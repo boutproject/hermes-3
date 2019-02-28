@@ -152,7 +152,7 @@ private:
   
   // Fix density in SOL
   bool sol_fix_profiles;
-  FieldGenerator *sol_ne, *sol_te; // Generating functions
+  std::shared_ptr<FieldGenerator> sol_ne, sol_te; // Generating functions
   
   // Output switches for additional information
   bool verbose;    // Outputs additional fields, mainly for debugging
@@ -161,11 +161,6 @@ private:
   // Numerical dissipation
 
   BoutReal numdiff, hyper, hyperpar; ///< Numerical dissipation
-  BoutReal ExBdiff; 
-  bool ExBpar; // Include parallel terms in ExBdiff
-  BoutReal ADpar; // Added Dissipation method in the parallel direction
-  bool ADpar_phine; // Include 1/Ne factor in phi ADpar term
-  bool ADpar_bndry; // Boundaries included in ADpar?
   int low_pass_z; // Fourier filter in Z 
   BoutReal z_hyper_viscos, x_hyper_viscos, y_hyper_viscos; // 4th-order derivatives
   bool low_n_diffuse; // Diffusion in parallel direction at low density
@@ -208,9 +203,7 @@ private:
   
   // Perturbed parallel gradient operators
   const Field3D Grad_parP(const Field3D &f);
-  const Field3D Grad_parP_CtoL(const Field3D &f);
-  const Field3D Grad_parP_LtoC(const Field3D &f);
-  const Field3D Div_parP_LtoC(const Field3D &f, const Field3D &v);
+  const Field3D Div_parP(const Field3D &f);
   
   // Electromagnetic solver for finite electron mass case
   bool split_n0_psi;   // Split the n=0 component of Apar (psi)?
@@ -228,7 +221,9 @@ private:
   bool newXZsolver; 
   Laplacian *phiSolver; // Old Laplacian in X-Z
   LaplaceXZ *newSolver; // New Laplacian in X-Z
-  
+
+  // Mesh quantities
+  Field2D B32, sqrtB;
 };
 
 /// Fundamental constants

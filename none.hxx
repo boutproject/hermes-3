@@ -9,7 +9,7 @@
 
 class NeutralNone: public NeutralModel {
 public:
-  NeutralNone(Solver *solver, Mesh *mesh, Options *options) : NeutralModel(options) {}
+  NeutralNone(Solver *solver, Mesh *mesh, Options &options) : NeutralModel(options) {}
   ~NeutralNone() {}
 
   /// Update plasma quantities

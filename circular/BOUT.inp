@@ -1,9 +1,8 @@
 
-NOUT = 10     # number of output time-steps
-TIMESTEP = 0.1  # time between outputs
+NOUT = 100     # number of output time-steps
+TIMESTEP = 1  # time between outputs
 
-ShiftXderivs = true # use shifted radial derivatives?
-TwistShift = true  # use twist-shift condition?
+TwistShift = true
 ballooning = true
 shiftinitial = false
 
@@ -17,6 +16,8 @@ grid="cbm18_dens8.grid_nx68ny64_profiles.nc"
 init_missing=true
 
 [mesh]
+paralleltransform = shifted  # identity, shifted, fci
+
 symmetricGlobalX = true
 
 ##################################################
@@ -91,15 +92,14 @@ nonuniform=true
 output_ddt = false # Output time derivatives
 verbose = true    # Output additional fields
 
+# Numerical diffusion terms. If negative these are turned off
 numdiff = -5e-4    # Numerical diffusion
-hyper = -1      # Hyper-diffusion
-hyperpar = -1 
-ExBdiff = -1  # Dissipation in ExB advection terms
-ExBpar = true   # Include y terms in dissipation
-ADpar = -1
-ADpar_phine = true
-z_hyper_viscos = -1
+hyper = -1      # 4th-order perpendicular hyper-diffusion
+hyperpar = -1   # 4th-order parallel hyper-diffusion in NVi and VePsi equations
+
 x_hyper_viscos = -1
+y_hyper_viscos = -1
+z_hyper_viscos = -1
 
 electromagnetic = true  # Electromagnetic? Otherwise electrostatic
 FiniteElMass    = true  # Finite electron mass?
@@ -117,7 +117,9 @@ resistivity    = true  # Resistivity: Psi -> Pe
 thermal_flux   = true  
 thermal_force  = true  # Force on electrons due to temperature gradients
 electron_viscosity = false # Parallel electron viscosity (Braginskii)
-ion_viscosity  = true  # Collisional viscosity
+
+ion_viscosity  = false  # Collisional viscosity. Includes poloidal viscosity
+
 poloidal_flows = true
 ion_velocity   = true
 thermal_conduction = true
@@ -127,15 +129,8 @@ classical_diffusion = true # Collisional cross-field diffusion, including perpen
 ########################################
 # Neutrals
 
-neutral_model = 0 	# Evolve neutral gas method
-			# 0 - no neutrals
-			# 1 - perp diffusion
-			# 2 - exponential model for Nn
-			# 3 - full neutral model
-                        # 4 - Diffusive in XZ, fluid in Y
-
 neutral_friction = true  # Friction term in vorticity equation
-ion_neutral = 0.0  # Simple ion-neutral damping term
+ion_neutral = -1  # Simple ion-neutral damping term. < 0 means off
 
 frecycle = 0.8
 
@@ -190,6 +185,7 @@ drift_wave = false
 
 ########################################
 [neutral]
+type = none    # Neutral model: none, diffusion2d, recycling, fullvelocity, mixed
 viscosity = 1  # Dynamic viscosity
 bulk = 0       # Bulk (volume) viscosity
 conduction =1 
@@ -198,8 +194,8 @@ conduction =1
 scale = 0.0
 
 bndry_all = neumann_o2
-bndry_xin = shifted(neumann_o2)
-bndry_xout = shifted(neumann_o2)
+bndry_xin = neumann_o2
+bndry_xout = neumann_o2
 
 [Ne] # Electron density 
 function = 0
@@ -210,9 +206,9 @@ source = 0.0
 function = 0
 
 [VePsi] # Ve + 0.5*beta_e*mi_me*psi
-bndry_core = zerolaplace #shifted(dirichlet_o2) #constlaplace
-bndry_pf   = shifted(dirichlet_o2)
-bndry_xout = shifted(dirichlet_o2)
+bndry_core = zerolaplace
+bndry_pf   = dirichlet_o2
+bndry_xout = dirichlet_o2
 
 [Pe]  # Electron pressure
 scale = 0.0
@@ -228,8 +224,6 @@ bndry_xin = none
 bndry_xout = none
 
 bndry_all = dirichlet_o2
-
-
 
 [Nn]
 

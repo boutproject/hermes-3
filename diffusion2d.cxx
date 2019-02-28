@@ -2,9 +2,10 @@
 #include "diffusion2d.hxx"
 
 #include <bout/constants.hxx>
+#include <bout/fv_ops.hxx>
 #include "div_ops.hxx"
 
-Diffusion2D::Diffusion2D(Solver *solver, Mesh *mesh, Options *options) : NeutralModel(options) {
+Diffusion2D::Diffusion2D(Solver *solver, Mesh *mesh, Options &options) : NeutralModel(options) {
   // 2D (X-Z) diffusive model
   // Neutral gas dynamics
   solver->add(Nn, "Nn");
@@ -21,8 +22,9 @@ Diffusion2D::Diffusion2D(Solver *solver, Mesh *mesh, Options *options) : Neutral
 }
 
 Diffusion2D::~Diffusion2D() {
-  if(inv)
+  if(inv) {
     delete inv;
+  }
 }
 
 void Diffusion2D::update(const Field3D &Ne, const Field3D &Te, const Field3D &Ti, const Field3D &Vi) {
@@ -36,9 +38,9 @@ void Diffusion2D::update(const Field3D &Ne, const Field3D &Te, const Field3D &Ti
   Field3D Nelim = floor(Ne, 1e-19); // Smaller limit for rate coefficients
   
   // Calculate atomic processes
-  for(int i=0;i<mesh->ngx;i++)
-    for(int j=0;j<mesh->ngy;j++)
-      for(int k=0;k<mesh->ngz;k++) {
+  for(int i=0;i<mesh->LocalNx;i++)
+    for(int j=0;j<mesh->LocalNy;j++)
+      for(int k=0;k<mesh->LocalNz;k++) {
         // Charge exchange frequency, normalised to ion cyclotron frequency
         BoutReal sigma_cx = Nelim(i,j,k)*Nnorm*hydrogen.chargeExchange(Te(i,j,k)*Tnorm)/Fnorm;
 	
@@ -95,13 +97,11 @@ void Diffusion2D::update(const Field3D &Ne, const Field3D &Te, const Field3D &Ti
   // Neutral density
   ddt(Nn) = 
     + S 
-    + Div_Perp_Lap_x3(Dnn, Nn, true);
+    + FV::Div_a_Laplace_perp(Dnn, Nn);
   
   // Neutral pressure
   ddt(Pn) = (2./3)*Qi
-    + Div_Perp_Lap_x3(Dnn, Pn, true)
-    //+ Div_Perp_Lap_x3(Tn*Dnn, Nn, true)  // Density diffusion
-    //+ Div_Perp_Lap_x3(Nn*Dnn, Tn, true)  // Temperature diffusion 
+    + FV::Div_a_Laplace_perp(Dnn, Pn)
     ;
   
 }
