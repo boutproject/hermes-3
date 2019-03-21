@@ -1,6 +1,6 @@
 /*
-
-    Copyright B.Dudson, J.Leddy, University of York, September 2016
+  
+    Copyright B.Dudson, J.Leddy, University of York, 2016-2019
               email: benjamin.dudson@york.ac.uk
 
     This file is part of Hermes-2 (Hot ion version)
@@ -186,7 +186,7 @@ int Hermes::init(bool restarting) {
   rho_s0 = Cs0 / Omega_ci;
 
   mi_me = AA * Mp / Me;
-  beta_e = qe * Tnorm * Nnorm / (SQ(Bnorm) / mu0);
+  beta_e = qe * Tnorm * Nnorm / (SQ(Bnorm) / (2. * mu0));
 
   output.write("\tmi_me=%e, beta_e=%e\n", mi_me, beta_e);
   SAVE_ONCE(mi_me, beta_e);
