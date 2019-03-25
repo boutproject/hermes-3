@@ -702,7 +702,7 @@ int Hermes::rhs(BoutReal t) {
         Te(n - 1, j, k) = 2. * te_bndry - Te(n - 2, j, k);
         Ti(n - 1, j, k) = 2. * ti_bndry - Ti(n - 2, j, k);
         // Vi(n-1,j,k) = 2.*vi_bndry - Vi(n-2,j,k);
-        Vi(n, j, k) = Vi(n - 1, j, k) = Vi(n - 2, j, k);
+        Vi(n - 1, j, k) = Vi(n - 2, j, k);
 
         if (te_bndry < 0.1 / Tnorm)
           te_bndry = 0.1 / Tnorm;
