@@ -7,6 +7,8 @@
 
 #include "div_ops.hxx"
 
+using bout::globals::mesh;
+
 NeutralMixed::NeutralMixed(Solver *solver, Mesh *mesh, Options &options)
     : NeutralModel(options) {
   solver->add(Nn, "Nn");

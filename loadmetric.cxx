@@ -1,8 +1,12 @@
 #include <globals.hxx>
 #include <output.hxx>
 #include <utils.hxx>
+#include <field2d.hxx>
+#include <bout/mesh.hxx>
 
 #include "loadmetric.hxx"
+
+using bout::globals::mesh;
 
 void LoadMetric(BoutReal Lnorm, BoutReal Bnorm) {
   // Load metric coefficients from the mesh

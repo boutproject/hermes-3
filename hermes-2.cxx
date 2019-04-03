@@ -620,8 +620,6 @@ int Hermes::init(bool restarting) {
 }
 
 int Hermes::rhs(BoutReal t) {
-  printf("TIME = %e\r", t);
-
   Coordinates *coord = mesh->getCoordinates();
   
   if (!evolve_plasma) {

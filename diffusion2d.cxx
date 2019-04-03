@@ -5,6 +5,8 @@
 #include <bout/fv_ops.hxx>
 #include "div_ops.hxx"
 
+using bout::globals::mesh;
+
 Diffusion2D::Diffusion2D(Solver *solver, Mesh *mesh, Options &options) : NeutralModel(options) {
   // 2D (X-Z) diffusive model
   // Neutral gas dynamics

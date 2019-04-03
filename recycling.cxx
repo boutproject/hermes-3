@@ -3,6 +3,8 @@
 #include <boutexception.hxx>
 #include <options.hxx>
 
+using bout::globals::mesh;
+
 NeutralRecycling::NeutralRecycling(Solver *solver, Mesh *mesh, Options &options)
     : NeutralModel(options) {
   OPTION(options, Lmax, 1.0);     // Maximum mean free path [m]

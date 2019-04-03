@@ -6,6 +6,8 @@
 
 #include "div_ops.hxx"
 
+using bout::globals::mesh;
+
 FullVelocity::FullVelocity(Solver *solver, Mesh *mesh, Options &options)
     : NeutralModel(options) {
   /*! 2D (X-Y) full velocity model
