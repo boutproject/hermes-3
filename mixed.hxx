@@ -22,6 +22,8 @@ public:
   
 private:
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
+
+  Field3D Pnlim;  // Limited pressure, used to calculate pressure-driven diffusive flows
   
   Field3D Dnn;
   

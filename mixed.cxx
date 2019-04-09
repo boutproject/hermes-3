@@ -9,7 +9,7 @@
 
 using bout::globals::mesh;
 
-NeutralMixed::NeutralMixed(Solver *solver, Mesh *mesh, Options &options)
+NeutralMixed::NeutralMixed(Solver *solver, Mesh *UNUSED(mesh), Options &options)
     : NeutralModel(options) {
   solver->add(Nn, "Nn");
   solver->add(Pn, "Pn");
@@ -26,15 +26,13 @@ NeutralMixed::NeutralMixed(Solver *solver, Mesh *mesh, Options &options)
   if (options["output_ddt"].withDefault(false)) {
     SAVE_REPEAT(ddt(Nn), ddt(Pn), ddt(NVn));
   }
-
+  
   Dnn = 0.0; // Neutral gas diffusion
 
   S = 0;
   F = 0;
   Qi = 0;
   Rp = 0;
-
-  SAVE_REPEAT(Dnn);
 }
 
 void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
@@ -53,6 +51,7 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   //
 
   Nn = floor(Nn, 1e-8);
+  Pn = floor(Pn, 1e-10);
   // Nnlim Used where division by neutral density is needed
   Field3D Nnlim = floor(Nn, 1e-5);
   Field3D Tn = Pn / Nn;
@@ -60,7 +59,7 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
 
   Field3D Vn = NVn / Nnlim; // Neutral parallel velocity
 
-  Field3D Pnlim = Nn * Tn;
+  Pnlim = Nn * Tn;
   Pnlim.applyBoundary("neumann");
 
   /////////////////////////////////////////////////////
@@ -134,6 +133,16 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   mesh->communicate(Dnn);
   Dnn.applyBoundary("dirichlet_o2");
 
+  // Apply a Dirichlet boundary condition to all the coefficients
+  // used in diffusion operators. This is to ensure that the flux through
+  // the boundary is zero.
+  Field3D DnnPn = Dnn * Pn;
+  DnnPn.applyBoundary("dirichlet_o2");
+  Field3D DnnNn = Dnn * Nn;
+  DnnNn.applyBoundary("dirichlet_o2");  
+  Field3D DnnNVn = Dnn * NVn;
+  DnnNVn.applyBoundary("dirichlet_o2");
+    
   // Logarithms used to calculate perpendicular velocity
   // V_perp = -Dnn * ( Grad_perp(Nn)/Nn + Grad_perp(Tn)/Tn )
   //
@@ -155,7 +164,7 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   ddt(Nn) =
       -FV::Div_par(Nn, Vn, sound_speed) // Advection
       + S                               // Source from recombining plasma
-      + FV::Div_a_Laplace_perp(Dnn * Nn, logPnlim) // Perpendicular diffusion
+      + FV::Div_a_Laplace_perp(DnnNn, logPnlim) // Perpendicular diffusion
       ;
 
   /////////////////////////////////////////////////////
@@ -166,9 +175,9 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
       -FV::Div_par(NVn, Vn, sound_speed)            // Momentum flow
       + F                                           // Friction with plasma
       - Grad_par(Pnlim)                             // Pressure gradient
-      + FV::Div_a_Laplace_perp(Dnn * NVn, logPnlim) // Perpendicular diffusion
+      + FV::Div_a_Laplace_perp(DnnNVn, logPnlim) // Perpendicular diffusion
 
-      + FV::Div_par_K_Grad_par(Dnn * Nn, Vn) // Parallel viscosity
+      + FV::Div_par_K_Grad_par(DnnNn, Vn) // Parallel viscosity
       ;
 
   if (numdiff > 0.0) {
@@ -185,11 +194,11 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
       -FV::Div_par(Pn, Vn, sound_speed)            // Advection
       - (2. / 3) * Pnlim * Div_par(Vn)             // Compression
       + (2. / 3) * Qi                              // Energy exchange with ions
-      + FV::Div_a_Laplace_perp(Dnn * Pn, logPnlim) // Perpendicular diffusion
-      + FV::Div_a_Laplace_perp(Dnn * Nn, Tn)       // Conduction
-      + FV::Div_par_K_Grad_par(Dnn * Nn, Tn)       // Parallel conduction
+      + FV::Div_a_Laplace_perp(DnnPn, logPnlim) // Perpendicular diffusion
+      + FV::Div_a_Laplace_perp(DnnNn, Tn)       // Conduction
+      + FV::Div_par_K_Grad_par(DnnNn, Tn)       // Parallel conduction
       ;
-
+  
   //////////////////////////////////////////////////////
   // Boundary condition on fluxes
   TRACE("Neutral boundary fluxes");
@@ -263,6 +272,15 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
             (2. / 3) * heatflux /
             (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
       }
+    }
+  }
+
+  BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
+    if ((Pn[i] < 1e-9) && (ddt(Pn)[i] < 0.0)) {
+      ddt(Pn)[i] = 0.0;
+    }
+    if ((Nn[i] < 1e-7) && (ddt(Nn)[i] < 0.0)) {
+      ddt(Nn)[i] = 0.0;
     }
   }
 }
