@@ -663,15 +663,12 @@ int Hermes::rhs(BoutReal t) {
           ne_bndry = 1e-5;
         BoutReal pe_bndry = 0.5 * (Pe(1, j, k) + Pe(2, j, k));
         BoutReal pi_bndry = 0.5 * (Pi(1, j, k) + Pi(2, j, k));
-        BoutReal nvi_bndry = 0.5 * (NVi(1, j, k) + NVi(2, j, k));
 
         BoutReal te_bndry = pe_bndry / ne_bndry;
         BoutReal ti_bndry = pi_bndry / ne_bndry;
-        BoutReal vi_bndry = nvi_bndry / ne_bndry;
 
         Te(1, j, k) = 2. * te_bndry - Te(2, j, k);
         Ti(1, j, k) = 2. * ti_bndry - Ti(2, j, k);
-        // Vi(1,j,k) = 2.*vi_bndry - Vi(2,j,k);
         Vi(0, j, k) = Vi(1, j, k) = Vi(2, j, k);
 
         if (te_bndry < 0.1 / Tnorm)
@@ -693,15 +690,12 @@ int Hermes::rhs(BoutReal t) {
           ne_bndry = 1e-5;
         BoutReal pe_bndry = 0.5 * (Pe(n - 1, j, k) + Pe(n - 2, j, k));
         BoutReal pi_bndry = 0.5 * (Pi(n - 1, j, k) + Pi(n - 2, j, k));
-        BoutReal nvi_bndry = 0.5 * (NVi(n - 1, j, k) + NVi(n - 2, j, k));
 
         BoutReal te_bndry = pe_bndry / ne_bndry;
         BoutReal ti_bndry = pi_bndry / ne_bndry;
-        BoutReal vi_bndry = nvi_bndry / ne_bndry;
 
         Te(n - 1, j, k) = 2. * te_bndry - Te(n - 2, j, k);
         Ti(n - 1, j, k) = 2. * ti_bndry - Ti(n - 2, j, k);
-        // Vi(n-1,j,k) = 2.*vi_bndry - Vi(n-2,j,k);
         Vi(n - 1, j, k) = Vi(n - 2, j, k);
 
         if (te_bndry < 0.1 / Tnorm)
