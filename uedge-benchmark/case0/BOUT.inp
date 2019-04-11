@@ -2,22 +2,18 @@
 NOUT = 1000     # number of output time-steps
 TIMESTEP = 500  # time between outputs
 
-ShiftXderivs = true # use shifted radial derivatives?
-TwistShift = true  # use twist-shift condition?
-ballooning = true
-shiftinitial = false
-
 MZ = 1     # number of points in z direction (2^n + 1)
 
 ZPERIOD=1
 
 grid="uedge-benchmark/uedge.grd_Up_Ni_Tei_2d.nc"
+ShiftWithoutTwist=true
 
 [restart]
 init_missing=true
 
 [mesh]
-symmetricGlobalX = true
+paralleltransform = shifted
 
 shiftangle_from_zshift=true # ShiftAngle not in grid file
 
@@ -95,8 +91,6 @@ verbose = true    # Output additional fields
 numdiff = 1e-3    # Numerical diffusion
 hyper = -1      # Hyper-diffusion
 hyperpar = -1 
-ExBdiff = -1  # Dissipation in ExB advection terms
-ADpar = -1
 z_hyper_viscos = -1
 x_hyper_viscos = -1
 low_n_diffuse = false
@@ -130,7 +124,6 @@ electron_ion_transfer = false # Energy exchange between ions and electrons
 boussinesq = true
 classical_diffusion = false # Collisional cross-field diffusion, including perpendicular viscosity
 
-
 frecycle = 0.0
 
 carbon_fraction = 0.0  # Carbon % 
@@ -141,14 +134,11 @@ sink_invlpar =  0.2  # 5m parallel connection length
 sheath_closure = false
 drift_wave = false
 
-density_diffusion = false  # Collisional diffusion
-thermal_diffusion = false
-
 anomalous_D = 0.2  # Anomalous density diffusion [m^2/s]
 anomalous_chi = 0.6 # Anomalous thermal diffusion [m^2/s]
 anomalous_nu = 0.01   # Anomalous viscosity
 
-anomalous_D_all_terms = false # Extra terms in NVi, Pe and Pi equations
+anomalous_D_pepi = false
 
 ion_neutral = 0.0
 
@@ -159,12 +149,12 @@ vort_bndry_flux = false
 ramp_mesh      = false
 ramp_timescale = 1e4
 
-sheath_model = 0  # 0 = Bohn, 1 = Loizu, 2 = Bohm + free density
-sheath_yup = false
-sheath_ydown = false
+sheath_model = 2  # 0 = Bohn, 1 = Loizu, 2 = Bohm + free density
+sheath_yup = true
+sheath_ydown = true
 sheath_gamma_e = 4   # Electron sheath heat transmission
 sheath_gamma_i = 2.5 # Ion sheath heat transmission
-test_boundaries = true
+test_boundaries = false
 
 startprofiles = true
 
@@ -202,8 +192,8 @@ neutral_gamma = 0.0
 scale = 0.0
 
 bndry_all = neumann_o2
-bndry_xin = shifted(neumann_o2)
-bndry_xout = shifted(neumann_o2)
+bndry_xin = neumann_o2
+bndry_xout = neumann_o2
 
 [Ne] # Electron density 
 function = 0
@@ -220,9 +210,9 @@ bndry_pf   = dirichlet_o2(0.1)
 function = 0
 
 [VePsi] # Ve + 0.5*beta_e*mi_me*psi
-bndry_core = zerolaplace #shifted(dirichlet_o2) #constlaplace
-bndry_pf   = shifted(dirichlet_o2)
-bndry_xout = shifted(dirichlet_o2)
+bndry_core = zerolaplace 
+bndry_pf   = dirichlet_o2
+bndry_xout = dirichlet_o2
 
 [Pe]  # Electron pressure
 function = 0

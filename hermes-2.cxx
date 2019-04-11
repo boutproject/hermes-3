@@ -476,7 +476,7 @@ int Hermes::init(bool restarting) {
       if (max(Pi, true) < 1e-5) {
         throw BoutException("Starting ion pressure is too small");
       }
-      mesh->communicate(Pi);
+      mesh->communicateXZ(Pi);
     }
 
     // Check for negatives
@@ -494,7 +494,7 @@ int Hermes::init(bool restarting) {
       throw BoutException("Starting pressure is too small");
     }
 
-    mesh->communicate(Ne, Pe);
+    mesh->communicateXZ(Ne, Pe);
   }
 
   /////////////////////////////////////////////////////////
@@ -635,7 +635,10 @@ int Hermes::rhs(BoutReal t) {
   }
 
   // Communicate evolving variables
-  mesh->communicate(EvolvingVars);
+  mesh->communicateXZ(EvolvingVars);
+  for (auto* f : EvolvingVars.field3d()) {
+    f->mergeYupYdown();
+  }
 
   Field3D Nelim = floor(Ne, 1e-5);
 

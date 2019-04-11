@@ -12,6 +12,8 @@ from boututils.datafile import DataFile
 import numpy as np
 import csv
 
+gridfilename = "../uedge.grd_Up_Ni_Tei_2d.nc"
+
 def readcsv(csvfile):
     """
     Assumes a single header line, followed by columns of real numbers
@@ -33,7 +35,7 @@ with open("ue_bmk.csv") as f:
 ue_data[:,0] *= 1e3
 
 # Read grid
-with DataFile("uedge.grd_Up_Ni_Tei_2d.nc") as d:
+with DataFile(gridfilename) as d:
     Rxy = d["Rxy"]
     Zxy = d["Zxy"]
 
@@ -134,7 +136,7 @@ from boututils.datafile import DataFile
 
 matplotlib.rcParams.update({'font.size': 8})
 
-grid = DataFile("uedge.grd_Up_Ni_Tei_2d.nc")
+grid = DataFile(gridfilename)
 
 fig, axarr = plt.subplots(2,2)
 
