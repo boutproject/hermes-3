@@ -22,9 +22,17 @@ NeutralMixed::NeutralMixed(Solver *solver, Mesh *UNUSED(mesh), Options &options)
 
   OPTION(options, numdiff, 1.0);
 
+  nn_floor = options["nn_floor"]
+                  .doc("A minimum density used when dividing NVn by Nn. Normalised units.")
+                  .withDefault(1e-4);
+  
   // Optionally output time derivatives
-  if (options["output_ddt"].withDefault(false)) {
+  if (options["output_ddt"].doc("Save derivatives to output?").withDefault(false)) {
     SAVE_REPEAT(ddt(Nn), ddt(Pn), ddt(NVn));
+  }
+
+  if (options["diagnose"].doc("Save additional diagnostic fields?").withDefault(false)) {
+    SAVE_REPEAT(Dnn);
   }
   
   Dnn = 0.0; // Neutral gas diffusion
@@ -53,7 +61,7 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   Nn = floor(Nn, 1e-8);
   Pn = floor(Pn, 1e-10);
   // Nnlim Used where division by neutral density is needed
-  Field3D Nnlim = floor(Nn, 1e-5);
+  Field3D Nnlim = floor(Nn, nn_floor);
   Field3D Tn = Pn / Nn;
   Tn = floor(Tn, 0.01 / Tnorm);
 
@@ -130,6 +138,7 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   BoutReal neutral_lmax = 0.1 / Lnorm;
   Field3D Rnn = Nn * sqrt(Tn) / neutral_lmax; // Neutral-neutral collisions
   Dnn = Pnlim / (Riz + Rcx + Rnn);
+  
   mesh->communicate(Dnn);
   Dnn.applyBoundary("dirichlet_o2");
 

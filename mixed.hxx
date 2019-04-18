@@ -32,6 +32,8 @@ private:
   BoutReal neutral_gamma; // Heat transmission for neutrals
   
   BoutReal numdiff;  // Numerical dissipation
+
+  BoutReal nn_floor; // Minimum Nn used when dividing NVn by Nn to get Vn.
 };
 
 

@@ -511,8 +511,13 @@ int Hermes::init(bool restarting) {
   // Read curvature components
   TRACE("Reading curvature");
 
-  Curlb_B.covariant = false; // Contravariant
-  mesh->get(Curlb_B, "bxcv");
+  try {
+    Curlb_B.covariant = false; // Contravariant
+    mesh->get(Curlb_B, "bxcv");
+  } catch (BoutException &e) {
+    output_warn.write("No curvature vector in input grid");
+    Curlb_B = 0.0;
+  }
   
   if (Options::root()["mesh"]["paralleltransform"].as<std::string>() == "shifted") {
     Field2D I;
