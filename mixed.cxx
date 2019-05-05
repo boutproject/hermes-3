@@ -20,8 +20,6 @@ NeutralMixed::NeutralMixed(Solver *solver, Mesh *UNUSED(mesh), Options &options)
 
   OPTION(options, neutral_gamma, 5. / 4);
 
-  OPTION(options, numdiff, 1.0);
-
   nn_floor = options["nn_floor"]
                   .doc("A minimum density used when dividing NVn by Nn. Normalised units.")
                   .withDefault(1e-4);
@@ -49,6 +47,10 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
 
   mesh->communicate(Nn, Pn, NVn);
 
+  Nn.clearParallelSlices();
+  Pn.clearParallelSlices();
+  NVn.clearParallelSlices();
+
   Coordinates *coord = mesh->getCoordinates();
   
   //////////////////////////////////////////////////////
@@ -63,9 +65,9 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   // Nnlim Used where division by neutral density is needed
   Field3D Nnlim = floor(Nn, nn_floor);
   Field3D Tn = Pn / Nn;
-  Tn = floor(Tn, 0.01 / Tnorm);
-
-  Field3D Vn = NVn / Nnlim; // Neutral parallel velocity
+  //Tn = floor(Tn, 0.01 / Tnorm);
+  Vn = NVn / Nn;
+  Field3D Vnlim = NVn / Nnlim; // Neutral parallel velocity
 
   Pnlim = Nn * Tn;
   Pnlim.applyBoundary("neumann");
@@ -92,10 +94,15 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
         Tn(r.ind, mesh->ystart - 1, jz) = tnwall;
 
         // Set pressure consistent at the boundary
-        Pn(r.ind, mesh->ystart - 1, jz) =
-            2. * nnwall * tnwall - Pn(r.ind, mesh->ystart, jz);
+        // Pn(r.ind, mesh->ystart - 1, jz) =
+        //     2. * nnwall * tnwall - Pn(r.ind, mesh->ystart, jz);
+
+        // Zero-gradient pressure
+        Pn(r.ind, mesh->ystart - 1, jz) = Pn(r.ind, mesh->ystart, jz);
+        
         // No flow into wall
         Vn(r.ind, mesh->ystart - 1, jz) = -Vn(r.ind, mesh->ystart, jz);
+        Vnlim(r.ind, mesh->ystart - 1, jz) = -Vnlim(r.ind, mesh->ystart, jz);
         NVn(r.ind, mesh->ystart - 1, jz) = -NVn(r.ind, mesh->ystart, jz);
       }
     }
@@ -118,10 +125,15 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
         Tn(r.ind, mesh->yend + 1, jz) = tnwall;
 
         // Set pressure consistent at the boundary
-        Pn(r.ind, mesh->yend + 1, jz) =
-            2. * nnwall * tnwall - Pn(r.ind, mesh->yend, jz);
+        // Pn(r.ind, mesh->yend + 1, jz) =
+        //     2. * nnwall * tnwall - Pn(r.ind, mesh->yend, jz);
+
+        // Zero-gradient pressure
+        Pn(r.ind, mesh->yend + 1, jz) = Pn(r.ind, mesh->yend, jz);
+        
         // No flow into wall
         Vn(r.ind, mesh->yend + 1, jz) = -Vn(r.ind, mesh->yend, jz);
+        Vnlim(r.ind, mesh->yend + 1, jz) = -Vnlim(r.ind, mesh->yend, jz);
         NVn(r.ind, mesh->yend + 1, jz) = -NVn(r.ind, mesh->yend, jz);
       }
     }
@@ -140,6 +152,7 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   Dnn = Pnlim / (Riz + Rcx + Rnn);
   
   mesh->communicate(Dnn);
+  Dnn.clearParallelSlices();
   Dnn.applyBoundary("dirichlet_o2");
 
   // Apply a Dirichlet boundary condition to all the coefficients
@@ -151,7 +164,29 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   DnnNn.applyBoundary("dirichlet_o2");  
   Field3D DnnNVn = Dnn * NVn;
   DnnNVn.applyBoundary("dirichlet_o2");
-    
+ 
+  if (sheath_ydown) {
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        Dnn(r.ind, mesh->ystart-1, jz) = -Dnn(r.ind, mesh->ystart, jz);
+        DnnPn(r.ind, mesh->ystart-1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
+        DnnNn(r.ind, mesh->ystart-1, jz) = -DnnNn(r.ind, mesh->ystart, jz);
+        DnnNVn(r.ind, mesh->ystart-1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
+      }
+    }
+  }
+ 
+  if (sheath_yup) {
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        Dnn(r.ind, mesh->yend+1, jz) = -Dnn(r.ind, mesh->yend, jz);
+        DnnPn(r.ind, mesh->yend+1, jz) = -DnnPn(r.ind, mesh->yend, jz);
+        DnnNn(r.ind, mesh->yend+1, jz) = -DnnNn(r.ind, mesh->yend, jz);
+        DnnNVn(r.ind, mesh->yend+1, jz) = -DnnNVn(r.ind, mesh->yend, jz);
+      }
+    }
+  }
+  
   // Logarithms used to calculate perpendicular velocity
   // V_perp = -Dnn * ( Grad_perp(Nn)/Nn + Grad_perp(Tn)/Tn )
   //
@@ -171,7 +206,7 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   TRACE("Neutral density");
 
   ddt(Nn) =
-      -FV::Div_par(Nn, Vn, sound_speed) // Advection
+      -FV::Div_par(Nn, Vnlim, sound_speed) // Advection
       + S                               // Source from recombining plasma
       + FV::Div_a_Laplace_perp(DnnNn, logPnlim) // Perpendicular diffusion
       ;
@@ -180,18 +215,21 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   // Neutral momentum
   TRACE("Neutral momentum");
 
+  // Relationship between heat conduction and viscosity for neutral
+  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+  // Transport Processes in Gases", 1972
+  // eta_n = (2. / 5) * kappa_n;
+
   ddt(NVn) =
-      -FV::Div_par(NVn, Vn, sound_speed)            // Momentum flow
+      -FV::Div_par(NVn, Vnlim, sound_speed)         // Momentum flow
       + F                                           // Friction with plasma
       - Grad_par(Pnlim)                             // Pressure gradient
       + FV::Div_a_Laplace_perp(DnnNVn, logPnlim) // Perpendicular diffusion
-
-      + FV::Div_par_K_Grad_par(DnnNn, Vn) // Parallel viscosity
+      + FV::Div_a_Laplace_perp((2./5)*DnnNn, Vn) // Perpendicular viscosity
+      + FV::Div_par_K_Grad_par((2./5)*DnnNn, Vn) // Parallel viscosity
       ;
 
-  if (numdiff > 0.0) {
-    ddt(NVn) += FV::Div_par_K_Grad_par(SQ(coord->dy) * coord->g_22 * numdiff, Vn);
-  }
 
   Fperp = Rcx + Rrc;
 
@@ -200,7 +238,7 @@ void NeutralMixed::update(const Field3D &Ne, const Field3D &Te,
   TRACE("Neutral pressure");
 
   ddt(Pn) =
-      -FV::Div_par(Pn, Vn, sound_speed)            // Advection
+      -FV::Div_par(Pn, Vnlim, sound_speed)         // Advection
       - (2. / 3) * Pnlim * Div_par(Vn)             // Compression
       + (2. / 3) * Qi                              // Energy exchange with ions
       + FV::Div_a_Laplace_perp(DnnPn, logPnlim) // Perpendicular diffusion

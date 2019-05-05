@@ -470,8 +470,8 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D &n, const Field3D &f,
     dfdx.applyBoundary("neumann");
 
     // This calculation is in field aligned coordinates
-    dfdx = mesh->toFieldAligned(dfdx);
-    Field3D n_fa = mesh->toFieldAligned(n);
+    dfdx = toFieldAligned(dfdx);
+    Field3D n_fa = toFieldAligned(n);
     
     Field3D yresult = 0.0;
     
@@ -542,7 +542,7 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D &n, const Field3D &f,
         }
       }
     }
-    result += mesh->fromFieldAligned(yresult);
+    result += fromFieldAligned(yresult);
   }
   
   return result;
