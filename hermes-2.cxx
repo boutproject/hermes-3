@@ -300,6 +300,7 @@ int Hermes::init(bool restarting) {
   OPTION(optsc, scale_num_cs, 1.0);
   OPTION(optsc, floor_num_cs, -1.0);
   OPTION(optsc, vepsi_dissipation, false);
+  OPTION(optsc, vort_dissipation, false);
 
   OPTION(optsc, ne_hyper_z, -1.0);
   OPTION(optsc, pe_hyper_z, -1.0);
@@ -977,6 +978,7 @@ int Hermes::rhs(BoutReal t) {
     }
     phi.applyBoundary(t);
     mesh->communicate(phi);
+    phi.clearParallelSlices();
   }
 
   //////////////////////////////////////////////////////////////
@@ -1145,6 +1147,22 @@ int Hermes::rhs(BoutReal t) {
   // Sheath boundary conditions on Y up and Y down
   TRACE("Sheath boundaries");
 
+  // Manually setting boundary conditions
+  Ne.clearParallelSlices();
+  Pe.clearParallelSlices();
+  Pi.clearParallelSlices();
+  Pelim.clearParallelSlices();
+  Pilim.clearParallelSlices();
+  Te.clearParallelSlices();
+  Ti.clearParallelSlices();
+  Ve.clearParallelSlices();
+  Vi.clearParallelSlices();
+  Vi.clearParallelSlices();
+  NVi.clearParallelSlices();
+  phi.clearParallelSlices();
+  Vort.clearParallelSlices();
+  Jpar.clearParallelSlices();
+  
   if (sheath_ydown) {
     switch (sheath_model) {
     case 0: { // Normal Bohm sheath
@@ -2184,6 +2202,24 @@ int Hermes::rhs(BoutReal t) {
       // Form of hyper-viscosity to suppress zig-zags in Z
       ddt(Vort) -= z_hyper_viscos * SQ(SQ(coord->dz)) * D4DZ4(Vort);
     }
+
+    if (vort_dissipation) {
+      // Adds dissipation term like in other equations
+      // Maximum speed either electron sound speed or Alfven speed
+      Field3D max_speed = Bnorm * coord->Bxy /
+                          sqrt(SI::mu0 * AA * SI::Mp * Nnorm * Nelim) /
+                          Cs0; // Alfven speed (normalised by Cs0)
+      Field3D elec_sound = sqrt(mi_me) * sound_speed; // Electron sound speed
+      for (int jx = 0; jx < mesh->LocalNx; jx++)
+        for (int jy = 0; jy < mesh->LocalNy; jy++)
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            if (elec_sound(jx, jy, jz) > max_speed(jx, jy, jz)) {
+              max_speed(jx, jy, jz) = elec_sound(jx, jy, jz);
+            }
+          }
+
+      ddt(Vort) -= FV::Div_par(Vort, 0.0, max_speed);
+    }
   }
 
   ///////////////////////////////////////////////////////////
@@ -2217,19 +2253,11 @@ int Hermes::rhs(BoutReal t) {
     if (thermal_force) {
       ddt(VePsi) -= mi_me * 0.71 * Grad_parP(Te);
     }
-
+    
     if (electron_viscosity) {
       // Electron parallel viscosity (Braginskii)
       Field3D ve_eta = 0.973 * mi_me * tau_e * Telim;
-
-      /*
-      if (flux_limit_alpha > 0) {
-        // Limit to free streaming value
-        Field3D ve_eta_fs = flux_limit_alpha * sqrt(mi_me * Telim) * R0;
-        ve_eta = (ve_eta * ve_eta_fs) / (ve_eta + ve_eta_fs);
-      }
-      */
-
+      
       if (eta_limit_alpha > 0.) {
         // SOLPS-style flux limiter
         // Values of alpha ~ 0.5 typically

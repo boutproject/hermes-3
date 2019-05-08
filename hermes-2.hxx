@@ -169,7 +169,8 @@ private:
   BoutReal scale_num_cs; // Scale numerical sound speed
   BoutReal floor_num_cs; // Apply a floor to the numerical sound speed
   bool vepsi_dissipation; // Dissipation term in VePsi equation
-
+  bool vort_dissipation; // Dissipation term in Vorticity equation
+  
   // Sources and profiles
   
   bool ramp_mesh;   // Use Ne,Pe in the grid file for starting ramp target
