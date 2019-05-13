@@ -21,7 +21,7 @@ class InterpRadiatedPower : public RadiatedPower {
 public:
   InterpRadiatedPower(const std::string &file);
   
-  BoutReal power(BoutReal Te, BoutReal ne, BoutReal ni);
+  BoutReal power(BoutReal, BoutReal, BoutReal) {return 0.0;}
   
 private:
   std::vector<BoutReal> te_array;  // Te in eV
@@ -32,7 +32,7 @@ private:
 /// Rates supplied by Eva Havlicova
 class HydrogenRadiatedPower : public RadiatedPower {
 public:
-  BoutReal power(BoutReal Te, BoutReal ne, BoutReal ni);
+  BoutReal power(BoutReal, BoutReal, BoutReal) {return 0.0;}
   
   // Collision rate coefficient <sigma*v> [m3/s]
   BoutReal ionisation(BoutReal Te);
@@ -56,7 +56,7 @@ private:
  */
 class UpdatedRadiatedPower : public RadiatedPower {
 public:
-  BoutReal power(BoutReal Te, BoutReal ne, BoutReal ni);  
+  BoutReal power(BoutReal, BoutReal, BoutReal) {return 0.0;}
 
   // Ionisation rate coefficient <sigma*v> [m3/s]
   BoutReal ionisation(BoutReal T); 

@@ -5,7 +5,7 @@
 
 using bout::globals::mesh;
 
-NeutralRecycling::NeutralRecycling(Solver *solver, Mesh *mesh, Options &options)
+NeutralRecycling::NeutralRecycling(Solver*, Mesh *mesh, Options &options)
     : NeutralModel(options) {
   OPTION(options, Lmax, 1.0);     // Maximum mean free path [m]
   OPTION(options, frecycle, 0.9); // Recycling fraction
@@ -23,7 +23,7 @@ NeutralRecycling::NeutralRecycling(Solver *solver, Mesh *mesh, Options &options)
 }
 
 void NeutralRecycling::update(const Field3D &Ne, const Field3D &Te,
-                              const Field3D &Ti, const Field3D &Vi) {
+                              const Field3D &UNUSED(Ti), const Field3D &Vi) {
   TRACE("NeutralRecycling::update");
 
   Coordinates *coord = mesh->getCoordinates();
@@ -148,7 +148,7 @@ void NeutralRecycling::update(const Field3D &Ne, const Field3D &Te,
       }
 }
 
-const Field2D NeutralRecycling::CumSumY2D(const Field2D &f, bool reverse) {
+Field2D NeutralRecycling::CumSumY2D(const Field2D &f, bool reverse) {
   // Cumulative sum in Y one xz-slice at a time
   //    -- reverse is option to sum from the end of Y
   Field2D result = 0.0;
@@ -186,7 +186,7 @@ const Field2D NeutralRecycling::CumSumY2D(const Field2D &f, bool reverse) {
   return result;
 }
 
-const Field3D NeutralRecycling::CumSumY3D(const Field3D &f, bool reverse) {
+Field3D NeutralRecycling::CumSumY3D(const Field3D &f, bool reverse) {
   // Cumulative sum in Y one xz-slice at a time
   //    -- reverse is option to sum from the end of Y
   Field3D result = 0.0;
@@ -230,7 +230,7 @@ const Field3D NeutralRecycling::CumSumY3D(const Field3D &f, bool reverse) {
   return result;
 }
 
-const BoutReal NeutralRecycling::bcast_lasty(const BoutReal f) {
+BoutReal NeutralRecycling::bcast_lasty(const BoutReal f) {
   BoutReal myf;
   // All but last processor receive
   if (!mesh->lastY()) {
