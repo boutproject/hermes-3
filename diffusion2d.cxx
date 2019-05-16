@@ -7,7 +7,7 @@
 
 using bout::globals::mesh;
 
-Diffusion2D::Diffusion2D(Solver *solver, Mesh *mesh, Options &options) : NeutralModel(options) {
+Diffusion2D::Diffusion2D(Solver *solver, Mesh*, Options &options) : NeutralModel(options) {
   // 2D (X-Z) diffusive model
   // Neutral gas dynamics
   solver->add(Nn, "Nn");
@@ -16,8 +16,8 @@ Diffusion2D::Diffusion2D(Solver *solver, Mesh *mesh, Options &options) : Neutral
   Dnn = 0.0; // Neutral gas diffusion
   
   SAVE_REPEAT(Dnn);
-  
-  OPTION(options, Lmax, 1.0); // Maximum mean free path [m]
+
+  Lmax = options["Lmax"].doc("Maximum mean free path [m]").withDefault(1.0);
 
   // Set Laplacian inversion to null
   inv = 0;
@@ -29,7 +29,7 @@ Diffusion2D::~Diffusion2D() {
   }
 }
 
-void Diffusion2D::update(const Field3D &Ne, const Field3D &Te, const Field3D &Ti, const Field3D &Vi) {
+void Diffusion2D::update(const Field3D &Ne, const Field3D &Te, const Field3D &UNUSED(Ti), const Field3D &UNUSED(Vi)) {
   
   mesh->communicate(Nn, Pn);
   
@@ -108,7 +108,7 @@ void Diffusion2D::update(const Field3D &Ne, const Field3D &Te, const Field3D &Ti
   
 }
 
-void Diffusion2D::precon(BoutReal t, BoutReal gamma, BoutReal delta) {
+void Diffusion2D::precon(BoutReal, BoutReal gamma, BoutReal) {
   // Neutral gas diffusion
   // Solve (1 - gamma*Dnn*Delp2)^{-1} 
   if(!inv) {

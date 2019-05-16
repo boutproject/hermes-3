@@ -17,8 +17,10 @@ NeutralMixed::NeutralMixed(Solver *solver, Mesh *UNUSED(mesh), Options &options)
 
   OPTION(options, sheath_ydown, true);
   OPTION(options, sheath_yup, true);
-
-  OPTION(options, neutral_gamma, 5. / 4);
+  
+  neutral_gamma = options["neutral_gamma"]
+          .doc("Heat flux to the wall q = neutral_gamma * n * T * cs")
+          .withDefault(5. / 4);
 
   nn_floor = options["nn_floor"]
                   .doc("A minimum density used when dividing NVn by Nn. Normalised units.")
