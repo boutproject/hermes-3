@@ -20,6 +20,8 @@ public:
   void addPressure(int x, int y, int z, BoutReal dpdt) {ddt(Pn)(x,y,z) += dpdt;}
   void addMomentum(int x, int y, int z, BoutReal dnvdt) {ddt(NVn)(x,y,z) += dnvdt;}
   
+  Field3D getDensity() override {return Nn;}
+
 private:
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
 

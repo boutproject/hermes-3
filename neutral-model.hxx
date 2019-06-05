@@ -63,10 +63,11 @@ public:
   Field3D S;     // Plasma particle sink, neutral source
   Field3D Qi;    // Power transfer from ions
   Field3D F;     // Ion-neutral friction
-  Field3D Fperp; // Ion-neutral friction in vorticity
+  Field3D Fperp; // Ion-neutral friction in vorticity. This is a rate, normalised by Fnorm 
   Field3D Rp;    // Radiation from the plasma
   Field3D Rn;    // Radiation from the neutrals
 
+  virtual Field3D getDensity() { throw BoutException("No neutral density"); }
 protected:
   BoutReal Tnorm, Nnorm, Bnorm, Lnorm, Fnorm; // Normalisations for temperature, density, magnetic field, lengths and frequencies
   

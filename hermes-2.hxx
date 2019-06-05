@@ -81,7 +81,7 @@ private:
   NeutralModel *neutrals; // Handles evolution of neutral gas
   bool neutral_friction;
   BoutReal frecycle;  // Recycling fraction
-  BoutReal ion_neutral; // Ion-neutral collision rate
+  BoutReal ion_neutral_rate; // Fixed ion-neutral collision rate
   
   // Impurity radiation
   BoutReal carbon_fraction;
@@ -104,7 +104,8 @@ private:
   bool thermal_force; // Force due to temperature gradients
   bool electron_viscosity; // Electron parallel viscosity
   bool ion_viscosity;   // Ion viscosity
-  bool electron_neutral;   // Include electron-neutral collisions
+  bool electron_neutral;   // Include electron-neutral collisions in resistivity
+  bool ion_neutral;        // Include ion-neutral collisions in ion collision time
   bool poloidal_flows;  // Include y derivatives in diamagnetic and ExB drifts
   bool thermal_flux;    // Include parallel and perpendicular energy flux from Te gradients
   bool thermal_conduction; // Braginskii electron heat conduction
