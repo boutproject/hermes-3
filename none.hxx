@@ -9,11 +9,12 @@
 
 class NeutralNone: public NeutralModel {
 public:
-  NeutralNone(Solver *solver, Mesh *mesh, Options &options) : NeutralModel(options) {}
+  NeutralNone(Solver *, Mesh *, Options &options) : NeutralModel(options) {}
   ~NeutralNone() {}
 
   /// Update plasma quantities
-  void update(const Field3D &Ne, const Field3D &Te, const Field3D &Ti, const Field3D &Vi) {}
+  void update(const Field3D &, const Field3D &, const Field3D &,
+              const Field3D &) {}
 };
 
 

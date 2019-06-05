@@ -20,6 +20,8 @@ public:
   void addMomentum(int x, int y, int z, BoutReal dnvdt);
   
 private:
+  Coordinates *coord;   // Coordinate system
+
   Field2D Nn2D;         // Neutral gas density (evolving)
   Field2D Pn2D;         // Neutral gas pressure (evolving)
   Vector2D Vn2D;        // Neutral gas velocity

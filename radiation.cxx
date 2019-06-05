@@ -60,14 +60,8 @@ InterpRadiatedPower::InterpRadiatedPower(const std::string &filename) {
   file.close();
 }
 
-BoutReal InterpRadiatedPower::power(BoutReal Te, BoutReal ne, BoutReal ni) {
-  return 0.0;
-}
-
 ////////////////////////////////////////////////////////////////
 //
-
-BoutReal HydrogenRadiatedPower::power(BoutReal Te, BoutReal ne, BoutReal ni) {}
 
 // Collision rate coefficient <sigma*v> [m3/s]
 BoutReal HydrogenRadiatedPower::ionisation(BoutReal T) {
@@ -213,8 +207,6 @@ BoutReal HydrogenRadiatedPower::excitation(BoutReal Te) {
 }
 
 /////////////////////////////////////////////////////////////////////////////
-
-BoutReal UpdatedRadiatedPower::power(BoutReal Te, BoutReal ne, BoutReal ni) {}
 
 // Collision rate coefficient <sigma*v> [m3/s]
 BoutReal UpdatedRadiatedPower::ionisation(BoutReal T) {

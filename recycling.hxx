@@ -27,9 +27,9 @@ private:
   Field2D hthe;
 
   // Utility functions
-  const Field2D CumSumY2D(const Field2D &f, bool reverse);
-  const Field3D CumSumY3D(const Field3D &f, bool reverse);
-  const BoutReal bcast_lasty(const BoutReal f);
+  Field2D CumSumY2D(const Field2D &f, bool reverse);
+  Field3D CumSumY3D(const Field3D &f, bool reverse);
+  BoutReal bcast_lasty(const BoutReal f);
 };
 
 #endif // __NEUTRAL_MODEL_H__
