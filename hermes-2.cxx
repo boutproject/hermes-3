@@ -222,7 +222,7 @@ const Field3D ceil(const Field3D &var, BoutReal f, REGION rgn = RGN_ALL) {
 Field3D SQ(const Vector3D &v) { return v * v; }
 
 int Hermes::init(bool restarting) {
-  
+
   auto& opt = Options::root();
 
   // Switches in model section
@@ -968,9 +968,7 @@ int Hermes::rhs(BoutReal t) {
             phi = phiSolver->solve(Vort * SQ(coord->Bxy), sheathmult * Telim);
           }
         }
-	
-	phi = DC(phi);
-
+        
         // Hot ion term in vorticity
         phi -= Pi;
 
@@ -2216,9 +2214,6 @@ int Hermes::rhs(BoutReal t) {
       mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
       ddt(Vort) -= FV::Div_a_Laplace_perp(0.5 / SQ(coord->Bxy), vEdotGradPi);
-
-      // ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pilim,
-      // vort_bndry_flux, poloidal_flows);
 
     } else {
       // When the Boussinesq approximation is not made,
