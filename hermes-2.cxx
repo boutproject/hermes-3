@@ -46,8 +46,8 @@ namespace FV {
 
     CellEdges cellboundary;
     
-    Field3D f = toFieldAligned(f_in, RGN_NOX);
-    Field3D v = toFieldAligned(v_in, RGN_NOX);
+    Field3D f = toFieldAligned(f_in, "RGN_NOX");
+    Field3D v = toFieldAligned(v_in, "RGN_NOX");
 
     Coordinates *coord = f_in.getCoordinates();
 
@@ -192,7 +192,7 @@ namespace FV {
         }
       }
     }
-    return fromFieldAligned(result, RGN_NOBNDRY);
+    return fromFieldAligned(result, "RGN_NOBNDRY");
   }
   
 }
@@ -1076,6 +1076,10 @@ int Hermes::rhs(BoutReal t) {
 
   //////////////////////////////////////////////////////////////
   // Sheath boundary conditions on Y up and Y down
+  //
+  // NOTE: Have to apply parallel boundary conditions in field aligned coordinates
+  // so shift to and then from field aligned
+
   TRACE("Sheath boundaries");
 
   // Manually setting boundary conditions
@@ -1093,6 +1097,28 @@ int Hermes::rhs(BoutReal t) {
   phi.clearParallelSlices();
   Vort.clearParallelSlices();
   Jpar.clearParallelSlices();
+  
+  // Shift to field aligned
+
+  Ne = toFieldAligned(Ne);
+  
+  Te = toFieldAligned(Te);
+  Ti = toFieldAligned(Ti);
+  Telim = toFieldAligned(Telim);
+  Tilim = toFieldAligned(Tilim);
+  
+  Pe = toFieldAligned(Pe);
+  Pi = toFieldAligned(Pi);
+  Pelim = toFieldAligned(Pelim);
+  Pilim = toFieldAligned(Pilim);
+  
+  Ve = toFieldAligned(Ve);
+  Vi = toFieldAligned(Vi);
+  NVi = toFieldAligned(NVi);
+
+  phi = toFieldAligned(phi);
+  Jpar = toFieldAligned(Jpar);
+  Vort = toFieldAligned(Vort);
   
   if (sheath_ydown) {
     switch (sheath_model) {
@@ -1790,6 +1816,29 @@ int Hermes::rhs(BoutReal t) {
       }
     }
   }
+
+  // Shift from field aligned
+
+  Ne = fromFieldAligned(Ne);
+  
+  Te = fromFieldAligned(Te);
+  Ti = fromFieldAligned(Ti);
+  Telim = fromFieldAligned(Telim);
+  Tilim = fromFieldAligned(Tilim);
+  
+  Pe = fromFieldAligned(Pe);
+  Pi = fromFieldAligned(Pi);
+  Pelim = fromFieldAligned(Pelim);
+  Pilim = fromFieldAligned(Pilim);
+  
+  Ve = fromFieldAligned(Ve);
+  Vi = fromFieldAligned(Vi);
+  NVi = fromFieldAligned(NVi);
+
+  phi = fromFieldAligned(phi);
+  Jpar = fromFieldAligned(Jpar);
+  Vort = fromFieldAligned(Vort);
+
 
   if (!currents) {
     // No currents, so reset Ve to be equal to Vi
