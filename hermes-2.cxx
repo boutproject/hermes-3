@@ -2072,6 +2072,19 @@ int Hermes::rhs(BoutReal t) {
       }
     }
 
+    // Limit size of stress tensor components
+    // If the off-diagonal components of the pressure tensor are large compared
+    // to the scalar pressure, then the model is probably breaking down.
+    // This can happen in very low density regions
+    BOUT_FOR(i, Pi_ciperp.getRegion("RGN_ALL")) {
+      if (fabs(Pi_ciperp[i]) > Pi[i]) {
+        Pi_ciperp[i] = SIGN(Pi_ciperp[i]) * Pi[i];
+      }
+      if (fabs(Pi_cipar[i]) > Pi[i]) {
+        Pi_cipar[i] = SIGN(Pi_cipar[i]) * Pi[i];
+      }
+    }
+    
     mesh->communicate(Pi_ciperp, Pi_cipar);
 
     Pi_ciperp.clearParallelSlices();
