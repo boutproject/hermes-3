@@ -2359,7 +2359,7 @@ int Hermes::rhs(BoutReal t) {
       // External electric field 
       // ddt(VePsi) += mi_me*nu*(Jpar - Jpar0)/NelimVe;
     }
-    
+
     // Parallel electric field
     if (j_par) {
       ddt(VePsi) += mi_me * Grad_parP(phi);
@@ -2369,11 +2369,11 @@ int Hermes::rhs(BoutReal t) {
     if (pe_par) {
       ddt(VePsi) -= mi_me * Grad_parP(Pelim) / NelimVe;
     }
-
+    
     if (thermal_force) {
       ddt(VePsi) -= mi_me * 0.71 * Grad_parP(Te);
     }
-    
+
     if (electron_viscosity) {
       // Electron parallel viscosity (Braginskii)
       Field3D ve_eta = 0.973 * mi_me * tau_e * Telim;
@@ -2559,9 +2559,18 @@ int Hermes::rhs(BoutReal t) {
 
   ///////////////////////////////////
   // Heat transmission through sheath
+  // Note: Have to calculate in field-aligned coordinates
+
+  Field3D Ne_FA = toFieldAligned(Ne);
+  Field3D Te_FA = toFieldAligned(Te);
+  Field3D Ti_FA = toFieldAligned(Ti);
+
   wall_power = 0.0; // Diagnostic output
   if (sheath_yup) {
     TRACE("electron sheath yup heat transmission");
+
+    Field3D sheath_dpe{0.0};
+
     switch (sheath_model) {
     case 0:
     case 2:
@@ -2570,13 +2579,13 @@ int Hermes::rhs(BoutReal t) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           // Temperature and density at the sheath entrance
           BoutReal tesheath = floor(
-              0.5 * (Te(r.ind, mesh->yend, jz) + Te(r.ind, mesh->yend + 1, jz)),
+              0.5 * (Te_FA(r.ind, mesh->yend, jz) + Te_FA(r.ind, mesh->yend + 1, jz)),
               0.0);
           BoutReal tisheath = floor(
-              0.5 * (Ti(r.ind, mesh->yend, jz) + Ti(r.ind, mesh->yend + 1, jz)),
+              0.5 * (Ti_FA(r.ind, mesh->yend, jz) + Ti_FA(r.ind, mesh->yend + 1, jz)),
               0.0);
           BoutReal nesheath = floor(
-              0.5 * (Ne(r.ind, mesh->yend, jz) + Ne(r.ind, mesh->yend + 1, jz)),
+              0.5 * (Ne_FA(r.ind, mesh->yend, jz) + Ne_FA(r.ind, mesh->yend + 1, jz)),
               0.0);
 
           // Sound speed (normalised units)
@@ -2594,16 +2603,20 @@ int Hermes::rhs(BoutReal t) {
           // Divide by volume of cell, and 2/3 to get pressure
           BoutReal power =
               flux / (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
-          ddt(Pe)(r.ind, mesh->yend, jz) -= (2. / 3) * power;
+          sheath_dpe(r.ind, mesh->yend, jz) = -(2. / 3) * power;
           wall_power(r.ind, mesh->yend) += power;
         }
       }
       break;
     }
     }
+    ddt(Pe) += fromFieldAligned(sheath_dpe);
   }
   if (sheath_ydown) {
     TRACE("electron sheath ydown heat transmission");
+
+    Field3D sheath_dpe{0.0};
+
     switch (sheath_model) {
     case 0:
     case 2:
@@ -2611,14 +2624,14 @@ int Hermes::rhs(BoutReal t) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           // Temperature and density at the sheath entrance
-          BoutReal tesheath = floor(0.5 * (Te(r.ind, mesh->ystart, jz) +
-                                           Te(r.ind, mesh->ystart - 1, jz)),
+          BoutReal tesheath = floor(0.5 * (Te_FA(r.ind, mesh->ystart, jz) +
+                                           Te_FA(r.ind, mesh->ystart - 1, jz)),
                                     0.0);
-          BoutReal tisheath = floor(0.5 * (Ti(r.ind, mesh->ystart, jz) +
-                                           Ti(r.ind, mesh->ystart - 1, jz)),
+          BoutReal tisheath = floor(0.5 * (Ti_FA(r.ind, mesh->ystart, jz) +
+                                           Ti_FA(r.ind, mesh->ystart - 1, jz)),
                                     0.0);
-          BoutReal nesheath = floor(0.5 * (Ne(r.ind, mesh->ystart, jz) +
-                                           Ne(r.ind, mesh->ystart - 1, jz)),
+          BoutReal nesheath = floor(0.5 * (Ne_FA(r.ind, mesh->ystart, jz) +
+                                           Ne_FA(r.ind, mesh->ystart - 1, jz)),
                                     0.0);
 
           // Sound speed (normalised units)
@@ -2637,13 +2650,15 @@ int Hermes::rhs(BoutReal t) {
           // Divide by volume of cell, and 2/3 to get pressure
           BoutReal power = flux / (coord->dy(r.ind, mesh->ystart) *
                                    coord->J(r.ind, mesh->ystart));
-          ddt(Pe)(r.ind, mesh->ystart, jz) -= (2. / 3) * power;
+          sheath_dpe(r.ind, mesh->ystart, jz) = -(2. / 3) * power;
           wall_power(r.ind, mesh->ystart) += power;
         }
       }
       break;
     }
     }
+
+    ddt(Pe) += fromFieldAligned(sheath_dpe);
   }
   // Transfer and source terms
   if (thermal_force) {
@@ -2866,6 +2881,9 @@ int Hermes::rhs(BoutReal t) {
 
   if (sheath_yup) {
     TRACE("ion sheath yup heat transmission");
+    
+    Field3D sheath_dpi{0.0};
+
     switch (sheath_model) {
     case 0:
     case 2:
@@ -2874,13 +2892,13 @@ int Hermes::rhs(BoutReal t) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           // Temperature and density at the sheath entrance
           BoutReal tesheath = floor(
-              0.5 * (Te(r.ind, mesh->yend, jz) + Te(r.ind, mesh->yend + 1, jz)),
+              0.5 * (Te_FA(r.ind, mesh->yend, jz) + Te_FA(r.ind, mesh->yend + 1, jz)),
               0.0);
           BoutReal tisheath = floor(
-              0.5 * (Ti(r.ind, mesh->yend, jz) + Ti(r.ind, mesh->yend + 1, jz)),
+              0.5 * (Ti_FA(r.ind, mesh->yend, jz) + Ti_FA(r.ind, mesh->yend + 1, jz)),
               0.0);
           BoutReal nesheath = floor(
-              0.5 * (Ne(r.ind, mesh->yend, jz) + Ne(r.ind, mesh->yend + 1, jz)),
+              0.5 * (Ne_FA(r.ind, mesh->yend, jz) + Ne_FA(r.ind, mesh->yend + 1, jz)),
               0.0);
 
           // Sound speed (normalised units)
@@ -2898,16 +2916,20 @@ int Hermes::rhs(BoutReal t) {
           // Divide by volume of cell, and 2/3 to get pressure
           BoutReal power =
               flux / (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
-          ddt(Pi)(r.ind, mesh->yend, jz) -= (2. / 3) * power;
+          sheath_dpi(r.ind, mesh->yend, jz) = -(2. / 3) * power;
           wall_power(r.ind, mesh->yend) += power;
         }
       }
       break;
     }
     }
+    ddt(Pi) += fromFieldAligned(sheath_dpi);
   }
   if (sheath_ydown) {
     TRACE("ion sheath ydown heat transmission");
+
+    Field3D sheath_dpi{0.0};
+
     switch (sheath_model) {
     case 0:
     case 2:
@@ -2915,14 +2937,14 @@ int Hermes::rhs(BoutReal t) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           // Temperature and density at the sheath entrance
-          BoutReal tesheath = floor(0.5 * (Te(r.ind, mesh->ystart, jz) +
-                                           Te(r.ind, mesh->ystart - 1, jz)),
+          BoutReal tesheath = floor(0.5 * (Te_FA(r.ind, mesh->ystart, jz) +
+                                           Te_FA(r.ind, mesh->ystart - 1, jz)),
                                     0.0);
-          BoutReal tisheath = floor(0.5 * (Ti(r.ind, mesh->ystart, jz) +
-                                           Ti(r.ind, mesh->ystart - 1, jz)),
+          BoutReal tisheath = floor(0.5 * (Ti_FA(r.ind, mesh->ystart, jz) +
+                                           Ti_FA(r.ind, mesh->ystart - 1, jz)),
                                     0.0);
-          BoutReal nesheath = floor(0.5 * (Ne(r.ind, mesh->ystart, jz) +
-                                           Ne(r.ind, mesh->ystart - 1, jz)),
+          BoutReal nesheath = floor(0.5 * (Ne_FA(r.ind, mesh->ystart, jz) +
+                                           Ne_FA(r.ind, mesh->ystart - 1, jz)),
                                     0.0);
 
           // Sound speed (normalised units)
@@ -2940,13 +2962,15 @@ int Hermes::rhs(BoutReal t) {
           // Divide by volume of cell, and 2/3 to get pressure
           BoutReal power = flux / (coord->dy(r.ind, mesh->ystart) *
                                    coord->J(r.ind, mesh->ystart));
-          ddt(Pi)(r.ind, mesh->ystart, jz) -= (2. / 3) * power;
+          sheath_dpi(r.ind, mesh->ystart, jz) = -(2. / 3) * power;
           wall_power(r.ind, mesh->ystart) += power;
         }
       }
       break;
     }
     }
+
+    ddt(Pi) += fromFieldAligned(sheath_dpi);
   }
 
   //////////////////////
