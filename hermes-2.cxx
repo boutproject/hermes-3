@@ -682,9 +682,23 @@ int Hermes::init(bool restarting) {
   try {
     Curlb_B.covariant = false; // Contravariant
     mesh->get(Curlb_B, "bxcv");
+  
   } catch (BoutException &e) {
-    output_warn.write("No curvature vector in input grid");
-    Curlb_B = 0.0;
+    try {
+      // May be 2D, reading as 3D
+      Vector2D curv2d;
+      curv2d.covariant = false;
+      mesh->get(curv2d, "bxcv");
+      Curlb_B = curv2d;
+    } catch (BoutException &e) {
+      if (j_diamag) {
+        // Need curvature
+        throw;
+      } else {
+        output_warn.write("No curvature vector in input grid");
+        Curlb_B = 0.0;
+      }
+    }
   }
   
   if (Options::root()["mesh"]["paralleltransform"].as<std::string>() == "shifted") {
