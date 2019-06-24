@@ -2350,6 +2350,12 @@ int Hermes::rhs(BoutReal t) {
 	if (elec_sound[i] > max_speed[i]) {
 	  max_speed[i] = elec_sound[i];
 	}
+
+        // Limit to 100x reference sound speed or light speed
+        BoutReal lim = BOUTMIN(100., 3e8/Cs0);
+        if (max_speed[i] > lim) {
+          max_speed[i] = lim;
+        }
       }
 
       ddt(Vort) -= FV::Div_par(Vort, 0.0, max_speed);
@@ -2433,9 +2439,16 @@ int Hermes::rhs(BoutReal t) {
                           Cs0; // Alfven speed (normalised by Cs0)
       Field3D elec_sound = sqrt(mi_me) * sound_speed; // Electron sound speed
       for (auto& i : max_speed.getRegion(RGN_ALL)) {
+        // Maximum of Alfven or thermal electron speed
 	if (elec_sound[i] > max_speed[i]) {
 	  max_speed[i] = elec_sound[i];
 	}
+
+        // Limit to 100x reference sound speed or light speed
+        BoutReal lim = BOUTMIN(100., 3e8/Cs0);
+        if (max_speed[i] > lim) {
+          max_speed[i] = lim;
+        }
       }
 
       ddt(VePsi) -= FV::Div_par(Ve - Vi, 0.0, max_speed);
