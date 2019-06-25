@@ -2315,7 +2315,7 @@ int Hermes::rhs(BoutReal t) {
       // Ion collisional viscosity.
       // Contains poloidal viscosity
 
-      ddt(Vort) -= Div(0.5 * Pi_ci * Curlb_B) -
+      ddt(Vort) += Div(0.5 * Pi_ci * Curlb_B) -
                    Div_n_bxGrad_f_B_XPPM(1. / 3, Pi_ci, vort_bndry_flux);
     }
 
