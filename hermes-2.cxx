@@ -420,19 +420,22 @@ int Hermes::init(bool restarting) {
 
   // Get switches from each variable section
   auto& optne = opt["Ne"];
-  Sn = optne["source"].withDefault(Field2D{0.0});
-  Sn /= Omega_ci;
+  NeSource = optne["source"].withDefault(Field3D{0.0});
+  NeSource /= Omega_ci;
+  Sn = DC(NeSource);
 
   // Inflowing density carries momentum
   OPTION(optne, density_inflow, false);
 
   auto& optpe = opt["Pe"];
-  Spe = optpe["source"].withDefault(Field2D{0.0});
-  Spe /= Omega_ci;
+  PeSource = optpe["source"].withDefault(Field3D{0.0});
+  PeSource /= Omega_ci;
+  Spe = DC(PeSource);
 
   auto& optpi = opt["Pi"];
-  Spi = optpi["source"].withDefault(Field2D{0.0});
-  Spi /= Omega_ci;
+  PiSource = optpi["source"].withDefault(Field3D{0.0});
+  PiSource /= Omega_ci;
+  Spi = DC(PiSource);
 
   OPTION(optsc, core_sources, false);
   if (core_sources) {
@@ -673,6 +676,10 @@ int Hermes::init(bool restarting) {
   if (source_vary_g11) {
     // Average metric tensor component
     g11norm = coord->g11 / averageY(coord->g11);
+
+    NeSource *= g11norm;
+    PeSource *= g11norm;
+    PiSource *= g11norm;
   }
 
   /////////////////////////////////////////////////////////
@@ -795,7 +802,6 @@ int Hermes::init(bool restarting) {
 
     // Sources added to Ne, Pe and Pi equations
     SAVE_REPEAT(NeSource, PeSource, PiSource);
-    NeSource = PeSource = PiSource = 0.0;
   }
 
   psi = phi = 0.0;
@@ -2220,14 +2226,12 @@ int Hermes::rhs(BoutReal t) {
 
       ddt(Sn) = -source_i * NeErr;
     }
-  } else {
-    NeSource = Sn * where(Sn, 1.0, Ne);
-  }
 
-  if (source_vary_g11) {
-    NeSource *= g11norm;
+    if (source_vary_g11) {
+      NeSource *= g11norm;
+    }
   }
-
+  
   ddt(Ne) += NeSource;
   
   if (low_n_diffuse) {
@@ -2770,22 +2774,26 @@ int Hermes::rhs(BoutReal t) {
         PeSource = Spe * where(Spe, PeTarget, Pe);
       }
     }
+    
+    if (source_vary_g11) {
+      PeSource *= g11norm;
+    }
+    
   } else {
     // Not adapting sources
 
     if (energy_source) {
       // Add the same amount of energy to each particle
       PeSource = Spe * Nelim / DC(Nelim);
+      
+      if (source_vary_g11) {
+        PeSource *= g11norm;
+      }
     } else {
       // Add the same amount of energy per volume
       // If no particle source added, then this can lead to
       // a small number of particles with a lot of energy!
-      PeSource = Spe * where(Spe, 1.0, Pe);
     }
-  }
-
-  if (source_vary_g11) {
-    PeSource *= g11norm;
   }
 
   ddt(Pe) += PeSource;
@@ -3045,24 +3053,29 @@ int Hermes::rhs(BoutReal t) {
         PiSource = Spi * where(Spi, PiTarget, Pi);
       }
     }
+    
+    if (source_vary_g11) {
+      PiSource *= g11norm;
+    }
+    
   } else {
     // Not adapting sources
 
     if (energy_source) {
       // Add the same amount of energy to each particle
       PiSource = Spi * Nelim / DC(Nelim);
+
+      if (source_vary_g11) {
+        PiSource *= g11norm;
+      }
+      
     } else {
       // Add the same amount of energy per volume
       // If no particle source added, then this can lead to
       // a small number of particles with a lot of energy!
-      PiSource = Spi * where(Spi, 1.0, Pi);
     }
   }
-
-  if (source_vary_g11) {
-    PiSource *= g11norm;
-  }
-
+  
   ddt(Pi) += PiSource;
   
   ///////////////////////////////////////////////////////////
