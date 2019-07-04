@@ -316,7 +316,7 @@ int Hermes::init(bool restarting) {
   OPTION(optsc, ne_hyper_z, -1.0);
   OPTION(optsc, pe_hyper_z, -1.0);
 
-  OPTION(optsc, low_n_diffuse, true);
+  OPTION(optsc, low_n_diffuse, false);
   OPTION(optsc, low_n_diffuse_perp, false);
 
   OPTION(optsc, resistivity_multiply, 1.0);
@@ -2501,8 +2501,9 @@ int Hermes::rhs(BoutReal t) {
     }
 
     // Ion-neutral friction
-    if (ion_neutral_rate > 0.0)
-      ddt(NVi) -= ion_neutral * NVi;
+    if (ion_neutral_rate > 0.0) {
+      ddt(NVi) -= ion_neutral_rate * NVi;
+    }
 
     if (numdiff > 0.0) {
       ddt(NVi) += numdiff * Div_par_diffusion_index(Vi);
@@ -2535,6 +2536,15 @@ int Hermes::rhs(BoutReal t) {
     
     if (hyperpar > 0.0) {
       ddt(NVi) -= FV::D4DY4_Index(Vi) / mi_me;
+    }
+
+    if (low_n_diffuse) {
+      // Diffusion which kicks in at very low density, in order to
+      // help prevent negative density regions
+      ddt(NVi) += FV::Div_par_K_Grad_par(SQ(coord->dy) * coord->g_22 * 1e-4 / Nelim, NVi);
+    }
+    if (low_n_diffuse_perp) {
+      ddt(NVi) += Div_Perp_Lap_FV_Index(1e-4 / Nelim, NVi, ne_bndry_flux);
     }
   }
 
