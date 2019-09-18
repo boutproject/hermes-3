@@ -34,6 +34,11 @@
 #include <bout/assert.hxx>
 #include <bout/fv_ops.hxx>
 
+
+// OpenADAS interface Atomicpp by T.Body
+#include "atomicpp/ImpuritySpecies.hxx"
+#include "atomicpp/Prad.hxx"
+
 namespace FV {
   template<typename CellEdges = MC>
   const Field3D Div_par_fvv(const Field3D &f_in, const Field3D &v_in,
