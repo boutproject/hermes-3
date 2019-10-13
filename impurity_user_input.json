@@ -1,0 +1,23 @@
+{
+    "c": {
+        "name": "Carbon",
+        "symbol": "c",
+        "atomic_number": 6,
+        "has_charge_exchange": true,
+        "year": 1996
+    },
+    "n": {
+        "name": "Nitrogen",
+        "symbol": "n",
+        "atomic_number": 7,
+        "has_charge_exchange": false,
+        "year": 1996
+    },
+    "ne": {
+        "name": "Neon",
+        "symbol": "ne",
+        "atomic_number": 10,
+        "has_charge_exchange": false,
+        "year": 1996
+    }
+}

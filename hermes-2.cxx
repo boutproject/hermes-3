@@ -591,7 +591,25 @@ int Hermes::init(bool restarting) {
   /////////////////////////////////////////////////////////
   // Impurities
   TRACE("Impurities");
+  
+  impurity_adas = optsc["impurity_adas"]
+                      .doc("Use Atomic++ interface to ADAS")
+                      .withDefault<bool>(false);
 
+  if (impurity_adas) {
+
+    fimp = optsc["impurity_fraction"]
+               .doc("Fixed fraction impurity, multiple of electron density")
+               .withDefault(0.0);
+
+    string impurity_species =
+        optsc["impurity_species"]
+            .doc("Short name of the ADAS species e.g. 'c' or 'ne'")
+            .withDefault("c");
+
+    impurity = new ImpuritySpecies(impurity_species);
+  }
+  
   OPTION(optsc, carbon_fraction, -1.);
   if (carbon_fraction > 0.0) {
     SAVE_REPEAT(Rzrad);

@@ -33,6 +33,9 @@ class Hermes;
 
 #include "neutral-model.hxx"
 
+// OpenADAS interface Atomicpp by T.Body
+#include "atomicpp/ImpuritySpecies.hxx"
+
 class Hermes : public PhysicsModel {
 public:
   virtual ~Hermes() {}
@@ -83,6 +86,10 @@ private:
   BoutReal ion_neutral_rate; // Fixed ion-neutral collision rate
   
   // Impurity radiation
+  BoutReal fimp;             // Impurity fraction (of Ne)
+  bool impurity_adas;        // True if using ImpuritySpecies, false if using
+  ImpuritySpecies *impurity; // Atomicpp impurity
+  
   BoutReal carbon_fraction;
   Field3D Rzrad;             // Radiated power
   RadiatedPower *carbon_rad; // Carbon cooling curve
