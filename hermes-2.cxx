@@ -599,7 +599,7 @@ int Hermes::init(bool restarting) {
   if (impurity_adas) {
 
     fimp = optsc["impurity_fraction"]
-               .doc("Fixed fraction impurity, multiple of electron density")
+               .doc("Fixed fraction ADAS impurity, multiple of electron density")
                .withDefault(0.0);
 
     string impurity_species =
@@ -3346,12 +3346,58 @@ int Hermes::rhs(BoutReal t) {
   //////////////////////////////////////////////////////////////
   // Impurities
 
-  if (carbon_fraction > 0.0) {
-    TRACE("Carbon impurity radiation");
-    Rzrad = carbon_rad->power(Te * Tnorm, Ne * Nnorm,
-                              Ne * (Nnorm * carbon_fraction)); // J / m^3 / s
-    Rzrad /= SI::qe * Tnorm * Nnorm * Omega_ci;                // Normalise
+  if ((carbon_fraction > 0.0) || impurity_adas) {
+    
+    if (carbon_fraction > 0.0) {
+      TRACE("Carbon impurity radiation");
+      Rzrad = carbon_rad->power(Te * Tnorm, Ne * Nnorm,
+                                Ne * (Nnorm * carbon_fraction)); // J / m^3 / s
+    } else {
+      Rzrad = 0.0;
+    }
 
+    if (impurity_adas) {
+      for (auto &i : Rzrad.getRegion("RGN_NOY")) {
+        // Calculate cell centre (C), left (L) and right (R) values
+        
+        BoutReal Te_C = Te[i],
+          Te_L = 0.5 * (Te[i.ym()] + Te[i]),
+          Te_R = 0.5 * (Te[i] + Te[i.yp()]);
+        BoutReal Ne_C = Ne[i],
+          Ne_L = 0.5 * (Ne[i.ym()] + Ne[i]),
+          Ne_R = 0.5 * (Ne[i] + Ne[i.yp()]);
+        
+        BoutReal Rz_L = computeRadiatedPower(*impurity,
+                                             Te_L * Tnorm,        // electron temperature [eV]
+                                             Ne_L * Nnorm,        // electron density [m^-3]
+                                             fimp * Ne_L * Nnorm, // impurity density [m^-3]
+                                             0.0);       // Neutral density [m^-3]
+        
+        BoutReal Rz_C = computeRadiatedPower(*impurity,
+                                             Te_C * Tnorm,        // electron temperature [eV]
+                                             Ne_C * Nnorm,        // electron density [m^-3]
+                                             fimp * Ne_C * Nnorm, // impurity density [m^-3]
+                                             0.0);       // Neutral density [m^-3]
+        
+        BoutReal Rz_R = computeRadiatedPower(*impurity,
+                                             Te_R * Tnorm,        // electron temperature [eV]
+                                             Ne_R * Nnorm,        // electron density [m^-3]
+                                             fimp * Ne_R * Nnorm, // impurity density [m^-3]
+                                             0.0);       // Neutral density [m^-3]
+        
+        // Jacobian (Cross-sectional area)
+        BoutReal J_C = coord->J[i],
+          J_L = 0.5 * (coord->J[i.ym()] + coord->J[i]),
+          J_R = 0.5 * (coord->J[i] + coord->J[i.yp()]);
+        
+        // Simpson's rule, calculate average over cell
+        Rzrad[i] += (J_L * Rz_L +
+                     4. * J_C * Rz_C +
+                     J_R * Rz_R) / (6. * J_C);
+      }
+    }
+    
+    Rzrad /= SI::qe * Tnorm * Nnorm * Omega_ci;                // Normalise
     ddt(Pe) -= (2. / 3) * Rzrad;
   }
 
