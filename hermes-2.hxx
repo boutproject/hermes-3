@@ -27,12 +27,14 @@ class Hermes;
 #include <bout/physicsmodel.hxx>
 
 #include <invert_laplace.hxx>
-#include <bout/invert/laplace3d.hxx>
 #include <bout/invert/laplacexy.hxx>
 #include <bout/invert/laplacexz.hxx>
 #include <bout/constants.hxx>
 
 #include "neutral-model.hxx"
+
+// OpenADAS interface Atomicpp by T.Body
+#include "atomicpp/ImpuritySpecies.hxx"
 
 class Hermes : public PhysicsModel {
 public:
@@ -81,9 +83,13 @@ private:
   NeutralModel *neutrals; // Handles evolution of neutral gas
   bool neutral_friction;
   BoutReal frecycle;  // Recycling fraction
-  BoutReal ion_neutral; // Ion-neutral collision rate
+  BoutReal ion_neutral_rate; // Fixed ion-neutral collision rate
   
   // Impurity radiation
+  BoutReal fimp;             // Impurity fraction (of Ne)
+  bool impurity_adas;        // True if using ImpuritySpecies, false if using
+  ImpuritySpecies *impurity; // Atomicpp impurity
+  
   BoutReal carbon_fraction;
   Field3D Rzrad;             // Radiated power
   RadiatedPower *carbon_rad; // Carbon cooling curve
@@ -104,7 +110,8 @@ private:
   bool thermal_force; // Force due to temperature gradients
   bool electron_viscosity; // Electron parallel viscosity
   bool ion_viscosity;   // Ion viscosity
-  bool electron_neutral;   // Include electron-neutral collisions
+  bool electron_neutral;   // Include electron-neutral collisions in resistivity
+  bool ion_neutral;        // Include ion-neutral collisions in ion collision time
   bool poloidal_flows;  // Include y derivatives in diamagnetic and ExB drifts
   bool thermal_flux;    // Include parallel and perpendicular energy flux from Te gradients
   bool thermal_conduction; // Braginskii electron heat conduction
@@ -169,7 +176,8 @@ private:
   BoutReal scale_num_cs; // Scale numerical sound speed
   BoutReal floor_num_cs; // Apply a floor to the numerical sound speed
   bool vepsi_dissipation; // Dissipation term in VePsi equation
-
+  bool vort_dissipation; // Dissipation term in Vorticity equation
+  
   // Sources and profiles
   
   bool ramp_mesh;   // Use Ne,Pe in the grid file for starting ramp target

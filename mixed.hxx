@@ -20,16 +20,20 @@ public:
   void addPressure(int x, int y, int z, BoutReal dpdt) {ddt(Pn)(x,y,z) += dpdt;}
   void addMomentum(int x, int y, int z, BoutReal dnvdt) {ddt(NVn)(x,y,z) += dnvdt;}
   
+  Field3D getDensity() override {return Nn;}
+
 private:
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
-  
+
+  Field3D Pnlim;  // Limited pressure, used to calculate pressure-driven diffusive flows
+  Field3D Vn;
   Field3D Dnn;
   
   bool sheath_ydown, sheath_yup;
   
   BoutReal neutral_gamma; // Heat transmission for neutrals
   
-  BoutReal numdiff;  // Numerical dissipation
+  BoutReal nn_floor; // Minimum Nn used when dividing NVn by Nn to get Vn.
 };
 
 

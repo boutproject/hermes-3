@@ -6,6 +6,8 @@
 
 #include "div_ops.hxx"
 
+using bout::globals::mesh;
+
 FullVelocity::FullVelocity(Solver *solver, Mesh *mesh, Options &options)
     : NeutralModel(options) {
   /*! 2D (X-Y) full velocity model
@@ -14,6 +16,8 @@ FullVelocity::FullVelocity(Solver *solver, Mesh *mesh, Options &options)
    * V_x, V_y, V_z
    */
 
+  coord = mesh->getCoordinates();
+  
   options.get("gamma_ratio", gamma_ratio, 5. / 3);
   options.get("viscosity", neutral_viscosity, 1e-2);
   options.get("bulk", neutral_bulk, 1e-2);
@@ -154,8 +158,6 @@ void FullVelocity::update(const Field3D &Ne, const Field3D &Te,
                           const Field3D &Ti, const Field3D &Vi) {
 
   mesh->communicate(Nn2D, Vn2D, Pn2D);
-
-  Coordinates *coord = mesh->getCoordinates();
   
   // Navier-Stokes for axisymmetric neutral gas profiles
   // Nn2D, Pn2D and Tn2D are unfloored
@@ -348,12 +350,19 @@ void FullVelocity::update(const Field3D &Ne, const Field3D &Te,
   }
 }
 
-void FullVelocity::addDensity(int x, int y, int z, BoutReal dndt) {
-  ddt(Nn2D)(x, y) += dndt / mesh->LocalNz; // Average over Z
+void FullVelocity::addDensity(int x, int y, int UNUSED(z), BoutReal dndt) {
+  ddt(Nn2D)(x, y) += dndt / mesh->LocalNz; // Average over Z, so Z index unused
 }
 
-void FullVelocity::addPressure(int x, int y, int z, BoutReal dpdt) {
+void FullVelocity::addPressure(int x, int y, int UNUSED(z), BoutReal dpdt) {
   ddt(Pn2D)(x, y) += dpdt / mesh->LocalNz;
 }
 
-void FullVelocity::addMomentum(int x, int y, int z, BoutReal dnvdt) {}
+void FullVelocity::addMomentum(int x, int y, int UNUSED(z), BoutReal dnvdt) {
+  // Momentum added in the direction of the magnetic field
+  // Vn2D is covariant and b = e_y / (JB) to write:
+  //
+  // V_{||n} = b dot V_n = Vn2D.y / (JB)
+
+  ddt(Vn2D.y)(x, y) += dnvdt * (coord->J(x, y) * coord->Bxy (x, y)) / Nn2D(x, y); 
+}

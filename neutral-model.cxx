@@ -10,6 +10,8 @@
 #include "none.hxx"
 #include "recycling.hxx"
 
+using bout::globals::mesh;
+
 NeutralModel *NeutralModel::create(Solver *solver, Mesh *mesh,
                                    Options &options) {
   // Decide which neutral model to use
