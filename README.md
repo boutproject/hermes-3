@@ -40,7 +40,7 @@ please cite the relevant papers.
 Installing BOUT++
 =================
 
-This version works with BOUT++ v4.2.2 or later
+This version works with BOUT++ v4.3 or later
 
     git clone https://github.com/boutproject/BOUT-dev.git
     cd BOUT-dev
