@@ -473,7 +473,7 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D &n, const Field3D &f,
     dfdx = toFieldAligned(dfdx);
     Field3D n_fa = toFieldAligned(n);
     
-    Field3D yresult = 0.0;
+    Field3D yresult{zeroFrom(n_fa)};
     
     for (int i = mesh->xstart; i <= mesh->xend; i++) {
       int ys = mesh->ystart - 1;

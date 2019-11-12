@@ -42,21 +42,23 @@
 namespace FV {
   template<typename CellEdges = MC>
   const Field3D Div_par_fvv(const Field3D &f_in, const Field3D &v_in,
-                            const Field3D &wave_speed, bool fixflux=true) {
+                            const Field3D &wave_speed_in, bool fixflux=true) {
 
     ASSERT1(areFieldsCompatible(f_in, v_in));
-    ASSERT1(areFieldsCompatible(f_in, wave_speed));
+    ASSERT1(areFieldsCompatible(f_in, wave_speed_in));
 
     Mesh* mesh = f_in.getMesh();
 
     CellEdges cellboundary;
-    
+
+    /// Ensure that f, v and wave_speed are field aligned
     Field3D f = toFieldAligned(f_in, "RGN_NOX");
     Field3D v = toFieldAligned(v_in, "RGN_NOX");
+    Field3D wave_speed = toFieldAligned(wave_speed_in, "RGN_NOX");
 
     Coordinates *coord = f_in.getCoordinates();
 
-    Field3D result{zeroFrom(f_in)};
+    Field3D result{zeroFrom(f)};
     
     // Only need one guard cell, so no need to communicate fluxes
     // Instead calculate in guard cells to preserve fluxes
@@ -235,30 +237,48 @@ int Hermes::init(bool restarting) {
 
   OPTION(optsc, evolve_plasma, true);
 
-  OPTION(optsc, electromagnetic, true);
-  OPTION(optsc, FiniteElMass, true);
+  electromagnetic = optsc["electromagnetic"]
+                        .doc("Include vector potential psi in Ohm's law?")
+                        .withDefault<bool>(true);
 
-  j_diamag = optsc["j_diamag"].doc("Diamagnetic current: Vort <-> Pe").withDefault<bool>(true);
-  j_par = optsc["j_par"].doc("Parallel current:    Vort <-> Psi").withDefault<bool>(true);
+  FiniteElMass = optsc["FiniteElMass"]
+                     .doc("Include electron inertia in Ohm's law?")
+                     .withDefault<bool>(true);
+
+  j_diamag = optsc["j_diamag"]
+                 .doc("Diamagnetic current: Vort <-> Pe")
+                 .withDefault<bool>(true);
+  
+  j_par = optsc["j_par"]
+              .doc("Parallel current:    Vort <-> Psi")
+              .withDefault<bool>(true);
+  
   OPTION(optsc, parallel_flow, true);
   OPTION(optsc, parallel_flow_p_term, parallel_flow);
   OPTION(optsc, pe_par, true);
   OPTION(optsc, pe_par_p_term, pe_par);
   OPTION(optsc, resistivity, true);
   OPTION(optsc, thermal_flux, true);
+
   thermal_force = optsc["thermal_force"]
                     .doc("Force on electrons due to temperature gradients")
                     .withDefault<bool>(true);
+  
   OPTION(optsc, electron_viscosity, true);
   OPTION(optsc, ion_viscosity, true);
+
   electron_neutral = optsc["electron_neutral"]
                        .doc("Include electron-neutral collisions in resistivity?")
                        .withDefault<bool>(true);
+  
   ion_neutral = optsc["ion_neutral"]
                   .doc("Include ion-neutral collisions in tau_i?")
                   .withDefault<bool>(false);
 
-  OPTION(optsc, poloidal_flows, true);
+  poloidal_flows = optsc["poloidal_flows"]
+                       .doc("Include ExB flows in X-Y plane")
+                       .withDefault(true);
+  
   OPTION(optsc, ion_velocity, true);
 
   OPTION(optsc, thermal_conduction, true);
@@ -425,7 +445,7 @@ int Hermes::init(bool restarting) {
 
   // Get switches from each variable section
   auto& optne = opt["Ne"];
-  NeSource = optne["source"].withDefault(Field3D{0.0});
+  NeSource = optne["source"].doc("Source term in ddt(Ne)").withDefault(Field3D{0.0});
   NeSource /= Omega_ci;
   Sn = DC(NeSource);
 
@@ -541,10 +561,10 @@ int Hermes::init(bool restarting) {
   TRACE("Loading metric tensor");
 
   Coordinates *coord = mesh->getCoordinates();
-  
-  bool loadmetric = optsc["loadmetric"].withDefault(true);
-  if (loadmetric) {
-    // Load Rxy, Bpxy etc. to create orthogonal metric
+
+  if (optsc["loadmetric"]
+          .doc("Load Rxy, Bpxy etc. to create orthogonal metric?")
+          .withDefault(true)) {
     LoadMetric(rho_s0, Bnorm);
   } else {
     Coordinates *coord = mesh->getCoordinates();
@@ -571,7 +591,7 @@ int Hermes::init(bool restarting) {
 
     coord->geometry(); // Calculate other metrics
   }
-  
+
   sqrtB = sqrt(coord->Bxy); // B^(1/2)
   B32 = sqrtB * coord->Bxy; // B^(3/2)
 
@@ -609,8 +629,10 @@ int Hermes::init(bool restarting) {
 
     impurity = new ImpuritySpecies(impurity_species);
   }
-  
-  OPTION(optsc, carbon_fraction, -1.);
+
+  carbon_fraction = optsc["carbon_fraction"]
+          .doc("Include a fixed fraction carbon impurity. < 0 means none.")
+          .withDefault(-1.);
   if (carbon_fraction > 0.0) {
     SAVE_REPEAT(Rzrad);
     SAVE_ONCE(carbon_fraction);
@@ -849,9 +871,12 @@ int Hermes::rhs(BoutReal t) {
   }
 
   // Communicate evolving variables
+  // Note: Parallel slices are not calculated because parallel derivatives
+  // are calculated using field aligned quantities
+  
   mesh->communicateXZ(EvolvingVars);
   for (auto* f : EvolvingVars.field3d()) {
-    f->mergeYupYdown();
+    f->clearParallelSlices(); // Make sure no parallel slices
   }
 
   Field3D Nelim = floor(Ne, 1e-5);
@@ -2085,7 +2110,6 @@ int Hermes::rhs(BoutReal t) {
         SQ((5. / 2) * Pilim) * SQ(Grad(Tifree)); // This term includes a
                                                  // parallel component which is
                                                  // cancelled in first term
-    
     // Perpendicular part from curvature
     Pi_ciperp =
         -0.5 * 0.96 * Pi * tau_i *
@@ -2131,11 +2155,13 @@ int Hermes::rhs(BoutReal t) {
       }
     }
     
-    mesh->communicate(Pi_ciperp, Pi_cipar);
+    mesh->communicateXZ(Pi_ciperp, Pi_cipar);
 
     Pi_ciperp.clearParallelSlices();
     Pi_cipar.clearParallelSlices();
     
+    Pi_ciperp = toFieldAligned(Pi_ciperp);
+    Pi_cipar = toFieldAligned(Pi_cipar);
     {
       int jy = 1;
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -2154,20 +2180,21 @@ int Hermes::rhs(BoutReal t) {
     }
     
     // Smooth Pi_ciperp along Y
-    Pi_ciperp.applyBoundary("neumann_o2");
-    Field3D Pi_ciperp_orig = copy(toFieldAligned(Pi_ciperp));
+    //Pi_ciperp.applyBoundary("neumann_o2");
+    Field3D Pi_ciperp_orig = copy(Pi_ciperp);
     for (auto &i : Pi_ciperp.getRegion("RGN_NOBNDRY")) {
       Pi_ciperp[i] = 0.5*Pi_ciperp_orig[i] + 0.25*(Pi_ciperp_orig[i.ym()] + Pi_ciperp_orig[i.yp()]);
     }
     Pi_ciperp = fromFieldAligned(Pi_ciperp);
-    mesh->communicate(Pi_ciperp);
+    Pi_cipar = fromFieldAligned(Pi_cipar);
+    
+    mesh->communicateXZ(Pi_ciperp);
     
     // Apply boundary conditions
     Pi_ciperp.applyBoundary("neumann_o2");
     Pi_cipar.applyBoundary("neumann_o2");
 
     Pi_ci = Pi_cipar + Pi_ciperp;
-    
   }
 
   ///////////////////////////////////////////////////////////
@@ -2636,7 +2663,7 @@ int Hermes::rhs(BoutReal t) {
   if (sheath_yup) {
     TRACE("electron sheath yup heat transmission");
 
-    Field3D sheath_dpe{0.0};
+    Field3D sheath_dpe{zeroFrom(Ne_FA)}; // Field aligned
 
     switch (sheath_model) {
     case 0:
@@ -2953,7 +2980,7 @@ int Hermes::rhs(BoutReal t) {
   if (sheath_yup) {
     TRACE("ion sheath yup heat transmission");
     
-    Field3D sheath_dpi{0.0};
+    Field3D sheath_dpi{zeroFrom(Te_FA)}; // Field aligned
 
     switch (sheath_model) {
     case 0:
@@ -3126,11 +3153,11 @@ int Hermes::rhs(BoutReal t) {
     Field2D NeDC = averageY(DC(Ne));
     Field2D VortDC = averageY(DC(Vort));
 
-    if ((mesh->XGLOBAL(mesh->xstart) - mesh->xstart) < radial_inner_width) {
+    if ((mesh->getGlobalXIndex(mesh->xstart) - mesh->xstart) < radial_inner_width) {
       // This processor contains points inside the inner radial boundary
 
       int imax = mesh->xstart + radial_inner_width - 1 -
-                 (mesh->XGLOBAL(mesh->xstart) - mesh->xstart);
+                 (mesh->getGlobalXIndex(mesh->xstart) - mesh->xstart);
       if (imax > mesh->xend) {
         imax = mesh->xend;
       }
@@ -3144,7 +3171,7 @@ int Hermes::rhs(BoutReal t) {
       for (int i = imin; i <= imax; ++i) {
         // position inside the boundary (0 = on boundary, 0.5 = first cell)
         BoutReal pos =
-            static_cast<BoutReal>(mesh->XGLOBAL(i) - mesh->xstart) + 0.5;
+            static_cast<BoutReal>(mesh->getGlobalXIndex(i) - mesh->xstart) + 0.5;
 
         // Diffusion coefficient which increases towards the boundary
         BoutReal D = radial_buffer_D * (1. - pos / radial_inner_width);
@@ -3191,12 +3218,12 @@ int Hermes::rhs(BoutReal t) {
     // Number of points in outer guard cells
     int nguard = mesh->LocalNx - mesh->xend - 1;
 
-    if (mesh->GlobalNx - nguard - mesh->XGLOBAL(mesh->xend) <=
+    if (mesh->GlobalNx - nguard - mesh->getGlobalXIndex(mesh->xend) <=
         radial_outer_width) {
 
       // Outer boundary
       int imin =
-          mesh->GlobalNx - nguard - radial_outer_width - mesh->XGLOBAL(0);
+          mesh->GlobalNx - nguard - radial_outer_width - mesh->getGlobalXIndex(0);
       if (imin < mesh->xstart) {
         imin = mesh->xstart;
       }
@@ -3205,7 +3232,7 @@ int Hermes::rhs(BoutReal t) {
 
         // position inside the boundary
         BoutReal pos =
-            static_cast<BoutReal>(mesh->GlobalNx - nguard - mesh->XGLOBAL(i)) -
+            static_cast<BoutReal>(mesh->GlobalNx - nguard - mesh->getGlobalXIndex(i)) -
             0.5;
 
         // Diffusion coefficient which increases towards the boundary
