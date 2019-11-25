@@ -130,7 +130,7 @@ classical_diffusion = true # Collisional cross-field diffusion, including perpen
 # Neutrals
 
 neutral_friction = true  # Friction term in vorticity equation
-ion_neutral = -1  # Simple ion-neutral damping term. < 0 means off
+ion_neutral = false  # Include ion-neutral collisions in tau_i?
 
 frecycle = 0.8
 

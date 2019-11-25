@@ -2709,7 +2709,7 @@ int Hermes::rhs(BoutReal t) {
   if (sheath_ydown) {
     TRACE("electron sheath ydown heat transmission");
 
-    Field3D sheath_dpe{0.0};
+    Field3D sheath_dpe{zeroFrom(Te_FA)};
 
     switch (sheath_model) {
     case 0:
@@ -3026,7 +3026,7 @@ int Hermes::rhs(BoutReal t) {
   if (sheath_ydown) {
     TRACE("ion sheath ydown heat transmission");
 
-    Field3D sheath_dpi{0.0};
+    Field3D sheath_dpi{zeroFrom(Ti_FA)};
 
     switch (sheath_model) {
     case 0:
