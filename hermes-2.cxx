@@ -367,6 +367,14 @@ int Hermes::init(bool restarting) {
   OPTION(optsc, radial_outer_width, 4);
   OPTION(optsc, radial_buffer_D, 1.0);
 
+  resistivity_boundary = optsc["resistivity_boundary"]
+    .doc("Normalised resistivity in radial boundary region")
+    .withDefault(1.0);
+
+  resistivity_boundary_width = optsc["resistivity_boundary_width"]
+    .doc("Number of grid cells in radial (x) direction")
+    .withDefault(0);
+  
   // Output additional information
   OPTION(optsc, verbose, false);    // Save additional fields
   OPTION(optsc, output_ddt, false); // Save time derivatives
@@ -2031,6 +2039,50 @@ int Hermes::rhs(BoutReal t) {
       
       // Add collision rate to the electron-ion rate
       nu += nu_ne;
+    }
+
+    if (resistivity_boundary_width > 0 &&
+        ((mesh->getGlobalXIndex(mesh->xstart) - mesh->xstart)
+         < resistivity_boundary_width)) {
+      // A region near the boundary with different resistivity
+      
+      int imax = mesh->xstart + resistivity_boundary_width - 1 -
+        (mesh->getGlobalXIndex(mesh->xstart) - mesh->xstart);
+      if (imax > mesh->xend) {
+        imax = mesh->xend;
+      }
+      int imin = mesh->xstart;
+      if (!mesh->firstX()) {
+        --imin; // Calculate in guard cells, for radial fluxes
+      }
+      for (int i = imin; i <= imax; ++i) {
+        for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+          for (int k = 0; k < mesh->LocalNz; ++k) {
+            nu(i, j, k) = resistivity_boundary;
+          }
+        }
+      }
+    }
+    
+    // Number of points in outer guard cells
+    int nguard = mesh->LocalNx - mesh->xend - 1;
+    
+    if (resistivity_boundary_width > 0 &&
+        (mesh->GlobalNx - nguard - mesh->getGlobalXIndex(mesh->xend) <=
+         resistivity_boundary_width)) {
+      // Outer boundary
+      int imin =
+        mesh->GlobalNx - nguard - resistivity_boundary_width - mesh->getGlobalXIndex(0);
+      if (imin < mesh->xstart) {
+        imin = mesh->xstart;
+      }
+      for (int i = imin; i <= mesh->xend; ++i) {
+        for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+          for (int k = 0; k < mesh->LocalNz; ++k) {
+            nu(i, j, k) = resistivity_boundary;
+          }
+        }
+      }
     }
   }
 
