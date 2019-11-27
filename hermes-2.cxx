@@ -2544,7 +2544,7 @@ int Hermes::rhs(BoutReal t) {
     }
 
     if (hyperpar > 0.0) {
-      ddt(VePsi) -= FV::D4DY4_Index(Ve - Vi);
+      ddt(VePsi) -= hyperpar * FV::D4DY4_Index(Ve - Vi);
     }
     
     if (vepsi_dissipation) {
@@ -2647,7 +2647,7 @@ int Hermes::rhs(BoutReal t) {
     }
     
     if (hyperpar > 0.0) {
-      ddt(NVi) -= FV::D4DY4_Index(Vi) / mi_me;
+      ddt(NVi) -= hyperpar * FV::D4DY4_Index(Vi) / mi_me;
     }
 
     if (low_n_diffuse) {
