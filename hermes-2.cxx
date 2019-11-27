@@ -1514,6 +1514,7 @@ int Hermes::rhs(BoutReal t) {
     }
     }
   } else {
+    // sheath_ydown == false
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         for (int jy = mesh->ystart - 1; jy >= 0; jy--) {
@@ -1529,6 +1530,12 @@ int Hermes::rhs(BoutReal t) {
 
           Pi(r.ind, jy, jz) = Ne(r.ind, jy, jz) * Ti(r.ind, jy, jz);
           Pilim(r.ind, jy, jz) = Nelim(r.ind, jy, jz) * Tilim(r.ind, jy, jz);
+
+          // No flows
+          Vi(r.ind, jy, jz) = -Vi(r.ind, mesh->ystart, jz);
+          NVi(r.ind, jy, jz) = -NVi(r.ind, mesh->ystart, jz);
+          Ve(r.ind, jy, jz) = -Ve(r.ind, mesh->ystart, jz);
+          Jpar(r.ind, jy, jz) = -Jpar(r.ind, mesh->ystart, jz);
         }
       }
     }
