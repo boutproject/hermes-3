@@ -1,22 +1,22 @@
 
-NOUT = 100     # number of output time-steps
-TIMESTEP = 10.0  # time between outputs
+NOUT = 50
+TIMESTEP = 10
 
 TwistShift = false  # use twist-shift condition?
 ballooning = true
 shiftinitial = false
 ShiftWithoutTwist=true
 
-ZPERIOD=10
+# ZPERIOD=10
 
 [restart]
 init_missing=true
 
 [mesh]
 
-nx = 20   # Radial resolution including 4 guard cells
+nx = 64   # Radial resolution including 4 guard cells
 ny = 16   # Parallel direction
-nz = 16   # number of points in toroidal direction
+nz = 64   # number of points in toroidal direction
 
 Lrad = 0.1  # Radial width of domain [m]
 Lpol = 0.5  # Poloidal length of domain [m]
@@ -75,17 +75,17 @@ upwind = W3
 # Time-integration solver
 
 [solver]
-mxstep = 1000000
 
 # Note: If evolving neutrals, need preconditioning
 type = cvode
 use_precon = true
 
-maxl = 10
-
 ATOL = 1.0e-10  # absolute tolerance
 RTOL = 1.0e-5   # relative tolerance
 mxstep = 1000000  # Maximum internal steps per output
+
+cvode_max_order = 2
+cvode_stability_limit_detection = true
 
 [laplace]  # This is used for Delp2 operator
 all_terms = true
@@ -130,10 +130,21 @@ output_ddt = false # Output time derivatives
 verbose = true     # Output additional fields
 
 #######################
+# radial buffers
+radial_buffers = false
+radial_inner_width = 4
+radial_outer_width = 4
+radial_buffer_D = 1.0
+
+resistivity_boundary = 1e-2
+resistivity_boundary_width = 4
+
+#######################
 # Numerical dissipation
 
 vepsi_dissipation = true  # Parallel dissipation on Ve-Vi
 vort_dissipation = true
+hyperpar = 0.1
 
 # Flux limiters
 kappa_limit_alpha = 0.2 # SOLPS style heat flux limiter
@@ -156,13 +167,13 @@ pe_par         = true  # Parallel pressure gradient: Pe <-> Psi
 resistivity    = true  # Resistivity: Psi -> Pe
 thermal_flux   = true
 thermal_force  = true
-electron_viscosity = false
+electron_viscosity = true
 ion_viscosity  = true  # Ion parallel viscosity
 thermal_conduction = true
 
-frecycle = 0.9  # Neutral gas recycling fraction
+frecycle = 0.99  # Neutral gas recycling fraction
 
-carbon_fraction = 0.0  # Carbon % 
+carbon_fraction = 0.0
 
 excitation = true # Hydrogen neutral excitation radiation
 
@@ -171,7 +182,6 @@ sinks = false
 sink_invlpar =  0.2  # 5m parallel connection length
 sheath_closure = false
 drift_wave = false
-
 
 #######################
 # Transport coefficients
@@ -201,7 +211,7 @@ ramp_timescale = 1e4
 
 #######################
 # Plasma sheath
-sheath_model = 0  # 0 = Bohn, 1 = Loizu, 2 = Bohm + free density
+sheath_model = 2  # 0 = Bohn, 1 = Loizu, 2 = Bohm + free density
 sheath_yup = true
 sheath_ydown = false
 sheath_gamma_e = 4   # Electron sheath heat transmission
@@ -248,7 +258,7 @@ bndry_xout = neumann_o2
 scale = 1
 function = 0.1 + 0.01*sin(3*z - x)
 
-source = 1e6 * H(x-0.5) * exp(-x/0.2) * H(0.2 - y/(2π))
+source = 1e4* H(x-0.5) * exp(-(x-0.5)/0.2) * H(0.2 - y/(2π))
 
 [Vort]
 function = 0
@@ -262,13 +272,13 @@ bndry_xout = dirichlet_o2
 scale = 1
 function = 0.01
 
-source = 1e6 * H(x-0.5) * exp(-x/0.2) * H(0.2 - y/(2π))
+source = 1e4 * H(x-0.5) * exp(-(x-0.5)/0.2) * H(0.2 - y/(2π))
 
 [Pi]
 scale = 1
 function = 0.01
 
-source = 1e6 * H(x-0.5) * exp(-x/0.2) * H(0.2 - y/(2π))
+source = 1e4 * H(x-0.5) * exp(-(x-0.5)/0.2) * H(0.2 - y/(2π))
 
 [Ve]
 
