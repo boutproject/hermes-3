@@ -647,6 +647,11 @@ int Hermes::init(bool restarting) {
     carbon_rad = new HutchinsonCarbonRadiation();
   }
 
+  if ((carbon_fraction > 0.0) || impurity_adas) {
+    // Save impurity radiation
+    SAVE_REPEAT(Rzrad);
+  }
+  
   /////////////////////////////////////////////////////////
   // Read profiles from the mesh
   TRACE("Reading profiles");
