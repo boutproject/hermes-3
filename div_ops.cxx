@@ -725,11 +725,11 @@ const Field2D Laplace_FV(const Field2D &k, const Field2D &f) {
 
       BoutReal gU = (coord->g22(i, j) + coord->g22(i, j + 1)) *
                     (f(i, j + 1) - f(i, j)) /
-                    (coord->dx(i, j + 1) + coord->dx(i, j));
+                    (coord->dy(i, j + 1) + coord->dy(i, j));
 
       BoutReal gD = (coord->g22(i, j - 1) + coord->g22(i, j)) *
                     (f(i, j) - f(i, j - 1)) /
-                    (coord->dx(i, j) + coord->dx(i, j - 1));
+                    (coord->dy(i, j) + coord->dy(i, j - 1));
 
       // Flow right
 
@@ -748,13 +748,13 @@ const Field2D Laplace_FV(const Field2D &k, const Field2D &f) {
 
       flux = gU * 0.25 * (coord->J(i, j + 1) + coord->J(i, j)) *
              (k(i, j + 1) + k(i, j));
-      result(i, j) += flux / (coord->dx(i, j) * coord->J(i, j));
+      result(i, j) += flux / (coord->dy(i, j) * coord->J(i, j));
 
       // Flow down
 
       flux = gD * 0.25 * (coord->J(i, j - 1) + coord->J(i, j)) *
              (k(i, j - 1) + k(i, j));
-      result(i, j) -= flux / (coord->dx(i, j) * coord->J(i, j));
+      result(i, j) -= flux / (coord->dy(i, j) * coord->J(i, j));
     }
   return result;
 }
