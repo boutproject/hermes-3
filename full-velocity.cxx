@@ -274,7 +274,7 @@ void FullVelocity::update(const Field3D &Ne, const Field3D &Te,
     BoutReal heatflux =
         q * (coord->J(r.ind, mesh->ystart) + coord->J(r.ind, mesh->ystart - 1)) /
         (sqrt(coord->g_22(r.ind, mesh->ystart)) +
-         sqrt(coord->g_22(r.ind, mesh->ystart - 11)));
+         sqrt(coord->g_22(r.ind, mesh->ystart - 1)));
 
     // Divide by volume of cell, and multiply by 2/3 to get pressure
     ddt(Pn2D)(r.ind, mesh->ystart) -=
