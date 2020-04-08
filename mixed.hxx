@@ -7,6 +7,9 @@
 #define __NEUTRAL_MIXED_H__
 
 #include "neutral-model.hxx"
+#include <invert_laplace.hxx>
+
+#include <memory>
 
 class NeutralMixed : public NeutralModel {
 public:
@@ -22,6 +25,8 @@ public:
   
   Field3D getDensity() override {return Nn;}
 
+  /// Preconditioner function
+  void precon(BoutReal t, BoutReal gamma, BoutReal delta);
 private:
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
 
@@ -34,6 +39,9 @@ private:
   BoutReal neutral_gamma; // Heat transmission for neutrals
   
   BoutReal nn_floor; // Minimum Nn used when dividing NVn by Nn to get Vn.
+
+  bool precondition {true}; // Enable preconditioner?
+  std::unique_ptr<Laplacian> inv; // Laplacian inversion used for preconditioning
 };
 
 
