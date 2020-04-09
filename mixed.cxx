@@ -370,5 +370,6 @@ void NeutralMixed::precon(BoutReal UNUSED(t), BoutReal gamma,
   inv->setCoefD(-gamma * Dnn);
 
   ddt(Nn) = inv->solve(ddt(Nn));
+  ddt(NVn) = inv->solve(ddt(NVn));
   ddt(Pn) = inv->solve(ddt(Pn));
 }
