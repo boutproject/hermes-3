@@ -1,10 +1,10 @@
 
 BOUT_TOP	= ../..
 
-TARGET = hermes-2
+TARGET = hermes-3
 
-DIRS = atomicpp
+DIRS = src
 
-SOURCEC		= hermes-2.cxx div_ops.cxx loadmetric.cxx radiation.cxx neutral-model.cxx diffusion2d.cxx recycling.cxx full-velocity.cxx mixed.cxx
+SOURCEC		= hermes-3.cxx
 
 include $(BOUT_TOP)/make.config
