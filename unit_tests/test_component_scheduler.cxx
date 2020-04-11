@@ -11,7 +11,12 @@ struct TestComponent : public Component {
 
 struct TestMultiply : public Component {
   TestMultiply(const std::string&, Options&, const MeshMap&) {}
-  void transform(Options &state) { state["answer"].force(state["answer"].as<int>() * 2); }
+  
+  void transform(Options &state) {
+    // Note: Using set<>() and get<>() for quicker access, avoiding printing
+    set(state["answer"],
+        get<int>(state["answer"]) * 2);
+  }
 };
 
 RegisterComponent<TestComponent> registertestcomponent("testcomponent");

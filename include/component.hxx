@@ -63,4 +63,25 @@ template <typename DerivedType>
 using RegisterComponent = RegisterInFactory<Component, DerivedType>;
 
 
+/// Faster non-printing getter for Options
+/// If this fails, it will throw BoutException
+template<typename T>
+T get(const Options& option) {
+  try {
+    return bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value);
+  } catch (const std::bad_cast &e) {
+    // Convert to a more useful error message
+    throw BoutException("Could not convert %s to type %s",
+                        option.str().c_str(), typeid(T).name());
+  }
+}
+
+/// Set values in an option. This could be optimised, but
+/// currently the is_value private variable would need to be modified.
+template<typename T>
+Options& set(Options& option, T value) {
+  option.force(std::move(value));
+  return option;
+}
+
 #endif // HERMES_COMPONENT_H
