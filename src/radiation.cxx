@@ -4,7 +4,7 @@
 #include <output.hxx>
 #include <utils.hxx>
 
-#include "radiation.hxx"
+#include "../include/radiation.hxx"
 
 #include <fstream>
 #include <sstream>

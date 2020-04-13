@@ -23,7 +23,7 @@ auto firstArg(const Head &head, Tail... ) {
 /// Example
 ///   Field3D Ne = ..., Te = ...;
 /// 
-///   Field3D result = cell_average(
+///   Field3D result = cellAverage(
 ///          [](BoutReal Ne, BoutReal Te) {return Ne*Te;} // The function to evaluate
 ///          Ne.getRegion("RGN_NOBNDRY")  // The region to iterate over
 ///          )(Ne, Te);                   // The input fields
@@ -32,7 +32,7 @@ auto firstArg(const Head &head, Tail... ) {
 /// is the same as the input fields.
 ///
 template <typename Function, typename RegionType>
-auto cell_average(Function func, RegionType region) {
+auto cellAverage(Function func, RegionType region) {
   return [&](const auto &... args) {
     // Use the first argument to set the result mesh etc.
     Field3D result{emptyFrom(firstArg(args...))};

@@ -20,7 +20,7 @@ using CellAverageTest = FakeMeshFixture;
 
 TEST_F(CellAverageTest, ConstantValue) {
   Field3D field{1.0};
-  Field3D result = cell_average([](BoutReal) { return 3.0; },
+  Field3D result = cellAverage([](BoutReal) { return 3.0; },
                                 field.getRegion("RGN_NOBNDRY"))(field);
 
   ASSERT_TRUE(result.isAllocated());
@@ -30,7 +30,7 @@ TEST_F(CellAverageTest, ConstantValue) {
 
 TEST_F(CellAverageTest, ConstantField) {
   Field3D field{1.0};
-  Field3D result = cell_average([](BoutReal val) { return val * 2.0; },
+  Field3D result = cellAverage([](BoutReal val) { return val * 2.0; },
                                 field.getRegion("RGN_NOBNDRY"))(field);
 
   ASSERT_TRUE(result.isAllocated());

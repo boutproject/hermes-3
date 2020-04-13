@@ -3,7 +3,19 @@
 Code structure
 ==============
 
+Component initialisation
+------------------------
 
+Inputs to the constructors are:
+
+* `name`
+* `alloptions`
+* `solver`
+
+The `name` is a string labelling the instance. The `alloptions` tree contains at least:
+
+* `alloptions[name]` options for this instance
+* `alloptions['units']` 
 
 State
 -----
@@ -20,5 +32,23 @@ a tree of objects (Options). At the start of each iteration
   * `Tesla`       Magnetic field normalisation
   * `meters`      Length normalisation
   * `inv_meters_cubed`     Density normalisation
+
+* `species`  Plasma species
+
+  * `electrons`
+  * `species1`  Example "h", "he2+"
+
+    * `AA`  Atomic mass
+    
+    * `density`
+    * `momentum`
+    * `pressure`
+    * `velocity`
+    * `temperature`
+
+    * `collision_rate`   Normalised collision frequency
+    * `density_source`
+    * `momentum_source`
+    * `energy_source`
 
 

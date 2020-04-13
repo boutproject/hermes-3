@@ -91,4 +91,40 @@ Options& set(Options& option, T value) {
   return option;
 }
 
+/// Add value to a given option. If not already set, treats
+/// as zero and sets the option to the value.
+template<typename T>
+Options& add(Options& option, T value) {
+  if (!option.isSet()) {
+    option = value;
+  } else {
+    try {
+      set(option, value + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value));
+    } catch (const std::bad_cast &e) {
+      // Convert to a more useful error message
+      throw BoutException("Could not convert %s to type %s",
+                          option.str().c_str(), typeid(T).name());
+    }
+  }
+  return option;
+}
+
+/// Add value to a given option. If not already set, treats
+/// as zero and sets the option to the value.
+template<typename T>
+Options& subtract(Options& option, T value) {
+  if (!option.isSet()) {
+    option = -value;
+  } else {
+    try {
+      set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value) - value);
+    } catch (const std::bad_cast &e) {
+      // Convert to a more useful error message
+      throw BoutException("Could not convert %s to type %s",
+                          option.str().c_str(), typeid(T).name());
+    }
+  }
+  return option;
+}
+
 #endif // HERMES_COMPONENT_H

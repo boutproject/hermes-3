@@ -2,6 +2,8 @@
 
 #include "utils.hxx" // for trim, strsplit
 
+#include "../include/ionisation.hxx"
+
 ComponentScheduler::ComponentScheduler(Options &options,
                                        Solver *solver) {
   
@@ -18,7 +20,7 @@ ComponentScheduler::ComponentScheduler(Options &options,
       continue;
     }
     components.push_back(Component::create(name_trimmed,
-                                           Options::root()[name_trimmed],
+                                           Options::root(),
                                            solver));
   }
 }

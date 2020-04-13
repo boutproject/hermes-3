@@ -27,9 +27,6 @@
 int Hermes::init(bool restarting) {
   auto &options = Options::root()["hermes"];
 
-  // For forward compatibility with multiple meshes
-  MeshMap meshes = {{"mesh", bout::globals::mesh}};
-
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
   Nnorm = options["Nnorm"].doc("Reference density [m^-3]").withDefault(1e19);
@@ -57,7 +54,7 @@ int Hermes::init(bool restarting) {
   options["restarting"] = restarting;
   
   // Create the components
-  scheduler = ComponentScheduler::create(options, meshes);
+  scheduler = ComponentScheduler::create(options, solver);
   
   return 0;
 }
