@@ -10,14 +10,12 @@
 #include <string>
 #include <memory>
 
-class Mesh; // Probably already included in options
-
-using MeshMap = std::map<std::string, Mesh*>;
+class Solver; // Time integrator
 
 /// Interface for a component of a simulation model
 /// 
 /// The constructor of derived types should have signature
-///   (std::string name, Options &options, std::map<std::string, Mesh*> meshes)
+///   (std::string name, Options &options, Solver *solver)
 /// 
 struct Component {
   /// Modify the given simulation state
@@ -26,17 +24,23 @@ struct Component {
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
   virtual void finally(const Options &UNUSED(state)) { }
+
+  /// Add extra fields for output, or set attributes e.g docstrings
+  virtual void annotate(Options &UNUSED(state)) { }
+
+  /// Preconditioning
+  virtual void precon(const Options &UNUSED(state), BoutReal UNUSED(gamma)) { }
   
   /// Create a Component
   static std::unique_ptr<Component> create(const std::string &name, // The species/name for this instance
-                                           Options &options,  // Settings from input
-                                           const MeshMap &meshes); 
+                                           Options &options,  // Settings from input);
+                                           Solver *solver); // Time integration solver
 };
 
 ///////////////////////////////////////////////////////////////////
 
 using ComponentCreator =
-    std::function<Component *(std::string, Options &, const MeshMap &)>;
+  std::function<Component *(std::string, Options &, Solver *)>;
 
 using ComponentFactory = Factory<Component, ComponentCreator>;
 
@@ -46,8 +50,8 @@ public:
   RegisterInFactory(const std::string &type) {
     ComponentFactory::getInstance().add(
         type,
-        [](const std::string &name, Options &options, const MeshMap &meshes)
-            -> Component * { return new DerivedType(name, options, meshes); });
+        [](const std::string &name, Options &options, Solver *solver)
+            -> Component * { return new DerivedType(name, options, solver); });
   }
 };
 
@@ -67,6 +71,9 @@ using RegisterComponent = RegisterInFactory<Component, DerivedType>;
 /// If this fails, it will throw BoutException
 template<typename T>
 T get(const Options& option) {
+  if (!option.isSet()) {
+    throw BoutException("Option %s has no value", option.str().c_str());
+  }
   try {
     return bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value);
   } catch (const std::bad_cast &e) {

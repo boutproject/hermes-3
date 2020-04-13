@@ -17,14 +17,19 @@
 /// 
 class ComponentScheduler {
 public:
-  ComponentScheduler(Options &options, const MeshMap &meshes);
+  ComponentScheduler(Options &options, Solver *solver);
 
   static std::unique_ptr<ComponentScheduler> create(Options &options,
-                                                    const MeshMap &meshes);
+                                                    Solver *solver);
   
   /// Run the scheduler, modifying the state
   void transform(Options &state);
-  
+
+  /// Add metadata, extra outputs
+  void annotate(Options &state);
+
+  /// Preconditioning
+  void precon(const Options &state, BoutReal gamma);
 private:
   /// The components to be executed in order
   std::vector<std::unique_ptr<Component>> components;

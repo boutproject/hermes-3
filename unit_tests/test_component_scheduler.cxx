@@ -4,13 +4,13 @@
 
 namespace {
 struct TestComponent : public Component {
-  TestComponent(const std::string&, Options&, const MeshMap&) {}
+  TestComponent(const std::string&, Options&, Solver *) {}
   void transform(Options &state) { state["answer"] = 42; }
 };
   
 
 struct TestMultiply : public Component {
-  TestMultiply(const std::string&, Options&, const MeshMap&) {}
+  TestMultiply(const std::string&, Options&, Solver *) {}
   
   void transform(Options &state) {
     // Note: Using set<>() and get<>() for quicker access, avoiding printing
@@ -24,11 +24,9 @@ RegisterComponent<TestMultiply> registertestcomponent2("multiply");
 } // namespace
 
 TEST(SchedulerTest, OneComponent) {
-  MeshMap meshes;
-
   Options options;
   options["components"] = "testcomponent";
-  auto scheduler = ComponentScheduler::create(options, meshes);
+  auto scheduler = ComponentScheduler::create(options, nullptr);
 
   EXPECT_FALSE(options.isSet("answer"));
   scheduler->transform(options);
@@ -37,14 +35,13 @@ TEST(SchedulerTest, OneComponent) {
 }
 
 TEST(SchedulerTest, TwoComponents) {
-  MeshMap meshes;
-
   Options options;
   options["components"] = "testcomponent, multiply";
-  auto scheduler = ComponentScheduler::create(options, meshes);
+  auto scheduler = ComponentScheduler::create(options, nullptr);
 
   EXPECT_FALSE(options.isSet("answer"));
   scheduler->transform(options);
   ASSERT_TRUE(options.isSet("answer"));
   ASSERT_TRUE(options["answer"] == 42 * 2);
 }
+

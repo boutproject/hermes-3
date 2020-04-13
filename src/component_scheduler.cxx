@@ -3,7 +3,7 @@
 #include "utils.hxx" // for trim, strsplit
 
 ComponentScheduler::ComponentScheduler(Options &options,
-                                       const MeshMap &meshes) {
+                                       Solver *solver) {
   
   std::string component_names = options["components"]
                                     .doc("Components in order of execution")
@@ -19,13 +19,13 @@ ComponentScheduler::ComponentScheduler(Options &options,
     }
     components.push_back(Component::create(name_trimmed,
                                            Options::root()[name_trimmed],
-                                           meshes));
+                                           solver));
   }
 }
 
 std::unique_ptr<ComponentScheduler> ComponentScheduler::create(Options &options,
-                                                               const MeshMap &meshes) {
-  return std::make_unique<ComponentScheduler>(options, meshes);
+                                                               Solver *solver) {
+  return std::make_unique<ComponentScheduler>(options, solver);
 }
 
 
@@ -37,5 +37,18 @@ void ComponentScheduler::transform(Options &state) {
   // Enable components to update themselves based on the final state
   for(auto &component : components) {
     component->finally(state);
+  }
+}
+
+void ComponentScheduler::annotate(Options &state) {
+  // Run through each component
+  for(auto &component : components) {
+    component->annotate(state);
+  }
+}
+
+void ComponentScheduler::precon(const Options &state, BoutReal gamma) {
+  for(auto &component : components) {
+    component->precon(state, gamma);
   }
 }
