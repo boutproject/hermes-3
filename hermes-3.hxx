@@ -41,6 +41,9 @@ private:
 
   /// Stores the dimensional units
   Options units;
+
+  /// The evolving state
+  Options state;
   
   /// Input normalisation constants
   BoutReal Tnorm, Nnorm, Bnorm;

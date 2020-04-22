@@ -62,8 +62,6 @@ int Hermes::init(bool restarting) {
 }
 
 int Hermes::rhs(BoutReal time) {
-  Options state;
-
   state["time"] = time;
   state["units"] = units; 
 
@@ -81,7 +79,11 @@ int Hermes::rhs(BoutReal time) {
  * to timestep
  * @param[in] delta   Not used here
  */
-int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal delta) { return 0; }
+int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal UNUSED(delta)) {
+  state["time"] = t;
+  scheduler->precon(state, gamma);
+  return 0;
+}
 
 // Standard main() function
 BOUTMAIN(Hermes);
