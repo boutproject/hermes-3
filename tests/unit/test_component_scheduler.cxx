@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 
-#include "../include/component_scheduler.hxx"
+#include "../../include/component_scheduler.hxx"
 
 namespace {
 struct TestComponent : public Component {

@@ -1,5 +1,5 @@
 
-BOUT_TOP	= ../../..
+BOUT_TOP	= ../../../..
 
 GTEST_BASE = $(BOUT_TOP)/externalpackages/googletest
 GTEST_DIR = $(GTEST_BASE)/googletest
@@ -73,9 +73,9 @@ TEST_OBJECTS = $(TEST_SOURCES:%.cxx=%.o)
 $(TEST_OBJECTS): | $(GTEST_SENTINEL)
 
 serial_tests: makefile $(BOUT_TOP)/make.config $(OBJ) $(LIB) checklib \
-              $(SUB_LIBS) $(TEST_OBJECTS) hermes_test_main.a ../src.a
+              $(SUB_LIBS) $(TEST_OBJECTS) hermes_test_main.a ../../src.a
 	@echo "  Linking tests"
-	@$(LD) -o $@ $(TEST_OBJECTS) hermes_test_main.a $(LDFLAGS) $(BOUT_LIBS) $(SUB_LIBS) ../src.a
+	@$(LD) -o $@ $(TEST_OBJECTS) hermes_test_main.a $(LDFLAGS) $(BOUT_LIBS) $(SUB_LIBS) ../../src.a
 
 # Note: This depends on GTEST_SENTINEL, which checks out Google Test if not present
 #       The correct behaviour relies on the dependencies being checked in left-to-right order

@@ -3,7 +3,7 @@
 
 #include "test_extras.hxx" // FakeMesh
 
-#include "../include/ionisation.hxx"
+#include "../../include/ionisation.hxx"
 
 /// Global mesh
 namespace bout{

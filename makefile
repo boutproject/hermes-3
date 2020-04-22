@@ -10,6 +10,6 @@ SOURCEC		= hermes-3.cxx
 include $(BOUT_TOP)/make.config
 
 check-unit-tests: src.a
-	$(MAKE) -C unit_tests check
+	$(MAKE) -C tests/unit check
 
 check: check-unit-tests

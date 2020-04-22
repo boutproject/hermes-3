@@ -1,7 +1,7 @@
 
 #include "gtest/gtest.h"
 
-#include "../include/integrate.hxx"
+#include "../../include/integrate.hxx"
 
 #include "test_extras.hxx" // FakeMesh
 

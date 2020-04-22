@@ -1,7 +1,7 @@
 
 #include "gtest/gtest.h"
 
-#include "../include/component.hxx"
+#include "../../include/component.hxx"
 
 #include <algorithm> // std::any_of
 
