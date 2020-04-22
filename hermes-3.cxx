@@ -25,6 +25,7 @@
 #include <bout/constants.hxx>
 
 #include "include/ionisation.hxx"
+#include "include/neutral_mixed.hxx"
 
 int Hermes::init(bool restarting) {
   auto &options = Options::root()["hermes"];
