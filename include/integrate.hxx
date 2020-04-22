@@ -32,8 +32,9 @@ auto firstArg(const Head &head, Tail... ) {
 /// is the same as the input fields.
 ///
 template <typename Function, typename RegionType>
-auto cellAverage(Function func, RegionType region) {
-  return [&](const auto &... args) {
+auto cellAverage(Function func, const RegionType &region) {
+  // Note: Capture by value or func and region go out of scope
+  return [=](const auto &... args) { 
     // Use the first argument to set the result mesh etc.
     Field3D result{emptyFrom(firstArg(args...))};
     result.allocate();

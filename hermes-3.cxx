@@ -24,6 +24,8 @@
 
 #include <bout/constants.hxx>
 
+#include "include/ionisation.hxx"
+
 int Hermes::init(bool restarting) {
   auto &options = Options::root()["hermes"];
 
