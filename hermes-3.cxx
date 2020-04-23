@@ -63,7 +63,7 @@ int Hermes::init(bool restarting) {
 }
 
 int Hermes::rhs(BoutReal time) {
-  state["time"] = time;
+  set(state["time"], time);
   state["units"] = units; 
 
   // Call all the components

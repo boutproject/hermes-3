@@ -1,0 +1,27 @@
+nout = 15
+timestep = 20
+
+[mesh]
+nx = 10
+ny = 10
+nz = 10
+
+yn = y / (2π)
+zn = z / (2π)
+
+[solver]
+mxstep = 1000
+
+[hermes]
+components = h
+
+[h]
+type = neutral_mixed
+
+[Nh]
+
+function = exp(-(x - 0.5)^2 - (mesh:yn - 0.5)^2 - (mesh:zn - 0.5)^2)
+
+[Ph]
+
+function = 0.1 * Nh:function

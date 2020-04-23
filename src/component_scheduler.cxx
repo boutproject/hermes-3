@@ -20,7 +20,7 @@ ComponentScheduler::ComponentScheduler(Options &options,
       continue;
     }
     components.push_back(Component::create(name_trimmed,
-                                           Options::root(),
+                                           Options::root()[name_trimmed],
                                            solver));
   }
 }

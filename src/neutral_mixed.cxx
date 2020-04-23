@@ -145,11 +145,11 @@ void NeutralMixed::transform(Options &state) {
 
   // Set values in the state
   auto& localstate = state["species"][name];
-  localstate["density"] = Nn;
-  localstate["pressure"] = Pn;
-  localstate["momentum"] = NVn;
-  localstate["velocity"] = Vn;
-  localstate["temperature"] = Tn;
+  set(localstate["density"], Nn);
+  set(localstate["pressure"], Pn);
+  set(localstate["momentum"], NVn);
+  set(localstate["velocity"], Vn);
+  set(localstate["temperature"], Tn);
 }
 
 void NeutralMixed::finally(const Options &state) {
