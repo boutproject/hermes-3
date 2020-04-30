@@ -1,32 +1,46 @@
 
-#include "full-velocity.hxx"
+#include "../include/full_velocity.hxx"
+#include "../include/div_ops.hxx"
 
-#include <boutexception.hxx>
-#include <options.hxx>
-
-#include "div_ops.hxx"
+#include "bout/mesh.hxx"
+#include "bout/solver.hxx"
 
 using bout::globals::mesh;
 
-FullVelocity::FullVelocity(Solver *solver, Mesh *mesh, Options &options)
-    : NeutralModel(options) {
-  /*! 2D (X-Y) full velocity model
-   *
-   * Vn2D is covariant (the default), so has components
-   * V_x, V_y, V_z
-   */
+NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& options, Solver *solver) : name(name) {
 
+  // This is used in both transform and finally functions
   coord = mesh->getCoordinates();
+
+  AA = options["AA"].doc("Atomic mass number").withDefault(2.0);
+
+  gamma_ratio =
+      options["gamma_ratio"].doc("Ratio of specific heats").withDefault(5. / 3);
+
+  neutral_viscosity = options["viscosity"]
+                          .doc("Normalised kinematic viscosity")
+                          .withDefault(1e-2);
+
+  neutral_bulk =
+      options["bulk"].doc("Normalised bulk viscosity").withDefault(1e-2);
+
+  neutral_conduction =
+      options["conduction"].doc("Normalised heat conduction").withDefault(1e-2);
+
+  outflow_ydown = options["outflow_ydown"]
+                      .doc("Allow outflowing neutrals?")
+                      .withDefault<bool>(false);
+
+  neutral_gamma = options["neutral_gamma"]
+                      .doc("Surface heat transmission coefficient")
+                      .withDefault(5. / 4);
+
+  // Get the normalisations
+  auto& units = Options::root()["units"];
+  BoutReal Lnorm = units["meters"];
+  BoutReal Bnorm = units["Tesla"];
+  Tnorm = units["eV"];
   
-  options.get("gamma_ratio", gamma_ratio, 5. / 3);
-  options.get("viscosity", neutral_viscosity, 1e-2);
-  options.get("bulk", neutral_bulk, 1e-2);
-  options.get("conduction", neutral_conduction, 1e-2);
-
-  OPTION(options, outflow_ydown, false); // Allow outflowing neutrals?
-
-  OPTION(options, neutral_gamma, 5. / 4);
-
   // Evolve 2D density, pressure, and velocity
   solver->add(Nn2D, "Nn");
   solver->add(Pn2D, "Pn");
@@ -75,8 +89,6 @@ FullVelocity::FullVelocity(Solver *solver, Mesh *mesh, Options &options)
   Txz.allocate();
   Tyr.allocate();
   Tyz.allocate();
-
-  Coordinates *coord = mesh->getCoordinates();
   
   for (int i = 0; i < mesh->LocalNx; i++)
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
@@ -146,27 +158,19 @@ FullVelocity::FullVelocity(Solver *solver, Mesh *mesh, Options &options)
 
   SAVE_ONCE(Urx, Ury, Uzx, Uzy);
   SAVE_ONCE(Txr, Txz, Tyr, Tyz);
-
-  // Atomic processes
-  S = 0;
-  F = 0;
-  Qi = 0;
-  Rp = 0;
 }
 
-void FullVelocity::update(const Field3D &Ne, const Field3D &Te,
-                          const Field3D &Ti, const Field3D &Vi) {
-
+/// Modify the given simulation state
+void NeutralFullVelocity::transform(Options &state) {
   mesh->communicate(Nn2D, Vn2D, Pn2D);
   
   // Navier-Stokes for axisymmetric neutral gas profiles
   // Nn2D, Pn2D and Tn2D are unfloored
   Tn2D = Pn2D / Nn2D;
 
-  // Nn and Tn are 3D floored fields, used for rate coefficients
-  Field3D Nn = floor(Nn2D, 1e-8);
-  Field3D Tn = Pn2D / Nn;
-  Tn = floor(Tn, 0.01 / Tnorm);
+  // Floored fields, used for rate coefficients
+  Field2D Nn = floor(Nn2D, 1e-8);
+  Field2D Tn = floor(Tn2D, 0.01 / Tnorm);
 
   //////////////////////////////////////////////////////
   // 2D (X-Y) full velocity model
@@ -199,12 +203,33 @@ void FullVelocity::update(const Field3D &Ne, const Field3D &Te,
     }
   }
 
+  // Exchange of parallel momentum. This could be done
+  // in a couple of ways, but here we use the fact that
+  // Vn2D is covariant and b = e_y / (JB) to write:
+  //
+  // V_{||n} = b dot V_n = Vn2D.y / (JB)
+  Field2D Vnpar = Vn2D.y / (coord->J * coord->Bxy);
+
+  // Set values in the state
+  auto& localstate = state["species"][name];
+  set(localstate["density"], Nn);
+  set(localstate["pressure"], Pn2D);
+  set(localstate["momentum"], Vnpar * Nn * AA);
+  set(localstate["velocity"], Vnpar); // Parallel velocity
+  set(localstate["temperature"], Tn);
+}
+
+/// Use the final simulation state to update internal state
+/// (e.g. time derivatives)
+void NeutralFullVelocity::finally(const Options &state) {
+  
   // Density
   ddt(Nn2D) = -Div(Vn2D, Nn2D);
 
   Field2D Nn2D_floor = floor(Nn2D, 1e-2);
+  
   // Velocity
-  ddt(Vn2D) = -Grad(Pn2D) / Nn2D_floor;
+  ddt(Vn2D) = -Grad(Pn2D) / (AA * Nn2D_floor);
 
   //////////////////////////////////////////////////////
   // Momentum advection
@@ -314,33 +339,26 @@ void FullVelocity::update(const Field3D &Ne, const Field3D &Te,
         (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
   }
 
-  // Exchange of parallel momentum. This could be done
-  // in a couple of ways, but here we use the fact that
-  // Vn2D is covariant and b = e_y / (JB) to write:
-  //
-  // V_{||n} = b dot V_n = Vn2D.y / (JB)
-  Field2D Vnpar = Vn2D.y / (coord->J * coord->Bxy);
-
   /////////////////////////////////////////////////////
   // Atomic processes
-
-  Field3D Riz, Rrc, Rcx;
-  neutral_rates(Ne, Te, Ti, Vi, Nn, Tn, Vnpar, S, F, Qi, Rp, Riz, Rrc, Rcx);
-
-  Fperp = Rrc + Rcx; // Friction for vorticity
-
-  // Loss of momentum in the X and Z directions
-  ddt(Vn2D).x -= (DC(Rcx) + DC(Riz)) * Vn2D.x / Nn2D_floor;
-  ddt(Vn2D).z -= (DC(Rcx) + DC(Riz)) * Vn2D.z / Nn2D_floor;
+  
+  auto& localstate = state["species"][name];
 
   // Particles
-  ddt(Nn2D) += DC(S); // Average over toroidal angle z
-
-  // Energy
-  ddt(Pn2D) += (2. / 3) * DC(Qi);
+  if (localstate.isSet("density_source")) {
+    ddt(Nn2D) += get<Field2D>(localstate["density_source"]);
+  }
 
   // Momentum. Note need to turn back into covariant form
-  ddt(Vn2D).y += DC(F) * (coord->J * coord->Bxy) / Nn2D_floor;
+  if (localstate.isSet("momentum_source")) {
+    ddt(Vn2D).y += get<Field2D>(localstate["momentum_source"])
+      * (coord->J * coord->Bxy) / (AA * Nn2D_floor);
+  }
+
+  // Energy
+  if (localstate.isSet("energy_source")) {
+    ddt(Pn2D) += (2. / 3) * get<Field2D>(localstate["energy_source"]);
+  }
 
   // Density evolution
   for (auto &i : Nn2D.getRegion("RGN_ALL")) {
@@ -350,19 +368,8 @@ void FullVelocity::update(const Field3D &Ne, const Field3D &Te,
   }
 }
 
-void FullVelocity::addDensity(int x, int y, int UNUSED(z), BoutReal dndt) {
-  ddt(Nn2D)(x, y) += dndt / mesh->LocalNz; // Average over Z, so Z index unused
+/// Add extra fields for output, or set attributes e.g docstrings
+void NeutralFullVelocity::annotate(Options &state) {
+  
 }
 
-void FullVelocity::addPressure(int x, int y, int UNUSED(z), BoutReal dpdt) {
-  ddt(Pn2D)(x, y) += dpdt / mesh->LocalNz;
-}
-
-void FullVelocity::addMomentum(int x, int y, int UNUSED(z), BoutReal dnvdt) {
-  // Momentum added in the direction of the magnetic field
-  // Vn2D is covariant and b = e_y / (JB) to write:
-  //
-  // V_{||n} = b dot V_n = Vn2D.y / (JB)
-
-  ddt(Vn2D.y)(x, y) += dnvdt * (coord->J(x, y) * coord->Bxy (x, y)) / Nn2D(x, y); 
-}

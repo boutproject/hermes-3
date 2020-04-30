@@ -1,27 +1,34 @@
-/*
- * Full velocity Navier-Stokes model
- */
 
-#ifndef __NEUTRAL_FULL_VELOCITY_H__
-#define __NEUTRAL_FULL_VELOCITY_H__
+#pragma once
+#ifndef FULL_VELOCITY_H
+#define FULL_VELOCITY_H
 
-#include "neutral-model.hxx"
+#include <string>
 
-class FullVelocity : public NeutralModel {
-public:
-  FullVelocity(Solver *solver, Mesh *mesh, Options &options);
-  ~FullVelocity() {}
+#include "component.hxx"
 
-  /// Update plasma quantities
-  void update(const Field3D &Ne, const Field3D &Te, const Field3D &Ti, const Field3D &Vi);
+#include "vector2d.hxx"
+
+struct NeutralFullVelocity : public Component {
+  NeutralFullVelocity(const std::string& name, Options& options, Solver *solver);
   
-  void addDensity(int x, int y, int z, BoutReal dndt);
-  void addPressure(int x, int y, int z, BoutReal dpdt);
-  void addMomentum(int x, int y, int z, BoutReal dnvdt);
+  /// Modify the given simulation state
+  void transform(Options &state);
   
+  /// Use the final simulation state to update internal state
+  /// (e.g. time derivatives)
+  void finally(const Options &state) override;
+
+  /// Add extra fields for output, or set attributes e.g docstrings
+  void annotate(Options &state) override;
 private:
   Coordinates *coord;   // Coordinate system
 
+  std::string name; // Name of this species
+  BoutReal AA; // Atomic mass
+
+  BoutReal Tnorm;
+  
   Field2D Nn2D;         // Neutral gas density (evolving)
   Field2D Pn2D;         // Neutral gas pressure (evolving)
   Vector2D Vn2D;        // Neutral gas velocity
@@ -50,5 +57,4 @@ private:
   bool outflow_ydown; // Allow neutral outflows?
 };
 
-
-#endif // __NEUTRAL_MODEL_H__
+#endif // FULL_VELOCITY_H

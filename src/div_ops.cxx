@@ -21,7 +21,7 @@
 
 #include <mpi.h>
 
-#include "div_ops.hxx"
+#include "../include/div_ops.hxx"
 
 #include <bout/fv_ops.hxx>
 

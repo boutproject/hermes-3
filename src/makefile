@@ -7,6 +7,7 @@ SUB_NAME	= src
 TARGET		= hermes-3
 
 SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
-                  neutral_mixed.cxx
+		  div_ops.cxx \
+                  neutral_mixed.cxx full_velocity.cxx
 
 include $(BOUT_TOP)/make.config

@@ -36,6 +36,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& options, Solver *so
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
                      .withDefault<bool>(true);
+  
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
 
@@ -50,7 +51,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& options, Solver *so
           .doc("Save derivatives to output?")
           .withDefault<bool>(false)) {
     SAVE_REPEAT(ddt(Nn), ddt(Pn), ddt(NVn));
-  }  
+  }
 }
 
 void NeutralMixed::transform(Options &state) {
