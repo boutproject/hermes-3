@@ -8,6 +8,7 @@ TARGET		= hermes-3
 
 SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
 		  div_ops.cxx \
-                  neutral_mixed.cxx full_velocity.cxx
+                  neutral_mixed.cxx full_velocity.cxx \
+		  diamagnetic_drift.cxx
 
 include $(BOUT_TOP)/make.config

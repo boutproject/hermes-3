@@ -4,7 +4,7 @@
 
 Ionisation::Ionisation(std::string name, Options &alloptions, Solver *) {
 
-  // Get options for this 
+  // Get options for this component
   auto& options = alloptions[name];
   
   Eionize = options["Eionize"].doc("Ionisation energy cost").withDefault(30.);

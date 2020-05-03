@@ -39,11 +39,12 @@ a tree of objects (Options). At the start of each iteration
   * `species1`  Example "h", "he2+"
 
     * `AA`  Atomic mass
+    * `charge`  Charge, in units of proton charge (i.e. electron=-1)
     
     * `density`
     * `momentum`
     * `pressure`
-    * `velocity`
+    * `velocity` Parallel velocity
     * `temperature`
 
     * `collision_rate`   Normalised collision frequency
