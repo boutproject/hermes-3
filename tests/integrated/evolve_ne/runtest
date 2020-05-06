@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+
+#
+# Run the test, check it completed successfully
+#
+
+from boututils.run_wrapper import shell, shell_safe, launch_safe
+from boutdata.collect import collect
+from sys import stdout, exit
+import numpy as np
+
+# Run the case
+s, out = launch_safe("./hermes-3", nproc=1, mthread=1, pipe=True)
+with open("run.log", "w") as f:
+  f.write(out)
+
+# Collect the density and pressure
+n = collect("Ne", path="data")
+
+# Check that the density is not zero 
+assert np.amax(n[0,2:-2,:,:]) - np.amin(n[0,2:-2,:,:]) > 0.1
+
+# Check density is not changing without sources
+assert np.amax(abs(n[-1,2:-2,:,:] - n[0,2:-2,:,:])) < 1e-10
+
+exit(0)

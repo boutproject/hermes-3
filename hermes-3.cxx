@@ -26,6 +26,7 @@
 
 #include "include/ionisation.hxx"
 #include "include/neutral_mixed.hxx"
+#include "include/evolve_ne.hxx"
 
 int Hermes::init(bool restarting) {
   auto &options = Options::root()["hermes"];
