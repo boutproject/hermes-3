@@ -27,6 +27,7 @@
 #include "include/ionisation.hxx"
 #include "include/neutral_mixed.hxx"
 #include "include/evolve_ne.hxx"
+#include "include/isothermal_electrons.hxx"
 
 int Hermes::init(bool restarting) {
   auto &options = Options::root()["hermes"];
