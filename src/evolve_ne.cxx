@@ -112,4 +112,8 @@ void EvolveNe::finally(const Options &state) {
   if (hyper_z > 0.) {
     ddt(Ne) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Ne);
   }
+
+  if (electrons.isSet("density_source")) {
+    ddt(Ne) += get<Field3D>(electrons["density_source"]);
+  }
 }

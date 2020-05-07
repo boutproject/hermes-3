@@ -54,8 +54,10 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options &alloptions, Solver
 
 void DiamagneticDrift::transform(Options &state) {
   // Iterate through all subsections
-  for (auto& kv : state.getChildren()) {
-    Options& species = state[kv.first]; // Note: Need non-const
+  Options& allspecies = state["species"];
+    
+  for (auto& kv : allspecies.getChildren()) {
+    Options& species = allspecies[kv.first]; // Note: Need non-const
 
     if (!(species.isSet("charge") and species.isSet("temperature")))
       continue; // Skip, go to next species

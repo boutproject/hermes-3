@@ -35,10 +35,10 @@ a tree of objects (Options). At the start of each iteration
 
 * `species`  Plasma species
 
-  * `electrons`
+  * `e`
   * `species1`  Example "h", "he2+"
 
-    * `AA`  Atomic mass
+    * `AA`  Atomic mass, proton = 1
     * `charge`  Charge, in units of proton charge (i.e. electron=-1)
     
     * `density`
@@ -52,4 +52,10 @@ a tree of objects (Options). At the start of each iteration
     * `momentum_source`
     * `energy_source`
 
+* `fields`
 
+  * `vorticity`
+  * `phi`       Electrostatic potential
+  * `DivJdia`   Divergence of diamagnetic current
+  * `DivJextra` Divergence of current, including parallel current.
+    Not including diamagnetic or polarisation currents

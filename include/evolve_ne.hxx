@@ -25,7 +25,8 @@ struct EvolveNe : public Component {
   /// Optional components
   /// - species
   ///   - e
-  ///     - velocity. If included, requires sound_speed or temperature
+  ///     - velocity        If included, requires sound_speed or temperature
+  ///     - density_source
   /// - fields
   ///   - phi 
   void finally(const Options &state) override;
