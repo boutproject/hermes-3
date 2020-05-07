@@ -31,7 +31,11 @@
 #include "include/sheath_closure.hxx"
 
 int Hermes::init(bool restarting) {
+
   auto &options = Options::root()["hermes"];
+  
+  output.write("\nGit Version of Hermes: %s\n", HERMES_VERSION);
+  options["version"] = HERMES_VERSION;
 
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
