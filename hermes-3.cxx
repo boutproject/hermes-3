@@ -28,6 +28,7 @@
 #include "include/neutral_mixed.hxx"
 #include "include/evolve_ne.hxx"
 #include "include/isothermal_electrons.hxx"
+#include "include/sheath_closure.hxx"
 
 int Hermes::init(bool restarting) {
   auto &options = Options::root()["hermes"];
@@ -53,7 +54,7 @@ int Hermes::init(bool restarting) {
 
   // Put into the options tree, so quantities can be normalised
   // when creating components
-  options["units"] = units;
+  Options::root()["units"] = units;
 
   // Tell the components if they are restarting
   options["restarting"] = restarting;
