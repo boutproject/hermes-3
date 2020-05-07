@@ -25,7 +25,7 @@ TEST(ComponentTest, InAvailableList) {
 
 TEST(ComponentTest, CanCreate) {
   Options options;
-  options["type"] = "testcomponent"; // This chooses what type of component
+  options["mycomponent"]["type"] = "testcomponent"; // This chooses what type of component
   
   auto component = Component::create("mycomponent", options, nullptr);
 

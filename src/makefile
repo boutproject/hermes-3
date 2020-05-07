@@ -9,7 +9,7 @@ TARGET		= hermes-3
 SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
 		  div_ops.cxx \
                   neutral_mixed.cxx full_velocity.cxx \
-		  evolve_ne.cxx \
+		  evolve_ne.cxx vorticity.cxx \
                   isothermal_electrons.cxx \
 		  diamagnetic_drift.cxx \
                   sheath_closure.cxx

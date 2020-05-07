@@ -1,0 +1,30 @@
+nout = 10
+timestep = 20
+
+MYG = 0
+
+[mesh]
+nx = 10
+ny = 1
+nz = 10
+
+yn = y / (2π)
+zn = z / (2π)
+
+[solver]
+mxstep = 1000
+
+[hermes]
+components = vorticity
+
+[vorticity]
+
+diamagnetic = false  # Include diamagnetic current?
+diamagnetic_polarisation = false # Include diamagnetic drift in polarisation current?"
+average_atomic_mass = 2 # Weighted average atomic mass, for polarisaion current
+bndry_flux = false # Allow flows through radial boundaries
+poloidal_flows = false  # Include poloidal ExB flow
+split_n0 = false # Split phi into n=0 and n!=0 components
+
+[Vort]
+function = exp(-((x-0.5)^2 + (mesh:zn - 0.5)^2)/(0.2^2))
