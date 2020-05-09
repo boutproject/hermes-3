@@ -1,35 +1,61 @@
-nout = 15
-timestep = 20
+nout = 50
+timestep = 50
 
 MYG = 0  # No guard cells in Y, 2D simulation
 
 [mesh]
-nx = 50
+nx = 260
 ny = 1
-nz = 50
+nz = 256
+
+Lrad = 0.05  # Radial width of domain [m]
+Lpol = 0.05  # Poloidal size of domain [m]
+
+Bpxy = 0.35  # Poloidal magnetic field [T]
+Rxy = 1.5   # Major radius [meters]
+
+dx = Lrad * Rxy * Bpxy / (nx - 4)  # Poloidal flux
+dz = Lpol / Rxy / nz   # Angle
+
+hthe = 1
+sinty = 0
+Bxy = Bpxy
+Btxy = 0
+bxcvz = 1./Rxy^2  # Curvature
 
 yn = y / (2π)
 zn = z / (2π)
 
 [solver]
-mxstep = 1000
+mxstep = 10000
 
 [hermes]
 components = evolve_ne, isothermal_electrons, vorticity, sheath_closure
+
+Nnorm = 2e18
+Bnorm = mesh:Bxy
+Tnorm = 5
 
 [evolve_ne]
 poloidal_flows = false  # Y flows due to ExB
 
 [Ne]
-function = exp(-(x - 0.5)^2 - (mesh:zn - 0.5)^2)
+height = 0.5
+width = 0.05
+
+function = 1 + height * exp(-((x-0.25)/width)^2 - ((z/(2*pi) - 0.5)/width)^2)
 
 [isothermal_electrons]
-temperature = 10  # Temperature in eV
+temperature = 5  # Temperature in eV
 
 [vorticity]
 
-diamagnetic = true
-diamagnetic_polarisation = false
-average_atomic_mass = 2.0
-split_n0 = false
+diamagnetic = true   # Include diamagnetic current?
+diamagnetic_polarisation = false # Include diamagnetic drift in polarisation current?
+average_atomic_mass = 1.0   # Weighted average atomic mass, for polarisaion current
+bndry_flux = false # Allow flows through radial boundaries
+poloidal_flows = false  # Include poloidal ExB flow
+split_n0 = false  # Split phi into n=0 and n!=0 components
 
+[sheath_closure]
+connection_length = 10 # meters

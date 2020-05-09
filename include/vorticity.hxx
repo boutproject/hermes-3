@@ -64,6 +64,8 @@ private:
   BoutReal average_atomic_mass; // Weighted average atomic mass, for polarisaion current (Boussinesq approximation)
   bool poloidal_flows;   ///< Include poloidal ExB flow?
   bool bndry_flux;  ///< Allow flows through radial boundaries?
+
+  bool sheath_boundary; ///< Set outer boundary to j=0?
   
   bool split_n0; // Split phi into n=0 and n!=0 components
   LaplaceXY *laplacexy; // Laplacian solver in X-Y (n=0)

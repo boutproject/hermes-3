@@ -59,3 +59,9 @@ a tree of objects (Options). At the start of each iteration
   * `DivJdia`   Divergence of diamagnetic current
   * `DivJextra` Divergence of current, including parallel current.
     Not including diamagnetic or polarisation currents
+
+
+Notes:
+* When checking if a subsection exists, use `option.isSection`, since `option.isSet`
+  is false if it is a section and not a value.
+  

@@ -20,7 +20,7 @@ components = vorticity
 [vorticity]
 
 diamagnetic = false  # Include diamagnetic current?
-diamagnetic_polarisation = false # Include diamagnetic drift in polarisation current?"
+diamagnetic_polarisation = false # Include diamagnetic drift in polarisation current?
 average_atomic_mass = 2 # Weighted average atomic mass, for polarisaion current
 bndry_flux = false # Allow flows through radial boundaries
 poloidal_flows = false  # Include poloidal ExB flow

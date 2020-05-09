@@ -56,19 +56,13 @@ void EvolveNe::finally(const Options &state) {
   
   auto& electrons = state["species"]["e"];
 
-  if (state.isSet("fields")) {
-    auto& fields = state["fields"];
-  
-    if (fields.isSet("phi")) {
-      // Electrostatic potential set -> include ExB flow
-      
-      Field3D phi = get<Field3D>(fields["phi"]);
-      
-      ddt(Ne) = -Div_n_bxGrad_f_B_XPPM(Ne, phi, ne_bndry_flux, poloidal_flows,
-                                       true); // ExB drift
-    } else {
-      ddt(Ne) = 0.0;
-    }
+  if (state.isSection("fields") and state["fields"].isSet("phi")) {
+    // Electrostatic potential set -> include ExB flow
+
+    Field3D phi = get<Field3D>(state["fields"]["phi"]);
+
+    ddt(Ne) = -Div_n_bxGrad_f_B_XPPM(Ne, phi, ne_bndry_flux, poloidal_flows,
+                                     true); // ExB drift
   } else {
     ddt(Ne) = 0.0;
   }
@@ -86,7 +80,7 @@ void EvolveNe::finally(const Options &state) {
       sound_speed = sqrt(Te);
     }
 
-    if (state.isSet("fields") and state["fields"].isSet("phi")) {
+    if (state.isSection("fields") and state["fields"].isSet("phi")) {
       // Parallel wave speed increased to electron sound speed
       // since electrostatic & electromagnetic waves are supported
       ddt(Ne) -= FV::Div_par(Ne, Ve, sqrt(SI::Me / SI::Mp) * sound_speed);

@@ -7,6 +7,8 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
   BoutReal Lnorm = alloptions["units"]["meters"]; // Length normalisation factor
   
   L_par = options["connection_length"].as<BoutReal>() / Lnorm;
+
+  output.write("L_par = %e\n", L_par);
 }
 
 void SheathClosure::transform(Options &state) {
@@ -15,14 +17,12 @@ void SheathClosure::transform(Options &state) {
   // Get electrostatic potential
   auto phi = get<Field3D>(state["fields"]["phi"]);
 
+  auto n = get<Field3D>(state["species"]["e"]["density"]);
+  
   add(state["fields"]["DivJextra"], // Used in vorticity
-      phi / L_par);
+      n * phi / L_par);
 
-  if (state["species"].isSet("e") and state["species"]["e"].isSet("density")) {
-    auto n = get<Field3D>(state["species"]["e"]["density"]);
-
-    add(state["species"]["e"]["density_source"],
-        n * phi / L_par);
-  }
+  add(state["species"]["e"]["density_source"],
+      n * phi / L_par);
 }
 

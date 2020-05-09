@@ -96,17 +96,16 @@ Options& set(Options& option, T value) {
 template<typename T>
 Options& add(Options& option, T value) {
   if (!option.isSet()) {
-    option = value;
+    return set(option, value);
   } else {
     try {
-      set(option, value + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value));
+      return set(option, value + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value));
     } catch (const std::bad_cast &e) {
       // Convert to a more useful error message
       throw BoutException("Could not convert %s to type %s",
                           option.str().c_str(), typeid(T).name());
     }
   }
-  return option;
 }
 
 /// Add value to a given option. If not already set, treats

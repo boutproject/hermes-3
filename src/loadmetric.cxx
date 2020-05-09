@@ -4,7 +4,7 @@
 #include <field2d.hxx>
 #include <bout/mesh.hxx>
 
-#include "loadmetric.hxx"
+#include "../include/loadmetric.hxx"
 
 using bout::globals::mesh;
 

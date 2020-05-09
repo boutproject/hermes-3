@@ -31,6 +31,8 @@
 #include "include/sheath_closure.hxx"
 #include "include/vorticity.hxx"
 
+#include "include/loadmetric.hxx"
+
 int Hermes::init(bool restarting) {
 
   auto &options = Options::root()["hermes"];
@@ -61,6 +63,41 @@ int Hermes::init(bool restarting) {
   // when creating components
   Options::root()["units"] = units;
 
+  /////////////////////////////////////////////////////////
+  // Load metric tensor from the mesh, passing length and B
+  // field normalisations
+  TRACE("Loading metric tensor");
+
+  if (options["loadmetric"]
+          .doc("Load Rxy, Bpxy etc. to create orthogonal metric?")
+          .withDefault(true)) {
+    LoadMetric(rho_s0, Bnorm);
+  } else {
+    Coordinates *coord = mesh->getCoordinates();
+    // To use non-orthogonal metric
+    // Normalise
+    coord->dx /= rho_s0 * rho_s0 * Bnorm;
+    coord->Bxy /= Bnorm;
+    // Metric is in grid file - just need to normalise
+    coord->g11 /= SQ(Bnorm * rho_s0);
+    coord->g22 *= SQ(rho_s0);
+    coord->g33 *= SQ(rho_s0);
+    coord->g12 /= Bnorm;
+    coord->g13 /= Bnorm;
+    coord->g23 *= SQ(rho_s0);
+
+    coord->J *= Bnorm / rho_s0;
+
+    coord->g_11 *= (Bnorm * Bnorm * rho_s0 * rho_s0);
+    coord->g_22 /= SQ(rho_s0);
+    coord->g_33 /= SQ(rho_s0);
+    coord->g_12 *= Bnorm;
+    coord->g_13 *= Bnorm;
+    coord->g_23 /= SQ(rho_s0);
+
+    coord->geometry(); // Calculate other metrics
+  }
+
   // Tell the components if they are restarting
   options["restarting"] = restarting;
   
@@ -71,6 +108,9 @@ int Hermes::init(bool restarting) {
 }
 
 int Hermes::rhs(BoutReal time) {
+  // Need to reset the state, since fields may be modified in transform steps
+  state = Options();
+  
   set(state["time"], time);
   state["units"] = units; 
 

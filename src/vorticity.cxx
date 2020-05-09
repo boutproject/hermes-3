@@ -14,6 +14,8 @@ Vorticity::Vorticity(std::string name, Options &alloptions, Solver *solver) {
   
   solver->add(Vort, "Vort");
 
+  SAVE_REPEAT(phi);
+  
   auto& options = alloptions[name];
 
   exb_advection = options["exb_advection"]
@@ -23,6 +25,11 @@ Vorticity::Vorticity(std::string name, Options &alloptions, Solver *solver) {
   diamagnetic = options["diamagnetic"]
                     .doc("Include diamagnetic current?")
                     .withDefault<bool>(true);
+
+  sheath_boundary =
+      options["sheath_boundary"]
+          .doc("Set potential to j=0 sheath at boundaries? (default = 0)")
+          .withDefault<bool>(false);
 
   diamagnetic_polarisation =
       options["diamagnetic_polarisation"]
@@ -109,8 +116,11 @@ void Vorticity::transform(Options &state) {
   auto& fields = state["fields"];
 
   // Sheath multiplier Te -> phi (2.84522 for Deuterium)
-  BoutReal sheathmult = log(0.5 * sqrt(SI::Mp / SI::Me / PI));
-
+  BoutReal sheathmult = 0.0;
+  if (sheath_boundary) {
+    sheathmult = log(0.5 * sqrt(SI::Mp / SI::Me / PI));
+  }
+  
   Field3D Te; // Electron temperature, use for outer boundary conditions
   if (state["species"]["e"].isSet("temperature")) {
     // Electron temperature set
@@ -166,9 +176,11 @@ void Vorticity::transform(Options &state) {
     // Diamagnetic current. This is calculated here so that the energy sources/sinks
     // can be calculated for the evolving species.
 
-    Vector3D Jdia; Jdia.x = 0.0; Jdia.y = 0.0; Jdia.y = 0.0; 
-    
+    Vector3D Jdia; Jdia.x = 0.0; Jdia.y = 0.0; Jdia.z = 0.0;
+    Jdia.covariant = Curlb_B.covariant;
+
     Options& allspecies = state["species"];
+    
     for (auto& kv : allspecies.getChildren()) {
       Options& species = allspecies[kv.first]; // Note: need non-const
 
@@ -243,7 +255,7 @@ void Vorticity::finally(const Options &state) {
     */
   }
   
-  if (state.isSet("fields") and state["fields"].isSet("DivJextra")) {
+  if (state.isSection("fields") and state["fields"].isSet("DivJextra")) {
     auto DivJextra = get<Field3D>(state["fields"]["DivJextra"]);
 
     // Parallel current is handled here, to allow different 2D or 3D closures
