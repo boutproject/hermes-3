@@ -30,6 +30,7 @@
 #include "include/isothermal_electrons.hxx"
 #include "include/sheath_closure.hxx"
 #include "include/vorticity.hxx"
+#include "include/fixed_fraction_ions.hxx"
 
 #include "include/loadmetric.hxx"
 

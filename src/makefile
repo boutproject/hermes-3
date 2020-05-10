@@ -12,6 +12,7 @@ SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
 		  evolve_ne.cxx vorticity.cxx \
                   isothermal_electrons.cxx \
 		  diamagnetic_drift.cxx \
-                  sheath_closure.cxx
+                  sheath_closure.cxx \
+                  fixed_fraction_ions.cxx
 
 include $(BOUT_TOP)/make.config
