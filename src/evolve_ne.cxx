@@ -10,6 +10,8 @@
 using bout::globals::mesh;
 
 EvolveNe::EvolveNe(std::string name, Options &alloptions, Solver *solver) {
+  AUTO_TRACE();
+  
   // Evolve the electron density in time
   solver->add(Ne, "Ne");
 

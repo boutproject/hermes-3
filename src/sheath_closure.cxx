@@ -17,12 +17,16 @@ void SheathClosure::transform(Options &state) {
   // Get electrostatic potential
   auto phi = get<Field3D>(state["fields"]["phi"]);
 
+  // Electron density
   auto n = get<Field3D>(state["species"]["e"]["density"]);
+
+  // Divergence of current through the sheath
+  Field3D DivJsh = n * phi / L_par;
   
   add(state["fields"]["DivJextra"], // Used in vorticity
-      n * phi / L_par);
+      DivJsh);
 
   add(state["species"]["e"]["density_source"],
-      n * phi / L_par);
+      DivJsh);
 }
 

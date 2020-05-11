@@ -26,7 +26,7 @@ TEST_F(SheathClosureTest, CreateComponent) {
   SheathClosure component("test", options, nullptr);
 }
 
-TEST_F(SheathClosureTest, PhiOnly) {
+TEST_F(SheathClosureTest, NeedsDensity) {
   Options options;
   options["units"]["meters"] = 1.0;
   options["test"]["connection_length"] = 10;
@@ -35,10 +35,9 @@ TEST_F(SheathClosureTest, PhiOnly) {
 
   Options state;
   state["fields"]["phi"] = Field3D(2.0);
-  component.transform(state);
 
-  ASSERT_TRUE(state["fields"].isSet("DivJextra"));
-  ASSERT_FALSE(state["species"]["e"].isSet("density_source"));
+  // Needs electron density
+  ASSERT_THROW(component.transform(state), BoutException);
 }
 
 TEST_F(SheathClosureTest, PhiAndDensity) {
@@ -54,5 +53,5 @@ TEST_F(SheathClosureTest, PhiAndDensity) {
   component.transform(state);
 
   ASSERT_TRUE(state["fields"].isSet("DivJextra"));
-  ASSERT_FALSE(state["species"]["e"].isSet("density_source"));
+  ASSERT_TRUE(state["species"]["e"].isSet("density_source"));
 }
