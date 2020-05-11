@@ -89,7 +89,7 @@ int Hermes::init(bool restarting) {
 
     coord->J *= Bnorm / rho_s0;
 
-    coord->g_11 *= (Bnorm * Bnorm * rho_s0 * rho_s0);
+    coord->g_11 *= SQ(Bnorm * rho_s0);
     coord->g_22 /= SQ(rho_s0);
     coord->g_33 /= SQ(rho_s0);
     coord->g_12 *= Bnorm;
