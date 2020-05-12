@@ -30,23 +30,24 @@ zn = z / (2π)
 mxstep = 10000
 
 [hermes]
-components = evolve_ne, isothermal_electrons, vorticity, sheath_closure
+components = e, vorticity, sheath_closure
 
 Nnorm = 2e18
 Bnorm = mesh:Bxy
 Tnorm = 5
 
-[evolve_ne]
+[e]  # Electrons
+type = evolve_ne, isothermal
+
 poloidal_flows = false  # Y flows due to ExB
+
+temperature = 5  # Temperature in eV
 
 [Ne]
 height = 0.5
 width = 0.05
 
 function = 1 + height * exp(-((x-0.25)/width)^2 - ((z/(2*pi) - 0.5)/width)^2)
-
-[isothermal_electrons]
-temperature = 5  # Temperature in eV
 
 [vorticity]
 

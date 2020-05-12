@@ -3,7 +3,7 @@
 
 #include "test_extras.hxx" // FakeMesh
 
-#include "../../include/isothermal_electrons.hxx"
+#include "../../include/isothermal.hxx"
 
 /// Global mesh
 namespace bout{
@@ -16,32 +16,32 @@ extern Mesh *mesh;
 using namespace bout::globals;
 
 // Reuse the "standard" fixture for FakeMesh
-using IsothermalElectronsTest = FakeMeshFixture;
+using IsothermalTest = FakeMeshFixture;
 
-TEST_F(IsothermalElectronsTest, CreateComponent) {
+TEST_F(IsothermalTest, CreateComponent) {
   Options options;
   options["units"]["eV"] = 1.0;
 
-  IsothermalElectrons component("test", options, nullptr);
+  Isothermal component("test", options, nullptr);
 }
 
-TEST_F(IsothermalElectronsTest, NeedsDensity) {
+TEST_F(IsothermalTest, NeedsDensity) {
   Options options;
   options["units"]["eV"] = 5.0;
 
   // No temperature specified -> Uses normalised temperature of 1
-  IsothermalElectrons component("test", options, nullptr);
+  Isothermal component("test", options, nullptr);
 
-  Options state;  // No electron density
+  Options state;  // No density
   ASSERT_THROW(component.transform(state), BoutException);
 }
        
-TEST_F(IsothermalElectronsTest, DefaultTemperature) {
+TEST_F(IsothermalTest, DefaultTemperature) {
   Options options;
   options["units"]["eV"] = 5.0;
 
   // No temperature specified -> Uses normalised temperature of 1
-  IsothermalElectrons component("test", options, nullptr);
+  Isothermal component("e", options, nullptr);
 
   Field3D Ne = 2.0;
   
@@ -61,13 +61,13 @@ TEST_F(IsothermalElectronsTest, DefaultTemperature) {
   }
 }
 
-TEST_F(IsothermalElectronsTest, GivenTemperature) {
+TEST_F(IsothermalTest, GivenTemperature) {
   Options options;
   options["units"]["eV"] = 5.0;
-  options["test"]["temperature"] = 15.0; // In eV -> Normalised Te = 3
+  options["e"]["temperature"] = 15.0; // In eV -> Normalised Te = 3
   
   // No temperature specified -> Uses normalised temperature of 1
-  IsothermalElectrons component("test", options, nullptr);
+  Isothermal component("e", options, nullptr);
 
   Field3D Ne = 2.0;
   

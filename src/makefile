@@ -11,7 +11,7 @@ SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
                   neutral_mixed.cxx full_velocity.cxx \
 		  evolve_ne.cxx vorticity.cxx \
                   evolve_pressure.cxx \
-                  isothermal_electrons.cxx \
+                  isothermal.cxx \
 		  diamagnetic_drift.cxx \
                   sheath_closure.cxx \
                   fixed_fraction_ions.cxx
