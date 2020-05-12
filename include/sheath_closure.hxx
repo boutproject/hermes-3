@@ -33,6 +33,8 @@ struct SheathClosure : public Component {
   void transform(Options &state) override;
 private:
   BoutReal L_par; // Normalised connection length
+
+  BoutReal sheath_gamma; // Sheath heat transmission coefficient
 };
 
 namespace {
