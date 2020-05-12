@@ -31,6 +31,7 @@
 #include "include/sheath_closure.hxx"
 #include "include/vorticity.hxx"
 #include "include/fixed_fraction_ions.hxx"
+#include "include/evolve_pressure.hxx"
 
 #include "include/loadmetric.hxx"
 
@@ -103,6 +104,10 @@ int Hermes::init(bool restarting) {
   options["restarting"] = restarting;
   
   // Create the components
+  // Here options is passed as the scheduler configuration, so that
+  // settings in [hermes] are used.
+  // Options::root() is passed as the root of the component options, so that
+  // individual components use their own sections, rather than subsections of [hermes].
   scheduler = ComponentScheduler::create(options, Options::root(), solver);
   
   return 0;

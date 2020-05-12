@@ -26,6 +26,10 @@ public:
   ///
   ///   component_options    Configuration of the components.
   ///     - <name>
+  ///       - type = Component classes, ...
+  ///                        If not provided, the type is the same as the name
+  ///                        Multiple classes can be given, separated by commas.
+  ///                        All classes will use the same Options section.
   ///       - ...
   ///   
   ///   solver               Used for time-dependent components
@@ -35,10 +39,14 @@ public:
                                                     Options &component_options,
                                                     Solver *solver);
   
-  /// Run the scheduler, modifying the state
+  /// Run the scheduler, modifying the state.
+  /// This calls all components' transform() methods, then
+  /// all component's finally() methods.
   void transform(Options &state);
 
-  /// Add metadata, extra outputs
+  /// Add metadata, extra outputs. This would typically
+  /// be called only for writing to disk, rather than every internal
+  /// timestep.
   void annotate(Options &state);
 
   /// Preconditioning
