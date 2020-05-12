@@ -26,7 +26,7 @@ RegisterComponent<TestMultiply> registertestcomponent2("multiply");
 TEST(SchedulerTest, OneComponent) {
   Options options;
   options["components"] = "testcomponent";
-  auto scheduler = ComponentScheduler::create(options, nullptr);
+  auto scheduler = ComponentScheduler::create(options, options, nullptr);
 
   EXPECT_FALSE(options.isSet("answer"));
   scheduler->transform(options);
@@ -37,7 +37,20 @@ TEST(SchedulerTest, OneComponent) {
 TEST(SchedulerTest, TwoComponents) {
   Options options;
   options["components"] = "testcomponent, multiply";
-  auto scheduler = ComponentScheduler::create(options, nullptr);
+  auto scheduler = ComponentScheduler::create(options, options, nullptr);
+
+  EXPECT_FALSE(options.isSet("answer"));
+  scheduler->transform(options);
+  ASSERT_TRUE(options.isSet("answer"));
+  ASSERT_TRUE(options["answer"] == 42 * 2);
+}
+
+TEST(SchedulerTest, SubComponents) {
+  Options options;
+  options["components"] = "species";
+  options["species"]["type"] = "testcomponent, multiply";
+
+  auto scheduler = ComponentScheduler::create(options, options, nullptr);
 
   EXPECT_FALSE(options.isSet("answer"));
   scheduler->transform(options);

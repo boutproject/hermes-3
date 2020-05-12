@@ -21,3 +21,5 @@ check-integrated-tests: hermes-3
 
 check: check-unit-tests check-integrated-tests
 
+clean::
+	make -C tests/unit clean

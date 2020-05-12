@@ -17,9 +17,22 @@
 /// 
 class ComponentScheduler {
 public:
-  ComponentScheduler(Options &options, Solver *solver);
+  ComponentScheduler(Options &scheduler_options, Options &component_options,
+                     Solver *solver);
 
-  static std::unique_ptr<ComponentScheduler> create(Options &options,
+  /// Inputs
+  ///   scheduler_options    Configuration of the scheduler
+  ///     - components       Comma-separated list of component names
+  ///
+  ///   component_options    Configuration of the components.
+  ///     - <name>
+  ///       - ...
+  ///   
+  ///   solver               Used for time-dependent components
+  ///                        to evolve quantities
+  /// 
+  static std::unique_ptr<ComponentScheduler> create(Options &scheduler_options,
+                                                    Options &component_options,
                                                     Solver *solver);
   
   /// Run the scheduler, modifying the state

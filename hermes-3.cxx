@@ -103,7 +103,7 @@ int Hermes::init(bool restarting) {
   options["restarting"] = restarting;
   
   // Create the components
-  scheduler = ComponentScheduler::create(options, solver);
+  scheduler = ComponentScheduler::create(options, Options::root(), solver);
   
   return 0;
 }

@@ -32,8 +32,9 @@ struct Component {
   virtual void precon(const Options &UNUSED(state), BoutReal UNUSED(gamma)) { }
   
   /// Create a Component
-  static std::unique_ptr<Component> create(const std::string &name, // The species/name for this instance
-                                           Options &options,  // Settings from input);
+  static std::unique_ptr<Component> create(const std::string &type, // The type to create
+                                           const std::string &name, // The species/name for this instance
+                                           Options &options,  // Component settings: options[name] are specific to this component
                                            Solver *solver); // Time integration solver
 };
 
