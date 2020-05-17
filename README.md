@@ -9,7 +9,7 @@
 Hermes plasma edge simulation model. Uses BOUT++ framework, adds finite volume
 operators and neutral gas models.
 
-This is Hermes-2, a hot ion drift-reduced model.
+This is Hermes-3, a hot ion multifluid drift-reduced model.
 
 Author: Ben Dudson, University of York <benjamin.dudson@york.ac.uk>
 
@@ -21,7 +21,7 @@ License
 Full text of the license is in the file LICENSE. If you are using Hermes-2,
 please cite the relevant papers.
 
-    Copyright B.Dudson, J.Leddy, University of York, September 2017-2019
+    Copyright B.Dudson, J.Leddy, University of York, September 2017-2020
               email: benjamin.dudson@york.ac.uk
 
     This program is free software: you can redistribute it and/or modify
@@ -63,4 +63,16 @@ Compiling Hermes
 
 To compile, run "make" and specify the location of BOUT++
 > $ make BOUT_TOP=/path/to/BOUT/
+
+Testing
+=======
+
+> $ make check BOUT_TOP=/path/to/BOUT
+
+This will run both unit and integrated tests.
+
+Examples
+========
+
+> $ ./hermes-3 -d examples/blob2d
 
