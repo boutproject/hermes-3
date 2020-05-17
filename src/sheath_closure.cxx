@@ -15,6 +15,10 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
           .doc("Sheath heat transmission coefficient (dimensionless)")
           .withDefault<BoutReal>(6.5);
 
+  offset = options["potential_offset"]
+               .doc("Potential at which the sheath current is zero")
+               .withDefault<BoutReal>(0.0);
+
   output.write("\tL_par = %e (normalised)\n", L_par);
 }
 
@@ -30,7 +34,7 @@ void SheathClosure::transform(Options &state) {
   auto n = get<Field3D>(electrons["density"]);
 
   // Divergence of current through the sheath
-  Field3D DivJsh = n * phi / L_par;
+  Field3D DivJsh = n * (phi - offset) / L_par;
   
   add(state["fields"]["DivJextra"], // Used in vorticity
       DivJsh);

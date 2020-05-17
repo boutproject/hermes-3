@@ -35,6 +35,8 @@ private:
   BoutReal L_par; // Normalised connection length
 
   BoutReal sheath_gamma; // Sheath heat transmission coefficient
+
+  BoutReal offset; // Potential at which the sheath current is zero
 };
 
 namespace {

@@ -32,6 +32,7 @@
 #include "include/vorticity.hxx"
 #include "include/fixed_fraction_ions.hxx"
 #include "include/evolve_pressure.hxx"
+#include "include/quasineutral.hxx"
 
 #include "include/loadmetric.hxx"
 
