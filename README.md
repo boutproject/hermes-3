@@ -1,10 +1,5 @@
-      _   _                                   ______
-     | | | |                                 |___   |
-     | |_| | ___ _ __ _ __ ___   ___  ___        / /
-     |  _  |/ _ \ '__| '_ ` _ \ / _ \/ __|      / /
-     | | | |  __/ |  | | | | | |  __/\__ \     / /___
-     \_| |_/\___|_|  |_| |_| |_|\___||___/    |______| 
-
+Hermes-3
+========
 
 Hermes plasma edge simulation model. Uses BOUT++ framework, adds finite volume
 operators and neutral gas models.
@@ -16,9 +11,9 @@ Author: Ben Dudson, University of York <benjamin.dudson@york.ac.uk>
 Released under the GPL license
 
 License
-=======
+-------
 
-Full text of the license is in the file LICENSE. If you are using Hermes-2,
+Full text of the license is in the file LICENSE. If you are using Hermes-3,
 please cite the relevant papers.
 
     Copyright B.Dudson, J.Leddy, University of York, September 2017-2020
@@ -38,7 +33,7 @@ please cite the relevant papers.
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Installing BOUT++
-=================
+-----------------
 
 This version works with BOUT++ v4.3 or later
 
@@ -59,20 +54,20 @@ or
     make
 
 Compiling Hermes
-================
+----------------
 
 To compile, run "make" and specify the location of BOUT++
 > $ make BOUT_TOP=/path/to/BOUT/
 
 Testing
-=======
+-------
 
 > $ make check BOUT_TOP=/path/to/BOUT
 
 This will run both unit and integrated tests.
 
 Examples
-========
+--------
 
 > $ ./hermes-3 -d examples/blob2d
 
