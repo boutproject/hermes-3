@@ -28,7 +28,7 @@ struct Quasineutral : public Component {
 private:
   std::string name; ///< Name of this species
   BoutReal charge;  ///< The charge of this species
-  BoutReal AA; ///< Atomic mass
+  BoutReal AA;      ///< Atomic mass
 };
 
 namespace {

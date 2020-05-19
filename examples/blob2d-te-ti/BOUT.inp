@@ -37,7 +37,7 @@ Bnorm = mesh:Bxy
 Tnorm = 5
 
 [e]
-type = evolve_ne, evolve_pressure    # Multiple components, all using this options section
+type = evolve_density, evolve_pressure
 
 charge = -1
 AA = 1/1836

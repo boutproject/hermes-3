@@ -37,7 +37,10 @@ Bnorm = mesh:Bxy
 Tnorm = 5
 
 [e]  # Electrons
-type = evolve_ne, isothermal
+type = evolve_density, isothermal  # Multiple components, all using this options section
+
+charge = -1
+AA = 1./1836
 
 poloidal_flows = false  # Y flows due to ExB
 

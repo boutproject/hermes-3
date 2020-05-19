@@ -26,7 +26,7 @@
 
 #include "include/ionisation.hxx"
 #include "include/neutral_mixed.hxx"
-#include "include/evolve_ne.hxx"
+#include "include/evolve_density.hxx"
 #include "include/isothermal.hxx"
 #include "include/sheath_closure.hxx"
 #include "include/vorticity.hxx"
