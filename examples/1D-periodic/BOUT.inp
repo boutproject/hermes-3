@@ -1,0 +1,53 @@
+nout = 50
+timestep = 0.1
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 128
+nz = 1
+
+Ly = 2π
+
+dy = Ly / ny
+
+yn = y / (2π)
+zn = z / (2π)
+
+[solver]
+mxstep = 10000
+
+[hermes]
+components = i
+
+loadmetric = false        # Use Rxy, Bpxy etc?
+normalise_metric = false  # Normalise the input metric?
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[i]  # Ions
+type = evolve_density, evolve_pressure, evolve_momentum
+
+charge = 1.0
+AA = 1.0
+
+thermal_conduction = false  # in evolve_pressure
+
+[Ni]
+
+function = 1
+
+[Pi]
+
+# A sinusoidal perturbation to the pressure
+#function = 1 + 0.1*sin(y)
+
+# A region of high pressure, sharp jump
+function = 1 + 0.1*H(y-3)*H(4-y)
+
+[NVi]
+
+function = 0

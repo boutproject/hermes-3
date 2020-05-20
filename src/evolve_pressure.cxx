@@ -70,6 +70,9 @@ void EvolvePressure::finally(const Options &state) {
     }
     
     ddt(P) -= FV::Div_par(P, V, sound_speed);
+
+    // Work done. This balances energetically a term in the momentum equation
+    ddt(P) -= (2. / 3) * P * Div_par(V);
   }
 
   // Parallel heat conduction

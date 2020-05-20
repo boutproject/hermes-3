@@ -39,6 +39,20 @@ evolve_pressure
 Evolves the pressure in time. This pressure is named `P<species>` where `<species>`
 is the short name of the evolving species e.g. `Pe`.
 
+Species parallel dynamics
+-------------------------
+
+evolve_momentum
+~~~~~~~~~~~~~~~
+
+Evolves the momentum `NV<species>` in time. 
+
+zero_current
+~~~~~~~~~~~~
+
+This imposes a zero-current Ohm's law, calculating a parallel
+electric field which balances the electron pressure gradient.
+This electric field is then used to calculate a force on the other species.
 
 Collective quantities
 ---------------------
@@ -57,3 +71,4 @@ c_s = \sqrt{\sum_i P_i / \sum_i m_in_i}
 
 This is set in the state as `sound_speed`, and is used for the numerical
 diffusion terms in the parallel advection.
+

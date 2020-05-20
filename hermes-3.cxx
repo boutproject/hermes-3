@@ -32,6 +32,7 @@
 #include "include/vorticity.hxx"
 #include "include/fixed_fraction_ions.hxx"
 #include "include/evolve_pressure.hxx"
+#include "include/evolve_momentum.hxx"
 #include "include/quasineutral.hxx"
 #include "include/sound_speed.hxx"
 #include "include/zero_current.hxx"
@@ -77,7 +78,9 @@ int Hermes::init(bool restarting) {
           .doc("Load Rxy, Bpxy etc. to create orthogonal metric?")
           .withDefault(true)) {
     LoadMetric(rho_s0, Bnorm);
-  } else {
+  } else if (options["normalise_metric"]
+                 .doc("Normalise input metric tensor? (assumes input is in SI units)")
+                 .withDefault<bool>(true)) {
     Coordinates *coord = mesh->getCoordinates();
     // To use non-orthogonal metric
     // Normalise

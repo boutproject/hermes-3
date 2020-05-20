@@ -4,6 +4,8 @@
 #include "../include/zero_current.hxx"
 
 void ZeroCurrent::transform(Options &state) {
+  AUTO_TRACE();
+
   // Get the electron pressure
   Options& electrons = state["species"]["e"];
   Field3D Pe = get<Field3D>(electrons["pressure"]);
