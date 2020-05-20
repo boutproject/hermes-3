@@ -46,6 +46,9 @@ int Hermes::init(bool restarting) {
   output.write("\nGit Version of Hermes: %s\n", HERMES_VERSION);
   options["version"] = HERMES_VERSION;
 
+  // Save the Hermes version in the output dump files
+  dump.setAttribute("", "HERMES_REVISION", HERMES_VERSION);
+
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
   Nnorm = options["Nnorm"].doc("Reference density [m^-3]").withDefault(1e19);
