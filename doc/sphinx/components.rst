@@ -4,7 +4,6 @@ Components
 ==========
 
 
-
 Species density
 ---------------
 
@@ -31,10 +30,30 @@ all other charged species densities have been calculated. It only
 makes sense to use this component for species with a non-zero charge.
 
 
-
 Species pressure and temperature
 --------------------------------
 
 evolve_pressure
 ~~~~~~~~~~~~~~~
 
+Evolves the pressure in time. This pressure is named `P<species>` where `<species>`
+is the short name of the evolving species e.g. `Pe`.
+
+
+Collective quantities
+---------------------
+
+These components combine multiple species together
+
+sound_speed
+~~~~~~~~~~~
+
+Calculates the collective sound speed, by summing the pressure of all species,
+and dividing by the sum of the mass density of all species:
+
+\[
+c_s = \sqrt{\sum_i P_i / \sum_i m_in_i}
+\]
+
+This is set in the state as `sound_speed`, and is used for the numerical
+diffusion terms in the parallel advection.

@@ -12,7 +12,7 @@ using bout::globals::mesh;
 EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solver) : name(name) {
   AUTO_TRACE();
   
-  // Evolve the electron density in time
+  // Evolve the density in time
   solver->add(N, std::string("N") + name);
 
   auto& options = alloptions[name];

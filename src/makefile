@@ -14,6 +14,7 @@ SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
                   isothermal.cxx quasineutral.cxx \
 		  diamagnetic_drift.cxx \
                   sheath_closure.cxx \
-                  fixed_fraction_ions.cxx
+                  fixed_fraction_ions.cxx \
+                  sound_speed.cxx
 
 include $(BOUT_TOP)/make.config
