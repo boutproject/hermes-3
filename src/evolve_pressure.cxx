@@ -5,6 +5,8 @@
 #include "../include/evolve_pressure.hxx"
 #include "../include/div_ops.hxx"
 
+using bout::globals::mesh;
+
 EvolvePressure::EvolvePressure(std::string name, Options &alloptions, Solver *solver) : name(name) {
   AUTO_TRACE();
   
@@ -27,6 +29,8 @@ EvolvePressure::EvolvePressure(std::string name, Options &alloptions, Solver *so
 
 void EvolvePressure::transform(Options &state) {
   AUTO_TRACE();
+
+  mesh->communicate(P);
   
   auto& species = state["species"][name];
 

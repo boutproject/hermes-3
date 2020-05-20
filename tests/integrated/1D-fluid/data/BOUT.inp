@@ -1,0 +1,56 @@
+nout = 50
+timestep = 0.1
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 128
+nz = 1
+
+Ly = 10
+
+dy = Ly / ny
+
+yn = y / (2π)
+zn = z / (2π)
+
+[solver]
+mxstep = 10000
+
+mms = true  # Run with MMS sources and output diagnostics
+
+[hermes]
+components = i
+
+loadmetric = false        # Use Rxy, Bpxy etc?
+normalise_metric = false  # Normalise the input metric?
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[i]  # Ions
+type = evolve_density, evolve_pressure, evolve_momentum
+
+charge = 1.0
+AA = 1.0
+
+thermal_conduction = false  # in evolve_pressure
+
+[Ni]
+
+solution = -0.1*sin(t - 2.0*y) + 1
+
+source = -0.1*cos(t - 2.0*y) + 0.0628318530717959*cos(2*t + y)
+
+[Pi]
+solution = 0.1*cos(t + 3.0*y) + 1
+
+source = (0.0628318530717959*cos(2*t + y)/(-0.1*sin(t - 2.0*y) + 1) - 0.0125663706143592*sin(2*t + y)*cos(t - 2.0*y)/(-0.1*sin(t - 2.0*y) + 1)^2)*(0.0666666666666667*cos(t + 3.0*y) + 0.666666666666667) - 0.1*sin(t + 3.0*y) + 0.0628318530717959*(0.1*cos(t + 3.0*y) + 1)*cos(2*t + y)/(-0.1*sin(t - 2.0*y) + 1) - 0.0188495559215388*sin(t + 3.0*y)*sin(2*t + y)/(-0.1*sin(t - 2.0*y) + 1) - 0.0125663706143592*(0.1*cos(t + 3.0*y) + 1)*sin(2*t + y)*cos(t - 2.0*y)/(-0.1*sin(t - 2.0*y) + 1)^2
+
+[NVi]
+
+solution = 0.1*sin(2*t + y)
+
+source = -0.188495559215388*sin(t + 3.0*y) + 0.2*cos(2*t + y) + 0.0125663706143592*sin(2*t + y)*cos(2*t + y)/(-0.1*sin(t - 2.0*y) + 1) - 0.00125663706143592*sin(2*t + y)^2*cos(t - 2.0*y)/(-0.1*sin(t - 2.0*y) + 1)^2
