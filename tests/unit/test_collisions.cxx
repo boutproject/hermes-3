@@ -23,6 +23,7 @@ TEST_F(CollisionsTest, CreateComponent) {
   
   options["units"]["eV"] = 1.0;
   options["units"]["meters"] = 1.0;
+  options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1e19;
   Collisions component("test", options, nullptr);
 }

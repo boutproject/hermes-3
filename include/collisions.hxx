@@ -2,6 +2,8 @@
 #ifndef COLLISIONS_H
 #define COLLISIONS_H
 
+#include <field3d.hxx>
+
 #include "component.hxx"
 
 /// Calculates the collision rate of each species
@@ -17,6 +19,11 @@ private:
   BoutReal Tnorm; // Temperature normalisation [eV]
   BoutReal Nnorm; // Density normalisation [m^-3]
   BoutReal rho_s0;  // Length normalisation [m]
+  BoutReal Omega_ci; // Frequency normalisation [s^-1]
+
+  /// Update collision frequencies, momentum and energy exchange
+  /// nu_12    normalised frequency
+  void collide(Options &species1, Options &species2, const Field3D &nu_12);
 };
 
 
