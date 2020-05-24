@@ -139,3 +139,28 @@ Energy exchange, heat transferred to species `a` from species `b`:
 .. math::
 
    Q_{ab} = \nu_{ab}\frac{3n_a m_a\left(T_b - T_a\right)}{m_a + m_b}
+
+- Neutral-neutral collisions
+
+  The cross-section is given by
+
+  .. math::
+     
+     \sigma = \pi \left(\frac{d_1 + d_2}{2}\right)^2
+
+  where `d_1` and `d_2` are the kinetic diameters of the two species. Typical values
+  are [Wikipedia] for H2  2.89e-10m, He  2.60e-10m, Ne 2.75e-10m. 
+
+  The mean relative velocity of the two species is
+
+  .. math::
+
+     v_{rel} = \sqrt{\frac{eT_1}{m_1} + \frac{eT_2}{m_2}}
+
+  and so the collision rate of species 1 on species 2 is:
+
+  .. math::
+
+  \nu_{12} = v_{rel} n_2 \sigma
+
+

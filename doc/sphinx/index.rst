@@ -11,7 +11,7 @@ The documentation is divided into the following sections:
    :name: contents
 
    code_structure
-   
+   components
 
 Indices and tables
 ==================
