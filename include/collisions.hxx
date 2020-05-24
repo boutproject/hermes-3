@@ -21,6 +21,10 @@ private:
   BoutReal rho_s0;  // Length normalisation [m]
   BoutReal Omega_ci; // Frequency normalisation [s^-1]
 
+  /// Which types of collisions to include?
+  bool electron_electron, electron_ion, electron_neutral, ion_ion, ion_neutral,
+      neutral_neutral;
+
   /// Update collision frequencies, momentum and energy exchange
   /// nu_12    normalised frequency
   void collide(Options &species1, Options &species2, const Field3D &nu_12);

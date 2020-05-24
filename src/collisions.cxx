@@ -13,53 +13,74 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
   Nnorm = units["inv_meters_cubed"];
   rho_s0 = units["meters"];
   Omega_ci = 1. / units["seconds"].as<BoutReal>();
+
+  Options& options = alloptions[name];
+
+  electron_electron = options["electron_electron"]
+                          .doc("Include electron-electron collisions?")
+                          .withDefault<bool>(true);
+  electron_ion = options["electron_ion"]
+                     .doc("Include electron-ion collisions?")
+                     .withDefault<bool>(true);
+  electron_neutral = options["electron_neutral"]
+                         .doc("Include electron-neutral elastic collisions?")
+                         .withDefault<bool>(true);
+  ion_ion = options["ion_ion"]
+                .doc("Include ion-ion elastic collisions?")
+                .withDefault<bool>(true);
+  ion_neutral = options["ion_neutral"]
+                    .doc("Include ion-neutral elastic collisions?")
+                    .withDefault<bool>(true);
+  neutral_neutral = options["neutral_neutral"]
+                        .doc("Include neutral-neutral elastic collisions?")
+                        .withDefault<bool>(true);
 }
 
 /// nu_12    normalised frequency
 void Collisions::collide(Options &species1, Options &species2, const Field3D &nu_12) {
   
-  const BoutReal mass1 = get<BoutReal>(species1["AA"]);
-  const BoutReal mass2 = get<BoutReal>(species2["AA"]);
-
-  const Field3D density1 = get<Field3D>(species1["density"]);
-  const Field3D density2 = get<Field3D>(species2["density"]);
-
   add(species1["collision_frequency"], nu_12);
 
   if (&species1 != &species2) {
     // For collisions between different species
     // m_a n_a \nu_{ab} = m_b n_b \nu_{ba}
 
+    const BoutReal mass1 = get<BoutReal>(species1["AA"]);
+    const BoutReal mass2 = get<BoutReal>(species2["AA"]);
+    
+    const Field3D density1 = get<Field3D>(species1["density"]);
+    const Field3D density2 = get<Field3D>(species2["density"]);
+    
     add(species2["collision_frequency"], nu_12 * (mass1 / mass2) * density1 / density2);
-  }
   
-  // Momentum exchange
-  if (species1.isSet("velocity") or species2.isSet("velocity")) {
+    // Momentum exchange
+    if (species1.isSet("velocity") or species2.isSet("velocity")) {
 
-    const Field3D velocity1 =
+      const Field3D velocity1 =
         species1.isSet("velocity") ? get<Field3D>(species1["velocity"]) : 0.0;
-    const Field3D velocity2 =
-        species2.isSet("velocity") ? get<Field3D>(species2["velocity"]) : 0.0;
+      const Field3D velocity2 =
+          species2.isSet("velocity") ? get<Field3D>(species2["velocity"]) : 0.0;
 
-    // F12 is the force on species 1 due to species 2 (normalised)
-    const Field3D F12 = nu_12 * mass1 * density1 * (velocity2 - velocity1);
+      // F12 is the force on species 1 due to species 2 (normalised)
+      const Field3D F12 = nu_12 * mass1 * density1 * (velocity2 - velocity1);
 
-    add(species1["momentum_source"], F12);
-    subtract(species2["momentum_source"], F12);
-  }
-  
-  // Energy exchange
-  if (species1.isSet("temperature") or species2.isSet("temperature")) {
-    // Q12 is heat transferred to species2 (normalised)
-    
-    const Field3D temperature1 = get<Field3D>(species1["temperature"]);
-    const Field3D temperature2 = get<Field3D>(species2["temperature"]);
-    
-    const Field3D Q12 =
-        nu_12 * 3. * density1 * (mass1 / (mass1 + mass2)) * (temperature2 - temperature1);
+      add(species1["momentum_source"], F12);
+      subtract(species2["momentum_source"], F12);
+    }
 
-    add(species1["energy_source"], Q12);
-    subtract(species2["energy_source"], Q12);
+    // Energy exchange
+    if (species1.isSet("temperature") or species2.isSet("temperature")) {
+      // Q12 is heat transferred to species2 (normalised)
+
+      const Field3D temperature1 = get<Field3D>(species1["temperature"]);
+      const Field3D temperature2 = get<Field3D>(species2["temperature"]);
+
+      const Field3D Q12 = nu_12 * 3. * density1 * (mass1 / (mass1 + mass2))
+                          * (temperature2 - temperature1);
+
+      add(species1["energy_source"], Q12);
+      subtract(species2["energy_source"], Q12);
+    }
   }
 }
 
@@ -76,7 +97,11 @@ void Collisions::transform(Options &state) {
 
   for (auto& kv : allspecies.getChildren()) {
     if (kv.first == "e") {
+      ////////////////////////////////////
       // electron-electron collisions
+
+      if (!electron_electron)
+        continue;
 
       const Field3D nu_ee = filledFrom(Ne, [&](auto& i) {
         const BoutReal logTe = log(Te[i]);
@@ -97,7 +122,11 @@ void Collisions::transform(Options &state) {
     Options& species = allspecies[kv.first]; // Note: Need non-const
 
     if (species.isSet("charge")) {
+      ////////////////////////////////////
       // electron-charged ion collisions
+
+      if (!electron_ion)
+        continue;
 
       const Field3D Ti = get<Field3D>(species["temperature"]) * Tnorm; // eV
       const Field3D Ni = get<Field3D>(species["density"]) * Nnorm; // In m^-3
@@ -131,18 +160,21 @@ void Collisions::transform(Options &state) {
       ////////////////////////////////////
       // electron-neutral collisions
 
+      if (!electron_neutral)
+        continue;
+
       // Neutral density
       Field3D Nn = get<Field3D>(species["density"]);
-      // Atomic mass
-      BoutReal AA = get<BoutReal>(species["AA"]);
       
-      BoutReal a0 = PI*SQ(5.29e-11); // Cross-section [m^2]
-      
-      // Electron thermal speed
-      Field3D vth_e = sqrt((SI::Mp / SI::Me) * Te);
-      
-      // Electron-neutral collision rate
-      Field3D nu_en = vth_e * Nnorm * Nn * a0 * rho_s0;
+      BoutReal a0 = 5e-19; // Cross-section [m^2]
+
+      const Field3D nu_en = filledFrom(Ne, [&](auto& i) {
+        // Electron thermal speed (normalised)
+        const BoutReal vth_e = sqrt((SI::Mp / SI::Me) * Te[i]);
+
+        // Electron-neutral collision rate
+        return vth_e * Nnorm * Nn[i] * a0 * rho_s0;
+      });
 
       collide(electrons, species, nu_en);
     }
@@ -207,6 +239,9 @@ void Collisions::transform(Options &state) {
           //////////////////////////////
           // Both charged species
 
+          if (!ion_ion)
+            continue;
+          
           const BoutReal Z2 = get<BoutReal>(species2["charge"]);
           const BoutReal charge2 = Z2 * SI::qe; // in Coulombs
 
@@ -235,7 +270,24 @@ void Collisions::transform(Options &state) {
           
         } else {
           // species1 charged, species2 neutral
-          
+
+          // Scattering of charged species 1
+          // Neutral density
+          Field3D Nn = get<Field3D>(species2["density"]);
+
+          BoutReal a0 = 5e-19; // Cross-section [m^2]
+
+          const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
+            // Relative velocity is sqrt( v1^2 + v2^2 )
+            const BoutReal vrel =
+                sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));
+
+            // Ion-neutral collision rate
+            // Units: density [m^-3], a0 [m^2], rho_s0 [m]
+            return vrel * density2[i] * a0 * rho_s0;
+          });
+
+          collide(species1, species2, nu_12);
         }
       }
     } else {
@@ -255,20 +307,62 @@ void Collisions::transform(Options &state) {
         // If temperature isn't set, assume zero
         const Field3D temperature2 =
           species2.isSet("temperature") ? get<Field3D>(species2["temperature"]) : 0.0;
-        const BoutReal mass2 = get<BoutReal>(species2["AA"]) * SI::Mp; // in Kg
+        const BoutReal AA2 = get<BoutReal>(species2["AA"]);
+        const Field3D density2 = get<Field3D>(species2["density"]) * Nnorm;
         
         if (species2.isSet("charge")) {
           // species1 neutral, species2 charged
-          const BoutReal charge2 = get<BoutReal>(species2["charge"]) * SI::qe; // in Coulombs
           
+          if (!ion_neutral)
+            continue;
+
+          // Scattering of charged species 2
+
+          // This is from NRL. The cross-section can vary significantly
+          BoutReal a0 = 5e-19; // Cross-section [m^2]
+
+          const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
+            // Relative velocity is sqrt( v1^2 + v2^2 )
+            const BoutReal vrel =
+                sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));
+
+            // Ion-neutral collision rate
+            // Units: density [m^-3], a0 [m^2], rho_s0 [m]
+            return vrel * density2[i] * a0 * rho_s0;
+          });
+
+          collide(species1, species2, nu_12);
           
         } else {
           // Both species neutral
-          
+
+          if (!neutral_neutral)
+            continue;
+
+          // The cross section is given by π ( (d1 + d2)/2 )^2
+          // where d is the kinetic diameter
+          //
+          // Typical values [m]
+          //  H2  2.89e-10
+          //  He  2.60e-10
+          //  Ne  2.75e-10
+          //  
+          BoutReal a0 = PI * SQ(2.8e-10); // Cross-section [m^2]
+
+          const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
+            // Relative velocity is sqrt( v1^2 + v2^2 )
+            const BoutReal vrel =
+                sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));
+
+            // Ion-neutral collision rate
+            // Units: density [m^-3], a0 [m^2], rho_s0 [m]
+            return vrel * density2[i] * a0 * rho_s0;
+          });
+
+          collide(species1, species2, nu_12);
         }
-      }
-      
-    }     
+      } 
+    }
   }
 }
 
