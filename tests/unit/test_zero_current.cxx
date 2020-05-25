@@ -76,7 +76,7 @@ TEST_F(ZeroCurrentTest, WithPressureGradient) {
   // Force on ions should be in negative y direction
   Field3D F = get<Field3D>(options["species"]["h+"]["momentum_source"]);
 
-  BOUT_FOR(i, F.getRegion("RGN_NOBNDRY")) {
+  BOUT_FOR_SERIAL(i, F.getRegion("RGN_NOBNDRY")) {
     ASSERT_LT(F[i], 0.0) << "Force on ions (h+) not negative at " << i;
   }
 }

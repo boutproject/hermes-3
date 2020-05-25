@@ -56,7 +56,7 @@ TEST_F(IsothermalTest, DefaultTemperature) {
 
   auto Pe = get<Field3D>(state["species"]["e"]["pressure"]);
   
-  BOUT_FOR(i, Pe.getRegion("RGN_ALL")) {
+  BOUT_FOR_SERIAL(i, Pe.getRegion("RGN_ALL")) {
     ASSERT_DOUBLE_EQ(Pe[i], 2.0);
   }
 }
@@ -82,7 +82,7 @@ TEST_F(IsothermalTest, GivenTemperature) {
 
   auto Pe = get<Field3D>(state["species"]["e"]["pressure"]);
   
-  BOUT_FOR(i, Pe.getRegion("RGN_ALL")) {
+  BOUT_FOR_SERIAL(i, Pe.getRegion("RGN_ALL")) {
     ASSERT_DOUBLE_EQ(Pe[i], 6.0);
   }
 }

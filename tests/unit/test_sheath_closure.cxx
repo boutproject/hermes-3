@@ -75,7 +75,7 @@ TEST_F(SheathClosureTest, Temperature) {
   ASSERT_TRUE(state["species"]["e"].isSet("energy_source"));
 
   Field3D energy_source = get<Field3D>(state["species"]["e"]["energy_source"]);
-  BOUT_FOR(i, energy_source.getRegion("RGN_NOBNDRY")) {
+  BOUT_FOR_SERIAL(i, energy_source.getRegion("RGN_NOBNDRY")) {
     ASSERT_TRUE(energy_source[i] <= 0.0); // Always a sink
   }
 }

@@ -65,7 +65,7 @@ TEST_F(IonisationTest, SourcesSanityCheck) {
   Field3D h_density_source = get<Field3D>(options["species"]["h"]["density_source"]);
   Field3D hp_density_source = get<Field3D>(options["species"]["h+"]["density_source"]);
   
-  BOUT_FOR(i, h_density_source.getRegion("RGN_NOBNDRY")) {
+  BOUT_FOR_SERIAL(i, h_density_source.getRegion("RGN_NOBNDRY")) {
     ASSERT_LT(h_density_source[i], 0.0) << "Atom (h) density source not negative at " << i;
     ASSERT_GT(hp_density_source[i], 0.0) << "Ion (h+) density source not positive at " << i;
   }
@@ -73,7 +73,7 @@ TEST_F(IonisationTest, SourcesSanityCheck) {
   Field3D h_momentum_source = get<Field3D>(options["species"]["h"]["momentum_source"]);
   Field3D hp_momentum_source = get<Field3D>(options["species"]["h+"]["momentum_source"]);
 
-  BOUT_FOR(i, h_momentum_source.getRegion("RGN_NOBNDRY")) {
+  BOUT_FOR_SERIAL(i, h_momentum_source.getRegion("RGN_NOBNDRY")) {
     ASSERT_LT(h_momentum_source[i], 0.0) << "Atom (h) momentum source not negative at " << i;
     ASSERT_GT(hp_momentum_source[i], 0.0) << "Ion (h+) momentum source not positive at " << i;
   }
@@ -81,13 +81,13 @@ TEST_F(IonisationTest, SourcesSanityCheck) {
   Field3D h_energy_source = get<Field3D>(options["species"]["h"]["energy_source"]);
   Field3D hp_energy_source = get<Field3D>(options["species"]["h+"]["energy_source"]);
 
-  BOUT_FOR(i, h_energy_source.getRegion("RGN_NOBNDRY")) {
+  BOUT_FOR_SERIAL(i, h_energy_source.getRegion("RGN_NOBNDRY")) {
     ASSERT_LT(h_energy_source[i], 0.0) << "Atom (h) energy source not negative at " << i;
     ASSERT_GT(hp_energy_source[i], 0.0) << "Ion (h+) energy source not positive at " << i;
   }
 
   Field3D e_energy_source = get<Field3D>(options["species"]["e"]["energy_source"]);
-  BOUT_FOR(i, h_energy_source.getRegion("RGN_NOBNDRY")) {
+  BOUT_FOR_SERIAL(i, h_energy_source.getRegion("RGN_NOBNDRY")) {
     ASSERT_LT(e_energy_source[i], 0.0) << "Electron (e) energy source not negative at " << i;
   }
 }
