@@ -7,10 +7,10 @@ RED_FG="\033[031m"
 RESET_FG="\033[039m"
 
 echo "****************************************"
-echo "Fetching BOUT++ master"
+echo "Fetching BOUT++ next branch"
 echo "****************************************"
 
-git clone --depth 1 https://github.com/boutproject/BOUT-dev.git
+git clone --depth 1 -b next https://github.com/boutproject/BOUT-dev.git
 cd BOUT-dev
 
 export MAKEFLAGS="-j 2 -k"
