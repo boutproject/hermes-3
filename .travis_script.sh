@@ -53,9 +53,14 @@ cd ..
 
 echo -e $RED_FG
 echo "**************************************************"
-echo "Compiling Hermes-3"
+echo "Compiling Hermes-3 "
 echo "**************************************************"
 echo -e $RESET_FG
+
+echo "Current directory: $PWD"
+ls
+echo "In BOUT-dev:"
+ls BOUT-dev
 
 time make BOUT_TOP=BOUT-dev
 
