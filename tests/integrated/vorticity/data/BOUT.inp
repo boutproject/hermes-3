@@ -11,6 +11,8 @@ nz = 10
 yn = y / (2π)
 zn = z / (2π)
 
+paralleltransform = identity
+
 [solver]
 mxstep = 1000
 

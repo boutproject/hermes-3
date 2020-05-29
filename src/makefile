@@ -6,8 +6,6 @@ MODULE_DIR	= ..
 SUB_NAME	= src
 TARGET		= hermes-3
 
-CXXFLAGS += -std=c++14
-
 SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
 		  div_ops.cxx loadmetric.cxx \
                   neutral_mixed.cxx full_velocity.cxx \

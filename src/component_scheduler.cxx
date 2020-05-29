@@ -25,7 +25,7 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
     // For each component e.g. "e", several Component types can be created
     // but if types are not specified then the component name is used
     std::string types = component_options[name_trimmed].isSet("type")
-                            ? component_options[name_trimmed]["type"]
+                            ? component_options[name_trimmed]["type"].as<std::string>()
                             : name_trimmed;
 
     for (const auto &type : strsplit(types, ',')) {

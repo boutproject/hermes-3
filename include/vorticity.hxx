@@ -56,7 +56,7 @@ private:
   Field3D Vort; // Evolving vorticity
   
   Field3D phi; // Electrostatic potential
-  Laplacian *phiSolver; // Laplacian solver in X-Z
+  std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
 
   bool exb_advection; // Include nonlinear ExB advection?
   bool diamagnetic; // Include diamagnetic current?
@@ -68,7 +68,7 @@ private:
   bool sheath_boundary; ///< Set outer boundary to j=0?
   
   bool split_n0; // Split phi into n=0 and n!=0 components
-  LaplaceXY *laplacexy; // Laplacian solver in X-Y (n=0)
+  LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
   Field2D phi2D;        // Axisymmetric phi
 
   Field2D Bsq; // SQ(coord->Bxy)

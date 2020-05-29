@@ -3,7 +3,6 @@
 #include <bout/constants.hxx>
 
 #include "../include/collisions.hxx"
-#include "../include/hermes_utils.hxx"
 
 Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
   const Options& units = alloptions["units"];

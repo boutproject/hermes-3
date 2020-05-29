@@ -5,6 +5,8 @@ A seeded plasma filament in 2D. This version is isothermal and cold ion,
 so only the electron density and vorticity are evolved. A sheath-connected
 closure is used for the parallel current.
 
+![Electron density Ne at three times, showing propagation to the right](blob2d.png)
+
 The model components are
 ```
 [hermes]

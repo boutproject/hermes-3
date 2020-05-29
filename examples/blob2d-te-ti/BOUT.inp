@@ -26,10 +26,13 @@ bxcvz = 1./Rxy^2  # Curvature
 yn = y / (2π)
 zn = z / (2π)
 
+paralleltransform = identity
+
 [solver]
 mxstep = 10000
 
 [hermes]
+# Two species, electrons and ions
 components = e, h+, vorticity, sheath_closure
 
 Nnorm = 2e18

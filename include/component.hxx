@@ -43,10 +43,16 @@ struct Component {
 using ComponentCreator =
   std::function<Component *(std::string, Options &, Solver *)>;
 
-using ComponentFactory = Factory<Component, ComponentCreator>;
+class ComponentFactory : public Factory<Component, ComponentFactory, ComponentCreator> {
+public:
+  static constexpr auto type_name = "Component";
+  static constexpr auto section_name = "component";
+  static constexpr auto option_name = "type";
+  static constexpr auto default_type = "none";
+};
 
 template <typename DerivedType>
-class RegisterInFactory<Component, DerivedType> {
+class RegisterInFactory<Component, DerivedType, ComponentFactory> {
 public:
   RegisterInFactory(const std::string &type) {
     ComponentFactory::getInstance().add(
@@ -65,7 +71,7 @@ public:
 ///     RegisterComponent<MyComponent> registercomponentmine("mycomponent");
 ///     }
 template <typename DerivedType>
-using RegisterComponent = RegisterInFactory<Component, DerivedType>;
+using RegisterComponent = RegisterInFactory<Component, DerivedType, ComponentFactory>;
 
 
 /// Faster non-printing getter for Options
