@@ -9,7 +9,7 @@ SOURCEC		= hermes-3.cxx
 
 # Capture the git version, to be printed in the outputs
 GIT_VERSION := $(shell git describe --abbrev=40 --dirty --always --tags)
-CXXFLAGS += -DHERMES_VERSION=\"$(GIT_VERSION)\"
+CXXFLAGS += -DHERMES_VERSION=\"$(GIT_VERSION)\" -std=c++14
 
 include $(BOUT_TOP)/make.config
 
