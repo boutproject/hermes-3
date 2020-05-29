@@ -33,18 +33,19 @@ cache:
 jobs:
   fast_finish: true
   include:
-  - name: "GCC"
+  - name: "GCC 8"
     addons:
       apt:
         sources:
           - ubuntu-toolchain-r-test
         packages:
+          - g++-8
           - *standard_packages
     env:
       - *default_env
       - BOUT_CONFIGURE_OPTIONS="--enable-sigfpe --enable-debug CXXFLAGS=-std=c++14"
-      - CC=gcc CXX=g++
-      - MATRIX_EVAL="CC=gcc && CXX=g++"
+      - CC=gcc-8 CXX=g++-8
+      - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
 
 before_install:
   ##################################################
