@@ -43,7 +43,7 @@ jobs:
           - *standard_packages
     env:
       - *default_env
-      - BOUT_CONFIGURE_OPTIONS="--enable-sigfpe --enable-debug -std=c++14"
+      - BOUT_CONFIGURE_OPTIONS="--enable-sigfpe --enable-debug CXXFLAGS=-std=c++14"
       - CC=gcc-7 CXX=g++-7
       - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
 
