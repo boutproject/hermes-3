@@ -40,22 +40,13 @@ then
 fi
 export PYTHONPATH=$(pwd)/tools/pylib/:$PYTHONPATH
 
-for target in ${MAIN_TARGET[@]}
-do
-    make_exit=0
-    time make $target || make_exit=$?
-    if [[ $make_exit -gt 0 ]]; then
-	make clean > /dev/null
-	echo -e $RED_FG
-	echo "**************************************************"
-	echo "Printing make commands:"
-	echo "**************************************************"
-	echo -e $RESET_FG
-	echo
-	make -n $target
-	exit $make_exit
-    fi
-done
+echo -e $RED_FG
+echo "**************************************************"
+echo "Building BOUT++"
+echo "**************************************************"
+echo -e $RESET_FG
+
+make
 
 # Change to parent directory (Hermes-3)
 cd ..
