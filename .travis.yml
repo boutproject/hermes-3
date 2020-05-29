@@ -33,19 +33,18 @@ cache:
 jobs:
   fast_finish: true
   include:
-  - name: "GCC 7"
+  - name: "GCC"
     addons:
       apt:
         sources:
           - ubuntu-toolchain-r-test
         packages:
-          - g++-7
           - *standard_packages
     env:
       - *default_env
       - BOUT_CONFIGURE_OPTIONS="--enable-sigfpe --enable-debug CXXFLAGS=-std=c++14"
-      - CC=gcc-7 CXX=g++-7
-      - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+      - CC=gcc CXX=g++
+      - MATRIX_EVAL="CC=gcc && CXX=g++"
 
 before_install:
   ##################################################
