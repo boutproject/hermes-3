@@ -1,7 +1,7 @@
 
 BOUT_TOP	= ../../../..
 
-GTEST_BASE = $(BOUT_TOP)/externalpackages/googletest
+GTEST_BASE = ../../googletest
 GTEST_DIR = $(GTEST_BASE)/googletest
 GMOCK_DIR = $(GTEST_BASE)/googlemock
 

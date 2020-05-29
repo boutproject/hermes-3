@@ -20,6 +20,7 @@ addons:
     - python3-pytest
     - python3-numpy
     - python3-scipy
+    - python3-netcdf4
     - libhdf5-mpi-dev
     - openmpi-bin
     - libopenmpi-dev
