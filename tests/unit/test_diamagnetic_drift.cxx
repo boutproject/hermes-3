@@ -20,6 +20,8 @@ using DiamagneticDriftTest = FakeMeshFixture;
 
 TEST_F(DiamagneticDriftTest, CreateComponent) {
   Options options;
+
+  mesh->getCoordinates()->Bxy = 1.0;
   
   options["units"]["Tesla"] = 1.0;
   options["units"]["meters"] = 1.0;

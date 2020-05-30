@@ -22,7 +22,9 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options &alloptions, Solver
   if (Options::root()["mesh"]["paralleltransform"].withDefault<std::string>(
           "none") == "shifted") {
     Field2D I;
-    mesh->get(I, "sinty");
+    if (mesh->get(I, "sinty"))
+      I = 0.0;
+    
     Curlb_B.z += I * Curlb_B.x;
   }
 
