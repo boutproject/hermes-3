@@ -14,21 +14,9 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options &alloptions, Solver
                    .withDefault<bool>(true);
 
   // Read curvature vector
-  try {
-    Curlb_B.covariant = false; // Contravariant
-    mesh->get(Curlb_B, "bxcv");
-  
-  } catch (BoutException &e) {
-    try {
-      // May be 2D, reading as 3D
-      Vector2D curv2d;
-      curv2d.covariant = false;
-      mesh->get(curv2d, "bxcv");
-      Curlb_B = curv2d;
-    } catch (BoutException &e) {
-      // Need curvature
-      throw;
-    }
+  Curlb_B.covariant = false; // Contravariant
+  if (mesh->get(Curlb_B, "bxcv")) {
+    Curlb_B.x = Curlb_B.y = Curlb_B.z = 0.0;
   }
 
   if (Options::root()["mesh"]["paralleltransform"].withDefault<std::string>(
