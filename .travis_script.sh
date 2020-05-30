@@ -66,5 +66,5 @@ echo "**************************************************"
 echo -e $RESET_FG
 
 # Run tests
-time make check
+time make BOUT_TOP=$PWD/BOUT-dev check
 
