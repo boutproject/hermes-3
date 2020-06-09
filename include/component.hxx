@@ -79,14 +79,14 @@ using RegisterComponent = RegisterInFactory<Component, DerivedType, ComponentFac
 template<typename T>
 T get(const Options& option) {
   if (!option.isSet()) {
-    throw BoutException("Option %s has no value", option.str().c_str());
+    throw BoutException("Option {:s} has no value", option.str());
   }
   try {
     return bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value);
   } catch (const std::bad_cast &e) {
     // Convert to a more useful error message
-    throw BoutException("Could not convert %s to type %s",
-                        option.str().c_str(), typeid(T).name());
+    throw BoutException("Could not convert {:s} to type {:s}",
+                        option.str(), typeid(T).name());
   }
 }
 
@@ -109,8 +109,8 @@ Options& add(Options& option, T value) {
       return set(option, value + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value));
     } catch (const std::bad_cast &e) {
       // Convert to a more useful error message
-      throw BoutException("Could not convert %s to type %s",
-                          option.str().c_str(), typeid(T).name());
+      throw BoutException("Could not convert {:s} to type {:s}",
+                          option.str(), typeid(T).name());
     }
   }
 }
@@ -126,8 +126,8 @@ Options& subtract(Options& option, T value) {
       set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value) - value);
     } catch (const std::bad_cast &e) {
       // Convert to a more useful error message
-      throw BoutException("Could not convert %s to type %s",
-                          option.str().c_str(), typeid(T).name());
+      throw BoutException("Could not convert {:s} to type {:s}",
+                          option.str(), typeid(T).name());
     }
   }
   return option;
