@@ -55,7 +55,6 @@ void AnomalousDiffusion::transform(Options &state) {
   if (include_D) {
     // Particle diffusion. Gradients of density drive flows of particles,
     // momentum and energy
-    
     add(species["density_source"],
         FV::Div_a_Laplace_perp(anomalous_D, N2D));
 

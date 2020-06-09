@@ -4,7 +4,7 @@
 
 #include "component.hxx"
 
-/// Add anomalous diffusion of density and temperature
+/// Add anomalous diffusion of density, momentum and energy
 ///
 struct AnomalousDiffusion : public Component {
   AnomalousDiffusion(std::string name, Options &alloptions, Solver *);
