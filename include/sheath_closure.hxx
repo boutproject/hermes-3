@@ -5,6 +5,9 @@
 #include "component.hxx"
 
 /// 2D closure, modelling currents through a sheath
+///
+/// This should only be used where one grid cell is used in y (ny=1).
+/// For domains with multiple Y points, use sheath_boundary
 struct SheathClosure : public Component {
   /// Inputs
   ///  - units

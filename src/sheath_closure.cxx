@@ -19,7 +19,7 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
                .doc("Potential at which the sheath current is zero")
                .withDefault<BoutReal>(0.0);
 
-  output.write("\tL_par = %e (normalised)\n", L_par);
+  output.write("\tL_par = {:e} (normalised)\n", L_par);
 }
 
 void SheathClosure::transform(Options &state) {
