@@ -37,6 +37,7 @@
 #include "include/sound_speed.hxx"
 #include "include/zero_current.hxx"
 #include "include/anomalous_diffusion.hxx"
+#include "include/recycling.hxx"
 
 #include "include/loadmetric.hxx"
 

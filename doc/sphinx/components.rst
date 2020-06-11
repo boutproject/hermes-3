@@ -164,3 +164,15 @@ Energy exchange, heat transferred to species `a` from species `b`:
   \nu_{12} = v_{rel} n_2 \sigma
 
 
+recycling
+~~~~~~~~~
+
+This component calculates the flux of a species into a Y boundary,
+due to recycling of flow out of the boundary of another species.
+
+The boundary fluxes might be set by sheath boundary conditions,
+which potentially depend on the density and temperature of all species.
+Recycling therefore can't be calculated until all species boundary conditions
+have been set. It is therefore expected that this component is a top-level
+component which comes after boundary conditions are set.
+
