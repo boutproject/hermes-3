@@ -14,9 +14,11 @@ void ZeroCurrent::transform(Options &state) {
   ASSERT1(get<BoutReal>(electrons["charge"]) == -1.0);
 
   // Force balance, E = -∇p / n
-
   Field3D Epar = - Grad_par(Pe) / Ne;
 
+  // Current due to ions
+  Field3D ion_current;
+  
   // Now calculate forces on other species
   Options& allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
@@ -29,10 +31,29 @@ void ZeroCurrent::transform(Options &state) {
       continue; // Needs both density and charge to experience a force
     }
     
-    Field3D N = get<Field3D>(species["density"]);
-    BoutReal charge = get<BoutReal>(species["charge"]);
+    const Field3D N = get<Field3D>(species["density"]);
+    const BoutReal charge = get<BoutReal>(species["charge"]);
 
     add(species["momentum_source"],
         charge * N * Epar);
+
+    if (species.isSet("velocity")) {
+      // If velocity is set, update the ion current
+      
+      const Field3D V =  get<Field3D>(species["velocity"]);
+      
+      if (!ion_current.isAllocated()) {
+        // Not yet allocated -> Set to the value
+        // This avoids having to set to zero initially and add the first time
+        ion_current = charge * N * V;
+      } else {
+        ion_current += charge * N * V;
+      }
+    }
+  }
+
+  if (ion_current.isAllocated()) {
+    // If ion current set, set the electron velocity
+    set(electrons["velocity"], ion_current / Ne);
   }
 }

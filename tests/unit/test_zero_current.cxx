@@ -80,3 +80,29 @@ TEST_F(ZeroCurrentTest, WithPressureGradient) {
     ASSERT_LT(F[i], 0.0) << "Force on ions (h+) not negative at " << i;
   }
 }
+
+TEST_F(ZeroCurrentTest, ElectronFlowVelocity) {
+  Options options;
+  
+  ZeroCurrent component("test", options, nullptr);
+
+  options["species"]["e"]["pressure"] =
+      FieldFactory::get()->create3D("y", &options, mesh);
+  options["species"]["e"]["density"] = 2.0;
+  options["species"]["e"]["charge"] = -1.0;
+
+  options["species"]["ion"]["density"] = 1.0;
+  options["species"]["ion"]["charge"] = 2.0;
+
+  // Set ion velocity
+  Field3D Vi =  FieldFactory::get()->create3D("y - x", &options, mesh);
+  options["species"]["ion"]["velocity"] = Vi;
+
+  component.transform(options);
+
+  // Electron velocity should be equal to ion velocity
+  Field3D Ve = get<Field3D>(options["species"]["e"]["velocity"]);
+  BOUT_FOR_SERIAL(i, Ve.getRegion("RGN_NOBNDRY")) {
+    ASSERT_DOUBLE_EQ(Ve[i], Vi[i]) << "Electron velocity not equal to ion velocity at " << i;
+  }
+}
