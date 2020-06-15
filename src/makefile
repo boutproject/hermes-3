@@ -14,7 +14,7 @@ SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
                   evolve_momentum.cxx \
                   isothermal.cxx quasineutral.cxx \
 		  diamagnetic_drift.cxx \
-                  sheath_closure.cxx \
+                  sheath_closure.cxx sheath_boundary.cxx \
                   fixed_fraction_ions.cxx \
                   sound_speed.cxx zero_current.cxx \
                   collisions.cxx  \
