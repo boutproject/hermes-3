@@ -15,6 +15,47 @@
 struct SheathBoundary : public Component {
   SheathBoundary(std::string name, Options &options, Solver *);
 
+  ///
+  /// Inputs
+  /// - species
+  ///   - e
+  ///     - density
+  ///     - temperature
+  ///     - velocity
+  ///     - mass        Optional
+  ///     - adiabatic   Optional. Ratio of specific heats, default 5/3.
+  ///   - <ions>  if charge is set (i.e. not neutrals)
+  ///     - charge
+  ///     - mass
+  ///     - density
+  ///     - temperature
+  ///     - velocity     Optional. Default 0
+  ///     - momentum     Optional. Default mass * density * velocity
+  ///     - adiabatic    Optional. Ratio of specific heats, default 5/3.
+  /// - fields
+  ///   - phi    Optional. If not set, calculated at boundary (see note below)
+  ///
+  /// Outputs
+  /// - species
+  ///   - e
+  ///     - density      Sets boundary
+  ///     - temperature  Sets boundary
+  ///     - velocity     Sets boundary
+  ///     - energy_source
+  ///   - <ions>
+  ///     - density      Sets boundary
+  ///     - temperature  Sets boundary
+  ///     - velocity     Sets boundary
+  ///     - momentum     Sets boundary
+  ///     - energy_source
+  /// - fields
+  ///   - phi   Sets boundary
+  ///
+  /// If the field phi is set, then this is used in the boundary condition.
+  /// If not set, phi at the boundary is calculated and stored in the state.
+  /// Note that phi in the domain will not be set, so will be invalid data.
+  ///
+  ///
   void transform(Options &state) override;
 private:
   BoutReal Ge; // Secondary electron emission coefficient
