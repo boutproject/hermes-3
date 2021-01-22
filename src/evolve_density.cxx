@@ -25,10 +25,6 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
 
-  anomalous_D = options["anomalous_D"]
-                    .doc("Anomalous diffusion (axisymmetric). <0 => off")
-                    .withDefault(-1.0);
-
   low_n_diffuse = options["low_n_diffuse"]
                       .doc("Parallel diffusion at low density")
                       .withDefault<bool>(false);
@@ -94,10 +90,6 @@ void EvolveDensity::finally(const Options &state) {
       // Parallel wave speed is ion sound speed
       ddt(N) -= FV::Div_par(N, V, sound_speed);
     }
-  }
-  
-  if (anomalous_D > 0.0) {
-    ddt(N) += FV::Div_a_Laplace_perp(anomalous_D, DC(N));
   }
 
   if (low_n_diffuse) {

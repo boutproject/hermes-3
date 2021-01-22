@@ -40,8 +40,7 @@ private:
 
   bool bndry_flux;      // Allow flows through boundaries?
   bool poloidal_flows;  // Include ExB flow in Y direction?
-  
-  BoutReal anomalous_D; // Anomalous diffusion (axisymmetric)
+
   bool low_n_diffuse;   // Parallel diffusion at low density
   bool low_n_diffuse_perp;  // Perpendicular diffusion at low density
   bool hyper_z;  // Hyper-diffusion in Z
