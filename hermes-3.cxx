@@ -46,7 +46,7 @@ int Hermes::init(bool restarting) {
 
   auto &options = Options::root()["hermes"];
   
-  output.write("\nGit Version of Hermes: %s\n", HERMES_VERSION);
+  output.write("\nGit Version of Hermes: {}\n", HERMES_VERSION);
   options["version"] = HERMES_VERSION;
 
   // Save the Hermes version in the output dump files
