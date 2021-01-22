@@ -12,6 +12,8 @@ struct EvolveDensity : public Component {
   /// This sets in the state
   /// - species
   ///   - <name>
+  ///     - AA
+  ///     - charge
   ///     - density
   void transform(Options &state) override;
 

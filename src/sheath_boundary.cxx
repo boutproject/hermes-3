@@ -25,7 +25,7 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 }
 
 SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) {
-  const Options& units = alloptions["units"];
+  AUTO_TRACE();
   
   Options &options = alloptions[name];
 
@@ -51,6 +51,8 @@ SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) 
 }
 
 void SheathBoundary::transform(Options &state) {
+  AUTO_TRACE();
+
   Options& allspecies = state["species"];
   Options& electrons = allspecies["e"];
   
@@ -58,6 +60,8 @@ void SheathBoundary::transform(Options &state) {
   // Not const because boundary conditions will be set
   Field3D Ne = get<Field3D>(electrons["density"]);
   Field3D Te = get<Field3D>(electrons["temperature"]);
+  Field3D Pe =
+      electrons.isSet("pressure") ? get<Field3D>(electrons["pressure"]) : Te * Ne;
 
   // Ratio of specific heats
   const BoutReal electron_adiabatic =
@@ -65,10 +69,10 @@ void SheathBoundary::transform(Options &state) {
 
   // Mass, normalised to proton mass
   const BoutReal Me =
-      electrons.isSet("mass") ? get<BoutReal>(electrons["mass"]) : SI::Me / SI::Mp;
+      electrons.isSet("AA") ? get<BoutReal>(electrons["AA"]) : SI::Me / SI::Mp;
 
   // This is for applying boundary conditions
-  Field3D Ve = get<Field3D>(electrons["velocity"]);
+  Field3D Ve = electrons.isSet("velocity") ? get<Field3D>(electrons["velocity"]) : 0.0;
   
   Coordinates *coord = mesh->getCoordinates();
   
@@ -100,7 +104,7 @@ void SheathBoundary::transform(Options &state) {
       
       const Field3D Ni = get<Field3D>(species["density"]);
       const Field3D Ti = get<Field3D>(species["temperature"]);
-      const BoutReal Mi = get<BoutReal>(species["mass"]);
+      const BoutReal Mi = get<BoutReal>(species["AA"]);
       const BoutReal Zi = get<BoutReal>(species["charge"]);
 
       const BoutReal adiabatic = species.isSet("adiabatic")
@@ -227,6 +231,7 @@ void SheathBoundary::transform(Options &state) {
 
         Ne[im] = SQ(Ne[i]) / Ne[ip];
         Te[im] = SQ(Te[i]) / Te[ip];
+        Pe[im] = SQ(Pe[i]) / Pe[ip];
 
         // Free boundary potential linearly extrapolated
         phi[im] = 2 * phi[i] - phi[ip];
@@ -278,6 +283,7 @@ void SheathBoundary::transform(Options &state) {
 
         Ne[ip] = SQ(Ne[i]) / Ne[im];
         Te[ip] = SQ(Te[i]) / Te[im];
+        Pe[ip] = SQ(Pe[i]) / Pe[im];
 
         // Free boundary potential linearly extrapolated
         phi[ip] = 2 * phi[i] - phi[im];
@@ -317,6 +323,7 @@ void SheathBoundary::transform(Options &state) {
   // Set electron density and temperature, now with boundary conditions
   set(electrons["density"], Ne);
   set(electrons["temperature"], Te);
+  set(electrons["pressure"], Pe);
   set(electrons["velocity"], Ve);
 
   // Set the potential, including boundary conditions
@@ -338,7 +345,7 @@ void SheathBoundary::transform(Options &state) {
       continue; // Neutral -> skip
 
     // Characteristics of this species
-    const BoutReal Mi = get<BoutReal>(species["mass"]);
+    const BoutReal Mi = get<BoutReal>(species["AA"]);
 
     const BoutReal adiabatic = species.isSet("adiabatic")
                                      ? get<BoutReal>(species["adiabatic"])
@@ -347,7 +354,8 @@ void SheathBoundary::transform(Options &state) {
     // Density and temperature boundary conditions will be imposed (free)
     Field3D Ni = get<Field3D>(species["density"]);
     Field3D Ti = get<Field3D>(species["temperature"]);
-    
+    Field3D Pi = species.isSet("pressure") ? get<Field3D>(species["pressure"]) : Ni * Ti;
+
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
@@ -371,6 +379,7 @@ void SheathBoundary::transform(Options &state) {
 
           Ni[im] = SQ(Ni[i]) / Ni[ip];
           Ti[im] = SQ(Ti[i]) / Ti[ip];
+          Pi[im] = SQ(Pi[i]) / Pi[ip];
 
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
@@ -440,6 +449,7 @@ void SheathBoundary::transform(Options &state) {
 
           Ni[ip] = SQ(Ni[i]) / Ni[im];
           Ti[ip] = SQ(Ti[i]) / Ti[im];
+          Pi[ip] = SQ(Pi[i]) / Pi[im];
 
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
@@ -492,6 +502,8 @@ void SheathBoundary::transform(Options &state) {
     // Put the modified fields back into the state.
     set(species["density"], Ni);
     set(species["temperature"], Ti);
+    set(species["pressure"], Pi);
+
     set(species["velocity"], Vi);
     set(species["momentum"], NVi);
 
