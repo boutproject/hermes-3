@@ -46,7 +46,7 @@ TEST_F(SheathBoundaryTest, CalculatePotential) {
                    // Ion species
                    {"h", {{"density", si*N},
                           {"temperature", Ti},
-                          {"mass", 1.0},
+                          {"AA", 1.0},
                           {"charge", Zi},
                           {"velocity", 0.0}}}}}};
 
