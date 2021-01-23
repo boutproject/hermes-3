@@ -35,7 +35,7 @@ void LoadMetric(BoutReal Lnorm, BoutReal Bnorm) {
   coord->Bxy /= Bnorm;
 
   // Calculate metric components
-  if (Options::root()["mesh"]["paralleltransform"].as<std::string>() == "shifted") {
+  if (Options::root()["mesh"]["paralleltransform"]["type"].as<std::string>() == "shifted") {
     sinty = 0.0; // I disappears from metric
   }
 
