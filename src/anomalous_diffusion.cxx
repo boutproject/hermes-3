@@ -1,6 +1,7 @@
 #include "../include/anomalous_diffusion.hxx"
 
 #include <bout/fv_ops.hxx>
+#include "../include/div_ops.hxx"
 
 AnomalousDiffusion::AnomalousDiffusion(std::string name, Options &alloptions, Solver *) : name(name) {
   // Normalisations
@@ -58,11 +59,13 @@ void AnomalousDiffusion::transform(Options &state) {
     add(species["density_source"],
         FV::Div_a_Laplace_perp(anomalous_D, N2D));
 
+    // Note: Upwind operators used, or unphysical increases
+    // in temperature and flow can be produced
     add(species["momentum_source"],
-        FV::Div_a_Laplace_perp(V2D * anomalous_D, N2D));
+        Div_a_Laplace_perp_upwind(V2D * anomalous_D, N2D));
 
     add(species["energy_source"],
-        FV::Div_a_Laplace_perp(T2D * anomalous_D, N2D));
+        Div_a_Laplace_perp_upwind((3./2)*T2D * anomalous_D, N2D));
   }
 
   if (include_chi) {

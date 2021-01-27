@@ -14,13 +14,17 @@ s, out = launch_safe("./hermes-3", nproc=1, mthread=1, pipe=True)
 with open("run.log", "w") as f:
   f.write(out)
 
-# Collect the density
-n = collect("Ne", path="data")
+# Collect the density and pressure
+n = collect("Nh", path="data")
+p = collect("Ph", path="data")
 
 # Check that the density is changing in time
-assert np.amax(n[0,2:-2,:,:]) - np.amin(n[0,2:-2,:,:]) > 0.1
+assert np.amax(np.abs(n[-1,2:-2,:,:] - n[0,2:-2,:,:])) > 0.05
 
-# Check density is not changing without sources
-assert np.amax(abs(n[-1,2:-2,:,:] - n[0,2:-2,:,:])) < 1e-10
+# Calculate temperature
+T = p / n
+
+# Check that the temperature is not changing
+assert np.amax(np.abs(T[-1,2:-2,:,:] - T[0,2:-2,:,:])) < 1e-6
 
 exit(0)

@@ -1,0 +1,36 @@
+nout = 5
+timestep = 1000
+
+[mesh]
+nx = 10
+ny = 10
+nz = 1
+
+dx = 0.0075 + 0.005*x
+dy = 0.01
+dz = 0.01
+
+[solver]
+mxstep = 1000
+
+[hermes]
+components = h
+
+loadmetric = false # Load metric from Bxy, Rxy etc?
+
+[h]
+type = evolve_density, evolve_pressure, anomalous_diffusion
+
+AA = 1
+charge = 1
+anomalous_D = 2    # Density diffusion [m^2/s]
+
+thermal_conduction = false  # No collision rate calculated
+
+[Nh]
+function =  1 + h(x - 0.25) * h(0.75-x) * exp(-(y-π)^2)
+bndry_all = neumann
+
+[Ph]
+function = Nh:function
+bndry_all = neumann
