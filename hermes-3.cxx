@@ -114,6 +114,8 @@ int Hermes::init(bool restarting) {
 
   // Tell the components if they are restarting
   options["restarting"] = restarting;
+
+  TRACE("Creating components");
   
   // Create the components
   // Here options is passed as the scheduler configuration, so that
