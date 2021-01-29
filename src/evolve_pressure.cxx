@@ -12,6 +12,8 @@ EvolvePressure::EvolvePressure(std::string name, Options &alloptions, Solver *so
   
   solver->add(P, std::string("P") + name);
 
+  T.setBoundary(std::string("T") + name);
+
   auto& options = alloptions[name];
   
   bndry_flux = options["bndry_flux"]
@@ -42,6 +44,7 @@ void EvolvePressure::transform(Options &state) {
   // Calculate temperature
   N = get<Field3D>(species["density"]);
   T = P / N;
+  T.applyBoundary();
   set(species["temperature"], T);
 }
 

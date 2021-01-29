@@ -120,9 +120,12 @@ void SheathBoundary::transform(Options &state) {
             auto ip = i.yp();
             
             // Free boundary extrapolate ion concentration
-            const BoutReal s_i = clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[ip] / Ne[ip]),
+            BoutReal s_i = clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[ip] / Ne[ip]),
                                       0.0, 1.0); // Limit range to [0,1]
 
+            if (!std::isfinite(s_i)) {
+              s_i = 1.0;
+            }
             BoutReal te = Te[i];
             BoutReal ti = Ti[i];
             
@@ -130,6 +133,12 @@ void SheathBoundary::transform(Options &state) {
 
             BoutReal grad_ne = Ne[ip] - Ne[i];
             BoutReal grad_ni = Ni[ip] - Ni[i];
+
+            // Note: Needed to get past initial conditions, perhaps transients
+            // but this shouldn't happen in steady state
+            if (fabs(grad_ni) < 1e-3) {
+                grad_ni = grad_ne = 1e-3;  // Remove kinetic correction term
+            }
 
             BoutReal C_i_sq = clip(
                 (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
@@ -150,8 +159,12 @@ void SheathBoundary::transform(Options &state) {
             auto i = indexAt(Ni, r.ind, mesh->yend, jz);
             auto im = i.ym();
 
-            const BoutReal s_i =
+            BoutReal s_i =
                 clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[im] / Ne[im]), 0.0, 1.0);
+
+            if (!std::isfinite(s_i)) {
+              s_i = 1.0;
+            }
 
             BoutReal te = Te[i];
             BoutReal ti = Ti[i];
@@ -161,6 +174,10 @@ void SheathBoundary::transform(Options &state) {
             BoutReal grad_ne = Ne[i] - Ne[im];
             BoutReal grad_ni = Ni[i] - Ni[im];
 
+            if (fabs(grad_ni) < 1e-3) {
+                grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
+            }
+
             BoutReal C_i_sq = clip(
                 (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
                     / Mi,
@@ -168,7 +185,6 @@ void SheathBoundary::transform(Options &state) {
 
             ion_sum(r.ind, mesh->yend, jz) += s_i * Zi * sqrt(C_i_sq);
 
-            output.write("ion_sum: {:e} {:e} {:e}\n", Zi * te * s_i * grad_ne / (s_i * grad_ne + grad_ni), grad_ne, grad_ni);
           }
         }
       }
@@ -183,9 +199,11 @@ void SheathBoundary::transform(Options &state) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           auto i = indexAt(phi, r.ind, mesh->ystart, jz);
 
-          phi[i] =
-              Te[i]
-              * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+          if (Te[i] <= 0.0) {
+            phi[i] = 0.0;
+          } else {
+            phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+          }
 
           phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
         }
@@ -197,11 +215,11 @@ void SheathBoundary::transform(Options &state) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           auto i = indexAt(phi, r.ind, mesh->yend, jz);
 
-          phi[i] =
-              Te[i]
-              * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
-
-          output.write("{:e} {:e} {:e}\n", Te[i], ion_sum[i], phi[i]);
+          if (Te[i] <= 0.0) {
+            phi[i] = 0.0;
+          } else {
+            phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+          }
           
           phi[i.yp()] = phi[i.ym()] = phi[i];
         }
@@ -399,6 +417,10 @@ void SheathBoundary::transform(Options &state) {
           BoutReal grad_ne = Ne[i] - nesheath;
           BoutReal grad_ni = Ni[i] - nisheath;
 
+          if (fabs(grad_ni) < 1e-3) {
+            grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
+          }
+
           // Ion speed into sheath
           // Equation (9) in Tskhakaya 2005
           //
@@ -463,6 +485,10 @@ void SheathBoundary::transform(Options &state) {
           BoutReal s_i = nisheath / nesheath; // Concentration
           BoutReal grad_ne = Ne[i] - nesheath;
           BoutReal grad_ni = Ni[i] - nisheath;
+
+          if (fabs(grad_ni) < 1e-3) {
+            grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
+          }
 
           // Ion speed into sheath
           // Equation (9) in Tskhakaya 2005

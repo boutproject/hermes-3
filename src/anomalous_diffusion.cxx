@@ -71,12 +71,12 @@ void AnomalousDiffusion::transform(Options &state) {
   if (include_chi) {
     // Gradients in temperature which drive energy flows
     add(species["energy_source"],
-        FV::Div_a_Laplace_perp(anomalous_chi * N2D, T2D));
+        Div_a_Laplace_perp_upwind(anomalous_chi * N2D, T2D));
   }
 
   if (include_nu) {
     // Gradients in slow speed which drive momentum flows
     add(species["momentum_source"],
-        FV::Div_a_Laplace_perp(anomalous_nu * N2D, V2D));
+        Div_a_Laplace_perp_upwind(anomalous_nu * N2D, V2D));
   }
 }
