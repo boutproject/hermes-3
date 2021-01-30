@@ -4,7 +4,16 @@
 
 #include "../include/collisions.hxx"
 
+namespace {
+BoutReal floor(BoutReal value, BoutReal min) {
+  if (value < min)
+    return min;
+  return value;
+}
+} // namespace
+
 Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
+  AUTO_TRACE();
   const Options& units = alloptions["units"];
 
   // Normalisations
@@ -35,8 +44,19 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
                         .withDefault<bool>(true);
 }
 
+/// Calculate transfer of momentum and energy between species1 and species2
 /// nu_12    normalised frequency
+///
+/// Modifies
+///   species1 and species2
+///     - collision_frequency
+///     - momentum_source   if species1 or species2 velocity is set
+///     - energy_source     if species1 or species2 temperature is set
+///
+/// Note: A* variables are used for atomic mass numbers;
+///       mass* variables are species masses in kg
 void Collisions::collide(Options& species1, Options& species2, const Field3D& nu_12) {
+  AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12);
 
@@ -44,13 +64,13 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
     // For collisions between different species
     // m_a n_a \nu_{ab} = m_b n_b \nu_{ba}
 
-    const BoutReal mass1 = get<BoutReal>(species1["AA"]);
-    const BoutReal mass2 = get<BoutReal>(species2["AA"]);
+    const BoutReal A1 = get<BoutReal>(species1["AA"]);
+    const BoutReal A2 = get<BoutReal>(species2["AA"]);
 
     const Field3D density1 = get<Field3D>(species1["density"]);
     const Field3D density2 = get<Field3D>(species2["density"]);
 
-    add(species2["collision_frequency"], nu_12 * (mass1 / mass2) * density1 / density2);
+    add(species2["collision_frequency"], nu_12 * (A1 / A2) * density1 / density2);
 
     // Momentum exchange
     if (species1.isSet("velocity") or species2.isSet("velocity")) {
@@ -61,7 +81,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
           species2.isSet("velocity") ? get<Field3D>(species2["velocity"]) : 0.0;
 
       // F12 is the force on species 1 due to species 2 (normalised)
-      const Field3D F12 = nu_12 * mass1 * density1 * (velocity2 - velocity1);
+      const Field3D F12 = nu_12 * A1 * density1 * (velocity2 - velocity1);
 
       add(species1["momentum_source"], F12);
       subtract(species2["momentum_source"], F12);
@@ -74,8 +94,8 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
       const Field3D temperature1 = get<Field3D>(species1["temperature"]);
       const Field3D temperature2 = get<Field3D>(species2["temperature"]);
 
-      const Field3D Q12 = nu_12 * 3. * density1 * (mass1 / (mass1 + mass2))
-                          * (temperature2 - temperature1);
+      const Field3D Q12 =
+          nu_12 * 3. * density1 * (A1 / (A1 + A2)) * (temperature2 - temperature1);
 
       add(species1["energy_source"], Q12);
       subtract(species2["energy_source"], Q12);
@@ -84,17 +104,17 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 }
 
 void Collisions::transform(Options& state) {
+  AUTO_TRACE();
 
   Options& allspecies = state["species"];
 
   // Treat electron collisions specially
   // electron-ion and electron-neutral collisions
-  
+
   if (allspecies.isSection("e")) {
     Options& electrons = allspecies["e"];
     const Field3D Te = get<Field3D>(electrons["temperature"]) * Tnorm; // eV
     const Field3D Ne = get<Field3D>(electrons["density"]) * Nnorm;     // In m^-3
-
     
     for (auto& kv : allspecies.getChildren()) {
       if (kv.first == "e") {
@@ -105,15 +125,23 @@ void Collisions::transform(Options& state) {
           continue;
 
         const Field3D nu_ee = filledFrom(Ne, [&](auto& i) {
-          const BoutReal logTe = log(Te[i]);
-          const BoutReal coulomb_log = 16.6 - 0.5 * log(Ne[i]) + (5. / 4) * logTe
+          const BoutReal Telim = floor(Te[i], 0.1);
+          const BoutReal Nelim = floor(Ne[i], 1e10);
+          const BoutReal logTe = log(Telim);
+          // From NRL formulary 2019, page 34
+          // Coefficient 30.4 from converting cm^-3 to m^-3
+          // Note that this breaks when coulomb_log falls below 1
+          const BoutReal coulomb_log = 30.4 - 0.5 * log(Nelim) + (5. / 4) * logTe
                                        - sqrt(1e-5 + SQ(logTe - 2) / 16.);
 
-          const BoutReal v1sq = 2 * Te[i] * SI::qe / SI::Me;
+          const BoutReal v1sq = 2 * Telim * SI::qe / SI::Me;
 
           // Collision frequency
-          return SQ(SI::qe) * Ne[i] * coulomb_log * 2
-                 / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
+          const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne[i], 0.0) * floor(coulomb_log, 1.0)
+                              * 2 / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
+
+          ASSERT2(std::isfinite(nu));
+          return nu;
         });
 
         collide(electrons, electrons, nu_ee / Omega_ci);
@@ -133,26 +161,32 @@ void Collisions::transform(Options& state) {
         const Field3D Ni = get<Field3D>(species["density"]) * Nnorm;     // In m^-3
 
         const BoutReal Zi = get<BoutReal>(species["charge"]);
-        const BoutReal Ai = get<BoutReal>(species["mass"]);
+        const BoutReal Ai = get<BoutReal>(species["AA"]);
         const BoutReal me_mi = SI::Me / (SI::Mp * Ai); // m_e / m_i
 
         const Field3D nu_ei = filledFrom(Ne, [&](auto& i) {
+          // NRL formulary 2019, page 34
           const BoutReal coulomb_log =
-              (Te[i] < Ti[i] * me_mi)
+              ((Te[i] < 0.1) || (Ni[i] < 1e10) || (Ne[i] < 1e10)) ? 10
+              : (Te[i] < Ti[i] * me_mi)
                   ? 23 - 0.5 * log(Ni[i]) + 1.5 * log(Ti[i]) - log(SQ(Zi) * Ai)
-                  : (Te[i] < 10 * SQ(Zi))
-                        // Ti m_e/m_i < Te < 10 Z^2
-                        ? 31.0 - 0.5 * log(Ne[i]) + log(Te[i])
-                        // Ti m_e/m_i < 10 Z^2 < Te
-                        : 30.0 - 0.5 * log(Ne[i]) - log(Zi) + 1.5 * log(Te[i]);
+              : (Te[i] < 10 * SQ(Zi))
+                  // Ti m_e/m_i < Te < 10 Z^2
+                  ? 31.0 - 0.5 * log(Ne[i]) + log(Te[i])
+                  // Ti m_e/m_i < 10 Z^2 < Te
+                  : 30.0 - 0.5 * log(Ne[i]) - log(Zi) + 1.5 * log(Te[i]);
 
           // Calculate v_a^2, v_b^2
-          const BoutReal vesq = 2 * Te[i] * SI::qe / SI::Me;
-          const BoutReal visq = 2 * Ti[i] * SI::qe / (SI::Mp * Ai);
+          const BoutReal vesq = 2 * floor(Te[i], 0.1) * SI::qe / SI::Me;
+          const BoutReal visq = 2 * floor(Ti[i], 0.1) * SI::qe / (SI::Mp * Ai);
 
           // Collision frequency
-          return SQ(SQ(SI::qe) * Zi) * Ni[i] * coulomb_log * (1. + me_mi)
-                 / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me));
+          const BoutReal nu = SQ(SQ(SI::qe) * Zi) * floor(Ni[i], 0.0)
+                              * floor(coulomb_log, 1.0) * (1. + me_mi)
+                              / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me));
+
+          ASSERT2(std::isfinite(nu));
+          return nu;
         });
 
         collide(electrons, species, nu_ei / Omega_ci);
@@ -243,28 +277,34 @@ void Collisions::transform(Options& state) {
 
           if (!ion_ion)
             continue;
-          
+
           const BoutReal Z2 = get<BoutReal>(species2["charge"]);
           const BoutReal charge2 = Z2 * SI::qe; // in Coulombs
 
           // Ion-ion collisions
           Field3D nu_12 = filledFrom(density1, [&](auto& i) {
+            const BoutReal Tlim1 = floor(temperature1[i], 0.1);
+            const BoutReal Tlim2 = floor(temperature2[i], 0.1);
+
+            const BoutReal Nlim1 = floor(density1[i], 1e10);
+            const BoutReal Nlim2 = floor(density2[i], 1e10);
+
             // Coulomb logarithm
             BoutReal coulomb_log =
                 29.91
-                - log((Z1 * Z2 * (AA1 + AA2))
-                      / (AA1 * temperature2[i] + AA2 * temperature1[i])
-                      * sqrt(density1[i] * SQ(Z1) / temperature1[i]
-                             + density2[i] * SQ(Z2) / temperature2[i]));
+                - log((Z1 * Z2 * (AA1 + AA2)) / (AA1 * Tlim2 + AA2 * Tlim1)
+                      * sqrt(Nlim1 * SQ(Z1) / Tlim1 + Nlim2 * SQ(Z2) / Tlim2));
 
             // Calculate v_a^2, v_b^2
-            const BoutReal v1sq = 2 * temperature1[i] * SI::qe / mass1;
-            const BoutReal v2sq = 2 * temperature2[i] * SI::qe / mass2;
+            const BoutReal v1sq = 2 * Tlim1 * SI::qe / mass1;
+            const BoutReal v2sq = 2 * Tlim2 * SI::qe / mass2;
 
             // Collision frequency
-            return SQ(charge1 * charge2) * density2[i] * coulomb_log
-                   * (1. + mass1 / mass2)
-                   / (3 * pow(PI * (v1sq + v2sq), 1.5) * SQ(SI::e0 * mass1));
+            const BoutReal nu = SQ(charge1 * charge2) * Nlim2 * floor(coulomb_log, 1.0)
+                                * (1. + mass1 / mass2)
+                                / (3 * pow(PI * (v1sq + v2sq), 1.5) * SQ(SI::e0 * mass1));
+            ASSERT2(std::isfinite(nu));
+            return nu;
           });
 
           // Update the species collision rates, momentum & energy exchange
@@ -288,7 +328,7 @@ void Collisions::transform(Options& state) {
             // Units: density [m^-3], a0 [m^2], rho_s0 [m]
             return vrel * density2[i] * a0 * rho_s0;
           });
-          
+
           collide(species1, species2, nu_12);
         }
       }

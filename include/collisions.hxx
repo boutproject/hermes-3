@@ -30,6 +30,8 @@ private:
   void collide(Options &species1, Options &species2, const Field3D &nu_12);
 };
 
-
+namespace {
+RegisterComponent<Collisions> registercomponentcollisions("collisions");
+}
 
 #endif // COLLISIONS_H

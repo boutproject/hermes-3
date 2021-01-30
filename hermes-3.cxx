@@ -39,6 +39,7 @@
 #include "include/zero_current.hxx"
 #include "include/anomalous_diffusion.hxx"
 #include "include/recycling.hxx"
+#include "include/collisions.hxx"
 
 #include "include/loadmetric.hxx"
 
