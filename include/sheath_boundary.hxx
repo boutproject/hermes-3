@@ -65,6 +65,8 @@ private:
   
   bool lower_y; // Boundary on lower y?
   bool upper_y; // Boundary on upper y?
+
+  bool always_set_phi; ///< Set phi field?
 };
 
 namespace {

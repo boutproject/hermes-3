@@ -48,6 +48,11 @@ SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) 
 
   lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
   upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
+
+  always_set_phi =
+      options["always_set_phi"]
+          .doc("Always set phi field? Default is to only modify if already set")
+          .withDefault<bool>(false);
 }
 
 void SheathBoundary::transform(Options &state) {
@@ -344,7 +349,7 @@ void SheathBoundary::transform(Options &state) {
     set(electrons["velocity"], Ve);
   }
 
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
+  if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
     // Set the potential, including boundary conditions
     set(state["fields"]["phi"], phi);
   }
