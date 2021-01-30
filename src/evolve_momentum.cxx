@@ -250,5 +250,9 @@ void EvolveMomentum::finally(const Options &state) {
   if (species.isSet("momentum_source")) {
     ddt(NV) += get<Field3D>(species["momentum_source"]);
   }
+
+#if CHECK > 1
+  bout::checkFinite(ddt(NV), std::string("ddt NV") + name, "RGN_NOBNDRY");
+#endif
 }
 

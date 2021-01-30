@@ -136,4 +136,8 @@ void EvolvePressure::finally(const Options &state) {
   if (species.isSet("energy_source")) {
     ddt(P) += (2./3) * get<Field3D>(species["energy_source"]);
   }
+
+#if CHECK > 1
+  bout::checkFinite(ddt(P), std::string("ddt P") + name, "RGN_NOBNDRY");
+#endif
 }

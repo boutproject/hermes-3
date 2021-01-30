@@ -108,4 +108,8 @@ void EvolveDensity::finally(const Options &state) {
   if (species.isSet("density_source")) {
     ddt(N) += get<Field3D>(species["density_source"]);
   }
+
+#if CHECK > 1
+  bout::checkFinite(ddt(N), std::string("ddt N") + name, "RGN_NOBNDRY");
+#endif
 }
