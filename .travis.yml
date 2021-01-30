@@ -4,7 +4,7 @@ language: cpp
 compiler: gcc
 
 git:
-  depth: 3
+  depth: 1
 
 addons:
   apt:
@@ -21,6 +21,7 @@ addons:
     - python3-numpy
     - python3-scipy
     - python3-netcdf4
+    - python3-importlib-metadata
     - libhdf5-mpi-dev
     - openmpi-bin
     - libopenmpi-dev
