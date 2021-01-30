@@ -225,9 +225,6 @@ void SheathBoundary::transform(Options &state) {
         }
       }
     }
-
-    // Set the potential at the wall
-    set(state["fields"]["phi"], phi);
   }
 
   //////////////////////////////////////////////////////////////////
@@ -342,10 +339,15 @@ void SheathBoundary::transform(Options &state) {
   set(electrons["density"], Ne);
   set(electrons["temperature"], Te);
   set(electrons["pressure"], Pe);
-  set(electrons["velocity"], Ve);
 
-  // Set the potential, including boundary conditions
-  set(state["fields"]["phi"], phi);
+  if (electrons.isSet("velocity")) {
+    set(electrons["velocity"], Ve);
+  }
+
+  if (state.isSection("fields") and state["fields"].isSet("phi")) {
+    // Set the potential, including boundary conditions
+    set(state["fields"]["phi"], phi);
+  }
 
   //////////////////////////////////////////////////////////////////
   // Iterate through all ions
@@ -530,8 +532,13 @@ void SheathBoundary::transform(Options &state) {
     set(species["temperature"], Ti);
     set(species["pressure"], Pi);
 
-    set(species["velocity"], Vi);
-    set(species["momentum"], NVi);
+    if (species.isSet("velocity")) {
+      set(species["velocity"], Vi);
+    }
+
+    if (species.isSet("momentum")) {
+      set(species["momentum"], NVi);
+    }
 
     // Additional loss of energy through sheath
     set(species["energy_source"], energy_source);
