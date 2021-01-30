@@ -86,7 +86,7 @@ void EvolvePressure::finally(const Options &state) {
   if (thermal_conduction) {
     
     // Calculate ion collision times
-    Field3D tau = 1. / get<Field3D>(species["collision_rate"]);
+    const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
     
     // Parallel heat conduction
     Field3D kappa_par = 3.9 * P * tau;

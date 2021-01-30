@@ -47,7 +47,7 @@ a tree of objects (Options). At the start of each iteration
     * `velocity` Parallel velocity
     * `temperature`
 
-    * `collision_rate`   Normalised collision frequency
+    * `collision_frequency`   Normalised collision frequency
     * `density_source`
     * `momentum_source`
     * `energy_source`

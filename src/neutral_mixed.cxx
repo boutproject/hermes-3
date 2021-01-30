@@ -157,15 +157,15 @@ void NeutralMixed::finally(const Options &state) {
   auto& localstate = state["species"][name];
 
   ///////////////////////////////////////////////////////
-  // Calculate cross-field diffusion from collision rate
+  // Calculate cross-field diffusion from collision frequency
   //
   //
   BoutReal neutral_lmax =
       0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
   Field3D Rnn = Nn * sqrt(Tn) / neutral_lmax; // Neutral-neutral collisions
   
-  if (localstate.isSet("collision_rate")) {
-    Dnn = Pnlim / (get<Field3D>(localstate["collision_rate"]) + Rnn);
+  if (localstate.isSet("collision_frequency")) {
+    Dnn = Pnlim / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
   } else {
     Dnn = Pnlim / Rnn;
   }
