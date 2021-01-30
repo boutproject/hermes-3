@@ -7,6 +7,14 @@
 
 using bout::globals::mesh;
 
+namespace {
+Ind3D indexAt(const Field3D& f, int x, int y, int z) {
+  int ny = f.getNy();
+  int nz = f.getNz();
+  return Ind3D{(x * ny + y) * nz + z, ny, nz};
+}
+} // namespace
+
 EvolvePressure::EvolvePressure(std::string name, Options &alloptions, Solver *solver) : name(name) {
   AUTO_TRACE();
   
@@ -27,6 +35,12 @@ EvolvePressure::EvolvePressure(std::string name, Options &alloptions, Solver *so
   thermal_conduction = options["thermal_conduction"]
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
+
+  if (options["diagnose"]
+          .doc("Save additional output diagnostics")
+      .withDefault<bool>(false)) {
+    bout::globals::dump.addRepeat(kappa_par, std::string("kappa_par_") + name);
+  }
 }
 
 void EvolvePressure::transform(Options &state) {
@@ -43,7 +57,7 @@ void EvolvePressure::transform(Options &state) {
 
   // Calculate temperature
   N = get<Field3D>(species["density"]);
-  T = P / N;
+  T = P / floor(N, 1e-5);
   T.applyBoundary();
   set(species["temperature"], T);
 }
@@ -87,11 +101,33 @@ void EvolvePressure::finally(const Options &state) {
     
     // Calculate ion collision times
     const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
+    const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
     
     // Parallel heat conduction
-    Field3D kappa_par = 3.9 * P * tau;
+    // Braginskii expression for parallel conduction
+    // kappa ~ n * v_th^2 * tau
+    //
+    // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
+    kappa_par = 3.9 * P * tau / AA;
     
-    ddt(P) += (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T);
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        auto i = indexAt(kappa_par, r.ind, mesh->ystart, jz);
+        auto im = i.ym();
+        kappa_par[im] = kappa_par[i];
+      }
+    }
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        auto i = indexAt(kappa_par, r.ind, mesh->yend, jz);
+        auto ip = i.yp();
+        kappa_par[ip] = kappa_par[i];
+      }
+    }
+
+    // Note: Flux through boundary turned off, because sheath heat flux
+    // is calculated and removed separately
+    ddt(P) += (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T, false);
   }
   
   //////////////////////
