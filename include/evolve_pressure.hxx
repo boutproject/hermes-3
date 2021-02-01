@@ -30,14 +30,16 @@ struct EvolvePressure : public Component {
   /// 
   void finally(const Options &state) override;
 private:
-  std::string name; // Short name of the species e.g. h+
-  
-  Field3D P;     // Pressure (normalised) 
-  Field3D T, N;  // Temperature, density
+  std::string name; ///< Short name of the species e.g. h+
+
+  Field3D P;     ///< Pressure (normalised) 
+  Field3D T, N;  ///< Temperature, density
 
   bool bndry_flux;
   bool poloidal_flows;
   bool thermal_conduction;
+
+  Field3D kappa_par; ///< Parallel heat conduction coefficient
 };
 
 namespace {

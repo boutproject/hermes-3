@@ -25,7 +25,7 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 }
 
 SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) {
-  const Options& units = alloptions["units"];
+  AUTO_TRACE();
   
   Options &options = alloptions[name];
 
@@ -48,9 +48,16 @@ SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) 
 
   lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
   upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
+
+  always_set_phi =
+      options["always_set_phi"]
+          .doc("Always set phi field? Default is to only modify if already set")
+          .withDefault<bool>(false);
 }
 
 void SheathBoundary::transform(Options &state) {
+  AUTO_TRACE();
+
   Options& allspecies = state["species"];
   Options& electrons = allspecies["e"];
   
@@ -58,6 +65,8 @@ void SheathBoundary::transform(Options &state) {
   // Not const because boundary conditions will be set
   Field3D Ne = get<Field3D>(electrons["density"]);
   Field3D Te = get<Field3D>(electrons["temperature"]);
+  Field3D Pe =
+      electrons.isSet("pressure") ? get<Field3D>(electrons["pressure"]) : Te * Ne;
 
   // Ratio of specific heats
   const BoutReal electron_adiabatic =
@@ -65,10 +74,10 @@ void SheathBoundary::transform(Options &state) {
 
   // Mass, normalised to proton mass
   const BoutReal Me =
-      electrons.isSet("mass") ? get<BoutReal>(electrons["mass"]) : SI::Me / SI::Mp;
+      electrons.isSet("AA") ? get<BoutReal>(electrons["AA"]) : SI::Me / SI::Mp;
 
   // This is for applying boundary conditions
-  Field3D Ve = get<Field3D>(electrons["velocity"]);
+  Field3D Ve = electrons.isSet("velocity") ? get<Field3D>(electrons["velocity"]) : 0.0;
   
   Coordinates *coord = mesh->getCoordinates();
   
@@ -100,7 +109,7 @@ void SheathBoundary::transform(Options &state) {
       
       const Field3D Ni = get<Field3D>(species["density"]);
       const Field3D Ti = get<Field3D>(species["temperature"]);
-      const BoutReal Mi = get<BoutReal>(species["mass"]);
+      const BoutReal Mi = get<BoutReal>(species["AA"]);
       const BoutReal Zi = get<BoutReal>(species["charge"]);
 
       const BoutReal adiabatic = species.isSet("adiabatic")
@@ -116,9 +125,12 @@ void SheathBoundary::transform(Options &state) {
             auto ip = i.yp();
             
             // Free boundary extrapolate ion concentration
-            const BoutReal s_i = clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[ip] / Ne[ip]),
+            BoutReal s_i = clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[ip] / Ne[ip]),
                                       0.0, 1.0); // Limit range to [0,1]
 
+            if (!std::isfinite(s_i)) {
+              s_i = 1.0;
+            }
             BoutReal te = Te[i];
             BoutReal ti = Ti[i];
             
@@ -126,6 +138,12 @@ void SheathBoundary::transform(Options &state) {
 
             BoutReal grad_ne = Ne[ip] - Ne[i];
             BoutReal grad_ni = Ni[ip] - Ni[i];
+
+            // Note: Needed to get past initial conditions, perhaps transients
+            // but this shouldn't happen in steady state
+            if (fabs(grad_ni) < 1e-3) {
+                grad_ni = grad_ne = 1e-3;  // Remove kinetic correction term
+            }
 
             BoutReal C_i_sq = clip(
                 (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
@@ -146,8 +164,12 @@ void SheathBoundary::transform(Options &state) {
             auto i = indexAt(Ni, r.ind, mesh->yend, jz);
             auto im = i.ym();
 
-            const BoutReal s_i =
+            BoutReal s_i =
                 clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[im] / Ne[im]), 0.0, 1.0);
+
+            if (!std::isfinite(s_i)) {
+              s_i = 1.0;
+            }
 
             BoutReal te = Te[i];
             BoutReal ti = Ti[i];
@@ -157,6 +179,10 @@ void SheathBoundary::transform(Options &state) {
             BoutReal grad_ne = Ne[i] - Ne[im];
             BoutReal grad_ni = Ni[i] - Ni[im];
 
+            if (fabs(grad_ni) < 1e-3) {
+                grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
+            }
+
             BoutReal C_i_sq = clip(
                 (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
                     / Mi,
@@ -164,7 +190,6 @@ void SheathBoundary::transform(Options &state) {
 
             ion_sum(r.ind, mesh->yend, jz) += s_i * Zi * sqrt(C_i_sq);
 
-            output.write("ion_sum: {:e} {:e} {:e}\n", Zi * te * s_i * grad_ne / (s_i * grad_ne + grad_ni), grad_ne, grad_ni);
           }
         }
       }
@@ -179,9 +204,11 @@ void SheathBoundary::transform(Options &state) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           auto i = indexAt(phi, r.ind, mesh->ystart, jz);
 
-          phi[i] =
-              Te[i]
-              * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+          if (Te[i] <= 0.0) {
+            phi[i] = 0.0;
+          } else {
+            phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+          }
 
           phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
         }
@@ -193,19 +220,16 @@ void SheathBoundary::transform(Options &state) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           auto i = indexAt(phi, r.ind, mesh->yend, jz);
 
-          phi[i] =
-              Te[i]
-              * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
-
-          output.write("{:e} {:e} {:e}\n", Te[i], ion_sum[i], phi[i]);
+          if (Te[i] <= 0.0) {
+            phi[i] = 0.0;
+          } else {
+            phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+          }
           
           phi[i.yp()] = phi[i.ym()] = phi[i];
         }
       }
     }
-
-    // Set the potential at the wall
-    set(state["fields"]["phi"], phi);
   }
 
   //////////////////////////////////////////////////////////////////
@@ -227,6 +251,7 @@ void SheathBoundary::transform(Options &state) {
 
         Ne[im] = SQ(Ne[i]) / Ne[ip];
         Te[im] = SQ(Te[i]) / Te[ip];
+        Pe[im] = SQ(Pe[i]) / Pe[ip];
 
         // Free boundary potential linearly extrapolated
         phi[im] = 2 * phi[i] - phi[ip];
@@ -278,6 +303,7 @@ void SheathBoundary::transform(Options &state) {
 
         Ne[ip] = SQ(Ne[i]) / Ne[im];
         Te[ip] = SQ(Te[i]) / Te[im];
+        Pe[ip] = SQ(Pe[i]) / Pe[im];
 
         // Free boundary potential linearly extrapolated
         phi[ip] = 2 * phi[i] - phi[im];
@@ -317,10 +343,16 @@ void SheathBoundary::transform(Options &state) {
   // Set electron density and temperature, now with boundary conditions
   set(electrons["density"], Ne);
   set(electrons["temperature"], Te);
-  set(electrons["velocity"], Ve);
+  set(electrons["pressure"], Pe);
 
-  // Set the potential, including boundary conditions
-  set(state["fields"]["phi"], phi);
+  if (electrons.isSet("velocity")) {
+    set(electrons["velocity"], Ve);
+  }
+
+  if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
+    // Set the potential, including boundary conditions
+    set(state["fields"]["phi"], phi);
+  }
 
   //////////////////////////////////////////////////////////////////
   // Iterate through all ions
@@ -338,7 +370,7 @@ void SheathBoundary::transform(Options &state) {
       continue; // Neutral -> skip
 
     // Characteristics of this species
-    const BoutReal Mi = get<BoutReal>(species["mass"]);
+    const BoutReal Mi = get<BoutReal>(species["AA"]);
 
     const BoutReal adiabatic = species.isSet("adiabatic")
                                      ? get<BoutReal>(species["adiabatic"])
@@ -347,7 +379,8 @@ void SheathBoundary::transform(Options &state) {
     // Density and temperature boundary conditions will be imposed (free)
     Field3D Ni = get<Field3D>(species["density"]);
     Field3D Ti = get<Field3D>(species["temperature"]);
-    
+    Field3D Pi = species.isSet("pressure") ? get<Field3D>(species["pressure"]) : Ni * Ti;
+
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
@@ -371,6 +404,7 @@ void SheathBoundary::transform(Options &state) {
 
           Ni[im] = SQ(Ni[i]) / Ni[ip];
           Ti[im] = SQ(Ti[i]) / Ti[ip];
+          Pi[im] = SQ(Pi[i]) / Pi[ip];
 
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
@@ -389,6 +423,10 @@ void SheathBoundary::transform(Options &state) {
           BoutReal s_i = nisheath / nesheath; // Concentration
           BoutReal grad_ne = Ne[i] - nesheath;
           BoutReal grad_ni = Ni[i] - nisheath;
+
+          if (fabs(grad_ni) < 1e-3) {
+            grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
+          }
 
           // Ion speed into sheath
           // Equation (9) in Tskhakaya 2005
@@ -440,6 +478,7 @@ void SheathBoundary::transform(Options &state) {
 
           Ni[ip] = SQ(Ni[i]) / Ni[im];
           Ti[ip] = SQ(Ti[i]) / Ti[im];
+          Pi[ip] = SQ(Pi[i]) / Pi[im];
 
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
@@ -453,6 +492,10 @@ void SheathBoundary::transform(Options &state) {
           BoutReal s_i = nisheath / nesheath; // Concentration
           BoutReal grad_ne = Ne[i] - nesheath;
           BoutReal grad_ni = Ni[i] - nisheath;
+
+          if (fabs(grad_ni) < 1e-3) {
+            grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
+          }
 
           // Ion speed into sheath
           // Equation (9) in Tskhakaya 2005
@@ -492,8 +535,15 @@ void SheathBoundary::transform(Options &state) {
     // Put the modified fields back into the state.
     set(species["density"], Ni);
     set(species["temperature"], Ti);
-    set(species["velocity"], Vi);
-    set(species["momentum"], NVi);
+    set(species["pressure"], Pi);
+
+    if (species.isSet("velocity")) {
+      set(species["velocity"], Vi);
+    }
+
+    if (species.isSet("momentum")) {
+      set(species["momentum"], NVi);
+    }
 
     // Additional loss of energy through sheath
     set(species["energy_source"], energy_source);

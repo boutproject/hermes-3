@@ -40,7 +40,7 @@ void ZeroCurrent::transform(Options &state) {
     if (species.isSet("velocity")) {
       // If velocity is set, update the ion current
       
-      const Field3D V =  get<Field3D>(species["velocity"]);
+      const Field3D V = get<Field3D>(species["velocity"]);
       
       if (!ion_current.isAllocated()) {
         // Not yet allocated -> Set to the value

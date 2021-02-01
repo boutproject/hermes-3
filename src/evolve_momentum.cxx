@@ -188,6 +188,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
 
+  V.setBoundary(std::string("V") + name);
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -200,8 +201,10 @@ void EvolveMomentum::transform(Options &state) {
 
   Field3D N = get<Field3D>(species["density"]);
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-  
-  set(species["velocity"], NV / (AA * N));
+
+  V = NV / (AA * N);
+  V.applyBoundary();
+  set(species["velocity"], V);
 }
 
 void EvolveMomentum::finally(const Options &state) {
@@ -247,5 +250,9 @@ void EvolveMomentum::finally(const Options &state) {
   if (species.isSet("momentum_source")) {
     ddt(NV) += get<Field3D>(species["momentum_source"]);
   }
+
+#if CHECK > 1
+  bout::checkFinite(ddt(NV), std::string("ddt NV") + name, "RGN_NOBNDRY");
+#endif
 }
 

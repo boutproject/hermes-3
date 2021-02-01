@@ -17,11 +17,23 @@ struct EvolveMomentum : public Component {
   
   /// Calculate ddt(NV).
   ///
+  /// Inputs
+  /// - species
+  ///   - <name>
+  ///     - density
+  ///     - velocity
+  ///     - pressure (optional)
+  ///     - momentum_source (optional)
+  ///     - sound_speed (optional, used for numerical dissipation)
+  ///     - temperature (only needed if sound_speed not provided)
+  /// - fields
+  ///   - phi (optional)
   void finally(const Options &state) override;
 private:
   std::string name;     ///< Short name of species e.g "e"
 
   Field3D NV;           ///< Species parallel momentum (normalised, evolving)
+  Field3D V;            ///< Species parallel velocity
   
   bool bndry_flux;      // Allow flows through boundaries?
   bool poloidal_flows;  // Include ExB flow in Y direction?

@@ -21,7 +21,8 @@ struct SheathBoundary : public Component {
   ///   - e
   ///     - density
   ///     - temperature
-  ///     - velocity
+  ///     - pressure    Optional
+  ///     - velocity    Optional
   ///     - mass        Optional
   ///     - adiabatic   Optional. Ratio of specific heats, default 5/3.
   ///   - <ions>  if charge is set (i.e. not neutrals)
@@ -29,6 +30,7 @@ struct SheathBoundary : public Component {
   ///     - mass
   ///     - density
   ///     - temperature
+  ///     - pressure     Optional
   ///     - velocity     Optional. Default 0
   ///     - momentum     Optional. Default mass * density * velocity
   ///     - adiabatic    Optional. Ratio of specific heats, default 5/3.
@@ -63,6 +65,8 @@ private:
   
   bool lower_y; // Boundary on lower y?
   bool upper_y; // Boundary on upper y?
+
+  bool always_set_phi; ///< Set phi field?
 };
 
 namespace {

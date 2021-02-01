@@ -25,10 +25,6 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
 
-  anomalous_D = options["anomalous_D"]
-                    .doc("Anomalous diffusion (axisymmetric). <0 => off")
-                    .withDefault(-1.0);
-
   low_n_diffuse = options["low_n_diffuse"]
                       .doc("Parallel diffusion at low density")
                       .withDefault<bool>(false);
@@ -95,10 +91,6 @@ void EvolveDensity::finally(const Options &state) {
       ddt(N) -= FV::Div_par(N, V, sound_speed);
     }
   }
-  
-  if (anomalous_D > 0.0) {
-    ddt(N) += FV::Div_a_Laplace_perp(anomalous_D, DC(N));
-  }
 
   if (low_n_diffuse) {
     // Diffusion which kicks in at very low density, in order to
@@ -116,4 +108,8 @@ void EvolveDensity::finally(const Options &state) {
   if (species.isSet("density_source")) {
     ddt(N) += get<Field3D>(species["density_source"]);
   }
+
+#if CHECK > 1
+  bout::checkFinite(ddt(N), std::string("ddt N") + name, "RGN_NOBNDRY");
+#endif
 }

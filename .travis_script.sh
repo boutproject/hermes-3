@@ -10,7 +10,7 @@ echo "****************************************"
 echo "Fetching BOUT++ next branch"
 echo "****************************************"
 
-git clone --depth 1 -b next https://github.com/boutproject/BOUT-dev.git
+git clone --recursive --depth 1 -b next https://github.com/boutproject/BOUT-dev.git
 cd BOUT-dev
 
 export MAKEFLAGS="-j 2 -k"

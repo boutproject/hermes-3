@@ -4,7 +4,7 @@ language: cpp
 compiler: gcc
 
 git:
-  depth: 3
+  depth: 1
 
 addons:
   apt:
@@ -47,6 +47,7 @@ jobs:
       - BOUT_CONFIGURE_OPTIONS="--enable-sigfpe --enable-debug"
       - CC=gcc-8 CXX=g++-8
       - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+      - PIP_PACKAGES="importlib-metadata"
 
 before_install:
   ##################################################

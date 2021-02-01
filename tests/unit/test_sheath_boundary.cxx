@@ -27,7 +27,7 @@ TEST_F(SheathBoundaryTest, CreateComponent) {
   SheathBoundary component("test", options, nullptr);
 }
 
-TEST_F(SheathBoundaryTest, CalculatePotential) {
+TEST_F(SheathBoundaryTest, DontSetPotential) {
   Options options;
   
   SheathBoundary component("test", options, nullptr);
@@ -46,13 +46,41 @@ TEST_F(SheathBoundaryTest, CalculatePotential) {
                    // Ion species
                    {"h", {{"density", si*N},
                           {"temperature", Ti},
-                          {"mass", 1.0},
+                          {"AA", 1.0},
                           {"charge", Zi},
                           {"velocity", 0.0}}}}}};
 
   component.transform(state);
   
-  // Should have calculated potential
+  // Should have calculated, but not set potential
+  ASSERT_FALSE(state["fields"].isSet("phi"));
+}
+
+TEST_F(SheathBoundaryTest, CalculatePotential) {
+  Options options{{"test", {{"always_set_phi", true}}}};
+
+  SheathBoundary component("test", options, nullptr);
+
+  Field3D N = FieldFactory::get()->create3D("1 + y", &options, mesh);
+  BoutReal Te = 2.0;
+  BoutReal Ti = 3.0;
+  BoutReal Zi = 1.1;
+  BoutReal si = 0.5;
+
+  Options state{{"species",
+                 {// Electrons
+                  {"e", {{"density", N}, {"temperature", Te}, {"velocity", 0.0}}},
+                  // Ion species
+                  {"h",
+                   {{"density", si * N},
+                    {"temperature", Ti},
+                    {"AA", 1.0},
+                    {"charge", Zi},
+                    {"velocity", 0.0}}}}}};
+
+  component.transform(state);
+
+  // Should have calculated, but not set potential
   ASSERT_TRUE(state["fields"].isSet("phi"));
 
   // Calculate the expected value of phi

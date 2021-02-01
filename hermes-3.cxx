@@ -39,6 +39,7 @@
 #include "include/zero_current.hxx"
 #include "include/anomalous_diffusion.hxx"
 #include "include/recycling.hxx"
+#include "include/collisions.hxx"
 
 #include "include/loadmetric.hxx"
 
@@ -46,7 +47,7 @@ int Hermes::init(bool restarting) {
 
   auto &options = Options::root()["hermes"];
   
-  output.write("\nGit Version of Hermes: %s\n", HERMES_VERSION);
+  output.write("\nGit Version of Hermes: {}\n", HERMES_VERSION);
   options["version"] = HERMES_VERSION;
 
   // Save the Hermes version in the output dump files
@@ -114,6 +115,8 @@ int Hermes::init(bool restarting) {
 
   // Tell the components if they are restarting
   options["restarting"] = restarting;
+
+  TRACE("Creating components");
   
   // Create the components
   // Here options is passed as the scheduler configuration, so that
