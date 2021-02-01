@@ -2,7 +2,7 @@ Hermes-3
 ========
 
 [![License](https://img.shields.io/badge/license-GPL-blue.svg)](https://img.shields.io/badge/license-GPL-blue.svg)
-[![Build Status](https://travis-ci.org/bendudson/hermes-3.svg?branch=master)](https://travis-ci.org/bendudson/hermes-3)
+![Build status](https://github.com/bendudson/hermes-3/workflows/Tests/badge.svg)
 
 Hermes plasma edge simulation model. Uses BOUT++ framework, adds finite volume
 operators and neutral gas models.
