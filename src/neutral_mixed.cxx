@@ -59,6 +59,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& options, Solver *so
     bout::globals::dump.addRepeat(Snv, std::string("SNV") + name);
     Sn = Sp = Snv = 0.0;
   }
+
+  AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(1.0);
 }
 
 void NeutralMixed::transform(Options &state) {
@@ -77,8 +79,8 @@ void NeutralMixed::transform(Options &state) {
   Nnlim = floor(Nn, nn_floor);
   Tn = Pn / Nn;
   // Tn = floor(Tn, 0.01 / Tnorm);
-  Vn = NVn / Nn;
-  Vnlim = NVn / Nnlim; // Neutral parallel velocity
+  Vn = NVn / (AA * Nn);
+  Vnlim = NVn / (AA * Nnlim); // Neutral parallel velocity
 
   Pnlim = Nn * Tn;
   Pnlim.applyBoundary("neumann");
@@ -154,6 +156,7 @@ void NeutralMixed::transform(Options &state) {
   // Set values in the state
   auto& localstate = state["species"][name];
   set(localstate["density"], Nn);
+  set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn);
   set(localstate["momentum"], NVn);
   set(localstate["velocity"], Vn);
@@ -169,7 +172,7 @@ void NeutralMixed::finally(const Options &state) {
   //
   BoutReal neutral_lmax =
       0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
-  Field3D Rnn = Nn * sqrt(Tn) / neutral_lmax; // Neutral-neutral collisions
+  Field3D Rnn = Nn * sqrt(Tn / AA) / neutral_lmax; // Neutral-neutral collisions
   
   if (localstate.isSet("collision_frequency")) {
     Dnn = Pnlim / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
@@ -225,7 +228,7 @@ void NeutralMixed::finally(const Options &state) {
   logPnlim.applyBoundary("neumann");
 
   // Sound speed appearing in Lax flux for advection terms
-  Field3D sound_speed = sqrt(Tn * (5. / 3));
+  Field3D sound_speed = sqrt(Tn * (5. / 3) / AA);
   
   /////////////////////////////////////////////////////
   // Neutral density

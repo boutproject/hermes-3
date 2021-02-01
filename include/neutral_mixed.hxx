@@ -33,6 +33,8 @@ private:
   Field3D Tn; // Neutral temperature
   Field3D Nnlim, Pnlim, Vnlim; // Limited in regions of low density
 
+  BoutReal AA; // Atomic mass (proton = 1)
+
   Field3D Dnn; // Diffusion coefficient
   
   bool sheath_ydown, sheath_yup;
