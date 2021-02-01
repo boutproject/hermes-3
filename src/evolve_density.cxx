@@ -38,6 +38,14 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
   // Charge and mass, default to electron
   charge = options["charge"].doc("Particle charge. electrons = -1").withDefault(-1.0);
   AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(SI::Me / SI::Mp);
+
+  if (options["diagnose"]
+          .doc("Output additional diagnostics?")
+          .withDefault<bool>(false)) {
+    bout::globals::dump.addRepeat(ddt(N), std::string("ddt(") + name + std::string(")"));
+    bout::globals::dump.addRepeat(Sn, std::string("SN") + name);
+    Sn = 0.0;
+  }
 }
 
 void EvolveDensity::transform(Options &state) {
@@ -106,7 +114,8 @@ void EvolveDensity::finally(const Options &state) {
   }
 
   if (species.isSet("density_source")) {
-    ddt(N) += get<Field3D>(species["density_source"]);
+    Sn = get<Field3D>(species["density_source"]); // Save for possible output
+    ddt(N) += Sn;
   }
 
 #if CHECK > 1

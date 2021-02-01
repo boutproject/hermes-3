@@ -50,7 +50,14 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& options, Solver *so
   if (options["output_ddt"]
           .doc("Save derivatives to output?")
           .withDefault<bool>(false)) {
-    SAVE_REPEAT(ddt(Nn), ddt(Pn), ddt(NVn));
+    bout::globals::dump.addRepeat(ddt(Nn), std::string("ddt(N") + name + std::string(")"));
+    bout::globals::dump.addRepeat(ddt(Pn), std::string("ddt(P") + name + std::string(")"));
+    bout::globals::dump.addRepeat(ddt(NVn), std::string("ddt(NV") + name + std::string(")"));
+
+    bout::globals::dump.addRepeat(Sn, std::string("SN") + name);
+    bout::globals::dump.addRepeat(Sp, std::string("SP") + name);
+    bout::globals::dump.addRepeat(Snv, std::string("SNV") + name);
+    Sn = Sp = Snv = 0.0;
   }
 }
 
@@ -228,7 +235,8 @@ void NeutralMixed::finally(const Options &state) {
     ;
 
   if (localstate.isSet("density_source")) {
-    ddt(Nn) += get<Field3D>(localstate["density_source"]);
+    Sn = get<Field3D>(localstate["density_source"]);
+    ddt(Nn) += Sn;
   }
   
   /////////////////////////////////////////////////////
@@ -250,7 +258,8 @@ void NeutralMixed::finally(const Options &state) {
       ;
 
   if (localstate.isSet("momentum_source")) {
-    ddt(NVn) += get<Field3D>(localstate["momentum_source"]);
+    Snv = get<Field3D>(localstate["momentum_source"]);
+    ddt(NVn) += Snv;
   }
 
   /////////////////////////////////////////////////////
@@ -265,7 +274,8 @@ void NeutralMixed::finally(const Options &state) {
       ;
 
   if (localstate.isSet("energy_source")) {
-    ddt(Pn) += (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    Sp = (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    ddt(Pn) += Sp;
   }
   
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {

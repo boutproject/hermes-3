@@ -43,6 +43,8 @@ private:
   
   bool precondition {true}; // Enable preconditioner?
   std::unique_ptr<Laplacian> inv; // Laplacian inversion used for preconditioning
+
+  Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
 };
 
 namespace {
