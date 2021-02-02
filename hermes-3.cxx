@@ -42,6 +42,7 @@
 #include "include/collisions.hxx"
 
 #include "include/amjuel_hyd_ionisation.hxx"
+#include "include/amjuel_helium.hxx"
 
 #include "include/loadmetric.hxx"
 

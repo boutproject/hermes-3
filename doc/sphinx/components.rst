@@ -230,3 +230,13 @@ rates calculation. The following might therefore be used::
 | t + e -> t+ + 2e | Tritium ionisation (Amjuel 2.1.5)   |
 +------------------+-------------------------------------+
 
+Helium
+~~~~~~
+
++----------------------+------------------------------------------------------------+
+| Reaction             | Description                                                |
++======================+============================================================+
+| he + e -> he+ + 2e   | He ionisation, unresolved metastables (Amjuel 2.3.9a)      |
+| he+ + e -> he        | He+ recombination, unresolved metastables (Amjuel 2.3.13a) |
++----------------------+------------------------------------------------------------+
+

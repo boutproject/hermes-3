@@ -65,44 +65,7 @@ static constexpr const BoutReal radiation_coefs[9][9] = {
      1.734769090475e-15}};
 
 void AmjuelHydIonisation::calculate_rates(Options& electron, Options& atom, Options& ion) {
-  Field3D Ne = get<Field3D>(electron["density"]);
-  Field3D Te = get<Field3D>(electron["temperature"]);
-
-  Field3D Nn = get<Field3D>(atom["density"]);
-  Field3D Tn = get<Field3D>(atom["temperature"]);
-  Field3D Vn = get<Field3D>(atom["velocity"]);
-  auto AA = get<BoutReal>(atom["AA"]);
-
-  ASSERT1(AA == get<BoutReal>(ion["AA"]));
-
-  Field3D reaction_rate = cellAverage(
-      [&](BoutReal ne, BoutReal nn, BoutReal te) {
-        return ne * nn * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
-      },
-      Ne.getRegion("RGN_NOBNDRY"))(Ne, Nn, Te);
-
-  // Particles move from hydrogen to ion
-  subtract(atom["density_source"], reaction_rate);
-  add(ion["density_source"], reaction_rate);
-
-  // Move momentum from hydrogen to ion
-  Field3D momentum_exchange = reaction_rate * AA * Vn;
-
-  subtract(atom["momentum_source"], momentum_exchange);
-  add(ion["momentum_source"], momentum_exchange);
-
-  // Move energy from atom to ion
-  Field3D energy_exchange = reaction_rate * (3. / 2) * Tn;
-  subtract(atom["energy_source"], energy_exchange);
-  add(ion["energy_source"], energy_exchange);
-
-  // Electron energy loss, including radiation
-  Field3D energy_loss = cellAverage(
-      [&](BoutReal ne, BoutReal nn, BoutReal te) {
-        return ne * nn * evaluate(radiation_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-               / FreqNorm;
-      },
-      Ne.getRegion("RGN_NOBNDRY"))(Ne, Nn, Te);
-
-  subtract(electron["energy_source"], energy_loss);
+  electron_reaction(electron, atom, ion, rate_coefs, radiation_coefs,
+                    0.0 // Note: Ionisation potential included in radiation_coefs
+  );
 }

@@ -3,7 +3,6 @@
 #define AMJUEL_HYD_IONISATION_H
 
 #include "amjuel_reaction.hxx"
-#include "integrate.hxx"
 
 /// Hydrogen ionisation, Amjuel rates
 struct AmjuelHydIonisation : public AmjuelReaction {
