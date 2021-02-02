@@ -16,7 +16,7 @@ type = shifted
 mxstep = 10000
 
 [hermes]
-components = h+, h, e, collisions, sheath_boundary, recycling, ionisation
+components = h+, h, e, collisions, sheath_boundary, recycling, reactions
 
 Nnorm = 2e18  # Reference density [m^-3]
 Bnorm = 1   # Reference magnetic field [T]
@@ -62,6 +62,7 @@ type = neutral_mixed
 
 AA = 1
 
+diagnose = true
 
 ################################################################
 # Electrons
@@ -94,3 +95,6 @@ bndry_all = dirichlet(0.1)   # All other boundaries low density
 [recycling]
 
 species = h+
+
+[reactions]
+type = h + e -> h+ + 2e

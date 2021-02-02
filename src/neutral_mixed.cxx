@@ -8,7 +8,10 @@
 
 using bout::globals::mesh;
 
-NeutralMixed::NeutralMixed(const std::string& name, Options& options, Solver *solver) : name(name) {
+NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver *solver) : name(name) {
+  AUTO_TRACE();
+
+  auto& options = alloptions[name];
 
   // Evolving variables e.g name is "h" or "h+"
   solver->add(Nn, std::string("N") + name);
@@ -53,7 +56,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& options, Solver *so
     bout::globals::dump.addRepeat(ddt(Nn), std::string("ddt(N") + name + std::string(")"));
     bout::globals::dump.addRepeat(ddt(Pn), std::string("ddt(P") + name + std::string(")"));
     bout::globals::dump.addRepeat(ddt(NVn), std::string("ddt(NV") + name + std::string(")"));
+  }
 
+  if (options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false)) {
     bout::globals::dump.addRepeat(Sn, std::string("SN") + name);
     bout::globals::dump.addRepeat(Sp, std::string("SP") + name);
     bout::globals::dump.addRepeat(Snv, std::string("SNV") + name);
@@ -164,6 +169,7 @@ void NeutralMixed::transform(Options &state) {
 }
 
 void NeutralMixed::finally(const Options &state) {
+  AUTO_TRACE();
   auto& localstate = state["species"][name];
 
   ///////////////////////////////////////////////////////

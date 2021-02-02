@@ -19,6 +19,7 @@ SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
                   sound_speed.cxx zero_current.cxx \
                   collisions.cxx  \
 		  anomalous_diffusion.cxx \
-                  recycling.cxx
+                  recycling.cxx \
+                  amjuel_hyd_ionisation.cxx
 
 include $(BOUT_TOP)/make.config

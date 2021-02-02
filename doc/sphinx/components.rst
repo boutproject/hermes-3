@@ -176,3 +176,57 @@ Recycling therefore can't be calculated until all species boundary conditions
 have been set. It is therefore expected that this component is a top-level
 component which comes after boundary conditions are set.
 
+
+Atomic and molecular reactions
+------------------------------
+
+The formula for the reaction is used as the name of the component. This
+makes writing the input file harder, since the formula must be in the exact same format
+(e.g. `h + e` and `e + h` won't be recognised as being the same thing),
+but makes reading and understanding the file easier.
+
+To include a set of reactions, it is probably easiest to group them,
+and then include the group name in the components list::
+
+  [hermes]
+  components = ..., reactions
+
+  [reactions]
+  type = (
+          h + e -> h+ + 2e,  # ionisation
+          h+ + e -> h,    # Radiative + 3-body recombination
+         )
+
+Note that brackets can be used to split the list of reactions over multiple lines,
+and trailing commas are ignored. Comments can be used if needed to add explanation.
+The name of the section does not need to be `reactions`, and multiple components could
+be created with different reaction sets. Be careful not to include the same reaction
+twice.
+
+When reactions are added, the species involved must be included, or an exception
+should be thrown.
+
+Hydrogenic processes
+~~~~~~~~~~~~~~~~~~~~
+
+Multiple isotopes of hydrogen can be evolved, so to keep track of this the
+species labels `h`, `d` and `t` are all handled by the same hydrogen atomic
+rates calculation. The following might therefore be used::
+
+  [hermes]
+  components = d, t, reactions
+
+  [reactions]
+  type = (
+          d + e -> d+ + 2e,  # Deuterium ionisation
+          t + e -> t+ + 2e,  # Tritium ionisation
+         )
+
++------------------+-------------------------------------+
+| Reaction         | Description                         |
++==================+=====================================+
+| h + e -> h+ + 2e | Hydrogen ionisation (Amjuel 2.1.5)  |
+| d + e -> d+ + 2e | Deuterium ionisation (Amjuel 2.1.5) |
+| t + e -> t+ + 2e | Tritium ionisation (Amjuel 2.1.5)   |
++------------------+-------------------------------------+
+
