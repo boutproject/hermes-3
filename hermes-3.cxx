@@ -40,6 +40,9 @@
 #include "include/anomalous_diffusion.hxx"
 #include "include/recycling.hxx"
 #include "include/collisions.hxx"
+#include "include/amjuel_hyd_ionisation.hxx"
+#include "include/amjuel_helium.hxx"
+#include "include/adas_neon.hxx"
 
 #include "include/loadmetric.hxx"
 

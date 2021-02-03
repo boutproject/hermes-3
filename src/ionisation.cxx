@@ -43,7 +43,7 @@ void Ionisation::transform(Options &state) {
   // Particles move from hydrogen to ion
   subtract(hydrogen["density_source"],
            reaction_rate);
-  
+
   add(ion["density_source"],
       reaction_rate);
 

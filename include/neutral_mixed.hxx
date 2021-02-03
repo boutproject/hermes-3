@@ -33,6 +33,8 @@ private:
   Field3D Tn; // Neutral temperature
   Field3D Nnlim, Pnlim, Vnlim; // Limited in regions of low density
 
+  BoutReal AA; // Atomic mass (proton = 1)
+
   Field3D Dnn; // Diffusion coefficient
   
   bool sheath_ydown, sheath_yup;
@@ -43,6 +45,8 @@ private:
   
   bool precondition {true}; // Enable preconditioner?
   std::unique_ptr<Laplacian> inv; // Laplacian inversion used for preconditioning
+
+  Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
 };
 
 namespace {

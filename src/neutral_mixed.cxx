@@ -8,7 +8,10 @@
 
 using bout::globals::mesh;
 
-NeutralMixed::NeutralMixed(const std::string& name, Options& options, Solver *solver) : name(name) {
+NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver *solver) : name(name) {
+  AUTO_TRACE();
+
+  auto& options = alloptions[name];
 
   // Evolving variables e.g name is "h" or "h+"
   solver->add(Nn, std::string("N") + name);
@@ -50,8 +53,19 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& options, Solver *so
   if (options["output_ddt"]
           .doc("Save derivatives to output?")
           .withDefault<bool>(false)) {
-    SAVE_REPEAT(ddt(Nn), ddt(Pn), ddt(NVn));
+    bout::globals::dump.addRepeat(ddt(Nn), std::string("ddt(N") + name + std::string(")"));
+    bout::globals::dump.addRepeat(ddt(Pn), std::string("ddt(P") + name + std::string(")"));
+    bout::globals::dump.addRepeat(ddt(NVn), std::string("ddt(NV") + name + std::string(")"));
   }
+
+  if (options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false)) {
+    bout::globals::dump.addRepeat(Sn, std::string("SN") + name);
+    bout::globals::dump.addRepeat(Sp, std::string("SP") + name);
+    bout::globals::dump.addRepeat(Snv, std::string("SNV") + name);
+    Sn = Sp = Snv = 0.0;
+  }
+
+  AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(1.0);
 }
 
 void NeutralMixed::transform(Options &state) {
@@ -70,8 +84,8 @@ void NeutralMixed::transform(Options &state) {
   Nnlim = floor(Nn, nn_floor);
   Tn = Pn / Nn;
   // Tn = floor(Tn, 0.01 / Tnorm);
-  Vn = NVn / Nn;
-  Vnlim = NVn / Nnlim; // Neutral parallel velocity
+  Vn = NVn / (AA * Nn);
+  Vnlim = NVn / (AA * Nnlim); // Neutral parallel velocity
 
   Pnlim = Nn * Tn;
   Pnlim.applyBoundary("neumann");
@@ -147,6 +161,7 @@ void NeutralMixed::transform(Options &state) {
   // Set values in the state
   auto& localstate = state["species"][name];
   set(localstate["density"], Nn);
+  set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn);
   set(localstate["momentum"], NVn);
   set(localstate["velocity"], Vn);
@@ -154,6 +169,7 @@ void NeutralMixed::transform(Options &state) {
 }
 
 void NeutralMixed::finally(const Options &state) {
+  AUTO_TRACE();
   auto& localstate = state["species"][name];
 
   ///////////////////////////////////////////////////////
@@ -162,7 +178,7 @@ void NeutralMixed::finally(const Options &state) {
   //
   BoutReal neutral_lmax =
       0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
-  Field3D Rnn = Nn * sqrt(Tn) / neutral_lmax; // Neutral-neutral collisions
+  Field3D Rnn = Nn * sqrt(Tn / AA) / neutral_lmax; // Neutral-neutral collisions
   
   if (localstate.isSet("collision_frequency")) {
     Dnn = Pnlim / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
@@ -218,7 +234,7 @@ void NeutralMixed::finally(const Options &state) {
   logPnlim.applyBoundary("neumann");
 
   // Sound speed appearing in Lax flux for advection terms
-  Field3D sound_speed = sqrt(Tn * (5. / 3));
+  Field3D sound_speed = sqrt(Tn * (5. / 3) / AA);
   
   /////////////////////////////////////////////////////
   // Neutral density
@@ -228,7 +244,8 @@ void NeutralMixed::finally(const Options &state) {
     ;
 
   if (localstate.isSet("density_source")) {
-    ddt(Nn) += get<Field3D>(localstate["density_source"]);
+    Sn = get<Field3D>(localstate["density_source"]);
+    ddt(Nn) += Sn;
   }
   
   /////////////////////////////////////////////////////
@@ -250,7 +267,8 @@ void NeutralMixed::finally(const Options &state) {
       ;
 
   if (localstate.isSet("momentum_source")) {
-    ddt(NVn) += get<Field3D>(localstate["momentum_source"]);
+    Snv = get<Field3D>(localstate["momentum_source"]);
+    ddt(NVn) += Snv;
   }
 
   /////////////////////////////////////////////////////
@@ -265,7 +283,8 @@ void NeutralMixed::finally(const Options &state) {
       ;
 
   if (localstate.isSet("energy_source")) {
-    ddt(Pn) += (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    Sp = (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    ddt(Pn) += Sp;
   }
   
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
