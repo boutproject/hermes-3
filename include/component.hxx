@@ -19,6 +19,7 @@ class Solver; // Time integrator
 /// 
 struct Component {
   /// Modify the given simulation state
+  /// All components must implement this function
   virtual void transform(Options &state) = 0;
   
   /// Use the final simulation state to update internal state
@@ -32,6 +33,11 @@ struct Component {
   virtual void precon(const Options &UNUSED(state), BoutReal UNUSED(gamma)) { }
   
   /// Create a Component
+  ///
+  /// @param type     The name of the component type to create (e.g. "evolve_density")
+  /// @param name     The species/name for this instance.
+  /// @param options  Component settings: options[name] are specific to this component
+  /// @param solver   Time-integration solver
   static std::unique_ptr<Component> create(const std::string &type, // The type to create
                                            const std::string &name, // The species/name for this instance
                                            Options &options,  // Component settings: options[name] are specific to this component
@@ -43,6 +49,7 @@ struct Component {
 using ComponentCreator =
   std::function<Component *(std::string, Options &, Solver *)>;
 
+/// A factory for creating Components on demand, based on a string type name
 class ComponentFactory : public Factory<Component, ComponentFactory, ComponentCreator> {
 public:
   static constexpr auto type_name = "Component";

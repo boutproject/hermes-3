@@ -54,6 +54,32 @@ This imposes a zero-current Ohm's law, calculating a parallel
 electric field which balances the electron pressure gradient.
 This electric field is then used to calculate a force on the other species.
 
+Neutral gas models
+------------------
+
+The `neutral_mixed` component solves fluid equations along :math:`y`
+(parallel to the magnetic field), and uses diffusive transport in :math:`x`
+and :math:`z`.  It was adopted from the approach used in UEDGE and this paper
+[Journal of Nuclear Materials, vol. 313-316, pp. 559-563 (2003)].
+
+.. math::
+   
+   \begin{aligned}\frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{||n} + n_n\mathbf{v}_{\perp n}\right) + S\\ \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& -\nabla\cdot\left(n_nv_{||n} \mathbf{b}v_{||n} + n_nv_{||n}\mathbf{v}_{\perp n}\right) - \partial_{||}p_n + \nabla_{||}\left(D_{nn}n_n\partial_{||}v_{||n}\right) + F \\ \frac{\partial p_n}{\partial t} =& -\nabla\cdot\left(p_n\mathbf{b}v_{||n} + p_n\mathbf{v}_{\perp n}\right) - \frac{2}{3}p_n\nabla\cdot\left(\mathbf{b}v_{||n}\right) + \nabla\cdot\left(D_{nn}n_n\nabla_\perp T_n\right) + \frac{2}{3}Q \end{aligned}
+
+The parallel momentum is evolved, so that it can be exchanged with the
+plasma parallel momentum, but the mass is neglected for perpendicular
+motion. In the perpendicular direction, therefore, the motion is a
+balance between the friction (primarily with the plasma through charge
+exchange) and the pressure gradient:
+
+.. math::
+
+   \mathbf{v}_{\perp n} = -D_{nn}\frac{1}{p_n}\nabla_\perp p_n
+
+At the moment there is no attempt to limit these velocities, which has
+been found necessary in UEDGE to get physical results in better
+agreement with kinetic neutral models [Discussion, T.Rognlien].
+
 Collective quantities
 ---------------------
 
@@ -186,7 +212,9 @@ makes writing the input file harder, since the formula must be in the exact same
 but makes reading and understanding the file easier.
 
 To include a set of reactions, it is probably easiest to group them,
-and then include the group name in the components list::
+and then include the group name in the components list
+
+.. code-block:: ini
 
   [hermes]
   components = ..., reactions
@@ -211,8 +239,10 @@ Hydrogenic processes
 
 Multiple isotopes of hydrogen can be evolved, so to keep track of this the
 species labels `h`, `d` and `t` are all handled by the same hydrogen atomic
-rates calculation. The following might therefore be used::
+rates calculation. The following might therefore be used
 
+.. code-block:: ini
+  
   [hermes]
   components = d, t, reactions
 
@@ -226,7 +256,9 @@ rates calculation. The following might therefore be used::
 | Reaction         | Description                         |
 +==================+=====================================+
 | h + e -> h+ + 2e | Hydrogen ionisation (Amjuel 2.1.5)  |
++------------------+-------------------------------------+
 | d + e -> d+ + 2e | Deuterium ionisation (Amjuel 2.1.5) |
++------------------+-------------------------------------+
 | t + e -> t+ + 2e | Tritium ionisation (Amjuel 2.1.5)   |
 +------------------+-------------------------------------+
 
@@ -237,6 +269,7 @@ Helium
 | Reaction             | Description                                                |
 +======================+============================================================+
 | he + e -> he+ + 2e   | He ionisation, unresolved metastables (Amjuel 2.3.9a)      |
++----------------------+------------------------------------------------------------+
 | he+ + e -> he        | He+ recombination, unresolved metastables (Amjuel 2.3.13a) |
 +----------------------+------------------------------------------------------------+
 
@@ -252,24 +285,43 @@ for the electrons.
 | Reaction               | Description                         |
 +========================+=====================================+
 | ne + e -> ne+ + 2e     | Neon ionisation                     |
++------------------------+-------------------------------------+
 | ne+ + e -> ne+2 + 2e   |                                     |
++------------------------+-------------------------------------+
 | ne+2 + e -> ne+3 + 2e  |                                     |
++------------------------+-------------------------------------+
 | ne+3 + e -> ne+4 + 2e  |                                     |
++------------------------+-------------------------------------+
 | ne+4 + e -> ne+5 + 2e  |                                     |
++------------------------+-------------------------------------+
 | ne+5 + e -> ne+6 + 2e  |                                     |
++------------------------+-------------------------------------+
 | ne+6 + e -> ne+7 + 2e  |                                     |
++------------------------+-------------------------------------+
 | ne+7 + e -> ne+8 + 2e  |                                     |
++------------------------+-------------------------------------+
 | ne+8 + e -> ne+9 + 2e  |                                     |
++------------------------+-------------------------------------+
 | ne+9 + e -> ne+10 + 2e |                                     |
++------------------------+-------------------------------------+
 | ne+ + e -> ne          | Neon recombination                  |
++------------------------+-------------------------------------+
 | ne+2 + e -> ne+        |                                     |
++------------------------+-------------------------------------+
 | ne+3 + e -> ne+2       |                                     |
++------------------------+-------------------------------------+
 | ne+4 + e -> ne+3       |                                     |
++------------------------+-------------------------------------+
 | ne+5 + e -> ne+4       |                                     |
++------------------------+-------------------------------------+
 | ne+6 + e -> ne+5       |                                     |
++------------------------+-------------------------------------+
 | ne+7 + e -> ne+6       |                                     |
++------------------------+-------------------------------------+
 | ne+8 + e -> ne+7       |                                     |
++------------------------+-------------------------------------+
 | ne+9 + e -> ne+8       |                                     |
++------------------------+-------------------------------------+
 | ne+10 + e -> ne+9      |                                     |
 +------------------------+-------------------------------------+
 

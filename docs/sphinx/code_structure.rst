@@ -65,3 +65,39 @@ Notes:
 * When checking if a subsection exists, use `option.isSection`, since `option.isSet`
   is false if it is a section and not a value.
   
+Docs
+----
+
+The basic building block of all Hermes-3 models is the
+`Component`. This defines an interface to a class which takes a state
+(a tree of dictionaries/maps), and transforms (modifies) it.  After
+all components have modified the state in turn, all components may
+then implement a `finally` method to take the final state but not
+modify it. This allows two components to depend on each other, but
+makes debugging and testing easier by limiting the places where the
+state can be modified.
+
+.. doxygenstruct:: Component
+   :members:
+
+Components are usually defined in separate files; sometimes multiple
+components in one file if they are small and related to each other (e.g.
+atomic rates for the same species). To be able to create components,
+they need to be registered in the factory. This is done in the header
+file using a code like::
+
+  #include "component.hxx"
+
+  struct MyComponent : public Component {
+    ...
+  };
+  
+  namespace {
+  RegisterComponent<MyComponent> registercomponentmine("mycomponent");
+  }
+
+where `MyComponent` is the component class, and "mycomponent" is the
+name that can be used in the BOUT.inp settings file to create a
+component of this type. Note that the name can be any string except it
+can't contain commas or brackets (), and shouldn't start or end with
+whitespace.
