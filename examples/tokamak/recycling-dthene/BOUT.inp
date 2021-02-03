@@ -1,0 +1,223 @@
+# Transport simulation with deuterium, tritium, helium and neon
+
+nout = 50
+timestep = 50
+
+MZ = 1
+
+[mesh]
+
+file = "tokamak.nc"
+
+[mesh:paralleltransform]
+type = shifted
+
+[solver]
+mxstep = 10000
+
+[hermes]
+components = d+, d, t+, t, he+, he, ne+, ne, e, collisions, sheath_boundary, recycling, reactions
+
+Nnorm = 2e18  # Reference density [m^-3]
+Bnorm = 1   # Reference magnetic field [T]
+Tnorm = 5   # Reference temperature [eV]
+
+################################################################
+# Deuterium ions
+
+[d+]
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
+
+AA = 2
+charge = 1
+anomalous_D = 2    # Density diffusion [m^2/s]
+anomalous_chi = 1
+
+thermal_conduction = true
+
+recycle_as = d
+recycle_multiplier = 0.99  # Recycling fraction
+
+[Nd+]
+
+function = 1
+
+bndry_core = dirichlet(1.0)  # Core boundary high density
+bndry_all = dirichlet(0.1)   # All other boundaries low density
+
+[Pd+]
+function = 1
+bndry_core = dirichlet(1.0)  # Core boundary
+bndry_all = dirichlet(0.01)   # All other boundaries
+
+[Td+]
+bndry_core = dirichlet(1.0)  # Core boundary
+bndry_all = dirichlet(0.1)   # All other boundaries
+
+################################################################
+# Deuterium neutrals
+
+[d]
+type = neutral_mixed
+
+AA = 2
+
+################################################################
+# Tritium ions
+
+[t+]
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
+
+AA = 3
+charge = 1
+anomalous_D = 2    # Density diffusion [m^2/s]
+anomalous_chi = 1
+
+thermal_conduction = true
+
+recycle_as = t
+recycle_multiplier = 0.99  # Recycling fraction
+
+[Nt+]
+
+function = 1
+
+bndry_core = dirichlet(1.0)  # Core boundary high density
+bndry_all = dirichlet(0.1)   # All other boundaries low density
+
+[Pt+]
+function = 1
+bndry_core = dirichlet(1.0)  # Core boundary
+bndry_all = dirichlet(0.01)   # All other boundaries
+
+[Tt+]
+bndry_core = dirichlet(1.0)  # Core boundary
+bndry_all = dirichlet(0.1)   # All other boundaries
+
+################################################################
+# Tritium neutrals
+
+[t]
+type = neutral_mixed
+
+AA = 3
+
+################################################################
+# Helium ions
+
+[he+]
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
+
+AA = 4
+charge = 1
+anomalous_D = 2    # Density diffusion [m^2/s]
+anomalous_chi = 1
+
+thermal_conduction = true
+
+recycle_as = he
+recycle_multiplier = 0.99  # Recycling fraction
+
+[Nhe+]
+
+function = 0.1
+
+bndry_core = dirichlet(0.1)  # Core boundary high density
+bndry_all = dirichlet(0.1)   # All other boundaries low density
+
+[Phe+]
+function = 0.01
+bndry_core = dirichlet(0.1)  # Core boundary 
+bndry_all = dirichlet(0.01)   # All other boundaries
+
+[The+]
+bndry_core = dirichlet(1.0)  # Core boundary
+bndry_all = dirichlet(0.1)   # All other boundaries
+
+################################################################
+# Helium neutrals
+
+[he]
+type = neutral_mixed
+
+AA = 4
+
+################################################################
+# Neon ions
+
+[ne+]
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
+
+AA = 20
+charge = 1
+anomalous_D = 2    # Density diffusion [m^2/s]
+anomalous_chi = 1
+
+thermal_conduction = true
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+[Nne+]
+
+function = 0.01
+
+bndry_core = dirichlet(0.01)  # Core boundary
+bndry_all = dirichlet(0.01)   # All other boundaries
+
+[Pne+]
+function = 0.001
+bndry_core = dirichlet(0.01)  # Core boundary
+bndry_all = dirichlet(0.001)   # All other boundaries
+
+[Tne+]
+bndry_core = dirichlet(1.0)  # Core boundary
+bndry_all = dirichlet(0.1)   # All other boundaries
+
+################################################################
+# Neon neutrals
+
+[ne]
+type = neutral_mixed
+
+AA = 20
+
+################################################################
+# Electrons
+
+[e]
+# Set electron density from quasineutrality,
+# and parallel flow from ion flow, assuming no currents
+type = quasineutral, evolve_pressure, zero_current, anomalous_diffusion
+
+AA = 1/1836
+charge = -1
+
+anomalous_D = `d+`:anomalous_D  # Note: needed for thermal transport
+anomalous_chi = 0.1
+thermal_conduction = true
+
+[Pe]
+function = 1
+bndry_core = dirichlet(1.0)  # Core boundary high density
+bndry_all = dirichlet(0.01)   # All other boundaries low density
+
+[Te]
+bndry_core = dirichlet(1.0)  # Core boundary high density
+bndry_all = dirichlet(0.1)   # All other boundaries low density
+
+################################################################
+
+[recycling]
+
+species = d+, t+, he+, ne+
+
+[reactions]
+type = (
+        d + e -> d+ + 2e,   # Deuterium ionisation
+        t + e -> t+ + 2e,   # Tritium ionisation
+        he + e -> he+ + 2e, # Helium ionisation
+        he+ + e -> he,      # Helium+ recombination
+        ne + e -> ne+ + 2e, # Neon ionisation
+        ne+ + e -> ne,      # Neon+ recombination
+       )

@@ -29,7 +29,7 @@ protected:
   /// (page 20 of amjuel.pdf)
   ///
   ///  coefs[T][n]
-  /// Input in SI units:
+  /// Input in units:
   ///     n in m^-3
   ///     T in eV
   ///

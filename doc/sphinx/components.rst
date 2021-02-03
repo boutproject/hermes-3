@@ -203,7 +203,7 @@ The name of the section does not need to be `reactions`, and multiple components
 be created with different reaction sets. Be careful not to include the same reaction
 twice.
 
-When reactions are added, the species involved must be included, or an exception
+When reactions are added, all the species involved must be included, or an exception
 should be thrown.
 
 Hydrogenic processes
@@ -239,4 +239,37 @@ Helium
 | he + e -> he+ + 2e   | He ionisation, unresolved metastables (Amjuel 2.3.9a)      |
 | he+ + e -> he        | He+ recombination, unresolved metastables (Amjuel 2.3.13a) |
 +----------------------+------------------------------------------------------------+
+
+Neon
+~~~~
+
+These rates are taken from ADAS (96): SCD and PLT are used for the ionisation
+rate and radiation energy loss; ACD and PRB for the recombination rate and radiation
+energy loss. The ionisation potential is also included as a source or sink of energy
+for the electrons.
+
++------------------------+-------------------------------------+
+| Reaction               | Description                         |
++========================+=====================================+
+| ne + e -> ne+ + 2e     | Neon ionisation                     |
+| ne+ + e -> ne+2 + 2e   |                                     |
+| ne+2 + e -> ne+3 + 2e  |                                     |
+| ne+3 + e -> ne+4 + 2e  |                                     |
+| ne+4 + e -> ne+5 + 2e  |                                     |
+| ne+5 + e -> ne+6 + 2e  |                                     |
+| ne+6 + e -> ne+7 + 2e  |                                     |
+| ne+7 + e -> ne+8 + 2e  |                                     |
+| ne+8 + e -> ne+9 + 2e  |                                     |
+| ne+9 + e -> ne+10 + 2e |                                     |
+| ne+ + e -> ne          | Neon recombination                  |
+| ne+2 + e -> ne+        |                                     |
+| ne+3 + e -> ne+2       |                                     |
+| ne+4 + e -> ne+3       |                                     |
+| ne+5 + e -> ne+4       |                                     |
+| ne+6 + e -> ne+5       |                                     |
+| ne+7 + e -> ne+6       |                                     |
+| ne+8 + e -> ne+7       |                                     |
+| ne+9 + e -> ne+8       |                                     |
+| ne+10 + e -> ne+9      |                                     |
++------------------------+-------------------------------------+
 
