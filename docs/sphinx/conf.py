@@ -164,6 +164,14 @@ else:
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
+# Prefer gif images to png
+from sphinx.builders.html import StandaloneHTMLBuilder
+StandaloneHTMLBuilder.supported_image_types = [
+    'image/svg+xml',
+    'image/gif',
+    'image/png',
+    'image/jpeg'
+]
 
 # -- Options for HTMLHelp output ------------------------------------------
 
