@@ -83,6 +83,10 @@ using RegisterComponent = RegisterInFactory<Component, DerivedType, ComponentFac
 
 /// Faster non-printing getter for Options
 /// If this fails, it will throw BoutException
+///
+/// @tparam T  The type the option should be converted to
+///
+/// @param option  The Option whose value will be returned
 template<typename T>
 T get(const Options& option) {
   if (!option.isSet()) {
@@ -99,6 +103,8 @@ T get(const Options& option) {
 
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
+///
+/// @tparam T The type of the value to set. Usually this is inferred
 template<typename T>
 Options& set(Options& option, T value) {
   option.force(std::move(value));
@@ -107,6 +113,12 @@ Options& set(Options& option, T value) {
 
 /// Add value to a given option. If not already set, treats
 /// as zero and sets the option to the value.
+///
+/// @tparam T The type of the value to add. The existing value
+///           will be casted to this type
+///
+/// @param option  The value to modify (or set if not already set)
+/// @param value   The quantity to add.
 template<typename T>
 Options& add(Options& option, T value) {
   if (!option.isSet()) {
@@ -124,6 +136,9 @@ Options& add(Options& option, T value) {
 
 /// Add value to a given option. If not already set, treats
 /// as zero and sets the option to the value.
+///
+/// @param option  The value to modify (or set if not already set)
+/// @param value   The quantity to add.
 template<typename T>
 Options& subtract(Options& option, T value) {
   if (!option.isSet()) {

@@ -22,7 +22,7 @@ of energy between them, or heat conduction.
 .. figure:: figs/1d_te_ti.*
    :name: 1d_te_ti
    :alt:
-   :scale: 50
+   :width: 60%
    
    Evolution of pressure, starting from a top hat
 
@@ -165,4 +165,53 @@ These are transport simulations, where the cross-field transport is given
 by diffusion, and fluid-like equations are used for the parallel dynamics
 (as in the 1D flux tube cases).
 
+The `recycling-dthene` example includes cross-field diffusion,
+parallel flow and heat conduction, collisions between species, sheath
+boundary conditions and recycling. It simulates the density, parallel
+flow and pressure of the electrons; ion species D+, T+, He+, Ne+; and
+neutral species D, T, He, Ne.
 
+.. figure:: figs/pe_nvt_nne_2d.png
+   :name: recycling-dthene
+   :alt:
+   :width: 100%
+
+   Electron pressure, parallel tritium flux, and neon atom density. Simulation
+   evolves D, T, He, Ne and electron species, including ions and neutral atoms.
+
+The model components are a list of species, and then collective components
+which couple multiple species.
+
+.. code-block:: ini
+
+   [hermes]
+   components = (d+, d, t+, t, he+, he, ne+, ne, e,
+                 collisions, sheath_boundary, recycling, reactions)
+
+Note that long lists like this can be split across multiple lines by
+using parentheses. 
+                 
+Each ion species has a set of components, to evolve the density,
+momentum and pressure. Anomalous diffusion adds diffusion of
+particles, momentum and energy. For example deuterium ions contain:
+
+.. code-block:: ini
+   
+   [d+]
+   type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
+   AA = 2
+   charge = 1
+
+Atomic reactions are specified as a list:
+
+.. code-block:: ini
+   
+   [reactions]
+   type = (
+        d + e -> d+ + 2e,   # Deuterium ionisation
+        t + e -> t+ + 2e,   # Tritium ionisation
+        he + e -> he+ + 2e, # Helium ionisation
+        he+ + e -> he,      # Helium+ recombination
+        ne + e -> ne+ + 2e, # Neon ionisation
+        ne+ + e -> ne,      # Neon+ recombination
+       )
