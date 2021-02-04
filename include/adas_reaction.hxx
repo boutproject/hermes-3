@@ -5,22 +5,27 @@
 #include "component.hxx"
 #include <vector>
 
+/// Represent a 2D rate coefficient table (T,n)
+/// Reads data from a file, then interpolates at required values.
 struct OpenADASRateCoefficient {
   /// Read the file, extracting data for the given ionisation level
+  /// @param filename   The file to read. Path relative to run working directory
+  /// @param level      The first index in the log coefficient array
+  ///                   (ionisation level)
   OpenADASRateCoefficient(const std::string& filename, int level);
 
   std::vector<std::vector<BoutReal>> log_coeff;
   std::vector<BoutReal> log_temperature;
   std::vector<BoutReal> log_density;
 
-  BoutReal Tmin, Tmax; // Range of T
-  BoutReal nmin, nmax; // Range of density
+  BoutReal Tmin, Tmax; ///< Range of T  [eV]
+  BoutReal nmin, nmax; ///< Range of density [m^-3]
 
-  /// Input in units:
-  ///     n in m^-3
-  ///     T in eV
+  /// Inputs:
+  /// @param  n  Electron density in m^-3
+  /// @param  T  Electron temperature in eV
   ///
-  /// Output in units m^3/s or eV m^3/s
+  /// @returns rate in units of m^3/s or eV m^3/s
   BoutReal evaluate(BoutReal T, BoutReal n);
 };
 
@@ -33,13 +38,13 @@ struct OpenADAS : public Component {
   ///
   /// Inputs
   /// ------
-  ///   units       Options tree containing normalisation constants
-  ///   rate_file   A JSON file containing reaction rate <σv> rates (e.g. SCD, ACD)
-  ///   radiation_file   A JSON file containing radiation loss rates (e.g. PLT, PRB)
-  ///   level       The lower ionisation state in the transition
+  /// @param units       Options tree containing normalisation constants
+  /// @param rate_file   A JSON file containing reaction rate <σv> rates (e.g. SCD, ACD)
+  /// @param radiation_file   A JSON file containing radiation loss rates (e.g. PLT, PRB)
+  /// @param level       The lower ionisation state in the transition
   ///               e.g. 0 for neutral -> 1st ionisation
   ///               and 1st -> neutral recombination
-  ///   electron_heating   The heating of the electrons per reaction [eV]
+  /// @param electron_heating   The heating of the electrons per reaction [eV]
   ///               This is the ionisation energy, positive for recombination
   ///               and negative for ionisation
   ///
@@ -58,15 +63,19 @@ struct OpenADAS : public Component {
   }
 
   /// Perform the calculation of rates, and transfer of particles/momentum/energy
+  ///
+  /// @param electron  The electron species e.g. state["species"]["e"]
+  /// @param from_ion  The ion on the left of the reaction
+  /// @param to_ion    The ion on the right of the reaction
   void calculate_rates(Options& electron, Options& from_ion, Options& to_ion);
 
 private:
   OpenADASRateCoefficient rate_coef;      ///< Reaction rate coefficient
   OpenADASRateCoefficient radiation_coef; ///< Energy loss (radiation) coefficient
 
-  BoutReal electron_heating; // Heating per reaction [eV]
+  BoutReal electron_heating; ///< Heating per reaction [eV]
 
-  BoutReal Tnorm, Nnorm, FreqNorm; // Normalisations
+  BoutReal Tnorm, Nnorm, FreqNorm; ///< Normalisations
 };
 
 #endif // ADAS_REACTION_H

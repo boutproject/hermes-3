@@ -21,18 +21,19 @@ public:
                      Solver *solver);
 
   /// Inputs
-  ///   scheduler_options    Configuration of the scheduler
-  ///     - components       Comma-separated list of component names
+  ///  @param scheduler_options  Configuration of the scheduler
+  ///                            Should contain "components", a comma-separated
+  ///                            list of component names
   ///
-  ///   component_options    Configuration of the components.
+  ///  @param component_options  Configuration of the components.
   ///     - <name>
   ///       - type = Component classes, ...
   ///                        If not provided, the type is the same as the name
   ///                        Multiple classes can be given, separated by commas.
   ///                        All classes will use the same Options section.
-  ///       - ...
+  ///       - ...  Options to control the component(s)
   ///   
-  ///   solver               Used for time-dependent components
+  ///  @param solver         Used for time-dependent components
   ///                        to evolve quantities
   /// 
   static std::unique_ptr<ComponentScheduler> create(Options &scheduler_options,

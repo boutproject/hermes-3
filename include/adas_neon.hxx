@@ -19,6 +19,8 @@ constexpr std::array<BoutReal, 10> neon_ionisation_energy{
 /// ne, ne+, ne+2, ne+3, ...
 ///
 /// Special cases for level=0 and level=1
+///
+/// @tparam level  The ionisation level: 0 is neutral, 10 is fully stripped.
 template <int level>
 constexpr std::initializer_list<char> neon_species_name {'n', 'e', '+', '0' + level};
 
@@ -30,6 +32,7 @@ constexpr std::initializer_list<char> neon_species_name<0> {'n', 'e'};
 
 /// ADAS effective ionisation (ADF11)
 ///
+/// @tparam level  The ionisation level of the ion on the left of the reaction
 template <int level>
 struct ADASNeonIonisation : public OpenADAS {
   ADASNeonIonisation(std::string, Options& alloptions, Solver*)
@@ -48,8 +51,11 @@ struct ADASNeonIonisation : public OpenADAS {
 /////////////////////////////////////////////////
 
 /// ADAS effective recombination coefficients (ADF11)
+///
+/// @tparam level  The ionisation level of the ion on the right of the reaction
 template <int level>
 struct ADASNeonRecombination : public OpenADAS {
+  /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
   ADASNeonRecombination(std::string, Options& alloptions, Solver*)
       : OpenADAS(alloptions["units"], "acd96_ne.json", "prb96_ne.json", level,
                  neon_ionisation_energy[level]) {}
