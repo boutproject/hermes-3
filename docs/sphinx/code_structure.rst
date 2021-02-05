@@ -43,8 +43,8 @@ for new variables which are added to the state:
 
 * `species`  Plasma species
 
-  * `e`
-  * `species1`  Example "h", "he2+"
+  * `e`    Electron species
+  * `species1`  Example "h", "he+2"
 
     * `AA`  Atomic mass, proton = 1
     * `charge`  Charge, in units of proton charge (i.e. electron=-1)
@@ -96,6 +96,9 @@ Notes:
 
 - When checking if a subsection exists, use `option.isSection`, since `option.isSet`
   is false if it is a section and not a value.
+- The species name convention is that the charge state is last, after the `+` or `-`
+  sign: `n2+` is a singly charged nitrogen molecule, while `n+2` is a +2 charged
+  nitrogen atom.
   
 Components
 ----------
