@@ -44,6 +44,15 @@ The ion density, pressure and momentum equations are evolved:
    [i]  # Ions
    type = evolve_density, evolve_pressure, evolve_momentum
 
+which solves the equations
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial n_i}{\partial t} =& -\nabla\cdot\left(n_i\mathbf{b}v_{||i}\right) \\
+   \frac{\partial p_i}{\partial t} =& -\nabla\cdot\left(p_i\mathbf{b}v_{||i}\right) - \frac{2}{3}p_i\nabla\cdot\left(\mathbf{b}v_{||i}\right) \\
+   \frac{\partial}{\partial t}\left(n_iv_{||i}\right) =& -\nabla\cdot\left(n_iv_{||i} \mathbf{b}v_{||i}\right) - \partial_{||}p_i + E
+   \end{aligned}
 
 The electron density is set to the ion density by quasineutrality,
 and only the electron pressure is evolved.
@@ -52,6 +61,24 @@ and only the electron pressure is evolved.
 
    [e] # Electrons
    type = quasineutral, evolve_pressure
+
+which adds the equations:
+
+.. math::
+
+   \begin{aligned}
+   n_e =& n_i \\
+   \frac{\partial p_e}{\partial t} =& -\nabla\cdot\left(p_e\mathbf{b}v_{||e}\right) - \frac{2}{3}p_e\nabla\cdot\left(\mathbf{b}v_{||e}\right)
+   \end{aligned}
+
+The `zero_current` component sets:
+
+.. math::
+
+   \begin{aligned}
+   E =& -\partial_{||}p_e \\
+   v_{||e} =& v_{||i}
+   \end{aligned}
 
 
 2D drift-plane
@@ -98,6 +125,14 @@ has several options, which are set in the same section e.g.
 
    poloidal_flows = false  # Y flows due to ExB
 
+and so solves the equation:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}}
+   \end{aligned}
+
 The `isothermal` component type sets the temperature to be a constant, and using
 the density then sets the pressure. The constant temperature is also
 set in this `[e]` section:
@@ -106,9 +141,26 @@ set in this `[e]` section:
 
    temperature = 5  # Temperature in eV
 
+so that the equation solved is
+
+.. math::
+
+   \begin{aligned}
+   p_e =& e n_e T_e
+   \end{aligned}
+
+where :math:`T_e` is the fixed electron temperature (5eV).
+
 The `vorticity` component uses the pressure to calculate the diamagnetic current,
 so must come after the `e` component. This component then calculates the potential.
 Options to control the vorticity component are set in the `[vorticity]` section.
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial \omega}{\partial t} =& - \nabla\cdot\left(\omega\mathbf{v}_{E\times B}\right) + \nabla\left(p_e\nabla\times\frac{\mathbf{b}}{B}\right) + \nabla\cdot\mathbf{j}_{sh} \\
+   \nabla\cdot\left(\frac{1}{B^2}\nabla_\perp\phi\right) = \omega
+   \end{aligned}
 
 The `sheath_closure` component uses the potential, so must come after `vorticity`.
 Options are also set as
@@ -117,6 +169,16 @@ Options are also set as
 
    [sheath_closure]
    connection_length = 10 # meters
+
+This adds the equation
+
+.. math::
+
+   \begin{aligned}
+   \nabla\cdot{\mathbf{j}_{sh}} = \frac{n_e\phi}{L_{||}}
+   \end{aligned}
+
+where :math:`L_{||}` is the connection length.
 
 Blob2D-Te-Ti
 ------------
@@ -156,6 +218,21 @@ using the quasineutrality of the plasma; the ion pressure (`Ph+`) is evolved.
    
    [h+]
    type = quasineutral, evolve_pressure
+
+The equations this solves are similar to the previous blob2d case, except
+now there are pressure equations for both ions and electrons:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}} \\
+   \frac{\partial p_e}{\partial t} =& - \nabla\cdot\left(p_e\mathbf{v}_{E\times B}\right) - \gamma_e p_e c_s \\
+   n_{h+} =& n_e \\
+   \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) - \gamma_i p_{h+} c_s \\
+   \frac{\partial \omega}{\partial t} = - \nabla\cdot\left(\omega\mathbf{v}_{E\times B}\right) + \nabla\left[\left(p_e + p_{h+}\right)\nabla\times\frac{\mathbf{b}}{B}\right] + \nabla\cdot\mathbf{j}_{sh} \\
+   \nabla\cdot\left[\frac{1}{B^2}\nabla_\perp\left(\phi + p_{h+}\right)\right] = \omega
+   \nabla\cdot{\mathbf{j}_{sh}} = \frac{n_e\phi}{L_{||}}
+   \end{aligned}
 
 
 2D axisymmetric tokamak

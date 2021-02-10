@@ -45,7 +45,8 @@ Species parallel dynamics
 evolve_momentum
 ~~~~~~~~~~~~~~~
 
-Evolves the momentum `NV<species>` in time. 
+Evolves the momentum `NV<species>` in time. The evolving quantity includes the atomic
+mass number, so should be divided by `AA` to obtain the particle flux.
 
 zero_current
 ~~~~~~~~~~~~
