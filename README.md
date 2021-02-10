@@ -7,7 +7,8 @@ Hermes-3
 Hermes plasma edge simulation model. Uses BOUT++ framework, adds finite volume
 operators and neutral gas models.
 
-This is Hermes-3, a hot ion multifluid drift-reduced model.
+This is Hermes-3, a hot ion multifluid drift-reduced model. The manual is
+[here on Readthedocs](https://hermes3.readthedocs.io/en/latest/).
 
 *Note* Currently under development, not yet fully working, and may change without notice.
 

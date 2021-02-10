@@ -5,12 +5,13 @@ Introduction
 
 Hermes-3 is a plasma simulation model built on `BOUT++
 <http://boutproject.github.io/>`_, developed mainly for simulating the
-edge of magnetically confined plasmas such as tokamaks.  The main aim
-of this model is multi-species simulation of fusion reactors, where
-the plasma will contain a mixture of deuterium, tritium, helium and
-other species.
+edge of magnetically confined plasmas such as tokamaks. The source
+code is `available on Github
+<https://github.com/bendudson/hermes-3>`. The main aim of this model
+is multi-species simulation of fusion reactors, where the plasma will
+contain a mixture of deuterium, tritium, helium and other species.
 
-A novel feature of this model is that it is organised into reusable
+An unusual feature of this model is that it is organised into reusable
 components, which can be tested individually and then configured at
 run-time. For example a transport simulation with deuterium and tritium ions and
 atoms has an input file specifying the components
