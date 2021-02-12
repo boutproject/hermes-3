@@ -6,12 +6,17 @@
 
 /// Boundary condition at the wall in Y
 ///
+/// This is a collective component, because it couples all charged species
+///
 /// These are based on
 /// "Boundary conditions for the multi-ion magnetized plasma-wall transition"
 ///  by D.Tskhakaya, S.Kuhn. JNM 337-339 (2005), 405-409
 ///
-/// Note: The approximation used here is for ions having similar
-/// gyro-orbit sizes
+/// Notes:
+///   - The approximation used here is for ions having similar
+///     gyro-orbit sizes
+///   - No boundary condition is applied to neutral species
+///
 struct SheathBoundary : public Component {
   SheathBoundary(std::string name, Options &options, Solver *);
 
