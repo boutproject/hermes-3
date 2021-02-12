@@ -27,3 +27,4 @@ TEST_F(NoFlowBoundaryTest, CreateComponent) {
 
   NoFlowBoundary component("test", options, nullptr);
 }
+
