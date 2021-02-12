@@ -42,10 +42,19 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
   if (options["diagnose"]
           .doc("Output additional diagnostics?")
           .withDefault<bool>(false)) {
-    bout::globals::dump.addRepeat(ddt(N), std::string("ddt(") + name + std::string(")"));
+    bout::globals::dump.addRepeat(ddt(N), std::string("ddt(N") + name + std::string(")"));
     bout::globals::dump.addRepeat(Sn, std::string("SN") + name);
     Sn = 0.0;
   }
+
+  const Options& units = alloptions["units"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+
+  source = alloptions[std::string("N") + name]["source"]
+               .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
+               .withDefault(Field3D(0.0))
+           / (Nnorm * Omega_ci);
 }
 
 void EvolveDensity::transform(Options &state) {
@@ -113,10 +122,11 @@ void EvolveDensity::finally(const Options &state) {
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 
+  Sn = source; // Save for possible output
   if (species.isSet("density_source")) {
-    Sn = get<Field3D>(species["density_source"]); // Save for possible output
-    ddt(N) += Sn;
+    Sn += get<Field3D>(species["density_source"]);
   }
+  ddt(N) += Sn;
 
 #if CHECK > 1
   bout::checkFinite(ddt(N), std::string("ddt N") + name, "RGN_NOBNDRY");

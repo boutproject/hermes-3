@@ -189,6 +189,14 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                        .withDefault<bool>(true);
 
   V.setBoundary(std::string("V") + name);
+
+  if (options["diagnose"]
+          .doc("Output additional diagnostics?")
+          .withDefault<bool>(false)) {
+    bout::globals::dump.addRepeat(V, std::string("V") + name);
+
+    bout::globals::dump.addRepeat(ddt(NV), std::string("ddt(NV") + name + std::string(")"));
+  }
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -227,7 +235,7 @@ void EvolveMomentum::finally(const Options &state) {
   Field3D N = get<Field3D>(species["density"]);
   
   // Parallel flow
-  Field3D V = get<Field3D>(species["velocity"]);
+  V = get<Field3D>(species["velocity"]);
 
   // Typical wave speed used for numerical diffusion
   Field3D sound_speed;
@@ -238,7 +246,7 @@ void EvolveMomentum::finally(const Options &state) {
     sound_speed = sqrt(T);
   }
   
-  ddt(NV) -= FV::Div_par_fvv(N, V, sound_speed, false);
+  ddt(NV) -= FV::Div_par_fvv(N, V, sound_speed);
 
   // Parallel pressure gradient
   if (species.isSet("pressure")) {

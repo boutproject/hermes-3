@@ -1,6 +1,7 @@
 
 #include <bout/fv_ops.hxx>
 #include <difops.hxx>
+#include <bout/constants.hxx>
 
 #include "../include/evolve_pressure.hxx"
 #include "../include/div_ops.hxx"
@@ -39,8 +40,26 @@ EvolvePressure::EvolvePressure(std::string name, Options &alloptions, Solver *so
   if (options["diagnose"]
           .doc("Save additional output diagnostics")
       .withDefault<bool>(false)) {
-    bout::globals::dump.addRepeat(kappa_par, std::string("kappa_par_") + name);
+    if (thermal_conduction) {
+      bout::globals::dump.addRepeat(kappa_par, std::string("kappa_par_") + name);
+    }
+    bout::globals::dump.addRepeat(T, std::string("T") + name);
+
+    bout::globals::dump.addRepeat(ddt(P), std::string("ddt(P") + name + std::string(")"));
+    bout::globals::dump.addRepeat(Sp, std::string("SP") + name);
+    Sp = 0.0;
   }
+
+  const Options& units = alloptions["units"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
+  const BoutReal Tnorm = units["eV"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+
+  source = alloptions[std::string("P") + name]["source"]
+               .doc(std::string("Source term in ddt(P") + name
+                    + std::string("). Units [N/m^2/s]"))
+               .withDefault(Field3D(0.0))
+           / (SI::qe * Nnorm * Tnorm * Omega_ci);
 }
 
 void EvolvePressure::transform(Options &state) {
@@ -133,9 +152,11 @@ void EvolvePressure::finally(const Options &state) {
   //////////////////////
   // Other sources
 
+  Sp = source;
   if (species.isSet("energy_source")) {
-    ddt(P) += (2./3) * get<Field3D>(species["energy_source"]);
+    Sp += (2./3) * get<Field3D>(species["energy_source"]); // For diagnostic output
   }
+  ddt(P) += Sp;
 
 #if CHECK > 1
   bout::checkFinite(ddt(P), std::string("ddt P") + name, "RGN_NOBNDRY");

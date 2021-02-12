@@ -15,9 +15,9 @@ void NoFlowBoundary::transform(Options& state) {
   AUTO_TRACE();
 
   // Make sure that the state has been set for this species
-  ASSERT1(state.isSection(name));
+  ASSERT1(state["species"].isSection(name));
 
-  Options& species = state[name];
+  Options& species = state["species"][name];
 
   // Apply zero-gradient boundary conditions to state variables
   for (const std::string field : {"density", "temperature", "pressure"}) {
@@ -26,6 +26,7 @@ void NoFlowBoundary::transform(Options& state) {
     }
 
     Field3D var = get<Field3D>(species[field]);
+    var.clearParallelSlices();
 
     if (noflow_lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -59,6 +60,7 @@ void NoFlowBoundary::transform(Options& state) {
     }
 
     Field3D var = get<Field3D>(species[field]);
+    var.clearParallelSlices();
 
     if (noflow_lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
