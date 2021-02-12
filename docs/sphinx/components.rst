@@ -39,6 +39,22 @@ evolve_pressure
 Evolves the pressure in time. This pressure is named `P<species>` where `<species>`
 is the short name of the evolving species e.g. `Pe`.
 
+By default parallel thermal conduction is included, which requires a collision
+time. If collisions are not calculated, then thermal conduction should be turned off
+by setting `thermal_conduction = false` in the input options.
+
+Notes:
+
+- Heat conduction through the boundary is turned off currently. This is because
+  heat losses are usually calculated at the sheath, so any additional heat conduction
+  would be in addition to the sheath heat transmission already included.
+
+The implementation is in `EvolvePressure`:
+
+.. doxygenstruct:: EvolvePressure
+   :members:
+
+
 Species parallel dynamics
 -------------------------
 
@@ -80,6 +96,48 @@ exchange) and the pressure gradient:
 At the moment there is no attempt to limit these velocities, which has
 been found necessary in UEDGE to get physical results in better
 agreement with kinetic neutral models [Discussion, T.Rognlien].
+
+noflow_boundary
+~~~~~~~~~~~~~~~
+
+This is a species component which imposes a no-flow boundary condition
+on y (parallel) boundaries.
+
+- Zero-gradient boundary conditions are applied to `density`,
+  `temperature` and `pressure` fields, if they are set.
+- Zero-value boundary conditions are applied to `velocity` and
+  `momentum` if they are set.
+
+By default both yup and ydown boundaries are set, but can be turned
+off by setting `noflow_lower_y` or `noflow_upper_y` to `false`.
+
+Example: To set no-flow boundary condition on an ion `d+` at the lower
+y boundary, with a sheath boundary at the upper y boundary:
+
+.. code-block:: ini
+
+   [hermes]
+   components = d+, sheath_boundary
+
+   [d+]
+   type = noflow_boundary
+
+   noflow_lower_y = true   # This is the default
+   noflow_upper_y = false  # Turn off no-flow at upper y for d+ species
+
+   [sheath_boundary]
+   lower_y = false         # Turn off sheath lower boundary for all species
+   upper_y = true
+
+Note that currently `noflow_boundary` is set per-species, whereas
+`sheath_boundary` is applied to all species. This is because sheath
+boundary conditions couple all charged species together, and doesn't
+affect neutral species.
+
+The implementation is in `NoFlowBoundary`:
+
+.. doxygenstruct:: NoFlowBoundary
+   :members:
 
 Collective quantities
 ---------------------

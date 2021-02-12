@@ -40,6 +40,9 @@ private:
   bool thermal_conduction;
 
   Field3D kappa_par; ///< Parallel heat conduction coefficient
+
+  Field3D source; ///< External pressure source
+  Field3D Sp; ///< Total pressure source
 };
 
 namespace {

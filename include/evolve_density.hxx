@@ -47,7 +47,8 @@ private:
   bool low_n_diffuse_perp;  // Perpendicular diffusion at low density
   bool hyper_z;  // Hyper-diffusion in Z
 
-  Field3D Sn; ///< Density source
+  Field3D source; ///< External input source
+  Field3D Sn; ///< Total density source
 };
 
 namespace {
