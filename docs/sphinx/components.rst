@@ -39,6 +39,22 @@ evolve_pressure
 Evolves the pressure in time. This pressure is named `P<species>` where `<species>`
 is the short name of the evolving species e.g. `Pe`.
 
+By default parallel thermal conduction is included, which requires a collision
+time. If collisions are not calculated, then thermal conduction should be turned off
+by setting `thermal_conduction = false` in the input options.
+
+Notes:
+
+- Heat conduction through the boundary is turned off currently. This is because
+  heat losses are usually calculated at the sheath, so any additional heat conduction
+  would be in addition to the sheath heat transmission already included.
+
+The implementation is in `EvolvePressure`:
+
+.. doxygenstruct:: EvolvePressure
+   :members:
+
+
 Species parallel dynamics
 -------------------------
 
