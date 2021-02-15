@@ -150,7 +150,7 @@ void Collisions::transform(Options& state) {
 
       Options& species = allspecies[kv.first]; // Note: Need non-const
 
-      if (species.isSet("charge")) {
+      if (species.isSet("charge") and (get<BoutReal>(species["charge"]) != 0.0)) {
         ////////////////////////////////////
         // electron-charged ion collisions
 
@@ -245,7 +245,7 @@ void Collisions::transform(Options& state) {
     const BoutReal AA1 = get<BoutReal>(species1["AA"]);
     const BoutReal mass1 = AA1 * SI::Mp; // in Kg
 
-    if (species1.isSet("charge")) {
+    if (species1.isSet("charge") and (get<BoutReal>(species1["charge"]) != 0.0)) {
       // Charged species
       const BoutReal Z1 = get<BoutReal>(species1["charge"]);
       const BoutReal charge1 = Z1 * SI::qe; // in Coulombs
@@ -271,7 +271,7 @@ void Collisions::transform(Options& state) {
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const BoutReal mass2 = AA2 * SI::Mp; // in Kg
 
-        if (species2.isSet("charge")) {
+        if (species2.isSet("charge") and (get<BoutReal>(species2["charge"]) != 0.0)) {
           //////////////////////////////
           // Both charged species
 

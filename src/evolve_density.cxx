@@ -64,7 +64,9 @@ void EvolveDensity::transform(Options &state) {
   auto& species = state["species"][name];
   set(species["density"], N);
   set(species["AA"], AA); // Atomic mass
-  set(species["charge"], charge);
+  if (charge != 0.0) { // Don't set charge for neutral species
+    set(species["charge"], charge);
+  }
 }
 
 void EvolveDensity::finally(const Options &state) {
