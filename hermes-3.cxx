@@ -44,6 +44,7 @@
 #include "include/amjuel_helium.hxx"
 #include "include/adas_neon.hxx"
 #include "include/noflow_boundary.hxx"
+#include "include/neutral_parallel_diffusion.hxx"
 
 #include "include/loadmetric.hxx"
 
