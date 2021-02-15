@@ -1,6 +1,8 @@
 *.o
 *.nc
 BOUT.log.*
+.BOUT.pid.*
+BOUT.settings
 *.a
 *~
 
