@@ -6,8 +6,12 @@
 
 /// Add effective diffusion of neutrals in a 1D system,
 /// by projecting cross-field diffusion onto parallel distance.
+///
+/// Note: This needs to be calculated after the collision frequency,
+/// so is a collective component. This therefore applies diffusion
+/// to all neutral species i.e. those with no (or zero) charge
 struct NeutralParallelDiffusion : public Component {
-  NeutralParallelDiffusion(std::string name, Options &alloptions, Solver *) : name(name) {
+  NeutralParallelDiffusion(std::string name, Options &alloptions, Solver *) {
     auto& options = alloptions[name];
     dneut = options["dneut"]
                 .doc("cross-field diffusion projection (B  / Bpol)^2")
@@ -17,7 +21,7 @@ struct NeutralParallelDiffusion : public Component {
   ///
   /// Inputs
   ///  - species
-  ///    - <name>
+  ///    - <all neutrals>    # Applies to all neutral species
   ///      - AA
   ///      - collision_frequency
   ///      - density
@@ -35,7 +39,6 @@ struct NeutralParallelDiffusion : public Component {
   void transform(Options &state) override;
 
 private:
-  std::string name; ///< The name of the neutral species
   BoutReal dneut; ///< cross-field diffusion projection (B  / Bpol)^2
 };
 

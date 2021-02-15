@@ -97,35 +97,6 @@ At the moment there is no attempt to limit these velocities, which has
 been found necessary in UEDGE to get physical results in better
 agreement with kinetic neutral models [Discussion, T.Rognlien].
 
-neutral_parallel_diffusion
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-This is intended mainly for 1D simulations, to provide effective parallel
-diffusion of particles, momentum and energy due to the projection of
-cross-field diffusion:
-
-.. math::
-
-   \begin{aligned}
-   \frac{\partial n_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_n\partial_{||}p_n\right) \\
-   \frac{\partial p_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n p_n\partial_{||}p_n\right) + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\kappa_n \partial_{||}T_n\right) \\
-   \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_nv_{||n} \partial_{||}p_n\right) + \nabla\cdot\left(\mathbf{b}\eta_n \partial_{||}T_n\right)
-   \end{aligned}
-
-The diffusion coefficient is calculated as
-
-.. math::
-
-   D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{T_n}{A \nu}
-
-where `A` is the atomic mass number; :math:`\nu` is the collision
-frequency. The factor :math:`B / B_{pol}` is the projection of the cross-field
-direction on the parallel transport, and is the `dneut` input setting.
-
-.. doxygenstruct:: NeutralParallelDiffusion
-   :members:
-
-
 noflow_boundary
 ~~~~~~~~~~~~~~~
 
@@ -185,6 +156,37 @@ and dividing by the sum of the mass density of all species:
 
 This is set in the state as `sound_speed`, and is used for the numerical
 diffusion terms in the parallel advection.
+
+neutral_parallel_diffusion
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This adds diffusion to **all** neutral species (those with no or zero charge),
+because it needs to be calculated after the collision frequencies are known.
+It is intended mainly for 1D simulations, to provide effective parallel
+diffusion of particles, momentum and energy due to the projection of
+cross-field diffusion:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial n_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_n\partial_{||}p_n\right) \\
+   \frac{\partial p_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n p_n\partial_{||}p_n\right) + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\kappa_n \partial_{||}T_n\right) \\
+   \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_nv_{||n} \partial_{||}p_n\right) + \nabla\cdot\left(\mathbf{b}\eta_n \partial_{||}T_n\right)
+   \end{aligned}
+
+The diffusion coefficient is calculated as
+
+.. math::
+
+   D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{T_n}{A \nu}
+
+where `A` is the atomic mass number; :math:`\nu` is the collision
+frequency. The factor :math:`B / B_{pol}` is the projection of the cross-field
+direction on the parallel transport, and is the `dneut` input setting.
+
+.. doxygenstruct:: NeutralParallelDiffusion
+   :members:
+
 
 collisions
 ~~~~~~~~~~
