@@ -351,6 +351,38 @@ rates calculation. The following might therefore be used
 +------------------+-------------------------------------+
 | t + e -> t+ + 2e | Tritium ionisation (Amjuel 2.1.5)   |
 +------------------+-------------------------------------+
+| h + h+ -> h+ + h | Hydrogen charge exchange            |
++------------------+-------------------------------------+
+| d + d+ -> d+ + d | Deuterium charge exchange           |
++------------------+-------------------------------------+
+| t + t+ -> t+ + t | Tritium charge exchange             |
++------------------+-------------------------------------+
+| h + d+ -> h+ + d | Mixed hydrogen isotope CX           |
++------------------+-------------------------------------+
+| d + h+ -> d+ + h |                                     |
++------------------+-------------------------------------+
+| h + t+ -> h+ + t |                                     |
++------------------+-------------------------------------+
+| t + h+ -> t+ + h |                                     |
++------------------+-------------------------------------+
+| d + t+ -> d+ + t |                                     |
++------------------+-------------------------------------+
+| t + d+ -> t+ + d |                                     |
++------------------+-------------------------------------+
+
+The code to calculate the charge exchange rates is in
+`hydrogen_charge_exchange.[ch]xx`. This implements reaction 0.1T from
+Amjuel (p38), scaled to different isotope masses and finite neutral
+particle temperatures by using the effective temperature (Amjuel p43):
+
+.. math::
+
+   T_{eff} = \frac{M}{M_1}T_1 + \frac{M}{M_2}T_2
+
+
+.. doxygenstruct:: HydrogenChargeExchange
+   :members:
+
 
 Helium
 ~~~~~~

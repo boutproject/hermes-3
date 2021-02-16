@@ -45,6 +45,7 @@
 #include "include/adas_neon.hxx"
 #include "include/noflow_boundary.hxx"
 #include "include/neutral_parallel_diffusion.hxx"
+#include "include/hydrogen_charge_exchange.hxx"
 
 #include "include/loadmetric.hxx"
 
