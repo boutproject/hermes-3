@@ -1,6 +1,6 @@
 #pragma once
-#ifndef NEUTRAL_PARALLEL_DIFFUSION_H
-#define NEUTRAL_PARALLEL_DIFFUSION_H
+#ifndef HYDROGEN_CHARGE_EXCHANGE_H
+#define HYDROGEN_CHARGE_EXCHANGE_H
 
 #include "component.hxx"
 
@@ -98,4 +98,4 @@ RegisterComponent<HydrogenChargeExchangeIsotope<'t', 'd'>>
     register_cx_td("t + d+ -> t+ + d");
 } // namespace
 
-#endif
+#endif // HYDROGEN_CHARGE_EXCHANGE_H
