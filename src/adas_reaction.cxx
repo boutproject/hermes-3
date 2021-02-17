@@ -153,7 +153,7 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   Field3D energy_loss = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
         return ne * n1 * radiation_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm
-               / FreqNorm;
+          / (Tnorm * FreqNorm);
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 

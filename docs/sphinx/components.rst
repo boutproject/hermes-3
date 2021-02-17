@@ -16,6 +16,38 @@ evolve_density
 This component evolves the species density in time, using the BOUT++
 time integration solver.
 
+The implementation is in the `EvolveDensity` class:
+
+.. doxygenstruct:: EvolveDensity
+   :members:
+
+upstream_density_feedback
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is intended for 1D simulations, where the density at `y=0` is set
+by adjusting an input source. This component uses a PI controller method
+to scale the density source up and down, to maintain the specified upstream
+density.
+
+For example:
+
+.. code-block:: ini
+
+   [h]
+   type = ..., upstream_density_feedback
+
+   density_upstream = 1e19  # Density in m^-3
+   density_controller_p = 1e-2 # Feedback controller proportional (p) parameter
+   density_controller_i = 1e-3 # Feedback controller integral (i) parameter
+
+   [Nd]
+   source = h(pi - y)  # Source shape
+
+The implementation is in the `UpstreamDensityFeedback` class:
+
+.. doxygenstruct:: UpstreamDensityFeedback
+   :members:
+
 fixed_fraction_ions
 ~~~~~~~~~~~~~~~~~~~
 
@@ -156,6 +188,37 @@ and dividing by the sum of the mass density of all species:
 
 This is set in the state as `sound_speed`, and is used for the numerical
 diffusion terms in the parallel advection.
+
+neutral_parallel_diffusion
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This adds diffusion to **all** neutral species (those with no or zero charge),
+because it needs to be calculated after the collision frequencies are known.
+It is intended mainly for 1D simulations, to provide effective parallel
+diffusion of particles, momentum and energy due to the projection of
+cross-field diffusion:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial n_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_n\partial_{||}p_n\right) \\
+   \frac{\partial p_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n p_n\partial_{||}p_n\right) + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\kappa_n \partial_{||}T_n\right) \\
+   \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_nv_{||n} \partial_{||}p_n\right) + \nabla\cdot\left(\mathbf{b}\eta_n \partial_{||}T_n\right)
+   \end{aligned}
+
+The diffusion coefficient is calculated as
+
+.. math::
+
+   D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{T_n}{A \nu}
+
+where `A` is the atomic mass number; :math:`\nu` is the collision
+frequency. The factor :math:`B / B_{pol}` is the projection of the cross-field
+direction on the parallel transport, and is the `dneut` input setting.
+
+.. doxygenstruct:: NeutralParallelDiffusion
+   :members:
+
 
 collisions
 ~~~~~~~~~~
@@ -320,6 +383,38 @@ rates calculation. The following might therefore be used
 +------------------+-------------------------------------+
 | t + e -> t+ + 2e | Tritium ionisation (Amjuel 2.1.5)   |
 +------------------+-------------------------------------+
+| h + h+ -> h+ + h | Hydrogen charge exchange            |
++------------------+-------------------------------------+
+| d + d+ -> d+ + d | Deuterium charge exchange           |
++------------------+-------------------------------------+
+| t + t+ -> t+ + t | Tritium charge exchange             |
++------------------+-------------------------------------+
+| h + d+ -> h+ + d | Mixed hydrogen isotope CX           |
++------------------+-------------------------------------+
+| d + h+ -> d+ + h |                                     |
++------------------+-------------------------------------+
+| h + t+ -> h+ + t |                                     |
++------------------+-------------------------------------+
+| t + h+ -> t+ + h |                                     |
++------------------+-------------------------------------+
+| d + t+ -> d+ + t |                                     |
++------------------+-------------------------------------+
+| t + d+ -> t+ + d |                                     |
++------------------+-------------------------------------+
+
+The code to calculate the charge exchange rates is in
+`hydrogen_charge_exchange.[ch]xx`. This implements reaction 0.1T from
+Amjuel (p38), scaled to different isotope masses and finite neutral
+particle temperatures by using the effective temperature (Amjuel p43):
+
+.. math::
+
+   T_{eff} = \frac{M}{M_1}T_1 + \frac{M}{M_2}T_2
+
+
+.. doxygenstruct:: HydrogenChargeExchange
+   :members:
+
 
 Helium
 ~~~~~~

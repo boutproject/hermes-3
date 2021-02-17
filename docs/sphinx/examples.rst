@@ -80,6 +80,69 @@ The `zero_current` component sets:
    v_{||e} =& v_{||i}
    \end{aligned}
 
+1D Scrape-off Layer (SOL)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This simulates a similar setup to the `SD1D
+<https://github.com/boutproject/SD1D/>`_ code: A 1D domain, with a
+source of heat and particles on one side, and a sheath boundary on the
+other. Ions recycle into neutrals, which charge exchange and are
+ionised.  A difference is that separate ion and electron temperatures
+are evolved here.
+
+.. figure:: figs/1d_recycling.*
+   :name: 1d_recycling
+   :alt:
+   :width: 60%
+
+   Evolution of ion and neutral pressure (blue); ion, electron and
+   neutral temperature (red), starting from flat profiles.
+
+Due to the short length-scales near the sheath, the grid is packed
+close to the target, by setting the grid spacing to be a linear
+function of index:
+
+.. code-block:: ini
+
+   [mesh]
+   dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+where `dymin` is 0.1 here, and sets the smallest grid spacing (at the
+target) as a fraction of the average grid spacing.
+
+The components are ion species `d+`, atoms `d`, electrons `e`:
+
+.. code-block:: ini
+
+   [hermes]
+   components = (d+, d, e,
+                zero_current, sheath_boundary, collisions, recycling, reactions,
+                neutral_parallel_diffusion)
+
+The electron velocity is set to the ion by specifying `zero_current`;
+A sheath boundary is included; Collisions are needed to be able to calculate
+heat conduction, as well as neutral diffusion rates; Recycling at the targets
+provides a source of atoms; `neutral_parallel_diffusion` simulates cross-field
+diffusion in a 1D system.
+
+The sheath boundary is only imposed on the upper Y boundary:
+
+.. code-block:: ini
+
+   [sheath_boundary]
+
+   lower_y = false
+   upper_y = true
+
+The reactions component is a group, which lists the reactions included:
+
+.. code-block:: ini
+
+   [reactions]
+   type = (
+           d + e -> d+ + 2e,   # Deuterium ionisation
+           d + d+ -> d+ + d,   # Charge exchange
+          )
 
 2D drift-plane
 --------------
@@ -181,7 +244,7 @@ This adds the equation
 where :math:`L_{||}` is the connection length.
 
 Blob2D-Te-Ti
-------------
+~~~~~~~~~~~~
 
 A seeded plasma filament in 2D. This version evolves both electron and
 ion temperatures. A sheath-connected closure is used for the parallel

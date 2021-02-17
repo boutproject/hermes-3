@@ -6,7 +6,7 @@
 #include "integrate.hxx"
 
 struct AmjuelReaction : public Component {
-  AmjuelReaction(std::string, Options &alloptions, Solver *) {
+  AmjuelReaction(std::string, Options& alloptions, Solver*) {
     // Get the units
     const auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);
@@ -33,7 +33,7 @@ protected:
   ///     n in m^-3
   ///     T in eV
   ///
-  /// Output in SI, units m^3/s
+  /// Output in SI, units m^3/s, or eV m^3/s for energy loss
   template <size_t rows, size_t cols>
   BoutReal evaluate(const BoutReal (&coefs)[rows][cols], BoutReal T, BoutReal n) {
 
@@ -45,7 +45,7 @@ protected:
     BoutReal logT = log(T);
     BoutReal result = 0.0;
 
-    BoutReal logT_n = 1.0;  // log(T) ** n
+    BoutReal logT_n = 1.0; // log(T) ** n
     for (size_t n = 0; n < cols; ++n) {
       BoutReal logn_m = 1.0; // log(ntilde) ** m
       for (size_t m = 0; m < rows; ++m) {
@@ -80,10 +80,11 @@ protected:
     ASSERT1(AA == get<BoutReal>(to_ion["AA"]));
 
     Field3D reaction_rate = cellAverage(
-      [&](BoutReal ne, BoutReal n1, BoutReal te) {
-        return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
-      },
-      Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
+        [&](BoutReal ne, BoutReal n1, BoutReal te) {
+          return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
+                 / FreqNorm;
+        },
+        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
     // Particles
     subtract(from_ion["density_source"], reaction_rate);
@@ -104,7 +105,7 @@ protected:
     Field3D energy_loss = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
           return ne * n1 * evaluate(radiation_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-                 / FreqNorm;
+                 / (Tnorm * FreqNorm);
         },
         Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 

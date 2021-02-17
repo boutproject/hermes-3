@@ -11,6 +11,9 @@ using bout::globals::mesh;
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver *solver) : name(name) {
   AUTO_TRACE();
 
+  // Need to take derivatives in X for cross-field diffusion terms
+  ASSERT0(mesh->xstart > 0);
+
   auto& options = alloptions[name];
 
   // Evolving variables e.g name is "h" or "h+"
@@ -303,7 +306,7 @@ void NeutralMixed::annotate(Options &state) {
   localstate["density"].attributes["normalisation"] = "inv_meters_cubed";
 }
 
-void NeutralMixed::precon(const Options &state, BoutReal gamma) {
+void NeutralMixed::precon(const Options &, BoutReal gamma) {
   if (!precondition) {
     return;
   }
