@@ -19,7 +19,6 @@ A simple model for the sheath recycling is included:
 
 Some important limitations
 
- - No charge exchange between ions and atoms
  - No recombination
  - No molecules etc.
 

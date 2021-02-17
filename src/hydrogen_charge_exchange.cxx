@@ -25,12 +25,12 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   }
 
   // Get rate coefficient, convert cm^3/s to m^3/s then normalise
-  const Field3D σv = exp(ln_sigmav) * (1e-6 * Nnorm / FreqNorm);
+  const Field3D sigmav = exp(ln_sigmav) * (1e-6 * Nnorm / FreqNorm);
 
   const Field3D Natom = get<Field3D>(atom1["density"]);
   const Field3D Nion = get<Field3D>(ion1["density"]);
 
-  const Field3D R = Natom * Nion * σv; // Rate coefficient
+  const Field3D R = Natom * Nion * sigmav; // Rate coefficient
 
   if ((&atom1 != &atom2) or (&ion1 != &ion2)) {
     // Transfer particles atom1 -> ion2, ion1 -> atom2
