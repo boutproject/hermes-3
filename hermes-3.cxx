@@ -23,7 +23,6 @@
 #include "hermes-3.hxx"
 
 #include <bout/constants.hxx>
-
 #include "include/ionisation.hxx"
 #include "include/neutral_mixed.hxx"
 #include "include/evolve_density.hxx"
@@ -46,8 +45,14 @@
 #include "include/noflow_boundary.hxx"
 #include "include/neutral_parallel_diffusion.hxx"
 #include "include/hydrogen_charge_exchange.hxx"
+#include "include/upstream_density_feedback.hxx"
 
 #include "include/loadmetric.hxx"
+
+Datafile *restart_datafile; ///< Temporary hack, to allow save/load from restarts
+Datafile *get_restart_datafile() {
+  return restart_datafile;
+}
 
 int Hermes::init(bool restarting) {
 
@@ -121,6 +126,11 @@ int Hermes::init(bool restarting) {
 
   // Tell the components if they are restarting
   options["restarting"] = restarting;
+
+  // Put pointer to restart file in global variable
+  // Note: It would probably be better to pass to components as argument,
+  // but awaiting DataFile refactoring
+  restart_datafile = &restart;
 
   TRACE("Creating components");
   

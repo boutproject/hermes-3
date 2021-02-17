@@ -16,6 +16,38 @@ evolve_density
 This component evolves the species density in time, using the BOUT++
 time integration solver.
 
+The implementation is in the `EvolveDensity` class:
+
+.. doxygenstruct:: EvolveDensity
+   :members:
+
+upstream_density_feedback
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is intended for 1D simulations, where the density at `y=0` is set
+by adjusting an input source. This component uses a PI controller method
+to scale the density source up and down, to maintain the specified upstream
+density.
+
+For example:
+
+.. code-block:: ini
+
+   [h]
+   type = ..., upstream_density_feedback
+
+   density_upstream = 1e19  # Density in m^-3
+   density_controller_p = 1e-2 # Feedback controller proportional (p) parameter
+   density_controller_i = 1e-3 # Feedback controller integral (i) parameter
+
+   [Nd]
+   source = h(pi - y)  # Source shape
+
+The implementation is in the `UpstreamDensityFeedback` class:
+
+.. doxygenstruct:: UpstreamDensityFeedback
+   :members:
+
 fixed_fraction_ions
 ~~~~~~~~~~~~~~~~~~~
 
