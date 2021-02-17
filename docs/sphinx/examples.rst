@@ -95,7 +95,7 @@ are evolved here.
    :alt:
    :width: 60%
 
-   Evolution of ion and neutral pressure (blue); ion, electron and
+   Evolution of ion and neutral density (blue); ion, electron and
    neutral temperature (red), starting from flat profiles.
 
 Due to the short length-scales near the sheath, the grid is packed
