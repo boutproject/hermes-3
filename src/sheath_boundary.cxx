@@ -345,6 +345,9 @@ void SheathBoundary::transform(Options &state) {
   set(electrons["temperature"], Te);
   set(electrons["pressure"], Pe);
 
+  // Set energy source (negative in cell next to sheath)
+  set(electrons["energy_source"], electron_energy_source);
+
   if (electrons.isSet("velocity")) {
     set(electrons["velocity"], Ve);
   }
