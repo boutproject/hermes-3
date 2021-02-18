@@ -10,6 +10,8 @@ Species density
 The density of a species can be calculated in several different ways,
 and are usually needed by other components.
 
+.. _evolve_density:
+
 evolve_density
 ~~~~~~~~~~~~~~
 
@@ -21,10 +23,12 @@ The implementation is in the `EvolveDensity` class:
 .. doxygenstruct:: EvolveDensity
    :members:
 
+.. _upstream_density_feedback:
+
 upstream_density_feedback
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This is intended for 1D simulations, where the density at `y=0` is set
+This is intended for 1D simulations, where the density at :math:`y=0` is set
 by adjusting an input source. This component uses a PI controller method
 to scale the density source up and down, to maintain the specified upstream
 density.
@@ -53,6 +57,8 @@ fixed_fraction_ions
 
 This sets the density of a species to a fraction of the electron density.
 
+.. _quasineutral:
+
 quasineutral
 ~~~~~~~~~~~~
 
@@ -64,6 +70,25 @@ makes sense to use this component for species with a non-zero charge.
 
 Species pressure and temperature
 --------------------------------
+
+.. _isothermal:
+
+isothermal
+~~~~~~~~~~
+
+Sets the temperature of a species to a fixed value
+
+.. code-block:: ini
+
+   [e]
+   type = ..., isothermal
+
+   temperature = 10   # Constant temperature [eV]
+
+.. doxygenstruct:: Isothermal
+   :members:
+
+.. _evolve_pressure:
 
 evolve_pressure
 ~~~~~~~~~~~~~~~
@@ -90,18 +115,39 @@ The implementation is in `EvolvePressure`:
 Species parallel dynamics
 -------------------------
 
+.. _evolve_momentum:
+
 evolve_momentum
 ~~~~~~~~~~~~~~~
 
 Evolves the momentum `NV<species>` in time. The evolving quantity includes the atomic
 mass number, so should be divided by `AA` to obtain the particle flux.
 
+.. _zero_current:
+
 zero_current
 ~~~~~~~~~~~~
 
 This imposes a zero-current Ohm's law, calculating a parallel
-electric field which balances the electron pressure gradient.
-This electric field is then used to calculate a force on the other species.
+electric field which balances the electron pressure gradient and other forces:
+
+.. math::
+
+   E_{||} = \left(-\nabla p_e + F\right) / n_e
+
+where :math:`F` is the `momentum_source` for the electrons.
+This electric field is then used to calculate a force on the other species:
+
+.. math::
+
+   F_z = Z n_z E_{||}
+
+which is added to the ion's `momentum_source`. 
+
+The implementation is in `ZeroCurrent`:
+
+.. doxygenstruct:: ZeroCurrent
+   :members:
 
 Neutral gas models
 ------------------
@@ -128,6 +174,8 @@ exchange) and the pressure gradient:
 At the moment there is no attempt to limit these velocities, which has
 been found necessary in UEDGE to get physical results in better
 agreement with kinetic neutral models [Discussion, T.Rognlien].
+
+.. _noflow_boundary:
 
 noflow_boundary
 ~~~~~~~~~~~~~~~
@@ -174,7 +222,14 @@ The implementation is in `NoFlowBoundary`:
 Collective quantities
 ---------------------
 
-These components combine multiple species together
+These components combine multiple species together. They are typically
+listed after all the species groups in the component list, so that all
+the species are present in the state.
+
+One of the most important is the `collisions`_ component. This sets collision
+times for all species, which are then used 
+
+.. _sound_speed:
 
 sound_speed
 ~~~~~~~~~~~
@@ -188,6 +243,8 @@ and dividing by the sum of the mass density of all species:
 
 This is set in the state as `sound_speed`, and is used for the numerical
 diffusion terms in the parallel advection.
+
+.. _neutral_parallel_diffusion:
 
 neutral_parallel_diffusion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -219,6 +276,8 @@ direction on the parallel transport, and is the `dneut` input setting.
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
 
+
+.. _collisions:
 
 collisions
 ~~~~~~~~~~
@@ -292,25 +351,69 @@ Energy exchange, heat transferred to species `a` from species `b`:
 
   The cross-section is given by
 
-  .. math::
+.. math::
      
-     \sigma = \pi \left(\frac{d_1 + d_2}{2}\right)^2
+   \sigma = \pi \left(\frac{d_1 + d_2}{2}\right)^2
 
-  where `d_1` and `d_2` are the kinetic diameters of the two species. Typical values
-  are [Wikipedia] for H2  2.89e-10m, He  2.60e-10m, Ne 2.75e-10m. 
+where :math:`d_1` and :math:`d_2` are the kinetic diameters of the two
+species. Typical values are [Wikipedia] for H2 2.89e-10m, He
+2.60e-10m, Ne 2.75e-10m.
 
-  The mean relative velocity of the two species is
+The mean relative velocity of the two species is
 
-  .. math::
+.. math::
 
-     v_{rel} = \sqrt{\frac{eT_1}{m_1} + \frac{eT_2}{m_2}}
+   v_{rel} = \sqrt{\frac{eT_1}{m_1} + \frac{eT_2}{m_2}}
 
-  and so the collision rate of species 1 on species 2 is:
+and so the collision rate of species 1 on species 2 is:
 
-  .. math::
+.. math::
 
-  \nu_{12} = v_{rel} n_2 \sigma
+   \nu_{12} = v_{rel} n_2 \sigma
 
+The implementation is in `Collisions`:
+
+.. doxygenstruct:: Collisions
+   :members:
+
+.. _thermal_force:
+
+thermal_force
+~~~~~~~~~~~~~
+
+This implements simple expressions for the thermal force. If the
+`electron_ion` option is true (which is the default), then a momentum
+source is added to all ions:
+
+.. math::
+
+   F_z = 0.71 n_z Z^2 \nabla_{||}T_e
+
+where :math:`n_z` is the density of the ions of charge :math:`Z`. There
+is an equal and opposite force on the electrons.
+
+If the `ion_ion` option is true (the default), then forces are
+calculated between light species (atomic mass < 4) and heavy species
+(atomic mass > 10).  If any combinations of ions are omitted, then a
+warning will be printed once.
+The force on the heavy ion is:
+
+.. math::
+
+   \begin{aligned}
+   F_z =& \beta \nabla_{||}T_i \\
+   \beta =& \frac{3\left(\mu + 5\sqrt{2}Z^2\left(1.1\mu^{5/2} - 0.35\mu^{3/2}\right) - 1\right)}{2.6 - 2\mu + 5.4\mu^2} \\
+   \mu =& m_z / \left(m_z + m_i\right)
+   \end{aligned}
+
+where subscripts :math:`z` refer to the heavy ion, and :math:`i`
+refers to the light ion. The force on the light ion fluid is equal and
+opposite: :math:`F_i = -F_z`.
+
+The implementation is in the `ThermalForce` class:
+
+.. doxygenstruct:: ThermalForce
+   :members:
 
 recycling
 ~~~~~~~~~
@@ -356,8 +459,8 @@ twice.
 When reactions are added, all the species involved must be included, or an exception
 should be thrown.
 
-Hydrogenic processes
-~~~~~~~~~~~~~~~~~~~~
+Hydrogen
+~~~~~~~~
 
 Multiple isotopes of hydrogen can be evolved, so to keep track of this the
 species labels `h`, `d` and `t` are all handled by the same hydrogen atomic
@@ -427,6 +530,15 @@ Helium
 | he+ + e -> he        | He+ recombination, unresolved metastables (Amjuel 2.3.13a) |
 +----------------------+------------------------------------------------------------+
 
+The implementation of these rates are in the `AmjuelHeIonisation01`
+and `AmjuelHeRecombination10` classes:
+
+.. doxygenstruct:: AmjuelHeIonisation01
+   :members:
+
+.. doxygenstruct:: AmjuelHeRecombination10
+   :members:
+
 Neon
 ~~~~
 
@@ -479,3 +591,25 @@ for the electrons.
 | ne+10 + e -> ne+9      |                                     |
 +------------------------+-------------------------------------+
 
+The implementation of these rates is in `ADASNeonIonisation` and
+`ADASNeonRecombination` template classes:
+
+.. doxygenstruct:: ADASNeonIonisation
+   :members:
+
+.. doxygenstruct:: ADASNeonRecombination
+   :members:
+
+Electromagnetic fields
+----------------------
+
+These are components which calculate the electric and/or magnetic
+fields.
+
+.. _vorticity:
+
+vorticity
+~~~~~~~~~
+
+.. doxygenstruct:: Vorticity
+   :members:

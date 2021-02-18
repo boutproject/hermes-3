@@ -27,7 +27,7 @@ The governing equations for each species are specified e.g.
 
   [d+]
   type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
-  AA = 1   # Atomic mass
+  AA = 2   # Atomic mass
   charge = 1
 
 and other components have their configuration options e.g. for reactions
