@@ -8,7 +8,9 @@
 /// the electric field. Use this electric field to calculate
 /// a force on the other species
 ///
-///   E = -∇p_e / n_e
+///   E = (-∇p_e + F) / n_e
+///
+/// where F is the momentum source for the electrons
 ///
 struct ZeroCurrent : public Component {
   ZeroCurrent(std::string, Options&, Solver*) {}
@@ -18,6 +20,7 @@ struct ZeroCurrent : public Component {
   ///   - e
   ///     - pressure
   ///     - density
+  ///     - momentum_source [optional]
   ///     Asserts that charge = -1
   ///
   /// Sets in the input

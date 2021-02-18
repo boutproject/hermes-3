@@ -106,3 +106,28 @@ TEST_F(ZeroCurrentTest, ElectronFlowVelocity) {
     ASSERT_DOUBLE_EQ(Ve[i], Vi[i]) << "Electron velocity not equal to ion velocity at " << i;
   }
 }
+
+TEST_F(ZeroCurrentTest, ElectronForceBalance) {
+  Options options;
+  ZeroCurrent component("test", options, nullptr);
+
+  options["species"]["e"]["pressure"] =1.0;
+  options["species"]["e"]["density"] = 2.0;
+  options["species"]["e"]["charge"] = -1.0;
+
+  options["species"]["e"]["momentum_source"] = 0.5;
+
+  // Should have E = momentum_source / density = 0.5 / 2.0
+
+  options["species"]["ion"]["density"] = 1.0;
+  options["species"]["ion"]["charge"] = 3.0;
+
+  component.transform(options);
+
+  // Should give ion momentum source charge * E = 3 * 0.5 / 2.0
+  Field3D F = get<Field3D>(options["species"]["ion"]["momentum_source"]);
+
+  BOUT_FOR_SERIAL(i, F.getRegion("RGN_NOBNDRY")) {
+    ASSERT_DOUBLE_EQ(F[i], 3. * 0.5 / 2.0) << "Momentum source not correct at " << i;
+  }
+}
