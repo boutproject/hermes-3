@@ -26,7 +26,7 @@ void ThermalForce::transform(Options& state) {
       }
 
       const BoutReal Z = get<BoutReal>(species["charge"]);
-      const Field3D nz = get<BoutReal>(species["density"]);
+      const Field3D nz = get<Field3D>(species["density"]);
 
       Field3D ion_force = nz * (0.71 * SQ(Z)) * Grad_Te;
 
@@ -85,7 +85,7 @@ void ThermalForce::transform(Options& state) {
           if (first_time) {
             // Print warnings the first time
             output_warn.write(
-                "ThermalForce: Not calculating thermal force between {} and {} species",
+                "ThermalForce: Not calculating thermal force between {} and {} species\n",
                 kv1->first, kv2->first);
           }
           continue;
@@ -96,22 +96,23 @@ void ThermalForce::transform(Options& state) {
 
         const BoutReal mi = get<BoutReal>((*light)["AA"]);
         const Field3D Ti = get<Field3D>((*light)["temperature"]);
-        
+
         const BoutReal mz = get<BoutReal>((*heavy)["AA"]);
         const BoutReal Z = get<BoutReal>((*heavy)["charge"]);
+        const Field3D nz = get<Field3D>((*heavy)["density"]);
 
         if (Z == 0.0) {
           continue; // Check that the charge is not zero
         }
-        
-        const BoutReal μ = mz / (mi + mz);
-        const BoutReal β =
-            3
-            * (μ + 5 * sqrt(2) * SQ(Z) * (1.1 * pow(μ, 5. / 2) - 0.35 * pow(μ, 3. / 2))
-               - 1)
-            / (2.6 - 2 * μ + 5.4 * SQ(μ));
 
-        const Field3D heavy_force = β * Grad_par(Ti);
+        const BoutReal mu = mz / (mi + mz);
+        const BoutReal beta =
+            3
+            * (mu + 5 * sqrt(2) * SQ(Z) * (1.1 * pow(mu, 5. / 2) - 0.35 * pow(mu, 3. / 2))
+               - 1)
+            / (2.6 - 2 * mu + 5.4 * SQ(mu));
+
+        const Field3D heavy_force = nz * beta * Grad_par(Ti);
 
         add((*heavy)["momentum_source"], heavy_force);
         subtract((*light)["momentum_source"], heavy_force);
