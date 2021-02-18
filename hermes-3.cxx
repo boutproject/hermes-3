@@ -46,6 +46,7 @@
 #include "include/neutral_parallel_diffusion.hxx"
 #include "include/hydrogen_charge_exchange.hxx"
 #include "include/upstream_density_feedback.hxx"
+#include "include/thermal_force.hxx"
 
 #include "include/loadmetric.hxx"
 
