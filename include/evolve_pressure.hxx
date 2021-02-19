@@ -9,6 +9,11 @@
 struct EvolvePressure : public Component {
   EvolvePressure(std::string name, Options &options, Solver *solver);
 
+  /// Inputs
+  /// - species
+  ///   - <name>
+  ///     - density
+  ///
   /// Sets
   /// - species
   ///   - <name>

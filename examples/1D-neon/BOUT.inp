@@ -15,7 +15,7 @@
 #  Does not include recombination
 
 
-nout = 200
+nout = 100
 timestep = 10
 
 MXG = 0  # No guard cells in X
@@ -57,6 +57,11 @@ Tnorm = 100
 
 [solver]
 mxstep = 100000
+
+atol = 1e-7
+rtol = 1e-5
+cvode_stability_limit_detection = true
+cvode_max_order = 1
 
 [sheath_boundary]
 
@@ -105,6 +110,9 @@ source = (powerflux*2/3 / (mesh:length_xpt))*h(mesh:y_xpt - y)  # Input power as
 [NVd+]
 
 function = 0
+
+[Td+]
+bndry_all = neumann
 
 ####################################
 
@@ -238,6 +246,9 @@ thermal_conduction = true  # in evolve_pressure
 function = `Pd+:function`  # Same as ion pressure initially
 
 source = `Pd+:source`  # Same as ion pressure source
+
+[Te]
+bndry_all = neumann
 
 ####################################
 
