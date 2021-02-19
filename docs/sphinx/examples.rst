@@ -71,7 +71,7 @@ which adds the equations:
    \frac{\partial p_e}{\partial t} =& -\nabla\cdot\left(p_e\mathbf{b}v_{||e}\right) - \frac{2}{3}p_e\nabla\cdot\left(\mathbf{b}v_{||e}\right)
    \end{aligned}
 
-The `zero_current` component sets:
+The :ref:`zero_current` component sets:
 
 .. math::
 
@@ -95,7 +95,7 @@ are evolved here.
    :alt:
    :width: 60%
 
-   Evolution of ion and neutral pressure (blue); ion, electron and
+   Evolution of ion and neutral density (blue); ion, electron and
    neutral temperature (red), starting from flat profiles.
 
 Due to the short length-scales near the sheath, the grid is packed
@@ -119,10 +119,10 @@ The components are ion species `d+`, atoms `d`, electrons `e`:
                 zero_current, sheath_boundary, collisions, recycling, reactions,
                 neutral_parallel_diffusion)
 
-The electron velocity is set to the ion by specifying `zero_current`;
+The electron velocity is set to the ion by specifying :ref:`zero_current`;
 A sheath boundary is included; Collisions are needed to be able to calculate
 heat conduction, as well as neutral diffusion rates; Recycling at the targets
-provides a source of atoms; `neutral_parallel_diffusion` simulates cross-field
+provides a source of atoms; :ref:`neutral_parallel_diffusion` simulates cross-field
 diffusion in a 1D system.
 
 The sheath boundary is only imposed on the upper Y boundary:
@@ -144,6 +144,16 @@ The reactions component is a group, which lists the reactions included:
            d + d+ -> d+ + d,   # Charge exchange
           )
 
+To run this example:
+
+.. code-block:: bash
+
+   nice -n 10 ./hermes-3 -d examples/1D-recycling
+
+This should take 5-10 minutes to run. There is a `makeplots.py` script in the
+`examples/1D-recycling` directory which will generate plots and a gif animation
+(if `ImageMagick <https://imagemagick.org/index.php>`_ is installed).
+
 2D drift-plane
 --------------
 
@@ -151,6 +161,8 @@ Simulations where the dynamics along the magnetic field is not
 included, or only included in a parameterised way as sources or
 sinks. These are useful for the study of the basic physics of plasma
 "blobs" / filaments, and tokamak edge turbulence.
+
+.. _Blob2d:
 
 Blob2d
 ~~~~~~
@@ -178,10 +190,10 @@ The electron component consists of two types:
 .. code-block:: ini
 
    [e]  # Electrons
-   type = evolve_ne, isothermal
+   type = evolve_density, isothermal
 
 
-The `evolve_ne` component type evolves the electron density `Ne`. This component
+The :ref:`evolve_density` component type evolves the electron density `Ne`. This component
 has several options, which are set in the same section e.g.
 
 .. code-block:: ini
@@ -196,7 +208,7 @@ and so solves the equation:
    \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}}
    \end{aligned}
 
-The `isothermal` component type sets the temperature to be a constant, and using
+The :ref:`isothermal` component type sets the temperature to be a constant, and using
 the density then sets the pressure. The constant temperature is also
 set in this `[e]` section:
 
@@ -214,7 +226,7 @@ so that the equation solved is
 
 where :math:`T_e` is the fixed electron temperature (5eV).
 
-The `vorticity` component uses the pressure to calculate the diamagnetic current,
+The :ref:`vorticity` component uses the pressure to calculate the diamagnetic current,
 so must come after the `e` component. This component then calculates the potential.
 Options to control the vorticity component are set in the `[vorticity]` section.
 
@@ -225,7 +237,7 @@ Options to control the vorticity component are set in the `[vorticity]` section.
    \nabla\cdot\left(\frac{1}{B^2}\nabla_\perp\phi\right) = \omega
    \end{aligned}
 
-The `sheath_closure` component uses the potential, so must come after `vorticity`.
+The `sheath_closure` component uses the potential, so must come after :ref:`vorticity`.
 Options are also set as
 
 .. code-block:: ini
@@ -282,7 +294,7 @@ using the quasineutrality of the plasma; the ion pressure (`Ph+`) is evolved.
    [h+]
    type = quasineutral, evolve_pressure
 
-The equations this solves are similar to the previous blob2d case, except
+The equations this solves are similar to the previous :ref:`Blob2d` case, except
 now there are pressure equations for both ions and electrons:
 
 .. math::

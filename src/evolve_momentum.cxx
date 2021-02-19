@@ -107,8 +107,8 @@ namespace FV {
               // Use mid-point to be consistent with boundary conditions
               flux = bndryval * vpar * vpar;
             } else {
-              // Add flux due to difference in boundary values
-              flux = s.R * vpar * sv.R + wave_speed(i, j, k) * (s.R * sv.R - bndryval * vpar);
+              // Handle pathological case of diverging flows
+              flux = bndryval * vpar * BOUTMIN(vpar, BOUTMAX(v(i, j, k), 0.0));
             }
           } else {
             

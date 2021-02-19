@@ -13,8 +13,14 @@ void ZeroCurrent::transform(Options &state) {
 
   ASSERT1(get<BoutReal>(electrons["charge"]) == -1.0);
 
-  // Force balance, E = -∇p / n
-  Field3D Epar = - Grad_par(Pe) / Ne;
+  // Force balance, E = (-∇p + F) / n
+  Field3D force_density = - Grad_par(Pe);
+
+  if (electrons.isSet("momentum_source")) {
+    // Balance other forces from e.g. collisions
+    force_density += get<Field3D>(electrons["momentum_source"]);
+  }
+  const Field3D Epar = force_density / Ne;
 
   // Current due to ions
   Field3D ion_current;

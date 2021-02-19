@@ -12,6 +12,10 @@ Quasineutral::Quasineutral(std::string name, Options &alloptions,
   charge = options["charge"].doc("Particle charge. electrons = -1");
   AA = options["AA"].doc("Particle atomic mass. Proton = 1");
 
+  // Save the density
+  bout::globals::dump.addRepeat(density, std::string("N") + name);
+  density = 0.0;
+
   ASSERT0(charge != 0.0);
 }
 
@@ -41,7 +45,8 @@ void Quasineutral::transform(Options &state) {
   Options &species = allspecies[name];
 
   // Calculate density required. Floor so that density is >= 0
-  set(species["density"], floor(rho / (-charge), 0.0));
+  density = floor(rho / (-charge), 0.0);
+  set(species["density"], density);
 
   set(species["charge"], charge);
 
