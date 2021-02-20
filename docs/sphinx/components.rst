@@ -3,6 +3,7 @@
 Components
 ==========
 
+This section describes the model components currently available. 
 
 Species density
 ---------------
@@ -37,14 +38,14 @@ For example:
 
 .. code-block:: ini
 
-   [h]
+   [d+]
    type = ..., upstream_density_feedback
 
-   density_upstream = 1e19  # Density in m^-3
-   density_controller_p = 1e-2 # Feedback controller proportional (p) parameter
-   density_controller_i = 1e-3 # Feedback controller integral (i) parameter
+   density_upstream = 1e19      # Density in m^-3
+   density_controller_p = 1e-2  # Feedback controller proportional (p) parameter
+   density_controller_i = 1e-3  # Feedback controller integral (i) parameter
 
-   [Nd]
+   [Nd+]
    source = h(pi - y)  # Source shape
 
 The implementation is in the `UpstreamDensityFeedback` class:
@@ -544,7 +545,8 @@ Neon
 
 These rates are taken from ADAS (96): SCD and PLT are used for the ionisation
 rate and radiation energy loss; ACD and PRB for the recombination rate and radiation
-energy loss. The ionisation potential is also included as a source or sink of energy
+energy loss; and CCD (89) for the charge exchange coupling to hydrogen.
+The ionisation potential is also included as a source or sink of energy
 for the electrons.
 
 +------------------------+-------------------------------------+
@@ -590,14 +592,77 @@ for the electrons.
 +------------------------+-------------------------------------+
 | ne+10 + e -> ne+9      |                                     |
 +------------------------+-------------------------------------+
+| ne+ + h -> ne + h+     | Charge exchange with hydrogen       |
++------------------------+-------------------------------------+
+| ne+2 + h -> ne+ + h+   |                                     |
++------------------------+-------------------------------------+
+| ne+3 + h -> ne+2 + h+  |                                     |
++------------------------+-------------------------------------+
+| ne+4 + h -> ne+3 + h+  |                                     |
++------------------------+-------------------------------------+
+| ne+5 + h -> ne+4 + h+  |                                     |
++------------------------+-------------------------------------+
+| ne+6 + h -> ne+5 + h+  |                                     |
++------------------------+-------------------------------------+
+| ne+7 + h -> ne+6 + h+  |                                     |
++------------------------+-------------------------------------+
+| ne+8 + h -> ne+7 + h+  |                                     |
++------------------------+-------------------------------------+
+| ne+9 + h -> ne+8 + h+  |                                     |
++------------------------+-------------------------------------+
+| ne+10 + h -> ne+9 + h+ |                                     |
++------------------------+-------------------------------------+
+| ne+ + d -> ne + d+     | Charge exchange with deuterium      |
++------------------------+-------------------------------------+
+| ne+2 + d -> ne+ + d+   |                                     |
++------------------------+-------------------------------------+
+| ne+3 + d -> ne+2 + d+  |                                     |
++------------------------+-------------------------------------+
+| ne+4 + d -> ne+3 + d+  |                                     |
++------------------------+-------------------------------------+
+| ne+5 + d -> ne+4 + d+  |                                     |
++------------------------+-------------------------------------+
+| ne+6 + d -> ne+5 + d+  |                                     |
++------------------------+-------------------------------------+
+| ne+7 + d -> ne+6 + d+  |                                     |
++------------------------+-------------------------------------+
+| ne+8 + d -> ne+7 + d+  |                                     |
++------------------------+-------------------------------------+
+| ne+9 + d -> ne+8 + d+  |                                     |
++------------------------+-------------------------------------+
+| ne+10 + d -> ne+9 + d+ |                                     |
++------------------------+-------------------------------------+
+| ne+ + t -> ne + t+     | Charge exchange with tritium        |
++------------------------+-------------------------------------+
+| ne+2 + t -> ne+ + t+   |                                     |
++------------------------+-------------------------------------+
+| ne+3 + t -> ne+2 + t+  |                                     |
++------------------------+-------------------------------------+
+| ne+4 + t -> ne+3 + t+  |                                     |
++------------------------+-------------------------------------+
+| ne+5 + t -> ne+4 + t+  |                                     |
++------------------------+-------------------------------------+
+| ne+6 + t -> ne+5 + t+  |                                     |
++------------------------+-------------------------------------+
+| ne+7 + t -> ne+6 + t+  |                                     |
++------------------------+-------------------------------------+
+| ne+8 + t -> ne+7 + t+  |                                     |
++------------------------+-------------------------------------+
+| ne+9 + t -> ne+8 + t+  |                                     |
++------------------------+-------------------------------------+
+| ne+10 + t -> ne+9 + t+ |                                     |
++------------------------+-------------------------------------+
 
-The implementation of these rates is in `ADASNeonIonisation` and
-`ADASNeonRecombination` template classes:
+The implementation of these rates is in `ADASNeonIonisation`, 
+`ADASNeonRecombination` and `ADASNeonCX` template classes:
 
 .. doxygenstruct:: ADASNeonIonisation
    :members:
 
 .. doxygenstruct:: ADASNeonRecombination
+   :members:
+
+.. doxygenstruct:: ADASNeonCX
    :members:
 
 Electromagnetic fields

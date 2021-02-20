@@ -68,13 +68,35 @@ struct OpenADAS : public Component {
   /// @param from_ion  The ion on the left of the reaction
   /// @param to_ion    The ion on the right of the reaction
   void calculate_rates(Options& electron, Options& from_ion, Options& to_ion);
-
 private:
   OpenADASRateCoefficient rate_coef;      ///< Reaction rate coefficient
   OpenADASRateCoefficient radiation_coef; ///< Energy loss (radiation) coefficient
 
   BoutReal electron_heating; ///< Heating per reaction [eV]
 
+  BoutReal Tnorm, Nnorm, FreqNorm; ///< Normalisations
+};
+
+struct OpenADASChargeExchange : public Component {
+  OpenADASChargeExchange(const Options& units, const std::string& rate_file, int level)
+      : rate_coef(std::string("json_database/") + rate_file, level) {
+    // Get the units
+    Tnorm = get<BoutReal>(units["eV"]);
+    Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
+    FreqNorm = 1. / get<BoutReal>(units["seconds"]);
+  }
+  /// Perform charge exchange
+  ///
+  /// from_A + from_B -> to_A + to_B
+  ///
+  /// from_A and to_A must have the same atomic mass
+  /// from_B and to_B must have the same atomic mass
+  /// The charge of from_A + from_B must equal the charge of to_A + to_B
+  void calculate_rates(Options& electron, Options& from_A, Options& from_B, Options& to_A,
+                       Options& to_B);
+
+private:
+  OpenADASRateCoefficient rate_coef;      ///< Reaction rate coefficient
   BoutReal Tnorm, Nnorm, FreqNorm; ///< Normalisations
 };
 

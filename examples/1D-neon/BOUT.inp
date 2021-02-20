@@ -263,13 +263,17 @@ type = (
         
         ne + e -> ne+ + 2e,   # Neon ionisation
         ne+ + e -> ne,        # Neon+ recombination
+        ne+ + d -> ne + d+,   # Neon+ charge exchange recombination
         
         ne+ + e -> ne+2 + 2e, # Neon+ ionisation
         ne+2 + e -> ne+,      # Neon+2 recombination
+        ne+2 + d -> ne+ + d+, # Neon+2 charge exchange recombination
 
         ne+2 + e -> ne+3 + 2e, # Neon+2 ionisation
         ne+3 + e -> ne+2,      # Neon+3 recombination
+        ne+3 + d -> ne+2 + d+, # Neon+3 charge exchange recombination
 
         ne+3 + e -> ne+4 + 2e, # Neon+3 ionisation
         ne+4 + e -> ne+3,      # Neon+4 recombination
+        ne+4 + d -> ne+3 + d+, # Neon+4 charge exchange recombination
        )
