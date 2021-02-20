@@ -29,7 +29,7 @@ OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename, in
   if (!json_file.good()) {
     throw BoutException("Could not read ADAS file '{}'", filename);
   }
-  
+
   nlohmann::json data;
   json_file >> data;
 
@@ -153,7 +153,7 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   Field3D energy_loss = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
         return ne * n1 * radiation_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm
-          / (Tnorm * FreqNorm);
+               / (Tnorm * FreqNorm);
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
@@ -161,4 +161,69 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   energy_loss -= (electron_heating / Tnorm) * reaction_rate;
 
   subtract(electron["energy_source"], energy_loss);
+}
+
+void OpenADASChargeExchange::calculate_rates(Options& electron, Options& from_A,
+                                             Options& from_B, Options& to_A,
+                                             Options& to_B) {
+  AUTO_TRACE();
+
+  // Check that the reaction conserves mass and charge
+  ASSERT1(get<BoutReal>(from_A["AA"]) == get<BoutReal>(to_A["AA"]));
+  ASSERT1(get<BoutReal>(from_B["AA"]) == get<BoutReal>(to_B["AA"]));
+  // ASSERT1(get<BoutReal>(from_A["charge"]) + get<BoutReal>(from_B["charge"])
+  //         == get<BoutReal>(to_A["charge"]) + get<BoutReal>(to_B["charge"]));
+
+  // Note: Using electron temperature and density,
+  // because ADAS website states that all rates are a function of Te
+  const Field3D Te = get<Field3D>(electron["temperature"]);
+  const Field3D Ne = get<Field3D>(electron["density"]);
+
+  const Field3D Na = get<Field3D>(from_A["density"]);
+  const Field3D Nb = get<Field3D>(from_B["density"]);
+
+  const Field3D reaction_rate = cellAverage(
+      [&](BoutReal na, BoutReal nb, BoutReal ne, BoutReal te) {
+        return na * nb * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
+      },
+      Ne.getRegion("RGN_NOBNDRY"))(Na, Nb, Ne, Te);
+
+  // from_A -> to_A
+  {
+    // Particles
+    subtract(from_A["density_source"], reaction_rate);
+    add(to_A["density_source"], reaction_rate);
+
+    // Momentum
+    const Field3D momentum_exchange =
+        reaction_rate * get<BoutReal>(from_A["AA"]) * get<Field3D>(from_A["velocity"]);
+
+    subtract(from_A["momentum_source"], momentum_exchange);
+    add(to_A["momentum_source"], momentum_exchange);
+
+    // Energy
+    const Field3D energy_exchange =
+        reaction_rate * (3. / 2) * get<Field3D>(from_A["temperature"]);
+    subtract(from_A["energy_source"], energy_exchange);
+    add(to_A["energy_source"], energy_exchange);
+  }
+  // from_B -> to_B
+  {
+    // Particles
+    subtract(from_B["density_source"], reaction_rate);
+    add(to_B["density_source"], reaction_rate);
+
+    // Momentum
+    const Field3D momentum_exchange =
+        reaction_rate * get<BoutReal>(from_B["AA"]) * get<Field3D>(from_B["velocity"]);
+
+    subtract(from_B["momentum_source"], momentum_exchange);
+    add(to_B["momentum_source"], momentum_exchange);
+
+    // Energy
+    const Field3D energy_exchange =
+        reaction_rate * (3. / 2) * get<Field3D>(from_B["temperature"]);
+    subtract(from_B["energy_source"], energy_exchange);
+    add(to_B["energy_source"], energy_exchange);
+  }
 }
