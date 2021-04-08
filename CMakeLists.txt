@@ -129,3 +129,19 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory
                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+
+# Tests
+
+enable_testing()
+
+function(hermes_add_integrated_test TESTNAME)
+  add_test(NAME ${TESTNAME}
+         WORKING_DIRECTORY tests/integrated/${TESTNAME}
+         COMMAND runtest)
+endfunction()
+
+hermes_add_integrated_test(1D-fluid)
+hermes_add_integrated_test(diffusion)
+hermes_add_integrated_test(evolve_density)
+hermes_add_integrated_test(neutral_mixed)
+hermes_add_integrated_test(vorticity)
