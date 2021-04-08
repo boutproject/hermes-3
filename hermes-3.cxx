@@ -21,6 +21,7 @@
 */
 
 #include "hermes-3.hxx"
+#include "revision.hxx"
 
 #include <bout/constants.hxx>
 #include "include/ionisation.hxx"
@@ -50,20 +51,15 @@
 
 #include "include/loadmetric.hxx"
 
-Datafile *restart_datafile; ///< Temporary hack, to allow save/load from restarts
-Datafile *get_restart_datafile() {
-  return restart_datafile;
-}
-
 int Hermes::init(bool restarting) {
 
   auto &options = Options::root()["hermes"];
   
-  output.write("\nGit Version of Hermes: {}\n", HERMES_VERSION);
-  options["version"] = HERMES_VERSION;
+  output.write("\nGit Version of Hermes: {:s}\n", hermes::version::revision);
+  options["revision"] = hermes::version::revision;
 
   // Save the Hermes version in the output dump files
-  dump.setAttribute("", "HERMES_REVISION", HERMES_VERSION);
+  dump.setAttribute("", "HERMES_REVISION", hermes::version::revision);
 
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
@@ -131,7 +127,7 @@ int Hermes::init(bool restarting) {
   // Put pointer to restart file in global variable
   // Note: It would probably be better to pass to components as argument,
   // but awaiting DataFile refactoring
-  restart_datafile = &restart;
+  set_restart_datafile(&restart);
 
   TRACE("Creating components");
   

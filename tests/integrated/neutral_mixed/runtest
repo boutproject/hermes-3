@@ -9,6 +9,8 @@ from boutdata.collect import collect
 from sys import stdout, exit
 import numpy as np
 
+shell("ln -s ../../../hermes-3 hermes-3")
+
 # Run the case
 s, out = launch_safe("./hermes-3", nproc=1, mthread=1, pipe=True)
 with open("run.log", "w") as f:
