@@ -21,6 +21,7 @@
 */
 
 #include "hermes-3.hxx"
+#include "revision.hxx"
 
 #include <bout/constants.hxx>
 #include "include/ionisation.hxx"
@@ -59,11 +60,11 @@ int Hermes::init(bool restarting) {
 
   auto &options = Options::root()["hermes"];
   
-  output.write("\nGit Version of Hermes: {}\n", HERMES_VERSION);
-  options["version"] = HERMES_VERSION;
+  output.write("\nGit Version of Hermes: {:s}\n", hermes::version::revision);
+  options["revision"] = hermes::version::revision;
 
   // Save the Hermes version in the output dump files
-  dump.setAttribute("", "HERMES_REVISION", HERMES_VERSION);
+  dump.setAttribute("", "HERMES_REVISION", hermes::version::revision);
 
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);

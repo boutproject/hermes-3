@@ -38,10 +38,29 @@ please cite the relevant papers.
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-Installing BOUT++
------------------
+Installing 
+----------
 
-This version works with the latest `next` branch of BOUT++
+This version works with the latest `next` branch of BOUT++.
+Either CMake or Autotools can be used to build.
+
+CMake
+~~~~~
+
+First configure BOUT++ and Hermes-3:
+
+    $ cmake . -B build
+
+That command will clone BOUT++ as a submodule, and all its dependencies.
+Then build, first compiling BOUT++ and then Hermes-3.
+
+    $ cmake --build build
+
+Autotools
+~~~~~~~~~
+
+To build with GNU autoconf and make, first install BOUT++:
+
 
     git clone -b next https://github.com/boutproject/BOUT-dev.git BOUT-next
     cd BOUT-next
@@ -61,10 +80,8 @@ or
 
     make
 
-Compiling Hermes-3
-------------------
 
-Clone the Hermes-3 repository
+Then clone the Hermes-3 repository
 
     git clone https://github.com/bendudson/hermes-3
 
