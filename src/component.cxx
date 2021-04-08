@@ -1,6 +1,16 @@
 
 #include "../include/component.hxx"
 
+Datafile *restart_datafile; ///< Temporary hack, to allow save/load from restarts
+
+Datafile *get_restart_datafile() {
+  return restart_datafile;
+}
+
+void set_restart_datafile(Datafile *file) {
+  restart_datafile = file;
+}
+
 std::unique_ptr<Component> Component::create(const std::string &type,
                                              const std::string &name,
                                              Options &alloptions,

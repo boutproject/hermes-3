@@ -35,76 +35,91 @@ message(STATUS "Git revision: ${HERMES_REVISION}")
 # BOUT++ is a dependency
 add_subdirectory(external/BOUT-dev)
 
+set(HERMES_SOURCES
+    src/component.cxx
+    src/component_scheduler.cxx
+    src/ionisation.cxx
+    src/radiation.cxx
+    src/div_ops.cxx
+    src/loadmetric.cxx
+    src/neutral_mixed.cxx
+    src/full_velocity.cxx
+    src/evolve_density.cxx
+    src/vorticity.cxx
+    src/evolve_pressure.cxx
+    src/evolve_momentum.cxx
+    src/isothermal.cxx
+    src/quasineutral.cxx
+    src/diamagnetic_drift.cxx
+    src/sheath_closure.cxx
+    src/sheath_boundary.cxx
+    src/fixed_fraction_ions.cxx
+    src/sound_speed.cxx
+    src/zero_current.cxx
+    src/collisions.cxx
+    src/anomalous_diffusion.cxx
+    src/recycling.cxx
+    src/amjuel_hyd_ionisation.cxx
+    src/amjuel_helium.cxx
+    src/adas_reaction.cxx
+    src/noflow_boundary.cxx
+    src/neutral_parallel_diffusion.cxx
+    src/hydrogen_charge_exchange.cxx
+    src/upstream_density_feedback.cxx
+    src/thermal_force.cxx
+    include/adas_reaction.hxx
+    include/adas_neon.hxx
+    include/amjuel_helium.hxx
+    include/amjuel_hyd_ionisation.hxx
+    include/amjuel_reaction.hxx
+    include/anomalous_diffusion.hxx
+    include/collisions.hxx
+    include/component.hxx
+    include/component_scheduler.hxx
+    include/diamagnetic_drift.hxx
+    include/div_ops.hxx
+    include/evolve_density.hxx
+    include/evolve_momentum.hxx
+    include/evolve_pressure.hxx
+    include/fixed_fraction_ions.hxx
+    include/full_velocity.hxx
+    include/hydrogen_charge_exchange.hxx
+    include/integrate.hxx
+    include/ionisation.hxx
+    include/loadmetric.hxx
+    include/neutral_mixed.hxx
+    include/neutral_parallel_diffusion.hxx
+    include/noflow_boundary.hxx
+    include/quasineutral.hxx
+    include/radiation.hxx
+    include/recycling.hxx
+    include/sheath_boundary.hxx
+    include/sheath_closure.hxx
+    include/sound_speed.hxx
+    include/thermal_force.hxx
+    include/upstream_density_feedback.hxx
+    include/vorticity.hxx
+    include/zero_current.hxx
+    )
+
+# Compile Hermes sources into a library, which can be used for unit tests
+add_library(hermes-3-lib ${HERMES_SOURCES})
+
+target_link_libraries(hermes-3-lib PRIVATE bout++::bout++)
+
+target_include_directories(hermes-3-lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  )
+
+# The main executable target
 add_executable(hermes-3
                hermes-3.cxx
-               src/component.cxx
-               src/component_scheduler.cxx
-               src/ionisation.cxx
-               src/radiation.cxx
-               src/div_ops.cxx
-               src/loadmetric.cxx
-               src/neutral_mixed.cxx
-               src/full_velocity.cxx
-               src/evolve_density.cxx
-               src/vorticity.cxx
-               src/evolve_pressure.cxx
-               src/evolve_momentum.cxx
-               src/isothermal.cxx
-               src/quasineutral.cxx
-               src/diamagnetic_drift.cxx
-               src/sheath_closure.cxx
-               src/sheath_boundary.cxx
-               src/fixed_fraction_ions.cxx
-               src/sound_speed.cxx
-               src/zero_current.cxx
-               src/collisions.cxx
-               src/anomalous_diffusion.cxx
-               src/recycling.cxx
-               src/amjuel_hyd_ionisation.cxx
-               src/amjuel_helium.cxx
-               src/adas_reaction.cxx
-               src/noflow_boundary.cxx
-               src/neutral_parallel_diffusion.cxx
-               src/hydrogen_charge_exchange.cxx
-               src/upstream_density_feedback.cxx
-               src/thermal_force.cxx
-               include/adas_reaction.hxx
-               include/adas_neon.hxx
-               include/amjuel_helium.hxx
-               include/amjuel_hyd_ionisation.hxx
-               include/amjuel_reaction.hxx
-               include/anomalous_diffusion.hxx
-               include/collisions.hxx
-               include/component.hxx
-               include/component_scheduler.hxx
-               include/diamagnetic_drift.hxx
-               include/div_ops.hxx
-               include/evolve_density.hxx
-               include/evolve_momentum.hxx
-               include/evolve_pressure.hxx
-               include/fixed_fraction_ions.hxx
-               include/full_velocity.hxx
-               include/hydrogen_charge_exchange.hxx
-               include/integrate.hxx
-               include/ionisation.hxx
-               include/loadmetric.hxx
-               include/neutral_mixed.hxx
-               include/neutral_parallel_diffusion.hxx
-               include/noflow_boundary.hxx
-               include/quasineutral.hxx
-               include/radiation.hxx
-               include/recycling.hxx
-               include/sheath_boundary.hxx
-               include/sheath_closure.hxx
-               include/sound_speed.hxx
-               include/thermal_force.hxx
-               include/upstream_density_feedback.hxx
-               include/vorticity.hxx
-               include/zero_current.hxx
-               ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx
-               )
+               ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
 
-target_link_libraries(hermes-3 PRIVATE bout++::bout++)
+target_link_libraries(hermes-3 PRIVATE bout++::bout++ hermes-3-lib)
+
 target_include_directories(hermes-3 PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
@@ -131,17 +146,35 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
 
 # Tests
+option(PACKAGE_TESTS "Build the tests" ON)
+if(PACKAGE_TESTS)
+  enable_testing()
 
-enable_testing()
+  # Integrated tests
+  function(hermes_add_integrated_test TESTNAME)
+    add_test(NAME ${TESTNAME}
+           WORKING_DIRECTORY tests/integrated/${TESTNAME}
+           COMMAND runtest)
+  endfunction()
 
-function(hermes_add_integrated_test TESTNAME)
-  add_test(NAME ${TESTNAME}
-         WORKING_DIRECTORY tests/integrated/${TESTNAME}
-         COMMAND runtest)
-endfunction()
+  hermes_add_integrated_test(1D-fluid)
+  hermes_add_integrated_test(diffusion)
+  hermes_add_integrated_test(evolve_density)
+  hermes_add_integrated_test(neutral_mixed)
+  hermes_add_integrated_test(vorticity)
 
-hermes_add_integrated_test(1D-fluid)
-hermes_add_integrated_test(diffusion)
-hermes_add_integrated_test(evolve_density)
-hermes_add_integrated_test(neutral_mixed)
-hermes_add_integrated_test(vorticity)
+  # Unit tests
+  option(PACKAGE_UNIT_TESTS "Build the unit tests" ON)
+  if(PACKAGE_UNIT_TESTS)
+    # Since BOUT++ includes googletest, adding it again causes errors
+    #add_subdirectory(external//googletest)
+    file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
+
+    add_executable(hermes_unit_tests
+                   tests/unit/main.cxx
+                   ${TEST_SOURCES})
+
+    add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
+    target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
+  endif()
+endif()

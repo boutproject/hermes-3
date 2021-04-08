@@ -47,14 +47,29 @@ Either CMake or Autotools can be used to build.
 CMake
 ~~~~~
 
-First configure BOUT++ and Hermes-3:
+First configure BOUT++ and Hermes-3. To use the default options and minimal
+dependencies just run:
 
     $ cmake . -B build
 
-That command will clone BOUT++ as a submodule, and all its dependencies.
-Then build, first compiling BOUT++ and then Hermes-3.
+Alternatively the CMake build can be customised, see the [BOUT++
+documentation](https://bout-dev.readthedocs.io/en/latest/user_docs/installing.html#cmake)
+or edit the compile options interactively before building:
+
+    $ ccmake . -B build
+
+During configuration
+[BOUT++](https://github.com/boutproject/BOUT-dev/) will be downloaded
+as a submodule, and all its dependencies.  Once configured, run build
+to compile BOUT++ and then Hermes-3:
 
     $ cmake --build build
+
+Then run the unit and integrated tests to check that everything is working:
+
+    $ cd build
+    $ ctest
+
 
 Autotools
 ~~~~~~~~~

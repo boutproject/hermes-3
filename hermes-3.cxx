@@ -51,11 +51,6 @@
 
 #include "include/loadmetric.hxx"
 
-Datafile *restart_datafile; ///< Temporary hack, to allow save/load from restarts
-Datafile *get_restart_datafile() {
-  return restart_datafile;
-}
-
 int Hermes::init(bool restarting) {
 
   auto &options = Options::root()["hermes"];
@@ -132,7 +127,7 @@ int Hermes::init(bool restarting) {
   // Put pointer to restart file in global variable
   // Note: It would probably be better to pass to components as argument,
   // but awaiting DataFile refactoring
-  restart_datafile = &restart;
+  set_restart_datafile(&restart);
 
   TRACE("Creating components");
   
