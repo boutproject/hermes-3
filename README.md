@@ -1,5 +1,4 @@
-Hermes-3
-========
+# Hermes-3
 
 [![License](https://img.shields.io/badge/license-GPL-blue.svg)](https://img.shields.io/badge/license-GPL-blue.svg)
 ![Build status](https://github.com/bendudson/hermes-3/workflows/Tests/badge.svg)
@@ -16,8 +15,7 @@ Author: Ben Dudson, University of York <benjamin.dudson@york.ac.uk>
 
 Released under the GPL license
 
-License
--------
+## License
 
 Full text of the license is in the file LICENSE. If you are using Hermes-3,
 please cite the relevant papers.
@@ -38,30 +36,33 @@ please cite the relevant papers.
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-Installing 
-----------
+## Installing and testing
 
-This version works with the latest `next` branch of BOUT++.
-Either CMake or Autotools can be used to build.
+This version of Hermes-3 works with the latest `next` branch of
+BOUT++.  Either CMake or Autotools can be used to build and run the tests.
 
-CMake
-~~~~~
+### CMake
 
-First configure BOUT++ and Hermes-3. To use the default options and minimal
+This is probably the most straightforward method to use now.  First
+configure BOUT++ and Hermes-3. To use the default options and minimal
 dependencies just run:
 
     $ cmake . -B build
 
-Alternatively the CMake build can be customised, see the [BOUT++
+Alternatively the CMake build can be customised: See the [BOUT++
 documentation](https://bout-dev.readthedocs.io/en/latest/user_docs/installing.html#cmake)
-or edit the compile options interactively before building:
+for examples of using `cmake` arguments, or edit the compile options
+interactively before building:
 
     $ ccmake . -B build
 
 During configuration
-[BOUT++](https://github.com/boutproject/BOUT-dev/) will be downloaded
-as a submodule, and all its dependencies.  Once configured, run build
-to compile BOUT++ and then Hermes-3:
+[BOUT++](https://github.com/boutproject/BOUT-dev/) will be
+automatically downloaded as a submodule, together with some
+dependencies (NetCDF and FFTW are assumed to be installed already,
+along with optional dependencies like SUNDIALS and PETSc if they are
+requested).  Once configured, run build to compile BOUT++ and then
+Hermes-3:
 
     $ cmake --build build
 
@@ -70,12 +71,9 @@ Then run the unit and integrated tests to check that everything is working:
     $ cd build
     $ ctest
 
+### Autotools
 
-Autotools
-~~~~~~~~~
-
-To build with GNU autoconf and make, first install BOUT++:
-
+To build and run tests with GNU autoconf and make, first install BOUT++:
 
     git clone -b next https://github.com/boutproject/BOUT-dev.git BOUT-next
     cd BOUT-next
@@ -110,17 +108,13 @@ installation
 This path should be the full path, not relative path, to avoid
 problems with compilation in subdirectories.
 
-Testing
--------
-
 To run the tests, which are run on Travis:
 
     make check BOUT_TOP=/path/to/BOUT-next
 
 This will run both unit and integrated tests.
 
-Examples
---------
+## Examples
 
 There are example inputs under the examples/ subdirectory. A simple
 example is a 2D (drift plane) simulation of a plasma blob/filament,
