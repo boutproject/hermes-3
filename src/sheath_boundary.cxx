@@ -476,6 +476,9 @@ void SheathBoundary::transform(Options &state) {
           BoutReal q =
               ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * Mi * C_i_sq)
               * nisheath * visheath;
+          if (q > 0.0) {
+            q = 0.0;
+          }
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->J[i] + coord->J[im])
@@ -483,6 +486,7 @@ void SheathBoundary::transform(Options &state) {
 
           // Divide by volume of cell to get energy loss rate (< 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          ASSERT2(power <= 0.0);
 
           energy_source[i] += power;
         }
@@ -540,10 +544,14 @@ void SheathBoundary::transform(Options &state) {
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
-          // Note: Here this is negative because visheath < 0
+          // Note: Here this is positive because visheath > 0
           BoutReal q =
               ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * C_i_sq * Mi)
               * nisheath * visheath;
+
+          if (q < 0.0) {
+            q = 0.0;
+          }
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->J[i] + coord->J[ip])
@@ -551,6 +559,8 @@ void SheathBoundary::transform(Options &state) {
 
           // Divide by volume of cell to get energy loss rate (> 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          ASSERT2(std::isfinite(power));
+          ASSERT2(power >= 0.0);
 
           energy_source[i] -= power; // Note: Sign negative because power > 0
         }
