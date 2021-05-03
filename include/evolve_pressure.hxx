@@ -43,6 +43,7 @@ private:
   bool bndry_flux;
   bool poloidal_flows;
   bool thermal_conduction;
+  bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
 
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 

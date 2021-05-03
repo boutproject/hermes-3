@@ -37,6 +37,9 @@ EvolvePressure::EvolvePressure(std::string name, Options &alloptions, Solver *so
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
 
+  p_div_v = options["p_div_v"]
+                .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
+                .withDefault<bool>(false);
   if (options["diagnose"]
           .doc("Save additional output diagnostics")
       .withDefault<bool>(false)) {
@@ -109,11 +112,20 @@ void EvolvePressure::finally(const Options &state) {
       Field3D T = get<Field3D>(species["temperature"]);
       sound_speed = sqrt(T);
     }
-    
-    ddt(P) -= FV::Div_par(P, V, sound_speed);
 
-    // Work done. This balances energetically a term in the momentum equation
-    ddt(P) -= (2. / 3) * P * Div_par(V);
+    if (p_div_v) {
+      // Use the P * Div(V) form
+      ddt(P) -= FV::Div_par(P, V, sound_speed);
+
+      // Work done. This balances energetically a term in the momentum equation
+      ddt(P) -= (2. / 3) * P * Div_par(V);
+
+    } else {
+      // Use V * Grad(P) form
+      ddt(P) -= (5. / 3) * FV::Div_par(P, V, sound_speed);
+
+      ddt(P) += (2. / 3) * V * Grad_par(P);
+    }
   }
 
   // Parallel heat conduction
