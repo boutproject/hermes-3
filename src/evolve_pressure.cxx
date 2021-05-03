@@ -121,6 +121,9 @@ void EvolvePressure::finally(const Options& state) {
 
     } else {
       // Use V * Grad(P) form
+      // Note: A mixed form has been tried (on 1D neon example)
+      //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
+      //       Caused heating of charged species near sheath like p_div_v
       ddt(P) -= (5. / 3) * FV::Div_par(P, V, sound_speed);
 
       ddt(P) += (2. / 3) * V * Grad_par(P);
