@@ -435,8 +435,8 @@ void SheathBoundary::transform(Options &state) {
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
-          const BoutReal tesheath = 0.5 * (Te[im] + Te[i]);  // electron temperature
-          const BoutReal tisheath = 0.5 * (Ti[im] + Ti[i]);  // ion temperature
+          const BoutReal tesheath = floor(0.5 * (Te[im] + Te[i]), 1e-5);  // electron temperature
+          const BoutReal tisheath = floor(0.5 * (Ti[im] + Ti[i]), 1e-5);  // ion temperature
 
           // Ion sheath heat transmission coefficient
           // Equation (22) in Tskhakaya 2005
@@ -509,8 +509,8 @@ void SheathBoundary::transform(Options &state) {
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[ip] + Ni[i]);
-          const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]);  // electron temperature
-          const BoutReal tisheath = 0.5 * (Ti[ip] + Ti[i]);  // ion temperature
+          const BoutReal tesheath = floor(0.5 * (Te[ip] + Te[i]), 1e-5);  // electron temperature
+          const BoutReal tisheath = floor(0.5 * (Ti[ip] + Ti[i]), 1e-5);  // ion temperature
 
           // Ion sheath heat transmission coefficient
           //
