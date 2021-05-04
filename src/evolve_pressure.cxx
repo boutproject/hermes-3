@@ -1,10 +1,10 @@
 
+#include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <difops.hxx>
-#include <bout/constants.hxx>
 
-#include "../include/evolve_pressure.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/evolve_pressure.hxx"
 
 using bout::globals::mesh;
 
@@ -16,30 +16,32 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 }
 } // namespace
 
-EvolvePressure::EvolvePressure(std::string name, Options &alloptions, Solver *solver) : name(name) {
+EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
+    : name(name) {
   AUTO_TRACE();
-  
+
   solver->add(P, std::string("P") + name);
 
-  T.setBoundary(std::string("T") + name);
-
   auto& options = alloptions[name];
-  
+
   bndry_flux = options["bndry_flux"]
                    .doc("Allow flows through radial boundaries")
                    .withDefault<bool>(true);
 
-  poloidal_flows = options["poloidal_flows"]
-                       .doc("Include poloidal ExB flow")
-                       .withDefault<bool>(true);
+  poloidal_flows =
+      options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
   thermal_conduction = options["thermal_conduction"]
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
 
+  p_div_v = options["p_div_v"]
+                .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
+                .withDefault<bool>(false);
+
   if (options["diagnose"]
           .doc("Save additional output diagnostics")
-      .withDefault<bool>(false)) {
+          .withDefault<bool>(false)) {
     if (thermal_conduction) {
       bout::globals::dump.addRepeat(kappa_par, std::string("kappa_par_") + name);
     }
@@ -62,31 +64,32 @@ EvolvePressure::EvolvePressure(std::string name, Options &alloptions, Solver *so
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
 }
 
-void EvolvePressure::transform(Options &state) {
+void EvolvePressure::transform(Options& state) {
   AUTO_TRACE();
 
   mesh->communicate(P);
-  
+
   auto& species = state["species"][name];
 
   // Check for low pressures, ensure that Pi >= 0
   P = floor(P, 0.0);
-  
+
   set(species["pressure"], P);
 
   // Calculate temperature
   N = get<Field3D>(species["density"]);
   T = P / floor(N, 1e-5);
-  T.applyBoundary();
+  T.applyBoundary("neumann");
+
   set(species["temperature"], T);
 }
 
-void EvolvePressure::finally(const Options &state) {
+void EvolvePressure::finally(const Options& state) {
   AUTO_TRACE();
 
   /// Get the section containing this species
   const auto& species = state["species"][name];
-  
+
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
 
@@ -99,7 +102,7 @@ void EvolvePressure::finally(const Options &state) {
 
   if (species.isSet("velocity")) {
     Field3D V = get<Field3D>(species["velocity"]);
-    
+
     // Typical wave speed used for numerical diffusion
     Field3D sound_speed;
     if (state.isSet("sound_speed")) {
@@ -108,27 +111,39 @@ void EvolvePressure::finally(const Options &state) {
       Field3D T = get<Field3D>(species["temperature"]);
       sound_speed = sqrt(T);
     }
-    
-    ddt(P) -= FV::Div_par(P, V, sound_speed);
 
-    // Work done. This balances energetically a term in the momentum equation
-    ddt(P) -= (2. / 3) * P * Div_par(V);
+    if (p_div_v) {
+      // Use the P * Div(V) form
+      ddt(P) -= FV::Div_par(P, V, sound_speed);
+
+      // Work done. This balances energetically a term in the momentum equation
+      ddt(P) -= (2. / 3) * P * Div_par(V);
+
+    } else {
+      // Use V * Grad(P) form
+      // Note: A mixed form has been tried (on 1D neon example)
+      //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
+      //       Caused heating of charged species near sheath like p_div_v
+      ddt(P) -= (5. / 3) * FV::Div_par(P, V, sound_speed);
+
+      ddt(P) += (2. / 3) * V * Grad_par(P);
+    }
   }
 
   // Parallel heat conduction
   if (thermal_conduction) {
-    
+
     // Calculate ion collision times
     const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-    
+
     // Parallel heat conduction
     // Braginskii expression for parallel conduction
     // kappa ~ n * v_th^2 * tau
     //
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
     kappa_par = 3.9 * P * tau / AA;
-    
+
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         auto i = indexAt(kappa_par, r.ind, mesh->ystart, jz);
@@ -148,13 +163,13 @@ void EvolvePressure::finally(const Options &state) {
     // is calculated and removed separately
     ddt(P) += (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T, false);
   }
-  
+
   //////////////////////
   // Other sources
 
   Sp = source;
   if (species.isSet("energy_source")) {
-    Sp += (2./3) * get<Field3D>(species["energy_source"]); // For diagnostic output
+    Sp += (2. / 3) * get<Field3D>(species["energy_source"]); // For diagnostic output
   }
   ddt(P) += Sp;
 

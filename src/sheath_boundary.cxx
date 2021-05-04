@@ -4,6 +4,7 @@
 #include "bout/mesh.hxx"
 using bout::globals::mesh;
 
+namespace {
 BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
   if (value < min)
     return min;
@@ -22,6 +23,27 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int ny = f.getNy();
   int nz = f.getNz();
   return Ind3D{(x * ny + y) * nz + z, ny, nz};
+}
+
+/// Limited free gradient of log of a quantity
+/// This ensures that the guard cell values remain positive
+/// while also ensuring that the quantity never increases
+///
+///  fm  fc | fp
+///         ^ boundary
+///
+/// exp( 2*log(fc) - log(fm) )
+///
+BoutReal limitFree(BoutReal fm, BoutReal fc) {
+  if (fm < fc) {
+    return fc; // Neumann rather than increasing into boundary
+  }
+  BoutReal fp = SQ(fc) / fm;
+  ASSERT2(std::isfinite(fp));
+
+  return fp;
+}
+
 }
 
 SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) {
@@ -246,12 +268,13 @@ void SheathBoundary::transform(Options &state) {
         auto im = i.ym();
 
         // Free gradient of log electron density and temperature
+        // Limited so that the values don't increase into the sheath
         // This ensures that the guard cell values remain positive
         // exp( 2*log(N[i]) - log(N[ip]) )
 
-        Ne[im] = SQ(Ne[i]) / Ne[ip];
-        Te[im] = SQ(Te[i]) / Te[ip];
-        Pe[im] = SQ(Pe[i]) / Pe[ip];
+        Ne[im] = limitFree(Ne[ip], Ne[i]);
+        Te[im] = limitFree(Te[ip], Te[i]);
+        Pe[im] = limitFree(Pe[ip], Pe[i]);
 
         // Free boundary potential linearly extrapolated
         phi[im] = 2 * phi[i] - phi[ip];
@@ -301,9 +324,9 @@ void SheathBoundary::transform(Options &state) {
         // This ensures that the guard cell values remain positive
         // exp( 2*log(N[i]) - log(N[ip]) )
 
-        Ne[ip] = SQ(Ne[i]) / Ne[im];
-        Te[ip] = SQ(Te[i]) / Te[im];
-        Pe[ip] = SQ(Pe[i]) / Pe[im];
+        Ne[ip] = limitFree(Ne[im], Ne[i]);
+        Te[ip] = limitFree(Te[im], Te[i]);
+        Pe[ip] = limitFree(Pe[im], Pe[i]);
 
         // Free boundary potential linearly extrapolated
         phi[ip] = 2 * phi[i] - phi[im];
@@ -405,15 +428,15 @@ void SheathBoundary::transform(Options &state) {
           // This ensures that the guard cell values remain positive
           // exp( 2*log(N[i]) - log(N[ip]) )
 
-          Ni[im] = SQ(Ni[i]) / Ni[ip];
-          Ti[im] = SQ(Ti[i]) / Ti[ip];
-          Pi[im] = SQ(Pi[i]) / Pi[ip];
+          Ni[im] = limitFree(Ni[ip], Ni[i]);
+          Ti[im] = limitFree(Ti[ip], Ti[i]);
+          Pi[im] = limitFree(Pi[ip], Pi[i]);
 
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
-          const BoutReal tesheath = 0.5 * (Te[im] + Te[i]);  // electron temperature
-          const BoutReal tisheath = 0.5 * (Ti[im] + Ti[i]);  // ion temperature
+          const BoutReal tesheath = floor(0.5 * (Te[im] + Te[i]), 1e-5);  // electron temperature
+          const BoutReal tisheath = floor(0.5 * (Ti[im] + Ti[i]), 1e-5);  // ion temperature
 
           // Ion sheath heat transmission coefficient
           // Equation (22) in Tskhakaya 2005
@@ -453,6 +476,9 @@ void SheathBoundary::transform(Options &state) {
           BoutReal q =
               ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * Mi * C_i_sq)
               * nisheath * visheath;
+          if (q > 0.0) {
+            q = 0.0;
+          }
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->J[i] + coord->J[im])
@@ -460,6 +486,7 @@ void SheathBoundary::transform(Options &state) {
 
           // Divide by volume of cell to get energy loss rate (< 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          ASSERT2(power <= 0.0);
 
           energy_source[i] += power;
         }
@@ -479,15 +506,15 @@ void SheathBoundary::transform(Options &state) {
           // This ensures that the guard cell values remain positive
           // exp( 2*log(N[i]) - log(N[ip]) )
 
-          Ni[ip] = SQ(Ni[i]) / Ni[im];
-          Ti[ip] = SQ(Ti[i]) / Ti[im];
-          Pi[ip] = SQ(Pi[i]) / Pi[im];
+          Ni[ip] = limitFree(Ni[im], Ni[i]);
+          Ti[ip] = limitFree(Ti[im], Ti[i]);
+          Pi[ip] = limitFree(Pi[im], Pi[i]);
 
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[ip] + Ni[i]);
-          const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]);  // electron temperature
-          const BoutReal tisheath = 0.5 * (Ti[ip] + Ti[i]);  // ion temperature
+          const BoutReal tesheath = floor(0.5 * (Te[ip] + Te[i]), 1e-5);  // electron temperature
+          const BoutReal tisheath = floor(0.5 * (Ti[ip] + Ti[i]), 1e-5);  // ion temperature
 
           // Ion sheath heat transmission coefficient
           //
@@ -517,10 +544,14 @@ void SheathBoundary::transform(Options &state) {
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
-          // Note: Here this is negative because visheath < 0
+          // Note: Here this is positive because visheath > 0
           BoutReal q =
               ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * C_i_sq * Mi)
               * nisheath * visheath;
+
+          if (q < 0.0) {
+            q = 0.0;
+          }
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->J[i] + coord->J[ip])
@@ -528,6 +559,8 @@ void SheathBoundary::transform(Options &state) {
 
           // Divide by volume of cell to get energy loss rate (> 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          ASSERT2(std::isfinite(power));
+          ASSERT2(power >= 0.0);
 
           energy_source[i] -= power; // Note: Sign negative because power > 0
         }
