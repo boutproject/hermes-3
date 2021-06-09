@@ -23,10 +23,8 @@ Bxy = Bpxy
 Btxy = 0
 bxcvz = 1./Rxy^2  # Curvature
 
-yn = y / (2π)
-zn = z / (2π)
-
-paralleltransform = identity
+[mesh:paralleltransform]
+type = identity
 
 [solver]
 mxstep = 10000

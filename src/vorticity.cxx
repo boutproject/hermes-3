@@ -91,7 +91,7 @@ Vorticity::Vorticity(std::string name, Options &alloptions, Solver *solver) {
     }
   }
 
-  if (Options::root()["mesh"]["paralleltransform"].as<std::string>() == "shifted") {
+  if (Options::root()["mesh"]["paralleltransform"]["type"].as<std::string>() == "shifted") {
     Field2D I;
     mesh->get(I, "sinty");
     Curlb_B.z += I * Curlb_B.x;
