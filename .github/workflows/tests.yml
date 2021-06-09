@@ -60,3 +60,59 @@ jobs:
         env:
           LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
           BOUT_CONFIGURE_OPTIONS: ${{ matrix.config.configure_options }}
+  cmake_tests:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    env:
+      OMP_NUM_THREADS: ${{ matrix.config.omp_num_threads }}
+      PYTHONPATH: ${{ github.workspace }}/tools/pylib
+      OMPI_MCA_rmaps_base_oversubscribe: yes
+      MPIRUN: mpiexec -np
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: "Default options"
+            os: ubuntu-18.04
+            configure_options: "-DPACKAGE_TESTS=OFF"
+
+    steps:
+      - name: Job information
+        run: |
+          echo Build: ${{ matrix.config.name }}, ${{ matrix.config.os }}
+          echo Configure options: ${{ matrix.config.configure_options }}
+
+      - name: Install dependencies
+        run: sudo apt update &&
+             sudo apt install -y
+                 libfftw3-dev
+                 libnetcdf-dev
+                 libnetcdf-c++4-dev
+                 netcdf-bin
+                 python3
+                 python3-pip
+                 python3-pytest
+                 python3-numpy
+                 python3-scipy
+                 openmpi-bin
+                 libopenmpi-dev
+                 liblapack-dev
+                 libparpack2-dev
+
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Install pip packages
+        run: |
+          ./.pip_install_for_travis.sh 'netcdf4~=1.5'
+          # Add the pip install location to the runner's PATH
+          echo ~/.local/bin >> $GITHUB_PATH
+      - name: Build and run tests
+        run: cmake . -B build $BOUT_CONFIGURE_OPTIONS &&
+             cmake --build build &&
+             cd build &&
+             ctest --output-on-failure --timeout 300
+        env:
+          LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
+          BOUT_CONFIGURE_OPTIONS: ${{ matrix.config.configure_options }}
