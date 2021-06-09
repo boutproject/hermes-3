@@ -12,9 +12,6 @@ Ly = 10
 
 dy = Ly / ny
 
-yn = y / (2π)
-zn = z / (2π)
-
 [solver]
 mxstep = 10000
 
