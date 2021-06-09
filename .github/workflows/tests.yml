@@ -72,9 +72,9 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - name: "Default options"
+          - name: "CMake default options"
             os: ubuntu-18.04
-            configure_options: "-DPACKAGE_TESTS=OFF"
+            configure_options: "-DPACKAGE_TESTS=OFF -DINSTALL_GTEST=ON"
 
     steps:
       - name: Job information
