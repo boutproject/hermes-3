@@ -166,8 +166,11 @@ if(HERMES_TESTS)
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)
-    # Since BOUT++ includes googletest, adding it again causes errors
-    #add_subdirectory(external//googletest)
+    if(NOT PACKAGE_TESTS)
+      # Not running BOUT++ tests
+      # Since BOUT++ includes googletest, adding it again causes errors
+      add_subdirectory(external/googletest)
+    endif()
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
 
     add_executable(hermes_unit_tests

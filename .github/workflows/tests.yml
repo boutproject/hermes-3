@@ -74,7 +74,7 @@ jobs:
         config:
           - name: "CMake default options"
             os: ubuntu-18.04
-            configure_options: "-DPACKAGE_TESTS=OFF -DINSTALL_GTEST=ON"
+            configure_options: "-DPACKAGE_TESTS=OFF"
 
     steps:
       - name: Job information
