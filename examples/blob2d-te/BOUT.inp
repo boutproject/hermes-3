@@ -23,10 +23,8 @@ Bxy = Bpxy
 Btxy = 0
 bxcvz = 1./Rxy^2  # Curvature
 
-yn = y / (2π)
-zn = z / (2π)
-
-paralleltransform = identity
+[mesh:paralleltransform]
+type = identity
 
 [solver]
 mxstep = 10000
@@ -55,7 +53,7 @@ width = 0.05
 function = 1 + height * exp(-((x-0.25)/width)^2 - ((z/(2*pi) - 0.5)/width)^2)
 
 [Pe]
-function = ne:function
+function = Ne:function
 
 [vorticity]
 

@@ -28,7 +28,7 @@ anomalous_D = 2    # Density diffusion [m^2/s]
 thermal_conduction = false  # No collision rate calculated
 
 [Nh]
-function =  1 + h(x - 0.25) * h(0.75-x) * exp(-(y-π)^2)
+function =  1 + H(x - 0.25) * H(0.75-x) * exp(-(y-π)^2)
 bndry_all = neumann
 
 [Ph]

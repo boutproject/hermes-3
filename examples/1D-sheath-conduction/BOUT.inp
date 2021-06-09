@@ -65,14 +65,14 @@ diagnose = true
 function = 1
 
 flux = 4e23  # Particles per m^2 per second input
-source = (flux/(mesh:length_xpt))*h(mesh:length_xpt - mesh:ypos)
+source = (flux/(mesh:length_xpt))*H(mesh:length_xpt - mesh:ypos)
 
 [Pi]
 function = 1
 
 powerflux = 2e7  # Input power flux in W/m^2
 
-source = (powerflux*2/3 / (mesh:length_xpt))*h(mesh:length_xpt - mesh:ypos)  # Input power as function of y
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:length_xpt - mesh:ypos)  # Input power as function of y
 
 [NVi]
 

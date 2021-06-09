@@ -90,14 +90,14 @@ recycle_multiplier = 0.99  # Recycling fraction
 function = 1
 
 flux = 4e23  # Particles per m^2 per second input
-source = (flux/(mesh:length_xpt))*h(mesh:y_xpt - y)
+source = (flux/(mesh:length_xpt))*H(mesh:y_xpt - y)
 
 [Pd+]
 function = 1
 
 powerflux = 2.5e7  # Input power flux in W/m^2
 
-source = (powerflux*2/3 / (mesh:length_xpt))*h(mesh:y_xpt - y)  # Input power as function of y
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
 
 [NVd+]
 

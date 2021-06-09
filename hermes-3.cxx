@@ -57,6 +57,7 @@ int Hermes::init(bool restarting) {
   
   output.write("\nGit Version of Hermes: {:s}\n", hermes::version::revision);
   options["revision"] = hermes::version::revision;
+  options["revision"].setConditionallyUsed();
 
   // Save the Hermes version in the output dump files
   dump.setAttribute("", "HERMES_REVISION", hermes::version::revision);
@@ -83,6 +84,7 @@ int Hermes::init(bool restarting) {
   // Put into the options tree, so quantities can be normalised
   // when creating components
   Options::root()["units"] = units;
+  Options::root()["units"].setConditionallyUsed();
 
   /////////////////////////////////////////////////////////
   // Load metric tensor from the mesh, passing length and B
@@ -123,6 +125,7 @@ int Hermes::init(bool restarting) {
 
   // Tell the components if they are restarting
   options["restarting"] = restarting;
+  options["restarting"].setConditionallyUsed();
 
   // Put pointer to restart file in global variable
   // Note: It would probably be better to pass to components as argument,

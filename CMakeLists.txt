@@ -146,8 +146,8 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
 
 # Tests
-option(PACKAGE_TESTS "Build the tests" ON)
-if(PACKAGE_TESTS)
+option(HERMES_TESTS "Build the tests" ON)
+if(HERMES_TESTS)
   enable_testing()
 
   # Integrated tests
@@ -164,10 +164,13 @@ if(PACKAGE_TESTS)
   hermes_add_integrated_test(vorticity)
 
   # Unit tests
-  option(PACKAGE_UNIT_TESTS "Build the unit tests" ON)
-  if(PACKAGE_UNIT_TESTS)
-    # Since BOUT++ includes googletest, adding it again causes errors
-    #add_subdirectory(external//googletest)
+  option(HERMES_UNIT_TESTS "Build the unit tests" ON)
+  if(HERMES_UNIT_TESTS)
+    if(NOT PACKAGE_TESTS)
+      # Not running BOUT++ tests
+      # Since BOUT++ includes googletest, adding it again causes errors
+      add_subdirectory(external/googletest)
+    endif()
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
 
     add_executable(hermes_unit_tests

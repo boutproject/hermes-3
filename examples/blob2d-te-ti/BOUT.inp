@@ -23,10 +23,8 @@ Bxy = Bpxy
 Btxy = 0
 bxcvz = 1./Rxy^2  # Curvature
 
-yn = y / (2π)
-zn = z / (2π)
-
-paralleltransform = identity
+[mesh:paralleltransform]
+type = identity
 
 [solver]
 mxstep = 10000
@@ -57,7 +55,7 @@ function = 1 + height * exp(-((x-0.25)/width)^2 - ((z/(2*pi) - 0.5)/width)^2)
 bndry_all = neumann
 
 [Pe]
-function = ne:function
+function = Ne:function
 bndry_all = neumann
 
 [h+]
@@ -72,8 +70,7 @@ poloidal_flows = false
 thermal_conduction = false
 
 [Nh+]
-function = ne:function
-bndry_all = neumann
+function = Ne:function
 
 [Ph+]
 function = `Nh+:function`

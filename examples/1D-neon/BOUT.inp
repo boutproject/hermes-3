@@ -22,7 +22,7 @@ MXG = 0  # No guard cells in X
 
 [mesh]
 nx = 1
-ny = 200   # Resolution along field-line
+ny = 400   # Resolution along field-line
 nz = 1
 
 length = 30           # Length of the domain in meters
@@ -60,8 +60,6 @@ mxstep = 100000
 
 atol = 1e-7
 rtol = 1e-5
-cvode_stability_limit_detection = true
-cvode_max_order = 1
 
 [sheath_boundary]
 
@@ -98,21 +96,18 @@ recycle_multiplier = 0.99  # Recycling fraction
 function = 1
 
 flux = 4e23  # Particles per m^2 per second input
-source = (flux/(mesh:length_xpt))*h(mesh:y_xpt - y)
+source = (flux/(mesh:length_xpt))*H(mesh:y_xpt - y)
 
 [Pd+]
 function = 1
 
 powerflux = 2.5e7  # Input power flux in W/m^2
 
-source = (powerflux*2/3 / (mesh:length_xpt))*h(mesh:y_xpt - y)  # Input power as function of y
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
 
 [NVd+]
 
 function = 0
-
-[Td+]
-bndry_all = neumann
 
 ####################################
 
@@ -246,9 +241,6 @@ thermal_conduction = true  # in evolve_pressure
 function = `Pd+:function`  # Same as ion pressure initially
 
 source = `Pd+:source`  # Same as ion pressure source
-
-[Te]
-bndry_all = neumann
 
 ####################################
 
