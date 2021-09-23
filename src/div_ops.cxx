@@ -271,12 +271,9 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D &n, const Field3D &f,
         BoutReal vD = coord->J(i, j) * (fmm - fpm) / coord->dx(i, j); // -J*df/dx
 
         BoutReal vR = 0.5 * (coord->J(i, j) + coord->J(i + 1, j)) * (fpp - fpm) /
-                      coord->dz; // J*df/dz
+                      coord->dz(i, j); // J*df/dz
         BoutReal vL = 0.5 * (coord->J(i, j) + coord->J(i - 1, j)) * (fmp - fmm) /
-                      coord->dz; // J*df/dz
-
-        // output.write("NEW: (%d,%d,%d) : (%e/%e, %e/%e)\n", i,j,k,vL,vR,
-        // vU,vD);
+                      coord->dz(i, j); // J*df/dz
 
         // 3) Calculate n on the cell faces. The sign of the
         //    velocity determines which side is used.
@@ -365,18 +362,18 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D &n, const Field3D &f,
         s.p = n(i, j, kp);
         s.pp = n(i, j, kpp);
 
-        // Upwind(s, coord->dz);
-        // XPPM(s, coord->dz);
-        // Fromm(s, coord->dz);
-        MC(s, coord->dz);
+        // Upwind(s, coord->dz(i, j));
+        // XPPM(s, coord->dz(i, j));
+        // Fromm(s, coord->dz(i, j));
+        MC(s, coord->dz(i, j));
 
         if (vU > 0.0) {
-          BoutReal flux = vU * s.R / (coord->J(i, j) * coord->dz);
+          BoutReal flux = vU * s.R / (coord->J(i, j) * coord->dz(i, j));
           result(i, j, k) += flux;
           result(i, j, kp) -= flux;
         }
         if (vD < 0.0) {
-          BoutReal flux = vD * s.L / (coord->J(i, j) * coord->dz);
+          BoutReal flux = vD * s.L / (coord->J(i, j) * coord->dz(i, j));
           result(i, j, k) -= flux;
           result(i, j, km) += flux;
         }
@@ -842,7 +839,7 @@ const Field3D Div_a_Laplace_perp_upwind(const Field3D& a, const Field3D& f) {
         // Calculate Z derivative at y boundary
         BoutReal dfdz =
             0.25 * (fc(i, j, kp) - fc(i, j, km) + fup(i, j + 1, kp) - fup(i, j + 1, km))
-            / coord->dz;
+            / coord->dz(i, j);
 
         // Y derivative
         BoutReal dfdy = 2. * (fup(i, j + 1, k) - fc(i, j, k))
@@ -858,7 +855,7 @@ const Field3D Div_a_Laplace_perp_upwind(const Field3D& a, const Field3D& f) {
         // Calculate flux between j and j-1
         dfdz = 0.25
                * (fc(i, j, kp) - fc(i, j, km) + fdown(i, j - 1, kp) - fdown(i, j - 1, km))
-               / coord->dz;
+               / coord->dz(i, j);
 
         dfdy = 2. * (fc(i, j, k) - fdown(i, j - 1, k))
                / (coord->dy(i, j) + coord->dy(i, j - 1));
@@ -889,7 +886,7 @@ const Field3D Div_a_Laplace_perp_upwind(const Field3D& a, const Field3D& f) {
 
         BoutReal gradient =
             // df/dz
-            (fc(i, j, kp) - fc(i, j, k)) / coord->dz
+            (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j)
 
             // - g_yz * df/dy / SQ(J*B)
             - coef
@@ -898,8 +895,8 @@ const Field3D Div_a_Laplace_perp_upwind(const Field3D& a, const Field3D& f) {
 
         BoutReal fout = gradient * ((gradient > 0) ? ac(i, j, kp) : ac(i, j, k));
 
-        yzresult(i, j, k) += fout / coord->dz;
-        yzresult(i, j, kp) -= fout / coord->dz;
+        yzresult(i, j, k) += fout / coord->dz(i, j);
+        yzresult(i, j, kp) -= fout / coord->dz(i, j);
       }
     }
   }
