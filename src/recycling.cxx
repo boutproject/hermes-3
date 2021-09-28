@@ -58,7 +58,7 @@ void Recycling::transform(Options& state) {
     Options& species_to = state["species"][channel.to];
     // Get the sources, so the values can be added
     Field3D density_source = species_to.isSet("density_source")
-                                 ? get<Field3D>(species_to["density_source"])
+                                 ? getNonFinal<Field3D>(species_to["density_source"])
                                  : 0.0;
 
     // Lower Y boundary

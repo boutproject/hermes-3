@@ -120,8 +120,6 @@ T getNonFinal(const Options& option) {
 template<typename T>
 T get(const Options& option, const std::string& location = "") {
 #if CHECKLEVEL >= 1
-  if (option.name() == "temperature")
-    throw BoutException("here");
   // Mark option as final, both inside the domain and the boundary
   const_cast<Options&>(option).attributes["final"] = location;
   const_cast<Options&>(option).attributes["final-domain"] = location;
@@ -129,13 +127,16 @@ T get(const Options& option, const std::string& location = "") {
   return getNonFinal<T>(option);
 }
 
+#define TOSTRING_(x) #x
+#define TOSTRING(x) TOSTRING_(x)
+
 #if CHECKLEVEL >= 1
 /// A wrapper around get<>() which captures debugging information
 ///
 /// Usage:
 ///   auto var = GET_VALUE(Field3D, option["value"]);
 #define GET_VALUE(Type, option) \
-  get<Type>(option, BOUT_CONCAT(__FILE__, __LINE__))
+  get<Type>(option, __FILE__ ":" TOSTRING(__LINE__))
 #else
 #define GET_VALUE(Type, option) \
   get<Type>(option)
@@ -168,7 +169,7 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
 /// Usage:
 ///   auto var = GET_NOBOUNDARY(Field3D, option["value"]);
 #define GET_NOBOUNDARY(Type, option) \
-  getNoBoundary<Type>(option, BOUT_CONCAT(__FILE__, __LINE__))
+  getNoBoundary<Type>(option, __FILE__ ":" TOSTRING(__LINE__))
 #else
 #define GET_NOBOUNDARY(Type, option) \
   getNoBoundary<Type>(option)
@@ -185,9 +186,16 @@ template<typename T>
 Options& set(Options& option, T value) {
   // Check that the value has not already been used
 #if CHECKLEVEL >= 1
-  if (option.hasAttribute("final") || option.hasAttribute("final-domain")) {
-    throw BoutException("Setting value of {} but it has already been used.", option.name());
+  if (option.hasAttribute("final")) {
+    throw BoutException("Setting value of {} but it has already been used in {}.",
+                        option.name(), option.attributes["final"].as<std::string>());
   }
+  if (option.hasAttribute("final-domain")) {
+    throw BoutException("Setting value of {} but it has already been used in {}.",
+                        option.name(),
+                        option.attributes["final-domain"].as<std::string>());
+  }
+
 #endif
   option.force(std::move(value));
   return option;
@@ -206,7 +214,8 @@ Options& setBoundary(Options& option, T value) {
   // Check that the value has not already been used
 #if CHECKLEVEL >= 1
   if (option.hasAttribute("final")) {
-    throw BoutException("Setting boundary of {} but it has already been used.", option.name());
+    throw BoutException("Setting boundary of {} but it has already been used in {}.",
+                        option.name(), option.attributes["final"].as<std::string>());
   }
 #endif
   option.force(std::move(value));
