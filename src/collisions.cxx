@@ -67,18 +67,20 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
     const BoutReal A1 = get<BoutReal>(species1["AA"]);
     const BoutReal A2 = get<BoutReal>(species2["AA"]);
 
-    const Field3D density1 = get<Field3D>(species1["density"]);
-    const Field3D density2 = get<Field3D>(species2["density"]);
+    const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]);
+    const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]);
 
     add(species2["collision_frequency"], nu_12 * (A1 / A2) * density1 / density2);
 
     // Momentum exchange
     if (species1.isSet("velocity") or species2.isSet("velocity")) {
 
-      const Field3D velocity1 =
-          species1.isSet("velocity") ? get<Field3D>(species1["velocity"]) : 0.0;
-      const Field3D velocity2 =
-          species2.isSet("velocity") ? get<Field3D>(species2["velocity"]) : 0.0;
+      const Field3D velocity1 = species1.isSet("velocity")
+                                    ? GET_NOBOUNDARY(Field3D, species1["velocity"])
+                                    : 0.0;
+      const Field3D velocity2 = species2.isSet("velocity")
+                                    ? GET_NOBOUNDARY(Field3D, species2["velocity"])
+                                    : 0.0;
 
       // F12 is the force on species 1 due to species 2 (normalised)
       const Field3D F12 = nu_12 * A1 * density1 * (velocity2 - velocity1);
@@ -91,8 +93,8 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
     if (species1.isSet("temperature") or species2.isSet("temperature")) {
       // Q12 is heat transferred to species2 (normalised)
 
-      const Field3D temperature1 = get<Field3D>(species1["temperature"]);
-      const Field3D temperature2 = get<Field3D>(species2["temperature"]);
+      const Field3D temperature1 = GET_NOBOUNDARY(Field3D, species1["temperature"]);
+      const Field3D temperature2 = GET_NOBOUNDARY(Field3D, species2["temperature"]);
 
       const Field3D Q12 =
           nu_12 * 3. * density1 * (A1 / (A1 + A2)) * (temperature2 - temperature1);
@@ -113,8 +115,8 @@ void Collisions::transform(Options& state) {
 
   if (allspecies.isSection("e")) {
     Options& electrons = allspecies["e"];
-    const Field3D Te = get<Field3D>(electrons["temperature"]) * Tnorm; // eV
-    const Field3D Ne = get<Field3D>(electrons["density"]) * Nnorm;     // In m^-3
+    const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]) * Tnorm; // eV
+    const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]) * Nnorm;     // In m^-3
     
     for (auto& kv : allspecies.getChildren()) {
       if (kv.first == "e") {
@@ -157,8 +159,8 @@ void Collisions::transform(Options& state) {
         if (!electron_ion)
           continue;
 
-        const Field3D Ti = get<Field3D>(species["temperature"]) * Tnorm; // eV
-        const Field3D Ni = get<Field3D>(species["density"]) * Nnorm;     // In m^-3
+        const Field3D Ti = GET_NOBOUNDARY(Field3D, species["temperature"]) * Tnorm; // eV
+        const Field3D Ni = GET_NOBOUNDARY(Field3D, species["density"]) * Nnorm;     // In m^-3
 
         const BoutReal Zi = get<BoutReal>(species["charge"]);
         const BoutReal Ai = get<BoutReal>(species["AA"]);
@@ -199,7 +201,7 @@ void Collisions::transform(Options& state) {
           continue;
 
         // Neutral density
-        Field3D Nn = get<Field3D>(species["density"]);
+        Field3D Nn = GET_NOBOUNDARY(Field3D, species["density"]);
 
         BoutReal a0 = 5e-19; // Cross-section [m^2]
 
@@ -236,11 +238,12 @@ void Collisions::transform(Options& state) {
     Options& species1 = allspecies[kv1->first];
 
     // If temperature isn't set, assume zero. in eV
-    const Field3D temperature1 = species1.isSet("temperature")
-                                     ? get<Field3D>(species1["temperature"]) * Tnorm
-                                     : 0.0;
+    const Field3D temperature1 =
+        species1.isSet("temperature")
+            ? GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm
+            : 0.0;
 
-    const Field3D density1 = get<Field3D>(species1["density"]) * Nnorm;
+    const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]) * Nnorm;
 
     const BoutReal AA1 = get<BoutReal>(species1["AA"]);
     const BoutReal mass1 = AA1 * SI::Mp; // in Kg
@@ -262,11 +265,12 @@ void Collisions::transform(Options& state) {
         // Note: Here species1 could be equal to species2
 
         // If temperature isn't set, assume zero. in eV
-        const Field3D temperature2 = species2.isSet("temperature")
-                                         ? get<Field3D>(species2["temperature"]) * Tnorm
-                                         : 0.0;
+        const Field3D temperature2 =
+            species2.isSet("temperature")
+                ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
+                : 0.0;
 
-        const Field3D density2 = get<Field3D>(species2["density"]) * Nnorm;
+        const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
 
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const BoutReal mass2 = AA2 * SI::Mp; // in Kg
@@ -315,7 +319,7 @@ void Collisions::transform(Options& state) {
 
           // Scattering of charged species 1
           // Neutral density
-          Field3D Nn = get<Field3D>(species2["density"]);
+          Field3D Nn = GET_NOBOUNDARY(Field3D, species2["density"]);
 
           BoutReal a0 = 5e-19; // Cross-section [m^2]
 
@@ -348,9 +352,11 @@ void Collisions::transform(Options& state) {
 
         // If temperature isn't set, assume zero
         const Field3D temperature2 =
-            species2.isSet("temperature") ? get<Field3D>(species2["temperature"]) : 0.0;
+            species2.isSet("temperature")
+                ? GET_NOBOUNDARY(Field3D, species2["temperature"])
+                : 0.0;
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
-        const Field3D density2 = get<Field3D>(species2["density"]) * Nnorm;
+        const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
 
         if (species2.isSet("charge")) {
           // species1 neutral, species2 charged

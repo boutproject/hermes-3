@@ -43,14 +43,16 @@ void AnomalousDiffusion::transform(Options &state) {
   Options& species = state["species"][name];
 
   // Diffusion operates on 2D (axisymmetric) profiles
-  const Field3D N = get<Field3D>(species["density"]);
+  const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
   const Field2D N2D = DC(N);
 
-  const Field3D T =
-      species.isSet("temperature") ? get<Field3D>(species["temperature"]) : 0.0;
+  const Field3D T = species.isSet("temperature")
+                        ? GET_NOBOUNDARY(Field3D, species["temperature"])
+                        : 0.0;
   const Field2D T2D = DC(T);
 
-  const Field3D V = species.isSet("velocity") ? get<Field3D>(species["velocity"]) : 0.0;
+  const Field3D V =
+      species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
   const Field2D V2D = DC(V);
   
   if (include_D) {
