@@ -25,7 +25,8 @@ void NoFlowBoundary::transform(Options& state) {
       continue; // Skip variables which are not set
     }
 
-    Field3D var = get<Field3D>(species[field]);
+    // Note: Value not final because we're going to set it
+    Field3D var = getNonFinal<Field3D>(species[field]);
     var.clearParallelSlices();
 
     if (noflow_lower_y) {
@@ -59,7 +60,7 @@ void NoFlowBoundary::transform(Options& state) {
       continue; // Skip variables which are not set
     }
 
-    Field3D var = get<Field3D>(species[field]);
+    Field3D var = getNonFinal<Field3D>(species[field]);
     var.clearParallelSlices();
 
     if (noflow_lower_y) {

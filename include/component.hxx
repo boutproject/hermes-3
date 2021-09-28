@@ -87,11 +87,14 @@ using RegisterComponent = RegisterInFactory<Component, DerivedType, ComponentFac
 /// Faster non-printing getter for Options
 /// If this fails, it will throw BoutException
 ///
+/// This version allows the value to be modified later
+/// i.e. the value returned is not the "final" value.
+///
 /// @tparam T  The type the option should be converted to
 ///
 /// @param option  The Option whose value will be returned
 template<typename T>
-T get(const Options& option) {
+T getNonFinal(const Options& option) {
   if (!option.isSet()) {
     throw BoutException("Option {:s} has no value", option.str());
   }
@@ -104,12 +107,36 @@ T get(const Options& option) {
   }
 }
 
+/// Faster non-printing getter for Options
+/// If this fails, it will throw BoutException
+///
+/// This marks the value as final. Subsequent calls
+/// to "set" this option will raise an exception.
+///
+/// @tparam T  The type the option should be converted to
+///
+/// @param option  The Option whose value will be returned
+template<typename T>
+T get(const Options& option) {
+  // Mark option as final.
+  // A better way would be to set the mutable value_used member
+  // but that is private currently.
+  const_cast<Options&>(option).attributes["final"] = true;
+
+  return getNonFinal<T>(option);
+}
+
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
+///
+/// If the value has been used then raise an exception (if CHECK >= 1)
+/// This is to prevent values being modified after use.
 ///
 /// @tparam T The type of the value to set. Usually this is inferred
 template<typename T>
 Options& set(Options& option, T value) {
+  // Check that the value has not already been used
+  ASSERT1(!option.hasAttribute("final"));
   option.force(std::move(value));
   return option;
 }

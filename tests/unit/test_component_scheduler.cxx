@@ -14,8 +14,9 @@ struct TestMultiply : public Component {
   
   void transform(Options &state) {
     // Note: Using set<>() and get<>() for quicker access, avoiding printing
+    //       getNonFinal needs to be used because we set the value afterwards
     set(state["answer"],
-        get<int>(state["answer"]) * 2);
+        getNonFinal<int>(state["answer"]) * 2);
   }
 };
 

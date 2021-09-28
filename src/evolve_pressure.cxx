@@ -77,7 +77,7 @@ void EvolvePressure::transform(Options& state) {
   set(species["pressure"], P);
 
   // Calculate temperature
-  N = get<Field3D>(species["density"]);
+  N = getNonFinal<Field3D>(species["density"]);
   T = P / floor(N, 1e-5);
   T.applyBoundary("neumann");
 
