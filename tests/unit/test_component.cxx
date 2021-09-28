@@ -54,3 +54,57 @@ TEST(ComponentTest, GetThrowsIncompatibleValue) {
   ASSERT_THROW(get<int>(option), BoutException);
 }
 
+TEST(ComponentTest, SetInteger) {
+  Options option;
+
+  set<int>(option, 3);
+
+  ASSERT_EQ(getNonFinal<int>(option), 3);
+}
+
+TEST(ComponentTest, SetAfterGetThrows) {
+  Options option;
+
+  option = 42;
+
+  ASSERT_EQ(get<int>(option), 42);
+
+  // Setting after get should fail
+  ASSERT_THROW(set<int>(option, 3), BoutException);
+}
+
+TEST(ComponentTest, SetAfterGetNonFinal) {
+  Options option;
+
+  option = 42;
+
+  ASSERT_EQ(getNonFinal<int>(option), 42);
+
+  set<int>(option, 3); // Doesn't throw
+
+  ASSERT_EQ(getNonFinal<int>(option), 3);
+}
+
+TEST(ComponentTest, SetBoundaryAfterGetThrows) {
+  Options option;
+
+  option = 42;
+
+  ASSERT_EQ(get<int>(option), 42);
+
+  // Setting after get should fail because get indicates an assumption
+  // that all values are final including boundary cells.
+  ASSERT_THROW(setBoundary<int>(option, 3), BoutException);
+}
+
+TEST(ComponentTest, SetBoundaryAfterGetNoBoundary) {
+  Options option;
+
+  option = 42;
+
+  ASSERT_EQ(getNoBoundary<int>(option), 42);
+
+  setBoundary<int>(option, 3); // ok because boundary not assumed final
+
+  ASSERT_EQ(getNonFinal<int>(option), 3);
+}

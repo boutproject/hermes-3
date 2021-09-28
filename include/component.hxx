@@ -110,21 +110,69 @@ T getNonFinal(const Options& option) {
 /// Faster non-printing getter for Options
 /// If this fails, it will throw BoutException
 ///
-/// This marks the value as final. Subsequent calls
-/// to "set" this option will raise an exception.
+/// This marks the value as final, both in the domain and the boundary.
+/// Subsequent calls to "set" this option will raise an exception.
 ///
 /// @tparam T  The type the option should be converted to
 ///
 /// @param option  The Option whose value will be returned
+/// @param location  An optional string to indicate where this value is used
 template<typename T>
-T get(const Options& option) {
-  // Mark option as final.
-  // A better way would be to set the mutable value_used member
-  // but that is private currently.
-  const_cast<Options&>(option).attributes["final"] = true;
-
+T get(const Options& option, const std::string& location = "") {
+#if CHECKLEVEL >= 1
+  if (option.name() == "temperature")
+    throw BoutException("here");
+  // Mark option as final, both inside the domain and the boundary
+  const_cast<Options&>(option).attributes["final"] = location;
+  const_cast<Options&>(option).attributes["final-domain"] = location;
+#endif
   return getNonFinal<T>(option);
 }
+
+#if CHECKLEVEL >= 1
+/// A wrapper around get<>() which captures debugging information
+///
+/// Usage:
+///   auto var = GET_VALUE(Field3D, option["value"]);
+#define GET_VALUE(Type, option) \
+  get<Type>(option, BOUT_CONCAT(__FILE__, __LINE__))
+#else
+#define GET_VALUE(Type, option) \
+  get<Type>(option)
+#endif
+
+/// Faster non-printing getter for Options
+/// If this fails, it will throw BoutException
+///
+/// This marks the value as final in the domain.
+/// The caller is assuming that the boundary values are non-final or invalid.
+/// Subsequent calls to "set" this option will raise an exception,
+/// but calls to "setBoundary" will not.
+///
+/// @tparam T  The type the option should be converted to
+///
+/// @param option  The Option whose value will be returned
+/// @param location  An optional string to indicate where this value is used
+template<typename T>
+T getNoBoundary(const Options& option, const std::string& location = "") {
+#if CHECKLEVEL >= 1
+  // Mark option as final inside the domain
+  const_cast<Options&>(option).attributes["final-domain"] = location;
+#endif
+  return getNonFinal<T>(option);
+}
+
+#if CHECKLEVEL >= 1
+/// A wrapper around get<>() which captures debugging information
+///
+/// Usage:
+///   auto var = GET_NOBOUNDARY(Field3D, option["value"]);
+#define GET_NOBOUNDARY(Type, option) \
+  getNoBoundary<Type>(option, BOUT_CONCAT(__FILE__, __LINE__))
+#else
+#define GET_NOBOUNDARY(Type, option) \
+  getNoBoundary<Type>(option)
+#endif
 
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
@@ -136,7 +184,31 @@ T get(const Options& option) {
 template<typename T>
 Options& set(Options& option, T value) {
   // Check that the value has not already been used
-  ASSERT1(!option.hasAttribute("final"));
+#if CHECKLEVEL >= 1
+  if (option.hasAttribute("final") || option.hasAttribute("final-domain")) {
+    throw BoutException("Setting value of {} but it has already been used.", option.name());
+  }
+#endif
+  option.force(std::move(value));
+  return option;
+}
+
+/// Set values in an option. This could be optimised, but
+/// currently the is_value private variable would need to be modified.
+///
+/// This version only checks that the boundary cells have not
+/// already been used by a call to get, not a call to getNoBoundary
+/// or getNonFinal.
+///
+/// @tparam T The type of the value to set. Usually this is inferred
+template<typename T>
+Options& setBoundary(Options& option, T value) {
+  // Check that the value has not already been used
+#if CHECKLEVEL >= 1
+  if (option.hasAttribute("final")) {
+    throw BoutException("Setting boundary of {} but it has already been used.", option.name());
+  }
+#endif
   option.force(std::move(value));
   return option;
 }
