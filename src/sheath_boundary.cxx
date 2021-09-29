@@ -38,8 +38,15 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
   if (fm < fc) {
     return fc; // Neumann rather than increasing into boundary
   }
+  if (fm < 1e-10) {
+    return fc; // Low / no density condition
+  }
   BoutReal fp = SQ(fc) / fm;
-  ASSERT2(std::isfinite(fp));
+#if CHECKLEVEL >= 2
+  if (!std::isfinite(fp)) {
+    throw BoutException("SheathBoundary limitFree: {}, {} -> {}", fm, fc, fp);
+  }
+#endif
 
   return fp;
 }
