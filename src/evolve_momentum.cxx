@@ -207,7 +207,8 @@ void EvolveMomentum::transform(Options &state) {
 
   set(species["momentum"], NV);
 
-  Field3D N = floor(get<Field3D>(species["density"]), 1e-5);
+  // Not using density boundary condition
+  Field3D N = floor(getNoBoundary<Field3D>(species["density"]), 1e-5);
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   V = NV / (AA * N);

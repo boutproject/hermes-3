@@ -7,9 +7,13 @@ void ZeroCurrent::transform(Options &state) {
   AUTO_TRACE();
 
   // Get the electron pressure
+  // Note: The pressure boundary can be set in sheath boundary condition
+  //       which depends on the electron velocity being set here first.
   Options& electrons = state["species"]["e"];
-  Field3D Pe = get<Field3D>(electrons["pressure"]);
-  Field3D Ne = get<Field3D>(electrons["density"]);
+  Field3D Pe = getNoBoundary<Field3D>(electrons["pressure"]);
+  Pe.applyBoundary("neumann");
+
+  Field3D Ne = getNoBoundary<Field3D>(electrons["density"]);
 
   ASSERT1(get<BoutReal>(electrons["charge"]) == -1.0);
 
@@ -37,7 +41,7 @@ void ZeroCurrent::transform(Options &state) {
       continue; // Needs both density and charge to experience a force
     }
     
-    const Field3D N = get<Field3D>(species["density"]);
+    const Field3D N = getNoBoundary<Field3D>(species["density"]);
     const BoutReal charge = get<BoutReal>(species["charge"]);
 
     add(species["momentum_source"],
@@ -46,7 +50,7 @@ void ZeroCurrent::transform(Options &state) {
     if (species.isSet("velocity")) {
       // If velocity is set, update the ion current
       
-      const Field3D V = get<Field3D>(species["velocity"]);
+      const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
       
       if (!ion_current.isAllocated()) {
         // Not yet allocated -> Set to the value

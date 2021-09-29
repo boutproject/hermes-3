@@ -7,8 +7,6 @@ MZ = 1
 
 [mesh]
 
-paralleltransform = shiftedmetric
-
 file = "tokamak.nc"
 
 [mesh:paralleltransform]

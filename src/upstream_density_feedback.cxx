@@ -6,7 +6,8 @@ using bout::globals::mesh;
 void UpstreamDensityFeedback::transform(Options& state) {
   Options& species = state["species"][name];
 
-  Field3D N = get<Field3D>(species["density"]);
+  // Doesn't need all boundaries to be set
+  Field3D N = getNoBoundary<Field3D>(species["density"]);
 
   auto time = get<BoutReal>(state["time"]);
   

@@ -45,7 +45,7 @@ ixseps2 = -1
 #  - electrons after other species, so the density can be set by quasineutrality
 #  - zero_current after thermal force, so the electric field includes the force on the electrons
 components = (d+, d, ne, ne+, ne+2, ne+3, ne+4, e,
-              thermal_force, zero_current, sheath_boundary, collisions, recycling, reactions,
+              zero_current, sheath_boundary, thermal_force, collisions, recycling, reactions,
               neutral_parallel_diffusion)
 
 loadmetric = false        # Use Rxy, Bpxy etc?

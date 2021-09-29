@@ -12,7 +12,8 @@ void ThermalForce::transform(Options& state) {
     // Electron-ion collisions
 
     Options& electrons = allspecies["e"];
-    const Field3D Te = get<Field3D>(electrons["temperature"]);
+    // Need Te boundary to take gradient
+    const Field3D Te = GET_VALUE(Field3D, electrons["temperature"]);
     const Field3D Grad_Te = Grad_par(Te);
 
     for (auto& kv : allspecies.getChildren()) {
@@ -26,7 +27,8 @@ void ThermalForce::transform(Options& state) {
       }
 
       const BoutReal Z = get<BoutReal>(species["charge"]);
-      const Field3D nz = get<Field3D>(species["density"]);
+      // Don't need density boundary
+      const Field3D nz = GET_NOBOUNDARY(Field3D, species["density"]);
 
       Field3D ion_force = nz * (0.71 * SQ(Z)) * Grad_Te;
 
@@ -95,11 +97,11 @@ void ThermalForce::transform(Options& state) {
         // This follows Stangeby, page 298 and following
 
         const BoutReal mi = get<BoutReal>((*light)["AA"]);
-        const Field3D Ti = get<Field3D>((*light)["temperature"]);
+        const Field3D Ti = GET_VALUE(Field3D, (*light)["temperature"]);
 
         const BoutReal mz = get<BoutReal>((*heavy)["AA"]);
         const BoutReal Z = get<BoutReal>((*heavy)["charge"]);
-        const Field3D nz = get<Field3D>((*heavy)["density"]);
+        const Field3D nz = GET_NOBOUNDARY(Field3D, (*heavy)["density"]);
 
         if (Z == 0.0) {
           continue; // Check that the charge is not zero

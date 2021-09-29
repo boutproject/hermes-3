@@ -50,10 +50,6 @@ function = 1
 bndry_core = dirichlet(1.0)  # Core boundary high density
 bndry_all = dirichlet(0.01)   # All other boundaries low density
 
-[Th+]
-bndry_core = dirichlet(1.0)  # Core boundary high density
-bndry_all = dirichlet(0.1)   # All other boundaries low density
-
 ################################################################
 # Neutrals
 
@@ -85,10 +81,6 @@ diagnose = true
 function = 1
 bndry_core = dirichlet(1.0)  # Core boundary high density
 bndry_all = dirichlet(0.01)   # All other boundaries low density
-
-[Te]
-bndry_core = dirichlet(1.0)  # Core boundary high density
-bndry_all = dirichlet(0.1)   # All other boundaries low density
 
 ################################################################
 

@@ -25,7 +25,8 @@ void NoFlowBoundary::transform(Options& state) {
       continue; // Skip variables which are not set
     }
 
-    Field3D var = get<Field3D>(species[field]);
+    // Note: Not assuming boundary is set because we're going to set it
+    Field3D var = GET_NOBOUNDARY(Field3D, species[field]);
     var.clearParallelSlices();
 
     if (noflow_lower_y) {
@@ -50,7 +51,8 @@ void NoFlowBoundary::transform(Options& state) {
       }
     }
 
-    set<Field3D>(species[field], var);
+    // Promise that we're only modifying the boundary
+    setBoundary<Field3D>(species[field], var);
   }
 
   // Apply zero-value boundary conditions to flows
@@ -59,7 +61,7 @@ void NoFlowBoundary::transform(Options& state) {
       continue; // Skip variables which are not set
     }
 
-    Field3D var = get<Field3D>(species[field]);
+    Field3D var = GET_NOBOUNDARY(Field3D, species[field]);
     var.clearParallelSlices();
 
     if (noflow_lower_y) {
@@ -84,6 +86,7 @@ void NoFlowBoundary::transform(Options& state) {
       }
     }
 
-    set<Field3D>(species[field], var);
+    // Promise that we're only modifying the boundary
+    setBoundary<Field3D>(species[field], var);
   }
 }

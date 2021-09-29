@@ -38,8 +38,15 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
   if (fm < fc) {
     return fc; // Neumann rather than increasing into boundary
   }
+  if (fm < 1e-10) {
+    return fc; // Low / no density condition
+  }
   BoutReal fp = SQ(fc) / fm;
-  ASSERT2(std::isfinite(fp));
+#if CHECKLEVEL >= 2
+  if (!std::isfinite(fp)) {
+    throw BoutException("SheathBoundary limitFree: {}, {} -> {}", fm, fc, fp);
+  }
+#endif
 
   return fp;
 }
@@ -82,13 +89,13 @@ void SheathBoundary::transform(Options &state) {
 
   Options& allspecies = state["species"];
   Options& electrons = allspecies["e"];
-  
+
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = get<Field3D>(electrons["density"]);
-  Field3D Te = get<Field3D>(electrons["temperature"]);
+  Field3D Ne = getNoBoundary<Field3D>(electrons["density"]);
+  Field3D Te = getNoBoundary<Field3D>(electrons["temperature"]);
   Field3D Pe =
-      electrons.isSet("pressure") ? get<Field3D>(electrons["pressure"]) : Te * Ne;
+      electrons.isSet("pressure") ? getNoBoundary<Field3D>(electrons["pressure"]) : Te * Ne;
 
   // Ratio of specific heats
   const BoutReal electron_adiabatic =
@@ -99,17 +106,17 @@ void SheathBoundary::transform(Options &state) {
       electrons.isSet("AA") ? get<BoutReal>(electrons["AA"]) : SI::Me / SI::Mp;
 
   // This is for applying boundary conditions
-  Field3D Ve = electrons.isSet("velocity") ? get<Field3D>(electrons["velocity"]) : 0.0;
-  
+  Field3D Ve = electrons.isSet("velocity") ? getNoBoundary<Field3D>(electrons["velocity"]) : 0.0;
+
   Coordinates *coord = mesh->getCoordinates();
-  
+
   //////////////////////////////////////////////////////////////////
   // Electrostatic potential
   // If phi is set, use free boundary condition
   // If phi not set, calculate assuming zero current
   Field3D phi;
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
-    phi = get<Field3D>(state["fields"]["phi"]);
+    phi = getNoBoundary<Field3D>(state["fields"]["phi"]);
   } else {
     // Calculate potential phi assuming zero current
     // Note: This is equation (22) in Tskhakaya 2005, with I = 0
@@ -129,10 +136,10 @@ void SheathBoundary::transform(Options &state) {
         continue; // Skip electrons and non-charged ions
       }
       
-      const Field3D Ni = get<Field3D>(species["density"]);
-      const Field3D Ti = get<Field3D>(species["temperature"]);
-      const BoutReal Mi = get<BoutReal>(species["AA"]);
-      const BoutReal Zi = get<BoutReal>(species["charge"]);
+      const Field3D Ni = getNoBoundary<Field3D>(species["density"]);
+      const Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
+      const BoutReal Mi = getNoBoundary<BoutReal>(species["AA"]);
+      const BoutReal Zi = getNoBoundary<BoutReal>(species["charge"]);
 
       const BoutReal adiabatic = species.isSet("adiabatic")
                                      ? get<BoutReal>(species["adiabatic"])
@@ -258,7 +265,7 @@ void SheathBoundary::transform(Options &state) {
   // Electrons
 
   Field3D electron_energy_source =
-      electrons.isSet("energy_source") ? get<Field3D>(electrons["energy_source"]) : 0.0;
+      electrons.isSet("energy_source") ? getNonFinal<Field3D>(electrons["energy_source"]) : 0.0;
 
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -364,20 +371,20 @@ void SheathBoundary::transform(Options &state) {
   }
 
   // Set electron density and temperature, now with boundary conditions
-  set(electrons["density"], Ne);
-  set(electrons["temperature"], Te);
-  set(electrons["pressure"], Pe);
+  setBoundary(electrons["density"], Ne);
+  setBoundary(electrons["temperature"], Te);
+  setBoundary(electrons["pressure"], Pe);
 
   // Set energy source (negative in cell next to sheath)
   set(electrons["energy_source"], electron_energy_source);
 
   if (electrons.isSet("velocity")) {
-    set(electrons["velocity"], Ve);
+    setBoundary(electrons["velocity"], Ve);
   }
 
   if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
     // Set the potential, including boundary conditions
-    set(state["fields"]["phi"], phi);
+    setBoundary(state["fields"]["phi"], phi);
   }
 
   //////////////////////////////////////////////////////////////////
@@ -403,19 +410,19 @@ void SheathBoundary::transform(Options &state) {
                                      : 5. / 3; // Ratio of specific heats (ideal gas)
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = get<Field3D>(species["density"]);
-    Field3D Ti = get<Field3D>(species["temperature"]);
-    Field3D Pi = species.isSet("pressure") ? get<Field3D>(species["pressure"]) : Ni * Ti;
+    Field3D Ni = getNoBoundary<Field3D>(species["density"]);
+    Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
+    Field3D Pi = species.isSet("pressure") ? getNoBoundary<Field3D>(species["pressure"]) : Ni * Ti;
 
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
-    Field3D Vi = species.isSet("velocity") ? get<Field3D>(species["velocity"]) : 0.0;
-    Field3D NVi = species.isSet("momentum") ? get<Field3D>(species["momentum"]) : Mi * Ni * Vi;
+    Field3D Vi = species.isSet("velocity") ? getNoBoundary<Field3D>(species["velocity"]) : 0.0;
+    Field3D NVi = species.isSet("momentum") ? getNoBoundary<Field3D>(species["momentum"]) : Mi * Ni * Vi;
 
-    // Energy source will be modified
+    // Energy source will be modified in the domain
     Field3D energy_source =
-        species.isSet("energy_source") ? get<Field3D>(species["energy_source"]) : 0.0;
+        species.isSet("energy_source") ? getNonFinal<Field3D>(species["energy_source"]) : 0.0;
 
     if (lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -569,16 +576,16 @@ void SheathBoundary::transform(Options &state) {
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
-    set(species["density"], Ni);
-    set(species["temperature"], Ti);
-    set(species["pressure"], Pi);
+    setBoundary(species["density"], Ni);
+    setBoundary(species["temperature"], Ti);
+    setBoundary(species["pressure"], Pi);
 
     if (species.isSet("velocity")) {
-      set(species["velocity"], Vi);
+      setBoundary(species["velocity"], Vi);
     }
 
     if (species.isSet("momentum")) {
-      set(species["momentum"], NVi);
+      setBoundary(species["momentum"], NVi);
     }
 
     // Additional loss of energy through sheath
