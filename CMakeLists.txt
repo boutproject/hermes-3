@@ -170,6 +170,7 @@ if(HERMES_TESTS)
     if(NOT PACKAGE_TESTS)
       # Not running BOUT++ tests
       # Since BOUT++ includes googletest, adding it again causes errors
+      set(CMAKE_CXX_STANDARD 14) # Needed to compile GoogleTest on Darwin
       add_subdirectory(external/googletest)
     endif()
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
