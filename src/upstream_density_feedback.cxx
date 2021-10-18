@@ -49,7 +49,7 @@ void UpstreamDensityFeedback::transform(Options& state) {
   
   // Broadcast the value of source from processor 0
   MPI_Bcast(&source_multiplier, 1, MPI_DOUBLE, 0, BoutComm::get());
-  ASSERT2(finite(source_multiplier));
+  ASSERT2(std::isfinite(source_multiplier));
 
   // Scale the source and add to the species density source
   add(species["density_source"], source_multiplier * density_source_shape);

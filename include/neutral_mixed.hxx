@@ -20,7 +20,7 @@ struct NeutralMixed : public Component {
   NeutralMixed(const std::string& name, Options& options, Solver *solver);
   
   /// Modify the given simulation state
-  void transform(Options &state);
+  void transform(Options &state) override;
   
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)

@@ -21,6 +21,8 @@ void set_restart_datafile(Datafile *file);
 ///   (std::string name, Options &options, Solver *solver)
 /// 
 struct Component {
+  virtual ~Component() {}
+
   /// Modify the given simulation state
   /// All components must implement this function
   virtual void transform(Options &state) = 0;

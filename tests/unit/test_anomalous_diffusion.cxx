@@ -85,8 +85,8 @@ TEST_F(AnomalousDiffusionTest, ParticleDiffusion) {
   Field3D source = get<Field3D>(state["species"]["h"]["density_source"]);
   BoutReal integral = 0.0;
   BOUT_FOR_SERIAL(i, source.getRegion("RGN_NOBNDRY")) {
-    ASSERT_TRUE(finite(dV[i])) << "Volume element not finite at " << i.x() << ", " << i.y() << ", " << i.z();
-    ASSERT_TRUE(finite(source[i])) << "Density source not finite at " << i.x() << ", " << i.y() << ", " << i.z();
+    ASSERT_TRUE(std::isfinite(dV[i])) << "Volume element not finite at " << i.x() << ", " << i.y() << ", " << i.z();
+    ASSERT_TRUE(std::isfinite(source[i])) << "Density source not finite at " << i.x() << ", " << i.y() << ", " << i.z();
     integral += source[i] * dV[i];
   }
   ASSERT_LT(abs(integral), 1e-3) << "Integral of density source should be close to zero";
