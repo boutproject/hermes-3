@@ -33,6 +33,7 @@ endif()
 message(STATUS "Git revision: ${HERMES_REVISION}")
 
 # BOUT++ is a dependency
+set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
 add_subdirectory(external/BOUT-dev)
 
 set(HERMES_SOURCES
@@ -169,6 +170,7 @@ if(HERMES_TESTS)
     if(NOT PACKAGE_TESTS)
       # Not running BOUT++ tests
       # Since BOUT++ includes googletest, adding it again causes errors
+      set(CMAKE_CXX_STANDARD 14) # Needed to compile GoogleTest on Darwin
       add_subdirectory(external/googletest)
     endif()
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)

@@ -4,6 +4,7 @@
 
 #include "adas_reaction.hxx"
 
+#include <array>
 #include <initializer_list>
 
 /// Ionisation energies in eV
