@@ -5,4 +5,4 @@ BOUT.log.*
 BOUT.settings
 *.a
 *~
-
+.DS_Store
