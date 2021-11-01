@@ -30,6 +30,7 @@
 #include "include/isothermal.hxx"
 #include "include/sheath_closure.hxx"
 #include "include/sheath_boundary.hxx"
+#include "include/sheath_boundary_simple.hxx"
 #include "include/vorticity.hxx"
 #include "include/fixed_fraction_ions.hxx"
 #include "include/evolve_pressure.hxx"

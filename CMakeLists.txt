@@ -54,6 +54,7 @@ set(HERMES_SOURCES
     src/diamagnetic_drift.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
+    src/sheath_boundary_simple.cxx
     src/fixed_fraction_ions.cxx
     src/sound_speed.cxx
     src/zero_current.cxx
@@ -95,6 +96,7 @@ set(HERMES_SOURCES
     include/radiation.hxx
     include/recycling.hxx
     include/sheath_boundary.hxx
+    include/sheath_boundary_simple.hxx
     include/sheath_closure.hxx
     include/sound_speed.hxx
     include/thermal_force.hxx
