@@ -3,6 +3,7 @@
 #include <derivs.hxx>
 #include <difops.hxx>
 #include <bout/constants.hxx>
+#include <initialprofiles.hxx>
 
 #include "../include/evolve_density.hxx"
 #include "../include/div_ops.hxx"
@@ -11,9 +12,6 @@ using bout::globals::mesh;
 
 EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solver) : name(name) {
   AUTO_TRACE();
-  
-  // Evolve the density in time
-  solver->add(N, std::string("N") + name);
 
   auto& options = alloptions[name];
 
@@ -34,6 +32,27 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
                            .withDefault<bool>(false);
   
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault<bool>(false);
+ 
+  evolve_log = options["evolve_log"].doc("Evolve the logarithm of density?").withDefault<bool>(false);
+
+  if (evolve_log) {
+    // Evolve logarithm of density
+    solver->add(logN, std::string("logN") + name);
+    // Save the density to the restart file
+    // so the simulation can be restarted evolving density
+    get_restart_datafile()->addOnce(N, std::string("N") + name);
+    // Save density to output files
+    bout::globals::dump.addRepeat(N, std::string("N") + name);
+
+    if (!alloptions["hermes"]["restarting"]) {
+      // Set logN from N input options
+      initial_profile(std::string("N") + name, N);
+      logN = log(N);
+    }
+  } else {
+    // Evolve the density in time
+    solver->add(N, std::string("N") + name);
+  }
 
   // Charge and mass, default to electron
   charge = options["charge"].doc("Particle charge. electrons = -1").withDefault(-1.0);
@@ -59,6 +78,12 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
 
 void EvolveDensity::transform(Options &state) {
   AUTO_TRACE();
+
+  if (evolve_log) {
+    // Evolving logN, but most calculations use N
+    N = exp(logN);
+  }
+
   mesh->communicate(N);
   
   auto& species = state["species"][name];
@@ -133,4 +158,8 @@ void EvolveDensity::finally(const Options &state) {
 #if CHECK > 1
   bout::checkFinite(ddt(N), std::string("ddt N") + name, "RGN_NOBNDRY");
 #endif
+
+  if (evolve_log) {
+    ddt(logN) = ddt(N) / N;
+  }
 }

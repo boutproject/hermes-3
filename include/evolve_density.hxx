@@ -40,12 +40,15 @@ private:
   
   Field3D N;            ///< Species density (normalised, evolving)
 
-  bool bndry_flux;      // Allow flows through boundaries?
-  bool poloidal_flows;  // Include ExB flow in Y direction?
+  bool bndry_flux;      ///< Allow flows through boundaries?
+  bool poloidal_flows;  ///< Include ExB flow in Y direction?
 
-  bool low_n_diffuse;   // Parallel diffusion at low density
-  bool low_n_diffuse_perp;  // Perpendicular diffusion at low density
-  bool hyper_z;  // Hyper-diffusion in Z
+  bool low_n_diffuse;   ///< Parallel diffusion at low density
+  bool low_n_diffuse_perp;  ///< Perpendicular diffusion at low density
+  bool hyper_z;    ///< Hyper-diffusion in Z
+
+  bool evolve_log; ///< Evolve logarithm of density?
+  Field3D logN;    ///< Logarithm of density (if evolving)
 
   Field3D source; ///< External input source
   Field3D Sn; ///< Total density source
