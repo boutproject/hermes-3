@@ -52,3 +52,14 @@ the directory containing the BOUT.dmp.* output data files as the argument:
 $ python3 blob_velocity.py .
 ```
 which should produce a plot and output pickle files.
+
+Blob size scan
+--------------
+
+The `blob_size_scan.py` script generates inputs for a range of blob sizes,
+runs the simulations, and analyses the output to produce a plot of blob
+velocity against blob size. There are a number of options; run
+```
+$ python3 blob_size_scan.py --help
+```
+to see a list of the options.
