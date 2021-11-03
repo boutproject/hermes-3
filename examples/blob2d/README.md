@@ -43,3 +43,12 @@ Options are also set as
 connection_length = 10 # meters
 ```
 
+Analysis
+--------
+
+To plot the blob velocity over time, run the blob_velocity python script, giving
+the directory containing the BOUT.dmp.* output data files as the argument:
+```
+$ python3 blob_velocity.py .
+```
+which should produce a plot and output pickle files.
