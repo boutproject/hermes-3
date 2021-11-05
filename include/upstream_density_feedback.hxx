@@ -41,6 +41,15 @@ struct UpstreamDensityFeedback : public Component {
             .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
             .withDefault(Field3D(0.0))
         / (Nnorm * FreqNorm);
+
+    if (options["diagnose"]
+        .doc("Output additional diagnostics?")
+        .withDefault<bool>(false)) {
+      bout::globals::dump.addOnce(density_source_shape,
+                                  std::string("density_source_shape_") + name);
+      bout::globals::dump.addRepeat(source_multiplier,
+                                    std::string("density_source_multiplier_") + name);
+    }
   }
 
   /// Inputs
@@ -70,6 +79,8 @@ private:
   BoutReal density_error_last{0.0};
 
   Field3D density_source_shape; ///< This shape source is scaled up and down
+
+  BoutReal source_multiplier; ///< Factor to multiply source
 };
 
 namespace {
