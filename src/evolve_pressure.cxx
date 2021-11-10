@@ -38,6 +38,9 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       // Set logN from N input options
       initial_profile(std::string("P") + name, P);
       logP = log(P);
+    } else {
+      // Ignore these settings
+      Options::root()[std::string("P") + name].setConditionallyUsed();
     }
   } else {
     // Evolve the density in time

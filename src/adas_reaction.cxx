@@ -20,6 +20,14 @@
 #include <fstream>
 #include <iterator>
 
+namespace {
+  BoutReal floor(BoutReal value, BoutReal min) {
+    if (value < min)
+      return min;
+    return value;
+  }
+}
+
 OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename, int level) {
   AUTO_TRACE();
 
@@ -130,7 +138,9 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
 
   Field3D reaction_rate = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
-        return ne * n1 * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
+        // Note: densities can be (slightly) negative
+        return floor(ne, 0.0) * floor(n1, 0.0) *
+          rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
@@ -152,8 +162,9 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   // Electron energy loss (radiation, ionisation potential)
   Field3D energy_loss = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
-        return ne * n1 * radiation_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm
-               / (Tnorm * FreqNorm);
+        return floor(ne, 0.0) * floor(n1, 0.0) *
+          radiation_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm
+          / (Tnorm * FreqNorm);
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 

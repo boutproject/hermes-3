@@ -294,8 +294,9 @@ void SheathBoundary::transform(Options &state) {
         const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / tesheath;
 
         // Electron velocity into sheath (< 0)
-        const BoutReal vesheath =
-            -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
+        const BoutReal vesheath = (tesheath < 1e-10) ?
+          0.0 :
+          -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
 
         Ve[im] = 2 * vesheath - Ve[i];
 
@@ -346,8 +347,9 @@ void SheathBoundary::transform(Options &state) {
         const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / tesheath;
 
         // Electron velocity into sheath (> 0)
-        const BoutReal vesheath =
-            sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
+        const BoutReal vesheath = (tesheath < 1e-10) ?
+          0.0 :
+          sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
 
         Ve[ip] = 2 * vesheath - Ve[i];
 
