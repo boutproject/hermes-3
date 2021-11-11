@@ -46,6 +46,9 @@ private:
   bool thermal_conduction;
   bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
 
+  bool evolve_log; ///< Evolve logarithm of P?
+  Field3D logP;    ///< Natural logarithm of P
+
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 
   Field3D source; ///< External pressure source

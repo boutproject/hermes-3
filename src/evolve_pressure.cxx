@@ -2,6 +2,7 @@
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <difops.hxx>
+#include <initialprofiles.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
@@ -20,9 +21,31 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     : name(name) {
   AUTO_TRACE();
 
-  solver->add(P, std::string("P") + name);
-
   auto& options = alloptions[name];
+
+  evolve_log = options["evolve_log"].doc("Evolve the logarithmof pressure?").withDefault<bool>(false);
+
+  if (evolve_log) {
+    // Evolve logarithm of density
+    solver->add(logP, std::string("logP") + name);
+    // Save the density to the restart file
+    // so the simulation can be restarted evolving density
+    get_restart_datafile()->addOnce(P, std::string("P") + name);
+    // Save density to output files
+    bout::globals::dump.addRepeat(P, std::string("P") + name);
+
+    if (!alloptions["hermes"]["restarting"]) {
+      // Set logN from N input options
+      initial_profile(std::string("P") + name, P);
+      logP = log(P);
+    } else {
+      // Ignore these settings
+      Options::root()[std::string("P") + name].setConditionallyUsed();
+    }
+  } else {
+    // Evolve the density in time
+    solver->add(P, std::string("P") + name);
+  }
 
   bndry_flux = options["bndry_flux"]
                    .doc("Allow flows through radial boundaries")
@@ -67,12 +90,17 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 void EvolvePressure::transform(Options& state) {
   AUTO_TRACE();
 
+  if (evolve_log) {
+    // Evolving logP, but most calculations use P
+    P = exp(logP);
+  } else {
+    // Check for low pressures, ensure that Pi >= 0
+    P = floor(P, 0.0);
+  }
+
   mesh->communicate(P);
 
   auto& species = state["species"][name];
-
-  // Check for low pressures, ensure that Pi >= 0
-  P = floor(P, 0.0);
 
   set(species["pressure"], P);
 
@@ -177,4 +205,8 @@ void EvolvePressure::finally(const Options& state) {
 #if CHECK > 1
   bout::checkFinite(ddt(P), std::string("ddt P") + name, "RGN_NOBNDRY");
 #endif
+
+  if (evolve_log) {
+    ddt(logP) = ddt(P) / P;
+  }
 }

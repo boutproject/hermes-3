@@ -70,7 +70,11 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
     const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]);
     const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]);
 
-    add(species2["collision_frequency"], nu_12 * (A1 / A2) * density1 / density2);
+    const Field3D nu = filledFrom(nu_12, [&](auto& i) {
+      return nu_12[i] * (A1 / A2) * density1[i] / floor(density2[i], 1e-5);
+    });
+
+    add(species2["collision_frequency"], nu);
 
     // Momentum exchange
     if (species1.isSet("velocity") or species2.isSet("velocity")) {
