@@ -42,11 +42,13 @@ ixseps2 = -1
 
 [hermes]
 # Notes:
-#  - electrons after other species, so the density can be set by quasineutrality
-#  - zero_current after thermal force, so the electric field includes the force on the electrons
+#  - electrons after other species, so the density can be set by quasineutrality,
+#    and their parallel flow using zero-current condition
+#  - electron_force_balance after thermal force and collisions, so the electric field
+#    includes the force on the electrons
 components = (d+, d, ne, ne+, ne+2, ne+3, ne+4, e,
-              zero_current, sheath_boundary, thermal_force, collisions, recycling, reactions,
-              neutral_parallel_diffusion)
+              sheath_boundary, thermal_force, collisions, recycling, reactions,
+              electron_force_balance, neutral_parallel_diffusion)
 
 loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
@@ -227,7 +229,7 @@ function = 1e-7
 ####################################
 
 [e] # Electrons
-type = quasineutral, evolve_pressure, noflow_boundary
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
 
 noflow_upper_y = false
 
