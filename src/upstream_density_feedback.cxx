@@ -10,8 +10,7 @@ void UpstreamDensityFeedback::transform(Options& state) {
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
   auto time = get<BoutReal>(state["time"]);
-  
-  BoutReal source_multiplier; ///< Factor to multiply source
+
   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
     int jz = 0;
     BoutReal error = density_upstream - N(r.ind, mesh->ystart, jz);
@@ -33,7 +32,7 @@ void UpstreamDensityFeedback::transform(Options& state) {
       // Limit density_error_integral to be >= 0
       density_error_integral = 0.0;
     }
-    
+
     // Calculate source from combination of error and integral
     source_multiplier = density_controller_p * error +
       density_controller_i * density_error_integral;
@@ -41,12 +40,12 @@ void UpstreamDensityFeedback::transform(Options& state) {
     if ((source_multiplier < 0.0) && density_source_positive) {
       source_multiplier = 0.0; // Don't remove particles
     }
-    
+
     density_error_last = error;
     density_error_lasttime = time;
     break;
   }
-  
+
   // Broadcast the value of source from processor 0
   MPI_Bcast(&source_multiplier, 1, MPI_DOUBLE, 0, BoutComm::get());
   ASSERT2(std::isfinite(source_multiplier));
