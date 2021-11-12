@@ -3,9 +3,9 @@
 #  - sheath boundary on upper Y
 #  - Evolving electron and ion species
 #  - heat conduction
-#  - Uniform source of heat and particles throughout domain
+#  - Source of heat and particles upstream of X-point
 #  - Non-uniform grid, packed towards the target
-#  - Recycling of ions as atoms
+#  - 100% recycling of ions as atoms, so particle source should go to zero
 #  - Ionisation of neutrals as ions
 #  - Charge exchange between neutrals and ions
 #  - Feedback control of upstream density
@@ -49,7 +49,7 @@ init_missing = true # Initialise any missing variables to zero
 #    and their parallel flow using zero-current condition
 #  - electron_force_balance after thermal force and collisions, so the electric field
 #    includes the force on the electrons
-components = (d+, d, ne, ne+, ne+2, ne+3, ne+4, e,
+components = (d+, d, ne, ne+, ne+2, ne+3, ne+4, ne+5, ne+6, ne+7, ne+8, ne+9, ne+10, e,
               sheath_boundary, thermal_force, collisions, recycling, reactions,
               electron_force_balance, neutral_parallel_diffusion)
 
@@ -61,13 +61,13 @@ Bnorm = 1
 Tnorm = 100
 
 [solver]
-type = beuler
+type = beuler  # Backward Euler steady-state solver
 max_nonlinear_iterations = 10
+
+diagnose = true
 
 atol = 1e-7
 rtol = 1e-5
-
-diagnose = true
 
 [sheath_boundary]
 
@@ -90,14 +90,17 @@ noflow_upper_y = false  # Sheath boundary at upper y
 charge = 1
 AA = 2
 
-density_upstream = 1e19  # Upstream density [m^-3]
+density_upstream = 8e18  # Upstream density [m^-3]
+density_source_positive = false  # Force source to be > 0?
+density_controller_i = 5e-4
+density_controller_p = 1e-2
 
 thermal_conduction = true  # in evolve_pressure
 
-diagnose = true
+diagnose = true   # Output diagnostics for these components?
 
 recycle_as = d
-recycle_multiplier = 0.99  # Recycling fraction
+recycle_multiplier = 1.0  # Recycling fraction
 
 [Nd+]
 
@@ -235,7 +238,7 @@ function = 1e-7
 ####################################
 
 [e] # Electrons
-type = quasineutral, evolve_pressure, zero_current, noflow_boundary
+type = quasineutral, zero_current, evolve_pressure, noflow_boundary
 
 noflow_upper_y = false
 
@@ -254,7 +257,7 @@ source = `Pd+:source`  # Same as ion pressure source
 
 [recycling]
 
-species = d+, ne+, ne+2, ne+3, ne+4
+species = d+, ne+, ne+2, ne+3, ne+4, ne+5, ne+6, ne+7, ne+8, ne+9, ne+10
 
 [reactions]
 type = (
