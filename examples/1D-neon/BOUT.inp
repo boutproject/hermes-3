@@ -237,6 +237,138 @@ function = 1e-7
 
 ####################################
 
+[ne+5] # Neon ions (5+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 5
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 1  # Recycling fraction
+
+diagnose = true
+
+[Nne+5]
+function = 1e-5
+
+[Pne+5]
+function = 1e-7
+
+####################################
+
+[ne+6] # Neon ions (6+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 6
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 1  # Recycling fraction
+
+diagnose = true
+
+[Nne+6]
+function = 1e-5
+
+[Pne+6]
+function = 1e-7
+
+####################################
+
+[ne+7] # Neon ions (7+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 7
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 1  # Recycling fraction
+
+diagnose = true
+
+[Nne+7]
+function = 1e-5
+
+[Pne+7]
+function = 1e-7
+
+####################################
+
+[ne+8] # Neon ions (8+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 8
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 1  # Recycling fraction
+
+diagnose = true
+
+[Nne+8]
+function = 1e-5
+
+[Pne+8]
+function = 1e-7
+
+####################################
+
+[ne+9] # Neon ions (9+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 9
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 1  # Recycling fraction
+
+diagnose = true
+
+[Nne+9]
+function = 1e-5
+
+[Pne+9]
+function = 1e-7
+
+####################################
+
+[ne+10] # Neon ions (10+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 10
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+diagnose = true
+
+[Nne+10]
+function = 1e-5
+
+[Pne+10]
+function = 1e-7
+
+####################################
+
 [e] # Electrons
 type = quasineutral, zero_current, evolve_pressure, noflow_boundary
 
@@ -279,4 +411,28 @@ type = (
         ne+3 + e -> ne+4 + 2e, # Neon+3 ionisation
         ne+4 + e -> ne+3,      # Neon+4 recombination
         ne+4 + d -> ne+3 + d+, # Neon+4 charge exchange recombination
+
+        ne+4 + e -> ne+5 + 2e, # Neon+3 ionisation
+        ne+5 + e -> ne+4,      # Neon+4 recombination
+        ne+5 + d -> ne+4 + d+, # Neon+4 charge exchange recombination
+
+        ne+5 + e -> ne+6 + 2e, # Neon+3 ionisation
+        ne+6 + e -> ne+5,      # Neon+4 recombination
+        ne+6 + d -> ne+5 + d+, # Neon+4 charge exchange recombination
+
+        ne+6 + e -> ne+7 + 2e, # Neon+3 ionisation
+        ne+7 + e -> ne+6,      # Neon+4 recombination
+        ne+7 + d -> ne+6 + d+, # Neon+4 charge exchange recombination
+
+        ne+7 + e -> ne+8 + 2e, # Neon+3 ionisation
+        ne+8 + e -> ne+7,      # Neon+4 recombination
+        ne+8 + d -> ne+7 + d+, # Neon+4 charge exchange recombination
+
+        ne+8 + e -> ne+9 + 2e, # Neon+3 ionisation
+        ne+9 + e -> ne+8,      # Neon+4 recombination
+        ne+9 + d -> ne+8 + d+, # Neon+4 charge exchange recombination
+
+        ne+9 + e -> ne+10 + 2e, # Neon+3 ionisation
+        ne+10 + e -> ne+9,      # Neon+4 recombination
+        ne+10 + d -> ne+9 + d+, # Neon+4 charge exchange recombination
        )
