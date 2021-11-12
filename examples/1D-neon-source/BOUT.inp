@@ -1,0 +1,437 @@
+# 1D system with:
+#  - no-flow boundary on lower Y
+#  - sheath boundary on upper Y
+#  - Evolving electron and ion species
+#  - heat conduction
+#  - Uniform source of heat and particles throughout domain
+#  - Non-uniform grid, packed towards the target
+#  - Recycling of ions as atoms
+#  - Ionisation of neutrals as ions
+#  - Charge exchange between neutrals and ions
+#  - Feedback control of upstream density
+#  - Neon: atoms, 1+, 2+, 3+ and 4+ ions
+#  - Thermal force (simple expression)
+#
+#  Does not include recombination
+
+
+nout = 10
+timestep = 100
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 400   # Resolution along field-line
+nz = 1
+
+length = 30           # Length of the domain in meters
+length_xpt = 10   # Length from midplane to X-point [m]
+
+dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+# Calculate where the source ends in grid index
+source = length_xpt / length
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+ixseps1 = -1
+ixseps2 = -1
+
+[hermes]
+# Notes:
+#  - electrons after other species, so the density can be set by quasineutrality
+#  - zero_current after thermal force, so the electric field includes the force on the electrons
+components = (d+, d, ne, ne+, ne+2, ne+3, ne+4, ne+5, ne+6, ne+7, ne+8, ne+9, ne+10, e,
+              zero_current, sheath_boundary, collisions, recycling, reactions,
+              neutral_parallel_diffusion)
+
+loadmetric = false        # Use Rxy, Bpxy etc?
+normalise_metric = true  # Normalise the input metric?
+
+Nnorm = 1e19
+Bnorm = 1
+Tnorm = 100
+
+[solver]
+type = beuler
+diagnose = true
+
+max_nonlinear_iterations = 10
+
+atol = 1e-7
+rtol = 1e-5
+
+predictor = false
+
+[sheath_boundary]
+
+lower_y = false
+upper_y = true
+
+[neutral_parallel_diffusion]
+
+dneut = 10   # (B / Bpol)^2 in neutral diffusion terms
+
+####################################
+
+[d+]  # Deuterium ions
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary, upstream_density_feedback)
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+charge = 1
+AA = 2
+
+density_upstream = 8e18  # Upstream density [m^-3]
+density_source_positive = false # Force source to be >= 0
+density_controller_i = 5e-4
+density_controller_p = 1e-2
+
+thermal_conduction = true  # in evolve_pressure
+
+diagnose = true
+
+recycle_as = d
+recycle_multiplier = 1.0  # Recycling fraction
+
+[Nd+]
+
+function = 1
+
+flux = 4e23  # Particles per m^2 per second input
+source = (flux/(mesh:length_xpt))*H(mesh:y_xpt - y)
+
+[Pd+]
+function = 1
+
+powerflux = 2.5e7  # Input power flux in W/m^2
+
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
+[NVd+]
+
+function = 0
+
+####################################
+
+[d]  # Deuterium atoms
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary)
+
+charge = 0
+AA = 2
+
+thermal_conduction = true
+
+[Nd]
+
+function = 0.001
+
+[Pd]
+
+function = 0.0001
+
+####################################
+[ne] # Neon neutral atoms
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary)
+
+charge = 0
+AA = 20
+
+[Nne]
+function = 1e-5
+
+#source = 1e19 * exp(-(y - 2*pi)^2) # source of neon near the target
+
+[Pne]
+function = 1e-7
+
+####################################
+
+[ne+] # Neon ions (1+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 1
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+[Nne+]
+function = 1e-5
+
+[Pne+]
+function = 1e-7
+
+####################################
+
+[ne+2] # Neon ions (2+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 2
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+[Nne+2]
+function = 1e-5
+
+[Pne+2]
+function = 1e-7
+
+####################################
+
+[ne+3] # Neon ions (3+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 3
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+[Nne+3]
+function = 1e-5
+
+[Pne+3]
+function = 1e-7
+
+####################################
+
+[ne+4] # Neon ions (4+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 4
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+diagnose = true
+
+[Nne+4]
+function = 1e-5
+
+[Pne+4]
+function = 1e-7
+
+####################################
+
+[ne+5] # Neon ions (5+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 5
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+diagnose = true
+
+[Nne+5]
+function = 1e-5
+
+[Pne+5]
+function = 1e-7
+
+####################################
+
+[ne+6] # Neon ions (6+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 6
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+diagnose = true
+
+[Nne+6]
+function = 1e-5
+
+[Pne+6]
+function = 1e-7
+
+####################################
+
+[ne+7] # Neon ions (7+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 7
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+diagnose = true
+
+[Nne+7]
+function = 1e-5
+
+[Pne+7]
+function = 1e-7
+
+####################################
+
+[ne+8] # Neon ions (8+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 8
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+diagnose = true
+
+[Nne+8]
+function = 1e-5
+
+[Pne+8]
+function = 1e-7
+
+####################################
+
+[ne+9] # Neon ions (9+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 9
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+diagnose = true
+
+[Nne+9]
+function = 1e-5
+
+[Pne+9]
+function = 1e-7
+
+####################################
+
+[ne+10] # Neon ions (10+)
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+charge = 10
+AA = 20
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+recycle_as = ne
+recycle_multiplier = 0.99  # Recycling fraction
+
+diagnose = true
+
+[Nne+10]
+function = 1e-5
+
+[Pne+10]
+function = 1e-7
+
+####################################
+
+[e] # Electrons
+type = quasineutral, evolve_pressure, noflow_boundary
+
+noflow_upper_y = false
+
+charge = -1
+AA = 1/1836
+
+thermal_conduction = true  # in evolve_pressure
+
+[Pe]
+
+function = `Pd+:function`  # Same as ion pressure initially
+
+source = `Pd+:source`  # Same as ion pressure source
+
+####################################
+
+[recycling]
+
+species = d+, ne+, ne+2, ne+3, ne+4, ne+5, ne+6, ne+7, ne+8, ne+9, ne+10
+
+[reactions]
+type = (
+        d + e -> d+ + 2e,     # Deuterium ionisation
+        d + d+ -> d+ + d,     # Charge exchange
+        
+        ne + e -> ne+ + 2e,   # Neon ionisation
+        ne+ + e -> ne,        # Neon+ recombination
+        ne+ + d -> ne + d+,   # Neon+ charge exchange recombination
+        
+        ne+ + e -> ne+2 + 2e, # Neon+ ionisation
+        ne+2 + e -> ne+,      # Neon+2 recombination
+        ne+2 + d -> ne+ + d+, # Neon+2 charge exchange recombination
+
+        ne+2 + e -> ne+3 + 2e, # Neon+2 ionisation
+        ne+3 + e -> ne+2,      # Neon+3 recombination
+        ne+3 + d -> ne+2 + d+, # Neon+3 charge exchange recombination
+
+        ne+3 + e -> ne+4 + 2e, # Neon+3 ionisation
+        ne+4 + e -> ne+3,      # Neon+4 recombination
+        ne+4 + d -> ne+3 + d+, # Neon+4 charge exchange recombination
+
+        ne+4 + e -> ne+5 + 2e, # Neon+3 ionisation
+        ne+5 + e -> ne+4,      # Neon+4 recombination
+        ne+5 + d -> ne+4 + d+, # Neon+4 charge exchange recombination
+
+        ne+5 + e -> ne+6 + 2e, # Neon+3 ionisation
+        ne+6 + e -> ne+5,      # Neon+4 recombination
+        ne+6 + d -> ne+5 + d+, # Neon+4 charge exchange recombination
+
+        ne+6 + e -> ne+7 + 2e, # Neon+3 ionisation
+        ne+7 + e -> ne+6,      # Neon+4 recombination
+        ne+7 + d -> ne+6 + d+, # Neon+4 charge exchange recombination
+
+        ne+7 + e -> ne+8 + 2e, # Neon+3 ionisation
+        ne+8 + e -> ne+7,      # Neon+4 recombination
+        ne+8 + d -> ne+7 + d+, # Neon+4 charge exchange recombination
+
+        ne+8 + e -> ne+9 + 2e, # Neon+3 ionisation
+        ne+9 + e -> ne+8,      # Neon+4 recombination
+        ne+9 + d -> ne+8 + d+, # Neon+4 charge exchange recombination
+
+        ne+9 + e -> ne+10 + 2e, # Neon+3 ionisation
+        ne+10 + e -> ne+9,      # Neon+4 recombination
+        ne+10 + d -> ne+9 + d+, # Neon+4 charge exchange recombination
+       )
