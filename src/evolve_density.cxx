@@ -91,8 +91,6 @@ void EvolveDensity::transform(Options &state) {
   mesh->communicate(N);
 
   auto& species = state["species"][name];
-  // Flooring N here results in unphysical sheath fluxes.
-  // Traced to flooring the density in the calculation of potential in sheath_boundary.cxx line 139
   set(species["density"], N);
   set(species["AA"], AA); // Atomic mass
   if (charge != 0.0) { // Don't set charge for neutral species
@@ -107,6 +105,9 @@ void EvolveDensity::finally(const Options &state) {
   auto coord = N.getCoordinates();
 
   auto& species = state["species"][name];
+
+  // Get updated density with boundary conditions
+  N = get<Field3D>(species["density"]);
 
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow

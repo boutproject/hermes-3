@@ -220,7 +220,10 @@ void EvolveMomentum::finally(const Options &state) {
   AUTO_TRACE();
 
   auto& species = state["species"][name];
-  
+
+  // Get updated momentum with boundary conditions
+  NV = get<Field3D>(species["momentum"]);
+
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
 

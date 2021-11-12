@@ -119,6 +119,10 @@ void EvolvePressure::finally(const Options& state) {
   /// Get the section containing this species
   const auto& species = state["species"][name];
 
+  // Get updated pressure and temperature with boundary conditions
+  P = get<Field3D>(species["pressure"]);
+  T = get<Field3D>(species["temperature"]);
+
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
 

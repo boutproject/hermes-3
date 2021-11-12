@@ -92,7 +92,7 @@ void SheathBoundary::transform(Options &state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = getNoBoundary<Field3D>(electrons["density"]);
+  Field3D Ne = floor(getNoBoundary<Field3D>(electrons["density"]), 0.0);
   Field3D Te = getNoBoundary<Field3D>(electrons["temperature"]);
   Field3D Pe =
       electrons.isSet("pressure") ? getNoBoundary<Field3D>(electrons["pressure"]) : Te * Ne;
@@ -136,7 +136,7 @@ void SheathBoundary::transform(Options &state) {
         continue; // Skip electrons and non-charged ions
       }
       
-      const Field3D Ni = getNoBoundary<Field3D>(species["density"]);
+      const Field3D Ni = floor(getNoBoundary<Field3D>(species["density"]), 0.0);
       const Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
       const BoutReal Mi = getNoBoundary<BoutReal>(species["AA"]);
       const BoutReal Zi = getNoBoundary<BoutReal>(species["charge"]);
@@ -285,7 +285,7 @@ void SheathBoundary::transform(Options &state) {
 
         // Free boundary potential linearly extrapolated
         phi[im] = 2 * phi[i] - phi[ip];
-        
+
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[im] + Te[i]);  // electron temperature
         const BoutReal phisheath = floor(0.5 * (phi[im] + phi[i]), 0.0); // Electron saturation at phi = 0
@@ -412,7 +412,7 @@ void SheathBoundary::transform(Options &state) {
                                      : 5. / 3; // Ratio of specific heats (ideal gas)
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = getNoBoundary<Field3D>(species["density"]);
+    Field3D Ni = floor(getNoBoundary<Field3D>(species["density"]), 0.0);
     Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
     Field3D Pi = species.isSet("pressure") ? getNoBoundary<Field3D>(species["pressure"]) : Ni * Ti;
 
