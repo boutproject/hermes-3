@@ -91,7 +91,9 @@ void EvolveDensity::transform(Options &state) {
   mesh->communicate(N);
 
   auto& species = state["species"][name];
-  set(species["density"], floor(N, 0.0));
+  // Flooring N here results in unphysical sheath fluxes.
+  // Traced to flooring the density in the calculation of potential in sheath_boundary.cxx line 139
+  set(species["density"], N);
   set(species["AA"], AA); // Atomic mass
   if (charge != 0.0) { // Don't set charge for neutral species
     set(species["charge"], charge);
