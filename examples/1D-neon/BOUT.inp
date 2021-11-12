@@ -16,7 +16,7 @@
 
 
 nout = 100
-timestep = 10
+timestep = 1000
 
 MXG = 0  # No guard cells in X
 
@@ -40,6 +40,9 @@ y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dym
 ixseps1 = -1
 ixseps2 = -1
 
+[restart_files]
+init_missing = true # Initialise any missing variables to zero
+
 [hermes]
 # Notes:
 #  - electrons after other species, so the density can be set by quasineutrality,
@@ -58,10 +61,13 @@ Bnorm = 1
 Tnorm = 100
 
 [solver]
-mxstep = 100000
+type = beuler
+max_nonlinear_iterations = 10
 
 atol = 1e-7
 rtol = 1e-5
+
+diagnose = true
 
 [sheath_boundary]
 
