@@ -129,6 +129,16 @@ T get(const Options& option, const std::string& location = "") {
   return getNonFinal<T>(option);
 }
 
+/// Check if an option can be fetched
+/// Sets the final flag so setting the value
+/// afterwards will lead to an error
+bool isSetFinal(const Options& option, const std::string& location = "");
+
+/// Check if an option can be fetched
+/// Sets the final flag so setting the value in the domain
+/// afterwards will lead to an error
+bool isSetFinalNoBoundary(const Options& option, const std::string& location = "");
+
 #define TOSTRING_(x) #x
 #define TOSTRING(x) TOSTRING_(x)
 

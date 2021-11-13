@@ -220,7 +220,10 @@ void EvolveMomentum::finally(const Options &state) {
   AUTO_TRACE();
 
   auto& species = state["species"][name];
-  
+
+  // Get updated momentum with boundary conditions
+  NV = get<Field3D>(species["momentum"]);
+
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
 
@@ -233,7 +236,7 @@ void EvolveMomentum::finally(const Options &state) {
   }
 
   // Get the species density
-  Field3D N = get<Field3D>(species["density"]);
+  Field3D N = floor(get<Field3D>(species["density"]), 1e-5);
   
   // Parallel flow
   V = get<Field3D>(species["velocity"]);

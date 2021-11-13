@@ -10,6 +10,12 @@
 using bout::globals::mesh;
 
 namespace {
+BoutReal floor(BoutReal value, BoutReal min) {
+  if (value < min)
+    return min;
+  return value;
+}
+
 Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int ny = f.getNy();
   int nz = f.getNz();
@@ -25,6 +31,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   evolve_log = options["evolve_log"].doc("Evolve the logarithmof pressure?").withDefault<bool>(false);
 
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
   if (evolve_log) {
     // Evolve logarithm of density
     solver->add(logP, std::string("logP") + name);
@@ -107,7 +114,7 @@ void EvolvePressure::transform(Options& state) {
   // Calculate temperature
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
-  T = P / floor(N, 1e-5);
+  T = P / floor(N, density_floor);
   T.applyBoundary("neumann");
 
   set(species["temperature"], T);
@@ -118,6 +125,10 @@ void EvolvePressure::finally(const Options& state) {
 
   /// Get the section containing this species
   const auto& species = state["species"][name];
+
+  // Get updated pressure and temperature with boundary conditions
+  P = get<Field3D>(species["pressure"]);
+  T = get<Field3D>(species["temperature"]);
 
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow

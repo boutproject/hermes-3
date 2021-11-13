@@ -27,8 +27,9 @@ ixseps2 = -1
 
 [hermes]
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
-# to electron pressure by imposing zero current.
-components = i, e, sheath_boundary, zero_current, collisions
+# to electron pressure using electron force balance
+# Collisions are needed to calculate heat conduction
+components = i, e, sheath_boundary, collisions, electron_force_balance
 
 loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
@@ -81,7 +82,7 @@ function = 0
 ####################################
 
 [e] # Electrons
-type = quasineutral, evolve_pressure, noflow_boundary
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
 
 noflow_upper_y = false
 

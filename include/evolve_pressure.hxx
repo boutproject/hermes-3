@@ -49,6 +49,7 @@ private:
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
 
+  BoutReal density_floor; ///< Minimum density for calculating T
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 
   Field3D source; ///< External pressure source

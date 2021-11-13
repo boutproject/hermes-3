@@ -195,7 +195,7 @@ void OpenADASChargeExchange::calculate_rates(Options& electron, Options& from_A,
 
   const Field3D reaction_rate = cellAverage(
       [&](BoutReal na, BoutReal nb, BoutReal ne, BoutReal te) {
-        return na * nb * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
+        return floor(na, 1e-5) * floor(nb, 1e-5) * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
       },
       Ne.getRegion("RGN_NOBNDRY"))(Na, Nb, Ne, Te);
 
