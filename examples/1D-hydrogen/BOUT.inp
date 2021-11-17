@@ -46,7 +46,8 @@ ixseps2 = -1
 #    on the electrons
 components = (d+, d, e,
               sheath_boundary, collisions, recycling, reactions,
-              electron_force_balance, neutral_parallel_diffusion)
+              electron_force_balance, neutral_parallel_diffusion,
+              ion_viscosity)
 
 loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
