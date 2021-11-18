@@ -62,10 +62,10 @@ private:
   bool exb_advection; // Include nonlinear ExB advection?
   bool diamagnetic; // Include diamagnetic current?
   bool diamagnetic_polarisation; // Include diamagnetic drift in polarisation current
+  bool boussinesq;  ///< Use the Boussinesq approximation?
   BoutReal average_atomic_mass; // Weighted average atomic mass, for polarisaion current (Boussinesq approximation)
   bool poloidal_flows;   ///< Include poloidal ExB flow?
   bool bndry_flux;  ///< Allow flows through radial boundaries?
-  bool boussinesq;  ///< Use the Boussinesq approximation?
 
   bool sheath_boundary; ///< Set outer boundary to j=0?
 
