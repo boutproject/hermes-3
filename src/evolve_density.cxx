@@ -85,8 +85,9 @@ void EvolveDensity::transform(Options &state) {
   if (evolve_log) {
     // Evolving logN, but most calculations use N
     N = exp(logN);
+  } else {
+    N = floor(N, 0.0);
   }
-  // Note: flooring the density here causes convergence issues
 
   mesh->communicate(N);
 
