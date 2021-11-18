@@ -129,8 +129,26 @@ mass number, so should be divided by `AA` to obtain the particle flux.
 zero_current
 ~~~~~~~~~~~~
 
-This imposes a zero-current Ohm's law, calculating a parallel
-electric field which balances the electron pressure gradient and other forces:
+This calculates the parallel flow of one charged species so that there is no net current,
+using flows already calculated for other species. It is used like `quasineutral`:
+
+.. code-block:: ini
+
+   [hermes]
+   components = h+, ..., e, ...   # Note: e after all other species
+   
+   [e]
+   type = ..., zero_current,... # Set e:velocity
+
+   charge = -1 # Species must have a charge
+
+
+electron_force_balance
+~~~~~~~~~~~~~~~~~~~~~~
+
+This calculates a parallel electric field which balances the electron
+pressure gradient and other forces on the electrons (including
+collisional friction, thermal forces):
 
 .. math::
 
@@ -145,9 +163,9 @@ This electric field is then used to calculate a force on the other species:
 
 which is added to the ion's `momentum_source`. 
 
-The implementation is in `ZeroCurrent`:
+The implementation is in `ElectronForceBalance`:
 
-.. doxygenstruct:: ZeroCurrent
+.. doxygenstruct:: ElectronForceBalance
    :members:
 
 Neutral gas models

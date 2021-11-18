@@ -18,7 +18,7 @@ mxstep = 10000
 [hermes]
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
 # to electron pressure by imposing zero current.
-components = i, e, zero_current
+components = i, e, electron_force_balance
 
 loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = false  # Normalise the input metric?
@@ -36,7 +36,7 @@ AA = 1.0
 thermal_conduction = false  # in evolve_pressure
 
 [e] # Electrons
-type = quasineutral, evolve_pressure
+type = quasineutral, zero_current, evolve_pressure
 
 charge = -1
 AA = 1/1836

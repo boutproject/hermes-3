@@ -40,10 +40,10 @@ ixseps2 = -1
 
 [hermes]
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
-# to electron pressure by imposing zero current.
+# to electron pressure by using electron force balance.
 components = (d+, d, e,
-              zero_current, sheath_boundary, collisions, recycling, reactions,
-              neutral_parallel_diffusion)
+              sheath_boundary, collisions, recycling, reactions,
+              electron_parallel_balance, neutral_parallel_diffusion)
 
 loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
@@ -125,7 +125,7 @@ function = 0.0001
 ####################################
 
 [e] # Electrons
-type = quasineutral, evolve_pressure, noflow_boundary
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
 
 noflow_upper_y = false
 

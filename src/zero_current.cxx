@@ -3,67 +3,65 @@
 
 #include "../include/zero_current.hxx"
 
+ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
+    : name(name) {
+  AUTO_TRACE();
+  Options &options = alloptions[name];
+
+  charge = options["charge"].doc("Particle charge. electrons = -1");
+
+  // Save the velocity
+  bout::globals::dump.addRepeat(velocity, std::string("V") + name);
+  velocity = 0.0;
+
+  ASSERT0(charge != 0.0);
+}
+
 void ZeroCurrent::transform(Options &state) {
   AUTO_TRACE();
 
-  // Get the electron pressure
-  // Note: The pressure boundary can be set in sheath boundary condition
-  //       which depends on the electron velocity being set here first.
-  Options& electrons = state["species"]["e"];
-  Field3D Pe = getNoBoundary<Field3D>(electrons["pressure"]);
-  Pe.applyBoundary("neumann");
-
-  Field3D Ne = getNoBoundary<Field3D>(electrons["density"]);
-
-  ASSERT1(get<BoutReal>(electrons["charge"]) == -1.0);
-
-  // Force balance, E = (-∇p + F) / n
-  Field3D force_density = - Grad_par(Pe);
-
-  if (electrons.isSet("momentum_source")) {
-    // Balance other forces from e.g. collisions
-    force_density += get<Field3D>(electrons["momentum_source"]);
-  }
-  const Field3D Epar = force_density / Ne;
-
-  // Current due to ions
-  Field3D ion_current;
+  // Current due to other species
+  Field3D current;
   
   // Now calculate forces on other species
   Options& allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
-    if (kv.first == "e") {
-      continue; // Skip electrons
+    if (kv.first == name) {
+      continue; // Skip self
     }
     Options& species = allspecies[kv.first]; // Note: Need non-const
-    
+ 
     if (!(species.isSet("density") and species.isSet("charge"))) {
-      continue; // Needs both density and charge to experience a force
+      continue; // Needs both density and charge to contribute
     }
-    
-    const Field3D N = getNoBoundary<Field3D>(species["density"]);
-    const BoutReal charge = get<BoutReal>(species["charge"]);
 
-    add(species["momentum_source"],
-        charge * N * Epar);
+    if (isSetFinalNoBoundary(species["velocity"], "zero_current")) {
+      // If velocity is set, update the current
+      // Note: Mark final so can't be set later
 
-    if (species.isSet("velocity")) {
-      // If velocity is set, update the ion current
-      
+      const Field3D N = getNoBoundary<Field3D>(species["density"]);
+      const BoutReal charge = get<BoutReal>(species["charge"]);
       const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
-      
-      if (!ion_current.isAllocated()) {
+
+      if (!current.isAllocated()) {
         // Not yet allocated -> Set to the value
         // This avoids having to set to zero initially and add the first time
-        ion_current = charge * N * V;
+        current = charge * N * V;
       } else {
-        ion_current += charge * N * V;
+        current += charge * N * V;
       }
     }
   }
 
-  if (ion_current.isAllocated()) {
-    // If ion current set, set the electron velocity
-    set(electrons["velocity"], ion_current / Ne);
+  if (!current.isAllocated()) {
+    // No currents, probably not what is intended
+    throw BoutException("No other species to set velocity from");
   }
+
+  // Get the species density
+  Options& species = state["species"][name];
+  Field3D N = getNoBoundary<Field3D>(species["density"]);
+
+  velocity = current / (-charge * N);
+  set(species["velocity"], velocity);
 }

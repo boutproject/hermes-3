@@ -26,15 +26,14 @@ of energy between them, or heat conduction.
    
    Evolution of pressure, starting from a top hat
 
-The model components are ions (i), electrons (e), and a constraint
-that the net current is zero. This constraint applies the electron
-pressure to the ion momentum equation, and sets the electron velocity
-to be equal to the ion velocity.
+The model components are ions (i) and electrons (e), and a component
+which uses the force on the electrons to calculate the parallel electric field,
+which transfers the force to the ions.
 
 .. code-block:: ini
 
    [hermes]
-   components = i, e, zero_current
+   components = i, e, electron_force_balance
 
 
 The ion density, pressure and momentum equations are evolved:
@@ -54,13 +53,14 @@ which solves the equations
    \frac{\partial}{\partial t}\left(n_iv_{||i}\right) =& -\nabla\cdot\left(n_iv_{||i} \mathbf{b}v_{||i}\right) - \partial_{||}p_i + E
    \end{aligned}
 
-The electron density is set to the ion density by quasineutrality,
-and only the electron pressure is evolved.
+The electron density is set to the ion density by quasineutrality, the
+parallel velocity is set by a zero current condition, and only the
+electron pressure is evolved.
 
 .. code-block:: ini
 
    [e] # Electrons
-   type = quasineutral, evolve_pressure
+   type = quasineutral, zero_current, evolve_pressure
 
 which adds the equations:
 

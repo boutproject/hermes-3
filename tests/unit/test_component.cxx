@@ -108,3 +108,28 @@ TEST(ComponentTest, SetBoundaryAfterGetNoBoundary) {
 
   ASSERT_EQ(getNonFinal<int>(option), 3);
 }
+
+TEST(ComponentTest, IsSetFinalStaysFalse) {
+  Options option;
+
+  ASSERT_EQ(isSetFinal(option["test"]), false);
+  // Shouldn't change if called again
+  ASSERT_EQ(isSetFinal(option["test"]), false);
+}
+
+TEST(ComponentTest, GetAfterIsSetFinal) {
+  Options option;
+  option["test"] = 1;
+
+  ASSERT_EQ(isSetFinal(option["test"]), true);
+  // Can get the value
+  ASSERT_EQ(get<int>(option["test"]), 1);
+}
+
+TEST(ComponentTest, SetAfterIsSetFinal) {
+  Options option;
+
+  ASSERT_EQ(isSetFinal(option["test"]), false);
+  // Can't now set the value
+  ASSERT_THROW(set<int>(option["test"], 3), BoutException);
+}

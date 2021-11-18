@@ -4,31 +4,44 @@
 
 #include "component.hxx"
 
-/// Balance the parallel electron pressure gradient against
-/// the electric field. Use this electric field to calculate
-/// a force on the other species
+/// Set the velocity of a species so that
+/// there is no net current, by summing the current from
+/// other species.
 ///
-///   E = (-∇p_e + F) / n_e
-///
-/// where F is the momentum source for the electrons
-///
+/// This is most often used in the electron species, but
+/// does not need to be.
 struct ZeroCurrent : public Component {
-  ZeroCurrent(std::string, Options&, Solver*) {}
+  /// Inputs
+  /// ------
+  ///
+  /// @param name    Short name for species e.g. "e"
+  /// @param alloptions   Component configuration options
+  ///   - <name>
+  ///     - charge   (must not be zero)
+  ZeroCurrent(std::string name, Options& alloptions, Solver*);
   
   /// Required inputs
   /// - species
-  ///   - e
-  ///     - pressure
+  ///   - <name>
   ///     - density
-  ///     - momentum_source [optional]
-  ///     Asserts that charge = -1
+  ///     - charge
+  ///   - <one or more other species>
+  ///     - density
+  ///     - velocity
+  ///     - charge
   ///
-  /// Sets in the input
+  /// Sets in the state
   /// - species
-  ///   - <all except e>   if both density and charge are set
-  ///     - momentum_source
+  ///   - <name>
+  ///     - velocity
   /// 
   void transform(Options &state) override;
+
+private:
+  std::string name; ///< Name of this species
+  BoutReal charge;  ///< The charge of this species
+
+  Field3D velocity; ///< Species velocity (for writing to output)
 };
 
 namespace {
