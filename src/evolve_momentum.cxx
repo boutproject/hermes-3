@@ -5,6 +5,14 @@
 #include "../include/evolve_momentum.hxx"
 #include "../include/div_ops.hxx"
 
+namespace {
+BoutReal floor(BoutReal value, BoutReal min) {
+  if (value < min)
+    return min;
+  return value;
+}
+}
+
 using bout::globals::mesh;
 
 namespace FV {
@@ -180,6 +188,8 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   auto& options = alloptions[name];
 
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+
   bndry_flux = options["bndry_flux"]
                       .doc("Allow flows through radial boundaries")
                       .withDefault<bool>(true);
@@ -208,7 +218,7 @@ void EvolveMomentum::transform(Options &state) {
   set(species["momentum"], NV);
 
   // Not using density boundary condition
-  Field3D N = floor(getNoBoundary<Field3D>(species["density"]), 1e-5);
+  Field3D N = floor(getNoBoundary<Field3D>(species["density"]), density_floor);
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   V = NV / (AA * N);
@@ -236,7 +246,7 @@ void EvolveMomentum::finally(const Options &state) {
   }
 
   // Get the species density
-  Field3D N = floor(get<Field3D>(species["density"]), 1e-5);
+  Field3D N = floor(get<Field3D>(species["density"]), 0.0);
   
   // Parallel flow
   V = get<Field3D>(species["velocity"]);
@@ -258,6 +268,14 @@ void EvolveMomentum::finally(const Options &state) {
     
     ddt(NV) -= Grad_par(P);
   }
+
+  BOUT_FOR(i, NV.getRegion("RGN_NOBNDRY")) {
+    if (N[i] < density_floor) {
+      // Don't evolve dynamics at low density, but become trace species
+      ddt(NV)[i] *= floor(N[i], 0.0) / density_floor; // Between 0 and 1
+    }
+  }
+
   // Other sources/sinks
   if (species.isSet("momentum_source")) {
     ddt(NV) += get<Field3D>(species["momentum_source"]);

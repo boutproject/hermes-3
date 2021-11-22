@@ -10,6 +10,14 @@
 
 using bout::globals::mesh;
 
+namespace {
+BoutReal floor(BoutReal value, BoutReal min) {
+  if (value < min)
+    return min;
+  return value;
+}
+}
+
 EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solver) : name(name) {
   AUTO_TRACE();
 
@@ -23,6 +31,8 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
 
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+
   low_n_diffuse = options["low_n_diffuse"]
                       .doc("Parallel diffusion at low density")
                       .withDefault<bool>(false);
@@ -30,7 +40,7 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
-  
+
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault<bool>(false);
  
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of density?").withDefault<bool>(false);
@@ -85,7 +95,7 @@ void EvolveDensity::transform(Options &state) {
   if (evolve_log) {
     // Evolving logN, but most calculations use N
     N = exp(logN);
-  } 
+  }
 
   mesh->communicate(N);
 
@@ -145,10 +155,10 @@ void EvolveDensity::finally(const Options &state) {
   if (low_n_diffuse) {
     // Diffusion which kicks in at very low density, in order to
     // help prevent negative density regions
-    ddt(N) += FV::Div_par_K_Grad_par(SQ(coord->dy) * coord->g_22 * 1e-4 / N, N);
+    ddt(N) += FV::Div_par_K_Grad_par(SQ(coord->dy) * coord->g_22 * density_floor / floor(N, 1e-3 * density_floor), N);
   }
   if (low_n_diffuse_perp) {
-    ddt(N) += Div_Perp_Lap_FV_Index(1e-4 / N, N, bndry_flux);
+    ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3*density_floor), N, bndry_flux);
   }
 
   if (hyper_z > 0.) {

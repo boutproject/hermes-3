@@ -37,6 +37,8 @@ private:
   
   bool bndry_flux;      // Allow flows through boundaries?
   bool poloidal_flows;  // Include ExB flow in Y direction?
+
+  BoutReal density_floor;
 };
 
 namespace {

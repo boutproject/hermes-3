@@ -204,6 +204,13 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) += (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T, false);
   }
 
+  BOUT_FOR(i, P.getRegion("RGN_NOBNDRY")) {
+    if (N[i] < density_floor) {
+      // Don't evolve dynamics at low density, but become trace species
+      ddt(P)[i] *= floor(N[i], 0.0) / density_floor; // Between 0 and 1
+    }
+  }
+
   //////////////////////
   // Other sources
 
