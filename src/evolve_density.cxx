@@ -16,6 +16,22 @@ BoutReal floor(BoutReal value, BoutReal min) {
     return min;
   return value;
 }
+
+template<typename T, typename = bout::utils::EnableIfField<T>>
+inline T clamp(const T& var, BoutReal lo, BoutReal hi, const std::string& rgn = "RGN_ALL") {
+  checkData(var);
+  T result = copy(var);
+
+  BOUT_FOR(d, var.getRegion(rgn)) {
+    if (result[d] < lo) {
+      result[d] = lo;
+    } else if (result[d] > hi) {
+      result[d] = hi;
+    }
+  }
+
+  return result;
+}
 }
 
 EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solver) : name(name) {
@@ -35,7 +51,7 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
 
   low_n_diffuse = options["low_n_diffuse"]
                       .doc("Parallel diffusion at low density")
-                      .withDefault<bool>(false);
+                      .withDefault<bool>(true);
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
@@ -155,7 +171,9 @@ void EvolveDensity::finally(const Options &state) {
   if (low_n_diffuse) {
     // Diffusion which kicks in at very low density, in order to
     // help prevent negative density regions
-    ddt(N) += FV::Div_par_K_Grad_par(SQ(coord->dy) * coord->g_22 * density_floor / floor(N, 1e-3 * density_floor), N);
+    //ddt(N) += FV::Div_par_K_Grad_par(SQ(coord->dy) * coord->g_22 * density_floor / floor(N, 1e-3 * density_floor), N);
+    ddt(N) += FV::Div_par_K_Grad_par(SQ(coord->dy) * coord->g_22 * log(density_floor /
+                                                                       clamp(N, 1e-6 * density_floor, density_floor)), N);
   }
   if (low_n_diffuse_perp) {
     ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3*density_floor), N, bndry_flux);
