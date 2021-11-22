@@ -246,7 +246,7 @@ void EvolveMomentum::finally(const Options &state) {
   }
 
   // Get the species density
-  Field3D N = floor(get<Field3D>(species["density"]), 0.0);
+  Field3D N = get<Field3D>(species["density"]);
   
   // Parallel flow
   V = get<Field3D>(species["velocity"]);
@@ -259,8 +259,10 @@ void EvolveMomentum::finally(const Options &state) {
     Field3D T = get<Field3D>(species["temperature"]);
     sound_speed = sqrt(T);
   }
-  
-  ddt(NV) -= FV::Div_par_fvv(N, V, sound_speed);
+
+  // Note: Density floor should be consistent with calculation of V
+  //       otherwise energy conservation is affected
+  ddt(NV) -= FV::Div_par_fvv(floor(N, density_floor), V, sound_speed);
 
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
@@ -269,11 +271,10 @@ void EvolveMomentum::finally(const Options &state) {
     ddt(NV) -= Grad_par(P);
   }
 
-  BOUT_FOR(i, NV.getRegion("RGN_NOBNDRY")) {
-    if (N[i] < density_floor) {
-      // Don't evolve dynamics at low density, but become trace species
-      ddt(NV)[i] *= floor(N[i], 0.0) / density_floor; // Between 0 and 1
-    }
+  if (isSetFinal(species["low_n_coeff"])) {
+    // Low density parallel diffusion
+    Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
+    ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N);
   }
 
   // Other sources/sinks

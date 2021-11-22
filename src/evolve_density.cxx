@@ -7,32 +7,9 @@
 
 #include "../include/evolve_density.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
 
 using bout::globals::mesh;
-
-namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
-
-template<typename T, typename = bout::utils::EnableIfField<T>>
-inline T clamp(const T& var, BoutReal lo, BoutReal hi, const std::string& rgn = "RGN_ALL") {
-  checkData(var);
-  T result = copy(var);
-
-  BOUT_FOR(d, var.getRegion(rgn)) {
-    if (result[d] < lo) {
-      result[d] = lo;
-    } else if (result[d] > hi) {
-      result[d] = hi;
-    }
-  }
-
-  return result;
-}
-}
 
 EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solver) : name(name) {
   AUTO_TRACE();
@@ -111,6 +88,8 @@ void EvolveDensity::transform(Options &state) {
   if (evolve_log) {
     // Evolving logN, but most calculations use N
     N = exp(logN);
+  } else {
+    N = floor(N, 0.0);
   }
 
   mesh->communicate(N);
@@ -121,13 +100,21 @@ void EvolveDensity::transform(Options &state) {
   if (charge != 0.0) { // Don't set charge for neutral species
     set(species["charge"], charge);
   }
+
+  if (low_n_diffuse) {
+    // Calculate a diffusion coefficient which can be used in N, P and NV equations
+
+    auto* coord = mesh->getCoordinates();
+
+    Field3D low_n_coeff = SQ(coord->dy) * coord->g_22 *
+      log(density_floor / clamp(N, 1e-6 * density_floor, density_floor));
+    low_n_coeff.applyBoundary("neumann");
+    set(species["low_n_coeff"], low_n_coeff);
+  }
 }
 
 void EvolveDensity::finally(const Options &state) {
   AUTO_TRACE();
-
-  // Get the coordinate system
-  auto coord = N.getCoordinates();
 
   auto& species = state["species"][name];
 
@@ -171,15 +158,16 @@ void EvolveDensity::finally(const Options &state) {
   if (low_n_diffuse) {
     // Diffusion which kicks in at very low density, in order to
     // help prevent negative density regions
-    //ddt(N) += FV::Div_par_K_Grad_par(SQ(coord->dy) * coord->g_22 * density_floor / floor(N, 1e-3 * density_floor), N);
-    ddt(N) += FV::Div_par_K_Grad_par(SQ(coord->dy) * coord->g_22 * log(density_floor /
-                                                                       clamp(N, 1e-6 * density_floor, density_floor)), N);
+
+    Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
+    ddt(N) += FV::Div_par_K_Grad_par(low_n_coeff, N);
   }
   if (low_n_diffuse_perp) {
     ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3*density_floor), N, bndry_flux);
   }
 
   if (hyper_z > 0.) {
+    auto* coord = N.getCoordinates();
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 

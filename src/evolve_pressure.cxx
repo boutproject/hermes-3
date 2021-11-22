@@ -6,22 +6,9 @@
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
+#include "../include/hermes_utils.hxx"
 
 using bout::globals::mesh;
-
-namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
-
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  int ny = f.getNy();
-  int nz = f.getNz();
-  return Ind3D{(x * ny + y) * nz + z, ny, nz};
-}
-} // namespace
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
     : name(name) {
@@ -170,6 +157,12 @@ void EvolvePressure::finally(const Options& state) {
     }
   }
 
+  if (species.isSet("low_n_coeff")) {
+    // Low density parallel diffusion
+    Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
+    ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N);
+  }
+
   // Parallel heat conduction
   if (thermal_conduction) {
 
@@ -202,13 +195,6 @@ void EvolvePressure::finally(const Options& state) {
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
     ddt(P) += (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T, false);
-  }
-
-  BOUT_FOR(i, P.getRegion("RGN_NOBNDRY")) {
-    if (N[i] < density_floor) {
-      // Don't evolve dynamics at low density, but become trace species
-      ddt(P)[i] *= floor(N[i], 0.0) / density_floor; // Between 0 and 1
-    }
   }
 
   //////////////////////
