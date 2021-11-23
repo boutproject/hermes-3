@@ -28,7 +28,7 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
 
   low_n_diffuse = options["low_n_diffuse"]
                       .doc("Parallel diffusion at low density")
-                      .withDefault<bool>(true);
+                      .withDefault<bool>(false);
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
@@ -107,7 +107,7 @@ void EvolveDensity::transform(Options &state) {
     auto* coord = mesh->getCoordinates();
 
     Field3D low_n_coeff = SQ(coord->dy) * coord->g_22 *
-      log(density_floor / clamp(N, 1e-6 * density_floor, density_floor));
+      log(density_floor / clamp(N, 1e-3 * density_floor, density_floor));
     low_n_coeff.applyBoundary("neumann");
     set(species["low_n_coeff"], low_n_coeff);
   }

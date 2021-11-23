@@ -271,10 +271,10 @@ void EvolveMomentum::finally(const Options &state) {
     ddt(NV) -= Grad_par(P);
   }
 
-  if (isSetFinal(species["low_n_coeff"])) {
+  if (species.isSet("low_n_coeff")) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
-    ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N);
+    ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N) + FV::Div_par_K_Grad_par(low_n_coeff * floor(N, density_floor), V);
   }
 
   // Other sources/sinks

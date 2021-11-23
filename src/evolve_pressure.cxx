@@ -160,7 +160,7 @@ void EvolvePressure::finally(const Options& state) {
   if (species.isSet("low_n_coeff")) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
-    ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N);
+    ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N) + FV::Div_par_K_Grad_par(low_n_coeff, P);
   }
 
   // Parallel heat conduction

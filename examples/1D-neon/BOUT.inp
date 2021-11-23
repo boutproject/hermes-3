@@ -360,7 +360,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 0.99  # Recycling fraction
+recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
 
