@@ -8,9 +8,15 @@
 ///
 /// Adds a viscosity to all species which are not electrons
 ///
+/// Uses Braginskii collisional form, combined with a
+/// SOLPS-like flux limiter.
+///
 /// Needs to be calculated after collisions, because collision
 /// frequency is used to calculate parallel viscosity
 struct IonViscosity : public Component {
+  /// Inputs
+  /// - <name>
+  ///   - eta_limit_alpha    Flux limiter coefficient
   IonViscosity(std::string name, Options& alloptions, Solver*);
 
   /// Inputs
@@ -27,7 +33,7 @@ struct IonViscosity : public Component {
   ///
   void transform(Options &state) override;
 private:
-
+  BoutReal eta_limit_alpha; ///< Flux limit coefficient
 };
 
 namespace {
