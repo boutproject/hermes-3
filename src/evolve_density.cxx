@@ -88,14 +88,12 @@ void EvolveDensity::transform(Options &state) {
   if (evolve_log) {
     // Evolving logN, but most calculations use N
     N = exp(logN);
-  } else {
-    N = floor(N, 0.0);
   }
 
   mesh->communicate(N);
 
   auto& species = state["species"][name];
-  set(species["density"], N);
+  set(species["density"], floor(N, 0.0)); // Density in state always >= 0
   set(species["AA"], AA); // Atomic mass
   if (charge != 0.0) { // Don't set charge for neutral species
     set(species["charge"], charge);
@@ -118,8 +116,9 @@ void EvolveDensity::finally(const Options &state) {
 
   auto& species = state["species"][name];
 
-  // Get updated density with boundary conditions
-  N = get<Field3D>(species["density"]);
+  // Get density boundary conditions
+  // but retain densities which fall below zero
+  N.setBoundaryTo(get<Field3D>(species["density"]));
 
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow

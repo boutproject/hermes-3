@@ -57,8 +57,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     .withDefault((name == "e") ? 3.16 : 3.9);
 
   kappa_limit_alpha = options["kappa_limit_alpha"]
-    .doc("Flux limiter factor. < 0 means no limit. Default is 0.2 for electrons, 1 for ions.")
-    .withDefault((name == "e") ? 0.2 : 1.0);
+    .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
+    .withDefault(-1.0);
 
   p_div_v = options["p_div_v"]
                 .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
