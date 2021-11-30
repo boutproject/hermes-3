@@ -51,6 +51,7 @@
 #include "include/upstream_density_feedback.hxx"
 #include "include/thermal_force.hxx"
 #include "include/ion_viscosity.hxx"
+#include "include/relax_potential.hxx"
 
 #include "include/loadmetric.hxx"
 

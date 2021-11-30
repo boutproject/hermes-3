@@ -53,6 +53,7 @@ set(HERMES_SOURCES
     src/isothermal.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
+    src/relax_potential.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
     src/sheath_boundary_simple.cxx
@@ -100,6 +101,7 @@ set(HERMES_SOURCES
     include/quasineutral.hxx
     include/radiation.hxx
     include/recycling.hxx
+    include/relax_potential.hxx
     include/sheath_boundary.hxx
     include/sheath_boundary_simple.hxx
     include/sheath_closure.hxx
