@@ -25,13 +25,14 @@ struct RelaxPotential : public Component {
   ///   - laplacian
   ///     Options for the Laplacian phi solver
   ///
-  RelaxPotential(std::string name, Options &options, Solver *solver);
+  RelaxPotential(std::string name, Options& options, Solver* solver);
 
   /// Optional inputs
   ///
   /// - species
   ///   - pressure and charge => Calculates diamagnetic terms [if diamagnetic=true]
-  ///   - pressure, charge and mass => Calculates polarisation current terms [if diamagnetic_polarisation=true]
+  ///   - pressure, charge and mass => Calculates polarisation current terms
+  ///     [if diamagnetic_polarisation=true]
   ///
   /// Sets in the state
   /// - species
@@ -44,14 +45,14 @@ struct RelaxPotential : public Component {
   ///
   /// Note: Diamagnetic current calculated here, but could be moved
   ///       to a component with the diamagnetic drift advection terms
-  void transform(Options &state) override;
+  void transform(Options& state) override;
 
   /// Optional inputs
   /// - fields
   ///   - DivJextra    Divergence of current, including parallel current
   ///                  Not including diamagnetic or polarisation currents
   ///
-  void finally(const Options &state) override;
+  void finally(const Options& state) override;
 
 private:
   Field3D Vort; // Evolving vorticity
@@ -59,20 +60,21 @@ private:
   Field3D phi1; // Scaled electrostatic potential, evolving in time ϕ_1 = λ_2 ϕ
   Field3D phi;  // Electrostatic potential
 
-  bool exb_advection; // Include nonlinear ExB advection?
-  bool diamagnetic; // Include diamagnetic current?
-  bool diamagnetic_polarisation; // Include diamagnetic drift in polarisation current
-  bool boussinesq;  ///< Use the Boussinesq approximation?
-  BoutReal average_atomic_mass; // Weighted average atomic mass, for polarisaion current (Boussinesq approximation)
-  bool poloidal_flows;   ///< Include poloidal ExB flow?
-  bool bndry_flux;  ///< Allow flows through radial boundaries?
+  bool exb_advection;            //< Include nonlinear ExB advection?
+  bool diamagnetic;              //< Include diamagnetic current?
+  bool diamagnetic_polarisation; //< Include diamagnetic drift in polarisation current?
+  bool boussinesq;               ///< Use the Boussinesq approximation?
+  BoutReal average_atomic_mass;  //< Weighted average atomic mass, for polarisaion current
+                                 // (Boussinesq approximation)
+  bool poloidal_flows;           ///< Include poloidal ExB flow?
+  bool bndry_flux;               ///< Allow flows through radial boundaries?
 
   bool sheath_boundary; ///< Set outer boundary to j=0?
 
-  Field2D Bsq; // SQ(coord->Bxy)
-  Vector2D Curlb_B; // Curvature vector Curl(b/B)
+  Field2D Bsq;      ///< SQ(coord->Bxy)
+  Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
 
-  BoutReal lambda_1, lambda_2;
+  BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
 };
 
 namespace {
