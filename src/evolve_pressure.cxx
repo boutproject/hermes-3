@@ -6,22 +6,9 @@
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
+#include "../include/hermes_utils.hxx"
 
 using bout::globals::mesh;
-
-namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
-
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  int ny = f.getNy();
-  int nz = f.getNz();
-  return Ind3D{(x * ny + y) * nz + z, ny, nz};
-}
-} // namespace
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
     : name(name) {
@@ -64,6 +51,14 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   thermal_conduction = options["thermal_conduction"]
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
+
+  kappa_coefficient = options["kappa_coefficient"]
+    .doc("Numerical coefficient in parallel heat conduction. Default is 3.16 for electrons, 3.9 otherwise")
+    .withDefault((name == "e") ? 3.16 : 3.9);
+
+  kappa_limit_alpha = options["kappa_limit_alpha"]
+    .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
+    .withDefault(-1.0);
 
   p_div_v = options["p_div_v"]
                 .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
@@ -170,11 +165,17 @@ void EvolvePressure::finally(const Options& state) {
     }
   }
 
+  if (species.isSet("low_n_coeff")) {
+    // Low density parallel diffusion
+    Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
+    ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N) + FV::Div_par_K_Grad_par(low_n_coeff, P);
+  }
+
   // Parallel heat conduction
   if (thermal_conduction) {
 
     // Calculate ion collision times
-    const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
+    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -182,7 +183,33 @@ void EvolvePressure::finally(const Options& state) {
     // kappa ~ n * v_th^2 * tau
     //
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
-    kappa_par = 3.9 * P * tau / AA;
+    kappa_par = kappa_coefficient * P * tau / AA;
+
+    if (kappa_limit_alpha > 0.0) {
+      /*
+       * Flux limiter, as used in SOLPS.
+       *
+       * Calculate the heat flux from Spitzer-Harm and flux limit
+       *
+       * Typical value of alpha ~ 0.2 for electrons
+       *
+       * R.Schneider et al. Contrib. Plasma Phys. 46, No. 1-2, 3 – 191 (2006)
+       * DOI 10.1002/ctpp.200610001
+       */
+
+      Field3D N = get<Field3D>(species["density"]);
+
+      // Spitzer-Harm heat flux
+      Field3D q_SH = kappa_par * Grad_par(T);
+      // Free-streaming flux
+      Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
+
+      // This results in a harmonic average of the heat fluxes
+      kappa_par = kappa_par / (1. + abs(q_SH / floor(q_fl, 1e-10)));
+
+      // Values of kappa on cell boundaries are needed for fluxes
+      mesh->communicate(kappa_par);
+    }
 
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {

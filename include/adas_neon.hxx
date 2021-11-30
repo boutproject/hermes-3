@@ -19,11 +19,14 @@ constexpr std::array<BoutReal, 10> neon_ionisation_energy{
 ///
 /// ne, ne+, ne+2, ne+3, ...
 ///
-/// Special cases for level=0 and level=1
+/// Special cases for level=0, 1 and 10
 ///
 /// @tparam level  The ionisation level: 0 is neutral, 10 is fully stripped.
 template <int level>
 constexpr std::initializer_list<char> neon_species_name{'n', 'e', '+', '0' + level};
+
+template <>
+constexpr std::initializer_list<char> neon_species_name<10>{'n', 'e', '+', '1', '0'};
 
 template <>
 constexpr std::initializer_list<char> neon_species_name<1>{'n', 'e', '+'};

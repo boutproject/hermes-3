@@ -528,7 +528,7 @@ void SheathBoundary::transform(Options &state) {
           // Ion sheath heat transmission coefficient
           //
           // 1 / (1 + ∂_{ln n_e} ln s_i = s_i * ∂n_e / (s_i * ∂n_e + ∂ n_i) 
-          BoutReal s_i = nisheath / nesheath; // Concentration
+          BoutReal s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0; // Concentration
           BoutReal grad_ne = Ne[i] - nesheath;
           BoutReal grad_ni = Ni[i] - nisheath;
 

@@ -71,6 +71,7 @@ set(HERMES_SOURCES
     src/hydrogen_charge_exchange.cxx
     src/upstream_density_feedback.cxx
     src/thermal_force.cxx
+    src/ion_viscosity.cxx
     include/adas_reaction.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
@@ -88,8 +89,10 @@ set(HERMES_SOURCES
     include/evolve_pressure.hxx
     include/fixed_fraction_ions.hxx
     include/full_velocity.hxx
+    include/hermes_utils.hxx
     include/hydrogen_charge_exchange.hxx
     include/integrate.hxx
+    include/ion_viscosity.hxx
     include/ionisation.hxx
     include/loadmetric.hxx
     include/neutral_mixed.hxx

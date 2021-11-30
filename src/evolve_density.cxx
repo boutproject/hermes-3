@@ -7,6 +7,7 @@
 
 #include "../include/evolve_density.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
 
 using bout::globals::mesh;
 
@@ -23,6 +24,8 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
 
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+
   low_n_diffuse = options["low_n_diffuse"]
                       .doc("Parallel diffusion at low density")
                       .withDefault<bool>(false);
@@ -30,7 +33,7 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
-  
+
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault<bool>(false);
  
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of density?").withDefault<bool>(false);
@@ -86,28 +89,36 @@ void EvolveDensity::transform(Options &state) {
     // Evolving logN, but most calculations use N
     N = exp(logN);
   }
-  // Note: flooring the density here causes convergence issues
 
   mesh->communicate(N);
 
   auto& species = state["species"][name];
-  set(species["density"], N);
+  set(species["density"], floor(N, 0.0)); // Density in state always >= 0
   set(species["AA"], AA); // Atomic mass
   if (charge != 0.0) { // Don't set charge for neutral species
     set(species["charge"], charge);
+  }
+
+  if (low_n_diffuse) {
+    // Calculate a diffusion coefficient which can be used in N, P and NV equations
+
+    auto* coord = mesh->getCoordinates();
+
+    Field3D low_n_coeff = SQ(coord->dy) * coord->g_22 *
+      log(density_floor / clamp(N, 1e-3 * density_floor, density_floor));
+    low_n_coeff.applyBoundary("neumann");
+    set(species["low_n_coeff"], low_n_coeff);
   }
 }
 
 void EvolveDensity::finally(const Options &state) {
   AUTO_TRACE();
 
-  // Get the coordinate system
-  auto coord = N.getCoordinates();
-
   auto& species = state["species"][name];
 
-  // Get updated density with boundary conditions
-  N = get<Field3D>(species["density"]);
+  // Get density boundary conditions
+  // but retain densities which fall below zero
+  N.setBoundaryTo(get<Field3D>(species["density"]));
 
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
@@ -146,13 +157,16 @@ void EvolveDensity::finally(const Options &state) {
   if (low_n_diffuse) {
     // Diffusion which kicks in at very low density, in order to
     // help prevent negative density regions
-    ddt(N) += FV::Div_par_K_Grad_par(SQ(coord->dy) * coord->g_22 * 1e-4 / N, N);
+
+    Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
+    ddt(N) += FV::Div_par_K_Grad_par(low_n_coeff, N);
   }
   if (low_n_diffuse_perp) {
-    ddt(N) += Div_Perp_Lap_FV_Index(1e-4 / N, N, bndry_flux);
+    ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3*density_floor), N, bndry_flux);
   }
 
   if (hyper_z > 0.) {
+    auto* coord = N.getCoordinates();
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 
