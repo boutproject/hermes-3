@@ -28,6 +28,7 @@ SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
                   hydrogen_charge_exchange.cxx \
                   upstream_density_feedback.cxx \
                   thermal_force.cxx \
-                  electron_force_balance.cxx
+                  electron_force_balance.cxx \
+		  relax_potential.cxx
 
 include $(BOUT_TOP)/make.config
