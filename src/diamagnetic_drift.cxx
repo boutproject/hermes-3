@@ -19,12 +19,12 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
     Curlb_B.x = Curlb_B.y = Curlb_B.z = 0.0;
   }
 
-  if (Options::root()["mesh"]["paralleltransform"].withDefault<std::string>("none")
+  if (Options::root()["mesh"]["paralleltransform"]["type"].as<std::string>()
       == "shifted") {
     Field2D I;
-    if (mesh->get(I, "sinty"))
+    if (mesh->get(I, "sinty")) {
       I = 0.0;
-
+    }
     Curlb_B.z += I * Curlb_B.x;
   }
 
@@ -59,18 +59,18 @@ void DiamagneticDrift::transform(Options& state) {
     // Diamagnetic drift velocity
     Vector3D vD = (T / q) * Curlb_B;
 
-    if (species.isSet("density")) {
+    if (IS_SET(species["density"])) {
       auto N = GET_VALUE(Field3D, species["density"]);
 
       subtract(species["density_source"], FV::Div_f_v(N, vD, bndry_flux));
     }
 
-    if (species.isSet("pressure")) {
+    if (IS_SET(species["pressure"])) {
       auto P = get<Field3D>(species["pressure"]);
       subtract(species["energy_source"], (5. / 2) * FV::Div_f_v(P, vD, bndry_flux));
     }
 
-    if (species.isSet("momentum")) {
+    if (IS_SET(species["momentum"])) {
       auto NV = get<Field3D>(species["momentum"]);
       subtract(species["momentum_source"], FV::Div_f_v(NV, vD, bndry_flux));
     }

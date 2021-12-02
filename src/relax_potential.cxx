@@ -106,14 +106,14 @@ void RelaxPotential::transform(Options& state) {
     for (auto& kv : allspecies.getChildren()) {
       Options& species = allspecies[kv.first]; // Note: need non-const
 
-      if (!(species.isSet("pressure") and species.isSet("charge")
+      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
             and (get<BoutReal>(species["charge"]) != 0.0))) {
         continue; // No pressure or charge -> no diamagnetic current
       }
       // Note that the species must have a charge, but charge is not used,
       // because it cancels out in the expression for current
 
-      auto P = get<Field3D>(species["pressure"]);
+      auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 
       Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
 
@@ -135,14 +135,14 @@ void RelaxPotential::transform(Options& state) {
       for (auto& kv : allspecies.getChildren()) {
         Options& species = allspecies[kv.first]; // Note: need non-const
 
-        if (!(species.isSet("pressure") and species.isSet("charge")
-              and species.isSet("AA"))) {
+        if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
+              and IS_SET(species["AA"]))) {
           continue; // No pressure, charge or mass -> no polarisation current due to
                     // diamagnetic flow
         }
-        auto P = get<Field3D>(species["pressure"]);
-        auto AA = get<BoutReal>(species["AA"]);
-        auto charge = get<BoutReal>(species["charge"]);
+        auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+        auto AA = GET_VALUE(BoutReal,  species["AA"]);
+        auto charge = GET_VALUE(BoutReal, species["charge"]);
 
         add(species["energy_source"], (3. / 2) * P * DivJdia);
       }

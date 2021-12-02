@@ -109,6 +109,10 @@ T getNonFinal(const Options& option) {
   }
 }
 
+#define TOSTRING_(x) #x
+#define TOSTRING(x) TOSTRING_(x)
+
+
 /// Faster non-printing getter for Options
 /// If this fails, it will throw BoutException
 ///
@@ -134,13 +138,34 @@ T get(const Options& option, const std::string& location = "") {
 /// afterwards will lead to an error
 bool isSetFinal(const Options& option, const std::string& location = "");
 
+#if CHECKLEVEL >= 1
+/// A wrapper around isSetFinal() which captures debugging information
+///
+/// Usage:
+///   if (IS_SET(option["value"]));
+#define IS_SET(option) \
+  isSetFinal(option, __FILE__ ":" TOSTRING(__LINE__))
+#else
+#define IS_SET(option) \
+  isSetFinal(option)
+#endif
+
 /// Check if an option can be fetched
 /// Sets the final flag so setting the value in the domain
 /// afterwards will lead to an error
 bool isSetFinalNoBoundary(const Options& option, const std::string& location = "");
 
-#define TOSTRING_(x) #x
-#define TOSTRING(x) TOSTRING_(x)
+#if CHECKLEVEL >= 1
+/// A wrapper around isSetFinalNoBoundary() which captures debugging information
+///
+/// Usage:
+///   if (IS_SET_NOBOUNDARY(option["value"]));
+#define IS_SET_NOBOUNDARY(option) \
+  isSetFinalNoBoundary(option, __FILE__ ":" TOSTRING(__LINE__))
+#else
+#define IS_SET_NOBOUNDARY(option) \
+  isSetFinalNoBoundary(option)
+#endif
 
 #if CHECKLEVEL >= 1
 /// A wrapper around get<>() which captures debugging information

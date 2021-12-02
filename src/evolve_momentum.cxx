@@ -234,20 +234,27 @@ void EvolveMomentum::finally(const Options &state) {
   // Get updated momentum with boundary conditions
   NV = get<Field3D>(species["momentum"]);
 
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
-    // Electrostatic potential set -> include ExB flow
+  // Get the species density
+  Field3D N = get<Field3D>(species["density"]);
 
-    Field3D phi = get<Field3D>(state["fields"]["phi"]);
+  if (state.isSection("fields") and state["fields"].isSet("phi")
+      and species.isSet("charge")) {
 
-    ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                    true); // ExB drift
+    BoutReal Z = get<BoutReal>(species["charge"]);
+    if (Z != 0.0) {
+      // Electrostatic potential set and species has charge
+      // -> include ExB flow and parallel force
+
+      Field3D phi = get<Field3D>(state["fields"]["phi"]);
+
+      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+                                       true); // ExB drift
+
+    }
   } else {
     ddt(NV) = 0.0;
   }
 
-  // Get the species density
-  Field3D N = get<Field3D>(species["density"]);
-  
   // Parallel flow
   V = get<Field3D>(species["velocity"]);
 

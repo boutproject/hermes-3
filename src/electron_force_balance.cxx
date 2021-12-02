@@ -6,6 +6,12 @@
 void ElectronForceBalance::transform(Options &state) {
   AUTO_TRACE();
 
+  if (IS_SET(state["fields"]["phi"])) {
+    // Here we use electron force balance to calculate the parallel electric field
+    // rather than the electrostatic potential
+    throw BoutException("Cannot calculate potential and use electron force balance\n");
+  }
+
   // Get the electron pressure
   // Note: The pressure boundary can be set in sheath boundary condition
   //       which depends on the electron velocity being set here first.

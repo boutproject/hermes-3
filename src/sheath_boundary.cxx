@@ -92,21 +92,24 @@ void SheathBoundary::transform(Options &state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = floor(getNoBoundary<Field3D>(electrons["density"]), 0.0);
-  Field3D Te = getNoBoundary<Field3D>(electrons["temperature"]);
-  Field3D Pe =
-      electrons.isSet("pressure") ? getNoBoundary<Field3D>(electrons["pressure"]) : Te * Ne;
+  Field3D Ne = floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0);
+  Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]);
+  Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
+                   ? getNoBoundary<Field3D>(electrons["pressure"])
+                   : Te * Ne;
 
   // Ratio of specific heats
   const BoutReal electron_adiabatic =
-      electrons.isSet("adiabatic") ? get<BoutReal>(electrons["adiabatic"]) : 5. / 3;
+      IS_SET(electrons["adiabatic"]) ? get<BoutReal>(electrons["adiabatic"]) : 5. / 3;
 
   // Mass, normalised to proton mass
   const BoutReal Me =
-      electrons.isSet("AA") ? get<BoutReal>(electrons["AA"]) : SI::Me / SI::Mp;
+      IS_SET(electrons["AA"]) ? get<BoutReal>(electrons["AA"]) : SI::Me / SI::Mp;
 
   // This is for applying boundary conditions
-  Field3D Ve = electrons.isSet("velocity") ? getNoBoundary<Field3D>(electrons["velocity"]) : 0.0;
+  Field3D Ve = IS_SET_NOBOUNDARY(electrons["velocity"])
+                   ? getNoBoundary<Field3D>(electrons["velocity"])
+                   : 0.0;
 
   Coordinates *coord = mesh->getCoordinates();
 
@@ -115,12 +118,12 @@ void SheathBoundary::transform(Options &state) {
   // If phi is set, use free boundary condition
   // If phi not set, calculate assuming zero current
   Field3D phi;
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
+  if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     phi = getNoBoundary<Field3D>(state["fields"]["phi"]);
   } else {
     // Calculate potential phi assuming zero current
     // Note: This is equation (22) in Tskhakaya 2005, with I = 0
-    
+
     // Need to sum  s_i Z_i C_i over all ion species
     //
     // To avoid looking up species for every grid point, this
@@ -129,19 +132,19 @@ void SheathBoundary::transform(Options &state) {
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
-      
-      if ((kv.first == "e") or !species.isSet("charge")
+      Options& species = allspecies[kv.first];
+
+      if ((kv.first == "e") or !IS_SET(species["charge"])
           or (get<BoutReal>(species["charge"]) == 0.0)) {
         continue; // Skip electrons and non-charged ions
       }
-      
-      const Field3D Ni = floor(getNoBoundary<Field3D>(species["density"]), 0.0);
-      const Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
-      const BoutReal Mi = getNoBoundary<BoutReal>(species["AA"]);
-      const BoutReal Zi = getNoBoundary<BoutReal>(species["charge"]);
 
-      const BoutReal adiabatic = species.isSet("adiabatic")
+      const Field3D Ni = floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0);
+      const Field3D Ti = GET_NOBOUNDARY(Field3D, species["temperature"]);
+      const BoutReal Mi = GET_NOBOUNDARY(BoutReal, species["AA"]);
+      const BoutReal Zi = GET_NOBOUNDARY(BoutReal, species["charge"]);
+
+      const BoutReal adiabatic = IS_SET(species["adiabatic"])
                                      ? get<BoutReal>(species["adiabatic"])
                                      : 5. / 3; // Ratio of specific heats (ideal gas)
 
@@ -338,11 +341,11 @@ void SheathBoundary::transform(Options &state) {
 
         // Free boundary potential linearly extrapolated
         phi[ip] = 2 * phi[i] - phi[im];
-        
+
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]);  // electron temperature
         const BoutReal phisheath = floor(0.5 * (phi[ip] + phi[i]), 0.0); // Electron saturation at phi = 0
-        
+
         // Electron sheath heat transmission
         const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / tesheath;
 
@@ -380,11 +383,14 @@ void SheathBoundary::transform(Options &state) {
   // Set energy source (negative in cell next to sheath)
   set(electrons["energy_source"], electron_energy_source);
 
-  if (electrons.isSet("velocity")) {
+  if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
     setBoundary(electrons["velocity"], Ve);
   }
+  if (IS_SET_NOBOUNDARY(electrons["momentum"])) {
+    setBoundary(electrons["momentum"], NVe);
+  }
 
-  if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
+  if (always_set_phi or IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     // Set the potential, including boundary conditions
     setBoundary(state["fields"]["phi"], phi);
   }
@@ -399,7 +405,8 @@ void SheathBoundary::transform(Options &state) {
     Options& species = allspecies[kv.first]; // Note: Need non-const
 
     // Ion charge
-    const BoutReal Zi = species.isSet("charge") ? get<BoutReal>(species["charge"]) : 0.0;
+    const BoutReal Zi =
+        IS_SET(species["charge"]) ? get<BoutReal>(species["charge"]) : 0.0;
 
     if (Zi == 0.0)
       continue; // Neutral -> skip
@@ -407,9 +414,9 @@ void SheathBoundary::transform(Options &state) {
     // Characteristics of this species
     const BoutReal Mi = get<BoutReal>(species["AA"]);
 
-    const BoutReal adiabatic = species.isSet("adiabatic")
-                                     ? get<BoutReal>(species["adiabatic"])
-                                     : 5. / 3; // Ratio of specific heats (ideal gas)
+    const BoutReal adiabatic = IS_SET(species["adiabatic"])
+                                   ? get<BoutReal>(species["adiabatic"])
+                                   : 5. / 3; // Ratio of specific heats (ideal gas)
 
     // Density and temperature boundary conditions will be imposed (free)
     Field3D Ni = floor(getNoBoundary<Field3D>(species["density"]), 0.0);
