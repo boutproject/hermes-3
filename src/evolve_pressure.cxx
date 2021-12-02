@@ -110,7 +110,6 @@ void EvolvePressure::transform(Options& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
   T = P / floor(N, density_floor);
-  T.applyBoundary("neumann");
 
   set(species["temperature"], T);
 }
