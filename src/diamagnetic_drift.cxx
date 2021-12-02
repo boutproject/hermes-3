@@ -19,8 +19,9 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
     Curlb_B.x = Curlb_B.y = Curlb_B.z = 0.0;
   }
 
-  if (Options::root()["mesh"]["paralleltransform"]["type"].as<std::string>()
-      == "shifted") {
+  Options& paralleltransform = Options::root()["mesh"]["paralleltransform"];
+  if (paralleltransform.isSet("type") and
+      paralleltransform["type"].as<std::string>() == "shifted") {
     Field2D I;
     if (mesh->get(I, "sinty")) {
       I = 0.0;
