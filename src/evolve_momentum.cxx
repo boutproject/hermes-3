@@ -250,6 +250,9 @@ void EvolveMomentum::finally(const Options &state) {
       ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
                                        true); // ExB drift
 
+      // Parallel electric field
+      // Force density = - Z N ∇ϕ
+      ddt(NV) -= Z * N * Grad_par(phi);
     }
   } else {
     ddt(NV) = 0.0;
