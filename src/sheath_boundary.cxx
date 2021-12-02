@@ -111,6 +111,10 @@ void SheathBoundary::transform(Options &state) {
                    ? getNoBoundary<Field3D>(electrons["velocity"])
                    : 0.0;
 
+  Field3D NVe = IS_SET_NOBOUNDARY(electrons["momentum"])
+                    ? getNoBoundary<Field3D>(electrons["momentum"])
+                    : 0.0;
+
   Coordinates *coord = mesh->getCoordinates();
 
   //////////////////////////////////////////////////////////////////
@@ -302,6 +306,7 @@ void SheathBoundary::transform(Options &state) {
           -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
 
         Ve[im] = 2 * vesheath - Ve[i];
+        NVe[im] = 2. * Me * nesheath * vesheath - NVe[i];
 
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
@@ -355,6 +360,7 @@ void SheathBoundary::transform(Options &state) {
           sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
 
         Ve[ip] = 2 * vesheath - Ve[i];
+        NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
 
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
@@ -479,12 +485,12 @@ void SheathBoundary::transform(Options &state) {
 
           // Ion sheath heat transmission coefficient
           const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath;
-          
+
           const BoutReal visheath = - sqrt(C_i_sq); // Negative -> into sheath
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
-          NVi[im] = 2. * nisheath * visheath - NVi[i];
+          NVi[im] = 2. * Mi * nisheath * visheath - NVi[i];
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
@@ -556,7 +562,7 @@ void SheathBoundary::transform(Options &state) {
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
-          NVi[ip] = 2. * nisheath * visheath - NVi[i];
+          NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
