@@ -62,7 +62,6 @@ void DiamagneticDrift::transform(Options& state) {
 
     if (IS_SET(species["density"])) {
       auto N = GET_VALUE(Field3D, species["density"]);
-
       subtract(species["density_source"], FV::Div_f_v(N, vD, bndry_flux));
     }
 

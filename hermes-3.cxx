@@ -26,6 +26,7 @@
 #include <bout/constants.hxx>
 #include "include/ionisation.hxx"
 #include "include/neutral_mixed.hxx"
+#include "include/diamagnetic_drift.hxx"
 #include "include/electron_force_balance.hxx"
 #include "include/evolve_density.hxx"
 #include "include/isothermal.hxx"
