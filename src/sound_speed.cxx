@@ -9,11 +9,11 @@ void SoundSpeed::transform(Options &state) {
     const Options& species = kv.second;
     
     if (species.isSet("pressure")) {
-      total_pressure += get<Field3D>(species["pressure"]);
+      total_pressure += GET_NOBOUNDARY(Field3D, species["pressure"]);
     }
 
     if (species.isSet("density") and species.isSet("AA")) {
-      total_density += get<Field3D>(species["density"]) * get<BoutReal>(species["AA"]);
+      total_density += GET_NOBOUNDARY(Field3D, species["density"]) * get<BoutReal>(species["AA"]);
     }
   }
 
