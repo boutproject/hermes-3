@@ -2,6 +2,7 @@
 #include "../include/vorticity.hxx"
 #include "../include/div_ops.hxx"
 
+#include <bout/fv_ops.hxx>
 #include <invert_laplace.hxx>
 #include <bout/invert/laplacexy.hxx>
 #include <bout/constants.hxx>
@@ -54,6 +55,18 @@ Vorticity::Vorticity(std::string name, Options &alloptions, Solver *solver) {
                  .doc("Split phi into n=0 and n!=0 components")
                  .withDefault<bool>(false);
 
+  // Numerical dissipation terms
+  // These are required to suppress parallel zig-zags in
+  // cell centred formulations. Essentially adds (hopefully small)
+  // parallel currents
+
+  vort_dissipation = options["vort_dissipation"]
+    .doc("Parallel dissipation of vorticity")
+    .withDefault<bool>(false);
+
+  phi_dissipation = options["phi_dissipation"]
+    .doc("Parallel dissipation of potential [Recommended]")
+    .withDefault<bool>(true);
   auto coord = mesh->getCoordinates();
   
   if (split_n0) {
