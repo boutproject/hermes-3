@@ -264,10 +264,11 @@ void EvolveMomentum::finally(const Options &state) {
   // Typical wave speed used for numerical diffusion
   Field3D sound_speed;
   if (state.isSet("sound_speed")) {
-    Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+    sound_speed = get<Field3D>(state["sound_speed"]);
   } else {
     Field3D T = get<Field3D>(species["temperature"]);
-    sound_speed = sqrt(T);
+    BoutReal AA = get<BoutReal>(species["AA"]);
+    sound_speed = sqrt(T / AA);
   }
 
   // Note: Density floor should be consistent with calculation of V
@@ -277,7 +278,6 @@ void EvolveMomentum::finally(const Options &state) {
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
     Field3D P = get<Field3D>(species["pressure"]);
-    
     ddt(NV) -= Grad_par(P);
   }
 

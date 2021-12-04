@@ -140,10 +140,11 @@ void EvolvePressure::finally(const Options& state) {
     // Typical wave speed used for numerical diffusion
     Field3D sound_speed;
     if (state.isSet("sound_speed")) {
-      Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+      sound_speed = get<Field3D>(state["sound_speed"]);
     } else {
       Field3D T = get<Field3D>(species["temperature"]);
-      sound_speed = sqrt(T);
+      BoutReal AA = get<BoutReal>(species["AA"]);
+      sound_speed = sqrt(T / AA);
     }
 
     if (p_div_v) {
