@@ -69,9 +69,13 @@ private:
 
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
+
+  bool phi_boundary_relax; ///< Relax boundary to zero-gradient
+  BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
+  BoutReal phi_boundary_last_update; ///< Time when last updated
+
   bool split_n0; // Split phi into n=0 and n!=0 components
   LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
-  Field2D phi2D;        // Axisymmetric phi
 
   Field2D Bsq; // SQ(coord->Bxy)
   Vector2D Curlb_B; // Curvature vector Curl(b/B)
