@@ -360,6 +360,9 @@ void Vorticity::transform(Options &state) {
       - Pi_sum;
   }
 
+  // Ensure that potential is set in the communication guard cells
+  mesh->communicate(phi);
+
   ddt(Vort) = 0.0;
 
   if (diamagnetic) {
