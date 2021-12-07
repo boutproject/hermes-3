@@ -145,14 +145,7 @@ void EvolveDensity::finally(const Options &state) {
       sound_speed = sqrt(T / AA);
     }
 
-    if (state.isSection("fields") and state["fields"].isSet("phi")) {
-      // Parallel wave speed increased to electron sound speed
-      // since electrostatic & electromagnetic waves are supported
-      ddt(N) -= FV::Div_par(N, V, sqrt(SI::Me / SI::Mp) * sound_speed);
-    } else {
-      // Parallel wave speed is ion sound speed
-      ddt(N) -= FV::Div_par(N, V, sound_speed);
-    }
+    ddt(N) -= FV::Div_par(N, V, sound_speed);
   }
 
   if (low_n_diffuse) {
