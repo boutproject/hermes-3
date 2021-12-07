@@ -17,5 +17,6 @@ void SoundSpeed::transform(Options &state) {
     }
   }
 
-  set(state["sound_speed"], sqrt(total_pressure / total_density));
+  Field3D sound_speed = sqrt(total_pressure / floor(total_density, 1e-10));
+  set(state["sound_speed"], sound_speed);
 }

@@ -468,7 +468,7 @@ void SheathBoundary::transform(Options &state) {
           // (from comparing C_i^2 in eq. 9 with eq. 20
           //
           // 
-          BoutReal s_i = nisheath / nesheath; // Concentration
+          BoutReal s_i = clip(nisheath / floor(nesheath, 1e-10), 0, 1); // Concentration
           BoutReal grad_ne = Ne[i] - nesheath;
           BoutReal grad_ni = Ni[i] - nisheath;
 
