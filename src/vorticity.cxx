@@ -431,7 +431,9 @@ void Vorticity::transform(Options &state) {
   
 void Vorticity::finally(const Options &state) {
   AUTO_TRACE();
-  
+
+  phi = get<Field3D>(state["fields"]["phi"]);
+
   if (exb_advection) {
     ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows);
 
