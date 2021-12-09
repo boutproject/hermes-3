@@ -1,4 +1,5 @@
 
+#include <derivs.hxx>
 #include <difops.hxx>
 #include <bout/fv_ops.hxx>
 
@@ -198,6 +199,8 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
 
+  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
+
   V.setBoundary(std::string("V") + name);
 
   if (options["diagnose"]
@@ -285,6 +288,11 @@ void EvolveMomentum::finally(const Options &state) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N) + FV::Div_par_K_Grad_par(low_n_coeff * floor(N, density_floor), V);
+  }
+
+  if (hyper_z > 0.) {
+    auto* coord = N.getCoordinates();
+    ddt(NV) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(NV);
   }
 
   // Other sources/sinks

@@ -79,6 +79,7 @@ private:
 
   Field2D Bsq; // SQ(coord->Bxy)
   Vector2D Curlb_B; // Curvature vector Curl(b/B)
+  BoutReal hyper_z; ///< Hyper-viscosity in Z
 };
 
 namespace {

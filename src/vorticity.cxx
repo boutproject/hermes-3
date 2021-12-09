@@ -7,6 +7,7 @@
 #include <bout/invert/laplacexy.hxx>
 #include <bout/constants.hxx>
 #include <difops.hxx>
+#include <derivs.hxx>
 
 using bout::globals::mesh;
 
@@ -54,6 +55,10 @@ Vorticity::Vorticity(std::string name, Options &alloptions, Solver *solver) {
   split_n0 = options["split_n0"]
                  .doc("Split phi into n=0 and n!=0 components")
                  .withDefault<bool>(false);
+
+  hyper_z = options["hyper_z"]
+    .doc("Hyper-viscosity in Z. < 0 -> off")
+    .withDefault(-1.0);
 
   // Numerical dissipation terms
   // These are required to suppress parallel zig-zags in
@@ -151,7 +156,7 @@ Vorticity::Vorticity(std::string name, Options &alloptions, Solver *solver) {
 
 void Vorticity::transform(Options &state) {
   AUTO_TRACE();
-  
+
   auto& fields = state["fields"];
 
   // Set the boundary of phi. Both 2D and 3D fields are kept, though the 3D field
@@ -486,6 +491,12 @@ void Vorticity::finally(const Options &state) {
       // Adds dissipation term like in other equations, but depending on gradient of potential
       ddt(Vort) -= FV::Div_par(-phi, 0.0, sound_speed);
     }
+  }
+
+  if (hyper_z > 0) {
+    // Form of hyper-viscosity to suppress zig-zags in Z
+    auto* coord = Vort.getCoordinates();
+    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
   }
 }
 

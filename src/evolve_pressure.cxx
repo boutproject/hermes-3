@@ -1,6 +1,7 @@
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
+#include <derivs.hxx>
 #include <difops.hxx>
 #include <initialprofiles.hxx>
 
@@ -63,6 +64,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   p_div_v = options["p_div_v"]
                 .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
                 .withDefault<bool>(false);
+
+  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
   if (options["diagnose"]
           .doc("Save additional output diagnostics")
@@ -229,6 +232,11 @@ void EvolvePressure::finally(const Options& state) {
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
     ddt(P) += (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T, false);
+  }
+
+  if (hyper_z > 0.) {
+    auto* coord = N.getCoordinates();
+    ddt(P) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(P);
   }
 
   //////////////////////

@@ -34,7 +34,7 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
-  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault<bool>(false);
+  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
  
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of density?").withDefault<bool>(false);
 
