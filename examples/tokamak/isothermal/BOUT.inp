@@ -1,9 +1,11 @@
 # Isothermal turbulence simulation
 
-nout = 50
+nout = 200
 timestep = 100
 
-MZ = 1
+MZ = 27
+
+zperiod = 4
 
 [mesh]
 
@@ -21,7 +23,7 @@ mxstep = 10000
 [hermes]
 components = (e, i, sound_speed, vorticity,
               sheath_boundary, collisions,
-              #diamagnetic_drift
+              diamagnetic_drift
               )
 
 Nnorm = 1e18  # Reference density [m^-3]
@@ -36,7 +38,6 @@ normalise_metric = true
 diamagnetic = true   # Include diamagnetic current?
 diamagnetic_polarisation = true # Include diamagnetic drift in polarisation current?
 average_atomic_mass = i:AA   # Weighted average atomic mass, for polarisaion current
-#bndry_flux = false # Allow flows through radial boundaries
 poloidal_flows = false  # Include poloidal ExB flow
 split_n0 = false  # Split phi into n=0 and n!=0 components
 
@@ -46,8 +47,10 @@ phi_dissipation = true
 phi_boundary_relax = true
 phi_boundary_timescale = 1e-6
 
+hyper_z = 0.01
+
 [vorticity:laplacian]
-inner_boundary_flags = 16   # 
+inner_boundary_flags = 16  # INVERT_SET, setting inner boundary
 outer_boundary_flags = 16  # INVERT_SET, setting outer boundary
 
 ################################################################
@@ -63,6 +66,8 @@ charge = -1
 temperature = 20  # Electron temperature in eV
 
 poloidal_flows = false
+
+hyper_z = 0.01
 
 [Ne]
 bndry_core = dirichlet(1.0)
@@ -82,3 +87,6 @@ charge = 1
 temperature = 20   # Ion temperature in eV
 
 poloidal_flows = false
+
+hyper_z = 0.01
+
