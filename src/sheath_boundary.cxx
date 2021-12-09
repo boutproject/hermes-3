@@ -133,6 +133,7 @@ void SheathBoundary::transform(Options &state) {
     // To avoid looking up species for every grid point, this
     // loops over the boundaries once per species.
     Field3D ion_sum {zeroFrom(Ne)};
+    phi = emptyFrom(Ne); // So phi is field aligned
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {
