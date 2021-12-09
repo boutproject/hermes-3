@@ -136,14 +136,9 @@ void EvolveDensity::finally(const Options &state) {
     Field3D V = get<Field3D>(species["velocity"]);
 
     // Typical wave speed used for numerical diffusion
-    Field3D sound_speed;
-    if (state.isSet("sound_speed")) {
-      sound_speed = get<Field3D>(state["sound_speed"]);
-    } else {
-      Field3D T = get<Field3D>(species["temperature"]);
-      BoutReal AA = get<BoutReal>(species["AA"]);
-      sound_speed = sqrt(T / AA);
-    }
+    Field3D T = get<Field3D>(species["temperature"]);
+    BoutReal AA = get<BoutReal>(species["AA"]);
+    Field3D sound_speed = sqrt(T / AA);
 
     ddt(N) -= FV::Div_par(N, V, sound_speed);
   }

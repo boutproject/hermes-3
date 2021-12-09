@@ -265,14 +265,9 @@ void EvolveMomentum::finally(const Options &state) {
   V = get<Field3D>(species["velocity"]);
 
   // Typical wave speed used for numerical diffusion
-  Field3D sound_speed;
-  if (state.isSet("sound_speed")) {
-    sound_speed = get<Field3D>(state["sound_speed"]);
-  } else {
-    Field3D T = get<Field3D>(species["temperature"]);
-    BoutReal AA = get<BoutReal>(species["AA"]);
-    sound_speed = sqrt(T / AA);
-  }
+  Field3D T = get<Field3D>(species["temperature"]);
+  BoutReal AA = get<BoutReal>(species["AA"]);
+  Field3D sound_speed = sqrt(T / AA);
 
   // Note: Density floor should be consistent with calculation of V
   //       otherwise energy conservation is affected
