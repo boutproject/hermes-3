@@ -103,23 +103,26 @@ void RelaxPotential::transform(Options& state) {
 
     Options& allspecies = state["species"];
 
+    // Pre-calculate this rather than calculate for each species
+    Vector3D Grad_phi = Grad(phi);
+
     for (auto& kv : allspecies.getChildren()) {
       Options& species = allspecies[kv.first]; // Note: need non-const
 
-      if (!(species.isSet("pressure") and species.isSet("charge")
+      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
             and (get<BoutReal>(species["charge"]) != 0.0))) {
         continue; // No pressure or charge -> no diamagnetic current
       }
       // Note that the species must have a charge, but charge is not used,
       // because it cancels out in the expression for current
 
-      auto P = get<Field3D>(species["pressure"]);
+      auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 
       Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
 
       // This term energetically balances diamagnetic term
       // in the vorticity equation
-      subtract(species["energy_source"], Jdia_species * Grad(phi));
+      subtract(species["energy_source"], Jdia_species * Grad_phi);
 
       Jdia += Jdia_species; // Collect total diamagnetic current
     }
@@ -135,14 +138,12 @@ void RelaxPotential::transform(Options& state) {
       for (auto& kv : allspecies.getChildren()) {
         Options& species = allspecies[kv.first]; // Note: need non-const
 
-        if (!(species.isSet("pressure") and species.isSet("charge")
-              and species.isSet("AA"))) {
+        if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
+              and IS_SET(species["AA"]))) {
           continue; // No pressure, charge or mass -> no polarisation current due to
-                    // diamagnetic flow
+                    // rate of change of diamagnetic flow
         }
-        auto P = get<Field3D>(species["pressure"]);
-        auto AA = get<BoutReal>(species["AA"]);
-        auto charge = get<BoutReal>(species["charge"]);
+        auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 
         add(species["energy_source"], (3. / 2) * P * DivJdia);
       }
@@ -175,6 +176,26 @@ void RelaxPotential::finally(const Options& state) {
     ddt(Vort) += DivJextra;
   }
 
+  // Parallel current due to species parallel flow
+  for (auto& kv : allspecies.getChildren()) {
+    const Options& species = kv.second;
+
+    if (!species.isSet("charge") or !species.isSet("momentum")) {
+      continue; // Not charged, or no parallel flow
+    }
+    const BoutReal Z = get<BoutReal>(species["charge"]);
+    if (fabs(Z) < 1e-5) {
+      continue; // Not charged
+    }
+
+    const Field3D N = get<Field3D>(species["density"]);
+    const Field3D NV = get<Field3D>(species["momentum"]);
+    const BoutReal A = get<BoutReal>(species["AA"]);
+
+    // Note: Using NV rather than N*V so that the cell boundary flux is correct
+    ddt(Vort) += Div_par((Z / A) * NV);
+  }
+
   // Solve diffusion equation for potential
 
   if (boussinesq) {
@@ -183,20 +204,22 @@ void RelaxPotential::finally(const Options& state) {
 
     if (diamagnetic_polarisation) {
       for (auto& kv : allspecies.getChildren()) {
+        // Note: includes electrons (should it?)
+
         const Options& species = kv.second;
         if (!species.isSet("charge")) {
           continue; // Not charged
         }
-        const BoutReal Zi = get<BoutReal>(species["charge"]);
-        if (fabs(Zi) < 1e-5) {
+        const BoutReal Z = get<BoutReal>(species["charge"]);
+        if (fabs(Z) < 1e-5) {
           continue; // Not charged
         }
         if (!species.isSet("pressure")) {
           continue; // No pressure
         }
-        const BoutReal Ai = get<BoutReal>(species["AA"]);
-        const Field3D Pi = get<Field3D>(species["pressure"]);
-        ddt(phi1) += lambda_1 * FV::Div_a_Laplace_perp(Ai / Bsq, Pi);
+        const BoutReal A = get<BoutReal>(species["AA"]);
+        const Field3D P = get<Field3D>(species["pressure"]);
+        ddt(phi1) += lambda_1 * FV::Div_a_Laplace_perp(A / Bsq, P);
       }
     }
   } else {

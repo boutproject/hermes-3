@@ -17,8 +17,9 @@ Isothermal::Isothermal(std::string name, Options &alloptions,
 void Isothermal::transform(Options &state) {
 
   Options& species = state["species"][name];
-  
-  auto N = get<Field3D>(species["density"]);
+
+  // Note: The boundary of N may not be set yet
+  auto N = GET_NOBOUNDARY(Field3D, species["density"]);
 
   set(species["temperature"], T);
   set(species["pressure"], N * T);

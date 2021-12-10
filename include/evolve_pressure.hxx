@@ -57,6 +57,8 @@ private:
 
   Field3D source; ///< External pressure source
   Field3D Sp;     ///< Total pressure source
+
+  BoutReal hyper_z; ///< Hyper-diffusion
 };
 
 namespace {

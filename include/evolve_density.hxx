@@ -46,7 +46,7 @@ private:
   BoutReal density_floor;
   bool low_n_diffuse;   ///< Parallel diffusion at low density
   bool low_n_diffuse_perp;  ///< Perpendicular diffusion at low density
-  bool hyper_z;    ///< Hyper-diffusion in Z
+  BoutReal hyper_z;    ///< Hyper-diffusion in Z
 
   bool evolve_log; ///< Evolve logarithm of density?
   Field3D logN;    ///< Logarithm of density (if evolving)

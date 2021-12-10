@@ -3,15 +3,34 @@
 
 #include "../include/electron_force_balance.hxx"
 
+using bout::globals::mesh;
+
 void ElectronForceBalance::transform(Options &state) {
   AUTO_TRACE();
+
+  if (IS_SET(state["fields"]["phi"])) {
+    // Here we use electron force balance to calculate the parallel electric field
+    // rather than the electrostatic potential
+    throw BoutException("Cannot calculate potential and use electron force balance\n");
+  }
 
   // Get the electron pressure
   // Note: The pressure boundary can be set in sheath boundary condition
   //       which depends on the electron velocity being set here first.
   Options& electrons = state["species"]["e"];
   Field3D Pe = getNoBoundary<Field3D>(electrons["pressure"]);
-  Pe.applyBoundary("neumann");
+
+  // Note: only parallel boundaries needed
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      Pe(r.ind, mesh->ystart - 1, jz) = Pe(r.ind, mesh->ystart, jz);
+    }
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      Pe(r.ind, mesh->yend + 1, jz) = Pe(r.ind, mesh->yend, jz);
+    }
+  }
 
   Field3D Ne = getNoBoundary<Field3D>(electrons["density"]);
 

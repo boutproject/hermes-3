@@ -1,0 +1,92 @@
+# Isothermal turbulence simulation
+
+nout = 200
+timestep = 100
+
+MZ = 27
+
+zperiod = 4
+
+[mesh]
+
+file = "tokamak.nc"
+
+extrapolate_y = false  # Can result in negative Jacobians in guard cells
+
+[mesh:paralleltransform]
+type = shifted
+
+[solver]
+
+mxstep = 10000
+
+[hermes]
+components = (e, i, sound_speed, vorticity,
+              sheath_boundary, collisions,
+              diamagnetic_drift
+              )
+
+Nnorm = 1e18  # Reference density [m^-3]
+Bnorm = 1   # Reference magnetic field [T]
+Tnorm = 50   # Reference temperature [eV]
+
+loadmetric = false  # Recalculate metric tensor? (false -> use grid values)
+normalise_metric = true
+
+[vorticity]
+
+diamagnetic = true   # Include diamagnetic current?
+diamagnetic_polarisation = true # Include diamagnetic drift in polarisation current?
+average_atomic_mass = i:AA   # Weighted average atomic mass, for polarisaion current
+poloidal_flows = false  # Include poloidal ExB flow
+split_n0 = false  # Split phi into n=0 and n!=0 components
+
+vort_dissipation = false
+phi_dissipation = true
+
+phi_boundary_relax = true
+phi_boundary_timescale = 1e-6
+
+hyper_z = 0.01
+
+[vorticity:laplacian]
+inner_boundary_flags = 16  # INVERT_SET, setting inner boundary
+outer_boundary_flags = 16  # INVERT_SET, setting outer boundary
+
+################################################################
+# Electrons
+
+[e]
+# Evolve the electron density, parallel momentum, and fix Te
+type = evolve_density, evolve_momentum, isothermal
+
+AA = 60 / 1836
+charge = -1
+
+temperature = 20  # Electron temperature in eV
+
+poloidal_flows = false
+
+hyper_z = 0.01
+
+[Ne]
+bndry_core = dirichlet(1.0)
+bndry_all = neumann
+
+function = 1.0 - 0.9*x
+
+################################################################
+# Ions
+[i]
+# Set ion density from quasineutrality, evolve parallel flow
+type = quasineutral, evolve_momentum, isothermal
+
+AA = 2       # Atomic mass
+charge = 1
+
+temperature = 20   # Ion temperature in eV
+
+poloidal_flows = false
+
+hyper_z = 0.01
+

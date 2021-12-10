@@ -34,7 +34,7 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
-  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault<bool>(false);
+  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
  
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of density?").withDefault<bool>(false);
 
@@ -136,22 +136,11 @@ void EvolveDensity::finally(const Options &state) {
     Field3D V = get<Field3D>(species["velocity"]);
 
     // Typical wave speed used for numerical diffusion
-    Field3D sound_speed;
-    if (state.isSet("sound_speed")) {
-      Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    } else {
-      Field3D T = get<Field3D>(species["temperature"]);
-      sound_speed = sqrt(T);
-    }
+    Field3D T = get<Field3D>(species["temperature"]);
+    BoutReal AA = get<BoutReal>(species["AA"]);
+    Field3D sound_speed = sqrt(T / AA);
 
-    if (state.isSection("fields") and state["fields"].isSet("phi")) {
-      // Parallel wave speed increased to electron sound speed
-      // since electrostatic & electromagnetic waves are supported
-      ddt(N) -= FV::Div_par(N, V, sqrt(SI::Me / SI::Mp) * sound_speed);
-    } else {
-      // Parallel wave speed is ion sound speed
-      ddt(N) -= FV::Div_par(N, V, sound_speed);
-    }
+    ddt(N) -= FV::Div_par(N, V, sound_speed);
   }
 
   if (low_n_diffuse) {

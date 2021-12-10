@@ -1,4 +1,5 @@
 
+#include <derivs.hxx>
 #include <difops.hxx>
 #include <bout/fv_ops.hxx>
 
@@ -198,6 +199,8 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
 
+  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
+
   V.setBoundary(std::string("V") + name);
 
   if (options["diagnose"]
@@ -234,31 +237,37 @@ void EvolveMomentum::finally(const Options &state) {
   // Get updated momentum with boundary conditions
   NV = get<Field3D>(species["momentum"]);
 
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
-    // Electrostatic potential set -> include ExB flow
+  // Get the species density
+  Field3D N = get<Field3D>(species["density"]);
 
-    Field3D phi = get<Field3D>(state["fields"]["phi"]);
+  if (state.isSection("fields") and state["fields"].isSet("phi")
+      and species.isSet("charge")) {
 
-    ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                    true); // ExB drift
+    BoutReal Z = get<BoutReal>(species["charge"]);
+    if (Z != 0.0) {
+      // Electrostatic potential set and species has charge
+      // -> include ExB flow and parallel force
+
+      Field3D phi = get<Field3D>(state["fields"]["phi"]);
+
+      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+                                       true); // ExB drift
+
+      // Parallel electric field
+      // Force density = - Z N ∇ϕ
+      ddt(NV) -= Z * N * Grad_par(phi);
+    }
   } else {
     ddt(NV) = 0.0;
   }
 
-  // Get the species density
-  Field3D N = get<Field3D>(species["density"]);
-  
   // Parallel flow
   V = get<Field3D>(species["velocity"]);
 
   // Typical wave speed used for numerical diffusion
-  Field3D sound_speed;
-  if (state.isSet("sound_speed")) {
-    Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-  } else {
-    Field3D T = get<Field3D>(species["temperature"]);
-    sound_speed = sqrt(T);
-  }
+  Field3D T = get<Field3D>(species["temperature"]);
+  BoutReal AA = get<BoutReal>(species["AA"]);
+  Field3D sound_speed = sqrt(T / AA);
 
   // Note: Density floor should be consistent with calculation of V
   //       otherwise energy conservation is affected
@@ -267,7 +276,6 @@ void EvolveMomentum::finally(const Options &state) {
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
     Field3D P = get<Field3D>(species["pressure"]);
-    
     ddt(NV) -= Grad_par(P);
   }
 
@@ -275,6 +283,11 @@ void EvolveMomentum::finally(const Options &state) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N) + FV::Div_par_K_Grad_par(low_n_coeff * floor(N, density_floor), V);
+  }
+
+  if (hyper_z > 0.) {
+    auto* coord = N.getCoordinates();
+    ddt(NV) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(NV);
   }
 
   // Other sources/sinks

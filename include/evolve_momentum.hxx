@@ -39,6 +39,8 @@ private:
   bool poloidal_flows;  // Include ExB flow in Y direction?
 
   BoutReal density_floor;
+
+  BoutReal hyper_z;  ///< Hyper-diffusion
 };
 
 namespace {

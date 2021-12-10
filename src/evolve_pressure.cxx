@@ -1,6 +1,7 @@
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
+#include <derivs.hxx>
 #include <difops.hxx>
 #include <initialprofiles.hxx>
 
@@ -64,6 +65,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                 .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
                 .withDefault<bool>(false);
 
+  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
+
   if (options["diagnose"]
           .doc("Save additional output diagnostics")
           .withDefault<bool>(false)) {
@@ -110,7 +113,6 @@ void EvolvePressure::transform(Options& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
   T = P / floor(N, density_floor);
-  T.applyBoundary("neumann");
 
   set(species["temperature"], T);
 }
@@ -139,13 +141,9 @@ void EvolvePressure::finally(const Options& state) {
     Field3D V = get<Field3D>(species["velocity"]);
 
     // Typical wave speed used for numerical diffusion
-    Field3D sound_speed;
-    if (state.isSet("sound_speed")) {
-      Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    } else {
-      Field3D T = get<Field3D>(species["temperature"]);
-      sound_speed = sqrt(T);
-    }
+    Field3D T = get<Field3D>(species["temperature"]);
+    BoutReal AA = get<BoutReal>(species["AA"]);
+    Field3D sound_speed = sqrt(T / AA);
 
     if (p_div_v) {
       // Use the P * Div(V) form
@@ -229,6 +227,11 @@ void EvolvePressure::finally(const Options& state) {
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
     ddt(P) += (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T, false);
+  }
+
+  if (hyper_z > 0.) {
+    auto* coord = N.getCoordinates();
+    ddt(P) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(P);
   }
 
   //////////////////////

@@ -694,5 +694,39 @@ fields.
 vorticity
 ~~~~~~~~~
 
+Evolves a vorticity equation, and at each call to transform() uses a matrix
+inversion to calculate potential from vorticity.
+
+In this component the Boussinesq approximation is made, so the vorticity equation solved is
+
+.. math::
+
+   \nabla\cdot\left(\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \phi + \sum_i\frac{A_i}{B^2}\nabla_\perp p_i\right) = \Omega
+
+Where the sum is over species, :math:`\overline{A}` is the average ion
+atomic number, and :math:`\overline{n}` is the normalisation density
+(i.e. goes to 1 in the normalised equations).  This is a simplified
+version of the full expression which is:
+
+.. math::
+
+   \nabla\cdot\left(\sum_i \frac{A_i n_i}{B^2}\nabla_\perp \phi + \sum_i \frac{A_i}{B^2}\nabla_\perp p_i\right) = \Omega
+
+and is derived by replacing
+
+.. math::
+
+   \sum_i A_i n_i \rightarrow \overline{A}\overline{n}
+
 .. doxygenstruct:: Vorticity
+   :members:
+
+relax_potential
+~~~~~~~~~~~~~~~
+
+This component evolves a vorticity equation, similar to the ``vorticity`` component.
+Rather than inverting an elliptic equation at every timestep, this component evolves
+the potential in time as a diffusion equation.
+
+.. doxygenstruct:: RelaxPotential
    :members:

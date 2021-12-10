@@ -16,6 +16,8 @@
 ///   - The approximation used here is for ions having similar
 ///     gyro-orbit sizes
 ///   - No boundary condition is applied to neutral species
+///   - Boundary conditions are applied to field-aligned fields
+///     using to/fromFieldAligned
 ///
 struct SheathBoundary : public Component {
   SheathBoundary(std::string name, Options &options, Solver *);
