@@ -64,6 +64,7 @@ set(HERMES_SOURCES
     src/anomalous_diffusion.cxx
     src/recycling.cxx
     src/amjuel_hyd_ionisation.cxx
+    src/amjuel_hyd_recombination.cxx
     src/amjuel_helium.cxx
     src/adas_reaction.cxx
     src/noflow_boundary.cxx
@@ -76,6 +77,7 @@ set(HERMES_SOURCES
     include/adas_neon.hxx
     include/amjuel_helium.hxx
     include/amjuel_hyd_ionisation.hxx
+    include/amjuel_hyd_recombination.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
     include/collisions.hxx
