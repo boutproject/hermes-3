@@ -540,6 +540,11 @@ particle temperatures by using the effective temperature (Amjuel p43):
    T_{eff} = \frac{M}{M_1}T_1 + \frac{M}{M_2}T_2
 
 
+The effective hydrogenic ionisation rates are calculated using Amjuel
+reaction 2.1.5, by D.Reiter, K.Sawada and T.Fujimoto (2016).
+Effective recombination rates, which combine radiative and 3-body contributions,
+are calculated using Amjuel reaction 2.1.8.
+
 .. doxygenstruct:: HydrogenChargeExchange
    :members:
 

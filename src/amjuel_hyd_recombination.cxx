@@ -65,7 +65,7 @@ static constexpr const BoutReal radiation_coefs[9][9] = {
      3.929300283002e-15}};
 
 void AmjuelHydRecombination::calculate_rates(Options& electron, Options& atom, Options& ion) {
-  electron_reaction(electron, atom, ion, rate_coefs, radiation_coefs,
+  electron_reaction(electron, ion, atom, rate_coefs, radiation_coefs,
                     13.6 // Potential energy loss [eV] heats electrons
   );
 }
