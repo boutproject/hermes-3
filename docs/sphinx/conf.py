@@ -46,7 +46,8 @@ if has_breathe:
                                      project="hermes3",
                                      rootpath='../doxygen/hermes3/xml',
                                      suffix='rst',
-                                     quiet=False)
+                                     quiet=False,
+                                     members=True)
     apidoc_args.rootpath = os.path.abspath(apidoc_args.rootpath)
     if not os.path.isdir(apidoc_args.destdir):
         if not apidoc_args.dryrun:
