@@ -1,7 +1,7 @@
 # Transport simulation with deuterium, tritium and helium
 
-nout = 50
-timestep = 100
+nout = 300
+timestep = 200
 
 MZ = 1
 
@@ -15,8 +15,9 @@ extrapolate_y=false  # Can result in negative Jacobians in guard cells
 type = shifted
 
 [solver]
-type = beuler
-diagnose = true
+#type = beuler
+#diagnose = true
+mxstep = 10000
 atol = 1e-7
 rtol = 1e-5
 
@@ -51,13 +52,13 @@ recycle_multiplier = 0.99  # Recycling fraction
 
 [Nd+]
 
-function = 1
+function = 1 - 0.9*x
 
 bndry_core = dirichlet(1.0)  # Core boundary high density
 bndry_all = neumann
 
 [Pd+]
-function = 1
+function = (1 - 0.9*x)^2
 bndry_core = dirichlet(1.0)  # Core boundary high density
 bndry_all = neumann
 
@@ -87,13 +88,13 @@ recycle_multiplier = 0.99  # Recycling fraction
 
 [Nt+]
 
-function = 1
+function = 1 - 0.9*x
 
 bndry_core = dirichlet(1.0)  # Core boundary high density
 bndry_all = neumann
 
 [Pt+]
-function = 1
+function = (1 - 0.9*x)^2
 bndry_core = dirichlet(1.0)  # Core boundary high density
 bndry_all = neumann
 
@@ -123,13 +124,13 @@ recycle_multiplier = 0.99  # Recycling fraction
 
 [Nhe+]
 
-function = 0.01
+function = 0.01 * (1 - 0.9*x)
 
 bndry_core = dirichlet(0.01)  # Core boundary high density
 bndry_all = neumann
 
 [Phe+]
-function = 0.01
+function = 0.01 * (1 - 0.9*x)^2
 bndry_core = dirichlet(0.01)  # Core boundary high density
 bndry_all = neumann
 
@@ -157,7 +158,7 @@ anomalous_chi = 0.1
 thermal_conduction = true
 
 [Pe]
-function = 2.01
+function = 2.01 * (1 - 0.9*x)^2
 bndry_core = dirichlet(2.01)  # Core boundary high density
 bndry_all = neumann
 
@@ -170,7 +171,14 @@ species = d+, t+, he+
 [reactions]
 type = (
         d + e -> d+ + 2e,   # Deuterium ionisation
+        d+ + e -> d,        # Deuterium recombination
+        d + d+ -> d+ + d,   # Deuterium charge exchange
         t + e -> t+ + 2e,   # Tritium ionisation
+        t+ + e -> t,        # Tritium recombination
+        t + t+ -> t+ + t,   # Tritium charge exchange
+        d + t+ -> d+ + t,   # D-T charge exchange
+        t + d+ -> t+ + d,   # T-D charge exchange
         he + e -> he+ + 2e, # Helium ionisation
         he+ + e -> he,      # Helium+ recombination
        )
+
