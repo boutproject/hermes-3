@@ -153,7 +153,7 @@ AA = 20
 [Nne]
 function = 1e-5
 
-source = 1e19 * exp(-(y - 2*pi)^2) # source of neon near the target
+source = 1e24 * exp(-(y - 2*pi)^2) # source of neon near the target
 
 [Pne]
 function = 1e-7
@@ -399,6 +399,7 @@ species = d+, ne+, ne+2, ne+3, ne+4, ne+5, ne+6, ne+7, ne+8, ne+9, ne+10
 [reactions]
 type = (
         d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
         d + d+ -> d+ + d,     # Charge exchange
         
         ne + e -> ne+ + 2e,   # Neon ionisation

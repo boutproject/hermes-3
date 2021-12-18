@@ -162,5 +162,6 @@ species = d+
 [reactions]
 type = (
         d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
         d + d+ -> d+ + d,     # Charge exchange
        )

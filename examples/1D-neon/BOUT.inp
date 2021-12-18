@@ -397,6 +397,7 @@ species = d+, ne+, ne+2, ne+3, ne+4, ne+5, ne+6, ne+7, ne+8, ne+9, ne+10
 [reactions]
 type = (
         d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
         d + d+ -> d+ + d,     # Charge exchange
         
         ne + e -> ne+ + 2e,   # Neon ionisation
