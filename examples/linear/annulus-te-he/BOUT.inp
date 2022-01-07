@@ -1,0 +1,121 @@
+# Turbulence simulation with evolving electron temperature
+#
+# Some values taken from
+#   https://doi.org/10.1063/1.4759010
+#   https://aip.scitation.org/doi/10.1063/1.3527987
+#
+
+nout = 500
+timestep = 50
+
+[mesh]
+
+nx = 64   # Radial resolution including 4 guard cells
+ny = 16   # Parallel direction
+nz = 64   # number of points in azimuthal direction
+
+length = 17  # length of machine in meters
+Rmin = 0.1    # minimum radius in meters
+Rmax = 0.4  # maximum radius in meters
+
+Bxy = 0.1   # Magnetic field strength [T]
+
+# The following choices make a Clebsch coordinate system where
+# x is a radial flux coordinate
+# y is a parallel angle coordinate (0 -> 2π)
+# z is azimuthal angle (0 -> 2π)
+#
+# Note: In input expressions,
+#       x is normalised from 0->1, y and z from 0->2π,
+
+Bpxy = Bxy
+Btxy = 0
+hthe = length / (2π)
+Rxy = Rmin + (Rmax - Rmin) * x   # Radius from axis. Note: Here x is from 0->1
+sinty = 0  # Integrated shear
+
+dr = (Rmax - Rmin) / (nx - 4)
+dx = Bpxy * Rxy * dr    # Radial flux coordinate
+dy = 2π / ny     # Angle 0 -> 2π
+dz = 2π / nz     # Azimuthal angle
+
+ixseps1 = -1  # This line and the one below will add y boundaries
+ixseps2 = -1  #
+
+extrapolate_y = false  # Can result in negative Jacobians in guard cells
+
+[mesh:paralleltransform]
+type = identity
+
+[solver]
+
+mxstep = 10000
+
+[hermes]
+components = (e, he+, sound_speed, vorticity,
+              sheath_boundary, collisions
+              )
+
+Nnorm = 1e18  # Reference density [m^-3]
+Bnorm = 1   # Reference magnetic field [T]
+Tnorm = 1   # Reference temperature [eV]
+
+loadmetric = true  # Recalculate metric tensor? (false -> use grid values)
+
+[vorticity]
+
+diamagnetic = false   # Include diamagnetic current?
+diamagnetic_polarisation = false # Include diamagnetic drift in polarisation current?
+average_atomic_mass = `he+`:AA   # Weighted average atomic mass, for polarisaion current
+poloidal_flows = false  # Include poloidal ExB flow
+split_n0 = false  # Split phi into n=0 and n!=0 components
+
+vort_dissipation = false
+phi_dissipation = true
+
+phi_boundary_relax = true
+phi_boundary_timescale = 1e-6
+
+[vorticity:laplacian]
+inner_boundary_flags = 16  # INVERT_SET, setting inner boundary
+outer_boundary_flags = 16  # INVERT_SET, setting outer boundary
+
+################################################################
+# Electrons
+
+[e]
+# Evolve the electron density, parallel momentum, and fix Te
+type = evolve_density, evolve_momentum, evolve_pressure
+
+AA = 60 / 1836
+charge = -1
+
+poloidal_flows = false
+
+[Ne]
+bndry_all = neumann
+
+function = 1e-1 * exp(-x^2) + 1e-5*(mixmode(z) + mixmode(4*z - x)) # Starting density profile [x10^18 m^-3]
+
+source = 6.7e22*exp(-(x/0.3)^2)   # Particle source in m^-3s^-1
+
+[Pe]
+bndry_all = neumann
+
+function = 5 * exp(-x^2) * Ne:function
+
+source = 1.3e4*exp(-(x/0.25)^2)   # Power into electrons [W/m^3]
+
+################################################################
+# Helium ions
+[he+]
+# Set ion density from quasineutrality, evolve parallel flow
+type = quasineutral, evolve_momentum, isothermal
+
+AA = 4       # Atomic mass
+charge = 1
+
+temperature = 0.1   # Ion temperature in eV
+
+poloidal_flows = false
+
