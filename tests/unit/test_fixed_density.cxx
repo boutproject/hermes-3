@@ -24,6 +24,7 @@ TEST_F(FixedDensityTest, CreateComponent) {
 
   FixedDensity component("test", options, nullptr);
 }
+
 TEST_F(FixedDensityTest, MustSetDensity) {
   Options options = {{"units", {{"inv_meters_cubed", 1.0}}},
                      {"test", {{"charge", 1.0}}}};

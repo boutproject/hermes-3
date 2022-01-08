@@ -158,6 +158,9 @@ public:
     // Need some options for parallelTransform
     options = Options::getRoot();
     mpi = bout::globals::mpi;
+
+    // Clear the DataFile output
+    bout::globals::dump = Datafile{};
   }
 
   void setCoordinates(std::shared_ptr<Coordinates> coords, CELL_LOC location = CELL_CENTRE) {
