@@ -15,8 +15,8 @@ ny = 16   # Parallel direction
 nz = 64   # number of points in azimuthal direction
 
 length = 17  # length of machine in meters
-Rmin = 0.1    # minimum radius in meters
-Rmax = 0.4  # maximum radius in meters
+Rmin = 0.1   # minimum radius in meters
+Rmax = 0.4   # maximum radius in meters
 
 Bxy = 0.1   # Magnetic field strength [T]
 
@@ -92,6 +92,8 @@ charge = -1
 
 poloidal_flows = false
 
+diagnose = true
+
 [Ne]
 bndry_all = neumann
 
@@ -104,7 +106,7 @@ bndry_all = neumann
 
 function = 5 * exp(-x^2) * Ne:function
 
-source = 1.3e4*exp(-(x/0.25)^2)   # Power into electrons [W/m^3]
+source = 1e5*exp(-(x/0.25)^2)   # Power into electrons [W/m^3]
 
 ################################################################
 # Helium ions
