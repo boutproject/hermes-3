@@ -58,7 +58,7 @@ protected:
   }
 
   /// Electron-driven reaction
-  /// e + from_ion -> to_ion [ + e?]
+  /// e + from_ion -> to_ion [ + e? + e?]
   ///
   /// Coefficients from Amjuel:
   ///  - rate_coefs        Double-polynomial log fit [T][n] for <σv>
@@ -75,9 +75,14 @@ protected:
     Field3D N1 = get<Field3D>(from_ion["density"]);
     Field3D T1 = get<Field3D>(from_ion["temperature"]);
     Field3D V1 = get<Field3D>(from_ion["velocity"]);
-    auto AA = get<BoutReal>(from_ion["AA"]);
 
+    auto AA = get<BoutReal>(from_ion["AA"]);
     ASSERT1(AA == get<BoutReal>(to_ion["AA"]));
+
+    const BoutReal from_charge =
+        from_ion.isSet("charge") ? get<BoutReal>(from_ion["charge"]) : 0.0;
+    const BoutReal to_charge =
+        to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
     Field3D reaction_rate = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
@@ -89,6 +94,11 @@ protected:
     // Particles
     subtract(from_ion["density_source"], reaction_rate);
     add(to_ion["density_source"], reaction_rate);
+
+    if (from_charge != to_charge) {
+      // To ensure quasineutrality, add electron density source
+      add(electron["density_source"], (to_charge - from_charge) * reaction_rate);
+    }
 
     // Momentum
     Field3D momentum_exchange = reaction_rate * AA * V1;
