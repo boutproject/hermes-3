@@ -16,18 +16,13 @@ annulus-isothermal-he
 
 Pure isothermal helium plasma. No neutrals or atomic physics.
 
-annulus-te-he
-~~~~~~~~~~~~~
-
-Pure helium plasma. No neutrals or atomic physics. The electron temperature
-is evolved, but the ion temperature is fixed
-
 annulus-te-he-fixedneutrals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Evolves the electron temperature and helium ion (1+ only), with a fixed background
 of stationary helium atoms. Atomic reactions provide the density source for the plasma,
 so the only external input is the power.
+
 Notes
 -----
 
