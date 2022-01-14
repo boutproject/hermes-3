@@ -77,6 +77,8 @@ phi_dissipation = true
 phi_boundary_relax = true
 phi_boundary_timescale = 1e-6
 
+hyper_z = 0.01
+
 [vorticity:laplacian]
 inner_boundary_flags = 16  # INVERT_SET, setting inner boundary
 outer_boundary_flags = 16  # INVERT_SET, setting outer boundary
@@ -88,12 +90,14 @@ outer_boundary_flags = 16  # INVERT_SET, setting outer boundary
 # Evolve the electron density, parallel momentum, and fix Te
 type = evolve_density, evolve_momentum, evolve_pressure
 
-AA = 60 / 1836
+AA = 1 / 1836
 charge = -1
 
 poloidal_flows = false
 
 diagnose = true
+
+hyper_z = 0.01
 
 [Ne]
 bndry_all = neumann
@@ -105,7 +109,8 @@ bndry_all = neumann
 
 function = 5 * exp(-x^2) * Ne:function
 
-source = 6e4*exp(-(x/0.25)^2)   # Power into electrons [W/m^3]
+yn = y / (2*pi)
+source = 1e4*exp(-(x/0.25)^2) * exp(-((yn - 0.2)/0.1)^2)  # Power into electrons [W/m^3]
 
 ################################################################
 # Helium ions
@@ -120,6 +125,8 @@ temperature = 0.1   # Ion temperature in eV
 
 poloidal_flows = false
 
+hyper_z = 0.01
+
 ################################################################
 # Helium atoms
 [he]
@@ -129,7 +136,7 @@ type = fixed_density, fixed_velocity, isothermal
 AA = 4       # Atomic mass
 charge = 0
 
-density = 1e17      # Density in m^-3
+density = 1e18      # Density in m^-3
 velocity = 0        # Parallel flow velocity in m/s
 temperature = 0.1   # Atom temperature in eV
 

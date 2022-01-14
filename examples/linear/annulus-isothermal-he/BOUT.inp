@@ -6,7 +6,7 @@
 #
 
 nout = 500
-timestep = 50
+timestep = 1000
 
 [mesh]
 
@@ -99,7 +99,7 @@ bndry_all = neumann
 
 function = 1e-1 * exp(-x^2) + 1e-5*(mixmode(z) + mixmode(4*z - x)) # Starting density profile [x10^18 m^-3]
 
-source = 6.7e22*exp(-(x/0.3)^2)   # Particle source in m^-3s^-1
+source = 5e21*exp(-(x/0.3)^2)   # Particle source in m^-3s^-1
 
 ################################################################
 # Helium ions
