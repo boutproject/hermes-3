@@ -54,6 +54,8 @@
 #include "include/thermal_force.hxx"
 #include "include/ion_viscosity.hxx"
 #include "include/relax_potential.hxx"
+#include "include/fixed_density.hxx"
+#include "include/fixed_velocity.hxx"
 
 #include "include/loadmetric.hxx"
 

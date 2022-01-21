@@ -89,7 +89,9 @@ set(HERMES_SOURCES
     include/evolve_density.hxx
     include/evolve_momentum.hxx
     include/evolve_pressure.hxx
+    include/fixed_density.hxx
     include/fixed_fraction_ions.hxx
+    include/fixed_velocity.hxx
     include/full_velocity.hxx
     include/hermes_utils.hxx
     include/hydrogen_charge_exchange.hxx

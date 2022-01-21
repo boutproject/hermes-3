@@ -11,6 +11,30 @@ Species density
 The density of a species can be calculated in several different ways,
 and are usually needed by other components.
 
+.. _fixed_density:
+
+fixed_density
+~~~~~~~~~~~~~
+
+Set the density to a value which does not change in time. For example:
+
+.. code-block:: ini
+
+   [d]
+   type = fixed_density, ...
+
+   AA = 2 # Atomic mass
+   charge = 0
+   density = 1e17 # In m^-3
+
+Note that the density can be a function of `x`, `y` and `z` coordinates
+for spatial variation.
+
+The implementation is in the `FixedDensity` class:
+
+.. doxygenstruct:: FixedDensity
+   :members:
+
 .. _evolve_density:
 
 evolve_density

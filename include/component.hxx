@@ -51,27 +51,16 @@ struct Component {
 
 ///////////////////////////////////////////////////////////////////
 
-using ComponentCreator =
-  std::function<Component *(std::string, Options &, Solver *)>;
-
 /// A factory for creating Components on demand, based on a string type name
-class ComponentFactory : public Factory<Component, ComponentFactory, ComponentCreator> {
+/// The template arguments after ComponentFactory are the types of the arguments
+/// to the Component constructor.
+class ComponentFactory
+    : public Factory<Component, ComponentFactory, const std::string&, Options&, Solver*> {
 public:
   static constexpr auto type_name = "Component";
   static constexpr auto section_name = "component";
   static constexpr auto option_name = "type";
   static constexpr auto default_type = "none";
-};
-
-template <typename DerivedType>
-class RegisterInFactory<Component, DerivedType, ComponentFactory> {
-public:
-  RegisterInFactory(const std::string &type) {
-    ComponentFactory::getInstance().add(
-        type,
-        [](const std::string &name, Options &options, Solver *solver)
-            -> Component * { return new DerivedType(name, options, solver); });
-  }
 };
 
 /// Simpler name for Factory registration helper class
@@ -83,8 +72,7 @@ public:
 ///     RegisterComponent<MyComponent> registercomponentmine("mycomponent");
 ///     }
 template <typename DerivedType>
-using RegisterComponent = RegisterInFactory<Component, DerivedType, ComponentFactory>;
-
+using RegisterComponent = ComponentFactory::RegisterInFactory<DerivedType>;
 
 /// Faster non-printing getter for Options
 /// If this fails, it will throw BoutException

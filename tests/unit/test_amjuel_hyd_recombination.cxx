@@ -44,6 +44,7 @@ TEST_F(HydrogenRCTest, DensitySourceSigns) {
                     {"velocity", 1.0}}},
                   {"h+",
                    {{"AA", 1.0},
+                    {"charge", 1.0},
                     {"density", 1.0},
                     {"temperature", 1.0},
                     {"velocity", 1.0}}}}}};
@@ -54,6 +55,7 @@ TEST_F(HydrogenRCTest, DensitySourceSigns) {
 
   auto atom_density_source = get<Field3D>(state["species"]["h"]["density_source"]);
   auto ion_density_source = get<Field3D>(state["species"]["h+"]["density_source"]);
+  auto electron_density_source = get<Field3D>(state["species"]["e"]["density_source"]);
 
   auto atom_momentum_source = get<Field3D>(state["species"]["h"]["momentum_source"]);
   auto ion_momentum_source = get<Field3D>(state["species"]["h+"]["momentum_source"]);
@@ -65,6 +67,7 @@ TEST_F(HydrogenRCTest, DensitySourceSigns) {
     output.write("{}: {}\n", i.ind, atom_density_source[i]);
     ASSERT_TRUE(atom_density_source[i] > 0.0);
     ASSERT_TRUE(ion_density_source[i] < 0.0);
+    ASSERT_FLOAT_EQ(electron_density_source[i], ion_density_source[i]);
 
     ASSERT_TRUE(atom_momentum_source[i] > 0.0);
     ASSERT_TRUE(ion_momentum_source[i] < 0.0);

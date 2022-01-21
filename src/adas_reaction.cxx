@@ -132,9 +132,14 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   Field3D N1 = GET_VALUE(Field3D, from_ion["density"]);
   Field3D T1 = GET_VALUE(Field3D, from_ion["temperature"]);
   Field3D V1 = GET_VALUE(Field3D, from_ion["velocity"]);
-  auto AA = get<BoutReal>(from_ion["AA"]);
 
+  auto AA = get<BoutReal>(from_ion["AA"]);
   ASSERT1(AA == get<BoutReal>(to_ion["AA"]));
+
+  const BoutReal from_charge =
+      from_ion.isSet("charge") ? get<BoutReal>(from_ion["charge"]) : 0.0;
+  const BoutReal to_charge =
+      to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
   Field3D reaction_rate = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
@@ -147,6 +152,11 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   // Particles
   subtract(from_ion["density_source"], reaction_rate);
   add(to_ion["density_source"], reaction_rate);
+
+  if (from_charge != to_charge) {
+    // To ensure quasineutrality, add electron density source
+    add(electron["density_source"], (to_charge - from_charge) * reaction_rate);
+  }
 
   // Momentum
   Field3D momentum_exchange = reaction_rate * AA * V1;
