@@ -145,7 +145,7 @@ void AmjuelHeRecombination10::transform(Options& state) {
   electron_reaction(state["species"]["e"],
                     state["species"]["he+"], // From helium ions
                     state["species"]["he"],  // To helium atoms
-                    he01_rate_coefs, he01_radiation_coefs,
+                    he10_rate_coefs, he10_radiation_coefs,
                     24.586 // Ionisation potential heating of electrons
   );
 }
