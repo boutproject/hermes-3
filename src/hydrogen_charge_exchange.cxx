@@ -16,10 +16,13 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   const Field3D Teff = (Tatom / Aatom + Tion / Aion) * Tnorm;
   const Field3D lnT = log(Teff);
 
-  Field3D ln_sigmav = -18.33882;
+  Field3D ln_sigmav = -18.5028;
   Field3D lnT_n = lnT; // (lnT)^n
-  for (BoutReal b : {0.2368705, -1.469575e-2, -1.13985e-2, 6.379644e-4, 3.162724e-4,
-                     -6.681994e-5, 3.812123e-6, 8.652321e-9}) {
+  // b0 -1.850280000000E+01 b1 3.708409000000E-01 b2 7.949876000000E-03
+  // b3 -6.143769000000E-04 b4 -4.698969000000E-04 b5 -4.096807000000E-04
+  // b6 1.440382000000E-04 b7 -1.514243000000E-05 b8 5.122435000000E-07
+  for (BoutReal b : {0.3708409, 7.949876e-3, -6.143769e-4, -4.698969e-4, -4.096807e-4,
+                     1.440382e-4, -1.514243e-5, 5.122435e-7}) {
     ln_sigmav += b * lnT_n;
     lnT_n *= lnT;
   }
