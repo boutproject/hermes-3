@@ -53,9 +53,9 @@ TEST_F(HydrogenCXTest, RateAt1eV) {
   ASSERT_TRUE(state["species"]["h+"].isSet("energy_source"));
 
   // Since here lnT = 0, we're only testing the b0 coefficient
-  // <σv> should be exp(-18.33882) cm^3/s
+  // <σv> should be exp(-18.5028) cm^3/s
 
   // Should appear as a source of energy in the atoms
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(state["species"]["h"]["energy_source"]),
-                           (3. / 2) * exp(-18.33882) * 1e-6, "RGN_NOBNDRY"));
+                           (3. / 2) * exp(-18.5028) * 1e-6, "RGN_NOBNDRY"));
 }
