@@ -61,7 +61,15 @@ During configuration
 automatically downloaded as a submodule, together with some
 dependencies (NetCDF and FFTW are assumed to be installed already,
 along with optional dependencies like SUNDIALS and PETSc if they are
-requested).  Once configured, run build to compile BOUT++ and then
+requested).
+
+If you have already installed BOUT++ and want to use that rather than
+configure and build BOUT++ again, set `HERMES_BUILD_BOUT` to `OFF` and pass
+CMake the path to the BOUT++ `build` directory e.g.
+
+    $ cmake . -B build -DHERMES_BUILD_BOUT=OFF -DCMAKE_PREFIX_PATH=$HOME/BOUT-dev/build
+
+Once configured, run build to compile BOUT++ and then
 Hermes-3:
 
     $ cmake --build build

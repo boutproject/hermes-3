@@ -33,8 +33,13 @@ endif()
 message(STATUS "Git revision: ${HERMES_REVISION}")
 
 # BOUT++ is a dependency
-set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
-add_subdirectory(external/BOUT-dev)
+option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
+if(HERMES_BUILD_BOUT)
+  set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
+  add_subdirectory(external/BOUT-dev)
+else()
+  find_package(bout++ REQUIRED)
+endif()
 
 set(HERMES_SOURCES
     src/component.cxx
