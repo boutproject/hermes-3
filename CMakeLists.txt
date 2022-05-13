@@ -73,6 +73,7 @@ set(HERMES_SOURCES
     src/upstream_density_feedback.cxx
     src/thermal_force.cxx
     src/ion_viscosity.cxx
+    src/transform.cxx
     include/adas_reaction.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
@@ -114,6 +115,7 @@ set(HERMES_SOURCES
     include/upstream_density_feedback.hxx
     include/vorticity.hxx
     include/zero_current.hxx
+    include/transform.hxx
     )
 
 # Compile Hermes sources into a library, which can be used for unit tests
