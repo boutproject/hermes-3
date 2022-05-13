@@ -6,7 +6,9 @@
 
 /// Hydrogen charge exchange total rate coefficient
 ///
-/// Reaction 0.1T from Amjuel (p38)
+///   p + H(1s) -> H(1s) + p
+///
+/// Reaction 3.1.8 from Amjuel (p43)
 ///
 /// Scaled to different isotope masses and finite neutral particle
 /// temperatures by using the effective temperature (Amjuel p43)

@@ -555,8 +555,8 @@ rates calculation. The following might therefore be used
 +------------------+---------------------------------------+
 
 The code to calculate the charge exchange rates is in
-`hydrogen_charge_exchange.[ch]xx`. This implements reaction 0.1T from
-Amjuel (p38), scaled to different isotope masses and finite neutral
+`hydrogen_charge_exchange.[ch]xx`. This implements reaction 3.1.8 from
+Amjuel (p43), scaled to different isotope masses and finite neutral
 particle temperatures by using the effective temperature (Amjuel p43):
 
 .. math::

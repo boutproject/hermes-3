@@ -33,8 +33,13 @@ endif()
 message(STATUS "Git revision: ${HERMES_REVISION}")
 
 # BOUT++ is a dependency
-set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
-add_subdirectory(external/BOUT-dev)
+option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
+if(HERMES_BUILD_BOUT)
+  set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
+  add_subdirectory(external/BOUT-dev)
+else()
+  find_package(bout++ REQUIRED)
+endif()
 
 set(HERMES_SOURCES
     src/component.cxx
@@ -73,6 +78,7 @@ set(HERMES_SOURCES
     src/upstream_density_feedback.cxx
     src/thermal_force.cxx
     src/ion_viscosity.cxx
+    src/transform.cxx
     include/adas_reaction.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
@@ -114,6 +120,7 @@ set(HERMES_SOURCES
     include/upstream_density_feedback.hxx
     include/vorticity.hxx
     include/zero_current.hxx
+    include/transform.hxx
     )
 
 # Compile Hermes sources into a library, which can be used for unit tests

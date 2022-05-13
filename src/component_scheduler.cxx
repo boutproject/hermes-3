@@ -2,8 +2,6 @@
 
 #include "utils.hxx" // for trim, strsplit
 
-#include "../include/ionisation.hxx"
-
 ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                        Options &component_options,
                                        Solver *solver) {

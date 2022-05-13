@@ -9,8 +9,9 @@
 #  - Ionisation of neutrals as ions
 #  - Charge exchange between neutrals and ions
 #  - Feedback control of upstream density
-#  - Separate electron and ion temperatures
+#  - Equal electron and ion temperatures
 #
+
 
 nout = 200
 timestep = 10000
@@ -43,7 +44,7 @@ ixseps2 = -1
 #    and velocity from zero-current condition
 #  - electron_force_balance after collisions, so the electric field includes forces
 #    on the electrons
-components = (d+, d, e,
+components = (d+, d, e, equilibriate,
               sheath_boundary, collisions, recycling, reactions,
               electron_force_balance, neutral_parallel_diffusion,
               ion_viscosity)
@@ -76,7 +77,7 @@ dneut = 10   # (B / Bpol)^2 in neutral diffusion terms
 ####################################
 
 [d+]  # Deuterium ions
-type = (evolve_density, evolve_pressure, evolve_momentum,
+type = (evolve_density, evolve_momentum,
         noflow_boundary, upstream_density_feedback)
 
 noflow_lower_y = true
@@ -90,8 +91,6 @@ density_source_positive = false  # Force source to be > 0?
 density_controller_i = 5e-4
 density_controller_p = 1e-2
 
-thermal_conduction = true  # in evolve_pressure
-
 diagnose = true   # Output diagnostics for these components?
 
 recycle_as = d
@@ -104,13 +103,6 @@ function = 1
 flux = 4e23  # Particles per m^2 per second input
 source = (flux/(mesh:length_xpt))*H(mesh:y_xpt - y)
 
-[Pd+]
-function = 1
-
-powerflux = 2.5e7  # Input power flux in W/m^2
-
-source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
-
 [NVd+]
 
 function = 0
@@ -118,7 +110,7 @@ function = 0
 ####################################
 
 [d]  # Deuterium atoms
-type = (evolve_density, evolve_pressure, evolve_momentum,
+type = (evolve_density, evolve_momentum, evolve_pressure,
         noflow_boundary)
 
 charge = 0
@@ -147,12 +139,17 @@ AA = 1/1836
 thermal_conduction = true  # in evolve_pressure
 
 [Pe]
+function = 1
 
-function = `Pd+:function`  # Same as ion pressure initially
+powerflux = 2.5e7  # Input power flux in W/m^2
 
-source = `Pd+:source`  # Same as ion pressure source
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
 
 ####################################
+
+[equilibriate]
+type = transform
+transforms = (species:d+:temperature = species:e:temperature)
 
 [recycling]
 
