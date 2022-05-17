@@ -165,10 +165,6 @@ void EvolveDensity::finally(const Options &state) {
   }
   ddt(N) += Sn;
 
-#if CHECK > 1
-  bout::checkFinite(ddt(N), std::string("ddt N") + name, "RGN_NOBNDRY");
-#endif
-
   if (evolve_log) {
     ddt(logN) = ddt(N) / N;
   }

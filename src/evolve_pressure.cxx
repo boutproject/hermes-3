@@ -243,10 +243,6 @@ void EvolvePressure::finally(const Options& state) {
   }
   ddt(P) += Sp;
 
-#if CHECK > 1
-  bout::checkFinite(ddt(P), std::string("ddt P") + name, "RGN_NOBNDRY");
-#endif
-
   if (evolve_log) {
     ddt(logP) = ddt(P) / P;
   }
