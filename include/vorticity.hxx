@@ -65,6 +65,8 @@ private:
   bool poloidal_flows;   ///< Include poloidal ExB flow?
   bool bndry_flux;  ///< Allow flows through radial boundaries?
 
+  bool collisional_friction; ///< Damping of vorticity due to collisional friction
+
   bool sheath_boundary; ///< Set outer boundary to j=0?
 
   bool vort_dissipation; ///< Parallel dissipation of vorticity
