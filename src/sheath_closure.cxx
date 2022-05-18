@@ -15,9 +15,18 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
           .doc("Sheath heat transmission coefficient (dimensionless)")
           .withDefault<BoutReal>(6.5);
 
+  sheath_gamma_ions = options["sheath_gamma_ions"]
+          .doc("Sheath heat transmission coefficient for ions (dimensionless)")
+          .withDefault<BoutReal>(2.0); // Value suggested by Stangeby's book, between eqs.
+                                       // (2.92) and (2.93)
+
   offset = options["potential_offset"]
                .doc("Potential at which the sheath current is zero")
                .withDefault<BoutReal>(0.0);
+
+  sinks = options["sinks"]
+               .doc("Include sinks of density and energy?")
+               .withDefault<bool>(false);
 
   output.write("\tL_par = {:e} (normalised)\n", L_par);
 }
@@ -52,5 +61,46 @@ void SheathClosure::transform(Options &state) {
     
     subtract(electrons["energy_source"], qsheath / L_par);
   }
-}
 
+  if (sinks) {
+    // Add sinks of density and energy. Allows source-driven 2d turbulence simulations.
+
+    // Calculate a sound speed from total pressure and total mass density.
+    // [Not sure if this is correct or the best thing in general, but reduces to the
+    // standard Bohm boundary conditions for a pure, hydrogenic plasma.]
+    Field3D P_total = 0.0;
+    Field3D rho_total = 0.0; // mass density
+    Options& allspecies = state["species"];
+    for (auto& kv : allspecies.getChildren()) {
+      Options& species = allspecies[kv.first];
+
+      const BoutReal A = get<BoutReal>(species["AA"]);
+      Field3D Ns = get<Field3D>(species["density"]);
+      Field3D Ts = get<Field3D>(species["temperature"]);
+
+      P_total += Ns * Ts;
+      rho_total += A * Ns;
+    }
+
+    Field3D c_s = sqrt(P_total / rho_total);
+
+    for (auto& kv : allspecies.getChildren()) {
+      Options& species = allspecies[kv.first];
+      Field3D Ns = get<Field3D>(species["density"]);
+
+      Field3D sheath_flux = floor(Ns * c_s, 0.0);
+      subtract(species["density_source"], sheath_flux / L_par);
+
+      if (kv.first != "e") {
+        // Electron sheath heat flux has different gamma-factor than ions, and was already
+        // handled above
+
+        auto Ts = get<Field3D>(species["temperature"]);
+
+        Field3D qsheath = floor(sheath_gamma_ions * Ts * sheath_flux, 0.0);
+
+        subtract(species["energy_source"], qsheath / L_par);
+      }
+    }
+  }
+}
