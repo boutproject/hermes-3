@@ -5,7 +5,7 @@
 using bout::globals::mesh;
 
 void NeutralParallelDiffusion::transform(Options& state) {
-
+  AUTO_TRACE();
   Options& allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
     // Get non-const reference
@@ -18,9 +18,10 @@ void NeutralParallelDiffusion::transform(Options& state) {
 
     auto nu = get<Field3D>(species["collision_frequency"]);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-    Field3D Nn = get<Field3D>(species["density"]);
-    Field3D Tn = get<Field3D>(species["temperature"]);
-    Field3D Pn = get<Field3D>(species["pressure"]);
+    const Field3D Nn = GET_VALUE(Field3D, species["density"]);
+    const Field3D Tn = GET_VALUE(Field3D, species["temperature"]);
+    const Field3D Pn = IS_SET(species["pressure"]) ?
+      GET_VALUE(Field3D, species["pressure"]) : Nn * Tn;
 
     // Diffusion coefficient
     Field3D Dn = dneut * Tn / (AA * nu);
