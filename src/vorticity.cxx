@@ -294,6 +294,11 @@ void Vorticity::transform(Options &state) {
         // Set midpoint (boundary) value
         for (int k = 0; k < mesh->LocalNz; k++) {
           phi(mesh->xstart - 1, j, k) = 2. * phivalue - phi(mesh->xstart, j, k);
+
+          // Note: This seems to make a difference, but don't know why.
+          // Without this, get convergence failures with no apparent instability
+          // (all fields apparently smooth, well behaved)
+          phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
         }
       }
     }
@@ -309,6 +314,11 @@ void Vorticity::transform(Options &state) {
         // Set midpoint (boundary) value
         for (int k = 0; k < mesh->LocalNz; k++) {
           phi(mesh->xend + 1, j, k) = 2. * phivalue - phi(mesh->xend, j, k);
+
+          // Note: This seems to make a difference, but don't know why.
+          // Without this, get convergence failures with no apparent instability
+          // (all fields apparently smooth, well behaved)
+          phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
         }
       }
     }
