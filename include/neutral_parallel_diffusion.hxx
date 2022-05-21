@@ -26,7 +26,7 @@ struct NeutralParallelDiffusion : public Component {
   ///      - collision_frequency
   ///      - density
   ///      - temperature
-  ///      - pressure
+  ///      - pressure     [optional, or density * temperature]
   ///      - velocity     [optional]
   ///      - momentum     [if velocity set]
   ///
