@@ -172,7 +172,7 @@ so only the electron density and vorticity are evolved. A sheath-connected
 closure is used for the parallel current.
 
 .. figure:: figs/blob2d.png
-   :name: blob2d
+   :name: fig-blob2d
    :alt:
    :scale: 50
    
@@ -255,6 +255,8 @@ This adds the equation
 
 where :math:`L_{||}` is the connection length.
 
+.. _Blob2d-Te-Ti:
+
 Blob2D-Te-Ti
 ~~~~~~~~~~~~
 
@@ -263,7 +265,7 @@ ion temperatures. A sheath-connected closure is used for the parallel
 current.
 
 .. figure:: figs/blob2d-te-ti.png
-   :name: blob2d-te-ti
+   :name: fig-blob2d-te-ti
    :alt:
    :scale: 50
    
@@ -303,11 +305,79 @@ now there are pressure equations for both ions and electrons:
    \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}} \\
    \frac{\partial p_e}{\partial t} =& - \nabla\cdot\left(p_e\mathbf{v}_{E\times B}\right) - \gamma_e p_e c_s \\
    n_{h+} =& n_e \\
+   \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) \\
+   \frac{\partial \omega}{\partial t} =& - \nabla\cdot\left(\omega\mathbf{v}_{E\times B}\right) + \nabla\left[\left(p_e + p_{h+}\right)\nabla\times\frac{\mathbf{b}}{B}\right] + \nabla\cdot\mathbf{j}_{sh} \\
+   \nabla\cdot\left[\frac{1}{B^2}\nabla_\perp\left(\phi + p_{h+}\right)\right] =& \omega \\
+   \nabla\cdot{\mathbf{j}_{sh}} =& \frac{n_e\phi}{L_{||}}
+   \end{aligned}
+
+2D-drift-plane-turbulence-te-ti
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A 2D turbulence simulation, similar to the :ref:`Blob2d-Te-Ti` case, but with
+extra source and sink terms, so that a statistical steady state of
+source-driven turbulence can be reached.
+
+The model components are
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, h+, vorticity, sheath_closure
+
+
+The electron component evolves density (saved as `Ne`) and pressure
+(`Pe`), and from these the temperature is calculated.
+
+.. code-block:: ini
+
+   [e]
+   type = evolve_density, evolve_pressure
+
+
+The ion component sets the ion density from the electron density, by
+using the quasineutrality of the plasma; the ion pressure (`Ph+`) is evolved.
+
+.. code-block:: ini
+
+   [h+]
+   type = quasineutral, evolve_pressure
+
+The sheath closure now specifies that additional sink terms should be added
+
+.. code-block:: ini
+
+    [sheath_closure]
+    connection_length = 50 # meters
+    potential_offset = 0.0  # Potential at which sheath current is zero
+    sinks = true
+
+and radially localised sources are added in the `[Ne]`, `[Pe]`, and `[Ph+]`
+sections.
+
+The equations this solves are the same as the previous :ref:`Blob2d-Te-Ti`
+case, except wih extra source and sink terms:
+
+.. math::
+
+   \begin{aligned}
+   p_\mathrm{total} =& \sum_a n_a T_a \\
+   \rho_\mathrm{total} =& \sum_a A_a n_a \\
+   c_s =& \sqrt{\frac{p_\mathrm{total}}{\rho_\mathrm{total}}} \\
+   \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}} + n_e c_s + S_n \\
+   \frac{\partial p_e}{\partial t} =& - \nabla\cdot\left(p_e\mathbf{v}_{E\times B}\right) - \gamma_e p_e c_s + S_{p_e} \\
+   n_{h+} =& n_e \\
    \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) - \gamma_i p_{h+} c_s \\
    \frac{\partial \omega}{\partial t} =& - \nabla\cdot\left(\omega\mathbf{v}_{E\times B}\right) + \nabla\left[\left(p_e + p_{h+}\right)\nabla\times\frac{\mathbf{b}}{B}\right] + \nabla\cdot\mathbf{j}_{sh} \\
    \nabla\cdot\left[\frac{1}{B^2}\nabla_\perp\left(\phi + p_{h+}\right)\right] =& \omega \\
    \nabla\cdot{\mathbf{j}_{sh}} =& \frac{n_e\phi}{L_{||}}
    \end{aligned}
+
+The sheath heat transmission coefficients default to :math:`\gamma_e = 6.5` and
+:math:`\gamma_i = 2.0` (:math:`\gamma_i` as suggested in Stangeby's textbook
+between equations (2.92) and (2.93)). Note the sinks in may not be correct or
+the best choices, especially for cases with multiple ion species; they were
+chosen as being simple to implement by John Omotani in May 2022.
 
 
 2D axisymmetric tokamak
