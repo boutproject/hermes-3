@@ -23,13 +23,14 @@ struct SheathClosure : public Component {
   ///
   /// Optional inputs
   /// - species
-  ///   - e
-  ///     - density
+  ///   - density
+  ///   - pressure
   ///
   /// Modifies
   /// - species
   ///   - e
   ///     - density_source   (If density present)
+  ///   - density_source and energy_source (If sinks=true)
   /// - fields
   ///   - DivJdia     Divergence of current
   ///
@@ -39,7 +40,11 @@ private:
 
   BoutReal sheath_gamma; // Sheath heat transmission coefficient
 
+  BoutReal sheath_gamma_ions; // Sheath heat transmission coefficient for ions
+
   BoutReal offset; // Potential at which the sheath current is zero
+
+  bool sinks; // Include sinks of density and energy?
 };
 
 namespace {
