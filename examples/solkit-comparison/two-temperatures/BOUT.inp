@@ -1,0 +1,153 @@
+# 1D system with:
+#  - no-flow boundary on lower Y
+#  - sheath boundary on upper Y
+#  - Evolving electron and ion species
+#  - heat conduction
+#  - Source of heat and particles upstream of X-point
+#  - Non-uniform grid, packed towards the target
+#  - 100% recycling of ions as atoms, so particle source should go to zero
+#  - Ionisation of neutrals as ions
+#  - Charge exchange between neutrals and ions
+#  - Feedback control of upstream density
+#  - Equal electron and ion temperatures
+#
+
+
+nout = 100
+timestep = 10000
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 200   # Resolution along field-line
+nz = 1
+
+length = 10.18           # Length of the domain in meters
+length_xpt = 3.75   # Length from midplane to X-point [m]
+
+dymin = 0.01  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+# Calculate where the source ends in grid index
+source = length_xpt / length
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+ixseps1 = -1
+ixseps2 = -1
+
+[hermes]
+# Notes:
+#  - electrons after other species, so the density can be set by quasineutrality
+#    and velocity from zero-current condition
+#  - electron_force_balance after collisions, so the electric field includes forces
+#    on the electrons
+components = (d+, d, e,
+              sheath_boundary, collisions, recycling, reactions,
+              electron_force_balance, solkit_neutral_parallel_diffusion)
+
+loadmetric = false        # Use Rxy, Bpxy etc?
+normalise_metric = true  # Normalise the input metric?
+
+Nnorm = 1e20
+Bnorm = 1
+Tnorm = 100
+
+[solver]
+type = beuler  # Backward Euler steady-state solver
+max_nonlinear_iterations = 10
+
+diagnose = true
+
+atol = 1e-7
+rtol = 1e-5
+
+[sheath_boundary]
+
+lower_y = false
+upper_y = true
+
+[solkit_neutral_parallel_diffusion]
+
+neutral_temperature = 3 # eV
+
+####################################
+
+[d+]  # Deuterium ions
+type = (evolve_density, evolve_momentum, evolve_pressure,
+        noflow_boundary)
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+charge = 1
+AA = 2
+
+diagnose = true   # Output diagnostics for these components?
+
+recycle_as = d
+recycle_multiplier = 1.0  # Recycling fraction
+
+[Nd+]
+
+function = 0.1 # Initial conditions
+
+[NVd+]
+
+function = 0
+
+[Pd+]
+
+function = 0.1
+
+# Power flux weighted so that parallel temperature gradient is the same
+source = Pe:source
+
+####################################
+
+[d]  # Deuterium atoms
+type = (evolve_density, fixed_velocity, isothermal)
+
+charge = 0
+AA = 2           # Atomic mass
+
+velocity = 0     # Parallel flow speed
+temperature = 0  # Isothermal temperature, eV
+
+[Nd]
+
+function = 1e-4
+
+####################################
+
+[e] # Electrons
+type = quasineutral, zero_current, evolve_pressure, noflow_boundary
+
+noflow_upper_y = false
+
+charge = -1
+AA = 1/1836
+
+thermal_conduction = true  # in evolve_pressure
+
+[Pe]
+function = 0.1
+
+powerflux = 6e6  # Input power flux in W/m^2
+
+source = 0.5 * (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
+####################################
+
+[recycling]
+
+species = d+
+
+[reactions]
+type = (
+        d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
+        solkit d + d+ -> d+ + d,     # Charge exchange
+       )
