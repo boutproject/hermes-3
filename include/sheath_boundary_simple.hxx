@@ -65,6 +65,10 @@ struct SheathBoundarySimple : public Component {
 private:
   BoutReal Ge; // Secondary electron emission coefficient
   BoutReal sin_alpha; // sin of angle between magnetic field and wall.
+
+  BoutReal gamma_e; ///< Electron sheath heat transmission
+  BoutReal gamma_i; ///< Ion sheath heat transmission
+  BoutReal sheath_ion_polytropic; ///< Polytropic coefficient in sheat velocity
   
   bool lower_y; // Boundary on lower y?
   bool upper_y; // Boundary on upper y?

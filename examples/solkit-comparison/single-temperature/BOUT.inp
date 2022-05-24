@@ -45,7 +45,7 @@ ixseps2 = -1
 #  - electron_force_balance after collisions, so the electric field includes forces
 #    on the electrons
 components = (d+, d, e, equilibriate,
-              sheath_boundary, collisions, recycling, reactions,
+              sheath_boundary_simple, collisions, recycling, reactions,
               electron_force_balance, solkit_neutral_parallel_diffusion)
 
 loadmetric = false        # Use Rxy, Bpxy etc?
@@ -64,10 +64,13 @@ diagnose = true
 atol = 1e-7
 rtol = 1e-5
 
-[sheath_boundary]
+[sheath_boundary_simple]
 
 lower_y = false
 upper_y = true
+
+gamma_e = 7.3
+gamma_i = 0 # Has no effect
 
 [solkit_neutral_parallel_diffusion]
 
