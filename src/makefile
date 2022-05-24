@@ -26,6 +26,7 @@ SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
                   adas_reaction.cxx \
                   noflow_boundary.cxx \
                   neutral_parallel_diffusion.cxx \
+                  solkit_neutral_parallel_diffusion.cxx \
                   hydrogen_charge_exchange.cxx \
                   upstream_density_feedback.cxx \
                   thermal_force.cxx \

@@ -74,6 +74,7 @@ set(HERMES_SOURCES
     src/adas_reaction.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
+    src/solkit_neutral_parallel_diffusion.cxx
     src/hydrogen_charge_exchange.cxx
     src/upstream_density_feedback.cxx
     src/thermal_force.cxx
@@ -107,6 +108,7 @@ set(HERMES_SOURCES
     include/loadmetric.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
+    include/solkit_neutral_parallel_diffusion.hxx
     include/noflow_boundary.hxx
     include/quasineutral.hxx
     include/radiation.hxx
