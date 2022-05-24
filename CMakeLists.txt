@@ -76,6 +76,7 @@ set(HERMES_SOURCES
     src/neutral_parallel_diffusion.cxx
     src/solkit_neutral_parallel_diffusion.cxx
     src/hydrogen_charge_exchange.cxx
+    src/solkit_hydrogen_charge_exchange.cxx
     src/upstream_density_feedback.cxx
     src/thermal_force.cxx
     src/ion_viscosity.cxx
@@ -102,6 +103,7 @@ set(HERMES_SOURCES
     include/full_velocity.hxx
     include/hermes_utils.hxx
     include/hydrogen_charge_exchange.hxx
+    include/solkit_hydrogen_charge_exchange.hxx
     include/integrate.hxx
     include/ion_viscosity.hxx
     include/ionisation.hxx
