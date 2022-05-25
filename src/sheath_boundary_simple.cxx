@@ -76,6 +76,18 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
     throw BoutException("Range of sin_alpha must be between 0 and 1");
   }
 
+  gamma_e = options["gamma_e"]
+    .doc("Electron sheath heat transmission coefficient")
+    .withDefault(3.5);
+
+  gamma_i = options["gamma_i"]
+    .doc("Ion sheath heat transmission coefficient")
+    .withDefault(3.5);
+
+  sheath_ion_polytropic = options["sheath_ion_polytropic"]
+         .doc("Ion polytropic coefficient in Bohm sound speed")
+         .withDefault(1.0);
+
   lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
   upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
 
@@ -97,10 +109,6 @@ void SheathBoundarySimple::transform(Options& state) {
   Field3D Te = getNoBoundary<Field3D>(electrons["temperature"]);
   Field3D Pe = electrons.isSet("pressure") ? getNoBoundary<Field3D>(electrons["pressure"])
                                            : Te * Ne;
-
-  // Ratio of specific heats
-  const BoutReal electron_adiabatic =
-      electrons.isSet("adiabatic") ? get<BoutReal>(electrons["adiabatic"]) : 5. / 3;
 
   // Mass, normalised to proton mass
   const BoutReal Me =
@@ -142,10 +150,6 @@ void SheathBoundarySimple::transform(Options& state) {
       const BoutReal Mi = getNoBoundary<BoutReal>(species["AA"]);
       const BoutReal Zi = getNoBoundary<BoutReal>(species["charge"]);
 
-      const BoutReal adiabatic = species.isSet("adiabatic")
-                                     ? get<BoutReal>(species["adiabatic"])
-                                     : 5. / 3; // Ratio of specific heats (ideal gas)
-
       if (lower_y) {
         // Sum values, put result in mesh->ystart
 
@@ -170,7 +174,7 @@ void SheathBoundarySimple::transform(Options& state) {
                 floor(0.5 * (Ti_im + Ti[i]), 1e-5); // ion temperature
 
             // Sound speed squared
-            BoutReal C_i_sq = (adiabatic * tisheath + Zi * tesheath) / Mi;
+            BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
             ion_sum[i] += Zi * nisheath * sqrt(C_i_sq);
           }
@@ -196,7 +200,7 @@ void SheathBoundarySimple::transform(Options& state) {
             const BoutReal tisheath =
                 floor(0.5 * (Ti_ip + Ti[i]), 1e-5); // ion temperature
 
-            BoutReal C_i_sq = (adiabatic * tisheath + Zi * tesheath) / Mi;
+            BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
             ion_sum[i] += Zi * nisheath * sqrt(C_i_sq);
           }
@@ -284,9 +288,6 @@ void SheathBoundarySimple::transform(Options& state) {
         const BoutReal phisheath =
             floor(0.5 * (phi[im] + phi[i]), 0.0); // Electron saturation at phi = 0
 
-        // Electron sheath heat transmission
-        const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / tesheath;
-
         // Electron velocity into sheath (< 0)
         const BoutReal vesheath =
             -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
@@ -296,7 +297,7 @@ void SheathBoundarySimple::transform(Options& state) {
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
         // Note: Here this is negative because vesheath < 0
-        BoutReal q = ((gamma_e - 1 - 1 / (electron_adiabatic - 1)) * tesheath
+        BoutReal q = ((gamma_e - 2.5) * tesheath
                       - 0.5 * Me * SQ(vesheath))
                      * nesheath * vesheath;
 
@@ -337,9 +338,6 @@ void SheathBoundarySimple::transform(Options& state) {
         const BoutReal phisheath =
             floor(0.5 * (phi[ip] + phi[i]), 0.0); // Electron saturation at phi = 0
 
-        // Electron sheath heat transmission
-        const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / tesheath;
-
         // Electron velocity into sheath (> 0)
         const BoutReal vesheath =
             sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
@@ -349,7 +347,7 @@ void SheathBoundarySimple::transform(Options& state) {
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
         // Note: Here this is positive because vesheath > 0
-        BoutReal q = ((gamma_e - 1 - 1 / (electron_adiabatic - 1)) * tesheath
+        BoutReal q = ((gamma_e - 2.5) * tesheath
                       - 0.5 * Me * SQ(vesheath))
                      * nesheath * vesheath;
 
@@ -401,10 +399,6 @@ void SheathBoundarySimple::transform(Options& state) {
     // Characteristics of this species
     const BoutReal Mi = get<BoutReal>(species["AA"]);
 
-    const BoutReal adiabatic = species.isSet("adiabatic")
-                                   ? get<BoutReal>(species["adiabatic"])
-                                   : 5. / 3; // Ratio of specific heats (ideal gas)
-
     // Density and temperature boundary conditions will be imposed (free)
     Field3D Ni = getNoBoundary<Field3D>(species["density"]);
     Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
@@ -448,10 +442,7 @@ void SheathBoundarySimple::transform(Options& state) {
               floor(0.5 * (Ti[im] + Ti[i]), 1e-5); // ion temperature
 
           // Ion speed into sheath
-          BoutReal C_i_sq = (adiabatic * tisheath + Zi * tesheath) / Mi;
-
-          // Ion sheath heat transmission coefficient
-          const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath;
+          BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
           const BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
 
@@ -463,11 +454,8 @@ void SheathBoundarySimple::transform(Options& state) {
           // This is additional energy flux through the sheath
           // Note: Here this is negative because visheath < 0
           BoutReal q =
-              ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * Mi * C_i_sq)
+              ((gamma_i - 2.5) * tisheath - 0.5 * Mi * C_i_sq)
               * nisheath * visheath;
-          if (q > 0.0) {
-            q = 0.0;
-          }
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->J[i] + coord->J[im])
@@ -475,7 +463,6 @@ void SheathBoundarySimple::transform(Options& state) {
 
           // Divide by volume of cell to get energy loss rate (< 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
-          ASSERT2(power <= 0.0);
 
           energy_source[i] += power;
         }
@@ -508,9 +495,7 @@ void SheathBoundarySimple::transform(Options& state) {
               floor(0.5 * (Ti[ip] + Ti[i]), 1e-5); // ion temperature
 
           // Ion speed into sheath
-          BoutReal C_i_sq = (adiabatic * tisheath + Zi * tesheath) / Mi;
-
-          const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath; // + Δγ
+          BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
           const BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
 
@@ -522,12 +507,8 @@ void SheathBoundarySimple::transform(Options& state) {
           // This is additional energy flux through the sheath
           // Note: Here this is positive because visheath > 0
           BoutReal q =
-              ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * C_i_sq * Mi)
+              ((gamma_i - 2.5) * tisheath - 0.5 * C_i_sq * Mi)
               * nisheath * visheath;
-
-          if (q < 0.0) {
-            q = 0.0;
-          }
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->J[i] + coord->J[ip])
@@ -536,7 +517,6 @@ void SheathBoundarySimple::transform(Options& state) {
           // Divide by volume of cell to get energy loss rate (> 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
           ASSERT2(std::isfinite(power));
-          ASSERT2(power >= 0.0);
 
           energy_source[i] -= power; // Note: Sign negative because power > 0
         }
