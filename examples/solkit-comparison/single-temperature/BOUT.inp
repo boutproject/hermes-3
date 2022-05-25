@@ -59,10 +59,19 @@ Tnorm = 100
 type = beuler  # Backward Euler steady-state solver
 max_nonlinear_iterations = 10
 
-diagnose = true
+diagnose = false
 
 atol = 1e-7
 rtol = 1e-5
+
+[collisions]
+
+electron_electron = false
+electron_ion = true
+electron_neutral = false
+ion_ion = false
+ion_neutral = false
+neutral_neutral = false
 
 [sheath_boundary_simple]
 
@@ -110,7 +119,7 @@ charge = 0
 AA = 2           # Atomic mass
 
 velocity = 0
-temperature = 0  # Isothermal temperature, eV
+temperature = 0  # Isothermal temperature, eV. Has no effect
 
 [Nd]
 
@@ -129,7 +138,7 @@ AA = 1/1836
 thermal_conduction = true  # in evolve_pressure
 
 [Pe]
-function = 1
+function = 0.01
 
 powerflux = 6e6  # Input power flux in W/m^2
 

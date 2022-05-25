@@ -32,6 +32,7 @@ for path in ["two-temperatures"]:
     c = next(col_iter)
     ax1.plot(te * tnorm, color=c, linestyle="--", label=r"{} $T_e$".format(path))
     ax1.plot(ti * tnorm, color=c, linestyle=":", label=r"{} $T_i$".format(path))
+    ax1.plot(0.5 * (ti + te) * tnorm, color=c, linestyle="-", label=r"{} $(T_i + T_e)/2$".format(path))
     ax2.plot(n * nnorm, color=c, label=path)
 
 ax1.set_ylabel("Temperature [eV]")
