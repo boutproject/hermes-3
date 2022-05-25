@@ -18,7 +18,7 @@ void SOLKITHydrogenChargeExchange::calculate_rates(Options& atom, Options& ion) 
        [&](BoutReal natom, BoutReal nion, BoutReal vatom, BoutReal vion){
          // CONSTANT CROSS-SECTION 3E-19m2, COLD ION/NEUTRAL AND STATIC NEUTRAL ASSUMPTION
          auto R = natom * nion * 3e-19 * fabs(vion) *
-           (Nnorm / FreqNorm);
+           (Nnorm * rho_s0);
          return AA * (vion - vatom) * R;
        },
        Natom.getRegion("RGN_NOBNDRY"))(Natom, Nion, Vatom, Vion);

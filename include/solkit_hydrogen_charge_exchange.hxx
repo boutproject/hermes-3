@@ -16,7 +16,7 @@ struct SOLKITHydrogenChargeExchange : public Component {
     // Get the units
     const auto& units = alloptions["units"];
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
-    FreqNorm = 1. / get<BoutReal>(units["seconds"]);
+    rho_s0 = get<BoutReal>(units["meters"]);
   }
 
   /// Calculate the charge exchange cross-section
@@ -34,7 +34,7 @@ struct SOLKITHydrogenChargeExchange : public Component {
   void calculate_rates(Options& atom, Options& ion);
 
 protected:
-  BoutReal Nnorm, FreqNorm; ///< Normalisations
+  BoutReal Nnorm, rho_s0; ///< Normalisations
 };
 
 /// Hydrogen charge exchange
