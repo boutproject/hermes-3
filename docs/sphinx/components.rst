@@ -125,6 +125,14 @@ By default parallel thermal conduction is included, which requires a collision
 time. If collisions are not calculated, then thermal conduction should be turned off
 by setting `thermal_conduction = false` in the input options.
 
+If the component option ``diagnose = true`` then additional fields
+will be saved to the dump files: The species temperature ``T + name``
+(e.g. ``Td+`` or ``Te``), the time derivative ``ddt(P + name)``
+(e.g. ``ddt(Pd+)`` or ``ddt(Pe)``), and the source of pressure from
+other components is saved as ``SP + name`` (e.g. ``SPd+`` or ``SPe``).
+The pressure source is the energy density source multiplied by ``2/3``
+(i.e. assumes a monatomic species).
+
 Notes:
 
 - Heat conduction through the boundary is turned off currently. This is because
@@ -147,6 +155,19 @@ evolve_momentum
 
 Evolves the momentum `NV<species>` in time. The evolving quantity includes the atomic
 mass number, so should be divided by `AA` to obtain the particle flux.
+
+If the component option ``diagnose = true`` then additional fields
+will be saved to the dump files: The velocity ``V + name``
+(e.g. ``Vd+`` or ``Ve``), the time derivative ``ddt(NV + name)``
+(e.g. ``ddt(NVd+)`` or ``ddt(NVe)``), and the source of momentum
+density (i.e force density) from other components is saved as ``SNV +
+name`` (e.g. ``SNVd+`` or ``SNVe``).
+
+The implementation is in ``EvolveMomentum``:
+
+.. doxygenstruct:: EvolveMomentum
+   :members:
+
 
 .. _zero_current:
 
