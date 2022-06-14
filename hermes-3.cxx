@@ -59,6 +59,7 @@
 #include "include/fixed_density.hxx"
 #include "include/fixed_velocity.hxx"
 #include "include/transform.hxx"
+#include "include/fixed_fraction_radiation.hxx"
 
 #include "include/loadmetric.hxx"
 
