@@ -209,6 +209,8 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
     bout::globals::dump.addRepeat(V, std::string("V") + name);
 
     bout::globals::dump.addRepeat(ddt(NV), std::string("ddt(NV") + name + std::string(")"));
+    bout::globals::dump.addRepeat(momentum_source, std::string("SNV") + name);
+    momentum_source = 0.0;
   }
 }
 
@@ -292,7 +294,8 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Other sources/sinks
   if (species.isSet("momentum_source")) {
-    ddt(NV) += get<Field3D>(species["momentum_source"]);
+    momentum_source = get<Field3D>(species["momentum_source"]);
+    ddt(NV) += momentum_source;
   }
 }
 

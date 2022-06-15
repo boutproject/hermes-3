@@ -125,6 +125,14 @@ By default parallel thermal conduction is included, which requires a collision
 time. If collisions are not calculated, then thermal conduction should be turned off
 by setting `thermal_conduction = false` in the input options.
 
+If the component option ``diagnose = true`` then additional fields
+will be saved to the dump files: The species temperature ``T + name``
+(e.g. ``Td+`` or ``Te``), the time derivative ``ddt(P + name)``
+(e.g. ``ddt(Pd+)`` or ``ddt(Pe)``), and the source of pressure from
+other components is saved as ``SP + name`` (e.g. ``SPd+`` or ``SPe``).
+The pressure source is the energy density source multiplied by ``2/3``
+(i.e. assumes a monatomic species).
+
 Notes:
 
 - Heat conduction through the boundary is turned off currently. This is because
@@ -147,6 +155,19 @@ evolve_momentum
 
 Evolves the momentum `NV<species>` in time. The evolving quantity includes the atomic
 mass number, so should be divided by `AA` to obtain the particle flux.
+
+If the component option ``diagnose = true`` then additional fields
+will be saved to the dump files: The velocity ``V + name``
+(e.g. ``Vd+`` or ``Ve``), the time derivative ``ddt(NV + name)``
+(e.g. ``ddt(NVd+)`` or ``ddt(NVe)``), and the source of momentum
+density (i.e force density) from other components is saved as ``SNV +
+name`` (e.g. ``SNVd+`` or ``SNVe``).
+
+The implementation is in ``EvolveMomentum``:
+
+.. doxygenstruct:: EvolveMomentum
+   :members:
+
 
 .. _zero_current:
 
@@ -717,6 +738,91 @@ The implementation of these rates is in `ADASNeonIonisation`,
 
 .. doxygenstruct:: ADASNeonCX
    :members:
+
+Fixed fraction radiation
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+These components produce volumetric electron energy losses, but don't
+otherwise modify the plasma solution: Their charge and mass density
+are not calculated, and there are no interactions with other species
+or boundary conditions.
+
+The ``fixed_fraction_carbon`` component calculates radiation due to carbon
+in coronal equilibrium, using a simple formula from `I.H.Hutchinson Nucl. Fusion 34 (10) 1337 - 1348 (1994) <https://doi.org/10.1088/0029-5515/34/10/I04>`_:
+
+.. math::
+
+   L\left(T_e\right) = 2\times 10^{-31} \frac{\left(T_e/10\right)^3}{1 + \left(T_e / 10\right)^{4.5}}
+
+which has units of :math:`Wm^3` with :math:`T_e` in eV.
+
+To use this component you can just add it to the list of components and then
+configure the impurity fraction:
+
+.. code-block:: ini
+
+   [hermes]
+   components = ..., fixed_fraction_carbon, ...
+
+   [fixed_fraction_carbon]
+   fraction = 0.05   # 5% of electron density
+   diagnose = true   # Saves Rfixed_fraction_carbon to output
+
+Or to customise the name of the radiation output diagnostic a section can be
+defined like this:
+
+.. code-block:: ini
+
+   [hermes]
+   components = ..., c, ...
+
+   [c]
+   type = fixed_fraction_carbon
+   fraction = 0.05   # 5% of electron density
+   diagnose = true   # Saves Rc (R + section name)
+
+The ``fixed_fraction_nitrogen`` component works in the same way, calculating nitrogen
+radiation using a formula from `Bruce Lipschultz et al 2016 Nucl. Fusion 56 056007 <https://doi.org/10.1088/0029-5515/56/5/056007>`_:
+
+.. math::
+
+   L\left(T_e\right) = \left{\begin{array}{cl}
+   5.9\times 10^{-34}\frac{\sqrt{T_e - 1}\left(80 - T_e\right)}{1 + 3.1\times 10^{-3}\left(T_e - 1\right)^2} & \textrm{If $1 < T_e < 80$eV} \\
+   0 & \textrm{Otherwise}\end{array}\right.
+
+
+The ``fixed_fraction_neon`` component use a piecewise polynomial fit to the neon
+cooling curve (Ryoko 2020 Nov):
+
+.. math::
+
+   L\left(T\right) = \left{\begin{array}{cl}
+   \Sum_{i=0}^5 a_i T_e^i & \textrm{If $3 \le T_e < 100$eV} \\
+   7\times 10^{-35} \left(T_e - 2\right) + 10^{-35} & \textrm{If $2 \le T_e < 3$eV} \\
+   10^{-35}\left(T_e - 1\right) & \textrm{If $1 < T_e < 2$eV} \\
+   0 & \textrm{Otherwise}\end{array}\right.
+
+where the coefficients of the polynomial fit are :math:`a_0 =
+-3.2798\times 10^{-34}`, :math:`a_1 = -3.4151\times 10^{-34}`,
+:math:`a_2 = 1.7347\times 10^{-34}`, :math:`a_3 = -5.119\times
+10^{-36}`, :math:`a_4 = 5.4824\times 10^{-38}`, :math:`a_5 =
+-2.0385\times 10^{-40}`.
+
+The ``fixed_fraction_argon`` components uses a piecewise polynomial
+fit to the argon cooling curve (Ryoko 2020 Nov):
+
+.. math::
+
+   L\left(T\right) = \left{\begin{array}{cl}
+   \Sum_{i=0}^9 b_i T_e^i & \textrm{If $1.5 \le T_e < 100$eV} \\
+   5\times 10^{-35} \left(T_e - 1\right) & \textrm{If $1 \le T_e < 1.5$eV} \\
+   0 & \textrm{Otherwise}\end{array}\right.
+
+where polynomial coefficients :math:`b_0\ldots b_9` are
+:math:`-9.9412e-34`, :math:`4.9864e-34`, :math:`1.9958e-34`,
+:math:`8.6011e-35`, :math:`-8.341e-36`, :math:`3.2559e-37`,
+:math:`-6.9642e-39`, :math:`8.8636e-41`, :math:`-6.7148e-43`,
+:math:`2.8025e-45`, :math:`-4.9692e-48`.
 
 Electromagnetic fields
 ----------------------

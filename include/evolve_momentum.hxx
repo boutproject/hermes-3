@@ -34,7 +34,9 @@ private:
 
   Field3D NV;           ///< Species parallel momentum (normalised, evolving)
   Field3D V;            ///< Species parallel velocity
-  
+
+  Field3D momentum_source; ///< From other components. Stored for diagnostic output
+
   bool bndry_flux;      // Allow flows through boundaries?
   bool poloidal_flows;  // Include ExB flow in Y direction?
 
