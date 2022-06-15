@@ -786,7 +786,7 @@ radiation using a formula from `Bruce Lipschultz et al 2016 Nucl. Fusion 56 0560
 
 .. math::
 
-   L\left(T_e\right) = \left{\begin{array}{cl}
+   L\left(T_e\right) = \left\{\begin{array}{cl}
    5.9\times 10^{-34}\frac{\sqrt{T_e - 1}\left(80 - T_e\right)}{1 + 3.1\times 10^{-3}\left(T_e - 1\right)^2} & \textrm{If $1 < T_e < 80$eV} \\
    0 & \textrm{Otherwise}\end{array}\right.
 
@@ -796,8 +796,8 @@ cooling curve (Ryoko 2020 Nov):
 
 .. math::
 
-   L\left(T\right) = \left{\begin{array}{cl}
-   \Sum_{i=0}^5 a_i T_e^i & \textrm{If $3 \le T_e < 100$eV} \\
+   L\left(T\right) = \left\{\begin{array}{cl}
+   \sum_{i=0}^5 a_i T_e^i & \textrm{If $3 \le T_e < 100$eV} \\
    7\times 10^{-35} \left(T_e - 2\right) + 10^{-35} & \textrm{If $2 \le T_e < 3$eV} \\
    10^{-35}\left(T_e - 1\right) & \textrm{If $1 < T_e < 2$eV} \\
    0 & \textrm{Otherwise}\end{array}\right.
@@ -813,8 +813,8 @@ fit to the argon cooling curve (Ryoko 2020 Nov):
 
 .. math::
 
-   L\left(T\right) = \left{\begin{array}{cl}
-   \Sum_{i=0}^9 b_i T_e^i & \textrm{If $1.5 \le T_e < 100$eV} \\
+   L\left(T\right) = \left\{\begin{array}{cl}
+   \sum_{i=0}^9 b_i T_e^i & \textrm{If $1.5 \le T_e < 100$eV} \\
    5\times 10^{-35} \left(T_e - 1\right) & \textrm{If $1 \le T_e < 1.5$eV} \\
    0 & \textrm{Otherwise}\end{array}\right.
 
