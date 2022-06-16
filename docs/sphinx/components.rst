@@ -346,10 +346,11 @@ direction on the parallel transport, and is the `dneut` input setting.
 collisions
 ~~~~~~~~~~
 
-For collisions between charged particles. In the following all quantities are
-in SI units except the temperatures: `T` is in eV, so `eT` has units of Joules.
+For collisions between charged particles. In the following all
+quantities are in SI units except the temperatures: :math:`T` is in
+eV, so :math:`eT` has units of Joules.
 
-Debye length `\lambda_D`
+Debye length :math:`\lambda_D`
 
 .. math::
 
@@ -361,25 +362,33 @@ Coulomb logarithm, from [NRL formulary 2019], adapted to SI units
 
   .. math::
 
-     \ln \lambda_ee = 16.6 - \frac{1}{2} \ln\left(n_e\right) + \frac{5}{4}\ln\left(T_e\right) - sqrt{10^{-5} + \left(\ln T_e - 2\right)^2 / 16} 
+     \ln \lambda_{ee} = 30.4 - \frac{1}{2} \ln\left(n_e\right) + \frac{5}{4}\ln\left(T_e\right) - \sqrt{10^{-5} + \left(\ln T_e - 2\right)^2 / 16} 
 
-  
+  where the coefficient (30.4) differs from the NRL value due to
+  converting density from cgs to SI units (:math:`30.4 = 23.5 -
+  0.5\ln\left(10^{-6}\right)`).
+
+
 - Electron-ion collisions
 
   .. math::
 
      \ln \lambda_{ei} = \left\{\begin{array}{ll}
-                              16.1 - \frac{1}{2}\ln\left(n_e\right) - \ln(Z) + \frac{3}{2}\ln\left(T_e\right) & \textrm{if} T_im_e/m_i < T_e < 10Z^2 \\
-                              17.1 - \frac{1}{2}\ln\left(n_e\right) + \ln\left(T_e\right) & \textrm{if} T_im_e/m_i < 10Z^2 < T_e \\
-                              9.09 - \frac{1}{2}\ln\left(n_i\right) + \frac{3}{2}\ln\left(T_i\right) - \ln\left(Z^2\mu\right) & \textrm{if} T_e < T_im_e/m_i \\
+                              10 & \textrm{if } T_e < 0.1 \textrm{eV or } n_e < 10^{10}m^{-3} \\
+                              30 - \frac{1}{2}\ln\left(n_e\right) - \ln(Z) + \frac{3}{2}\ln\left(T_e\right) & \textrm{if } T_im_e/m_i < T_e < 10Z^2 \\
+                              31 - \frac{1}{2}\ln\left(n_e\right) + \ln\left(T_e\right) & \textrm{if } T_im_e/m_i < 10Z^2 < T_e \\
+                              23 - \frac{1}{2}\ln\left(n_i\right) + \frac{3}{2}\ln\left(T_i\right) - \ln\left(Z^2\mu\right) & \textrm{if } T_e < T_im_e/m_i \\
                               \end{array}\right.
      
 - Mixed ion-ion collisions
   
   .. math::
 
-     \ln \lambda_{ii'} = 16.1 - ln\left[\frac{ZZ'\left(\mu + \mu'\right)}{\mu T_{i'} + \mu'T_i}\left(\frac{n_iZ^2}{T_i} + \frac{n_{i'} Z'^2}{T_{i'}}\right)^{1/2}\right]
+     \ln \lambda_{ii'} = 29.91 - ln\left[\frac{ZZ'\left(\mu + \mu'\right)}{\mu T_{i'} + \mu'T_i}\left(\frac{n_iZ^2}{T_i} + \frac{n_{i'} Z'^2}{T_{i'}}\right)^{1/2}\right]
 
+  where like the other expressions the different constant is due to
+  converting from cgs to SI units: :math:`29.91 = 23 -
+  0.5\ln\left(10^{-6}\right)`.
 
 The frequency of charged species `a` colliding with charged species `b` is
 
@@ -388,10 +397,10 @@ The frequency of charged species `a` colliding with charged species `b` is
    \nu_{ab} = \frac{1}{3\pi^{3/2}\epsilon_0^2}\frac{Z_a^2 Z_b^2 n_b \ln\Lambda}{\left(v_a^2 + v_b^2\right)^{3/2}}\frac{\left(1 + m_a / m_b\right)}{m_a^2}
 
 
-Note that the cgs expression in Hinton is divided by `\left(4\pi\epsilon_0\right)^2` to get
+Note that the cgs expression in Hinton is divided by :math:`\left(4\pi\epsilon_0\right)^2` to get
 the expression in SI units.
 
-For conservation of momentum, the collision frequencies `\nu_{ab}` and `\nu_{ba}` are
+For conservation of momentum, the collision frequencies :math:`\nu_{ab}` and :math:`\nu_{ba}` are
 related by:
 
 .. math::

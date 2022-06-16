@@ -1,0 +1,60 @@
+# 0D system with:
+
+nout = 100
+timestep = 2000
+
+MXG = 0  # No guard cells in X
+MYG = 0  # No guard cells in Y
+
+[mesh]
+nx = 1
+ny = 1
+nz = 1
+
+[hermes]
+components = d+, e, collisions
+
+loadmetric = false
+
+Nnorm = 1e19
+Bnorm = 1
+Tnorm = 100
+
+[solver]
+type = beuler  # Backward Euler steady-state solver
+max_nonlinear_iterations = 10
+
+diagnose = true
+
+atol = 1e-7
+rtol = 1e-5
+
+####################################
+
+[d+]  # Deuterium ions
+type = fixed_density, evolve_pressure
+
+charge = 1
+AA = 2
+
+density = 1e19 # m^-3
+thermal_conduction = false  # in evolve_pressure
+diagnose = true   # Output diagnostics for these components?
+
+[Pd+]
+function = 1
+
+####################################
+
+[e] # Electrons
+type = quasineutral, evolve_pressure
+
+charge = -1
+AA = 1/1836
+
+thermal_conduction = false  # in evolve_pressure
+diagnose = true
+
+[Pe]
+function = 0   # Cold electrons initially
+
