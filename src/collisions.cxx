@@ -178,9 +178,9 @@ void Collisions::transform(Options& state) {
                   ? 23 - 0.5 * log(Ni[i]) + 1.5 * log(Ti[i]) - log(SQ(Zi) * Ai)
               : (Te[i] < 10 * SQ(Zi))
                   // Ti m_e/m_i < Te < 10 Z^2
-                  ? 31.0 - 0.5 * log(Ne[i]) + log(Te[i])
+                  ? 30.0 - 0.5 * log(Ne[i]) - log(Zi) + 1.5 * log(Te[i])
                   // Ti m_e/m_i < 10 Z^2 < Te
-                  : 30.0 - 0.5 * log(Ne[i]) - log(Zi) + 1.5 * log(Te[i]);
+                  : 31.0 - 0.5 * log(Ne[i]) + log(Te[i]);
 
           // Calculate v_a^2, v_b^2
           const BoutReal vesq = 2 * floor(Te[i], 0.1) * SI::qe / SI::Me;
