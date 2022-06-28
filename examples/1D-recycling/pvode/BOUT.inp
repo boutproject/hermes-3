@@ -13,8 +13,8 @@
 #  Does not include recombination
 
 
-nout = 400
-timestep = 5000
+nout = 100
+timestep = 20
 
 MXG = 0  # No guard cells in X
 
@@ -53,8 +53,9 @@ Bnorm = 1
 Tnorm = 100
 
 [solver]
-type = beuler  # Backward Euler steady-state solver
-max_nonlinear_iterations = 10
+type = pvode  # Backward Euler steady-state solver
+
+mxstep = 50000
 
 atol = 1e-7
 rtol = 1e-5
