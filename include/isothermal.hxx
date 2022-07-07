@@ -25,8 +25,9 @@ struct Isothermal : public Component {
 
 private:
   std::string name; // Species name
-  
-  BoutReal T; // The normalised tempertature
+
+  Field3D T; // The normalised temperature
+  Field3D P; // The normalised pressure
 };
 
 namespace {
