@@ -51,8 +51,10 @@ TEST_F(IsothermalTest, DefaultTemperature) {
   component.transform(state);
 
   // Temperature should be a scalar, and normalised to 1
-  auto Te = get<BoutReal>(state["species"]["e"]["temperature"]);
-  ASSERT_DOUBLE_EQ(Te, 1.0);
+  auto Te = get<Field3D>(state["species"]["e"]["temperature"]);
+  BOUT_FOR_SERIAL(i, Te.getRegion("RGN_ALL")) {
+    ASSERT_DOUBLE_EQ(Te[i], 1.0);
+  }
 
   auto Pe = get<Field3D>(state["species"]["e"]["pressure"]);
   
@@ -77,8 +79,10 @@ TEST_F(IsothermalTest, GivenTemperature) {
   component.transform(state);
 
   // Temperature should be a scalar, and normalised to 1
-  auto Te = get<BoutReal>(state["species"]["e"]["temperature"]);
-  ASSERT_DOUBLE_EQ(Te, 3.0);
+  auto Te = get<Field3D>(state["species"]["e"]["temperature"]);
+  BOUT_FOR_SERIAL(i, Te.getRegion("RGN_ALL")) {
+    ASSERT_DOUBLE_EQ(Te[i], 3.0);
+  }
 
   auto Pe = get<Field3D>(state["species"]["e"]["pressure"]);
   
