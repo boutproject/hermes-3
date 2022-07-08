@@ -10,17 +10,27 @@ Isothermal::Isothermal(std::string name, Options &alloptions,
   auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
   T = options["temperature"]
           .doc("Constant temperature [eV]")
-          .withDefault(Tnorm) /
+          .withDefault<Field3D>(Tnorm) /
       Tnorm; // Normalise
+
+  // Save the temperature to the output files
+  bout::globals::dump.addOnce(T, std::string("T") + name);
+
+  if (options["diagnose"]
+      .doc("Save additional output diagnostics")
+      .withDefault<bool>(false)) {
+    // Save pressure as time-varying field
+    bout::globals::dump.addRepeat(P, std::string("P") + name);
+  }
 }
 
 void Isothermal::transform(Options &state) {
-
   Options& species = state["species"][name];
 
   // Note: The boundary of N may not be set yet
   auto N = GET_NOBOUNDARY(Field3D, species["density"]);
 
   set(species["temperature"], T);
-  set(species["pressure"], N * T);
+  P = N * T;
+  set(species["pressure"], P);
 }
