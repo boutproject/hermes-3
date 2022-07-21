@@ -33,6 +33,10 @@ struct Quasineutral : public Component {
   ///     - charge
   ///     - AA
   void transform(Options &state) override;
+
+  /// Get the final density for output
+  /// including any boundary conditions applied
+  void finally(const Options &state) override;
 private:
   std::string name; ///< Name of this species
   BoutReal charge;  ///< The charge of this species

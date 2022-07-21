@@ -24,7 +24,7 @@ void Quasineutral::transform(Options &state) {
   Options &allspecies = state["species"];
 
   // Add charge density of other species
-  Field3D rho = std::accumulate(
+  const Field3D rho = std::accumulate(
       // Iterate through species
       begin(allspecies.getChildren()), end(allspecies.getChildren()),
       // Start with no charge
@@ -52,4 +52,9 @@ void Quasineutral::transform(Options &state) {
   set(species["charge"], charge);
 
   set(species["AA"], AA);
+}
+
+void Quasineutral::finally(const Options &state) {
+  // Density may have had boundary conditions applied
+  density = get<Field3D>(state["species"][name]["density"]);
 }
