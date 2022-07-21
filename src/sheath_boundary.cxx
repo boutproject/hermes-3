@@ -1,5 +1,7 @@
 #include "../include/sheath_boundary.hxx"
 
+#include <bout/output_bout_types.hxx>
+
 #include "bout/constants.hxx"
 #include "bout/mesh.hxx"
 using bout::globals::mesh;
@@ -300,7 +302,7 @@ void SheathBoundary::transform(Options &state) {
         const BoutReal phisheath = floor(0.5 * (phi[im] + phi[i]), 0.0); // Electron saturation at phi = 0
 
         // Electron sheath heat transmission
-        const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / tesheath;
+        const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / floor(tesheath, 1e-5);
 
         // Electron velocity into sheath (< 0)
         const BoutReal vesheath = (tesheath < 1e-10) ?
@@ -323,6 +325,12 @@ void SheathBoundary::transform(Options &state) {
 
         // Divide by volume of cell to get energy loss rate (< 0)
         BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+
+#if CHECKLEVEL >= 1
+        if (!std::isfinite(power)) {
+	  throw BoutException("Non-finite power at {} : Te {} Ne {} Ve {}", i, tesheath, nesheath, vesheath);
+	}
+#endif
 
         electron_energy_source[i] += power;
       }
@@ -354,7 +362,7 @@ void SheathBoundary::transform(Options &state) {
         const BoutReal phisheath = floor(0.5 * (phi[ip] + phi[i]), 0.0); // Electron saturation at phi = 0
 
         // Electron sheath heat transmission
-        const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / tesheath;
+        const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / floor(tesheath, 1e-5);
 
         // Electron velocity into sheath (> 0)
         const BoutReal vesheath = (tesheath < 1e-10) ?
@@ -377,7 +385,11 @@ void SheathBoundary::transform(Options &state) {
 
         // Divide by volume of cell to get energy loss rate (> 0)
         BoutReal power = flux / (coord->dy[i] * coord->J[i]);
-
+#if CHECKLEVEL >= 1
+	if (!std::isfinite(power)) {
+	  throw BoutException("Non-finite power {} at {} : Te {} Ne {} Ve {} => q {}, flux {}", power, i, tesheath, nesheath, vesheath, q, flux);
+        }
+#endif
         electron_energy_source[i] -= power;
       }
     }
@@ -520,6 +532,7 @@ void SheathBoundary::transform(Options &state) {
 
           // Divide by volume of cell to get energy loss rate (< 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+	  ASSERT1(std::isfinite(power));
           ASSERT2(power <= 0.0);
 
           energy_source[i] += power;
@@ -593,7 +606,7 @@ void SheathBoundary::transform(Options &state) {
 
           // Divide by volume of cell to get energy loss rate (> 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
-          ASSERT2(std::isfinite(power));
+          ASSERT1(std::isfinite(power));
           ASSERT2(power >= 0.0);
 
           energy_source[i] -= power; // Note: Sign negative because power > 0

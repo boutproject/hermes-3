@@ -3,6 +3,7 @@
 #include <bout/fv_ops.hxx>
 #include <derivs.hxx>
 #include <difops.hxx>
+#include <bout/output_bout_types.hxx>
 #include <initialprofiles.hxx>
 
 #include "../include/div_ops.hxx"
@@ -246,4 +247,12 @@ void EvolvePressure::finally(const Options& state) {
   if (evolve_log) {
     ddt(logP) = ddt(P) / P;
   }
+
+#if CHECKLEVEL >= 1
+  for (auto& i : P.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(P)[i])) {
+      throw BoutException("ddt(P{}) non-finite at {}. Sp={}\n", name, i, Sp[i]);
+    }
+  }
+#endif
 }

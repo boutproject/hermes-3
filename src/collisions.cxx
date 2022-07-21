@@ -1,6 +1,7 @@
 #include <iterator>
 
 #include <bout/constants.hxx>
+#include <bout/output_bout_types.hxx>
 
 #include "../include/collisions.hxx"
 
@@ -190,8 +191,12 @@ void Collisions::transform(Options& state) {
           const BoutReal nu = SQ(SQ(SI::qe) * Zi) * floor(Ni[i], 0.0)
                               * floor(coulomb_log, 1.0) * (1. + me_mi)
                               / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me));
-
-          ASSERT2(std::isfinite(nu));
+#if CHECK >= 2
+	  if (!std::isfinite(nu)) {
+	    throw BoutException("Collisions 195: {} at {}: Ni {}, Ne {}, Clog {}, vesq {}, visq {}, Te {}, Ti {}\n",
+                                nu, i, Ni[i], Ne[i], coulomb_log, vesq, visq, Te[i], Ti[i]);
+	  }
+#endif
           return nu;
         });
 

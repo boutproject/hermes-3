@@ -126,7 +126,7 @@ void SheathBoundarySimple::transform(Options& state) {
   // If phi not set, calculate assuming zero current
   Field3D phi;
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
-    phi = getNoBoundary<Field3D>(state["fields"]["phi"]);
+    phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   } else {
     // Calculate potential phi assuming zero current
 
@@ -290,7 +290,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
         // Electron velocity into sheath (< 0)
         const BoutReal vesheath =
-            -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
+	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
 
         Ve[im] = 2 * vesheath - Ve[i];
 
@@ -330,7 +330,7 @@ void SheathBoundarySimple::transform(Options& state) {
         Te[ip] = limitFree(Te[im], Te[i]);
         Pe[ip] = limitFree(Pe[im], Pe[i]);
 
-        // Free boundary potential linearly extrapolated
+        // Free boundary potential linearly extrapolated.
         phi[ip] = 2 * phi[i] - phi[im];
 
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
@@ -340,7 +340,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
         // Electron velocity into sheath (> 0)
         const BoutReal vesheath =
-            sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
+	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
 
         Ve[ip] = 2 * vesheath - Ve[i];
 

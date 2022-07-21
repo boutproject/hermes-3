@@ -3,6 +3,7 @@
 #include <derivs.hxx>
 #include <difops.hxx>
 #include <bout/constants.hxx>
+#include <bout/output_bout_types.hxx>
 #include <initialprofiles.hxx>
 
 #include "../include/evolve_density.hxx"
@@ -168,4 +169,12 @@ void EvolveDensity::finally(const Options &state) {
   if (evolve_log) {
     ddt(logN) = ddt(N) / N;
   }
+
+#if CHECKLEVEL >= 1
+  for (auto& i : N.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(N)[i])) {
+      throw BoutException("ddt(N{}) non-finite at {}. Sn={}\n", name, i, Sn[i]);
+    }
+  }
+#endif
 }

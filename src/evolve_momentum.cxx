@@ -2,6 +2,7 @@
 #include <derivs.hxx>
 #include <difops.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/output_bout_types.hxx>
 
 #include "../include/evolve_momentum.hxx"
 #include "../include/div_ops.hxx"
@@ -297,5 +298,13 @@ void EvolveMomentum::finally(const Options &state) {
     momentum_source = get<Field3D>(species["momentum_source"]);
     ddt(NV) += momentum_source;
   }
+
+#if CHECKLEVEL >= 1
+  for (auto& i : NV.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(NV)[i])) {
+      throw BoutException("ddt(NV{}) non-finite at {}\n", name, i);
+    }
+  }
+#endif
 }
 
