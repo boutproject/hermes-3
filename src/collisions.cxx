@@ -157,9 +157,9 @@ void Collisions::transform(Options& state) {
 
       Options& species = allspecies[kv.first]; // Note: Need non-const
 
-      if (species.isSet("charge") and (get<BoutReal>(species["charge"]) != 0.0)) {
+      if (species.isSet("charge") and (get<BoutReal>(species["charge"]) > 0.0)) {
         ////////////////////////////////////
-        // electron-charged ion collisions
+        // electron-positive ion collisions
 
         if (!electron_ion)
           continue;
@@ -193,8 +193,8 @@ void Collisions::transform(Options& state) {
                               / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me));
 #if CHECK >= 2
 	  if (!std::isfinite(nu)) {
-	    throw BoutException("Collisions 195: {} at {}: Ni {}, Ne {}, Clog {}, vesq {}, visq {}, Te {}, Ti {}\n",
-                                nu, i, Ni[i], Ne[i], coulomb_log, vesq, visq, Te[i], Ti[i]);
+	    throw BoutException("Collisions 195 {}: {} at {}: Ni {}, Ne {}, Clog {}, vesq {}, visq {}, Te {}, Ti {}\n",
+                                kv.first, nu, i, Ni[i], Ne[i], coulomb_log, vesq, visq, Te[i], Ti[i]);
 	  }
 #endif
           return nu;
@@ -202,6 +202,15 @@ void Collisions::transform(Options& state) {
 
         collide(electrons, species, nu_ei / Omega_ci);
 
+      } if (species.isSet("charge") and (get<BoutReal>(species["charge"]) < 0.0)) {
+        ////////////////////////////////////
+        // electron-negative ion collisions
+
+        static bool first_time = true;
+        if (first_time) {
+          output_warn.write("Warning: Not calculating e - {} collisions", kv.first);
+          first_time = false;
+        }
       } else {
         ////////////////////////////////////
         // electron-neutral collisions
@@ -241,7 +250,7 @@ void Collisions::transform(Options& state) {
   //
   const std::map<std::string, Options>& children = allspecies.getChildren();
   for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
-    if (kv1->first == "e")
+    if (kv1->first == "e" or kv1->first == "ebeam")
       continue; // Skip electrons
 
     Options& species1 = allspecies[kv1->first];
@@ -266,7 +275,7 @@ void Collisions::transform(Options& state) {
       // lower half of the matrix, but start at the diagonal
       for (std::map<std::string, Options>::const_iterator kv2 = kv1;
            kv2 != std::end(children); ++kv2) {
-        if (kv2->first == "e")
+        if (kv2->first == "e" or kv2->first == "ebeam")
           continue; // Skip electrons
 
         Options& species2 = allspecies[kv2->first];
