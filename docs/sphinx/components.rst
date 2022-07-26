@@ -101,7 +101,13 @@ Species pressure and temperature
 isothermal
 ~~~~~~~~~~
 
-Sets the temperature of a species to a fixed value
+Sets the temperature of a species to a fixed value which is constant
+in space and time. If the species density is set then this component
+also calculates the pressure.
+
+By default only saves the temperature once as a non-evolving variable.
+If ``diagnose`` is set then pressure is also saved as a time-evolving
+variable.
 
 .. code-block:: ini
 
