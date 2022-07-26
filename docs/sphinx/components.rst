@@ -175,6 +175,26 @@ The implementation is in `EvolvePressure`:
 Species parallel dynamics
 -------------------------
 
+fixed_velocity
+~~~~~~~~~~~~~~
+
+Sets the velocity of a species to a fixed value which is constant
+in time but can vary in space. If the species density is set then this
+component also calculates the momentum.
+
+Saves the temperature once as a non-evolving variable.
+
+.. code-block:: ini
+
+   [e]
+   type = ..., fixed_velocity
+
+   velocity = 10 + sin(z)   # Spatially dependent velocity [m/s]
+
+.. doxygenstruct:: FixedTemperature
+   :members:
+
+
 .. _evolve_momentum:
 
 evolve_momentum

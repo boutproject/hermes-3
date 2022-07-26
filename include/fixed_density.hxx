@@ -18,9 +18,9 @@ struct FixedDensity : public Component {
 
     auto& options = alloptions[name];
 
-    // Charge and mass. Default to zero
-    charge = options["charge"].doc("Particle charge. electrons = -1").withDefault(0.0);
-    AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(0.0);
+    // Charge and mass
+    charge = options["charge"].doc("Particle charge. electrons = -1");
+    AA = options["AA"].doc("Particle atomic mass. Proton = 1");
 
     // Normalisation of density
     const BoutReal Nnorm = alloptions["units"]["inv_meters_cubed"];

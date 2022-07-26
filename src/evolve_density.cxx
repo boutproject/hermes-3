@@ -61,9 +61,9 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
     solver->add(N, std::string("N") + name);
   }
 
-  // Charge and mass. Default to zero
-  charge = options["charge"].doc("Particle charge. electrons = -1").withDefault(0.0);
-  AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(0.0);
+  // Charge and mass
+  charge = options["charge"].doc("Particle charge. electrons = -1");
+  AA = options["AA"].doc("Particle atomic mass. Proton = 1");
 
   if (options["diagnose"]
           .doc("Output additional diagnostics?")

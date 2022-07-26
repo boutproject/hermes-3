@@ -35,10 +35,13 @@ struct FixedVelocity : public Component {
     auto& species = state["species"][name];
     set(species["velocity"], V);
 
-    const Field3D N = getNoBoundary<Field3D>(species["density"]);
-    const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
+    // If density is set, also set momentum
+    if (isSetFinalNoBoundary(species["density"])) {
+      const Field3D N = getNoBoundary<Field3D>(species["density"]);
+      const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-    set(species["momentum"], AA * N * V);
+      set(species["momentum"], AA * N * V);
+    }
   }
 
 private:
