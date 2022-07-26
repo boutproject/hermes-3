@@ -58,6 +58,7 @@
 #include "include/relax_potential.hxx"
 #include "include/fixed_density.hxx"
 #include "include/fixed_velocity.hxx"
+#include "include/fixed_temperature.hxx"
 #include "include/transform.hxx"
 #include "include/fixed_fraction_radiation.hxx"
 

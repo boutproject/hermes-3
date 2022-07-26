@@ -92,7 +92,6 @@ charge density is zero everywhere. This must therefore be done after
 all other charged species densities have been calculated. It only
 makes sense to use this component for species with a non-zero charge.
 
-
 Species pressure and temperature
 --------------------------------
 
@@ -117,6 +116,28 @@ variable.
    temperature = 10   # Constant temperature [eV]
 
 .. doxygenstruct:: Isothermal
+   :members:
+
+
+fixed_temperature
+~~~~~~~~~~~~~~~~~
+
+Sets the temperature of a species to a fixed value which is constant
+in time but can vary in space. If the species density is set then this
+component also calculates the pressure.
+
+By default only saves the temperature once as a non-evolving variable.
+If ``diagnose`` is set then pressure is also saved as a time-evolving
+variable.
+
+.. code-block:: ini
+
+   [e]
+   type = ..., fixed_temperature
+
+   temperature = 10 - x   # Spatially dependent temperature [eV]
+
+.. doxygenstruct:: FixedTemperature
    :members:
 
 .. _evolve_pressure:
