@@ -43,6 +43,10 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
   neutral_neutral = options["neutral_neutral"]
                         .doc("Include neutral-neutral elastic collisions?")
                         .withDefault<bool>(true);
+
+  frictional_heating = options["frictional_heating"]
+    .doc("Include R dot v heating term as energy source?")
+    .withDefault<bool>(true);
 }
 
 /// Calculate transfer of momentum and energy between species1 and species2
@@ -53,10 +57,11 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
 ///     - collision_frequency
 ///     - momentum_source   if species1 or species2 velocity is set
 ///     - energy_source     if species1 or species2 temperature is set
+///                         or velocity is set and frictional_heating
 ///
 /// Note: A* variables are used for atomic mass numbers;
 ///       mass* variables are species masses in kg
-void Collisions::collide(Options& species1, Options& species2, const Field3D& nu_12) {
+void Collisions::collide(Options& species1, Options& species2, const Field3D& nu_12, BoutReal momentum_coefficient) {
   AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12);
@@ -78,7 +83,8 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
     add(species2["collision_frequency"], nu);
 
     // Momentum exchange
-    if (species1.isSet("velocity") or species2.isSet("velocity")) {
+    if (isSetFinalNoBoundary(species1["velocity"]) or
+        isSetFinalNoBoundary(species2["velocity"])) {
 
       const Field3D velocity1 = species1.isSet("velocity")
                                     ? GET_NOBOUNDARY(Field3D, species1["velocity"])
@@ -92,6 +98,12 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 
       add(species1["momentum_source"], F12);
       subtract(species2["momentum_source"], F12);
+
+      if (frictional_heating) {
+        // Heating due to friction
+        subtract(species1["energy_source"], F12 * velocity1);
+        add(species2["energy_source"], F12 * velocity2);
+      }
     }
 
     // Energy exchange
@@ -151,7 +163,7 @@ void Collisions::transform(Options& state) {
           return nu;
         });
 
-        collide(electrons, electrons, nu_ee / Omega_ci);
+        collide(electrons, electrons, nu_ee / Omega_ci, 1.0);
         continue;
       }
 
@@ -200,7 +212,15 @@ void Collisions::transform(Options& state) {
           return nu;
         });
 
-        collide(electrons, species, nu_ei / Omega_ci);
+        // Coefficient in front of parallel momentum exchange
+        // This table is from Braginskii 1965
+        BoutReal mom_coeff =
+          Zi == 1 ? 0.51 :
+          Zi == 2 ? 0.44 :
+          Zi == 3 ? 0.40 :
+          0.38; // Note: 0.38 is for Zi=4; tends to 0.29 for Zi->infty
+
+        collide(electrons, species, nu_ei / Omega_ci, mom_coeff);
 
       } if (species.isSet("charge") and (get<BoutReal>(species["charge"]) < 0.0)) {
         ////////////////////////////////////
@@ -231,7 +251,7 @@ void Collisions::transform(Options& state) {
           return vth_e * Nnorm * Nn[i] * a0 * rho_s0;
         });
 
-        collide(electrons, species, nu_en);
+        collide(electrons, species, nu_en, 1.0);
       }
     }
   }
@@ -330,7 +350,7 @@ void Collisions::transform(Options& state) {
           });
 
           // Update the species collision rates, momentum & energy exchange
-          collide(species1, species2, nu_12 / Omega_ci);
+          collide(species1, species2, nu_12 / Omega_ci, 1.0);
 
         } else {
           // species1 charged, species2 neutral
@@ -351,7 +371,7 @@ void Collisions::transform(Options& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1, species2, nu_12);
+          collide(species1, species2, nu_12, 1.0);
         }
       }
     } else {
@@ -397,7 +417,7 @@ void Collisions::transform(Options& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1, species2, nu_12);
+          collide(species1, species2, nu_12, 1.0);
 
         } else {
           // Both species neutral
@@ -425,7 +445,7 @@ void Collisions::transform(Options& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1, species2, nu_12);
+          collide(species1, species2, nu_12, 1.0);
         }
       }
     }

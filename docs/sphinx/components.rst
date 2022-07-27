@@ -465,14 +465,35 @@ Momentum exchange, force on species `a` due to collisions with species `b`:
 
 .. math::
 
-   F_{ab} = \nu_{ab} m_a n_a \left( u_b - u_a \right)
+   F_{ab} = C_m \nu_{ab} m_a n_a \left( u_b - u_a \right)
 
-   
-Energy exchange, heat transferred to species `a` from species `b`:
+Where the coefficient :math:`C_m` for parallel flows depends on the species: For most combinations
+of species this is set to 1, but for electron-ion collisions the Braginskii coefficients are used:
+:math:`C_m = 0.51` if ion charge :math:`Z_i = 1`;  0.44 for :math:`Z_i = 2`; 0.40 for :math:`Z_i = 3`;
+and 0.38 is used for :math:`Z_i \ge 4`. Note that this coefficient should decline further with
+increasing ion charge, tending to 0.29 as :math:`Z_i \rightarrow \infty`.
+
+Frictional heating is included by default, but can be disabled by
+setting the `frictional_heating` option to `false`. When enabled it
+adds a source of thermal energy corresponding to the resistive heating
+term:
 
 .. math::
 
-   Q_{ab} = \nu_{ab}\frac{3n_a m_a\left(T_b - T_a\right)}{m_a + m_b}
+   Q_{ab,F} = - F_{ab} u_a
+
+Energy exchange, heat transferred to species `a` from species `b` due to temperature
+differences, is given by:
+
+.. math::
+
+   Q_{ab,T} = \nu_{ab}\frac{3n_a m_a\left(T_b - T_a\right)}{m_a + m_b}
+
+- Ion-neutral and electron-neutral collisions
+
+  The cross-section for elastic collisions between charged and neutral
+  particles can vary significantly. Here for simplicity we just take
+  a value of :math:`5\times 10^{-19}m^2` from the NRL formulary.
 
 - Neutral-neutral collisions
 
