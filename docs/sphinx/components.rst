@@ -160,6 +160,13 @@ other components is saved as ``SP + name`` (e.g. ``SPd+`` or ``SPe``).
 The pressure source is the energy density source multiplied by ``2/3``
 (i.e. assumes a monatomic species).
 
+.. math::
+
+   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}\nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right) + \frac{2}{3}S_E + S_N\frac{1}{2}mNV^2
+
+where :math:`S_E` is the ``energy_source`` (thermal energy source),
+and :math:`S_N` is the density source.
+
 Notes:
 
 - Heat conduction through the boundary is turned off currently. This is because
