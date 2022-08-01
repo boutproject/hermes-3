@@ -328,7 +328,7 @@ void SheathBoundary::transform(Options &state) {
 
 #if CHECKLEVEL >= 1
         if (!std::isfinite(power)) {
-	  throw BoutException("Non-finite power at {} : Te {} Ne {} Ve {}", i, tesheath, nesheath, vesheath);
+	  throw BoutException("Non-finite power at {} : Te {} Ne {} Ve {} phi {}, {}", i, tesheath, nesheath, vesheath, phi[i], phi[ip]);
 	}
 #endif
 
@@ -387,7 +387,8 @@ void SheathBoundary::transform(Options &state) {
         BoutReal power = flux / (coord->dy[i] * coord->J[i]);
 #if CHECKLEVEL >= 1
 	if (!std::isfinite(power)) {
-	  throw BoutException("Non-finite power {} at {} : Te {} Ne {} Ve {} => q {}, flux {}", power, i, tesheath, nesheath, vesheath, q, flux);
+	  throw BoutException("Non-finite power {} at {} : Te {} Ne {} Ve {} phi {}, {} => q {}, flux {}",
+                              power, i, tesheath, nesheath, vesheath, phi[i], phi[im], q, flux);
         }
 #endif
         electron_energy_source[i] -= power;

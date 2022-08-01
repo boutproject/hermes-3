@@ -383,6 +383,26 @@ void Vorticity::transform(Options &state) {
   // Ensure that potential is set in the communication guard cells
   mesh->communicate(phi);
 
+  // Outer boundary cells
+  if (mesh->firstX()) {
+    for (int i = mesh->xstart-2; i >= 0; --i) {
+      for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+        for (int k = 0; k < mesh->LocalNz; ++k) {
+          phi(i, j, k) = phi(i + 1, j, k);
+        }
+      }
+    }
+  }
+  if (mesh->lastX()) {
+    for (int i = mesh->xend + 2; i < mesh->LocalNx; ++i) {
+      for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+        for (int k = 0; k < mesh->LocalNz; ++k) {
+          phi(i, j, k) = phi(i - 1, j, k);
+        }
+      }
+    }
+  }
+
   ddt(Vort) = 0.0;
 
   if (diamagnetic) {
