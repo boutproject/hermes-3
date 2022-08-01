@@ -62,6 +62,7 @@ set(HERMES_SOURCES
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
     src/sheath_boundary_simple.cxx
+    src/sheath_boundary_insulating.cxx
     src/fixed_fraction_ions.cxx
     src/sound_speed.cxx
     src/zero_current.cxx
@@ -118,6 +119,7 @@ set(HERMES_SOURCES
     include/relax_potential.hxx
     include/sheath_boundary.hxx
     include/sheath_boundary_simple.hxx
+    include/sheath_boundary_insulating.hxx
     include/sheath_closure.hxx
     include/sound_speed.hxx
     include/thermal_force.hxx
