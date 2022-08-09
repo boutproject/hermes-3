@@ -62,6 +62,7 @@ set(HERMES_SOURCES
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
     src/sheath_boundary_simple.cxx
+    src/snb_conduction.cxx
     src/fixed_fraction_ions.cxx
     src/sound_speed.cxx
     src/zero_current.cxx
@@ -110,6 +111,7 @@ set(HERMES_SOURCES
     include/loadmetric.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
+    include/snb_conduction.hxx
     include/solkit_neutral_parallel_diffusion.hxx
     include/noflow_boundary.hxx
     include/quasineutral.hxx

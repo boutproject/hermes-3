@@ -179,6 +179,17 @@ The implementation is in `EvolvePressure`:
    :members:
 
 
+SNB nonlocal heat flux
+~~~~~~~~~~~~~~~~~~~~~~
+
+Calculates the divergence of the electron heat flux using the
+Shurtz-Nicolai-Busquet (SNB) model. Uses the BOUT++ implementation which is
+`documented here <https://bout-dev.readthedocs.io/en/latest/user_docs/nonlocal.html?#snb-model>`_.
+
+.. doxygenstruct:: SNBConduction
+   :members:
+
+
 Species parallel dynamics
 -------------------------
 
