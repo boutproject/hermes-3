@@ -157,6 +157,18 @@ Vorticity::Vorticity(std::string name, Options &alloptions, Solver *solver) {
   Curlb_B *= 2. / coord->Bxy;
   
   Bsq = SQ(coord->Bxy);
+
+  if (options["diagnose"]
+          .doc("Output additional diagnostics?")
+          .withDefault<bool>(false)) {
+
+    if (diamagnetic) {
+      SAVE_REPEAT(DivJdia);
+    }
+    if (collisional_friction) {
+      SAVE_REPEAT(DivJcol);
+    }
+  }
 }
 
 void Vorticity::transform(Options &state) {
@@ -437,7 +449,7 @@ void Vorticity::transform(Options &state) {
     
     // Note: This term is central differencing so that it balances
     // the corresponding compression term in the species pressure equations
-    Field3D DivJdia = Div(Jdia);
+    DivJdia = Div(Jdia);
     ddt(Vort) += DivJdia;
 
     if (diamagnetic_polarisation) {
@@ -458,6 +470,44 @@ void Vorticity::transform(Options &state) {
     }
 
     set(fields["DivJdia"], DivJdia);
+  }
+
+  if (collisional_friction) {
+    // Damping of vorticity due to collisions
+
+    // Calculate a mass-weighted collision frequency
+    Field3D sum_A_nu_n = zeroFrom(Vort); // Sum of atomic mass * collision frequency * density
+    Field3D sum_A_n = zeroFrom(Vort);    // Sum of atomic mass * density
+
+    const Options& allspecies = state["species"];
+    for (const auto& kv : allspecies.getChildren()) {
+      const Options& species = kv.second;
+
+      if (!(species.isSet("charge") and species.isSet("AA"))) {
+        continue; // No charge or mass -> no current
+      }
+      if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+	continue; // Zero charge
+      }
+
+      const BoutReal A = get<BoutReal>(species["AA"]);
+      const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
+      const Field3D AN = A * N;
+      sum_A_n += AN;
+      if (IS_SET(species["collision_frequency"])) {
+	sum_A_nu_n += AN * GET_VALUE(Field3D, species["collision_frequency"]);
+      }
+    }
+
+    Field3D weighted_collision_frequency = sum_A_nu_n / sum_A_n;
+    weighted_collision_frequency.setBoundary("neumann");
+
+    DivJcol = - FV::Div_a_Grad_perp(
+		    weighted_collision_frequency * average_atomic_mass
+		    / Bsq, phi);
+
+    ddt(Vort) += DivJcol;
+    set(fields["DivJcol"], DivJcol);
   }
 
   set(fields["vorticity"], Vort);
@@ -515,40 +565,6 @@ void Vorticity::finally(const Options &state) {
 
     // Note: Using NV rather than N*V so that the cell boundary flux is correct
     ddt(Vort) += Div_par((Z / A) * NV);
-  }
-
-  if (collisional_friction) {
-    // Damping of vorticity due to collisions
-
-    // Calculate a mass-weighted collision frequency
-    Field3D sum_A_nu_n = zeroFrom(Vort); // Sum of atomic mass * collision frequency * density
-    Field3D sum_A_n = zeroFrom(Vort);    // Sum of atomic mass * density
-
-    const Options& allspecies = state["species"];
-    for (const auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
-
-      if (!(species.isSet("charge") and species.isSet("AA"))) {
-        continue; // No charge or mass -> no current
-      }
-      if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
-	continue; // Zero charge
-      }
-
-      const BoutReal A = get<BoutReal>(species["AA"]);
-      const Field3D N = get<Field3D>(species["density"]);
-      const Field3D AN = A * N;
-      sum_A_n += AN;
-      if (species.isSet("collision_frequency")) {
-	sum_A_nu_n += AN * get<Field3D>(species["collision_frequency"]);
-      }
-    }
-
-    const Field3D weighted_collision_frequency = sum_A_nu_n / sum_A_n;
-
-    ddt(Vort) -= FV::Div_a_Laplace_perp(
-		    weighted_collision_frequency * average_atomic_mass
-		    / Bsq, phi);
   }
 
   if (state.isSet("sound_speed")) {

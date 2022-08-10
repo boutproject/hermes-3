@@ -69,8 +69,10 @@ for new variables which are added to the state:
   * `vorticity`
   * `phi`       Electrostatic potential
   * `DivJdia`   Divergence of diamagnetic current
-  * `DivJextra` Divergence of current, including parallel current.
-    Not including diamagnetic or polarisation currents
+  * `DivJcol`   Divergence of collisional current
+  * `DivJextra` Divergence of current, including 2D parallel current
+    closures.  Not including diamagnetic, parallel current due to
+    flows, or polarisation currents
 
 For example to get the electron density::
 
