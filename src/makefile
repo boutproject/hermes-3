@@ -34,6 +34,7 @@ SOURCEC		= component.cxx component_scheduler.cxx ionisation.cxx radiation.cxx \
                   electron_force_balance.cxx \
 		  ion_viscosity.cxx \
 		  relax_potential.cxx \
-		  transform.cxx
+		  transform.cxx \
+                  sheath_boundary_insulating.cxx
 
 include $(BOUT_TOP)/make.config
