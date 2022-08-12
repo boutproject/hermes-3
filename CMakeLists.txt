@@ -75,6 +75,7 @@ set(HERMES_SOURCES
     src/adas_reaction.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
+    src/polarisation_drift.cxx
     src/solkit_neutral_parallel_diffusion.cxx
     src/hydrogen_charge_exchange.cxx
     src/solkit_hydrogen_charge_exchange.cxx
@@ -113,6 +114,7 @@ set(HERMES_SOURCES
     include/neutral_parallel_diffusion.hxx
     include/solkit_neutral_parallel_diffusion.hxx
     include/noflow_boundary.hxx
+    include/polarisation_drift.hxx
     include/quasineutral.hxx
     include/radiation.hxx
     include/recycling.hxx
