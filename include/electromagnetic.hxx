@@ -49,6 +49,7 @@ struct Electromagnetic : public Component {
   /// - species
   ///   - <..>      All species with charge and parallel momentum
   ///     - momentum  (modifies) to m n v||
+  ///     - velocity  (modifies) to v||
   /// - fields
   ///   - Apar      Electromagnetic potential
   ///

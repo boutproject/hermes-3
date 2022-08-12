@@ -86,8 +86,11 @@ void Electromagnetic::transform(Options &state) {
     if (fabs(Z) < 1e-5) {
       continue; // Not charged
     }
+    const BoutReal A = get<BoutReal>(species["AA"]);
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
     subtract(species["momentum"], Z * N * Apar);
+    // Note: velocity is momentum / (A * N)
+    subtract(species["velocity"], (Z / A) * Apar);
   }
 }
