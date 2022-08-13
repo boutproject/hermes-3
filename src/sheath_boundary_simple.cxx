@@ -369,7 +369,7 @@ void SheathBoundarySimple::transform(Options& state) {
   setBoundary(electrons["pressure"], Pe);
 
   // Set energy source (negative in cell next to sheath)
-  set(electrons["energy_source"], electron_energy_source);
+  add(electrons["energy_source"], fromFieldAligned(electron_energy_source));
 
   if (electrons.isSet("velocity")) {
     setBoundary(electrons["velocity"], Ve);
@@ -538,6 +538,6 @@ void SheathBoundarySimple::transform(Options& state) {
     }
 
     // Additional loss of energy through sheath
-    set(species["energy_source"], energy_source);
+    add(species["energy_source"], fromFieldAligned(energy_source));
   }
 }
