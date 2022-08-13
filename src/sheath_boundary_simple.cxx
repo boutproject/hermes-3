@@ -117,6 +117,9 @@ void SheathBoundarySimple::transform(Options& state) {
   // This is for applying boundary conditions
   Field3D Ve =
       electrons.isSet("velocity") ? getNoBoundary<Field3D>(electrons["velocity"]) : 0.0;
+  Field3D NVe = IS_SET_NOBOUNDARY(electrons["momentum"])
+    ? toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]))
+    : zeroFrom(Ne);
 
   Coordinates* coord = mesh->getCoordinates();
 
@@ -293,6 +296,7 @@ void SheathBoundarySimple::transform(Options& state) {
 	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
 
         Ve[im] = 2 * vesheath - Ve[i];
+        NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
 
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
@@ -343,6 +347,7 @@ void SheathBoundarySimple::transform(Options& state) {
 	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
 
         Ve[ip] = 2 * vesheath - Ve[i];
+        NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
 
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
@@ -373,6 +378,9 @@ void SheathBoundarySimple::transform(Options& state) {
 
   if (electrons.isSet("velocity")) {
     setBoundary(electrons["velocity"], Ve);
+  }
+  if (IS_SET_NOBOUNDARY(electrons["momentum"])) {
+    setBoundary(electrons["momentum"], fromFieldAligned(NVe));
   }
 
   if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
