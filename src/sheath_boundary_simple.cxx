@@ -295,8 +295,12 @@ void SheathBoundarySimple::transform(Options& state) {
             floor(0.5 * (phi[im] + phi[i]), 0.0); // Electron saturation at phi = 0
 
         // Electron velocity into sheath (< 0)
-        const BoutReal vesheath =
+        BoutReal vesheath =
 	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
+
+        if (Ve[i] < vesheath) {
+          vesheath = Ve[i];
+        }
 
         Ve[im] = 2 * vesheath - Ve[i];
         NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
@@ -346,8 +350,12 @@ void SheathBoundarySimple::transform(Options& state) {
             floor(0.5 * (phi[ip] + phi[i]), 0.0); // Electron saturation at phi = 0
 
         // Electron velocity into sheath (> 0)
-        const BoutReal vesheath =
+        BoutReal vesheath =
 	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
+
+        if (Ve[i] > vesheath) {
+          vesheath = Ve[i];
+        }
 
         Ve[ip] = 2 * vesheath - Ve[i];
         NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
@@ -370,6 +378,8 @@ void SheathBoundarySimple::transform(Options& state) {
       }
     }
   }
+
+  output.write("Ve: {} {} {}\n", Ve(10, 2, 31), Ve(10, 3, 31), Ve(10, 4, 31));
 
   // Set electron density and temperature, now with boundary conditions
   setBoundary(electrons["density"], fromFieldAligned(Ne));
@@ -458,7 +468,11 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          const BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
+          BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
+
+          if (Vi[i] < visheath) {
+            visheath = Vi[i];
+          }
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
@@ -511,7 +525,11 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          const BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
+          BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
+
+          if (Vi[i] > visheath) {
+            visheath = Vi[i];
+          }
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
