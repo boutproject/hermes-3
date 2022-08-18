@@ -33,6 +33,7 @@
 #include "include/sheath_closure.hxx"
 #include "include/sheath_boundary.hxx"
 #include "include/sheath_boundary_simple.hxx"
+#include "include/sheath_boundary_insulating.hxx"
 #include "include/vorticity.hxx"
 #include "include/fixed_fraction_ions.hxx"
 #include "include/evolve_pressure.hxx"
@@ -62,6 +63,7 @@
 #include "include/transform.hxx"
 #include "include/fixed_fraction_radiation.hxx"
 #include "include/snb_conduction.hxx"
+#include "include/polarisation_drift.hxx"
 
 #include "include/loadmetric.hxx"
 

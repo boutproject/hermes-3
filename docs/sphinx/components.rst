@@ -278,6 +278,65 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
+Drifts
+------
+
+The ExB drift is included in the density, momentum and pressure evolution equations if
+potential is calculated. Other drifts can be added with the following components.
+
+diamagnetic_drift
+~~~~~~~~~~~~~~~~~
+
+Adds diamagnetic drift terms to all species' density, pressure and parallel momentum
+equations. Calculates the diamagnetic drift velocity as
+
+.. math::
+
+   \mathbf{v}_{dia} = \frac{T}{q} \nabla\times\left(\frac{\mathbf{b}}{B}\right)
+
+where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
+is read from the `bxcv` mesh input variable.
+
+.. doxygenstruct:: DiamagneticDrift
+   :members:
+
+
+polarisation_drift
+~~~~~~~~~~~~~~~~~~
+
+This calculates the polarisation drift of all charged species,
+including ions and electrons. It works by approximating the drift
+as a potential flow:
+
+.. math::
+
+   \mathbf{v}_{pol} = - \frac{m}{q B^2} \nabla_\perp\phi_{pol}
+
+where :math:`\phi_{pol}` is approximately the time derivative of the
+electrostatic potential :math:`\phi` in the frame of the fluid, with
+an ion diamagnetic contribution. This is calculated by inverting a
+Laplacian equation similar to that solved in the vorticity equation.
+
+This component needs to be run after all other currents have been
+calculated.  It marks currents as used, so out-of-order modifications
+should raise errors.
+
+See the `examples/blob2d-vpol` example, which contains:
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, vorticity, sheath_closure, polarisation_drift
+
+   [polarisation_drift]
+   diagnose = true
+
+Setting `diagnose = true` saves `DivJ` to the dump files with the divergence of all
+currents except polarisation, and `phi_pol` which is the polarisation flow potential.
+
+.. doxygenstruct:: PolarisationDrift
+   :members:
+
 Neutral gas models
 ------------------
 
@@ -303,6 +362,9 @@ exchange) and the pressure gradient:
 At the moment there is no attempt to limit these velocities, which has
 been found necessary in UEDGE to get physical results in better
 agreement with kinetic neutral models [Discussion, T.Rognlien].
+
+Boundary conditions
+-------------------
 
 .. _noflow_boundary:
 
