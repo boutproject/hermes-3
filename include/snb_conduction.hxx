@@ -46,7 +46,7 @@ struct SNBConduction : public Component {
   /// Inputs
   ///  - <name>
   ///    - diagnose   Saves Div_Q_SH and Div_Q_SNB
-  SNBConduction(std::string name, Options& alloptions, Solver*) {
+  SNBConduction(std::string name, Options& alloptions, Solver*) : snb(alloptions[name]) {
     AUTO_TRACE();
     auto& options = alloptions[name];
 
