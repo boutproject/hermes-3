@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+
+plot = False
+
+from boututils.run_wrapper import shell, shell_safe, launch_safe
+from boutdata.collect import collect
+from sys import stdout, exit
+import numpy as np
+
+shell("ln -s ../../../hermes-3 hermes-3")
+
+for case in ["uniform", "nonuniform"]:
+  print("Running " + case + "...")
+  s, out = launch_safe("./hermes-3 -d " + case, nproc=1, mthread=1, pipe=True)
+  with open("run.log." + case, "w") as f:
+    f.write(out)
+
+  # Collect the divergence of heat fluxes from Spitzer-Harm and SNB calculations
+  dq_sh = collect("Div_Q_SH", path = case, tind=0, info=False).squeeze()
+  dq_snb = collect("Div_Q_SNB", path = case, tind=0, info=False).squeeze()
+
+  if plot:
+    import matplotlib.pyplot as plt
+    # Cumulative sum gives heat flux
+    q_sh = np.cumsum(dq_sh)
+    q_snb = np.cumsum(dq_snb)
+    plt.plot(q_sh, label="Spitzer-Harm")
+    plt.plot(q_snb, label="SNB")
+    plt.xlabel("Cell number")
+    plt.ylabel("Heat flux [Arb]")
+    plt.savefig(case + ".png")
+    plt.close()
+
+  # Flux at boundaries should match
+  assert abs(np.sum(dq_sh) - np.sum(dq_snb)) < 1e-5
+  print("Passed")  
+
+exit(0)
