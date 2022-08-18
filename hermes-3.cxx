@@ -63,6 +63,7 @@
 #include "include/transform.hxx"
 #include "include/fixed_fraction_radiation.hxx"
 #include "include/electromagnetic.hxx"
+#include "include/polarisation_drift.hxx"
 
 #include "include/loadmetric.hxx"
 
