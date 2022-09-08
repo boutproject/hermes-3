@@ -63,6 +63,8 @@ private:
   // Diagnostic outputs
   Field3D DivJ; // Divergence of all other currents
   Field3D phi_pol; // Polarisation drift potential
+
+  BoutReal density_floor; // Minimum mass density
 };
 
 namespace {

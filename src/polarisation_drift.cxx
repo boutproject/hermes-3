@@ -1,6 +1,7 @@
 #include "../include/polarisation_drift.hxx"
 
 #include <bout/fv_ops.hxx>
+#include <bout/output_bout_types.hxx>
 #include <invert_laplace.hxx>
 #include <difops.hxx>
 
@@ -26,6 +27,8 @@ PolarisationDrift::PolarisationDrift(std::string name,
 
   phiSolver->setInnerBoundaryFlags(0);
   phiSolver->setOuterBoundaryFlags(0);
+
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
 
   if (options["diagnose"]
           .doc("Output additional diagnostics?")
@@ -57,6 +60,9 @@ void PolarisationDrift::transform(Options &state) {
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
     mass_density += A * N;
   }
+
+  // Apply a floor to prevent divide-by-zero errors
+  mass_density = floor(mass_density, density_floor);
 
   // Calculate divergence of all currents except the polarisation current
   DivJ = 0.0;
