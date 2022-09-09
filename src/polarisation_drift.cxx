@@ -28,8 +28,22 @@ PolarisationDrift::PolarisationDrift(std::string name,
   phiSolver->setInnerBoundaryFlags(0);
   phiSolver->setOuterBoundaryFlags(0);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  boussinesq = options["boussinesq"]
+    .doc("Assume a uniform mass density in calculating the polarisation drift")
+    .withDefault<bool>(true);
 
+  if (boussinesq) {
+    average_atomic_mass =
+      options["average_atomic_mass"]
+      .doc("Weighted average atomic mass, for polarisaion current "
+           "(Boussinesq approximation)")
+      .withDefault<BoutReal>(2.0); // Deuterium
+  } else {
+    average_atomic_mass = 1.0;
+    // Use a density floor to prevent divide-by-zero errors
+    density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  }
+  
   if (options["diagnose"]
           .doc("Output additional diagnostics?")
           .withDefault<bool>(false)) {
@@ -45,24 +59,29 @@ void PolarisationDrift::transform(Options &state) {
 
   // Calculate the total mass density of species
   // which contribute to polarisation current
-  Field3D mass_density = 0.0;
-  for (auto& kv : allspecies.getChildren()) {
-    const Options& species = kv.second;
+  Field3D mass_density;
+  if (boussinesq) {
+    mass_density = average_atomic_mass;
+  } else {
+    mass_density = 0.0;
+    for (auto& kv : allspecies.getChildren()) {
+      const Options& species = kv.second;
 
-    if (!(species.isSet("charge") and species.isSet("AA"))) {
-      continue; // No charge or mass -> no current
-    }
-    if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
-      continue; // Zero charge
+      if (!(species.isSet("charge") and species.isSet("AA"))) {
+        continue; // No charge or mass -> no current
+      }
+      if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+        continue; // Zero charge
+      }
+
+      const BoutReal A = get<BoutReal>(species["AA"]);
+      const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
+      mass_density += A * N;
     }
 
-    const BoutReal A = get<BoutReal>(species["AA"]);
-    const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
-    mass_density += A * N;
+    // Apply a floor to prevent divide-by-zero errors
+    mass_density = floor(mass_density, density_floor);
   }
-
-  // Apply a floor to prevent divide-by-zero errors
-  mass_density = floor(mass_density, density_floor);
 
   // Calculate divergence of all currents except the polarisation current
   DivJ = 0.0;
