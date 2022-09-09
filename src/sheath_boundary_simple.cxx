@@ -298,10 +298,6 @@ void SheathBoundarySimple::transform(Options& state) {
         BoutReal vesheath =
 	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
 
-        if (Ve[i] < vesheath) {
-          vesheath = Ve[i];
-        }
-
         Ve[im] = 2 * vesheath - Ve[i];
         NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
 
@@ -353,10 +349,6 @@ void SheathBoundarySimple::transform(Options& state) {
         BoutReal vesheath =
 	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
 
-        if (Ve[i] > vesheath) {
-          vesheath = Ve[i];
-        }
-
         Ve[ip] = 2 * vesheath - Ve[i];
         NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
 
@@ -378,8 +370,6 @@ void SheathBoundarySimple::transform(Options& state) {
       }
     }
   }
-
-  output.write("Ve: {} {} {}\n", Ve(10, 2, 31), Ve(10, 3, 31), Ve(10, 4, 31));
 
   // Set electron density and temperature, now with boundary conditions
   setBoundary(electrons["density"], fromFieldAligned(Ne));
