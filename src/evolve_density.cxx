@@ -136,9 +136,12 @@ void EvolveDensity::finally(const Options &state) {
     // Parallel velocity set
     Field3D V = get<Field3D>(species["velocity"]);
 
-    // Typical wave speed used for numerical diffusion
-    Field3D T = get<Field3D>(species["temperature"]);
-    BoutReal AA = get<BoutReal>(species["AA"]);
+    // Electron wave speed used for numerical diffusion
+    // This is needed if ion densities are evolved with electron momentum
+    // Potentially should be replaced with a "fastest_wave" quantity
+    const auto& electron = state["species"]["e"];
+    Field3D T = get<Field3D>(electron["temperature"]);
+    BoutReal AA = get<BoutReal>(electron["AA"]);
     Field3D sound_speed = sqrt(T / AA);
 
     ddt(N) -= FV::Div_par(N, V, sound_speed);
