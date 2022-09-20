@@ -1,5 +1,4 @@
-# Turbulence simulation with evolving electron temperature
-# and fixed neutral atom background.
+# Isothermal turbulence simulation
 #
 # Some values taken from
 #   https://doi.org/10.1063/1.4759010
@@ -7,7 +6,7 @@
 #
 
 nout = 500
-timestep = 50
+timestep = 1000
 
 [mesh]
 
@@ -16,8 +15,8 @@ ny = 16   # Parallel direction
 nz = 64   # number of points in azimuthal direction
 
 length = 17  # length of machine in meters
-Rmin = 0.1   # minimum radius in meters
-Rmax = 0.4   # maximum radius in meters
+Rmin = 0.1    # minimum radius in meters
+Rmax = 0.4  # maximum radius in meters
 
 Bxy = 0.1   # Magnetic field strength [T]
 
@@ -40,18 +39,10 @@ dx = Bpxy * Rxy * dr    # Radial flux coordinate
 dy = 2π / ny     # Angle 0 -> 2π
 dz = 2π / nz     # Azimuthal angle
 
-ypos = y * hthe # Position along axis, from 0 to length [m]
-
 ixseps1 = -1  # This line and the one below will add y boundaries
 ixseps2 = -1  #
 
 extrapolate_y = false  # Can result in negative Jacobians in guard cells
-
-# Electron beam source shape
-source_shape = 0.5 * (1 - tanh((Rxy - R_e)/L_b)) * exp(-ypos / beam_mfp)
-R_e = 0.26  # Radius of source edge [m]
-L_b = 0.05  # Source scale length [m]
-beam_mfp = 60  # Mean free path of electron beam [m]
 
 [mesh:paralleltransform]
 type = identity
@@ -61,8 +52,9 @@ type = identity
 mxstep = 10000
 
 [hermes]
-components = (e, he+, he, sound_speed, vorticity,
-              sheath_boundary, collisions, reactions,
+# Note: electromagnetic modifies the parallel momentum so comes after species and before boundary conditions
+components = (e, he+, electromagnetic, sound_speed, vorticity,
+              sheath_boundary, collisions
               )
 
 Nnorm = 1e18  # Reference density [m^-3]
@@ -85,8 +77,6 @@ phi_dissipation = true
 phi_boundary_relax = true
 phi_boundary_timescale = 1e-6
 
-hyper_z = 0.01
-
 [vorticity:laplacian]
 inner_boundary_flags = 16  # INVERT_SET, setting inner boundary
 outer_boundary_flags = 16  # INVERT_SET, setting outer boundary
@@ -96,30 +86,21 @@ outer_boundary_flags = 16  # INVERT_SET, setting outer boundary
 
 [e]
 # Evolve the electron density, parallel momentum, and fix Te
-type = evolve_density, evolve_momentum, evolve_pressure
+type = evolve_density, evolve_momentum, isothermal
 
-AA = 1 / 1836
+AA = 60 / 1836
 charge = -1
 
+temperature = 5  # Electron temperature in eV
+
 poloidal_flows = false
-
-diagnose = true
-
-hyper_z = 0.01
 
 [Ne]
 bndry_all = neumann
 
 function = 1e-1 * exp(-x^2) + 1e-5*(mixmode(z) + mixmode(4*z - x)) # Starting density profile [x10^18 m^-3]
 
-source = 3.7e20 * mesh:source_shape # Beam ionization source [m^-3/s]
-
-[Pe]
-bndry_all = neumann
-
-function = 5 * exp(-x^2) * Ne:function
-
-source = 4.5e3 * mesh:source_shape # Electron heating, beam scattering + resistive [W/m^3]
+source = 5e21*exp(-(x/0.3)^2)   # Particle source in m^-3s^-1
 
 ################################################################
 # Helium ions
@@ -134,23 +115,3 @@ temperature = 0.1   # Ion temperature in eV
 
 poloidal_flows = false
 
-################################################################
-# Helium atoms
-[he]
-# Set a fixed background of helium atoms
-type = fixed_density, fixed_velocity, isothermal
-
-AA = 4       # Atomic mass
-charge = 0
-
-density = 4.8e18      # Density in m^-3
-velocity = 0        # Parallel flow velocity in m/s
-temperature = 0.1   # Atom temperature in eV
-
-################################################################
-
-[reactions]
-type = (
-        he + e -> he+ + 2e, # Helium ionisation
-        he+ + e -> he,      # Helium+ recombination
-       )

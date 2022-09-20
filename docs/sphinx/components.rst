@@ -160,6 +160,13 @@ other components is saved as ``SP + name`` (e.g. ``SPd+`` or ``SPe``).
 The pressure source is the energy density source multiplied by ``2/3``
 (i.e. assumes a monatomic species).
 
+.. math::
+
+   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}\nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right) + \frac{2}{3}S_E + S_N\frac{1}{2}mNV^2
+
+where :math:`S_E` is the ``energy_source`` (thermal energy source),
+and :math:`S_N` is the density source.
+
 Notes:
 
 - Heat conduction through the boundary is turned off currently. This is because
@@ -260,6 +267,65 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
+Drifts
+------
+
+The ExB drift is included in the density, momentum and pressure evolution equations if
+potential is calculated. Other drifts can be added with the following components.
+
+diamagnetic_drift
+~~~~~~~~~~~~~~~~~
+
+Adds diamagnetic drift terms to all species' density, pressure and parallel momentum
+equations. Calculates the diamagnetic drift velocity as
+
+.. math::
+
+   \mathbf{v}_{dia} = \frac{T}{q} \nabla\times\left(\frac{\mathbf{b}}{B}\right)
+
+where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
+is read from the `bxcv` mesh input variable.
+
+.. doxygenstruct:: DiamagneticDrift
+   :members:
+
+
+polarisation_drift
+~~~~~~~~~~~~~~~~~~
+
+This calculates the polarisation drift of all charged species,
+including ions and electrons. It works by approximating the drift
+as a potential flow:
+
+.. math::
+
+   \mathbf{v}_{pol} = - \frac{m}{q B^2} \nabla_\perp\phi_{pol}
+
+where :math:`\phi_{pol}` is approximately the time derivative of the
+electrostatic potential :math:`\phi` in the frame of the fluid, with
+an ion diamagnetic contribution. This is calculated by inverting a
+Laplacian equation similar to that solved in the vorticity equation.
+
+This component needs to be run after all other currents have been
+calculated.  It marks currents as used, so out-of-order modifications
+should raise errors.
+
+See the `examples/blob2d-vpol` example, which contains:
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, vorticity, sheath_closure, polarisation_drift
+
+   [polarisation_drift]
+   diagnose = true
+
+Setting `diagnose = true` saves `DivJ` to the dump files with the divergence of all
+currents except polarisation, and `phi_pol` which is the polarisation flow potential.
+
+.. doxygenstruct:: PolarisationDrift
+   :members:
+
 Neutral gas models
 ------------------
 
@@ -285,6 +351,9 @@ exchange) and the pressure gradient:
 At the moment there is no attempt to limit these velocities, which has
 been found necessary in UEDGE to get physical results in better
 agreement with kinetic neutral models [Discussion, T.Rognlien].
+
+Boundary conditions
+-------------------
 
 .. _noflow_boundary:
 
@@ -469,14 +538,35 @@ Momentum exchange, force on species `a` due to collisions with species `b`:
 
 .. math::
 
-   F_{ab} = \nu_{ab} m_a n_a \left( u_b - u_a \right)
+   F_{ab} = C_m \nu_{ab} m_a n_a \left( u_b - u_a \right)
 
-   
-Energy exchange, heat transferred to species `a` from species `b`:
+Where the coefficient :math:`C_m` for parallel flows depends on the species: For most combinations
+of species this is set to 1, but for electron-ion collisions the Braginskii coefficients are used:
+:math:`C_m = 0.51` if ion charge :math:`Z_i = 1`;  0.44 for :math:`Z_i = 2`; 0.40 for :math:`Z_i = 3`;
+and 0.38 is used for :math:`Z_i \ge 4`. Note that this coefficient should decline further with
+increasing ion charge, tending to 0.29 as :math:`Z_i \rightarrow \infty`.
+
+Frictional heating is included by default, but can be disabled by
+setting the `frictional_heating` option to `false`. When enabled it
+adds a source of thermal energy corresponding to the resistive heating
+term:
 
 .. math::
 
-   Q_{ab} = \nu_{ab}\frac{3n_a m_a\left(T_b - T_a\right)}{m_a + m_b}
+   Q_{ab,F} = - F_{ab} u_a
+
+Energy exchange, heat transferred to species `a` from species `b` due to temperature
+differences, is given by:
+
+.. math::
+
+   Q_{ab,T} = \nu_{ab}\frac{3n_a m_a\left(T_b - T_a\right)}{m_a + m_b}
+
+- Ion-neutral and electron-neutral collisions
+
+  The cross-section for elastic collisions between charged and neutral
+  particles can vary significantly. Here for simplicity we just take
+  a value of :math:`5\times 10^{-19}m^2` from the NRL formulary.
 
 - Neutral-neutral collisions
 
@@ -937,4 +1027,58 @@ Rather than inverting an elliptic equation at every timestep, this component evo
 the potential in time as a diffusion equation.
 
 .. doxygenstruct:: RelaxPotential
+   :members:
+
+electromagnetic
+~~~~~~~~~~~~~~~
+
+This component modifies the definition of momentum of all species, to
+include the contribution from the electromagnetic potential
+:math:`A_{||}`.
+
+Assumes that "momentum" :math:`p_s` calculated for all species
+:math:`s` is
+
+.. math::
+
+   p_s = m_s n_s v_{||s} + Z_s e n_s A_{||}
+
+which arises once the electromagnetic contribution to the force on
+each species is included in the momentum equation. This is normalised
+so that in dimensionless quantities
+
+.. math::
+
+   p_s = A n v_{||} + Z n A_{||}
+
+where :math:`A` and :math:`Z` are the atomic number and charge of the
+species.
+
+The current density :math:`j_{||}` in SI units is
+
+.. math::
+
+   j_{||} = -\frac{1}{\mu_0}\nabla_\perp^2 A_{||}
+
+which when normalised in Bohm units becomes
+
+.. math::
+
+   j_{||} = - \frac{1}{\beta_{em}}\nabla_\perp^2 A_{||}
+
+where :math:`\beta_{em}` is a normalisation parameter which is half
+the plasma electron beta as normally defined:
+
+.. math::
+
+   \beta_{em} = \frac{\mu_0 e \overline{n} \overline{T}}{\overline{B}^2}
+
+To convert the species momenta into a current, we take the sum of
+:math:`p_s Z_s e / m_s`. In terms of normalised quantities this gives:
+
+.. math::
+
+   - \frac{1}{\beta_{em}} \nabla_\perp^2 A_{||} + \sum_s \frac{Z^2 n_s}{A}A_{||} = \sum_s \frac{Z}{A} p_s
+
+.. doxygenstruct:: Electromagnetic
    :members:

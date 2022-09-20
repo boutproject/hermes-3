@@ -25,9 +25,14 @@ private:
   bool electron_electron, electron_ion, electron_neutral, ion_ion, ion_neutral,
       neutral_neutral;
 
+  /// Include frictional heating term?
+  bool frictional_heating;
+
   /// Update collision frequencies, momentum and energy exchange
   /// nu_12    normalised frequency
-  void collide(Options &species1, Options &species2, const Field3D &nu_12);
+  /// momentum_coefficient   Leading coefficient on parallel friction
+  ///                        e.g 0.51 for electron-ion with Zi=1
+  void collide(Options &species1, Options &species2, const Field3D &nu_12, BoutReal momentum_coefficient);
 };
 
 namespace {

@@ -29,6 +29,7 @@ average_atomic_mass = 2 # Weighted average atomic mass, for polarisaion current
 bndry_flux = false # Allow flows through radial boundaries
 poloidal_flows = false  # Include poloidal ExB flow
 split_n0 = false # Split phi into n=0 and n!=0 components
+phi_dissipation = false # Add parallel dissipation (default is true)
 
 [Vort]
 function = exp(-((x-0.5)^2 + (mesh:zn - 0.5)^2)/(0.2^2))

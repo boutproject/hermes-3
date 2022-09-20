@@ -18,7 +18,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   auto& options = alloptions[name];
 
-  evolve_log = options["evolve_log"].doc("Evolve the logarithmof pressure?").withDefault<bool>(false);
+  evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
   if (evolve_log) {
@@ -243,6 +243,14 @@ void EvolvePressure::finally(const Options& state) {
     Sp += (2. / 3) * get<Field3D>(species["energy_source"]); // For diagnostic output
   }
   ddt(P) += Sp;
+
+  if (species.isSet("density_source") and species.isSet("velocity")) {
+    // Change in balance between kinetic & thermal energy due to particle source
+    auto Sn = get<Field3D>(species["energy_source"]);
+    auto V = get<Field3D>(species["velocity"]);
+    auto AA = get<BoutReal>(species["AA"]);
+    ddt(P) += Sn * 0.5 * AA * N * SQ(V);
+  }
 
   if (evolve_log) {
     ddt(logP) = ddt(P) / P;
