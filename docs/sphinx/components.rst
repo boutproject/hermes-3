@@ -1028,3 +1028,57 @@ the potential in time as a diffusion equation.
 
 .. doxygenstruct:: RelaxPotential
    :members:
+
+electromagnetic
+~~~~~~~~~~~~~~~
+
+This component modifies the definition of momentum of all species, to
+include the contribution from the electromagnetic potential
+:math:`A_{||}`.
+
+Assumes that "momentum" :math:`p_s` calculated for all species
+:math:`s` is
+
+.. math::
+
+   p_s = m_s n_s v_{||s} + Z_s e n_s A_{||}
+
+which arises once the electromagnetic contribution to the force on
+each species is included in the momentum equation. This is normalised
+so that in dimensionless quantities
+
+.. math::
+
+   p_s = A n v_{||} + Z n A_{||}
+
+where :math:`A` and :math:`Z` are the atomic number and charge of the
+species.
+
+The current density :math:`j_{||}` in SI units is
+
+.. math::
+
+   j_{||} = -\frac{1}{\mu_0}\nabla_\perp^2 A_{||}
+
+which when normalised in Bohm units becomes
+
+.. math::
+
+   j_{||} = - \frac{1}{\beta_{em}}\nabla_\perp^2 A_{||}
+
+where :math:`\beta_{em}` is a normalisation parameter which is half
+the plasma electron beta as normally defined:
+
+.. math::
+
+   \beta_{em} = \frac{\mu_0 e \overline{n} \overline{T}}{\overline{B}^2}
+
+To convert the species momenta into a current, we take the sum of
+:math:`p_s Z_s e / m_s`. In terms of normalised quantities this gives:
+
+.. math::
+
+   - \frac{1}{\beta_{em}} \nabla_\perp^2 A_{||} + \sum_s \frac{Z^2 n_s}{A}A_{||} = \sum_s \frac{Z}{A} p_s
+
+.. doxygenstruct:: Electromagnetic
+   :members:

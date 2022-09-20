@@ -50,6 +50,7 @@ set(HERMES_SOURCES
     src/loadmetric.cxx
     src/neutral_mixed.cxx
     src/full_velocity.cxx
+    src/electromagnetic.cxx
     src/electron_force_balance.cxx
     src/evolve_density.cxx
     src/vorticity.cxx
@@ -96,6 +97,7 @@ set(HERMES_SOURCES
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/div_ops.hxx
+    include/electromagnetic.hxx
     include/electron_force_balance.hxx
     include/evolve_density.hxx
     include/evolve_momentum.hxx
