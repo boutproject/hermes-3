@@ -431,6 +431,17 @@ neutral_parallel_diffusion
 
 This adds diffusion to **all** neutral species (those with no or zero charge),
 because it needs to be calculated after the collision frequencies are known.
+
+.. code-block:: ini
+
+   [hermes]
+   components = ... , collisions, neutral_parallel_diffusion
+
+   [neutral_parallel_diffusion]
+   dneut = 1         # Diffusion multiplication factor
+   diagnose = true   # This enables diagnostic output for each species
+
+
 It is intended mainly for 1D simulations, to provide effective parallel
 diffusion of particles, momentum and energy due to the projection of
 cross-field diffusion:

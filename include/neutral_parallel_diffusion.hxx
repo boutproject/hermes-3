@@ -10,12 +10,28 @@
 /// Note: This needs to be calculated after the collision frequency,
 /// so is a collective component. This therefore applies diffusion
 /// to all neutral species i.e. those with no (or zero) charge
+///
+/// Diagnostics
+/// -----------
+///
+/// If diagnose = true then the following outputs are saved for
+/// each neutral species
+///
+///  - D<name>_Dpar   Parallel diffusion coefficient e.g. Dhe_Dpar
+///  - S<name>_Dpar   Density source due to diffusion
+///  - E<name>_Dpar   Energy source due to diffusion
+///  - F<name>_Dpar   Momentum source due to diffusion
+///
 struct NeutralParallelDiffusion : public Component {
   NeutralParallelDiffusion(std::string name, Options &alloptions, Solver *) {
     auto& options = alloptions[name];
     dneut = options["dneut"]
                 .doc("cross-field diffusion projection (B  / Bpol)^2")
                 .as<BoutReal>();
+
+    diagnose = options["diagnose"]
+      .doc("Output additional diagnostics?")
+      .withDefault<bool>(false);
   }
 
   ///
@@ -40,6 +56,19 @@ struct NeutralParallelDiffusion : public Component {
 
 private:
   BoutReal dneut; ///< cross-field diffusion projection (B  / Bpol)^2
+
+  bool diagnose; ///< Output diagnostics?
+
+  /// Per-species diagnostics
+  struct Diagnostics {
+    Field3D Dn; ///< Diffusion coefficient
+    Field3D S; ///< Particle source
+    Field3D E; ///< Energy source
+    Field3D F; ///< Momentum source
+  };
+
+  /// Store diagnostics for each species
+  std::map<std::string, Diagnostics> diagnostics;
 };
 
 namespace {
