@@ -9,7 +9,7 @@ struct AmjuelHydIonisation : public AmjuelReaction {
   AmjuelHydIonisation(std::string name, Options& alloptions, Solver* solver)
       : AmjuelReaction(name, alloptions, solver) {}
 
-  void calculate_rates(Options& electron, Options& atom, Options& ion);
+  void calculate_rates(Options& electron, Options& atom, Options& ion, Field3D &reaction_rate);
 };
 
 /// Hydrogen ionisation
@@ -23,9 +23,20 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
     Options& electron = state["species"]["e"];
     Options& atom = state["species"][{Isotope}];     // e.g. "h"
     Options& ion = state["species"][{Isotope, '+'}]; // e.g. "h+"
+    Field3D reaction_rate;
 
-    calculate_rates(electron, atom, ion);
+    calculate_rates(electron, atom, ion, reaction_rate);
+
+    if (diagnose) {
+      S = reaction_rate;
+    }
   }
+private:
+  bool diagnose; ///< Outputting diagnostics?
+  Field3D S; ///< Particle exchange
+  Field3D F; ///< Momentum exchange
+  Field3D E; ///< Energy exchange
+  Field3D R; ///< Radiation loss
 };
 
 namespace {

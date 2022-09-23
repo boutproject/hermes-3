@@ -11,7 +11,9 @@ struct AmjuelHeIonisation01 : public AmjuelReaction {
   AmjuelHeIonisation01(std::string name, Options& alloptions, Solver* solver)
       : AmjuelReaction(name, alloptions, solver) {}
 
-  void transform(Options& state) override;
+  void transform(Options& state) override{
+    Field3D reaction_rate;
+  };
 };
 
 
@@ -23,7 +25,9 @@ struct AmjuelHeRecombination10 : public AmjuelReaction {
   AmjuelHeRecombination10(std::string name, Options& alloptions, Solver* solver)
       : AmjuelReaction(name, alloptions, solver) {}
 
-  void transform(Options& state) override;
+  void transform(Options& state) override{
+    Field3D reaction_rate;
+  };
 };
 
 

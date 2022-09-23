@@ -68,7 +68,8 @@ protected:
   void electron_reaction(Options& electron, Options& from_ion, Options& to_ion,
                          const BoutReal (&rate_coefs)[rows][cols],
                          const BoutReal (&radiation_coefs)[rows][cols],
-                         BoutReal electron_heating) {
+                         BoutReal electron_heating,
+                         Field3D &reaction_rate) {
     Field3D Ne = get<Field3D>(electron["density"]);
     Field3D Te = get<Field3D>(electron["temperature"]);
 
@@ -84,7 +85,7 @@ protected:
     const BoutReal to_charge =
         to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
-    Field3D reaction_rate = cellAverage(
+    reaction_rate = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
           return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
                  / FreqNorm;
