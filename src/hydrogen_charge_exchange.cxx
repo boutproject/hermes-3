@@ -60,4 +60,8 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   const Field3D ion_energy = (3. / 2) * R * Tion;
   subtract(ion1["energy_source"], ion_energy);
   add(atom2["energy_source"], ion_energy);
+
+  // Update collision frequency for the two colliding species
+  add(atom1["collision_frequency"], Nion * sigmav);
+  add(ion1["collision_frequency"], Natom * sigmav);
 }
