@@ -12,7 +12,8 @@ struct SoundSpeed : public Component {
   SoundSpeed(std::string, Options&, Solver*) {}
   
   /// This sets in the state
-  /// - sound_speed
+  /// - sound_speed     The collective sound speed, based on total pressure and total mass density
+  /// - fastest_wave    The highest species sound speed at each point in the domain
   ///
   /// Optional inputs:
   /// - species
