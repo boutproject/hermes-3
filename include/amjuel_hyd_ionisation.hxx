@@ -17,7 +17,20 @@ struct AmjuelHydIonisation : public AmjuelReaction {
 template <char Isotope>
 struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
   AmjuelHydIonisationIsotope(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelHydIonisation(name, alloptions, solver) {}
+      : AmjuelHydIonisation(name, alloptions, solver) {
+
+    diagnose = alloptions[name]["diagnose"]
+      .doc("Output additional diagnostics?")
+      .withDefault<bool>(false);
+
+    if (diagnose) {
+      // Save particle, momentum and energy channels
+
+      bout::globals::dump.addRepeat(S, {"Sd+_iz"}); // Particle source
+    }
+
+
+  }
 
   void transform(Options& state) override {
     Options& electron = state["species"]["e"];
