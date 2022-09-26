@@ -30,10 +30,10 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
     if (diagnose) {
       // Save particle, momentum and energy channels
 
-      bout::globals::dump.addRepeat(S, {"Sd+_rec"}); // Particle source
-      bout::globals::dump.addRepeat(F, {"Fd+_rec"}); // Momentum exchange
-      bout::globals::dump.addRepeat(E, {"Ed+_rec"}); // Energy exchange
-      bout::globals::dump.addRepeat(R, {"Rd+_rec"}); // Radiation loss
+      bout::globals::dump.addRepeat(S, {'S', Isotope, '+', '_', 'r', 'e', 'c'}); // Particle source
+      bout::globals::dump.addRepeat(F, {'F', Isotope, '+', '_', 'r', 'e', 'c'}); // Momentum exchange
+      bout::globals::dump.addRepeat(E, {'E', Isotope, '+', '_', 'r', 'e', 'c'}); // Energy exchange
+      bout::globals::dump.addRepeat(R, {'R', Isotope, '+', '_', 'r', 'e', 'c'}); // Radiation loss
       }
     
     

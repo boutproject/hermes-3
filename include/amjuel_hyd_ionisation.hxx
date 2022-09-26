@@ -28,10 +28,10 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
     if (diagnose) {
       // Save particle, momentum and energy channels
 
-      bout::globals::dump.addRepeat(S, {"Sd+_iz"}); // Particle source
-      bout::globals::dump.addRepeat(F, {"Fd+_iz"}); // Momentum exchange
-      bout::globals::dump.addRepeat(E, {"Ed+_iz"}); // Energy exchange
-      bout::globals::dump.addRepeat(R, {"Rd+_ex"}); // Radiation loss
+      bout::globals::dump.addRepeat(S, {'S', Isotope, '+', '_', 'i', 'z'}); // Particle source
+      bout::globals::dump.addRepeat(F, {'F', Isotope, '+', '_', 'i', 'z'}); // Momentum exchange
+      bout::globals::dump.addRepeat(E, {'E', Isotope, '+', '_', 'i', 'z'}); // Energy exchange
+      bout::globals::dump.addRepeat(R, {'R', Isotope, '+', '_', 'e', 'x'}); // Radiation loss
     }
 
 
