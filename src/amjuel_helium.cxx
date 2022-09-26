@@ -66,7 +66,7 @@ static constexpr const BoutReal he01_radiation_coefs[9][9] = {
      2.60719149454e-09, -2.870919514967e-10, 8.059675146168e-12, 3.704316808942e-13,
      -1.713225271579e-14}};
 
-void AmjuelHeIonisation01::transform(Options& state, Field3D &reaction_rate) {
+void AmjuelHeIonisation01::calculate_rates(Options& state, Field3D &reaction_rate) {
   electron_reaction(state["species"]["e"],
                     state["species"]["he"],  // From helium atoms
                     state["species"]["he+"], // To helium ions
@@ -143,7 +143,7 @@ static constexpr const BoutReal he10_radiation_coefs[9][9] = {
      -5.086412415216e-09, 3.674153797642e-10, -1.621809988343e-11, 6.737654534264e-13,
      -1.678705755876e-14}};
 
-void AmjuelHeRecombination10::transform(Options& state, Field3D &reaction_rate) {
+void AmjuelHeRecombination10::calculate_rates(Options& state, Field3D &reaction_rate) {
   electron_reaction(state["species"]["e"],
                     state["species"]["he+"], // From helium ions
                     state["species"]["he"],  // To helium atoms

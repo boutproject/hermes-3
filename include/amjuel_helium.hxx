@@ -4,6 +4,7 @@
 
 #include "amjuel_reaction.hxx"
 
+
 /// e + he -> he+ + 2e
 /// Amjuel reaction 2.3.9a, page 161
 /// Not resolving metastables, only transporting ground state
@@ -11,8 +12,11 @@ struct AmjuelHeIonisation01 : public AmjuelReaction {
   AmjuelHeIonisation01(std::string name, Options& alloptions, Solver* solver)
       : AmjuelReaction(name, alloptions, solver) {}
 
+  void calculate_rates(Options& state, Field3D &reaction_rate);
+
   void transform(Options& state) override{
     Field3D reaction_rate;
+    calculate_rates(state, reaction_rate);
   };
 };
 
@@ -25,8 +29,11 @@ struct AmjuelHeRecombination10 : public AmjuelReaction {
   AmjuelHeRecombination10(std::string name, Options& alloptions, Solver* solver)
       : AmjuelReaction(name, alloptions, solver) {}
 
+  void calculate_rates(Options& state, Field3D &reaction_rate);
+
   void transform(Options& state) override{
     Field3D reaction_rate;
+    calculate_rates(state, reaction_rate);
   };
 };
 
