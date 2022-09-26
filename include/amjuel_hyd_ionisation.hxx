@@ -29,6 +29,9 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
       // Save particle, momentum and energy channels
 
       bout::globals::dump.addRepeat(S, {"Sd+_iz"}); // Particle source
+      bout::globals::dump.addRepeat(F, {"Fd+_iz"}); // Momentum exchange
+      bout::globals::dump.addRepeat(E, {"Ed+_iz"}); // Energy exchange
+      bout::globals::dump.addRepeat(R, {"Rd+_ex"}); // Radiation loss
     }
 
 
@@ -44,6 +47,9 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
 
     if (diagnose) {
       S = reaction_rate;
+      F = momentum_exchange;
+      E = energy_exchange;
+      R = energy_loss;
     }
   }
 private:

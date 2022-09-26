@@ -21,7 +21,23 @@ struct AmjuelHydRecombination : public AmjuelReaction {
 template <char Isotope>
 struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
   AmjuelHydRecombinationIsotope(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelHydRecombination(name, alloptions, solver) {}
+      : AmjuelHydRecombination(name, alloptions, solver) {
+
+    diagnose = alloptions[name]["diagnose"]
+      .doc("Output additional diagnostics?")
+      .withDefault<bool>(false);
+
+    if (diagnose) {
+      // Save particle, momentum and energy channels
+
+      bout::globals::dump.addRepeat(S, {"Sd+_rec"}); // Particle source
+      bout::globals::dump.addRepeat(F, {"Fd+_rec"}); // Momentum exchange
+      bout::globals::dump.addRepeat(E, {"Ed+_rec"}); // Energy exchange
+      bout::globals::dump.addRepeat(R, {"Rd+_rec"}); // Radiation loss
+      }
+    
+    
+    }
   
   void transform(Options& state) override {
     Options& electron = state["species"]["e"];
@@ -30,7 +46,20 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
     Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
 
     calculate_rates(electron, atom, ion, reaction_rate, momentum_exchange, energy_exchange, energy_loss);
+
+    if (diagnose) {
+      S = reaction_rate;
+      F = momentum_exchange;
+      E = energy_exchange;
+      R = energy_loss;
+    }
   }
+private:
+  bool diagnose; ///< Outputting diagnostics?
+  Field3D S; ///< Particle exchange
+  Field3D F; ///< Momentum exchange
+  Field3D E; ///< Energy exchange
+  Field3D R; ///< Radiation loss
 };
 
 namespace {
