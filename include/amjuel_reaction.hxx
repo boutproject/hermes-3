@@ -69,7 +69,10 @@ protected:
                          const BoutReal (&rate_coefs)[rows][cols],
                          const BoutReal (&radiation_coefs)[rows][cols],
                          BoutReal electron_heating,
-                         Field3D &reaction_rate) {
+                         Field3D &reaction_rate,
+                         Field3D &momentum_exchange,
+                         Field3D &energy_exchange,
+                         Field3D &energy_loss) {
     Field3D Ne = get<Field3D>(electron["density"]);
     Field3D Te = get<Field3D>(electron["temperature"]);
 
@@ -102,18 +105,18 @@ protected:
     }
 
     // Momentum
-    Field3D momentum_exchange = reaction_rate * AA * V1;
+    momentum_exchange = reaction_rate * AA * V1;
 
     subtract(from_ion["momentum_source"], momentum_exchange);
     add(to_ion["momentum_source"], momentum_exchange);
 
     // Ion energy
-    Field3D energy_exchange = reaction_rate * (3. / 2) * T1;
+    energy_exchange = reaction_rate * (3. / 2) * T1;
     subtract(from_ion["energy_source"], energy_exchange);
     add(to_ion["energy_source"], energy_exchange);
 
     // Electron energy loss (radiation, ionisation potential)
-    Field3D energy_loss = cellAverage(
+    energy_loss = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
           return ne * n1 * evaluate(radiation_coefs, te * Tnorm, ne * Nnorm) * Nnorm
                  / (Tnorm * FreqNorm);

@@ -11,7 +11,9 @@ struct AmjuelHydRecombination : public AmjuelReaction {
   AmjuelHydRecombination(std::string name, Options& alloptions, Solver* solver)
       : AmjuelReaction(name, alloptions, solver) {}
 
-  void calculate_rates(Options& electron, Options& atom, Options& ion, Field3D &reaction_rate);
+  void calculate_rates(Options& electron, Options& atom, Options& ion,
+                        Field3D &reaction_rate, Field3D &momentum_exchange,
+                        Field3D &energy_exchange, Field3D &energy_loss);
 };
 
 /// Hydrogen recombination
@@ -20,14 +22,14 @@ template <char Isotope>
 struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
   AmjuelHydRecombinationIsotope(std::string name, Options& alloptions, Solver* solver)
       : AmjuelHydRecombination(name, alloptions, solver) {}
-
+  
   void transform(Options& state) override {
     Options& electron = state["species"]["e"];
     Options& atom = state["species"][{Isotope}];     // e.g. "h"
     Options& ion = state["species"][{Isotope, '+'}]; // e.g. "h+"
-    Field3D reaction_rate;
+    Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
 
-    calculate_rates(electron, atom, ion, reaction_rate);
+    calculate_rates(electron, atom, ion, reaction_rate, momentum_exchange, energy_exchange, energy_loss);
   }
 };
 

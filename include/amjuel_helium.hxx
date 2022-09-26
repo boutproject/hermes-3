@@ -12,11 +12,13 @@ struct AmjuelHeIonisation01 : public AmjuelReaction {
   AmjuelHeIonisation01(std::string name, Options& alloptions, Solver* solver)
       : AmjuelReaction(name, alloptions, solver) {}
 
-  void calculate_rates(Options& state, Field3D &reaction_rate);
+  void calculate_rates(Options& state, 
+                        Field3D &reaction_rate, Field3D &momentum_exchange,
+                        Field3D &energy_exchange, Field3D &energy_loss);
 
   void transform(Options& state) override{
-    Field3D reaction_rate;
-    calculate_rates(state, reaction_rate);
+    Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
+    calculate_rates(state, reaction_rate, momentum_exchange, energy_exchange, energy_loss);
   };
 };
 
@@ -29,11 +31,13 @@ struct AmjuelHeRecombination10 : public AmjuelReaction {
   AmjuelHeRecombination10(std::string name, Options& alloptions, Solver* solver)
       : AmjuelReaction(name, alloptions, solver) {}
 
-  void calculate_rates(Options& state, Field3D &reaction_rate);
+  void calculate_rates(Options& state, 
+                      Field3D &reaction_rate, Field3D &momentum_exchange,
+                      Field3D &energy_exchange, Field3D &energy_loss);
 
   void transform(Options& state) override{
-    Field3D reaction_rate;
-    calculate_rates(state, reaction_rate);
+    Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
+    calculate_rates(state, reaction_rate, momentum_exchange, energy_exchange, energy_loss);
   };
 };
 

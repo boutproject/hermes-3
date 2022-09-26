@@ -65,9 +65,11 @@ static constexpr const BoutReal radiation_coefs[9][9] = {
      1.734769090475e-15}};
 
 void AmjuelHydIonisation::calculate_rates(
-  Options& electron, Options& atom, Options& ion, Field3D &reaction_rate) {
+  Options& electron, Options& atom, Options& ion, 
+  Field3D &reaction_rate, Field3D &momentum_exchange,
+  Field3D &energy_exchange, Field3D &energy_loss) {
   electron_reaction(electron, atom, ion, rate_coefs, radiation_coefs,
                     0.0, // Note: Ionisation potential included in radiation_coefs
-                    reaction_rate
+                    reaction_rate, momentum_exchange, energy_exchange, energy_loss
   );
 }
