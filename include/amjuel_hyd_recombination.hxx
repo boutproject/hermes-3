@@ -48,10 +48,10 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
     calculate_rates(electron, atom, ion, reaction_rate, momentum_exchange, energy_exchange, energy_loss);
 
     if (diagnose) {
-      S = reaction_rate;
-      F = momentum_exchange;
-      E = energy_exchange;
-      R = energy_loss;
+      S = -reaction_rate;
+      F = -momentum_exchange;
+      E = -energy_exchange;
+      R = -energy_loss;
     }
   }
 private:

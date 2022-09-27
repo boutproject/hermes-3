@@ -49,7 +49,7 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
       S = reaction_rate;
       F = momentum_exchange;
       E = energy_exchange;
-      R = energy_loss;
+      R = -energy_loss;
     }
   }
 private:
