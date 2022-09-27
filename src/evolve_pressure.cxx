@@ -75,7 +75,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       bout::globals::dump.addRepeat(kappa_par, std::string("kappa_par_") + name);
     }
     bout::globals::dump.addRepeat(T, std::string("T") + name);
-
+    bout::globals::dump.addRepeat(source, std::string("E") + name + std::string("_src"));
     bout::globals::dump.addRepeat(ddt(P), std::string("ddt(P") + name + std::string(")"));
     bout::globals::dump.addRepeat(Sp, std::string("SP") + name);
     Sp = 0.0;
