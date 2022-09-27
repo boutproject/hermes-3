@@ -70,6 +70,7 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
           .withDefault<bool>(false)) {
     bout::globals::dump.addRepeat(ddt(N), std::string("ddt(N") + name + std::string(")"));
     bout::globals::dump.addRepeat(Sn, std::string("SN") + name);
+    bout::globals::dump.addRepeat(source, std::string("S") + name + std::string("_src"));
     Sn = 0.0;
   }
 
