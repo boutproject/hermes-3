@@ -47,11 +47,11 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   } // Skip the case where the same isotope swaps places
 
   // Transfer momentum
-  atom_mom = R * get<Field3D>(atom1["velocity"]);
+  atom_mom = R * Aatom * get<Field3D>(atom1["velocity"]);
   subtract(atom1["momentum_source"], atom_mom);
   add(ion2["momentum_source"], atom_mom);
 
-  ion_mom = R * get<Field3D>(ion1["velocity"]);
+  ion_mom = R * Aion * get<Field3D>(ion1["velocity"]);
   subtract(ion1["momentum_source"], ion_mom);
   add(atom2["momentum_source"], ion_mom);
 

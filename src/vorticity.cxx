@@ -162,6 +162,8 @@ Vorticity::Vorticity(std::string name, Options &alloptions, Solver *solver) {
           .doc("Output additional diagnostics?")
           .withDefault<bool>(false)) {
 
+    SAVE_REPEAT(ddt(Vort));
+
     if (diamagnetic) {
       SAVE_REPEAT(DivJdia);
     }
