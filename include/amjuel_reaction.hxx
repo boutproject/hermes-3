@@ -96,6 +96,7 @@ protected:
         Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
     // Particles
+    // For ionisation, "from_ion" is the neutral and "to_ion" is the ion
     subtract(from_ion["density_source"], reaction_rate);
     add(to_ion["density_source"], reaction_rate);
 
