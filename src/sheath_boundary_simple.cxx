@@ -95,6 +95,11 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
       options["always_set_phi"]
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
+
+  diagnose = alloptions[name]["diagnose"]
+      .doc("Output additional diagnostics?")
+      .withDefault<bool>(false);
+      
 }
 
 void SheathBoundarySimple::transform(Options& state) {

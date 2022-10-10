@@ -74,6 +74,9 @@ private:
   bool upper_y; // Boundary on upper y?
 
   bool always_set_phi; ///< Set phi field?
+
+  bool diagnose; // Save additional diagnostics?
+
 };
 
 namespace {
