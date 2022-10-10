@@ -425,7 +425,8 @@ void SheathBoundaryInsulating::transform(Options &state) {
     }
 
     // Additional loss of energy through sheath
-    add(species["energy_source"], fromFieldAligned(energy_source));
+    // Note: Already includes any previously set sources
+    set(species["energy_source"], fromFieldAligned(energy_source));
   }
 
   //////////////////////////////////////////////////////////////////
@@ -509,7 +510,7 @@ void SheathBoundaryInsulating::transform(Options &state) {
   }
 
   // Set energy source (negative in cell next to sheath)
-  add(electrons["energy_source"], fromFieldAligned(electron_energy_source));
+  set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
     setBoundary(electrons["velocity"], fromFieldAligned(Ve));
