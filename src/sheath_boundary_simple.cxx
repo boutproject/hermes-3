@@ -96,7 +96,7 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
 
-  diagnose = alloptions[name]["diagnose"]
+  diagnose = options["diagnose"]
       .doc("Output additional diagnostics?")
       .withDefault<bool>(false);
       
@@ -275,6 +275,8 @@ void SheathBoundarySimple::transform(Options& state) {
     ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
     : zeroFrom(Ne);
 
+  Field3D hflux_e = zeroFrom(Ne); // sheath heat flux for diagnostics
+
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
@@ -320,6 +322,7 @@ void SheathBoundarySimple::transform(Options& state) {
         // Divide by volume of cell to get energy loss rate (< 0)
         BoutReal power = flux / (coord->dy[i] * coord->J[i]);
 
+        hflux_e += power;
         electron_energy_source[i] += power;
       }
     }
@@ -371,6 +374,7 @@ void SheathBoundarySimple::transform(Options& state) {
         // Divide by volume of cell to get energy loss rate (> 0)
         BoutReal power = flux / (coord->dy[i] * coord->J[i]);
 
+        hflux_e -= power;
         electron_energy_source[i] -= power;
       }
     }
@@ -395,6 +399,11 @@ void SheathBoundarySimple::transform(Options& state) {
   if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
     // Set the potential, including boundary conditions
     setBoundary(state["fields"]["phi"], fromFieldAligned(phi));
+  }
+
+  // Save diagnostics
+  if (diagnose) {
+    bout::globals::dump.addRepeat(hflux_e, std::string("hflux_e"));
   }
 
   //////////////////////////////////////////////////////////////////
