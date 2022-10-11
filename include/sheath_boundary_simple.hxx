@@ -79,6 +79,13 @@ private:
 
   Field3D hflux_e;
 
+  struct Diagnostics {
+    Field3D E;
+  };
+
+  /// Store sheath diagnostics for each species separately
+  std::map<std::string, Diagnostics> diagnostics;
+
 };
 
 namespace {
