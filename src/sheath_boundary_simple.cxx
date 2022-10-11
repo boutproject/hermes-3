@@ -102,7 +102,7 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
 
   // Save diagnostics
   if (diagnose) {
-    bout::globals::dump.addRepeat(hflux_e, std::string("hflux_e"));
+    bout::globals::dump.addRepeat(hflux_e, std::string("Ee_sheath"));
   }
       
 }
@@ -575,7 +575,7 @@ void SheathBoundarySimple::transform(Options& state) {
         // If not found, create a diagnostics struct and initialise fields
         auto it_bool_pair = diagnostics.emplace(kv.first, Diagnostics {hflux_i});
         auto& d = it_bool_pair.first->second;
-        bout::globals::dump.addRepeat(d.E, std::string("hflux_") + kv.first);
+        bout::globals::dump.addRepeat(d.E, std::string("E") + kv.first + std::string("_sheath"));
       } else {
       // Update diagnostic values
       auto& d = search->second;
