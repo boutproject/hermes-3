@@ -103,6 +103,8 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   // Save diagnostics
   if (diagnose) {
     bout::globals::dump.addRepeat(hflux_e, std::string("Ee_sheath"));
+    bout::globals::dump.addRepeat(phi, std::string("phi_sheath"));
+    bout::globals::dump.addRepeat(ion_sum, std::string("J_sheath"));
   }
       
 }
@@ -140,7 +142,7 @@ void SheathBoundarySimple::transform(Options& state) {
   // Electrostatic potential
   // If phi is set, use free boundary condition
   // If phi not set, calculate assuming zero current
-  Field3D phi;
+
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
     phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   } else {
@@ -150,7 +152,7 @@ void SheathBoundarySimple::transform(Options& state) {
     //
     // To avoid looking up species for every grid point, this
     // loops over the boundaries once per species.
-    Field3D ion_sum = 0.0;
+    ion_sum = 0.0;
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {

@@ -78,6 +78,8 @@ private:
   bool diagnose; // Save additional diagnostics?
 
   Field3D hflux_e;
+  Field3D phi; // Phi on boundaries
+  Field3D ion_sum; // Sum of ion current on boundaries
 
   struct Diagnostics {
     Field3D E;
