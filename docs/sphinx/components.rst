@@ -209,7 +209,7 @@ Saves the temperature once as a non-evolving variable.
 
    velocity = 10 + sin(z)   # Spatially dependent velocity [m/s]
 
-.. doxygenstruct:: FixedTemperature
+.. doxygenstruct:: FixedVelocity
    :members:
 
 

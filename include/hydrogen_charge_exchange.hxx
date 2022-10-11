@@ -15,6 +15,11 @@
 ///
 /// T_eff = (M/M_1)T_1 + (M/M_2)T_2
 ///
+///
+/// Important: If this is included then ion_neutral collisions
+///            should probably be disabled in the `collisions` component,
+///            to avoid double-counting.
+///
 struct HydrogenChargeExchange : public Component {
   ///
   /// @param alloptions Settings, which should include:
@@ -51,6 +56,8 @@ protected:
   ///   - density_source     [If atom1 != atom2 or ion1 != ion2]
   ///   - momentum_source
   ///   - energy_source
+  ///
+  /// Modifies collision_frequency for atom1 and ion1
   ///
   /// Diagnostic output
   ///  R            Reaction rate, transfer of particles in case of different isotopes

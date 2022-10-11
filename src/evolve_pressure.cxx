@@ -246,7 +246,7 @@ void EvolvePressure::finally(const Options& state) {
 
   if (species.isSet("density_source") and species.isSet("velocity")) {
     // Change in balance between kinetic & thermal energy due to particle source
-    auto Sn = get<Field3D>(species["energy_source"]);
+    auto Sn = get<Field3D>(species["density_source"]);
     auto V = get<Field3D>(species["velocity"]);
     auto AA = get<BoutReal>(species["AA"]);
     ddt(P) += Sn * 0.5 * AA * N * SQ(V);

@@ -1,5 +1,6 @@
 #include "../include/anomalous_diffusion.hxx"
 
+#include <bout/output_bout_types.hxx>
 #include <bout/fv_ops.hxx>
 #include "../include/div_ops.hxx"
 
@@ -39,6 +40,7 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options &alloptions, So
 }
 
 void AnomalousDiffusion::transform(Options &state) {
+  AUTO_TRACE();
 
   Options& species = state["species"][name];
 

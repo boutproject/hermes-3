@@ -295,7 +295,7 @@ void SheathBoundarySimple::transform(Options& state) {
             floor(0.5 * (phi[im] + phi[i]), 0.0); // Electron saturation at phi = 0
 
         // Electron velocity into sheath (< 0)
-        const BoutReal vesheath =
+        BoutReal vesheath =
 	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
 
         Ve[im] = 2 * vesheath - Ve[i];
@@ -346,7 +346,7 @@ void SheathBoundarySimple::transform(Options& state) {
             floor(0.5 * (phi[ip] + phi[i]), 0.0); // Electron saturation at phi = 0
 
         // Electron velocity into sheath (> 0)
-        const BoutReal vesheath =
+        BoutReal vesheath =
 	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
 
         Ve[ip] = 2 * vesheath - Ve[i];
@@ -377,7 +377,8 @@ void SheathBoundarySimple::transform(Options& state) {
   setBoundary(electrons["pressure"], fromFieldAligned(Pe));
 
   // Set energy source (negative in cell next to sheath)
-  add(electrons["energy_source"], fromFieldAligned(electron_energy_source));
+  // Note: electron_energy_source includes any sources previously set in other components
+  set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
     setBoundary(electrons["velocity"], fromFieldAligned(Ve));
@@ -458,7 +459,11 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          const BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
+          BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
+
+          if (Vi[i] < visheath) {
+            visheath = Vi[i];
+          }
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
@@ -511,7 +516,11 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          const BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
+          BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
+
+          if (Vi[i] > visheath) {
+            visheath = Vi[i];
+          }
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
@@ -552,6 +561,7 @@ void SheathBoundarySimple::transform(Options& state) {
     }
 
     // Additional loss of energy through sheath
-    add(species["energy_source"], fromFieldAligned(energy_source));
+    // Note: energy_source already includes previously set values
+    set(species["energy_source"], fromFieldAligned(energy_source));
   }
 }
