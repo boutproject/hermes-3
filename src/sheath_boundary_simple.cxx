@@ -99,6 +99,11 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   diagnose = options["diagnose"]
       .doc("Output additional diagnostics?")
       .withDefault<bool>(false);
+
+  // Save diagnostics
+  if (diagnose) {
+    bout::globals::dump.addRepeat(hflux_e, std::string("hflux_e"));
+  }
       
 }
 
@@ -275,7 +280,7 @@ void SheathBoundarySimple::transform(Options& state) {
     ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
     : zeroFrom(Ne);
 
-  Field3D hflux_e = zeroFrom(Ne); // sheath heat flux for diagnostics
+  hflux_e = zeroFrom(Ne); // sheath heat flux for diagnostics
 
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -401,10 +406,7 @@ void SheathBoundarySimple::transform(Options& state) {
     setBoundary(state["fields"]["phi"], fromFieldAligned(phi));
   }
 
-  // Save diagnostics
-  if (diagnose) {
-    bout::globals::dump.addRepeat(hflux_e, std::string("hflux_e"));
-  }
+  
 
   //////////////////////////////////////////////////////////////////
   // Iterate through all ions

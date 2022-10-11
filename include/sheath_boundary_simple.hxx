@@ -77,6 +77,8 @@ private:
 
   bool diagnose; // Save additional diagnostics?
 
+  Field3D hflux_e;
+
 };
 
 namespace {
