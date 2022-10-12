@@ -467,7 +467,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
-          NVi[im] = 2. * nisheath * visheath - NVi[i];
+          NVi[im] = 2. * Mi * nisheath * visheath - NVi[i];
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
@@ -524,7 +524,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
-          NVi[ip] = 2. * nisheath * visheath - NVi[i];
+          NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
