@@ -29,7 +29,7 @@ struct Component {
   virtual void finally(const Options &UNUSED(state)) { }
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  virtual void annotate(Options &UNUSED(state)) { }
+  virtual void outputVars(Options &UNUSED(state)) { }
 
   /// Preconditioning
   virtual void precon(const Options &UNUSED(state), BoutReal UNUSED(gamma)) { }

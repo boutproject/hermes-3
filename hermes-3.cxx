@@ -183,5 +183,8 @@ int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal UNUSED(delta)) {
   return 0;
 }
 
+void outputVars(Options& options) {
+}
+
 // Standard main() function
 BOUTMAIN(Hermes);

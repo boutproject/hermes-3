@@ -48,7 +48,7 @@ public:
   /// Add metadata, extra outputs. This would typically
   /// be called only for writing to disk, rather than every internal
   /// timestep.
-  void annotate(Options &state);
+  void outputVars(Options &state);
 
   /// Preconditioning
   void precon(const Options &state, BoutReal gamma);
