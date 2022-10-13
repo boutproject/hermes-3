@@ -300,10 +300,53 @@ void NeutralMixed::finally(const Options &state) {
   }
 }
 
-void NeutralMixed::annotate(Options &state) {
-  auto& localstate = state["species"][name];
-  localstate["density"].attributes["time_dimension"] = "t";
-  localstate["density"].attributes["normalisation"] = "inv_meters_cubed";
+void NeutralMixed::outputVars(Options& state) {
+  // Normalisations
+  auto Nnorm = state["Nnorm"].as<BoutReal>();
+  auto Tnorm = state["Tnorm"].as<BoutReal>();
+  auto Omega_ci = state["Omega_ci"].as<BoutReal>();
+  auto Cs0 = state["Cs0"].as<BoutReal>();
+
+  if (output_ddt) {
+    set_with_attrs(state[std::string("ddt(N") + name + std::string(")")], ddt(Nn), {
+        {"time_dimension", "t"},
+        {"units", "m^-3 s^-1"},
+        {"conversion", Nnorm * Omega_ci}
+      });
+    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn), {
+        {"time_dimension", "t"},
+        {"units", "Pa s^-1"},
+        {"conversion", SI::qe * Tnorm * Nnorm * Omega_ci},
+      });
+    set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NVn), {
+        {"time_dimension", "t"},
+        {"units", "kg m^-2 s^-2"},
+        {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+      });
+  }
+  if (diagnose) {
+    set_with_attrs(state[std::string("SN") + name], Sn, {
+        {"time_dimension", "t"},
+        {"units", "m^-3 s^-1"},
+        {"conversion", Nnorm * Omega_ci},
+        {"standard_name", "density source"},
+        {"long_name", name + " number density source"}
+      });
+    set_with_attrs(state[std::string("SP") + name], Sp, {
+        {"time_dimension", "t"},
+        {"units", "Pa s^-1"},
+        {"conversion", SI::qe * Tnorm * Nnorm * Omega_ci},
+        {"standard_name", "pressure source"},
+        {"long_name", name + " pressure source"}
+      });
+    set_with_attrs(state[std::string("SNV") + name], Snv, {
+        {"time_dimension", "t"},
+        {"units", "kg m^-2 s^-2"},
+        {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+        {"standard_name", "momentum source"},
+        {"long_name", name + " momentum source"}
+      });
+  }
 }
 
 void NeutralMixed::precon(const Options &, BoutReal gamma) {

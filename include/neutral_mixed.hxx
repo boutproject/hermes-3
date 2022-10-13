@@ -27,7 +27,7 @@ struct NeutralMixed : public Component {
   void finally(const Options &state) override;
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  void annotate(Options &state) override;
+  void outputVars(Options &state) override;
 
   /// Preconditioner
   void precon(const Options &state, BoutReal gamma) override;
@@ -53,6 +53,9 @@ private:
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
+
+  bool output_ddt; ///< Save time derivatives?
+  bool diagnose; ///< Save additional diagnostics?
 };
 
 namespace {
