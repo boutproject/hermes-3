@@ -12,9 +12,6 @@
 
 class Solver; // Time integrator
 
-Datafile *get_restart_datafile(); ///< Temporary hack, to allow save/load from restarts
-void set_restart_datafile(Datafile *file);
-
 /// Interface for a component of a simulation model
 /// 
 /// The constructor of derived types should have signature

@@ -144,11 +144,6 @@ int Hermes::init(bool restarting) {
   options["restarting"] = restarting;
   options["restarting"].setConditionallyUsed();
 
-  // Put pointer to restart file in global variable
-  // Note: It would probably be better to pass to components as argument,
-  // but awaiting DataFile refactoring
-  set_restart_datafile(&restart);
-
   TRACE("Creating components");
   
   // Create the components
