@@ -61,5 +61,7 @@ bndry_flux = false # Allow flows through radial boundaries
 poloidal_flows = false  # Include poloidal ExB flow
 split_n0 = false  # Split phi into n=0 and n!=0 components
 
+phi_dissipation = false # No parallel dynamics
+
 [sheath_closure]
 connection_length = 10 # meters
