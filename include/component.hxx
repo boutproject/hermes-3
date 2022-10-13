@@ -288,4 +288,10 @@ Options& subtract(Options& option, T value) {
   return option;
 }
 
+template<typename T>
+void set_with_attrs(Options& option, T value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  option = value;
+  option.setAttributes(attrs);
+}
+
 #endif // HERMES_COMPONENT_H
