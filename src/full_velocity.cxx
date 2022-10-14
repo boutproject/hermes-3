@@ -47,7 +47,6 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& optio
   solver->add(Vn2D, "Vn");
 
   DivV2D.setBoundary("Pn"); // Same boundary condition as Pn
-  SAVE_REPEAT(DivV2D);
 
   // Load necessary metrics for non-orth calculation
   Field2D etaxy, cosbeta;
@@ -155,9 +154,6 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& optio
   Txz.applyBoundary("neumann");
   Tyr.applyBoundary("neumann");
   Tyz.applyBoundary("neumann");
-
-  SAVE_ONCE(Urx, Ury, Uzx, Uzy);
-  SAVE_ONCE(Txr, Txz, Tyr, Tyz);
 }
 
 /// Modify the given simulation state
@@ -369,7 +365,26 @@ void NeutralFullVelocity::finally(const Options &state) {
 }
 
 /// Add extra fields for output, or set attributes e.g docstrings
-void NeutralFullVelocity::annotate(Options &state) {
-  
+void NeutralFullVelocity::outputVars(Options &state) {
+  // Normalisations
+  auto Nnorm = state["Nnorm"].as<BoutReal>();
+  auto Tnorm = state["Tnorm"].as<BoutReal>();
+  auto Omega_ci = state["Omega_ci"].as<BoutReal>();
+  auto Cs0 = state["Cs0"].as<BoutReal>();
+
+  set_with_attrs(state["DivV2D"], DivV2D, {
+      {"time_dimension", "t"},
+      {"units", "s^-1"},
+      {"conversion", Omega_ci}
+    });
+
+  set_with_attrs(state["Urx"], Urx, {});
+  set_with_attrs(state["Ury"], Ury, {});
+  set_with_attrs(state["Uzx"], Uzx, {});
+  set_with_attrs(state["Uzy"], Uzy, {});
+  set_with_attrs(state["Txr"], Txr, {});
+  set_with_attrs(state["Txz"], Txz, {});
+  set_with_attrs(state["Tyr"], Tyr, {});
+  set_with_attrs(state["Tyz"], Tyz, {});
 }
 
