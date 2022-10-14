@@ -16,7 +16,6 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
   // This is the normalisation parameter in the Helmholtz equation
   beta_em = SI::mu0 * SI::qe * Tnorm * Nnorm / SQ(Bnorm);
   output_info.write("Electromagnetic: beta_em = {}", beta_em);
-  SAVE_ONCE(beta_em);
 
   auto& options = alloptions[name];
 
@@ -25,13 +24,9 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
   aparSolver->setInnerBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD);
   aparSolver->setOuterBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD);
 
-  SAVE_REPEAT(Apar); // Always save Apar
-
-  if (options["diagnose"]
-      .doc("Output additional diagnostics?")
-      .withDefault<bool>(false)) {
-    SAVE_REPEAT(Ajpar, alpha_em);
-  }
+  diagnose = options["diagnose"]
+    .doc("Output additional diagnostics?")
+    .withDefault<bool>(false);
 }
 
 void Electromagnetic::transform(Options &state) {
@@ -92,5 +87,33 @@ void Electromagnetic::transform(Options &state) {
     subtract(species["momentum"], Z * N * Apar);
     // Note: velocity is momentum / (A * N)
     subtract(species["velocity"], (Z / A) * Apar);
+  }
+}
+
+void Electromagnetic::outputVars(Options &state) {
+  // Normalisations
+  auto Bnorm = state["Bnorm"].as<BoutReal>();
+  auto rho_s0 = state["rho_s0"].as<BoutReal>();
+
+  set_with_attrs(state["beta_em"], beta_em, {
+      {"long_name", "Helmholtz equation parameter"}
+    });
+
+  set_with_attrs(state["Apar"], Apar, {
+      {"time_dimension", "t"},
+      {"units", "T m"},
+      {"conversion", Bnorm * rho_s0},
+      {"standard_name", "b dot A"},
+      {"long_name", "Parallel component of vector potential A"}
+    });
+
+  if (diagnose) {
+    set_with_attrs(state["Ajpar"], Ajpar, {
+      {"time_dimension", "t"},
+    });
+
+    set_with_attrs(state["alpha_em"], alpha_em, {
+      {"time_dimension", "t"},
+    });
   }
 }
