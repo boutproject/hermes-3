@@ -51,7 +51,8 @@ struct Vorticity : public Component {
   ///                  Not including diamagnetic or polarisation currents
   /// 
   void finally(const Options &state) override;
-  
+
+  void outputVars(Options &state) override;
 private:
   Field3D Vort; // Evolving vorticity
   
@@ -85,6 +86,8 @@ private:
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {
