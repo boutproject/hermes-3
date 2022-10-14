@@ -299,7 +299,8 @@ void NeutralMixed::outputVars(Options& state) {
     set_with_attrs(state[std::string("ddt(N") + name + std::string(")")], ddt(Nn), {
         {"time_dimension", "t"},
         {"units", "m^-3 s^-1"},
-        {"conversion", Nnorm * Omega_ci}
+        {"conversion", Nnorm * Omega_ci},
+        {"long_name", std::string("Rate of change of ") + name + " number density"}
       });
     set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn), {
         {"time_dimension", "t"},
