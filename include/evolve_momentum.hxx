@@ -29,6 +29,8 @@ struct EvolveMomentum : public Component {
   /// - fields
   ///   - phi (optional)
   void finally(const Options &state) override;
+
+  void outputVars(Options &state) override;
 private:
   std::string name;     ///< Short name of species e.g "e"
 
@@ -43,6 +45,8 @@ private:
   BoutReal density_floor;
 
   BoutReal hyper_z;  ///< Hyper-diffusion
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {

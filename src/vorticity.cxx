@@ -580,28 +580,32 @@ void Vorticity::outputVars(Options& state) {
                   {"units", "V"},
                   {"conversion", Tnorm},
                   {"standard_name", "potential"},
-                  {"long_name", "plasma potential"}});
+                  {"long_name", "plasma potential"},
+                  {"source", "vorticity"}});
 
   if (diagnose) {
     set_with_attrs(state["ddt(Vort)"], ddt(Vort),
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},
                     {"conversion", SI::qe * Nnorm * Omega_ci},
-                    {"long_name", "Rate of change of vorticity"}});
+                    {"long_name", "Rate of change of vorticity"},
+                    {"source", "vorticity"}});
 
     if (diamagnetic) {
       set_with_attrs(state["DivJdia"], DivJdia,
                      {{"time_dimension", "t"},
                       {"units", "A m^-3"},
                       {"conversion", SI::qe * Nnorm * Omega_ci},
-                      {"long_name", "Divergence of diamagnetic current"}});
+                      {"long_name", "Divergence of diamagnetic current"},
+                      {"source", "vorticity"}});
     }
     if (collisional_friction) {
       set_with_attrs(state["DivJcol"], DivJcol,
                      {{"time_dimension", "t"},
                       {"units", "A m^-3"},
                       {"conversion", SI::qe * Nnorm * Omega_ci},
-                      {"long_name", "Divergence of collisional current"}});
+                      {"long_name", "Divergence of collisional current"},
+                      {"source", "vorticity"}});
     }
   }
 }

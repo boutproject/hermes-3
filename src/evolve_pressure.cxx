@@ -26,9 +26,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     solver->add(logP, std::string("logP") + name);
     // Save the density to the restart file
     // so the simulation can be restarted evolving density
-    get_restart_datafile()->addOnce(P, std::string("P") + name);
-    // Save density to output files
-    bout::globals::dump.addRepeat(P, std::string("P") + name);
+    //get_restart_datafile()->addOnce(P, std::string("P") + name);
 
     if (!alloptions["hermes"]["restarting"]) {
       // Set logN from N input options
@@ -68,18 +66,9 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
-  if (options["diagnose"]
-          .doc("Save additional output diagnostics")
-          .withDefault<bool>(false)) {
-    if (thermal_conduction) {
-      bout::globals::dump.addRepeat(kappa_par, std::string("kappa_par_") + name);
-    }
-    bout::globals::dump.addRepeat(T, std::string("T") + name);
-
-    bout::globals::dump.addRepeat(ddt(P), std::string("ddt(P") + name + std::string(")"));
-    bout::globals::dump.addRepeat(Sp, std::string("SP") + name);
-    Sp = 0.0;
-  }
+  diagnose = options["diagnose"]
+    .doc("Save additional output diagnostics")
+    .withDefault<bool>(false);
 
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
@@ -263,4 +252,62 @@ void EvolvePressure::finally(const Options& state) {
     }
   }
 #endif
+}
+
+void EvolvePressure::outputVars(Options& state) {
+  // Normalisations
+  auto Nnorm = state["Nnorm"].as<BoutReal>();
+  auto Tnorm = state["Tnorm"].as<BoutReal>();
+  auto Omega_ci = state["Omega_ci"].as<BoutReal>();
+  auto rho_s0 = state["rho_s0"].as<BoutReal>();
+
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+  if (evolve_log) {
+    set_with_attrs(state[std::string("P") + name], P,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa"},
+                    {"conversion", Pnorm},
+                    {"standard_name", "pressure"},
+                    {"long_name", name + " pressure"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+  }
+
+  if (diagnose) {
+    if (thermal_conduction) {
+      set_with_attrs(state[std::string("kappa_par_") + name], kappa_par,
+                     {{"time_dimension", "t"},
+                      {"units", "W / m / eV"},
+                      {"conversion", Pnorm * Omega_ci * SQ(rho_s0)},
+                      {"long_name", name + " heat conduction coefficient"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+    }
+    set_with_attrs(state[std::string("T") + name], T,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"conversion", Tnorm},
+                    {"standard_name", "temperature"},
+                    {"long_name", name + " temperature"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(P),
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", std::string("Rate of change of ") + name + " pressure"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    set_with_attrs(state[std::string("SP") + name], Sp,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+  }
 }

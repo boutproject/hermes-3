@@ -195,7 +195,9 @@ void EvolveDensity::outputVars(Options& state) {
                     {"units", "m^-3"},
                     {"conversion", Nnorm},
                     {"standard_name", "density"},
-                    {"long_name", name + " number density"}});
+                    {"long_name", name + " number density"},
+                    {"species", name},
+                    {"source", "evolve_density"}});
   }
 
   if (diagnose) {
@@ -204,12 +206,17 @@ void EvolveDensity::outputVars(Options& state) {
         {{"time_dimension", "t"},
          {"units", "m^-3 s^-1"},
          {"conversion", Nnorm * Omega_ci},
-         {"long_name", std::string("Rate of change of ") + name + " number density"}});
+         {"long_name", std::string("Rate of change of ") + name + " number density"},
+         {"species", name},
+         {"source", "evolve_density"}});
+
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
                     {"units", "m^-3 s^-1"},
                     {"conversion", Nnorm * Omega_ci},
                     {"standard_name", "density source"},
-                    {"long_name", name + " number density source"}});
+                    {"long_name", name + " number density source"},
+                    {"species", name},
+                    {"source", "evolve_density"}});
   }
 }

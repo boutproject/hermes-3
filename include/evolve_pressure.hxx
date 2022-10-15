@@ -35,6 +35,7 @@ struct EvolvePressure : public Component {
   ///
   void finally(const Options& state) override;
 
+  void outputVars(Options& state) override;
 private:
   std::string name; ///< Short name of the species e.g. h+
 
@@ -59,6 +60,8 @@ private:
   Field3D Sp;     ///< Total pressure source
 
   BoutReal hyper_z; ///< Hyper-diffusion
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {
