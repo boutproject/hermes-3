@@ -25,6 +25,9 @@ Tnorm = 5   # Reference temperature [eV]
 [h]
 type = evolve_density, anomalous_diffusion
 
+AA = 1
+charge = 1
+
 anomalous_D = 2    # Density diffusion [m^2/s]
 
 [Nh]
