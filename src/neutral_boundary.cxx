@@ -13,8 +13,8 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions, Solver* 
                    .doc("Neutral boundary heat transmission coefficient")
                    .withDefault(0.0);
 
-  lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
-  upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
+  lower_y = options["neutral_lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
+  upper_y = options["neutral_upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
 }
 
 void NeutralBoundary::transform(Options& state) {

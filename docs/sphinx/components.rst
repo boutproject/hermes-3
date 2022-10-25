@@ -410,6 +410,43 @@ The implementation is in `NoFlowBoundary`:
 .. doxygenstruct:: NoFlowBoundary
    :members:
 
+.. _neutral_boundary:
+
+neutral_boundary
+~~~~~~~~~~~~~~~~
+
+Sets Y (sheath/target) boundary conditions on neutral particle
+density, temperature and pressure. A no-flow boundary condition
+is set on parallel velocity and momentum. It is a species-specific
+component and so goes in the list of components for the species
+that the boundary condition should be applied to.
+
+An energy sink is added to the flux of heat to the wall, with
+heat flux `q`:
+
+.. math::
+
+   q = \gamma_{heat} n T v_{th}
+
+   v_{th} = \sqrt{eT / m}
+
+The factor `gamma_heat`
+
+.. code-block:: ini
+
+   [hermes]
+   components = d
+
+   [d]
+   type = ... , neutral_boundary
+
+   gamma_heat = 3  # Neutral boundary heat transmission coefficient
+   neutral_lower_y = true  # Boundary on lower y?
+   neutral_upper_y = true  # Boundary on upper y?
+
+.. doxygenstruct:: NeutralBoundary
+   :members:
+
 Collective quantities
 ---------------------
 
