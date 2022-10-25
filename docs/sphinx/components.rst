@@ -41,7 +41,20 @@ evolve_density
 ~~~~~~~~~~~~~~
 
 This component evolves the species density in time, using the BOUT++
-time integration solver.
+time integration solver. The species charge and atomic mass must be set,
+and the initial density should be specified in its own section:
+
+.. code-block:: ini
+
+   [d]
+   type = evolve_density, ...
+
+   AA = 2 # Atomic mass
+   charge = 0
+
+   [Nd]
+   function = 1 - 0.5x # Initial condition, normalised to Nnorm
+
 
 The implementation is in the `EvolveDensity` class:
 
