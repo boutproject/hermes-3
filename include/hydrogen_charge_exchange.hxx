@@ -57,6 +57,8 @@ protected:
   ///   - momentum_source
   ///   - energy_source
   ///
+  /// Modifies collision_frequency for atom1 and ion1
+  ///
   /// Diagnostic output
   ///  R            Reaction rate, transfer of particles in case of different isotopes
   ///  atom_mom     Momentum removed from atom1, added to ion2
