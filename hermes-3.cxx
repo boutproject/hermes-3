@@ -63,6 +63,7 @@
 #include "include/fixed_temperature.hxx"
 #include "include/transform.hxx"
 #include "include/fixed_fraction_radiation.hxx"
+#include "include/set_temperature.hxx"
 #include "include/snb_conduction.hxx"
 #include "include/electromagnetic.hxx"
 #include "include/polarisation_drift.hxx"

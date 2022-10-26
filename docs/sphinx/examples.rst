@@ -387,6 +387,146 @@ These are transport simulations, where the cross-field transport is given
 by diffusion, and fluid-like equations are used for the parallel dynamics
 (as in the 1D flux tube cases).
 
+The input settings (in BOUT.inp) are set to read the grid from a file `tokamak.nc`.
+This is linked to a default file `compass-36x48.grd.nc`, a COMPASS-like lower single
+null tokamak equilibrium. Due to the way that BOUT++ uses communications between
+processors to implement branch cuts, these simulations require a multiple of 6 processors.
+You don't usually need 6 physical cores to run these cases, if MPI over-subscription
+is enabled.
+
+heat-transport
+~~~~~~~~~~~~~~
+
+In `examples/tokamak/heat-transport`, this evolves only electron pressure with
+a fixed density. It combines cross-field diffusion with parallel heat conduction
+and a sheath boundary condition.
+
+To run this simulation with the default inputs requires (at least)
+6 processors because it is a single-null tokamak grid.
+From the build directory:
+
+.. code-block:: bash
+
+   cd examples/tokamak
+   mpirun -np 6 ../../hermes-3 -d heat-transport
+
+That will read the grid from `tokamak.nc`, which by default links to
+the `compass-36x48.grd.nc` file.
+
+The components of the model are given in `heat-transport/BOUT.inp`:
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, h+, collisions, sheath_boundary_simple
+
+We have two species, electrons and hydrogen ions, and add collisions
+between them and a simple sheath boundary condition.
+
+The electrons have the following components to fix the density,
+evolve the pressure, and include anomalous cross-field diffusion:
+
+.. code-block:: ini
+
+   [e]
+   type = fixed_density, evolve_pressure, anomalous_diffusion
+
+The `fixed_density` takes these options:
+
+.. code-block:: ini
+
+   AA = 1/1836
+   charge = -1
+   density = 1e18 # Fixed density [m^-3]
+
+so in this simulation the electron density is a uniform and constant value.
+If desired, that density can be made a function of space (`x` and `y` coordinates).
+
+The `evolve_pressure` component has thermal conduction enabled, and outputs
+extra diagnostics i.e. the temperature `Te`:
+
+.. code-block:: ini
+
+   thermal_conduction = true   # Spitzer parallel heat conduction
+   diagnose = true   # Output additional diagnostics
+
+There are other options that can be set to modify the behavior,
+such as setting `kappa_limit_alpha` to a value between 0 and 1 to impose
+a free-streaming heat flux limit.
+
+Since we're evolving the electron pressure we should set initial and
+boundary conditions on `Pe`:
+
+.. code-block:: ini
+
+   [Pe]
+   function = 1
+   bndry_core = dirichlet(1.0)  # Core boundary high pressure 
+   bndry_all = neumann
+
+That sets the pressure initially uniform, to a normalised value of 1,
+and fixes the pressure at the core boundary. Other boundaries are set
+to zero-gradient (neumann) so there is no cross-field diffusion of heat out of
+the outer (SOL or PF) boundaries. Flow of heat through the sheath is
+governed by the `sheath_boundary_simple` top-level component.
+
+The hydrogen ions need a density and temperature in order to calculate
+the collision frequencies. If the ion temperature is fixed to be the same
+as the electron temperature then there is no transfer of energy between
+ions and electrons:
+
+.. code-block:: ini
+
+   [h+]
+   type = quasineutral, set_temperature
+
+The `quasineutral` component sets the ion density so that there is no net charge
+in each cell. In this case that means the hydrogen ion density is set equal to
+the electron density. To perform this calculation the component requires that the
+ion atomic mass and charge are specified:
+
+.. code-block:: ini
+
+   AA = 1
+   charge = 1
+
+The `set_temperature` component sets the ion temperature to the temperature of another
+species. The name of that species is given by the `temperature_from` option:
+
+.. code-block:: ini
+
+   temperature_from = e  # Set Th+ = Te
+
+The `collisions` component is described in the manual, and calculates both electron-electron
+and electron-ion collisions. These can be disabled if desired, using individual options.
+There are also ion-ion, electron-neutral, ion-neutral and neutral-neutral collisions that
+are not used here.
+
+The `sheath_boundary_simple` component is a simplified Bohm-Chodura sheath boundary
+condition, that allows the sheath heat transmission coefficient to be specified for
+electrons and (where relevant) for ions.
+
+The equations solved by this example are:
+
+.. math::
+
+   \begin{aligned}
+   \frac{3}{2} \frac{\partial P_e}{\partial t} =& \nabla\cdot\left(\kappa_{e||}\mathbf{b}\mathbf{b}\cdot\nabla T_e\right) + \nabla\cdot\left(n_e\chi\nabla_\perp T_e\right) \\
+   \kappa_{e||} =& 3.16 P_e \tau_e / m_e \\
+   \tau_e =& 1 / \left(\nu_{ee} + \nu_{ei}\right) \\
+   \nu_{ee} =& \frac{2 e^4 n_e \ln\Lambda_{ee}}{3\epsilon_0^2 m_e^2 \left(4\pi e T_e / m_e\right)^{3/2}} \\
+   \ln\Lambda_{ee} =& 30.4 - \frac{1}{2}\ln n_e + \frac{5}{4}\ln T_e - \sqrt{10^{-5} + \left(\ln T_e - 2\right)^2 / 16} \\
+   \nu_{ei} =& \frac{e^4 n_e \ln\Lambda_{ei}\left(1 + m_e / m_i\right)}{3\epsilon_0^2 m_e^2 \left(2\pi T_e (1/m_e + 1/m_i)\right)^{3/2}} \\
+   \ln\Lambda_{ei} =& 31 - \frac{1}{2}\ln n_e + \ln T_e
+   \end{aligned}
+
+The calculation of the Coulomb logarithms follows the NRL formulary,
+and the above expression is used for temperatures above 10eV. See
+the `collisions` manual section for the expressions used in other regimes.
+
+recycling-dthene
+~~~~~~~~~~~~~~~~
+   
 The `recycling-dthene` example includes cross-field diffusion,
 parallel flow and heat conduction, collisions between species, sheath
 boundary conditions and recycling. It simulates the density, parallel
