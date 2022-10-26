@@ -50,6 +50,7 @@ const Field3D D4DX4_FV_Index(const Field3D &f, bool bndry_flux=false);
 // Div ( k * Grad(f) )
 const Field2D Laplace_FV(const Field2D &k, const Field2D &f);
 
-const Field3D Div_a_Laplace_perp_upwind(const Field3D& a, const Field3D& f);
+/// Perpendicular diffusion including X and Y directions
+const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
 
 #endif //  __DIV_OPS_H__

@@ -200,7 +200,7 @@ void RelaxPotential::finally(const Options& state) {
 
   if (boussinesq) {
     ddt(phi1) =
-        lambda_1 * (FV::Div_a_Laplace_perp(average_atomic_mass / Bsq, phi) - Vort);
+        lambda_1 * (FV::Div_a_Grad_perp(average_atomic_mass / Bsq, phi) - Vort);
 
     if (diamagnetic_polarisation) {
       for (auto& kv : allspecies.getChildren()) {
@@ -219,7 +219,7 @@ void RelaxPotential::finally(const Options& state) {
         }
         const BoutReal A = get<BoutReal>(species["AA"]);
         const Field3D P = get<Field3D>(species["pressure"]);
-        ddt(phi1) += lambda_1 * FV::Div_a_Laplace_perp(A / Bsq, P);
+        ddt(phi1) += lambda_1 * FV::Div_a_Grad_perp(A / Bsq, P);
       }
     }
   } else {
@@ -241,12 +241,12 @@ void RelaxPotential::finally(const Options& state) {
       const BoutReal Ai = get<BoutReal>(species["AA"]);
       const Field3D Ni = get<Field3D>(species["density"]);
 
-      phi_vort += FV::Div_a_Laplace_perp((Ai / Bsq) * Ni, phi);
+      phi_vort += FV::Div_a_Grad_perp((Ai / Bsq) * Ni, phi);
 
       if (diamagnetic_polarisation and species.isSet("pressure")) {
         // Calculate the diamagnetic flow contribution
         const Field3D Pi = get<Field3D>(species["pressure"]);
-        phi_vort += FV::Div_a_Laplace_perp(Ai / Bsq, Pi);
+        phi_vort += FV::Div_a_Grad_perp(Ai / Bsq, Pi);
       }
     }
 

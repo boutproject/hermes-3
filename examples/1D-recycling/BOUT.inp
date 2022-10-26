@@ -43,7 +43,7 @@ ixseps2 = -1
 # to electron pressure by using electron force balance.
 components = (d+, d, e,
               sheath_boundary, collisions, recycling, reactions,
-              electron_parallel_balance, neutral_parallel_diffusion)
+              electron_force_balance, neutral_parallel_diffusion)
 
 loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
