@@ -17,7 +17,8 @@ struct Recycling : public Component {
   ///     - species    A comma-separated list of species to recycle
   ///   - <species>
   ///     - recycle_as  The species to recycle into
-  ///     - recycle_multiplier   The recycled flux multiplier
+  ///     - recycle_multiplier   The recycled flux multiplier, between 0 and 1
+  ///     - recycle_energy       The energy of the recycled particles [eV]
   ///
   Recycling(std::string name, Options &alloptions, Solver *);
 
@@ -43,6 +44,7 @@ private:
     std::string to;   ///< Species to recycle to
     BoutReal multiplier; ///< Flux multiplier. Combination of recycling fraction and species
                          ///< change e.g h+ -> h2 results in 0.5 multiplier
+    BoutReal energy; ///< Energy of recycled particle (normalised to Tnorm)
   };
 
   std::vector<RecycleChannel> channels; // Recycling channels
