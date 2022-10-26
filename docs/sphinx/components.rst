@@ -684,6 +684,8 @@ The implementation is in the `ThermalForce` class:
 .. doxygenstruct:: ThermalForce
    :members:
 
+.. _recycling:
+
 recycling
 ~~~~~~~~~
 
@@ -696,6 +698,29 @@ Recycling therefore can't be calculated until all species boundary conditions
 have been set. It is therefore expected that this component is a top-level
 component which comes after boundary conditions are set.
 
+The recycling component has a `species` option, that is a list of species
+to recycle. For each of the species in that list, `recycling` will look in
+the corresponding section for the options `recycle_as`, `recycle_multiplier`
+and `recycle_energy`.
+
+For example, recycling `d+` ions into `d` atoms with a recycling fraction
+of 1. Each returning atom has an energy of 3.5eV:
+
+.. code-block:: ini
+
+   [hermes]
+   components = d+, d, sheath_boundary, recycling
+
+   [recycling]
+   species = d+   # Comma-separated list of species to recycle
+
+   [d+]
+   recycle_as = d         # Species to recycle as
+   recycle_multiplier = 1 # Recycling fraction
+   recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+.. doxygenstruct:: Recycling
+   :members:
 
 Atomic and molecular reactions
 ------------------------------
