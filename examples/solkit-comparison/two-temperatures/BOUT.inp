@@ -57,6 +57,7 @@ Tnorm = 100
 
 [solver]
 type = beuler  # Backward Euler steady-state solver
+snes_type = newtonls  # PETSc nonlinear solver
 max_nonlinear_iterations = 10
 
 diagnose = true

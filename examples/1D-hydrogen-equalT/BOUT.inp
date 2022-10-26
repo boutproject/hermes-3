@@ -58,9 +58,10 @@ Tnorm = 100
 
 [solver]
 type = beuler  # Backward Euler steady-state solver
+snes_type = newtonls
 max_nonlinear_iterations = 10
 
-diagnose = true
+diagnose = false # Print diagnostic information?
 
 atol = 1e-7
 rtol = 1e-5
