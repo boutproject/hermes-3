@@ -365,7 +365,7 @@ SI units (except temperatures in eV) the equations are:
    p_\mathrm{total} =& \sum_a e n_a T_a \\
    \rho_\mathrm{total} =& \sum_a A_a m_p n_a \\
    c_s =& \sqrt{\frac{p_\mathrm{total}}{\rho_\mathrm{total}}} \\
-   \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}} - \frac{n_e c_s}{L_{||} + S_n \\
+   \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}} - \frac{n_e c_s}{L_{||}} + S_n \\
    \frac{\partial p_e}{\partial t} =& - \nabla\cdot\left(p_e\mathbf{v}_{E\times B}\right) - \frac{\gamma_e p_e c_s}{L_{||}} + S_{p_e} \\
    n_{h+} =& n_e \\
    \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) - \frac{\gamma_i p_{h+} c_s}{L_{||}} \\
