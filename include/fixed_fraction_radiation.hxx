@@ -2,6 +2,7 @@
 #ifndef FIXED_FRACTION_RADIATION_H
 #define FIXED_FRACTION_RADIATION_H
 
+#include <bout/constants.hxx>
 #include "component.hxx"
 
 namespace {

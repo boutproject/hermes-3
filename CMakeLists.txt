@@ -127,6 +127,7 @@ set(HERMES_SOURCES
     include/sheath_boundary.hxx
     include/sheath_boundary_simple.hxx
     include/sheath_boundary_insulating.hxx
+    include/simple_conduction.hxx
     include/snb_conduction.hxx
     include/sheath_closure.hxx
     include/sound_speed.hxx
