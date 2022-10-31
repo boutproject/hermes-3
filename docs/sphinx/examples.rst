@@ -368,7 +368,7 @@ SI units (except temperatures in eV) the equations are:
    \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}} - \frac{n_e c_s}{L_{||}} + S_n \\
    \frac{\partial p_e}{\partial t} =& - \nabla\cdot\left(p_e\mathbf{v}_{E\times B}\right) - \frac{\gamma_e p_e c_s}{L_{||}} + S_{p_e} \\
    n_{h+} =& n_e \\
-   \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) - \frac{\gamma_i p_{h+} c_s}{L_{||}} \\
+   \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) - \frac{\gamma_i p_{h+} c_s}{L_{||}} + S_{p_{h+}} \\
    \frac{\partial \omega}{\partial t} =& - \nabla\cdot\left(\omega\mathbf{v}_{E\times B}\right) + \nabla\cdot\left[\left(p_e + p_{h+}\right)\nabla\times\frac{\mathbf{b}}{B}\right] + \nabla\cdot\mathbf{j}_{sh} \\
    \nabla\cdot\left[\frac{\overline{A}m_p}{B^2}\left(\overline{n}\nabla_\perp\phi + \nabla_\perp p_{h+}\right)\right] =& \omega \\
    \nabla\cdot{\mathbf{j}_{sh}} =& \frac{e n_e \overline{c_s} \phi}{\overline{T} L_{||}} \\
