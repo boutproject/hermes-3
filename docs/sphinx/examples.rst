@@ -370,7 +370,7 @@ SI units (except temperatures in eV) the equations are:
    n_{h+} =& n_e \\
    \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) - \frac{\gamma_i p_{h+} c_s}{L_{||}} \\
    \frac{\partial \omega}{\partial t} =& - \nabla\cdot\left(\omega\mathbf{v}_{E\times B}\right) + \nabla\cdot\left[\left(p_e + p_{h+}\right)\nabla\times\frac{\mathbf{b}}{B}\right] + \nabla\cdot\mathbf{j}_{sh} \\
-   \nabla\cdot\left[\frac{\overline{A}}{B^2}\left(\overline{n}\nabla_\perp\phi + \nabla_\perp p_{h+}\right)\right] =& \omega \\
+   \nabla\cdot\left[\frac{\overline{A}m_p}{B^2}\left(\overline{n}\nabla_\perp\phi + \nabla_\perp p_{h+}\right)\right] =& \omega \\
    \nabla\cdot{\mathbf{j}_{sh}} =& \frac{e n_e \overline{c_s} \phi}{\overline{T} L_{||}} \\
    \mathbf{v}_{E\times B} =& \frac{\mathbf{B}\times\nabla\phi}{B^2}
    \end{aligned}
