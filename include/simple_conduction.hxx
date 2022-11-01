@@ -59,13 +59,13 @@ struct SimpleConduction : public Component {
     if (temperature > 0.0) {
       T = temperature; // Fixed
     } else {
-      T = get<Field3D>(species["temperature"]);
+      T = GET_NOBOUNDARY(Field3D, species["temperature"]);
     }
     Field3D N;
     if (density > 0.0) {
       N = density;
     } else {
-      N = get<Field3D>(species["density"]);
+      N = GET_NOBOUNDARY(Field3D, species["density"]);
     }
     auto AA = get<BoutReal>(species["AA"]);
 
@@ -91,7 +91,7 @@ private:
 };
 
 namespace {
-RegisterComponent<AnomalousDiffusion>
+RegisterComponent<SimpleConduction>
     registercomponentsimpleconduction("simple_conduction");
 }
 
