@@ -54,6 +54,7 @@ struct RelaxPotential : public Component {
   ///
   void finally(const Options& state) override;
 
+  void outputVars(Options& state) override;
 private:
   Field3D Vort; // Evolving vorticity
 
