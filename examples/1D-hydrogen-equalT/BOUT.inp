@@ -101,8 +101,7 @@ recycle_multiplier = 1.0  # Recycling fraction
 
 function = 1
 
-flux = 4e23  # Particles per m^2 per second input
-source = (flux/(mesh:length_xpt))*H(mesh:y_xpt - y)
+source_shape = H(mesh:y_xpt - y) # For upstream_density_feedback
 
 [NVd+]
 

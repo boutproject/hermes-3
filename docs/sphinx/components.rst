@@ -83,7 +83,9 @@ For example:
    density_controller_i = 1e-3  # Feedback controller integral (i) parameter
 
    [Nd+]
-   source = h(pi - y)  # Source shape
+   source_shape = h(pi - y)  # Source shape
+
+Note: There is a separate `source` setting that includes a fixed (non varying) density source.
 
 The implementation is in the `UpstreamDensityFeedback` class:
 

@@ -4,7 +4,22 @@
 
 #include "component.hxx"
 
+/// Adds a time-varying density source, depending on the difference
+/// between the upstream density at y=0 and the specified value
 struct UpstreamDensityFeedback : public Component {
+
+  /// Inputs
+  ///  - <name> (e.g. "d+")
+  ///    - density_upstream        Upstream density (y=0) in m^-3
+  ///    - density_controller_p    Feedback proportional to error
+  ///    - density_controller_i    Feedback proportional to error integral
+  ///    - density_integral_positive  Force integral term to be positive? (default: false)
+  ///    - density_source_positive    Force density source to be positive? (default: true)
+  ///    - diagnose           Output diagnostic information?
+  ///
+  ///  - N<name>  (e.g. "Nd+")
+  ///    - source_shape  The initial source that is scaled by a time-varying factor
+  ///
   UpstreamDensityFeedback(std::string name, Options& alloptions, Solver*) : name(name) {
     const auto& units = alloptions["units"];
     BoutReal Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
@@ -37,7 +52,7 @@ struct UpstreamDensityFeedback : public Component {
 
     // Source shape the same as used in EvolveDensity
     density_source_shape =
-        alloptions[std::string("N") + name]["source"]
+      alloptions[std::string("N") + name]["source_shape"]
             .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
             .withDefault(Field3D(0.0))
         / (Nnorm * FreqNorm);
