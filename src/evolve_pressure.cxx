@@ -99,21 +99,20 @@ void EvolvePressure::transform(Options& state) {
   if (evolve_log) {
     // Evolving logP, but most calculations use P
     P = exp(logP);
-  } else {
-    // Check for low pressures, ensure that Pi >= 0
-    P = floor(P, 0.0);
   }
 
   mesh->communicate(P);
 
+  Field3D Pfloor = floor(P, 0.0);
+
   auto& species = state["species"][name];
 
-  set(species["pressure"], P);
+  set(species["pressure"], Pfloor);
 
   // Calculate temperature
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
-  T = P / floor(N, density_floor);
+  T = Pfloor / floor(N, density_floor);
 
   set(species["temperature"], T);
 }
@@ -125,7 +124,10 @@ void EvolvePressure::finally(const Options& state) {
   const auto& species = state["species"][name];
 
   // Get updated pressure and temperature with boundary conditions
-  P = get<Field3D>(species["pressure"]);
+  // Note: Retain pressures which fall below zero
+  P.setBoundaryTo(get<Field3D>(species["pressure"]));
+  Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
+
   T = get<Field3D>(species["temperature"]);
 
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
@@ -151,7 +153,7 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) -= FV::Div_par(P, V, sound_speed);
 
       // Work done. This balances energetically a term in the momentum equation
-      ddt(P) -= (2. / 3) * P * Div_par(V);
+      ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
 
     } else {
       // Use V * Grad(P) form
@@ -182,7 +184,7 @@ void EvolvePressure::finally(const Options& state) {
     // kappa ~ n * v_th^2 * tau
     //
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
-    kappa_par = kappa_coefficient * P * tau / AA;
+    kappa_par = kappa_coefficient * Pfloor * tau / AA;
 
     if (kappa_limit_alpha > 0.0) {
       /*
