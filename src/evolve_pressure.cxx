@@ -64,7 +64,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   p_div_v = options["p_div_v"]
                 .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
-                .withDefault<bool>(false);
+                .withDefault<bool>(true);
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
