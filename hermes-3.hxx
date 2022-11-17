@@ -34,12 +34,15 @@ public:
 protected:
   int init(bool restarting) override;
   int rhs(BoutReal t) override;
-  int precon(BoutReal t, BoutReal gamma, BoutReal delta) override;
+  int precon(BoutReal t, BoutReal gamma, BoutReal delta);
 
   /// Add variables to be written to the output file
   ///
   /// Adds units and then calls each component in turn
   void outputVars(Options& options) override;
+
+  /// Add variables to restart file
+  void restartVars(Options& options) override;
 private:
   /// Organises and schedules model components
   std::unique_ptr<ComponentScheduler> scheduler;

@@ -50,6 +50,9 @@ public:
   /// timestep.
   void outputVars(Options &state);
 
+  /// Add variables to restart files
+  void restartVars(Options &state);
+
   /// Preconditioning
   void precon(const Options &state, BoutReal gamma);
 private:

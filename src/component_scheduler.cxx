@@ -66,6 +66,13 @@ void ComponentScheduler::outputVars(Options &state) {
   }
 }
 
+void ComponentScheduler::restartVars(Options &state) {
+  // Run through each component
+  for(auto &component : components) {
+    component->restartVars(state);
+  }
+}
+
 void ComponentScheduler::precon(const Options &state, BoutReal gamma) {
   for(auto &component : components) {
     component->precon(state, gamma);

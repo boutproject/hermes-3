@@ -31,6 +31,9 @@ struct Component {
   /// Add extra fields for output, or set attributes e.g docstrings
   virtual void outputVars(Options &UNUSED(state)) { }
 
+  /// Add extra fields to restart files
+  virtual void restartVars(Options &UNUSED(state)) { }
+
   /// Preconditioning
   virtual void precon(const Options &UNUSED(state), BoutReal UNUSED(gamma)) { }
   

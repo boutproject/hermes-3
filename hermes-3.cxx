@@ -76,9 +76,6 @@ int Hermes::init(bool restarting) {
   options["revision"] = hermes::version::revision;
   options["revision"].setConditionallyUsed();
 
-  // Save the Hermes version in the output dump files
-  dump.setAttribute("", "HERMES_REVISION", hermes::version::revision);
-
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
   Nnorm = options["Nnorm"].doc("Reference density [m^-3]").withDefault(1e19);
@@ -142,7 +139,7 @@ int Hermes::init(bool restarting) {
   options["restarting"].setConditionallyUsed();
 
   TRACE("Creating components");
-  
+
   // Create the components
   // Here options is passed as the scheduler configuration, so that
   // settings in [hermes] are used.
@@ -180,8 +177,14 @@ int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal UNUSED(delta)) {
   return 0;
 }
 
-void outputVars(Options& options) {
+void Hermes::outputVars(Options& options) {
   AUTO_TRACE();
+
+  // Save the Hermes version in the output dump files
+  options["HERMES_REVISION"].force(hermes::version::revision);
+
+  // Save normalisation quantities. These may be used by components
+  // to calculate conversion factors to SI units
 
   set_with_attrs(options["Tnorm"], Tnorm, {
       {"units", "eV"},
@@ -220,6 +223,48 @@ void outputVars(Options& options) {
       {"long_name", "Gyro-radius length normalisation"}
     });
   scheduler->outputVars(options);
+}
+
+void Hermes::restartVars(Options& options) {
+  AUTO_TRACE();
+
+  set_with_attrs(options["Tnorm"], Tnorm, {
+      {"units", "eV"},
+      {"conversion", 1}, // Already in SI units
+      {"standard_name", "temperature normalisation"},
+      {"long_name", "temperature normalisation"}
+    });
+  set_with_attrs(options["Nnorm"], Nnorm, {
+      {"units", "m^-3"},
+      {"conversion", 1},
+      {"standard_name", "density normalisation"},
+      {"long_name", "Number density normalisation"}
+    });
+  set_with_attrs(options["Bnorm"], Bnorm, {
+      {"units", "T"},
+      {"conversion", 1},
+      {"standard_name", "magnetic field normalisation"},
+      {"long_name", "Magnetic field normalisation"}
+    });
+  set_with_attrs(options["Cs0"], Cs0, {
+      {"units", "m/s"},
+      {"conversion", 1},
+      {"standard_name", "velocity normalisation"},
+      {"long_name", "Sound speed normalisation"}
+    });
+  set_with_attrs(options["Omega_ci"], Omega_ci, {
+      {"units", "s^-1"},
+      {"conversion", 1},
+      {"standard_name", "frequency normalisation"},
+      {"long_name", "Cyclotron frequency normalisation"}
+    });
+  set_with_attrs(options["rho_s0"], rho_s0, {
+      {"units", "m"},
+      {"conversion", 1},
+      {"standard_name", "length normalisation"},
+      {"long_name", "Gyro-radius length normalisation"}
+    });
+  scheduler->restartVars(options);
 }
 
 // Standard main() function

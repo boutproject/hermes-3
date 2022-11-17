@@ -23,16 +23,9 @@ struct FixedTemperature : public Component {
     T = options["temperature"].doc("Constant temperature [eV]").as<Field3D>()
         / Tnorm; // Normalise
 
-    // Save temperature to output files
-    bout::globals::dump.addOnce(T, std::string("T") + name);
-
-    if (options["diagnose"]
-        .doc("Save additional output diagnostics")
-        .withDefault<bool>(false)) {
-      // Save pressure as time-varying field
-      bout::globals::dump.addRepeat(P, std::string("P") + name);
-      P = 0.0;
-    }
+    diagnose = options["diagnose"]
+      .doc("Save additional output diagnostics")
+      .withDefault<bool>(false);
   }
 
   /// Sets in the state the temperature and pressure of the species
@@ -63,11 +56,42 @@ struct FixedTemperature : public Component {
     }
   }
 
+  void outputVars(Options& state) override {
+    AUTO_TRACE();
+    auto Tnorm = state["Tnorm"].as<BoutReal>();
+
+    // Save temperature to output files
+    set_with_attrs(state[std::string("T") + name], T,
+                   {{"units", "eV"},
+                    {"conversion", Tnorm},
+                    {"standard_name", "temperature"},
+                    {"long_name", name + " temperature"},
+                    {"species", name},
+                    {"source", "fixed_temperature"}});
+
+    if (diagnose) {
+      auto Nnorm = state["Nnorm"].as<BoutReal>();
+      BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+      // Save pressure as time-varying field
+      set_with_attrs(state[std::string("P") + name], P,
+                     {{"time_dimension", "t"},
+                      {"units", "Pa"},
+                      {"conversion", Pnorm},
+                      {"standard_name", "pressure"},
+                      {"long_name", name + " pressure"},
+                      {"species", name},
+                      {"source", "fixed_temperature"}});
+    }
+  }
+
 private:
   std::string name; ///< Short name of species e.g "e"
 
   Field3D T; ///< Species temperature (normalised)
   Field3D P; ///< Species pressure (normalised)
+
+  bool diagnose; ///< Output additional fields
 };
 
 namespace {

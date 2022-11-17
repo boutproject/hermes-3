@@ -255,6 +255,7 @@ void EvolvePressure::finally(const Options& state) {
 }
 
 void EvolvePressure::outputVars(Options& state) {
+  AUTO_TRACE();
   // Normalisations
   auto Nnorm = state["Nnorm"].as<BoutReal>();
   auto Tnorm = state["Tnorm"].as<BoutReal>();
