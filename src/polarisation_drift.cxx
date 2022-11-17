@@ -1,5 +1,6 @@
 #include "../include/polarisation_drift.hxx"
 
+#include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
 #include <invert_laplace.hxx>
@@ -44,11 +45,9 @@ PolarisationDrift::PolarisationDrift(std::string name,
     density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
   }
   
-  if (options["diagnose"]
-          .doc("Output additional diagnostics?")
-          .withDefault<bool>(false)) {
-    SAVE_REPEAT(DivJ, phi_pol);
-  }
+  diagnose = options["diagnose"]
+    .doc("Output additional diagnostics?")
+    .withDefault<bool>(false);
 }
 
 void PolarisationDrift::transform(Options &state) {
@@ -164,5 +163,30 @@ void PolarisationDrift::transform(Options &state) {
       auto NV = GET_VALUE(Field3D, species["momentum"]);
       add(species["momentum_source"], FV::Div_a_Grad_perp(NV * coef, phi_pol));
     }
+  }
+}
+
+void PolarisationDrift::outputVars(Options &state) {
+  AUTO_TRACE();
+  // Normalisations
+  auto Nnorm = state["Nnorm"].as<BoutReal>();
+  auto Tnorm = state["Tnorm"].as<BoutReal>();
+  auto Omega_ci = state["Omega_ci"].as<BoutReal>();
+
+  if (diagnose) {
+    set_with_attrs(state["DivJpol"], -DivJ,
+                   {{"time_dimension", "t"},
+                    {"units", "A m^-3"},
+                    {"conversion", SI::qe * Nnorm * Omega_ci},
+                    {"long_name", "Divergence of polarisation current"},
+                    {"source", "polarisation_drift"}});
+
+    set_with_attrs(state["phi_pol"], phi_pol,
+                   {{"time_dimension", "t"},
+                    {"units", "V / s"},
+                    {"conversion", Tnorm * Omega_ci},
+                    {"standard_name", "flow potential"},
+                    {"long_name", "polarisation flow potential"},
+                    {"source", "polarisation_drift"}});
   }
 }
