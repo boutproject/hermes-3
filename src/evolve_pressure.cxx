@@ -99,21 +99,20 @@ void EvolvePressure::transform(Options& state) {
   if (evolve_log) {
     // Evolving logP, but most calculations use P
     P = exp(logP);
-  } else {
-    // Check for low pressures, ensure that Pi >= 0
-    P = floor(P, 0.0);
   }
 
   mesh->communicate(P);
 
+  Field3D Pfloor = floor(P, 0.0);
+
   auto& species = state["species"][name];
 
-  set(species["pressure"], P);
+  set(species["pressure"], Pfloor);
 
   // Calculate temperature
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
-  T = P / floor(N, density_floor);
+  T = Pfloor / floor(N, density_floor);
 
   set(species["temperature"], T);
 }
@@ -125,7 +124,10 @@ void EvolvePressure::finally(const Options& state) {
   const auto& species = state["species"][name];
 
   // Get updated pressure and temperature with boundary conditions
-  P = get<Field3D>(species["pressure"]);
+  // Note: Retain pressures which fall below zero
+  P.setBoundaryTo(get<Field3D>(species["pressure"]));
+  Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
+
   T = get<Field3D>(species["temperature"]);
 
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
@@ -142,23 +144,27 @@ void EvolvePressure::finally(const Options& state) {
     Field3D V = get<Field3D>(species["velocity"]);
 
     // Typical wave speed used for numerical diffusion
-    Field3D T = get<Field3D>(species["temperature"]);
-    BoutReal AA = get<BoutReal>(species["AA"]);
-    Field3D sound_speed = sqrt(T / AA);
+    Field3D fastest_wave;
+    if (state.isSet("fastest_wave")) {
+      fastest_wave = get<Field3D>(state["fastest_wave"]);
+    } else {
+      BoutReal AA = get<BoutReal>(species["AA"]);
+      fastest_wave = sqrt(T / AA);
+    }
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par(P, V, sound_speed);
+      ddt(P) -= FV::Div_par(P, V, fastest_wave);
 
       // Work done. This balances energetically a term in the momentum equation
-      ddt(P) -= (2. / 3) * P * Div_par(V);
+      ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
 
     } else {
       // Use V * Grad(P) form
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3) * FV::Div_par(P, V, sound_speed);
+      ddt(P) -= (5. / 3) * FV::Div_par(P, V, fastest_wave);
 
       ddt(P) += (2. / 3) * V * Grad_par(P);
     }
@@ -182,7 +188,7 @@ void EvolvePressure::finally(const Options& state) {
     // kappa ~ n * v_th^2 * tau
     //
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
-    kappa_par = kappa_coefficient * P * tau / AA;
+    kappa_par = kappa_coefficient * Pfloor * tau / AA;
 
     if (kappa_limit_alpha > 0.0) {
       /*
@@ -245,11 +251,17 @@ void EvolvePressure::finally(const Options& state) {
   ddt(P) += Sp;
 
   if (species.isSet("density_source") and species.isSet("velocity")) {
+    // NOTE: This has two problems
+    //       1. density_source is NOT just sources of particles, but also includes
+    //          terms from e.g. cross-field diffusion
+    //       2. As written it is probably not dimensionally correct.
+    //          Probably should not have a factor of N
+    //
     // Change in balance between kinetic & thermal energy due to particle source
-    auto Sn = get<Field3D>(species["density_source"]);
-    auto V = get<Field3D>(species["velocity"]);
-    auto AA = get<BoutReal>(species["AA"]);
-    ddt(P) += Sn * 0.5 * AA * N * SQ(V);
+    // auto Sn = get<Field3D>(species["density_source"]);
+    // auto V = get<Field3D>(species["velocity"]);
+    // auto AA = get<BoutReal>(species["AA"]);
+    // ddt(P) += Sn * 0.5 * AA * N * SQ(V);
   }
 
   if (evolve_log) {

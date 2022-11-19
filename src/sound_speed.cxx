@@ -1,6 +1,14 @@
 
 #include "../include/sound_speed.hxx"
 
+namespace {
+BoutReal floor(BoutReal value, BoutReal min) {
+  if (value < min)
+    return min;
+  return value;
+}
+} // namespace
+
 void SoundSpeed::transform(Options &state) {
   Field3D total_pressure = 0.0;
   Field3D total_density = 0.0;
@@ -22,7 +30,7 @@ void SoundSpeed::transform(Options &state) {
         auto N = GET_NOBOUNDARY(Field3D, species["density"]);
         auto AA = get<BoutReal>(species["AA"]);
         for (auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
-          BoutReal sound_speed = sqrt(P[i] / (N[i] * AA));
+          BoutReal sound_speed = sqrt(P[i] / (floor(N[i], 1e-5) * AA));
           fastest_wave[i] = BOUTMAX(fastest_wave[i], sound_speed);
         }
       }
