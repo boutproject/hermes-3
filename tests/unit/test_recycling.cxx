@@ -22,6 +22,7 @@ using RecyclingTest = FakeMeshFixture;
 
 TEST_F(RecyclingTest, CreateComponent) {
   Options options;
+  options["units"]["eV"] = 5; // Normalisation temperature
   options["recycling"]["species"] = "";  // No species to recycle
 
   Recycling component("recycling", options, nullptr);

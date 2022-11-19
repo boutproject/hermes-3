@@ -355,23 +355,38 @@ The sheath closure now specifies that additional sink terms should be added
 and radially localised sources are added in the `[Ne]`, `[Pe]`, and `[Ph+]`
 sections.
 
-The equations this solves are the same as the previous :ref:`Blob2d-Te-Ti`
-case, except wih extra source and sink terms:
+The equations this solves are the same as the previous
+:ref:`Blob2d-Te-Ti` case, except wih extra source and sink terms. In
+SI units (except temperatures in eV) the equations are:
 
 .. math::
 
    \begin{aligned}
-   p_\mathrm{total} =& \sum_a n_a T_a \\
-   \rho_\mathrm{total} =& \sum_a A_a n_a \\
+   p_\mathrm{total} =& \sum_a e n_a T_a \\
+   \rho_\mathrm{total} =& \sum_a A_a m_p n_a \\
    c_s =& \sqrt{\frac{p_\mathrm{total}}{\rho_\mathrm{total}}} \\
-   \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}} + n_e c_s + S_n \\
-   \frac{\partial p_e}{\partial t} =& - \nabla\cdot\left(p_e\mathbf{v}_{E\times B}\right) - \gamma_e p_e c_s + S_{p_e} \\
+   \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}} - \frac{n_e c_s}{L_{||}} + S_n \\
+   \frac{\partial p_e}{\partial t} =& - \nabla\cdot\left(p_e\mathbf{v}_{E\times B}\right) - \frac{\gamma_e p_e c_s}{L_{||}} + S_{p_e} \\
    n_{h+} =& n_e \\
-   \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) - \gamma_i p_{h+} c_s \\
-   \frac{\partial \omega}{\partial t} =& - \nabla\cdot\left(\omega\mathbf{v}_{E\times B}\right) + \nabla\left[\left(p_e + p_{h+}\right)\nabla\times\frac{\mathbf{b}}{B}\right] + \nabla\cdot\mathbf{j}_{sh} \\
-   \nabla\cdot\left[\frac{1}{B^2}\nabla_\perp\left(\phi + p_{h+}\right)\right] =& \omega \\
-   \nabla\cdot{\mathbf{j}_{sh}} =& \frac{n_e\phi}{L_{||}}
+   \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) - \frac{\gamma_i p_{h+} c_s}{L_{||}} + S_{p_{h+}} \\
+   \frac{\partial \omega}{\partial t} =& - \nabla\cdot\left(\omega\mathbf{v}_{E\times B}\right) + \nabla\cdot\left[\left(p_e + p_{h+}\right)\nabla\times\frac{\mathbf{b}}{B}\right] + \nabla\cdot\mathbf{j}_{sh} \\
+   \nabla\cdot\left[\frac{\overline{A}m_p}{B^2}\left(\overline{n}\nabla_\perp\phi + \nabla_\perp p_{h+}\right)\right] =& \omega \\
+   \nabla\cdot{\mathbf{j}_{sh}} =& \frac{e n_e \overline{c_s} \phi}{\overline{T} L_{||}} \\
+   \mathbf{v}_{E\times B} =& \frac{\mathbf{B}\times\nabla\phi}{B^2}
    \end{aligned}
+
+Where :math:`\overline{T}` and :math:`\overline{n}` are the reference
+temperature (units of eV) and density (in units of :math:`m^{-3}`)
+used for normalisation. :math:`\overline{c_s} = \sqrt{e\overline{T} /
+m_p}` is the reference sound speed, where :math:`m_p` is the proton
+mass. The mean ion atomic mass :math:`\overline{A}` is set to 1 here.
+
+These reference values enter into the sheath current
+:math:`\mathbf{j}_{sh}` because that is a simplified, linearised form
+of the full expression. Likewise the vorticity (:math:`\omega`)
+equation used the Boussinesq approximation to simplify the
+polarisation current term, leading to constant reference values being
+used.
 
 The sheath heat transmission coefficients default to :math:`\gamma_e = 6.5` and
 :math:`\gamma_i = 2.0` (:math:`\gamma_i` as suggested in Stangeby's textbook
@@ -387,6 +402,146 @@ These are transport simulations, where the cross-field transport is given
 by diffusion, and fluid-like equations are used for the parallel dynamics
 (as in the 1D flux tube cases).
 
+The input settings (in BOUT.inp) are set to read the grid from a file `tokamak.nc`.
+This is linked to a default file `compass-36x48.grd.nc`, a COMPASS-like lower single
+null tokamak equilibrium. Due to the way that BOUT++ uses communications between
+processors to implement branch cuts, these simulations require a multiple of 6 processors.
+You don't usually need 6 physical cores to run these cases, if MPI over-subscription
+is enabled.
+
+heat-transport
+~~~~~~~~~~~~~~
+
+In `examples/tokamak/heat-transport`, this evolves only electron pressure with
+a fixed density. It combines cross-field diffusion with parallel heat conduction
+and a sheath boundary condition.
+
+To run this simulation with the default inputs requires (at least)
+6 processors because it is a single-null tokamak grid.
+From the build directory:
+
+.. code-block:: bash
+
+   cd examples/tokamak
+   mpirun -np 6 ../../hermes-3 -d heat-transport
+
+That will read the grid from `tokamak.nc`, which by default links to
+the `compass-36x48.grd.nc` file.
+
+The components of the model are given in `heat-transport/BOUT.inp`:
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, h+, collisions, sheath_boundary_simple
+
+We have two species, electrons and hydrogen ions, and add collisions
+between them and a simple sheath boundary condition.
+
+The electrons have the following components to fix the density,
+evolve the pressure, and include anomalous cross-field diffusion:
+
+.. code-block:: ini
+
+   [e]
+   type = fixed_density, evolve_pressure, anomalous_diffusion
+
+The `fixed_density` takes these options:
+
+.. code-block:: ini
+
+   AA = 1/1836
+   charge = -1
+   density = 1e18 # Fixed density [m^-3]
+
+so in this simulation the electron density is a uniform and constant value.
+If desired, that density can be made a function of space (`x` and `y` coordinates).
+
+The `evolve_pressure` component has thermal conduction enabled, and outputs
+extra diagnostics i.e. the temperature `Te`:
+
+.. code-block:: ini
+
+   thermal_conduction = true   # Spitzer parallel heat conduction
+   diagnose = true   # Output additional diagnostics
+
+There are other options that can be set to modify the behavior,
+such as setting `kappa_limit_alpha` to a value between 0 and 1 to impose
+a free-streaming heat flux limit.
+
+Since we're evolving the electron pressure we should set initial and
+boundary conditions on `Pe`:
+
+.. code-block:: ini
+
+   [Pe]
+   function = 1
+   bndry_core = dirichlet(1.0)  # Core boundary high pressure 
+   bndry_all = neumann
+
+That sets the pressure initially uniform, to a normalised value of 1,
+and fixes the pressure at the core boundary. Other boundaries are set
+to zero-gradient (neumann) so there is no cross-field diffusion of heat out of
+the outer (SOL or PF) boundaries. Flow of heat through the sheath is
+governed by the `sheath_boundary_simple` top-level component.
+
+The hydrogen ions need a density and temperature in order to calculate
+the collision frequencies. If the ion temperature is fixed to be the same
+as the electron temperature then there is no transfer of energy between
+ions and electrons:
+
+.. code-block:: ini
+
+   [h+]
+   type = quasineutral, set_temperature
+
+The `quasineutral` component sets the ion density so that there is no net charge
+in each cell. In this case that means the hydrogen ion density is set equal to
+the electron density. To perform this calculation the component requires that the
+ion atomic mass and charge are specified:
+
+.. code-block:: ini
+
+   AA = 1
+   charge = 1
+
+The `set_temperature` component sets the ion temperature to the temperature of another
+species. The name of that species is given by the `temperature_from` option:
+
+.. code-block:: ini
+
+   temperature_from = e  # Set Th+ = Te
+
+The `collisions` component is described in the manual, and calculates both electron-electron
+and electron-ion collisions. These can be disabled if desired, using individual options.
+There are also ion-ion, electron-neutral, ion-neutral and neutral-neutral collisions that
+are not used here.
+
+The `sheath_boundary_simple` component is a simplified Bohm-Chodura sheath boundary
+condition, that allows the sheath heat transmission coefficient to be specified for
+electrons and (where relevant) for ions.
+
+The equations solved by this example are:
+
+.. math::
+
+   \begin{aligned}
+   \frac{3}{2} \frac{\partial P_e}{\partial t} =& \nabla\cdot\left(\kappa_{e||}\mathbf{b}\mathbf{b}\cdot\nabla T_e\right) + \nabla\cdot\left(n_e\chi\nabla_\perp T_e\right) \\
+   \kappa_{e||} =& 3.16 P_e \tau_e / m_e \\
+   \tau_e =& 1 / \left(\nu_{ee} + \nu_{ei}\right) \\
+   \nu_{ee} =& \frac{2 e^4 n_e \ln\Lambda_{ee}}{3\epsilon_0^2 m_e^2 \left(4\pi e T_e / m_e\right)^{3/2}} \\
+   \ln\Lambda_{ee} =& 30.4 - \frac{1}{2}\ln n_e + \frac{5}{4}\ln T_e - \sqrt{10^{-5} + \left(\ln T_e - 2\right)^2 / 16} \\
+   \nu_{ei} =& \frac{e^4 n_e \ln\Lambda_{ei}\left(1 + m_e / m_i\right)}{3\epsilon_0^2 m_e^2 \left(2\pi T_e (1/m_e + 1/m_i)\right)^{3/2}} \\
+   \ln\Lambda_{ei} =& 31 - \frac{1}{2}\ln n_e + \ln T_e
+   \end{aligned}
+
+The calculation of the Coulomb logarithms follows the NRL formulary,
+and the above expression is used for temperatures above 10eV. See
+the `collisions` manual section for the expressions used in other regimes.
+
+recycling-dthene
+~~~~~~~~~~~~~~~~
+   
 The `recycling-dthene` example includes cross-field diffusion,
 parallel flow and heat conduction, collisions between species, sheath
 boundary conditions and recycling. It simulates the density, parallel

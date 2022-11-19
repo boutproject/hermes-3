@@ -41,7 +41,20 @@ evolve_density
 ~~~~~~~~~~~~~~
 
 This component evolves the species density in time, using the BOUT++
-time integration solver.
+time integration solver. The species charge and atomic mass must be set,
+and the initial density should be specified in its own section:
+
+.. code-block:: ini
+
+   [d]
+   type = evolve_density, ...
+
+   AA = 2 # Atomic mass
+   charge = 0
+
+   [Nd]
+   function = 1 - 0.5x # Initial condition, normalised to Nnorm
+
 
 The implementation is in the `EvolveDensity` class:
 
@@ -410,6 +423,43 @@ The implementation is in `NoFlowBoundary`:
 .. doxygenstruct:: NoFlowBoundary
    :members:
 
+.. _neutral_boundary:
+
+neutral_boundary
+~~~~~~~~~~~~~~~~
+
+Sets Y (sheath/target) boundary conditions on neutral particle
+density, temperature and pressure. A no-flow boundary condition
+is set on parallel velocity and momentum. It is a species-specific
+component and so goes in the list of components for the species
+that the boundary condition should be applied to.
+
+An energy sink is added to the flux of heat to the wall, with
+heat flux `q`:
+
+.. math::
+
+   q = \gamma_{heat} n T v_{th}
+
+   v_{th} = \sqrt{eT / m}
+
+The factor `gamma_heat`
+
+.. code-block:: ini
+
+   [hermes]
+   components = d
+
+   [d]
+   type = ... , neutral_boundary
+
+   gamma_heat = 3  # Neutral boundary heat transmission coefficient
+   neutral_lower_y = true  # Boundary on lower y?
+   neutral_upper_y = true  # Boundary on upper y?
+
+.. doxygenstruct:: NeutralBoundary
+   :members:
+
 Collective quantities
 ---------------------
 
@@ -647,6 +697,8 @@ The implementation is in the `ThermalForce` class:
 .. doxygenstruct:: ThermalForce
    :members:
 
+.. _recycling:
+
 recycling
 ~~~~~~~~~
 
@@ -659,6 +711,29 @@ Recycling therefore can't be calculated until all species boundary conditions
 have been set. It is therefore expected that this component is a top-level
 component which comes after boundary conditions are set.
 
+The recycling component has a `species` option, that is a list of species
+to recycle. For each of the species in that list, `recycling` will look in
+the corresponding section for the options `recycle_as`, `recycle_multiplier`
+and `recycle_energy`.
+
+For example, recycling `d+` ions into `d` atoms with a recycling fraction
+of 1. Each returning atom has an energy of 3.5eV:
+
+.. code-block:: ini
+
+   [hermes]
+   components = d+, d, sheath_boundary, recycling
+
+   [recycling]
+   species = d+   # Comma-separated list of species to recycle
+
+   [d+]
+   recycle_as = d         # Species to recycle as
+   recycle_multiplier = 1 # Recycling fraction
+   recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+.. doxygenstruct:: Recycling
+   :members:
 
 Atomic and molecular reactions
 ------------------------------

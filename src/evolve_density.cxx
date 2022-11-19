@@ -218,5 +218,14 @@ void EvolveDensity::outputVars(Options& state) {
                     {"long_name", name + " number density source"},
                     {"species", name},
                     {"source", "evolve_density"}});
+
+    set_with_attrs(state[std::string("S") + name + std::string("_src")], source,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "density source"},
+                    {"long_name", name + " number density source"},
+                    {"species", name},
+                    {"source", "evolve_density"}});
   }
 }
