@@ -11,7 +11,9 @@ struct AmjuelHydRecombination : public AmjuelReaction {
   AmjuelHydRecombination(std::string name, Options& alloptions, Solver* solver)
       : AmjuelReaction(name, alloptions, solver) {}
 
-  void calculate_rates(Options& electron, Options& atom, Options& ion);
+  void calculate_rates(Options& electron, Options& atom, Options& ion,
+                        Field3D &reaction_rate, Field3D &momentum_exchange,
+                        Field3D &energy_exchange, Field3D &energy_loss);
 };
 
 /// Hydrogen recombination
@@ -19,15 +21,45 @@ struct AmjuelHydRecombination : public AmjuelReaction {
 template <char Isotope>
 struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
   AmjuelHydRecombinationIsotope(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelHydRecombination(name, alloptions, solver) {}
+      : AmjuelHydRecombination(name, alloptions, solver) {
 
+    diagnose = alloptions[name]["diagnose"]
+      .doc("Output additional diagnostics?")
+      .withDefault<bool>(false);
+
+    if (diagnose) {
+      // Save particle, momentum and energy channels
+
+      bout::globals::dump.addRepeat(S, {'S', Isotope, '+', '_', 'r', 'e', 'c'}); // Particle source
+      bout::globals::dump.addRepeat(F, {'F', Isotope, '+', '_', 'r', 'e', 'c'}); // Momentum exchange
+      bout::globals::dump.addRepeat(E, {'E', Isotope, '+', '_', 'r', 'e', 'c'}); // Energy exchange
+      bout::globals::dump.addRepeat(R, {'R', Isotope, '+', '_', 'r', 'e', 'c'}); // Radiation loss
+      }
+    
+    
+    }
+  
   void transform(Options& state) override {
     Options& electron = state["species"]["e"];
     Options& atom = state["species"][{Isotope}];     // e.g. "h"
     Options& ion = state["species"][{Isotope, '+'}]; // e.g. "h+"
+    Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
 
-    calculate_rates(electron, atom, ion);
+    calculate_rates(electron, atom, ion, reaction_rate, momentum_exchange, energy_exchange, energy_loss);
+
+    if (diagnose) {
+      S = -reaction_rate;
+      F = -momentum_exchange;
+      E = -energy_exchange;
+      R = -energy_loss;
+    }
   }
+private:
+  bool diagnose; ///< Outputting diagnostics?
+  Field3D S; ///< Particle exchange
+  Field3D F; ///< Momentum exchange
+  Field3D E; ///< Energy exchange
+  Field3D R; ///< Radiation loss
 };
 
 namespace {

@@ -355,23 +355,38 @@ The sheath closure now specifies that additional sink terms should be added
 and radially localised sources are added in the `[Ne]`, `[Pe]`, and `[Ph+]`
 sections.
 
-The equations this solves are the same as the previous :ref:`Blob2d-Te-Ti`
-case, except wih extra source and sink terms:
+The equations this solves are the same as the previous
+:ref:`Blob2d-Te-Ti` case, except wih extra source and sink terms. In
+SI units (except temperatures in eV) the equations are:
 
 .. math::
 
    \begin{aligned}
-   p_\mathrm{total} =& \sum_a n_a T_a \\
-   \rho_\mathrm{total} =& \sum_a A_a n_a \\
+   p_\mathrm{total} =& \sum_a e n_a T_a \\
+   \rho_\mathrm{total} =& \sum_a A_a m_p n_a \\
    c_s =& \sqrt{\frac{p_\mathrm{total}}{\rho_\mathrm{total}}} \\
-   \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}} + n_e c_s + S_n \\
-   \frac{\partial p_e}{\partial t} =& - \nabla\cdot\left(p_e\mathbf{v}_{E\times B}\right) - \gamma_e p_e c_s + S_{p_e} \\
+   \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}} - \frac{n_e c_s}{L_{||}} + S_n \\
+   \frac{\partial p_e}{\partial t} =& - \nabla\cdot\left(p_e\mathbf{v}_{E\times B}\right) - \frac{\gamma_e p_e c_s}{L_{||}} + S_{p_e} \\
    n_{h+} =& n_e \\
-   \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) - \gamma_i p_{h+} c_s \\
-   \frac{\partial \omega}{\partial t} =& - \nabla\cdot\left(\omega\mathbf{v}_{E\times B}\right) + \nabla\left[\left(p_e + p_{h+}\right)\nabla\times\frac{\mathbf{b}}{B}\right] + \nabla\cdot\mathbf{j}_{sh} \\
-   \nabla\cdot\left[\frac{1}{B^2}\nabla_\perp\left(\phi + p_{h+}\right)\right] =& \omega \\
-   \nabla\cdot{\mathbf{j}_{sh}} =& \frac{n_e\phi}{L_{||}}
+   \frac{\partial p_{h+}}{\partial t} =& - \nabla\cdot\left(p_{h+}\mathbf{v}_{E\times B}\right) - \frac{\gamma_i p_{h+} c_s}{L_{||}} + S_{p_{h+}} \\
+   \frac{\partial \omega}{\partial t} =& - \nabla\cdot\left(\omega\mathbf{v}_{E\times B}\right) + \nabla\cdot\left[\left(p_e + p_{h+}\right)\nabla\times\frac{\mathbf{b}}{B}\right] + \nabla\cdot\mathbf{j}_{sh} \\
+   \nabla\cdot\left[\frac{\overline{A}m_p}{B^2}\left(\overline{n}\nabla_\perp\phi + \nabla_\perp p_{h+}\right)\right] =& \omega \\
+   \nabla\cdot{\mathbf{j}_{sh}} =& \frac{e n_e \overline{c_s} \phi}{\overline{T} L_{||}} \\
+   \mathbf{v}_{E\times B} =& \frac{\mathbf{B}\times\nabla\phi}{B^2}
    \end{aligned}
+
+Where :math:`\overline{T}` and :math:`\overline{n}` are the reference
+temperature (units of eV) and density (in units of :math:`m^{-3}`)
+used for normalisation. :math:`\overline{c_s} = \sqrt{e\overline{T} /
+m_p}` is the reference sound speed, where :math:`m_p` is the proton
+mass. The mean ion atomic mass :math:`\overline{A}` is set to 1 here.
+
+These reference values enter into the sheath current
+:math:`\mathbf{j}_{sh}` because that is a simplified, linearised form
+of the full expression. Likewise the vorticity (:math:`\omega`)
+equation used the Boussinesq approximation to simplify the
+polarisation current term, leading to constant reference values being
+used.
 
 The sheath heat transmission coefficients default to :math:`\gamma_e = 6.5` and
 :math:`\gamma_i = 2.0` (:math:`\gamma_i` as suggested in Stangeby's textbook

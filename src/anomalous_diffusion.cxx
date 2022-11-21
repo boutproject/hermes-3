@@ -4,6 +4,9 @@
 #include <bout/fv_ops.hxx>
 #include "../include/div_ops.hxx"
 
+using bout::globals::mesh;
+
+
 AnomalousDiffusion::AnomalousDiffusion(std::string name, Options &alloptions, Solver *) : name(name) {
   // Normalisations
   const Options& units = alloptions["units"];
@@ -45,42 +48,61 @@ void AnomalousDiffusion::transform(Options &state) {
   Options& species = state["species"][name];
 
   // Diffusion operates on 2D (axisymmetric) profiles
+  // Note: Includes diffusion in Y, so set boundary fluxes
+  // to zero by imposing neumann boundary conditions.
   const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
-  const Field2D N2D = DC(N);
+  Field2D N2D = DC(N);
 
   const Field3D T = species.isSet("temperature")
                         ? GET_NOBOUNDARY(Field3D, species["temperature"])
                         : 0.0;
-  const Field2D T2D = DC(T);
+  Field2D T2D = DC(T);
 
   const Field3D V =
       species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
-  const Field2D V2D = DC(V);
-  
+  Field2D V2D = DC(V);
+
+  // Apply Neumann Y boundary condition, so no additional flux into boundary
+  // Note: Not setting radial (X) boundaries since those set radial fluxes
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      N2D(r.ind, mesh->ystart - 1, jz) = N2D(r.ind, mesh->ystart, jz);
+      T2D(r.ind, mesh->ystart - 1, jz) = T2D(r.ind, mesh->ystart, jz);
+      V2D(r.ind, mesh->ystart - 1, jz) = V2D(r.ind, mesh->ystart, jz);
+    }
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      N2D(r.ind, mesh->yend + 1, jz) = N2D(r.ind, mesh->yend, jz);
+      T2D(r.ind, mesh->yend + 1, jz) = T2D(r.ind, mesh->yend, jz);
+      V2D(r.ind, mesh->yend + 1, jz) = V2D(r.ind, mesh->yend, jz);
+    }
+  }
+
   if (include_D) {
     // Particle diffusion. Gradients of density drive flows of particles,
     // momentum and energy
     add(species["density_source"],
-        Div_a_Laplace_perp_upwind(anomalous_D, N2D));
+        Div_a_Grad_perp_upwind(anomalous_D, N2D));
 
     // Note: Upwind operators used, or unphysical increases
     // in temperature and flow can be produced
     add(species["momentum_source"],
-        Div_a_Laplace_perp_upwind(V2D * anomalous_D, N2D));
+        Div_a_Grad_perp_upwind(V2D * anomalous_D, N2D));
 
     add(species["energy_source"],
-        Div_a_Laplace_perp_upwind((3./2)*T2D * anomalous_D, N2D));
+        Div_a_Grad_perp_upwind((3./2)*T2D * anomalous_D, N2D));
   }
 
   if (include_chi) {
     // Gradients in temperature which drive energy flows
     add(species["energy_source"],
-        Div_a_Laplace_perp_upwind(anomalous_chi * N2D, T2D));
+        Div_a_Grad_perp_upwind(anomalous_chi * N2D, T2D));
   }
 
   if (include_nu) {
     // Gradients in slow speed which drive momentum flows
     add(species["momentum_source"],
-        Div_a_Laplace_perp_upwind(anomalous_nu * N2D, V2D));
+        Div_a_Grad_perp_upwind(anomalous_nu * N2D, V2D));
   }
 }

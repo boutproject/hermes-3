@@ -756,8 +756,8 @@ const Field2D Laplace_FV(const Field2D &k, const Field2D &f) {
   return result;
 }
 
-// Div ( a Laplace_perp(f) )  -- diffusion
-const Field3D Div_a_Laplace_perp_upwind(const Field3D& a, const Field3D& f) {
+// Div ( a Grad_perp(f) )  -- diffusion
+const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
