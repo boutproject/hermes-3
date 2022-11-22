@@ -291,6 +291,34 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
+simple_conduction
+-----------------
+
+This is a simplified parallel heat conduction model that can be used when a linearised model is needed.
+If used, the thermal conduction term in `evolve_pressure` component should be disabled.
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, ...
+
+   [e]
+   type = evolve_pressure, simple_conduction
+
+   thermal_conduction = false  # Disable term in evolve_pressure
+
+To linearise the heat conduction the temperature and density used in
+calculating the Coulomb logarithm and heat conduction coefficient can
+be fixed by specifying `conduction_temperature` and
+`conduction_density`.
+
+Note: For hydrogenic plasmas this produces very similar parallel electron
+heat conduction as the `evolve_pressure` term with electron-electron collisions
+disabled.
+
+.. doxygenstruct:: SimpleConduction
+   :members:
+
 Drifts
 ------
 
@@ -586,7 +614,15 @@ The frequency of charged species `a` colliding with charged species `b` is
 
 
 Note that the cgs expression in Hinton is divided by :math:`\left(4\pi\epsilon_0\right)^2` to get
-the expression in SI units.
+the expression in SI units. The thermal speeds in this expression are defined as:
+
+.. math::
+
+   v_a^2 = 2 e T_a / m_a
+
+Note that with this definition we recover the `Braginskii expressions
+<https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html>`_
+for e-i and i-i collision times.
 
 For conservation of momentum, the collision frequencies :math:`\nu_{ab}` and :math:`\nu_{ba}` are
 related by:
