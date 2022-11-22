@@ -6,7 +6,7 @@
 # - Dirichlet, zero-temperature boundary conditions on all walls.
 
 nout = 100
-timestep = 4000
+timestep = 10000
 
 MZ = 1
 
