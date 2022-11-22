@@ -1,26 +1,17 @@
-#!/usr/bin/env python3
-
 import xhermes
+import matplotlib.pyplot as plt
 
-# Following two lines needed so all variables are shown when printing the Dataset
-import xarray as xr
-xr.set_options(display_max_rows=1000)
+# Open the dataset
+bd = xhermes.open(".", geometry="toroidal", gridfilepath="../tokamak.nc")
 
-# Set better figure size
-from matplotlib import pyplot as plt
-plt.rcParams["figure.figsize"] = (16,8)
+# Make a plot of electron temperature against time
+bd["Te"].isel(x=30, theta=30, zeta=0).plot()
+plt.yscale('log')
+plt.tight_layout()
+plt.savefig("Te_30_30.png")
+plt.closeall()
 
-ds = xhermes.open(".", geometry="toroidal", gridfilepath="../tokamak.nc")
-print(ds)
+bd["Te"].isel(t=100, zeta=0).bout.contourf()
+plt.savefig("Te2D.png")
+plt.closeall()
 
-# Get rid of size-1 toroidal direction
-ds = ds.squeeze()
-
-# Make an animation
-# Note: saving a gif can be slow. Comment out `save_as` argument to disable.
-ds.bout.animate_list(
-    ["Te"],
-    poloidal_plot=True,
-    show=True,
-    save_as="hermes_animation",
-)
