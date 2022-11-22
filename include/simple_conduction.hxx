@@ -50,16 +50,21 @@ struct SimpleConduction : public Component {
                        "coefficient. < 0 for not fixed")
                   .withDefault<BoutReal>(-1.0)
               / Nnorm;
+
+    boundary_flux = options["conduction_boundary_flux"]
+      .doc("Allow heat conduction through sheath boundaries?")
+      .withDefault<bool>(false);
   }
 
   void transform(Options& state) override {
     auto& species = state["species"][name];
 
-    Field3D T;
+    // Species time-evolving temperature
+    Field3D T = GET_NOBOUNDARY(Field3D, species["temperature"]);
+
+    Field3D Tcoef = T; // Temperature used in coefficients.
     if (temperature > 0.0) {
-      T = temperature; // Fixed
-    } else {
-      T = GET_NOBOUNDARY(Field3D, species["temperature"]);
+      Tcoef = temperature; // Fixed
     }
     Field3D N;
     if (density > 0.0) {
@@ -69,14 +74,14 @@ struct SimpleConduction : public Component {
     }
     auto AA = get<BoutReal>(species["AA"]);
 
-    Field3D coulomb_log = 6.6 - 0.5 * log(N * Nnorm / 1e20) + 1.5 * log(T * Tnorm);
+    Field3D coulomb_log = 6.6 - 0.5 * log(N * Nnorm / 1e20) + 1.5 * log(Tcoef * Tnorm);
 
     // Parallel heat conduction coefficient
-    Field3D kappa_par = kappa0 * pow(T, 2.5) / (coulomb_log * sqrt(AA));
+    Field3D kappa_par = kappa0 * pow(Tcoef, 2.5) / (coulomb_log * sqrt(AA));
 
-    // Note: Flux through boundary turned off, because sheath heat flux
+    // Note: Flux through boundary turned off by default, because sheath heat flux
     // is calculated and removed separately
-    Field3D DivQ = FV::Div_par_K_Grad_par(kappa_par, T, false);
+    Field3D DivQ = FV::Div_par_K_Grad_par(kappa_par, T, boundary_flux);
 
     add(species["energy_source"], DivQ);
   }
@@ -88,6 +93,8 @@ private:
 
   BoutReal temperature; ///< Fix temperature if > 0
   BoutReal density;     ///< Fix density if > 0
+
+  bool boundary_flux;   ///< Allow flux through sheath boundaries?
 };
 
 namespace {
