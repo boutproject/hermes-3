@@ -40,6 +40,10 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options &alloptions, So
                        .as<Field2D>()
                    / diffusion_norm;
   }
+
+  anomalous_sheath_flux = options["anomalous_sheath_flux"]
+    .doc("Allow anomalous diffusion into sheath?")
+    .withDefault<bool>(false);
 }
 
 void AnomalousDiffusion::transform(Options &state) {
@@ -62,20 +66,22 @@ void AnomalousDiffusion::transform(Options &state) {
       species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
   Field2D V2D = DC(V);
 
-  // Apply Neumann Y boundary condition, so no additional flux into boundary
-  // Note: Not setting radial (X) boundaries since those set radial fluxes
-  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-    for (int jz = 0; jz < mesh->LocalNz; jz++) {
-      N2D(r.ind, mesh->ystart - 1, jz) = N2D(r.ind, mesh->ystart, jz);
-      T2D(r.ind, mesh->ystart - 1, jz) = T2D(r.ind, mesh->ystart, jz);
-      V2D(r.ind, mesh->ystart - 1, jz) = V2D(r.ind, mesh->ystart, jz);
+  if (!anomalous_sheath_flux) {
+    // Apply Neumann Y boundary condition, so no additional flux into boundary
+    // Note: Not setting radial (X) boundaries since those set radial fluxes
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        N2D(r.ind, mesh->ystart - 1, jz) = N2D(r.ind, mesh->ystart, jz);
+        T2D(r.ind, mesh->ystart - 1, jz) = T2D(r.ind, mesh->ystart, jz);
+        V2D(r.ind, mesh->ystart - 1, jz) = V2D(r.ind, mesh->ystart, jz);
+      }
     }
-  }
-  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-    for (int jz = 0; jz < mesh->LocalNz; jz++) {
-      N2D(r.ind, mesh->yend + 1, jz) = N2D(r.ind, mesh->yend, jz);
-      T2D(r.ind, mesh->yend + 1, jz) = T2D(r.ind, mesh->yend, jz);
-      V2D(r.ind, mesh->yend + 1, jz) = V2D(r.ind, mesh->yend, jz);
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        N2D(r.ind, mesh->yend + 1, jz) = N2D(r.ind, mesh->yend, jz);
+        T2D(r.ind, mesh->yend + 1, jz) = T2D(r.ind, mesh->yend, jz);
+        V2D(r.ind, mesh->yend + 1, jz) = V2D(r.ind, mesh->yend, jz);
+      }
     }
   }
 

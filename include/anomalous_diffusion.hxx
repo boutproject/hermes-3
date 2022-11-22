@@ -33,6 +33,8 @@ private:
   Field2D anomalous_D; ///< Anomalous density diffusion coefficient
   Field2D anomalous_chi; ///< Anomalous thermal diffusion coefficient
   Field2D anomalous_nu; ///< Anomalous momentum diffusion coefficient
+
+  bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
 };
 
 namespace {
