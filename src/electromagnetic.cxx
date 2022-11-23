@@ -1,6 +1,7 @@
 #include "../include/electromagnetic.hxx"
 
 #include <bout/constants.hxx>
+#include <bout/mesh.hxx>
 #include <invert_laplace.hxx>
 
 Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*) {
@@ -89,8 +90,15 @@ void Electromagnetic::transform(Options &state) {
     const BoutReal A = get<BoutReal>(species["AA"]);
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
-    subtract(species["momentum"], Z * N * Apar);
+    Field3D nv = getNonFinal<Field3D>(species["momentum"]);
+    nv -= Z * N * Apar;
     // Note: velocity is momentum / (A * N)
-    subtract(species["velocity"], (Z / A) * Apar);
+    Field3D v = getNonFinal<Field3D>(species["velocity"]);
+    v -= (Z / A) * Apar;
+    // Need to update the guard cells
+    bout::globals::mesh->communicate(nv, v);
+
+    set(species["momentum"], nv);
+    set(species["velocity"], v);
   }
 }
