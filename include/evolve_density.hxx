@@ -5,8 +5,29 @@
 #include "component.hxx"
 
 /// Evolve species density in time
-/// 
+///
+/// # Mesh inputs
+///
+/// N<name>_src  A source of particles, per cubic meter per second.
+///              This can be over-ridden by the `source` option setting.
 struct EvolveDensity : public Component {
+  /// # Inputs
+  ///
+  /// - <name>
+  ///   - charge         Particle charge e.g. hydrogen = 1
+  ///   - AA             Atomic mass number e.g. hydrogen = 1
+  ///   - bndry_flux     Allow flow through radial boundaries? Default is true.
+  ///   - poloidal_flows Include poloidal ExB flows? Default is true.
+  ///   - density_floor  Minimum density floor. Default is 1e-5 normalised units
+  ///   - low_n_diffuse  Enhance parallel diffusion at low density? Default false
+  ///   - hyper_z        Hyper-diffusion in Z. Default off.
+  ///   - evolve_log     Evolve logarithm of density? Default false.
+  ///   - diagnose       Output additional diagnostics?
+  ///
+  /// - N<name>   e.g. "Ne", "Nd+"
+  ///   - source    Source of particles [/m^3/s]
+  ///               NOTE: This overrides mesh input N<name>_src
+  ///
   EvolveDensity(std::string name, Options &options, Solver *solver);
 
   /// This sets in the state

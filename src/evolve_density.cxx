@@ -78,9 +78,14 @@ EvolveDensity::EvolveDensity(std::string name, Options &alloptions, Solver *solv
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
+  // Try to read the density source from the mesh
+  // Units of particles per cubic meter per second
+  source = 0.0;
+  mesh->get(source, std::string("N") + name + "_src");
+  // Allow the user to override the source
   source = alloptions[std::string("N") + name]["source"]
                .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
-               .withDefault(Field3D(0.0))
+               .withDefault(source)
            / (Nnorm * Omega_ci);
 }
 
