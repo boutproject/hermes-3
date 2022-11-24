@@ -71,6 +71,9 @@
 
 #include "include/loadmetric.hxx"
 
+// Hermes operators don't need parallel slices
+BOUT_OVERRIDE_DEFAULT_OPTION("mesh:calcParallelSlices_on_communicate", false);
+
 int Hermes::init(bool restarting) {
 
   auto &options = Options::root()["hermes"];
