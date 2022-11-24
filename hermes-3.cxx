@@ -114,9 +114,9 @@ int Hermes::init(bool restarting) {
   // field normalisations
   TRACE("Loading metric tensor");
 
-  if (options["loadmetric"]
-          .doc("Load Rxy, Bpxy etc. to create orthogonal metric?")
-          .withDefault(true)) {
+  if (options["recalculate_metric"]
+          .doc("Load Rxy, Bpxy etc. to calculate an orthogonal metric?")
+          .withDefault(false)) {
     LoadMetric(rho_s0, Bnorm);
   } else if (options["normalise_metric"]
                  .doc("Normalise input metric tensor? (assumes input is in SI units)")
