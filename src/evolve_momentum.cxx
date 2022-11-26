@@ -145,6 +145,14 @@ void EvolveMomentum::outputVars(Options &state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
+  state[std::string("NV") + name].setAttributes(
+      {{"time_dimension", "t"},
+       {"units", "kg / m^2 / s"},
+       {"conversion", SI::Mp * Nnorm * Cs0},
+       {"standard_name", "momentum"},
+       {"long_name", name + " parallel momentum"},
+       {"species", name},
+       {"source", "evolve_momentum"}});
 
   if (diagnose) {
     set_with_attrs(state[std::string("V") + name], V,

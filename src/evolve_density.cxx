@@ -190,15 +190,15 @@ void EvolveDensity::outputVars(Options& state) {
 
   if (evolve_log) {
     // Save density to output files
-    set_with_attrs(state[std::string("N") + name], N,
-                   {{"time_dimension", "t"},
-                    {"units", "m^-3"},
-                    {"conversion", Nnorm},
-                    {"standard_name", "density"},
-                    {"long_name", name + " number density"},
-                    {"species", name},
-                    {"source", "evolve_density"}});
+    state[std::string("N") + name].force(N);
   }
+  state[std::string("N") + name].setAttributes({{"time_dimension", "t"},
+                                                {"units", "m^-3"},
+                                                {"conversion", Nnorm},
+                                                {"standard_name", "density"},
+                                                {"long_name", name + " number density"},
+                                                {"species", name},
+                                                {"source", "evolve_density"}});
 
   if (diagnose) {
     set_with_attrs(

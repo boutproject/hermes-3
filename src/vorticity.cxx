@@ -575,6 +575,12 @@ void Vorticity::outputVars(Options& state) {
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
+  state["Vort"].setAttributes({{"time_dimension", "t"},
+                               {"units", "C m^-3"},
+                               {"conversion", SI::qe * Nnorm},
+                               {"long_name", "vorticity"},
+                               {"source", "vorticity"}});
+
   set_with_attrs(state["phi"], phi,
                  {{"time_dimension", "t"},
                   {"units", "V"},

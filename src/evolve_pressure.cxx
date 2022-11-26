@@ -277,15 +277,16 @@ void EvolvePressure::outputVars(Options& state) {
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   if (evolve_log) {
-    set_with_attrs(state[std::string("P") + name], P,
-                   {{"time_dimension", "t"},
-                    {"units", "Pa"},
-                    {"conversion", Pnorm},
-                    {"standard_name", "pressure"},
-                    {"long_name", name + " pressure"},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+    state[std::string("P") + name].force(P);
   }
+
+  state[std::string("P") + name].setAttributes({{"time_dimension", "t"},
+                                                {"units", "Pa"},
+                                                {"conversion", Pnorm},
+                                                {"standard_name", "pressure"},
+                                                {"long_name", name + " pressure"},
+                                                {"species", name},
+                                                {"source", "evolve_pressure"}});
 
   if (diagnose) {
     if (thermal_conduction) {

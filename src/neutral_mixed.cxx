@@ -302,46 +302,72 @@ void NeutralMixed::outputVars(Options& state) {
   auto Cs0 = get<BoutReal>(state["Cs0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
 
+  state[std::string("N") + name].setAttributes({{"time_dimension", "t"},
+                                                {"units", "m^-3"},
+                                                {"conversion", Nnorm},
+                                                {"standard_name", "density"},
+                                                {"long_name", name + " number density"},
+                                                {"species", name},
+                                                {"source", "neutral_mixed"}});
+
+  state[std::string("P") + name].setAttributes({{"time_dimension", "t"},
+                                                {"units", "Pa"},
+                                                {"conversion", Pnorm},
+                                                {"standard_name", "pressure"},
+                                                {"long_name", name + " pressure"},
+                                                {"species", name},
+                                                {"source", "neutral_mixed"}});
+
+  state[std::string("NV") + name].setAttributes(
+      {{"time_dimension", "t"},
+       {"units", "kg / m^2 / s"},
+       {"conversion", SI::Mp * Nnorm * Cs0},
+       {"standard_name", "momentum"},
+       {"long_name", name + " parallel momentum"},
+       {"species", name},
+       {"source", "neutral_mixed"}});
+
   if (output_ddt) {
-    set_with_attrs(state[std::string("ddt(N") + name + std::string(")")], ddt(Nn), {
-        {"time_dimension", "t"},
-        {"units", "m^-3 s^-1"},
-        {"conversion", Nnorm * Omega_ci},
-        {"long_name", std::string("Rate of change of ") + name + " number density"}
-      });
-    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn), {
-        {"time_dimension", "t"},
-        {"units", "Pa s^-1"},
-        {"conversion", SI::qe * Tnorm * Nnorm * Omega_ci},
-      });
-    set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NVn), {
-        {"time_dimension", "t"},
-        {"units", "kg m^-2 s^-2"},
-        {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-      });
+    set_with_attrs(
+        state[std::string("ddt(N") + name + std::string(")")], ddt(Nn),
+        {{"time_dimension", "t"},
+         {"units", "m^-3 s^-1"},
+         {"conversion", Nnorm * Omega_ci},
+         {"long_name", std::string("Rate of change of ") + name + " number density"},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn),
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NVn),
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"source", "neutral_mixed"}});
   }
   if (diagnose) {
-    set_with_attrs(state[std::string("SN") + name], Sn, {
-        {"time_dimension", "t"},
-        {"units", "m^-3 s^-1"},
-        {"conversion", Nnorm * Omega_ci},
-        {"standard_name", "density source"},
-        {"long_name", name + " number density source"}
-      });
-    set_with_attrs(state[std::string("SP") + name], Sp, {
-        {"time_dimension", "t"},
-        {"units", "Pa s^-1"},
-        {"conversion", SI::qe * Tnorm * Nnorm * Omega_ci},
-        {"standard_name", "pressure source"},
-        {"long_name", name + " pressure source"}
-      });
-    set_with_attrs(state[std::string("SNV") + name], Snv, {
-        {"time_dimension", "t"},
-        {"units", "kg m^-2 s^-2"},
-        {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-        {"standard_name", "momentum source"},
-        {"long_name", name + " momentum source"}
-      });
+    set_with_attrs(state[std::string("SN") + name], Sn,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "density source"},
+                    {"long_name", name + " number density source"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("SP") + name], Sp,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", SI::qe * Tnorm * Nnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("SNV") + name], Snv,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum source"},
+                    {"long_name", name + " momentum source"},
+                    {"source", "neutral_mixed"}});
   }
 }
 
