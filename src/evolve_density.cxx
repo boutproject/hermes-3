@@ -185,8 +185,8 @@ void EvolveDensity::finally(const Options& state) {
 
 void EvolveDensity::outputVars(Options& state) {
   // Normalisations
-  auto Nnorm = state["Nnorm"].as<BoutReal>();
-  auto Omega_ci = state["Omega_ci"].as<BoutReal>();
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
   if (evolve_log) {
     // Save density to output files

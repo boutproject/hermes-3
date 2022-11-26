@@ -36,8 +36,8 @@ void Isothermal::transform(Options &state) {
 
 void Isothermal::outputVars(Options& state) {
   AUTO_TRACE();
-  auto Tnorm = state["Tnorm"].as<BoutReal>();
-  auto Nnorm = state["Nnorm"].as<BoutReal>();
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
 
   // Save the temperature to the output files
   set_with_attrs(state[std::string("T") + name], T,

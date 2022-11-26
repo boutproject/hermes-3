@@ -4,8 +4,8 @@
 #include <derivs.hxx>
 #include <difops.hxx>
 
-#include "../include/neutral_mixed.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/neutral_mixed.hxx"
 
 using bout::globals::mesh;
 
@@ -237,9 +237,9 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  ddt(Nn) = -FV::Div_par(Nn, Vn, sound_speed) // Advection
-           + FV::Div_a_Grad_perp(DnnNn, logPnlim) // Perpendicular diffusion
-    ;
+  ddt(Nn) = -FV::Div_par(Nn, Vn, sound_speed)      // Advection
+            + FV::Div_a_Grad_perp(DnnNn, logPnlim) // Perpendicular diffusion
+      ;
 
   if (localstate.isSet("density_source")) {
     Sn = get<Field3D>(localstate["density_source"]);
@@ -256,12 +256,11 @@ void NeutralMixed::finally(const Options& state) {
   // Transport Processes in Gases", 1972
   // eta_n = (2. / 5) * kappa_n;
 
-  ddt(NVn) =
-      - FV::Div_par_fvv(Nnlim, Vn, sound_speed)      // Momentum flow
-      - Grad_par(Pn)                                 // Pressure gradient
-      + FV::Div_a_Grad_perp(DnnNVn, logPnlim)     // Perpendicular diffusion
-      + FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn) // Perpendicular viscosity
-      + FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
+  ddt(NVn) = -FV::Div_par_fvv(Nnlim, Vn, sound_speed)       // Momentum flow
+             - Grad_par(Pn)                                 // Pressure gradient
+             + FV::Div_a_Grad_perp(DnnNVn, logPnlim)        // Perpendicular diffusion
+             + FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
+             + FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
       ;
 
   if (localstate.isSet("momentum_source")) {
@@ -273,11 +272,11 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = -FV::Div_par(Pn, Vn, sound_speed) // Advection
-            - (2. / 3) * Pn * Div_par(Vn)     // Compression
+  ddt(Pn) = -FV::Div_par(Pn, Vn, sound_speed)      // Advection
+            - (2. / 3) * Pn * Div_par(Vn)          // Compression
             + FV::Div_a_Grad_perp(DnnPn, logPnlim) // Perpendicular diffusion
             + FV::Div_a_Grad_perp(DnnNn, Tn)       // Conduction
-            + FV::Div_par_K_Grad_par(DnnNn, Tn)       // Parallel conduction
+            + FV::Div_par_K_Grad_par(DnnNn, Tn)    // Parallel conduction
       ;
 
   if (localstate.isSet("energy_source")) {
@@ -297,10 +296,11 @@ void NeutralMixed::finally(const Options& state) {
 
 void NeutralMixed::outputVars(Options& state) {
   // Normalisations
-  auto Nnorm = state["Nnorm"].as<BoutReal>();
-  auto Tnorm = state["Tnorm"].as<BoutReal>();
-  auto Omega_ci = state["Omega_ci"].as<BoutReal>();
-  auto Cs0 = state["Cs0"].as<BoutReal>();
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
 
   if (output_ddt) {
     set_with_attrs(state[std::string("ddt(N") + name + std::string(")")], ddt(Nn), {

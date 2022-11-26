@@ -64,7 +64,7 @@ void ZeroCurrent::transform(Options &state) {
 
 void ZeroCurrent::outputVars(Options &state) {
   AUTO_TRACE();
-  auto Cs0 = state["Cs0"].as<BoutReal>();
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   // Save the velocity
   set_with_attrs(state[std::string("V") + name], velocity,

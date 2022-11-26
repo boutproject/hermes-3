@@ -571,9 +571,9 @@ void Vorticity::finally(const Options& state) {
 void Vorticity::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
-  auto Nnorm = state["Nnorm"].as<BoutReal>();
-  auto Tnorm = state["Tnorm"].as<BoutReal>();
-  auto Omega_ci = state["Omega_ci"].as<BoutReal>();
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
   set_with_attrs(state["phi"], phi,
                  {{"time_dimension", "t"},

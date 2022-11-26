@@ -92,8 +92,8 @@ void Electromagnetic::transform(Options &state) {
 
 void Electromagnetic::outputVars(Options &state) {
   // Normalisations
-  auto Bnorm = state["Bnorm"].as<BoutReal>();
-  auto rho_s0 = state["rho_s0"].as<BoutReal>();
+  auto Bnorm = get<BoutReal>(state["Bnorm"]);
+  auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   set_with_attrs(state["beta_em"], beta_em, {
       {"long_name", "Helmholtz equation parameter"}

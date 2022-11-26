@@ -367,10 +367,10 @@ void NeutralFullVelocity::finally(const Options &state) {
 /// Add extra fields for output, or set attributes e.g docstrings
 void NeutralFullVelocity::outputVars(Options &state) {
   // Normalisations
-  auto Nnorm = state["Nnorm"].as<BoutReal>();
-  auto Tnorm = state["Tnorm"].as<BoutReal>();
-  auto Omega_ci = state["Omega_ci"].as<BoutReal>();
-  auto Cs0 = state["Cs0"].as<BoutReal>();
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   set_with_attrs(state["DivV2D"], DivV2D, {
       {"time_dimension", "t"},

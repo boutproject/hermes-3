@@ -58,7 +58,7 @@ void Quasineutral::finally(const Options &state) {
 
 void Quasineutral::outputVars(Options &state) {
   AUTO_TRACE();
-  auto Nnorm = state["Nnorm"].as<BoutReal>();
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
 
   // Save the density
   set_with_attrs(state[std::string("N") + name], density,

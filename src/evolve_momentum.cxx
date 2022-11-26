@@ -141,9 +141,10 @@ void EvolveMomentum::finally(const Options &state) {
 void EvolveMomentum::outputVars(Options &state) {
   AUTO_TRACE();
   // Normalisations
-  auto Nnorm = state["Nnorm"].as<BoutReal>();
-  auto Omega_ci = state["Omega_ci"].as<BoutReal>();
-  auto Cs0 = state["Cs0"].as<BoutReal>();
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
+
 
   if (diagnose) {
     set_with_attrs(state[std::string("V") + name], V,
