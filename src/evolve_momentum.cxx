@@ -1,6 +1,7 @@
 
 #include <derivs.hxx>
 #include <difops.hxx>
+#include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
 
@@ -39,15 +40,9 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   V.setBoundary(std::string("V") + name);
 
-  if (options["diagnose"]
-          .doc("Output additional diagnostics?")
-          .withDefault<bool>(false)) {
-    bout::globals::dump.addRepeat(V, std::string("V") + name);
-
-    bout::globals::dump.addRepeat(ddt(NV), std::string("ddt(NV") + name + std::string(")"));
-    bout::globals::dump.addRepeat(momentum_source, std::string("SNV") + name);
-    momentum_source = 0.0;
-  }
+  diagnose = options["diagnose"]
+    .doc("Output additional diagnostics?")
+    .withDefault<bool>(false);
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -143,3 +138,47 @@ void EvolveMomentum::finally(const Options &state) {
 #endif
 }
 
+void EvolveMomentum::outputVars(Options &state) {
+  AUTO_TRACE();
+  // Normalisations
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
+
+  state[std::string("NV") + name].setAttributes(
+      {{"time_dimension", "t"},
+       {"units", "kg / m^2 / s"},
+       {"conversion", SI::Mp * Nnorm * Cs0},
+       {"standard_name", "momentum"},
+       {"long_name", name + " parallel momentum"},
+       {"species", name},
+       {"source", "evolve_momentum"}});
+
+  if (diagnose) {
+    set_with_attrs(state[std::string("V") + name], V,
+                   {{"time_dimension", "t"},
+                    {"units", "m / s"},
+                    {"conversion", Cs0},
+                    {"long_name", name + " parallel velocity"},
+                    {"standard_name", "velocity"},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+
+    set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NV),
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", std::string("Rate of change of ") + name + " momentum"},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+
+    set_with_attrs(state[std::string("SNV") + name], momentum_source,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum source"},
+                    {"long_name", name + " momentum source"},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+  }
+}

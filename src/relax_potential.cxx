@@ -42,7 +42,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
-  SAVE_REPEAT(phi);
 
   if (diamagnetic) {
     // Read curvature vector
@@ -252,4 +251,18 @@ void RelaxPotential::finally(const Options& state) {
 
     ddt(phi1) = lambda_1 * (phi_vort - Vort);
   }
+}
+
+void RelaxPotential::outputVars(Options& state) {
+  AUTO_TRACE();
+  // Normalisations
+  auto Tnorm = state["Tnorm"].as<BoutReal>();
+
+  set_with_attrs(state["phi"], phi,
+                 {{"time_dimension", "t"},
+                  {"units", "V"},
+                  {"conversion", Tnorm},
+                  {"standard_name", "potential"},
+                  {"long_name", "plasma potential"},
+                  {"source", "relax_potential"}});
 }

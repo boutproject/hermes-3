@@ -37,6 +37,7 @@ struct ZeroCurrent : public Component {
   /// 
   void transform(Options &state) override;
 
+  void outputVars(Options &state) override;
 private:
   std::string name; ///< Name of this species
   BoutReal charge;  ///< The charge of this species

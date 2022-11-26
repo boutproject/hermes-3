@@ -12,9 +12,6 @@
 
 class Solver; // Time integrator
 
-Datafile *get_restart_datafile(); ///< Temporary hack, to allow save/load from restarts
-void set_restart_datafile(Datafile *file);
-
 /// Interface for a component of a simulation model
 /// 
 /// The constructor of derived types should have signature
@@ -32,7 +29,10 @@ struct Component {
   virtual void finally(const Options &UNUSED(state)) { }
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  virtual void annotate(Options &UNUSED(state)) { }
+  virtual void outputVars(Options &UNUSED(state)) { }
+
+  /// Add extra fields to restart files
+  virtual void restartVars(Options &UNUSED(state)) { }
 
   /// Preconditioning
   virtual void precon(const Options &UNUSED(state), BoutReal UNUSED(gamma)) { }
@@ -289,6 +289,12 @@ Options& subtract(Options& option, T value) {
     }
   }
   return option;
+}
+
+template<typename T>
+void set_with_attrs(Options& option, T value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  option.force(value);
+  option.setAttributes(attrs);
 }
 
 #endif // HERMES_COMPONENT_H

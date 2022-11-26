@@ -53,6 +53,8 @@ struct EvolveDensity : public Component {
   /// - fields
   ///   - phi               If included, ExB drift is calculated
   void finally(const Options &state) override;
+
+  void outputVars(Options &state) override;
 private:
   std::string name;     ///< Short name of species e.g "e"
 
@@ -74,6 +76,8 @@ private:
 
   Field3D source; ///< External input source
   Field3D Sn; ///< Total density source
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {
