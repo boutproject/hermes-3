@@ -86,10 +86,15 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
+  // Try to read the pressure source from the mesh
+  // Units of Pascals per second
+  source = 0.0;
+  mesh->get(source, std::string("P") + name + "_src");
+  // Allow the user to override the source
   source = alloptions[std::string("P") + name]["source"]
                .doc(std::string("Source term in ddt(P") + name
                     + std::string("). Units [N/m^2/s]"))
-               .withDefault(Field3D(0.0))
+               .withDefault(source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
 }
 
