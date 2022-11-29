@@ -50,11 +50,11 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
   void outputVars(Options& state) override {
     AUTO_TRACE();
     // Normalisations
-    auto Nnorm = state["Nnorm"].as<BoutReal>();
-    auto Tnorm = state["Tnorm"].as<BoutReal>();
+    auto Nnorm = get<BoutReal>(state["Nnorm"]);
+    auto Tnorm = get<BoutReal>(state["Tnorm"]);
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
-    auto Omega_ci = state["Omega_ci"].as<BoutReal>();
-    auto Cs0 = state["Cs0"].as<BoutReal>();
+    auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+    auto Cs0 = get<BoutReal>(state["Cs0"]);
 
     if (diagnose) {
       // Save particle, momentum and energy channels

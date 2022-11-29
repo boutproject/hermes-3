@@ -48,7 +48,7 @@ struct FixedDensity : public Component {
 
   void outputVars(Options& state) override {
     AUTO_TRACE();
-    auto Nnorm = state["Nnorm"].as<BoutReal>();
+    auto Nnorm = get<BoutReal>(state["Nnorm"]);
 
     // Save the density, not time dependent
     set_with_attrs(state[std::string("N") + name], N,

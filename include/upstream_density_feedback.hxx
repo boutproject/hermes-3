@@ -61,8 +61,8 @@ struct UpstreamDensityFeedback : public Component {
     AUTO_TRACE();
     if (diagnose) {
       // Normalisations
-      auto Nnorm = state["Nnorm"].as<BoutReal>();
-      auto Omega_ci = state["Omega_ci"].as<BoutReal>();
+      auto Nnorm = get<BoutReal>(state["Nnorm"]);
+      auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
       // Shape is not time-dependent
       set_with_attrs(

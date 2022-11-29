@@ -43,7 +43,7 @@ struct FixedVelocity : public Component {
 
   void outputVars(Options& state) override {
     AUTO_TRACE();
-    auto Cs0 = state["Cs0"].as<BoutReal>();
+    auto Cs0 = get<BoutReal>(state["Cs0"]);
 
     // Save the density, not time dependent
     set_with_attrs(state[std::string("V") + name], V,
