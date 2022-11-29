@@ -70,7 +70,7 @@ struct SetTemperature : public Component {
     AUTO_TRACE();
 
     if (diagnose) {
-      auto Tnorm = state["Tnorm"].as<BoutReal>();
+      auto Tnorm = get<BoutReal>(state["Tnorm"]);
 
       // Save temperature to output files
       set_with_attrs(state[std::string("T") + name], T,

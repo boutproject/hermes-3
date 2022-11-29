@@ -58,7 +58,7 @@ struct FixedTemperature : public Component {
 
   void outputVars(Options& state) override {
     AUTO_TRACE();
-    auto Tnorm = state["Tnorm"].as<BoutReal>();
+    auto Tnorm = get<BoutReal>(state["Tnorm"]);
 
     // Save temperature to output files
     set_with_attrs(state[std::string("T") + name], T,
@@ -70,7 +70,7 @@ struct FixedTemperature : public Component {
                     {"source", "fixed_temperature"}});
 
     if (diagnose) {
-      auto Nnorm = state["Nnorm"].as<BoutReal>();
+      auto Nnorm = get<BoutReal>(state["Nnorm"]);
       BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
       // Save pressure as time-varying field
