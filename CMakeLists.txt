@@ -87,6 +87,7 @@ set(HERMES_SOURCES
     src/ion_viscosity.cxx
     src/transform.cxx
     include/adas_reaction.hxx
+    include/adas_carbon.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
     include/amjuel_hyd_ionisation.hxx
