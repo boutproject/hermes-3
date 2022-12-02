@@ -95,6 +95,15 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
       options["always_set_phi"]
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
+
+  const Options& units = alloptions["units"];
+  const BoutReal Tnorm = units["eV"];
+
+  // Read wall voltage, convert to normalised units
+  wall_potential = options["wall_potential"]
+                       .doc("Voltage of the wall [Volts]")
+                       .withDefault(Field3D(0.0))
+                   / Tnorm;
 }
 
 void SheathBoundarySimple::transform(Options& state) {
@@ -235,6 +244,9 @@ void SheathBoundarySimple::transform(Options& state) {
               tesheath
               * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
 
+          const BoutReal phi_wall = 0.5 * (wall_potential[i] + wall_potential[i.ym()]);
+          phi[i] += phi_wall; // Add bias potential
+
           phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
         }
       }
@@ -256,6 +268,9 @@ void SheathBoundarySimple::transform(Options& state) {
           phi[i] =
               tesheath
               * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
+
+          const BoutReal phi_wall = 0.5 * (wall_potential[i] + wall_potential[i.yp()]);
+          phi[i] += phi_wall; // Add bias potential
 
           phi[i.yp()] = phi[i.ym()] = phi[i];
         }
@@ -291,12 +306,13 @@ void SheathBoundarySimple::transform(Options& state) {
 
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
+        const BoutReal phi_wall = 0.5 * (wall_potential[im] + wall_potential[i]);
         const BoutReal phisheath =
-            floor(0.5 * (phi[im] + phi[i]), 0.0); // Electron saturation at phi = 0
+            floor(0.5 * (phi[im] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
         // Electron velocity into sheath (< 0)
         BoutReal vesheath =
-	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
+	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
         Ve[im] = 2 * vesheath - Ve[i];
         NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
@@ -342,12 +358,13 @@ void SheathBoundarySimple::transform(Options& state) {
 
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]); // electron temperature
+        const BoutReal phi_wall = 0.5 * (wall_potential[ip] + wall_potential[i]);
         const BoutReal phisheath =
-            floor(0.5 * (phi[ip] + phi[i]), 0.0); // Electron saturation at phi = 0
+            floor(0.5 * (phi[ip] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
         // Electron velocity into sheath (> 0)
         BoutReal vesheath =
-	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
+	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
         Ve[ip] = 2 * vesheath - Ve[i];
         NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
