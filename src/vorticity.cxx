@@ -77,7 +77,6 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
   // so that phi can be saved and re-loaded
-  // get_restart_datafile()->addOnce(phi, "phi");
 
   // Set initial value. Will be overwritten if restarting
   phi = 0.0;

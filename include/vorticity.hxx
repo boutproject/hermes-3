@@ -53,6 +53,25 @@ struct Vorticity : public Component {
   void finally(const Options &state) override;
 
   void outputVars(Options &state) override;
+
+  // Save and restore potential phi
+  void restartVars(Options& state) override {
+    AUTO_TRACE();
+
+    // NOTE: This is a hack because we know that the loaded restart file
+    //       is passed into restartVars in PhysicsModel::postInit
+    // The restart value should be used in init() rather than here
+    static bool first = true;
+    if (first and state.isSet("phi")) {
+      first = false;
+      phi = state["phi"].as<Field3D>();
+    }
+
+    // Save the potential
+    set_with_attrs(state["phi"], phi,
+                   {{"long_name", "plasma potential"},
+                    {"source", "vorticity"}});
+  }
 private:
   Field3D Vort; // Evolving vorticity
   
