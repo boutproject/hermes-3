@@ -50,6 +50,7 @@ set(HERMES_SOURCES
     src/loadmetric.cxx
     src/neutral_mixed.cxx
     src/full_velocity.cxx
+    src/electromagnetic.cxx
     src/electron_force_balance.cxx
     src/evolve_density.cxx
     src/vorticity.cxx
@@ -62,6 +63,8 @@ set(HERMES_SOURCES
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
     src/sheath_boundary_simple.cxx
+    src/sheath_boundary_insulating.cxx
+    src/snb_conduction.cxx
     src/fixed_fraction_ions.cxx
     src/sound_speed.cxx
     src/zero_current.cxx
@@ -74,6 +77,8 @@ set(HERMES_SOURCES
     src/adas_reaction.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
+    src/neutral_boundary.cxx
+    src/polarisation_drift.cxx
     src/solkit_neutral_parallel_diffusion.cxx
     src/hydrogen_charge_exchange.cxx
     src/solkit_hydrogen_charge_exchange.cxx
@@ -82,6 +87,7 @@ set(HERMES_SOURCES
     src/ion_viscosity.cxx
     src/transform.cxx
     include/adas_reaction.hxx
+    include/adas_carbon.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
     include/amjuel_hyd_ionisation.hxx
@@ -93,6 +99,7 @@ set(HERMES_SOURCES
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/div_ops.hxx
+    include/electromagnetic.hxx
     include/electron_force_balance.hxx
     include/evolve_density.hxx
     include/evolve_momentum.hxx
@@ -108,16 +115,21 @@ set(HERMES_SOURCES
     include/ion_viscosity.hxx
     include/ionisation.hxx
     include/loadmetric.hxx
+    include/neutral_boundary.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
     include/solkit_neutral_parallel_diffusion.hxx
     include/noflow_boundary.hxx
+    include/polarisation_drift.hxx
     include/quasineutral.hxx
     include/radiation.hxx
     include/recycling.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
     include/sheath_boundary_simple.hxx
+    include/sheath_boundary_insulating.hxx
+    include/simple_conduction.hxx
+    include/snb_conduction.hxx
     include/sheath_closure.hxx
     include/sound_speed.hxx
     include/thermal_force.hxx

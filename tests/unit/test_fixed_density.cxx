@@ -20,14 +20,17 @@ using FixedDensityTest = FakeMeshFixture;
 
 TEST_F(FixedDensityTest, CreateComponent) {
   Options options = {{"units", {{"inv_meters_cubed", 1.0}}},
-                     {"test", {{"density", 1.0}}}};
+                     {"test", {{"density", 1.0},
+                               {"charge", 1.0},
+                               {"AA", 2.0}}}};
 
   FixedDensity component("test", options, nullptr);
 }
 
 TEST_F(FixedDensityTest, MustSetDensity) {
   Options options = {{"units", {{"inv_meters_cubed", 1.0}}},
-                     {"test", {{"charge", 1.0}}}};
+                     {"test", {{"charge", 1.0},
+                               {"AA", 2.0}}}};
 
   // Density isn't set, so this should throw
   ASSERT_THROW(FixedDensity component("test", options, nullptr), BoutException);

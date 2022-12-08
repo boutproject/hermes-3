@@ -20,6 +20,10 @@ loadmetric = false # Load metric from Bxy, Rxy etc?
 [e]
 type = evolve_density
 
+# Both charge and mass are expected if density is evolved
+charge = -1
+AA = 1/1836  # Atomic mass
+
 [Ne]
 function = exp(-(x - 0.5)^2 - (mesh:yn - 0.5)^2 - (mesh:zn - 0.5)^2)
 

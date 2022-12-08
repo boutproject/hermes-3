@@ -158,9 +158,6 @@ public:
     // Need some options for parallelTransform
     options = Options::getRoot();
     mpi = bout::globals::mpi;
-
-    // Clear the DataFile output
-    bout::globals::dump = Datafile{};
   }
 
   void setCoordinates(std::shared_ptr<Coordinates> coords, CELL_LOC location = CELL_CENTRE) {
@@ -189,15 +186,6 @@ public:
     return nullptr;
   }
   int wait(comm_handle UNUSED(handle)) override { return 0; }
-  MPI_Request sendToProc(int UNUSED(xproc), int UNUSED(yproc), BoutReal* UNUSED(buffer),
-                         int UNUSED(size), int UNUSED(tag)) override {
-    return MPI_Request();
-  }
-  comm_handle receiveFromProc(int UNUSED(xproc), int UNUSED(yproc),
-                              BoutReal* UNUSED(buffer), int UNUSED(size),
-                              int UNUSED(tag)) override {
-    return nullptr;
-  }
   int getNXPE() override { return 1; }
   int getNYPE() override { return 1; }
   int getXProcIndex() override { return 1; }
@@ -233,40 +221,6 @@ public:
   bool lastY() const override { return true; }
   bool firstY(int UNUSED(xpos)) const override { return true; }
   bool lastY(int UNUSED(xpos)) const override { return true; }
-  int UpXSplitIndex() override { return 0; }
-  int DownXSplitIndex() override { return 0; }
-  int sendYOutIndest(BoutReal* UNUSED(buffer), int UNUSED(size),
-                     int UNUSED(tag)) override {
-    return 0;
-  }
-  int sendYOutOutdest(BoutReal* UNUSED(buffer), int UNUSED(size),
-                      int UNUSED(tag)) override {
-    return 0;
-  }
-  int sendYInIndest(BoutReal* UNUSED(buffer), int UNUSED(size),
-                    int UNUSED(tag)) override {
-    return 0;
-  }
-  int sendYInOutdest(BoutReal* UNUSED(buffer), int UNUSED(size),
-                     int UNUSED(tag)) override {
-    return 0;
-  }
-  comm_handle irecvYOutIndest(BoutReal* UNUSED(buffer), int UNUSED(size),
-                              int UNUSED(tag)) override {
-    return nullptr;
-  }
-  comm_handle irecvYOutOutdest(BoutReal* UNUSED(buffer), int UNUSED(size),
-                               int UNUSED(tag)) override {
-    return nullptr;
-  }
-  comm_handle irecvYInIndest(BoutReal* UNUSED(buffer), int UNUSED(size),
-                             int UNUSED(tag)) override {
-    return nullptr;
-  }
-  comm_handle irecvYInOutdest(BoutReal* UNUSED(buffer), int UNUSED(size),
-                              int UNUSED(tag)) override {
-    return nullptr;
-  }
   RangeIterator iterateBndryLowerY() const override {
     return RangeIterator(xstart, xend);
   }
@@ -578,87 +532,5 @@ public:
   std::shared_ptr<Coordinates> test_coords{nullptr};
   std::shared_ptr<Coordinates> test_coords_staggered{nullptr};
 };
-
-/// Returns a stencil object which indicates that non-boundary cells
-/// depend on all of their neighbours to a depth of one, including
-/// corners.
-template <class T>
-OperatorStencil<T> squareStencil(Mesh* localmesh) {
-  OperatorStencil<T> stencil;
-  IndexOffset<T> zero;
-  std::set<IndexOffset<T>> offsets = {
-      zero,
-      zero.xp(),
-      zero.xm(),
-  };
-  if (!std::is_same<T, IndPerp>::value) {
-    offsets.insert(zero.yp());
-    offsets.insert(zero.ym());
-    offsets.insert(zero.xp().yp());
-    offsets.insert(zero.xp().ym());
-    offsets.insert(zero.xm().yp());
-    offsets.insert(zero.xm().ym());
-  }
-  if (!std::is_same<T, Ind2D>::value) {
-    offsets.insert(zero.zp());
-    offsets.insert(zero.zm());
-    offsets.insert(zero.xp().zp());
-    offsets.insert(zero.xp().zm());
-    offsets.insert(zero.xm().zp());
-    offsets.insert(zero.xm().zm());
-  }
-  if (std::is_same<T, Ind3D>::value) {
-    offsets.insert(zero.yp().zp());
-    offsets.insert(zero.yp().zm());
-    offsets.insert(zero.ym().zp());
-    offsets.insert(zero.ym().zm());
-  }
-  std::vector<IndexOffset<T>> offsetsVec(offsets.begin(), offsets.end());
-  stencil.add(
-      [localmesh](T ind) -> bool {
-        return (localmesh->xstart <= ind.x() && ind.x() <= localmesh->xend
-                && (std::is_same<T, IndPerp>::value
-                    || (localmesh->ystart <= ind.y() && ind.y() <= localmesh->yend))
-                && (std::is_same<T, Ind2D>::value
-                    || (localmesh->zstart <= ind.z() && ind.z() <= localmesh->zend)));
-      },
-      offsetsVec);
-  stencil.add([](T UNUSED(ind)) -> bool { return true; }, {zero});
-  return stencil;
-}
-
-/// Returns a stencil object which indicates that non-boundary cells
-/// depend on all of their neighbours to a depth of one, excluding
-/// corners.
-template <class T>
-OperatorStencil<T> starStencil(Mesh* localmesh) {
-  OperatorStencil<T> stencil;
-  IndexOffset<T> zero;
-  std::set<IndexOffset<T>> offsets = {
-      zero,
-      zero.xp(),
-      zero.xm(),
-  };
-  if (!std::is_same<T, IndPerp>::value) {
-    offsets.insert(zero.yp());
-    offsets.insert(zero.ym());
-  }
-  if (!std::is_same<T, Ind2D>::value) {
-    offsets.insert(zero.zp());
-    offsets.insert(zero.zm());
-  }
-  std::vector<IndexOffset<T>> offsetsVec(offsets.begin(), offsets.end());
-  stencil.add(
-      [localmesh](T ind) -> bool {
-        return (localmesh->xstart <= ind.x() && ind.x() <= localmesh->xend
-                && (std::is_same<T, IndPerp>::value
-                    || (localmesh->ystart <= ind.y() && ind.y() <= localmesh->yend))
-                && (std::is_same<T, Ind2D>::value
-                    || (localmesh->zstart <= ind.z() && ind.z() <= localmesh->zend)));
-      },
-      offsetsVec);
-  stencil.add([](T UNUSED(ind)) -> bool { return true; }, {zero});
-  return stencil;
-}
 
 #endif //  TEST_EXTRAS_H__

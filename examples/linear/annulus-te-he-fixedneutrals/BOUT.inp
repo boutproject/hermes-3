@@ -40,10 +40,18 @@ dx = Bpxy * Rxy * dr    # Radial flux coordinate
 dy = 2π / ny     # Angle 0 -> 2π
 dz = 2π / nz     # Azimuthal angle
 
+ypos = y * hthe # Position along axis, from 0 to length [m]
+
 ixseps1 = -1  # This line and the one below will add y boundaries
 ixseps2 = -1  #
 
 extrapolate_y = false  # Can result in negative Jacobians in guard cells
+
+# Electron beam source shape
+source_shape = 0.5 * (1 - tanh((Rxy - R_e)/L_b)) * exp(-ypos / beam_mfp)
+R_e = 0.26  # Radius of source edge [m]
+L_b = 0.05  # Source scale length [m]
+beam_mfp = 60  # Mean free path of electron beam [m]
 
 [mesh:paralleltransform]
 type = identity
@@ -104,13 +112,14 @@ bndry_all = neumann
 
 function = 1e-1 * exp(-x^2) + 1e-5*(mixmode(z) + mixmode(4*z - x)) # Starting density profile [x10^18 m^-3]
 
+source = 3.7e20 * mesh:source_shape # Beam ionization source [m^-3/s]
+
 [Pe]
 bndry_all = neumann
 
 function = 5 * exp(-x^2) * Ne:function
 
-yn = y / (2*pi)
-source = 1e4*exp(-(x/0.25)^2) * exp(-((yn - 0.2)/0.1)^2)  # Power into electrons [W/m^3]
+source = 4.5e3 * mesh:source_shape # Electron heating, beam scattering + resistive [W/m^3]
 
 ################################################################
 # Helium ions
@@ -125,8 +134,6 @@ temperature = 0.1   # Ion temperature in eV
 
 poloidal_flows = false
 
-hyper_z = 0.01
-
 ################################################################
 # Helium atoms
 [he]
@@ -136,7 +143,7 @@ type = fixed_density, fixed_velocity, isothermal
 AA = 4       # Atomic mass
 charge = 0
 
-density = 1e18      # Density in m^-3
+density = 4.8e18      # Density in m^-3
 velocity = 0        # Parallel flow velocity in m/s
 temperature = 0.1   # Atom temperature in eV
 

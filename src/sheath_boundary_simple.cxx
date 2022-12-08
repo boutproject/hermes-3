@@ -95,6 +95,15 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
       options["always_set_phi"]
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
+
+  const Options& units = alloptions["units"];
+  const BoutReal Tnorm = units["eV"];
+
+  // Read wall voltage, convert to normalised units
+  wall_potential = options["wall_potential"]
+                       .doc("Voltage of the wall [Volts]")
+                       .withDefault(Field3D(0.0))
+                   / Tnorm;
 }
 
 void SheathBoundarySimple::transform(Options& state) {
@@ -105,18 +114,24 @@ void SheathBoundarySimple::transform(Options& state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = getNoBoundary<Field3D>(electrons["density"]);
-  Field3D Te = getNoBoundary<Field3D>(electrons["temperature"]);
-  Field3D Pe = electrons.isSet("pressure") ? getNoBoundary<Field3D>(electrons["pressure"])
-                                           : Te * Ne;
+  Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
+  Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
+  Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
+    ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
+    : Te * Ne;
 
   // Mass, normalised to proton mass
   const BoutReal Me =
-      electrons.isSet("AA") ? get<BoutReal>(electrons["AA"]) : SI::Me / SI::Mp;
+      IS_SET(electrons["AA"]) ? get<BoutReal>(electrons["AA"]) : SI::Me / SI::Mp;
 
   // This is for applying boundary conditions
-  Field3D Ve =
-      electrons.isSet("velocity") ? getNoBoundary<Field3D>(electrons["velocity"]) : 0.0;
+  Field3D Ve = IS_SET_NOBOUNDARY(electrons["velocity"])
+    ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
+    : zeroFrom(Ne);
+
+  Field3D NVe = IS_SET_NOBOUNDARY(electrons["momentum"])
+    ? toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]))
+    : zeroFrom(Ne);
 
   Coordinates* coord = mesh->getCoordinates();
 
@@ -126,7 +141,7 @@ void SheathBoundarySimple::transform(Options& state) {
   // If phi not set, calculate assuming zero current
   Field3D phi;
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
-    phi = getNoBoundary<Field3D>(state["fields"]["phi"]);
+    phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   } else {
     // Calculate potential phi assuming zero current
 
@@ -229,6 +244,9 @@ void SheathBoundarySimple::transform(Options& state) {
               tesheath
               * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
 
+          const BoutReal phi_wall = 0.5 * (wall_potential[i] + wall_potential[i.ym()]);
+          phi[i] += phi_wall; // Add bias potential
+
           phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
         }
       }
@@ -251,6 +269,9 @@ void SheathBoundarySimple::transform(Options& state) {
               tesheath
               * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
 
+          const BoutReal phi_wall = 0.5 * (wall_potential[i] + wall_potential[i.yp()]);
+          phi[i] += phi_wall; // Add bias potential
+
           phi[i.yp()] = phi[i.ym()] = phi[i];
         }
       }
@@ -261,8 +282,8 @@ void SheathBoundarySimple::transform(Options& state) {
   // Electrons
 
   Field3D electron_energy_source = electrons.isSet("energy_source")
-                                       ? getNonFinal<Field3D>(electrons["energy_source"])
-                                       : 0.0;
+    ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
+    : zeroFrom(Ne);
 
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -285,14 +306,16 @@ void SheathBoundarySimple::transform(Options& state) {
 
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
+        const BoutReal phi_wall = 0.5 * (wall_potential[im] + wall_potential[i]);
         const BoutReal phisheath =
-            floor(0.5 * (phi[im] + phi[i]), 0.0); // Electron saturation at phi = 0
+            floor(0.5 * (phi[im] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
         // Electron velocity into sheath (< 0)
-        const BoutReal vesheath =
-            -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
+        BoutReal vesheath =
+	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
         Ve[im] = 2 * vesheath - Ve[i];
+        NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
 
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
@@ -330,19 +353,21 @@ void SheathBoundarySimple::transform(Options& state) {
         Te[ip] = limitFree(Te[im], Te[i]);
         Pe[ip] = limitFree(Pe[im], Pe[i]);
 
-        // Free boundary potential linearly extrapolated
+        // Free boundary potential linearly extrapolated.
         phi[ip] = 2 * phi[i] - phi[im];
 
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]); // electron temperature
+        const BoutReal phi_wall = 0.5 * (wall_potential[ip] + wall_potential[i]);
         const BoutReal phisheath =
-            floor(0.5 * (phi[ip] + phi[i]), 0.0); // Electron saturation at phi = 0
+            floor(0.5 * (phi[ip] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
         // Electron velocity into sheath (> 0)
-        const BoutReal vesheath =
-            sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
+        BoutReal vesheath =
+	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
         Ve[ip] = 2 * vesheath - Ve[i];
+        NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
 
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
@@ -364,20 +389,24 @@ void SheathBoundarySimple::transform(Options& state) {
   }
 
   // Set electron density and temperature, now with boundary conditions
-  setBoundary(electrons["density"], Ne);
-  setBoundary(electrons["temperature"], Te);
-  setBoundary(electrons["pressure"], Pe);
+  setBoundary(electrons["density"], fromFieldAligned(Ne));
+  setBoundary(electrons["temperature"], fromFieldAligned(Te));
+  setBoundary(electrons["pressure"], fromFieldAligned(Pe));
 
   // Set energy source (negative in cell next to sheath)
-  set(electrons["energy_source"], electron_energy_source);
+  // Note: electron_energy_source includes any sources previously set in other components
+  set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
 
-  if (electrons.isSet("velocity")) {
-    setBoundary(electrons["velocity"], Ve);
+  if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
+    setBoundary(electrons["velocity"], fromFieldAligned(Ve));
+  }
+  if (IS_SET_NOBOUNDARY(electrons["momentum"])) {
+    setBoundary(electrons["momentum"], fromFieldAligned(NVe));
   }
 
   if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
     // Set the potential, including boundary conditions
-    setBoundary(state["fields"]["phi"], phi);
+    setBoundary(state["fields"]["phi"], fromFieldAligned(phi));
   }
 
   //////////////////////////////////////////////////////////////////
@@ -400,23 +429,26 @@ void SheathBoundarySimple::transform(Options& state) {
     const BoutReal Mi = get<BoutReal>(species["AA"]);
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = getNoBoundary<Field3D>(species["density"]);
-    Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
-    Field3D Pi =
-        species.isSet("pressure") ? getNoBoundary<Field3D>(species["pressure"]) : Ni * Ti;
+    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
+    Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
+    Field3D Pi = species.isSet("pressure")
+      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
+      : Ni * Ti;
 
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
-    Field3D Vi =
-        species.isSet("velocity") ? getNoBoundary<Field3D>(species["velocity"]) : 0.0;
-    Field3D NVi = species.isSet("momentum") ? getNoBoundary<Field3D>(species["momentum"])
-                                            : Mi * Ni * Vi;
+    Field3D Vi = species.isSet("velocity")
+      ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
+      : zeroFrom(Ni);
+    Field3D NVi = species.isSet("momentum")
+      ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
+      : Mi * Ni * Vi;
 
     // Energy source will be modified in the domain
     Field3D energy_source = species.isSet("energy_source")
-                                ? getNonFinal<Field3D>(species["energy_source"])
-                                : 0.0;
+      ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
+      : zeroFrom(Ni);
 
     if (lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -444,11 +476,15 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          const BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
+          BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
+
+          if (Vi[i] < visheath) {
+            visheath = Vi[i];
+          }
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
-          NVi[im] = 2. * nisheath * visheath - NVi[i];
+          NVi[im] = 2. * Mi * nisheath * visheath - NVi[i];
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
@@ -497,11 +533,15 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          const BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
+          BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
+
+          if (Vi[i] > visheath) {
+            visheath = Vi[i];
+          }
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
-          NVi[ip] = 2. * nisheath * visheath - NVi[i];
+          NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
@@ -525,19 +565,20 @@ void SheathBoundarySimple::transform(Options& state) {
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
-    setBoundary(species["density"], Ni);
-    setBoundary(species["temperature"], Ti);
-    setBoundary(species["pressure"], Pi);
+    setBoundary(species["density"], fromFieldAligned(Ni));
+    setBoundary(species["temperature"], fromFieldAligned(Ti));
+    setBoundary(species["pressure"], fromFieldAligned(Pi));
 
     if (species.isSet("velocity")) {
-      setBoundary(species["velocity"], Vi);
+      setBoundary(species["velocity"], fromFieldAligned(Vi));
     }
 
     if (species.isSet("momentum")) {
-      setBoundary(species["momentum"], NVi);
+      setBoundary(species["momentum"], fromFieldAligned(NVi));
     }
 
     // Additional loss of energy through sheath
-    set(species["energy_source"], energy_source);
+    // Note: energy_source already includes previously set values
+    set(species["energy_source"], fromFieldAligned(energy_source));
   }
 }

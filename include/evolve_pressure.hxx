@@ -6,7 +6,32 @@
 
 #include "component.hxx"
 
+/// Evolves species pressure in time
+///
+/// # Mesh inputs
+///
+/// P<name>_src   A source of pressure, in Pascals per second
+///               This can be over-ridden by the `source` option setting.
+///
 struct EvolvePressure : public Component {
+  ///
+  /// # Inputs
+  ///
+  /// - <name>
+  ///   - evolve_log           Evolve logarithm of pressure? Default is false
+  ///   - density_floor        Minimum density floor. Default 1e-5 normalised units.
+  ///   - bndry_flux           Allow flows through radial boundaries? Default is true
+  ///   - poloidal_flows       Include poloidal ExB flows? Default is true
+  ///   - thermal_conduction   Include parallel heat conduction? Default is true
+  ///   - kappa_coefficient    Heat conduction constant. Default is 3.16 for electrons, 3.9 otherwise
+  ///   - kappa_limit_alpha    Flux limiter, off by default.
+  ///   - p_div_v   Use p * Div(v) form? Default is v * Grad(p) form
+  ///   - hyper_z   Hyper-diffusion in Z
+  ///
+  /// - P<name>  e.g. "Pe", "Pd+"
+  ///   - source     Source of pressure [Pa / s].
+  ///                NOTE: This overrides mesh input P<name>_src
+  ///
   EvolvePressure(std::string name, Options& options, Solver* solver);
 
   /// Inputs
@@ -35,6 +60,7 @@ struct EvolvePressure : public Component {
   ///
   void finally(const Options& state) override;
 
+  void outputVars(Options& state) override;
 private:
   std::string name; ///< Short name of the species e.g. h+
 
@@ -59,6 +85,8 @@ private:
   Field3D Sp;     ///< Total pressure source
 
   BoutReal hyper_z; ///< Hyper-diffusion
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {

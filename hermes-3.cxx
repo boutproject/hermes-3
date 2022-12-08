@@ -23,43 +23,52 @@
 #include "hermes-3.hxx"
 #include "revision.hxx"
 
-#include <bout/constants.hxx>
-#include "include/ionisation.hxx"
-#include "include/neutral_mixed.hxx"
-#include "include/diamagnetic_drift.hxx"
-#include "include/electron_force_balance.hxx"
-#include "include/evolve_density.hxx"
-#include "include/isothermal.hxx"
-#include "include/sheath_closure.hxx"
-#include "include/sheath_boundary.hxx"
-#include "include/sheath_boundary_simple.hxx"
-#include "include/vorticity.hxx"
-#include "include/fixed_fraction_ions.hxx"
-#include "include/evolve_pressure.hxx"
-#include "include/evolve_momentum.hxx"
-#include "include/quasineutral.hxx"
-#include "include/sound_speed.hxx"
-#include "include/zero_current.hxx"
-#include "include/anomalous_diffusion.hxx"
-#include "include/recycling.hxx"
-#include "include/collisions.hxx"
+#include "include/adas_carbon.hxx"
+#include "include/adas_neon.hxx"
+#include "include/amjuel_helium.hxx"
 #include "include/amjuel_hyd_ionisation.hxx"
 #include "include/amjuel_hyd_recombination.hxx"
-#include "include/amjuel_helium.hxx"
-#include "include/adas_neon.hxx"
-#include "include/noflow_boundary.hxx"
-#include "include/neutral_parallel_diffusion.hxx"
-#include "include/solkit_neutral_parallel_diffusion.hxx"
-#include "include/hydrogen_charge_exchange.hxx"
-#include "include/solkit_hydrogen_charge_exchange.hxx"
-#include "include/upstream_density_feedback.hxx"
-#include "include/thermal_force.hxx"
-#include "include/ion_viscosity.hxx"
-#include "include/relax_potential.hxx"
+#include "include/anomalous_diffusion.hxx"
+#include "include/collisions.hxx"
+#include "include/diamagnetic_drift.hxx"
+#include "include/electromagnetic.hxx"
+#include "include/electron_force_balance.hxx"
+#include "include/evolve_density.hxx"
+#include "include/evolve_momentum.hxx"
+#include "include/evolve_pressure.hxx"
 #include "include/fixed_density.hxx"
-#include "include/fixed_velocity.hxx"
-#include "include/transform.hxx"
+#include "include/fixed_fraction_ions.hxx"
 #include "include/fixed_fraction_radiation.hxx"
+#include "include/fixed_temperature.hxx"
+#include "include/fixed_velocity.hxx"
+#include "include/hydrogen_charge_exchange.hxx"
+#include "include/ion_viscosity.hxx"
+#include "include/ionisation.hxx"
+#include "include/isothermal.hxx"
+#include "include/neutral_boundary.hxx"
+#include "include/neutral_mixed.hxx"
+#include "include/neutral_parallel_diffusion.hxx"
+#include "include/noflow_boundary.hxx"
+#include "include/polarisation_drift.hxx"
+#include "include/quasineutral.hxx"
+#include "include/recycling.hxx"
+#include "include/relax_potential.hxx"
+#include "include/set_temperature.hxx"
+#include "include/sheath_boundary.hxx"
+#include "include/sheath_boundary_insulating.hxx"
+#include "include/sheath_boundary_simple.hxx"
+#include "include/sheath_closure.hxx"
+#include "include/simple_conduction.hxx"
+#include "include/snb_conduction.hxx"
+#include "include/solkit_hydrogen_charge_exchange.hxx"
+#include "include/solkit_neutral_parallel_diffusion.hxx"
+#include "include/sound_speed.hxx"
+#include "include/thermal_force.hxx"
+#include "include/transform.hxx"
+#include "include/upstream_density_feedback.hxx"
+#include "include/vorticity.hxx"
+#include "include/zero_current.hxx"
+#include <bout/constants.hxx>
 
 #include "include/loadmetric.hxx"
 
@@ -71,9 +80,6 @@ int Hermes::init(bool restarting) {
   options["revision"] = hermes::version::revision;
   options["revision"].setConditionallyUsed();
 
-  // Save the Hermes version in the output dump files
-  dump.setAttribute("", "HERMES_REVISION", hermes::version::revision);
-
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
   Nnorm = options["Nnorm"].doc("Reference density [m^-3]").withDefault(1e19);
@@ -82,9 +88,6 @@ int Hermes::init(bool restarting) {
   Cs0 = sqrt(SI::qe * Tnorm / SI::Mp); // Reference sound speed [m/s]
   Omega_ci = SI::qe * Bnorm / SI::Mp;  // Ion cyclotron frequency [1/s]
   rho_s0 = Cs0 / Omega_ci;             // Length scale [m]
-
-  SAVE_ONCE(Tnorm, Nnorm, Bnorm); // Save normalisations
-  SAVE_ONCE(Cs0, Omega_ci, rho_s0);
 
   // Put normalisation quantities into an Options to use later
   units["inv_meters_cubed"] = Nnorm;
@@ -139,13 +142,8 @@ int Hermes::init(bool restarting) {
   options["restarting"] = restarting;
   options["restarting"].setConditionallyUsed();
 
-  // Put pointer to restart file in global variable
-  // Note: It would probably be better to pass to components as argument,
-  // but awaiting DataFile refactoring
-  set_restart_datafile(&restart);
-
   TRACE("Creating components");
-  
+
   // Create the components
   // Here options is passed as the scheduler configuration, so that
   // settings in [hermes] are used.
@@ -181,6 +179,96 @@ int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal UNUSED(delta)) {
   state["time"] = t;
   scheduler->precon(state, gamma);
   return 0;
+}
+
+void Hermes::outputVars(Options& options) {
+  AUTO_TRACE();
+
+  // Save the Hermes version in the output dump files
+  options["HERMES_REVISION"].force(hermes::version::revision);
+
+  // Save normalisation quantities. These may be used by components
+  // to calculate conversion factors to SI units
+
+  set_with_attrs(options["Tnorm"], Tnorm, {
+      {"units", "eV"},
+      {"conversion", 1}, // Already in SI units
+      {"standard_name", "temperature normalisation"},
+      {"long_name", "temperature normalisation"}
+    });
+  set_with_attrs(options["Nnorm"], Nnorm, {
+      {"units", "m^-3"},
+      {"conversion", 1},
+      {"standard_name", "density normalisation"},
+      {"long_name", "Number density normalisation"}
+    });
+  set_with_attrs(options["Bnorm"], Bnorm, {
+      {"units", "T"},
+      {"conversion", 1},
+      {"standard_name", "magnetic field normalisation"},
+      {"long_name", "Magnetic field normalisation"}
+    });
+  set_with_attrs(options["Cs0"], Cs0, {
+      {"units", "m/s"},
+      {"conversion", 1},
+      {"standard_name", "velocity normalisation"},
+      {"long_name", "Sound speed normalisation"}
+    });
+  set_with_attrs(options["Omega_ci"], Omega_ci, {
+      {"units", "s^-1"},
+      {"conversion", 1},
+      {"standard_name", "frequency normalisation"},
+      {"long_name", "Cyclotron frequency normalisation"}
+    });
+  set_with_attrs(options["rho_s0"], rho_s0, {
+      {"units", "m"},
+      {"conversion", 1},
+      {"standard_name", "length normalisation"},
+      {"long_name", "Gyro-radius length normalisation"}
+    });
+  scheduler->outputVars(options);
+}
+
+void Hermes::restartVars(Options& options) {
+  AUTO_TRACE();
+
+  set_with_attrs(options["Tnorm"], Tnorm, {
+      {"units", "eV"},
+      {"conversion", 1}, // Already in SI units
+      {"standard_name", "temperature normalisation"},
+      {"long_name", "temperature normalisation"}
+    });
+  set_with_attrs(options["Nnorm"], Nnorm, {
+      {"units", "m^-3"},
+      {"conversion", 1},
+      {"standard_name", "density normalisation"},
+      {"long_name", "Number density normalisation"}
+    });
+  set_with_attrs(options["Bnorm"], Bnorm, {
+      {"units", "T"},
+      {"conversion", 1},
+      {"standard_name", "magnetic field normalisation"},
+      {"long_name", "Magnetic field normalisation"}
+    });
+  set_with_attrs(options["Cs0"], Cs0, {
+      {"units", "m/s"},
+      {"conversion", 1},
+      {"standard_name", "velocity normalisation"},
+      {"long_name", "Sound speed normalisation"}
+    });
+  set_with_attrs(options["Omega_ci"], Omega_ci, {
+      {"units", "s^-1"},
+      {"conversion", 1},
+      {"standard_name", "frequency normalisation"},
+      {"long_name", "Cyclotron frequency normalisation"}
+    });
+  set_with_attrs(options["rho_s0"], rho_s0, {
+      {"units", "m"},
+      {"conversion", 1},
+      {"standard_name", "length normalisation"},
+      {"long_name", "Gyro-radius length normalisation"}
+    });
+  scheduler->restartVars(options);
 }
 
 // Standard main() function

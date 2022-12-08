@@ -16,10 +16,21 @@
 ///     this is here for comparison to that more complete model.
 ///
 struct SheathBoundarySimple : public Component {
+  /// # Input options
+  /// - <name>  e.g. "sheath_boundary_simple"
+  ///   - lower_y                  Boundary on lower y?
+  ///   - upper_y                  Boundary on upper y?
+  ///   - gamma_e                  Electron sheath heat transmission coefficient
+  ///   - gamma_i                  Ion sheath heat transmission coefficient
+  ///   - sheath_ion_polytropic    Ion polytropic coefficient in Bohm sound speed. Default 1.
+  ///   - wall_potential           Voltage of the wall [Volts]
+  ///   - secondary_electron_coef  Effective secondary electron emission coefficient
+  ///   - sin_alpha                Sine of the angle between magnetic field line and wall surface (0 to 1)
+  ///   - always_set_phi           Always set phi field? Default is to only modify if already set
   SheathBoundarySimple(std::string name, Options &options, Solver *);
 
   ///
-  /// Inputs
+  /// # Inputs
   /// - species
   ///   - e
   ///     - density
@@ -40,7 +51,7 @@ struct SheathBoundarySimple : public Component {
   /// - fields
   ///   - phi    Optional. If not set, calculated at boundary (see note below)
   ///
-  /// Outputs
+  /// # Outputs
   /// - species
   ///   - e
   ///     - density      Sets boundary
@@ -74,6 +85,8 @@ private:
   bool upper_y; // Boundary on upper y?
 
   bool always_set_phi; ///< Set phi field?
+
+  Field3D wall_potential; ///< Voltage of the wall. Normalised units.
 };
 
 namespace {

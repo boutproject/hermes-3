@@ -1,5 +1,7 @@
 #include "../include/sheath_boundary.hxx"
 
+#include <bout/output_bout_types.hxx>
+
 #include "bout/constants.hxx"
 #include "bout/mesh.hxx"
 using bout::globals::mesh;
@@ -82,6 +84,15 @@ SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) 
       options["always_set_phi"]
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
+
+  const Options& units = alloptions["units"];
+  const BoutReal Tnorm = units["eV"];
+
+  // Read wall voltage, convert to normalised units
+  wall_potential = options["wall_potential"]
+                       .doc("Voltage of the wall [Volts]")
+                       .withDefault(Field3D(0.0))
+                   / Tnorm;
 }
 
 void SheathBoundary::transform(Options &state) {
@@ -247,6 +258,9 @@ void SheathBoundary::transform(Options &state) {
             phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
           }
 
+          const BoutReal phi_wall = 0.5 * (wall_potential[i] + wall_potential[i.ym()]);
+          phi[i] += phi_wall; // Add bias potential
+
           phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
         }
       }
@@ -262,6 +276,9 @@ void SheathBoundary::transform(Options &state) {
           } else {
             phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
           }
+
+          const BoutReal phi_wall = 0.5 * (wall_potential[i] + wall_potential[i.yp()]);
+          phi[i] += phi_wall; // Add bias potential
 
           phi[i.yp()] = phi[i.ym()] = phi[i];
         }
@@ -297,15 +314,18 @@ void SheathBoundary::transform(Options &state) {
 
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[im] + Te[i]);  // electron temperature
-        const BoutReal phisheath = floor(0.5 * (phi[im] + phi[i]), 0.0); // Electron saturation at phi = 0
+        const BoutReal phi_wall = 0.5 * (wall_potential[im] + wall_potential[i]);
+
+        const BoutReal phisheath = floor(
+            0.5 * (phi[im] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
         // Electron sheath heat transmission
-        const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / tesheath;
+        const BoutReal gamma_e = 2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5);
 
         // Electron velocity into sheath (< 0)
         const BoutReal vesheath = (tesheath < 1e-10) ?
           0.0 :
-          -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
+          -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / tesheath);
 
         Ve[im] = 2 * vesheath - Ve[i];
         NVe[im] = 2. * Me * nesheath * vesheath - NVe[i];
@@ -323,6 +343,12 @@ void SheathBoundary::transform(Options &state) {
 
         // Divide by volume of cell to get energy loss rate (< 0)
         BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+
+#if CHECKLEVEL >= 1
+        if (!std::isfinite(power)) {
+	  throw BoutException("Non-finite power at {} : Te {} Ne {} Ve {} phi {}, {}", i, tesheath, nesheath, vesheath, phi[i], phi[ip]);
+	}
+#endif
 
         electron_energy_source[i] += power;
       }
@@ -351,15 +377,16 @@ void SheathBoundary::transform(Options &state) {
 
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]);  // electron temperature
-        const BoutReal phisheath = floor(0.5 * (phi[ip] + phi[i]), 0.0); // Electron saturation at phi = 0
+        const BoutReal phi_wall = 0.5 * (wall_potential[ip] + wall_potential[i]);
+        const BoutReal phisheath = floor(0.5 * (phi[ip] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
         // Electron sheath heat transmission
-        const BoutReal gamma_e = 2 / (1. - Ge) + phisheath / tesheath;
+        const BoutReal gamma_e = 2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5);
 
         // Electron velocity into sheath (> 0)
         const BoutReal vesheath = (tesheath < 1e-10) ?
           0.0 :
-          sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / tesheath);
+          sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / tesheath);
 
         Ve[ip] = 2 * vesheath - Ve[i];
         NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
@@ -377,7 +404,12 @@ void SheathBoundary::transform(Options &state) {
 
         // Divide by volume of cell to get energy loss rate (> 0)
         BoutReal power = flux / (coord->dy[i] * coord->J[i]);
-
+#if CHECKLEVEL >= 1
+	if (!std::isfinite(power)) {
+	  throw BoutException("Non-finite power {} at {} : Te {} Ne {} Ve {} phi {}, {} => q {}, flux {}",
+                              power, i, tesheath, nesheath, vesheath, phi[i], phi[im], q, flux);
+        }
+#endif
         electron_energy_source[i] -= power;
       }
     }
@@ -388,7 +420,8 @@ void SheathBoundary::transform(Options &state) {
   setBoundary(electrons["temperature"], fromFieldAligned(Te));
   setBoundary(electrons["pressure"], fromFieldAligned(Pe));
 
-  // Set energy source (negative in cell next to sheath)
+  // Add energy source (negative in cell next to sheath)
+  // Note: already includes previously set sources
   set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
@@ -520,6 +553,7 @@ void SheathBoundary::transform(Options &state) {
 
           // Divide by volume of cell to get energy loss rate (< 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+	  ASSERT1(std::isfinite(power));
           ASSERT2(power <= 0.0);
 
           energy_source[i] += power;
@@ -593,7 +627,7 @@ void SheathBoundary::transform(Options &state) {
 
           // Divide by volume of cell to get energy loss rate (> 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
-          ASSERT2(std::isfinite(power));
+          ASSERT1(std::isfinite(power));
           ASSERT2(power >= 0.0);
 
           energy_source[i] -= power; // Note: Sign negative because power > 0
@@ -616,6 +650,7 @@ void SheathBoundary::transform(Options &state) {
     }
 
     // Additional loss of energy through sheath
+    // Note: Already includes previously set sources
     set(species["energy_source"], fromFieldAligned(energy_source));
   }
 }

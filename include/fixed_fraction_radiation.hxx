@@ -2,6 +2,7 @@
 #ifndef FIXED_FRACTION_RADIATION_H
 #define FIXED_FRACTION_RADIATION_H
 
+#include <bout/constants.hxx>
 #include "component.hxx"
 
 namespace {
@@ -81,18 +82,16 @@ struct FixedFractionRadiation : public Component {
   /// Inputs
   /// - <name>
   ///   - fraction
-  FixedFractionRadiation(std::string name, Options &alloptions, Solver *UNUSED(solver)) {
+  FixedFractionRadiation(std::string name, Options &alloptions, Solver *UNUSED(solver)) : name(name) {
     auto& options = alloptions[name];
 
     fraction = options["fraction"]
       .doc("Impurity ion density as fraction of electron density")
       .withDefault(0.0);
 
-    if (options["diagnose"]
-        .doc("Output radiation diagnostic?")
-        .withDefault<bool>(false)) {
-      bout::globals::dump.addRepeat(radiation, std::string("R") + name);
-    }
+    diagnose = options["diagnose"]
+      .doc("Output radiation diagnostic?")
+      .withDefault<bool>(false);
 
     // Get the units
     auto& units = alloptions["units"];
@@ -138,11 +137,25 @@ struct FixedFractionRadiation : public Component {
     subtract(electrons["energy_source"], radiation);
   }
 
+  void outputVars(Options& state) override {
+    AUTO_TRACE();
+
+    if (diagnose) {
+      set_with_attrs(state[std::string("R") + name], radiation,
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", SI::qe * Tnorm * Nnorm * FreqNorm},
+                      {"long_name", std::string("Radiation cooling ") + name},
+                      {"source", "fixed_fraction_radiation"}});
+    }
+  }
  private:
+  std::string name;
+
   CoolingCurve cooling; ///< The cooling curve L(T) -> Wm^3
   BoutReal fraction; ///< Fixed fraction
 
-  bool diagnose; ///< Output radiationdiagnostic?
+  bool diagnose; ///< Output radiation diagnostic?
   Field3D radiation; ///< For output diagnostic
 
   // Normalisations

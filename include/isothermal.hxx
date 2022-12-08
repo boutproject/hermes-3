@@ -12,21 +12,25 @@ struct Isothermal : public Component {
   /// Inputs
   /// - species
   ///   - <name>
-  ///     - density
+  ///     - density (optional)
   ///
   /// Sets in the state
   ///
   /// - species
   ///   - <name>
   ///     - temperature
-  ///     - pressure
+  ///     - pressure (if density is set)
   ///
   void transform(Options &state) override;
 
+  void outputVars(Options &state) override;
 private:
   std::string name; // Species name
-  
-  BoutReal T; // The normalised tempertature
+
+  BoutReal T; ///< The normalised temperature
+  Field3D P; ///< The normalised pressure
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {

@@ -1,0 +1,64 @@
+nout = 2
+timestep = 0.1
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 128
+nz = 1
+
+Ly = 10
+
+dy = Ly / ny
+
+[solver]
+mxstep = 10000
+
+[hermes]
+components = d, he, d+, collisions, neutral_parallel_diffusion
+
+loadmetric = false        # Use Rxy, Bpxy etc?
+normalise_metric = false  # Normalise the input metric?
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[neutral_parallel_diffusion]
+diagnose = true # Output additional diagnostics
+
+dneut = 1.0
+
+[d]  # Deuterium atoms
+type = evolve_density, fixed_temperature, fixed_velocity
+
+charge = 0.0
+AA = 2.0
+
+temperature = 1 + 0.5 * sin(y) # eV
+velocity = 100 + 10 * sin(2y)  # m/s
+
+[Nd]
+function = 1 + 0.1 * cos(y)
+
+[he] # Helium atoms
+type = fixed_density, fixed_temperature, fixed_velocity
+
+charge = 0.0
+AA = 4.0
+
+density = 1e18  # m^-3
+temperature = 1 # eV
+velocity = 100 # m/s
+
+[d+] # Deuterium ions
+type = fixed_density, fixed_temperature, fixed_velocity
+
+charge = 1.0
+AA = 2.0
+
+density = 1e18  # m^-3
+temperature = 1 # eV
+velocity = 100 # m/s
+

@@ -41,7 +41,20 @@ evolve_density
 ~~~~~~~~~~~~~~
 
 This component evolves the species density in time, using the BOUT++
-time integration solver.
+time integration solver. The species charge and atomic mass must be set,
+and the initial density should be specified in its own section:
+
+.. code-block:: ini
+
+   [d]
+   type = evolve_density, ...
+
+   AA = 2 # Atomic mass
+   charge = 0
+
+   [Nd]
+   function = 1 - 0.5x # Initial condition, normalised to Nnorm
+
 
 The implementation is in the `EvolveDensity` class:
 
@@ -92,7 +105,6 @@ charge density is zero everywhere. This must therefore be done after
 all other charged species densities have been calculated. It only
 makes sense to use this component for species with a non-zero charge.
 
-
 Species pressure and temperature
 --------------------------------
 
@@ -101,7 +113,13 @@ Species pressure and temperature
 isothermal
 ~~~~~~~~~~
 
-Sets the temperature of a species to a fixed value
+Sets the temperature of a species to a fixed value which is constant
+in space and time. If the species density is set then this component
+also calculates the pressure.
+
+By default only saves the temperature once as a non-evolving variable.
+If ``diagnose`` is set then pressure is also saved as a time-evolving
+variable.
 
 .. code-block:: ini
 
@@ -111,6 +129,28 @@ Sets the temperature of a species to a fixed value
    temperature = 10   # Constant temperature [eV]
 
 .. doxygenstruct:: Isothermal
+   :members:
+
+
+fixed_temperature
+~~~~~~~~~~~~~~~~~
+
+Sets the temperature of a species to a fixed value which is constant
+in time but can vary in space. If the species density is set then this
+component also calculates the pressure.
+
+By default only saves the temperature once as a non-evolving variable.
+If ``diagnose`` is set then pressure is also saved as a time-evolving
+variable.
+
+.. code-block:: ini
+
+   [e]
+   type = ..., fixed_temperature
+
+   temperature = 10 - x   # Spatially dependent temperature [eV]
+
+.. doxygenstruct:: FixedTemperature
    :members:
 
 .. _evolve_pressure:
@@ -133,6 +173,13 @@ other components is saved as ``SP + name`` (e.g. ``SPd+`` or ``SPe``).
 The pressure source is the energy density source multiplied by ``2/3``
 (i.e. assumes a monatomic species).
 
+.. math::
+
+   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}\nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right) + \frac{2}{3}S_E + S_N\frac{1}{2}mNV^2
+
+where :math:`S_E` is the ``energy_source`` (thermal energy source),
+and :math:`S_N` is the density source.
+
 Notes:
 
 - Heat conduction through the boundary is turned off currently. This is because
@@ -145,8 +192,39 @@ The implementation is in `EvolvePressure`:
    :members:
 
 
+SNB nonlocal heat flux
+~~~~~~~~~~~~~~~~~~~~~~
+
+Calculates the divergence of the electron heat flux using the
+Shurtz-Nicolai-Busquet (SNB) model. Uses the BOUT++ implementation which is
+`documented here <https://bout-dev.readthedocs.io/en/latest/user_docs/nonlocal.html?#snb-model>`_.
+
+.. doxygenstruct:: SNBConduction
+   :members:
+
+
 Species parallel dynamics
 -------------------------
+
+fixed_velocity
+~~~~~~~~~~~~~~
+
+Sets the velocity of a species to a fixed value which is constant
+in time but can vary in space. If the species density is set then this
+component also calculates the momentum.
+
+Saves the temperature once as a non-evolving variable.
+
+.. code-block:: ini
+
+   [e]
+   type = ..., fixed_velocity
+
+   velocity = 10 + sin(z)   # Spatially dependent velocity [m/s]
+
+.. doxygenstruct:: FixedVelocity
+   :members:
+
 
 .. _evolve_momentum:
 
@@ -213,6 +291,93 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
+simple_conduction
+-----------------
+
+This is a simplified parallel heat conduction model that can be used when a linearised model is needed.
+If used, the thermal conduction term in `evolve_pressure` component should be disabled.
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, ...
+
+   [e]
+   type = evolve_pressure, simple_conduction
+
+   thermal_conduction = false  # Disable term in evolve_pressure
+
+To linearise the heat conduction the temperature and density used in
+calculating the Coulomb logarithm and heat conduction coefficient can
+be fixed by specifying `conduction_temperature` and
+`conduction_density`.
+
+Note: For hydrogenic plasmas this produces very similar parallel electron
+heat conduction as the `evolve_pressure` term with electron-electron collisions
+disabled.
+
+.. doxygenstruct:: SimpleConduction
+   :members:
+
+Drifts
+------
+
+The ExB drift is included in the density, momentum and pressure evolution equations if
+potential is calculated. Other drifts can be added with the following components.
+
+diamagnetic_drift
+~~~~~~~~~~~~~~~~~
+
+Adds diamagnetic drift terms to all species' density, pressure and parallel momentum
+equations. Calculates the diamagnetic drift velocity as
+
+.. math::
+
+   \mathbf{v}_{dia} = \frac{T}{q} \nabla\times\left(\frac{\mathbf{b}}{B}\right)
+
+where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
+is read from the `bxcv` mesh input variable.
+
+.. doxygenstruct:: DiamagneticDrift
+   :members:
+
+
+polarisation_drift
+~~~~~~~~~~~~~~~~~~
+
+This calculates the polarisation drift of all charged species,
+including ions and electrons. It works by approximating the drift
+as a potential flow:
+
+.. math::
+
+   \mathbf{v}_{pol} = - \frac{m}{q B^2} \nabla_\perp\phi_{pol}
+
+where :math:`\phi_{pol}` is approximately the time derivative of the
+electrostatic potential :math:`\phi` in the frame of the fluid, with
+an ion diamagnetic contribution. This is calculated by inverting a
+Laplacian equation similar to that solved in the vorticity equation.
+
+This component needs to be run after all other currents have been
+calculated.  It marks currents as used, so out-of-order modifications
+should raise errors.
+
+See the `examples/blob2d-vpol` example, which contains:
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, vorticity, sheath_closure, polarisation_drift
+
+   [polarisation_drift]
+   diagnose = true
+
+Setting `diagnose = true` saves `DivJ` to the dump files with the divergence of all
+currents except polarisation, and `phi_pol` which is the polarisation flow potential.
+
+.. doxygenstruct:: PolarisationDrift
+   :members:
+
 Neutral gas models
 ------------------
 
@@ -238,6 +403,9 @@ exchange) and the pressure gradient:
 At the moment there is no attempt to limit these velocities, which has
 been found necessary in UEDGE to get physical results in better
 agreement with kinetic neutral models [Discussion, T.Rognlien].
+
+Boundary conditions
+-------------------
 
 .. _noflow_boundary:
 
@@ -283,6 +451,43 @@ The implementation is in `NoFlowBoundary`:
 .. doxygenstruct:: NoFlowBoundary
    :members:
 
+.. _neutral_boundary:
+
+neutral_boundary
+~~~~~~~~~~~~~~~~
+
+Sets Y (sheath/target) boundary conditions on neutral particle
+density, temperature and pressure. A no-flow boundary condition
+is set on parallel velocity and momentum. It is a species-specific
+component and so goes in the list of components for the species
+that the boundary condition should be applied to.
+
+An energy sink is added to the flux of heat to the wall, with
+heat flux `q`:
+
+.. math::
+
+   q = \gamma_{heat} n T v_{th}
+
+   v_{th} = \sqrt{eT / m}
+
+The factor `gamma_heat`
+
+.. code-block:: ini
+
+   [hermes]
+   components = d
+
+   [d]
+   type = ... , neutral_boundary
+
+   gamma_heat = 3  # Neutral boundary heat transmission coefficient
+   neutral_lower_y = true  # Boundary on lower y?
+   neutral_upper_y = true  # Boundary on upper y?
+
+.. doxygenstruct:: NeutralBoundary
+   :members:
+
 Collective quantities
 ---------------------
 
@@ -315,6 +520,17 @@ neutral_parallel_diffusion
 
 This adds diffusion to **all** neutral species (those with no or zero charge),
 because it needs to be calculated after the collision frequencies are known.
+
+.. code-block:: ini
+
+   [hermes]
+   components = ... , collisions, neutral_parallel_diffusion
+
+   [neutral_parallel_diffusion]
+   dneut = 1         # Diffusion multiplication factor
+   diagnose = true   # This enables diagnostic output for each species
+
+
 It is intended mainly for 1D simulations, to provide effective parallel
 diffusion of particles, momentum and energy due to the projection of
 cross-field diffusion:
@@ -398,7 +614,15 @@ The frequency of charged species `a` colliding with charged species `b` is
 
 
 Note that the cgs expression in Hinton is divided by :math:`\left(4\pi\epsilon_0\right)^2` to get
-the expression in SI units.
+the expression in SI units. The thermal speeds in this expression are defined as:
+
+.. math::
+
+   v_a^2 = 2 e T_a / m_a
+
+Note that with this definition we recover the `Braginskii expressions
+<https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html>`_
+for e-i and i-i collision times.
 
 For conservation of momentum, the collision frequencies :math:`\nu_{ab}` and :math:`\nu_{ba}` are
 related by:
@@ -411,14 +635,35 @@ Momentum exchange, force on species `a` due to collisions with species `b`:
 
 .. math::
 
-   F_{ab} = \nu_{ab} m_a n_a \left( u_b - u_a \right)
+   F_{ab} = C_m \nu_{ab} m_a n_a \left( u_b - u_a \right)
 
-   
-Energy exchange, heat transferred to species `a` from species `b`:
+Where the coefficient :math:`C_m` for parallel flows depends on the species: For most combinations
+of species this is set to 1, but for electron-ion collisions the Braginskii coefficients are used:
+:math:`C_m = 0.51` if ion charge :math:`Z_i = 1`;  0.44 for :math:`Z_i = 2`; 0.40 for :math:`Z_i = 3`;
+and 0.38 is used for :math:`Z_i \ge 4`. Note that this coefficient should decline further with
+increasing ion charge, tending to 0.29 as :math:`Z_i \rightarrow \infty`.
+
+Frictional heating is included by default, but can be disabled by
+setting the `frictional_heating` option to `false`. When enabled it
+adds a source of thermal energy corresponding to the resistive heating
+term:
 
 .. math::
 
-   Q_{ab} = \nu_{ab}\frac{3n_a m_a\left(T_b - T_a\right)}{m_a + m_b}
+   Q_{ab,F} = - F_{ab} u_a
+
+Energy exchange, heat transferred to species `a` from species `b` due to temperature
+differences, is given by:
+
+.. math::
+
+   Q_{ab,T} = \nu_{ab}\frac{3n_a m_a\left(T_b - T_a\right)}{m_a + m_b}
+
+- Ion-neutral and electron-neutral collisions
+
+  The cross-section for elastic collisions between charged and neutral
+  particles can vary significantly. Here for simplicity we just take
+  a value of :math:`5\times 10^{-19}m^2` from the NRL formulary.
 
 - Neutral-neutral collisions
 
@@ -488,6 +733,8 @@ The implementation is in the `ThermalForce` class:
 .. doxygenstruct:: ThermalForce
    :members:
 
+.. _recycling:
+
 recycling
 ~~~~~~~~~
 
@@ -500,6 +747,29 @@ Recycling therefore can't be calculated until all species boundary conditions
 have been set. It is therefore expected that this component is a top-level
 component which comes after boundary conditions are set.
 
+The recycling component has a `species` option, that is a list of species
+to recycle. For each of the species in that list, `recycling` will look in
+the corresponding section for the options `recycle_as`, `recycle_multiplier`
+and `recycle_energy`.
+
+For example, recycling `d+` ions into `d` atoms with a recycling fraction
+of 1. Each returning atom has an energy of 3.5eV:
+
+.. code-block:: ini
+
+   [hermes]
+   components = d+, d, sheath_boundary, recycling
+
+   [recycling]
+   species = d+   # Comma-separated list of species to recycle
+
+   [d+]
+   recycle_as = d         # Species to recycle as
+   recycle_multiplier = 1 # Recycling fraction
+   recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+.. doxygenstruct:: Recycling
+   :members:
 
 Atomic and molecular reactions
 ------------------------------
@@ -531,6 +801,21 @@ twice.
 
 When reactions are added, all the species involved must be included, or an exception
 should be thrown.
+
+Notes:
+
+1. Charge exchange channel diagnostics: For two species `a` and `b`,
+   the channel `Fab_cx` is a source of momentum for species `a` due to
+   charge exchange with species `b`. There are corresponding sinks for
+   the products of the charge exchange reaction which are not saved.
+
+   For example,reaction `d + t+ -> d+ + t` will save the following
+   forces (momentum sources):
+   - `Fdt+_cx` is a source of momentum for deuterium atoms `d` and sink of momentum for deuterium ions `d+`.
+   - `Ft+d_cx` is a source of momentum for tritium ions `t+` and sink of momentum for tritium atoms `t`
+
+   The reason for this convention is the existence of the inverse reactions:
+   `t + d+ -> t+ + d` outputs diagnostics `Ftd+_cx` and `Fd+t_cx`.
 
 Hydrogen
 ~~~~~~~~
@@ -879,4 +1164,58 @@ Rather than inverting an elliptic equation at every timestep, this component evo
 the potential in time as a diffusion equation.
 
 .. doxygenstruct:: RelaxPotential
+   :members:
+
+electromagnetic
+~~~~~~~~~~~~~~~
+
+This component modifies the definition of momentum of all species, to
+include the contribution from the electromagnetic potential
+:math:`A_{||}`.
+
+Assumes that "momentum" :math:`p_s` calculated for all species
+:math:`s` is
+
+.. math::
+
+   p_s = m_s n_s v_{||s} + Z_s e n_s A_{||}
+
+which arises once the electromagnetic contribution to the force on
+each species is included in the momentum equation. This is normalised
+so that in dimensionless quantities
+
+.. math::
+
+   p_s = A n v_{||} + Z n A_{||}
+
+where :math:`A` and :math:`Z` are the atomic number and charge of the
+species.
+
+The current density :math:`j_{||}` in SI units is
+
+.. math::
+
+   j_{||} = -\frac{1}{\mu_0}\nabla_\perp^2 A_{||}
+
+which when normalised in Bohm units becomes
+
+.. math::
+
+   j_{||} = - \frac{1}{\beta_{em}}\nabla_\perp^2 A_{||}
+
+where :math:`\beta_{em}` is a normalisation parameter which is half
+the plasma electron beta as normally defined:
+
+.. math::
+
+   \beta_{em} = \frac{\mu_0 e \overline{n} \overline{T}}{\overline{B}^2}
+
+To convert the species momenta into a current, we take the sum of
+:math:`p_s Z_s e / m_s`. In terms of normalised quantities this gives:
+
+.. math::
+
+   - \frac{1}{\beta_{em}} \nabla_\perp^2 A_{||} + \sum_s \frac{Z^2 n_s}{A}A_{||} = \sum_s \frac{Z}{A} p_s
+
+.. doxygenstruct:: Electromagnetic
    :members:

@@ -3,6 +3,7 @@
 #include <bout/fv_ops.hxx>
 #include <derivs.hxx>
 #include <difops.hxx>
+#include <bout/output_bout_types.hxx>
 #include <initialprofiles.hxx>
 
 #include "../include/div_ops.hxx"
@@ -17,7 +18,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   auto& options = alloptions[name];
 
-  evolve_log = options["evolve_log"].doc("Evolve the logarithmof pressure?").withDefault<bool>(false);
+  evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
   if (evolve_log) {
@@ -25,9 +26,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     solver->add(logP, std::string("logP") + name);
     // Save the density to the restart file
     // so the simulation can be restarted evolving density
-    get_restart_datafile()->addOnce(P, std::string("P") + name);
-    // Save density to output files
-    bout::globals::dump.addRepeat(P, std::string("P") + name);
+    //get_restart_datafile()->addOnce(P, std::string("P") + name);
 
     if (!alloptions["hermes"]["restarting"]) {
       // Set logN from N input options
@@ -67,28 +66,24 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
-  if (options["diagnose"]
-          .doc("Save additional output diagnostics")
-          .withDefault<bool>(false)) {
-    if (thermal_conduction) {
-      bout::globals::dump.addRepeat(kappa_par, std::string("kappa_par_") + name);
-    }
-    bout::globals::dump.addRepeat(T, std::string("T") + name);
-
-    bout::globals::dump.addRepeat(ddt(P), std::string("ddt(P") + name + std::string(")"));
-    bout::globals::dump.addRepeat(Sp, std::string("SP") + name);
-    Sp = 0.0;
-  }
+  diagnose = options["diagnose"]
+    .doc("Save additional output diagnostics")
+    .withDefault<bool>(false);
 
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
+  // Try to read the pressure source from the mesh
+  // Units of Pascals per second
+  source = 0.0;
+  mesh->get(source, std::string("P") + name + "_src");
+  // Allow the user to override the source
   source = alloptions[std::string("P") + name]["source"]
                .doc(std::string("Source term in ddt(P") + name
                     + std::string("). Units [N/m^2/s]"))
-               .withDefault(Field3D(0.0))
+               .withDefault(source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
 }
 
@@ -98,21 +93,20 @@ void EvolvePressure::transform(Options& state) {
   if (evolve_log) {
     // Evolving logP, but most calculations use P
     P = exp(logP);
-  } else {
-    // Check for low pressures, ensure that Pi >= 0
-    P = floor(P, 0.0);
   }
 
   mesh->communicate(P);
 
+  Field3D Pfloor = floor(P, 0.0);
+
   auto& species = state["species"][name];
 
-  set(species["pressure"], P);
+  set(species["pressure"], Pfloor);
 
   // Calculate temperature
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
-  T = P / floor(N, density_floor);
+  T = Pfloor / floor(N, density_floor);
 
   set(species["temperature"], T);
 }
@@ -124,7 +118,10 @@ void EvolvePressure::finally(const Options& state) {
   const auto& species = state["species"][name];
 
   // Get updated pressure and temperature with boundary conditions
-  P = get<Field3D>(species["pressure"]);
+  // Note: Retain pressures which fall below zero
+  P.setBoundaryTo(get<Field3D>(species["pressure"]));
+  Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
+
   T = get<Field3D>(species["temperature"]);
 
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
@@ -141,23 +138,27 @@ void EvolvePressure::finally(const Options& state) {
     Field3D V = get<Field3D>(species["velocity"]);
 
     // Typical wave speed used for numerical diffusion
-    Field3D T = get<Field3D>(species["temperature"]);
-    BoutReal AA = get<BoutReal>(species["AA"]);
-    Field3D sound_speed = sqrt(T / AA);
+    Field3D fastest_wave;
+    if (state.isSet("fastest_wave")) {
+      fastest_wave = get<Field3D>(state["fastest_wave"]);
+    } else {
+      BoutReal AA = get<BoutReal>(species["AA"]);
+      fastest_wave = sqrt(T / AA);
+    }
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par(P, V, sound_speed);
+      ddt(P) -= FV::Div_par(P, V, fastest_wave);
 
       // Work done. This balances energetically a term in the momentum equation
-      ddt(P) -= (2. / 3) * P * Div_par(V);
+      ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
 
     } else {
       // Use V * Grad(P) form
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3) * FV::Div_par(P, V, sound_speed);
+      ddt(P) -= (5. / 3) * FV::Div_par(P, V, fastest_wave);
 
       ddt(P) += (2. / 3) * V * Grad_par(P);
     }
@@ -181,7 +182,7 @@ void EvolvePressure::finally(const Options& state) {
     // kappa ~ n * v_th^2 * tau
     //
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
-    kappa_par = kappa_coefficient * P * tau / AA;
+    kappa_par = kappa_coefficient * Pfloor * tau / AA;
 
     if (kappa_limit_alpha > 0.0) {
       /*
@@ -243,7 +244,98 @@ void EvolvePressure::finally(const Options& state) {
   }
   ddt(P) += Sp;
 
+  if (species.isSet("density_source") and species.isSet("velocity")) {
+    // NOTE: This has two problems
+    //       1. density_source is NOT just sources of particles, but also includes
+    //          terms from e.g. cross-field diffusion
+    //       2. As written it is probably not dimensionally correct.
+    //          Probably should not have a factor of N
+    //
+    // Change in balance between kinetic & thermal energy due to particle source
+    // auto Sn = get<Field3D>(species["density_source"]);
+    // auto V = get<Field3D>(species["velocity"]);
+    // auto AA = get<BoutReal>(species["AA"]);
+    // ddt(P) += Sn * 0.5 * AA * N * SQ(V);
+  }
+
   if (evolve_log) {
     ddt(logP) = ddt(P) / P;
+  }
+
+#if CHECKLEVEL >= 1
+  for (auto& i : P.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(P)[i])) {
+      throw BoutException("ddt(P{}) non-finite at {}. Sp={}\n", name, i, Sp[i]);
+    }
+  }
+#endif
+}
+
+void EvolvePressure::outputVars(Options& state) {
+  AUTO_TRACE();
+  // Normalisations
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+  if (evolve_log) {
+    state[std::string("P") + name].force(P);
+  }
+
+  state[std::string("P") + name].setAttributes({{"time_dimension", "t"},
+                                                {"units", "Pa"},
+                                                {"conversion", Pnorm},
+                                                {"standard_name", "pressure"},
+                                                {"long_name", name + " pressure"},
+                                                {"species", name},
+                                                {"source", "evolve_pressure"}});
+
+  if (diagnose) {
+    if (thermal_conduction) {
+      set_with_attrs(state[std::string("kappa_par_") + name], kappa_par,
+                     {{"time_dimension", "t"},
+                      {"units", "W / m / eV"},
+                      {"conversion", Pnorm * Omega_ci * SQ(rho_s0)},
+                      {"long_name", name + " heat conduction coefficient"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+    }
+    set_with_attrs(state[std::string("T") + name], T,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"conversion", Tnorm},
+                    {"standard_name", "temperature"},
+                    {"long_name", name + " temperature"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(P),
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", std::string("Rate of change of ") + name + " pressure"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    set_with_attrs(state[std::string("SP") + name], Sp,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    set_with_attrs(state[std::string("P") + name + std::string("_src")], source,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
   }
 }

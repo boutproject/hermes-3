@@ -1,0 +1,64 @@
+nout = 1
+timestep = 1
+
+MYG = 2
+MXG = 0
+
+[mesh]
+nx = 1
+ny = 50
+nz = 1
+
+yn = y / (2π)
+
+ixseps1 = 0  # Domain is not periodic in Y
+
+length = 30           # Length of the domain in meters
+
+dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+[mesh:paralleltransform]
+type = identity
+
+[solver]
+mxstep = 1000
+
+[hermes]
+components = e, d, snb_conduction
+
+loadmetric = false # Load metric from Bxy, Rxy etc?
+
+Nnorm = 1e20 # m^-3
+Tnorm = 10    # eV
+Bnorm = 1    # Tesla
+
+[snb_conduction]
+diagnose = true
+
+[e]
+type = fixed_density, fixed_velocity, evolve_pressure
+
+AA = 1./1836
+charge = -1
+
+density = 1e19   # m^-3
+velocity = 0     # m/s
+thermal_conduction = false
+
+[Pe]
+function = 1 - 0.9*mesh:yn^2
+
+bndry_all = neumann
+
+[d]
+type = fixed_density, fixed_velocity, fixed_temperature
+
+AA = 2
+charge = 1
+
+density = 1e19   # m^-3
+velocity = 0     # m/s
+temperature = 10 # eV
