@@ -1,0 +1,162 @@
+# 1D system with:
+#  - no-flow boundary on lower Y
+#  - sheath boundary on upper Y
+#  - Evolving electron and ion species
+#  - heat conduction
+#  - Uniform source of heat and particles throughout domain
+#  - Non-uniform grid, packed towards the target
+#  - Recycling of ions as atoms
+#  - Ionisation of neutrals as ions
+#  - Charge exchange between neutrals and ions
+#  - Feedback control of upstream density
+#
+#  Does not include recombination
+
+
+nout = 10
+timestep = 5000
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 50   # Resolution along field-line
+nz = 1
+
+length = 30           # Length of the domain in meters
+length_xpt = 10   # Length from midplane to X-point [m]
+
+dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+# Calculate where the source ends in grid index
+source = length_xpt / length
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+ixseps1 = -1
+ixseps2 = -1
+
+[hermes]
+# Evolve ion density, ion and electron pressure, then calculate force on ions due
+# to electron pressure by using electron force balance.
+components = (d+, d, e,
+              sheath_boundary, collisions, recycling, reactions,
+              electron_force_balance, neutral_parallel_diffusion)
+
+loadmetric = false        # Use Rxy, Bpxy etc?
+normalise_metric = true  # Normalise the input metric?
+
+Nnorm = 1e19
+Bnorm = 1
+Tnorm = 100
+
+[solver]
+type = pvode  # Backward Euler steady-state solver
+
+mxstep = 50000
+
+atol = 1e-7
+rtol = 1e-5
+
+[sheath_boundary]
+
+lower_y = false
+upper_y = true
+
+[neutral_parallel_diffusion]
+
+dneut = 10   # (B / Bpol)^2 in neutral diffusion terms
+
+####################################
+
+[d+]  # Deuterium ions
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary, upstream_density_feedback)
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+charge = 1
+AA = 2
+
+density_upstream = 1e19  # Upstream density [m^-3]
+density_source_positive = false  # Force source to be > 0?
+density_controller_i = 5e-4
+density_controller_p = 1e-2
+
+thermal_conduction = true  # in evolve_pressure
+
+diagnose = true
+
+recycle_as = d
+recycle_multiplier = 1  # Recycling fraction
+
+[Nd+]
+
+function = 1
+
+flux = 4e23  # Particles per m^2 per second input
+source = (flux/(mesh:length_xpt))*H(mesh:y_xpt - y)
+
+[Pd+]
+function = 1
+
+powerflux = 2.5e7  # Input power flux in W/m^2
+
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
+[NVd+]
+
+function = 0
+
+####################################
+
+[d]  # Deuterium atoms
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary)
+
+charge = 0
+AA = 2
+
+thermal_conduction = true
+
+[Nd]
+
+function = 0.001
+
+[Pd]
+
+function = 0.0001
+
+####################################
+
+[e] # Electrons
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
+
+noflow_upper_y = false
+
+charge = -1
+AA = 1/1836
+
+thermal_conduction = true  # in evolve_pressure
+
+[Pe]
+
+function = `Pd+:function`  # Same as ion pressure initially
+
+source = `Pd+:source`  # Same as ion pressure source
+
+####################################
+
+[recycling]
+
+species = d+
+
+[reactions]
+type = (
+        d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
+        d + d+ -> d+ + d,     # Charge exchange
+       )
