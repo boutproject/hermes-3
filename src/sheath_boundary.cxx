@@ -93,6 +93,13 @@ SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) 
                        .doc("Voltage of the wall [Volts]")
                        .withDefault(Field3D(0.0))
                    / Tnorm;
+  // Convert to field aligned coordinates
+  wall_potential = toFieldAligned(wall_potential);
+
+  // Note: wall potential at the last cell before the boundary is used,
+  // not the value at the boundary half-way between cells. This is due
+  // to how twist-shift boundary conditions and non-aligned inputs are
+  // treated; using the cell boundary gives incorrect results.
 }
 
 void SheathBoundary::transform(Options &state) {
@@ -258,7 +265,7 @@ void SheathBoundary::transform(Options &state) {
             phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
           }
 
-          const BoutReal phi_wall = 0.5 * (wall_potential[i] + wall_potential[i.ym()]);
+          const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
 
           phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
@@ -277,7 +284,7 @@ void SheathBoundary::transform(Options &state) {
             phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
           }
 
-          const BoutReal phi_wall = 0.5 * (wall_potential[i] + wall_potential[i.yp()]);
+          const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
 
           phi[i.yp()] = phi[i.ym()] = phi[i];
@@ -314,7 +321,7 @@ void SheathBoundary::transform(Options &state) {
 
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[im] + Te[i]);  // electron temperature
-        const BoutReal phi_wall = 0.5 * (wall_potential[im] + wall_potential[i]);
+        const BoutReal phi_wall = wall_potential[i];
 
         const BoutReal phisheath = floor(
             0.5 * (phi[im] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
@@ -377,7 +384,7 @@ void SheathBoundary::transform(Options &state) {
 
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]);  // electron temperature
-        const BoutReal phi_wall = 0.5 * (wall_potential[ip] + wall_potential[i]);
+        const BoutReal phi_wall = wall_potential[i];
         const BoutReal phisheath = floor(0.5 * (phi[ip] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
         // Electron sheath heat transmission
