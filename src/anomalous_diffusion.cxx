@@ -46,6 +46,10 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
   anomalous_sheath_flux = options["anomalous_sheath_flux"]
                               .doc("Allow anomalous diffusion into sheath?")
                               .withDefault<bool>(false);
+
+  diagnose = alloptions[name]["diagnose"]
+                   .doc("Output additional diagnostics?")
+                   .withDefault<bool>(false);
 }
 
 void AnomalousDiffusion::transform(Options& state) {
@@ -108,5 +112,25 @@ void AnomalousDiffusion::transform(Options& state) {
   if (include_nu) {
     // Gradients in slow speed which drive momentum flows
     add(species["momentum_source"], Div_a_Grad_perp_upwind(anomalous_nu * N2D, V2D));
+  }
+
+  if (diagnose) {
+
+    // void outputVars(Options& state) override {
+      AUTO_TRACE();
+      // Normalisations
+      // auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+      // auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+      
+      // Save particle, momentum and energy channels
+
+      set_with_attrs(state[{std::string("anomalous_D_") + name}], anomalous_D,
+                      {{"time_dimension", "t"},
+                      {"units", "m^2 s^-1"},
+                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                      {"standard_name", "anomalous density diffusion"},
+                      {"long_name", std::string("Anomalous density diffusion of ") + name},
+                      {"source", "anomalous_diffusion"}});
+    // }
   }
 }

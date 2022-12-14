@@ -22,11 +22,7 @@ struct AnomalousDiffusion : public Component {
   ///   - anomalous_nu   Overrides nu_<name>
   ///   - anomalous_sheath_flux  Allow anomalous flux into sheath?
   //                             Default false.
-  AnomalousDiffusion(std::string name, Options &alloptions, Solver *) {
-    diagnose = alloptions[name]["diagnose"]
-                   .doc("Output additional diagnostics?")
-                   .withDefault<bool>(false);
-  };
+  AnomalousDiffusion(std::string name, Options &alloptions, Solver *);
 
   /// Inputs
   /// - species
@@ -44,26 +40,6 @@ struct AnomalousDiffusion : public Component {
   ///     - energy_source
   ///
   void transform(Options &state) override;
-
-  void outputVars(Options& state) override {
-    AUTO_TRACE();
-    // Normalisations
-    auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
-    auto rho_s0 = get<BoutReal>(state["rho_s0"]);
-
-    if (diagnose) {
-      // Save particle, momentum and energy channels
-
-      set_with_attrs(state[{std::string("anomalous_D_") + name}], anomalous_D,
-                      {{"time_dimension", "t"},
-                      {"units", "m^2 s^-1"},
-                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
-                      {"standard_name", "anomalous density diffusion"},
-                      {"long_name", std::string("Anomalous density diffusion of ") + name},
-                      {"source", "anomalous_diffusion"}});
-
-    }
-  }
 
 private:
   std::string name; ///< Species name
