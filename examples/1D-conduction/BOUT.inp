@@ -1,0 +1,80 @@
+# 1D heat conduction using non-uniform grid
+#
+# Electron pressure is evolved, with a fixed density and ion
+# temperature. The ion species is only here to provide collisions
+# and so set the heat conduction.
+
+nout = 200
+timestep = 2000
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 200   # Resolution along field-line
+nz = 1
+
+length = 30           # Length of the domain in meters
+length_xpt = 10   # Length from midplane to X-point [m]
+
+dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+# Calculate where the source ends in grid index
+source = length_xpt / length
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+ixseps1 = -1
+ixseps2 = -1
+
+[hermes]
+# Evolve ion density, ion and electron pressure, then calculate force on ions due
+# to electron pressure by using electron force balance.
+components = (d+, e, sheath_boundary, collisions)
+
+loadmetric = false        # Use Rxy, Bpxy etc?
+normalise_metric = true  # Normalise the input metric?
+
+Nnorm = 1e19
+Bnorm = 1
+Tnorm = 10
+
+[solver]
+mxstep = 100000
+
+[sheath_boundary]
+
+lower_y = false
+upper_y = true
+
+####################################
+
+[d+]  # Deuterium ions
+type = (fixed_density, fixed_temperature)
+
+charge = 1
+AA = 2
+
+density = 1e19  # Fixed density [m^-3]
+temperature = 10 # Fixed temperature [eV]
+
+####################################
+
+[e] # Electrons
+type = quasineutral, evolve_pressure
+
+charge = -1
+AA = 1/1836
+
+thermal_conduction = true  # in evolve_pressure
+
+[Pe]
+
+function = 1
+
+powerflux = 2.5e7  # Input power flux in W/m^2
+
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
