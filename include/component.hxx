@@ -200,6 +200,25 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
   getNoBoundary<Type>(option)
 #endif
 
+/// Check whether value is valid, returning true
+/// if invalid i.e contains non-finite values
+template<typename T>
+bool hermesDataInvalid(const T& value) {
+  return false; // Default
+}
+
+/// Check Field3D values.
+/// Doesn't check boundary cells
+template<>
+inline bool hermesDataInvalid(const Field3D& value) {
+  for (auto& i : value.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(value[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
 ///
@@ -221,7 +240,11 @@ Options& set(Options& option, T value) {
                         option.attributes["final-domain"].as<std::string>());
   }
 
+  if (hermesDataInvalid(value)) {
+    throw BoutException("Setting invalid value for '{}'", option.str());
+  }
 #endif
+
   option.force(std::move(value));
   return option;
 }
@@ -278,17 +301,16 @@ Options& add(Options& option, T value) {
 template<typename T>
 Options& subtract(Options& option, T value) {
   if (!option.isSet()) {
-    option = -value;
+    return set(option, -value);
   } else {
     try {
-      set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value) - value);
+      return set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value) - value);
     } catch (const std::bad_cast &e) {
       // Convert to a more useful error message
       throw BoutException("Could not convert {:s} to type {:s}",
                           option.str(), typeid(T).name());
     }
   }
-  return option;
 }
 
 template<typename T>
