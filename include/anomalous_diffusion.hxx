@@ -40,6 +40,7 @@ struct AnomalousDiffusion : public Component {
   ///     - energy_source
   ///
   void transform(Options &state) override;
+  void outputVars(Options &state) override;
 
 private:
   std::string name; ///< Species name

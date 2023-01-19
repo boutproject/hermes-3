@@ -110,6 +110,14 @@ void AnomalousDiffusion::transform(Options& state) {
     add(species["momentum_source"], Div_a_Grad_perp_upwind(anomalous_nu * N2D, V2D));
   }
 
+}
+
+void AnomalousDiffusion::outputVars(Options& state) {
+  AUTO_TRACE();
+  // Normalisations
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
   if (diagnose) {
 
     // void outputVars(Options& state) override {
@@ -130,3 +138,4 @@ void AnomalousDiffusion::transform(Options& state) {
     // }
   }
 }
+
