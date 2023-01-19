@@ -104,6 +104,8 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
                        .doc("Voltage of the wall [Volts]")
                        .withDefault(Field3D(0.0))
                    / Tnorm;
+  // Convert to field aligned coordinates
+  wall_potential = toFieldAligned(wall_potential);
 }
 
 void SheathBoundarySimple::transform(Options& state) {
@@ -244,7 +246,7 @@ void SheathBoundarySimple::transform(Options& state) {
               tesheath
               * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
 
-          const BoutReal phi_wall = 0.5 * (wall_potential[i] + wall_potential[i.ym()]);
+          const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
 
           phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
@@ -269,7 +271,7 @@ void SheathBoundarySimple::transform(Options& state) {
               tesheath
               * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
 
-          const BoutReal phi_wall = 0.5 * (wall_potential[i] + wall_potential[i.yp()]);
+          const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
 
           phi[i.yp()] = phi[i.ym()] = phi[i];
@@ -306,7 +308,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
-        const BoutReal phi_wall = 0.5 * (wall_potential[im] + wall_potential[i]);
+        const BoutReal phi_wall = wall_potential[i];
         const BoutReal phisheath =
             floor(0.5 * (phi[im] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
@@ -358,7 +360,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]); // electron temperature
-        const BoutReal phi_wall = 0.5 * (wall_potential[ip] + wall_potential[i]);
+        const BoutReal phi_wall = wall_potential[i];
         const BoutReal phisheath =
             floor(0.5 * (phi[ip] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 

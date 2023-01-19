@@ -222,7 +222,7 @@ void Collisions::transform(Options& state) {
 
         collide(electrons, species, nu_ei / Omega_ci, mom_coeff);
 
-      } if (species.isSet("charge") and (get<BoutReal>(species["charge"]) < 0.0)) {
+      } else if (species.isSet("charge") and (get<BoutReal>(species["charge"]) < 0.0)) {
         ////////////////////////////////////
         // electron-negative ion collisions
 

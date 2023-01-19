@@ -5,6 +5,7 @@
 #include <difops.hxx>
 #include <bout/output_bout_types.hxx>
 #include <initialprofiles.hxx>
+#include <bout/invert_pardiv.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
@@ -69,6 +70,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   diagnose = options["diagnose"]
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
+
+  enable_precon = options["precon"]
+    .doc("Enable preconditioner? (Note: solver may not use it)")
+    .withDefault<bool>(true);
 
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
@@ -338,4 +343,25 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
   }
+}
+
+void EvolvePressure::precon(const Options &state, BoutReal gamma) {
+  if (!(enable_precon and thermal_conduction)) {
+    return; // Disabled
+  }
+
+  static std::unique_ptr<InvertParDiv> inv;
+  if (!inv) {
+    // Initialise parallel inversion class
+    inv = InvertParDiv::create();
+    inv->setCoefA(1.0);
+  }
+  const auto& species = state["species"][name];
+  const Field3D N = get<Field3D>(species["density"]);
+
+  // Set the coefficient in Div_par( B * Grad_par )
+  inv->setCoefB(-(2. / 3) * gamma * kappa_par / floor(N, density_floor));
+  Field3D dT = ddt(P);
+  dT.applyBoundary("neumann");
+  ddt(P) = inv->solve(dT);
 }

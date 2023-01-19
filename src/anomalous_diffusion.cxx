@@ -76,18 +76,14 @@ void AnomalousDiffusion::transform(Options& state) {
     // Apply Neumann Y boundary condition, so no additional flux into boundary
     // Note: Not setting radial (X) boundaries since those set radial fluxes
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        N2D(r.ind, mesh->ystart - 1, jz) = N2D(r.ind, mesh->ystart, jz);
-        T2D(r.ind, mesh->ystart - 1, jz) = T2D(r.ind, mesh->ystart, jz);
-        V2D(r.ind, mesh->ystart - 1, jz) = V2D(r.ind, mesh->ystart, jz);
-      }
+      N2D(r.ind, mesh->ystart - 1) = N2D(r.ind, mesh->ystart);
+      T2D(r.ind, mesh->ystart - 1) = T2D(r.ind, mesh->ystart);
+      V2D(r.ind, mesh->ystart - 1) = V2D(r.ind, mesh->ystart);
     }
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        N2D(r.ind, mesh->yend + 1, jz) = N2D(r.ind, mesh->yend, jz);
-        T2D(r.ind, mesh->yend + 1, jz) = T2D(r.ind, mesh->yend, jz);
-        V2D(r.ind, mesh->yend + 1, jz) = V2D(r.ind, mesh->yend, jz);
-      }
+      N2D(r.ind, mesh->yend + 1) = N2D(r.ind, mesh->yend);
+      T2D(r.ind, mesh->yend + 1) = T2D(r.ind, mesh->yend);
+      V2D(r.ind, mesh->yend + 1) = V2D(r.ind, mesh->yend);
     }
   }
 
