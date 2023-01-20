@@ -51,15 +51,19 @@ void EvolveMomentum::transform(Options &state) {
 
   auto& species = state["species"][name];
 
-  set(species["momentum"], NV);
-
   // Not using density boundary condition
-  Field3D N = floor(getNoBoundary<Field3D>(species["density"]), density_floor);
+  auto N = getNoBoundary<Field3D>(species["density"]);
+  Field3D Nlim = floor(N, density_floor);
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-  V = NV / (AA * N);
+  V = NV / (AA * Nlim);
   V.applyBoundary();
   set(species["velocity"], V);
+
+  NV_solver = NV; // Save the momentum as calculated by the solver
+  NV = AA * N * V; // Re-calculate consistent with V and N
+  // Note: Now NV and NV_solver will differ when N < density_floor
+  set(species["momentum"], NV);
 }
 
 void EvolveMomentum::finally(const Options &state) {
@@ -128,6 +132,10 @@ void EvolveMomentum::finally(const Options &state) {
     momentum_source = get<Field3D>(species["momentum_source"]);
     ddt(NV) += momentum_source;
   }
+
+  // If N < density_floor then NV and NV_solver may differ
+  // -> Add term to force NV_solver towards NV
+  ddt(NV) += NV - NV_solver;
 
 #if CHECKLEVEL >= 1
   for (auto& i : NV.getRegion("RGN_NOBNDRY")) {
