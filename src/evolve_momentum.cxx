@@ -76,6 +76,8 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Get the species density
   Field3D N = get<Field3D>(species["density"]);
+  // Apply a floor to the density
+  Field3D Nlim = floor(N, density_floor);
 
   if (state.isSection("fields") and state["fields"].isSet("phi")
       and species.isSet("charge")) {
@@ -102,13 +104,18 @@ void EvolveMomentum::finally(const Options &state) {
   V = get<Field3D>(species["velocity"]);
 
   // Typical wave speed used for numerical diffusion
-  Field3D T = get<Field3D>(species["temperature"]);
-  BoutReal AA = get<BoutReal>(species["AA"]);
-  Field3D sound_speed = sqrt(T / AA);
+  Field3D fastest_wave;
+  if (state.isSet("fastest_wave")) {
+    fastest_wave = get<Field3D>(state["fastest_wave"]);
+  } else {
+    Field3D T = get<Field3D>(species["temperature"]);
+    BoutReal AA = get<BoutReal>(species["AA"]);
+    fastest_wave = sqrt(T / AA);
+  }
 
   // Note: Density floor should be consistent with calculation of V
   //       otherwise energy conservation is affected
-  ddt(NV) -= FV::Div_par_fvv(floor(N, density_floor), V, sound_speed);
+  ddt(NV) -= FV::Div_par_fvv(Nlim, V, fastest_wave);
 
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
@@ -119,7 +126,7 @@ void EvolveMomentum::finally(const Options &state) {
   if (species.isSet("low_n_coeff")) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
-    ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N) + FV::Div_par_K_Grad_par(low_n_coeff * floor(N, density_floor), V);
+    ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N) + FV::Div_par_K_Grad_par(low_n_coeff * Nlim, V);
   }
 
   if (hyper_z > 0.) {
