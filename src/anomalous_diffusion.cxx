@@ -120,12 +120,7 @@ void AnomalousDiffusion::outputVars(Options& state) {
 
   if (diagnose) {
 
-    // void outputVars(Options& state) override {
       AUTO_TRACE();
-      // Normalisations
-      // auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
-      // auto rho_s0 = get<BoutReal>(state["rho_s0"]);
-      
       // Save particle, momentum and energy channels
 
       set_with_attrs(state[{std::string("anomalous_D_") + name}], anomalous_D,
@@ -135,6 +130,23 @@ void AnomalousDiffusion::outputVars(Options& state) {
                       {"standard_name", "anomalous density diffusion"},
                       {"long_name", std::string("Anomalous density diffusion of ") + name},
                       {"source", "anomalous_diffusion"}});
+
+      set_with_attrs(state[{std::string("anomalous_Chi_") + name}], anomalous_chi,
+                      {{"time_dimension", "t"},
+                      {"units", "m^2 s^-1"},
+                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                      {"standard_name", "anomalous thermal diffusion"},
+                      {"long_name", std::string("Anomalous thermal diffusion of ") + name},
+                      {"source", "anomalous_diffusion"}});
+
+      set_with_attrs(state[{std::string("anomalous_nu_") + name}], anomalous_nu,
+                      {{"time_dimension", "t"},
+                      {"units", "m^2 s^-1"},
+                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                      {"standard_name", "anomalous momentum diffusion"},
+                      {"long_name", std::string("Anomalous momentum diffusion of ") + name},
+                      {"source", "anomalous_diffusion"}});
+      
     // }
   }
 }
