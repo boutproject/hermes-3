@@ -58,7 +58,7 @@ void ZeroCurrent::transform(Options &state) {
   Options& species = state["species"][name];
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
-  velocity = current / (-charge * N);
+  velocity = current / (-charge * floor(N, 1e-5));
   set(species["velocity"], velocity);
 }
 
