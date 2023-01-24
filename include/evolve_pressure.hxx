@@ -18,15 +18,17 @@ struct EvolvePressure : public Component {
   /// # Inputs
   ///
   /// - <name>
-  ///   - evolve_log           Evolve logarithm of pressure? Default is false
-  ///   - density_floor        Minimum density floor. Default 1e-5 normalised units.
   ///   - bndry_flux           Allow flows through radial boundaries? Default is true
-  ///   - poloidal_flows       Include poloidal ExB flows? Default is true
-  ///   - thermal_conduction   Include parallel heat conduction? Default is true
+  ///   - density_floor        Minimum density floor. Default 1e-5 normalised units.
+  ///   - diagnose             Output additional diagnostic fields?
+  ///   - evolve_log           Evolve logarithm of pressure? Default is false
+  ///   - hyper_z              Hyper-diffusion in Z
   ///   - kappa_coefficient    Heat conduction constant. Default is 3.16 for electrons, 3.9 otherwise
   ///   - kappa_limit_alpha    Flux limiter, off by default.
-  ///   - p_div_v   Use p * Div(v) form? Default is v * Grad(p) form
-  ///   - hyper_z   Hyper-diffusion in Z
+  ///   - poloidal_flows       Include poloidal ExB flows? Default is true
+  ///   - precon               Enable preconditioner? Note: solver may not use it even if enabled.
+  ///   - p_div_v              Use p * Div(v) form? Default is v * Grad(p) form
+  ///   - thermal_conduction   Include parallel heat conduction? Default is true
   ///
   /// - P<name>  e.g. "Pe", "Pd+"
   ///   - source     Source of pressure [Pa / s].
@@ -61,6 +63,10 @@ struct EvolvePressure : public Component {
   void finally(const Options& state) override;
 
   void outputVars(Options& state) override;
+
+  /// Preconditioner
+  ///
+  void precon(const Options &UNUSED(state), BoutReal gamma) override;
 private:
   std::string name; ///< Short name of the species e.g. h+
 
@@ -87,6 +93,7 @@ private:
   BoutReal hyper_z; ///< Hyper-diffusion
 
   bool diagnose; ///< Output additional diagnostics?
+  bool enable_precon; ///< Enable preconditioner?
 };
 
 namespace {

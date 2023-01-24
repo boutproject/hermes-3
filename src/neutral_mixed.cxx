@@ -115,6 +115,7 @@ void NeutralMixed::transform(Options& state) {
 
         // Zero-gradient pressure
         Pn(r.ind, mesh->ystart - 1, jz) = Pn(r.ind, mesh->ystart, jz);
+        Pnlim(r.ind, mesh->ystart - 1, jz) = Pnlim(r.ind, mesh->ystart, jz);
 
         // No flow into wall
         Vn(r.ind, mesh->ystart - 1, jz) = -Vn(r.ind, mesh->ystart, jz);
@@ -146,6 +147,7 @@ void NeutralMixed::transform(Options& state) {
 
         // Zero-gradient pressure
         Pn(r.ind, mesh->yend + 1, jz) = Pn(r.ind, mesh->yend, jz);
+        Pnlim(r.ind, mesh->yend + 1, jz) = Pnlim(r.ind, mesh->yend, jz);
 
         // No flow into wall
         Vn(r.ind, mesh->yend + 1, jz) = -Vn(r.ind, mesh->yend, jz);
@@ -176,12 +178,13 @@ void NeutralMixed::finally(const Options& state) {
   BoutReal neutral_lmax =
       0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
-  Field3D Rnn = Nnlim * sqrt(Tn / AA) / neutral_lmax; // Neutral-neutral collisions
+  Field3D Rnn = sqrt(Tn / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
-    Dnn = Pnlim / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+    // Dnn = Vth^2 / sigma
+    Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
   } else {
-    Dnn = Pnlim / Rnn;
+    Dnn = (Tn / AA) / Rnn;
   }
 
   mesh->communicate(Dnn);
@@ -347,6 +350,13 @@ void NeutralMixed::outputVars(Options& state) {
                     {"source", "neutral_mixed"}});
   }
   if (diagnose) {
+    set_with_attrs(state[std::string("T") + name], Tn,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"conversion", Tnorm},
+                    {"standard_name", "temperature"},
+                    {"long_name", name + " temperature"},
+                    {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
                     {"units", "m^-3 s^-1"},

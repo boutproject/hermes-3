@@ -150,7 +150,10 @@ int Hermes::init(bool restarting) {
   // Options::root() is passed as the root of the component options, so that
   // individual components use their own sections, rather than subsections of [hermes].
   scheduler = ComponentScheduler::create(options, Options::root(), solver);
-  
+
+  // Preconditioner
+  setPrecon((preconfunc)&Hermes::precon);
+
   return 0;
 }
 

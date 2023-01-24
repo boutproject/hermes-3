@@ -5,6 +5,7 @@
 #include <difops.hxx>
 #include <bout/output_bout_types.hxx>
 #include <initialprofiles.hxx>
+#include <bout/invert_pardiv.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
@@ -24,7 +25,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   if (evolve_log) {
     // Evolve logarithm of density
     solver->add(logP, std::string("logP") + name);
-    // Save the density to the restart file
+    // Save the pressure to the restart file
     // so the simulation can be restarted evolving density
     //get_restart_datafile()->addOnce(P, std::string("P") + name);
 
@@ -70,6 +71,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
 
+  enable_precon = options["precon"]
+    .doc("Enable preconditioner? (Note: solver may not use it)")
+    .withDefault<bool>(true);
+
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Tnorm = units["eV"];
@@ -97,17 +102,18 @@ void EvolvePressure::transform(Options& state) {
 
   mesh->communicate(P);
 
-  Field3D Pfloor = floor(P, 0.0);
 
   auto& species = state["species"][name];
-
-  set(species["pressure"], Pfloor);
 
   // Calculate temperature
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
-  T = Pfloor / floor(N, density_floor);
 
+  Field3D Pfloor = floor(P, 0.0);
+  T = Pfloor / floor(N, density_floor);
+  Pfloor = N * T; // Ensure consistency
+
+  set(species["pressure"], Pfloor);
   set(species["temperature"], T);
 }
 
@@ -123,6 +129,7 @@ void EvolvePressure::finally(const Options& state) {
   Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
 
   T = get<Field3D>(species["temperature"]);
+  N = get<Field3D>(species["density"]);
 
   if (state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
@@ -196,8 +203,6 @@ void EvolvePressure::finally(const Options& state) {
        * DOI 10.1002/ctpp.200610001
        */
 
-      Field3D N = get<Field3D>(species["density"]);
-
       // Spitzer-Harm heat flux
       Field3D q_SH = kappa_par * Grad_par(T);
       // Free-streaming flux
@@ -261,6 +266,10 @@ void EvolvePressure::finally(const Options& state) {
   if (evolve_log) {
     ddt(logP) = ddt(P) / P;
   }
+
+  // Term to force evolved P towards N * T
+  // This is active when P < 0 or when N < density_floor
+  ddt(P) += N * T - P;
 
 #if CHECKLEVEL >= 1
   for (auto& i : P.getRegion("RGN_NOBNDRY")) {
@@ -338,4 +347,25 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
   }
+}
+
+void EvolvePressure::precon(const Options &state, BoutReal gamma) {
+  if (!(enable_precon and thermal_conduction)) {
+    return; // Disabled
+  }
+
+  static std::unique_ptr<InvertParDiv> inv;
+  if (!inv) {
+    // Initialise parallel inversion class
+    inv = InvertParDiv::create();
+    inv->setCoefA(1.0);
+  }
+  const auto& species = state["species"][name];
+  const Field3D N = get<Field3D>(species["density"]);
+
+  // Set the coefficient in Div_par( B * Grad_par )
+  inv->setCoefB(-(2. / 3) * gamma * kappa_par / floor(N, density_floor));
+  Field3D dT = ddt(P);
+  dT.applyBoundary("neumann");
+  ddt(P) = inv->solve(dT);
 }
