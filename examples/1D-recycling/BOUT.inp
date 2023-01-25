@@ -54,6 +54,8 @@ Tnorm = 100
 
 [solver]
 type = beuler  # Backward Euler steady-state solver
+snes_type = newtonls
+ksp_type = gmres
 max_nonlinear_iterations = 10
 
 atol = 1e-7
