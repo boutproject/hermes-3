@@ -16,9 +16,15 @@ void SoundSpeed::transform(Options &state) {
   Field3D fastest_wave = 0.0;
   for (auto& kv : state["species"].getChildren()) {
     const Options& species = kv.second;
-    
+
     if (species.isSet("pressure")) {
       total_pressure += GET_NOBOUNDARY(Field3D, species["pressure"]);
+    }
+
+    if ((kv.first == "e") and !electron_dynamics) {
+      // Exclude electron sound speed, but include electron pressure in
+      // collective sound speed calculation (total_pressure).
+      continue;
     }
 
     if (species.isSet("density") and species.isSet("AA")) {
@@ -38,6 +44,9 @@ void SoundSpeed::transform(Options &state) {
   }
 
   Field3D sound_speed = sqrt(total_pressure / floor(total_density, 1e-10));
+  for (auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
+    fastest_wave[i] = BOUTMAX(fastest_wave[i], sound_speed[i]);
+  }
   set(state["sound_speed"], sound_speed);
   set(state["fastest_wave"], fastest_wave);
 }

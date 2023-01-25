@@ -9,7 +9,12 @@
 /// This uses the sum of all species pressures and mass densities
 /// so should run after those have been set.
 struct SoundSpeed : public Component {
-  SoundSpeed(std::string, Options&, Solver*) {}
+  SoundSpeed(std::string name, Options &alloptions, Solver*) {
+    Options &options = alloptions[name];
+    electron_dynamics = options["electron_dynamics"]
+      .doc("Include electron sound speed?")
+      .withDefault<bool>(true);
+  }
   
   /// This sets in the state
   /// - sound_speed     The collective sound speed, based on total pressure and total mass density
@@ -23,6 +28,9 @@ struct SoundSpeed : public Component {
   ///     - pressure
   ///
   void transform(Options &state) override;
+
+private:
+  bool electron_dynamics; ///< Include electron sound speed?
 };
 
 namespace {
