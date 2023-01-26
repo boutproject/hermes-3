@@ -71,7 +71,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
 
-  enable_precon = options["precon"]
+  enable_precon = options["precondition"]
     .doc("Enable preconditioner? (Note: solver may not use it)")
     .withDefault<bool>(true);
 
