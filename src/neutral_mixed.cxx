@@ -13,6 +13,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     : name(name) {
   AUTO_TRACE();
 
+  // Normalisations
+  const Options& units = alloptions["units"];
+  const BoutReal meters = units["meters"];
+  const BoutReal seconds = units["seconds"];
+
   // Need to take derivatives in X for cross-field diffusion terms
   ASSERT0(mesh->xstart > 0);
 
@@ -43,6 +48,15 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
                      .withDefault<bool>(true);
+
+  flux_limit = options["flux_limit"]
+    .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
+    .withDefault(0.2);
+
+  diffusion_limit = options["diffusion_limit"]
+    .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
+    .withDefault(-1.0)
+    / (meters * meters / seconds); // Normalise
 
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
@@ -171,6 +185,17 @@ void NeutralMixed::finally(const Options& state) {
   AUTO_TRACE();
   auto& localstate = state["species"][name];
 
+  // Logarithms used to calculate perpendicular velocity
+  // V_perp = -Dnn * ( Grad_perp(Nn)/Nn + Grad_perp(Tn)/Tn )
+  //
+  // Grad(Pn) / Pn = Grad(Tn)/Tn + Grad(Nn)/Nn
+  //               = Grad(logTn + logNn)
+  // Field3D logNn = log(Nn);
+  // Field3D logTn = log(Tn);
+
+  Field3D logPnlim = log(Pnlim);
+  logPnlim.applyBoundary("neumann");
+
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
   //
@@ -185,6 +210,23 @@ void NeutralMixed::finally(const Options& state) {
     Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
   } else {
     Dnn = (Tn / AA) / Rnn;
+  }
+
+  if (flux_limit > 0.0) {
+    // Apply flux limit to diffusion,
+    // using the local thermal speed and pressure gradient magnitude
+    Field3D Dmax = flux_limit * sqrt(Tn / AA) /
+      (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]);
+    }
+  }
+
+  if (diffusion_limit > 0.0) {
+    // Impose an upper limit on the diffusion coefficient
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = BOUTMIN(Dnn[i], diffusion_limit);
+    }
   }
 
   mesh->communicate(Dnn);
@@ -222,17 +264,6 @@ void NeutralMixed::finally(const Options& state) {
       }
     }
   }
-
-  // Logarithms used to calculate perpendicular velocity
-  // V_perp = -Dnn * ( Grad_perp(Nn)/Nn + Grad_perp(Tn)/Tn )
-  //
-  // Grad(Pn) / Pn = Grad(Tn)/Tn + Grad(Nn)/Nn
-  //               = Grad(logTn + logNn)
-  // Field3D logNn = log(Nn);
-  // Field3D logTn = log(Tn);
-
-  Field3D logPnlim = log(Pnlim);
-  logPnlim.applyBoundary("neumann");
 
   // Sound speed appearing in Lax flux for advection terms
   Field3D sound_speed = sqrt(Tn * (5. / 3) / AA);
@@ -356,6 +387,13 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", Tnorm},
                     {"standard_name", "temperature"},
                     {"long_name", name + " temperature"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("Dnn") + name], Dnn,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " diffusion coefficient"},
                     {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
