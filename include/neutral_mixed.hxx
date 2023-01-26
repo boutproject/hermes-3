@@ -50,6 +50,7 @@ private:
   BoutReal nn_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
 
   BoutReal flux_limit; ///< Diffusive flux limit
+  BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
   bool precondition {true}; ///< Enable preconditioner?
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning

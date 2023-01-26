@@ -13,6 +13,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     : name(name) {
   AUTO_TRACE();
 
+  // Normalisations
+  const Options& units = alloptions["units"];
+  const BoutReal meters = units["meters"];
+  const BoutReal seconds = units["seconds"];
+
   // Need to take derivatives in X for cross-field diffusion terms
   ASSERT0(mesh->xstart > 0);
 
@@ -47,6 +52,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   flux_limit = options["flux_limit"]
     .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
     .withDefault(0.2);
+
+  diffusion_limit = options["diffusion_limit"]
+    .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
+    .withDefault(-1.0)
+    / (meters * meters / seconds); // Normalise
 
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
@@ -202,12 +212,20 @@ void NeutralMixed::finally(const Options& state) {
     Dnn = (Tn / AA) / Rnn;
   }
 
-  // Flux limit diffusion
   if (flux_limit > 0.0) {
+    // Apply flux limit to diffusion,
+    // using the local thermal speed and pressure gradient magnitude
     Field3D Dmax = flux_limit * sqrt(Tn / AA) /
       (abs(Grad(logPnlim)) + 1. / neutral_lmax);
     BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) {
       Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]);
+    }
+  }
+
+  if (diffusion_limit > 0.0) {
+    // Impose an upper limit on the diffusion coefficient
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = BOUTMIN(Dnn[i], diffusion_limit);
     }
   }
 
