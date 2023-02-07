@@ -219,6 +219,18 @@ inline bool hermesDataInvalid(const Field3D& value) {
   return false;
 }
 
+/// Check Field2D values.
+/// Doesn't check boundary cells
+template<>
+inline bool hermesDataInvalid(const Field2D& value) {
+  for (auto& i : value.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(value[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
 ///
