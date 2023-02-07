@@ -1,4 +1,6 @@
 
+#include <bout/constants.hxx>
+
 #include "../include/full_velocity.hxx"
 #include "../include/div_ops.hxx"
 
@@ -7,12 +9,15 @@
 
 using bout::globals::mesh;
 
-NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& options, Solver *solver) : name(name) {
+NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& alloptions, Solver *solver) : name(name) {
+  AUTO_TRACE();
 
   // This is used in both transform and finally functions
   coord = mesh->getCoordinates();
 
-  AA = options["AA"].doc("Atomic mass number").withDefault(2.0);
+  auto& options = alloptions[name];
+
+  AA = options["AA"].doc("Atomic mass number. Proton = 1").as<int>();
 
   gamma_ratio =
       options["gamma_ratio"].doc("Ratio of specific heats").withDefault(5. / 3);
@@ -42,11 +47,11 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& optio
   Tnorm = units["eV"];
   
   // Evolve 2D density, pressure, and velocity
-  solver->add(Nn2D, "Nn");
-  solver->add(Pn2D, "Pn");
-  solver->add(Vn2D, "Vn");
+  solver->add(Nn2D, "N" + name);
+  solver->add(Pn2D, "P" + name);
+  solver->add(Vn2D, "V" + name);
 
-  DivV2D.setBoundary("Pn"); // Same boundary condition as Pn
+  DivV2D.setBoundary("P" + name); // Same boundary condition as Pn
 
   // Load necessary metrics for non-orth calculation
   Field2D etaxy, cosbeta;
@@ -158,15 +163,22 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& optio
 
 /// Modify the given simulation state
 void NeutralFullVelocity::transform(Options &state) {
+  AUTO_TRACE();
   mesh->communicate(Nn2D, Vn2D, Pn2D);
-  
-  // Navier-Stokes for axisymmetric neutral gas profiles
-  // Nn2D, Pn2D and Tn2D are unfloored
-  Tn2D = Pn2D / Nn2D;
+
+  // Boundary conditions
+  Nn2D.applyBoundary("neumann");
+  Pn2D.applyBoundary("neumann");
+  Vn2D.applyBoundary("dirichlet");
 
   // Floored fields, used for rate coefficients
-  Field2D Nn = floor(Nn2D, 1e-8);
-  Field2D Tn = floor(Tn2D, 0.01 / Tnorm);
+  Nn2D = floor(Nn2D, 0.0);
+  Pn2D = floor(Pn2D, 0.0);
+
+  Field2D Nnlim = floor(Nn2D, 1e-5);
+
+  Tn2D = Pn2D / Nnlim;
+  Tn2D.applyBoundary("neumann");
 
   //////////////////////////////////////////////////////
   // 2D (X-Y) full velocity model
@@ -174,29 +186,32 @@ void NeutralFullVelocity::transform(Options &state) {
   // Evolves density Nn2D, velocity vector Vn2D and pressure Pn2D
   //
 
-  if (outflow_ydown) {
-    // Outflowing boundaries at ydown. If flow direction is
-    // into domain then zero value is set. If flow is out of domain
-    // then Neumann conditions are set
+  for (RangeIterator idwn = mesh->iterateBndryLowerY(); !idwn.isDone();
+       idwn.next()) {
+    // Diriclet conditions on Y
+    Vn2D.y(idwn.ind, mesh->ystart - 1) = -Vn2D.y(idwn.ind, mesh->ystart);
 
-    for (RangeIterator idwn = mesh->iterateBndryLowerY(); !idwn.isDone();
-         idwn.next()) {
+    // Neumann boundary condition on X and Z components
+    Vn2D.x(idwn.ind, mesh->ystart - 1) = Vn2D.x(idwn.ind, mesh->ystart);
+    Vn2D.z(idwn.ind, mesh->ystart - 1) = Vn2D.z(idwn.ind, mesh->ystart);
 
-      if (Vn2D.y(idwn.ind, mesh->ystart) < 0.0) {
-        // Flowing out of domain
-        Vn2D.y(idwn.ind, mesh->ystart - 1) = Vn2D.y(idwn.ind, mesh->ystart);
-      } else {
-        // Flowing into domain
-        Vn2D.y(idwn.ind, mesh->ystart - 1) = -Vn2D.y(idwn.ind, mesh->ystart);
-      }
-      // Neumann boundary condition on X and Z components
-      Vn2D.x(idwn.ind, mesh->ystart - 1) = Vn2D.x(idwn.ind, mesh->ystart);
-      Vn2D.z(idwn.ind, mesh->ystart - 1) = Vn2D.z(idwn.ind, mesh->ystart);
+    // Neumann conditions on density and pressure
+    Nn2D(idwn.ind, mesh->ystart - 1) = Nn2D(idwn.ind, mesh->ystart);
+    Pn2D(idwn.ind, mesh->ystart - 1) = Pn2D(idwn.ind, mesh->ystart);
+  }
 
-      // Neumann conditions on density and pressure
-      Nn2D(idwn.ind, mesh->ystart - 1) = Nn2D(idwn.ind, mesh->ystart);
-      Pn2D(idwn.ind, mesh->ystart - 1) = Pn2D(idwn.ind, mesh->ystart);
-    }
+  for (RangeIterator idwn = mesh->iterateBndryUpperY(); !idwn.isDone();
+       idwn.next()) {
+    // Diriclet conditions on Y
+    Vn2D.y(idwn.ind, mesh->yend + 1) = -Vn2D.y(idwn.ind, mesh->yend);
+
+    // Neumann boundary condition on X and Z components
+    Vn2D.x(idwn.ind, mesh->yend + 1) = Vn2D.x(idwn.ind, mesh->yend);
+    Vn2D.z(idwn.ind, mesh->yend + 1) = Vn2D.z(idwn.ind, mesh->yend);
+
+    // Neumann conditions on density and pressure
+    Nn2D(idwn.ind, mesh->yend + 1) = Nn2D(idwn.ind, mesh->yend);
+    Pn2D(idwn.ind, mesh->yend + 1) = Pn2D(idwn.ind, mesh->yend);
   }
 
   // Exchange of parallel momentum. This could be done
@@ -208,17 +223,19 @@ void NeutralFullVelocity::transform(Options &state) {
 
   // Set values in the state
   auto& localstate = state["species"][name];
-  set(localstate["density"], Nn);
+  set(localstate["density"], Nn2D);
+  set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn2D);
-  set(localstate["momentum"], Vnpar * Nn * AA);
+  set(localstate["momentum"], Vnpar * Nn2D * AA);
   set(localstate["velocity"], Vnpar); // Parallel velocity
-  set(localstate["temperature"], Tn);
+  set(localstate["temperature"], 0.01);
 }
 
 /// Use the final simulation state to update internal state
 /// (e.g. time derivatives)
 void NeutralFullVelocity::finally(const Options &state) {
-  
+  AUTO_TRACE();
+
   // Density
   ddt(Nn2D) = -Div(Vn2D, Nn2D);
 
@@ -266,7 +283,7 @@ void NeutralFullVelocity::finally(const Options &state) {
   // Pressure
   ddt(Pn2D) = -Div(Vn2D, Pn2D) -
               (gamma_ratio - 1.) * Pn2D * DivV2D * floor(Nn2D, 0) / Nn2D_floor +
-              Laplace_FV(neutral_conduction, Pn2D / Nn2D);
+              Laplace_FV(neutral_conduction, Tn2D);
 
   ///////////////////////////////////////////////////////////////////
   // Boundary condition on fluxes
@@ -342,18 +359,18 @@ void NeutralFullVelocity::finally(const Options &state) {
 
   // Particles
   if (localstate.isSet("density_source")) {
-    ddt(Nn2D) += get<Field2D>(localstate["density_source"]);
+    ddt(Nn2D) += DC(get<Field3D>(localstate["density_source"]));
   }
 
   // Momentum. Note need to turn back into covariant form
   if (localstate.isSet("momentum_source")) {
-    ddt(Vn2D).y += get<Field2D>(localstate["momentum_source"])
+    ddt(Vn2D).y += DC(get<Field3D>(localstate["momentum_source"]))
       * (coord->J * coord->Bxy) / (AA * Nn2D_floor);
   }
 
   // Energy
   if (localstate.isSet("energy_source")) {
-    ddt(Pn2D) += (2. / 3) * get<Field2D>(localstate["energy_source"]);
+    ddt(Pn2D) += (2. / 3) * DC(get<Field3D>(localstate["energy_source"]));
   }
 
   // Density evolution
@@ -371,6 +388,23 @@ void NeutralFullVelocity::outputVars(Options &state) {
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+
+  state[std::string("N") + name].setAttributes({{"time_dimension", "t"},
+                                                {"units", "m^-3"},
+                                                {"conversion", Nnorm},
+                                                {"standard_name", "density"},
+                                                {"long_name", name + " number density"},
+                                                {"species", name},
+                                                {"source", "full_velocity"}});
+
+  state[std::string("P") + name].setAttributes({{"time_dimension", "t"},
+                                                {"units", "Pa"},
+                                                {"conversion", Pnorm},
+                                                {"standard_name", "pressure"},
+                                                {"long_name", name + " pressure"},
+                                                {"species", name},
+                                                {"source", "full_velocity"}});
 
   set_with_attrs(state["DivV2D"], DivV2D, {
       {"time_dimension", "t"},

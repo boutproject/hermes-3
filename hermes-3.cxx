@@ -1,7 +1,7 @@
 /*
 
-    Copyright B.Dudson, J.Leddy, University of York, 2016-2020
-              email: benjamin.dudson@york.ac.uk
+    Copyright Hermes-3 contributors 2016-2023
+              email: dudson2@llnl.gov
 
     This file is part of Hermes-3 (Hot ion, multifluid)
 
@@ -41,6 +41,7 @@
 #include "include/fixed_fraction_radiation.hxx"
 #include "include/fixed_temperature.hxx"
 #include "include/fixed_velocity.hxx"
+#include "include/full_velocity.hxx"
 #include "include/hydrogen_charge_exchange.hxx"
 #include "include/ion_viscosity.hxx"
 #include "include/ionisation.hxx"
