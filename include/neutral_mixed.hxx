@@ -55,7 +55,7 @@ private:
   bool precondition {true}; ///< Enable preconditioner?
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
-  Field3D density_source, energy_source; ///< External input source
+  Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
 
   bool output_ddt; ///< Save time derivatives?

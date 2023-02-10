@@ -91,13 +91,13 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
-  energy_source = 0.0;
-  mesh->get(energy_source, std::string("P") + name + "_src");
+  pressure_source = 0.0;
+  mesh->get(pressure_source, std::string("P") + name + "_src");
   // Allow the user to override the source
-  energy_source = alloptions[std::string("P") + name]["source"]
+  pressure_source = alloptions[std::string("P") + name]["source"]
                .doc(std::string("Source term in ddt(P") + name
                     + std::string("). Units [N/m^2/s]"))
-               .withDefault(energy_source)
+               .withDefault(pressure_source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
 
 }
@@ -339,7 +339,7 @@ void NeutralMixed::finally(const Options& state) {
             + FV::Div_par_K_Grad_par(DnnNn, Tn)    // Parallel conduction
       ;
 
-  Sp = energy_source;
+  Sp = pressure_source;
   if (localstate.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
   }
@@ -451,7 +451,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"long_name", name + " number density source"},
                     {"species", name},
                     {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("P") + name + std::string("_src")], energy_source,
+    set_with_attrs(state[std::string("P") + name + std::string("_src")], pressure_source,
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
