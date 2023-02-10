@@ -17,6 +17,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   const Options& units = alloptions["units"];
   const BoutReal meters = units["meters"];
   const BoutReal seconds = units["seconds"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
+  const BoutReal Tnorm = units["eV"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
   // Need to take derivatives in X for cross-field diffusion terms
   ASSERT0(mesh->xstart > 0);
@@ -75,6 +78,28 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
       options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
 
   AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(1.0);
+
+  // Try to read the density source from the mesh
+  // Units of particles per cubic meter per second
+  density_source = 0.0;
+  mesh->get(density_source, std::string("N") + name + "_src");
+  // Allow the user to override the source
+  density_source = alloptions[std::string("N") + name]["source"]
+               .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
+               .withDefault(density_source)
+           / (Nnorm * Omega_ci);
+
+  // Try to read the pressure source from the mesh
+  // Units of Pascals per second
+  pressure_source = 0.0;
+  mesh->get(pressure_source, std::string("P") + name + "_src");
+  // Allow the user to override the source
+  pressure_source = alloptions[std::string("P") + name]["source"]
+               .doc(std::string("Source term in ddt(P") + name
+                    + std::string("). Units [N/m^2/s]"))
+               .withDefault(pressure_source)
+           / (SI::qe * Nnorm * Tnorm * Omega_ci);
+
 }
 
 void NeutralMixed::transform(Options& state) {
@@ -275,10 +300,11 @@ void NeutralMixed::finally(const Options& state) {
             + FV::Div_a_Grad_perp(DnnNn, logPnlim) // Perpendicular diffusion
       ;
 
+  Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
-    Sn = get<Field3D>(localstate["density_source"]);
-    ddt(Nn) += Sn;
+    Sn += get<Field3D>(localstate["density_source"]);
   }
+  ddt(Nn) += Sn; // Always add density_source
 
   /////////////////////////////////////////////////////
   // Neutral momentum
@@ -313,10 +339,11 @@ void NeutralMixed::finally(const Options& state) {
             + FV::Div_par_K_Grad_par(DnnNn, Tn)    // Parallel conduction
       ;
 
+  Sp = pressure_source;
   if (localstate.isSet("energy_source")) {
-    Sp = (2. / 3) * get<Field3D>(localstate["energy_source"]);
-    ddt(Pn) += Sp;
+    Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
   }
+  ddt(Pn) += Sp;
 
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
     if ((Pn[i] < 1e-9) && (ddt(Pn)[i] < 0.0)) {
@@ -416,6 +443,23 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "momentum source"},
                     {"long_name", name + " momentum source"},
                     {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("S") + name + std::string("_src")], density_source,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "density source"},
+                    {"long_name", name + " number density source"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("P") + name + std::string("_src")], pressure_source,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+
   }
 }
 
