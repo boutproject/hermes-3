@@ -303,8 +303,8 @@ void NeutralMixed::finally(const Options& state) {
   Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
     Sn += get<Field3D>(localstate["density_source"]);
-    ddt(Nn) += Sn;
   }
+  ddt(Nn) += Sn; // Always add density_source
 
   /////////////////////////////////////////////////////
   // Neutral momentum
@@ -342,8 +342,8 @@ void NeutralMixed::finally(const Options& state) {
   Sp = energy_source;
   if (localstate.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
-    ddt(Pn) += Sp;
   }
+  ddt(Pn) += Sp;
 
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
     if ((Pn[i] < 1e-9) && (ddt(Pn)[i] < 0.0)) {
@@ -450,7 +450,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "density source"},
                     {"long_name", name + " number density source"},
                     {"species", name},
-                    {"source", "evolve_density"}});
+                    {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("P") + name + std::string("_src")], energy_source,
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
@@ -458,7 +458,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "pressure source"},
                     {"long_name", name + " pressure source"},
                     {"species", name},
-                    {"source", "evolve_pressure"}});
+                    {"source", "neutral_mixed"}});
 
   }
 }
