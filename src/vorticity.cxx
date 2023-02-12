@@ -11,12 +11,31 @@
 
 using bout::globals::mesh;
 
+namespace {
+BoutReal floor(BoutReal value, BoutReal min) {
+  if (value < min)
+    return min;
+  return value;
+}
+
+Ind3D indexAt(const Field3D& f, int x, int y, int z) {
+  int ny = f.getNy();
+  int nz = f.getNz();
+  return Ind3D{(x * ny + y) * nz + z, ny, nz};
+}
+}
+
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   AUTO_TRACE();
 
   solver->add(Vort, "Vort");
 
   auto& options = alloptions[name];
+  // Normalisations
+  const Options& units = alloptions["units"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Bnorm = units["Tesla"];
+  const BoutReal Lnorm = units["meters"];
 
   exb_advection = options["exb_advection"]
                       .doc("Include ExB advection (nonlinear term)?")
@@ -54,6 +73,12 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   split_n0 = options["split_n0"]
                  .doc("Split phi into n=0 and n!=0 components")
                  .withDefault<bool>(false);
+
+  viscosity = options["viscosity"]
+    .doc("Kinematic viscosity [m^2/s]")
+    .withDefault<BoutReal>(0.0)
+    / (Lnorm * Lnorm * Omega_ci);
+  viscosity.applyBoundary("dirichlet");
 
   hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
 
@@ -137,10 +162,6 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     mesh->get(I, "sinty");
     Curlb_B.z += I * Curlb_B.x;
   }
-
-  Options& units = alloptions["units"];
-  BoutReal Bnorm = units["Tesla"];
-  BoutReal Lnorm = units["meters"];
 
   Curlb_B.x /= Bnorm;
   Curlb_B.y *= SQ(Lnorm);
@@ -546,6 +567,9 @@ void Vorticity::finally(const Options& state) {
     // Note: Using NV rather than N*V so that the cell boundary flux is correct
     ddt(Vort) += Div_par((Z / A) * NV);
   }
+
+  // Viscosity
+  ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
 
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
