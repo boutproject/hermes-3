@@ -99,6 +99,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                            .doc("Relax x boundaries of phi towards Neumann?")
                            .withDefault<bool>(false);
 
+  phi_sheath_dissipation = options["phi_sheath_dissipation"]
+    .doc("Add dissipation when phi < 0.0 at the sheath")
+    .withDefault<bool>(false);
+
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
   // so that phi can be saved and re-loaded
@@ -588,6 +592,27 @@ void Vorticity::finally(const Options& state) {
     // Form of hyper-viscosity to suppress zig-zags in Z
     auto* coord = Vort.getCoordinates();
     ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+  }
+
+  if (phi_sheath_dissipation) {
+    // Dissipation when phi < 0.0 at the sheath
+
+    Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+    Coordinates *coord = phi.getCoordinates();
+
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        auto i = indexAt(phi, r.ind, mesh->ystart, jz);
+        ddt(Vort)[i] -= sound_speed[i] * floor(-phi[i], 0.0) / (sqrt(coord->g_22[i]) * coord->dy[i]);
+      }
+    }
+
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        auto i = indexAt(phi, r.ind, mesh->yend, jz);
+        ddt(Vort)[i] -= sound_speed[i] * floor(-phi[i], 0.0) / (sqrt(coord->g_22[i]) * coord->dy[i]);
+      }
+    }
   }
 }
 

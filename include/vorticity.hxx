@@ -91,6 +91,7 @@ private:
 
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
+  bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
 
   bool phi_boundary_relax; ///< Relax boundary to zero-gradient
   BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
