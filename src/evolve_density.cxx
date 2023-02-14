@@ -96,6 +96,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
       }
     }
   }
+
+  neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
+    .doc("Apply neumann boundary with Z average?")
+    .withDefault<bool>(false);
 }
 
 void EvolveDensity::transform(Options& state) {
@@ -107,6 +111,40 @@ void EvolveDensity::transform(Options& state) {
   }
 
   mesh->communicate(N);
+
+  if (neumann_boundary_average_z) {
+    // Take Z (usually toroidal) average and apply as X (radial) boundary condition
+    if (mesh->firstX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        BoutReal Navg = 0.0; // Average N in Z
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          Navg += N(mesh->xstart, j, k);
+        }
+        Navg /= mesh->LocalNz;
+
+        // Apply boundary condition
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          N(mesh->xstart - 1, j, k) = 2. * Navg - N(mesh->xstart, j, k);
+          N(mesh->xstart - 2, j, k) = N(mesh->xstart - 1, j, k);
+        }
+      }
+    }
+
+    if (mesh->lastX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        BoutReal Navg = 0.0; // Average N in Z
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          Navg += N(mesh->xend, j, k);
+        }
+        Navg /= mesh->LocalNz;
+
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          N(mesh->xend + 1, j, k) = 2. * Navg - N(mesh->xend, j, k);
+          N(mesh->xend + 2, j, k) = N(mesh->xend + 1, j, k);
+        }
+      }
+    }
+  }
 
   auto& species = state["species"][name];
   set(species["density"], floor(N, 0.0)); // Density in state always >= 0
