@@ -90,6 +90,21 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                     + std::string("). Units [N/m^2/s]"))
                .withDefault(source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
+
+  if (alloptions[std::string("P") + name]["source_only_in_core"]
+      .doc("Zero the source outside the closed field-line region?")
+      .withDefault<bool>(false)) {
+    for (int x = mesh->xstart; x <= mesh->xend; x++) {
+      if (!mesh->periodicY(x)) {
+        // Not periodic, so not in core
+        for (int y = mesh->ystart; y <= mesh->yend; y++) {
+          for (int z = mesh->zstart; z <= mesh->zend; z++) {
+            source(x, y, z) = 0.0;
+          }
+        }
+      }
+    }
+  }
 }
 
 void EvolvePressure::transform(Options& state) {

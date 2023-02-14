@@ -81,6 +81,21 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
                .withDefault(source)
            / (Nnorm * Omega_ci);
+
+  if (alloptions[std::string("N") + name]["source_only_in_core"]
+      .doc("Zero the source outside the closed field-line region?")
+      .withDefault<bool>(false)) {
+    for (int x = mesh->xstart; x <= mesh->xend; x++) {
+      if (!mesh->periodicY(x)) {
+        // Not periodic, so not in core
+        for (int y = mesh->ystart; y <= mesh->yend; y++) {
+          for (int z = mesh->zstart; z <= mesh->zend; z++) {
+            source(x, y, z) = 0.0;
+          }
+        }
+      }
+    }
+  }
 }
 
 void EvolveDensity::transform(Options& state) {
