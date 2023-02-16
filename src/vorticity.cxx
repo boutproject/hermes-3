@@ -597,22 +597,24 @@ void Vorticity::finally(const Options& state) {
   if (phi_sheath_dissipation) {
     // Dissipation when phi < 0.0 at the sheath
 
-    Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    Coordinates *coord = phi.getCoordinates();
-
+    auto phi_fa = toFieldAligned(phi);
+    Field3D dissipation{zeroFrom(phi_fa)};
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(phi, r.ind, mesh->ystart, jz);
-        ddt(Vort)[i] -= sound_speed[i] * floor(-phi[i], 0.0) / (sqrt(coord->g_22[i]) * coord->dy[i]);
+        auto i = indexAt(phi_fa, r.ind, mesh->ystart, jz);
+        BoutReal phisheath = 0.5*(phi_fa[i] + phi_fa[i.ym()]);
+        dissipation[i] = -floor(-phisheath, 0.0);
       }
     }
 
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(phi, r.ind, mesh->yend, jz);
-        ddt(Vort)[i] -= sound_speed[i] * floor(-phi[i], 0.0) / (sqrt(coord->g_22[i]) * coord->dy[i]);
+        auto i = indexAt(phi_fa, r.ind, mesh->yend, jz);
+        BoutReal phisheath = 0.5*(phi_fa[i] + phi_fa[i.yp()]);
+        dissipation[i] = -floor(-phisheath, 0.0);
       }
     }
+    ddt(Vort) += fromFieldAligned(dissipation);
   }
 }
 
