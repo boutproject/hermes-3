@@ -13,6 +13,14 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     : name(name) {
   AUTO_TRACE();
 
+  // Normalisations
+  const Options& units = alloptions["units"];
+  const BoutReal meters = units["meters"];
+  const BoutReal seconds = units["seconds"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
+  const BoutReal Tnorm = units["eV"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+
   // Need to take derivatives in X for cross-field diffusion terms
   ASSERT0(mesh->xstart > 0);
 
@@ -44,6 +52,15 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                      .doc("Enable preconditioning in neutral model?")
                      .withDefault<bool>(true);
 
+  flux_limit = options["flux_limit"]
+    .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
+    .withDefault(0.2);
+
+  diffusion_limit = options["diffusion_limit"]
+    .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
+    .withDefault(-1.0)
+    / (meters * meters / seconds); // Normalise
+
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
 
@@ -61,6 +78,28 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
       options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
 
   AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(1.0);
+
+  // Try to read the density source from the mesh
+  // Units of particles per cubic meter per second
+  density_source = 0.0;
+  mesh->get(density_source, std::string("N") + name + "_src");
+  // Allow the user to override the source
+  density_source = alloptions[std::string("N") + name]["source"]
+               .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
+               .withDefault(density_source)
+           / (Nnorm * Omega_ci);
+
+  // Try to read the pressure source from the mesh
+  // Units of Pascals per second
+  pressure_source = 0.0;
+  mesh->get(pressure_source, std::string("P") + name + "_src");
+  // Allow the user to override the source
+  pressure_source = alloptions[std::string("P") + name]["source"]
+               .doc(std::string("Source term in ddt(P") + name
+                    + std::string("). Units [N/m^2/s]"))
+               .withDefault(pressure_source)
+           / (SI::qe * Nnorm * Tnorm * Omega_ci);
+
 }
 
 void NeutralMixed::transform(Options& state) {
@@ -171,6 +210,17 @@ void NeutralMixed::finally(const Options& state) {
   AUTO_TRACE();
   auto& localstate = state["species"][name];
 
+  // Logarithms used to calculate perpendicular velocity
+  // V_perp = -Dnn * ( Grad_perp(Nn)/Nn + Grad_perp(Tn)/Tn )
+  //
+  // Grad(Pn) / Pn = Grad(Tn)/Tn + Grad(Nn)/Nn
+  //               = Grad(logTn + logNn)
+  // Field3D logNn = log(Nn);
+  // Field3D logTn = log(Tn);
+
+  Field3D logPnlim = log(Pnlim);
+  logPnlim.applyBoundary("neumann");
+
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
   //
@@ -185,6 +235,23 @@ void NeutralMixed::finally(const Options& state) {
     Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
   } else {
     Dnn = (Tn / AA) / Rnn;
+  }
+
+  if (flux_limit > 0.0) {
+    // Apply flux limit to diffusion,
+    // using the local thermal speed and pressure gradient magnitude
+    Field3D Dmax = flux_limit * sqrt(Tn / AA) /
+      (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]);
+    }
+  }
+
+  if (diffusion_limit > 0.0) {
+    // Impose an upper limit on the diffusion coefficient
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = BOUTMIN(Dnn[i], diffusion_limit);
+    }
   }
 
   mesh->communicate(Dnn);
@@ -223,17 +290,6 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
-  // Logarithms used to calculate perpendicular velocity
-  // V_perp = -Dnn * ( Grad_perp(Nn)/Nn + Grad_perp(Tn)/Tn )
-  //
-  // Grad(Pn) / Pn = Grad(Tn)/Tn + Grad(Nn)/Nn
-  //               = Grad(logTn + logNn)
-  // Field3D logNn = log(Nn);
-  // Field3D logTn = log(Tn);
-
-  Field3D logPnlim = log(Pnlim);
-  logPnlim.applyBoundary("neumann");
-
   // Sound speed appearing in Lax flux for advection terms
   Field3D sound_speed = sqrt(Tn * (5. / 3) / AA);
 
@@ -244,10 +300,11 @@ void NeutralMixed::finally(const Options& state) {
             + FV::Div_a_Grad_perp(DnnNn, logPnlim) // Perpendicular diffusion
       ;
 
+  Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
-    Sn = get<Field3D>(localstate["density_source"]);
-    ddt(Nn) += Sn;
+    Sn += get<Field3D>(localstate["density_source"]);
   }
+  ddt(Nn) += Sn; // Always add density_source
 
   /////////////////////////////////////////////////////
   // Neutral momentum
@@ -259,11 +316,11 @@ void NeutralMixed::finally(const Options& state) {
   // Transport Processes in Gases", 1972
   // eta_n = (2. / 5) * kappa_n;
 
-  ddt(NVn) = -FV::Div_par_fvv(Nnlim, Vn, sound_speed)       // Momentum flow
-             - Grad_par(Pn)                                 // Pressure gradient
-             + FV::Div_a_Grad_perp(DnnNVn, logPnlim)        // Perpendicular diffusion
-             + FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
-             + FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
+  ddt(NVn) = - AA * FV::Div_par_fvv(Nnlim, Vn, sound_speed)      // Momentum flow
+             - Grad_par(Pn)                                      // Pressure gradient
+             + FV::Div_a_Grad_perp(DnnNVn, logPnlim)             // Perpendicular diffusion
+             + AA * FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
+             + AA * FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
       ;
 
   if (localstate.isSet("momentum_source")) {
@@ -282,10 +339,11 @@ void NeutralMixed::finally(const Options& state) {
             + FV::Div_par_K_Grad_par(DnnNn, Tn)    // Parallel conduction
       ;
 
+  Sp = pressure_source;
   if (localstate.isSet("energy_source")) {
-    Sp = (2. / 3) * get<Field3D>(localstate["energy_source"]);
-    ddt(Pn) += Sp;
+    Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
   }
+  ddt(Pn) += Sp;
 
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
     if ((Pn[i] < 1e-9) && (ddt(Pn)[i] < 0.0)) {
@@ -357,6 +415,13 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "temperature"},
                     {"long_name", name + " temperature"},
                     {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("Dnn") + name], Dnn,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
                     {"units", "m^-3 s^-1"},
@@ -378,6 +443,23 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "momentum source"},
                     {"long_name", name + " momentum source"},
                     {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("S") + name + std::string("_src")], density_source,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "density source"},
+                    {"long_name", name + " number density source"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("P") + name + std::string("_src")], pressure_source,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+
   }
 }
 

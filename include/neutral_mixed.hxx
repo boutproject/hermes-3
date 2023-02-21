@@ -48,10 +48,14 @@ private:
   BoutReal neutral_gamma; ///< Heat transmission for neutrals
   
   BoutReal nn_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
-  
+
+  BoutReal flux_limit; ///< Diffusive flux limit
+  BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
+
   bool precondition {true}; ///< Enable preconditioner?
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
+  Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
 
   bool output_ddt; ///< Save time derivatives?

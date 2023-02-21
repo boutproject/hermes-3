@@ -7,6 +7,9 @@ from math import pi
 # Length of the y domain
 Ly = 10.
 
+# Atomic mass number
+AA = 2.0
+
 # metric tensor
 metric = Metric()  # Identity
 
@@ -14,18 +17,19 @@ metric = Metric()  # Identity
 
 n = 1 + 0.1*sin(2*y - t)
 p = 1 + 0.1*cos(3*y + t)
-nv = 0.1*sin(y + 2*t)
+mnv = AA * 0.1*sin(y + 2*t)
 
 # Turn solution into real x and z coordinates
 replace = [ (y, metric.y*2*pi/Ly) ]
 
 n = n.subs(replace)
 p = p.subs(replace)
-nv = nv.subs(replace)
+mnv = mnv.subs(replace)
 
 ##############################
 # Calculate time derivatives
 
+nv = mnv / AA
 v = nv / n
 gamma = 5./3
 
@@ -36,25 +40,25 @@ dndt = - Div_par(nv)
 dpdt = - Div_par(p*v) - (gamma-1.0)*p*Div_par(v)
 
 # Momentum equation
-dnvdt = - Div_par(nv*v) - Grad_par(p)
+dmnvdt = - Div_par(mnv*v) - Grad_par(p)
 
 #############################
 # Calculate sources
 
 Sn = diff(n, t) - dndt
 Sp = diff(p, t) - dpdt
-Snv = diff(nv, t) - dnvdt
+Smnv = diff(mnv, t) - dmnvdt
 
 # Substitute back to get input y coordinates
 replace = [ (metric.y, y*Ly/(2*pi) ) ]
 
 n = n.subs(replace)
 p = p.subs(replace)
-nv = nv.subs(replace)
+mnv = mnv.subs(replace)
 
 Sn = Sn.subs(replace)
 Sp = Sp.subs(replace)
-Snv = Snv.subs(replace)
+Smnv = Smnv.subs(replace)
 
 print("[n]")
 print("solution = " + exprToStr(n))
@@ -65,5 +69,5 @@ print("solution = " + exprToStr(p))
 print("\nsource = " + exprToStr(Sp))
 
 print("\n[nv]")
-print("solution = " + exprToStr(nv))
-print("\nsource = " + exprToStr(Snv))
+print("solution = " + exprToStr(mnv))
+print("\nsource = " + exprToStr(Smnv))
