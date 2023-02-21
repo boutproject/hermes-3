@@ -316,11 +316,11 @@ void NeutralMixed::finally(const Options& state) {
   // Transport Processes in Gases", 1972
   // eta_n = (2. / 5) * kappa_n;
 
-  ddt(NVn) = -FV::Div_par_fvv(Nnlim, Vn, sound_speed)       // Momentum flow
-             - Grad_par(Pn)                                 // Pressure gradient
-             + FV::Div_a_Grad_perp(DnnNVn, logPnlim)        // Perpendicular diffusion
-             + FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
-             + FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
+  ddt(NVn) = - AA * FV::Div_par_fvv(Nnlim, Vn, sound_speed)      // Momentum flow
+             - Grad_par(Pn)                                      // Pressure gradient
+             + FV::Div_a_Grad_perp(DnnNVn, logPnlim)             // Perpendicular diffusion
+             + AA * FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
+             + AA * FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
       ;
 
   if (localstate.isSet("momentum_source")) {

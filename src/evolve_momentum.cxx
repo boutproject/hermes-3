@@ -70,6 +70,7 @@ void EvolveMomentum::finally(const Options &state) {
   AUTO_TRACE();
 
   auto& species = state["species"][name];
+  BoutReal AA = get<BoutReal>(species["AA"]);
 
   // Get updated momentum with boundary conditions
   NV = get<Field3D>(species["momentum"]);
@@ -109,13 +110,12 @@ void EvolveMomentum::finally(const Options &state) {
     fastest_wave = get<Field3D>(state["fastest_wave"]);
   } else {
     Field3D T = get<Field3D>(species["temperature"]);
-    BoutReal AA = get<BoutReal>(species["AA"]);
     fastest_wave = sqrt(T / AA);
   }
 
   // Note: Density floor should be consistent with calculation of V
   //       otherwise energy conservation is affected
-  ddt(NV) -= FV::Div_par_fvv(Nlim, V, fastest_wave);
+  ddt(NV) -= AA * FV::Div_par_fvv(Nlim, V, fastest_wave);
 
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
