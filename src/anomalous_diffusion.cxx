@@ -46,6 +46,10 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
   anomalous_sheath_flux = options["anomalous_sheath_flux"]
                               .doc("Allow anomalous diffusion into sheath?")
                               .withDefault<bool>(false);
+
+  diagnose = alloptions[name]["diagnose"]
+                   .doc("Output additional diagnostics?")
+                   .withDefault<bool>(false);
 }
 
 void AnomalousDiffusion::transform(Options& state) {
@@ -105,4 +109,45 @@ void AnomalousDiffusion::transform(Options& state) {
     // Gradients in slow speed which drive momentum flows
     add(species["momentum_source"], Div_a_Grad_perp_upwind(anomalous_nu * N2D, V2D));
   }
+
 }
+
+void AnomalousDiffusion::outputVars(Options& state) {
+  AUTO_TRACE();
+  // Normalisations
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
+  if (diagnose) {
+
+      AUTO_TRACE();
+      // Save particle, momentum and energy channels
+
+      set_with_attrs(state[{std::string("anomalous_D_") + name}], anomalous_D,
+                      {{"time_dimension", "t"},
+                      {"units", "m^2 s^-1"},
+                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                      {"standard_name", "anomalous density diffusion"},
+                      {"long_name", std::string("Anomalous density diffusion of ") + name},
+                      {"source", "anomalous_diffusion"}});
+
+      set_with_attrs(state[{std::string("anomalous_Chi_") + name}], anomalous_chi,
+                      {{"time_dimension", "t"},
+                      {"units", "m^2 s^-1"},
+                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                      {"standard_name", "anomalous thermal diffusion"},
+                      {"long_name", std::string("Anomalous thermal diffusion of ") + name},
+                      {"source", "anomalous_diffusion"}});
+
+      set_with_attrs(state[{std::string("anomalous_nu_") + name}], anomalous_nu,
+                      {{"time_dimension", "t"},
+                      {"units", "m^2 s^-1"},
+                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                      {"standard_name", "anomalous momentum diffusion"},
+                      {"long_name", std::string("Anomalous momentum diffusion of ") + name},
+                      {"source", "anomalous_diffusion"}});
+      
+    // }
+  }
+}
+
