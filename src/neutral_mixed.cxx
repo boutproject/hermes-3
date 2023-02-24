@@ -481,8 +481,8 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
 
   Field3D coef = -gamma * Dnn;
 
-  if (state["solver"]["scale_timederivs"].isSet()) {
-    coef *= get<Field3D>(state["solver"]["scale_timederivs"]);
+  if (state.isSet("scale_timederivs")) {
+    coef *= get<Field3D>(state["scale_timederivs"]);
   }
 
   inv->setCoefD(coef);

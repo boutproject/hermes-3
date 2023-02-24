@@ -371,8 +371,8 @@ void EvolvePressure::precon(const Options &state, BoutReal gamma) {
   // Set the coefficient in Div_par( B * Grad_par )
   Field3D coef = -(2. / 3) * gamma * kappa_par / floor(N, density_floor);
 
-  if (state["solver"]["scale_timederivs"].isSet()) {
-    coef *= get<Field3D>(state["solver"]["scale_timederivs"]);
+  if (state.isSet("scale_timederivs")) {
+    coef *= get<Field3D>(state["scale_timederivs"]);
   }
 
   inv->setCoefB(coef);
