@@ -30,7 +30,7 @@ struct ScaleTimeDerivs : public Component {
     auto Te = get<Field3D>(state["species"]["e"]["temperature"]);
     Field3D dt = dl2 / pow(Te, 5./2);
 
-    state["solver"]["scale_timederivs"] = dt / max(dt, true);
+    state["scale_timederivs"] = dt / max(dt, true);
   }
 
 private:

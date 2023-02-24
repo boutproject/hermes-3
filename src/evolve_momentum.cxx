@@ -145,8 +145,8 @@ void EvolveMomentum::finally(const Options &state) {
   ddt(NV) += NV - NV_solver;
 
   // Scale time derivatives
-  if (state["solver"]["scale_timederivs"].isSet()) {
-    ddt(NV) *= get<Field3D>(state["solver"]["scale_timederivs"]);
+  if (state.isSet("scale_timederivs")) {
+    ddt(NV) *= get<Field3D>(state["scale_timederivs"]);
   }
 
 #if CHECKLEVEL >= 1

@@ -355,8 +355,8 @@ void NeutralMixed::finally(const Options& state) {
   }
 
   // Scale time derivatives
-  if (state["solver"]["scale_timederivs"].isSet()) {
-    Field3D scale_timederivs = get<Field3D>(state["solver"]["scale_timederivs"]);
+  if (state.isSet("scale_timederivs")) {
+    Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
     ddt(Nn) *= scale_timederivs;
     ddt(Pn) *= scale_timederivs;
     ddt(NVn) *= scale_timederivs;

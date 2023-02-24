@@ -272,8 +272,8 @@ void EvolvePressure::finally(const Options& state) {
   ddt(P) += N * T - P;
 
   // Scale time derivatives
-  if (state["solver"]["scale_timederivs"].isSet()) {
-    ddt(P) *= get<Field3D>(state["solver"]["scale_timederivs"]);
+  if (state.isSet("scale_timederivs")) {
+    ddt(P) *= get<Field3D>(state["scale_timederivs"]);
   }
 
 #if CHECKLEVEL >= 1
