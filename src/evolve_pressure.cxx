@@ -271,6 +271,11 @@ void EvolvePressure::finally(const Options& state) {
   // This is active when P < 0 or when N < density_floor
   ddt(P) += N * T - P;
 
+  // Scale time derivatives
+  if (state["solver"]["scale_timederivs"].isSet()) {
+    ddt(P) *= get<Field3D>(state["solver"]["scale_timederivs"]);
+  }
+
 #if CHECKLEVEL >= 1
   for (auto& i : P.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(P)[i])) {
@@ -364,7 +369,13 @@ void EvolvePressure::precon(const Options &state, BoutReal gamma) {
   const Field3D N = get<Field3D>(species["density"]);
 
   // Set the coefficient in Div_par( B * Grad_par )
-  inv->setCoefB(-(2. / 3) * gamma * kappa_par / floor(N, density_floor));
+  Field3D coef = -(2. / 3) * gamma * kappa_par / floor(N, density_floor);
+
+  if (state["solver"]["scale_timederivs"].isSet()) {
+    coef *= get<Field3D>(state["solver"]["scale_timederivs"]);
+  }
+
+  inv->setCoefB(coef);
   Field3D dT = ddt(P);
   dT.applyBoundary("neumann");
   ddt(P) = inv->solve(dT);

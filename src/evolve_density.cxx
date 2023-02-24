@@ -175,6 +175,11 @@ void EvolveDensity::finally(const Options& state) {
   }
   ddt(N) += Sn;
 
+  // Scale time derivatives
+  if (state["solver"]["scale_timederivs"].isSet()) {
+    ddt(N) *= get<Field3D>(state["solver"]["scale_timederivs"]);
+  }
+
   if (evolve_log) {
     ddt(logN) = ddt(N) / N;
   }
