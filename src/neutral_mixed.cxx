@@ -353,6 +353,14 @@ void NeutralMixed::finally(const Options& state) {
       ddt(Nn)[i] = 0.0;
     }
   }
+
+  // Scale time derivatives
+  if (state.isSet("scale_timederivs")) {
+    Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
+    ddt(Nn) *= scale_timederivs;
+    ddt(Pn) *= scale_timederivs;
+    ddt(NVn) *= scale_timederivs;
+  }
 }
 
 void NeutralMixed::outputVars(Options& state) {
@@ -463,7 +471,7 @@ void NeutralMixed::outputVars(Options& state) {
   }
 }
 
-void NeutralMixed::precon(const Options&, BoutReal gamma) {
+void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   if (!precondition) {
     return;
   }
@@ -471,7 +479,13 @@ void NeutralMixed::precon(const Options&, BoutReal gamma) {
   // Neutral gas diffusion
   // Solve (1 - gamma*Dnn*Delp2)^{-1}
 
-  inv->setCoefD(-gamma * Dnn);
+  Field3D coef = -gamma * Dnn;
+
+  if (state.isSet("scale_timederivs")) {
+    coef *= get<Field3D>(state["scale_timederivs"]);
+  }
+
+  inv->setCoefD(coef);
 
   ddt(Nn) = inv->solve(ddt(Nn));
   ddt(NVn) = inv->solve(ddt(NVn));

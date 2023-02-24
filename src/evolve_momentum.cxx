@@ -144,6 +144,11 @@ void EvolveMomentum::finally(const Options &state) {
   // -> Add term to force NV_solver towards NV
   ddt(NV) += NV - NV_solver;
 
+  // Scale time derivatives
+  if (state.isSet("scale_timederivs")) {
+    ddt(NV) *= get<Field3D>(state["scale_timederivs"]);
+  }
+
 #if CHECKLEVEL >= 1
   for (auto& i : NV.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(NV)[i])) {
