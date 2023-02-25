@@ -25,9 +25,20 @@ struct ScaleTimeDerivs : public Component {
     // Scale by parallel heat conduction CFL timescale
     auto Te = get<Field3D>(state["species"]["e"]["temperature"]);
     Field3D dt = dl2 / pow(floor(Te, 1e-5), 5./2);
+    scaling = dt / max(dt, true); // Saved for output
 
-    state["scale_timederivs"] = dt / max(dt, true);
+    state["scale_timederivs"] = scaling;
   }
+
+  void outputVars(Options& state) override {
+    set_with_attrs(
+        state["scale_timederivs"], scaling,
+        {{"time_dimension", "t"},
+         {"long_name", "Scaling factor applied to all time derivatives"},
+         {"source", "scale_timederivs"}});
+  }
+private:
+  Field3D scaling; // The scaling factor applied to each cell
 };
 
 namespace {
