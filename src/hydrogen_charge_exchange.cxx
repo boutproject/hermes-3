@@ -47,13 +47,32 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   } // Skip the case where the same isotope swaps places
 
   // Transfer momentum
-  atom_mom = R * Aatom * get<Field3D>(atom1["velocity"]);
+  auto atom1_velocity = get<Field3D>(atom1["velocity"]);
+  auto ion1_velocity = get<Field3D>(ion1["velocity"]);
+
+  // Transfer fom atom1 to ion2
+  atom_mom = R * Aatom * atom1_velocity;
   subtract(atom1["momentum_source"], atom_mom);
   add(ion2["momentum_source"], atom_mom);
 
-  ion_mom = R * Aion * get<Field3D>(ion1["velocity"]);
+  // Transfer from ion1 to atom2
+  ion_mom = R * Aion * ion1_velocity;
   subtract(ion1["momentum_source"], ion_mom);
   add(atom2["momentum_source"], ion_mom);
+
+  if (frictional_heating) {
+    // Frictional heating: Friction force between ions and atoms
+    // converts kinetic energy to thermal energy
+
+    auto atom2_velocity = get<Field3D>(atom2["velocity"]);
+    auto ion2_velocity = get<Field3D>(ion2["velocity"]);
+
+    add(atom1["energy_source"], atom_mom * atom1_velocity);
+    subtract(ion2["energy_source"], atom_mom * ion2_velocity);
+
+    add(ion1["energy_source"], ion_mom * ion1_velocity);
+    subtract(atom2["energy_source"], ion_mom * atom2_velocity);
+  }
 
   // Transfer energy
   atom_energy = (3. / 2) * R * Tatom;

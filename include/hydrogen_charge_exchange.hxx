@@ -29,16 +29,23 @@ struct HydrogenChargeExchange : public Component {
   ///          - eV
   ///          - inv_meters_cubed
   ///          - seconds
-  HydrogenChargeExchange(std::string, Options& alloptions, Solver*) {
+  HydrogenChargeExchange(std::string name, Options& alloptions, Solver*) {
     // Get the units
     const auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
+
+    auto& options = alloptions[name];
+    frictional_heating = options["frictional_heating"]
+      .doc("Include R dot v heating term as energy source?")
+      .withDefault<bool>(true);
   }
 
 protected:
   BoutReal Tnorm, Nnorm, FreqNorm; ///< Normalisations
+
+  bool frictional_heating; ///< Include R dot v heating term?
 
   /// Calculate the charge exchange cross-section
   ///
