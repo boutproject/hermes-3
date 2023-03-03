@@ -249,24 +249,6 @@ void EvolvePressure::finally(const Options& state) {
   }
   ddt(P) += Sp;
 
-  if (species.isSet("density_source") and species.isSet("velocity")) {
-    // NOTE: This has two problems
-    //       1. density_source is NOT just sources of particles, but also includes
-    //          terms from e.g. cross-field diffusion
-    //       2. As written it is probably not dimensionally correct.
-    //          Probably should not have a factor of N
-    //
-    // Change in balance between kinetic & thermal energy due to particle source
-    // auto Sn = get<Field3D>(species["density_source"]);
-    // auto V = get<Field3D>(species["velocity"]);
-    // auto AA = get<BoutReal>(species["AA"]);
-    // ddt(P) += Sn * 0.5 * AA * N * SQ(V);
-  }
-
-  if (evolve_log) {
-    ddt(logP) = ddt(P) / P;
-  }
-
   // Term to force evolved P towards N * T
   // This is active when P < 0 or when N < density_floor
   ddt(P) += N * T - P;
@@ -274,6 +256,10 @@ void EvolvePressure::finally(const Options& state) {
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     ddt(P) *= get<Field3D>(state["scale_timederivs"]);
+  }
+
+  if (evolve_log) {
+    ddt(logP) = ddt(P) / P;
   }
 
 #if CHECKLEVEL >= 1
