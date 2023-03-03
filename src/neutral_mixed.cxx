@@ -39,10 +39,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                    .doc("Enable wall boundary conditions at yup")
                    .withDefault<bool>(true);
 
-  neutral_gamma = options["neutral_gamma"]
-                      .doc("Heat flux to the wall q = neutral_gamma * n * T * cs")
-                      .withDefault(5. / 4);
-
   nn_floor = options["nn_floor"]
                  .doc("A minimum density used when dividing NVn by Nn. "
                       "Normalised units.")
@@ -180,10 +176,6 @@ void NeutralMixed::transform(Options& state) {
         // Zero gradient temperature, heat flux added later
         Tn(r.ind, mesh->yend + 1, jz) = tnwall;
 
-        // Set pressure consistent at the boundary
-        // Pn(r.ind, mesh->yend + 1, jz) =
-        //     2. * nnwall * tnwall - Pn(r.ind, mesh->yend, jz);
-
         // Zero-gradient pressure
         Pn(r.ind, mesh->yend + 1, jz) = Pn(r.ind, mesh->yend, jz);
         Pnlim(r.ind, mesh->yend + 1, jz) = Pnlim(r.ind, mesh->yend, jz);
@@ -315,12 +307,15 @@ void NeutralMixed::finally(const Options& state) {
   // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
   // Transport Processes in Gases", 1972
   // eta_n = (2. / 5) * kappa_n;
+  //
+  // The following viscosity terms are not included because
+  // they are not (yet) balanced by a viscous heating term
+  // + AA * FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
+  // + AA * FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
 
   ddt(NVn) = - AA * FV::Div_par_fvv(Nnlim, Vn, sound_speed)      // Momentum flow
              - Grad_par(Pn)                                      // Pressure gradient
              + FV::Div_a_Grad_perp(DnnNVn, logPnlim)             // Perpendicular diffusion
-             + AA * FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
-             + AA * FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
       ;
 
   if (localstate.isSet("momentum_source")) {

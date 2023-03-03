@@ -42,11 +42,9 @@ private:
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn; ///< Diffusion coefficient
-  
+
   bool sheath_ydown, sheath_yup;
-  
-  BoutReal neutral_gamma; ///< Heat transmission for neutrals
-  
+
   BoutReal nn_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
 
   BoutReal flux_limit; ///< Diffusive flux limit
