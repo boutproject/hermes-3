@@ -35,17 +35,10 @@ struct HydrogenChargeExchange : public Component {
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
-
-    auto& options = alloptions[name];
-    frictional_heating = options["frictional_heating"]
-      .doc("Include R dot v heating term as energy source?")
-      .withDefault<bool>(true);
   }
 
 protected:
   BoutReal Tnorm, Nnorm, FreqNorm; ///< Normalisations
-
-  bool frictional_heating; ///< Include R dot v heating term?
 
   /// Calculate the charge exchange cross-section
   ///

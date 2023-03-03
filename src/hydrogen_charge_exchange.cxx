@@ -60,21 +60,19 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   subtract(ion1["momentum_source"], ion_mom);
   add(atom2["momentum_source"], ion_mom);
 
-  if (frictional_heating) {
-    // Frictional heating: Friction force between ions and atoms
-    // converts kinetic energy to thermal energy
+  // Frictional heating: Friction force between ions and atoms
+  // converts kinetic energy to thermal energy
+  //
+  // This handles the general case that ion1 != ion2
+  // and atom1 != atom2
 
-    auto atom2_velocity = get<Field3D>(atom2["velocity"]);
-    auto ion2_velocity = get<Field3D>(ion2["velocity"]);
+  auto ion2_velocity = get<Field3D>(ion2["velocity"]);
+  add(ion2["energy_source"], 0.5 * Aatom * R * SQ(ion2_velocity - atom1_velocity));
 
-    add(atom1["energy_source"], atom_mom * atom1_velocity);
-    subtract(ion2["energy_source"], atom_mom * ion2_velocity);
+  auto atom2_velocity = get<Field3D>(atom2["velocity"]);
+  add(atom2["energy_source"], 0.5 * Aion * R * SQ(atom2_velocity - ion1_velocity));
 
-    add(ion1["energy_source"], ion_mom * ion1_velocity);
-    subtract(atom2["energy_source"], ion_mom * atom2_velocity);
-  }
-
-  // Transfer energy
+  // Transfer thermal energy
   atom_energy = (3. / 2) * R * Tatom;
   subtract(atom1["energy_source"], atom_energy);
   add(ion2["energy_source"], atom_energy);
