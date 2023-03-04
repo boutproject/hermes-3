@@ -89,12 +89,17 @@ void AnomalousDiffusion::transform(Options& state) {
 
   if (include_D) {
     // Particle diffusion. Gradients of density drive flows of particles,
-    // momentum and energy
+    // momentum and energy. The implementation here is equivalent to an
+    // advection velocity
+    //
+    //  v_D = - D Grad_perp(N) / N
+
     add(species["density_source"], Div_a_Grad_perp_upwind(anomalous_D, N2D));
 
     // Note: Upwind operators used, or unphysical increases
     // in temperature and flow can be produced
-    add(species["momentum_source"], Div_a_Grad_perp_upwind(V2D * anomalous_D, N2D));
+    auto AA = get<BoutReal>(species["AA"]);
+    add(species["momentum_source"], Div_a_Grad_perp_upwind(AA * V2D * anomalous_D, N2D));
 
     add(species["energy_source"],
         Div_a_Grad_perp_upwind((3. / 2) * T2D * anomalous_D, N2D));
@@ -107,7 +112,8 @@ void AnomalousDiffusion::transform(Options& state) {
 
   if (include_nu) {
     // Gradients in slow speed which drive momentum flows
-    add(species["momentum_source"], Div_a_Grad_perp_upwind(anomalous_nu * N2D, V2D));
+    auto AA = get<BoutReal>(species["AA"]);
+    add(species["momentum_source"], Div_a_Grad_perp_upwind(anomalous_nu * AA * N2D, V2D));
   }
 
 }
