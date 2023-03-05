@@ -57,6 +57,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     .withDefault(-1.0)
     / (meters * meters / seconds); // Normalise
 
+  neutral_viscosity = options["neutral_viscosity"]
+    .doc("Include neutral gas viscosity?")
+    .withDefault<bool>(true);
+
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
 
@@ -302,21 +306,26 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral momentum
   TRACE("Neutral momentum");
 
-  // Relationship between heat conduction and viscosity for neutral
-  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
-  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
-  // Transport Processes in Gases", 1972
-  // eta_n = (2. / 5) * kappa_n;
-  //
-  // The following viscosity terms are not included because
-  // they are not (yet) balanced by a viscous heating term
-  // + AA * FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
-  // + AA * FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
-
   ddt(NVn) = - AA * FV::Div_par_fvv(Nnlim, Vn, sound_speed)      // Momentum flow
              - Grad_par(Pn)                                      // Pressure gradient
              + FV::Div_a_Grad_perp(DnnNVn, logPnlim)             // Perpendicular diffusion
       ;
+
+  if (neutral_viscosity) {
+    // NOTE: The following viscosity terms are are not (yet) balanced
+    //       by a viscous heating term
+
+    // Relationship between heat conduction and viscosity for neutral
+    // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+    // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+    // Transport Processes in Gases", 1972
+    // eta_n = (2. / 5) * kappa_n;
+    //
+
+    ddt(NVn) += AA * FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
+              + AA * FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
+      ;
+  }
 
   if (localstate.isSet("momentum_source")) {
     Snv = get<Field3D>(localstate["momentum_source"]);

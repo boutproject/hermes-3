@@ -50,6 +50,8 @@ private:
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
+  bool neutral_viscosity; ///< include viscosity?
+
   bool precondition {true}; ///< Enable preconditioner?
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
