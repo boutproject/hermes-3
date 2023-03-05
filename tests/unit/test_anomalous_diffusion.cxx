@@ -59,6 +59,7 @@ TEST_F(AnomalousDiffusionTest, ParticleDiffusion) {
   options["units"]["seconds"] = 1.0;
 
   options["h"]["anomalous_D"] = 1.0;  // Set particle diffusion for "h" species
+  options["h"]["AA"] = 1.0; // Atomic mass number
   
   AnomalousDiffusion component("h", options, nullptr);
 
