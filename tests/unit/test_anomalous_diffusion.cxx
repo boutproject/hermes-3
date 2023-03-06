@@ -59,13 +59,13 @@ TEST_F(AnomalousDiffusionTest, ParticleDiffusion) {
   options["units"]["seconds"] = 1.0;
 
   options["h"]["anomalous_D"] = 1.0;  // Set particle diffusion for "h" species
-  options["h"]["AA"] = 1.0; // Atomic mass number
-  
+
   AnomalousDiffusion component("h", options, nullptr);
 
   Options state;
   state["species"]["h"]["density"] =
     FieldFactory::get()->create3D("1 + y * (x - 0.5)", &options, mesh);
+  state["species"]["h"]["AA"] = 1.0; // Atomic mass number
   
   component.transform(state);
 
