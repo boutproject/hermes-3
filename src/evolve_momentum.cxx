@@ -46,7 +46,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   fix_momentum_boundary_flux = options["fix_momentum_boundary_flux"]
     .doc("Fix Y boundary momentum flux to boundary midpoint value?")
-    .withDefault<bool>(true);
+    .withDefault<bool>(false);
 }
 
 void EvolveMomentum::transform(Options &state) {
