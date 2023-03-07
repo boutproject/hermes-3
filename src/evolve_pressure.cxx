@@ -90,6 +90,25 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                     + std::string("). Units [N/m^2/s]"))
                .withDefault(source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
+
+  if (alloptions[std::string("P") + name]["source_only_in_core"]
+      .doc("Zero the source outside the closed field-line region?")
+      .withDefault<bool>(false)) {
+    for (int x = mesh->xstart; x <= mesh->xend; x++) {
+      if (!mesh->periodicY(x)) {
+        // Not periodic, so not in core
+        for (int y = mesh->ystart; y <= mesh->yend; y++) {
+          for (int z = mesh->zstart; z <= mesh->zend; z++) {
+            source(x, y, z) = 0.0;
+          }
+        }
+      }
+    }
+  }
+
+  neumann_boundary_average_z = alloptions[std::string("P") + name]["neumann_boundary_average_z"]
+    .doc("Apply neumann boundary with Z average?")
+    .withDefault<bool>(false);
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -102,6 +121,39 @@ void EvolvePressure::transform(Options& state) {
 
   mesh->communicate(P);
 
+  if (neumann_boundary_average_z) {
+    // Take Z (usually toroidal) average and apply as X (radial) boundary condition
+    if (mesh->firstX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        BoutReal Pavg = 0.0; // Average P in Z
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          Pavg += P(mesh->xstart, j, k);
+        }
+        Pavg /= mesh->LocalNz;
+
+        // Apply boundary condition
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          P(mesh->xstart - 1, j, k) = 2. * Pavg - P(mesh->xstart, j, k);
+          P(mesh->xstart - 2, j, k) = P(mesh->xstart - 1, j, k);
+        }
+      }
+    }
+
+    if (mesh->lastX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        BoutReal Pavg = 0.0; // Average P in Z
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          Pavg += P(mesh->xend, j, k);
+        }
+        Pavg /= mesh->LocalNz;
+
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          P(mesh->xend + 1, j, k) = 2. * Pavg - P(mesh->xend, j, k);
+          P(mesh->xend + 2, j, k) = P(mesh->xend + 1, j, k);
+        }
+      }
+    }
+  }
 
   auto& species = state["species"][name];
 
