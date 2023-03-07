@@ -22,6 +22,7 @@ struct DiamagneticDrift : public Component {
 private:
   Vector2D Curlb_B;
   bool bndry_flux;
+  Field2D diamag_form;
 };
 
 namespace {
