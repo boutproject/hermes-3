@@ -33,6 +33,8 @@ struct EvolvePressure : public Component {
   /// - P<name>  e.g. "Pe", "Pd+"
   ///   - source     Source of pressure [Pa / s].
   ///                NOTE: This overrides mesh input P<name>_src
+  ///   - source_only_in_core         Zero the source outside the closed field-line region?
+  ///   - neumann_boundary_average_z  Apply Neumann boundaries with Z average?
   ///
   EvolvePressure(std::string name, Options& options, Solver* solver);
 
@@ -74,6 +76,7 @@ private:
   Field3D T, N; ///< Temperature, density
 
   bool bndry_flux;
+  bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation

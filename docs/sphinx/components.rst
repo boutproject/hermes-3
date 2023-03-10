@@ -650,10 +650,52 @@ term:
 
 .. math::
 
-   Q_{ab,F} = - F_{ab} u_a
+   Q_{ab,F} = \frac{m_b}{m_a + m_b} \left( u_b - u_a \right) F_{ab}
 
-Energy exchange, heat transferred to species `a` from species `b` due to temperature
-differences, is given by:
+This term has some important properties:
+
+1. It is always positive: Collisions of two species with the same
+   temperature never leads to cooling.
+2. It is Galilean invariant: Shifting both species' velocity by the
+   same amount leaves :math:`Q_{ab,F}` unchanged.
+3. If both species have the same mass, the thermal energy
+   change due to slowing down is shared equally between them.
+4. If one species is much heavier than the other, for example
+   electron-ion collisions, the lighter species is preferentially
+   heated. This recovers e.g. Braginskii expressions for :math:`Q_{ei}`
+   and :math:`Q_{ie}`.
+
+This can be derived by considering the exchange of energy
+:math:`W_{ab,F}` between two species at the same temperature but
+different velocities. If the pressure is evolved then it contains
+a term that balances the change in kinetic energy due to changes
+in velocity:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial}{\partial t}\left(m_a n_a u_a\right) =& \ldots + F_{ab} \\
+   \frac{\partial}{\partial t}\left(\frac{3}{2}p_a\right) =& \ldots - F_{ab} u_a + W_{ab, F}
+   \end{aligned}
+
+For momentum and energy conservation we must have :math:`F_{ab}=-F_{ba}`
+and :math:`W_{ab,F} = -W_{ba,F}`. Comparing the above to the
+`Braginskii expression
+<https://farside.ph.utexas.edu/teaching/plasma/lectures/node35.html>`_
+we see that for ion-electron collisions the term :math:`- F_{ab}u_a + W_{ab, F}`
+goes to zero, so :math:`W_{ab, F} \sim u_aF_{ab}` for
+:math:`m_a \gg m_b`. An expression that has all these desired properties
+is
+
+.. math::
+
+   W_{ab,F} = \left(\frac{m_a u_a + m_b u_a}{m_a + m_b}\right)F_{ab}
+
+which is not Galilean invariant but when combined with the :math:`- F_{ab} u_a`
+term gives a change in pressure that is invariant, as required.
+   
+Thermal energy exchange, heat transferred to species :math:`a` from
+species :math:`b` due to temperature differences, is given by:
 
 .. math::
 
@@ -817,6 +859,56 @@ Notes:
    The reason for this convention is the existence of the inverse reactions:
    `t + d+ -> t+ + d` outputs diagnostics `Ftd+_cx` and `Fd+t_cx`.
 
+2. Reactions typically convert species from one to another, leading to
+   a transfer of mass momentum and energy. For a reaction converting
+   species :math:`a` to species :math:`b` at rate :math:`R` (units
+   of events per second per volume) we have transfers:
+
+   .. math::
+
+      \begin{aligned}
+      \frac{\partial}{\partial t} n_a =& \ldots - R \\
+      \frac{\partial}{\partial t} n_b =& \ldots + R \\
+      \frac{\partial}{\partial t}\left( m n_a u_a\right) =& \ldots + F_{ab} \\
+      \frac{\partial}{\partial t}\left( m n_a u_a\right) =& \ldots + F_{ba} \\
+      \frac{\partial}{\partial t}\left( \frac{3}{2} p_a \right) =& \ldots - F_{ab}u_a + W_{ab} - \frac{1}{2}mRu_a^2 \\
+      \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + W_{ba} + \frac{1}{2}mRu_b^2
+      \end{aligned}
+      
+  where both species have the same mass: :math:`m_a = m_b = m`. In the
+  pressure equations the :math:`-F_{ab}u_a` comes from splitting the
+  kinetic and thermal energies; :math:`W_{ab}=-W_{ba}` is the energy
+  transfer term that we need to find; The final term balances the loss
+  of kinetic energy at fixed momentum due to a particle source or
+  sink.
+
+  The momentum transfer :math:`F_{ab}=-F{ba}` is the momentum carried
+  by the converted ions: :math:`F_{ab}=-m R u_a`. To find
+  :math:`W_{ab}` we note that for :math:`p_a = 0` the change in pressure
+  must go to zero: :math:`-F_{ab}u_a + W_{ab} -\frac{1}{2}mRu_a^2 = 0`.
+
+  .. math::
+
+      \begin{aligned}
+      W_{ab} =& F_{ab}u_a + \frac{1}{2}mRu_a^2 \\
+      =& - mR u_a^2 + \frac{1}{2}mRu_a^2\\
+      =& -\frac{1}{2}mRu_a^2
+      \end{aligned}
+
+  Substituting into the above gives:
+
+  .. math::
+
+     \begin{aligned}
+     \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + W_{ba} + \frac{1}{2}mRu_b^2 \\
+     =& \ldots - mRu_au_b + \frac{1}{2}mRu_a^2 + \frac{1}{2}mRu_a^2 \\
+     =& \ldots + \frac{1}{2}mR\left(u_a - u_b\right)^2
+     \end{aligned}
+
+  This has the property that the change in pressure of both species is
+  Galilean invariant. This transfer term is included in the Amjuel reactions
+  and hydrogen charge exchange.
+     
 Hydrogen
 ~~~~~~~~
 

@@ -46,6 +46,7 @@ for i in range(ni.shape[0]):
     
     plt.title(f"Time {i}")
     plt.savefig(f"1d_recycling_{i:02d}.png")
+    plt.savefig(f"1d_recycling_{i:02d}.pdf")
     plt.close()
 
 os.system('convert -resize 50% -delay 20 -loop 0 *.png 1d_recycling.gif')

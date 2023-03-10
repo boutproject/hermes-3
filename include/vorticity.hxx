@@ -91,6 +91,7 @@ private:
 
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
+  bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
 
   bool phi_boundary_relax; ///< Relax boundary to zero-gradient
   BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
@@ -102,6 +103,7 @@ private:
   Field2D Bsq; // SQ(coord->Bxy)
   Vector2D Curlb_B; // Curvature vector Curl(b/B)
   BoutReal hyper_z; ///< Hyper-viscosity in Z
+  Field2D viscosity; ///< Kinematic viscosity
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current

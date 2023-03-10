@@ -154,11 +154,12 @@ namespace FV {
               // Use mid-point to be consistent with boundary conditions
               flux = bndryval * vpar * vpar;
             } else {
-              // Handle pathological case of diverging flows
-              flux = bndryval * vpar * BOUTMIN(vpar, BOUTMAX(v(i, j, k), 0.0));
+              // Add flux due to difference in boundary values
+              flux = s.R * vpar * sv.R + wave_speed(i, j, k) * (s.R * sv.R - bndryval * vpar);
             }
+
           } else {
-            
+
             // Maximum wave speed in the two cells
             BoutReal amax = BOUTMAX(wave_speed(i, j, k), wave_speed(i, j + 1, k));
 
@@ -173,7 +174,7 @@ namespace FV {
               flux = s.R * 0.5 * (vpar + amax) * sv.R;
             }
           }
-          
+
           result(i, j, k) += flux * flux_factor_rc;
           result(i, j + 1, k) -= flux * flux_factor_rp;
 

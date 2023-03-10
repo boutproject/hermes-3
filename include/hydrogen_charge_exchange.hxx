@@ -29,7 +29,7 @@ struct HydrogenChargeExchange : public Component {
   ///          - eV
   ///          - inv_meters_cubed
   ///          - seconds
-  HydrogenChargeExchange(std::string, Options& alloptions, Solver*) {
+  HydrogenChargeExchange(std::string name, Options& alloptions, Solver*) {
     // Get the units
     const auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);

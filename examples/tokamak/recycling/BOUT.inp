@@ -1,7 +1,11 @@
-# Tokamak diffusion, parallel conduction, and sheath boundary
+# Simple tokamak transport model
+#
+# Values taken from http://ocs.ciemat.es/EPS2021PAP/pdf/P5.1028.pdf
+# for COMPASS tokamak
+#
 
-nout = 50
-timestep = 50
+nout = 200
+timestep = 5000
 
 MZ = 1
 
@@ -9,57 +13,82 @@ MZ = 1
 
 file = "tokamak.nc"
 
+extrapolate_y = false
+
 [mesh:paralleltransform]
 type = shifted
 
 [solver]
-mxstep = 10000
+type = cvode
+use_precon = true
+mxstep = 1e5
+
+mxorder = 3
+atol = 1e-12
+rtol = 1e-5
 
 [hermes]
-components = (h+, h, e,
-              collisions, sheath_boundary, recycling,
-              reactions, electron_force_balance)
+components = (d+, d, e,
+              collisions, sheath_boundary_simple, recycling, 
+              sound_speed,
+              reactions,
+              electron_force_balance)
 
-Nnorm = 2e18  # Reference density [m^-3]
+Nnorm = 1e19  # Reference density [m^-3]
 Bnorm = 1   # Reference magnetic field [T]
-Tnorm = 5   # Reference temperature [eV]
+Tnorm = 75   # Reference temperature [eV]
+
+[sheath_boundary_simple]
+gamma_i = 3.5  # Ion sheath heat transmission coefficient
+gamma_e = 4.8  # Electron sheath heat transmission coefficient
+
+[sound_speed]
+electron_dynamics = false
 
 ################################################################
 # Ions
 
-[h+]
+[d+]
 type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
 
-AA = 1
+AA = 2
 charge = 1
-anomalous_D = 2    # Density diffusion [m^2/s]
-anomalous_chi = 1
+anomalous_D = 0.15    # Density diffusion [m^2/s]
+anomalous_chi = 4
 
 thermal_conduction = true
 
-recycle_as = h
+recycle_as = d
 recycle_multiplier = 0.99  # Recycling fraction
 
-[Nh+]
+diagnose = true
+
+precondition = true
+
+[Nd+]
 
 function = 1
 
 bndry_core = dirichlet(1.0)  # Core boundary high density
-bndry_all = dirichlet(0.1)   # All other boundaries low density
+bndry_all = neumann   # All other boundaries low density
 
-[Ph+]
+[Pd+]
 function = 1
 bndry_core = dirichlet(1.0)  # Core boundary high density
-bndry_all = dirichlet(0.01)   # All other boundaries low density
+bndry_all = neumann   # All other boundaries low density
 
 ################################################################
 # Neutrals
 
-[h]
+[d]
 type = neutral_mixed
 
-AA = 1
+AA = 2
 
+diagnose = true
+output_ddt = true
+
+precondition = true
 diagnose = true
 
 ################################################################
@@ -73,8 +102,8 @@ type = quasineutral, evolve_pressure, zero_current, anomalous_diffusion
 AA = 1/1836
 charge = -1
 
-anomalous_D = `h+`:anomalous_D  # Note: needed for thermal transport
-anomalous_chi = 0.1
+anomalous_D = 0.15  # Note: needed for thermal transport
+anomalous_chi = 4
 thermal_conduction = true
 
 diagnose = true
@@ -82,13 +111,18 @@ diagnose = true
 [Pe]
 function = 1
 bndry_core = dirichlet(1.0)  # Core boundary high density
-bndry_all = dirichlet(0.01)   # All other boundaries low density
+bndry_all = neumann   # All other boundaries low density
 
 ################################################################
 
 [recycling]
 
-species = h+
+species = d+
 
 [reactions]
-type = h + e -> h+ + 2e
+type = (d + e -> d+ + 2e,
+        d + d+ -> d+ + d,
+	d+ + e -> d)
+
+diagnose = true
+

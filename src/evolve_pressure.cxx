@@ -90,6 +90,25 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                     + std::string("). Units [N/m^2/s]"))
                .withDefault(source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
+
+  if (alloptions[std::string("P") + name]["source_only_in_core"]
+      .doc("Zero the source outside the closed field-line region?")
+      .withDefault<bool>(false)) {
+    for (int x = mesh->xstart; x <= mesh->xend; x++) {
+      if (!mesh->periodicY(x)) {
+        // Not periodic, so not in core
+        for (int y = mesh->ystart; y <= mesh->yend; y++) {
+          for (int z = mesh->zstart; z <= mesh->zend; z++) {
+            source(x, y, z) = 0.0;
+          }
+        }
+      }
+    }
+  }
+
+  neumann_boundary_average_z = alloptions[std::string("P") + name]["neumann_boundary_average_z"]
+    .doc("Apply neumann boundary with Z average?")
+    .withDefault<bool>(false);
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -102,6 +121,39 @@ void EvolvePressure::transform(Options& state) {
 
   mesh->communicate(P);
 
+  if (neumann_boundary_average_z) {
+    // Take Z (usually toroidal) average and apply as X (radial) boundary condition
+    if (mesh->firstX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        BoutReal Pavg = 0.0; // Average P in Z
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          Pavg += P(mesh->xstart, j, k);
+        }
+        Pavg /= mesh->LocalNz;
+
+        // Apply boundary condition
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          P(mesh->xstart - 1, j, k) = 2. * Pavg - P(mesh->xstart, j, k);
+          P(mesh->xstart - 2, j, k) = P(mesh->xstart - 1, j, k);
+        }
+      }
+    }
+
+    if (mesh->lastX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        BoutReal Pavg = 0.0; // Average P in Z
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          Pavg += P(mesh->xend, j, k);
+        }
+        Pavg /= mesh->LocalNz;
+
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          P(mesh->xend + 1, j, k) = 2. * Pavg - P(mesh->xend, j, k);
+          P(mesh->xend + 2, j, k) = P(mesh->xend + 1, j, k);
+        }
+      }
+    }
+  }
 
   auto& species = state["species"][name];
 
@@ -249,27 +301,18 @@ void EvolvePressure::finally(const Options& state) {
   }
   ddt(P) += Sp;
 
-  if (species.isSet("density_source") and species.isSet("velocity")) {
-    // NOTE: This has two problems
-    //       1. density_source is NOT just sources of particles, but also includes
-    //          terms from e.g. cross-field diffusion
-    //       2. As written it is probably not dimensionally correct.
-    //          Probably should not have a factor of N
-    //
-    // Change in balance between kinetic & thermal energy due to particle source
-    // auto Sn = get<Field3D>(species["density_source"]);
-    // auto V = get<Field3D>(species["velocity"]);
-    // auto AA = get<BoutReal>(species["AA"]);
-    // ddt(P) += Sn * 0.5 * AA * N * SQ(V);
+  // Term to force evolved P towards N * T
+  // This is active when P < 0 or when N < density_floor
+  ddt(P) += N * T - P;
+
+  // Scale time derivatives
+  if (state.isSet("scale_timederivs")) {
+    ddt(P) *= get<Field3D>(state["scale_timederivs"]);
   }
 
   if (evolve_log) {
     ddt(logP) = ddt(P) / P;
   }
-
-  // Term to force evolved P towards N * T
-  // This is active when P < 0 or when N < density_floor
-  ddt(P) += N * T - P;
 
 #if CHECKLEVEL >= 1
   for (auto& i : P.getRegion("RGN_NOBNDRY")) {
@@ -364,7 +407,13 @@ void EvolvePressure::precon(const Options &state, BoutReal gamma) {
   const Field3D N = get<Field3D>(species["density"]);
 
   // Set the coefficient in Div_par( B * Grad_par )
-  inv->setCoefB(-(2. / 3) * gamma * kappa_par / floor(N, density_floor));
+  Field3D coef = -(2. / 3) * gamma * kappa_par / floor(N, density_floor);
+
+  if (state.isSet("scale_timederivs")) {
+    coef *= get<Field3D>(state["scale_timederivs"]);
+  }
+
+  inv->setCoefB(coef);
   Field3D dT = ddt(P);
   dT.applyBoundary("neumann");
   ddt(P) = inv->solve(dT);

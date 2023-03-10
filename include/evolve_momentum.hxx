@@ -48,6 +48,7 @@ private:
   BoutReal hyper_z;  ///< Hyper-diffusion
 
   bool diagnose; ///< Output additional diagnostics?
+  bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
 };
 
 namespace {

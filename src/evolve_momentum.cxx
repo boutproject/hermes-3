@@ -43,6 +43,10 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
+
+  fix_momentum_boundary_flux = options["fix_momentum_boundary_flux"]
+    .doc("Fix Y boundary momentum flux to boundary midpoint value?")
+    .withDefault<bool>(false);
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -115,7 +119,7 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Note: Density floor should be consistent with calculation of V
   //       otherwise energy conservation is affected
-  ddt(NV) -= AA * FV::Div_par_fvv(Nlim, V, fastest_wave);
+  ddt(NV) -= AA * FV::Div_par_fvv(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
 
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
@@ -143,6 +147,11 @@ void EvolveMomentum::finally(const Options &state) {
   // If N < density_floor then NV and NV_solver may differ
   // -> Add term to force NV_solver towards NV
   ddt(NV) += NV - NV_solver;
+
+  // Scale time derivatives
+  if (state.isSet("scale_timederivs")) {
+    ddt(NV) *= get<Field3D>(state["scale_timederivs"]);
+  }
 
 #if CHECKLEVEL >= 1
   for (auto& i : NV.getRegion("RGN_NOBNDRY")) {

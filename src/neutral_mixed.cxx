@@ -39,10 +39,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                    .doc("Enable wall boundary conditions at yup")
                    .withDefault<bool>(true);
 
-  neutral_gamma = options["neutral_gamma"]
-                      .doc("Heat flux to the wall q = neutral_gamma * n * T * cs")
-                      .withDefault(5. / 4);
-
   nn_floor = options["nn_floor"]
                  .doc("A minimum density used when dividing NVn by Nn. "
                       "Normalised units.")
@@ -60,6 +56,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
     .withDefault(-1.0)
     / (meters * meters / seconds); // Normalise
+
+  neutral_viscosity = options["neutral_viscosity"]
+    .doc("Include neutral gas viscosity?")
+    .withDefault<bool>(true);
 
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
@@ -179,10 +179,6 @@ void NeutralMixed::transform(Options& state) {
 
         // Zero gradient temperature, heat flux added later
         Tn(r.ind, mesh->yend + 1, jz) = tnwall;
-
-        // Set pressure consistent at the boundary
-        // Pn(r.ind, mesh->yend + 1, jz) =
-        //     2. * nnwall * tnwall - Pn(r.ind, mesh->yend, jz);
 
         // Zero-gradient pressure
         Pn(r.ind, mesh->yend + 1, jz) = Pn(r.ind, mesh->yend, jz);
@@ -310,18 +306,26 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral momentum
   TRACE("Neutral momentum");
 
-  // Relationship between heat conduction and viscosity for neutral
-  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
-  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
-  // Transport Processes in Gases", 1972
-  // eta_n = (2. / 5) * kappa_n;
-
   ddt(NVn) = - AA * FV::Div_par_fvv(Nnlim, Vn, sound_speed)      // Momentum flow
              - Grad_par(Pn)                                      // Pressure gradient
              + FV::Div_a_Grad_perp(DnnNVn, logPnlim)             // Perpendicular diffusion
-             + AA * FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
-             + AA * FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
       ;
+
+  if (neutral_viscosity) {
+    // NOTE: The following viscosity terms are are not (yet) balanced
+    //       by a viscous heating term
+
+    // Relationship between heat conduction and viscosity for neutral
+    // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+    // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+    // Transport Processes in Gases", 1972
+    // eta_n = (2. / 5) * kappa_n;
+    //
+
+    ddt(NVn) += AA * FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)    // Perpendicular viscosity
+              + AA * FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
+      ;
+  }
 
   if (localstate.isSet("momentum_source")) {
     Snv = get<Field3D>(localstate["momentum_source"]);
@@ -352,6 +356,14 @@ void NeutralMixed::finally(const Options& state) {
     if ((Nn[i] < 1e-7) && (ddt(Nn)[i] < 0.0)) {
       ddt(Nn)[i] = 0.0;
     }
+  }
+
+  // Scale time derivatives
+  if (state.isSet("scale_timederivs")) {
+    Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
+    ddt(Nn) *= scale_timederivs;
+    ddt(Pn) *= scale_timederivs;
+    ddt(NVn) *= scale_timederivs;
   }
 }
 
@@ -463,7 +475,7 @@ void NeutralMixed::outputVars(Options& state) {
   }
 }
 
-void NeutralMixed::precon(const Options&, BoutReal gamma) {
+void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   if (!precondition) {
     return;
   }
@@ -471,7 +483,13 @@ void NeutralMixed::precon(const Options&, BoutReal gamma) {
   // Neutral gas diffusion
   // Solve (1 - gamma*Dnn*Delp2)^{-1}
 
-  inv->setCoefD(-gamma * Dnn);
+  Field3D coef = -gamma * Dnn;
+
+  if (state.isSet("scale_timederivs")) {
+    coef *= get<Field3D>(state["scale_timederivs"]);
+  }
+
+  inv->setCoefD(coef);
 
   ddt(Nn) = inv->solve(ddt(Nn));
   ddt(NVn) = inv->solve(ddt(NVn));

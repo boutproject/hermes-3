@@ -11,12 +11,31 @@
 
 using bout::globals::mesh;
 
+namespace {
+BoutReal floor(BoutReal value, BoutReal min) {
+  if (value < min)
+    return min;
+  return value;
+}
+
+Ind3D indexAt(const Field3D& f, int x, int y, int z) {
+  int ny = f.getNy();
+  int nz = f.getNz();
+  return Ind3D{(x * ny + y) * nz + z, ny, nz};
+}
+}
+
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   AUTO_TRACE();
 
   solver->add(Vort, "Vort");
 
   auto& options = alloptions[name];
+  // Normalisations
+  const Options& units = alloptions["units"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Bnorm = units["Tesla"];
+  const BoutReal Lnorm = units["meters"];
 
   exb_advection = options["exb_advection"]
                       .doc("Include ExB advection (nonlinear term)?")
@@ -55,6 +74,12 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                  .doc("Split phi into n=0 and n!=0 components")
                  .withDefault<bool>(false);
 
+  viscosity = options["viscosity"]
+    .doc("Kinematic viscosity [m^2/s]")
+    .withDefault<BoutReal>(0.0)
+    / (Lnorm * Lnorm * Omega_ci);
+  viscosity.applyBoundary("dirichlet");
+
   hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
 
   // Numerical dissipation terms
@@ -73,6 +98,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   phi_boundary_relax = options["phi_boundary_relax"]
                            .doc("Relax x boundaries of phi towards Neumann?")
                            .withDefault<bool>(false);
+
+  phi_sheath_dissipation = options["phi_sheath_dissipation"]
+    .doc("Add dissipation when phi < 0.0 at the sheath")
+    .withDefault<bool>(false);
 
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
@@ -137,10 +166,6 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     mesh->get(I, "sinty");
     Curlb_B.z += I * Curlb_B.x;
   }
-
-  Options& units = alloptions["units"];
-  BoutReal Bnorm = units["Tesla"];
-  BoutReal Lnorm = units["meters"];
 
   Curlb_B.x /= Bnorm;
   Curlb_B.y *= SQ(Lnorm);
@@ -547,6 +572,9 @@ void Vorticity::finally(const Options& state) {
     ddt(Vort) += Div_par((Z / A) * NV);
   }
 
+  // Viscosity
+  ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
+
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
@@ -564,6 +592,29 @@ void Vorticity::finally(const Options& state) {
     // Form of hyper-viscosity to suppress zig-zags in Z
     auto* coord = Vort.getCoordinates();
     ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+  }
+
+  if (phi_sheath_dissipation) {
+    // Dissipation when phi < 0.0 at the sheath
+
+    auto phi_fa = toFieldAligned(phi);
+    Field3D dissipation{zeroFrom(phi_fa)};
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        auto i = indexAt(phi_fa, r.ind, mesh->ystart, jz);
+        BoutReal phisheath = 0.5*(phi_fa[i] + phi_fa[i.ym()]);
+        dissipation[i] = -floor(-phisheath, 0.0);
+      }
+    }
+
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        auto i = indexAt(phi_fa, r.ind, mesh->yend, jz);
+        BoutReal phisheath = 0.5*(phi_fa[i] + phi_fa[i.yp()]);
+        dissipation[i] = -floor(-phisheath, 0.0);
+      }
+    }
+    ddt(Vort) += fromFieldAligned(dissipation);
   }
 }
 
