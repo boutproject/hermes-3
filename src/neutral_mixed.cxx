@@ -100,6 +100,20 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                .withDefault(pressure_source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
 
+  // Note no NVn for now.
+  Dnn.setBoundary(std::string("Dnn") + name);
+  Tn.setBoundary(std::string("T") + name);
+  Pn.setBoundary(std::string("Pn") + name);
+  Nn.setBoundary(std::string("N") + name);
+
+  // Same boundary applies to floored versions
+  Tnlim.setBoundary(std::string("T") + name);
+  Pnlim.setBoundary(std::string("Pn") + name);
+  Nnlim.setBoundary(std::string("N") + name);
+  DnnNn.setBoundary(std::string("Dnn") + name);
+  DnnPn.setBoundary(std::string("Dnn") + name);
+  DnnTn.setBoundary(std::string("Dnn") + name);
+
 }
 
 void NeutralMixed::transform(Options& state) {
@@ -117,7 +131,7 @@ void NeutralMixed::transform(Options& state) {
   // Nnlim Used where division by neutral density is needed
   Nnlim = floor(Nn, nn_floor);
   Tn = Pn / Nnlim;
-  Tn.applyBoundary("neumann");
+  Tn.applyBoundary();
 
   Vn = NVn / (AA * Nnlim);
   Vnlim = Vn;
@@ -126,7 +140,7 @@ void NeutralMixed::transform(Options& state) {
   Vnlim.applyBoundary("neumann");
 
   Pnlim = floor(Nnlim * Tn, 1e-8);
-  Pnlim.applyBoundary("neumann");
+  Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
   // Boundary conditions
@@ -252,17 +266,17 @@ void NeutralMixed::finally(const Options& state) {
 
   mesh->communicate(Dnn);
   Dnn.clearParallelSlices();
-  Dnn.applyBoundary("dirichlet_o2");
+  Dnn.applyBoundary();
 
   // Apply a Dirichlet boundary condition to all the coefficients
   // used in diffusion operators. This is to ensure that the flux through
   // the boundary is zero.
-  Field3D DnnPn = Dnn * Pn;
-  DnnPn.applyBoundary("dirichlet_o2");
-  Field3D DnnNn = Dnn * Nn;
-  DnnNn.applyBoundary("dirichlet_o2");
+  DnnPn = Dnn * Pn;
+  DnnPn.applyBoundary();
+  DnnNn = Dnn * Nn;
+  DnnNn.applyBoundary();
   Field3D DnnNVn = Dnn * NVn;
-  DnnNVn.applyBoundary("dirichlet_o2");
+  DnnNVn.applyBoundary();
 
   if (sheath_ydown) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
