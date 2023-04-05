@@ -30,7 +30,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   solver->add(Nn, std::string("N") + name);
   solver->add(Pn, std::string("P") + name);
   solver->add(NVn, std::string("NV") + name);
-  solver->add(Dnn, std::string("Dnn" + name));
+  /// solver->add(Dnn, std::string("Dnn" + name));
 
   sheath_ydown = options["sheath_ydown"]
                      .doc("Enable wall boundary conditions at ydown")
@@ -104,12 +104,12 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   // Note no NVn for now.
   Dnn.setBoundary(std::string("Dnn") + name);
   Tn.setBoundary(std::string("T") + name);
-  Pn.setBoundary(std::string("Pn") + name);
+  Pn.setBoundary(std::string("P") + name);
   Nn.setBoundary(std::string("N") + name);
 
   // Same boundary applies to floored versions
   Tnlim.setBoundary(std::string("T") + name);
-  Pnlim.setBoundary(std::string("Pn") + name);
+  Pnlim.setBoundary(std::string("P") + name);
   Nnlim.setBoundary(std::string("N") + name);
   DnnNn.setBoundary(std::string("Dnn") + name);
   DnnPn.setBoundary(std::string("Dnn") + name);
