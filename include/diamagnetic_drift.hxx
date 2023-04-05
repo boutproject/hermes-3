@@ -20,9 +20,9 @@ struct DiamagneticDrift : public Component {
   void transform(Options &state) override;
 
 private:
-  Vector2D Curlb_B;
+  Vector3D Curlb_B;
   bool bndry_flux;
-  Field2D diamag_form;
+  Coordinates::FieldMetric diamag_form;
 };
 
 namespace {

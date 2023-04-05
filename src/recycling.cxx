@@ -53,9 +53,9 @@ void Recycling::transform(Options& state) {
 
   // Get metric tensor components
   Coordinates* coord = mesh->getCoordinates();
-  const Field2D& J = coord->J;
-  const Field2D& dy = coord->dy;
-  const Field2D& g_22 = coord->g_22;
+  const Field3D& J = coord->J;
+  const Field3D& dy = coord->dy;
+  const Field3D& g_22 = coord->g_22;
 
   for (const auto& channel : channels) {
     const Options& species_from = state["species"][channel.from];
@@ -89,16 +89,16 @@ void Recycling::transform(Options& state) {
         // Flow of recycled species inwards
         BoutReal flow =
             channel.multiplier * flux
-            * (J(r.ind, mesh->ystart) + J(r.ind, mesh->ystart - 1))
-            / (sqrt(g_22(r.ind, mesh->ystart)) + sqrt(g_22(r.ind, mesh->ystart - 1)));
+	  * (J(r.ind, mesh->ystart, jz) + J(r.ind, mesh->ystart - 1, jz))
+	  / (sqrt(g_22(r.ind, mesh->ystart, jz)) + sqrt(g_22(r.ind, mesh->ystart - 1, jz)));
 
         // Add to density source
         density_source(r.ind, mesh->ystart, jz) +=
-            flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+	  flow / (J(r.ind, mesh->ystart, jz) * dy(r.ind, mesh->ystart, jz));
 
         // energy of recycled particles
         energy_source(r.ind, mesh->ystart, jz) +=
-            channel.energy * flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+	  channel.energy * flow / (J(r.ind, mesh->ystart, jz) * dy(r.ind, mesh->ystart, jz));
       }
     }
 
@@ -119,16 +119,16 @@ void Recycling::transform(Options& state) {
 
         // Flow of neutrals inwards
         BoutReal flow =
-            channel.multiplier * flux * (J(r.ind, mesh->yend) + J(r.ind, mesh->yend + 1))
-            / (sqrt(g_22(r.ind, mesh->yend)) + sqrt(g_22(r.ind, mesh->yend + 1)));
+	  channel.multiplier * flux * (J(r.ind, mesh->yend, jz) + J(r.ind, mesh->yend + 1, jz))
+	  / (sqrt(g_22(r.ind, mesh->yend, jz)) + sqrt(g_22(r.ind, mesh->yend + 1, jz)));
 
         // Rate of change of neutrals in final cell
         // Add to density source
         density_source(r.ind, mesh->yend, jz) +=
-            flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+	  flow / (J(r.ind, mesh->yend, jz) * dy(r.ind, mesh->yend, jz));
 
         energy_source(r.ind, mesh->yend, jz) +=
-            channel.energy * flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+	  channel.energy * flow / (J(r.ind, mesh->yend, jz) * dy(r.ind, mesh->yend, jz));
       }
     }
 

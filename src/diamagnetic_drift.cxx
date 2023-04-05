@@ -16,7 +16,7 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
 
   diamag_form = options["diamag_form"]
     .doc("Form of diamagnetic drift: 0 = gradient; 1 = divergence")
-    .withDefault(Field2D(1.0));
+    .withDefault(Field3D(1.0));
 
   // Read curvature vector
   Curlb_B.covariant = false; // Contravariant
@@ -50,10 +50,14 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   // Set drift to zero through sheath boundaries.
   // Flux through those cell faces should be set by sheath.
   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-    Curlb_B.y(r.ind, mesh->ystart - 1) = -Curlb_B.y(r.ind, mesh->ystart);
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      Curlb_B.y(r.ind, mesh->ystart - 1, jz) = -Curlb_B.y(r.ind, mesh->ystart, jz);
+    }
   }
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-    Curlb_B.y(r.ind, mesh->yend + 1) = -Curlb_B.y(r.ind, mesh->yend);
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      Curlb_B.y(r.ind, mesh->yend + 1, jz) = -Curlb_B.y(r.ind, mesh->yend, jz);
+    }
   }
 }
 

@@ -116,7 +116,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     // Create an XY solver for n=0 component
     laplacexy = new LaplaceXY(mesh);
     // Set coefficients for Boussinesq solve
-    laplacexy->setCoefs(average_atomic_mass / SQ(coord->Bxy), 0.0);
+    laplacexy->setCoefs(average_atomic_mass / SQ(DC(coord->Bxy)), 0.0);
   }
   phiSolver = Laplacian::create(&options["laplacian"]);
   // Set coefficients for Boussinesq solve

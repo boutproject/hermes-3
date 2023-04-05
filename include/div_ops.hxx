@@ -100,24 +100,21 @@ namespace FV {
       }
 
       for (int j = ys; j <= ye; j++) {
-        // Pre-calculate factors which multiply fluxes
-
-        // For right cell boundaries
-        BoutReal common_factor = (coord->J(i, j) + coord->J(i, j + 1)) /
-          (sqrt(coord->g_22(i, j)) + sqrt(coord->g_22(i, j + 1)));
-        
-        BoutReal flux_factor_rc = common_factor / (coord->dy(i, j) * coord->J(i, j));
-        BoutReal flux_factor_rp = common_factor / (coord->dy(i, j + 1) * coord->J(i, j + 1));
-
-        // For left cell boundaries
-        common_factor = (coord->J(i, j) + coord->J(i, j - 1)) /
-          (sqrt(coord->g_22(i, j)) + sqrt(coord->g_22(i, j - 1)));
-
-        BoutReal flux_factor_lc = common_factor / (coord->dy(i, j) * coord->J(i, j));
-        BoutReal flux_factor_lm = common_factor / (coord->dy(i, j - 1) * coord->J(i, j - 1));
-        
         for (int k = 0; k < mesh->LocalNz; k++) {
-
+	  // For right cell boundaries
+	  BoutReal common_factor = (coord->J(i, j, k) + coord->J(i, j + 1, k)) /
+	    (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j + 1, k)));
+	  
+	  BoutReal flux_factor_rc = common_factor / (coord->dy(i, j, k) * coord->J(i, j, k));
+	  BoutReal flux_factor_rp = common_factor / (coord->dy(i, j + 1, k) * coord->J(i, j + 1, k));
+	  
+	  // For left cell boundaries
+	  common_factor = (coord->J(i, j, k) + coord->J(i, j - 1, k)) /
+	    (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j - 1, k)));
+	  
+	  BoutReal flux_factor_lc = common_factor / (coord->dy(i, j, k) * coord->J(i, j, k));
+	  BoutReal flux_factor_lm = common_factor / (coord->dy(i, j - 1, k) * coord->J(i, j - 1, k));
+	  
           ////////////////////////////////////////////
           // Reconstruct f at the cell faces
           // This calculates s.R and s.L for the Right and Left

@@ -2,7 +2,7 @@
 #ifndef VORTICITY_H
 #define VORTICITY_H
 
-#include <vector2d.hxx>
+#include <vector3d.hxx>
 
 #include "component.hxx"
 
@@ -100,10 +100,10 @@ private:
   bool split_n0; // Split phi into n=0 and n!=0 components
   LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
 
-  Field2D Bsq; // SQ(coord->Bxy)
-  Vector2D Curlb_B; // Curvature vector Curl(b/B)
+  Field3D Bsq; // SQ(coord->Bxy)
+  Vector3D Curlb_B; // Curvature vector Curl(b/B)
   BoutReal hyper_z; ///< Hyper-viscosity in Z
-  Field2D viscosity; ///< Kinematic viscosity
+  Field3D viscosity; ///< Kinematic viscosity
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current

@@ -81,7 +81,7 @@ TEST_F(AnomalousDiffusionTest, ParticleDiffusion) {
                            "RGN_NOBNDRY"));
 
   // Expect the sum over all cells of density source to be zero
-  Field2D dV = coords->J * coords->dx * coords->dy * coords->dz; // Cell volume
+  Coordinates::FieldMetric dV = coords->J * coords->dx * coords->dy * coords->dz; // Cell volume
 
   Field3D source = get<Field3D>(state["species"]["h"]["density_source"]);
   BoutReal integral = 0.0;

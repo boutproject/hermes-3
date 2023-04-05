@@ -2,7 +2,7 @@
 #ifndef RELAX_POTENTIAL_H
 #define RELAX_POTENTIAL_H
 
-#include <vector2d.hxx>
+#include <vector3d.hxx>
 
 #include "component.hxx"
 
@@ -72,8 +72,8 @@ private:
 
   bool sheath_boundary; ///< Set outer boundary to j=0?
 
-  Field2D Bsq;      ///< SQ(coord->Bxy)
-  Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
+  Coordinates::FieldMetric Bsq;      ///< SQ(coord->Bxy)
+  Vector3D Curlb_B; ///< Curvature vector Curl(b/B)
 
   BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
 };
