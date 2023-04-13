@@ -269,9 +269,7 @@ void NeutralMixed::finally(const Options& state) {
   Dnn.clearParallelSlices();
   Dnn.applyBoundary();
 
-  // Apply a Dirichlet boundary condition to all the coefficients
-  // used in diffusion operators. This is to ensure that the flux through
-  // the boundary is zero.
+  // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnPn = Dnn * Pn;
   DnnPn.applyBoundary();
   DnnNn = Dnn * Nn;
