@@ -54,6 +54,8 @@ struct Electromagnetic : public Component {
   ///   - Apar      Electromagnetic potential
   ///
   void transform(Options &state) override;
+
+  void outputVars(Options &state) override;
 private:
   Field3D Apar; // Electromagnetic potential A_||
   Field3D Ajpar; // Total parallel current density
@@ -61,6 +63,8 @@ private:
   BoutReal beta_em; // Normalisation coefficient mu_0 e T n / B^2
 
   std::unique_ptr<Laplacian> aparSolver; // Laplacian solver in X-Z
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {

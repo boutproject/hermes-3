@@ -54,6 +54,8 @@ struct NeutralParallelDiffusion : public Component {
   ///      - momentum_source  [if velocity set]
   void transform(Options &state) override;
 
+  /// Save variables to the output
+  void outputVars(Options &state) override;
 private:
   BoutReal dneut; ///< cross-field diffusion projection (B  / Bpol)^2
 

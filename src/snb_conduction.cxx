@@ -1,3 +1,4 @@
+#include <bout/constants.hxx>
 #include "../include/snb_conduction.hxx"
 
 #include <bout.hxx>
@@ -34,4 +35,30 @@ void SNBConduction::transform(Options& state) {
   //
   // ddt(3/2 P) = .. - Div(q)
   subtract(electrons["energy_source"], Div_Q_SNB);
+}
+
+void SNBConduction::outputVars(Options& state) {
+  AUTO_TRACE();
+
+  if (diagnose) {
+    auto Nnorm = get<BoutReal>(state["Nnorm"]);
+    auto Tnorm = get<BoutReal>(state["Tnorm"]);
+    auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+
+    BoutReal DivQnorm = SI::qe * Tnorm * Nnorm * Omega_ci;
+
+    set_with_attrs(state["Div_Q_SH"], Div_Q_SH,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^3"},
+                    {"conversion", DivQnorm},
+                    {"long_name", "Divergence of Spitzer-Harm electron heat conduction"},
+                    {"source", "snb_conduction"}});
+
+    set_with_attrs(state["Div_Q_SNB"], Div_Q_SNB,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^3"},
+                    {"conversion", DivQnorm},
+                    {"long_name", "Divergence of SNB electron heat conduction"},
+                    {"source", "snb_conduction"}});
+  }
 }

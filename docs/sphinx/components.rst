@@ -41,7 +41,20 @@ evolve_density
 ~~~~~~~~~~~~~~
 
 This component evolves the species density in time, using the BOUT++
-time integration solver.
+time integration solver. The species charge and atomic mass must be set,
+and the initial density should be specified in its own section:
+
+.. code-block:: ini
+
+   [d]
+   type = evolve_density, ...
+
+   AA = 2 # Atomic mass
+   charge = 0
+
+   [Nd]
+   function = 1 - 0.5x # Initial condition, normalised to Nnorm
+
 
 The implementation is in the `EvolveDensity` class:
 
@@ -278,6 +291,34 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
+simple_conduction
+-----------------
+
+This is a simplified parallel heat conduction model that can be used when a linearised model is needed.
+If used, the thermal conduction term in `evolve_pressure` component should be disabled.
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, ...
+
+   [e]
+   type = evolve_pressure, simple_conduction
+
+   thermal_conduction = false  # Disable term in evolve_pressure
+
+To linearise the heat conduction the temperature and density used in
+calculating the Coulomb logarithm and heat conduction coefficient can
+be fixed by specifying `conduction_temperature` and
+`conduction_density`.
+
+Note: For hydrogenic plasmas this produces very similar parallel electron
+heat conduction as the `evolve_pressure` term with electron-electron collisions
+disabled.
+
+.. doxygenstruct:: SimpleConduction
+   :members:
+
 Drifts
 ------
 
@@ -410,6 +451,43 @@ The implementation is in `NoFlowBoundary`:
 .. doxygenstruct:: NoFlowBoundary
    :members:
 
+.. _neutral_boundary:
+
+neutral_boundary
+~~~~~~~~~~~~~~~~
+
+Sets Y (sheath/target) boundary conditions on neutral particle
+density, temperature and pressure. A no-flow boundary condition
+is set on parallel velocity and momentum. It is a species-specific
+component and so goes in the list of components for the species
+that the boundary condition should be applied to.
+
+An energy sink is added to the flux of heat to the wall, with
+heat flux `q`:
+
+.. math::
+
+   q = \gamma_{heat} n T v_{th}
+
+   v_{th} = \sqrt{eT / m}
+
+The factor `gamma_heat`
+
+.. code-block:: ini
+
+   [hermes]
+   components = d
+
+   [d]
+   type = ... , neutral_boundary
+
+   gamma_heat = 3  # Neutral boundary heat transmission coefficient
+   neutral_lower_y = true  # Boundary on lower y?
+   neutral_upper_y = true  # Boundary on upper y?
+
+.. doxygenstruct:: NeutralBoundary
+   :members:
+
 Collective quantities
 ---------------------
 
@@ -536,7 +614,15 @@ The frequency of charged species `a` colliding with charged species `b` is
 
 
 Note that the cgs expression in Hinton is divided by :math:`\left(4\pi\epsilon_0\right)^2` to get
-the expression in SI units.
+the expression in SI units. The thermal speeds in this expression are defined as:
+
+.. math::
+
+   v_a^2 = 2 e T_a / m_a
+
+Note that with this definition we recover the `Braginskii expressions
+<https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html>`_
+for e-i and i-i collision times.
 
 For conservation of momentum, the collision frequencies :math:`\nu_{ab}` and :math:`\nu_{ba}` are
 related by:
@@ -564,10 +650,52 @@ term:
 
 .. math::
 
-   Q_{ab,F} = - F_{ab} u_a
+   Q_{ab,F} = \frac{m_b}{m_a + m_b} \left( u_b - u_a \right) F_{ab}
 
-Energy exchange, heat transferred to species `a` from species `b` due to temperature
-differences, is given by:
+This term has some important properties:
+
+1. It is always positive: Collisions of two species with the same
+   temperature never leads to cooling.
+2. It is Galilean invariant: Shifting both species' velocity by the
+   same amount leaves :math:`Q_{ab,F}` unchanged.
+3. If both species have the same mass, the thermal energy
+   change due to slowing down is shared equally between them.
+4. If one species is much heavier than the other, for example
+   electron-ion collisions, the lighter species is preferentially
+   heated. This recovers e.g. Braginskii expressions for :math:`Q_{ei}`
+   and :math:`Q_{ie}`.
+
+This can be derived by considering the exchange of energy
+:math:`W_{ab,F}` between two species at the same temperature but
+different velocities. If the pressure is evolved then it contains
+a term that balances the change in kinetic energy due to changes
+in velocity:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial}{\partial t}\left(m_a n_a u_a\right) =& \ldots + F_{ab} \\
+   \frac{\partial}{\partial t}\left(\frac{3}{2}p_a\right) =& \ldots - F_{ab} u_a + W_{ab, F}
+   \end{aligned}
+
+For momentum and energy conservation we must have :math:`F_{ab}=-F_{ba}`
+and :math:`W_{ab,F} = -W_{ba,F}`. Comparing the above to the
+`Braginskii expression
+<https://farside.ph.utexas.edu/teaching/plasma/lectures/node35.html>`_
+we see that for ion-electron collisions the term :math:`- F_{ab}u_a + W_{ab, F}`
+goes to zero, so :math:`W_{ab, F} \sim u_aF_{ab}` for
+:math:`m_a \gg m_b`. An expression that has all these desired properties
+is
+
+.. math::
+
+   W_{ab,F} = \left(\frac{m_a u_a + m_b u_a}{m_a + m_b}\right)F_{ab}
+
+which is not Galilean invariant but when combined with the :math:`- F_{ab} u_a`
+term gives a change in pressure that is invariant, as required.
+   
+Thermal energy exchange, heat transferred to species :math:`a` from
+species :math:`b` due to temperature differences, is given by:
 
 .. math::
 
@@ -647,6 +775,8 @@ The implementation is in the `ThermalForce` class:
 .. doxygenstruct:: ThermalForce
    :members:
 
+.. _recycling:
+
 recycling
 ~~~~~~~~~
 
@@ -659,6 +789,29 @@ Recycling therefore can't be calculated until all species boundary conditions
 have been set. It is therefore expected that this component is a top-level
 component which comes after boundary conditions are set.
 
+The recycling component has a `species` option, that is a list of species
+to recycle. For each of the species in that list, `recycling` will look in
+the corresponding section for the options `recycle_as`, `recycle_multiplier`
+and `recycle_energy`.
+
+For example, recycling `d+` ions into `d` atoms with a recycling fraction
+of 1. Each returning atom has an energy of 3.5eV:
+
+.. code-block:: ini
+
+   [hermes]
+   components = d+, d, sheath_boundary, recycling
+
+   [recycling]
+   species = d+   # Comma-separated list of species to recycle
+
+   [d+]
+   recycle_as = d         # Species to recycle as
+   recycle_multiplier = 1 # Recycling fraction
+   recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+.. doxygenstruct:: Recycling
+   :members:
 
 Atomic and molecular reactions
 ------------------------------
@@ -691,6 +844,71 @@ twice.
 When reactions are added, all the species involved must be included, or an exception
 should be thrown.
 
+Notes:
+
+1. Charge exchange channel diagnostics: For two species `a` and `b`,
+   the channel `Fab_cx` is a source of momentum for species `a` due to
+   charge exchange with species `b`. There are corresponding sinks for
+   the products of the charge exchange reaction which are not saved.
+
+   For example,reaction `d + t+ -> d+ + t` will save the following
+   forces (momentum sources):
+   - `Fdt+_cx` is a source of momentum for deuterium atoms `d` and sink of momentum for deuterium ions `d+`.
+   - `Ft+d_cx` is a source of momentum for tritium ions `t+` and sink of momentum for tritium atoms `t`
+
+   The reason for this convention is the existence of the inverse reactions:
+   `t + d+ -> t+ + d` outputs diagnostics `Ftd+_cx` and `Fd+t_cx`.
+
+2. Reactions typically convert species from one to another, leading to
+   a transfer of mass momentum and energy. For a reaction converting
+   species :math:`a` to species :math:`b` at rate :math:`R` (units
+   of events per second per volume) we have transfers:
+
+   .. math::
+
+      \begin{aligned}
+      \frac{\partial}{\partial t} n_a =& \ldots - R \\
+      \frac{\partial}{\partial t} n_b =& \ldots + R \\
+      \frac{\partial}{\partial t}\left( m n_a u_a\right) =& \ldots + F_{ab} \\
+      \frac{\partial}{\partial t}\left( m n_a u_a\right) =& \ldots + F_{ba} \\
+      \frac{\partial}{\partial t}\left( \frac{3}{2} p_a \right) =& \ldots - F_{ab}u_a + W_{ab} - \frac{1}{2}mRu_a^2 \\
+      \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + W_{ba} + \frac{1}{2}mRu_b^2
+      \end{aligned}
+      
+  where both species have the same mass: :math:`m_a = m_b = m`. In the
+  pressure equations the :math:`-F_{ab}u_a` comes from splitting the
+  kinetic and thermal energies; :math:`W_{ab}=-W_{ba}` is the energy
+  transfer term that we need to find; The final term balances the loss
+  of kinetic energy at fixed momentum due to a particle source or
+  sink.
+
+  The momentum transfer :math:`F_{ab}=-F{ba}` is the momentum carried
+  by the converted ions: :math:`F_{ab}=-m R u_a`. To find
+  :math:`W_{ab}` we note that for :math:`p_a = 0` the change in pressure
+  must go to zero: :math:`-F_{ab}u_a + W_{ab} -\frac{1}{2}mRu_a^2 = 0`.
+
+  .. math::
+
+      \begin{aligned}
+      W_{ab} =& F_{ab}u_a + \frac{1}{2}mRu_a^2 \\
+      =& - mR u_a^2 + \frac{1}{2}mRu_a^2\\
+      =& -\frac{1}{2}mRu_a^2
+      \end{aligned}
+
+  Substituting into the above gives:
+
+  .. math::
+
+     \begin{aligned}
+     \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + W_{ba} + \frac{1}{2}mRu_b^2 \\
+     =& \ldots - mRu_au_b + \frac{1}{2}mRu_a^2 + \frac{1}{2}mRu_a^2 \\
+     =& \ldots + \frac{1}{2}mR\left(u_a - u_b\right)^2
+     \end{aligned}
+
+  This has the property that the change in pressure of both species is
+  Galilean invariant. This transfer term is included in the Amjuel reactions
+  and hydrogen charge exchange.
+     
 Hydrogen
 ~~~~~~~~
 

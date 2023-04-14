@@ -96,6 +96,17 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
 
+  const Options& units = alloptions["units"];
+  const BoutReal Tnorm = units["eV"];
+
+  // Read wall voltage, convert to normalised units
+  wall_potential = options["wall_potential"]
+                       .doc("Voltage of the wall [Volts]")
+                       .withDefault(Field3D(0.0))
+                   / Tnorm;
+  // Convert to field aligned coordinates
+  wall_potential = toFieldAligned(wall_potential);
+
   diagnose = options["diagnose"]
       .doc("Output additional diagnostics?")
       .withDefault<bool>(false);
@@ -247,6 +258,9 @@ void SheathBoundarySimple::transform(Options& state) {
               tesheath
               * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
 
+          const BoutReal phi_wall = wall_potential[i];
+          phi[i] += phi_wall; // Add bias potential
+
           phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
         }
       }
@@ -268,6 +282,9 @@ void SheathBoundarySimple::transform(Options& state) {
           phi[i] =
               tesheath
               * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
+
+          const BoutReal phi_wall = wall_potential[i];
+          phi[i] += phi_wall; // Add bias potential
 
           phi[i.yp()] = phi[i.ym()] = phi[i];
         }
@@ -305,12 +322,13 @@ void SheathBoundarySimple::transform(Options& state) {
 
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
+        const BoutReal phi_wall = wall_potential[i];
         const BoutReal phisheath =
-            floor(0.5 * (phi[im] + phi[i]), 0.0); // Electron saturation at phi = 0
+            floor(0.5 * (phi[im] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
         // Electron velocity into sheath (< 0)
         BoutReal vesheath =
-	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
+	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
         Ve[im] = 2 * vesheath - Ve[i];
         NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
@@ -357,12 +375,13 @@ void SheathBoundarySimple::transform(Options& state) {
 
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]); // electron temperature
+        const BoutReal phi_wall = wall_potential[i];
         const BoutReal phisheath =
-            floor(0.5 * (phi[ip] + phi[i]), 0.0); // Electron saturation at phi = 0
+            floor(0.5 * (phi[ip] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
         // Electron velocity into sheath (> 0)
         BoutReal vesheath =
-	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-phisheath / floor(tesheath, 1e-5));
+	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
         Ve[ip] = 2 * vesheath - Ve[i];
         NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
@@ -489,7 +508,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
-          NVi[im] = 2. * nisheath * visheath - NVi[i];
+          NVi[im] = 2. * Mi * nisheath * visheath - NVi[i];
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
@@ -547,7 +566,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
-          NVi[ip] = 2. * nisheath * visheath - NVi[i];
+          NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath

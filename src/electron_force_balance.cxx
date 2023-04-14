@@ -39,12 +39,12 @@ void ElectronForceBalance::transform(Options &state) {
   // Force balance, E = (-∇p + F) / n
   Field3D force_density = - Grad_par(Pe);
 
-  if (isSetFinal(electrons["momentum_source"], "zero_current")) {
+  if (IS_SET(electrons["momentum_source"])) {
     // Balance other forces from e.g. collisions
     // Note: marked as final so can't be set later
     force_density += get<Field3D>(electrons["momentum_source"]);
   }
-  const Field3D Epar = force_density / Ne;
+  const Field3D Epar = force_density / floor(Ne, 1e-5);
 
   // Now calculate forces on other species
   Options& allspecies = state["species"];

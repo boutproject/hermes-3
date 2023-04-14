@@ -29,10 +29,13 @@ struct EvolveMomentum : public Component {
   /// - fields
   ///   - phi (optional)
   void finally(const Options &state) override;
+
+  void outputVars(Options &state) override;
 private:
   std::string name;     ///< Short name of species e.g "e"
 
   Field3D NV;           ///< Species parallel momentum (normalised, evolving)
+  Field3D NV_solver;    ///< Momentum as input from solver
   Field3D V;            ///< Species parallel velocity
 
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
@@ -43,6 +46,9 @@ private:
   BoutReal density_floor;
 
   BoutReal hyper_z;  ///< Hyper-diffusion
+
+  bool diagnose; ///< Output additional diagnostics?
+  bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
 };
 
 namespace {

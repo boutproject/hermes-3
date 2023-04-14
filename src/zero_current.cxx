@@ -10,10 +10,6 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
 
   charge = options["charge"].doc("Particle charge. electrons = -1");
 
-  // Save the velocity
-  bout::globals::dump.addRepeat(velocity, std::string("V") + name);
-  velocity = 0.0;
-
   ASSERT0(charge != 0.0);
 }
 
@@ -62,6 +58,21 @@ void ZeroCurrent::transform(Options &state) {
   Options& species = state["species"][name];
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
-  velocity = current / (-charge * N);
+  velocity = current / (-charge * floor(N, 1e-5));
   set(species["velocity"], velocity);
+}
+
+void ZeroCurrent::outputVars(Options &state) {
+  AUTO_TRACE();
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
+
+  // Save the velocity
+  set_with_attrs(state[std::string("V") + name], velocity,
+                 {{"time_dimension", "t"},
+                  {"units", "m / s"},
+                  {"conversion", Cs0},
+                  {"long_name", name + " parallel velocity"},
+                  {"standard_name", "velocity"},
+                  {"species", name},
+                  {"source", "zero_current"}});
 }

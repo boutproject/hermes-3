@@ -100,9 +100,29 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
       subtract(species2["momentum_source"], F12);
 
       if (frictional_heating) {
-        // Heating due to friction
-        subtract(species1["energy_source"], F12 * velocity1);
-        add(species2["energy_source"], F12 * velocity2);
+        // Heating due to friction and energy transfer
+        //
+        // In the pressure (thermal energy) equation we have a term
+        // that transfers translational kinetic energy to thermal
+        // energy, and an energy transfer between species:
+        //
+        // d/dt(3/2p_1) = ...  - F_12 v_1 + W_12
+        //
+        // The energy transfer term W_12 is chosen to make the
+        // pressure change frame invariant:
+        //
+        // W_12 = (m_1 v_1 + m_2 v_2) / (m_1 + m_2) * F_12
+        //
+        // The sum of these two terms is:
+        //
+        // - F_12 v_1 + W_12 = m_2 (v_2  - v_1) / (m_1 + m_2) * F_12
+        //
+        // Note:
+        //  1) This term is always positive: Collisions don't lead to cooling
+        //  2) In the limit that m_2 << m_1 (e.g. electron-ion collisions),
+        //     the lighter species is heated more than the heavy species.
+        add(species1["energy_source"], (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12);
+        add(species2["energy_source"], (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12);
       }
     }
 
@@ -222,7 +242,7 @@ void Collisions::transform(Options& state) {
 
         collide(electrons, species, nu_ei / Omega_ci, mom_coeff);
 
-      } if (species.isSet("charge") and (get<BoutReal>(species["charge"]) < 0.0)) {
+      } else if (species.isSet("charge") and (get<BoutReal>(species["charge"]) < 0.0)) {
         ////////////////////////////////////
         // electron-negative ion collisions
 

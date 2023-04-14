@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+
+from __future__ import division
+from __future__ import print_function
+
+try:
+  from builtins import str
+except:
+  pass
+
+from boututils.run_wrapper import shell, launch, getmpirun
+from boutdata.collect import collect
+
+from numpy import sqrt, max, abs, mean, array, log, concatenate
+
+shell("rm data/BOUT.dmp.0.nc")
+
+# Link to the executable
+shell("ln -s ../../../hermes-3 hermes-3")
+
+success = True
+
+path = "data"
+
+s, out = launch("./hermes-3 -d " + path, nproc=1, pipe=True)
+
+# Save output to log file
+with open("run.log", "w") as f:
+  f.write(out)
+
+Pe = collect("Pe", tind=-1, path=path)
+Ne = collect("Ne", tind=-1, path=path)
+Tnorm = collect("Tnorm", path=path)
+Te = Pe / Ne
+Te_up = Te[-1,0,0,0] * Tnorm
+
+# Upstream electron temperature should be about 60eV
+if Te_up < 50 or Te_up > 70:
+  success = False
+  print("Electron temperature failed: {}eV. Expecting about 60eV".format(Te_up))
+
+Ti = collect("Td+", tind=-1, path=path)
+Ti_up = Ti[-1,0,0,0] * Tnorm
+# Upstream ion temperature should be about 140eV
+if Ti_up < 130 or Ti_up > 150:
+  success = False
+  print("Ion temperature failed: {}eV. Expecting about 140eV".format(Ti_up))
+
+if success:
+  print(" => Test passed")
+  exit(0)
+else:
+  print(" => Test failed")
+  exit(1)

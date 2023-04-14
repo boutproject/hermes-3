@@ -20,10 +20,19 @@
 ///     using to/fromFieldAligned
 ///
 struct SheathBoundary : public Component {
+  /// # Input options
+  /// - <name>  e.g. "sheath_boundary"
+  ///   - lower_y                  Boundary on lower y?
+  ///   - upper_y                  Boundary on upper y?
+  ///   - wall_potential           Voltage of the wall [Volts]
+  ///   - floor_potential          Apply floor to sheath potential?
+  ///   - secondary_electron_coef  Effective secondary electron emission coefficient
+  ///   - sin_alpha                Sine of the angle between magnetic field line and wall surface (0 to 1)
+  ///   - always_set_phi           Always set phi field? Default is to only modify if already set
   SheathBoundary(std::string name, Options &options, Solver *);
 
   ///
-  /// Inputs
+  /// # Inputs
   /// - species
   ///   - e
   ///     - density
@@ -44,7 +53,7 @@ struct SheathBoundary : public Component {
   /// - fields
   ///   - phi    Optional. If not set, calculated at boundary (see note below)
   ///
-  /// Outputs
+  /// # Outputs
   /// - species
   ///   - e
   ///     - density      Sets boundary
@@ -74,6 +83,10 @@ private:
   bool upper_y; // Boundary on upper y?
 
   bool always_set_phi; ///< Set phi field?
+
+  Field3D wall_potential; ///< Voltage at the wall. Normalised units.
+
+  bool floor_potential; ///< Apply floor to sheath potential?
 };
 
 namespace {

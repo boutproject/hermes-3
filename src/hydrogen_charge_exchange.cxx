@@ -1,7 +1,10 @@
 #include "../include/hydrogen_charge_exchange.hxx"
 
 void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
-                                             Options& atom2, Options& ion2) {
+                                             Options& atom2, Options& ion2,
+                                             Field3D &R,
+                                             Field3D &atom_mom, Field3D &ion_mom,
+                                             Field3D &atom_energy, Field3D &ion_energy) {
 
   // Temperatures and masses of initial atom and ion
   const Field3D Tatom = get<Field3D>(atom1["temperature"]);
@@ -33,7 +36,7 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   const Field3D Natom = floor(get<Field3D>(atom1["density"]), 1e-5);
   const Field3D Nion = floor(get<Field3D>(ion1["density"]), 1e-5);
 
-  const Field3D R = Natom * Nion * sigmav; // Rate coefficient
+  R = Natom * Nion * sigmav; // Rate coefficient. This is an output parameter.
 
   if ((&atom1 != &atom2) or (&ion1 != &ion2)) {
     // Transfer particles atom1 -> ion2, ion1 -> atom2
@@ -44,20 +47,37 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   } // Skip the case where the same isotope swaps places
 
   // Transfer momentum
-  const Field3D atom_mom = R * Aatom * get<Field3D>(atom1["velocity"]);
+  auto atom1_velocity = get<Field3D>(atom1["velocity"]);
+  auto ion1_velocity = get<Field3D>(ion1["velocity"]);
+
+  // Transfer fom atom1 to ion2
+  atom_mom = R * Aatom * atom1_velocity;
   subtract(atom1["momentum_source"], atom_mom);
   add(ion2["momentum_source"], atom_mom);
 
-  const Field3D ion_mom = R * Aion * get<Field3D>(ion1["velocity"]);
+  // Transfer from ion1 to atom2
+  ion_mom = R * Aion * ion1_velocity;
   subtract(ion1["momentum_source"], ion_mom);
   add(atom2["momentum_source"], ion_mom);
 
-  // Transfer energy
-  const Field3D atom_energy = (3. / 2) * R * Tatom;
+  // Frictional heating: Friction force between ions and atoms
+  // converts kinetic energy to thermal energy
+  //
+  // This handles the general case that ion1 != ion2
+  // and atom1 != atom2
+
+  auto ion2_velocity = get<Field3D>(ion2["velocity"]);
+  add(ion2["energy_source"], 0.5 * Aatom * R * SQ(ion2_velocity - atom1_velocity));
+
+  auto atom2_velocity = get<Field3D>(atom2["velocity"]);
+  add(atom2["energy_source"], 0.5 * Aion * R * SQ(atom2_velocity - ion1_velocity));
+
+  // Transfer thermal energy
+  atom_energy = (3. / 2) * R * Tatom;
   subtract(atom1["energy_source"], atom_energy);
   add(ion2["energy_source"], atom_energy);
 
-  const Field3D ion_energy = (3. / 2) * R * Tion;
+  ion_energy = (3. / 2) * R * Tion;
   subtract(ion1["energy_source"], ion_energy);
   add(atom2["energy_source"], ion_energy);
 

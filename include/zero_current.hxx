@@ -37,6 +37,13 @@ struct ZeroCurrent : public Component {
   /// 
   void transform(Options &state) override;
 
+  void finally(const Options &state) override {
+    // Get the velocity with boundary condition applied.
+    // This is for output only
+    velocity = get<Field3D>(state["species"][name]["velocity"]);
+  }
+
+  void outputVars(Options &state) override;
 private:
   std::string name; ///< Name of this species
   BoutReal charge;  ///< The charge of this species

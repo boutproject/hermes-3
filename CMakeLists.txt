@@ -77,6 +77,7 @@ set(HERMES_SOURCES
     src/adas_reaction.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
+    src/neutral_boundary.cxx
     src/polarisation_drift.cxx
     src/solkit_neutral_parallel_diffusion.cxx
     src/hydrogen_charge_exchange.cxx
@@ -86,6 +87,7 @@ set(HERMES_SOURCES
     src/ion_viscosity.cxx
     src/transform.cxx
     include/adas_reaction.hxx
+    include/adas_carbon.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
     include/amjuel_hyd_ionisation.hxx
@@ -113,6 +115,7 @@ set(HERMES_SOURCES
     include/ion_viscosity.hxx
     include/ionisation.hxx
     include/loadmetric.hxx
+    include/neutral_boundary.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
     include/solkit_neutral_parallel_diffusion.hxx
@@ -125,6 +128,7 @@ set(HERMES_SOURCES
     include/sheath_boundary.hxx
     include/sheath_boundary_simple.hxx
     include/sheath_boundary_insulating.hxx
+    include/simple_conduction.hxx
     include/snb_conduction.hxx
     include/sheath_closure.hxx
     include/sound_speed.hxx
@@ -192,10 +196,12 @@ if(HERMES_TESTS)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
+  hermes_add_integrated_test(1D-recycling)
   hermes_add_integrated_test(diffusion)
   hermes_add_integrated_test(evolve_density)
   hermes_add_integrated_test(neutral_mixed)
   hermes_add_integrated_test(vorticity)
+  hermes_add_integrated_test(sod-shock)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
