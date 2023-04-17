@@ -111,9 +111,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   Tnlim.setBoundary(std::string("T") + name);
   Pnlim.setBoundary(std::string("P") + name);
   Nnlim.setBoundary(std::string("N") + name);
-  DnnNn.setBoundary(std::string("Dnn") + name);
-  DnnPn.setBoundary(std::string("Dnn") + name);
-  DnnTn.setBoundary(std::string("Dnn") + name);
+  DnnNn.setBoundary(std::string("DnnNn") + name);
+  DnnPn.setBoundary(std::string("DnnPn") + name);
+  DnnTn.setBoundary(std::string("DnnTn") + name);
 
 }
 
