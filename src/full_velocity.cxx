@@ -4,7 +4,7 @@
 
 #include "bout/mesh.hxx"
 #include "bout/solver.hxx"
-
+#if not BOUT_USE_METRIC_3D 
 using bout::globals::mesh;
 
 NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& options, Solver *solver) : name(name) {
@@ -12,6 +12,12 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& optio
   // This is used in both transform and finally functions
   coord = mesh->getCoordinates();
 
+  dy2D = DC(coord->dy);
+  dx2D = DC(coord->dx);
+  J2D = DC(coord->J);
+  g_22_2D = DC(coord->g_22);
+  Bxy2D = DC(coord->Bxy); // redundant name...
+  
   AA = options["AA"].doc("Atomic mass number").withDefault(2.0);
 
   gamma_ratio =
@@ -94,14 +100,14 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& optio
       // Central differencing of coordinates
       BoutReal dRdtheta, dZdtheta;
       if (j == mesh->ystart) {
-        dRdtheta = (Rxy(i, j + 1) - Rxy(i, j)) / (coord->dy(i, j));
-        dZdtheta = (Zxy(i, j + 1) - Zxy(i, j)) / (coord->dy(i, j));
+        dRdtheta = (Rxy(i, j + 1) - Rxy(i, j)) / (dy2D(i, j));
+        dZdtheta = (Zxy(i, j + 1) - Zxy(i, j)) / (dy2D(i, j));
       } else if (j == mesh->yend) {
-        dRdtheta = (Rxy(i, j) - Rxy(i, j - 1)) / (coord->dy(i, j));
-        dZdtheta = (Zxy(i, j) - Zxy(i, j - 1)) / (coord->dy(i, j));
+        dRdtheta = (Rxy(i, j) - Rxy(i, j - 1)) / (dy2D(i, j));
+        dZdtheta = (Zxy(i, j) - Zxy(i, j - 1)) / (dy2D(i, j));
       } else {
-        dRdtheta = (Rxy(i, j + 1) - Rxy(i, j - 1)) / (2. * coord->dy(i, j));
-        dZdtheta = (Zxy(i, j + 1) - Zxy(i, j - 1)) / (2. * coord->dy(i, j));
+        dRdtheta = (Rxy(i, j + 1) - Rxy(i, j - 1)) / (2. * dy2D(i, j));
+        dZdtheta = (Zxy(i, j + 1) - Zxy(i, j - 1)) / (2. * dy2D(i, j));
       }
 
       // Match to hthe, 1/|Grad y|
@@ -113,15 +119,15 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& optio
       BoutReal dRdpsi, dZdpsi;
       if (i == 0) {
         // One-sided differences
-        dRdpsi = (Rxy(i + 1, j) - Rxy(i, j)) / (coord->dx(i, j));
-        dZdpsi = (Zxy(i + 1, j) - Zxy(i, j)) / (coord->dx(i, j));
+        dRdpsi = (Rxy(i + 1, j) - Rxy(i, j)) / (dx2D(i, j));
+        dZdpsi = (Zxy(i + 1, j) - Zxy(i, j)) / (dx2D(i, j));
       } else if (i == (mesh->LocalNx - 1)) {
         // One-sided differences
-        dRdpsi = (Rxy(i, j) - Rxy(i - 1, j)) / (coord->dx(i, j));
-        dZdpsi = (Zxy(i, j) - Zxy(i - 1, j)) / (coord->dx(i, j));
+        dRdpsi = (Rxy(i, j) - Rxy(i - 1, j)) / (dx2D(i, j));
+        dZdpsi = (Zxy(i, j) - Zxy(i - 1, j)) / (dx2D(i, j));
       } else {
-        dRdpsi = (Rxy(i + 1, j) - Rxy(i - 1, j)) / (2. * coord->dx(i, j));
-        dZdpsi = (Zxy(i + 1, j) - Zxy(i - 1, j)) / (2. * coord->dx(i, j));
+        dRdpsi = (Rxy(i + 1, j) - Rxy(i - 1, j)) / (2. * dx2D(i, j));
+        dZdpsi = (Zxy(i + 1, j) - Zxy(i - 1, j)) / (2. * dx2D(i, j));
       }
 
       // Match to Bp, |Grad psi|. NOTE: this only works if
@@ -182,7 +188,7 @@ void NeutralFullVelocity::transform(Options &state) {
     for (RangeIterator idwn = mesh->iterateBndryLowerY(); !idwn.isDone();
          idwn.next()) {
 
-      if (Vn2D.y(idwn.ind, mesh->ystart) < 0.0) {
+      if (Vn2D.y(idwn.ind, mesh->ystart, 0) < 0.0) {
         // Flowing out of domain
         Vn2D.y(idwn.ind, mesh->ystart - 1) = Vn2D.y(idwn.ind, mesh->ystart);
       } else {
@@ -204,7 +210,7 @@ void NeutralFullVelocity::transform(Options &state) {
   // Vn2D is covariant and b = e_y / (JB) to write:
   //
   // V_{||n} = b dot V_n = Vn2D.y / (JB)
-  Field2D Vnpar = Vn2D.y / (coord->J * coord->Bxy);
+  Field2D Vnpar = Vn2D.y / (J2D * Bxy2D);
 
   // Set values in the state
   auto& localstate = state["species"][name];
@@ -293,14 +299,14 @@ void NeutralFullVelocity::finally(const Options &state) {
     BoutReal q = neutral_gamma * Nnout * Tnout * sqrt(Tnout);
     // Multiply by cell area to get power
     BoutReal heatflux =
-        q * (coord->J(r.ind, mesh->ystart) + coord->J(r.ind, mesh->ystart - 1)) /
-        (sqrt(coord->g_22(r.ind, mesh->ystart)) +
-         sqrt(coord->g_22(r.ind, mesh->ystart - 1)));
+        q * (J2D(r.ind, mesh->ystart) + J2D(r.ind, mesh->ystart - 1)) /
+        (sqrt(g_22_2D(r.ind, mesh->ystart)) +
+         sqrt(g_22_2D(r.ind, mesh->ystart - 1)));
 
     // Divide by volume of cell, and multiply by 2/3 to get pressure
     ddt(Pn2D)(r.ind, mesh->ystart) -=
         (2. / 3) * heatflux /
-        (coord->dy(r.ind, mesh->ystart) * coord->J(r.ind, mesh->ystart));
+        (dy2D(r.ind, mesh->ystart) * J2D(r.ind, mesh->ystart));
   }
 
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
@@ -325,14 +331,14 @@ void NeutralFullVelocity::finally(const Options &state) {
     BoutReal q = neutral_gamma * Nnout * Tnout * sqrt(Tnout);
     // Multiply by cell area to get power
     BoutReal heatflux =
-        q * (coord->J(r.ind, mesh->yend) + coord->J(r.ind, mesh->yend + 1)) /
-        (sqrt(coord->g_22(r.ind, mesh->yend)) +
-         sqrt(coord->g_22(r.ind, mesh->yend + 1)));
+        q * (J2D(r.ind, mesh->yend) + J2D(r.ind, mesh->yend + 1)) /
+        (sqrt(g_22_2D(r.ind, mesh->yend)) +
+         sqrt(g_22_2D(r.ind, mesh->yend + 1)));
 
     // Divide by volume of cell, and multiply by 2/3 to get pressure
     ddt(Pn2D)(r.ind, mesh->yend) -=
         (2. / 3) * heatflux /
-        (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
+        (dy2D(r.ind, mesh->yend) * J2D(r.ind, mesh->yend));
   }
 
   /////////////////////////////////////////////////////
@@ -348,7 +354,7 @@ void NeutralFullVelocity::finally(const Options &state) {
   // Momentum. Note need to turn back into covariant form
   if (localstate.isSet("momentum_source")) {
     ddt(Vn2D).y += get<Field2D>(localstate["momentum_source"])
-      * (coord->J * coord->Bxy) / (AA * Nn2D_floor);
+      * (J2D * Bxy2D) / (AA * Nn2D_floor);
   }
 
   // Energy
@@ -388,3 +394,4 @@ void NeutralFullVelocity::outputVars(Options &state) {
   set_with_attrs(state["Tyz"], Tyz, {});
 }
 
+#endif

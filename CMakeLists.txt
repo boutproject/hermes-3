@@ -49,7 +49,7 @@ set(HERMES_SOURCES
     src/div_ops.cxx
     src/loadmetric.cxx
     src/neutral_mixed.cxx
-    #src/full_velocity.cxx
+    src/full_velocity.cxx
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
     src/evolve_density.cxx
