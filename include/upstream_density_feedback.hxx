@@ -94,6 +94,15 @@ struct UpstreamDensityFeedback : public Component {
                      {{"time_dimension", "t"},
                       {"long_name", name + " density source multiplier"},
                       {"source", "upstream_density_feedback"}});
+
+      set_with_attrs(state[std::string("S") + name + std::string("_feedback")], density_source_shape * source_multiplier,
+                      {{"time_dimension", "t"},
+                      {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "density source"},
+                    {"long_name", name + "upstream density feedback controller source"},
+                    {"source", "upstream_density_feedback"}});
+
     }
   }
 
