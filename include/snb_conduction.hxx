@@ -50,11 +50,9 @@ struct SNBConduction : public Component {
     AUTO_TRACE();
     auto& options = alloptions[name];
 
-    if (options["diagnose"]
-        .doc("Save additional output diagnostics")
-          .withDefault<bool>(false)) {
-      SAVE_REPEAT(Div_Q_SH, Div_Q_SNB);
-    }
+    diagnose = options["diagnose"]
+      .doc("Save additional output diagnostics")
+      .withDefault<bool>(false);
   }
 
   /// Inputs
@@ -69,10 +67,13 @@ struct SNBConduction : public Component {
   ///     - energy_source
   void transform(Options& state) override;
 
+  void outputVars(Options& state) override;
 private:
   bout::HeatFluxSNB snb;
 
   Field3D Div_Q_SH, Div_Q_SNB; ///< Divergence of heat fluxes
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {

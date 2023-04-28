@@ -23,11 +23,14 @@ struct Isothermal : public Component {
   ///
   void transform(Options &state) override;
 
+  void outputVars(Options &state) override;
 private:
   std::string name; // Species name
 
-  BoutReal T; // The normalised temperature
-  Field3D P; // The normalised pressure
+  BoutReal T; ///< The normalised temperature
+  Field3D P; ///< The normalised pressure
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {

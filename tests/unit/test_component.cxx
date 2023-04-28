@@ -62,6 +62,7 @@ TEST(ComponentTest, SetInteger) {
   ASSERT_EQ(getNonFinal<int>(option), 3);
 }
 
+#if CHECKLEVEL >= 1
 TEST(ComponentTest, SetAfterGetThrows) {
   Options option;
 
@@ -72,6 +73,7 @@ TEST(ComponentTest, SetAfterGetThrows) {
   // Setting after get should fail
   ASSERT_THROW(set<int>(option, 3), BoutException);
 }
+#endif
 
 TEST(ComponentTest, SetAfterGetNonFinal) {
   Options option;
@@ -85,6 +87,7 @@ TEST(ComponentTest, SetAfterGetNonFinal) {
   ASSERT_EQ(getNonFinal<int>(option), 3);
 }
 
+#if CHECKLEVEL >= 1
 TEST(ComponentTest, SetBoundaryAfterGetThrows) {
   Options option;
 
@@ -96,6 +99,7 @@ TEST(ComponentTest, SetBoundaryAfterGetThrows) {
   // that all values are final including boundary cells.
   ASSERT_THROW(setBoundary<int>(option, 3), BoutException);
 }
+#endif
 
 TEST(ComponentTest, SetBoundaryAfterGetNoBoundary) {
   Options option;
@@ -126,6 +130,7 @@ TEST(ComponentTest, GetAfterIsSetFinal) {
   ASSERT_EQ(get<int>(option["test"]), 1);
 }
 
+#if CHECKLEVEL >= 1
 TEST(ComponentTest, SetAfterIsSetFinal) {
   Options option;
 
@@ -133,3 +138,4 @@ TEST(ComponentTest, SetAfterIsSetFinal) {
   // Can't now set the value
   ASSERT_THROW(set<int>(option["test"], 3), BoutException);
 }
+#endif

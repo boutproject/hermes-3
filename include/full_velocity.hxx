@@ -20,7 +20,7 @@ struct NeutralFullVelocity : public Component {
   void finally(const Options &state) override;
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  void annotate(Options &state) override;
+  void outputVars(Options &state) override;
 private:
   Coordinates *coord;   // Coordinate system
 

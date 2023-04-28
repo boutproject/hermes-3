@@ -13,14 +13,14 @@
 #  Does not include recombination
 
 
-nout = 200
-timestep = 2000
+nout = 400
+timestep = 5000
 
 MXG = 0  # No guard cells in X
 
 [mesh]
 nx = 1
-ny = 200   # Resolution along field-line
+ny = 400   # Resolution along field-line
 nz = 1
 
 length = 30           # Length of the domain in meters
@@ -53,7 +53,13 @@ Bnorm = 1
 Tnorm = 100
 
 [solver]
-mxstep = 100000
+type = beuler  # Backward Euler steady-state solver
+snes_type = newtonls
+ksp_type = gmres
+max_nonlinear_iterations = 10
+
+atol = 1e-7
+rtol = 1e-5
 
 [sheath_boundary]
 
@@ -77,13 +83,16 @@ charge = 1
 AA = 2
 
 density_upstream = 1e19  # Upstream density [m^-3]
+density_source_positive = false  # Force source to be > 0?
+density_controller_i = 5e-4
+density_controller_p = 1e-2
 
 thermal_conduction = true  # in evolve_pressure
 
 diagnose = true
 
 recycle_as = d
-recycle_multiplier = 0.99  # Recycling fraction
+recycle_multiplier = 1  # Recycling fraction
 
 [Nd+]
 
@@ -147,6 +156,7 @@ species = d+
 
 [reactions]
 type = (
-        d + e -> d+ + 2e,   # Deuterium ionisation
-        d + d+ -> d+ + d,   # Charge exchange
+        d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
+        d + d+ -> d+ + d,     # Charge exchange
        )

@@ -27,9 +27,6 @@ struct FixedDensity : public Component {
 
     // Get the density and normalise
     N = options["density"].as<Field3D>() / Nnorm;
-
-    // Save density to output files
-    bout::globals::dump.addOnce(N, std::string("N") + name);
   }
 
   /// Sets in the state the density, mass and charge of the species
@@ -49,6 +46,19 @@ struct FixedDensity : public Component {
     set(species["density"], N);
   }
 
+  void outputVars(Options& state) override {
+    AUTO_TRACE();
+    auto Nnorm = get<BoutReal>(state["Nnorm"]);
+
+    // Save the density, not time dependent
+    set_with_attrs(state[std::string("N") + name], N,
+                   {{"units", "m^-3"},
+                    {"conversion", Nnorm},
+                    {"standard_name", "density"},
+                    {"long_name", name + " number density"},
+                    {"species", name},
+                    {"source", "fixed_density"}});
+  }
 private:
   std::string name; ///< Short name of species e.g "e"
 

@@ -29,16 +29,12 @@ struct SetTemperature : public Component {
     auto& options = alloptions[name];
 
     temperature_from = options["temperature_from"]
-      .doc("Name of species to take temperature from (e.g 'e')")
-      .as<std::string>();
+                           .doc("Name of species to take temperature from (e.g 'e')")
+                           .as<std::string>();
 
-    if (options["diagnose"]
-            .doc("Save additional output diagnostics")
-            .withDefault<bool>(false)) {
-      // Save temperature as time-varying field
-      bout::globals::dump.addRepeat(T, std::string("T") + name);
-      T = 0.0;
-    }
+    diagnose = options["diagnose"]
+                   .doc("Save additional output diagnostics")
+                   .withDefault<bool>(false);
   }
 
   ///
@@ -70,10 +66,29 @@ struct SetTemperature : public Component {
     }
   }
 
+  void outputVars(Options& state) override {
+    AUTO_TRACE();
+
+    if (diagnose) {
+      auto Tnorm = get<BoutReal>(state["Tnorm"]);
+
+      // Save temperature to output files
+      set_with_attrs(state[std::string("T") + name], T,
+                     {{"time_dimension", "t"},
+                      {"units", "eV"},
+                      {"conversion", Tnorm},
+                      {"standard_name", "temperature"},
+                      {"long_name", name + " temperature set from " + temperature_from},
+                      {"species", name},
+                      {"source", "set_temperature"}});
+    }
+  }
+
 private:
   std::string name;             ///< Short name of species e.g "e"
-  std::string temperature_from; //< The species that the temperature is taken from
-  Field3D T;                    //< The temperature
+  std::string temperature_from; ///< The species that the temperature is taken from
+  Field3D T;                    ///< The temperature
+  bool diagnose;                ///< Output diagnostics?
 };
 
 namespace {
