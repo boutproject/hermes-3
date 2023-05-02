@@ -101,7 +101,7 @@ private:
   LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
 
   Field3D Bsq; // SQ(coord->Bxy)
-  Vector3D Curlb_B; // Curvature vector Curl(b/B)
+  VectorMetric Curlb_B; // Curvature vector Curl(b/B)
   BoutReal hyper_z; ///< Hyper-viscosity in Z
   Field3D viscosity; ///< Kinematic viscosity
 
