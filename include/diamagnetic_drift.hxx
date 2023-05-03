@@ -2,7 +2,9 @@
 #ifndef DIAMAGNETIC_DRIFT_H
 #define DIAMAGNETIC_DRIFT_H
 
+
 #include "component.hxx"
+#include <bout/vectormetric.hxx>
 
 /// Calculate diamagnetic flows
 
