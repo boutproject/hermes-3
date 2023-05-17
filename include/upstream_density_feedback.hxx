@@ -79,9 +79,9 @@ struct UpstreamDensityFeedback : public Component {
       auto Nnorm = get<BoutReal>(state["Nnorm"]);
       auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
-      // Shape is not time-dependent
+      // Shape is not time-dependent and has units of [m-3 s-1]
       set_with_attrs(
-          state[std::string("density_source_shape_") + name], density_source_shape,
+          state[std::string("density_feedback_src_shape_") + name], density_source_shape,
           {{"units", "m^-3 s^-1"},
            {"conversion", Nnorm * Omega_ci},
            {"long_name", name + " density source shape"},
@@ -89,7 +89,7 @@ struct UpstreamDensityFeedback : public Component {
 
       // The source multiplier is time-dependent, but dimensionless
       // because all the units are attached to the shape
-      set_with_attrs(state[std::string("density_source_multiplier_") + name],
+      set_with_attrs(state[std::string("density_feedback_src_mult_") + name],
                      source_multiplier,
                      {{"time_dimension", "t"},
                       {"long_name", name + " density source multiplier"},
@@ -102,6 +102,21 @@ struct UpstreamDensityFeedback : public Component {
                     {"standard_name", "density source"},
                     {"long_name", name + "upstream density feedback controller source"},
                     {"source", "upstream_density_feedback"}});
+
+      // Save proportional and integral component of source for diagnostics/tuning
+      // Multiplier = proportional term + integral term
+      set_with_attrs(
+          state[std::string("density_feedback_src_p_") + name], proportional_term,
+          {{"time_dimension", "t"},
+          {"long_name", name + " proportional feedback term"},
+          {"source", "upstream_density_feedback"}});
+
+      
+      set_with_attrs(
+          state[std::string("density_feedback_src_i_") + name], integral_term,
+          {{"time_dimension", "t"},
+           {"long_name", name + " integral feedback term"},
+           {"source", "upstream_density_feedback"}});
 
     }
   }
@@ -129,7 +144,7 @@ private:
 
   BoutReal density_upstream;                           ///< Normalised upstream density
   BoutReal density_controller_p, density_controller_i; ///< PI controller parameters
-
+  BoutReal error;
   BoutReal density_error_integral{0.0}; ///< Time integral of the error
 
   bool density_integral_positive; ///< Force integral term to be positive?
@@ -142,6 +157,8 @@ private:
   Field3D density_source_shape; ///< This shape source is scaled up and down
 
   BoutReal source_multiplier; ///< Factor to multiply source
+
+  BoutReal proportional_term, integral_term; ///< Components of resulting source for diagnostics
 
   bool diagnose; ///< Output diagnostic information?
 };

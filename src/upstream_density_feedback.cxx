@@ -13,7 +13,7 @@ void UpstreamDensityFeedback::transform(Options& state) {
 
   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
     int jz = 0;
-    BoutReal error = density_upstream - N(r.ind, mesh->ystart, jz);
+    error = density_upstream - N(r.ind, mesh->ystart, jz);
 
     // PI controller, using crude integral of the error
     if (density_error_lasttime < 0.0) {
@@ -34,8 +34,9 @@ void UpstreamDensityFeedback::transform(Options& state) {
     }
 
     // Calculate source from combination of error and integral
-    source_multiplier = density_controller_p * error +
-      density_controller_i * density_error_integral;
+    integral_term = density_controller_i * density_error_integral;
+    proportional_term = density_controller_p * error;
+    source_multiplier = proportional_term + integral_term;
 
     if ((source_multiplier < 0.0) && density_source_positive) {
       source_multiplier = 0.0; // Don't remove particles
@@ -46,8 +47,12 @@ void UpstreamDensityFeedback::transform(Options& state) {
     break;
   }
 
-  // Broadcast the value of source from processor 0
+  // The upstream density is only present in processor 0, so for other
+  // processors the above loop is skipped. Need to broadcast the values from
+  // processor 0 to the other processors
   MPI_Bcast(&source_multiplier, 1, MPI_DOUBLE, 0, BoutComm::get());
+  MPI_Bcast(&proportional_term, 1, MPI_DOUBLE, 0, BoutComm::get());
+  MPI_Bcast(&integral_term, 1, MPI_DOUBLE, 0, BoutComm::get());
   ASSERT2(std::isfinite(source_multiplier));
 
   // Scale the source and add to the species density source
