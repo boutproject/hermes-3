@@ -60,7 +60,7 @@ set(HERMES_SOURCES
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
     src/evolve_density.cxx
-    src/vorticity.cxx
+    src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
     src/isothermal.cxx
@@ -93,6 +93,7 @@ set(HERMES_SOURCES
     src/thermal_force.cxx
     src/ion_viscosity.cxx
     src/transform.cxx
+    src/vorticity.cxx
     include/adas_reaction.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
@@ -109,6 +110,7 @@ set(HERMES_SOURCES
     include/electromagnetic.hxx
     include/electron_force_balance.hxx
     include/evolve_density.hxx
+    include/evolve_energy.hxx
     include/evolve_momentum.hxx
     include/evolve_pressure.hxx
     include/fixed_density.hxx

@@ -191,6 +191,32 @@ The implementation is in `EvolvePressure`:
 .. doxygenstruct:: EvolvePressure
    :members:
 
+.. _evolve_energy:
+
+evolve_energy
+~~~~~~~~~~~~~
+
+This evolves the species internal energy :math:`\mathcal{E}` in time:
+
+.. math::
+
+   \mathcal{E} = \frac{1}{\gamma - 1} P + \frac{1}{2}m nv_{||}^2
+
+Note that this component requires the parallel velocity :math:`v_{||}`
+to calculate the pressure. It must therefore be listed after a component
+that sets the velocity, such as `evolve_momentum`:
+
+.. code-block:: ini
+
+   [d]
+   type = ..., evolve_momentum, evolve_energy
+
+The energy density will be saved as `E<species>` (e.g `Ed`) and the
+pressure as `P<species>` (e.g. `Pd`). Additional diagnostics, such as the
+temperature, can be saved by setting the option `diagnose = true`.
+
+.. doxygenstruct:: EvolveEnergy
+   :members:
 
 SNB nonlocal heat flux
 ~~~~~~~~~~~~~~~~~~~~~~
