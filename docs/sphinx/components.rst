@@ -291,6 +291,33 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
+electron_viscosity
+------------------
+
+Calculates the Braginskii electron parallel viscosity, adding a force (momentum source)
+to the electron momentum equation:
+
+.. math::
+
+   F = \sqrt{B}\nabla\cdot\left[\frac{\eta_e}{B}\mathbf{b}\mathbf{b}\cdot\nabla\left(\sqrt{B}V_{||e}\right)\right]
+
+The electron parallel viscosity is
+
+.. math::
+
+   \eta_e = \frac{4}{3} 0.73 p_e \tau_e
+
+where :math:`\tau_e` is the electron collision time. The collisions between electrons
+and all other species therefore need to be calculated before this component is run:
+
+.. code-block:: ini
+
+   [hermes]
+   components = ..., e, ..., collisions, electron_viscosity
+
+.. doxygenstruct:: ElectronViscosity
+   :members:
+
 simple_conduction
 -----------------
 
