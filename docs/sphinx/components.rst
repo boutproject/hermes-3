@@ -196,7 +196,8 @@ The implementation is in `EvolvePressure`:
 evolve_energy
 ~~~~~~~~~~~~~
 
-This evolves the species internal energy :math:`\mathcal{E}` in time:
+This evolves the sum of species internal energy and parallel kinetic
+energy, :math:`\mathcal{E}`:
 
 .. math::
 

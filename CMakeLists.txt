@@ -211,6 +211,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(neutral_mixed)
   hermes_add_integrated_test(vorticity)
   hermes_add_integrated_test(sod-shock)
+  hermes_add_integrated_test(sod-shock-energy)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
