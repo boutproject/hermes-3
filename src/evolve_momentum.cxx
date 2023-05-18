@@ -7,6 +7,7 @@
 
 #include "../include/evolve_momentum.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_build_config.hxx"
 
 namespace {
 BoutReal floor(BoutReal value, BoutReal min) {
@@ -119,7 +120,7 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Note: Density floor should be consistent with calculation of V
   //       otherwise energy conservation is affected
-  ddt(NV) -= AA * FV::Div_par_fvv(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
+  ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
 
   // Parallel pressure gradient
   if (species.isSet("pressure")) {

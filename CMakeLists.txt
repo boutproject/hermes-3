@@ -232,3 +232,22 @@ if(HERMES_TESTS)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
   endif()
 endif()
+
+# Compile-time options
+
+set(SLOPE_LIMITERS MinMod MC Upwind)
+set(HERMES_SLOPE_LIMITER MinMod CACHE STRING "Set advection slope limiter")
+set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
+message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")
+
+# Generate the build config header
+
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx")
+  # If we do in source builds, this is fine
+  if (NOT ${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
+    message(FATAL_ERROR "Generated hermes_build_config.hxx header already exists; please remove '${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx' before continuing")
+  endif()
+endif()
+
+configure_file(include/hermes_build_config.hxx.in include/hermes_build_config.hxx)
+

@@ -10,6 +10,7 @@
 #include "../include/div_ops.hxx"
 #include "../include/evolve_energy.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/hermes_build_config.hxx"
 
 using bout::globals::mesh;
 
@@ -222,7 +223,7 @@ void EvolveEnergy::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(E) -= FV::Div_par(E + P, V, fastest_wave);
+    ddt(E) -= FV::Div_par<hermes::Limiter>(E + P, V, fastest_wave);
   }
 
   if (species.isSet("low_n_coeff")) {
