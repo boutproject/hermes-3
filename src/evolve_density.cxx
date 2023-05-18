@@ -203,7 +203,7 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par<hermes::Limiter>(N, V, fastest_wave);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave);
   }
 
   if (low_n_diffuse) {

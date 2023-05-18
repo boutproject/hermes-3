@@ -223,7 +223,7 @@ void EvolveEnergy::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(E) -= FV::Div_par<hermes::Limiter>(E + P, V, fastest_wave);
+    ddt(E) -= FV::Div_par_mod<hermes::Limiter>(E + P, V, fastest_wave);
   }
 
   if (species.isSet("low_n_coeff")) {

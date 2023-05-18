@@ -208,7 +208,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par<hermes::Limiter>(P, V, fastest_wave);
+      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave);
 
       // Work done. This balances energetically a term in the momentum equation
       ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
@@ -218,7 +218,7 @@ void EvolvePressure::finally(const Options& state) {
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3) * FV::Div_par<hermes::Limiter>(P, V, fastest_wave);
+      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave);
 
       ddt(P) += (2. / 3) * V * Grad_par(P);
     }
