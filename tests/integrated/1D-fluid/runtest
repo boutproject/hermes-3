@@ -19,7 +19,7 @@ from numpy import sqrt, max, abs, mean, array, log, concatenate
 shell("ln -s ../../../hermes-3 hermes-3")
 
 # List of NY values to use
-nylist = [20, 40, 80, 160] #, 320, 640]
+nylist = [40, 80, 160, 320]
 
 nout = 1
 timestep = 1
