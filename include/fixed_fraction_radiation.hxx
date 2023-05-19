@@ -73,6 +73,37 @@ namespace {
       return 0.0;
     }
   };
+
+  /// Fit from ADAS data by Mike Kryjak 19/05/2023
+  /// Not super accurate above 2000 - instead it converges on near-zero
+  /// Extra care taken to avoid discontinuities or jumps, although there is a small one at 0.2eV.
+  struct Argon_tau_0dot5ms{
+    BoutReal curve(BoutReal Te) {
+      BoutReal logT = log(Te);
+      BoutReal log_out = 0;
+
+      if (Te >= 0.2 and Te <= 2500) {
+        log_out = log_out 
+        -8.4367e+01 * pow(logT, 0)
+        +1.1075e+01 * pow(logT, 1)
+        -2.3092e+00 * pow(logT, 2)
+        -1.2378e+00 * pow(logT, 3)
+        +8.4987e-01 * pow(logT, 4)
+        +5.6445e-02 * pow(logT, 5)
+        -2.0179e-01 * pow(logT, 6)
+        +7.4687e-02 * pow(logT, 7)
+        -1.2541e-02 * pow(logT, 8)
+        +1.0245e-03 * pow(logT, 9)
+        -3.3029e-05 * pow(logT, 10);
+        return exp(log_out);
+
+      } else if (Te < 0.2) {
+        return 0;    /// Already really near zero
+      } else if (Te > 2500) {
+        return 1.2856e-33;
+      }
+    }
+  };
 }
 
 /// Set ion densities from electron densities
@@ -172,8 +203,11 @@ namespace {
   RegisterComponent<FixedFractionRadiation<RyokoNeon>>
     registercomponentfixedfractionneon("fixed_fraction_neon");
 
-  RegisterComponent<FixedFractionRadiation<RyokoArgon>>
+  RegisterComponent<FixedFractionRadiation<Argon_tau_0dot5ms>>
     registercomponentfixedfractionargon("fixed_fraction_argon");
+
+  // RegisterComponent<FixedFractionRadiation<RyokoArgon>>
+  //   registercomponentfixedfractionargon("fixed_fraction_deprecated");
 }
 
 #endif // FIXED_FRACTION_IONS_H
