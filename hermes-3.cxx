@@ -192,9 +192,6 @@ void Hermes::outputVars(Options& options) {
   // Save the Hermes version in the output dump files
   options["HERMES_REVISION"].force(hermes::version::revision);
 
-  // Ensure that metrics are updated
-  mesh->getCoordinates()->outputVars(options);
-
   // Save normalisation quantities. These may be used by components
   // to calculate conversion factors to SI units
 
