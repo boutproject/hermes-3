@@ -85,6 +85,7 @@ CMake the path to the BOUT++ `build` directory e.g.
 
     $ cmake . -B build -DHERMES_BUILD_BOUT=OFF -DCMAKE_PREFIX_PATH=$HOME/BOUT-dev/build
 
+Note that Hermes-3 currently requires BOUT++ version 5.
 
 ## Examples
 
