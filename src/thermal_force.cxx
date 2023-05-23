@@ -1,5 +1,5 @@
 
-#include <difops.hxx>
+#include <bout/difops.hxx>
 
 #include "../include/thermal_force.hxx"
 

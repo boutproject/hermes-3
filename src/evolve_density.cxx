@@ -2,9 +2,9 @@
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
-#include <derivs.hxx>
-#include <difops.hxx>
-#include <initialprofiles.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
+#include <bout/initialprofiles.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_density.hxx"
