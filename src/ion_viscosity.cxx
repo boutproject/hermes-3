@@ -60,7 +60,7 @@ void IonViscosity::transform(Options &state) {
 
   Options& allspecies = state["species"];
 
-  Coordinates *coord = P.getCoordinates();
+  auto coord = mesh->getCoordinates();
   const Field3D Bxy = coord->Bxy;
   const Field3D sqrtB = sqrt(Bxy);
   const Field3D Grad_par_logB = Grad_par(log(Bxy));
