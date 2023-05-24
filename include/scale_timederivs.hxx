@@ -3,7 +3,7 @@
 #define SCALE_TIMEDERIVS_H
 
 #include "component.hxx"
-#include <globals.hxx>
+#include <bout/globals.hxx>
 
 /// Scale time derivatives of the system
 ///

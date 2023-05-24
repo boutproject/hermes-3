@@ -2,7 +2,7 @@
 
 #include <bout/constants.hxx>
 #include <bout/mesh.hxx>
-#include <invert_laplace.hxx>
+#include <bout/invert_laplace.hxx>
 
 Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*) {
   AUTO_TRACE();

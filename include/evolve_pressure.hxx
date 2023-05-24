@@ -2,7 +2,7 @@
 #ifndef EVOLVE_PRESSURE_H
 #define EVOLVE_PRESSURE_H
 
-#include <field3d.hxx>
+#include <bout/field3d.hxx>
 
 #include "component.hxx"
 

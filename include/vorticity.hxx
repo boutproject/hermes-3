@@ -2,7 +2,7 @@
 #ifndef VORTICITY_H
 #define VORTICITY_H
 
-#include <vector2d.hxx>
+#include <bout/vector2d.hxx>
 
 #include "component.hxx"
 

@@ -1,7 +1,7 @@
 /// Ion viscosity model
 
 #include <bout/fv_ops.hxx>
-#include <difops.hxx>
+#include <bout/difops.hxx>
 #include <bout/mesh.hxx>
 
 #include "../include/ion_viscosity.hxx"

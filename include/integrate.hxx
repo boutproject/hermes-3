@@ -5,8 +5,8 @@
 
 #include <functional>
 
-#include "field3d.hxx"
-#include "bout/coordinates.hxx"
+#include <bout/field3d.hxx>
+#include <bout/coordinates.hxx>
 
 /// Get the first argument from a parameter pack
 template <typename Head, typename... Tail>
