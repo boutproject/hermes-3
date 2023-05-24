@@ -345,6 +345,113 @@ and all other species therefore need to be calculated before this component is r
 .. doxygenstruct:: ElectronViscosity
    :members:
 
+ion_viscosity
+-------------
+
+Adds ion viscosity terms to all charged species that are not electrons.
+The collision frequency is required so this is a top-level component that
+must be calculated after collisions:
+
+.. code-block:: ini
+
+   [hermes]
+   components =  ..., collisions, ion_viscosity
+
+By default only the parallel diffusion of momentum is included, adding a force to each
+ion's momentum equation:
+
+.. math::
+
+   F = \sqrt{B}\nabla\cdot\left[\frac{\eta_i}{B}\mathbf{b}\mathbf{b}\cdot\nabla\left(\sqrt{B}V_{||i}\right)\right]
+
+The ion parallel viscosity is
+
+.. math::
+
+   \eta_i = \frac{4}{3} 0.96 p_i \tau_i
+
+If the `perpendicular` option is set:
+
+.. code-block:: ini
+
+   [ion_viscosity]
+   perpendicular = true # Include perpendicular flows
+
+Then the ion scalar viscous pressure is calculated as:
+
+.. math::
+
+   \Pi_{ci} = \Pi_{ci||} + \Pi_{ci\perp}
+
+where :math:`\Pi_{ci||}` corresponds to the parallel diffusion of momentum above.
+
+.. math::
+
+   \Pi_{ci||} = - 0.96 \frac{2p_i\tau_i}{\sqrt{B}} \partial_{||}\left(\sqrt{B} V_{||i}\right)
+
+The perpendicular part is calculated from:
+
+.. math::
+
+   \begin{aligned}\Pi_{ci\perp} =& 0.96 p_i\tau_i \kappa \cdot \left[\mathbf{V}_E + \mathbf{V}_{di} + 1.16\frac{\mathbf{b}\times\nabla T_i}{B} \right] \\
+   =& -0.96 p_i\tau_i\frac{1}{B}\left(\mathbf{b}\times\kappa\right)\cdot\left[\nabla\phi + \frac{\nabla p_i}{en_i} + 1.61\nabla T_i \right]\end{aligned}
+
+
+A parallel force term is added, in addition to the parallel viscosity above:
+
+.. math::
+
+   F = -\frac{2}{3}B^{3/2}\partial_{||}\left(\frac{\Pi_{ci\perp}{B^{3/2}}\right)
+   
+In the vorticity equation the viscosity appears as a divergence of a current:
+
+.. math::
+
+   \mathbf{J}_{ci} = \frac{\Pi_{ci}}{2}\nabla\times\frac{\mathbf{b}}{B} - \frac{1}{3}\frac{\mathbf{b}\times\nabla\Pi_{ci}}{B}
+
+that transfers energy between ion internal energy and $E\times B$ energy:
+
+.. math::
+
+   \begin{aligned}\frac{\partial \omega}{\partial t} =& \ldots + \nabla\cdot\mathbf{J}_{ci} \\
+   \frac{\partial p_i}{\partial t} =& \ldots - \mathbf{J}_{ci}\cdot\nabla\left(\phi + \frac{p_i}{n_0}\right)
+
+Note that the sum of the perpendicular and parallel contributions to the ion viscosity act to damp
+the net poloidal flow. This can be seen by assuming that :math:`\phi`, :math:`p_i` and :math:`T_i`
+are flux functions. We can then write:
+
+.. math::
+
+   \Pi_{ci\perp} = -0.96 p_i\tau_i \frac{1}{B}\left(\mathbf{b}\times\kappa\right)\cdot\nabla\psi F\left(\psi\right)
+
+where
+
+.. math::
+
+   F\left(\psi\right) = \frac{\partial\phi}{\partial\psi} + \frac{1}{en}\frac{\partial p_i}{\partial\psi} + 1.61\frac{\partial T_i}{\partial\psi}
+
+Using the approximation
+
+.. math::
+
+   \left(\mathbf{b}\times\kappa\right)\cdot\nabla\psi \simeq -RB_\zeta \partial_{||}\ln B
+
+expanding:
+
+.. math::
+
+   \frac{2}{\sqrt{B}}\partial_{||}\left(\sqrt{B}V_{||i}\right) = 2\partial_{||}V_{||i} + V_{||i}\partial_{||}\ln B
+
+and neglecting parallel gradients of velocity gives:
+
+.. math::
+
+   \Pi_{ci} \simeq 0.96 p_i\tau_i \left[ \frac{RB_{\zeta}}{B}F\left(\psi\right) - V_{||i} \right]\partial_{||}\ln B
+
+   
+.. doxygenstruct:: IonViscosity
+   :members:
+
 simple_conduction
 -----------------
 

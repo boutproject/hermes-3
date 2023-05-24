@@ -13,10 +13,25 @@
 ///
 /// Needs to be calculated after collisions, because collision
 /// frequency is used to calculate parallel viscosity
+///
+/// The ion stress tensor Pi_ci is split into perpendicular and
+/// parallel pieces:
+///
+///    Pi_ci = Pi_ciperp + Pi_cipar
+///
+/// In the parallel ion momentum equation the Pi_cipar term
+/// is solved as a parallel diffusion, so is treated separately
+/// All other terms are added to Pi_ciperp, even if they are
+/// not really parallel parts
 struct IonViscosity : public Component {
   /// Inputs
   /// - <name>
-  ///   - eta_limit_alpha    Flux limiter coefficient
+  ///   - eta_limit_alpha: float, default -1
+  ///         Flux limiter coefficient. < 0 means off.
+  ///   - perpendicular: bool, default false
+  ///         Include perpendicular flows?
+  ///         Requires curvature vector and phi potential
+  ///
   IonViscosity(std::string name, Options& alloptions, Solver*);
 
   /// Inputs
@@ -34,6 +49,8 @@ struct IonViscosity : public Component {
   void transform(Options &state) override;
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
+  bool perpendicular; ///< Include perpendicular flow? (Requires phi)
+  Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
 };
 
 namespace {
