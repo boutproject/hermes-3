@@ -1,8 +1,8 @@
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
-#include <derivs.hxx>
-#include <difops.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/neutral_mixed.hxx"

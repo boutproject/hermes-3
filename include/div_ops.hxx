@@ -26,9 +26,9 @@
 #ifndef __DIV_OPS_H__
 #define __DIV_OPS_H__
 
+#include <bout/field3d.hxx>
+#include <bout/vector3d.hxx>
 #include <bout/fv_ops.hxx>
-#include <field3d.hxx>
-#include <vector3d.hxx>
 
 /*!
  * Diffusion in index space

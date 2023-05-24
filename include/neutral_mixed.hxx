@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-#include <invert_laplace.hxx>
+#include <bout/invert_laplace.hxx>
 
 #include "component.hxx"
 

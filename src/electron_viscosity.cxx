@@ -2,7 +2,7 @@
 
 #include <bout/fv_ops.hxx>
 #include <bout/mesh.hxx>
-#include <difops.hxx>
+#include <bout/difops.hxx>
 #include <bout/constants.hxx>
 
 #include "../include/electron_viscosity.hxx"
