@@ -196,6 +196,9 @@ The implementation is in `EvolvePressure`:
 evolve_energy
 ~~~~~~~~~~~~~
 
+*Note* This is currently under development and has some unresolved
+issues with boundary conditions.  Only for testing purposes.
+
 This evolves the sum of species internal energy and parallel kinetic
 energy, :math:`\mathcal{E}`:
 
