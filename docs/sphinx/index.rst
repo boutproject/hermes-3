@@ -9,5 +9,6 @@ Welcome to Hermes-3 documentation!
 
    introduction
    examples
+   transport_2d
    code_structure
    components
