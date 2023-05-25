@@ -70,11 +70,11 @@ This is intended for 1D simulations, where the density at :math:`y=0` is set
 by adjusting an input source. This component uses a PI controller method
 to scale the density source up and down, to maintain the specified upstream
 density. 
-The source, e.g. ``Sd+_feedback``, is calculated as a product of ``density_source_multiplier``, 
-which is calculated using the PI method and ``density_source_shape`` which defines the source region.
-Note that ``density_source_shape`` also defines the initial source in the controller, and so should
-be set to a reasonable value in ``[m-3s-1]``. It is recommended this is set to be similar to the 
-be equivalent to the net system particle loss (for example due to unrecycled ions at the target).
+The source, e.g. ``Sd+_feedback``, is calculated as a product of the control signal ``density_source_multiplier``, 
+and the array ``density_source_shape`` which defines the source region.
+The signal is non-dimensional and the controller depends on the value of ``density_source_shape`` to have a good initial guess of the source.
+It should be set to a reasonable value in the units of ``[m-3s-1]``. 
+A good reasonable value is the expected steady state domain particle loss (for example due to unrecycled ions at the target).
 
 
 For example:
@@ -91,16 +91,19 @@ For example:
    [Nd+]
    source_shape = h(pi - y) * 1e20  # Source shape
 
-There are two additional settings which can make the controller more robust without excessive tuning.
+There are two additional settings which can make the controller more robust without excessive tuning:
+
 ``density_source_positive`` ensures the controller never takes particles away, which can prevent oscillatory
-behaviour. Note that some other particle sink in the domain will be required (e.g. incomplete recycling) 
-if the upstream density is above the target.
+behaviour. Note that this requires some other domain particle sink to ensure control, or else the particle count can never reduce.
 
 ``density_integral_positive`` This makes sure the integral component only adds particles. 
-If set to False, large overshoots are possible if the density increases above the target, because this causes
-the source to change sign without being reset to zero. 
+The integral component takes a long time to change value, which can result in large overshoots if the initial guess was too small.
+This setting mitigates this by disabling the integral term if the density is above the desired value.
 
-Note: There is a separate `source` setting that includes a fixed (non varying) density source.
+Notes:
+   - The example cases have their PI parameters tuned properly without the need of the above two settings.
+   - Under certain conditions, the use of the PI controller can make the upstream density enter a very small oscillation (~0.05% of upstream value).
+   - There is a separate `source` setting that includes a fixed (non varying) density source.
 
 The implementation is in the `UpstreamDensityFeedback` class:
 
