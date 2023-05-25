@@ -2,7 +2,7 @@
 #ifndef EVOLVE_ENERGY_H
 #define EVOLVE_ENERGY_H
 
-#include <field3d.hxx>
+#include <bout/field3d.hxx>
 
 #include "component.hxx"
 
