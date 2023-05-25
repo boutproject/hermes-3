@@ -115,6 +115,7 @@ if plotting:
         # in grey linking the two axes.
         mark_inset(ax1, ax2, loc1=2, loc2=4, fc="none", ec="0.5")
     except:
+        raise
         print("WARNING: Could not import Matplotlib")
         plotting = False
 

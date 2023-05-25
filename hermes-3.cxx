@@ -35,6 +35,7 @@
 #include "include/electron_force_balance.hxx"
 #include "include/electron_viscosity.hxx"
 #include "include/evolve_density.hxx"
+#include "include/evolve_energy.hxx"
 #include "include/evolve_momentum.hxx"
 #include "include/evolve_pressure.hxx"
 #include "include/fixed_density.hxx"

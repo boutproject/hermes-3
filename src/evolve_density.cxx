@@ -9,6 +9,7 @@
 #include "../include/div_ops.hxx"
 #include "../include/evolve_density.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/hermes_build_config.hxx"
 
 using bout::globals::mesh;
 
@@ -202,7 +203,7 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par(N, V, fastest_wave);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave);
   }
 
   if (low_n_diffuse) {

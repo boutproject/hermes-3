@@ -44,7 +44,7 @@ if Te_up < 50 or Te_up > 70:
 Ti = collect("Td+", tind=-1, path=path)
 Ti_up = Ti[-1,0,0,0] * Tnorm
 # Upstream ion temperature should be about 140eV
-if Ti_up < 130 or Ti_up > 150:
+if Ti_up < 125 or Ti_up > 145:
   success = False
   print("Ion temperature failed: {}eV. Expecting about 140eV".format(Ti_up))
 
