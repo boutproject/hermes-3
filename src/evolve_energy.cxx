@@ -145,6 +145,8 @@ void EvolveEnergy::transform(Options& state) {
     }
   }
 
+  P.applyBoundary("neumann");
+
   if (neumann_boundary_average_z) {
     // Take Z (usually toroidal) average and apply as X (radial) boundary condition
     if (mesh->firstX()) {
