@@ -1,7 +1,7 @@
 #include <bout/constants.hxx>
 #include "../include/snb_conduction.hxx"
 
-#include <bout.hxx>
+#include <bout/bout.hxx>
 using bout::globals::mesh;
 
 void SNBConduction::transform(Options& state) {

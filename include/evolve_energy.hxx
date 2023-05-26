@@ -1,19 +1,19 @@
 #pragma once
-#ifndef EVOLVE_PRESSURE_H
-#define EVOLVE_PRESSURE_H
+#ifndef EVOLVE_ENERGY_H
+#define EVOLVE_ENERGY_H
 
 #include <bout/field3d.hxx>
 
 #include "component.hxx"
 
-/// Evolves species pressure in time
+/// Evolves species internal energy in time
 ///
 /// # Mesh inputs
 ///
 /// P<name>_src   A source of pressure, in Pascals per second
 ///               This can be over-ridden by the `source` option setting.
 ///
-struct EvolvePressure : public Component {
+struct EvolveEnergy : public Component {
   ///
   /// # Inputs
   ///
@@ -23,31 +23,34 @@ struct EvolvePressure : public Component {
   ///   - diagnose             Output additional diagnostic fields?
   ///   - evolve_log           Evolve logarithm of pressure? Default is false
   ///   - hyper_z              Hyper-diffusion in Z
-  ///   - kappa_coefficient    Heat conduction constant. Default is 3.16 for electrons, 3.9 otherwise
+  ///   - kappa_coefficient    Heat conduction constant. Default is 3.16 for
+  ///   electrons, 3.9 otherwise
   ///   - kappa_limit_alpha    Flux limiter, off by default.
   ///   - poloidal_flows       Include poloidal ExB flows? Default is true
-  ///   - precon               Enable preconditioner? Note: solver may not use it even if enabled.
-  ///   - p_div_v              Use p * Div(v) form? Default is v * Grad(p) form
+  ///   - precon               Enable preconditioner? Note: solver may not use it even if
+  ///   enabled.
   ///   - thermal_conduction   Include parallel heat conduction? Default is true
   ///
-  /// - P<name>  e.g. "Pe", "Pd+"
-  ///   - source     Source of pressure [Pa / s].
+  /// - E<name>  e.g. "Ee", "Ed+"
+  ///   - source     Source of energy [W / s].
   ///                NOTE: This overrides mesh input P<name>_src
-  ///   - source_only_in_core         Zero the source outside the closed field-line region?
+  ///   - source_only_in_core         Zero the source outside the closed field-line
+  ///                                 region?
   ///   - neumann_boundary_average_z  Apply Neumann boundaries with Z average?
   ///
-  EvolvePressure(std::string name, Options& options, Solver* solver);
+  EvolveEnergy(std::string name, Options& options, Solver* solver);
 
   /// Inputs
   /// - species
   ///   - <name>
   ///     - density
+  ///     - velocity
   ///
   /// Sets
   /// - species
   ///   - <name>
   ///     - pressure
-  ///     - temperature   Requires density
+  ///     - temperature
   ///
   void transform(Options& state) override;
 
@@ -68,39 +71,42 @@ struct EvolvePressure : public Component {
 
   /// Preconditioner
   ///
-  void precon(const Options &UNUSED(state), BoutReal gamma) override;
+  void precon(const Options& UNUSED(state), BoutReal gamma) override;
+
 private:
   std::string name; ///< Short name of the species e.g. h+
 
+  Field3D E;    ///< Energy (normalised): P + 1/2 m n v^2
   Field3D P;    ///< Pressure (normalised)
   Field3D T, N; ///< Temperature, density
 
+  BoutReal adiabatic_index; ///< Ratio of specific heats, γ = Cp / Cv
+  BoutReal Cv; /// Heat capacity at constant volume (3/2 for ideal monatomic gas)
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
-  BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
+  BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
+                              ///< calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
 
-  bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
-
-  bool evolve_log; ///< Evolve logarithm of P?
-  Field3D logP;    ///< Natural logarithm of P
+  bool evolve_log; ///< Evolve logarithm of E?
+  Field3D logE;    ///< Natural logarithm of E
 
   BoutReal density_floor; ///< Minimum density for calculating T
-  Field3D kappa_par; ///< Parallel heat conduction coefficient
+  Field3D kappa_par;      ///< Parallel heat conduction coefficient
 
-  Field3D source; ///< External pressure source
-  Field3D Sp;     ///< Total pressure source
+  Field3D source; ///< External power source
+  Field3D Se;     ///< Total energy source
 
   BoutReal hyper_z; ///< Hyper-diffusion
 
-  bool diagnose; ///< Output additional diagnostics?
+  bool diagnose;      ///< Output additional diagnostics?
   bool enable_precon; ///< Enable preconditioner?
 };
 
 namespace {
-RegisterComponent<EvolvePressure> registercomponentevolvepressure("evolve_pressure");
+RegisterComponent<EvolveEnergy> registercomponentevolveenergy("evolve_energy");
 }
 
-#endif // EVOLVE_PRESSURE_H
+#endif // EVOLVE_ENERGY_H

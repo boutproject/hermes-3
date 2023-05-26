@@ -5,9 +5,9 @@
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/invert/laplacexy.hxx>
-#include <derivs.hxx>
-#include <difops.hxx>
-#include <invert_laplace.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
+#include <bout/invert_laplace.hxx>
 
 using bout::globals::mesh;
 
@@ -45,7 +45,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
       options["diamagnetic"].doc("Include diamagnetic current?").withDefault<bool>(true);
 
   sheath_boundary = options["sheath_boundary"]
-                        .doc("Set potential to j=0 sheath at boundaries? (default = 0)")
+                        .doc("Set potential to j=0 sheath at radial boundaries? (default = 0)")
                         .withDefault<bool>(false);
 
   diamagnetic_polarisation =
@@ -59,7 +59,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
           .withDefault<bool>(false);
 
   average_atomic_mass = options["average_atomic_mass"]
-                            .doc("Weighted average atomic mass, for polarisaion current "
+                            .doc("Weighted average atomic mass, for polarisation current "
                                  "(Boussinesq approximation)")
                             .withDefault<BoutReal>(2.0); // Deuterium
 

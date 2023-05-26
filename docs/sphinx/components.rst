@@ -211,6 +211,36 @@ The implementation is in `EvolvePressure`:
 .. doxygenstruct:: EvolvePressure
    :members:
 
+.. _evolve_energy:
+
+evolve_energy
+~~~~~~~~~~~~~
+
+*Note* This is currently under development and has some unresolved
+issues with boundary conditions.  Only for testing purposes.
+
+This evolves the sum of species internal energy and parallel kinetic
+energy, :math:`\mathcal{E}`:
+
+.. math::
+
+   \mathcal{E} = \frac{1}{\gamma - 1} P + \frac{1}{2}m nv_{||}^2
+
+Note that this component requires the parallel velocity :math:`v_{||}`
+to calculate the pressure. It must therefore be listed after a component
+that sets the velocity, such as `evolve_momentum`:
+
+.. code-block:: ini
+
+   [d]
+   type = ..., evolve_momentum, evolve_energy
+
+The energy density will be saved as `E<species>` (e.g `Ed`) and the
+pressure as `P<species>` (e.g. `Pd`). Additional diagnostics, such as the
+temperature, can be saved by setting the option `diagnose = true`.
+
+.. doxygenstruct:: EvolveEnergy
+   :members:
 
 SNB nonlocal heat flux
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -309,6 +339,33 @@ which is added to the ion's `momentum_source`.
 The implementation is in `ElectronForceBalance`:
 
 .. doxygenstruct:: ElectronForceBalance
+   :members:
+
+electron_viscosity
+------------------
+
+Calculates the Braginskii electron parallel viscosity, adding a force (momentum source)
+to the electron momentum equation:
+
+.. math::
+
+   F = \sqrt{B}\nabla\cdot\left[\frac{\eta_e}{B}\mathbf{b}\mathbf{b}\cdot\nabla\left(\sqrt{B}V_{||e}\right)\right]
+
+The electron parallel viscosity is
+
+.. math::
+
+   \eta_e = \frac{4}{3} 0.73 p_e \tau_e
+
+where :math:`\tau_e` is the electron collision time. The collisions between electrons
+and all other species therefore need to be calculated before this component is run:
+
+.. code-block:: ini
+
+   [hermes]
+   components = ..., e, ..., collisions, electron_viscosity
+
+.. doxygenstruct:: ElectronViscosity
    :members:
 
 simple_conduction

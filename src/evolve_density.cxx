@@ -2,13 +2,14 @@
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
-#include <derivs.hxx>
-#include <difops.hxx>
-#include <initialprofiles.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
+#include <bout/initialprofiles.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_density.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/hermes_build_config.hxx"
 
 using bout::globals::mesh;
 
@@ -202,7 +203,7 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par(N, V, fastest_wave);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave);
   }
 
   if (low_n_diffuse) {

@@ -2,7 +2,7 @@
 #ifndef RELAX_POTENTIAL_H
 #define RELAX_POTENTIAL_H
 
-#include <vector2d.hxx>
+#include <bout/vector2d.hxx>
 
 #include "component.hxx"
 
