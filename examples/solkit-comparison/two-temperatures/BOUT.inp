@@ -8,7 +8,6 @@
 #  - 100% recycling of ions as atoms, so particle source should go to zero
 #  - Ionisation of neutrals as ions
 #  - Charge exchange between neutrals and ions
-#  - Feedback control of upstream density
 #  - Equal electron and ion temperatures
 #
 
