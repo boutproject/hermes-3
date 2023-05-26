@@ -121,6 +121,7 @@ charge = 0
 AA = 2
 
 thermal_conduction = true
+diagnose = true
 
 [Nd]
 
@@ -141,6 +142,7 @@ charge = -1
 AA = 1/1836
 
 thermal_conduction = true  # in evolve_pressure
+diagnose = true
 
 [Pe]
 
