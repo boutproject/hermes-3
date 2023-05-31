@@ -3,9 +3,9 @@
 #include <bout/fv_ops.hxx>
 #include <bout/invert_pardiv.hxx>
 #include <bout/output_bout_types.hxx>
-#include <derivs.hxx>
-#include <difops.hxx>
-#include <initialprofiles.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
+#include <bout/initialprofiles.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_energy.hxx"
@@ -144,6 +144,8 @@ void EvolveEnergy::transform(Options& state) {
       P[i] = 0.0;
     }
   }
+
+  P.applyBoundary("neumann");
 
   if (neumann_boundary_average_z) {
     // Take Z (usually toroidal) average and apply as X (radial) boundary condition
