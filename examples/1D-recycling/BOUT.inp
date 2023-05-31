@@ -85,7 +85,7 @@ AA = 2
 density_upstream = 1e19  # Upstream density [m^-3]
 density_source_positive = false  # Force source to be > 0?
 density_controller_i = 5e-4
-density_controller_p = 1e-2
+density_controller_p = 5e2
 
 thermal_conduction = true  # in evolve_pressure
 
@@ -98,8 +98,7 @@ recycle_multiplier = 1  # Recycling fraction
 
 function = 1
 
-flux = 4e23  # Particles per m^2 per second input
-source = (flux/(mesh:length_xpt))*H(mesh:y_xpt - y)
+source_shape = H(mesh:y_xpt - y) * 1e20 # Feedback controller source shape
 
 [Pd+]
 function = 1
@@ -122,6 +121,7 @@ charge = 0
 AA = 2
 
 thermal_conduction = true
+diagnose = true
 
 [Nd]
 
@@ -142,6 +142,7 @@ charge = -1
 AA = 1/1836
 
 thermal_conduction = true  # in evolve_pressure
+diagnose = true
 
 [Pe]
 

@@ -5,9 +5,9 @@
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/invert/laplacexy.hxx>
-#include <derivs.hxx>
-#include <difops.hxx>
-#include <invert_laplace.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
+#include <bout/invert_laplace.hxx>
 
 using bout::globals::mesh;
 

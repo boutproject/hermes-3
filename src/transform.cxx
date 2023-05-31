@@ -1,7 +1,7 @@
 
 #include "../include/transform.hxx"
 
-#include "utils.hxx" // for trim, strsplit
+#include <bout/utils.hxx> // for trim, strsplit
 
 Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solver)) {
 
