@@ -1,5 +1,5 @@
 #include <bout/fv_ops.hxx>
-#include <vecops.hxx>
+#include <bout/vecops.hxx>
 
 #include "../include/diamagnetic_drift.hxx"
 

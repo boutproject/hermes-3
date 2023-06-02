@@ -15,14 +15,40 @@ struct Vorticity : public Component {
   /// Options
   ///
   /// - <name>
-  ///   - diamagnetic
-  ///   - diamagnetic_polarisation
-  ///   - average_atomic_mass
-  ///   - bndry_flux
-  ///   - poloidal_flows
-  ///   - split_n0
-  ///   - laplacian
+  ///   - average_atomic_mass: float, default 2.0
+  ///     Weighted average ion atomic mass for polarisation current
+  ///   - bndry_flux: bool, default true
+  ///     Allow flows through radial (X) boundaries?
+  ///   - collisional_friction: bool, default false
+  ///     Damp vorticity based on mass-weighted collision frequency?
+  ///   - diagnose: bool, false
+  ///     Output additional diagnostics?
+  ///   - diamagnetic: bool, default true
+  ///     Include diamagnetic current, using curvature vector?
+  ///   - diamagnetic_polarisation: bool, default true
+  ///     Include ion diamagnetic drift in polarisation current?
+  ///   - exb_advection: bool, default true
+  ///     Include ExB advection (nonlinear term)?
+  ///   - hyper_z: float, default -1.0
+  ///     Hyper-viscosity in Z. < 0 means off
+  ///   - laplacian: subsection
   ///     Options for the Laplacian phi solver
+  ///   - phi_boundary_relax: bool, default false
+  ///     Relax radial phi boundaries towards zero-gradient?
+  ///   - phi_boundary_timescale: float, 1e-4
+  ///     Timescale for phi boundary relaxation [seconds]
+  ///   - phi_dissipation: bool, default true
+  ///     Parallel dissipation of potential (Recommended)
+  ///   - poloidal_flows: bool, default true
+  ///     Include poloidal ExB flow?
+  ///   - sheath_boundary: bool, default false
+  ///     If phi_boundary_relax is false, set the radial boundary to the sheath potential?
+  ///   - split_n0: bool, default false
+  ///     Split phi into n=0 and n!=0 components?
+  ///   - viscosity: Field2D, default 0.0
+  ///     Kinematic viscosity [m^2/s]
+  ///   - vort_dissipation: bool, default false
+  ///     Parallel dissipation of vorticity?
   /// 
   Vorticity(std::string name, Options &options, Solver *solver);
 

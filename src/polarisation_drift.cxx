@@ -3,8 +3,8 @@
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
-#include <invert_laplace.hxx>
-#include <difops.hxx>
+#include <bout/invert_laplace.hxx>
+#include <bout/difops.hxx>
 
 using bout::globals::mesh;
 

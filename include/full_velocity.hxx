@@ -7,7 +7,7 @@
 
 #include "component.hxx"
 
-#include "vector2d.hxx"
+#include <bout/vector2d.hxx>
 
 struct NeutralFullVelocity : public Component {
   NeutralFullVelocity(const std::string& name, Options& options, Solver *solver);

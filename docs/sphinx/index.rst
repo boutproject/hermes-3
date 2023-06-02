@@ -8,6 +8,8 @@ Welcome to Hermes-3 documentation!
    :name: contents
 
    introduction
+   getting_started
    examples
+   transport_2d
    code_structure
    components

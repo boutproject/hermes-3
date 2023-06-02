@@ -1,7 +1,7 @@
-#include <globals.hxx>
-#include <output.hxx>
-#include <utils.hxx>
-#include <field2d.hxx>
+#include <bout/globals.hxx>
+#include <bout/output.hxx>
+#include <bout/utils.hxx>
+#include <bout/field2d.hxx>
 #include <bout/mesh.hxx>
 
 #include "../include/loadmetric.hxx"
