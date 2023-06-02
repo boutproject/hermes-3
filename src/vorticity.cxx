@@ -506,7 +506,7 @@ void Vorticity::transform(Options& state) {
     }
 
     Field3D weighted_collision_frequency = sum_A_nu_n / sum_A_n;
-    weighted_collision_frequency.setBoundary("neumann");
+    weighted_collision_frequency.applyBoundary("neumann");
 
     DivJcol = -FV::Div_a_Grad_perp(
         weighted_collision_frequency * average_atomic_mass / Bsq, phi);
