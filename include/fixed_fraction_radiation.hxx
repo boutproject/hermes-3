@@ -21,86 +21,96 @@ namespace {
     }
   };
 
-  /// Nitrogen based cooling curve used in Lipschultz 2016
-  struct LipschultzNitrogen {
-    BoutReal curve(BoutReal Te) {
-      if (Te > 1. and Te < 80.) {
-        return 5.9e-34 * sqrt(Te - 1.0) * (80. - Te) / (1. + (3.1e-3 * SQ(Te - 1.)));
-      }
-      return 0.0;
-    }
-  };
+  /// Below fits are from ADAS data by Mike Kryjak 03/06/2023 and supersede above deprecated fits
+  /// Data generated using radas https://github.com/cfs-energy/radas
+  /// Chose N = 1E20m-3 and tau = 0.5ms based on Moulton, 2021 (DOI: 10.1088/1741-4326/abe4b2)
+  /// Those values are applicable in the ITER scrape-off layer but may not be valid in other conditions.
+  /// The fits are 10 coefficient polynomials fitted in log-log space like the AMJUEL database in EIRENE
 
-  /// Neon based cooling curve produced by Matlab polynominal curve
-  /// fitting "polyval" (Ryoko 2020 Nov)
-  struct RyokoNeon {
-    BoutReal curve(BoutReal Te) {
-      if (Te >= 3 and Te <= 100) {
-        return -2.0385e-40 * pow(Te, 5)
-          + 5.4824e-38 * pow(Te, 4)
-          - 5.1190E-36 * pow(Te, 3)
-          + 1.7347E-34 * SQ(Te)
-          -3.4151E-34 * Te
-          -3.2798E-34;
-      } else if (Te >=2 and Te < 3) {
-        return 7e-35 * (Te - 2.) + 1e-35;
-      } else if (Te >=1 and Te < 2) {
-        return 1e-35 * (Te - 1.);
-      }
-      return 0.0;
-    }
-  };
-
-  /// Argon based cooling curve produced by Matlab polynominal curve
-  /// fitting "polyval" (Ryoko 2020 Nov)
-  struct RyokoArgon {
-    BoutReal curve(BoutReal Te) {
-      if (Te >= 1.5 and Te <= 100) {
-        return -4.9692e-48 * pow(Te, 10)
-          + 2.8025e-45 * pow(Te, 9)
-          - 6.7148e-43 * pow(Te, 8)
-          + 8.8636e-41 * pow(Te, 7)
-          - 6.9642e-39 * pow(Te, 6)
-          + 3.2559e-37 * pow(Te, 5)
-          - 8.3410e-36 * pow(Te, 4)
-          + 8.6011e-35 * pow(Te, 3)
-          + 1.9958e-34 * pow(Te, 2)
-          + 4.9864e-34 * Te
-          - 9.9412e-34;
-      } else if (Te >= 1.0 and Te < 1.5) {
-        return 5e-35 * (Te - 1.0);
-      }
-      return 0.0;
-    }
-  };
-
-  /// Fit from ADAS data by Mike Kryjak 19/05/2023
-  /// Not super accurate above 2000 - instead it converges on near-zero
-  /// Extra care taken to avoid discontinuities or jumps, although there is a small one at 0.2eV.
-  struct Argon_tau_0dot5ms{
+  /// Argon
+  struct Argon_adas{
     BoutReal curve(BoutReal Te) {
       BoutReal logT = log(Te);
       BoutReal log_out = 0;
 
-      if (Te >= 0.2 and Te <= 2500) {
-        log_out = log_out 
-        -8.4367e+01 * pow(logT, 0)
-        +1.1075e+01 * pow(logT, 1)
-        -2.3092e+00 * pow(logT, 2)
-        -1.2378e+00 * pow(logT, 3)
-        +8.4987e-01 * pow(logT, 4)
-        +5.6445e-02 * pow(logT, 5)
-        -2.0179e-01 * pow(logT, 6)
-        +7.4687e-02 * pow(logT, 7)
-        -1.2541e-02 * pow(logT, 8)
-        +1.0245e-03 * pow(logT, 9)
-        -3.3029e-05 * pow(logT, 10);
+      if (Te >= 1.5 and Te <= 1500) {
+        log_out = log_out
+        -8.7276e+01 * pow(logT, 0)
+        +2.6028e+01 * pow(logT, 1)
+        -3.1418e+01 * pow(logT, 2)
+        +2.8683e+01 * pow(logT, 3)
+        -1.7736e+01 * pow(logT, 4)
+        +7.4835e+00 * pow(logT, 5)
+        -2.1562e+00 * pow(logT, 6)
+        +4.1118e-01 * pow(logT, 7)
+        -4.8969e-02 * pow(logT, 8)
+        +3.2708e-03 * pow(logT, 9)
+        -9.3114e-05 * pow(logT, 10);
         return exp(log_out);
 
-      } else if (Te < 0.2) {
-        return 0;    /// Already really near zero
-      } else if (Te > 2500) {
-        return 1.2856e-33;
+      } else if (Te < 1.5) {
+        return 1.2316e-35;   
+      } else if (Te > 1500) {
+        return 1.2572e-32;
+      }
+    }
+  };
+
+  /// Neon
+  struct Neon_adas{
+    BoutReal curve(BoutReal Te) {
+      BoutReal logT = log(Te);
+      BoutReal log_out = 0;
+
+      if (Te >= 2 and Te <= 1000) {
+        log_out = log_out
+        -9.5485e+01 * pow(logT, 0)
+        +6.8706e+01 * pow(logT, 1)
+        -1.4171e+02 * pow(logT, 2)
+        +1.6144e+02 * pow(logT, 3)
+        -1.0674e+02 * pow(logT, 4)
+        +4.3751e+01 * pow(logT, 5)
+        -1.1490e+01 * pow(logT, 6)
+        +1.9365e+00 * pow(logT, 7)
+        -2.0259e-01 * pow(logT, 8)
+        +1.1977e-02 * pow(logT, 9)
+        -3.0591e-04 * pow(logT, 10);
+        return exp(log_out);
+
+      } else if (Te < 2) {
+        return 7.0655e-36;   
+      } else if (Te > 1000) {
+        return 1.1600e-32;
+      }
+    }
+  };
+
+
+  /// Nitrogen
+  struct Nitrogen_adas{
+    BoutReal curve(BoutReal Te) {
+      BoutReal logT = log(Te);
+      BoutReal log_out = 0;
+
+      if (Te >= 2 and Te <= 500) {
+        log_out = log_out
+        -5.6832e+01 * pow(logT, 0)
+        -1.0690e+02 * pow(logT, 1)
+        +2.2106e+02 * pow(logT, 2)
+        -2.3902e+02 * pow(logT, 3)
+        +1.5679e+02 * pow(logT, 4)
+        -6.5878e+01 * pow(logT, 5)
+        +1.8075e+01 * pow(logT, 6)
+        -3.2221e+00 * pow(logT, 7)
+        +3.6003e-01 * pow(logT, 8)
+        -2.2931e-02 * pow(logT, 9)
+        +6.3593e-04 * pow(logT, 10);
+        return exp(log_out);
+
+      } else if (Te < 2) {
+        return 4.0959e-34;   
+      } else if (Te > 500) {
+        return 7.7710e-33;
       }
     }
   };
@@ -197,13 +207,13 @@ namespace {
   RegisterComponent<FixedFractionRadiation<HutchinsonCarbon>>
     registercomponentfixedfractioncarbon("fixed_fraction_carbon");
 
-  RegisterComponent<FixedFractionRadiation<LipschultzNitrogen>>
+  RegisterComponent<FixedFractionRadiation<Nitrogen_adas>>
     registercomponentfixedfractionnitrogen("fixed_fraction_nitrogen");
 
-  RegisterComponent<FixedFractionRadiation<RyokoNeon>>
+  RegisterComponent<FixedFractionRadiation<Neon_adas>>
     registercomponentfixedfractionneon("fixed_fraction_neon");
 
-  RegisterComponent<FixedFractionRadiation<Argon_tau_0dot5ms>>
+  RegisterComponent<FixedFractionRadiation<Argon_adas>>
     registercomponentfixedfractionargon("fixed_fraction_argon");
 
   // RegisterComponent<FixedFractionRadiation<RyokoArgon>>
