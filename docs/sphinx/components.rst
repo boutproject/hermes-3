@@ -1408,26 +1408,77 @@ vorticity
 Evolves a vorticity equation, and at each call to transform() uses a matrix
 inversion to calculate potential from vorticity.
 
-In this component the Boussinesq approximation is made, so the vorticity equation solved is
+In this component the Boussinesq approximation is made, so the
+vorticity equation solved is
 
 .. math::
 
-   \nabla\cdot\left(\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \phi + \sum_i\frac{A_i}{B^2}\nabla_\perp p_i\right) = \Omega
+   \nabla\cdot\left(\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \phi \underbrace{+ \sum_i\frac{A_i}{Z_i B^2}\nabla_\perp p_i}_{\mathrm{if diamagnetic_polarisation}}}\right) = \Omega
 
 Where the sum is over species, :math:`\overline{A}` is the average ion
 atomic number, and :math:`\overline{n}` is the normalisation density
-(i.e. goes to 1 in the normalised equations).  This is a simplified
-version of the full expression which is:
+(i.e. goes to 1 in the normalised equations). The ion diamagnetic flow
+terms in this Boussinesq approximation can be written in terms of an
+effective ion pressure :math:`\hat{p}`:
 
 .. math::
 
-   \nabla\cdot\left(\sum_i \frac{A_i n_i}{B^2}\nabla_\perp \phi + \sum_i \frac{A_i}{B^2}\nabla_\perp p_i\right) = \Omega
+   \hat{p} \equiv \sum_i \frac{A_i}{overline{A} Z_i} p_i
+
+as
+
+.. math::
+
+   \nabla\cdot\left[\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \left(\phi + \frac{\hat{p}}{\overline{n}}\right) \right] = \Omega
+   
+Note that if ``diamagnetic_polarisation = false`` then the ion
+pressure terms are removed from the vorticity, and also from other ion
+pressure terms coming from the polarisation current
+(i.e. :math:`\hat{p}\rightarrow 0`.
+
+This is a simplified version of the full vorticity definition which is:
+
+.. math::
+
+   \nabla\cdot\left(\sum_i \frac{A_i n_i}{B^2}\nabla_\perp \phi + \sum_i \frac{A_i}{Z_i B^2}\nabla_\perp p_i\right) = \Omega
 
 and is derived by replacing
 
 .. math::
 
    \sum_i A_i n_i \rightarrow \overline{A}\overline{n}
+
+In the case of multiple species, this Boussinesq approximation means that the ion diamagnetic flow
+terms 
+
+The vorticity equation that is integrated in time is
+
+.. math::
+
+   \begin{aligned}\frac{\partial \Omega}{\partial t} =& \nabla\cdot\left(\mathbf{b}\sum_s Z_s n_sV_{||s}\right) \\
+   &+ \underbrace{\nabla\cdot\left(\nabla\times\frac{\mathbf{b}}{B}\sum_s p_s\right)}_{\textrm{if diamagnetic}} + \underbrace{\nabla\cdot\mathbf{J_{exb}}}_{\mathrm{if exb_advection}} \\
+   &+ \nabla\cdot\left(\mathbf{b}J_{extra}\right)\end{aligned}
+
+The nonlinearity :math:`\nabla\cdot\mathbf{J_{exb}}` is part of the
+divergence of polarisation current. In its simplified form when
+``exb_advection_simplified = true``, this is the :math:`E\times B`
+advection of vorticity:
+
+.. math::
+
+   \nabla\cdot\mathbf{J_{exb}} = -\nabla\cdot\left(\Omega \mathbf{V}_{E\times B}\right)
+
+When ``exb_advection_simplified = false`` then the more complete
+(Boussinesq approximation) form is used:
+
+.. math::
+
+   \nabla\cdot\mathbf{J_{exb}} = -\nabla\cdot\left[\frac{\overline{A}}{2B^2}\nabla_\perp\left(\mathbf{V}_{E\times B}\cdot\nabla \hat{p}\right) + \frac{\Omega}{2} \mathbf{V}_{E\times B} + \frac{\overline{A}\overline{n}}{2B^2}\nabla_\perp^2\phi\left(\mathbf{V}_{E\times B} + \frac{\mathbf{b}}{B}\times\nabla\hat{p}\right) \right]
+   
+The form of the vorticity equation is based on Simakov & Catto
+(erratum 2004), with the first term modified to conserve energy. In
+the limit of zero ion pressure and constant :math:`B` it reduces to
+the simplified form.
 
 .. doxygenstruct:: Vorticity
    :members:
