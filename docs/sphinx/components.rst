@@ -1420,7 +1420,7 @@ vorticity equation solved is
 
 .. math::
 
-   \nabla\cdot\left(\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \phi \underbrace{+ \sum_i\frac{A_i}{Z_i B^2}\nabla_\perp p_i}_{\mathrm{if diamagnetic_polarisation}}\right) = \Omega
+   \nabla\cdot\left(\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \phi\right) \underbrace{+ \nabla\cdot\left(\sum_i\frac{A_i}{Z_i B^2}\nabla_\perp p_i\right)}_{\mathrm{if diamagnetic\_polarisation}} = \Omega
 
 Where the sum is over species, :math:`\overline{A}` is the average ion
 atomic number, and :math:`\overline{n}` is the normalisation density
@@ -1482,10 +1482,11 @@ When ``exb_advection_simplified = false`` then the more complete
 
    \nabla\cdot\mathbf{J_{exb}} = -\nabla\cdot\left[\frac{\overline{A}}{2B^2}\nabla_\perp\left(\mathbf{V}_{E\times B}\cdot\nabla \hat{p}\right) + \frac{\Omega}{2} \mathbf{V}_{E\times B} + \frac{\overline{A}\overline{n}}{2B^2}\nabla_\perp^2\phi\left(\mathbf{V}_{E\times B} + \frac{\mathbf{b}}{B}\times\nabla\hat{p}\right) \right]
    
-The form of the vorticity equation is based on Simakov & Catto
-(erratum 2004), with the first term modified to conserve energy. In
-the limit of zero ion pressure and constant :math:`B` it reduces to
-the simplified form.
+The form of the vorticity equation is based on `Simakov & Catto
+<https://doi.org/10.1063/1.1623492>`_ (corrected in `erratum 2004
+<https://doi.org/10.1063/1.1703527>`_), in the Boussinesq limit and
+with the first term modified to conserve energy. In the limit of zero
+ion pressure and constant :math:`B` it reduces to the simplified form.
 
 .. doxygenstruct:: Vorticity
    :members:
