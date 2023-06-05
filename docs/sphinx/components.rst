@@ -424,7 +424,7 @@ A parallel force term is added, in addition to the parallel viscosity above:
 
 .. math::
 
-   F = -\frac{2}{3}B^{3/2}\partial_{||}\left(\frac{\Pi_{ci\perp}{B^{3/2}}\right)
+   F = -\frac{2}{3}B^{3/2}\partial_{||}\left(\frac{\Pi_{ci\perp}}{B^{3/2}}\right)
    
 In the vorticity equation the viscosity appears as a divergence of a current:
 
@@ -432,12 +432,12 @@ In the vorticity equation the viscosity appears as a divergence of a current:
 
    \mathbf{J}_{ci} = \frac{\Pi_{ci}}{2}\nabla\times\frac{\mathbf{b}}{B} - \frac{1}{3}\frac{\mathbf{b}\times\nabla\Pi_{ci}}{B}
 
-that transfers energy between ion internal energy and $E\times B$ energy:
+that transfers energy between ion internal energy and :math:`E\times B` energy:
 
 .. math::
 
    \begin{aligned}\frac{\partial \omega}{\partial t} =& \ldots + \nabla\cdot\mathbf{J}_{ci} \\
-   \frac{\partial p_i}{\partial t} =& \ldots - \mathbf{J}_{ci}\cdot\nabla\left(\phi + \frac{p_i}{n_0}\right)
+   \frac{\partial p_i}{\partial t} =& \ldots - \mathbf{J}_{ci}\cdot\nabla\left(\phi + \frac{p_i}{n_0}\right)\end{aligned}
 
 Note that the sum of the perpendicular and parallel contributions to the ion viscosity act to damp
 the net poloidal flow. This can be seen by assuming that :math:`\phi`, :math:`p_i` and :math:`T_i`
@@ -470,6 +470,13 @@ and neglecting parallel gradients of velocity gives:
 .. math::
 
    \Pi_{ci} \simeq 0.96 p_i\tau_i \left[ \frac{RB_{\zeta}}{B}F\left(\psi\right) - V_{||i} \right]\partial_{||}\ln B
+
+   
+**Notes** and implementation details:
+- The magnitude of :math:`\Pi_{ci\perp}` and :math:`\Pi_{ci||}` are individually
+  limited to be less than or equal to the scalar pressure :math:`Pi` (though can have
+  opposite sign). The reasoning is that if these off-diagonal terms become large then
+  the model is likely breaking down. Occasionally happens in low-density regions.
 
    
 .. doxygenstruct:: IonViscosity
@@ -1413,7 +1420,7 @@ vorticity equation solved is
 
 .. math::
 
-   \nabla\cdot\left(\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \phi \underbrace{+ \sum_i\frac{A_i}{Z_i B^2}\nabla_\perp p_i}_{\mathrm{if diamagnetic_polarisation}}}\right) = \Omega
+   \nabla\cdot\left(\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \phi \underbrace{+ \sum_i\frac{A_i}{Z_i B^2}\nabla_\perp p_i}_{\mathrm{if diamagnetic_polarisation}}\right) = \Omega
 
 Where the sum is over species, :math:`\overline{A}` is the average ion
 atomic number, and :math:`\overline{n}` is the normalisation density
@@ -1423,7 +1430,7 @@ effective ion pressure :math:`\hat{p}`:
 
 .. math::
 
-   \hat{p} \equiv \sum_i \frac{A_i}{overline{A} Z_i} p_i
+   \hat{p} \equiv \sum_i \frac{A_i}{\overline{A} Z_i} p_i
 
 as
 
@@ -1456,7 +1463,7 @@ The vorticity equation that is integrated in time is
 .. math::
 
    \begin{aligned}\frac{\partial \Omega}{\partial t} =& \nabla\cdot\left(\mathbf{b}\sum_s Z_s n_sV_{||s}\right) \\
-   &+ \underbrace{\nabla\cdot\left(\nabla\times\frac{\mathbf{b}}{B}\sum_s p_s\right)}_{\textrm{if diamagnetic}} + \underbrace{\nabla\cdot\mathbf{J_{exb}}}_{\mathrm{if exb_advection}} \\
+   &+ \underbrace{\nabla\cdot\left(\nabla\times\frac{\mathbf{b}}{B}\sum_s p_s\right)}_{\textrm{if diamagnetic}} + \underbrace{\nabla\cdot\mathbf{J_{exb}}}_{\mathrm{if exb\_advection}} \\
    &+ \nabla\cdot\left(\mathbf{b}J_{extra}\right)\end{aligned}
 
 The nonlinearity :math:`\nabla\cdot\mathbf{J_{exb}}` is part of the

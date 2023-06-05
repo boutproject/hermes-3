@@ -47,10 +47,24 @@ struct IonViscosity : public Component {
   ///     - momentum_source
   ///
   void transform(Options &state) override;
+
+  /// Save variables to the output
+  void outputVars(Options &state) override;
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
   bool perpendicular; ///< Include perpendicular flow? (Requires phi)
   Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
+
+  bool diagnose; ///< Output additional diagnostics?
+
+  /// Per-species diagnostics
+  struct Diagnostics {
+    Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar
+    Field3D Pi_cipar;  ///< Parallel part of Pi scalar
+  };
+
+  /// Store diagnostics for each species
+  std::map<std::string, Diagnostics> diagnostics;
 };
 
 namespace {
