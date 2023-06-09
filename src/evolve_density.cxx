@@ -73,25 +73,43 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
-  // Try to read the density source from the mesh
-  // Units of particles per cubic meter per second
-  source = 0.0;
-  mesh->get(source, std::string("N") + name + "_src");
-  // Allow the user to override the source
-  source = alloptions[std::string("N") + name]["source"]
-               .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
-               .withDefault(source)
-           / (Nnorm * Omega_ci);
+  auto& n_options = alloptions[std::string("N") + name];
+  source_time_dependent = n_options["source_time_dependent"]
+    .doc("Use a time-dependent source?")
+    .withDefault<bool>(false);
 
-  if (alloptions[std::string("N") + name]["source_only_in_core"]
-      .doc("Zero the source outside the closed field-line region?")
-      .withDefault<bool>(false)) {
-    for (int x = mesh->xstart; x <= mesh->xend; x++) {
-      if (!mesh->periodicY(x)) {
-        // Not periodic, so not in core
-        for (int y = mesh->ystart; y <= mesh->yend; y++) {
-          for (int z = mesh->zstart; z <= mesh->zend; z++) {
-            source(x, y, z) = 0.0;
+  source_only_in_core = n_options["source_only_in_core"]
+    .doc("Zero the source outside the closed field-line region?")
+    .withDefault<bool>(false);
+
+  source_normalisation = Nnorm * Omega_ci;
+  time_normalisation = 1./Omega_ci;
+
+  if (source_time_dependent) {
+    auto str = n_options["source"]
+      .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
+      .as<std::string>();
+    source_generator = FieldFactory::get()->parse(str, n_options);
+
+  } else {
+    // Try to read the density source from the mesh
+    // Units of particles per cubic meter per second
+    source = 0.0;
+    mesh->get(source, std::string("N") + name + "_src");
+    // Allow the user to override the source
+    source = n_options["source"]
+      .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
+      .withDefault(source)
+      / source_normalisation;
+
+    if (source_only_in_core) {
+      for (int x = mesh->xstart; x <= mesh->xend; x++) {
+        if (!mesh->periodicY(x)) {
+          // Not periodic, so not in core
+          for (int y = mesh->ystart; y <= mesh->yend; y++) {
+            for (int z = mesh->zstart; z <= mesh->zend; z++) {
+              source(x, y, z) = 0.0;
+            }
           }
         }
       }
@@ -223,6 +241,10 @@ void EvolveDensity::finally(const Options& state) {
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 
+  if (source_time_dependent) {
+    updateSource(get<BoutReal>(state["time"]));
+  }
+
   Sn = source; // Save for possible output
   if (species.isSet("density_source")) {
     Sn += get<Field3D>(species["density_source"]);
@@ -291,5 +313,27 @@ void EvolveDensity::outputVars(Options& state) {
                     {"long_name", name + " number density source"},
                     {"species", name},
                     {"source", "evolve_density"}});
+  }
+}
+
+void EvolveDensity::updateSource(BoutReal time) {
+  // Generate, converting the time to seconds
+  source = FieldFactory::get()->create3D(source_generator,
+                                         mesh,
+                                         CELL_CENTER,
+                                         time * time_normalisation)
+    / source_normalisation;
+
+  if (source_only_in_core) {
+    for (int x = mesh->xstart; x <= mesh->xend; x++) {
+      if (!mesh->periodicY(x)) {
+        // Not periodic, so not in core
+        for (int y = mesh->ystart; y <= mesh->yend; y++) {
+          for (int z = mesh->zstart; z <= mesh->zend; z++) {
+            source(x, y, z) = 0.0;
+          }
+        }
+      }
+    }
   }
 }

@@ -80,6 +80,15 @@ private:
   Field3D source; ///< External input source
   Field3D Sn; ///< Total density source
 
+  bool source_only_in_core;  ///< Zero source where Y is non-periodic?
+  bool source_time_dependent; ///< Is the input source time dependent?
+  BoutReal source_normalisation; ///< Normalisation factor [m^-3/s]
+  BoutReal time_normalisation; ///< Normalisation factor [s]
+  FieldGeneratorPtr source_generator;
+
+  /// Modifies the `source` member variable
+  void updateSource(BoutReal time);
+
   bool diagnose; ///< Output additional diagnostics?
 };
 
