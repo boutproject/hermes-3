@@ -1,6 +1,7 @@
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/field_factory.hxx>
 #include <bout/output_bout_types.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
@@ -89,7 +90,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     auto str = n_options["source"]
       .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
       .as<std::string>();
-    source_generator = FieldFactory::get()->parse(str, n_options);
+    source_generator = FieldFactory::get()->parse(str, &n_options);
 
   } else {
     // Try to read the density source from the mesh
