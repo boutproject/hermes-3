@@ -56,6 +56,53 @@ const Field2D Laplace_FV(const Field2D& k, const Field2D& f);
 const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
 
 namespace FV {
+
+/// Superbee limiter
+///
+/// This corresponds to the limiter function
+///    φ(r) = max(0, min(2r, 1), min(r,2)
+///
+/// The value at cell right (i.e. i + 1/2) is:
+///
+///   n.R = n.c - φ(r) (n.c - (n.p + n.c)/2)
+///       = n.c + φ(r) (n.p - n.c)/2
+///
+/// Four regimes:
+///  a) r < 1/2 -> φ(r) = 2r
+///     n.R = n.c + gL
+///  b) 1/2 < r < 1 -> φ(r) = 1
+///     n.R = n.c + gR/2
+///  c) 1 < r < 2 -> φ(r) = r
+///     n.R = n.c + gL/2
+///  d) 2 < r  -> φ(r) = 2
+///     n.R = n.c + gR
+///
+///  where the left and right gradients are:
+///   gL = n.c - n.m
+///   gR = n.p - n.c
+///
+struct Superbee {
+  void operator()(Stencil1D& n) {
+    BoutReal gL = n.c - n.L;
+    BoutReal gR = n.R - n.c;
+
+    // r = gL / gR
+    // Limiter is φ(r)
+    if (gL * gR < 0) {
+      // Different signs => Zero gradient
+      n.L = n.R = n.c;
+    } else {
+      BoutReal sign = SIGN(gL);
+      gL = fabs(gL);
+      gR = fabs(gR);
+      BoutReal half_slope = sign * BOUTMAX(BOUTMIN(gL, 0.5*gR),
+                                           BOUTMIN(gR, 0.5*gL));
+      n.L = n.c - half_slope;
+      n.R = n.c + half_slope;
+    }
+  }
+};
+
 template <typename CellEdges = MC>
 const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in, bool fixflux = true) {
