@@ -3,6 +3,11 @@
 Tests
 =====
 
+The specification of the Toro tests used here is taken from
+`Walker (2012) <https://doi.org/10.1371/journal.pone.0039999>`_,
+originally from Toro's book `Riemann Solvers and Numerical Methods for
+Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`_.
+
 1D fluid (MMS)
 --------------
 
@@ -54,9 +59,24 @@ kinetic) then the result is much closer to the analytic solution.
    :alt:
    :width: 60%
 
+Toro test 1
+-----------
+
+``tests/integrated/toro-1``
+
+Toro's test problem #1, from `Riemann Solvers and Numerical Methods
+for Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`_
+is a variation of Sod's shock tube problem. The left state is moving
+into the right, increasing the speed of the resulting shock. Left
+state :math:`\left(\rho_L, u_L, p_L\right) = \left(1.0, 0.75,
+1.0\right)` Right state :math:`\left(\rho_R, u_R, p_R\right) =
+\left(0.125, 0, 0.1\right)`. The size of the domain is 5, and
+the reference result is given at time :math:`t = 0.8`.
 
 Toro test 2
 -----------
+
+``tests/integrated/toro-2`` and ``tests/integrated/toro-2-energy``
 
 Toro's test problem #2 tests robustness to diverging flows and near-zero densities.
 The initial state has constant density and temperature, but a jump in velocity.
@@ -72,6 +92,8 @@ in a domain of length 5 at time :math:`t=0.6` is shown below.
 
 Toro test 3
 -----------
+
+``tests/integrated/toro-3`` and ``tests/integrated/toro-3-energy``
 
 Toro's test problem #3 contains a strong shock close to a contact
 discontinuity.  Left initial state :math:`\left(\rho_L, u_L, p_L\right) =
@@ -97,6 +119,8 @@ solution:
 Toro test 4
 -----------
 
+``tests/integrated/toro-4`` and ``tests/integrated/toro-4-energy``
+
 Toro's test problem #4 produces two right-going shocks with a contact
 between them.  Left state :math:`\left(\rho_L, u_L, p_L\right) =
 \left(5.99924, 19.5975, 460.894\right)` Right state
@@ -106,10 +130,12 @@ between them.  Left state :math:`\left(\rho_L, u_L, p_L\right) =
 Toro test 5
 -----------
 
+``tests/integrated/toro-5`` and ``tests/integrated/toro-5-energy``
+
 The initial conditions for Toro's test problem #5 are the same as test
 #3, but the whole system is moving to the left at a uniform speed. The
 velocity is chosen so that the contact discontinuity remains almost
 stationary at the initial jump location.  Left state
-:math:`\left(\rho_L, u_L, p_L\right) = \left(1, 19.59745,
+:math:`\left(\rho_L, u_L, p_L\right) = \left(1, -19.59745,
 1000.0\right)` Right state :math:`\left(\rho_R, u_R, p_R\right) =
 \left(1, -19.59745, 0.01\right)`.  Result at time :math:`t = 0.03`.
