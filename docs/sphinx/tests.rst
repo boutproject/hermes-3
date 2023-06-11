@@ -3,10 +3,32 @@
 Tests
 =====
 
+1D fluid (MMS)
+--------------
+
+``tests/integrated/1D-fluid``
+
+This convergence test using the Method of Manufactured Solutions (MMS)
+solves fluid equations in the pressure form:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial n}{\partial t} &= -\nabla\cdot\left(n\mathbf{b}v_{||}\right) \\
+   \frac{\partial p}{\partial t} &= -\nabla\cdot\left(p\mathbf{b}v_{||}\right) - \frac{2}{3}p\nabla\cdot\left(\mathbf{b}v_{||}\right) \\
+   \frac{\partial}{\partial t}\left(mnv_{||}\right) &= -\nabla\cdot\left(nv_{||}\mathbf{b}v_{||}\right) - \partial_{||}p
+   \end{aligned}
+
+
+.. figure:: figs/fluid_norm.png
+   :name: fluid_norm
+   :alt:
+   :width: 60%
+
 Sod shock
 ---------
 
-``tests/integrates/sod-shock`` and ``tests/integrated/sod-shock-energy``
+``tests/integrated/sod-shock`` and ``tests/integrated/sod-shock-energy``
 
 Euler equations in 1D. Starting from a state with a jump at the middle
 of the domain.  Left state density, velocity and pressure are
@@ -56,8 +78,8 @@ discontinuity.  Left initial state :math:`\left(\rho_L, u_L, p_L\right) =
 \left(1.0, 0, 1000.0\right)` Right state :math:`\left(\rho_R, u_R,
 p_R\right) = \left(1.0, 0, 0.01\right)`.  Time :math:`t = 0.04`.
 
-When evolving pressure, the density peak does not converge to the
-analytic solution (solid black line):
+When evolving pressure, the simulation is robust but the density peak
+does not converge to the analytic solution (solid black line):
 
 .. figure:: figs/toro-3.png
    :name: toro-3
