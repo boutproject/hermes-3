@@ -1,5 +1,5 @@
-nout = 12
-timestep = 0.05
+nout = 10
+timestep = 0.004
 
 MXG = 0  # No guard cells in X
 
@@ -15,6 +15,7 @@ Ly = 5  # Length of the domain
 dy = Ly / ny
 
 [solver]
+mxstep = 10000
 
 [hermes]
 components = i, sound_speed
@@ -30,7 +31,7 @@ Tnorm = Mp / qe # Length to meters
 Nnorm = 1 / Mp  # Sets Pi to Pascals, Ni to kg/m^3
 
 [i]  # Ions
-type = evolve_density, evolve_momentum, evolve_energy
+type = evolve_density, evolve_pressure, evolve_momentum
 
 charge = 1.0
 AA = 1.0
@@ -46,21 +47,18 @@ rho_L = 1.0
 rho_R = 1.0
 function = rho_L + H(y - pi) * (rho_R - rho_L)
 
-[Ei]
+[Pi]
 
 bndry_all = neumann
 
 # Jump from p_L to p_R
-p_L = 0.4
-p_R = 0.4
-function = (3/2) * (p_L + H(y - pi) * (p_R - p_L)) + 0.5 * NVi:function^2 / Ni:function
+p_L = 1000
+p_R = 0.01
+function = p_L + H(y - pi) * (p_R - p_L)
 
 [NVi]
-v_L = -2.0
-v_R = 2.0
-
-function = Ni:function * (v_L + H(y - pi) * (v_R - v_L))
+function = 0
 
 [Vi]
-bndry_ydown = dirichlet(NVi:v_L * Ni:rho_L)
-bndry_all = dirichlet(NVi:v_R * Ni:rho_R)
+bndry_all = neumann
+
