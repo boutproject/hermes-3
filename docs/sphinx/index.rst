@@ -10,6 +10,7 @@ Welcome to Hermes-3 documentation!
    introduction
    getting_started
    examples
+   tests
    transport_2d
    code_structure
    components

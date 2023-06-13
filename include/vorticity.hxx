@@ -100,11 +100,14 @@ struct Vorticity : public Component {
   }
 private:
   Field3D Vort; // Evolving vorticity
-  
+
   Field3D phi; // Electrostatic potential
   std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
 
+  Field3D Pi_hat; ///< Contribution from ion pressure, weighted by atomic mass / charge
+
   bool exb_advection; // Include nonlinear ExB advection?
+  bool exb_advection_simplified; // Simplify nonlinear ExB advection form?
   bool diamagnetic; // Include diamagnetic current?
   bool diamagnetic_polarisation; // Include diamagnetic drift in polarisation current
   BoutReal average_atomic_mass; // Weighted average atomic mass, for polarisaion current (Boussinesq approximation)

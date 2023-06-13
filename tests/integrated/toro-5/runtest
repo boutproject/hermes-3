@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+#
+# Toro's test problem #5
+#
+# References:
+#
+
+resolutions = [
+    (100, "ob", 0.4),
+    (400, "-r", 0.3),
+    #(1600, '-g', 0.3)
+]
+
+plotting = False
+
+from math import sqrt
+import numpy as np
+from boututils.run_wrapper import shell, launch, getmpirun
+from boutdata.collect import collect
+import sys
+
+# Semi-analytic solution
+# 5 regions:
+#
+#  P1, rho1  | P2, rho2  |  P3, rho3  | P4, rho4 | P5, rho5
+#           pos12      pos23        pos34      pos45
+
+L = 5     # Length of domain
+x0 = 2.5  # Starting position
+u0 = -19.59745
+gamma = 5.0 / 3
+time = 0.03  # In seconds
+
+G = (gamma - 1) / (gamma + 1)
+beta = (gamma - 1) / (2 * gamma)
+
+P1 = 1000.0  # Left pressure
+rho1 = 1.0  # Left density
+
+P5 = 0.01  # Right pressure
+rho5 = 1.0  # Right density
+
+cs1 = sqrt(gamma * P1 / rho1)
+cs5 = sqrt(gamma * P5 / rho5)
+
+# Iteratively calculate P3, the post-shock pressure
+P3 = 0.5 * (P5 + P1)
+while True:
+    u4 = (P3 - P5) * sqrt((1 - G) / (rho5 * (P3 + G * P5)))
+    u3 = u4
+    P3_new = (
+        P1**beta - u3 * sqrt(G**2 * rho1 / ((1 - G**2) * P1 ** (1 / gamma)))
+    ) ** (1 / beta)
+    P3 = 0.5 * (P3 + P3_new)
+    if abs(P3_new - P3) < 1e-10:
+        break
+
+P4 = P3
+
+rho3 = rho1 * (P3 / P1) ** (1 / gamma)
+rho4 = rho5 * (P4 + G * P5) / (P5 + G * P4)
+
+# Velocity of the shock
+v_shock = u3 * ((rho4 / rho5) / ((rho4 / rho5) - 1))
+
+# Key positions
+pos12 = x0 - cs1 * time + u0 * time
+pos34 = x0 + u3 * time  + u0 * time # Post-shock velocity
+pos45 = x0 + v_shock * time + u0 * time
+
+# Determine pos23
+cs2 = cs1 - ((gamma - 1) / 2) * u3
+pos23 = x0 + (u3 - cs2) * time + u0 * time
+
+if plotting:
+    try:
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.axes_grid1.inset_locator import (
+            inset_axes,
+            InsetPosition,
+            mark_inset,
+        )
+
+        # Create x_exact and rho_exact for plotting
+
+        # Region 1
+        x_exact = [0, pos12]
+        rho_exact = [rho1, rho1]
+
+        # Region 2
+        x2 = np.linspace(pos12, pos23, endpoint=True)
+        c = G * ((x0 + u0 * time - x2) / time) + (1 - G) * cs1
+        rho_exact2 = rho1 * (c / cs1) ** (2 / (gamma - 1))
+
+        x_exact += list(x2)
+        rho_exact += list(rho_exact2)
+
+        # Regions 3, 4, 5
+
+        x_exact += [pos23, pos34, pos34, pos45, pos45, L]
+        rho_exact += [rho3, rho3, rho4, rho4, rho5, rho5]
+
+        fig, ax1 = plt.subplots()
+        ax1.plot(x_exact, rho_exact, "k")
+
+        #ax2 = plt.axes([0, 0, 1, 1])
+        #ax2.plot(x_exact, rho_exact, "k")
+        #ax2.set_xlim(0.82, 0.9)
+        #ax2.set_ylim(0.11, 0.25)
+
+        # Manually set the position and relative size of the inset axes within ax1
+        ip = InsetPosition(ax1, [0.01, 0.03, 0.4, 0.4])
+        #ax2.set_axes_locator(ip)
+        # Mark the region corresponding to the inset axes on ax1 and draw lines
+        # in grey linking the two axes.
+        #mark_inset(ax1, ax2, loc1=2, loc2=4, fc="none", ec="0.5")
+    except:
+        print("WARNING: Could not import Matplotlib")
+        plotting = False
+
+# Perform simulations at required resolutions
+
+# Link to the executable
+shell("ln -s ../../../hermes-3 hermes-3")
+
+errs = []
+for ny, sym, tol in resolutions:
+    # Delete old data
+    shell("rm data/BOUT.dmp.*.nc")
+
+    # Launch using MPI
+    s, out = launch(f"./hermes-3 mesh:ny={ny}", nproc=1, pipe=True)
+
+    # Save output to log file
+    f = open(f"run.log.{ny}", "w")
+    f.write(out)
+    f.close()
+
+    n = collect("Ni", path="data", tind=-1, info=False).squeeze()
+
+    assert ny == len(n)
+    xs = L * (np.arange(ny) + 0.5) / ny
+
+    # Calculate exact solution
+    rho = np.zeros(ny)
+    for i, x in enumerate(xs):
+        if x < pos12:
+            rho[i] = rho1
+        elif x < pos23:
+            c = G * ((x0 - x) / time) + (1 - G) * cs1
+            rho[i] = rho1 * (c / cs1) ** (2 / (gamma - 1))
+        elif x < pos34:
+            rho[i] = rho3
+        elif x < pos45:
+            rho[i] = rho4
+        else:
+            rho[i] = rho5
+
+    err = np.sqrt(np.mean((n - rho) ** 2))
+
+    if err > tol:
+        print(f"ny = {ny} err = {err} tol = {tol}")
+        print(" => Test failed")
+        sys.exit(1)
+
+    errs.append(err)
+
+    if plotting:
+        ax1.plot(xs, n, sym, label=f"n = {ny} $l_2={err:.3}$", mfc="none")
+        #ax2.plot(xs, n, sym, mfc="none")
+
+print(errs)
+
+if plotting:
+    ax1.set_xlabel(r"Location $x$")
+    ax1.set_ylabel(r"Density $\rho$")
+    ax1.legend()
+
+    #ax2.set_yticks([])
+    #ax2.set_xticks([])
+
+    plt.savefig("toro-5.png")
+    plt.savefig("toro-5.pdf")
+    plt.show()
+
+
+print(" => Test passed")
+sys.exit(0)
