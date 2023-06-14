@@ -14,7 +14,7 @@
 
 
 nout = 100
-timestep = 20
+timestep = 100
 
 MXG = 0  # No guard cells in X
 
@@ -53,7 +53,8 @@ Bnorm = 1
 Tnorm = 100
 
 [solver]
-type = pvode  # Backward Euler steady-state solver
+type = cvode  # Backward Euler steady-state solver
+use_precon = true
 
 mxstep = 50000
 

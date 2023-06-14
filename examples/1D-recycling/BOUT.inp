@@ -64,7 +64,7 @@ type = beuler  # Backward Euler steady-state solver
 snes_type = newtonls
 ksp_type = gmres
 max_nonlinear_iterations = 10
-
+lag_jacobian = 500
 atol = 1e-7
 rtol = 1e-5
 
