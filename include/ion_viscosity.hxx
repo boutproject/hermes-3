@@ -53,7 +53,7 @@ struct IonViscosity : public Component {
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
   bool perpendicular; ///< Include perpendicular flow? (Requires phi)
-  Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
+  VectorMetric Curlb_B; ///< Curvature vector Curl(b/B)
 
   bool diagnose; ///< Output additional diagnostics?
 
