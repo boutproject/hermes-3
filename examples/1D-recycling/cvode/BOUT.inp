@@ -13,8 +13,8 @@
 #  Does not include recombination
 
 
-nout = 100
-timestep = 100
+nout = 400
+timestep = 300
 
 MXG = 0  # No guard cells in X
 
@@ -84,7 +84,7 @@ AA = 2
 
 density_upstream = 1e19  # Upstream density [m^-3]
 density_source_positive = false  # Force source to be > 0?
-density_controller_i = 5e-4
+density_controller_i = 1e-2
 density_controller_p = 5e2
 
 thermal_conduction = true  # in evolve_pressure
