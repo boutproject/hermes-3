@@ -3,6 +3,7 @@
 #define ION_VISCOSITY_H
 
 #include "component.hxx"
+#include "bout/vectormetric.hxx"
 
 /// Ion viscosity terms
 ///
