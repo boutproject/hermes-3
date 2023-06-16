@@ -118,8 +118,10 @@ void EvolveMomentum::finally(const Options &state) {
     fastest_wave = sqrt(T / AA);
   }
 
-  // Note: Density floor should be consistent with calculation of V
-  //       otherwise energy conservation is affected
+  // Note:
+  //  - Density floor should be consistent with calculation of V
+  //    otherwise energy conservation is affected
+  //  - using the same operator as in density and pressure equations doesn't work
   ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
 
   // Parallel pressure gradient

@@ -71,7 +71,7 @@ following PETSc configure line is a good starting point:
 
 .. code-block:: bash
 
-   ./configure --with-mpi=yes --download-hypre --download-make --with-fortran-bindings=0
+   ./configure --with-mpi=yes --download-hypre --download-make --with-fortran-bindings=0 --with-debugging=0
 
 To configure Hermes-3 with PETSc, use the ``-DBOUT_USE_PETSC=ON`` flag:
 
