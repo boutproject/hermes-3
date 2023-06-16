@@ -14,3 +14,4 @@ Welcome to Hermes-3 documentation!
    transport_2d
    code_structure
    components
+   numerical_methods
