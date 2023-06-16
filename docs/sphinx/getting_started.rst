@@ -43,8 +43,9 @@ recommended way to build Hermes-3 links to the `SUNDIALS
 Note that the integrated tests require MPI, and so may not run on the
 head nodes of many computing clusters.
 
-The CMake configuration can be customised: See the [BOUT++
-documentation](https://bout-dev.readthedocs.io/en/latest/user_docs/installing.html#cmake)
+The CMake configuration can be customised: See the `BOUT++
+documentation
+<https://bout-dev.readthedocs.io/en/latest/user_docs/installing.html#cmake>`_
 for examples of using `cmake` arguments, or edit the compile options
 interactively before building:
 
@@ -85,7 +86,7 @@ Numerical methods
 -----------------
 
 Advection operators in Hermes-3 use slope limiters, also called `flux
-limiters <https://en.wikipedia.org/wiki/Flux_limiter` to suppress
+limiters <https://en.wikipedia.org/wiki/Flux_limiter>`_ to suppress
 spurious numerical oscillations near sharp features, while converging
 at 2nd-order in smooth regions. In general there is a trade-off
 between suppression of numerical oscillations and dissipation: Too
