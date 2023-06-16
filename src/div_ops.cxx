@@ -610,6 +610,33 @@ const Field3D Div_Perp_Lap_FV_Index(const Field3D &as, const Field3D &fs,
   return result;
 }
 
+/// Z diffusion in index space
+const Field3D Div_Z_FV_Index(const Field3D &as, const Field3D &fs) {
+
+  Field3D result = 0.0;
+
+  Coordinates *coord = mesh->getCoordinates();
+  
+  for (int i = mesh->xstart; i <= mesh->xend; i++)
+    for (int j = mesh->ystart; j <= mesh->yend; j++)
+      for (int k = 0; k < mesh->LocalNz; k++) {
+        int kp = (k + 1) % mesh->LocalNz;
+        int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+
+        // Calculate gradients on cell faces
+
+        BoutReal gD = fs(i, j, k) - fs(i, j, km);
+
+        BoutReal gU = fs(i, j, kp) - fs(i, j, k);
+
+        result(i, j, k) += gU * 0.5 * (as(i, j, k) + as(i, j, kp));
+
+        result(i, j, k) -= gD * 0.5 * (as(i, j, k) + as(i, j, km));
+      }
+  
+  return result;
+}
+
 // *** USED ***
 const Field3D D4DX4_FV_Index(const Field3D &f, bool bndry_flux) {
   Field3D result = 0.0;
@@ -691,6 +718,15 @@ const Field3D D4DX4_FV_Index(const Field3D &f, bool bndry_flux) {
       }
     }
 
+  return result;
+}
+
+const Field3D D4DZ4_Index(const Field3D& f) {
+  Field3D result;
+  result.allocate();
+  BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
+    result[i] = f[i.zp(2)] - 4.*f[i.zp()] + 6 * f[i] - 4 * f[i.zm()] + f[i.zm(2)];
+  }
   return result;
 }
 

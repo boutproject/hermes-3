@@ -23,11 +23,6 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
-
-  low_p_diffuse_perp = options["low_p_diffuse_perp"]
-                           .doc("Perpendicular diffusion at low density")
-                           .withDefault<bool>(false);
 
   if (evolve_log) {
     // Evolve logarithm of pressure
@@ -73,6 +68,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                 .withDefault<bool>(false);
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
+
+  hyper_z_T = options["hyper_z_T"]
+    .doc("4th-order dissipation of temperature")
+    .withDefault<BoutReal>(-1.0);
 
   diagnose = options["diagnose"]
     .doc("Save additional output diagnostics")
@@ -236,11 +235,6 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N) + FV::Div_par_K_Grad_par(low_n_coeff, P);
   }
 
-  if (low_p_diffuse_perp) {
-    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / floor(P, 1e-3 * pressure_floor), P,
-                                    true);
-  }
-
   // Parallel heat conduction
   if (thermal_conduction) {
 
@@ -300,8 +294,11 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (hyper_z > 0.) {
-    auto* coord = N.getCoordinates();
-    ddt(P) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(P);
+    ddt(P) -= hyper_z * D4DZ4_Index(P);
+  }
+
+  if (hyper_z_T > 0.) {
+    ddt(P) -= hyper_z_T * D4DZ4_Index(T);
   }
 
   //////////////////////
