@@ -10,7 +10,7 @@ Dynamics parallel to the magnetic field are solved using a 2nd-order
 slope-limiter method.  For any number of fluids we solve the number
 density :math:`n`, momentum along the magnetic field,
 :math:`mnv_{||}`, and either pressure :math:`p` or energy
-:math:`\mathcal{E}`. Here :math:`m` is the particle mass, so that $mn$
+:math:`\mathcal{E}`. Here :math:`m` is the particle mass, so that :math:`mn`
 is the mass density. :math:`v_{||}` is the component of the flow
 velocity in the direction of the magnetic field, and is aligned with
 one of the mesh coordinate directions.  All quantities are cell
