@@ -1,7 +1,7 @@
 # Analyse convergence towards steady state
 
-paths = [".", "pvode"]
-labels = ["NK", "PVODE"]
+paths = ["cvode", "."]
+labels = ["CVODE", "Backward-Euler"]
 linestyles = ["-", "--"]
 
 import matplotlib.pyplot as plt
@@ -25,10 +25,10 @@ for path in paths:
         times.append(t_array / wci) # Seconds
 
         # density source
-        m = collect("density_source_multiplier_d+", path=path)
+        m = collect("density_feedback_src_mult_d+", path=path)
         source_mags.append(np.abs(m + 1))
     except:
-        break
+        raise
 
 for calls, source, label, linestyle in zip(cumulative_calls, source_mags, labels, linestyles):
     plt.plot(calls, source, label=label, linestyle=linestyle)
@@ -52,12 +52,15 @@ plt.show()
 # Time derivatives
 
 for path, calls, label, linestyle in zip(paths, cumulative_calls, labels, linestyles):
-    for varname, color in [("ddt(Nd+)", 'k'), ("ddt(Pd+)", 'r'), ("ddt(NVd+)",'b')]:
+    for varname, color, varlabel in [(r"ddt(Nd+)", 'k', r'$\frac{\partial}{\partial t}n_{d+}$'),
+                                     ("ddt(Pd+)", 'r', r'$\frac{\partial}{\partial t}p_{d+}$'),
+                                     ("ddt(NVd+)",'b', r'$\frac{\partial}{\partial t}nv_{||d+}$')]:
         dv = collect(varname, path=path)
-        dv_rms = np.sqrt(np.sum(dv[:,0,:,0]**2, axis=1))
-        plt.plot(calls, dv_rms, label=label + " " + varname, linestyle=linestyle, color=color)
+        wci = collect("Omega_ci", path=path)
+        dv_rms = np.sqrt(np.sum(dv[:,0,:,0]**2, axis=1)) * wci
+        plt.plot(calls, dv_rms, label=label + " " + varlabel, linestyle=linestyle, color=color)
 plt.yscale('log')
-plt.ylabel("RMS time derivative over domain")
+plt.ylabel(r"RMS time derivative over domain [s$^{-1}$]")
 plt.xlabel("RHS evaluations")
 plt.legend()
 plt.savefig("timederivs_rhsevals.pdf")

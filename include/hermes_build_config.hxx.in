@@ -4,6 +4,8 @@
 
 #include <bout/fv_ops.hxx>
 
+#include "div_ops.hxx" // For Superbee
+
 namespace hermes {
   /// Slope limiter to use in advection operators
   using Limiter=FV::@HERMES_SLOPE_LIMITER@;

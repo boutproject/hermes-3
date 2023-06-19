@@ -142,7 +142,7 @@ void SheathBoundarySimple::transform(Options& state) {
   // If phi is set, use free boundary condition
   // If phi not set, calculate assuming zero current
   Field3D phi;
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
+  if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   } else {
     // Calculate potential phi assuming zero current
