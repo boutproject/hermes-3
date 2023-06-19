@@ -5,9 +5,9 @@
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/invert/laplacexy.hxx>
-#include <derivs.hxx>
-#include <difops.hxx>
-#include <invert_laplace.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
+#include <bout/invert_laplace.hxx>
 
 using bout::globals::mesh;
 
@@ -41,11 +41,15 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                       .doc("Include ExB advection (nonlinear term)?")
                       .withDefault<bool>(true);
 
+  exb_advection_simplified = options["exb_advection_simplified"]
+                      .doc("Simplify nonlinear ExB advection form?")
+                      .withDefault<bool>(true);
+
   diamagnetic =
       options["diamagnetic"].doc("Include diamagnetic current?").withDefault<bool>(true);
 
   sheath_boundary = options["sheath_boundary"]
-                        .doc("Set potential to j=0 sheath at boundaries? (default = 0)")
+                        .doc("Set potential to j=0 sheath at radial boundaries? (default = 0)")
                         .withDefault<bool>(false);
 
   diamagnetic_polarisation =
@@ -59,7 +63,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
           .withDefault<bool>(false);
 
   average_atomic_mass = options["average_atomic_mass"]
-                            .doc("Weighted average atomic mass, for polarisaion current "
+                            .doc("Weighted average atomic mass, for polarisation current "
                                  "(Boussinesq approximation)")
                             .withDefault<BoutReal>(2.0); // Deuterium
 
@@ -189,7 +193,7 @@ void Vorticity::transform(Options& state) {
   // is constant in Z. This is for efficiency, to reduce the number of conversions.
   // Note: For now the boundary values are all at the midpoint,
   //       and only phi is considered, not phi + Pi which is handled in Boussinesq solves
-  Field3D Pi_sum = 0.0; ///< Contribution from ion pressure, weighted by atomic mass
+  Pi_hat = 0.0; // Contribution from ion pressure, weighted by atomic mass / charge
   if (diamagnetic_polarisation) {
     // Diamagnetic term in vorticity. Note this is weighted by the mass
     // This includes all species, including electrons
@@ -202,15 +206,21 @@ void Vorticity::transform(Options& state) {
         continue; // No pressure, charge or mass -> no polarisation current
       }
 
-      // Don't need sheath boundary
-      auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
-      auto AA = get<BoutReal>(species["AA"]);
+      const auto charge = get<BoutReal>(species["charge"]);
+      if (fabs(charge) < 1e-5) {
+        // No charge
+        continue;
+      }
 
-      Pi_sum += P * (AA / average_atomic_mass);
+      // Don't need sheath boundary
+      const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+      const auto AA = get<BoutReal>(species["AA"]);
+
+      Pi_hat += P * (AA / average_atomic_mass / charge);
     }
   }
 
-  Pi_sum.applyBoundary("neumann");
+  Pi_hat.applyBoundary("neumann");
 
   if (phi_boundary_relax) {
     // Update the boundary regions by relaxing towards zero gradient
@@ -351,7 +361,7 @@ void Vorticity::transform(Options& state) {
   //    and sets the boundary between cells to this value.
   //    This shift by 1/2 grid cell is important.
 
-  Field3D phi_plus_pi = phi + Pi_sum;
+  Field3D phi_plus_pi = phi + Pi_hat;
 
   if (mesh->firstX()) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
@@ -387,10 +397,10 @@ void Vorticity::transform(Options& state) {
     // Solve non-axisymmetric part using X-Z solver
     phi = phi_plus_pi_2d
           + phiSolver->solve((Vort - Vort2D) * (Bsq / average_atomic_mass), phi_plus_pi)
-          - Pi_sum;
+          - Pi_hat;
 
   } else {
-    phi = phiSolver->solve(Vort * (Bsq / average_atomic_mass), phi_plus_pi) - Pi_sum;
+    phi = phiSolver->solve(Vort * (Bsq / average_atomic_mass), phi_plus_pi) - Pi_hat;
   }
 
   // Ensure that potential is set in the communication guard cells
@@ -436,6 +446,11 @@ void Vorticity::transform(Options& state) {
       if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"]))) {
         continue; // No pressure or charge -> no diamagnetic current
       }
+      if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+        // No charge
+        continue;
+      }
+
       // Note that the species must have a charge, but charge is not used,
       // because it cancels out in the expression for current
 
@@ -466,11 +481,18 @@ void Vorticity::transform(Options& state) {
           continue; // No pressure, charge or mass -> no polarisation current due to
                     // diamagnetic flow
         }
-        auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
-        auto AA = get<BoutReal>(species["AA"]);
+
+        const auto charge = get<BoutReal>(species["charge"]);
+        if (fabs(charge) < 1e-5) {
+          // No charge
+          continue;
+        }
+
+        const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+        const auto AA = get<BoutReal>(species["AA"]);
 
         add(species["energy_source"],
-            (3. / 2) * P * (AA / average_atomic_mass) * DivJdia);
+            (3. / 2) * P * (AA / average_atomic_mass / charge) * DivJdia);
       }
     }
 
@@ -506,10 +528,10 @@ void Vorticity::transform(Options& state) {
     }
 
     Field3D weighted_collision_frequency = sum_A_nu_n / sum_A_n;
-    weighted_collision_frequency.setBoundary("neumann");
+    weighted_collision_frequency.applyBoundary("neumann");
 
     DivJcol = -FV::Div_a_Grad_perp(
-        weighted_collision_frequency * average_atomic_mass / Bsq, phi);
+        weighted_collision_frequency * average_atomic_mass / Bsq, phi + Pi_hat);
 
     ddt(Vort) += DivJcol;
     set(fields["DivJcol"], DivJcol);
@@ -525,23 +547,36 @@ void Vorticity::finally(const Options& state) {
   phi = get<Field3D>(state["fields"]["phi"]);
 
   if (exb_advection) {
-    ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows);
+    // These terms come from divergence of polarisation current
 
-    /*
+    if (exb_advection_simplified) {
+      // By default this is a simplified nonlinear term
+      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows);
+
+    } else {
+      // If diamagnetic_polarisation = false and B is constant, then
+      // this term reduces to the simplified form above.
+      //
+      // Because this is implemented in terms of an operation on the result
+      // of an operation, we need to communicate and the resulting stencil is
+      // wider than the simple form.
       ddt(Vort) -=
         Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows);
 
-    // V_ExB dot Grad(Pi)
-    Field3D vEdotGradPi = bracket(phi, Pi, BRACKET_ARAKAWA);
-    vEdotGradPi.applyBoundary("free_o2");
-    // delp2(phi) term
-    Field3D DelpPhi_2B2 = 0.5 * Delp2(phi) / Bsq;
-    DelpPhi_2B2.applyBoundary("free_o2");
+      // V_ExB dot Grad(Pi)
+      Field3D vEdotGradPi = bracket(phi, Pi_hat, BRACKET_ARAKAWA);
+      vEdotGradPi.applyBoundary("free_o2");
 
-    mesh->communicate(vEdotGradPi, DelpPhi_2B2);
+      // delp2(phi) term
+      Field3D DelpPhi_2B2 = 0.5 * average_atomic_mass * Delp2(phi) / Bsq;
+      DelpPhi_2B2.applyBoundary("free_o2");
 
-    ddt(Vort) -= FV::Div_a_Laplace_perp(0.5 / Bsq, vEdotGradPi);
-    */
+      mesh->communicate(vEdotGradPi, DelpPhi_2B2);
+
+      ddt(Vort) -= FV::Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
+      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux,
+                                         poloidal_flows);
+    }
   }
 
   if (state.isSection("fields") and state["fields"].isSet("DivJextra")) {

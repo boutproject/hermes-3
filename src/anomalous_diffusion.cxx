@@ -152,8 +152,6 @@ void AnomalousDiffusion::outputVars(Options& state) {
                       {"standard_name", "anomalous momentum diffusion"},
                       {"long_name", std::string("Anomalous momentum diffusion of ") + name},
                       {"source", "anomalous_diffusion"}});
-      
-    // }
   }
 }
 

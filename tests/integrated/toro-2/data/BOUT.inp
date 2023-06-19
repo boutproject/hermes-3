@@ -1,0 +1,67 @@
+nout = 12
+timestep = 0.05
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 100 # dx = 0.01 in Sod paper
+nz = 1
+
+ixseps1 = -1 # Boundaries in Y
+
+Ly = 5  # Length of the domain
+
+dy = Ly / ny
+
+[solver]
+
+[hermes]
+components = i, sound_speed
+
+loadmetric = false        # Use Rxy, Bpxy etc?
+normalise_metric = false  # Normalise the input metric?
+
+Mp = 1.672621898e-27 # Proton mass
+qe = 1.602176634e-19 # Electron charge
+
+Bnorm = Mp / qe # Sets time to seconds
+Tnorm = Mp / qe # Length to meters
+Nnorm = 1 / Mp  # Sets Pi to Pascals, Ni to kg/m^3
+
+[i]  # Ions
+type = evolve_density, evolve_pressure, evolve_momentum
+
+charge = 1.0
+AA = 1.0
+
+thermal_conduction = false  # in evolve_pressure
+
+[Ni]
+
+bndry_all = neumann
+
+# Jumps from rho_L on left to rho_R on right
+rho_L = 1.0
+rho_R = 1.0
+function = rho_L + H(y - pi) * (rho_R - rho_L)
+
+[Pi]
+
+bndry_all = neumann
+
+# Jump from p_L to p_R
+p_L = 0.4
+p_R = 0.4
+function = p_L + H(y - pi) * (p_R - p_L)
+
+[NVi]
+v_L = -2.0
+v_R = 2.0
+
+function = Ni:function * (v_L + H(y - pi) * (v_R - v_L))
+
+[Vi]
+bndry_ydown = dirichlet(NVi:v_L * Ni:rho_L)
+bndry_all = dirichlet(NVi:v_R * Ni:rho_R)
+

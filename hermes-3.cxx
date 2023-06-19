@@ -33,7 +33,9 @@
 #include "include/diamagnetic_drift.hxx"
 #include "include/electromagnetic.hxx"
 #include "include/electron_force_balance.hxx"
+#include "include/electron_viscosity.hxx"
 #include "include/evolve_density.hxx"
+#include "include/evolve_energy.hxx"
 #include "include/evolve_momentum.hxx"
 #include "include/evolve_pressure.hxx"
 #include "include/fixed_density.hxx"
@@ -190,9 +192,6 @@ void Hermes::outputVars(Options& options) {
 
   // Save the Hermes version in the output dump files
   options["HERMES_REVISION"].force(hermes::version::revision);
-
-  // Ensure that metrics are updated
-  mesh->getCoordinates()->outputVars(options);
 
   // Save normalisation quantities. These may be used by components
   // to calculate conversion factors to SI units

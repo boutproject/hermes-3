@@ -69,7 +69,13 @@ upstream_density_feedback
 This is intended for 1D simulations, where the density at :math:`y=0` is set
 by adjusting an input source. This component uses a PI controller method
 to scale the density source up and down, to maintain the specified upstream
-density.
+density. 
+The source, e.g. ``Sd+_feedback``, is calculated as a product of the control signal ``density_source_multiplier``, 
+and the array ``density_source_shape`` which defines the source region.
+The signal is non-dimensional and the controller depends on the value of ``density_source_shape`` to have a good initial guess of the source.
+It should be set to a reasonable value in the units of ``[m-3s-1]``. 
+A good reasonable value is the expected steady state domain particle loss (for example due to unrecycled ions at the target).
+
 
 For example:
 
@@ -83,7 +89,21 @@ For example:
    density_controller_i = 1e-3  # Feedback controller integral (i) parameter
 
    [Nd+]
-   source = h(pi - y)  # Source shape
+   source_shape = h(pi - y) * 1e20  # Source shape
+
+There are two additional settings which can make the controller more robust without excessive tuning:
+
+``density_source_positive`` ensures the controller never takes particles away, which can prevent oscillatory
+behaviour. Note that this requires some other domain particle sink to ensure control, or else the particle count can never reduce.
+
+``density_integral_positive`` This makes sure the integral component only adds particles. 
+The integral component takes a long time to change value, which can result in large overshoots if the initial guess was too small.
+This setting mitigates this by disabling the integral term if the density is above the desired value.
+
+Notes:
+   - The example cases have their PI parameters tuned properly without the need of the above two settings.
+   - Under certain conditions, the use of the PI controller can make the upstream density enter a very small oscillation (~0.05% of upstream value).
+   - There is a separate `source` setting that includes a fixed (non varying) density source.
 
 The implementation is in the `UpstreamDensityFeedback` class:
 
@@ -191,6 +211,36 @@ The implementation is in `EvolvePressure`:
 .. doxygenstruct:: EvolvePressure
    :members:
 
+.. _evolve_energy:
+
+evolve_energy
+~~~~~~~~~~~~~
+
+*Note* This is currently under development and has some unresolved
+issues with boundary conditions.  Only for testing purposes.
+
+This evolves the sum of species internal energy and parallel kinetic
+energy, :math:`\mathcal{E}`:
+
+.. math::
+
+   \mathcal{E} = \frac{1}{\gamma - 1} P + \frac{1}{2}m nv_{||}^2
+
+Note that this component requires the parallel velocity :math:`v_{||}`
+to calculate the pressure. It must therefore be listed after a component
+that sets the velocity, such as `evolve_momentum`:
+
+.. code-block:: ini
+
+   [d]
+   type = ..., evolve_momentum, evolve_energy
+
+The energy density will be saved as `E<species>` (e.g `Ed`) and the
+pressure as `P<species>` (e.g. `Pd`). Additional diagnostics, such as the
+temperature, can be saved by setting the option `diagnose = true`.
+
+.. doxygenstruct:: EvolveEnergy
+   :members:
 
 SNB nonlocal heat flux
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -289,6 +339,147 @@ which is added to the ion's `momentum_source`.
 The implementation is in `ElectronForceBalance`:
 
 .. doxygenstruct:: ElectronForceBalance
+   :members:
+
+electron_viscosity
+------------------
+
+Calculates the Braginskii electron parallel viscosity, adding a force (momentum source)
+to the electron momentum equation:
+
+.. math::
+
+   F = \sqrt{B}\nabla\cdot\left[\frac{\eta_e}{B}\mathbf{b}\mathbf{b}\cdot\nabla\left(\sqrt{B}V_{||e}\right)\right]
+
+The electron parallel viscosity is
+
+.. math::
+
+   \eta_e = \frac{4}{3} 0.73 p_e \tau_e
+
+where :math:`\tau_e` is the electron collision time. The collisions between electrons
+and all other species therefore need to be calculated before this component is run:
+
+.. code-block:: ini
+
+   [hermes]
+   components = ..., e, ..., collisions, electron_viscosity
+
+.. doxygenstruct:: ElectronViscosity
+   :members:
+
+ion_viscosity
+-------------
+
+Adds ion viscosity terms to all charged species that are not electrons.
+The collision frequency is required so this is a top-level component that
+must be calculated after collisions:
+
+.. code-block:: ini
+
+   [hermes]
+   components =  ..., collisions, ion_viscosity
+
+By default only the parallel diffusion of momentum is included, adding a force to each
+ion's momentum equation:
+
+.. math::
+
+   F = \sqrt{B}\nabla\cdot\left[\frac{\eta_i}{B}\mathbf{b}\mathbf{b}\cdot\nabla\left(\sqrt{B}V_{||i}\right)\right]
+
+The ion parallel viscosity is
+
+.. math::
+
+   \eta_i = \frac{4}{3} 0.96 p_i \tau_i
+
+If the `perpendicular` option is set:
+
+.. code-block:: ini
+
+   [ion_viscosity]
+   perpendicular = true # Include perpendicular flows
+
+Then the ion scalar viscous pressure is calculated as:
+
+.. math::
+
+   \Pi_{ci} = \Pi_{ci||} + \Pi_{ci\perp}
+
+where :math:`\Pi_{ci||}` corresponds to the parallel diffusion of momentum above.
+
+.. math::
+
+   \Pi_{ci||} = - 0.96 \frac{2p_i\tau_i}{\sqrt{B}} \partial_{||}\left(\sqrt{B} V_{||i}\right)
+
+The perpendicular part is calculated from:
+
+.. math::
+
+   \begin{aligned}\Pi_{ci\perp} =& 0.96 p_i\tau_i \kappa \cdot \left[\mathbf{V}_E + \mathbf{V}_{di} + 1.16\frac{\mathbf{b}\times\nabla T_i}{B} \right] \\
+   =& -0.96 p_i\tau_i\frac{1}{B}\left(\mathbf{b}\times\kappa\right)\cdot\left[\nabla\phi + \frac{\nabla p_i}{en_i} + 1.61\nabla T_i \right]\end{aligned}
+
+
+A parallel force term is added, in addition to the parallel viscosity above:
+
+.. math::
+
+   F = -\frac{2}{3}B^{3/2}\partial_{||}\left(\frac{\Pi_{ci\perp}}{B^{3/2}}\right)
+   
+In the vorticity equation the viscosity appears as a divergence of a current:
+
+.. math::
+
+   \mathbf{J}_{ci} = \frac{\Pi_{ci}}{2}\nabla\times\frac{\mathbf{b}}{B} - \frac{1}{3}\frac{\mathbf{b}\times\nabla\Pi_{ci}}{B}
+
+that transfers energy between ion internal energy and :math:`E\times B` energy:
+
+.. math::
+
+   \begin{aligned}\frac{\partial \omega}{\partial t} =& \ldots + \nabla\cdot\mathbf{J}_{ci} \\
+   \frac{\partial p_i}{\partial t} =& \ldots - \mathbf{J}_{ci}\cdot\nabla\left(\phi + \frac{p_i}{n_0}\right)\end{aligned}
+
+Note that the sum of the perpendicular and parallel contributions to the ion viscosity act to damp
+the net poloidal flow. This can be seen by assuming that :math:`\phi`, :math:`p_i` and :math:`T_i`
+are flux functions. We can then write:
+
+.. math::
+
+   \Pi_{ci\perp} = -0.96 p_i\tau_i \frac{1}{B}\left(\mathbf{b}\times\kappa\right)\cdot\nabla\psi F\left(\psi\right)
+
+where
+
+.. math::
+
+   F\left(\psi\right) = \frac{\partial\phi}{\partial\psi} + \frac{1}{en}\frac{\partial p_i}{\partial\psi} + 1.61\frac{\partial T_i}{\partial\psi}
+
+Using the approximation
+
+.. math::
+
+   \left(\mathbf{b}\times\kappa\right)\cdot\nabla\psi \simeq -RB_\zeta \partial_{||}\ln B
+
+expanding:
+
+.. math::
+
+   \frac{2}{\sqrt{B}}\partial_{||}\left(\sqrt{B}V_{||i}\right) = 2\partial_{||}V_{||i} + V_{||i}\partial_{||}\ln B
+
+and neglecting parallel gradients of velocity gives:
+
+.. math::
+
+   \Pi_{ci} \simeq 0.96 p_i\tau_i \left[ \frac{RB_{\zeta}}{B}F\left(\psi\right) - V_{||i} \right]\partial_{||}\ln B
+
+   
+**Notes** and implementation details:
+- The magnitude of :math:`\Pi_{ci\perp}` and :math:`\Pi_{ci||}` are individually
+  limited to be less than or equal to the scalar pressure :math:`Pi` (though can have
+  opposite sign). The reasoning is that if these off-diagonal terms become large then
+  the model is likely breaking down. Occasionally happens in low-density regions.
+
+   
+.. doxygenstruct:: IonViscosity
    :members:
 
 simple_conduction
@@ -1224,26 +1415,78 @@ vorticity
 Evolves a vorticity equation, and at each call to transform() uses a matrix
 inversion to calculate potential from vorticity.
 
-In this component the Boussinesq approximation is made, so the vorticity equation solved is
+In this component the Boussinesq approximation is made, so the
+vorticity equation solved is
 
 .. math::
 
-   \nabla\cdot\left(\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \phi + \sum_i\frac{A_i}{B^2}\nabla_\perp p_i\right) = \Omega
+   \nabla\cdot\left(\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \phi\right) \underbrace{+ \nabla\cdot\left(\sum_i\frac{A_i}{Z_i B^2}\nabla_\perp p_i\right)}_{\mathrm{if diamagnetic\_polarisation}} = \Omega
 
 Where the sum is over species, :math:`\overline{A}` is the average ion
 atomic number, and :math:`\overline{n}` is the normalisation density
-(i.e. goes to 1 in the normalised equations).  This is a simplified
-version of the full expression which is:
+(i.e. goes to 1 in the normalised equations). The ion diamagnetic flow
+terms in this Boussinesq approximation can be written in terms of an
+effective ion pressure :math:`\hat{p}`:
 
 .. math::
 
-   \nabla\cdot\left(\sum_i \frac{A_i n_i}{B^2}\nabla_\perp \phi + \sum_i \frac{A_i}{B^2}\nabla_\perp p_i\right) = \Omega
+   \hat{p} \equiv \sum_i \frac{A_i}{\overline{A} Z_i} p_i
+
+as
+
+.. math::
+
+   \nabla\cdot\left[\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \left(\phi + \frac{\hat{p}}{\overline{n}}\right) \right] = \Omega
+   
+Note that if ``diamagnetic_polarisation = false`` then the ion
+pressure terms are removed from the vorticity, and also from other ion
+pressure terms coming from the polarisation current
+(i.e. :math:`\hat{p}\rightarrow 0`.
+
+This is a simplified version of the full vorticity definition which is:
+
+.. math::
+
+   \nabla\cdot\left(\sum_i \frac{A_i n_i}{B^2}\nabla_\perp \phi + \sum_i \frac{A_i}{Z_i B^2}\nabla_\perp p_i\right) = \Omega
 
 and is derived by replacing
 
 .. math::
 
    \sum_i A_i n_i \rightarrow \overline{A}\overline{n}
+
+In the case of multiple species, this Boussinesq approximation means that the ion diamagnetic flow
+terms 
+
+The vorticity equation that is integrated in time is
+
+.. math::
+
+   \begin{aligned}\frac{\partial \Omega}{\partial t} =& \nabla\cdot\left(\mathbf{b}\sum_s Z_s n_sV_{||s}\right) \\
+   &+ \underbrace{\nabla\cdot\left(\nabla\times\frac{\mathbf{b}}{B}\sum_s p_s\right)}_{\textrm{if diamagnetic}} + \underbrace{\nabla\cdot\mathbf{J_{exb}}}_{\mathrm{if exb\_advection}} \\
+   &+ \nabla\cdot\left(\mathbf{b}J_{extra}\right)\end{aligned}
+
+The nonlinearity :math:`\nabla\cdot\mathbf{J_{exb}}` is part of the
+divergence of polarisation current. In its simplified form when
+``exb_advection_simplified = true``, this is the :math:`E\times B`
+advection of vorticity:
+
+.. math::
+
+   \nabla\cdot\mathbf{J_{exb}} = -\nabla\cdot\left(\Omega \mathbf{V}_{E\times B}\right)
+
+When ``exb_advection_simplified = false`` then the more complete
+(Boussinesq approximation) form is used:
+
+.. math::
+
+   \nabla\cdot\mathbf{J_{exb}} = -\nabla\cdot\left[\frac{\overline{A}}{2B^2}\nabla_\perp\left(\mathbf{V}_{E\times B}\cdot\nabla \hat{p}\right) + \frac{\Omega}{2} \mathbf{V}_{E\times B} + \frac{\overline{A}\overline{n}}{2B^2}\nabla_\perp^2\phi\left(\mathbf{V}_{E\times B} + \frac{\mathbf{b}}{B}\times\nabla\hat{p}\right) \right]
+   
+The form of the vorticity equation is based on `Simakov & Catto
+<https://doi.org/10.1063/1.1623492>`_ (corrected in `erratum 2004
+<https://doi.org/10.1063/1.1703527>`_), in the Boussinesq limit and
+with the first term modified to conserve energy. In the limit of zero
+ion pressure and constant :math:`B` it reduces to the simplified form.
 
 .. doxygenstruct:: Vorticity
    :members:

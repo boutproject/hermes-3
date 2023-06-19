@@ -1,12 +1,13 @@
 
-#include <derivs.hxx>
-#include <difops.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
 
 #include "../include/evolve_momentum.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_build_config.hxx"
 
 namespace {
 BoutReal floor(BoutReal value, BoutReal min) {
@@ -117,9 +118,11 @@ void EvolveMomentum::finally(const Options &state) {
     fastest_wave = sqrt(T / AA);
   }
 
-  // Note: Density floor should be consistent with calculation of V
-  //       otherwise energy conservation is affected
-  ddt(NV) -= AA * FV::Div_par_fvv(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
+  // Note:
+  //  - Density floor should be consistent with calculation of V
+  //    otherwise energy conservation is affected
+  //  - using the same operator as in density and pressure equations doesn't work
+  ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
 
   // Parallel pressure gradient
   if (species.isSet("pressure")) {

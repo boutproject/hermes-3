@@ -2,7 +2,7 @@
 #ifndef EVOLVE_PRESSURE_H
 #define EVOLVE_PRESSURE_H
 
-#include <field3d.hxx>
+#include <bout/field3d.hxx>
 
 #include "component.hxx"
 
@@ -88,6 +88,8 @@ private:
   Field3D logP;    ///< Natural logarithm of P
 
   BoutReal density_floor; ///< Minimum density for calculating T
+  BoutReal pressure_floor; ///< When non-zero pressure is needed
+  bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low pressure?
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 
   Field3D source; ///< External pressure source

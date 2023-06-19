@@ -11,18 +11,25 @@ project(hermes-3 LANGUAGES CXX)
 # Extra CMake scripts in cmake/ subdirectory
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
-# Update submodules
+option(HERMES_UPDATE_GIT_SUBMODULE "Check submodules are up-to-date during build" ON)
 # Adapted from https://cliutils.gitlab.io/modern-cmake/chapters/projects/submodule.html
-find_package(Git QUIET)
-if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
-  message(STATUS "Submodule update")
-  execute_process(COMMAND ${GIT_EXECUTABLE} -c submodule.recurse=false submodule update --init --recursive
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    RESULT_VARIABLE GIT_SUBMOD_RESULT)
-  if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-    message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+# Update submodules as needed
+function(hermes_update_submodules)
+  if(NOT HERMES_UPDATE_GIT_SUBMODULE)
+    return()
   endif()
-endif()
+  find_package(Git QUIET)
+  if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+    message(STATUS "Submodule update")
+    execute_process(COMMAND ${GIT_EXECUTABLE} -c submodule.recurse=false submodule update --init --recursive
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+      RESULT_VARIABLE GIT_SUBMOD_RESULT)
+    if(NOT GIT_SUBMOD_RESULT EQUAL "0")
+      message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+    endif()
+  endif()
+endfunction()
+hermes_update_submodules()
 
 # Get the Git revision
 include(GetGitRevisionDescription)
@@ -52,8 +59,9 @@ set(HERMES_SOURCES
     src/full_velocity.cxx
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
+    src/electron_viscosity.cxx
     src/evolve_density.cxx
-    src/vorticity.cxx
+    src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
     src/isothermal.cxx
@@ -86,6 +94,7 @@ set(HERMES_SOURCES
     src/thermal_force.cxx
     src/ion_viscosity.cxx
     src/transform.cxx
+    src/vorticity.cxx
     include/adas_reaction.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
@@ -101,7 +110,9 @@ set(HERMES_SOURCES
     include/div_ops.hxx
     include/electromagnetic.hxx
     include/electron_force_balance.hxx
+    include/electron_viscosity.hxx
     include/evolve_density.hxx
+    include/evolve_energy.hxx
     include/evolve_momentum.hxx
     include/evolve_pressure.hxx
     include/fixed_density.hxx
@@ -202,6 +213,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(neutral_mixed)
   hermes_add_integrated_test(vorticity)
   hermes_add_integrated_test(sod-shock)
+  hermes_add_integrated_test(sod-shock-energy)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -222,3 +234,22 @@ if(HERMES_TESTS)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
   endif()
 endif()
+
+# Compile-time options
+
+set(SLOPE_LIMITERS MinMod MC Upwind Superbee)
+set(HERMES_SLOPE_LIMITER MinMod CACHE STRING "Set advection slope limiter")
+set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
+message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")
+
+# Generate the build config header
+
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx")
+  # If we do in source builds, this is fine
+  if (NOT ${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
+    message(FATAL_ERROR "Generated hermes_build_config.hxx header already exists; please remove '${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx' before continuing")
+  endif()
+endif()
+
+configure_file(include/hermes_build_config.hxx.in include/hermes_build_config.hxx)
+

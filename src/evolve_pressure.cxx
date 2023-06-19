@@ -1,15 +1,16 @@
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
-#include <derivs.hxx>
-#include <difops.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
 #include <bout/output_bout_types.hxx>
-#include <initialprofiles.hxx>
+#include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/hermes_build_config.hxx"
 
 using bout::globals::mesh;
 
@@ -22,11 +23,17 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
+  low_p_diffuse_perp = options["low_p_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low density")
+                           .withDefault<bool>(false);
+
   if (evolve_log) {
-    // Evolve logarithm of density
+    // Evolve logarithm of pressure
     solver->add(logP, std::string("logP") + name);
     // Save the pressure to the restart file
-    // so the simulation can be restarted evolving density
+    // so the simulation can be restarted evolving pressure
     //get_restart_datafile()->addOnce(P, std::string("P") + name);
 
     if (!alloptions["hermes"]["restarting"]) {
@@ -38,7 +45,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       Options::root()[std::string("P") + name].setConditionallyUsed();
     }
   } else {
-    // Evolve the density in time
+    // Evolve the pressure in time
     solver->add(P, std::string("P") + name);
   }
 
@@ -207,7 +214,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par(P, V, fastest_wave);
+      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave);
 
       // Work done. This balances energetically a term in the momentum equation
       ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
@@ -217,7 +224,7 @@ void EvolvePressure::finally(const Options& state) {
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3) * FV::Div_par(P, V, fastest_wave);
+      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave);
 
       ddt(P) += (2. / 3) * V * Grad_par(P);
     }
@@ -227,6 +234,11 @@ void EvolvePressure::finally(const Options& state) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N) + FV::Div_par_K_Grad_par(low_n_coeff, P);
+  }
+
+  if (low_p_diffuse_perp) {
+    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / floor(P, 1e-3 * pressure_floor), P,
+                                    true);
   }
 
   // Parallel heat conduction

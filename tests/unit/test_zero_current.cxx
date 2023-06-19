@@ -15,7 +15,7 @@ extern Mesh *mesh;
 // The unit tests use the global mesh
 using namespace bout::globals;
 
-#include <field_factory.hxx>  // For generating functions
+#include <bout/field_factory.hxx>  // For generating functions
 
 // Reuse the "standard" fixture for FakeMesh
 using ZeroCurrentTest = FakeMeshFixture;

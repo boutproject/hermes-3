@@ -24,7 +24,26 @@ of energy between them, or heat conduction.
    :alt:
    :width: 60%
    
-   Evolution of pressure, starting from a top hat
+   Evolution of pressure, starting from a top hat. Input in ``examples/1D-te-ti``.
+
+To run this example:
+
+.. code-block:: bash
+
+   ./hermes-3 -d examples/1D-te-ti
+
+Which takes a few seconds to run on a single core. Then in the
+``examples/1D-te-ti`` directory run the analysis script
+
+.. code-block:: bash
+
+   python3 makeplot.py
+
+That should generate png files and an animated gif if ImageMagick is
+installed (the ``convert`` program). If an error like
+``ModuleNotFoundError: No module named 'boutdata'`` occurs, then
+install the ``boutdata`` package with ``python3 -m pip install
+boutdata``.
 
 The model components are ions (i) and electrons (e), and a component
 which uses the force on the electrons to calculate the parallel electric field,
