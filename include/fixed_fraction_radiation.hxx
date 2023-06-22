@@ -35,23 +35,23 @@ namespace {
 
       if (Te >= 1.5 and Te <= 1500) {
         log_out = log_out
-        -8.7276e+01 * pow(logT, 0)
-        +2.6028e+01 * pow(logT, 1)
-        -3.1418e+01 * pow(logT, 2)
-        +2.8683e+01 * pow(logT, 3)
-        -1.7736e+01 * pow(logT, 4)
-        +7.4835e+00 * pow(logT, 5)
-        -2.1562e+00 * pow(logT, 6)
-        +4.1118e-01 * pow(logT, 7)
-        -4.8969e-02 * pow(logT, 8)
-        +3.2708e-03 * pow(logT, 9)
-        -9.3114e-05 * pow(logT, 10);
+        -8.4541e+01 * pow(logT, 0)
+        +1.5773e+01 * pow(logT, 1)
+        -1.5426e+01 * pow(logT, 2)
+        +1.4941e+01 * pow(logT, 3)
+        -1.0482e+01 * pow(logT, 4)
+        +5.0092e+00 * pow(logT, 5)
+        -1.6003e+00 * pow(logT, 6)
+        +3.2946e-01 * pow(logT, 7)
+        -4.1404e-02 * pow(logT, 8)
+        +2.8706e-03 * pow(logT, 9)
+        -8.3889e-05 * pow(logT, 10);
         return exp(log_out);
 
       } else if (Te < 1.5) {
-        return 1.2316e-35;   
-      } else if (Te > 1500) {
-        return 1.2572e-32;
+        return 1.9535e-35;   
+      } else {
+        return 1.2265e-32;
       }
     }
   };
@@ -64,23 +64,23 @@ namespace {
 
       if (Te >= 2 and Te <= 1000) {
         log_out = log_out
-        -9.5485e+01 * pow(logT, 0)
-        +6.8706e+01 * pow(logT, 1)
-        -1.4171e+02 * pow(logT, 2)
-        +1.6144e+02 * pow(logT, 3)
-        -1.0674e+02 * pow(logT, 4)
-        +4.3751e+01 * pow(logT, 5)
-        -1.1490e+01 * pow(logT, 6)
-        +1.9365e+00 * pow(logT, 7)
-        -2.0259e-01 * pow(logT, 8)
-        +1.1977e-02 * pow(logT, 9)
-        -3.0591e-04 * pow(logT, 10);
+        -8.2148e+01 * pow(logT, 0)
+        +1.2893e+01 * pow(logT, 1)
+        -4.7427e+01 * pow(logT, 2)
+        +7.4522e+01 * pow(logT, 3)
+        -5.7571e+01 * pow(logT, 4)
+        +2.5738e+01 * pow(logT, 5)
+        -7.1276e+00 * pow(logT, 6)
+        +1.2429e+00 * pow(logT, 7)
+        -1.3294e-01 * pow(logT, 8)
+        +7.9737e-03 * pow(logT, 9)
+        -2.0549e-04 * pow(logT, 10);
         return exp(log_out);
 
       } else if (Te < 2) {
-        return 7.0655e-36;   
-      } else if (Te > 1000) {
-        return 1.1600e-32;
+        return 6.3530e-36;   
+      } else {
+        return 1.1789e-32;
       }
     }
   };
@@ -94,23 +94,53 @@ namespace {
 
       if (Te >= 2 and Te <= 500) {
         log_out = log_out
-        -5.6832e+01 * pow(logT, 0)
-        -1.0690e+02 * pow(logT, 1)
-        +2.2106e+02 * pow(logT, 2)
-        -2.3902e+02 * pow(logT, 3)
-        +1.5679e+02 * pow(logT, 4)
-        -6.5878e+01 * pow(logT, 5)
-        +1.8075e+01 * pow(logT, 6)
-        -3.2221e+00 * pow(logT, 7)
-        +3.6003e-01 * pow(logT, 8)
-        -2.2931e-02 * pow(logT, 9)
-        +6.3593e-04 * pow(logT, 10);
+        -5.0165e+01 * pow(logT, 0)
+        -1.3575e+02 * pow(logT, 1)
+        +2.7351e+02 * pow(logT, 2)
+        -2.9211e+02 * pow(logT, 3)
+        +1.9012e+02 * pow(logT, 4)
+        -7.9516e+01 * pow(logT, 5)
+        +2.1776e+01 * pow(logT, 6)
+        -3.8833e+00 * pow(logT, 7)
+        +4.3473e-01 * pow(logT, 8)
+        -2.7768e-02 * pow(logT, 9)
+        +7.7272e-04 * pow(logT, 10);
         return exp(log_out);
 
       } else if (Te < 2) {
-        return 4.0959e-34;   
-      } else if (Te > 500) {
-        return 7.7710e-33;
+        return 4.3484e-34;   
+      } else {
+        return 8.1110e-33;
+      }
+    }
+  };
+
+
+  /// Carbon
+  struct Carbon_adas{
+    BoutReal curve(BoutReal Te) {
+      BoutReal logT = log(Te);
+      BoutReal log_out = 0;
+
+      if (Te >= 1 and Te <= 500) {
+        log_out = log_out
+        -7.8784e+01 * pow(logT, 0)
+        +1.5533e+00 * pow(logT, 1)
+        +1.6590e+01 * pow(logT, 2)
+        -3.2380e+01 * pow(logT, 3)
+        +3.1278e+01 * pow(logT, 4)
+        -1.7483e+01 * pow(logT, 5)
+        +5.9139e+00 * pow(logT, 6)
+        -1.2297e+00 * pow(logT, 7)
+        +1.5400e-01 * pow(logT, 8)
+        -1.0680e-02 * pow(logT, 9)
+        +3.1566e-04 * pow(logT, 10);
+        return exp(log_out);
+
+      } else if (Te < 1) {
+        return 6.0062e-35;   
+      } else {
+        return 4.5306e-33;
       }
     }
   };
@@ -205,7 +235,10 @@ struct FixedFractionRadiation : public Component {
 
 namespace {
   RegisterComponent<FixedFractionRadiation<HutchinsonCarbon>>
-    registercomponentfixedfractioncarbon("fixed_fraction_carbon");
+    registercomponentfixedfractionhutchinsonbcarbon("fixed_fraction_hutchinson_carbon");
+    
+  RegisterComponent<FixedFractionRadiation<Carbon_adas>>
+    registercomponentfixedfractioncarbon("fixed_fraction_carbon");  
 
   RegisterComponent<FixedFractionRadiation<Nitrogen_adas>>
     registercomponentfixedfractionnitrogen("fixed_fraction_nitrogen");
@@ -216,8 +249,6 @@ namespace {
   RegisterComponent<FixedFractionRadiation<Argon_adas>>
     registercomponentfixedfractionargon("fixed_fraction_argon");
 
-  // RegisterComponent<FixedFractionRadiation<RyokoArgon>>
-  //   registercomponentfixedfractionargon("fixed_fraction_deprecated");
 }
 
 #endif // FIXED_FRACTION_IONS_H
