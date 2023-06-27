@@ -29,6 +29,16 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
 
+  low_n_diffuse_perp = options["low_n_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low density")
+                           .withDefault<bool>(false);
+
+  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
+  low_p_diffuse_perp = options["low_p_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low pressure")
+                           .withDefault<bool>(false);
+
   bndry_flux = options["bndry_flux"]
                       .doc("Allow flows through radial boundaries")
                       .withDefault<bool>(true);
@@ -134,6 +144,15 @@ void EvolveMomentum::finally(const Options &state) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N) + FV::Div_par_K_Grad_par(low_n_coeff * Nlim, V);
+  }
+
+  if (low_n_diffuse_perp) {
+    ddt(NV) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), NV, true);
+  }
+
+  if (low_p_diffuse_perp) {
+    Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
+    ddt(NV) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV, true);
   }
 
   if (hyper_z > 0.) {

@@ -72,6 +72,8 @@ private:
   BoutReal density_floor;
   bool low_n_diffuse;   ///< Parallel diffusion at low density
   bool low_n_diffuse_perp;  ///< Perpendicular diffusion at low density
+  BoutReal pressure_floor; ///< When non-zero pressure is needed
+  bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low pressure?
   BoutReal hyper_z;    ///< Hyper-diffusion in Z
 
   bool evolve_log; ///< Evolve logarithm of density?

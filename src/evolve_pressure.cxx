@@ -24,6 +24,22 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
 
+  low_n_diffuse_perp = options["low_n_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low density")
+                           .withDefault<bool>(false);
+
+  temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+
+  low_T_diffuse_perp = options["low_T_diffuse_perp"].doc("Add cross-field diffusion at low temperature?")
+    .withDefault<bool>(false);
+
+  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
+  low_p_diffuse_perp = options["low_p_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low pressure")
+                           .withDefault<bool>(false);
+
   if (evolve_log) {
     // Evolve logarithm of pressure
     solver->add(logP, std::string("logP") + name);
@@ -233,6 +249,20 @@ void EvolvePressure::finally(const Options& state) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N) + FV::Div_par_K_Grad_par(low_n_coeff, P);
+  }
+
+  if (low_n_diffuse_perp) {
+    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), P, true);
+  }
+
+  if (low_T_diffuse_perp) {
+    ddt(P) += 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / floor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
+                                           T, false);
+  }
+
+  if (low_p_diffuse_perp) {
+    Field3D Plim = floor(P, 1e-3 * pressure_floor);
+    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
   }
 
   // Parallel heat conduction
