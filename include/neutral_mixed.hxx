@@ -37,7 +37,7 @@ private:
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
-  Field3D Nnlim, Pnlim, Vnlim, Tnlim; // Limited in regions of low density
+  Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 

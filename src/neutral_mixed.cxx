@@ -102,19 +102,21 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                .withDefault(pressure_source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
 
-  // Note no NVn for now.
   Dnn.setBoundary(std::string("Dnn") + name);
   Tn.setBoundary(std::string("T") + name);
   Pn.setBoundary(std::string("P") + name);
   Nn.setBoundary(std::string("N") + name);
 
-  // Same boundary applies to floored versions
+  // All floored versions of variables get the same boundary as the original
   Tnlim.setBoundary(std::string("T") + name);
   Pnlim.setBoundary(std::string("P") + name);
+  logPnlim.setBoundary(std::string("P") + name);
   Nnlim.setBoundary(std::string("N") + name);
-  DnnNn.setBoundary(std::string("DnnNn") + name);
-  DnnPn.setBoundary(std::string("DnnPn") + name);
-  DnnTn.setBoundary(std::string("DnnTn") + name);
+
+  // Product of Dnn and another parameter has same BC as Dnn
+  DnnNn.setBoundary(std::string("Dnn") + name);
+  DnnPn.setBoundary(std::string("Dnn") + name);
+  DnnTn.setBoundary(std::string("Dnn") + name);
 
 }
 
@@ -145,7 +147,7 @@ void NeutralMixed::transform(Options& state) {
   Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
-  // Boundary conditions
+  // Parallel boundary conditions
   TRACE("Neutral boundary conditions");
 
   if (sheath_ydown) {
@@ -230,8 +232,8 @@ void NeutralMixed::finally(const Options& state) {
   // Field3D logNn = log(Nn);
   // Field3D logTn = log(Tn);
 
-  Field3D logPnlim = log(Pnlim);
-  logPnlim.applyBoundary("neumann");
+  logPnlim = log(Pnlim);
+  logPnlim.applyBoundary();
 
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
