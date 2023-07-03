@@ -35,24 +35,24 @@ namespace {
 
       if (Te >= 1.5 and Te <= 1500) {
         log_out = log_out
-        -8.4541e+01 * pow(logT, 0)
-        +1.5773e+01 * pow(logT, 1)
-        -1.5426e+01 * pow(logT, 2)
-        +1.4941e+01 * pow(logT, 3)
-        -1.0482e+01 * pow(logT, 4)
-        +5.0092e+00 * pow(logT, 5)
-        -1.6003e+00 * pow(logT, 6)
-        +3.2946e-01 * pow(logT, 7)
-        -4.1404e-02 * pow(logT, 8)
-        +2.8706e-03 * pow(logT, 9)
-        -8.3889e-05 * pow(logT, 10);
+        -8.45410692e+01 * pow(logT, 0)
+        +1.57727040e+01 * pow(logT, 1)
+        -1.54264860e+01 * pow(logT, 2)
+        +1.49409902e+01 * pow(logT, 3)
+        -1.04815113e+01 * pow(logT, 4)
+        +5.00924595e+00 * pow(logT, 5)
+        -1.60029106e+00 * pow(logT, 6)
+        +3.29455609e-01 * pow(logT, 7)
+        -4.14036827e-02 * pow(logT, 8)
+        +2.87063206e-03 * pow(logT, 9)
+        -8.38888002e-05 * pow(logT, 10);
         return exp(log_out);
 
-      } else if (Te < 1.5) {
-        return 1.9535e-35;   
-      } else {
-        return 1.2265e-32;
-      }
+    } else if (Te < 1.5) {
+        return 1.95353412e-35;   
+    } else {
+        return 1.22649600e-32;
+    }
     }
   };
 
@@ -64,24 +64,24 @@ namespace {
 
       if (Te >= 2 and Te <= 1000) {
         log_out = log_out
-        -8.2148e+01 * pow(logT, 0)
-        +1.2893e+01 * pow(logT, 1)
-        -4.7427e+01 * pow(logT, 2)
-        +7.4522e+01 * pow(logT, 3)
-        -5.7571e+01 * pow(logT, 4)
-        +2.5738e+01 * pow(logT, 5)
-        -7.1276e+00 * pow(logT, 6)
-        +1.2429e+00 * pow(logT, 7)
-        -1.3294e-01 * pow(logT, 8)
-        +7.9737e-03 * pow(logT, 9)
-        -2.0549e-04 * pow(logT, 10);
+        -8.21475117e+01 * pow(logT, 0)
+        +1.28929854e+01 * pow(logT, 1)
+        -4.74266289e+01 * pow(logT, 2)
+        +7.45222324e+01 * pow(logT, 3)
+        -5.75710722e+01 * pow(logT, 4)
+        +2.57375965e+01 * pow(logT, 5)
+        -7.12758563e+00 * pow(logT, 6)
+        +1.24287546e+00 * pow(logT, 7)
+        -1.32943407e-01 * pow(logT, 8)
+        +7.97368445e-03 * pow(logT, 9)
+        -2.05487897e-04 * pow(logT, 10);
         return exp(log_out);
 
-      } else if (Te < 2) {
-        return 6.3530e-36;   
-      } else {
-        return 1.1789e-32;
-      }
+    } else if (Te < 2) {
+        return 6.35304113e-36;   
+    } else {
+        return 1.17894628e-32;
+    }
     }
   };
 
@@ -94,24 +94,24 @@ namespace {
 
       if (Te >= 2 and Te <= 500) {
         log_out = log_out
-        -5.0165e+01 * pow(logT, 0)
-        -1.3575e+02 * pow(logT, 1)
-        +2.7351e+02 * pow(logT, 2)
-        -2.9211e+02 * pow(logT, 3)
-        +1.9012e+02 * pow(logT, 4)
-        -7.9516e+01 * pow(logT, 5)
-        +2.1776e+01 * pow(logT, 6)
-        -3.8833e+00 * pow(logT, 7)
-        +4.3473e-01 * pow(logT, 8)
-        -2.7768e-02 * pow(logT, 9)
-        +7.7272e-04 * pow(logT, 10);
+        -5.01649969e+01 * pow(logT, 0)
+        -1.35749724e+02 * pow(logT, 1)
+        +2.73509608e+02 * pow(logT, 2)
+        -2.92109992e+02 * pow(logT, 3)
+        +1.90120639e+02 * pow(logT, 4)
+        -7.95164871e+01 * pow(logT, 5)
+        +2.17762218e+01 * pow(logT, 6)
+        -3.88334992e+00 * pow(logT, 7)
+        +4.34730098e-01 * pow(logT, 8)
+        -2.77683605e-02 * pow(logT, 9)
+        +7.72720422e-04 * pow(logT, 10);
         return exp(log_out);
 
-      } else if (Te < 2) {
-        return 4.3484e-34;   
-      } else {
-        return 8.1110e-33;
-      }
+    } else if (Te < 2) {
+        return 4.34835380e-34;   
+    } else {
+        return 8.11096182e-33;
+    }
     }
   };
 
@@ -124,24 +124,24 @@ namespace {
 
       if (Te >= 1 and Te <= 500) {
         log_out = log_out
-        -7.8784e+01 * pow(logT, 0)
-        +1.5533e+00 * pow(logT, 1)
-        +1.6590e+01 * pow(logT, 2)
-        -3.2380e+01 * pow(logT, 3)
-        +3.1278e+01 * pow(logT, 4)
-        -1.7483e+01 * pow(logT, 5)
-        +5.9139e+00 * pow(logT, 6)
-        -1.2297e+00 * pow(logT, 7)
-        +1.5400e-01 * pow(logT, 8)
-        -1.0680e-02 * pow(logT, 9)
-        +3.1566e-04 * pow(logT, 10);
+        -7.87837896e+01 * pow(logT, 0)
+        +1.55326376e+00 * pow(logT, 1)
+        +1.65898194e+01 * pow(logT, 2)
+        -3.23804546e+01 * pow(logT, 3)
+        +3.12784663e+01 * pow(logT, 4)
+        -1.74826039e+01 * pow(logT, 5)
+        +5.91393245e+00 * pow(logT, 6)
+        -1.22974105e+00 * pow(logT, 7)
+        +1.54004499e-01 * pow(logT, 8)
+        -1.06797106e-02 * pow(logT, 9)
+        +3.15657594e-04 * pow(logT, 10);
         return exp(log_out);
 
-      } else if (Te < 1) {
-        return 6.0062e-35;   
-      } else {
-        return 4.5306e-33;
-      }
+    } else if (Te < 1) {
+        return 6.00623928e-35;   
+    } else {
+        return 4.53057707e-33;
+    }
     }
   };
 }
