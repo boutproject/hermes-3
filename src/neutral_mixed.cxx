@@ -102,6 +102,15 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                .withDefault(pressure_source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
 
+  // Set boundary condition defaults: Neumann for all but the diffusivity.
+  // The dirichlet on diffusivity ensures no radial flux.
+  // NV and V are ignored as they are hardcoded in the parallel BC code.
+  alloptions[std::string("Dnn") + name]["bndry_all"] = alloptions[std::string("Dnn") + name]["bndry_all"].withDefault("dirichlet");
+  alloptions[std::string("T") + name]["bndry_all"] = alloptions[std::string("T") + name]["bndry_all"].withDefault("neumann");
+  alloptions[std::string("P") + name]["bndry_all"] = alloptions[std::string("P") + name]["bndry_all"].withDefault("neumann");
+  alloptions[std::string("N") + name]["bndry_all"] = alloptions[std::string("N") + name]["bndry_all"].withDefault("neumann");
+
+  // Pick up BCs from input file
   Dnn.setBoundary(std::string("Dnn") + name);
   Tn.setBoundary(std::string("T") + name);
   Pn.setBoundary(std::string("P") + name);
@@ -113,10 +122,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   logPnlim.setBoundary(std::string("P") + name);
   Nnlim.setBoundary(std::string("N") + name);
 
-  // Product of Dnn and another parameter has same BC as Dnn
+  // Product of Dnn and another parameter has same BC as Dnn - see eqns to see why this is necessary
   DnnNn.setBoundary(std::string("Dnn") + name);
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnTn.setBoundary(std::string("Dnn") + name);
+  DnnNVn.setBoundary(std::string("Dnn") + name);
 
 }
 

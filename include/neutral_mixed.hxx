@@ -42,7 +42,7 @@ private:
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn; ///< Diffusion coefficient
-  Field3D DnnNn, DnnPn, DnnTn; ///< Used for operators
+  Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
 
   bool sheath_ydown, sheath_yup;
 
