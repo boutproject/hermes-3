@@ -68,7 +68,7 @@ void BinormalSTPM::transform(Options& state) {
 	(2. / 3) * (1/Theta) * FV::Div_par_K_Grad_par(chi_Theta, P, false));
 
     add(species["momentum_source"],
-	FV::Div_par_K_Grad_par(nu_Theta, NV, false));
+	(1/Theta) * FV::Div_par_K_Grad_par(nu_Theta, NV, false));
     
     add(species["density_source"],
 	(1/Theta) * FV::Div_par_K_Grad_par(D_Theta, N, false));
