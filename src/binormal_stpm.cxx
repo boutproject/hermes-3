@@ -19,6 +19,7 @@ BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions, Solver* solver
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
   const BoutReal diffusion_norm = rho_s0 * rho_s0 * Omega_ci; // m^2/s
+  const BoutReal speed_norm = rho_s0 * Omega_ci; // m/s
   
   Theta = options["Theta"]
     .doc("Field-line Pitch defined by Feng et al.")
@@ -41,7 +42,8 @@ BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions, Solver* solver
 
   Vbn = options["Vbn"]
     .doc("Binormal velocity.")
-    .withDefault(0.);
+    .withDefault(0.)
+    /speed_norm;
 
   chi_Theta = chi/Theta;
   D_Theta = D/Theta;
@@ -58,17 +60,22 @@ void BinormalSTPM::transform(Options& state) {
 
     Options& species = allspecies[species_name];
 
-    const Field3D T = get<Field3D>(species["temperature"]);
+    const Field3D P = get<Field3D>(species["pressure"]);
     const Field3D NV = get<Field3D>(species["momentum"]);
     const Field3D N = get<Field3D>(species["density"]);
     
-    add(species["pressure_source"], (1/Theta) * FV::Div_par_K_Grad_par(chi_Theta, T, false));
-    add(species["pressure_source"], (3/(2*Theta)) * Grad_par(N*T*Vbn/Theta));    
+    add(species["pressure_source"],
+	(2. / 3) * (1/Theta) * FV::Div_par_K_Grad_par(chi_Theta, P, false));
 
-    add(species["momentum_source"], FV::Div_par_K_Grad_par(nu_Theta, NV, false));
+    add(species["momentum_source"],
+	FV::Div_par_K_Grad_par(nu_Theta, NV, false));
     
-    add(species["density_source"], (1/Theta) * FV::Div_par_K_Grad_par(D_Theta, N, false));
-    add(species["density_source"], (1/Theta) * Grad_par(N*Vbn/Theta));
+    add(species["density_source"],
+	(1/Theta) * FV::Div_par_K_Grad_par(D_Theta, N, false));
+
+    add(species["pressure_source"], (2. / 3) * Theta * Grad_par(P*Vbn/Theta));
+    add(species["density_source"], (1/Theta) * Grad_par(N*Vbn/Theta));    
+
   }
 }
 
