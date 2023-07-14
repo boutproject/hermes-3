@@ -8,7 +8,7 @@
 
 /// Adds terms to Density, Pressure and Momentum equations following the
 /// stellarator 2-point model from Yuhe Feng et al., PPCF 53 (2011) 024009
-/// The terms add the effective parallel contribution of perpendicular drifts
+/// The terms add the effective parallel contribution of perpendicular transport
 /// in long connection length scenarios.
 /// B Shanahan 2023 <brendan.shanahan@ipp.mpg.de>
 struct BinormalSTPM : public Component {
