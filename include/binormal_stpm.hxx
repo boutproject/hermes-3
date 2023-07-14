@@ -19,7 +19,6 @@ struct BinormalSTPM : public Component {
   ///   - D           Perpendicular density diffusion coefficient
   ///   - chi         Perpendicular heat diffusion coefficient
   ///   - nu          Perpendicular momentum diffusion coefficient
-  ///   - Vbn         Binormal velocity from cross-field drifts
   ///   - Theta       Field line pitch as described by Feng et al.
   ///
   BinormalSTPM(std::string name, Options& options, Solver* solver);
@@ -37,7 +36,6 @@ struct BinormalSTPM : public Component {
 private:
   std::string name; ///< Short name of the species e.g. h+
   Field3D Theta, chi, D, nu; ///< Field line pitch, anomalous thermal, momentum diffusion
-  Field3D Vbn;  ///< Binormal velocity from cross-field drifts input
   Field3D nu_Theta, chi_Theta, D_Theta; ///< nu/Theta, chi/Theta, D/Theta, precalculated
 
 };
