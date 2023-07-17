@@ -1,0 +1,111 @@
+# 1D system with:
+#  - no-flow boundary on lower Y
+#  - sheath boundary on upper Y
+#  - Evolving electron and ion species
+#  - evolving density, pressure and momentum
+#  - heat conduction
+#  - Uniform source of heat and particles throughout domain
+#  - field line pitch from stellarator 2pt model
+
+nout = 50 # number of timesteps to output
+timestep = 5e4 # timestep between outputs [1/omega_ci]
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 200   # Resolution along field-line
+nz = 1
+
+length = 100          # Length of the domain in meters
+length_xpt = length   # Length from midplane to X-point [m]
+
+dy = length / ny      # Resolution in y
+
+ypos = y * length / (2*pi) # Y position [m]
+
+ixseps1 = -1          # Necessary to set boundary conditions in y
+ixseps2 = -1          # Necessary to set boundary conditions in y
+
+[hermes]
+# Evolve ion density, ion and electron pressure, then calculate force on ions due
+# to electron pressure using electron force balance
+# Collisions are needed to calculate heat conduction
+
+components = i, e, sheath_boundary, collisions, binormal_stpm, electron_force_balance
+
+loadmetric = false        # Use Rxy, Bpxy etc?
+normalise_metric = true   # Normalise the input metric?
+
+Nnorm = 1e19   # [m^-3]
+Bnorm = 2.5    # [T]
+Tnorm = 100    # [eV] 
+
+[solver]
+mxstep = 10000   # maximum step for solver before failure.
+
+[sheath_boundary]
+lower_y = false  
+upper_y = true
+
+[binormal_stpm]
+D = 1         # [m^2/s]  Density diffusion coefficient
+chi = 3       # [m^2/s]  Thermal diffusion coefficient
+nu = 1        # [m^2/s]  Momentum diffusion coefficient
+
+Theta = 1e-3  # Field line pitch
+
+####################################
+
+[i]  # Ions
+type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+charge = 1
+AA = 1.0
+
+thermal_conduction = true  # in evolve_pressure
+
+diagnose = true
+
+[Ni]
+
+function = 1
+
+flux = 4e23  # Particles per m^2 per second input
+source = (flux/(mesh:length_xpt))*H(mesh:length_xpt - mesh:ypos)
+
+[Pi]
+function = 1
+
+powerflux = 2e7  # Input power flux in W/m^2
+
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:length_xpt - mesh:ypos)  # Input power as function of y
+
+[NVi]
+
+function = 0
+
+####################################
+
+[e] # Electrons
+type = quasineutral, evolve_pressure, zero_current, evolve_momentum, noflow_boundary
+
+noflow_upper_y = false
+
+charge = -1
+AA = 1/1836
+
+thermal_conduction = true  # in evolve_pressure
+
+[Pe]
+
+function = Pi:function  # Same as ion pressure initially
+
+source = Pi:source  # Same as ion pressure source
+
+[NVe]
+
+function = 0
