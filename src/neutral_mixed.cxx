@@ -31,7 +31,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   solver->add(Nn, std::string("N") + name);
   solver->add(Pn, std::string("P") + name);
   solver->add(NVn, std::string("NV") + name);
-  /// solver->add(Dnn, std::string("Dnn" + name));
 
   sheath_ydown = options["sheath_ydown"]
                      .doc("Enable wall boundary conditions at ydown")
