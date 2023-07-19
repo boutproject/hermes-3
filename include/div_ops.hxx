@@ -54,6 +54,8 @@ const Field2D Laplace_FV(const Field2D& k, const Field2D& f);
 
 /// Perpendicular diffusion including X and Y directions
 const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
+/// Version of function that returns fluxes
+const Field3D Div_a_Grad_perp_upwind_fluxes(const Field3D& a, const Field3D& f, Field3D& flux_xlow, Field3D& flux_ylow);
 
 namespace FV {
 
