@@ -917,11 +917,11 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
 
 /// Div ( a Grad_perp(f) )  -- diffusion
 ///
-/// Returns the fluxes in the final arguments
+/// Returns the flows in the final arguments
 ///
-/// Fluxes are always in the positive {x,y} direction
-/// i.e xlow(i,j) is the flux into cell (i,j) from the left,
-///               and the flux out of cell (i-1,j) to the right
+/// Flows are always in the positive {x,y} direction
+/// i.e xlow(i,j) is the flow into cell (i,j) from the left,
+///               and the flow out of cell (i-1,j) to the right
 /// 
 ///           ylow(i,j+1)
 ///              ^
@@ -932,11 +932,10 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
 ///           +---|---+
 ///           ylow(i,j)
 ///
-/// All fluxes are averaged in Z
 ///
-const Field3D Div_a_Grad_perp_upwind_fluxes(const Field3D& a, const Field3D& f,
-                                            Field3D &flux_xlow,
-                                            Field3D &flux_ylow) {
+const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
+                                           Field3D &flow_xlow,
+                                           Field3D &flow_ylow) {
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
@@ -945,9 +944,9 @@ const Field3D Div_a_Grad_perp_upwind_fluxes(const Field3D& a, const Field3D& f,
 
   Coordinates* coord = f.getCoordinates();
 
-  // Zero all fluxes
-  flux_xlow = 0.0;
-  flux_ylow = 0.0;
+  // Zero all flows
+  flow_xlow = 0.0;
+  flow_ylow = 0.0;
 
   // Flux in x
 
@@ -970,7 +969,7 @@ const Field3D Div_a_Grad_perp_upwind_fluxes(const Field3D& a, const Field3D& f,
         result(i, j, k) += fout / (coord->dx(i, j) * coord->J(i, j));
         result(i + 1, j, k) -= fout / (coord->dx(i + 1, j) * coord->J(i + 1, j));
 
-        flux_xlow(i + 1, j, k) = fout * coord->dy(i, j) * coord->dz(i, j);
+        flow_xlow(i + 1, j, k) = fout * coord->dy(i, j) * coord->dz(i, j);
       }
     }
 
@@ -1004,7 +1003,7 @@ const Field3D Div_a_Grad_perp_upwind_fluxes(const Field3D& a, const Field3D& f,
     fup = fdown = fc = toFieldAligned(f);
     aup = adown = ac = toFieldAligned(a);
     yzresult.setDirectionY(YDirectionType::Aligned);
-    flux_ylow.setDirectionY(YDirectionType::Aligned);
+    flow_ylow.setDirectionY(YDirectionType::Aligned);
   }
 
   // Y flux
@@ -1057,7 +1056,7 @@ const Field3D Div_a_Grad_perp_upwind_fluxes(const Field3D& a, const Field3D& f,
                * (dfdz - coef_d * dfdy);
 
         yzresult(i, j, k) -= fout / (coord->dy(i, j) * coord->J(i, j));
-        flux_ylow(i, j, k) = fout * coord->dx(i, j) * coord->dz(i, j);
+        flow_ylow(i, j, k) = fout * coord->dx(i, j) * coord->dz(i, j);
       }
     }
   }
@@ -1097,7 +1096,7 @@ const Field3D Div_a_Grad_perp_upwind_fluxes(const Field3D& a, const Field3D& f,
     result += yzresult;
   } else {
     result += fromFieldAligned(yzresult);
-    flux_ylow = fromFieldAligned(flux_ylow);
+    flow_ylow = fromFieldAligned(flow_ylow);
   }
 
   return result;

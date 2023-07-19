@@ -99,6 +99,7 @@ private:
 
   bool diagnose; ///< Output additional diagnostics?
   bool enable_precon; ///< Enable preconditioner?
+  Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
 };
 
 namespace {

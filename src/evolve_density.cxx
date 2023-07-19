@@ -245,6 +245,17 @@ void EvolveDensity::finally(const Options& state) {
     }
   }
 #endif
+
+  if (diagnose) {
+    // Save flows if they are set
+
+    if (species.isSet("density_flow_xlow")) {
+      flow_xlow = get<Field3D>(state["density_flow_xlow"]);
+    }
+    if (species.isSet("density_flow_ylow")) {
+      flow_ylow = get<Field3D>(state["density_flow_ylow"]);
+    }
+  }
 }
 
 void EvolveDensity::outputVars(Options& state) {
@@ -291,5 +302,29 @@ void EvolveDensity::outputVars(Options& state) {
                     {"long_name", name + " number density source"},
                     {"species", name},
                     {"source", "evolve_density"}});
+
+    // If fluxes have been set then add them to the output
+    auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
+    if (flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_xlow")], flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                    {"standard_name", "particle flow"},
+                    {"long_name", name + " particle flow in X"},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+    }
+    if (flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_ylow")], flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                    {"standard_name", "particle flow"},
+                    {"long_name", name + " particle flow in Y"},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+    }
   }
 }
