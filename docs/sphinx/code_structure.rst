@@ -64,12 +64,12 @@ for new variables which are added to the state:
     * `momentum_source` Normalised momentum source
     * `energy_source`  Normalised energy source
 
-    * `density_flow_xlow`  Normalised particle flow through lower X cell face
-    * `density_flow_ylow`  Normalised particle flow through lower Y cell face
+    * `particle_flow_xlow` Normalised particle flow through lower X cell face
+    * `particle_flow_ylow` Normalised particle flow through lower Y cell face
     * `momentum_flow_xlow` Normalised momentum flow through lower X cell face
     * `momentum_flow_ylow` Normalised momentum flow through lower Y cell face
-    * `energy_flow_xlow`  Normalised energy flow through lower X cell face
-    * `energy_flow_ylow`  Normalised energy flow through lower Y cell face
+    * `energy_flow_xlow`   Normalised energy flow through lower X cell face
+    * `energy_flow_ylow`   Normalised energy flow through lower Y cell face
 
 * `fields`
 

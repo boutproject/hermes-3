@@ -98,8 +98,8 @@ void AnomalousDiffusion::transform(Options& state) {
 
     add(species["density_source"], Div_a_Grad_perp_upwind_flows(anomalous_D, N2D,
                                                                 flow_xlow, flow_ylow));
-    add(species["density_flow_xlow"], flow_xlow);
-    add(species["density_flow_ylow"], flow_ylow);
+    add(species["particle_flow_xlow"], flow_xlow);
+    add(species["particle_flow_ylow"], flow_ylow);
 
     // Note: Upwind operators used, or unphysical increases
     // in temperature and flow can be produced

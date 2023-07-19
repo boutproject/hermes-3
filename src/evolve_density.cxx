@@ -249,11 +249,11 @@ void EvolveDensity::finally(const Options& state) {
   if (diagnose) {
     // Save flows if they are set
 
-    if (species.isSet("density_flow_xlow")) {
-      flow_xlow = get<Field3D>(state["density_flow_xlow"]);
+    if (species.isSet("particle_flow_xlow")) {
+      flow_xlow = get<Field3D>(state["particle_flow_xlow"]);
     }
-    if (species.isSet("density_flow_ylow")) {
-      flow_ylow = get<Field3D>(state["density_flow_ylow"]);
+    if (species.isSet("particle_flow_ylow")) {
+      flow_ylow = get<Field3D>(state["particle_flow_ylow"]);
     }
   }
 }
