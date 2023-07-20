@@ -331,10 +331,10 @@ void EvolveEnergy::finally(const Options& state) {
     // Save flows of energy if they are set
 
     if (species.isSet("energy_flow_xlow")) {
-      flow_xlow = get<Field3D>(state["energy_flow_xlow"]);
+      flow_xlow = get<Field3D>(species["energy_flow_xlow"]);
     }
     if (species.isSet("energy_flow_ylow")) {
-      flow_ylow = get<Field3D>(state["energy_flow_ylow"]);
+      flow_ylow = get<Field3D>(species["energy_flow_ylow"]);
     }
   }
 }

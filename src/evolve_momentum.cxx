@@ -168,10 +168,10 @@ void EvolveMomentum::finally(const Options &state) {
     // Save flows if they are set
 
     if (species.isSet("momentum_flow_xlow")) {
-      flow_xlow = get<Field3D>(state["momentum_flow_xlow"]);
+      flow_xlow = get<Field3D>(species["momentum_flow_xlow"]);
     }
     if (species.isSet("momentum_flux_ylow")) {
-      flow_ylow = get<Field3D>(state["momentum_flow_ylow"]);
+      flow_ylow = get<Field3D>(species["momentum_flow_ylow"]);
     }
   }
 }
