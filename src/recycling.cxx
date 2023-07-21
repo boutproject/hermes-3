@@ -19,6 +19,10 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                                    .doc("Comma-separated list of species to recycle")
                                    .as<std::string>(),
                                ',');
+
+  diagnose =
+      options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
+      
   for (const auto& species : species_list) {
     std::string from = trim(species, " \t\r()"); // The species name in the list
 
@@ -72,10 +76,10 @@ void Recycling::transform(Options& state) {
 
     Options& species_to = state["species"][channel.to];
     // Get the sources, so the values can be added
-    Field3D density_source = species_to.isSet("density_source")
+    density_source = species_to.isSet("density_source")
                                  ? getNonFinal<Field3D>(species_to["density_source"])
                                  : 0.0;
-    Field3D energy_source = species_to.isSet("energy_source")
+    energy_source = species_to.isSet("energy_source")
                                 ? getNonFinal<Field3D>(species_to["energy_source"])
                                 : 0.0;
 
@@ -164,11 +168,11 @@ void Recycling::transform(Options& state) {
             BoutReal particle_flow = channel.multiplier * particle_flux * area;
             BoutReal energy_flow = channel.multiplier * energy_flux * area;
 
-            // Not sure why the other calcs above aren't dividing the flow by the cell volume..
-            density_source(mesh->lastX(), iy, iz) += particle_flow / volume;
+            // // Not sure why the other calcs above aren't dividing the flow by the cell volume..
+            // density_source(mesh->lastX(), iy, iz) += particle_flow / volume;
 
-            // For now, this is a fixed temperature
-            energy_source(mesh->lastX(), iy, iz) += channel.energy * particle_flow / volume;
+            // // For now, this is a fixed temperature
+            // energy_source(mesh->lastX(), iy, iz) += channel.energy * particle_flow / volume;
 
           }
         }
@@ -178,5 +182,31 @@ void Recycling::transform(Options& state) {
     // Put the updated sources back into the state
     set<Field3D>(species_to["density_source"], density_source);
     set<Field3D>(species_to["energy_source"], energy_source);
+  }
+}
+
+void Recycling::outputVars(Options& state) {
+
+  AUTO_TRACE();
+  // Normalisations
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+
+  if (diagnose) {
+
+      for (const auto& channel : channels) {
+        AUTO_TRACE();
+
+        // Save particle and energy source for the species created during recycling
+
+        set_with_attrs(state[{std::string("S") + channel.to + std::string("_src_recycle")}], density_source,
+                        {{"time_dimension", "t"},
+                        {"units", "m^-3 s^-1"},
+                        {"conversion", Nnorm * Omega_ci},
+                        {"standard_name", "particle source"},
+                        {"long_name", std::string("Recycling particle source of ") + channel.to},
+                        {"source", "recycling"}});
+      }
+
   }
 }

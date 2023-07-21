@@ -36,6 +36,7 @@ struct Recycling : public Component {
   ///   - density_source
   ///
   void transform(Options &state) override;
+  void outputVars(Options &state) override;
 
 private:
 
@@ -49,6 +50,8 @@ private:
 
   std::vector<RecycleChannel> channels; // Recycling channels
   bool sol_recycling;  ///< Flag for reycling in the edge
+  bool diagnose; ///< Outputting diagnostics?
+  Field3D density_source, energy_source; ///< Recycling particle and energy sources for all locations
   
 };
 
