@@ -45,6 +45,10 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
       throw BoutException("recycle_fraction must be betweeen 0 and 1");
     }
     channels.push_back({from, to, recycle_multiplier, recycle_energy});
+
+    sol_recycling = alloptions[name]["sol_recycling"]
+                   .doc("Recycling in the SOL edge?")
+                   .withDefault<bool>(false);
   }
 }
 
@@ -55,7 +59,10 @@ void Recycling::transform(Options& state) {
   Coordinates* coord = mesh->getCoordinates();
   const Field2D& J = coord->J;
   const Field2D& dy = coord->dy;
+  const Field2D& dx = coord->dx;
+  const Field2D& dz = coord->dz;
   const Field2D& g_22 = coord->g_22;
+  const Field2D& g11 = coord->g11;
 
   for (const auto& channel : channels) {
     const Options& species_from = state["species"][channel.from];
@@ -129,6 +136,42 @@ void Recycling::transform(Options& state) {
 
         energy_source(r.ind, mesh->yend, jz) +=
             channel.energy * flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+      }
+    }
+
+    if (sol_recycling) {
+
+      if(mesh->lastX()){
+        for(int iy=0; iy < mesh->LocalNy ; iy++){
+          for(int iz=0; iz < mesh->LocalNz; iz++){
+            
+            // Particle flux crossing the SOL edge boundary
+            // Inner (xlow) cell edge of the first guard cell (lastX()+1)
+            BoutReal particle_flux = get<Field3D>(species_from["particle_flow_xlow"])
+                (mesh->lastX()+1, iy, iz);
+            BoutReal energy_flux = get<Field3D>(species_from["energy_flow_xlow"])
+                (mesh->lastX()+1, iy, iz);
+
+            // Radial cross-sectional area to convert flux to flow
+            BoutReal area = (J(mesh->lastX(), iy) * g11( mesh->lastX(), iy) + 
+                J(mesh->lastX()+1, iy) * g11(mesh->lastX()+1, iy)) / 2;
+
+            // Volume of cell adjacent to wall which will receive source
+            BoutReal volume = J(mesh->lastX(), iy) * dx(mesh->lastX(), iy) * 
+                dy(mesh->lastX(), iy) * dz(mesh->lastX(), iy);
+
+            // Flow of recycled species back from the edge
+            BoutReal particle_flow = channel.multiplier * particle_flux * area;
+            BoutReal energy_flow = channel.multiplier * energy_flux * area;
+
+            // Not sure why the other calcs above aren't dividing the flow by the cell volume..
+            density_source(mesh->lastX(), iy, iz) += particle_flow / volume;
+
+            // For now, this is a fixed temperature
+            energy_source(mesh->lastX(), iy, iz) += channel.energy * particle_flow / volume;
+
+          }
+        }
       }
     }
 

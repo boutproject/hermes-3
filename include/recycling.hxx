@@ -48,6 +48,7 @@ private:
   };
 
   std::vector<RecycleChannel> channels; // Recycling channels
+  bool sol_recycling;  ///< Flag for reycling in the edge
   
 };
 
