@@ -20,8 +20,6 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                                    .as<std::string>(),
                                ',');
 
-  diagnose =
-      options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
       
   for (const auto& species : species_list) {
     std::string from = trim(species, " \t\r()"); // The species name in the list
@@ -34,6 +32,9 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
     std::string to = from_options["recycle_as"]
                          .doc("Name of the species to recycle into")
                          .as<std::string>();
+
+    diagnose =
+      from_options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
 
     BoutReal recycle_multiplier =
         from_options["recycle_multiplier"]
@@ -50,7 +51,7 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
     }
     channels.push_back({from, to, recycle_multiplier, recycle_energy});
 
-    sol_recycling = alloptions[name]["sol_recycling"]
+    sol_recycling = from_options["sol_recycling"]
                    .doc("Recycling in the SOL edge?")
                    .withDefault<bool>(false);
   }
@@ -168,11 +169,11 @@ void Recycling::transform(Options& state) {
             BoutReal particle_flow = channel.multiplier * particle_flux * area;
             BoutReal energy_flow = channel.multiplier * energy_flux * area;
 
-            // // Not sure why the other calcs above aren't dividing the flow by the cell volume..
-            // density_source(mesh->lastX(), iy, iz) += particle_flow / volume;
+            // Not sure why the other calcs above aren't dividing the flow by the cell volume..
+            density_source(mesh->lastX(), iy, iz) += particle_flow / volume;
 
-            // // For now, this is a fixed temperature
-            // energy_source(mesh->lastX(), iy, iz) += channel.energy * particle_flow / volume;
+            // For now, this is a fixed temperature
+            energy_source(mesh->lastX(), iy, iz) += channel.energy * particle_flow / volume;
 
           }
         }
