@@ -203,7 +203,7 @@ void Recycling::outputVars(Options& state) {
 
         // Save particle and energy source for the species created during recycling
 
-        set_with_attrs(state[{std::string("S") + channel.to + std::string("_target_recycle")}], density_source,
+        set_with_attrs(state[{std::string("S") + channel.to + std::string("_recycle")}], density_source,
                         {{"time_dimension", "t"},
                         {"units", "m^-3 s^-1"},
                         {"conversion", Nnorm * Omega_ci},
@@ -228,14 +228,6 @@ void Recycling::outputVars(Options& state) {
                           {"long_name", std::string("SOL recycling energy source of ") + channel.to},
                           {"source", "recycling"}});
           }
-
-        set_with_attrs(state["debug_particle_flow"], radial_particle_flow,
-                        {{"time_dimension", "t"},
-                        {"units", "m^-3 s^-1"},
-                        {"conversion", Nnorm * Omega_ci},
-                        {"standard_name", "particle source"},
-                        {"long_name", std::string("Particle flow of ")},
-                        {"source", "recycling"}});
       }
 
   }
