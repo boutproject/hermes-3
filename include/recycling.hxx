@@ -52,6 +52,9 @@ private:
   bool sol_recycling;  ///< Flag for reycling in the edge
   bool diagnose; ///< Outputting diagnostics?
   Field3D density_source, energy_source; ///< Recycling particle and energy sources for all locations
+  Field3D sol_recycling_density_source, sol_recycling_energy_source;  ///< Recycling particle and energy sources for edge recycling only
+  Field3D target_recycling_density_source, target_recycling_energy_source;  ///< Recycling particle and energy sources for target recycling only
+  Field3D radial_particle_flow, radial_energy_flow;  ///< Radial fluxes coming from evolve_density and evolve_pressure used in recycling calc
   
 };
 
