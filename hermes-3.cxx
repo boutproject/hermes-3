@@ -73,8 +73,71 @@
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
 #include <bout/constants.hxx>
+#include <bout/boundary_factory.hxx>
+#include <bout/boundary_op.hxx>
+#include <bout/field_factory.hxx>
 
 #include "include/loadmetric.hxx"
+
+class CustomBoundary : public BoundaryOp {
+public:
+  CustomBoundary() : gen(nullptr) {}
+  CustomBoundary(BoundaryRegion* region,  std::shared_ptr<FieldGenerator> g)
+    : BoundaryOp(region), gen(std::move(g)) {}
+
+  using BoundaryOp::clone;
+  /// Create a copy of this boundary condition
+  /// This is called by the Boundary Factory
+  BoundaryOp* clone(BoundaryRegion* region, const std::list<std::string>& args) override {
+    std::shared_ptr<FieldGenerator> newgen;
+    if (!args.empty()) {
+      // First argument should be an expression
+      newgen = FieldFactory::get()->parse(args.front());
+    }
+    return new CustomBoundary(region, newgen);
+  }
+
+  // Only implementing for Field3D, no time dependence
+  void apply(Field3D& f) override {
+    // Ensure that field and boundary are on the same mesh
+    Mesh* mesh = bndry->localmesh;
+    ASSERT1(mesh == f.getMesh());
+
+    // Only implemented for cell centre quantities
+    ASSERT1(f.getLocation() == CELL_CENTRE);
+
+    // This loop goes over the first row of boundary cells (in X and Y)
+    for (bndry->first(); !bndry->isDone(); bndry->next1d()) {
+      for (int zk = 0; zk < mesh->LocalNz; zk++) { // Loop over Z points
+        BoutReal val = 0.0; // Boundary value
+        if (gen) {
+          // Generate the boundary value
+          val = gen->generate(bout::generator::Context(bndry, zk, CELL_CENTRE, 0.0, mesh));
+        }
+        // Set value in boundary cell f(bndry->x, bndry->y, zk)
+        // using value inside the domain f(bndry->x - bndry->bx, bndry->y - bndry->by, zk)
+        // Note: (bx, by) is the direction into the boundary, so
+        //    (1, 0)  X outer boundary (SOL)
+        //    (-1, 0) X inner boundary (Core or PF)
+        //    (0, 1)  Y upper boundary (outer lower target)
+        //    (0, -1) Y lower boundary (inner lower target)
+        f(bndry->x, bndry->y, zk) =
+          2 * val - f(bndry->x - bndry->bx, bndry->y - bndry->by, zk);
+
+        // Set remainder of boundary cells to the same value
+        for (int i = 1; i < bndry->width; i++) {
+          f(bndry->x + i * bndry->bx, bndry->y + i * bndry->by, zk) = f(bndry->x, bndry->y, zk);
+        }
+      }
+    }
+  }
+
+  void apply(Field2D& f) override {
+    throw BoutException("CustomBoundary not implemented for Field2D");
+  }
+private:
+  std::shared_ptr<FieldGenerator> gen; // Generator
+};
 
 int Hermes::init(bool restarting) {
 
@@ -104,6 +167,11 @@ int Hermes::init(bool restarting) {
   // when creating components
   Options::root()["units"] = units;
   Options::root()["units"].setConditionallyUsed();
+
+  // Add a custom boundary condition to the boundary factory
+  // This will make it available as an input option
+  // e.g. bndry_all = custom(0.1)
+  BoundaryFactory::getInstance()->add(new CustomBoundary(), "custom");
 
   /////////////////////////////////////////////////////////
   // Load metric tensor from the mesh, passing length and B
