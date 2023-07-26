@@ -102,6 +102,10 @@ public:
     // Ensure that field and boundary are on the same mesh
     Mesh* mesh = bndry->localmesh;
     ASSERT1(mesh == f.getMesh());
+    Coordinates *coord = mesh->getCoordinates();
+    Field2D dx = coord->dx;
+    Field2D g11 = coord->g11;
+    Field2D dr = dx / sqrt(g11) // cell radial length. dr = dx/(Bpol * R) and g11 = (Bpol*R)**2 
 
     // Only implemented for cell centre quantities
     ASSERT1(f.getLocation() == CELL_CENTRE);
