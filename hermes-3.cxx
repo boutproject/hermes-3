@@ -115,20 +115,21 @@ public:
       for (int zk = 0; zk < mesh->LocalNz; zk++) { // Loop over Z points
         BoutReal val = 0.0; // Boundary value
         if (gen) {
-          // Generate the boundary value
+          // Pick up the boundary condition setting from the input file
           val = gen->generate(bout::generator::Context(bndry, zk, CELL_CENTRE, 0.0, mesh));
         }
-        // Set value in boundary cell f(bndry->x, bndry->y, zk)
-        // using value inside the domain f(bndry->x - bndry->bx, bndry->y - bndry->by, zk)
+        // Set value in inner guard cell f(bndry->x, bndry->y, zk)
+        // using the final domain cell value f(bndry->x - bndry->bx, bndry->y - bndry->by, zk)
         // Note: (bx, by) is the direction into the boundary, so
         //    (1, 0)  X outer boundary (SOL)
         //    (-1, 0) X inner boundary (Core or PF)
         //    (0, 1)  Y upper boundary (outer lower target)
         //    (0, -1) Y lower boundary (inner lower target)
+        output << val;
         f(bndry->x, bndry->y, zk) =
           2 * val - f(bndry->x - bndry->bx, bndry->y - bndry->by, zk);
 
-        // Set remainder of boundary cells to the same value
+        // Set any remaining guard cells (i.e. the outer guards) to the same value
         for (int i = 1; i < bndry->width; i++) {
           f(bndry->x + i * bndry->bx, bndry->y + i * bndry->by, zk) = f(bndry->x, bndry->y, zk);
         }
