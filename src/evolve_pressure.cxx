@@ -190,8 +190,9 @@ void EvolvePressure::finally(const Options& state) {
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
 
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
-    // Electrostatic potential set -> include ExB flow
+  if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
+      state.isSection("fields") and state["fields"].isSet("phi")) {
+    // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 

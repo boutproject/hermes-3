@@ -203,7 +203,8 @@ void EvolveEnergy::finally(const Options& state) {
 
   Field3D Pfloor = P;
 
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
+  if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
+      state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
