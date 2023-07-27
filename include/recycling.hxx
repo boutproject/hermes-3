@@ -51,15 +51,15 @@ private:
   };
 
   std::vector<RecycleChannel> channels; // Recycling channels
-  
-  bool target_recycling, sol_recycling, pfr_recycling;  ///< Flags for enabling recycling in different regions
+
+  bool target_recycle, sol_recycle, pfr_recycle;  ///< Flags for enabling recycling in different regions
   bool diagnose; ///< Save additional post-processing variables?
 
   Field3D density_source, energy_source; ///< Recycling particle and energy sources for all locations
 
-  Field3D target_recycling_density_source, target_recycling_energy_source;  ///< Recycling particle and energy sources for target recycling only
-  Field3D sol_recycling_density_source, sol_recycling_energy_source;  ///< Recycling particle and energy sources for edge recycling only
-  Field3D pfr_recycling_density_source, pfr_recycling_energy_source;  ///< Recycling particle and energy sources for edge recycling only
+  Field3D target_recycle_density_source, target_recycle_energy_source;  ///< Recycling particle and energy sources for target recycling only
+  Field3D sol_recycle_density_source, sol_recycle_energy_source;  ///< Recycling particle and energy sources for edge recycling only
+  Field3D pfr_recycle_density_source, pfr_recycle_energy_source;  ///< Recycling particle and energy sources for edge recycling only
 
   Field3D radial_particle_flow, radial_energy_flow;  ///< Radial fluxes coming from evolve_density and evolve_pressure used in recycling calc
   
