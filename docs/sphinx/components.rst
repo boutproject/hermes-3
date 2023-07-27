@@ -59,7 +59,7 @@ The equation solved is:
 
 .. math::
 
-   \frac{\partial n}{\partial t} = \nabla\cdot\left[n \left(\frac{1}{B}\mathbf{b}\times\nabla\phi + v_{||}\mathbf{b}\right)\right] + S_n
+   \frac{\partial n}{\partial t} = -\nabla\cdot\left[n \left(\frac{1}{B}\mathbf{b}\times\nabla\phi + v_{||}\mathbf{b}\right)\right] + S_n
 
 where the source :math:`S_n` is a combination of external source, and
 other processes that nay be included, including drift terms
