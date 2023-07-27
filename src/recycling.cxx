@@ -126,6 +126,9 @@ void Recycling::transform(Options& state) {
     // Recycling at the divertor target plates
     if (target_recycling) {
 
+      target_recycling_density_source = 0;
+      target_recycling_energy_source = 0;
+
       // Lower Y boundary
 
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -147,12 +150,12 @@ void Recycling::transform(Options& state) {
               / (sqrt(g_22(r.ind, mesh->ystart)) + sqrt(g_22(r.ind, mesh->ystart - 1)));
 
           // Add to density source
-          density_source(r.ind, mesh->ystart, jz) +=
-              flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+          target_recycling_density_source += flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+          density_source(r.ind, mesh->ystart, jz) += flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
 
           // energy of recycled particles
-          energy_source(r.ind, mesh->ystart, jz) +=
-              channel.target_energy * flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+          target_recycling_energy_source += channel.target_energy * flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+          energy_source(r.ind, mesh->ystart, jz) += channel.target_energy * flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
         }
       }
 
@@ -178,11 +181,11 @@ void Recycling::transform(Options& state) {
 
           // Rate of change of neutrals in final cell
           // Add to density source
-          density_source(r.ind, mesh->yend, jz) +=
-              flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+          target_recycling_density_source += flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+          density_source(r.ind, mesh->yend, jz) += flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
 
-          energy_source(r.ind, mesh->yend, jz) +=
-              channel.target_energy * flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+          target_recycling_energy_source += channel.target_energy * flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+          energy_source(r.ind, mesh->yend, jz) += channel.target_energy * flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
         }
       }
     }
@@ -252,13 +255,23 @@ void Recycling::outputVars(Options& state) {
 
         // Save particle and energy source for the species created during recycling
 
-        set_with_attrs(state[{std::string("S") + channel.to + std::string("_recycle")}], density_source,
-                        {{"time_dimension", "t"},
-                        {"units", "m^-3 s^-1"},
-                        {"conversion", Nnorm * Omega_ci},
-                        {"standard_name", "particle source"},
-                        {"long_name", std::string("Target recycling particle source of ") + channel.to},
-                        {"source", "recycling"}});
+        if (target_recycling) {
+          set_with_attrs(state[{std::string("S") + channel.to + std::string("_target_recycle")}], target_recycling_density_source,
+                          {{"time_dimension", "t"},
+                          {"units", "m^-3 s^-1"},
+                          {"conversion", Nnorm * Omega_ci},
+                          {"standard_name", "particle source"},
+                          {"long_name", std::string("Target recycling particle source of ") + channel.to},
+                          {"source", "recycling"}});
+    
+          set_with_attrs(state[{std::string("E") + channel.to + std::string("_target_recycle")}], target_recycling_energy_source,
+                          {{"time_dimension", "t"},
+                          {"units", "W m^-3"},
+                          {"conversion", Pnorm * Omega_ci},
+                          {"standard_name", "energy source"},
+                          {"long_name", std::string("Target recycling energy source of ") + channel.to},
+                          {"source", "recycling"}});
+          }
 
         if (sol_recycling) {
           set_with_attrs(state[{std::string("S") + channel.to + std::string("_sol_recycle")}], sol_recycling_density_source,
@@ -273,7 +286,7 @@ void Recycling::outputVars(Options& state) {
                           {{"time_dimension", "t"},
                           {"units", "W m^-3"},
                           {"conversion", Pnorm * Omega_ci},
-                          {"standard_name", "energy source source"},
+                          {"standard_name", "energy source"},
                           {"long_name", std::string("SOL recycling energy source of ") + channel.to},
                           {"source", "recycling"}});
           }
