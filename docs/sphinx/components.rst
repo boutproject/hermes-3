@@ -55,6 +55,31 @@ and the initial density should be specified in its own section:
    [Nd]
    function = 1 - 0.5x # Initial condition, normalised to Nnorm
 
+The equation solved is:
+
+.. math::
+
+   \frac{\partial n}{\partial t} = \nabla\cdot\left[n \left(\frac{1}{B}\mathbf{b}\times\nabla\phi + v_{||}\mathbf{b}\right)\right] + S_n
+
+where the source :math:`S_n` is a combination of external source, and
+other processes that nay be included, including drift terms
+(e.g. magnetic drift) or atomic processes (e.g. ionization).
+
+Notes:
+
+1. The density will be saved in the output file as `N` + species
+   label, e.g `Nd` in the above example.
+2. If `diagnose=true` is set in the species options then the net
+   source :math:`S_n` is saved as `SN` + species, e.g. `SNd`; the
+   external source is saved as `S` + species + `_src` e.g. `Sd_src`.
+   The time derivative of density is saved as `ddt(N` + species + `)`
+   e.g. `ddt(Nd)`.
+3. The density source can be set in the input mesh file as a field
+   `S` + species + `_src` e.g. `Sd_src`. This can be overridden by
+   specifying the source in the input options.
+4. The `poloidal_flows` switch controls whether the X-Y components of
+   the ExB flow are included (default is true). If set to `false` then
+   ExB flows are only in the X-Z plane.
 
 The implementation is in the `EvolveDensity` class:
 
