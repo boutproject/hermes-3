@@ -37,23 +37,59 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
     diagnose =
       from_options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
 
-    BoutReal recycle_multiplier =
-        from_options["recycle_multiplier"]
-            .doc("Multiply the recycled flux by this factor. Should be >=0 and <= 1")
+    BoutReal target_recycle_multiplier =
+        from_options["target_recycle_multiplier"]
+            .doc("Multiply the target recycled flux by this factor. Should be >=0 and <= 1")
             .as<BoutReal>();
 
-    BoutReal recycle_energy = from_options["recycle_energy"]
-                                  .doc("Fixed energy of the recycled particles [eV]")
+    BoutReal sol_recycle_multiplier =
+        from_options["sol_recycle_multiplier"]
+            .doc("Multiply the sol recycled flux by this factor. Should be >=0 and <= 1")
+            .as<BoutReal>();
+
+    BoutReal pfr_recycle_multiplier =
+        from_options["pfr_recycle_multiplier"]
+            .doc("Multiply the pfr recycled flux by this factor. Should be >=0 and <= 1")
+            .as<BoutReal>();
+
+    BoutReal target_recycle_energy = from_options["target_recycle_energy"]
+                                  .doc("Fixed energy of the recycled particles at target [eV]")
                                   .withDefault<BoutReal>(0.0)
                               / Tnorm; // Normalise from eV
 
-    if ((recycle_multiplier < 0.0) or (recycle_multiplier > 1.0)) {
+    BoutReal sol_recycle_energy = from_options["sol_recycle_energy"]
+                                  .doc("Fixed energy of the recycled particles at sol [eV]")
+                                  .withDefault<BoutReal>(0.0)
+                              / Tnorm; // Normalise from eV
+
+    BoutReal pfr_recycle_energy = from_options["pfr_recycle_energy"]
+                                  .doc("Fixed energy of the recycled particles at pfr [eV]")
+                                  .withDefault<BoutReal>(0.0)
+                              / Tnorm; // Normalise from eV
+
+    if ((target_recycle_multiplier < 0.0) or (target_recycle_multiplier > 1.0)
+    or (sol_recycle_multiplier < 0.0) or (sol_recycle_multiplier > 1.0)
+    or (pfr_recycle_multiplier < 0.0) or (pfr_recycle_multiplier > 1.0)) {
       throw BoutException("recycle_fraction must be betweeen 0 and 1");
     }
-    channels.push_back({from, to, recycle_multiplier, recycle_energy});
+
+    // Populate recycling channel vector
+    channels.push_back({
+      from, to, 
+      target_recycle_multiplier, sol_recycle_multiplier, pfr_recycle_multiplier,
+      target_recycle_energy, sol_recycle_energy, pfr_recycle_energy});
+
+    // Boolean flags for enabling recycling in different regions
+    target_recycling = from_options["target_recycling"]
+                   .doc("Recycling in the targets?")
+                   .withDefault<bool>(false);
 
     sol_recycling = from_options["sol_recycling"]
                    .doc("Recycling in the SOL edge?")
+                   .withDefault<bool>(false);
+
+    pfr_recycling = from_options["pfr_recycling"]
+                   .doc("Recycling in the PFR edge?")
                    .withDefault<bool>(false);
   }
 }
@@ -77,7 +113,9 @@ void Recycling::transform(Options& state) {
     const Field3D V = get<Field3D>(species_from["velocity"]); // Parallel flow velocity
 
     Options& species_to = state["species"][channel.to];
-    // Get the sources, so the values can be added
+
+    // Recycling particle and energy sources will be added to these global sources 
+    // which are then passed to the density and pressure equations
     density_source = species_to.isSet("density_source")
                                  ? getNonFinal<Field3D>(species_to["density_source"])
                                  : 0.0;
@@ -85,66 +123,71 @@ void Recycling::transform(Options& state) {
                                 ? getNonFinal<Field3D>(species_to["energy_source"])
                                 : 0.0;
 
-    // Lower Y boundary
+    // Recycling at the divertor target plates
+    if (target_recycling) {
 
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        // Calculate flux through surface [normalised m^-2 s^-1],
-        // should be positive since V < 0.0
-        BoutReal flux =
-            -0.5 * (N(r.ind, mesh->ystart, jz) + N(r.ind, mesh->ystart - 1, jz)) * 0.5
-            * (V(r.ind, mesh->ystart, jz) + V(r.ind, mesh->ystart - 1, jz));
+      // Lower Y boundary
 
-        if (flux < 0.0) {
-          flux = 0.0;
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          // Calculate flux through surface [normalised m^-2 s^-1],
+          // should be positive since V < 0.0
+          BoutReal flux =
+              -0.5 * (N(r.ind, mesh->ystart, jz) + N(r.ind, mesh->ystart - 1, jz)) * 0.5
+              * (V(r.ind, mesh->ystart, jz) + V(r.ind, mesh->ystart - 1, jz));
+
+          if (flux < 0.0) {
+            flux = 0.0;
+          }
+
+          // Flow of recycled species inwards
+          BoutReal flow =
+              channel.target_multiplier * flux
+              * (J(r.ind, mesh->ystart) + J(r.ind, mesh->ystart - 1))
+              / (sqrt(g_22(r.ind, mesh->ystart)) + sqrt(g_22(r.ind, mesh->ystart - 1)));
+
+          // Add to density source
+          density_source(r.ind, mesh->ystart, jz) +=
+              flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+
+          // energy of recycled particles
+          energy_source(r.ind, mesh->ystart, jz) +=
+              channel.target_energy * flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
         }
+      }
 
-        // Flow of recycled species inwards
-        BoutReal flow =
-            channel.multiplier * flux
-            * (J(r.ind, mesh->ystart) + J(r.ind, mesh->ystart - 1))
-            / (sqrt(g_22(r.ind, mesh->ystart)) + sqrt(g_22(r.ind, mesh->ystart - 1)));
+      // Upper Y boundary
 
-        // Add to density source
-        density_source(r.ind, mesh->ystart, jz) +=
-            flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        // Calculate flux of ions into target from Ne and Vi boundary
+        // This calculation is supposed to be consistent with the flow
+        // of plasma from FV::Div_par(N, V)
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          // Flux through surface [normalised m^-2 s^-1], should be positive
+          BoutReal flux = 0.5 * (N(r.ind, mesh->yend, jz) + N(r.ind, mesh->yend + 1, jz))
+                          * 0.5 * (V(r.ind, mesh->yend, jz) + V(r.ind, mesh->yend + 1, jz));
 
-        // energy of recycled particles
-        energy_source(r.ind, mesh->ystart, jz) +=
-            channel.energy * flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+          if (flux < 0.0) {
+            flux = 0.0;
+          }
+
+          // Flow of neutrals inwards
+          BoutReal flow =
+              channel.target_multiplier * flux * (J(r.ind, mesh->yend) + J(r.ind, mesh->yend + 1))
+              / (sqrt(g_22(r.ind, mesh->yend)) + sqrt(g_22(r.ind, mesh->yend + 1)));
+
+          // Rate of change of neutrals in final cell
+          // Add to density source
+          density_source(r.ind, mesh->yend, jz) +=
+              flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+
+          energy_source(r.ind, mesh->yend, jz) +=
+              channel.target_energy * flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+        }
       }
     }
 
-    // Upper Y boundary
-
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      // Calculate flux of ions into target from Ne and Vi boundary
-      // This calculation is supposed to be consistent with the flow
-      // of plasma from FV::Div_par(N, V)
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        // Flux through surface [normalised m^-2 s^-1], should be positive
-        BoutReal flux = 0.5 * (N(r.ind, mesh->yend, jz) + N(r.ind, mesh->yend + 1, jz))
-                        * 0.5 * (V(r.ind, mesh->yend, jz) + V(r.ind, mesh->yend + 1, jz));
-
-        if (flux < 0.0) {
-          flux = 0.0;
-        }
-
-        // Flow of neutrals inwards
-        BoutReal flow =
-            channel.multiplier * flux * (J(r.ind, mesh->yend) + J(r.ind, mesh->yend + 1))
-            / (sqrt(g_22(r.ind, mesh->yend)) + sqrt(g_22(r.ind, mesh->yend + 1)));
-
-        // Rate of change of neutrals in final cell
-        // Add to density source
-        density_source(r.ind, mesh->yend, jz) +=
-            flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
-
-        energy_source(r.ind, mesh->yend, jz) +=
-            channel.energy * flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
-      }
-    }
-
+    // Recycling at the SOL edge (2D/3D only)
     if (sol_recycling) {
 
       radial_particle_flow = get<Field3D>(species_from["particle_flow_xlow"]);
@@ -163,15 +206,15 @@ void Recycling::transform(Options& state) {
             // Flow of recycled species back from the edge
             // Edge = LHS flow of inner guard cells (mesh->xend-1)
             // TODO: Handle cases when flow is going into domain from edge
-            BoutReal recycle_particle_flow = channel.multiplier * radial_particle_flow(mesh->xend+1, iy, iz) * -1; 
-            BoutReal recycle_energy_flow = channel.multiplier * radial_energy_flow(mesh->xend, iy, iz) * -1 ;
+            BoutReal recycle_particle_flow = channel.sol_multiplier * radial_particle_flow(mesh->xend+1, iy, iz) * -1; 
+            BoutReal recycle_energy_flow = channel.sol_multiplier * radial_energy_flow(mesh->xend, iy, iz) * -1 ;
 
-            // Not sure why the other calcs above aren't dividing the flow by the cell volume..
+            // Divide by volume to get source
             sol_recycling_density_source(mesh->xend, iy, iz) += recycle_particle_flow / volume;
             density_source(mesh->xend, iy, iz) += sol_recycling_density_source(mesh->xend, iy, iz);
 
             // For now, this is a fixed temperature
-            sol_recycling_energy_source(mesh->xend, iy, iz) += channel.energy * recycle_particle_flow / volume;
+            sol_recycling_energy_source(mesh->xend, iy, iz) += channel.sol_energy * recycle_particle_flow / volume;
             energy_source(mesh->xend, iy, iz) += sol_recycling_energy_source(mesh->xend, iy, iz);
 
           
@@ -179,6 +222,12 @@ void Recycling::transform(Options& state) {
           }
         }
       }
+    }
+
+        // Recycling at the SOL edge (2D/3D only)
+    if (pfr_recycling) {
+
+      throw BoutException("Error: PFR recycling not implemented yet\n");
     }
 
     // Put the updated sources back into the state

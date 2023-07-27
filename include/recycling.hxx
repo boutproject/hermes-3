@@ -43,17 +43,24 @@ private:
   struct RecycleChannel {
     std::string from; ///< The species name to recycle
     std::string to;   ///< Species to recycle to
-    BoutReal multiplier; ///< Flux multiplier. Combination of recycling fraction and species
-                         ///< change e.g h+ -> h2 results in 0.5 multiplier
-    BoutReal energy; ///< Energy of recycled particle (normalised to Tnorm)
+
+    /// Flux multiplier (recycling fraction). 
+    /// Combination of recycling fraction and species change e.g h+ -> h2 results in 0.5 multiplier
+    BoutReal target_multiplier, sol_multiplier, edge_multiplier; 
+    BoutReal target_energy, sol_energy, edge_energy; ///< Energy of recycled particle (normalised to Tnorm)
   };
 
   std::vector<RecycleChannel> channels; // Recycling channels
-  bool sol_recycling;  ///< Flag for reycling in the edge
-  bool diagnose; ///< Outputting diagnostics?
+  
+  bool target_recycling, sol_recycling, pfr_recycling;  ///< Flags for enabling recycling in different regions
+  bool diagnose; ///< Save additional post-processing variables?
+
   Field3D density_source, energy_source; ///< Recycling particle and energy sources for all locations
-  Field3D sol_recycling_density_source, sol_recycling_energy_source;  ///< Recycling particle and energy sources for edge recycling only
+
   Field3D target_recycling_density_source, target_recycling_energy_source;  ///< Recycling particle and energy sources for target recycling only
+  Field3D sol_recycling_density_source, sol_recycling_energy_source;  ///< Recycling particle and energy sources for edge recycling only
+  Field3D pfr_recycling_density_source, pfr_recycling_energy_source;  ///< Recycling particle and energy sources for edge recycling only
+
   Field3D radial_particle_flow, radial_energy_flow;  ///< Radial fluxes coming from evolve_density and evolve_pressure used in recycling calc
   
 };
