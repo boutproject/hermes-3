@@ -54,17 +54,17 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
 
     BoutReal target_recycle_energy = from_options["target_recycle_energy"]
                                   .doc("Fixed energy of the recycled particles at target [eV]")
-                                  .withDefault<BoutReal>(0.0)
+                                  .withDefault<BoutReal>(3.0)
                               / Tnorm; // Normalise from eV
 
     BoutReal sol_recycle_energy = from_options["sol_recycle_energy"]
                                   .doc("Fixed energy of the recycled particles at sol [eV]")
-                                  .withDefault<BoutReal>(0.0)
+                                  .withDefault<BoutReal>(3.0)
                               / Tnorm; // Normalise from eV
 
     BoutReal pfr_recycle_energy = from_options["pfr_recycle_energy"]
                                   .doc("Fixed energy of the recycled particles at pfr [eV]")
-                                  .withDefault<BoutReal>(0.0)
+                                  .withDefault<BoutReal>(3.0)
                               / Tnorm; // Normalise from eV
 
     if ((target_recycle_multiplier < 0.0) or (target_recycle_multiplier > 1.0)
