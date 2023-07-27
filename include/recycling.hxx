@@ -46,8 +46,8 @@ private:
 
     /// Flux multiplier (recycling fraction). 
     /// Combination of recycling fraction and species change e.g h+ -> h2 results in 0.5 multiplier
-    BoutReal target_multiplier, sol_multiplier, edge_multiplier; 
-    BoutReal target_energy, sol_energy, edge_energy; ///< Energy of recycled particle (normalised to Tnorm)
+    BoutReal target_multiplier, sol_multiplier, pfr_multiplier; 
+    BoutReal target_energy, sol_energy, pfr_energy; ///< Energy of recycled particle (normalised to Tnorm)
   };
 
   std::vector<RecycleChannel> channels; // Recycling channels

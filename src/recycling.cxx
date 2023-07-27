@@ -206,7 +206,7 @@ void Recycling::transform(Options& state) {
       sol_recycle_density_source = 0;
       sol_recycle_energy_source = 0;
 
-      if(mesh->lastX()){
+      if(mesh->lastX()){  // Only do this for the processor which has the edge region
         for(int iy=0; iy < mesh->LocalNy ; iy++){
           for(int iz=0; iz < mesh->LocalNz; iz++){
 
@@ -235,10 +235,42 @@ void Recycling::transform(Options& state) {
       }
     }
 
-        // Recycling at the SOL edge (2D/3D only)
+    // Recycling at the PFR edge (2D/3D only)
     if (pfr_recycle) {
 
-      throw BoutException("Error: PFR recycling not implemented yet\n");
+      radial_particle_flow = get<Field3D>(species_from["particle_flow_xlow"]);
+      radial_energy_flow = get<Field3D>(species_from["energy_flow_xlow"]);
+      pfr_recycle_density_source = 0;
+      pfr_recycle_energy_source = 0;
+
+      if(mesh->firstX()){   // Only do this for the processor which has the core region
+        if (!mesh->periodicY(mesh->xstart)) {   // Only do this for the processor with a periodic Y, i.e. the PFR
+          for(int iy=0; iy < mesh->LocalNy ; iy++){
+            for(int iz=0; iz < mesh->LocalNz; iz++){
+            
+
+              // Volume of cell adjacent to wall which will receive source
+              BoutReal volume = J(mesh->xstart, iy) * dx(mesh->xstart, iy)
+                  * dy(mesh->xstart, iy) * dz(mesh->xstart, iy);
+
+              // Flow of recycled species back from the edge
+              // Edge = LHS flow of inner guard cells (mesh->xend-1)
+              // TODO: Handle cases when flow is going into domain from edge
+              BoutReal recycle_particle_flow = channel.pfr_multiplier * radial_particle_flow(mesh->xstart+1, iy, iz) * -1; 
+              BoutReal recycle_energy_flow = channel.pfr_multiplier * radial_energy_flow(mesh->xstart, iy, iz) * -1 ;
+
+              // Divide by volume to get source
+              pfr_recycle_density_source(mesh->xstart, iy, iz) += recycle_particle_flow / volume;
+              density_source(mesh->xstart, iy, iz) += pfr_recycle_density_source(mesh->xstart, iy, iz);
+
+              // For now, this is a fixed temperature
+              pfr_recycle_energy_source(mesh->xstart, iy, iz) += channel.pfr_energy * recycle_particle_flow / volume;
+              energy_source(mesh->xstart, iy, iz) += pfr_recycle_energy_source(mesh->xstart, iy, iz);
+
+            }
+          }
+        }
+      }
     }
 
     // Put the updated sources back into the state
@@ -263,6 +295,7 @@ void Recycling::outputVars(Options& state) {
 
         // Save particle and energy source for the species created during recycling
 
+        // Target recycling
         if (target_recycle) {
           set_with_attrs(state[{std::string("S") + channel.to + std::string("_target_recycle")}], target_recycle_density_source,
                           {{"time_dimension", "t"},
@@ -281,6 +314,7 @@ void Recycling::outputVars(Options& state) {
                           {"source", "recycling"}});
           }
 
+        // SOL recycling
         if (sol_recycle) {
           set_with_attrs(state[{std::string("S") + channel.to + std::string("_sol_recycle")}], sol_recycle_density_source,
                           {{"time_dimension", "t"},
@@ -296,6 +330,25 @@ void Recycling::outputVars(Options& state) {
                           {"conversion", Pnorm * Omega_ci},
                           {"standard_name", "energy source"},
                           {"long_name", std::string("SOL recycling energy source of ") + channel.to},
+                          {"source", "recycling"}});
+          }
+
+        // PFR recycling
+        if (pfr_recycle) {
+          set_with_attrs(state[{std::string("S") + channel.to + std::string("_pfr_recycle")}], pfr_recycle_density_source,
+                          {{"time_dimension", "t"},
+                          {"units", "m^-3 s^-1"},
+                          {"conversion", Nnorm * Omega_ci},
+                          {"standard_name", "particle source"},
+                          {"long_name", std::string("PFR recycling particle source of ") + channel.to},
+                          {"source", "recycling"}});
+    
+          set_with_attrs(state[{std::string("E") + channel.to + std::string("_pfr_recycle")}], pfr_recycle_energy_source,
+                          {{"time_dimension", "t"},
+                          {"units", "W m^-3"},
+                          {"conversion", Pnorm * Omega_ci},
+                          {"standard_name", "energy source"},
+                          {"long_name", std::string("PFR recycling energy source of ") + channel.to},
                           {"source", "recycling"}});
           }
       }
