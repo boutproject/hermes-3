@@ -40,17 +40,17 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
     BoutReal target_recycle_multiplier =
         from_options["target_recycle_multiplier"]
             .doc("Multiply the target recycled flux by this factor. Should be >=0 and <= 1")
-            .as<BoutReal>();
+            .withDefault<BoutReal>(1.0);
 
     BoutReal sol_recycle_multiplier =
         from_options["sol_recycle_multiplier"]
             .doc("Multiply the sol recycled flux by this factor. Should be >=0 and <= 1")
-            .as<BoutReal>();
+            .withDefault<BoutReal>(1.0);
 
     BoutReal pfr_recycle_multiplier =
         from_options["pfr_recycle_multiplier"]
             .doc("Multiply the pfr recycled flux by this factor. Should be >=0 and <= 1")
-            .as<BoutReal>();
+            .withDefault<BoutReal>(1.0);
 
     BoutReal target_recycle_energy = from_options["target_recycle_energy"]
                                   .doc("Fixed energy of the recycled particles at target [eV]")
