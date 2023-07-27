@@ -150,12 +150,16 @@ void Recycling::transform(Options& state) {
               / (sqrt(g_22(r.ind, mesh->ystart)) + sqrt(g_22(r.ind, mesh->ystart - 1)));
 
           // Add to density source
-          target_recycle_density_source += flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
-          density_source(r.ind, mesh->ystart, jz) += flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+          target_recycle_density_source(r.ind, mesh->ystart, jz) += flow 
+              / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+          density_source(r.ind, mesh->ystart, jz) += flow 
+              / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
 
           // energy of recycled particles
-          target_recycle_energy_source += channel.target_energy * flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
-          energy_source(r.ind, mesh->ystart, jz) += channel.target_energy * flow / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+          target_recycle_energy_source(r.ind, mesh->ystart, jz) += channel.target_energy * flow 
+              / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+          energy_source(r.ind, mesh->ystart, jz) += channel.target_energy * flow 
+              / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
         }
       }
 
@@ -181,11 +185,15 @@ void Recycling::transform(Options& state) {
 
           // Rate of change of neutrals in final cell
           // Add to density source
-          target_recycle_density_source += flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
-          density_source(r.ind, mesh->yend, jz) += flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+          target_recycle_density_source(r.ind, mesh->yend, jz) += flow 
+              / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+          density_source(r.ind, mesh->yend, jz) += flow 
+              / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
 
-          target_recycle_energy_source += channel.target_energy * flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
-          energy_source(r.ind, mesh->yend, jz) += channel.target_energy * flow / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+          target_recycle_energy_source(r.ind, mesh->yend, jz) += channel.target_energy * flow 
+              / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
+          energy_source(r.ind, mesh->yend, jz) += channel.target_energy * flow 
+              / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
         }
       }
     }
