@@ -202,7 +202,6 @@ void Recycling::transform(Options& state) {
     if (sol_recycle) {
 
       radial_particle_flow = get<Field3D>(species_from["particle_flow_xlow"]);
-      radial_energy_flow = get<Field3D>(species_from["energy_flow_xlow"]);
       sol_recycle_density_source = 0;
       sol_recycle_energy_source = 0;
 
@@ -218,7 +217,6 @@ void Recycling::transform(Options& state) {
             // Edge = LHS flow of inner guard cells (mesh->xend-1)
             // TODO: Handle cases when flow is going into domain from edge
             BoutReal recycle_particle_flow = channel.sol_multiplier * radial_particle_flow(mesh->xend+1, iy, iz) * -1; 
-            BoutReal recycle_energy_flow = channel.sol_multiplier * radial_energy_flow(mesh->xend, iy, iz) * -1 ;
 
             // Divide by volume to get source
             sol_recycle_density_source(mesh->xend, iy, iz) += recycle_particle_flow / volume;
@@ -239,7 +237,6 @@ void Recycling::transform(Options& state) {
     if (pfr_recycle) {
 
       radial_particle_flow = get<Field3D>(species_from["particle_flow_xlow"]);
-      radial_energy_flow = get<Field3D>(species_from["energy_flow_xlow"]);
       pfr_recycle_density_source = 0;
       pfr_recycle_energy_source = 0;
 
@@ -257,7 +254,6 @@ void Recycling::transform(Options& state) {
               // Edge = LHS flow of inner guard cells (mesh->xend-1)
               // TODO: Handle cases when flow is going into domain from edge
               BoutReal recycle_particle_flow = channel.pfr_multiplier * radial_particle_flow(mesh->xstart+1, iy, iz) * -1; 
-              BoutReal recycle_energy_flow = channel.pfr_multiplier * radial_energy_flow(mesh->xstart, iy, iz) * -1 ;
 
               // Divide by volume to get source
               pfr_recycle_density_source(mesh->xstart, iy, iz) += recycle_particle_flow / volume;
