@@ -201,7 +201,9 @@ void Recycling::transform(Options& state) {
     // Recycling at the SOL edge (2D/3D only)
     if (sol_recycle) {
 
-      radial_particle_flow = get<Field3D>(species_from["particle_flow_xlow"]);
+      // Flow out of domain is negative, so outflow is *-1
+      radial_particle_outflow = get<Field3D>(species_from["particle_flow_xlow"]) * -1;
+
       sol_recycle_density_source = 0;
       sol_recycle_energy_source = 0;
 
@@ -215,9 +217,9 @@ void Recycling::transform(Options& state) {
 
             // Flow of recycled species back from the edge
             // SOL edge = LHS flow of inner guard cells on the high X side (mesh->xend+1)
-            // Flow out of domain is negative
+            
             // TODO: Handle cases when flow is going into domain from edge
-            BoutReal recycle_particle_flow = channel.sol_multiplier * radial_particle_flow(mesh->xend+1, iy, iz) * -1; 
+            BoutReal recycle_particle_flow = channel.sol_multiplier * radial_particle_outflow(mesh->xend+1, iy, iz); 
 
             // Divide by volume to get source
             sol_recycle_density_source(mesh->xend, iy, iz) += recycle_particle_flow / volume;
@@ -237,7 +239,9 @@ void Recycling::transform(Options& state) {
     // Recycling at the PFR edge (2D/3D only)
     if (pfr_recycle) {
 
-      radial_particle_flow = get<Field3D>(species_from["particle_flow_xlow"]);
+      // PFR is flipped compared to edge: flow out of domain is positive
+      radial_particle_outflow = get<Field3D>(species_from["particle_flow_xlow"]);
+      
       pfr_recycle_density_source = 0;
       pfr_recycle_energy_source = 0;
 
@@ -253,9 +257,8 @@ void Recycling::transform(Options& state) {
 
               // Flow of recycled species back from the edge
               // PFR edge = LHS flow of the first domain cell on the low X side (mesh->xstart)
-              // PFR is flipped compared to edge: flow out of domain is positive
               // TODO: Handle cases when flow is going into domain from edge
-              BoutReal recycle_particle_flow = channel.pfr_multiplier * radial_particle_flow(mesh->xstart, iy, iz); 
+              BoutReal recycle_particle_flow = channel.pfr_multiplier * radial_particle_outflow(mesh->xstart, iy, iz); 
 
               // Divide by volume to get source
               pfr_recycle_density_source(mesh->xstart, iy, iz) += recycle_particle_flow / volume;
