@@ -61,7 +61,7 @@ private:
   Field3D sol_recycle_density_source, sol_recycle_energy_source;  ///< Recycling particle and energy sources for edge recycling only
   Field3D pfr_recycle_density_source, pfr_recycle_energy_source;  ///< Recycling particle and energy sources for edge recycling only
 
-  Field3D radial_particle_flow, radial_energy_flow;  ///< Radial fluxes coming from evolve_density and evolve_pressure used in recycling calc
+  Field3D radial_particle_outflow, radial_energy_outflow;  ///< Radial fluxes coming from evolve_density and evolve_pressure used in recycling calc
   
 };
 
