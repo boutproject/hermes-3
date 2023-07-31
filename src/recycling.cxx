@@ -214,7 +214,8 @@ void Recycling::transform(Options& state) {
                  * dy(mesh->xend, iy) * dz(mesh->xend, iy);
 
             // Flow of recycled species back from the edge
-            // Edge = LHS flow of inner guard cells (mesh->xend-1)
+            // SOL edge = LHS flow of inner guard cells on the high X side (mesh->xend+1)
+            // Flow out of domain is negative
             // TODO: Handle cases when flow is going into domain from edge
             BoutReal recycle_particle_flow = channel.sol_multiplier * radial_particle_flow(mesh->xend+1, iy, iz) * -1; 
 
@@ -251,9 +252,10 @@ void Recycling::transform(Options& state) {
                   * dy(mesh->xstart, iy) * dz(mesh->xstart, iy);
 
               // Flow of recycled species back from the edge
-              // Edge = LHS flow of inner guard cells (mesh->xend-1)
+              // PFR edge = LHS flow of the first domain cell on the low X side (mesh->xstart)
+              // PFR is flipped compared to edge: flow out of domain is positive
               // TODO: Handle cases when flow is going into domain from edge
-              BoutReal recycle_particle_flow = channel.pfr_multiplier * radial_particle_flow(mesh->xstart+1, iy, iz) * -1; 
+              BoutReal recycle_particle_flow = channel.pfr_multiplier * radial_particle_flow(mesh->xstart, iy, iz); 
 
               // Divide by volume to get source
               pfr_recycle_density_source(mesh->xstart, iy, iz) += recycle_particle_flow / volume;
