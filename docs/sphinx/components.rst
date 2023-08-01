@@ -55,6 +55,31 @@ and the initial density should be specified in its own section:
    [Nd]
    function = 1 - 0.5x # Initial condition, normalised to Nnorm
 
+The equation solved is:
+
+.. math::
+
+   \frac{\partial n}{\partial t} = \nabla\cdot\left[n \left(\frac{1}{B}\mathbf{b}\times\nabla\phi + v_{||}\mathbf{b}\right)\right] + S_n
+
+where the source :math:`S_n` is a combination of external source, and
+other processes that nay be included, including drift terms
+(e.g. magnetic drift) or atomic processes (e.g. ionization).
+
+Notes:
+
+1. The density will be saved in the output file as `N` + species
+   label, e.g `Nd` in the above example.
+2. If `diagnose=true` is set in the species options then the net
+   source :math:`S_n` is saved as `SN` + species, e.g. `SNd`; the
+   external source is saved as `S` + species + `_src` e.g. `Sd_src`.
+   The time derivative of density is saved as `ddt(N` + species + `)`
+   e.g. `ddt(Nd)`.
+3. The density source can be set in the input mesh file as a field
+   `S` + species + `_src` e.g. `Sd_src`. This can be overridden by
+   specifying the source in the input options.
+4. The `poloidal_flows` switch controls whether the X-Y components of
+   the ExB flow are included (default is true). If set to `false` then
+   ExB flows are only in the X-Z plane.
 
 The implementation is in the `EvolveDensity` class:
 
@@ -597,11 +622,75 @@ agreement with kinetic neutral models [Discussion, T.Rognlien].
 
 Boundary conditions
 -------------------
+Simple boundary conditions
+~~~~~~~~~~~~~~~
+BOUT++ simple boundary conditions
+^^^^^^^^^^^^^^^
+
+BOUT++ provides a number of fundamental boundary conditions including:
+- dirichlet(x): boundary set to constant value of `x`
+- neumann: boundary set to zero gradient
+- free_o2: boundary set by linear extrapolation (using 2 points)
+- free_o3: boundary set by quadratic extrapolation (using 3 points)
+
+These can be set on different parts of the domain using the keywords
+`core`, `sol`, `pf`, `lower_target`, `upper_target`, `xin`, `xout`, `yup`, `ydown` and `bndry_all`.
+
+The boundary conditions can also be applied over a finite width as well as relaxed over a specified timescale.
+
+These boundary conditions are implemented in BOUT++, and therefore have no access to
+the normalisations within Hermes-3 and so must be used in normalised units.
+Please see the `BOUT++ documentation
+<https://bout-dev.readthedocs.io/en/latest/user_docs/boundary_options.html>`_ for more detail, 
+including the full list of boundary conditions and more guidance on their use.
+In case the documentation is incomplete or insufficient, please refer to the 
+`BOUT++ boundary condition code
+<https://github.com/boutproject/BOUT-dev/blob/cbd197e78f7d52721188badfd7c38a0a540a82bd/src/mesh/boundary_standard.cxx>`_
+.
+
+Hermes-3 simple boundary conditions
+^^^^^^^^^^^^^^^
+Currently, there is only one additional simple boundary condition implemented in Hermes-3.
+`decaylength(x)` sets the boundary according to a user-set radial decay length. 
+This is a commonly used setting for plasma density and pressure in the tokamak SOL boundary in 2D and 3D but is not applicable in 1D.
+Note that this must be provided in normalised units just like the BOUT++ simple boundary conditions.
+
+
+Simple boundary condition examples
+^^^^^^^^^^^^^^^
+The below example for a 2D tokamak simulation sets the electron density to a constant value of 1e20 m:sup:`-3` in the core and
+sets a decay length of 3mm in the SOL and PFR regions, while setting the remaining boundaries to `neumann`.
+Example settings of the fundamental normalisation factors and the calculation of the derived ones is provided
+in the `hermes` component which can be accessed by using the `hermes:` prefix in any other component in the input file.
+
+.. code-block:: ini
+
+   [hermes]
+   Nnorm = 1e17  # Reference density [m^-3]
+   Bnorm = 1   # Reference magnetic field [T]
+   Tnorm = 100   # Reference temperature [eV]
+   qe = 1.60218e-19   # Electron charge
+   Mp = 1.67262e-27   # Proton mass
+   Cs0 = sqrt(qe * Tnorm / Mp)   # Reference speed [m/s]
+   Omega_ci = qe * Bnorm / Mp   # Reference frequency [1/s]
+   rho_s0 = Cs0 / Omega_ci   # Refence length [m]
+
+   [Ne]
+   bndry_core = dirichlet(1e20 / hermes:Nnorm)
+   bndry_sol = decaylength(0.003 / hermes:rho_s0)
+   bndry_pf = decaylength(0.003 / hermes:rho_s0)
+   bndry_all = neumann()
+
+
+Component boundary conditions
+~~~~~~~~~~~~~~~
+Hermes-3 includes additional boundary conditions whose complexity requires their implementation
+as components. They may overwrite simple boundary conditions and must be set in the same way as other components.
 
 .. _noflow_boundary:
 
 noflow_boundary
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 This is a species component which imposes a no-flow boundary condition
 on y (parallel) boundaries.
@@ -645,7 +734,7 @@ The implementation is in `NoFlowBoundary`:
 .. _neutral_boundary:
 
 neutral_boundary
-~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 Sets Y (sheath/target) boundary conditions on neutral particle
 density, temperature and pressure. A no-flow boundary condition
@@ -678,6 +767,10 @@ The factor `gamma_heat`
 
 .. doxygenstruct:: NeutralBoundary
    :members:
+
+Others
+^^^^^^^^^^^^^^^
+See `sheath_boundary` and `simple_sheath_boundary`.
 
 Collective quantities
 ---------------------
@@ -1324,7 +1417,7 @@ otherwise modify the plasma solution: Their charge and mass density
 are not calculated, and there are no interactions with other species
 or boundary conditions.
 
-The ``fixed_fraction_carbon`` component calculates radiation due to carbon
+The ``fixed_fraction_hutchinson_carbon`` component calculates radiation due to carbon
 in coronal equilibrium, using a simple formula from `I.H.Hutchinson Nucl. Fusion 34 (10) 1337 - 1348 (1994) <https://doi.org/10.1088/0029-5515/34/10/I04>`_:
 
 .. math::
@@ -1339,9 +1432,9 @@ configure the impurity fraction:
 .. code-block:: ini
 
    [hermes]
-   components = ..., fixed_fraction_carbon, ...
+   components = ..., fixed_fraction_hutchinson_carbon, ...
 
-   [fixed_fraction_carbon]
+   [fixed_fraction_hutchinson_carbon]
    fraction = 0.05   # 5% of electron density
    diagnose = true   # Saves Rfixed_fraction_carbon to output
 
@@ -1354,52 +1447,21 @@ defined like this:
    components = ..., c, ...
 
    [c]
-   type = fixed_fraction_carbon
+   type = fixed_fraction_hutchinson_carbon
    fraction = 0.05   # 5% of electron density
    diagnose = true   # Saves Rc (R + section name)
 
-The ``fixed_fraction_nitrogen`` component works in the same way, calculating nitrogen
-radiation using a formula from `Bruce Lipschultz et al 2016 Nucl. Fusion 56 056007 <https://doi.org/10.1088/0029-5515/56/5/056007>`_:
 
-.. math::
+Carbon is also provided as an ADAS rate along with nitrogen, neon and argon. The component names are  
+``fixed_fraction_carbon``, ``fixed_fraction_nitrogen``, ``fixed_fraction_neon`` and ``fixed_fraction_argon``.
 
-   L\left(T_e\right) = \left\{\begin{array}{cl}
-   5.9\times 10^{-34}\frac{\sqrt{T_e - 1}\left(80 - T_e\right)}{1 + 3.1\times 10^{-3}\left(T_e - 1\right)^2} & \textrm{If $1 < T_e < 80$eV} \\
-   0 & \textrm{Otherwise}\end{array}\right.
+These can be used in the same way as ``fixed_fraction_hutchinson_carbon``. Each rate is in the form of a 10 coefficient 
+log-log polynomial fit of data obtained using the open source tool `radas <https://github.com/cfs-energy/radas>`_.
+The :math:`n {\tau}` parameter representing the density and residence time assumed in the radas 
+collisional-radiative model has been set to :math:`1\times 10^{20} \times 0.5ms` based on `David Moulton et al 2017 Plasma Phys. Control. Fusion 59(6) <https://doi.org10.1088/1361-6587/aa6b13>`_.
 
-
-The ``fixed_fraction_neon`` component use a piecewise polynomial fit to the neon
-cooling curve (Ryoko 2020 Nov):
-
-.. math::
-
-   L\left(T\right) = \left\{\begin{array}{cl}
-   \sum_{i=0}^5 a_i T_e^i & \textrm{If $3 \le T_e < 100$eV} \\
-   7\times 10^{-35} \left(T_e - 2\right) + 10^{-35} & \textrm{If $2 \le T_e < 3$eV} \\
-   10^{-35}\left(T_e - 1\right) & \textrm{If $1 < T_e < 2$eV} \\
-   0 & \textrm{Otherwise}\end{array}\right.
-
-where the coefficients of the polynomial fit are :math:`a_0 =
--3.2798\times 10^{-34}`, :math:`a_1 = -3.4151\times 10^{-34}`,
-:math:`a_2 = 1.7347\times 10^{-34}`, :math:`a_3 = -5.119\times
-10^{-36}`, :math:`a_4 = 5.4824\times 10^{-38}`, :math:`a_5 =
--2.0385\times 10^{-40}`.
-
-The ``fixed_fraction_argon`` components uses a piecewise polynomial
-fit to the argon cooling curve (Ryoko 2020 Nov):
-
-.. math::
-
-   L\left(T\right) = \left\{\begin{array}{cl}
-   \sum_{i=0}^9 b_i T_e^i & \textrm{If $1.5 \le T_e < 100$eV} \\
-   5\times 10^{-35} \left(T_e - 1\right) & \textrm{If $1 \le T_e < 1.5$eV} \\
-   0 & \textrm{Otherwise}\end{array}\right.
-
-where polynomial coefficients :math:`b_0\ldots b_9` are
-:math:`-9.9412e-34`, :math:`4.9864e-34`, :math:`1.9958e-34`,
-:math:`8.6011e-35`, :math:`-8.341e-36`, :math:`3.2559e-37`,
-:math:`-6.9642e-39`, :math:`8.8636e-41`, :math:`-6.7148e-43`,
-:math:`2.8025e-45`, :math:`-4.9692e-48`.
+Each rate has an upper and lower bound beyond which the rate remains constant. 
+Please refer to the source code in `fixed_fraction_radiation.hxx` for the coefficients and bounds used for each rate.
 
 Electromagnetic fields
 ----------------------

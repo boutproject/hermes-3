@@ -101,6 +101,32 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                .withDefault(pressure_source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
 
+  // Set boundary condition defaults: Neumann for all but the diffusivity.
+  // The dirichlet on diffusivity ensures no radial flux.
+  // NV and V are ignored as they are hardcoded in the parallel BC code.
+  alloptions[std::string("Dnn") + name]["bndry_all"] = alloptions[std::string("Dnn") + name]["bndry_all"].withDefault("dirichlet");
+  alloptions[std::string("T") + name]["bndry_all"] = alloptions[std::string("T") + name]["bndry_all"].withDefault("neumann");
+  alloptions[std::string("P") + name]["bndry_all"] = alloptions[std::string("P") + name]["bndry_all"].withDefault("neumann");
+  alloptions[std::string("N") + name]["bndry_all"] = alloptions[std::string("N") + name]["bndry_all"].withDefault("neumann");
+
+  // Pick up BCs from input file
+  Dnn.setBoundary(std::string("Dnn") + name);
+  Tn.setBoundary(std::string("T") + name);
+  Pn.setBoundary(std::string("P") + name);
+  Nn.setBoundary(std::string("N") + name);
+
+  // All floored versions of variables get the same boundary as the original
+  Tnlim.setBoundary(std::string("T") + name);
+  Pnlim.setBoundary(std::string("P") + name);
+  logPnlim.setBoundary(std::string("P") + name);
+  Nnlim.setBoundary(std::string("N") + name);
+
+  // Product of Dnn and another parameter has same BC as Dnn - see eqns to see why this is necessary
+  DnnNn.setBoundary(std::string("Dnn") + name);
+  DnnPn.setBoundary(std::string("Dnn") + name);
+  DnnTn.setBoundary(std::string("Dnn") + name);
+  DnnNVn.setBoundary(std::string("Dnn") + name);
+
 }
 
 void NeutralMixed::transform(Options& state) {
@@ -118,7 +144,7 @@ void NeutralMixed::transform(Options& state) {
   // Nnlim Used where division by neutral density is needed
   Nnlim = floor(Nn, nn_floor);
   Tn = Pn / Nnlim;
-  Tn.applyBoundary("neumann");
+  Tn.applyBoundary();
 
   Vn = NVn / (AA * Nnlim);
   Vnlim = Vn;
@@ -127,10 +153,10 @@ void NeutralMixed::transform(Options& state) {
   Vnlim.applyBoundary("neumann");
 
   Pnlim = floor(Nnlim * Tn, 1e-8);
-  Pnlim.applyBoundary("neumann");
+  Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
-  // Boundary conditions
+  // Parallel boundary conditions
   TRACE("Neutral boundary conditions");
 
   if (sheath_ydown) {
@@ -215,8 +241,8 @@ void NeutralMixed::finally(const Options& state) {
   // Field3D logNn = log(Nn);
   // Field3D logTn = log(Tn);
 
-  Field3D logPnlim = log(Pnlim);
-  logPnlim.applyBoundary("neumann");
+  logPnlim = log(Pnlim);
+  logPnlim.applyBoundary();
 
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
@@ -253,17 +279,15 @@ void NeutralMixed::finally(const Options& state) {
 
   mesh->communicate(Dnn);
   Dnn.clearParallelSlices();
-  Dnn.applyBoundary("dirichlet_o2");
+  Dnn.applyBoundary();
 
-  // Apply a Dirichlet boundary condition to all the coefficients
-  // used in diffusion operators. This is to ensure that the flux through
-  // the boundary is zero.
-  Field3D DnnPn = Dnn * Pn;
-  DnnPn.applyBoundary("dirichlet_o2");
-  Field3D DnnNn = Dnn * Nn;
-  DnnNn.applyBoundary("dirichlet_o2");
+  // Neutral diffusion parameters have the same boundary condition as Dnn
+  DnnPn = Dnn * Pn;
+  DnnPn.applyBoundary();
+  DnnNn = Dnn * Nn;
+  DnnNn.applyBoundary();
   Field3D DnnNVn = Dnn * NVn;
-  DnnNVn.applyBoundary("dirichlet_o2");
+  DnnNVn.applyBoundary();
 
   if (sheath_ydown) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
