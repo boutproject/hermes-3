@@ -969,7 +969,8 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
         result(i, j, k) += fout / (coord->dx(i, j) * coord->J(i, j));
         result(i + 1, j, k) -= fout / (coord->dx(i + 1, j) * coord->J(i + 1, j));
 
-        flow_xlow(i + 1, j, k) = fout * coord->dy(i, j) * coord->dz(i, j);
+        // Flow will be positive in the positive coordinate direction
+        flow_xlow(i + 1, j, k) = -1.0 * fout * coord->dy(i, j) * coord->dz(i, j);
       }
     }
 
@@ -1056,7 +1057,9 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
                * (dfdz - coef_d * dfdy);
 
         yzresult(i, j, k) -= fout / (coord->dy(i, j) * coord->J(i, j));
-        flow_ylow(i, j, k) = fout * coord->dx(i, j) * coord->dz(i, j);
+
+        // Flow will be positive in the positive coordinate direction
+        flow_ylow(i, j, k) = -1.0 * fout * coord->dx(i, j) * coord->dz(i, j);
       }
     }
   }
