@@ -535,8 +535,8 @@ disabled.
 .. doxygenstruct:: SimpleConduction
    :members:
 
-Drifts
-------
+Drifts and transport
+--------------------
 
 The ExB drift is included in the density, momentum and pressure evolution equations if
 potential is calculated. Other drifts can be added with the following components.
@@ -592,6 +592,51 @@ Setting `diagnose = true` saves `DivJ` to the dump files with the divergence of 
 currents except polarisation, and `phi_pol` which is the polarisation flow potential.
 
 .. doxygenstruct:: PolarisationDrift
+   :members:
+
+anomalous_diffusion
+~~~~~~~~~~~~~~~~~~~
+
+Adds cross-field diffusion of particles, momentum and energy to a species.
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, ...
+
+   [e]
+   type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
+
+   anomalous_D = 1.0   # Density diffusion [m^2/s]
+   anomalous_chi = 0,5 # Thermal diffusion [m^2/s]
+   anomalous_nu = 0.5  # Kinematic viscosity [m^2/s]
+
+Anomalous diffusion coefficients can be functions of `x` and `y`.  The
+coefficients can also be read from the mesh input file: If the mesh
+file contains `D_` + the name of the species, for example `D_e` then
+it will be read and used as the density diffusion coefficient.
+Similarly, `chi_e` is the thermal conduction coefficient, and `nu_e`
+is the kinematic viscosity. All quantities should be in SI units of
+m^2/s.  Values that are set in the options (as above) override those
+in the mesh file.
+
+The sources of particles :math:`S`, momentum :math:`F` and energy
+:math:`E` are calculated from species density :math:`N`, parallel
+velocity :math:`V` and temperature :math:`T` using diffusion
+coefficients :math:`D`, :math:`\chi` and :math:`\nu` as follows:
+
+.. math::
+
+   \begin{aligned}
+   S =& \nabla\cdot\left(D \nabla_\perp N\right) \\
+   F =& \nabla\cdot\left(m V D \nabla_\perp N\right) + \nabla\cdot\left(m N \nu \nabla_\perp V\right)\\
+   E =& \nabla\cdot\left(\frac{3}{2}T D \nabla_\perp N\right) + \nabla\cdot\left(N \chi \nabla_\perp T\right)
+   \end{aligned}
+
+Note that particle diffusion is treated as a density gradient-driven flow
+with velocity :math:`v_D = -D \nabla_\perp N / N`.
+
+.. doxygenstruct:: AnomalousDiffusion
    :members:
 
 Neutral gas models

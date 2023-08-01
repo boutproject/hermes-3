@@ -163,6 +163,17 @@ void EvolveMomentum::finally(const Options &state) {
     }
   }
 #endif
+
+  if (diagnose) {
+    // Save flows if they are set
+
+    if (species.isSet("momentum_flow_xlow")) {
+      flow_xlow = get<Field3D>(species["momentum_flow_xlow"]);
+    }
+    if (species.isSet("momentum_flux_ylow")) {
+      flow_ylow = get<Field3D>(species["momentum_flow_ylow"]);
+    }
+  }
 }
 
 void EvolveMomentum::outputVars(Options &state) {
@@ -207,5 +218,29 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"long_name", name + " momentum source"},
                     {"species", name},
                     {"source", "evolve_momentum"}});
+
+    // If fluxes have been set then add them to the output
+    auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
+    if (flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("MomentumFlow_") + name + std::string("_xlow")], flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "N"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum flow"},
+                    {"long_name", name + " momentum flow in X. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+    }
+    if (flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("MomentumFlow_") + name + std::string("_ylow")], flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "N"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum flow"},
+                    {"long_name", name + " momentum flow in Y. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+    }
   }
 }

@@ -49,6 +49,7 @@ private:
 
   bool diagnose; ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
+  Field3D flow_xlow, flow_ylow; ///< Momentum flow diagnostics
 };
 
 namespace {

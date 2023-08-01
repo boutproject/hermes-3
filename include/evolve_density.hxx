@@ -81,6 +81,7 @@ private:
   Field3D Sn; ///< Total density source
 
   bool diagnose; ///< Output additional diagnostics?
+  Field3D flow_xlow, flow_ylow; ///< Particle flow diagnostics
 };
 
 namespace {

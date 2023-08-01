@@ -87,6 +87,8 @@ void AnomalousDiffusion::transform(Options& state) {
     }
   }
 
+  Field3D flow_xlow, flow_ylow; // Flows through cell faces
+
   if (include_D) {
     // Particle diffusion. Gradients of density drive flows of particles,
     // momentum and energy. The implementation here is equivalent to an
@@ -94,28 +96,40 @@ void AnomalousDiffusion::transform(Options& state) {
     //
     //  v_D = - D Grad_perp(N) / N
 
-    add(species["density_source"], Div_a_Grad_perp_upwind(anomalous_D, N2D));
+    add(species["density_source"], Div_a_Grad_perp_upwind_flows(anomalous_D, N2D,
+                                                                flow_xlow, flow_ylow));
+    add(species["particle_flow_xlow"], flow_xlow);
+    add(species["particle_flow_ylow"], flow_ylow);
 
     // Note: Upwind operators used, or unphysical increases
     // in temperature and flow can be produced
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"], Div_a_Grad_perp_upwind(AA * V2D * anomalous_D, N2D));
+    add(species["momentum_source"], Div_a_Grad_perp_upwind_flows(AA * V2D * anomalous_D, N2D,
+                                                                 flow_xlow, flow_ylow));
+    add(species["momentum_flow_xlow"], flow_xlow);
+    add(species["momentum_flow_ylow"], flow_ylow);
 
     add(species["energy_source"],
-        Div_a_Grad_perp_upwind((3. / 2) * T2D * anomalous_D, N2D));
+        Div_a_Grad_perp_upwind_flows((3. / 2) * T2D * anomalous_D, N2D,
+                                     flow_xlow, flow_ylow));
+    add(species["energy_flow_xlow"], flow_xlow);
+    add(species["energy_flow_ylow"], flow_ylow);
   }
 
   if (include_chi) {
-    // Gradients in temperature which drive energy flows
-    add(species["energy_source"], Div_a_Grad_perp_upwind(anomalous_chi * N2D, T2D));
+    // Gradients in temperature that drive energy flows
+    add(species["energy_source"], Div_a_Grad_perp_upwind_flows(anomalous_chi * N2D, T2D, flow_xlow, flow_ylow));
+    add(species["energy_flow_xlow"], flow_xlow);
+    add(species["energy_flow_ylow"], flow_ylow);
   }
 
   if (include_nu) {
-    // Gradients in slow speed which drive momentum flows
+    // Gradients in flow speed that drive momentum flows
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"], Div_a_Grad_perp_upwind(anomalous_nu * AA * N2D, V2D));
+    add(species["momentum_source"], Div_a_Grad_perp_upwind_flows(anomalous_nu * AA * N2D, V2D, flow_xlow, flow_ylow));
+    add(species["momentum_flow_xlow"], flow_xlow);
+    add(species["momentum_flow_ylow"], flow_ylow);
   }
-
 }
 
 void AnomalousDiffusion::outputVars(Options& state) {
