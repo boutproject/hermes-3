@@ -228,7 +228,7 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"standard_name", "momentum flow"},
-                    {"long_name", name + " momentum flow in X"},
+                    {"long_name", name + " momentum flow in X. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
@@ -238,7 +238,7 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"standard_name", "momentum flow"},
-                    {"long_name", name + " momentum flow in Y"},
+                    {"long_name", name + " momentum flow in Y. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }

@@ -419,7 +419,7 @@ void EvolvePressure::outputVars(Options& state) {
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " power through X cell face"},
+                    {"long_name", name + " power through X cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
@@ -429,7 +429,7 @@ void EvolvePressure::outputVars(Options& state) {
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " power through Y cell face"},
+                    {"long_name", name + " power through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }

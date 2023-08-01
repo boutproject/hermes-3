@@ -312,7 +312,7 @@ void EvolveDensity::outputVars(Options& state) {
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
                     {"standard_name", "particle flow"},
-                    {"long_name", name + " particle flow in X"},
+                    {"long_name", name + " particle flow in X. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_density"}});
     }
@@ -322,7 +322,7 @@ void EvolveDensity::outputVars(Options& state) {
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
                     {"standard_name", "particle flow"},
-                    {"long_name", name + " particle flow in Y"},
+                    {"long_name", name + " particle flow in Y. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_density"}});
     }
