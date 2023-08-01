@@ -201,8 +201,8 @@ void Recycling::transform(Options& state) {
     // Recycling at the SOL edge (2D/3D only)
     if (sol_recycle) {
 
-      // Flow out of domain is negative, so outflow is *-1
-      radial_particle_outflow = get<Field3D>(species_from["particle_flow_xlow"]) * -1;
+      // Flow out of domain is positive in the positive coordinate direction
+      radial_particle_outflow = get<Field3D>(species_from["particle_flow_xlow"]);
 
       sol_recycle_density_source = 0;
       sol_recycle_energy_source = 0;
@@ -241,8 +241,8 @@ void Recycling::transform(Options& state) {
     // Recycling at the PFR edge (2D/3D only)
     if (pfr_recycle) {
 
-      // PFR is flipped compared to edge: flow out of domain is positive
-      radial_particle_outflow = get<Field3D>(species_from["particle_flow_xlow"]);
+      // PFR is flipped compared to edge: x=0 is at the PFR edge. Therefore outflow is in the negative coordinate direction.
+      radial_particle_outflow = get<Field3D>(species_from["particle_flow_xlow"]) * -1;
 
       pfr_recycle_density_source = 0;
       pfr_recycle_energy_source = 0;
