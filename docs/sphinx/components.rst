@@ -978,17 +978,17 @@ The boundary fluxes might be set by sheath boundary conditions,
 which potentially depend on the density and temperature of all species.
 Recycling therefore can't be calculated until all species boundary conditions
 have been set. It is therefore expected that this component is a top-level
-component which comes after boundary conditions are set.
+component (i.e. in the `Hermes` section) which comes after boundary conditions are set.
 
 Recycling has been implemented at the target, the SOL edge and the PFR edge.
-Each is off by default and must activated with a separate flag. Each can be 
+Each is off by default and must be activated with a separate flag. Each can be 
 assigned a separate recycle multiplier and recycle energy. 
 
 The chosen species must feature an outflow through the boundary - any cells
 with an inflow have their recycling source set to zero. If a sheath boundary condition
 is enabled, then this is automatically satisfied at the target through the Bohm condition.
-If it is not enabled, then the target boundary must be set to `free` or `decay_length` to 
-allow an outflow. If SOL or PFR recycling is enabled, a `free` or `decay_length` on
+If it is not enabled, then the target boundary must be set to `free_o2`, `free_o3` or `decaylength` to 
+allow an outflow. If SOL or PFR recycling is enabled, a `free_o2`, `free_o3` or `decaylength`on
 their respective boundaries is required at all times.
 
 The recycling component has a `species` option, that is a list of species
