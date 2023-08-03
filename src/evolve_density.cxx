@@ -36,6 +36,12 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
+  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
+  low_p_diffuse_perp = options["low_p_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low pressure")
+                           .withDefault<bool>(false);
+
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
   evolve_log = options["evolve_log"]
@@ -213,9 +219,15 @@ void EvolveDensity::finally(const Options& state) {
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(N) += FV::Div_par_K_Grad_par(low_n_coeff, N);
   }
+
   if (low_n_diffuse_perp) {
     ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
                                     bndry_flux);
+  }
+
+  if (low_p_diffuse_perp) {
+    Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
+    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N, true);
   }
 
   if (hyper_z > 0.) {
