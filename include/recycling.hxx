@@ -56,7 +56,7 @@ private:
   bool diagnose; ///< Save additional post-processing variables?
 
   Field3D density_source, energy_source; ///< Recycling particle and energy sources for all locations
-  Field3D is_pump; ///< 1 = pump, 0 = no pump. Works only in SOL/PFR
+  Field2D is_pump; ///< 1 = pump, 0 = no pump. Works only in SOL/PFR
 
   // Recycling particle and energy sources for the different sources of recycling
   // Note that SOL, PFR and pump are not applicable to 1D

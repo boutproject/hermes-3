@@ -215,6 +215,10 @@ void Recycling::transform(Options& state) {
       }
     }
 
+    // Initialise counters of pump recycling fluxes
+    pump_recycle_density_source = 0;
+    pump_recycle_energy_source = 0;
+
     // Recycling at the SOL edge (2D/3D only)
     if (sol_recycle) {
 
@@ -223,6 +227,7 @@ void Recycling::transform(Options& state) {
 
       sol_recycle_density_source = 0;
       sol_recycle_energy_source = 0;
+      
 
       if(mesh->lastX()){  // Only do this for the processor which has the edge region
         for(int iy=0; iy < mesh->LocalNy ; iy++){
@@ -250,12 +255,12 @@ void Recycling::transform(Options& state) {
             BoutReal recycle_source = recycle_particle_flow / volume;
 
             // Add to appropriate diagnostic field depending if pump or not
-            if ((is_pump(mesh->xend+1, iy, iz) == 1.0) and (neutral_pump)) {
+            if ((is_pump(mesh->xend+1, iy) == 1.0) and (neutral_pump)) {
               pump_recycle_density_source(mesh->xend+1, iy, iz) += recycle_source;
               pump_recycle_energy_source(mesh->xend+1, iy, iz) += recycle_source * channel.pfr_energy;
             } else {
-              pfr_recycle_density_source(mesh->xend+1, iy, iz) += recycle_source;
-              pfr_recycle_energy_source(mesh->xend+1, iy, iz) += recycle_source * channel.pfr_energy;
+              sol_recycle_density_source(mesh->xend+1, iy, iz) += recycle_source;
+              sol_recycle_energy_source(mesh->xend+1, iy, iz) += recycle_source * channel.pfr_energy;
             }
 
             // Add to density source which will be picked up by evolve_density.cxx
@@ -305,14 +310,14 @@ void Recycling::transform(Options& state) {
               BoutReal recycle_source = recycle_particle_flow / volume;
 
               // Add to appropriate diagnostic field depending if pump or not
-              if ((is_pump(mesh->xstart, iy, iz) == 1.0) and (neutral_pump))  {
+              if ((is_pump(mesh->xstart, iy) == 1.0) and (neutral_pump))  {
                 pump_recycle_density_source(mesh->xstart, iy, iz) += recycle_source;
                 pump_recycle_energy_source(mesh->xstart, iy, iz) += recycle_source * channel.pfr_energy;
               } else {
                 pfr_recycle_density_source(mesh->xstart, iy, iz) += recycle_source;
                 pfr_recycle_energy_source(mesh->xstart, iy, iz) += recycle_source * channel.pfr_energy;
               }
-
+            
               // Add to density source which will be picked up by evolve_density.cxx
               // Add to energy source which will be picked up by evolve_pressure.cxx
               density_source(mesh->xstart, iy, iz) += recycle_source;
@@ -331,7 +336,7 @@ void Recycling::transform(Options& state) {
 }
 
 void Recycling::outputVars(Options& state) {
-
+  
   AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
@@ -401,26 +406,26 @@ void Recycling::outputVars(Options& state) {
                           {"standard_name", "energy source"},
                           {"long_name", std::string("PFR recycling energy source of ") + channel.to},
                           {"source", "recycling"}});
-          }
+        }
 
-          // Neutral pump
-          if (neutral_pump) {
-            set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump")}], pump_recycle_density_source,
-                            {{"time_dimension", "t"},
-                            {"units", "m^-3 s^-1"},
-                            {"conversion", Nnorm * Omega_ci},
-                            {"standard_name", "particle source"},
-                            {"long_name", std::string("Pump recycling particle source of ") + channel.to},
-                            {"source", "recycling"}});
-      
-            set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump")}], pump_recycle_energy_source,
-                            {{"time_dimension", "t"},
-                            {"units", "W m^-3"},
-                            {"conversion", Pnorm * Omega_ci},
-                            {"standard_name", "energy source"},
-                            {"long_name", std::string("Pump recycling energy source of ") + channel.to},
-                            {"source", "recycling"}});
-            }
+        // Neutral pump
+        if (neutral_pump) {
+          set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump_recycle")}], pump_recycle_density_source,
+                          {{"time_dimension", "t"},
+                          {"units", "m^-3 s^-1"},
+                          {"conversion", Nnorm * Omega_ci},
+                          {"standard_name", "particle source"},
+                          {"long_name", std::string("Pump recycling particle source of ") + channel.to},
+                          {"source", "recycling"}});
+    
+          set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump_recycle")}], pump_recycle_energy_source,
+                          {{"time_dimension", "t"},
+                          {"units", "W m^-3"},
+                          {"conversion", Pnorm * Omega_ci},
+                          {"standard_name", "energy source"},
+                          {"long_name", std::string("Pump recycling energy source of ") + channel.to},
+                          {"source", "recycling"}});
+        }
       }
 
   }
