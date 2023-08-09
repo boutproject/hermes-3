@@ -965,201 +965,10 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
   return result;
 }
 
-
-/// Div ( a Grad_perp(f) )  -- diffusion
-///
-/// Returns the flows in the final arguments
-///
-/// Flows are always in the positive {x,y} direction
-/// i.e xlow(i,j) is the flow into cell (i,j) from the left,
-///               and the flow out of cell (i-1,j) to the right
-/// 
-///           ylow(i,j+1)
-///              ^
-///           +---|---+
-///           |       |
-/// xlow(i,j) -> (i,j) -> xlow(i+1,j)
-///           |   ^   |
-///           +---|---+
-///           ylow(i,j)
-///
-///
-const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
-                                           Field3D &flow_xlow,
-                                           Field3D &flow_ylow) {
-  ASSERT2(a.getLocation() == f.getLocation());
-
-  Mesh* mesh = a.getMesh();
-
-  Field3D result{zeroFrom(f)};
-
-  Coordinates* coord = f.getCoordinates();
-
-  // Zero all flows
-  flow_xlow = 0.0;
-  flow_ylow = 0.0;
-
-  // Flux in x
-
-  int xs = mesh->xstart - 1;
-  int xe = mesh->xend;
-
-  for (int i = xs; i <= xe; i++)
-    for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      for (int k = 0; k < mesh->LocalNz; k++) {
-        // Calculate flux from i to i+1
-
-        const BoutReal gradient = (coord->J(i, j) * coord->g11(i, j)
-                                     + coord->J(i + 1, j) * coord->g11(i + 1, j))
-                                  * (f(i + 1, j, k) - f(i, j, k))
-                                  / (coord->dx(i, j) + coord->dx(i + 1, j));
-
-        // Use the upwind coefficient
-        const BoutReal fout = gradient * ((gradient > 0) ? a(i + 1, j, k) : a(i, j, k));
-
-        result(i, j, k) += fout / (coord->dx(i, j) * coord->J(i, j));
-        result(i + 1, j, k) -= fout / (coord->dx(i + 1, j) * coord->J(i + 1, j));
-
-        // Flow will be positive in the positive coordinate direction
-        flow_xlow(i + 1, j, k) = -1.0 * fout * coord->dy(i, j) * coord->dz(i, j);
-      }
-    }
-
-  // Y and Z fluxes require Y derivatives
-
-  // Fields containing values along the magnetic field
-  Field3D fup(mesh), fdown(mesh);
-  Field3D aup(mesh), adown(mesh);
-
-  // Values on this y slice (centre).
-  // This is needed because toFieldAligned may modify the field
-  Field3D fc = f;
-  Field3D ac = a;
-
-  // Result of the Y and Z fluxes
-  Field3D yzresult(mesh);
-  yzresult.allocate();
-
-  if (f.hasParallelSlices() && a.hasParallelSlices()) {
-    // Both inputs have yup and ydown
-
-    fup = f.yup();
-    fdown = f.ydown();
-
-    aup = a.yup();
-    adown = a.ydown();
-  } else {
-    // At least one input doesn't have yup/ydown fields.
-    // Need to shift to/from field aligned coordinates
-
-    fup = fdown = fc = toFieldAligned(f);
-    aup = adown = ac = toFieldAligned(a);
-    yzresult.setDirectionY(YDirectionType::Aligned);
-    flow_ylow.setDirectionY(YDirectionType::Aligned);
-  }
-
-  // Y flux
-
-  for (int i = mesh->xstart; i <= mesh->xend; i++) {
-    for (int j = mesh->ystart; j <= mesh->yend; j++) {
-
-      BoutReal coef_u =
-          0.5
-          * (coord->g_23(i, j) / SQ(coord->J(i, j) * coord->Bxy(i, j))
-             + coord->g_23(i, j + 1) / SQ(coord->J(i, j + 1) * coord->Bxy(i, j + 1)));
-
-      BoutReal coef_d =
-          0.5
-          * (coord->g_23(i, j) / SQ(coord->J(i, j) * coord->Bxy(i, j))
-             + coord->g_23(i, j - 1) / SQ(coord->J(i, j - 1) * coord->Bxy(i, j - 1)));
-
-      for (int k = 0; k < mesh->LocalNz; k++) {
-        // Calculate flux between j and j+1
-        int kp = (k + 1) % mesh->LocalNz;
-        int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
-
-        // Calculate Z derivative at y boundary
-        BoutReal dfdz =
-            0.25 * (fc(i, j, kp) - fc(i, j, km) + fup(i, j + 1, kp) - fup(i, j + 1, km))
-            / coord->dz(i, j);
-
-        // Y derivative
-        BoutReal dfdy = 2. * (fup(i, j + 1, k) - fc(i, j, k))
-                        / (coord->dy(i, j + 1) + coord->dy(i, j));
-
-        BoutReal fout = 0.25 * (ac(i, j, k) + aup(i, j + 1, k))
-                            * (coord->J(i, j) * coord->g23(i, j)
-                               + coord->J(i, j + 1) * coord->g23(i, j + 1))
-                            * (dfdz - coef_u * dfdy);
-
-        yzresult(i, j, k) = fout / (coord->dy(i, j) * coord->J(i, j));
-
-        // Calculate flux between j and j-1
-        dfdz = 0.25
-               * (fc(i, j, kp) - fc(i, j, km) + fdown(i, j - 1, kp) - fdown(i, j - 1, km))
-               / coord->dz(i, j);
-
-        dfdy = 2. * (fc(i, j, k) - fdown(i, j - 1, k))
-               / (coord->dy(i, j) + coord->dy(i, j - 1));
-
-        fout = 0.25 * (ac(i, j, k) + adown(i, j - 1, k))
-               * (coord->J(i, j) * coord->g23(i, j)
-                  + coord->J(i, j - 1) * coord->g23(i, j - 1))
-               * (dfdz - coef_d * dfdy);
-
-        yzresult(i, j, k) -= fout / (coord->dy(i, j) * coord->J(i, j));
-
-        // Flow will be positive in the positive coordinate direction
-        flow_ylow(i, j, k) = -1.0 * fout * coord->dx(i, j) * coord->dz(i, j);
-      }
-    }
-  }
-
-  // Z flux
-  // Easier since all metrics constant in Z
-
-  for (int i = mesh->xstart; i <= mesh->xend; i++) {
-    for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      // Coefficient in front of df/dy term
-      BoutReal coef = coord->g_23(i, j)
-                      / (coord->dy(i, j + 1) + 2. * coord->dy(i, j) + coord->dy(i, j - 1))
-                      / SQ(coord->J(i, j) * coord->Bxy(i, j));
-
-      for (int k = 0; k < mesh->LocalNz; k++) {
-        // Calculate flux between k and k+1
-        int kp = (k + 1) % mesh->LocalNz;
-
-        BoutReal gradient =
-            // df/dz
-            (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j)
-
-            // - g_yz * df/dy / SQ(J*B)
-            - coef
-                  * (fup(i, j + 1, k) + fup(i, j + 1, kp) - fdown(i, j - 1, k)
-                     - fdown(i, j - 1, kp));
-
-        BoutReal fout = gradient * ((gradient > 0) ? ac(i, j, kp) : ac(i, j, k));
-
-        yzresult(i, j, k) += fout / coord->dz(i, j);
-        yzresult(i, j, kp) -= fout / coord->dz(i, j);
-      }
-    }
-  }
-  // Check if we need to transform back
-  if (f.hasParallelSlices() && a.hasParallelSlices()) {
-    result += yzresult;
-  } else {
-    result += fromFieldAligned(yzresult);
-    flow_ylow = fromFieldAligned(flow_ylow);
-  }
-
-  return result;
-}
-
 // Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) --  Vorticity
 // Includes nonorthogonal X-Y and X-Z metric corrections
 //
-Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f) {
+const Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f) {
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
@@ -1548,19 +1357,19 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux from i to i+1
 
-        const BoutReal gradient = (coord->J(i, j) * coord->g11(i, j)
-                                     + coord->J(i + 1, j) * coord->g11(i + 1, j))
+        const BoutReal gradient = (coord->J(i, j, k) * coord->g11(i, j, k)
+				   + coord->J(i + 1, j, k) * coord->g11(i + 1, j, k))
                                   * (f(i + 1, j, k) - f(i, j, k))
-                                  / (coord->dx(i, j) + coord->dx(i + 1, j));
+	  / (coord->dx(i, j, k) + coord->dx(i + 1, j, k));
 
         // Use the upwind coefficient
         const BoutReal fout = gradient * ((gradient > 0) ? a(i + 1, j, k) : a(i, j, k));
 
-        result(i, j, k) += fout / (coord->dx(i, j) * coord->J(i, j));
-        result(i + 1, j, k) -= fout / (coord->dx(i + 1, j) * coord->J(i + 1, j));
+        result(i, j, k) += fout / (coord->dx(i, j,k ) * coord->J(i, j, k));
+        result(i + 1, j, k) -= fout / (coord->dx(i + 1, j, k) * coord->J(i + 1, j, k));
 
         // Flow will be positive in the positive coordinate direction
-        flow_xlow(i + 1, j, k) = -1.0 * fout * coord->dy(i, j) * coord->dz(i, j);
+        flow_xlow(i + 1, j, k) = -1.0 * fout * coord->dy(i, j, k) * coord->dz(i, j, k);
       }
     }
 
@@ -1601,55 +1410,54 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
-
-      BoutReal coef_u =
-          0.5
-          * (coord->g_23(i, j) / SQ(coord->J(i, j) * coord->Bxy(i, j))
-             + coord->g_23(i, j + 1) / SQ(coord->J(i, j + 1) * coord->Bxy(i, j + 1)));
-
-      BoutReal coef_d =
-          0.5
-          * (coord->g_23(i, j) / SQ(coord->J(i, j) * coord->Bxy(i, j))
-             + coord->g_23(i, j - 1) / SQ(coord->J(i, j - 1) * coord->Bxy(i, j - 1)));
-
       for (int k = 0; k < mesh->LocalNz; k++) {
-        // Calculate flux between j and j+1
+	BoutReal coef_u =
+          0.5
+          * (coord->g_23(i, j, k) / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k))
+             + coord->g_23(i, j + 1, k) / SQ(coord->J(i, j + 1, k) * coord->Bxy(i, j + 1, k)));
+
+	BoutReal coef_d =
+          0.5
+          * (coord->g_23(i, j, k) / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k))
+             + coord->g_23(i, j - 1, k) / SQ(coord->J(i, j - 1, k) * coord->Bxy(i, j - 1, k)));
+
+	// Calculate flux between j and j+1
         int kp = (k + 1) % mesh->LocalNz;
         int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
 
         // Calculate Z derivative at y boundary
         BoutReal dfdz =
             0.25 * (fc(i, j, kp) - fc(i, j, km) + fup(i, j + 1, kp) - fup(i, j + 1, km))
-            / coord->dz(i, j);
+	  / coord->dz(i, j, k);
 
         // Y derivative
         BoutReal dfdy = 2. * (fup(i, j + 1, k) - fc(i, j, k))
-                        / (coord->dy(i, j + 1) + coord->dy(i, j));
+	  / (coord->dy(i, j + 1, k) + coord->dy(i, j, k));
 
         BoutReal fout = 0.25 * (ac(i, j, k) + aup(i, j + 1, k))
-                            * (coord->J(i, j) * coord->g23(i, j)
-                               + coord->J(i, j + 1) * coord->g23(i, j + 1))
+	  * (coord->J(i, j, k) * coord->g23(i, j, k)
+	     + coord->J(i, j + 1, k) * coord->g23(i, j + 1, k))
                             * (dfdz - coef_u * dfdy);
 
-        yzresult(i, j, k) = fout / (coord->dy(i, j) * coord->J(i, j));
+        yzresult(i, j, k) = fout / (coord->dy(i, j, k) * coord->J(i, j, k));
 
         // Calculate flux between j and j-1
         dfdz = 0.25
                * (fc(i, j, kp) - fc(i, j, km) + fdown(i, j - 1, kp) - fdown(i, j - 1, km))
-               / coord->dz(i, j);
+	  / coord->dz(i, j, k);
 
         dfdy = 2. * (fc(i, j, k) - fdown(i, j - 1, k))
-               / (coord->dy(i, j) + coord->dy(i, j - 1));
+	  / (coord->dy(i, j, k) + coord->dy(i, j - 1, k));
 
         fout = 0.25 * (ac(i, j, k) + adown(i, j - 1, k))
-               * (coord->J(i, j) * coord->g23(i, j)
-                  + coord->J(i, j - 1) * coord->g23(i, j - 1))
+	  * (coord->J(i, j, k) * coord->g23(i, j, k)
+	     + coord->J(i, j - 1, k) * coord->g23(i, j - 1, k))
                * (dfdz - coef_d * dfdy);
 
-        yzresult(i, j, k) -= fout / (coord->dy(i, j) * coord->J(i, j));
+        yzresult(i, j, k) -= fout / (coord->dy(i, j, k) * coord->J(i, j, k));
 
         // Flow will be positive in the positive coordinate direction
-        flow_ylow(i, j, k) = -1.0 * fout * coord->dx(i, j) * coord->dz(i, j);
+        flow_ylow(i, j, k) = -1.0 * fout * coord->dx(i, j, k) * coord->dz(i, j, k);
       }
     }
   }
@@ -1659,18 +1467,18 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      // Coefficient in front of df/dy term
-      BoutReal coef = coord->g_23(i, j)
-                      / (coord->dy(i, j + 1) + 2. * coord->dy(i, j) + coord->dy(i, j - 1))
-                      / SQ(coord->J(i, j) * coord->Bxy(i, j));
-
       for (int k = 0; k < mesh->LocalNz; k++) {
-        // Calculate flux between k and k+1
+	// Coefficient in front of df/dy term
+	BoutReal coef = coord->g_23(i, j, k)
+	  / (coord->dy(i, j + 1, k) + 2. * coord->dy(i, j, k) + coord->dy(i, j - 1, k))
+	  / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k));
+
+	// Calculate flux between k and k+1
         int kp = (k + 1) % mesh->LocalNz;
 
         BoutReal gradient =
             // df/dz
-            (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j)
+	  (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j, k)
 
             // - g_yz * df/dy / SQ(J*B)
             - coef
@@ -1679,8 +1487,8 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 
         BoutReal fout = gradient * ((gradient > 0) ? ac(i, j, kp) : ac(i, j, k));
 
-        yzresult(i, j, k) += fout / coord->dz(i, j);
-        yzresult(i, j, kp) -= fout / coord->dz(i, j);
+        yzresult(i, j, k) += fout / coord->dz(i, j, k);
+        yzresult(i, j, kp) -= fout / coord->dz(i, j, kp);
       }
     }
   }
