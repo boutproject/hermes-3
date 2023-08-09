@@ -29,6 +29,16 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
 
+  low_n_diffuse_perp = options["low_n_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low density")
+                           .withDefault<bool>(false);
+
+  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
+  low_p_diffuse_perp = options["low_p_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low pressure")
+                           .withDefault<bool>(false);
+
   bndry_flux = options["bndry_flux"]
                       .doc("Allow flows through radial boundaries")
                       .withDefault<bool>(true);
@@ -136,6 +146,15 @@ void EvolveMomentum::finally(const Options &state) {
     ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N) + FV::Div_par_K_Grad_par(low_n_coeff * Nlim, V);
   }
 
+  if (low_n_diffuse_perp) {
+    ddt(NV) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), NV, true);
+  }
+
+  if (low_p_diffuse_perp) {
+    Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
+    ddt(NV) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV, true);
+  }
+
   if (hyper_z > 0.) {
     auto* coord = N.getCoordinates();
     ddt(NV) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(NV);
@@ -163,6 +182,17 @@ void EvolveMomentum::finally(const Options &state) {
     }
   }
 #endif
+
+  if (diagnose) {
+    // Save flows if they are set
+
+    if (species.isSet("momentum_flow_xlow")) {
+      flow_xlow = get<Field3D>(species["momentum_flow_xlow"]);
+    }
+    if (species.isSet("momentum_flux_ylow")) {
+      flow_ylow = get<Field3D>(species["momentum_flow_ylow"]);
+    }
+  }
 }
 
 void EvolveMomentum::outputVars(Options &state) {
@@ -207,5 +237,29 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"long_name", name + " momentum source"},
                     {"species", name},
                     {"source", "evolve_momentum"}});
+
+    // If fluxes have been set then add them to the output
+    auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
+    if (flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("MomentumFlow_") + name + std::string("_xlow")], flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "N"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum flow"},
+                    {"long_name", name + " momentum flow in X. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+    }
+    if (flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("MomentumFlow_") + name + std::string("_ylow")], flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "N"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum flow"},
+                    {"long_name", name + " momentum flow in Y. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+    }
   }
 }

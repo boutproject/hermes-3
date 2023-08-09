@@ -37,11 +37,12 @@ private:
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
-  Field3D Nnlim, Pnlim, Vnlim; // Limited in regions of low density
+  Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn; ///< Diffusion coefficient
+  Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
 
   bool sheath_ydown, sheath_yup;
 

@@ -21,56 +21,127 @@ namespace {
     }
   };
 
-  /// Nitrogen based cooling curve used in Lipschultz 2016
-  struct LipschultzNitrogen {
+  /// Below fits are from ADAS data by Mike Kryjak 03/06/2023 and supersede above deprecated fits
+  /// Data generated using radas https://github.com/cfs-energy/radas
+  /// Chose N = 1E20m-3 and tau = 0.5ms based on Moulton, 2021 (DOI: 10.1088/1741-4326/abe4b2)
+  /// Those values are applicable in the ITER scrape-off layer but may not be valid in other conditions.
+  /// The fits are 10 coefficient polynomials fitted in log-log space like the AMJUEL database in EIRENE
+
+  /// Argon
+  struct Argon_adas{
     BoutReal curve(BoutReal Te) {
-      if (Te > 1. and Te < 80.) {
-        return 5.9e-34 * sqrt(Te - 1.0) * (80. - Te) / (1. + (3.1e-3 * SQ(Te - 1.)));
-      }
-      return 0.0;
+      BoutReal logT = log(Te);
+      BoutReal log_out = 0;
+
+      if (Te >= 1.5 and Te <= 1500) {
+        log_out = log_out
+        -8.45410692e+01 * pow(logT, 0)
+        +1.57727040e+01 * pow(logT, 1)
+        -1.54264860e+01 * pow(logT, 2)
+        +1.49409902e+01 * pow(logT, 3)
+        -1.04815113e+01 * pow(logT, 4)
+        +5.00924595e+00 * pow(logT, 5)
+        -1.60029106e+00 * pow(logT, 6)
+        +3.29455609e-01 * pow(logT, 7)
+        -4.14036827e-02 * pow(logT, 8)
+        +2.87063206e-03 * pow(logT, 9)
+        -8.38888002e-05 * pow(logT, 10);
+        return exp(log_out);
+
+    } else if (Te < 1.5) {
+        return 1.95353412e-35;   
+    } else {
+        return 1.22649600e-32;
+    }
     }
   };
 
-  /// Neon based cooling curve produced by Matlab polynominal curve
-  /// fitting "polyval" (Ryoko 2020 Nov)
-  struct RyokoNeon {
+  /// Neon
+  struct Neon_adas{
     BoutReal curve(BoutReal Te) {
-      if (Te >= 3 and Te <= 100) {
-        return -2.0385e-40 * pow(Te, 5)
-          + 5.4824e-38 * pow(Te, 4)
-          - 5.1190E-36 * pow(Te, 3)
-          + 1.7347E-34 * SQ(Te)
-          -3.4151E-34 * Te
-          -3.2798E-34;
-      } else if (Te >=2 and Te < 3) {
-        return 7e-35 * (Te - 2.) + 1e-35;
-      } else if (Te >=1 and Te < 2) {
-        return 1e-35 * (Te - 1.);
-      }
-      return 0.0;
+      BoutReal logT = log(Te);
+      BoutReal log_out = 0;
+
+      if (Te >= 2 and Te <= 1000) {
+        log_out = log_out
+        -8.21475117e+01 * pow(logT, 0)
+        +1.28929854e+01 * pow(logT, 1)
+        -4.74266289e+01 * pow(logT, 2)
+        +7.45222324e+01 * pow(logT, 3)
+        -5.75710722e+01 * pow(logT, 4)
+        +2.57375965e+01 * pow(logT, 5)
+        -7.12758563e+00 * pow(logT, 6)
+        +1.24287546e+00 * pow(logT, 7)
+        -1.32943407e-01 * pow(logT, 8)
+        +7.97368445e-03 * pow(logT, 9)
+        -2.05487897e-04 * pow(logT, 10);
+        return exp(log_out);
+
+    } else if (Te < 2) {
+        return 6.35304113e-36;   
+    } else {
+        return 1.17894628e-32;
+    }
     }
   };
 
-  /// Argon based cooling curve produced by Matlab polynominal curve
-  /// fitting "polyval" (Ryoko 2020 Nov)
-  struct RyokoArgon {
+
+  /// Nitrogen
+  struct Nitrogen_adas{
     BoutReal curve(BoutReal Te) {
-      if (Te >= 1.5 and Te <= 100) {
-        return -4.9692e-48 * pow(Te, 10)
-          + 2.8025e-45 * pow(Te, 9)
-          - 6.7148e-43 * pow(Te, 8)
-          + 8.8636e-41 * pow(Te, 7)
-          - 6.9642e-39 * pow(Te, 6)
-          + 3.2559e-37 * pow(Te, 5)
-          - 8.3410e-36 * pow(Te, 4)
-          + 8.6011e-35 * pow(Te, 3)
-          + 1.9958e-34 * pow(Te, 2)
-          + 4.9864e-34 * Te
-          - 9.9412e-34;
-      } else if (Te >= 1.0 and Te < 1.5) {
-        return 5e-35 * (Te - 1.0);
-      }
-      return 0.0;
+      BoutReal logT = log(Te);
+      BoutReal log_out = 0;
+
+      if (Te >= 2 and Te <= 500) {
+        log_out = log_out
+        -5.01649969e+01 * pow(logT, 0)
+        -1.35749724e+02 * pow(logT, 1)
+        +2.73509608e+02 * pow(logT, 2)
+        -2.92109992e+02 * pow(logT, 3)
+        +1.90120639e+02 * pow(logT, 4)
+        -7.95164871e+01 * pow(logT, 5)
+        +2.17762218e+01 * pow(logT, 6)
+        -3.88334992e+00 * pow(logT, 7)
+        +4.34730098e-01 * pow(logT, 8)
+        -2.77683605e-02 * pow(logT, 9)
+        +7.72720422e-04 * pow(logT, 10);
+        return exp(log_out);
+
+    } else if (Te < 2) {
+        return 4.34835380e-34;   
+    } else {
+        return 8.11096182e-33;
+    }
+    }
+  };
+
+
+  /// Carbon
+  struct Carbon_adas{
+    BoutReal curve(BoutReal Te) {
+      BoutReal logT = log(Te);
+      BoutReal log_out = 0;
+
+      if (Te >= 1 and Te <= 500) {
+        log_out = log_out
+        -7.87837896e+01 * pow(logT, 0)
+        +1.55326376e+00 * pow(logT, 1)
+        +1.65898194e+01 * pow(logT, 2)
+        -3.23804546e+01 * pow(logT, 3)
+        +3.12784663e+01 * pow(logT, 4)
+        -1.74826039e+01 * pow(logT, 5)
+        +5.91393245e+00 * pow(logT, 6)
+        -1.22974105e+00 * pow(logT, 7)
+        +1.54004499e-01 * pow(logT, 8)
+        -1.06797106e-02 * pow(logT, 9)
+        +3.15657594e-04 * pow(logT, 10);
+        return exp(log_out);
+
+    } else if (Te < 1) {
+        return 6.00623928e-35;   
+    } else {
+        return 4.53057707e-33;
+    }
     }
   };
 }
@@ -164,16 +235,20 @@ struct FixedFractionRadiation : public Component {
 
 namespace {
   RegisterComponent<FixedFractionRadiation<HutchinsonCarbon>>
-    registercomponentfixedfractioncarbon("fixed_fraction_carbon");
+    registercomponentfixedfractionhutchinsonbcarbon("fixed_fraction_hutchinson_carbon");
+    
+  RegisterComponent<FixedFractionRadiation<Carbon_adas>>
+    registercomponentfixedfractioncarbon("fixed_fraction_carbon");  
 
-  RegisterComponent<FixedFractionRadiation<LipschultzNitrogen>>
+  RegisterComponent<FixedFractionRadiation<Nitrogen_adas>>
     registercomponentfixedfractionnitrogen("fixed_fraction_nitrogen");
 
-  RegisterComponent<FixedFractionRadiation<RyokoNeon>>
+  RegisterComponent<FixedFractionRadiation<Neon_adas>>
     registercomponentfixedfractionneon("fixed_fraction_neon");
 
-  RegisterComponent<FixedFractionRadiation<RyokoArgon>>
+  RegisterComponent<FixedFractionRadiation<Argon_adas>>
     registercomponentfixedfractionargon("fixed_fraction_argon");
+
 }
 
 #endif // FIXED_FRACTION_IONS_H

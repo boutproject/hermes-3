@@ -46,8 +46,11 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f,
 
 const Field3D Div_Perp_Lap_FV_Index(const Field3D& a, const Field3D& f, bool xflux);
 
+const Field3D Div_Z_FV_Index(const Field3D& a, const Field3D& f);
+
 // 4th-order flux conserving term, in index space
 const Field3D D4DX4_FV_Index(const Field3D& f, bool bndry_flux = false);
+const Field3D D4DZ4_Index(const Field3D& f);
 
 // Div ( k * Grad(f) )
 const Field2D Laplace_FV(const Field2D& k, const Field2D& f);
@@ -63,7 +66,8 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f, F
  * in which the g12 and g13 components can be non-zero
  * i.e. X-Y, X-Z and Y-Z coordinates can all be non-orthogonal.
  */
-Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x);
+const Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x);
+
 
 namespace FV {
 

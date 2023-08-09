@@ -29,6 +29,8 @@
 #include "include/amjuel_hyd_ionisation.hxx"
 #include "include/amjuel_hyd_recombination.hxx"
 #include "include/anomalous_diffusion.hxx"
+#include "include/classical_diffusion.hxx"
+#include "include/binormal_stpm.hxx"
 #include "include/collisions.hxx"
 #include "include/diamagnetic_drift.hxx"
 #include "include/electromagnetic.hxx"
@@ -72,8 +74,85 @@
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
 #include <bout/constants.hxx>
+#include <bout/boundary_factory.hxx>
+#include <bout/boundary_op.hxx>
+#include <bout/field_factory.hxx>
 
 #include "include/loadmetric.hxx"
+
+class DecayLengthBoundary : public BoundaryOp {
+public:
+  DecayLengthBoundary() : gen(nullptr) {}
+  DecayLengthBoundary(BoundaryRegion* region,  std::shared_ptr<FieldGenerator> g)
+    : BoundaryOp(region), gen(std::move(g)) {}
+
+  using BoundaryOp::clone;
+  /// Create a copy of this boundary condition
+  /// This is called by the Boundary Factory
+  BoundaryOp* clone(BoundaryRegion* region, const std::list<std::string>& args) override {
+    std::shared_ptr<FieldGenerator> newgen;
+    if (!args.empty()) {
+      // First argument should be an expression
+      newgen = FieldFactory::get()->parse(args.front());
+    }
+    return new DecayLengthBoundary(region, newgen);
+  }
+
+  // Only implementing for Field3D, no time dependence
+  void apply(Field3D& f) override {
+    // Ensure that field and boundary are on the same mesh
+    Mesh* mesh = bndry->localmesh;
+    ASSERT1(mesh == f.getMesh());
+
+    // Get cell radial length
+    Coordinates *coord = mesh->getCoordinates();
+    Field2D dx = coord->dx;
+    Field2D g11 = coord->g11;
+    Field2D dr = dx / sqrt(g11); // cell radial length. dr = dx/(Bpol * R) and g11 = (Bpol*R)**2 
+
+    // Only implemented for cell centre quantities
+    ASSERT1(f.getLocation() == CELL_CENTRE);
+
+    // This loop goes over the first row of boundary cells (in X and Y)
+    for (bndry->first(); !bndry->isDone(); bndry->next1d()) {
+      for (int zk = 0; zk < mesh->LocalNz; zk++) { // Loop over Z points
+        BoutReal decay_length = 3; // Default decay length is 3 normalised units (usually ~3mm)
+        if (gen) {
+          // Pick up the boundary condition setting from the input file
+          // Must be specified in normalised units like the other BCs inputs
+          decay_length = gen->generate(bout::generator::Context(bndry, zk, CELL_CENTRE, 0.0, mesh));
+        }
+        // Set value in inner guard cell f(bndry->x, bndry->y, zk)
+        // using the final domain cell value f(bndry->x - bndry->bx, bndry->y - bndry->by, zk)
+        // Note: (bx, by) is the direction into the boundary, so
+        //    (1, 0)  X outer boundary (SOL)
+        //    (-1, 0) X inner boundary (Core or PF)
+        //    (0, 1)  Y upper boundary (outer lower target)
+        //    (0, -1) Y lower boundary (inner lower target)
+        
+        // Distance between final cell centre and inner guard cell centre in normalised units
+        BoutReal distance = 0.5 * (dr(bndry->x, bndry->y) + 
+          dr(bndry->x - bndry->bx, bndry->y - bndry->by));
+
+        // Exponential decay 
+        f(bndry->x, bndry->y, zk) =
+          f(bndry->x - bndry->bx, bndry->y - bndry->by, zk) * exp(-1 * distance / decay_length);
+
+        // Set any remaining guard cells (i.e. the outer guards) to the same value
+        // Should the outer guards have the decay continue, or just copy what the inners have?
+        for (int i = 1; i < bndry->width; i++) {
+          f(bndry->x + i * bndry->bx, bndry->y + i * bndry->by, zk) = f(bndry->x, bndry->y, zk);
+        }
+      }
+    }
+  }
+
+  void apply(Field2D& f) override {
+    throw BoutException("DecayLengthBoundary not implemented for Field2D");
+  }
+private:
+  std::shared_ptr<FieldGenerator> gen; // Generator
+};
 
 int Hermes::init(bool restarting) {
 
@@ -103,6 +182,11 @@ int Hermes::init(bool restarting) {
   // when creating components
   Options::root()["units"] = units;
   Options::root()["units"].setConditionallyUsed();
+
+  // Add the decay length boundary condition to the boundary factory
+  // This will make it available as an input option
+  // e.g. bndry_sol = decaylength(0.003 / rho_s0) sets up a decay length of 3mm
+  BoundaryFactory::getInstance()->add(new DecayLengthBoundary(), "decaylength");
 
   /////////////////////////////////////////////////////////
   // Load metric tensor from the mesh, passing length and B
