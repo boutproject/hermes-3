@@ -23,6 +23,7 @@ struct NeutralFullVelocity : public Component {
   void outputVars(Options &state) override;
 private:
   Coordinates *coord;   // Coordinate system
+  Field2D dy2D, dx2D, J2D, g_22_2D, Bxy2D; //2D Coordinate objects
   
   std::string name; // Name of this species
   BoutReal AA; // Atomic mass

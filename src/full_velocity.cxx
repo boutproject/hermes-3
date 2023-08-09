@@ -12,6 +12,12 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& optio
   // This is used in both transform and finally functions
   coord = mesh->getCoordinates();
   
+  dy2D = DC(coord->dy);
+  dx2D = DC(coord->dx);
+  J2D = DC(coord->J);
+  g_22_2D = DC(coord->g_22);
+  Bxy2D = DC(coord->Bxy); // redundant name...
+  
   AA = options["AA"].doc("Atomic mass number").withDefault(2.0);
 
   gamma_ratio =
