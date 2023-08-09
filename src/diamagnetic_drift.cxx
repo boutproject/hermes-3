@@ -16,7 +16,7 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
 
   diamag_form = options["diamag_form"]
     .doc("Form of diamagnetic drift: 0 = gradient; 1 = divergence")
-    .withDefault(Field3D(1.0));
+    .withDefault(Coordinates::FieldMetric(1.0));
 
   // Read curvature vector
   Curlb_B.covariant = false; // Contravariant
