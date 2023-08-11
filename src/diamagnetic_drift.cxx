@@ -1,4 +1,5 @@
 #include <bout/fv_ops.hxx>
+#include <bout/vecops.hxx>
 
 #include "../include/diamagnetic_drift.hxx"
 
@@ -12,6 +13,10 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
 
   bndry_flux =
       options["bndry_flux"].doc("Allow fluxes through boundary?").withDefault<bool>(true);
+
+  diamag_form = options["diamag_form"]
+    .doc("Form of diamagnetic drift: 0 = gradient; 1 = divergence")
+    .withDefault(Field2D(1.0));
 
   // Read curvature vector
   Curlb_B.covariant = false; // Contravariant
@@ -41,6 +46,15 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   Curlb_B.z *= SQ(Lnorm);
 
   Curlb_B *= 2. / mesh->getCoordinates()->Bxy;
+
+  // Set drift to zero through sheath boundaries.
+  // Flux through those cell faces should be set by sheath.
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    Curlb_B.y(r.ind, mesh->ystart - 1) = -Curlb_B.y(r.ind, mesh->ystart);
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    Curlb_B.y(r.ind, mesh->yend + 1) = -Curlb_B.y(r.ind, mesh->yend);
+  }
 }
 
 void DiamagneticDrift::transform(Options& state) {
@@ -55,6 +69,9 @@ void DiamagneticDrift::transform(Options& state) {
 
     // Calculate diamagnetic drift velocity for this species
     auto q = get<BoutReal>(species["charge"]);
+    if (fabs(q) < 1e-5) {
+      continue;
+    }
     auto T = GET_VALUE(Field3D, species["temperature"]);
 
     // Diamagnetic drift velocity
@@ -62,17 +79,28 @@ void DiamagneticDrift::transform(Options& state) {
 
     if (IS_SET(species["density"])) {
       auto N = GET_VALUE(Field3D, species["density"]);
-      subtract(species["density_source"], FV::Div_f_v(N, vD, bndry_flux));
+
+      // Divergence form: Div(n v_D)
+      Field3D div_form = FV::Div_f_v(N, vD, bndry_flux);
+      // Gradient form: Curlb_B dot Grad(N T / q)
+      Field3D grad_form = Curlb_B * Grad(N * T / q);
+
+      subtract(species["density_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
     }
 
     if (IS_SET(species["pressure"])) {
       auto P = get<Field3D>(species["pressure"]);
-      subtract(species["energy_source"], (5. / 2) * FV::Div_f_v(P, vD, bndry_flux));
+
+      Field3D div_form = FV::Div_f_v(P, vD, bndry_flux);
+      Field3D grad_form = Curlb_B * Grad(P * T / q);
+      subtract(species["energy_source"], (5. / 2) * (diamag_form * div_form + (1. - diamag_form) * grad_form));
     }
 
     if (IS_SET(species["momentum"])) {
       auto NV = get<Field3D>(species["momentum"]);
-      subtract(species["momentum_source"], FV::Div_f_v(NV, vD, bndry_flux));
+      Field3D div_form = FV::Div_f_v(NV, vD, bndry_flux);
+      Field3D grad_form = Curlb_B * Grad(NV * T / q);
+      subtract(species["momentum_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
     }
   }
 }

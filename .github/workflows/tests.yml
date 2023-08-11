@@ -19,7 +19,7 @@ jobs:
       matrix:
         config:
           - name: "CMake default options"
-            os: ubuntu-18.04
+            os: ubuntu-22.04
             configure_options: "-DPACKAGE_TESTS=OFF"
 
     steps:

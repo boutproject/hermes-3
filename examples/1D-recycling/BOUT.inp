@@ -1,62 +1,75 @@
 # 1D system with:
-#  - no-flow boundary on lower Y
-#  - sheath boundary on upper Y
+#  - no-flow boundary on lower Y (i.e. outboard midplane)
+#  - sheath boundary on upper Y (i.e. divertor target)
 #  - Evolving electron and ion species
 #  - heat conduction
-#  - Uniform source of heat and particles throughout domain
-#  - Non-uniform grid, packed towards the target
+#  - Uniform source of heat and particles throughout region above the X-point
+#  - Non-uniform grid, packed towards the divertor target
 #  - Recycling of ions as atoms
 #  - Ionisation of neutrals as ions
 #  - Charge exchange between neutrals and ions
 #  - Feedback control of upstream density
-#
-#  Does not include recombination
 
-
-nout = 200
-timestep = 2000
+# This is the number of output time-steps to write out
+nout = 400
+# This is the interval between writing output time-steps (solver timestep is automatic)
+# Normalisation: see BOUT++ docs
+timestep = 5000
 
 MXG = 0  # No guard cells in X
 
 [mesh]
+# 1D simulation, use "y" as the dimension along the fieldline
 nx = 1
-ny = 200   # Resolution along field-line
+ny = 400   # Resolution along field-line
 nz = 1
 
 length = 30           # Length of the domain in meters
-length_xpt = 10   # Length from midplane to X-point [m]
+length_xpt = 10   # Length from midplane to X-point [m] (i.e. this is where the source ends)
 
 dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
 
-# Parallel grid spacing
+# Parallel grid spacing — grid refinement near the divertor target (which is where the interesting
+# stuff happens)
 dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
 
-# Calculate where the source ends in grid index
+# Calculate where the source ends in grid index (i.e. at the X-point)
 source = length_xpt / length
 y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
 
+# Index for separatrix. Doesn't have any effect in 1D.
 ixseps1 = -1
 ixseps2 = -1
 
 [hermes]
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
 # to electron pressure by using electron force balance.
+# N.B. The ordering of components matters!! Need to put dependent quantities after
+# the components that they depend on.
+# If this is wrong, you'll get a runtime error (about non-existant variables)
 components = (d+, d, e,
               sheath_boundary, collisions, recycling, reactions,
               electron_force_balance, neutral_parallel_diffusion)
 
-loadmetric = false        # Use Rxy, Bpxy etc?
+loadmetric = false       # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
 
-Nnorm = 1e19
-Bnorm = 1
-Tnorm = 100
+# Normalisation parameters
+Nnorm = 1e19 #particles per cubic metre
+Bnorm = 1 #tesla
+Tnorm = 100 #electron-volts
 
 [solver]
-mxstep = 100000
+type = beuler  # Backward Euler steady-state solver
+snes_type = newtonls
+ksp_type = gmres
+max_nonlinear_iterations = 10
+lag_jacobian = 500
+atol = 1e-7
+rtol = 1e-5
 
 [sheath_boundary]
-
+# Set a sheath boundary condition at which the ends of the field-line
 lower_y = false
 upper_y = true
 
@@ -74,28 +87,38 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 charge = 1
-AA = 2
+AA = 2 # atomic mass number in amu
 
+# Density controller will force the upstream density towards this value
 density_upstream = 1e19  # Upstream density [m^-3]
+density_source_positive = false  # Force source to be > 0?
+# Check Hermes-3 documentation for how this source works
+density_controller_i = 1e-2
+density_controller_p = 5e2
 
 thermal_conduction = true  # in evolve_pressure
 
 diagnose = true
 
 recycle_as = d
-recycle_multiplier = 0.99  # Recycling fraction
+recycle_multiplier = 1  # Recycling fraction
 
 [Nd+]
-
+# Initial condition for ion density.
+# Constant initial condition, but you could decide to write an expression in
+# terms of grid location and other variables
+# i.e. function = (y / (2 * pi) - 1)
 function = 1
 
-flux = 4e23  # Particles per m^2 per second input
-source = (flux/(mesh:length_xpt))*H(mesh:y_xpt - y)
+source_shape = H(mesh:y_xpt - y) * 1e20 # Feedback controller source shape
 
 [Pd+]
+
+# Initial condition for ion pressure (in terms of hermes:Nnorm * hermes:Tnorm)
 function = 1
 
-powerflux = 2.5e7  # Input power flux in W/m^2
+# Input power flux to ions in W/m^2
+powerflux = 2.5e7
 
 source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
 
@@ -110,16 +133,21 @@ type = (evolve_density, evolve_pressure, evolve_momentum,
         noflow_boundary)
 
 charge = 0
+# Neutral mass in amu
 AA = 2
 
 thermal_conduction = true
+# Save variable to file
+diagnose = true
 
 [Nd]
 
+# Initial condition for neutral density
 function = 0.001
 
 [Pd]
 
+# Initial condition for neutral pressure
 function = 0.0001
 
 ####################################
@@ -130,12 +158,14 @@ type = quasineutral, evolve_pressure, zero_current, noflow_boundary
 noflow_upper_y = false
 
 charge = -1
-AA = 1/1836
+AA = 1/1836 # Electron mass in amu
 
 thermal_conduction = true  # in evolve_pressure
+diagnose = true
 
 [Pe]
 
+# Input power flux to electrons in W/m^2
 function = `Pd+:function`  # Same as ion pressure initially
 
 source = `Pd+:source`  # Same as ion pressure source
@@ -144,10 +174,12 @@ source = `Pd+:source`  # Same as ion pressure source
 
 [recycling]
 
+# What species should be recycled?
 species = d+
 
 [reactions]
 type = (
-        d + e -> d+ + 2e,   # Deuterium ionisation
-        d + d+ -> d+ + d,   # Charge exchange
+        d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
+        d + d+ -> d+ + d,     # Charge exchange
        )

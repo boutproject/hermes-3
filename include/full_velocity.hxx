@@ -7,7 +7,7 @@
 
 #include "component.hxx"
 
-#include "vector2d.hxx"
+#include <bout/vector2d.hxx>
 
 /// Neutral gas model, evolving three components of velocity as axisymmetric fields
 ///

@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-#include <invert_laplace.hxx>
+#include <bout/invert_laplace.hxx>
 
 #include "component.hxx"
 
@@ -37,24 +37,26 @@ private:
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
-  Field3D Nnlim, Pnlim, Vnlim; // Limited in regions of low density
+  Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn; ///< Diffusion coefficient
-  
+  Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
+
   bool sheath_ydown, sheath_yup;
-  
-  BoutReal neutral_gamma; ///< Heat transmission for neutrals
-  
+
   BoutReal nn_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
 
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
+  bool neutral_viscosity; ///< include viscosity?
+
   bool precondition {true}; ///< Enable preconditioner?
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
+  Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
 
   bool output_ddt; ///< Save time derivatives?

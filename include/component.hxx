@@ -3,7 +3,7 @@
 #ifndef HERMES_COMPONENT_H
 #define HERMES_COMPONENT_H
 
-#include <options.hxx>
+#include <bout/options.hxx>
 #include <bout/generic_factory.hxx>
 
 #include <map>

@@ -6,7 +6,7 @@
 #include "integrate.hxx"
 
 struct AmjuelReaction : public Component {
-  AmjuelReaction(std::string, Options& alloptions, Solver*) {
+  AmjuelReaction(std::string name, Options& alloptions, Solver*) {
     // Get the units
     const auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);
@@ -83,6 +83,8 @@ protected:
     auto AA = get<BoutReal>(from_ion["AA"]);
     ASSERT1(AA == get<BoutReal>(to_ion["AA"]));
 
+    Field3D V2 = get<Field3D>(to_ion["velocity"]);
+
     const BoutReal from_charge =
         from_ion.isSet("charge") ? get<BoutReal>(from_ion["charge"]) : 0.0;
     const BoutReal to_charge =
@@ -103,6 +105,12 @@ protected:
     if (from_charge != to_charge) {
       // To ensure quasineutrality, add electron density source
       add(electron["density_source"], (to_charge - from_charge) * reaction_rate);
+      if (electron.isSet("velocity")) {
+        // Transfer of electron kinetic to thermal energy due to density source
+        auto Ve = get<Field3D>(electron["velocity"]);
+        auto Ae = get<BoutReal>(electron["AA"]);
+        add(electron["energy_source"], 0.5 * Ae * (to_charge - from_charge) * reaction_rate * SQ(Ve));
+      }
     }
 
     // Momentum
@@ -111,7 +119,34 @@ protected:
     subtract(from_ion["momentum_source"], momentum_exchange);
     add(to_ion["momentum_source"], momentum_exchange);
 
-    // Ion energy
+    // Kinetic energy transfer to thermal energy
+    //
+    // This is a combination of three terms in the pressure
+    // (thermal energy) equation:
+    //
+    // d/dt(3/2 p_1) = ... - F_12 v_1 + W_12 - (1/2) m R v_1^2 // From ion
+    //
+    // d/dt(3/2 p_2) = ... - F_21 v_2 + W_21 + (1/2) m R v_2^2 // to_ion
+    //
+    // where forces are F_21 = -F_12, energy transfer W_21 = -W_12,
+    // and masses are equal so m_1 = m_2 = m
+    //
+    // Here the force F_21 = m R v_1   i.e. momentum_exchange
+    //
+    // As p_1 -> 0 the sum of the p_1 terms must go to zero.
+    // Hence:
+    //
+    // W_12 = F_12 v_1 + (1/2) m R v_1^2
+    //      = -R m v_1^2 + (1/2) m R v_1^2
+    //      = - (1/2) m R v_1^2
+    //
+    // d/dt(3/2 p_2) = - m R v_1 v_2 + (1/2) m R v_1^2 + (1/2) m R v_2^2
+    //               = (1/2) m R (v_1 - v_2)^2
+    //
+
+    add(to_ion["energy_source"], 0.5 * AA * reaction_rate * SQ(V1 - V2));
+
+    // Ion thermal energy transfer
     energy_exchange = reaction_rate * (3. / 2) * T1;
     subtract(from_ion["energy_source"], energy_exchange);
     add(to_ion["energy_source"], energy_exchange);

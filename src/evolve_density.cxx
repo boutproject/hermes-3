@@ -2,13 +2,14 @@
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
-#include <derivs.hxx>
-#include <difops.hxx>
-#include <initialprofiles.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
+#include <bout/initialprofiles.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_density.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/hermes_build_config.hxx"
 
 using bout::globals::mesh;
 
@@ -33,6 +34,12 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
+                           .withDefault<bool>(false);
+
+  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
+  low_p_diffuse_perp = options["low_p_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
@@ -81,6 +88,25 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
                .withDefault(source)
            / (Nnorm * Omega_ci);
+
+  if (alloptions[std::string("N") + name]["source_only_in_core"]
+      .doc("Zero the source outside the closed field-line region?")
+      .withDefault<bool>(false)) {
+    for (int x = mesh->xstart; x <= mesh->xend; x++) {
+      if (!mesh->periodicY(x)) {
+        // Not periodic, so not in core
+        for (int y = mesh->ystart; y <= mesh->yend; y++) {
+          for (int z = mesh->zstart; z <= mesh->zend; z++) {
+            source(x, y, z) = 0.0;
+          }
+        }
+      }
+    }
+  }
+
+  neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
+    .doc("Apply neumann boundary with Z average?")
+    .withDefault<bool>(false);
 }
 
 void EvolveDensity::transform(Options& state) {
@@ -92,6 +118,40 @@ void EvolveDensity::transform(Options& state) {
   }
 
   mesh->communicate(N);
+
+  if (neumann_boundary_average_z) {
+    // Take Z (usually toroidal) average and apply as X (radial) boundary condition
+    if (mesh->firstX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        BoutReal Navg = 0.0; // Average N in Z
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          Navg += N(mesh->xstart, j, k);
+        }
+        Navg /= mesh->LocalNz;
+
+        // Apply boundary condition
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          N(mesh->xstart - 1, j, k) = 2. * Navg - N(mesh->xstart, j, k);
+          N(mesh->xstart - 2, j, k) = N(mesh->xstart - 1, j, k);
+        }
+      }
+    }
+
+    if (mesh->lastX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        BoutReal Navg = 0.0; // Average N in Z
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          Navg += N(mesh->xend, j, k);
+        }
+        Navg /= mesh->LocalNz;
+
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          N(mesh->xend + 1, j, k) = 2. * Navg - N(mesh->xend, j, k);
+          N(mesh->xend + 2, j, k) = N(mesh->xend + 1, j, k);
+        }
+      }
+    }
+  }
 
   auto& species = state["species"][name];
   set(species["density"], floor(N, 0.0)); // Density in state always >= 0
@@ -122,8 +182,8 @@ void EvolveDensity::finally(const Options& state) {
   // but retain densities which fall below zero
   N.setBoundaryTo(get<Field3D>(species["density"]));
 
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
-    // Electrostatic potential set -> include ExB flow
+  if ((fabs(charge) > 1e-5) and state.isSection("fields") and state["fields"].isSet("phi")) {
+    // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
@@ -149,7 +209,7 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par(N, V, fastest_wave);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave);
   }
 
   if (low_n_diffuse) {
@@ -159,9 +219,15 @@ void EvolveDensity::finally(const Options& state) {
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(N) += FV::Div_par_K_Grad_par(low_n_coeff, N);
   }
+
   if (low_n_diffuse_perp) {
     ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
                                     bndry_flux);
+  }
+
+  if (low_p_diffuse_perp) {
+    Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
+    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N, true);
   }
 
   if (hyper_z > 0.) {
@@ -175,6 +241,11 @@ void EvolveDensity::finally(const Options& state) {
   }
   ddt(N) += Sn;
 
+  // Scale time derivatives
+  if (state.isSet("scale_timederivs")) {
+    ddt(N) *= get<Field3D>(state["scale_timederivs"]);
+  }
+
   if (evolve_log) {
     ddt(logN) = ddt(N) / N;
   }
@@ -186,6 +257,17 @@ void EvolveDensity::finally(const Options& state) {
     }
   }
 #endif
+
+  if (diagnose) {
+    // Save flows if they are set
+
+    if (species.isSet("particle_flow_xlow")) {
+      flow_xlow = get<Field3D>(species["particle_flow_xlow"]);
+    }
+    if (species.isSet("particle_flow_ylow")) {
+      flow_ylow = get<Field3D>(species["particle_flow_ylow"]);
+    }
+  }
 }
 
 void EvolveDensity::outputVars(Options& state) {
@@ -232,5 +314,29 @@ void EvolveDensity::outputVars(Options& state) {
                     {"long_name", name + " number density source"},
                     {"species", name},
                     {"source", "evolve_density"}});
+
+    // If fluxes have been set then add them to the output
+    auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
+    if (flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_xlow")], flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                    {"standard_name", "particle flow"},
+                    {"long_name", name + " particle flow in X. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+    }
+    if (flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_ylow")], flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                    {"standard_name", "particle flow"},
+                    {"long_name", name + " particle flow in Y. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+    }
   }
 }

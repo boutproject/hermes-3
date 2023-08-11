@@ -16,7 +16,14 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   ASSERT1(get<BoutReal>(atom2["AA"]) == Aion); // Check that the mass is consistent
 
   // Calculate effective temperature in eV
-  const Field3D Teff = (Tatom / Aatom + Tion / Aion) * Tnorm;
+  Field3D Teff = (Tatom / Aatom + Tion / Aion) * Tnorm;
+  for (auto& i : Teff.getRegion("RGN_NOBNDRY")) {
+    if (Teff[i] < 0.01) {
+      Teff[i] = 0.01;
+    } else if (Teff[i] > 10000) {
+      Teff[i] = 10000;
+    }
+  }
   const Field3D lnT = log(Teff);
 
   Field3D ln_sigmav = -18.5028;
@@ -47,15 +54,32 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   } // Skip the case where the same isotope swaps places
 
   // Transfer momentum
-  atom_mom = R * Aatom * get<Field3D>(atom1["velocity"]);
+  auto atom1_velocity = get<Field3D>(atom1["velocity"]);
+  auto ion1_velocity = get<Field3D>(ion1["velocity"]);
+
+  // Transfer fom atom1 to ion2
+  atom_mom = R * Aatom * atom1_velocity;
   subtract(atom1["momentum_source"], atom_mom);
   add(ion2["momentum_source"], atom_mom);
 
-  ion_mom = R * Aion * get<Field3D>(ion1["velocity"]);
+  // Transfer from ion1 to atom2
+  ion_mom = R * Aion * ion1_velocity;
   subtract(ion1["momentum_source"], ion_mom);
   add(atom2["momentum_source"], ion_mom);
 
-  // Transfer energy
+  // Frictional heating: Friction force between ions and atoms
+  // converts kinetic energy to thermal energy
+  //
+  // This handles the general case that ion1 != ion2
+  // and atom1 != atom2
+
+  auto ion2_velocity = get<Field3D>(ion2["velocity"]);
+  add(ion2["energy_source"], 0.5 * Aatom * R * SQ(ion2_velocity - atom1_velocity));
+
+  auto atom2_velocity = get<Field3D>(atom2["velocity"]);
+  add(atom2["energy_source"], 0.5 * Aion * R * SQ(atom2_velocity - ion1_velocity));
+
+  // Transfer thermal energy
   atom_energy = (3. / 2) * R * Tatom;
   subtract(atom1["energy_source"], atom_energy);
   add(ion2["energy_source"], atom_energy);

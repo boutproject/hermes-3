@@ -1,9 +1,9 @@
 
 #include "../include/recycling.hxx"
 
-#include "utils.hxx" // for trim, strsplit
-#include "bout/coordinates.hxx"
-#include "bout/mesh.hxx"
+#include <bout/utils.hxx> // for trim, strsplit
+#include <bout/coordinates.hxx>
+#include <bout/mesh.hxx>
 
 using bout::globals::mesh;
 

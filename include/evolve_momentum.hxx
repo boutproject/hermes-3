@@ -44,10 +44,15 @@ private:
   bool poloidal_flows;  // Include ExB flow in Y direction?
 
   BoutReal density_floor;
+  bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
+  BoutReal pressure_floor;
+  bool low_p_diffuse_perp; ///< Cross-field diffusion at low pressure?
 
   BoutReal hyper_z;  ///< Hyper-diffusion
 
   bool diagnose; ///< Output additional diagnostics?
+  bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
+  Field3D flow_xlow, flow_ylow; ///< Momentum flow diagnostics
 };
 
 namespace {

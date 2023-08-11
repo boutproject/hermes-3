@@ -27,6 +27,8 @@ struct EvolveDensity : public Component {
   /// - N<name>   e.g. "Ne", "Nd+"
   ///   - source    Source of particles [/m^3/s]
   ///               NOTE: This overrides mesh input N<name>_src
+  ///   - source_only_in_core         Zero the source outside the closed field-line region?
+  ///   - neumann_boundary_average_z  Apply Neumann boundaries with Z average?
   ///
   EvolveDensity(std::string name, Options &options, Solver *solver);
 
@@ -65,10 +67,13 @@ private:
 
   bool bndry_flux;      ///< Allow flows through boundaries?
   bool poloidal_flows;  ///< Include ExB flow in Y direction?
+  bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
 
   BoutReal density_floor;
   bool low_n_diffuse;   ///< Parallel diffusion at low density
   bool low_n_diffuse_perp;  ///< Perpendicular diffusion at low density
+  BoutReal pressure_floor; ///< When non-zero pressure is needed
+  bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low pressure?
   BoutReal hyper_z;    ///< Hyper-diffusion in Z
 
   bool evolve_log; ///< Evolve logarithm of density?
@@ -78,6 +83,7 @@ private:
   Field3D Sn; ///< Total density source
 
   bool diagnose; ///< Output additional diagnostics?
+  Field3D flow_xlow, flow_ylow; ///< Particle flow diagnostics
 };
 
 namespace {

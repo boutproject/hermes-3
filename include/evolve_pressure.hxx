@@ -2,7 +2,7 @@
 #ifndef EVOLVE_PRESSURE_H
 #define EVOLVE_PRESSURE_H
 
-#include <field3d.hxx>
+#include <bout/field3d.hxx>
 
 #include "component.hxx"
 
@@ -33,6 +33,8 @@ struct EvolvePressure : public Component {
   /// - P<name>  e.g. "Pe", "Pd+"
   ///   - source     Source of pressure [Pa / s].
   ///                NOTE: This overrides mesh input P<name>_src
+  ///   - source_only_in_core         Zero the source outside the closed field-line region?
+  ///   - neumann_boundary_average_z  Apply Neumann boundaries with Z average?
   ///
   EvolvePressure(std::string name, Options& options, Solver* solver);
 
@@ -74,6 +76,7 @@ private:
   Field3D T, N; ///< Temperature, density
 
   bool bndry_flux;
+  bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
@@ -85,15 +88,23 @@ private:
   Field3D logP;    ///< Natural logarithm of P
 
   BoutReal density_floor; ///< Minimum density for calculating T
+  bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
+  BoutReal temperature_floor; ///< Low temperature scale for low_T_diffuse_perp
+  bool low_T_diffuse_perp; ///< Add cross-field diffusion at low temperature?
+  BoutReal pressure_floor; ///< When non-zero pressure is needed
+  bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
+
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 
   Field3D source; ///< External pressure source
   Field3D Sp;     ///< Total pressure source
 
   BoutReal hyper_z; ///< Hyper-diffusion
+  BoutReal hyper_z_T; ///< 4th-order dissipation in T
 
   bool diagnose; ///< Output additional diagnostics?
   bool enable_precon; ///< Enable preconditioner?
+  Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
 };
 
 namespace {

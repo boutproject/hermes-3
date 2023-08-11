@@ -100,6 +100,10 @@ SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) 
   // not the value at the boundary half-way between cells. This is due
   // to how twist-shift boundary conditions and non-aligned inputs are
   // treated; using the cell boundary gives incorrect results.
+
+  floor_potential = options["floor_potential"]
+                        .doc("Apply a floor to wall potential when calculating Ve?")
+                        .withDefault<bool>(true);
 }
 
 void SheathBoundary::transform(Options &state) {
@@ -323,11 +327,12 @@ void SheathBoundary::transform(Options &state) {
         const BoutReal tesheath = 0.5 * (Te[im] + Te[i]);  // electron temperature
         const BoutReal phi_wall = wall_potential[i];
 
-        const BoutReal phisheath = floor(
-            0.5 * (phi[im] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
+        const BoutReal phisheath = floor_potential ? floor(
+            0.5 * (phi[im] + phi[i]), phi_wall) // Electron saturation at phi = phi_wall
+	    : 0.5 * (phi[im] + phi[i]);
 
         // Electron sheath heat transmission
-        const BoutReal gamma_e = 2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5);
+        const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
 
         // Electron velocity into sheath (< 0)
         const BoutReal vesheath = (tesheath < 1e-10) ?
@@ -385,10 +390,11 @@ void SheathBoundary::transform(Options &state) {
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]);  // electron temperature
         const BoutReal phi_wall = wall_potential[i];
-        const BoutReal phisheath = floor(0.5 * (phi[ip] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
+        const BoutReal phisheath = floor_potential ? floor(0.5 * (phi[ip] + phi[i]), phi_wall) // Electron saturation at phi = phi_wall
+                                                   : 0.5 * (phi[ip] + phi[i]);
 
         // Electron sheath heat transmission
-        const BoutReal gamma_e = 2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5);
+        const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
 
         // Electron velocity into sheath (> 0)
         const BoutReal vesheath = (tesheath < 1e-10) ?
