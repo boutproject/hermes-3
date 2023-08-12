@@ -3,6 +3,7 @@
 #include <bout/fv_ops.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/output_bout_types.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/neutral_mixed.hxx"
@@ -391,6 +392,20 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Pn) *= scale_timederivs;
     ddt(NVn) *= scale_timederivs;
   }
+
+#if CHECKLEVEL >= 1
+  for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(Nn)[i])) {
+      throw BoutException("ddt(N{}) non-finite at {}\n", name, i);
+    }
+    if (!std::isfinite(ddt(Pn)[i])) {
+      throw BoutException("ddt(P{}) non-finite at {}\n", name, i);
+    }
+    if (!std::isfinite(ddt(NVn)[i])) {
+      throw BoutException("ddt(NV{}) non-finite at {}\n", name, i);
+    }
+  }
+#endif
 }
 
 void NeutralMixed::outputVars(Options& state) {

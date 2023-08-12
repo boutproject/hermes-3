@@ -16,7 +16,14 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   ASSERT1(get<BoutReal>(atom2["AA"]) == Aion); // Check that the mass is consistent
 
   // Calculate effective temperature in eV
-  const Field3D Teff = (Tatom / Aatom + Tion / Aion) * Tnorm;
+  Field3D Teff = (Tatom / Aatom + Tion / Aion) * Tnorm;
+  for (auto& i : Teff.getRegion("RGN_NOBNDRY")) {
+    if (Teff[i] < 0.01) {
+      Teff[i] = 0.01;
+    } else if (Teff[i] > 10000) {
+      Teff[i] = 10000;
+    }
+  }
   const Field3D lnT = log(Teff);
 
   Field3D ln_sigmav = -18.5028;
