@@ -11,7 +11,7 @@
 
 /// Neutral gas model, evolving three components of velocity as axisymmetric fields
 ///
-/// Evolves neutral density, pressure and velocity
+/// Evolves neutral density, pressure and velocity as Field2D quantities
 struct NeutralFullVelocity : public Component {
   NeutralFullVelocity(const std::string& name, Options& options, Solver *solver);
   

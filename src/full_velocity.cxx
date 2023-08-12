@@ -1,5 +1,6 @@
 
 #include <bout/constants.hxx>
+#include <bout/output_bout_types.hxx>
 
 #include "../include/full_velocity.hxx"
 #include "../include/div_ops.hxx"
@@ -228,7 +229,7 @@ void NeutralFullVelocity::transform(Options &state) {
   set(localstate["pressure"], Pn2D);
   set(localstate["momentum"], Vnpar * Nn2D * AA);
   set(localstate["velocity"], Vnpar); // Parallel velocity
-  set(localstate["temperature"], 0.01);
+  set(localstate["temperature"], Tn2D);
 }
 
 /// Use the final simulation state to update internal state
@@ -239,8 +240,8 @@ void NeutralFullVelocity::finally(const Options &state) {
   // Density
   ddt(Nn2D) = -Div(Vn2D, Nn2D);
 
-  Field2D Nn2D_floor = floor(Nn2D, 1e-2);
-  
+  Field2D Nn2D_floor = floor(Nn2D, 1e-5);
+
   // Velocity
   ddt(Vn2D) = -Grad(Pn2D) / (AA * Nn2D_floor);
 
@@ -273,17 +274,26 @@ void NeutralFullVelocity::finally(const Options &state) {
   ddt(Vn2D).y += Ury * ddt(vr) + Uzy * ddt(vz);
 
   DivV2D = Div(Vn2D);
-  DivV2D.applyBoundary(0.0);
+  DivV2D.applyBoundary("neumann");
   mesh->communicate(DivV2D);
 
   // ddt(Vn2D) += Grad( (neutral_viscosity/3. + neutral_bulk) * DivV2D ) /
-  // Nn2D_floor;
+  //   Nn2D_floor;
 
   //////////////////////////////////////////////////////
   // Pressure
   ddt(Pn2D) = -Div(Vn2D, Pn2D) -
-              (gamma_ratio - 1.) * Pn2D * DivV2D * floor(Nn2D, 0) / Nn2D_floor +
+              (gamma_ratio - 1.) * Pn2D * DivV2D +
               Laplace_FV(neutral_conduction, Tn2D);
+
+  Field2D a = -Div(Vn2D, Pn2D);
+  Field2D b = Laplace_FV(neutral_conduction, Tn2D);
+
+  for (auto& i : Pn2D.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(Pn2D)[i])) {
+      throw BoutException("1: ddt(P{}) non-finite at {}: {} {} {} {}\n", name, i, Pn2D[i], DivV2D[i], a[i], b[i]);
+    }
+  }
 
   ///////////////////////////////////////////////////////////////////
   // Boundary condition on fluxes
@@ -352,6 +362,12 @@ void NeutralFullVelocity::finally(const Options &state) {
         (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
   }
 
+  for (auto& i : Pn2D.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(Pn2D)[i])) {
+      throw BoutException("2: ddt(P{}) non-finite at {}\n", name, i);
+    }
+  }
+
   /////////////////////////////////////////////////////
   // Atomic processes
   
@@ -379,6 +395,26 @@ void NeutralFullVelocity::finally(const Options &state) {
       ddt(Nn2D)[i] = 0.0;
     }
   }
+
+#if CHECKLEVEL >= 1
+  for (auto& i : Nn2D.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(Nn2D)[i])) {
+      throw BoutException("ddt(N{}) non-finite at {}\n", name, i);
+    }
+    if (!std::isfinite(ddt(Pn2D)[i])) {
+      throw BoutException("ddt(P{}) non-finite at {}\n", name, i);
+    }
+    if (!std::isfinite(ddt(Vn2D).x[i])) {
+      throw BoutException("ddt(V{}.x) non-finite at {}\n", name, i);
+    }
+    if (!std::isfinite(ddt(Vn2D).y[i])) {
+      throw BoutException("ddt(V{}.y) non-finite at {}\n", name, i);
+    }
+    if (!std::isfinite(ddt(Vn2D).z[i])) {
+      throw BoutException("ddt(V{}.z) non-finite at {}\n", name, i);
+    }
+  }
+#endif
 }
 
 /// Add extra fields for output, or set attributes e.g docstrings
@@ -406,7 +442,7 @@ void NeutralFullVelocity::outputVars(Options &state) {
                                                 {"species", name},
                                                 {"source", "full_velocity"}});
 
-  set_with_attrs(state["DivV2D"], DivV2D, {
+  set_with_attrs(state["DivV2D_" + name], DivV2D, {
       {"time_dimension", "t"},
       {"units", "s^-1"},
       {"conversion", Omega_ci}
