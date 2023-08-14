@@ -140,6 +140,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
       subtract(species2["energy_source"], Q12);
     }
   }
+  collision_rates[species1.name()][species2.name()] = nu_12;
 }
 
 void Collisions::transform(Options& state) {
@@ -467,6 +468,36 @@ void Collisions::transform(Options& state) {
 
           collide(species1, species2, nu_12, 1.0);
         }
+      }
+    }
+  }
+}
+
+void Collisions::outputVars(Options& state) {
+  AUTO_TRACE();
+  // Normalisations
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+
+  /// Iterate through the first species in each collision pair
+  const std::map<std::string, Options>& level1 = collision_rates.getChildren();
+  for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
+
+    /// Iterate through the second species in each collision pair
+    const std::map<std::string, Options>& level2 = collision_rates[s1->first].getChildren();
+    for (auto s2 = std::begin(level2); s2 != std::end(level2); ++s2) {
+
+      std::string name = s1->first + s2->first;
+
+      if (diagnose) {
+
+        set_with_attrs(state[std::string("K") + name + std::string("_coll")], collision_rates[s1->first][s2->first],
+                     {{"time_dimension", "t"},
+                      {"units", "s-1"},
+                      {"conversion", Omega_ci},
+                      {"standard_name", "collision frequency"},
+                      {"long_name", name + " collision frequency"},
+                      {"species", name},
+                      {"source", "collisions"}});
       }
     }
   }
