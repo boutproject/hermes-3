@@ -60,6 +60,7 @@ private:
   /// Calculated collision rates saved for post-processing and use by other components
   /// Saved in options, the BOUT++ dictionary-like object
   Options collision_rates; 
+  Options frictional_heating_sources;   // Also save frictional heating which is per species not per collision basis
 
   /// Save more diagnostics?
   bool diagnose;

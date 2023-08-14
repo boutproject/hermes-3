@@ -66,6 +66,15 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 
   add(species1["collision_frequency"], nu_12);
 
+  /// Record the frequency and initialise energy and momentum sources to 0
+  collision_rates[species1.name()][species2.name()]["frequency"] = nu_12;
+  collision_rates[species1.name()][species2.name()]["energy_source"] = 0;
+  collision_rates[species1.name()][species2.name()]["momentum_source"] = 0;
+
+  /// This is treated separately because both species in the collision get heated
+  /// Otherwise, since we save only one source per pair, the source for species1 would no longer equal -1*source for species2
+  collision_rates[species1.name()][species2.name()]["frictional_heating_energy_source"] = 0;
+
   if (&species1 != &species2) {
     // For collisions between different species
     // m_a n_a \nu_{ab} = m_b n_b \nu_{ba}
@@ -98,6 +107,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 
       add(species1["momentum_source"], F12);
       subtract(species2["momentum_source"], F12);
+      add(collision_rates[species1.name()][species2.name()]["momentum_source"], F12);
 
       if (frictional_heating) {
         // Heating due to friction and energy transfer
@@ -121,8 +131,13 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
         //  1) This term is always positive: Collisions don't lead to cooling
         //  2) In the limit that m_2 << m_1 (e.g. electron-ion collisions),
         //     the lighter species is heated more than the heavy species.
-        add(species1["energy_source"], (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12);
-        add(species2["energy_source"], (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12);
+        Field3D species1_source = (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12;
+        Field3D species2_source = (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12;
+
+        add(species1["energy_source"], species1_source);
+        add(species2["energy_source"], species2_source);
+        frictional_heating_sources[species1.name()][species1.name()+species2.name()] = species1_source;
+        frictional_heating_sources[species2.name()][species1.name()+species2.name()] = species2_source;
       }
     }
 
@@ -138,9 +153,16 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 
       add(species1["energy_source"], Q12);
       subtract(species2["energy_source"], Q12);
+      add(collision_rates[species1.name()][species2.name()]["energy_source"], Q12);
     }
+
+    
   }
-  collision_rates[species1.name()][species2.name()] = nu_12;
+
+  
+  
+  
+  // collision_rates[species1.name()][species2.name()] = nu_12;
 }
 
 void Collisions::transform(Options& state) {
@@ -476,7 +498,11 @@ void Collisions::transform(Options& state) {
 void Collisions::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   /// Iterate through the first species in each collision pair
   const std::map<std::string, Options>& level1 = collision_rates.getChildren();
@@ -487,10 +513,13 @@ void Collisions::outputVars(Options& state) {
     for (auto s2 = std::begin(level2); s2 != std::end(level2); ++s2) {
 
       std::string name = s1->first + s2->first;
+      Field3D frequency = collision_rates[s1->first][s2->first]["frequency"];
+      Field3D energy = collision_rates[s1->first][s2->first]["energy_source"];
+      Field3D momentum = collision_rates[s1->first][s2->first]["momentum_source"];
 
       if (diagnose) {
 
-        set_with_attrs(state[std::string("K") + name + std::string("_coll")], collision_rates[s1->first][s2->first],
+        set_with_attrs(state[std::string("K") + name + std::string("_coll")], frequency,
                      {{"time_dimension", "t"},
                       {"units", "s-1"},
                       {"conversion", Omega_ci},
@@ -498,6 +527,25 @@ void Collisions::outputVars(Options& state) {
                       {"long_name", name + " collision frequency"},
                       {"species", name},
                       {"source", "collisions"}});
+
+        set_with_attrs(state[std::string("E") + name + std::string("_coll")], energy,
+                     {{"time_dimension", "t"},
+                      {"units", "s-1"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy transfer"},
+                      {"long_name", name + " Energy transfer"},
+                      {"species", name},
+                      {"source", "collisions"}});
+
+        set_with_attrs(state[std::string("F") + name + std::string("_coll")], momentum,
+                     {{"time_dimension", "t"},
+                      {"units", "s-1"},
+                      {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                      {"standard_name", "momentum transfer"},
+                      {"long_name", name + " Momentum transfer"},
+                      {"species", name},
+                      {"source", "collisions"}});
+
       }
     }
   }
