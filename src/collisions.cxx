@@ -140,7 +140,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
       subtract(species2["energy_source"], Q12);
     }
   }
-  collision_rates[species1.name()][species2.name()] = nu_12;
+  set(collision_rates[species1.name()][species2.name()], nu_12);
 }
 
 void Collisions::transform(Options& state) {
@@ -490,7 +490,7 @@ void Collisions::outputVars(Options& state) {
 
       if (diagnose) {
 
-        set_with_attrs(state[std::string("K") + name + std::string("_coll")], collision_rates[s1->first][s2->first],
+        set_with_attrs(state[std::string("K") + name + std::string("_coll")], get<Field3D>(collision_rates[s1->first][s2->first]),
                      {{"time_dimension", "t"},
                       {"units", "s-1"},
                       {"conversion", Omega_ci},
