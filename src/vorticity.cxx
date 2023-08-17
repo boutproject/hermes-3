@@ -502,7 +502,7 @@ void Vorticity::transform(Options& state) {
 
     if (diamagnetic_polarisation) {
       // Calculate energy exchange term nonlinear in pressure
-      // ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
+      // (3 / 2) ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
       for (auto& kv : allspecies.getChildren()) {
         Options& species = allspecies[kv.first]; // Note: need non-const
 
@@ -522,7 +522,7 @@ void Vorticity::transform(Options& state) {
         const auto AA = get<BoutReal>(species["AA"]);
 
         add(species["energy_source"],
-            (3. / 2) * P * (AA / average_atomic_mass / charge) * DivJdia);
+            P * (AA / average_atomic_mass / charge) * DivJdia);
       }
     }
 
