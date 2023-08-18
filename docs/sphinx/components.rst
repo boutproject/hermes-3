@@ -1003,7 +1003,46 @@ of 1. Each returning atom has an energy of 3.5eV:
 
 .. doxygenstruct:: Recycling
    :members:
+      
+.. _binormal_stpm:
 
+binormal_stpm
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This adds a term to **all** species which includes the effects of cross-field
+drifts following the stellarator two point model:
+`Y. Feng et al., Plasma Phys. Control. Fusion 53 (2011) 024009 <http://dx.doi.org/10.1088/0741-3335/53/2/024009>`_
+
+.. code-block:: ini
+
+   [hermes]
+   components = ... , binormal_stpm
+
+   [binormal_stpm]
+   D = 1         # [m^2/s]  Density diffusion coefficient
+   chi = 3       # [m^2/s]  Thermal diffusion coefficient
+   nu = 1        # [m^2/s]  Momentum diffusion coefficient
+
+   Theta = 1e-3  # Field line pitch
+
+It is intended only for 1D simulations, to provide effective parallel
+diffusion of particles, momentum and energy due to the projection of
+cross-field diffusion:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial N}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{D}{\Theta}\partial_{||}N\right) \\
+   \frac{\partial P}{\partial t} =& \ldots + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\frac{\chi}{\Theta} N\partial_{||}T\right) \\
+   \frac{\partial}{\partial t}\left(NV\right) =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{\nu}{\Theta} \partial_{||}NV\right) 
+   \end{aligned}
+   
+The diffusion coefficients `D`, `\chi` and `\nu` and field line pitch `\Theta` are prescribed in the input file.
+
+
+.. doxygenstruct:: BinormalSTPM
+   :members:
+      
 Atomic and molecular reactions
 ------------------------------
 
