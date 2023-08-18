@@ -59,7 +59,7 @@ private:
 
   /// Calculated collision rates saved for post-processing and use by other components
   /// Saved in options, the BOUT++ dictionary-like object
-  Options collision_rates; 
+  Options collision_rates;
 
   /// Save more diagnostics?
   bool diagnose;
