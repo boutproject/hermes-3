@@ -265,7 +265,7 @@ void Collisions::transform(Options& state) {
 
         const Field3D nu_en = filledFrom(Ne, [&](auto& i) {
           // Electron thermal speed (normalised)
-          const BoutReal vth_e = sqrt((SI::Mp / SI::Me) * Te[i]);
+          const BoutReal vth_e = sqrt((SI::Mp / SI::Me) * Te[i] / Tnorm);
 
           // Electron-neutral collision rate
           return vth_e * Nnorm * Nn[i] * a0 * rho_s0;
