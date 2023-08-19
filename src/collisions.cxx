@@ -411,7 +411,7 @@ void Collisions::transform(Options& state) {
         // If temperature isn't set, assume zero
         const Field3D temperature2 =
             species2.isSet("temperature")
-                ? GET_NOBOUNDARY(Field3D, species2["temperature"])
+                ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
                 : 0.0;
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
