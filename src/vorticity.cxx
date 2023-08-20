@@ -500,32 +500,6 @@ void Vorticity::transform(Options& state) {
     DivJdia = Div(Jdia);
     ddt(Vort) += DivJdia;
 
-    if (diamagnetic_polarisation) {
-      // Calculate energy exchange term nonlinear in pressure
-      // (3 / 2) ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
-      for (auto& kv : allspecies.getChildren()) {
-        Options& species = allspecies[kv.first]; // Note: need non-const
-
-        if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
-              and species.isSet("AA"))) {
-          continue; // No pressure, charge or mass -> no polarisation current due to
-                    // diamagnetic flow
-        }
-
-        const auto charge = get<BoutReal>(species["charge"]);
-        if (fabs(charge) < 1e-5) {
-          // No charge
-          continue;
-        }
-
-        const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
-        const auto AA = get<BoutReal>(species["AA"]);
-
-        add(species["energy_source"],
-            P * (AA / average_atomic_mass / charge) * DivJdia);
-      }
-    }
-
     set(fields["DivJdia"], DivJdia);
   }
 

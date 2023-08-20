@@ -70,6 +70,8 @@ private:
   bool boussinesq; // If true, assume a constant mass density in Jpol
   BoutReal average_atomic_mass; // If boussinesq=true, mass density to use
   BoutReal density_floor; // Minimum mass density if boussinesq=false
+  bool advection; // Advect fluids by an approximate polarisation velocity?
+  bool diamagnetic_polarisation; // Calculate compression terms?
 };
 
 namespace {
