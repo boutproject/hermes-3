@@ -100,7 +100,7 @@ void Recycling::transform(Options& state) {
   // Get metric tensor components
   Coordinates* coord = mesh->getCoordinates();
 
-  const Coordaintes::FieldMetric& J = coord->J;
+  const Coordinates::FieldMetric& J = coord->J;
   const Coordinates::FieldMetric& dy = coord->dy;
   const Coordinates::FieldMetric& dx = coord->dx;
   const Coordinates::FieldMetric& dz = coord->dz;
@@ -147,20 +147,20 @@ void Recycling::transform(Options& state) {
           // Flow of recycled species inwards
           BoutReal flow =
               channel.target_multiplier * flux
-              * (J(r.ind, mesh->ystart) + J(r.ind, mesh->ystart - 1))
-              / (sqrt(g_22(r.ind, mesh->ystart)) + sqrt(g_22(r.ind, mesh->ystart - 1)));
+	    * (J(r.ind, mesh->ystart, jz) + J(r.ind, mesh->ystart - 1, jz))
+	    / (sqrt(g_22(r.ind, mesh->ystart, jz)) + sqrt(g_22(r.ind, mesh->ystart - 1, jz)));
 
           // Add to density source
           target_recycle_density_source(r.ind, mesh->ystart, jz) += flow 
-              / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+	    / (J(r.ind, mesh->ystart, jz) * dy(r.ind, mesh->ystart, jz));
           density_source(r.ind, mesh->ystart, jz) += flow 
-              / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+	    / (J(r.ind, mesh->ystart, jz) * dy(r.ind, mesh->ystart, jz));
 
           // energy of recycled particles
           target_recycle_energy_source(r.ind, mesh->ystart, jz) += channel.target_energy * flow 
-              / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+	    / (J(r.ind, mesh->ystart, jz) * dy(r.ind, mesh->ystart, jz));
           energy_source(r.ind, mesh->ystart, jz) += channel.target_energy * flow 
-              / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+	    / (J(r.ind, mesh->ystart, jz) * dy(r.ind, mesh->ystart, jz));
         }
       }
 
@@ -213,8 +213,8 @@ void Recycling::transform(Options& state) {
           for(int iz=0; iz < mesh->LocalNz; iz++){
 
             // Volume of cell adjacent to wall which will receive source
-            BoutReal volume = J(mesh->xend, iy) * dx(mesh->xend, iy)
-                 * dy(mesh->xend, iy) * dz(mesh->xend, iy);
+            BoutReal volume = J(mesh->xend, iy, iz) * dx(mesh->xend, iy, iz)
+	      * dy(mesh->xend, iy, iz) * dz(mesh->xend, iy, iz);
 
             // Flow of recycled species back from the edge
             // SOL edge = LHS flow of inner guard cells on the high X side (mesh->xend+1)
