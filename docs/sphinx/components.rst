@@ -1109,22 +1109,38 @@ The implementation is in the `ThermalForce` class:
 recycling
 ~~~~~~~~~
 
-This component calculates the flux of a species into a Y boundary,
+This component calculates the flux of a species into a boundary
 due to recycling of flow out of the boundary of another species.
 
 The boundary fluxes might be set by sheath boundary conditions,
 which potentially depend on the density and temperature of all species.
 Recycling therefore can't be calculated until all species boundary conditions
 have been set. It is therefore expected that this component is a top-level
-component which comes after boundary conditions are set.
+component (i.e. in the `Hermes` section) which comes after boundary conditions are set.
+
+Recycling has been implemented at the target, the SOL edge and the PFR edge.
+Each is off by default and must be activated with a separate flag. Each can be 
+assigned a separate recycle multiplier and recycle energy. 
+
+The chosen species must feature an outflow through the boundary - any cells
+with an inflow have their recycling source set to zero. If a sheath boundary condition
+is enabled, then this is automatically satisfied at the target through the Bohm condition.
+If it is not enabled, then the target boundary must be set to `free_o2`, `free_o3` or `decaylength` to 
+allow an outflow. If SOL or PFR recycling is enabled, a `free_o2`, `free_o3` or `decaylength`on
+their respective boundaries is required at all times.
 
 The recycling component has a `species` option, that is a list of species
 to recycle. For each of the species in that list, `recycling` will look in
 the corresponding section for the options `recycle_as`, `recycle_multiplier`
-and `recycle_energy`.
+and `recycle_energy` for each of the three implemented boundaries. Note that 
+the resulting recycling source is a simple
+multiplication of the outgoing species flow and the multiplier factor.
+This means that recycling `d+` ions into `d2` molecules would require a multiplier 
+of 0.5 to maintain a particle balance in the simulation.
 
 For example, recycling `d+` ions into `d` atoms with a recycling fraction
-of 1. Each returning atom has an energy of 3.5eV:
+of 0.95 at the target and 1.0 at the SOL and PFR edges. 
+Each returning atom has an energy of 3.5eV:
 
 .. code-block:: ini
 
@@ -1136,12 +1152,61 @@ of 1. Each returning atom has an energy of 3.5eV:
 
    [d+]
    recycle_as = d         # Species to recycle as
-   recycle_multiplier = 1 # Recycling fraction
-   recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+   target_recycle = true  
+   target_recycle_multiplier = 0.95 # Recycling fraction
+   target_recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+   sol_recycle = true
+   sol_recycle_multiplier = 1 # Recycling fraction
+   sol_recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+   sol_recycle = true
+   sol_recycle_multiplier = 1 # Recycling fraction
+   sol_recycle_energy = 3.5   # Energy of recycled particles [eV]
 
 .. doxygenstruct:: Recycling
    :members:
+      
+.. _binormal_stpm:
 
+binormal_stpm
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This adds a term to **all** species which includes the effects of cross-field
+drifts following the stellarator two point model:
+`Y. Feng et al., Plasma Phys. Control. Fusion 53 (2011) 024009 <http://dx.doi.org/10.1088/0741-3335/53/2/024009>`_
+
+.. code-block:: ini
+
+   [hermes]
+   components = ... , binormal_stpm
+
+   [binormal_stpm]
+   D = 1         # [m^2/s]  Density diffusion coefficient
+   chi = 3       # [m^2/s]  Thermal diffusion coefficient
+   nu = 1        # [m^2/s]  Momentum diffusion coefficient
+
+   Theta = 1e-3  # Field line pitch
+
+It is intended only for 1D simulations, to provide effective parallel
+diffusion of particles, momentum and energy due to the projection of
+cross-field diffusion:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial N}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{D}{\Theta}\partial_{||}N\right) \\
+   \frac{\partial P}{\partial t} =& \ldots + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\frac{\chi}{\Theta} N\partial_{||}T\right) \\
+   \frac{\partial}{\partial t}\left(NV\right) =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{\nu}{\Theta} \partial_{||}NV\right) 
+   \end{aligned}
+   
+The diffusion coefficients `D`, `\chi` and `\nu` and field line pitch `\Theta` are prescribed in the input file.
+
+
+.. doxygenstruct:: BinormalSTPM
+   :members:
+      
 Atomic and molecular reactions
 ------------------------------
 

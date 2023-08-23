@@ -101,7 +101,7 @@ thermal_conduction = true  # in evolve_pressure
 diagnose = true
 
 recycle_as = d
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 [Nd+]
 # Initial condition for ion density.

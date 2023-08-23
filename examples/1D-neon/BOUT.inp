@@ -104,7 +104,7 @@ thermal_conduction = true  # in evolve_pressure
 diagnose = true   # Output diagnostics for these components?
 
 recycle_as = d
-recycle_multiplier = 1.0  # Recycling fraction
+target_recycle_multiplier = 1.0  # Recycling fraction
 
 [Nd+]
 
@@ -168,7 +168,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 [Nne+]
 function = 1e-5
@@ -188,7 +188,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 [Nne+2]
 function = 1e-5
@@ -208,7 +208,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 [Nne+3]
 function = 1e-5
@@ -228,7 +228,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
 
@@ -250,7 +250,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
 
@@ -272,7 +272,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
 
@@ -294,7 +294,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
 
@@ -316,7 +316,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
 
@@ -338,7 +338,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
 
@@ -360,7 +360,7 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-recycle_multiplier = 1  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
 

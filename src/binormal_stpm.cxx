@@ -39,7 +39,7 @@ BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions, Solver* solver
   chi_Theta = chi/Theta;
   D_Theta = D/Theta;
   nu_Theta = nu/Theta;
-  
+
 }
 
 void BinormalSTPM::transform(Options& state) {
@@ -50,22 +50,27 @@ void BinormalSTPM::transform(Options& state) {
     const auto& species_name = kv.first;
 
     Options& species = allspecies[species_name];
+    auto AA = get<BoutReal>(species["AA"]);
 
-    const Field3D P = get<Field3D>(species["pressure"]);
-    const Field3D NV = get<Field3D>(species["momentum"]);
-    const Field3D N = get<Field3D>(species["density"]);
+    const Field3D N = species.isSet("density")
+      ? GET_NOBOUNDARY(Field3D, species["density"])
+      : 0.0;
+    const Field3D T = species.isSet("temperature")
+      ? GET_NOBOUNDARY(Field3D, species["temperature"])
+      : 0.0;
+    const Field3D NV = species.isSet("momentum")
+      ? GET_NOBOUNDARY(Field3D, species["momentum"])
+      : 0.0;
     
     add(species["pressure_source"],
-	(2. / 3) * (1/Theta) * FV::Div_par_K_Grad_par(chi_Theta, P, false));
+	(2. / 3) * (1/Theta) * FV::Div_par_K_Grad_par(chi_Theta*N, T, false));
 
     add(species["momentum_source"],
-	(1/Theta) * FV::Div_par_K_Grad_par(nu_Theta, NV, false));
+	(1/Theta) * FV::Div_par_K_Grad_par(AA*nu_Theta, NV, false));
     
     add(species["density_source"],
 	(1/Theta) * FV::Div_par_K_Grad_par(D_Theta, N, false));
 
   }
 }
-
-
 
