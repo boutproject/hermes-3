@@ -48,7 +48,7 @@ struct NeutralBoundary : public Component {
 private:
   std::string name; ///< Short name of species e.g "d"
 
-  BoutReal gamma_heat; ///< Heat flux coefficient
+  BoutReal target_gamma_heat, sol_gamma_heat, pfr_gamma_heat; ///< Heat flux coefficient
   Field3D energy_source_diagnostic; ///< Diagnostic for power lost to wall
 
   bool diagnose; ///> Save diagnostic variables?

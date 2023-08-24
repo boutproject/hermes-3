@@ -10,16 +10,24 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions, Solver* 
 
   auto& options = alloptions[name];
 
-  gamma_heat = options["gamma_heat"]
-                   .doc("Neutral boundary heat transmission coefficient")
+  target_gamma_heat = options["target_gamma_heat"]
+                   .doc("Neutral boundary heat transmission coefficient on target")
+                   .withDefault(0.0);
+
+  sol_gamma_heat = options["sol_gamma_heat"]
+                   .doc("Neutral boundary heat transmission coefficient in SOL")
+                   .withDefault(0.0);
+
+  pfr_gamma_heat = options["pfr_gamma_heat"]
+                   .doc("Neutral boundary heat transmission coefficient in PFR")
                    .withDefault(0.0);
 
   diagnose = options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
 
-  lower_y = options["neutral_lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
-  upper_y = options["neutral_upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
-  sol = options["neutral_sol"].doc("Boundary on SOL?").withDefault<bool>(false);
-  pfr = options["neutral_pfr"].doc("Boundary on PFR?").withDefault<bool>(false);
+  lower_y = options["neutral_boundary_lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
+  upper_y = options["neutral_boundary_upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
+  sol = options["neutral_boundary_sol"].doc("Boundary on SOL?").withDefault<bool>(false);
+  pfr = options["neutral_boundary_pfr"].doc("Boundary on PFR?").withDefault<bool>(false);
 }
 
 void NeutralBoundary::transform(Options& state) {
@@ -74,7 +82,7 @@ void NeutralBoundary::transform(Options& state) {
         const BoutReal v_th = sqrt(tnsheath / AA);
 
         // Heat flux (> 0)
-        const BoutReal q = gamma_heat * nnsheath * tnsheath * v_th;
+        const BoutReal q = target_gamma_heat * nnsheath * tnsheath * v_th;
         // Multiply by cell area to get power
         BoutReal flux = q * (coord->J[i] + coord->J[im])
                         / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
@@ -113,7 +121,7 @@ void NeutralBoundary::transform(Options& state) {
         const BoutReal v_th = sqrt(tnsheath / AA);
 
         // Heat flux (> 0)
-        const BoutReal q = gamma_heat * nnsheath * tnsheath * v_th;
+        const BoutReal q = target_gamma_heat * nnsheath * tnsheath * v_th;
         // Multiply by cell area to get power
         BoutReal flux = q * (coord->J[i] + coord->J[ip])
                         / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
@@ -145,7 +153,7 @@ void NeutralBoundary::transform(Options& state) {
           const BoutReal v_th = sqrt(tnsheath / AA);
 
           // Heat flux (> 0)
-          const BoutReal q = gamma_heat * nnsheath * tnsheath * v_th;
+          const BoutReal q = sol_gamma_heat * nnsheath * tnsheath * v_th;
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->dy[i] + coord->dy[ig]) * (coord->dz[i] + coord->dz[ig])
@@ -180,7 +188,7 @@ void NeutralBoundary::transform(Options& state) {
           const BoutReal v_th = sqrt(tnsheath / AA);
 
           // Heat flux (> 0)
-          const BoutReal q = gamma_heat * nnsheath * tnsheath * v_th;
+          const BoutReal q = pfr_gamma_heat * nnsheath * tnsheath * v_th;
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->dy[i] + coord->dy[ig]) * (coord->dz[i] + coord->dz[ig])
