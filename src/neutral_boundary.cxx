@@ -1,4 +1,5 @@
 #include "bout/mesh.hxx"
+#include <bout/constants.hxx>
 using bout::globals::mesh;
 
 #include "../include/neutral_boundary.hxx"
@@ -12,6 +13,8 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions, Solver* 
   gamma_heat = options["gamma_heat"]
                    .doc("Neutral boundary heat transmission coefficient")
                    .withDefault(0.0);
+
+  diagnose = options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
 
   lower_y = options["neutral_lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
   upper_y = options["neutral_upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
@@ -42,6 +45,7 @@ void NeutralBoundary::transform(Options& state) {
           : zeroFrom(Nn);
 
   Coordinates* coord = mesh->getCoordinates();
+  energy_source_diagnostic = 0;
 
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -77,6 +81,7 @@ void NeutralBoundary::transform(Options& state) {
 
         // Subtract from cell next to boundary
         energy_source[i] -= power;
+        energy_source_diagnostic[i] -= power;
       }
     }
   }
@@ -115,6 +120,7 @@ void NeutralBoundary::transform(Options& state) {
 
         // Subtract from cell next to boundary
         energy_source[i] -= power;
+        energy_source_diagnostic[i] -= power;
       }
     }
   }
@@ -134,3 +140,30 @@ void NeutralBoundary::transform(Options& state) {
   // Note: energy_source includes any sources previously set in other components
   set(species["energy_source"], fromFieldAligned(energy_source));
 }
+
+void NeutralBoundary::outputVars(Options& state) {
+  
+  AUTO_TRACE();
+  // Normalisations
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+  if (diagnose) {
+
+      AUTO_TRACE();
+
+      // Save particle and energy source for the species created during recycling
+
+      // Target recycling
+        set_with_attrs(state[{std::string("E") + name + std::string("_wall_refl")}], energy_source_diagnostic,
+                        {{"time_dimension", "t"},
+                        {"units", "W m^-3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", std::string("Wall reflection energy source of ") + name},
+                        {"source", "neutral_boundary"}});
+  }
+}
+

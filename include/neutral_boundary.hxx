@@ -43,11 +43,15 @@ struct NeutralBoundary : public Component {
   ///      - energy_source  Adds wall losses
   ///
   void transform(Options& state) override;
+  void outputVars(Options &state) override;
 
 private:
   std::string name; ///< Short name of species e.g "d"
 
   BoutReal gamma_heat; ///< Heat flux coefficient
+  Field3D energy_source_diagnostic; ///< Diagnostic for power lost to wall
+
+  bool diagnose; ///> Save diagnostic variables?
 
   bool lower_y; ///< Boundary condition at lower y?
   bool upper_y; ///< Boundary condition at upper y?
