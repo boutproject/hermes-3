@@ -18,6 +18,8 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions, Solver* 
 
   lower_y = options["neutral_lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
   upper_y = options["neutral_upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
+  sol = options["neutral_sol"].doc("Boundary on SOL?").withDefault<bool>(false);
+  pfr = options["neutral_pfr"].doc("Boundary on PFR?").withDefault<bool>(false);
 }
 
 void NeutralBoundary::transform(Options& state) {
@@ -47,6 +49,7 @@ void NeutralBoundary::transform(Options& state) {
   Coordinates* coord = mesh->getCoordinates();
   energy_source_diagnostic = 0;
 
+  // Targets
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
@@ -121,6 +124,76 @@ void NeutralBoundary::transform(Options& state) {
         // Subtract from cell next to boundary
         energy_source[i] -= power;
         energy_source_diagnostic[i] -= power;
+      }
+    }
+  }
+
+  // SOL edge
+  if (sol) {
+    if(mesh->lastX()){  // Only do this for the processor which has the edge region
+      for(int iy=0; iy < mesh->LocalNy ; iy++){
+        for(int iz=0; iz < mesh->LocalNz; iz++){
+
+          auto i = indexAt(Nn, mesh->xend, iy, iz);  // Final domain cell
+          auto ig = indexAt(Nn, mesh->xend+1, iy, iz);  // Guard cell
+          
+          // Calculate midpoint values at wall
+          const BoutReal nnsheath = 0.5 * (Nn[ig] + Nn[i]);
+          const BoutReal tnsheath = 0.5 * (Tn[ig] + Tn[i]);
+
+          // Thermal speed in one direction only (?)
+          const BoutReal v_th = sqrt(tnsheath / AA);
+
+          // Heat flux (> 0)
+          const BoutReal q = gamma_heat * nnsheath * tnsheath * v_th;
+
+          // Multiply by cell area to get power
+          BoutReal flux = q * (coord->dy[i] + coord->dy[ig]) * (coord->dz[i] + coord->dz[ig])
+                          / (sqrt(coord->g22[i]) + sqrt(coord->g22[ig]));
+
+          // Divide by volume of cell to get energy loss rate (> 0)
+          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);
+
+          // Subtract from cell next to boundary
+          energy_source[i] -= power;
+          energy_source_diagnostic[i] -= power;
+
+        }
+      }
+    }
+  }
+
+  // PFR edge
+  if (pfr) {
+    if ((mesh->firstX()) and (!mesh->periodicY(mesh->xstart))) {  // do loop if inner edge and not periodic (i.e. PFR)
+      for(int iy=0; iy < mesh->LocalNy ; iy++){
+        for(int iz=0; iz < mesh->LocalNz; iz++){
+
+          auto i = indexAt(Nn, mesh->xstart, iy, iz);  // Final domain cell
+          auto ig = indexAt(Nn, mesh->xstart-1, iy, iz);  // Guard cell
+          
+          // Calculate midpoint values at wall
+          const BoutReal nnsheath = 0.5 * (Nn[ig] + Nn[i]);
+          const BoutReal tnsheath = 0.5 * (Tn[ig] + Tn[i]);
+
+          // Thermal speed in one direction only (?)
+          const BoutReal v_th = sqrt(tnsheath / AA);
+
+          // Heat flux (> 0)
+          const BoutReal q = gamma_heat * nnsheath * tnsheath * v_th;
+
+          // Multiply by cell area to get power
+          BoutReal flux = q * (coord->dy[i] + coord->dy[ig]) * (coord->dz[i] + coord->dz[ig])
+                          / (sqrt(coord->g22[i]) + sqrt(coord->g22[ig]));
+
+          // Divide by volume of cell to get energy loss rate (> 0)
+          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);
+
+          // Subtract from cell next to boundary
+          energy_source[i] -= power;
+          energy_source_diagnostic[i] -= power;
+
+        }
       }
     }
   }

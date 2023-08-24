@@ -55,6 +55,8 @@ private:
 
   bool lower_y; ///< Boundary condition at lower y?
   bool upper_y; ///< Boundary condition at upper y?
+  bool sol; ///< Boundary condition at sol?
+  bool pfr; ///< Boundary condition at pfr?
 };
 
 namespace {
