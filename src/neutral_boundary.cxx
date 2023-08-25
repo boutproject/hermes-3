@@ -155,9 +155,10 @@ void NeutralBoundary::transform(Options& state) {
           // Heat flux (> 0)
           const BoutReal q = sol_gamma_heat * nnsheath * tnsheath * v_th;
 
-          // Multiply by cell area to get power
+          // Multiply by radial cell area to get power
           BoutReal flux = q * (coord->dy[i] + coord->dy[ig]) * (coord->dz[i] + coord->dz[ig])
-                          / (sqrt(coord->g22[i]) + sqrt(coord->g22[ig]));
+                          *  1/(sqrt(coord->g22[i]) + sqrt(coord->g22[ig]))   // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
+                          * sqrt(coord->g_33[i] + coord->g_33[ig]);   // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
 
           // Divide by volume of cell to get energy loss rate (> 0)
           BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);
