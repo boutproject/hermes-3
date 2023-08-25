@@ -49,7 +49,7 @@ private:
   std::string name; ///< Short name of species e.g "d"
 
   BoutReal target_gamma_heat, sol_gamma_heat, pfr_gamma_heat; ///< Heat flux coefficient
-  Field3D energy_source_diagnostic; ///< Diagnostic for power lost to wall
+  Field3D target_energy_source, wall_energy_source; ///< Diagnostic for power loss
 
   bool diagnose; ///> Save diagnostic variables?
 

@@ -55,7 +55,8 @@ void NeutralBoundary::transform(Options& state) {
           : zeroFrom(Nn);
 
   Coordinates* coord = mesh->getCoordinates();
-  energy_source_diagnostic = 0;
+  target_energy_source = 0;
+  wall_energy_source = 0;
 
   // Targets
   if (lower_y) {
@@ -92,7 +93,7 @@ void NeutralBoundary::transform(Options& state) {
 
         // Subtract from cell next to boundary
         energy_source[i] -= power;
-        energy_source_diagnostic[i] -= power;
+        target_energy_source[i] -= power;
       }
     }
   }
@@ -131,7 +132,7 @@ void NeutralBoundary::transform(Options& state) {
 
         // Subtract from cell next to boundary
         energy_source[i] -= power;
-        energy_source_diagnostic[i] -= power;
+        target_energy_source[i] -= power;
       }
     }
   }
@@ -165,7 +166,7 @@ void NeutralBoundary::transform(Options& state) {
 
           // Subtract from cell next to boundary
           energy_source[i] -= power;
-          energy_source_diagnostic[i] -= power;
+          wall_energy_source[i] -= power;
 
         }
       }
@@ -200,7 +201,7 @@ void NeutralBoundary::transform(Options& state) {
 
           // Subtract from cell next to boundary
           energy_source[i] -= power;
-          energy_source_diagnostic[i] -= power;
+          wall_energy_source[i] -= power;
 
         }
       }
@@ -239,13 +240,24 @@ void NeutralBoundary::outputVars(Options& state) {
       // Save particle and energy source for the species created during recycling
 
       // Target recycling
-        set_with_attrs(state[{std::string("E") + name + std::string("_wall_refl")}], energy_source_diagnostic,
+
+      if ((sol) or (pfr)) {
+        set_with_attrs(state[{std::string("E") + name + std::string("_wall_refl")}], wall_energy_source,
                         {{"time_dimension", "t"},
                         {"units", "W m^-3"},
                         {"conversion", Pnorm * Omega_ci},
                         {"standard_name", "energy source"},
                         {"long_name", std::string("Wall reflection energy source of ") + name},
                         {"source", "neutral_boundary"}});
+      }
+
+      set_with_attrs(state[{std::string("E") + name + std::string("_target_refl")}], target_energy_source,
+                      {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy source"},
+                      {"long_name", std::string("Wall reflection energy source of ") + name},
+                      {"source", "neutral_boundary"}});
   }
 }
 
