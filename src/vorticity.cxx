@@ -456,6 +456,36 @@ void Vorticity::transform(Options& state) {
 
       auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 
+      // Note: This calculation requires phi derivatives at the Y boundaries
+      //       Setting to free boundaries
+      if (phi.hasParallelSlices()) {
+        Field3D &phi_ydown = phi.ydown();
+        Field3D &phi_yup = phi.yup();
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            phi_ydown(r.ind, mesh->ystart - 1, jz) = 2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            phi_yup(r.ind, mesh->yend + 1, jz) = 2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
+          }
+        }
+      } else {
+        Field3D phi_fa = toFieldAligned(phi);
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            phi_fa(r.ind, mesh->ystart - 1, jz) = 2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            phi_fa(r.ind, mesh->yend + 1, jz) = 2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
+          }
+        }
+        phi = fromFieldAligned(phi_fa);
+      }
+
       Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
 
       // This term energetically balances diamagnetic term
@@ -472,7 +502,7 @@ void Vorticity::transform(Options& state) {
 
     if (diamagnetic_polarisation) {
       // Calculate energy exchange term nonlinear in pressure
-      // ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
+      // (3 / 2) ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
       for (auto& kv : allspecies.getChildren()) {
         Options& species = allspecies[kv.first]; // Note: need non-const
 
@@ -492,7 +522,7 @@ void Vorticity::transform(Options& state) {
         const auto AA = get<BoutReal>(species["AA"]);
 
         add(species["energy_source"],
-            (3. / 2) * P * (AA / average_atomic_mass / charge) * DivJdia);
+            P * (AA / average_atomic_mass / charge) * DivJdia);
       }
     }
 

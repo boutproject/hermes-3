@@ -47,6 +47,9 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
   frictional_heating = options["frictional_heating"]
     .doc("Include R dot v heating term as energy source?")
     .withDefault<bool>(true);
+
+  diagnose =
+      options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 }
 
 /// Calculate transfer of momentum and energy between species1 and species2
@@ -65,6 +68,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
   AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12);
+  set(collision_rates[species1.name()][species2.name()], nu_12);
 
   if (&species1 != &species2) {
     // For collisions between different species
@@ -81,6 +85,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
     });
 
     add(species2["collision_frequency"], nu);
+    set(collision_rates[species2.name()][species1.name()], nu);
 
     // Momentum exchange
     if (isSetFinalNoBoundary(species1["velocity"]) or
@@ -265,7 +270,7 @@ void Collisions::transform(Options& state) {
 
         const Field3D nu_en = filledFrom(Ne, [&](auto& i) {
           // Electron thermal speed (normalised)
-          const BoutReal vth_e = sqrt((SI::Mp / SI::Me) * Te[i]);
+          const BoutReal vth_e = sqrt((SI::Mp / SI::Me) * Te[i] / Tnorm);
 
           // Electron-neutral collision rate
           return vth_e * Nnorm * Nn[i] * a0 * rho_s0;
@@ -411,7 +416,7 @@ void Collisions::transform(Options& state) {
         // If temperature isn't set, assume zero
         const Field3D temperature2 =
             species2.isSet("temperature")
-                ? GET_NOBOUNDARY(Field3D, species2["temperature"])
+                ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
                 : 0.0;
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
@@ -468,6 +473,40 @@ void Collisions::transform(Options& state) {
           collide(species1, species2, nu_12, 1.0);
         }
       }
+    }
+  }
+}
+
+void Collisions::outputVars(Options& state) {
+  AUTO_TRACE();
+
+  if (!diagnose) {
+    return; // Don't save diagnostics
+  }
+
+  // Normalisations
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+
+  /// Iterate through the first species in each collision pair
+  const std::map<std::string, Options>& level1 = collision_rates.getChildren();
+  for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
+    const Options& section = collision_rates[s1->first];
+
+    /// Iterate through the second species in each collision pair
+    const std::map<std::string, Options>& level2 = section.getChildren();
+    for (auto s2 = std::begin(level2); s2 != std::end(level2); ++s2) {
+
+      std::string name = s1->first + s2->first;
+
+      set_with_attrs(state[std::string("K") + name + std::string("_coll")],
+                     getNonFinal<Field3D>(section[s2->first]),
+                     {{"time_dimension", "t"},
+                      {"units", "s-1"},
+                      {"conversion", Omega_ci},
+                      {"standard_name", "collision frequency"},
+                      {"long_name", name + " collision frequency"},
+                      {"species", name},
+                      {"source", "collisions"}});
     }
   }
 }
