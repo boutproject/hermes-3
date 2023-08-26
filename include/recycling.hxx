@@ -61,8 +61,7 @@ private:
   // Recycling particle and energy sources for the different sources of recycling
   // Note that SOL, PFR and pump are not applicable to 1D
   Field3D target_recycle_density_source, target_recycle_energy_source; 
-  Field3D sol_recycle_density_source, sol_recycle_energy_source; 
-  Field3D pfr_recycle_density_source, pfr_recycle_energy_source;
+  Field3D wall_recycle_density_source, wall_recycle_energy_source;  ///< Recycling particle and energy sources for pfr + sol recycling
   Field3D pump_recycle_density_source, pump_recycle_energy_source; 
 
   Field3D radial_particle_outflow, radial_energy_outflow;  ///< Radial fluxes coming from evolve_density and evolve_pressure used in recycling calc
