@@ -107,6 +107,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     .doc("Add dissipation when phi < 0.0 at the sheath")
     .withDefault<bool>(false);
 
+  damp_core_vorticity = options["damp_core_vorticity"]
+	  .doc("Damp vorticity at the core boundary?")
+	  .withDefault<bool>(false);
+
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
   // so that phi can be saved and re-loaded
@@ -654,6 +658,22 @@ void Vorticity::finally(const Options& state) {
       }
     }
     ddt(Vort) += fromFieldAligned(dissipation);
+  }
+
+  if (damp_core_vorticity) {
+    // Damp axisymmetric vorticity near core boundary
+    if (mesh->firstX() and mesh->periodicY(mesh->xstart)) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        BoutReal vort_avg = 0.0; // Average Vort in Z
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          vort_avg += Vort(mesh->xstart, j, k);
+        }
+        vort_avg /= mesh->LocalNz;
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          ddt(Vort)(mesh->xstart, j, k) -= 0.01 * vort_avg;
+        }
+      }
+    }
   }
 }
 
