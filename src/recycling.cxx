@@ -246,7 +246,7 @@ void Recycling::transform(Options& state) {
             // Recycling source is 0 for each cell where the flow goes into instead of out of the domain
             BoutReal recycle_particle_flow = 0;
             if (radial_particle_outflow(mesh->xend+1, iy, iz) > 0) {
-              recycle_particle_flow = channel.sol_multiplier * radial_particle_outflow(mesh->xend+1, iy, iz); 
+              recycle_particle_flow = multiplier * radial_particle_outflow(mesh->xend+1, iy, iz); 
             } 
 
             // Divide by volume to get source
