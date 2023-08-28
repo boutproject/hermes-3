@@ -198,6 +198,8 @@ void IonViscosity::transform(Options &state) {
     }
 #endif
 
+    Pi_ci.applyBoundary("neumann");
+
     // Divergence of current in vorticity equation
     Field3D DivJ = Div(0.5 * Pi_ci * Curlb_B) -
       Div_n_bxGrad_f_B_XPPM(1. / 3, Pi_ci, false, true);
@@ -213,12 +215,13 @@ void IonViscosity::transform(Options &state) {
       auto search = diagnostics.find(species_name);
       if (search == diagnostics.end()) {
         // First time, create diagnostic
-        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar});
+        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ});
       } else {
         // Update diagnostic values
         auto& d = search->second;
         d.Pi_ciperp = Pi_ciperp;
         d.Pi_cipar = Pi_cipar;
+        d.DivJ = DivJ;
       }
     }
   }
@@ -231,6 +234,7 @@ void IonViscosity::outputVars(Options &state) {
     // Normalisations
     auto Nnorm = get<BoutReal>(state["Nnorm"]);
     auto Tnorm = get<BoutReal>(state["Tnorm"]);
+    auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
     for (const auto& it : diagnostics) {
@@ -252,6 +256,14 @@ void IonViscosity::outputVars(Options &state) {
                       {"conversion", Pnorm},
                       {"standard_name", "Viscous pressure"},
                       {"long_name", species_name + " parallel collisional viscous pressure"},
+                      {"species", species_name},
+                      {"source", "ion_viscosity"}});
+
+      set_with_attrs(state[std::string("DivJvis_") + species_name], d.DivJ,
+                     {{"time_dimension", "t"},
+                      {"units", "A m^-3"},
+                      {"conversion", SI::qe * Nnorm * Omega_ci},
+                      {"long_name", std::string("Divergence of viscous current due to species") + species_name},
                       {"species", species_name},
                       {"source", "ion_viscosity"}});
     }
