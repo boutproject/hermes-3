@@ -23,6 +23,32 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int nz = f.getNz();
   return Ind3D{(x * ny + y) * nz + z, ny, nz};
 }
+
+/// Limited free gradient of log of a quantity
+/// This ensures that the guard cell values remain positive
+/// while also ensuring that the quantity never increases
+///
+///  fm  fc | fp
+///         ^ boundary
+///
+/// exp( 2*log(fc) - log(fm) )
+///
+BoutReal limitFree(BoutReal fm, BoutReal fc) {
+  if (fm < fc) {
+    return fc; // Neumann rather than increasing into boundary
+  }
+  if (fm < 1e-10) {
+    return fc; // Low / no density condition
+  }
+  BoutReal fp = SQ(fc) / fm;
+#if CHECKLEVEL >= 2
+  if (!std::isfinite(fp)) {
+    throw BoutException("SheathBoundary limitFree: {}, {} -> {}", fm, fc, fp);
+  }
+#endif
+
+  return fp;
+}
 }
 
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
@@ -459,6 +485,38 @@ void Vorticity::transform(Options& state) {
       // because it cancels out in the expression for current
 
       auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+
+      // Note: We need boundary conditions on P, so apply the same
+      //       free boundary condition as sheath_boundary.
+      if (P.hasParallelSlices()) {
+        Field3D &P_ydown = P.ydown();
+        Field3D &P_yup = P.yup();
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            P_ydown(r.ind, mesh->ystart - 1, jz) = 2 * P(r.ind, mesh->ystart, jz) - P_yup(r.ind, mesh->ystart + 1, jz);
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
+          }
+        }
+      } else {
+        Field3D P_fa = toFieldAligned(P);
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            auto i = indexAt(P_fa, r.ind, mesh->ystart, jz);
+            P_fa[i.ym()] = limitFree(P_fa[i.yp()], P_fa[i]);
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            auto i = indexAt(P_fa, r.ind, mesh->yend, jz);
+            P_fa[i.yp()] = limitFree(P_fa[i.ym()], P_fa[i]);
+          }
+        }
+        P = fromFieldAligned(P_fa);
+      }
 
       // Note: This calculation requires phi derivatives at the Y boundaries
       //       Setting to free boundaries
