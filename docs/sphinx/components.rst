@@ -787,8 +787,15 @@ is set on parallel velocity and momentum. It is a species-specific
 component and so goes in the list of components for the species
 that the boundary condition should be applied to.
 
-An energy sink is added to the flux of heat to the wall, with
-heat flux `q`:
+A source of neutral cooling is added in accordance with the approach in the thesis of D.Power 2023.
+The source represents two kinds of neutral reflection:
+
+- Fast reflection, where a neutral atom hits the wall and reflects having lost some energy,
+- Thermal reflection, where a neutral atom hits the wall, recombines into a molecule, and then
+  is assumed to immediately dissociate at the Franck Condon dissociation temperature of 3eV.
+
+The energy sink has a heat flux `q` calculated from thermal velocity at the wall and a 
+heat transmission coefficient:
 
 .. math::
 
@@ -796,7 +803,19 @@ heat flux `q`:
 
    v_{th} = \sqrt{eT / m}
 
-The factor `gamma_heat`
+   \gamma_{heat} = 1 - \alpha_{n} R_{r} - (1 - R_{r}) (\frac{T_{FC}}{2 T})
+
+Where :math:`\alpha_{n}` is the energy retained by the neutral particle after reflection,
+:math:`R_{r}` is the fraction of neutral particles that undergo fast reflection and 
+:math:`T_{FC}` is the Franck-Condon dissociation temperature, currently hardcoded to 3eV.
+Since different regions of the tokamak feature different incidence angles and may feature 
+different materials, the energy reflection coefficient and the fast reflection fraction 
+can be set individually for the target, PFR and SOL walls. The default values are 0.75
+for :math:`\alpha_{n}` and 0.8 for :math:`R_{r}` and correspond to approximate values for 
+tungsten for incidence angles seen at the target. (Power, 2023)
+
+Here are the options set to their defaults. Note that the SOL and PFR are set to have no
+reflection by default so that it is compatible with a model of any dimensionality which has a target.
 
 .. code-block:: ini
 
@@ -806,9 +825,18 @@ The factor `gamma_heat`
    [d]
    type = ... , neutral_boundary
 
-   gamma_heat = 3  # Neutral boundary heat transmission coefficient
-   neutral_lower_y = true  # Boundary on lower y?
-   neutral_upper_y = true  # Boundary on upper y?
+   neutral_boundary_sol = true
+   neutral_boundary_pfr = true
+   neutral_boundary_upper_y = true
+   neutral_boundary_lower_y = true 
+
+   target_energy_refl_factor = 0.75
+   sol_energy_refl_factor = 0.75
+   pfr_energy_refl_factor = 0.75
+
+   target_fast_refl_fraction = 0.80
+   sol_fast_refl_fraction = 0.80
+   pfr_fast_refl_fraction = 0.80
 
 .. doxygenstruct:: NeutralBoundary
    :members:
