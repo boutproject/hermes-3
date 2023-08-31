@@ -137,7 +137,7 @@ void NeutralBoundary::transform(Options& state) {
     }
   }
 
-  // SOL edge
+    // SOL edge
   if (sol) {
     if(mesh->lastX()){  // Only do this for the processor which has the edge region
       for(int iy=0; iy < mesh->LocalNy ; iy++){
@@ -157,12 +157,19 @@ void NeutralBoundary::transform(Options& state) {
           const BoutReal q = sol_gamma_heat * nnsheath * tnsheath * v_th;
 
           // Multiply by radial cell area to get power
-          BoutReal flux = q * (coord->dy[i] + coord->dy[ig]) * (coord->dz[i] + coord->dz[ig])
-                          *  1/(sqrt(coord->g22[i]) + sqrt(coord->g22[ig]))   // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
-                          * sqrt(coord->g_33[i] + coord->g_33[ig]);   // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+          // Expanded form of the calculation for clarity
+
+          // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
+          BoutReal dpolsheath = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
+
+          // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+          BoutReal dtorsheath = 0.5*(coord->dz[i] + coord->dz[ig]) * 0.5*(sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+
+          BoutReal dasheath = dpolsheath * dtorsheath;  // [m^2]
+          BoutReal flux = q * dasheath;  // [W]
 
           // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);
+          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [W m^-3]
 
           // Subtract from cell next to boundary
           energy_source[i] -= power;
@@ -192,12 +199,20 @@ void NeutralBoundary::transform(Options& state) {
           // Heat flux (> 0)
           const BoutReal q = pfr_gamma_heat * nnsheath * tnsheath * v_th;
 
-          // Multiply by cell area to get power
-          BoutReal flux = q * (coord->dy[i] + coord->dy[ig]) * (coord->dz[i] + coord->dz[ig])
-                          / (sqrt(coord->g22[i]) + sqrt(coord->g22[ig]));
+          // Multiply by radial cell area to get power
+          // Expanded form of the calculation for clarity
+
+          // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
+          BoutReal dpolsheath = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
+
+          // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+          BoutReal dtorsheath = 0.5*(coord->dz[i] + coord->dz[ig]) * 0.5*(sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+
+          BoutReal dasheath = dpolsheath * dtorsheath;  // [m^2]
+          BoutReal flux = q * dasheath;  // [W]
 
           // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);
+          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [W m^-3]
 
           // Subtract from cell next to boundary
           energy_source[i] -= power;
