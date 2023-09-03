@@ -475,7 +475,7 @@ void Recycling::outputVars(Options& state) {
 
         // Neutral pump
         if (neutral_pump) {
-          set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump_recycle")}], pump_recycle_density_source,
+          set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump")}], pump_recycle_density_source,
                           {{"time_dimension", "t"},
                           {"units", "m^-3 s^-1"},
                           {"conversion", Nnorm * Omega_ci},
@@ -483,7 +483,7 @@ void Recycling::outputVars(Options& state) {
                           {"long_name", std::string("Pump recycling particle source of ") + channel.to},
                           {"source", "recycling"}});
     
-          set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump_recycle")}], pump_recycle_energy_source,
+          set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump")}], pump_recycle_energy_source,
                           {{"time_dimension", "t"},
                           {"units", "W m^-3"},
                           {"conversion", Pnorm * Omega_ci},
