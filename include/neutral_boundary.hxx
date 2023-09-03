@@ -48,7 +48,11 @@ struct NeutralBoundary : public Component {
 private:
   std::string name; ///< Short name of species e.g "d"
 
-  BoutReal target_gamma_heat, sol_gamma_heat, pfr_gamma_heat; ///< Heat flux coefficient
+  BoutReal Tnorm; // Temperature normalisation [eV]
+
+  BoutReal target_energy_refl_factor, sol_energy_refl_factor, pfr_energy_refl_factor; ///< Fraction of energy retained after reflection
+  BoutReal target_fast_refl_fraction, sol_fast_refl_fraction, pfr_fast_refl_fraction; ///< Fraction of neutrals undergoing fast reflection
+
   Field3D target_energy_source, wall_energy_source; ///< Diagnostic for power loss
 
   bool diagnose; ///> Save diagnostic variables?

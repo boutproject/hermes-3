@@ -9,30 +9,49 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions, Solver* 
   AUTO_TRACE();
 
   auto& options = alloptions[name];
-
-  target_gamma_heat = options["target_gamma_heat"]
-                   .doc("Neutral boundary heat transmission coefficient on target")
-                   .withDefault(0.0);
-
-  sol_gamma_heat = options["sol_gamma_heat"]
-                   .doc("Neutral boundary heat transmission coefficient in SOL")
-                   .withDefault(0.0);
-
-  pfr_gamma_heat = options["pfr_gamma_heat"]
-                   .doc("Neutral boundary heat transmission coefficient in PFR")
-                   .withDefault(0.0);
+  const Options& units = alloptions["units"];
+  Tnorm = units["eV"];
 
   diagnose = options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
-
   lower_y = options["neutral_boundary_lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
   upper_y = options["neutral_boundary_upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
   sol = options["neutral_boundary_sol"].doc("Boundary on SOL?").withDefault<bool>(false);
   pfr = options["neutral_boundary_pfr"].doc("Boundary on PFR?").withDefault<bool>(false);
+
+  target_energy_refl_factor =
+        options["target_energy_refl_factor"]
+            .doc("Fraction of energy retained by neutral particles after wall reflection at target")
+            .withDefault<BoutReal>(0.75);
+
+  sol_energy_refl_factor =
+        options["sol_energy_refl_factor"]
+            .doc("Fraction of energy retained by neutral particles after wall reflection at SOL")
+            .withDefault<BoutReal>(0.75);
+
+  pfr_energy_refl_factor =
+        options["pfr_energy_refl_factor"]
+            .doc("Fraction of energy retained by neutral particles after wall reflection at PFR")
+            .withDefault<BoutReal>(0.75);
+
+  target_fast_refl_fraction =
+        options["target_fast_refl_fraction"]
+            .doc("Fraction of neutrals that are undergoing fast reflection at the target")
+            .withDefault<BoutReal>(0.8);
+
+  sol_fast_refl_fraction =
+        options["sol_fast_refl_fraction"]
+            .doc("Fraction of neutrals that are undergoing fast reflection at the sol")
+            .withDefault<BoutReal>(0.8);
+  
+  pfr_fast_refl_fraction =
+        options["pfr_fast_refl_fraction"]
+            .doc("Fraction of neutrals that are undergoing fast reflection at the pfr")
+            .withDefault<BoutReal>(0.8);
+
 }
 
 void NeutralBoundary::transform(Options& state) {
   AUTO_TRACE();
-
   auto& species = state["species"][name];
   const BoutReal AA = get<BoutReal>(species["AA"]);
 
@@ -82,6 +101,10 @@ void NeutralBoundary::transform(Options& state) {
         // Thermal speed
         const BoutReal v_th = sqrt(tnsheath / AA);
 
+        // Calculate effective gamma from particle and energy reflection coefficients
+        BoutReal target_gamma_heat = 1 - target_energy_refl_factor * target_fast_refl_fraction 
+                                  -(1-target_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
+
         // Heat flux (> 0)
         const BoutReal q = target_gamma_heat * nnsheath * tnsheath * v_th;
         // Multiply by cell area to get power
@@ -121,6 +144,10 @@ void NeutralBoundary::transform(Options& state) {
         // Thermal speed
         const BoutReal v_th = sqrt(tnsheath / AA);
 
+        // Calculate effective gamma from particle and energy reflection coefficients
+        BoutReal target_gamma_heat = 1 - target_energy_refl_factor * target_fast_refl_fraction 
+                                  -(1-target_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
+
         // Heat flux (> 0)
         const BoutReal q = target_gamma_heat * nnsheath * tnsheath * v_th;
         // Multiply by cell area to get power
@@ -137,7 +164,7 @@ void NeutralBoundary::transform(Options& state) {
     }
   }
 
-  // SOL edge
+    // SOL edge
   if (sol) {
     if(mesh->lastX()){  // Only do this for the processor which has the edge region
       for(int iy=0; iy < mesh->LocalNy ; iy++){
@@ -153,16 +180,27 @@ void NeutralBoundary::transform(Options& state) {
           // Thermal speed in one direction only (?)
           const BoutReal v_th = sqrt(tnsheath / AA);
 
+          // Calculate effective gamma from particle and energy reflection coefficients
+          BoutReal sol_gamma_heat = 1 - sol_energy_refl_factor * sol_fast_refl_fraction 
+                                    -(1-sol_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
+
           // Heat flux (> 0)
           const BoutReal q = sol_gamma_heat * nnsheath * tnsheath * v_th;
 
           // Multiply by radial cell area to get power
-          BoutReal flux = q * (coord->dy[i] + coord->dy[ig]) * (coord->dz[i] + coord->dz[ig])
-                          *  1/(sqrt(coord->g22[i]) + sqrt(coord->g22[ig]))   // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
-                          * sqrt(coord->g_33[i] + coord->g_33[ig]);   // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+          // Expanded form of the calculation for clarity
+
+          // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
+          BoutReal dpolsheath = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
+
+          // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+          BoutReal dtorsheath = 0.5*(coord->dz[i] + coord->dz[ig]) * 0.5*(sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+
+          BoutReal dasheath = dpolsheath * dtorsheath;  // [m^2]
+          BoutReal flux = q * dasheath;  // [W]
 
           // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);
+          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [W m^-3]
 
           // Subtract from cell next to boundary
           energy_source[i] -= power;
@@ -189,15 +227,28 @@ void NeutralBoundary::transform(Options& state) {
           // Thermal speed in one direction only (?)
           const BoutReal v_th = sqrt(tnsheath / AA);
 
+          
+          // Calculate effective gamma from particle and energy reflection coefficients
+          BoutReal pfr_gamma_heat = 1 - pfr_energy_refl_factor * pfr_fast_refl_fraction 
+                                    -(1-pfr_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
+
           // Heat flux (> 0)
           const BoutReal q = pfr_gamma_heat * nnsheath * tnsheath * v_th;
 
-          // Multiply by cell area to get power
-          BoutReal flux = q * (coord->dy[i] + coord->dy[ig]) * (coord->dz[i] + coord->dz[ig])
-                          / (sqrt(coord->g22[i]) + sqrt(coord->g22[ig]));
+          // Multiply by radial cell area to get power
+          // Expanded form of the calculation for clarity
+
+          // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
+          BoutReal dpolsheath = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
+
+          // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+          BoutReal dtorsheath = 0.5*(coord->dz[i] + coord->dz[ig]) * 0.5*(sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+
+          BoutReal dasheath = dpolsheath * dtorsheath;  // [m^2]
+          BoutReal flux = q * dasheath;  // [W]
 
           // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);
+          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [W m^-3]
 
           // Subtract from cell next to boundary
           energy_source[i] -= power;
