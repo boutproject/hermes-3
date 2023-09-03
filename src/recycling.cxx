@@ -67,6 +67,36 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                                   .withDefault<BoutReal>(3.0)
                               / Tnorm; // Normalise from eV
 
+    BoutReal target_fast_recycle_fraction =
+        from_options["target_fast_recycle_fraction"]
+            .doc("Fraction of ions undergoing fast reflection at target")
+            .withDefault<BoutReal>(0);
+
+    BoutReal pfr_fast_recycle_fraction =
+        from_options["pfr_fast_recycle_fraction"]
+            .doc("Fraction of ions undergoing fast reflection at pfr")
+            .withDefault<BoutReal>(0);
+
+    BoutReal sol_fast_recycle_fraction =
+        from_options["sol_fast_recycle_fraction"]
+            .doc("Fraction of ions undergoing fast reflection at sol")
+            .withDefault<BoutReal>(0);
+
+    BoutReal target_fast_recycle_energy_factor =
+        from_options["target_fast_recycle_energy_factor"]
+            .doc("Fraction of energy retained by fast recycled neutrals at target")
+            .withDefault<BoutReal>(0);
+
+    BoutReal sol_fast_recycle_energy_factor =
+        from_options["sol_fast_recycle_energy_factor"]
+            .doc("Fraction of energy retained by fast recycled neutrals at sol")
+            .withDefault<BoutReal>(0);
+
+    BoutReal pfr_fast_recycle_energy_factor =
+        from_options["pfr_fast_recycle_energy_factor"]
+            .doc("Fraction of energy retained by fast recycled neutrals at pfr")
+            .withDefault<BoutReal>(0);
+
     if ((target_recycle_multiplier < 0.0) or (target_recycle_multiplier > 1.0)
     or (sol_recycle_multiplier < 0.0) or (sol_recycle_multiplier > 1.0)
     or (pfr_recycle_multiplier < 0.0) or (pfr_recycle_multiplier > 1.0)) {
@@ -77,7 +107,9 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
     channels.push_back({
       from, to, 
       target_recycle_multiplier, sol_recycle_multiplier, pfr_recycle_multiplier,
-      target_recycle_energy, sol_recycle_energy, pfr_recycle_energy});
+      target_recycle_energy, sol_recycle_energy, pfr_recycle_energy,
+      target_fast_recycle_fraction, pfr_fast_recycle_fraction, sol_fast_recycle_fraction,
+      target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor, pfr_fast_recycle_energy_factor});
 
     // Boolean flags for enabling recycling in different regions
     target_recycle = from_options["target_recycle"]
@@ -111,6 +143,7 @@ void Recycling::transform(Options& state) {
 
     const Field3D N = get<Field3D>(species_from["density"]);
     const Field3D V = get<Field3D>(species_from["velocity"]); // Parallel flow velocity
+    const Field3D T = get<Field3D>(species_from["temperature"]); // Ion temperature
 
     Options& species_to = state["species"][channel.to];
 
@@ -122,6 +155,8 @@ void Recycling::transform(Options& state) {
     energy_source = species_to.isSet("energy_source")
                                 ? getNonFinal<Field3D>(species_to["energy_source"])
                                 : 0.0;
+
+    
 
     // Recycling at the divertor target plates
     if (target_recycle) {
@@ -156,7 +191,14 @@ void Recycling::transform(Options& state) {
               / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
 
           // energy of recycled particles
-          target_recycle_energy_source(r.ind, mesh->ystart, jz) += channel.target_energy * flow 
+          // VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+          // TODO: Is the energy here 3eV * NV or 3/2 * 3eV * NV? It was just 3eV * NV before but it's adding to energy source
+          BoutReal tisheath = (T(r.ind, mesh->ystart, jz) + T(r.ind, mesh->ystart-1, jz)) * 0.5;   // Ion temp at wall
+          BoutReal neutral_energy = flow * (
+            channel.target_fast_recycle_energy_factor * channel.target_fast_recycle_fraction * tisheath  // Fast recycling part
+            + (1 - channel.target_fast_recycle_fraction) * channel.target_energy);   // Thermal recycling part
+
+          target_recycle_energy_source(r.ind, mesh->ystart, jz) += neutral_energy
               / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
           energy_source(r.ind, mesh->ystart, jz) += channel.target_energy * flow 
               / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
@@ -190,7 +232,15 @@ void Recycling::transform(Options& state) {
           density_source(r.ind, mesh->yend, jz) += flow 
               / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
 
-          target_recycle_energy_source(r.ind, mesh->yend, jz) += channel.target_energy * flow 
+          // energy of recycled particles
+          // VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+          // TODO: Is the energy here 3eV * NV or 3/2 * 3eV * NV? It was just 3eV * NV before but it's adding to energy source
+          BoutReal tisheath = (T(r.ind, mesh->yend, jz) + T(r.ind, mesh->yend+1, jz)) * 0.5;   // Ion temp at wall
+          BoutReal neutral_energy = flow * (
+            channel.target_fast_recycle_energy_factor * channel.target_fast_recycle_fraction * tisheath  // Fast recycling part
+            + (1 - channel.target_fast_recycle_fraction) * channel.target_energy);   // Thermal recycling part
+
+          target_recycle_energy_source(r.ind, mesh->yend, jz) += neutral_energy
               / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
           energy_source(r.ind, mesh->yend, jz) += channel.target_energy * flow 
               / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));

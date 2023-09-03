@@ -48,6 +48,8 @@ private:
     /// Combination of recycling fraction and species change e.g h+ -> h2 results in 0.5 multiplier
     BoutReal target_multiplier, sol_multiplier, pfr_multiplier; 
     BoutReal target_energy, sol_energy, pfr_energy; ///< Energy of recycled particle (normalised to Tnorm)
+    BoutReal target_fast_recycle_fraction, pfr_fast_recycle_fraction, sol_fast_recycle_fraction;   ///< Fraction of ions undergoing fast reflection
+    BoutReal target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor, pfr_fast_recycle_energy_factor;   ///< Fraction of energy retained by fast recycled neutrals
   };
 
   std::vector<RecycleChannel> channels; // Recycling channels
@@ -62,6 +64,7 @@ private:
 
   Field3D radial_particle_outflow, radial_energy_outflow;  ///< Radial fluxes coming from evolve_density and evolve_pressure used in recycling calc
   
+
 };
 
 namespace {
