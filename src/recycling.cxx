@@ -24,7 +24,7 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
 
 
   // Neutral pump
-  // Mark cells as having a pump by setting the Field3D is_pump to 1 in the grid file
+  // Mark cells as having a pump by setting the Field2D is_pump to 1 in the grid file
   // Works only on SOL and PFR edges, where it locally modifies the recycle multiplier to the pump albedo
   is_pump = 0.0;
   mesh->get(is_pump, std::string("is_pump"));
@@ -448,6 +448,11 @@ void Recycling::outputVars(Options& state) {
                           {"conversion", Pnorm * Omega_ci},
                           {"standard_name", "energy source"},
                           {"long_name", std::string("Pump recycling energy source of ") + channel.to},
+                          {"source", "recycling"}});
+
+          set_with_attrs(state[{std::string("is_pump")}], is_pump,
+                          {{"standard_name", "neutral pump location"},
+                          {"long_name", std::string("Neutral pump location")},
                           {"source", "recycling"}});
         }
       }
