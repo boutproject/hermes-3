@@ -200,7 +200,7 @@ void Recycling::transform(Options& state) {
 
           target_recycle_energy_source(r.ind, mesh->ystart, jz) += neutral_energy
               / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
-          energy_source(r.ind, mesh->ystart, jz) += channel.target_energy * flow 
+          energy_source(r.ind, mesh->ystart, jz) += neutral_energy
               / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
         }
       }
@@ -242,7 +242,7 @@ void Recycling::transform(Options& state) {
 
           target_recycle_energy_source(r.ind, mesh->yend, jz) += neutral_energy
               / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
-          energy_source(r.ind, mesh->yend, jz) += channel.target_energy * flow 
+          energy_source(r.ind, mesh->yend, jz) += neutral_energy
               / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
         }
       }
