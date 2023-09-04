@@ -258,6 +258,10 @@ void Recycling::transform(Options& state) {
             // Divide by volume to get source
             BoutReal recycle_source = recycle_particle_flow / volume;
 
+            // Pump source terms
+            BoutReal esink = 0;
+            BoutReal psink = 0;
+
             // Compute the neutral loss sink and combine with the recycled source to compute overall neutral sources
             if ((is_pump(mesh->xend, iy) == 1.0) and (neutral_pump)) {
 
@@ -290,11 +294,11 @@ void Recycling::transform(Options& state) {
               // Calculate particle and energy fluxes of neutrals hitting the pump
               // Assume thermal velocity greater than perpendicular velocity and use it for flux calc
               BoutReal pflow = v_th * nnsheath * dasheath;   // [s^-1]
-              BoutReal psink = pflow / dv * (1 - multiplier);   // Particle sink [s^-1 m^-3]
+              psink = pflow / dv * (1 - multiplier);   // Particle sink [s^-1 m^-3]
 
               // Use gamma=3.5 as per Stangeby p.69, total energy of drifting Maxwellian
               BoutReal eflow = 3.5 * tnsheath * v_th * nnsheath * dasheath;   // [W]
-              BoutReal esink = eflow / dv * (1 - multiplier);   // heatsink [W m^-3]
+              esink = eflow / dv * (1 - multiplier);   // heatsink [W m^-3]
 
               // Pump puts neutral particle and energy source in final domain cell
               // Source accounts for recycled ions and the particle sink due to neutrals hitting the pump
@@ -304,6 +308,7 @@ void Recycling::transform(Options& state) {
               // Pump multiplier controls both fraction of recycled ions and fraction of returned neutrals 
               pump_recycle_density_source(mesh->xend, iy, iz) += recycle_source - psink;
               pump_recycle_energy_source(mesh->xend, iy, iz) += recycle_source * channel.sol_energy - esink;
+
             } else {
               wall_recycle_density_source(mesh->xend, iy, iz) += recycle_source;
               wall_recycle_energy_source(mesh->xend, iy, iz) += recycle_source * channel.sol_energy;
@@ -311,8 +316,9 @@ void Recycling::transform(Options& state) {
 
             // Add to density source which will be picked up by evolve_density.cxx
             // Add to energy source which will be picked up by evolve_pressure.cxx
-            density_source(mesh->xend, iy, iz) += recycle_source;
-            energy_source(mesh->xend, iy, iz) += recycle_source * channel.pfr_energy;
+            // psink and esink are additional sinks from the neutral pump which are 0 if disabled
+            density_source(mesh->xend, iy, iz) += recycle_source - psink;
+            energy_source(mesh->xend, iy, iz) += recycle_source * channel.pfr_energy - esink;
 
           }
         }
@@ -352,6 +358,10 @@ void Recycling::transform(Options& state) {
               // Divide by volume to get source
               BoutReal recycle_source = recycle_particle_flow / volume;
 
+              // Pump source terms
+              BoutReal esink = 0;
+              BoutReal psink = 0;
+
               // Add to appropriate diagnostic field depending if pump or not
               if ((is_pump(mesh->xstart, iy) == 1.0) and (neutral_pump))  {
                 auto i = indexAt(Nn, mesh->xstart, iy, iz);   // Final domain cell
@@ -383,11 +393,11 @@ void Recycling::transform(Options& state) {
                 // Calculate particle and energy fluxes of neutrals hitting the pump
                 // Assume thermal velocity greater than perpendicular velocity and use it for flux calc
                 BoutReal pflow = v_th * nnsheath * dasheath;   // [s^-1]
-                BoutReal psink = pflow / dv * (1 - multiplier);   // Particle sink [s^-1 m^-3]
+                psink = pflow / dv * (1 - multiplier);   // Particle sink [s^-1 m^-3]
 
                 // Use gamma=3.5 as per Stangeby p.69, total energy of drifting Maxwellian
                 BoutReal eflow = 3.5 * tnsheath * v_th * nnsheath * dasheath;   // [W]
-                BoutReal esink = eflow / dv * (1 - multiplier);   // heatsink [W m^-3]
+                esink = eflow / dv * (1 - multiplier);   // heatsink [W m^-3]
 
                 // Pump puts neutral particle and energy source in final domain cell
                 // Source accounts for recycled ions and the particle sink due to neutrals hitting the pump
@@ -404,8 +414,9 @@ void Recycling::transform(Options& state) {
             
               // Add to density source which will be picked up by evolve_density.cxx
               // Add to energy source which will be picked up by evolve_pressure.cxx
-              density_source(mesh->xstart, iy, iz) += recycle_source;
-              energy_source(mesh->xstart, iy, iz) += recycle_source * channel.pfr_energy;
+              // psink and esink are additional sinks from the neutral pump which are 0 if disabled
+              density_source(mesh->xend, iy, iz) += recycle_source - psink;
+              energy_source(mesh->xend, iy, iz) += recycle_source * channel.pfr_energy - esink;
 
             }
           }
