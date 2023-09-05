@@ -280,7 +280,7 @@ void Recycling::transform(Options& state) {
               // Calculate wall conditions
               BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
               BoutReal tnsheath = 0.5 * (Tn[i] + tnguard);
-              BoutReal v_th = sqrt(tnsheath / AAn);
+              BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AAn) );   // Stangeby p.69 eqns. 2.21, 2.24
 
               // Convert dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
               // Convert dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
@@ -296,8 +296,8 @@ void Recycling::transform(Options& state) {
               BoutReal pflow = v_th * nnsheath * dasheath;   // [s^-1]
               psink = pflow / dv * (1 - multiplier);   // Particle sink [s^-1 m^-3]
 
-              // Use gamma=3.5 as per Stangeby p.69, total energy of drifting Maxwellian
-              BoutReal eflow = 3.5 * tnsheath * v_th * nnsheath * dasheath;   // [W]
+              // Use gamma=2.0 as per Stangeby p.69, total energy of static Maxwellian
+              BoutReal eflow = 2.0 * tnsheath * v_th * nnsheath * dasheath;   // [W]
               esink = eflow / dv * (1 - multiplier);   // heatsink [W m^-3]
 
               // Pump puts neutral particle and energy source in final domain cell
@@ -379,7 +379,7 @@ void Recycling::transform(Options& state) {
                 // Calculate wall conditions
                 BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
                 BoutReal tnsheath = 0.5 * (Tn[i] + tnguard);
-                BoutReal v_th = sqrt(tnsheath / AAn);
+                BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AAn) );   // Stangeby p.69 eqns. 2.21, 2.24
 
                 // Convert dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
                 // Convert dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
@@ -395,8 +395,8 @@ void Recycling::transform(Options& state) {
                 BoutReal pflow = v_th * nnsheath * dasheath;   // [s^-1]
                 psink = pflow / dv * (1 - multiplier);   // Particle sink [s^-1 m^-3]
 
-                // Use gamma=3.5 as per Stangeby p.69, total energy of drifting Maxwellian
-                BoutReal eflow = 3.5 * tnsheath * v_th * nnsheath * dasheath;   // [W]
+                // Use gamma=2.0 as per Stangeby p.69, total energy of static Maxwellian
+                BoutReal eflow = 2.0 * tnsheath * v_th * nnsheath * dasheath;   // [W]
                 esink = eflow / dv * (1 - multiplier);   // heatsink [W m^-3]
 
                 // Pump puts neutral particle and energy source in final domain cell
