@@ -67,9 +67,9 @@ void IonViscosity::transform(Options &state) {
   Options& allspecies = state["species"];
 
   auto coord = mesh->getCoordinates();
-  const Field3D Bxy = coord->Bxy;
-  const Field3D sqrtB = sqrt(Bxy);
-  const Field3D Grad_par_logB = Grad_par(log(Bxy));
+  const Field2D Bxy = coord->Bxy;
+  const Field2D sqrtB = sqrt(Bxy);
+  const Field2D Grad_par_logB = Grad_par(log(Bxy));
 
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
@@ -123,35 +123,40 @@ void IonViscosity::transform(Options &state) {
       continue; // Skip perpendicular flow parts below
     }
 
+    // The following calculation is performed on the axisymmetric components
+
     // Need electrostatic potential for ExB flow
-    const Field3D phi = get<Field3D>(state["fields"]["phi"]);
+    const Field2D phi_av = DC(get<Field3D>(state["fields"]["phi"]));
 
     // Density and temperature needed for diamagnetic flows
-    const Field3D N = get<Field3D>(species["density"]);
-    const Field3D T = get<Field3D>(species["temperature"]);
+    const Field2D N_av = DC(get<Field3D>(species["density"]));
+    const Field2D T_av = DC(get<Field3D>(species["temperature"]));
+    const Field2D P_av = DC(P);
+    const Field2D tau_av = DC(tau);
+    const Field2D V_av = DC(V);
 
     // Parallel ion stress tensor component
-    Field3D Pi_cipar = -0.96 * P * tau *
-      (2. * Grad_par(V) + V * Grad_par_logB);
+    Field2D Pi_cipar = -0.96 * P_av * tau_av *
+                          (2. * Grad_par(V_av) + V_av * Grad_par_logB);
     // Could also be written as:
     // Pi_cipar = -0.96*Pi*tau*2.*Grad_par(sqrt(Bxy)*Vi)/sqrt(Bxy);
 
     // Perpendicular ion stress tensor
     // 0.96 P tau kappa * (V_E + V_di + 1.61 b x Grad(T)/B )
     // Note: Heat flux terms are neglected for now
-    Field3D Pi_ciperp = -0.5 * 0.96 * P * tau *
-      (Curlb_B * Grad(phi + 1.61 * T) - Curlb_B * Grad(P) / N);
+    Field2D Pi_ciperp = -0.5 * 0.96 * P_av * tau_av *
+      (Curlb_B * Grad(phi_av + 1.61 * T_av) - Curlb_B * Grad(P_av) / N_av);
 
     // Limit size of stress tensor components
     // If the off-diagonal components of the pressure tensor are large compared
     // to the scalar pressure, then the model is probably breaking down.
     // This can happen in very low density regions
     BOUT_FOR(i, Pi_ciperp.getRegion("RGN_NOBNDRY")) {
-      if (fabs(Pi_ciperp[i]) > P[i]) {
-        Pi_ciperp[i] = SIGN(Pi_ciperp[i]) * P[i];
+      if (fabs(Pi_ciperp[i]) > P_av[i]) {
+        Pi_ciperp[i] = SIGN(Pi_ciperp[i]) * P_av[i];
       }
-      if (fabs(Pi_cipar[i]) > P[i]) {
-        Pi_cipar[i] = SIGN(Pi_cipar[i]) * P[i];
+      if (fabs(Pi_cipar[i]) > P_av[i]) {
+        Pi_cipar[i] = SIGN(Pi_cipar[i]) * P_av[i];
       }
     }
 
@@ -160,26 +165,16 @@ void IonViscosity::transform(Options &state) {
     Pi_cipar.applyBoundary("neumann");
 
     // Apply parallel boundary conditions
-    Pi_ciperp = toFieldAligned(Pi_ciperp);
-    Pi_cipar = toFieldAligned(Pi_cipar);
-    {
-      int jy = 1;
-      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-	for (int jz = 0; jz < mesh->LocalNz; jz++) {
-	  Pi_ciperp(r.ind, jy, jz) = Pi_ciperp(r.ind, jy + 1, jz);
-	  Pi_cipar(r.ind, jy, jz) = Pi_cipar(r.ind, jy + 1, jz);
-	}
-      }
-      jy = mesh->yend + 1;
-      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-	for (int jz = 0; jz < mesh->LocalNz; jz++) {
-	  Pi_ciperp(r.ind, jy, jz) = Pi_ciperp(r.ind, jy - 1, jz);
-	  Pi_cipar(r.ind, jy, jz) = Pi_cipar(r.ind, jy - 1, jz);
-	}
-      }
+    int jy = 1;
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      Pi_ciperp(r.ind, jy) = Pi_ciperp(r.ind, jy + 1);
+      Pi_cipar(r.ind, jy) = Pi_cipar(r.ind, jy + 1);
     }
-    Pi_ciperp = fromFieldAligned(Pi_ciperp);
-    Pi_cipar = fromFieldAligned(Pi_cipar);
+    jy = mesh->yend + 1;
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      Pi_ciperp(r.ind, jy) = Pi_ciperp(r.ind, jy - 1);
+      Pi_cipar(r.ind, jy) = Pi_cipar(r.ind, jy - 1);
+    }
 
     mesh->communicate(Pi_ciperp, Pi_cipar);
 
@@ -187,13 +182,13 @@ void IonViscosity::transform(Options &state) {
     //const Field3D div_Pi_ciperp = - (2. / 3) * B32 * Grad_par(Pi_ciperp / B32);
 
     add(species["momentum_source"], div_Pi_ciperp);
-    subtract(species["energy_source"], V * div_Pi_ciperp);
+    subtract(species["energy_source"], V_av * div_Pi_ciperp);
 
     // Total scalar ion viscous pressure
-    Field3D Pi_ci = Pi_cipar + Pi_ciperp;
+    Field2D Pi_ci = Pi_cipar + Pi_ciperp;
 
 #if CHECKLEVEL >= 1
-    for (auto& i : N.getRegion("RGN_NOBNDRY")) {
+    for (auto& i : N_av.getRegion("RGN_NOBNDRY")) {
       if (!std::isfinite(Pi_cipar[i])) {
         throw BoutException("{} Pi_cipar non-finite at {}.\n", species_name, i);
       }
@@ -203,26 +198,30 @@ void IonViscosity::transform(Options &state) {
     }
 #endif
 
+    Pi_ci.applyBoundary("neumann");
+
     // Divergence of current in vorticity equation
     Field3D DivJ = Div(0.5 * Pi_ci * Curlb_B) -
-      Div_n_bxGrad_f_B_XPPM(1. / 3, Pi_ci, false);
+      Div_n_bxGrad_f_B_XPPM(1. / 3, Pi_ci, false, true);
     add(state["fields"]["DivJextra"], DivJ);
 
     // Transfer of energy between ion internal energy and ExB flow
-    subtract(species["energy_source"], 0.5 * Pi_ci * Curlb_B * Grad(phi + P)
-             - (1 / 3) * bracket(Pi_ci, phi + P, BRACKET_ARAKAWA));
+    subtract(species["energy_source"],
+             Field3D(0.5 * Pi_ci * Curlb_B * Grad(phi_av + P_av)
+                     - (1 / 3) * bracket(Pi_ci, phi_av + P_av, BRACKET_STD)));
 
     if (diagnose) {
       // Find the diagnostics struct for this species
       auto search = diagnostics.find(species_name);
       if (search == diagnostics.end()) {
         // First time, create diagnostic
-        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar});
+        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ});
       } else {
         // Update diagnostic values
         auto& d = search->second;
         d.Pi_ciperp = Pi_ciperp;
         d.Pi_cipar = Pi_cipar;
+        d.DivJ = DivJ;
       }
     }
   }
@@ -235,6 +234,7 @@ void IonViscosity::outputVars(Options &state) {
     // Normalisations
     auto Nnorm = get<BoutReal>(state["Nnorm"]);
     auto Tnorm = get<BoutReal>(state["Tnorm"]);
+    auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
     for (const auto& it : diagnostics) {
@@ -256,6 +256,14 @@ void IonViscosity::outputVars(Options &state) {
                       {"conversion", Pnorm},
                       {"standard_name", "Viscous pressure"},
                       {"long_name", species_name + " parallel collisional viscous pressure"},
+                      {"species", species_name},
+                      {"source", "ion_viscosity"}});
+
+      set_with_attrs(state[std::string("DivJvis_") + species_name], d.DivJ,
+                     {{"time_dimension", "t"},
+                      {"units", "A m^-3"},
+                      {"conversion", SI::qe * Nnorm * Omega_ci},
+                      {"long_name", std::string("Divergence of viscous current due to species") + species_name},
                       {"species", species_name},
                       {"source", "ion_viscosity"}});
     }

@@ -1,0 +1,138 @@
+# Turbulence simulation
+
+nout = 200
+timestep = 100
+
+MZ = 81
+
+zperiod = 5
+
+[mesh]
+
+file = "65402_68x32_revIp_wide_fixBp_curv.nc"
+
+extrapolate_y = false  # Can result in negative Jacobians in guard cells
+
+[mesh:paralleltransform]
+type = shifted
+
+[solver]
+
+use_precon = true
+mxstep = 100000
+cvode_max_order = 3
+
+[hermes]
+components = (e, i, sound_speed, vorticity,
+              sheath_boundary, collisions,
+              diamagnetic_drift, classical_diffusion, ion_viscosity,
+              polarisation_drift
+              )
+
+Nnorm = 1e19  # Reference density [m^-3]
+Bnorm = 1   # Reference magnetic field [T]
+Tnorm = 50   # Reference temperature [eV]
+
+loadmetric = false  # Recalculate metric tensor? (false -> use grid values)
+normalise_metric = true
+
+[polarisation_drift]
+advection = false
+diamagnetic_polarisation = true
+average_atomic_mass = vorticity:average_atomic_mass
+
+[ion_viscosity]
+perpendicular = true
+diagnose = true
+
+[diamagnetic_drift]
+diamag_form = x * (1 - x)  # 0 = gradient; 1 = divergence
+
+[vorticity]
+
+exb_advection_simplified = false
+diamagnetic = true   # Include diamagnetic current?
+diamagnetic_polarisation = true # Include diamagnetic drift in polarisation current?
+average_atomic_mass = i:AA   # Weighted average atomic mass, for polarisaion current
+poloidal_flows = true  # Include poloidal ExB flow
+split_n0 = false  # Split phi into n=0 and n!=0 components
+
+vort_dissipation = false
+phi_dissipation = true
+phi_sheath_dissipation = true
+damp_core_vorticity = true
+
+phi_boundary_relax = true
+phi_boundary_timescale = 1e-6
+
+################################################################
+# Electrons
+
+[e]
+# Evolve the electron density, parallel momentum, and fix Te
+type = evolve_density, evolve_pressure, evolve_momentum
+
+AA = 1 / 1836
+charge = -1
+
+poloidal_flows = true
+
+diagnose = true
+
+low_n_diffuse_perp = true
+
+[Ne]
+neumann_boundary_average_z = true # Neumann average Z boundaries in X
+
+function = 3.0 - 2.7*x + 1e-3*mixmode(x - z)
+
+flux = 3e21 # /s
+
+# sum( Se_src[x,y] * J*dx*dy*2pi )
+# Note: Depends on source shape and mesh
+shape_factor = 14.325989540821935
+
+source = flux * shape_factor * exp(-((x - 0.05)/0.05)^2)
+source_only_in_core = true
+
+[Pe]
+#bndry_core = dirichlet(3.0)
+#bndry_all = neumann
+neumann_boundary_average_z = true # Neumnn average Z boundaries in X
+
+function = 3*(1.0 - 0.9*x)^2
+
+heating = 60e3 # Power input per species [W]
+
+T_source = heating / (Ne:flux * 1.602e-19 * 1.5)
+
+source = Ne:source * T_source * 1.602e-19
+source_only_in_core = true
+
+# Post-process source:
+# float((bd['Pe_src'][-1,:,:,0] * bd['J'] * bd['dx'] * bd['dy'] * 2 * 3.14159).sum())
+
+################################################################
+# Ions
+[i]
+# Set ion density from quasineutrality, evolve parallel flow
+type = quasineutral, evolve_pressure, evolve_momentum
+
+AA = 2       # Atomic mass
+charge = 1
+
+poloidal_flows = true
+
+low_n_diffuse_perp = true
+#hyper_z_T = 1e-5
+
+[Pi]
+#bndry_core = dirichlet(3.0)
+#bndry_all = neumann
+neumann_boundary_average_z = true # Neumann average boundaries in X
+
+function = 3*(1.0 - 0.9*x)^2
+
+source = Pe:source
+source_only_in_core = true
+
