@@ -49,7 +49,9 @@ struct Vorticity : public Component {
   ///     Kinematic viscosity [m^2/s]
   ///   - vort_dissipation: bool, default false
   ///     Parallel dissipation of vorticity?
-  /// 
+  ///   - damp_core_vorticity: bool, default false
+  ///     Damp axisymmetric component of vorticity in cell next to core boundary
+  ///
   Vorticity(std::string name, Options &options, Solver *solver);
 
   /// Optional inputs
@@ -121,6 +123,7 @@ private:
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
   bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
+  bool damp_core_vorticity; ///< Damp axisymmetric component of vorticity
 
   bool phi_boundary_relax; ///< Relax boundary to zero-gradient
   BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
