@@ -1196,9 +1196,11 @@ Each returning atom has an energy of 3.5eV:
 Neutral pump
 ^^^^^^^^^^^^^^^
 
-The recycling component also features a neutral pump, which is currently implemented for 
+The recycling component also features a neutral pump which is currently implemented for 
 the SOL and PFR edges only, and so is not available in 1D. The pump is a region of the wall
-which facilitates particle loss by incomplete recycling and neutral absorption.
+which facilitates particle loss by incomplete recycling and neutral absorption. 
+
+The pump requires wall recycling to be enabled on the relevant wall region.
 
 The particle loss rate :math:`\Gamma_{N_{n}}` is the sum of the incident ions that are not recycled and the 
 incident neutrals which are not reflected, both of which are controlled by the pump multiplier :math:`M_{p}` 
