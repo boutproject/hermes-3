@@ -279,7 +279,10 @@ void SheathBoundarySimple::transform(Options& state) {
       }
     }
   }
-
+  
+  // Field to capture total sheath heat flux for diagnostics
+  Field3D electron_sheath_power_ylow = zeroFrom(Ne);
+  
   //////////////////////////////////////////////////////////////////
   // Electrons
 
@@ -334,6 +337,14 @@ void SheathBoundarySimple::transform(Options& state) {
         BoutReal power = flux / (coord->dy[i] * coord->J[i]);
 
         electron_energy_source[i] += power;
+
+        // Total heat flux for diagnostic purposes
+        q = (gamma_e * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
+        flux = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+        power = flux / (coord->dy[i] * coord->J[i]);
+
+        electron_sheath_power_ylow[i] += power;       // lower Y, so power placed in final domain cell 
+                      
       }
     }
   }
@@ -386,6 +397,13 @@ void SheathBoundarySimple::transform(Options& state) {
         BoutReal power = flux / (coord->dy[i] * coord->J[i]);
 
         electron_energy_source[i] -= power;
+
+        // Total heat flux for diagnostic purposes
+        q = (gamma_e * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
+        flux = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+        power = flux / (coord->dy[i] * coord->J[i]);
+        
+        electron_sheath_power_ylow[ip] -= power;    // upper Y, so power placed in first guard cell
       }
     }
   }
@@ -398,6 +416,9 @@ void SheathBoundarySimple::transform(Options& state) {
   // Set energy source (negative in cell next to sheath)
   // Note: electron_energy_source includes any sources previously set in other components
   set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
+
+  // Add the total sheath power flux to the tracker of y power flows
+  add(electrons["energy_flow_ylow"], electron_sheath_power_ylow);
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
     setBoundary(electrons["velocity"], fromFieldAligned(Ve));
@@ -452,6 +473,9 @@ void SheathBoundarySimple::transform(Options& state) {
       ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
       : zeroFrom(Ni);
 
+    // Field to capture total sheath heat flux for diagnostics
+    Field3D ion_sheath_power_ylow = zeroFrom(Ne);
+
     if (lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
@@ -503,6 +527,13 @@ void SheathBoundarySimple::transform(Options& state) {
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
 
           energy_source[i] += power;
+
+          // Calculation of total heat flux for diagnostic purposes
+          q = (gamma_i * tisheath + 0.5 * Mi * C_i_sq) * nisheath * visheath;
+          flux = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+          power = flux / (coord->dy[i] * coord->J[i]);
+
+          ion_sheath_power_ylow[i] += power;      // lower Y, so power placed in final domain cell
         }
       }
     }
@@ -561,10 +592,17 @@ void SheathBoundarySimple::transform(Options& state) {
           ASSERT2(std::isfinite(power));
 
           energy_source[i] -= power; // Note: Sign negative because power > 0
+
+          // Calculation of total heat flux for diagnostic purposes
+          q = (gamma_i * tisheath + 0.5 * Mi * C_i_sq) * nisheath * visheath;
+          flux = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+          power = flux / (coord->dy[i] * coord->J[i]);
+
+          ion_sheath_power_ylow[ip] += power;       // Upper Y, so power placed in first guard cell
         }
       }
+      
     }
-
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
     setBoundary(species["density"], fromFieldAligned(Ni));
@@ -582,5 +620,8 @@ void SheathBoundarySimple::transform(Options& state) {
     // Additional loss of energy through sheath
     // Note: energy_source already includes previously set values
     set(species["energy_source"], fromFieldAligned(energy_source));
+
+    // Add the total sheath power flux to the tracker of y power flows
+    add(species["energy_flow_ylow"], ion_sheath_power_ylow);
   }
 }
