@@ -58,6 +58,7 @@ private:
   bool diagnose; ///< Save additional post-processing variables?
 
   Field3D density_source, energy_source; ///< Recycling particle and energy sources for all locations
+  Field3D heatflow_ylow, heatflow_xlow; ///< Cell edge fluxes used for calculating fast recycling energy source
 
   Field3D target_recycle_density_source, target_recycle_energy_source;  ///< Recycling particle and energy sources for target recycling only
   Field3D wall_recycle_density_source, wall_recycle_energy_source;  ///< Recycling particle and energy sources for pfr + sol recycling
