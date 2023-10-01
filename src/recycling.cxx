@@ -187,14 +187,14 @@ void Recycling::transform(Options& state) {
           // Flow of recycled neutrals into domain [s-1]
           BoutReal flow =
               channel.target_multiplier * flux
-              * (J(r.ind, mesh->ystart) + J(r.ind, mesh->ystart - 1))
-              / (sqrt(g_22(r.ind, mesh->ystart)) + sqrt(g_22(r.ind, mesh->ystart - 1))); // Omitting *dx*dz because it cancels out when calculating source
+              * (J(r.ind, mesh->ystart) + J(r.ind, mesh->ystart - 1)) / (sqrt(g_22(r.ind, mesh->ystart)) + sqrt(g_22(r.ind, mesh->ystart - 1)))
+              * 0.5*(dx(r.ind, mesh->ystart) + dx(r.ind, mesh->ystart - 1)) * 0.5*(dz(r.ind, mesh->ystart) + dz(r.ind, mesh->ystart - 1));  
+
+          BoutReal volume  = J(r.ind, mesh->ystart) * dx(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart) * dz(r.ind, mesh->ystart);
 
           // Calculate sources in the final cell [m^-3 s^-1]
-          target_recycle_density_source(r.ind, mesh->ystart, jz) += flow    // For diagnostic 
-              / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
-          density_source(r.ind, mesh->ystart, jz) += flow         // For use in solver
-              / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
+          target_recycle_density_source(r.ind, mesh->ystart, jz) += flow / volume;    // For diagnostic 
+          density_source(r.ind, mesh->ystart, jz) += flow / volume;         // For use in solver
 
           // Energy of recycled particles
           BoutReal ion_heatflow = energy_flow_ylow(r.ind, mesh->ystart, jz);   // Ion heat flux to wall. This is ylow end so take first domain cell
@@ -206,10 +206,8 @@ void Recycling::transform(Options& state) {
             + flow * (1 - channel.target_fast_recycle_fraction) * channel.target_energy;   // Thermal recycling part
 
           // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
-          target_recycle_energy_source(r.ind, mesh->ystart, jz) += neutral_heatflow
-              / (J(r.ind, mesh->ystart) * dx(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart) * dz(r.ind, mesh->ystart));
-          energy_source(r.ind, mesh->ystart, jz) += neutral_heatflow
-              / (J(r.ind, mesh->ystart) * dx(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart) * dz(r.ind, mesh->ystart));
+          target_recycle_energy_source(r.ind, mesh->ystart, jz) += neutral_heatflow / volume;
+          energy_source(r.ind, mesh->ystart, jz) += neutral_heatflow / volume;
         }
       }
 
@@ -231,15 +229,16 @@ void Recycling::transform(Options& state) {
           // Flow of recycled neutrals into domain [s-1]
           BoutReal flow =
               channel.target_multiplier * flux 
-              * (J(r.ind, mesh->yend) + J(r.ind, mesh->yend + 1))
-              / (sqrt(g_22(r.ind, mesh->yend)) + sqrt(g_22(r.ind, mesh->yend + 1)));  // Omitting *dx*dz because it cancels out when calculating source
+              * (J(r.ind, mesh->yend) + J(r.ind, mesh->yend + 1)) / (sqrt(g_22(r.ind, mesh->yend)) + sqrt(g_22(r.ind, mesh->yend + 1)))
+              * 0.5*(dx(r.ind, mesh->yend) + dx(r.ind, mesh->yend + 1)) * 0.5*(dz(r.ind, mesh->yend) + dz(r.ind, mesh->yend + 1)); 
+
+          BoutReal volume  = J(r.ind, mesh->yend) * dx(r.ind, mesh->yend) * dy(r.ind, mesh->yend) * dz(r.ind, mesh->yend);
 
           // Calculate sources in the final cell [m^-3 s^-1]
-          target_recycle_density_source(r.ind, mesh->yend, jz) += flow    // For diagnostic 
-              / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend));
-          density_source(r.ind, mesh->yend, jz) += flow         // For use in solver
-              / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend)); 
+          target_recycle_density_source(r.ind, mesh->yend, jz) += flow / volume;    // For diagnostic 
+          density_source(r.ind, mesh->yend, jz) += flow / volume;         // For use in solver
 
+          // Energy of recycled particles
           BoutReal ion_heatflow = energy_flow_ylow(r.ind, mesh->yend + 1, jz);   // Ion heat flow to wall in [W]. This is yup end so take guard cell
 
           // Blend fast (ion energy) and thermal (constant energy) recycling 
@@ -250,10 +249,8 @@ void Recycling::transform(Options& state) {
 
 
           // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
-          target_recycle_energy_source(r.ind, mesh->yend, jz) += neutral_heatflow
-              / (J(r.ind, mesh->yend) * dx(r.ind, mesh->yend) * dy(r.ind, mesh->yend) * dz(r.ind, mesh->yend));
-          energy_source(r.ind, mesh->yend, jz) += neutral_heatflow
-              / (J(r.ind, mesh->yend) * dx(r.ind, mesh->yend) * dy(r.ind, mesh->yend) * dz(r.ind, mesh->yend));
+          target_recycle_energy_source(r.ind, mesh->yend, jz) += neutral_heatflow / volume;
+          energy_source(r.ind, mesh->yend, jz) += neutral_heatflow / volume;
         }
       }
     }
