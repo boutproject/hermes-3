@@ -418,7 +418,7 @@ void SheathBoundarySimple::transform(Options& state) {
   set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
 
   // Add the total sheath power flux to the tracker of y power flows
-  add(electrons["energy_flow_ylow"], electron_sheath_power_ylow);
+  add(electrons["energy_flow_ylow"], fromFieldAligned(electron_sheath_power_ylow));
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
     setBoundary(electrons["velocity"], fromFieldAligned(Ve));
@@ -622,6 +622,6 @@ void SheathBoundarySimple::transform(Options& state) {
     set(species["energy_source"], fromFieldAligned(energy_source));
 
     // Add the total sheath power flux to the tracker of y power flows
-    add(species["energy_flow_ylow"], ion_sheath_power_ylow);
+    add(species["energy_flow_ylow"], fromFieldAligned(ion_sheath_power_ylow));
   }
 }
