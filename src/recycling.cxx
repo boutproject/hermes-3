@@ -156,23 +156,16 @@ void Recycling::transform(Options& state) {
                                 ? getNonFinal<Field3D>(species_to["energy_source"])
                                 : 0.0;
 
-    // Fast recycling needs to know how much energy the "from" species is losing to the boundary
-    if (species_from.isSet("energy_flow_ylow")) {
-      heatflow_ylow = get<Field3D>(species_from["energy_flow_ylow"]);
-    } else if (channel.target_fast_recycle_fraction > 0) {
-      throw BoutException("Target fast recycle enabled but no sheath heat flow available, check compatibility with sheath component");
-    };
-
-    // if (species.isSet("energy_flow_xlow")) {
-    //   heatflow_xlow = get<Field3D>(species["energy_flow_xlow"]);
-    // } else if (sol_fast_recycle_fraction > 0) or (pfr_fast_recycle_fraction > 0) {
-    //   throw BoutException("SOL/PFR fast recycle enabled but no wall heat flow available, check your wall BC choice");
-    // };
-
-    
 
     // Recycling at the divertor target plates
     if (target_recycle) {
+
+      // Fast recycling needs to know how much energy the "from" species is losing to the boundary
+      if (species_from.isSet("energy_flow_ylow")) {
+        energy_flow_ylow = get<Field3D>(species_from["energy_flow_ylow"]);
+      } else if (channel.target_fast_recycle_fraction > 0) {
+        throw BoutException("Target fast recycle enabled but no sheath heat flow available, check compatibility with sheath component");
+      };
 
       target_recycle_density_source = 0;
       target_recycle_energy_source = 0;
@@ -204,7 +197,7 @@ void Recycling::transform(Options& state) {
               / (J(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart));
 
           // Energy of recycled particles
-          BoutReal ion_heatflow = heatflow_ylow(r.ind, mesh->ystart, jz);   // Ion heat flux to wall. This is ylow end so take first domain cell
+          BoutReal ion_heatflow = energy_flow_ylow(r.ind, mesh->ystart, jz);   // Ion heat flux to wall. This is ylow end so take first domain cell
 
           // Blend fast (ion energy) and thermal (constant energy) recycling 
           // Calculate returning neutral heat flow in [W]
@@ -247,7 +240,7 @@ void Recycling::transform(Options& state) {
           density_source(r.ind, mesh->yend, jz) += flow         // For use in solver
               / (J(r.ind, mesh->yend) * dy(r.ind, mesh->yend)); 
 
-          BoutReal ion_heatflow = heatflow_ylow(r.ind, mesh->yend + 1, jz);   // Ion heat flow to wall in [W]. This is yup end so take guard cell
+          BoutReal ion_heatflow = energy_flow_ylow(r.ind, mesh->yend + 1, jz);   // Ion heat flow to wall in [W]. This is yup end so take guard cell
 
           // Blend fast (ion energy) and thermal (constant energy) recycling 
           // Calculate returning neutral heat flow in [W]
@@ -268,11 +261,29 @@ void Recycling::transform(Options& state) {
     wall_recycle_density_source = 0;
     wall_recycle_energy_source = 0;
 
+    // Get edge particle and heat for the species being recycled
+    if (sol_recycle or pfr_recycle) {
+
+      if (species_from.isSet("energy_flow_xlow")) {
+        energy_flow_xlow = get<Field3D>(species_from["energy_flow_xlow"]);
+      } else if ((channel.sol_fast_recycle_fraction > 0) or (channel.pfr_fast_recycle_fraction > 0)) {
+        throw BoutException("SOL/PFR fast recycle enabled but no cell edge heat flow available, check your wall BC choice");
+      };
+
+      if (species_from.isSet("particle_flow_xlow")) {
+        particle_flow_xlow = get<Field3D>(species_from["particle_flow_xlow"]);
+      } else if ((channel.sol_fast_recycle_fraction > 0) or (channel.pfr_fast_recycle_fraction > 0)) {
+        throw BoutException("SOL/PFR fast recycle enabled but no cell edge particle flow available, check your wall BC choice");
+      };
+      
+    }
+
     // Recycling at the SOL edge (2D/3D only)
     if (sol_recycle) {
 
       // Flow out of domain is positive in the positive coordinate direction
-      radial_particle_outflow = get<Field3D>(species_from["particle_flow_xlow"]);
+      Field3D radial_particle_outflow = energy_flow_xlow;
+      Field3D radial_energy_outflow = particle_flow_xlow;
 
       if(mesh->lastX()){  // Only do this for the processor which has the edge region
         for(int iy=0; iy < mesh->LocalNy ; iy++){
@@ -294,9 +305,17 @@ void Recycling::transform(Options& state) {
             wall_recycle_density_source(mesh->xend, iy, iz) += recycle_particle_flow / volume;
             density_source(mesh->xend, iy, iz) += recycle_particle_flow / volume;
 
-            // For now, this is a fixed temperature
-            wall_recycle_energy_source(mesh->xend, iy, iz) += channel.sol_energy * recycle_particle_flow / volume;
-            energy_source(mesh->xend, iy, iz) += channel.sol_energy * recycle_particle_flow / volume;
+            BoutReal ion_heatflow = radial_energy_outflow(mesh->xend+1, iy, iz);   // Ion heat flow to wall in [W]. This is on xlow edge so take guard cell
+
+            // Blend fast (ion energy) and thermal (constant energy) recycling 
+            // Calculate returning neutral heat flow in [W]
+            BoutReal neutral_heatflow = 
+              ion_heatflow * channel.sol_fast_recycle_energy_factor * channel.sol_fast_recycle_fraction   // Fast recycling part
+              + recycle_particle_flow * (1 - channel.sol_fast_recycle_fraction) * channel.sol_energy;   // Thermal recycling part
+
+            // Divide heat flow in [W] by cell volume to get energy source in [m^-3 s^-1]
+            wall_recycle_energy_source(mesh->xend, iy, iz) += neutral_heatflow / volume;   // For diagnostic
+            energy_source(mesh->xend, iy, iz) += neutral_heatflow / volume;    // For use in solver
 
           
 
@@ -309,7 +328,8 @@ void Recycling::transform(Options& state) {
     if (pfr_recycle) {
 
       // PFR is flipped compared to edge: x=0 is at the PFR edge. Therefore outflow is in the negative coordinate direction.
-      radial_particle_outflow = get<Field3D>(species_from["particle_flow_xlow"]) * -1;
+      Field3D radial_particle_outflow = particle_flow_xlow * -1;
+      Field3D radial_energy_outflow = energy_flow_xlow * -1;
 
       if(mesh->firstX()){   // Only do this for the processor which has the core region
         if (!mesh->periodicY(mesh->xstart)) {   // Only do this for the processor with a periodic Y, i.e. the PFR
@@ -333,9 +353,17 @@ void Recycling::transform(Options& state) {
               wall_recycle_density_source(mesh->xstart, iy, iz) += recycle_particle_flow / volume;
               density_source(mesh->xstart, iy, iz) += recycle_particle_flow / volume;
 
-              // For now, this is a fixed temperature
-              wall_recycle_energy_source(mesh->xstart, iy, iz) += channel.pfr_energy * recycle_particle_flow / volume;
-              energy_source(mesh->xstart, iy, iz) += channel.pfr_energy * recycle_particle_flow / volume;
+              BoutReal ion_heatflow = radial_energy_outflow(mesh->xstart, iy, iz);   // Ion heat flow to wall in [W]. This is on xlow edge so take first domain cell
+
+              // Blend fast (ion energy) and thermal (constant energy) recycling 
+              // Calculate returning neutral heat flow in [W]
+              BoutReal neutral_heatflow = 
+                ion_heatflow * channel.pfr_fast_recycle_energy_factor * channel.pfr_fast_recycle_fraction   // Fast recycling part
+                + recycle_particle_flow * (1 - channel.pfr_fast_recycle_fraction) * channel.pfr_energy;   // Thermal recycling part
+
+              // Divide heat flow in [W] by cell volume to get energy source in [m^-3 s^-1]
+              wall_recycle_energy_source(mesh->xstart, iy, iz) += neutral_heatflow / volume;   // For diagnostic
+              energy_source(mesh->xstart, iy, iz) += neutral_heatflow / volume;    // For use in solver
 
             }
           }

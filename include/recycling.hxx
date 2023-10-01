@@ -58,12 +58,13 @@ private:
   bool diagnose; ///< Save additional post-processing variables?
 
   Field3D density_source, energy_source; ///< Recycling particle and energy sources for all locations
-  Field3D heatflow_ylow, heatflow_xlow; ///< Cell edge fluxes used for calculating fast recycling energy source
+  Field3D energy_flow_ylow, energy_flow_xlow; ///< Cell edge fluxes used for calculating fast recycling energy source
+  Field3D particle_flow_xlow; ///< Radial wall particle fluxes for recycling calc. No need to get poloidal from here, it's calculated from sheath velocity
 
   Field3D target_recycle_density_source, target_recycle_energy_source;  ///< Recycling particle and energy sources for target recycling only
   Field3D wall_recycle_density_source, wall_recycle_energy_source;  ///< Recycling particle and energy sources for pfr + sol recycling
 
-  Field3D radial_particle_outflow, radial_energy_outflow;  ///< Radial fluxes coming from evolve_density and evolve_pressure used in recycling calc
+  // Field3D radial_particle_outflow, radial_energy_outflow;  ///< Radial fluxes coming from evolve_density and evolve_pressure used in recycling calc
   
 
 };
