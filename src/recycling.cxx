@@ -202,7 +202,7 @@ void Recycling::transform(Options& state) {
           // Blend fast (ion energy) and thermal (constant energy) recycling 
           // Calculate returning neutral heat flow in [W]
           BoutReal neutral_heatflow = 
-            ion_heatflow * channel.target_fast_recycle_energy_factor * channel.target_fast_recycle_fraction   // Fast recycling part
+            ion_heatflow * channel.target_multiplier * channel.target_fast_recycle_energy_factor * channel.target_fast_recycle_fraction   // Fast recycling part
             + flow * (1 - channel.target_fast_recycle_fraction) * channel.target_energy;   // Thermal recycling part
 
           // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
@@ -245,7 +245,7 @@ void Recycling::transform(Options& state) {
           // Blend fast (ion energy) and thermal (constant energy) recycling 
           // Calculate returning neutral heat flow in [W]
           BoutReal neutral_heatflow = 
-            ion_heatflow * channel.target_fast_recycle_energy_factor * channel.target_fast_recycle_fraction   // Fast recycling part
+            ion_heatflow * channel.target_multiplier * channel.target_fast_recycle_energy_factor * channel.target_fast_recycle_fraction   // Fast recycling part
             + flow * (1 - channel.target_fast_recycle_fraction) * channel.target_energy;   // Thermal recycling part
 
 
@@ -310,7 +310,7 @@ void Recycling::transform(Options& state) {
             // Blend fast (ion energy) and thermal (constant energy) recycling 
             // Calculate returning neutral heat flow in [W]
             BoutReal neutral_heatflow = 
-              ion_heatflow * channel.sol_fast_recycle_energy_factor * channel.sol_fast_recycle_fraction   // Fast recycling part
+              ion_heatflow * channel.sol_multiplier * channel.sol_fast_recycle_energy_factor * channel.sol_fast_recycle_fraction   // Fast recycling part
               + recycle_particle_flow * (1 - channel.sol_fast_recycle_fraction) * channel.sol_energy;   // Thermal recycling part
 
             // Divide heat flow in [W] by cell volume to get energy source in [m^-3 s^-1]
@@ -358,7 +358,7 @@ void Recycling::transform(Options& state) {
               // Blend fast (ion energy) and thermal (constant energy) recycling 
               // Calculate returning neutral heat flow in [W]
               BoutReal neutral_heatflow = 
-                ion_heatflow * channel.pfr_fast_recycle_energy_factor * channel.pfr_fast_recycle_fraction   // Fast recycling part
+                ion_heatflow * channel.pfr_multiplier * channel.pfr_fast_recycle_energy_factor * channel.pfr_fast_recycle_fraction   // Fast recycling part
                 + recycle_particle_flow * (1 - channel.pfr_fast_recycle_fraction) * channel.pfr_energy;   // Thermal recycling part
 
               // Divide heat flow in [W] by cell volume to get energy source in [m^-3 s^-1]
