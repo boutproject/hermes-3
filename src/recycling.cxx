@@ -197,7 +197,7 @@ void Recycling::transform(Options& state) {
           density_source(r.ind, mesh->ystart, jz) += flow / volume;         // For use in solver
 
           // Energy of recycled particles
-          BoutReal ion_heatflow = energy_flow_ylow(r.ind, mesh->ystart, jz);   // Ion heat flux to wall. This is ylow end so take first domain cell
+          BoutReal ion_heatflow = energy_flow_ylow(r.ind, mesh->ystart, jz) * -1;   // This is ylow end so take first domain cell and flip sign
 
           // Blend fast (ion energy) and thermal (constant energy) recycling 
           // Calculate returning neutral heat flow in [W]
