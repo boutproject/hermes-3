@@ -2,6 +2,7 @@
 #include "../include/recycling.hxx"
 
 #include <bout/utils.hxx> // for trim, strsplit
+#include "../include/hermes_utils.hxx"  // For indexAt
 #include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
 #include <bout/constants.hxx>
@@ -21,6 +22,12 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                                    .as<std::string>(),
                                ',');
 
+  
+  // Neutral pump
+  // Mark cells as having a pump by setting the Field2D is_pump to 1 in the grid file
+  // Works only on SOL and PFR edges, where it locally modifies the recycle multiplier to the pump albedo
+  is_pump = 0.0;
+  mesh->get(is_pump, std::string("is_pump"));
       
   for (const auto& species : species_list) {
     std::string from = trim(species, " \t\r()"); // The species name in the list
@@ -51,6 +58,11 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
         from_options["pfr_recycle_multiplier"]
             .doc("Multiply the pfr recycled flux by this factor. Should be >=0 and <= 1")
             .withDefault<BoutReal>(1.0);
+
+    BoutReal pump_recycle_multiplier =
+      from_options["pump_recycle_multiplier"]
+          .doc("Multiply the pump boundary recycling flux by this factor (like albedo). Should be >=0 and <= 1")
+          .withDefault<BoutReal>(1.0);
 
     BoutReal target_recycle_energy = from_options["target_recycle_energy"]
                                   .doc("Fixed energy of the recycled particles at target [eV]")
@@ -99,14 +111,15 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
 
     if ((target_recycle_multiplier < 0.0) or (target_recycle_multiplier > 1.0)
     or (sol_recycle_multiplier < 0.0) or (sol_recycle_multiplier > 1.0)
-    or (pfr_recycle_multiplier < 0.0) or (pfr_recycle_multiplier > 1.0)) {
+    or (pfr_recycle_multiplier < 0.0) or (pfr_recycle_multiplier > 1.0)
+    or (pump_recycle_multiplier < 0.0) or (pump_recycle_multiplier > 1.0)) {
       throw BoutException("recycle_fraction must be betweeen 0 and 1");
     }
 
     // Populate recycling channel vector
     channels.push_back({
       from, to, 
-      target_recycle_multiplier, sol_recycle_multiplier, pfr_recycle_multiplier,
+      target_recycle_multiplier, sol_recycle_multiplier, pfr_recycle_multiplier, pump_recycle_multiplier,
       target_recycle_energy, sol_recycle_energy, pfr_recycle_energy,
       target_fast_recycle_fraction, pfr_fast_recycle_fraction, sol_fast_recycle_fraction,
       target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor, pfr_fast_recycle_energy_factor});
@@ -123,6 +136,10 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
     pfr_recycle = from_options["pfr_recycle"]
                    .doc("Recycling in the PFR edge?")
                    .withDefault<bool>(false);
+
+    neutral_pump = from_options["neutral_pump"]
+                   .doc("Neutral pump enabled? Note, need location in grid file")
+                   .withDefault<bool>(false);                 
   }
 }
 
@@ -146,6 +163,10 @@ void Recycling::transform(Options& state) {
     const Field3D T = get<Field3D>(species_from["temperature"]); // Ion temperature
 
     Options& species_to = state["species"][channel.to];
+    const Field3D Nn = get<Field3D>(species_to["density"]);
+    const Field3D Pn = get<Field3D>(species_to["pressure"]);
+    const Field3D Tn = get<Field3D>(species_to["temperature"]);
+    const BoutReal AAn = get<BoutReal>(species_to["AA"]);
 
     // Recycling particle and energy sources will be added to these global sources 
     // which are then passed to the density and pressure equations
