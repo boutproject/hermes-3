@@ -185,9 +185,12 @@ void Recycling::transform(Options& state) {
       // Fast recycling needs to know how much energy the "from" species is losing to the boundary
       if (species_from.isSet("energy_flow_ylow")) {
         energy_flow_ylow = get<Field3D>(species_from["energy_flow_ylow"]);
-      } else if (channel.target_fast_recycle_fraction > 0) {
-        throw BoutException("Target fast recycle enabled but no sheath heat flow available, check compatibility with sheath component");
-      };
+      } else {
+        energy_flow_ylow = 0;
+        if (channel.target_fast_recycle_fraction > 0) {
+          throw BoutException("Target fast recycle enabled but no sheath heat flow available in energy_flow_ylow! \nCurrently only sheath_boundary_simple is supported for fast recycling.");
+        }
+      }
 
       target_recycle_density_source = 0;
       target_recycle_energy_source = 0;
