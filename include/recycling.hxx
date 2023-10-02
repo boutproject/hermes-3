@@ -63,7 +63,9 @@ private:
 
   Field2D is_pump; ///< 1 = pump, 0 = no pump. Works only in SOL/PFR. Provided by user in grid file.
 
-  Field3D target_recycle_density_source, target_recycle_energy_source;  ///< Recycling particle and energy sources for target recycling only
+  // Recycling particle and energy sources for the different sources of recycling
+  // Note that SOL, PFR and pump are not applicable to 1D
+  Field3D target_recycle_density_source, target_recycle_energy_source; 
   Field3D wall_recycle_density_source, wall_recycle_energy_source;  ///< Recycling particle and energy sources for pfr + sol recycling
   Field3D pump_density_source, pump_energy_source;  ///< Recycling particle and energy sources for pump recycling
 

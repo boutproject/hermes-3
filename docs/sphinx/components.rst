@@ -1189,9 +1189,57 @@ Each returning atom has an energy of 3.5eV:
    sol_recycle_multiplier = 1 # Recycling fraction
    sol_recycle_energy = 3.5   # Energy of recycled particles [eV]
 
-   sol_recycle = true
-   sol_recycle_multiplier = 1 # Recycling fraction
-   sol_recycle_energy = 3.5   # Energy of recycled particles [eV]
+   pfr_recycle = true
+   pfr_recycle_multiplier = 1 # Recycling fraction
+   pfr_recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+Neutral pump
+^^^^^^^^^^^^^^^
+
+The recycling component also features a neutral pump which is currently implemented for 
+the SOL and PFR edges only, and so is not available in 1D. The pump is a region of the wall
+which facilitates particle loss by incomplete recycling and neutral absorption. 
+
+The pump requires wall recycling to be enabled on the relevant wall region.
+
+The particle loss rate :math:`\Gamma_{N_{n}}` is the sum of the incident ions that are not recycled and the 
+incident neutrals which are not reflected, both of which are controlled by the pump multiplier :math:`M_{p}` 
+which is set by the `pump_multiplier` option in the input file. The unrecycled ion flux :math:`\Gamma_{N_{i}}^{unrecycled}` is calculated exactly the same
+as for edge recycling but with `pump_multiplier` replacing the `recycle_multiplier`.
+
+.. math::
+
+   \begin{aligned}
+   \Gamma_{N_{n}} &= \Gamma_{N_{i}}^{unrecycled} + M_{p} \times \Gamma_{N_{n}}^{incident} \\
+   \Gamma_{N_{n}}^{incident} &= N_{n} v_{th} = N_{n} \frac{1}{4} \sqrt{\frac{8 T_{n}}{\pi m_{n}}} \\
+   \end{aligned}
+
+Where the thermal velocity formulation is for a static maxwellian in 1D (see Stangeby p.64, eqns 2.21, 2.24) 
+and the temperature is in `eV`.
+
+The heat loss rate :math:`\Gamma_{E_{n}}` is calculated as:
+
+.. math::
+
+   \begin{aligned}
+   \Gamma_{E_{n}} &= \Gamma_{E_{i}}^{unrecycled}  + M_{p} \times \Gamma_{E_{n}}^{incident} \\
+   \Gamma_{E_{n}}^{incident} &= \gamma T_{n} N_{n} v_{th} = 2 T_{n} N_{n} \frac{1}{4} \sqrt{\frac{8 T_{n}}{\pi m_{n}}} \\
+   \end{aligned}
+
+Where the incident heat flux is for a static maxwellian in 1D (see Stangeby p.69, eqn 2.30).
+
+The pump will be placed in any cell that
+ 1. Is the final domain cell before the guard cells
+ 2. Is on the SOL or PFR edge
+ 3. Has a `is_pump` value of 1
+
+The field `is_pump` must be created by the user and added to the grid file as a `Field2D`.
+
+Diagnostic variables
+^^^^^^^^^^^^^^^
+Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, the pump as well as the SOL and PFR which are grouped together as `wall`.
+as well as the pump. In addition, the field `is_pump` is saved to help in plotting the pump location.
+
 
 .. doxygenstruct:: Recycling
    :members:

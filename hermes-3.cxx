@@ -162,6 +162,10 @@ int Hermes::init(bool restarting) {
   options["revision"] = hermes::version::revision;
   options["revision"].setConditionallyUsed();
 
+  output.write("Slope limiter: {}\n", hermes::limiter_typename);
+  options["slope_limiter"] = hermes::limiter_typename;
+  options["slope_limiter"].setConditionallyUsed();
+
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
   Nnorm = options["Nnorm"].doc("Reference density [m^-3]").withDefault(1e19);
@@ -276,6 +280,8 @@ void Hermes::outputVars(Options& options) {
 
   // Save the Hermes version in the output dump files
   options["HERMES_REVISION"].force(hermes::version::revision);
+
+  options["HERMES_SLOPE_LIMITER"].force(hermes::limiter_typename);
 
   // Save normalisation quantities. These may be used by components
   // to calculate conversion factors to SI units

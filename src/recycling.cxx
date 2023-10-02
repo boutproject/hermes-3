@@ -3,6 +3,7 @@
 
 #include <bout/utils.hxx> // for trim, strsplit
 #include "../include/hermes_utils.hxx"  // For indexAt
+#include "../include/hermes_utils.hxx"  // For indexAt
 #include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
 #include <bout/constants.hxx>
@@ -113,7 +114,7 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
     or (sol_recycle_multiplier < 0.0) or (sol_recycle_multiplier > 1.0)
     or (pfr_recycle_multiplier < 0.0) or (pfr_recycle_multiplier > 1.0)
     or (pump_recycle_multiplier < 0.0) or (pump_recycle_multiplier > 1.0)) {
-      throw BoutException("recycle_fraction must be betweeen 0 and 1");
+      throw BoutException("All recycle multipliers must be betweeen 0 and 1");
     }
 
     // Populate recycling channel vector
@@ -276,6 +277,9 @@ void Recycling::transform(Options& state) {
       }
     }
 
+    // Initialise counters of pump recycling fluxes
+    pump_recycle_density_source = 0;
+    pump_recycle_energy_source = 0;
     wall_recycle_density_source = 0;
     wall_recycle_energy_source = 0;
     pump_density_source = 0;
@@ -324,7 +328,7 @@ void Recycling::transform(Options& state) {
             // Recycling source is 0 for each cell where the flow goes into instead of out of the domain
             BoutReal recycle_particle_flow = 0;
             if (radial_particle_outflow(mesh->xend+1, iy, iz) > 0) {
-              recycle_particle_flow = channel.sol_multiplier * radial_particle_outflow(mesh->xend+1, iy, iz); 
+              recycle_particle_flow = multiplier * radial_particle_outflow(mesh->xend+1, iy, iz); 
             } 
 
             BoutReal ion_energy_flow = radial_energy_outflow(mesh->xend+1, iy, iz);   // Ion heat flow to wall in [W]. This is on xlow edge so take guard cell
@@ -426,7 +430,7 @@ void Recycling::transform(Options& state) {
               // Recycling source is 0 for each cell where the flow goes into instead of out of the domain
               BoutReal recycle_particle_flow = 0;
               if (radial_particle_outflow(mesh->xstart, iy, iz) > 0) { 
-                recycle_particle_flow = channel.pfr_multiplier * radial_particle_outflow(mesh->xstart, iy, iz); 
+                recycle_particle_flow = multiplier * radial_particle_outflow(mesh->xstart, iy, iz); 
               }
 
               BoutReal ion_energy_flow = radial_energy_outflow(mesh->xstart, iy, iz);   // Ion heat flow to wall in [W]. This is on xlow edge so take first domain cell
@@ -511,7 +515,7 @@ void Recycling::transform(Options& state) {
 }
 
 void Recycling::outputVars(Options& state) {
-
+  
   AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);

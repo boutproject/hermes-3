@@ -61,6 +61,7 @@ private:
   struct Diagnostics {
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar
     Field3D Pi_cipar;  ///< Parallel part of Pi scalar
+    Field3D DivJ;      ///< Divergence of current in vorticity equation
   };
 
   /// Store diagnostics for each species
