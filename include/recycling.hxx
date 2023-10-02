@@ -65,7 +65,7 @@ private:
 
   Field3D target_recycle_density_source, target_recycle_energy_source;  ///< Recycling particle and energy sources for target recycling only
   Field3D wall_recycle_density_source, wall_recycle_energy_source;  ///< Recycling particle and energy sources for pfr + sol recycling
-  Field3D pump_recycle_density_source, pump_recycle_energy_source;  ///< Recycling particle and energy sources for pump recycling
+  Field3D pump_density_source, pump_energy_source;  ///< Recycling particle and energy sources for pump recycling
 
 };
 
