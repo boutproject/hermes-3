@@ -278,8 +278,6 @@ void Recycling::transform(Options& state) {
     }
 
     // Initialise counters of pump recycling fluxes
-    pump_recycle_density_source = 0;
-    pump_recycle_energy_source = 0;
     wall_recycle_density_source = 0;
     wall_recycle_energy_source = 0;
     pump_density_source = 0;
