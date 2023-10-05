@@ -1214,11 +1214,11 @@ The recycled heat flux is:
 .. math::
 
    \begin{aligned}
-   \Gamma_{E_{n}} &= R \times (R_{f} \alpha_{E} \Gamma_{E_{i}}^{sheath}  + (1 - R_{f} T_{R} \Gamma_{N_{i}})) \\
+   \Gamma_{E_{n}} &= R \times (R_{f} \alpha_{E} \Gamma_{E_{i}}^{sheath}  + (1 - R_{f}) T_{R} \Gamma_{N_{i}})) \\
    \end{aligned}
 
 Where :math:`R` is the recycle multiplier, :math:`R_{f}` is the fast reflection fraction, :math:`\alpha_{E}` is the energy reflection factor,
-:math:`\Gamma_{E_{i}}^{sheath}` is the incident heat flux from the sheath boundary condition, :math:`T_{R}` is the recycle energy.
+:math:`\Gamma_{E_{i}}^{sheath}` is the incident heat flux from the sheath boundary condition, :math:`T_{R}` is the recycle energy and :math:`\Gamma_{N_{i}}` is the incident ion flux.
 
 :math:`R_{f}` and :math:`\alpha_{E}` can be set as in the below example. They can also be set to different values for the SOL and PFR by replacing
 the word "target" with either "sol" or "pfr".
