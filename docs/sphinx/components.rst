@@ -1150,12 +1150,19 @@ Recycling has been implemented at the target, the SOL edge and the PFR edge.
 Each is off by default and must be activated with a separate flag. Each can be 
 assigned a separate recycle multiplier and recycle energy. 
 
-The chosen species must feature an outflow through the boundary - any cells
+Configuring thermal recycling
+^^^^^^^^^^^^^^^
+
+A simple and commonly used way to model recycling is to assume it is fully thermal,
+i.e. that every incident ion recombines into a neutral molecule and thermalises with the surface 
+before becoming re-emitted. Hermes-3 does not yet have a hydrogenic molecule model, and so 
+the molecules are assumed to instantly dissociate at the Franck-Condon dissociation temperature of 3.5eV.
+
+In order to set this up, the chosen species must feature an outflow through the boundary - any cells
 with an inflow have their recycling source set to zero. If a sheath boundary condition
 is enabled, then this is automatically satisfied at the target through the Bohm condition.
 If it is not enabled, then the target boundary must be set to `free_o2`, `free_o3` or `decaylength` to 
-allow an outflow. If SOL or PFR recycling is enabled, a `free_o2`, `free_o3` or `decaylength`on
-their respective boundaries is required at all times.
+allow an outflow. 
 
 The recycling component has a `species` option, that is a list of species
 to recycle. For each of the species in that list, `recycling` will look in
@@ -1193,6 +1200,40 @@ Each returning atom has an energy of 3.5eV:
    pfr_recycle_multiplier = 1 # Recycling fraction
    pfr_recycle_energy = 3.5   # Energy of recycled particles [eV]
 
+Allowing for fast recycling
+^^^^^^^^^^^^^^^
+
+In reality, a fraction of incident ions will undergo specular reflection off the surface and 
+preserve a fraction of their energy. In the popular Monte-Carlo neutral code EIRENE, the 
+fast recycling fraction and the energy reflection factor are provided by the `TRIM database <https://www.eirene.de/old_eirene/html/surface_data.html>`_
+as a function of incident angle, surface material and incident particle energy.
+Studies found that sheath acceleration can make the ion angle relatively consistent, e.g. 60 degrees; in (`Jae-Sun Park et al 2021 Nucl. Fusion 61 016021 <https://iopscience.iop.org/article/10.1088/1741-4326/abc1ce>`_).
+
+The recycled heat flux is:
+
+.. math::
+
+   \begin{aligned}
+   \Gamma_{E_{n}} &= R \times (R_{f} \alpha_{E} \Gamma_{E_{i}}^{sheath}  + (1 - R_{f} T_{R} \Gamma_{N_{i}})) \\
+   \end{aligned}
+
+Where :math:`R` is the recycle multiplier, :math:`R_{f}` is the fast reflection fraction, :math:`\alpha_{E}` is the energy reflection factor,
+:math:`\Gamma_{E_{i}}^{sheath}` is the incident heat flux from the sheath boundary condition, :math:`T_{R}` is the recycle energy.
+
+:math:`R_{f}` and :math:`\alpha_{E}` can be set as in the below example. They can also be set to different values for the SOL and PFR by replacing
+the word "target" with either "sol" or "pfr".
+
+.. code-block:: ini
+
+   [d+]
+   recycle_as = d         # Species to recycle as
+
+   target_recycle = true  
+   target_recycle_multiplier = 0.95 # Recycling fraction
+   target_recycle_energy = 3.5   # Energy of recycled particles [eV]
+   target_fast_recycle_energy_factor = 0.70
+   target_fast_recycle_fraction = 0.80
+
 Neutral pump
 ^^^^^^^^^^^^^^^
 
@@ -1204,8 +1245,8 @@ The pump requires wall recycling to be enabled on the relevant wall region.
 
 The particle loss rate :math:`\Gamma_{N_{n}}` is the sum of the incident ions that are not recycled and the 
 incident neutrals which are not reflected, both of which are controlled by the pump multiplier :math:`M_{p}` 
-which is set by the `pump_multiplier` option in the input file. The unrecycled ion flux :math:`\Gamma_{N_{i}}^{unrecycled}` is calculated exactly the same
-as for edge recycling but with `pump_multiplier` replacing the `recycle_multiplier`.
+which is set by the `pump_multiplier` option in the input file. The unrecycled ion flux :math:`\Gamma_{N_{i}}^{unrecycled}` is calculated using the recycling
+model and allows for either thermal or fast recycling, but with the difference that the `pump_multiplier` replaces the `recycle_multiplier`. 
 
 .. math::
 
