@@ -59,6 +59,7 @@ anomalous_chi = 4
 thermal_conduction = true
 
 recycle_as = d
+target_recycle = true
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 diagnose = true

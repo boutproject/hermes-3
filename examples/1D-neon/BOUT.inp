@@ -104,7 +104,9 @@ thermal_conduction = true  # in evolve_pressure
 diagnose = true   # Output diagnostics for these components?
 
 recycle_as = d
-target_recycle_multiplier = 1.0  # Recycling fraction
+target_recycle = true  # Target recycling on
+target_recycle_energy = 3.5  # Franck-Condon dissociation energy
+target_recycle_multiplier = 1  # Recycling fraction
 
 [Nd+]
 
@@ -168,6 +170,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 1  # Recycling fraction
 
 [Nne+]
@@ -188,6 +192,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 1  # Recycling fraction
 
 [Nne+2]
@@ -208,6 +214,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 1  # Recycling fraction
 
 [Nne+3]
@@ -228,6 +236,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
@@ -250,6 +260,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
@@ -272,6 +284,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
@@ -294,6 +308,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
@@ -316,6 +332,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
@@ -338,6 +356,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true
@@ -360,6 +380,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 1  # Recycling fraction
 
 diagnose = true

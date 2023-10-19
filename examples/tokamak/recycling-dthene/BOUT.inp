@@ -36,6 +36,7 @@ anomalous_chi = 1
 thermal_conduction = true
 
 recycle_as = d
+target_recycle = true
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 [Nd+]
@@ -76,6 +77,7 @@ anomalous_chi = 1
 thermal_conduction = true
 
 recycle_as = t
+target_recycle = true
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 [Nt+]
@@ -116,6 +118,7 @@ anomalous_chi = 1
 thermal_conduction = true
 
 recycle_as = he
+target_recycle = true
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 [Nhe+]
@@ -156,6 +159,7 @@ anomalous_chi = 1
 thermal_conduction = true
 
 recycle_as = ne
+target_recycle = true
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 [Nne+]

@@ -99,7 +99,7 @@ void NeutralBoundary::transform(Options& state) {
         const BoutReal tnsheath = 0.5 * (Tn[im] + Tn[i]);
 
         // Thermal speed
-        const BoutReal v_th = sqrt(tnsheath / AA);
+        const BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
 
         // Calculate effective gamma from particle and energy reflection coefficients
         BoutReal target_gamma_heat = 1 - target_energy_refl_factor * target_fast_refl_fraction 
@@ -142,7 +142,7 @@ void NeutralBoundary::transform(Options& state) {
         const BoutReal tnsheath = 0.5 * (Tn[ip] + Tn[i]);
 
         // Thermal speed
-        const BoutReal v_th = sqrt(tnsheath / AA);
+        const BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
 
         // Calculate effective gamma from particle and energy reflection coefficients
         BoutReal target_gamma_heat = 1 - target_energy_refl_factor * target_fast_refl_fraction 
@@ -177,8 +177,8 @@ void NeutralBoundary::transform(Options& state) {
           const BoutReal nnsheath = 0.5 * (Nn[ig] + Nn[i]);
           const BoutReal tnsheath = 0.5 * (Tn[ig] + Tn[i]);
 
-          // Thermal speed in one direction only (?)
-          const BoutReal v_th = sqrt(tnsheath / AA);
+          // Thermal speed of static Maxwellian in one direction
+          const BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
 
           // Calculate effective gamma from particle and energy reflection coefficients
           BoutReal sol_gamma_heat = 1 - sol_energy_refl_factor * sol_fast_refl_fraction 
@@ -224,8 +224,8 @@ void NeutralBoundary::transform(Options& state) {
           const BoutReal nnsheath = 0.5 * (Nn[ig] + Nn[i]);
           const BoutReal tnsheath = 0.5 * (Tn[ig] + Tn[i]);
 
-          // Thermal speed in one direction only (?)
-          const BoutReal v_th = sqrt(tnsheath / AA);
+          // Thermal speed of static Maxwellian in one direction
+          const BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
 
           
           // Calculate effective gamma from particle and energy reflection coefficients

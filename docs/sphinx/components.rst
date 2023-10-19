@@ -1150,12 +1150,19 @@ Recycling has been implemented at the target, the SOL edge and the PFR edge.
 Each is off by default and must be activated with a separate flag. Each can be 
 assigned a separate recycle multiplier and recycle energy. 
 
-The chosen species must feature an outflow through the boundary - any cells
+Configuring thermal recycling
+^^^^^^^^^^^^^^^
+
+A simple and commonly used way to model recycling is to assume it is fully thermal,
+i.e. that every incident ion recombines into a neutral molecule and thermalises with the surface 
+before becoming re-emitted. Hermes-3 does not yet have a hydrogenic molecule model, and so 
+the molecules are assumed to instantly dissociate at the Franck-Condon dissociation temperature of 3.5eV.
+
+In order to set this up, the chosen species must feature an outflow through the boundary - any cells
 with an inflow have their recycling source set to zero. If a sheath boundary condition
 is enabled, then this is automatically satisfied at the target through the Bohm condition.
 If it is not enabled, then the target boundary must be set to `free_o2`, `free_o3` or `decaylength` to 
-allow an outflow. If SOL or PFR recycling is enabled, a `free_o2`, `free_o3` or `decaylength`on
-their respective boundaries is required at all times.
+allow an outflow. 
 
 The recycling component has a `species` option, that is a list of species
 to recycle. For each of the species in that list, `recycling` will look in
@@ -1189,9 +1196,91 @@ Each returning atom has an energy of 3.5eV:
    sol_recycle_multiplier = 1 # Recycling fraction
    sol_recycle_energy = 3.5   # Energy of recycled particles [eV]
 
-   sol_recycle = true
-   sol_recycle_multiplier = 1 # Recycling fraction
-   sol_recycle_energy = 3.5   # Energy of recycled particles [eV]
+   pfr_recycle = true
+   pfr_recycle_multiplier = 1 # Recycling fraction
+   pfr_recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+Allowing for fast recycling
+^^^^^^^^^^^^^^^
+
+In reality, a fraction of incident ions will undergo specular reflection off the surface and 
+preserve a fraction of their energy. In the popular Monte-Carlo neutral code EIRENE, the 
+fast recycling fraction and the energy reflection factor are provided by the `TRIM database <https://www.eirene.de/old_eirene/html/surface_data.html>`_
+as a function of incident angle, surface material and incident particle energy.
+Studies found that sheath acceleration can make the ion angle relatively consistent, e.g. 60 degrees; in (`Jae-Sun Park et al 2021 Nucl. Fusion 61 016021 <https://iopscience.iop.org/article/10.1088/1741-4326/abc1ce>`_).
+
+The recycled heat flux is:
+
+.. math::
+
+   \begin{aligned}
+   \Gamma_{E_{n}} &= R \times (R_{f} \alpha_{E} \Gamma_{E_{i}}^{sheath}  + (1 - R_{f}) T_{R} \Gamma_{N_{i}})) \\
+   \end{aligned}
+
+Where :math:`R` is the recycle multiplier, :math:`R_{f}` is the fast reflection fraction, :math:`\alpha_{E}` is the energy reflection factor,
+:math:`\Gamma_{E_{i}}^{sheath}` is the incident heat flux from the sheath boundary condition, :math:`T_{R}` is the recycle energy and :math:`\Gamma_{N_{i}}` is the incident ion flux.
+
+:math:`R_{f}` and :math:`\alpha_{E}` can be set as in the below example. They can also be set to different values for the SOL and PFR by replacing
+the word "target" with either "sol" or "pfr".
+
+.. code-block:: ini
+
+   [d+]
+   recycle_as = d         # Species to recycle as
+
+   target_recycle = true  
+   target_recycle_multiplier = 0.95 # Recycling fraction
+   target_recycle_energy = 3.5   # Energy of recycled particles [eV]
+   target_fast_recycle_energy_factor = 0.70
+   target_fast_recycle_fraction = 0.80
+
+Neutral pump
+^^^^^^^^^^^^^^^
+
+The recycling component also features a neutral pump which is currently implemented for 
+the SOL and PFR edges only, and so is not available in 1D. The pump is a region of the wall
+which facilitates particle loss by incomplete recycling and neutral absorption. 
+
+The pump requires wall recycling to be enabled on the relevant wall region.
+
+The particle loss rate :math:`\Gamma_{N_{n}}` is the sum of the incident ions that are not recycled and the 
+incident neutrals which are not reflected, both of which are controlled by the pump multiplier :math:`M_{p}` 
+which is set by the `pump_multiplier` option in the input file. The unrecycled ion flux :math:`\Gamma_{N_{i}}^{unrecycled}` is calculated using the recycling
+model and allows for either thermal or fast recycling, but with the difference that the `pump_multiplier` replaces the `recycle_multiplier`. 
+
+.. math::
+
+   \begin{aligned}
+   \Gamma_{N_{n}} &= \Gamma_{N_{i}}^{unrecycled} + M_{p} \times \Gamma_{N_{n}}^{incident} \\
+   \Gamma_{N_{n}}^{incident} &= N_{n} v_{th} = N_{n} \frac{1}{4} \sqrt{\frac{8 T_{n}}{\pi m_{n}}} \\
+   \end{aligned}
+
+Where the thermal velocity formulation is for a static maxwellian in 1D (see Stangeby p.64, eqns 2.21, 2.24) 
+and the temperature is in `eV`.
+
+The heat loss rate :math:`\Gamma_{E_{n}}` is calculated as:
+
+.. math::
+
+   \begin{aligned}
+   \Gamma_{E_{n}} &= \Gamma_{E_{i}}^{unrecycled}  + M_{p} \times \Gamma_{E_{n}}^{incident} \\
+   \Gamma_{E_{n}}^{incident} &= \gamma T_{n} N_{n} v_{th} = 2 T_{n} N_{n} \frac{1}{4} \sqrt{\frac{8 T_{n}}{\pi m_{n}}} \\
+   \end{aligned}
+
+Where the incident heat flux is for a static maxwellian in 1D (see Stangeby p.69, eqn 2.30).
+
+The pump will be placed in any cell that
+ 1. Is the final domain cell before the guard cells
+ 2. Is on the SOL or PFR edge
+ 3. Has a `is_pump` value of 1
+
+The field `is_pump` must be created by the user and added to the grid file as a `Field2D`.
+
+Diagnostic variables
+^^^^^^^^^^^^^^^
+Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, the pump as well as the SOL and PFR which are grouped together as `wall`.
+as well as the pump. In addition, the field `is_pump` is saved to help in plotting the pump location.
+
 
 .. doxygenstruct:: Recycling
    :members:
