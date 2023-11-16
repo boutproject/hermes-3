@@ -101,3 +101,14 @@ example:
 See the
 [examples](https://github.com/bendudson/hermes-3/tree/master/examples)
 for more complicated cases.
+
+## Publications
+
+* B.Dudson, M.Kryjak, H.Muhammed, P.Hill, J,Omotani [Hermes-3:
+  Multi-component plasma simulations with
+  BOUT++](https://doi.org/10.1016/j.cpc.2023.108991)
+  Comp. Phys. Comm. 2023
+  108991. doi:[10.1016/j.cpc.2023.108991](https://doi.org/10.1016/j.cpc.2023.108991).
+  Preprint:
+  [arXiv.2303.12131](https://doi.org/10.48550/arXiv.2303.12131).
+
