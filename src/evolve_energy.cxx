@@ -138,7 +138,7 @@ void EvolveEnergy::transform(Options& state) {
   // Calculate pressure
   // E = Cv * P + (1/2) m n v^2
   P.allocate();
-  BOUT_FOR(i, P.getRegion("RGN_NOBNDRY")) {
+  BOUT_FOR(i, P.getRegion("RGN_ALL")) {
     P[i] = (E[i] - 0.5 * AA * N[i] * SQ(V[i])) / Cv;
     if (P[i] < 0.0) {
       P[i] = 0.0;
