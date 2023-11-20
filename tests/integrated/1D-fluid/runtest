@@ -19,7 +19,7 @@ from numpy import sqrt, max, abs, mean, array, log, concatenate
 shell("ln -s ../../../hermes-3 hermes-3")
 
 # List of NY values to use
-nylist = [40, 80, 160, 320]
+nylist = [40, 80, 160, 320] #, 640, 1280, 2560, 5120]
 
 nout = 1
 timestep = 1
@@ -84,8 +84,8 @@ try:
     inf = results[var]["inf"]
     order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
     
-    plt.plot(dy, l2, '-o', label=r'$l^2$ ('+var+')')
-    plt.plot(dy, inf, '-x', label=r'$l^\infty$ ('+var+')')
+    plt.plot(dy, l2, '-o', label=r'$l_2$ ('+var+')')
+    plt.plot(dy, inf, '-x', label=r'$l_\infty$ ('+var+')')
     plt.plot(dy, l2[-1]*(dy/dy[-1])**order, '--', label="Order %.1f" % (order))
 
   plt.legend(loc="upper left")

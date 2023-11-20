@@ -64,7 +64,7 @@ type = beuler  # Backward Euler steady-state solver
 snes_type = newtonls
 ksp_type = gmres
 max_nonlinear_iterations = 10
-
+lag_jacobian = 500
 atol = 1e-7
 rtol = 1e-5
 
@@ -93,7 +93,7 @@ AA = 2 # atomic mass number in amu
 density_upstream = 1e19  # Upstream density [m^-3]
 density_source_positive = false  # Force source to be > 0?
 # Check Hermes-3 documentation for how this source works
-density_controller_i = 5e-4
+density_controller_i = 1e-2
 density_controller_p = 5e2
 
 thermal_conduction = true  # in evolve_pressure
@@ -101,7 +101,9 @@ thermal_conduction = true  # in evolve_pressure
 diagnose = true
 
 recycle_as = d
-recycle_multiplier = 1  # Recycling fraction
+target_recycle = true  # Target recycling on
+target_recycle_energy = 3.5  # Franck-Condon dissociation energy
+target_recycle_multiplier = 1  # Recycling fraction
 
 [Nd+]
 # Initial condition for ion density.

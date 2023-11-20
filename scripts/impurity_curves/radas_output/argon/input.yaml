@@ -1,0 +1,157 @@
+# Species to perform analysis for
+species: Argon
+
+# Electron density (in m**-3)
+electron_density: 1.0E+20
+
+# Neutral density (in m**-3)
+neutral_density: 0.0
+
+# Electron temperature (in eV)
+electron_temperature: [1.00000000e+00, 1.11548656e+00, 1.24431027e+00, 1.38801139e+00,
+       1.54830806e+00, 1.72711683e+00, 1.92657562e+00, 2.14906922e+00,
+       2.39725784e+00, 2.67410891e+00, 2.98293256e+00, 3.32742119e+00,
+       3.71169363e+00, 4.14034437e+00, 4.61849852e+00, 5.15187304e+00,
+       5.74684516e+00, 6.41052856e+00, 7.15085847e+00, 7.97668654e+00,
+       8.89788666e+00, 9.92547302e+00, 1.10717318e+01, 1.23503680e+01,
+       1.37766696e+01, 1.53676898e+01, 1.71424515e+01, 1.91221744e+01,
+       2.13305286e+01, 2.37939180e+01, 2.65417958e+01, 2.96070166e+01,
+       3.30262293e+01, 3.68403150e+01, 4.10948764e+01, 4.58407824e+01,
+       5.11347769e+01, 5.70401565e+01, 6.36275282e+01, 7.09756528e+01,
+       7.91723870e+01, 8.83157340e+01, 9.85150146e+01, 1.09892175e+02,
+       1.22583245e+02, 1.36739963e+02, 1.52531591e+02, 1.70146940e+02,
+       1.89796626e+02, 2.11715586e+02, 2.36165891e+02, 2.63439878e+02,
+       2.93863645e+02, 3.27800947e+02, 3.65657552e+02, 4.07886087e+02,
+       4.54991449e+02, 5.07536848e+02, 5.66150535e+02, 6.31533314e+02,
+       7.04466927e+02, 7.85823391e+02, 8.76575434e+02, 9.77808119e+02,
+       1.09073182e+03, 1.21669669e+03, 1.35720881e+03, 1.51394819e+03,
+       1.68878886e+03, 1.88382129e+03, 2.10137733e+03, 2.34405818e+03,
+       2.61476541e+03, 2.91673568e+03, 3.25357946e+03, 3.62932417e+03,
+       4.04846235e+03, 4.51600535e+03, 5.03754329e+03, 5.61931185e+03,
+       6.26826687e+03, 6.99216747e+03, 7.79966887e+03, 8.70042582e+03,
+       9.70520810e+03, 1.08260292e+04, 1.20762902e+04, 1.34709394e+04,
+       1.50266519e+04, 1.67620283e+04, 1.86978173e+04, 2.08571640e+04,
+       2.32658862e+04, 2.59527835e+04, 2.89499813e+04, 3.22933151e+04,
+       3.60227591e+04, 4.01829038e+04, 4.48234893e+04, 5.00000000e+04]
+
+# How long to run the time-integrator for (in s)
+evolution_start: 1.0E-8
+evolution_stop: 1.0E+2
+
+# electron density (ne) * residence time (tau) (in m^-3 s)
+ne_tau: [5.0e+16, 1.0e+17]
+
+file_output:
+  netcdf: True
+
+plotting:
+  figsize: [6, 4]
+  show_dpi: 150
+  save_dpi: 300
+
+  coronal_charge_state_fraction_2d:
+
+    type: xrplot2d
+    variable: coronal_charge_state_fraction
+
+    slice:
+      # Electron density to plot (in m^-3)
+      electron_density: 1.0e+20
+
+    xscale: "log"
+    xlabel: "$T_e [eV]$"
+    ylabel: "Charge state fraction"
+    title: "Argon coronal charge-station-fraction"
+    
+    show: False
+  
+  coronal_charge_state_fraction_1d:
+
+    type: xrplot1d
+    variable: coronal_charge_state_fraction
+    iterate_over: dim_charge_state
+    legend_base: "$Ar^{#}$"
+    in_legend: value
+    
+    slice:
+      # Electron density to plot (in m^-3)
+      electron_density: 1.0e+20
+
+    xscale: "log"
+    xlabel: "$T_e [eV]$"
+    ylabel: "Charge state fraction"
+    title: "Argon coronal charge-station-fraction"
+    
+    show: True
+    legend: True
+    grid: True
+  
+  mean_charge_state:
+
+    type: xrplot1d
+    variable: noncoronal_mean_charge_state
+    iterate_over: dim_ne_tau
+    legend_base: "$n_e \\tau = #$"
+    in_legend: ne_tau
+
+    slice:
+      # Electron density to plot (in m^-3)
+      electron_density: 1.0e+20
+
+    xscale: "log"
+    xlabel: "$T_e [eV]$"
+    ylabel: "Mean charge state"
+    title: "Argon mean charge state"
+    
+    show: True
+    legend: True
+    grid: True
+
+  electron_emission_prefactor:
+
+    type: xrplot1d
+    variable: noncoronal_electron_emission_prefactor
+    iterate_over: dim_ne_tau
+    legend_base: "$n_e \\tau = #$"
+    in_legend: ne_tau
+
+    slice:
+      # Electron density to plot (in m^-3)
+      electron_density: 1.0e+20
+
+    xscale: log
+    yscale: log
+    xlabel: "$T_e [eV]$"
+    ylabel: "$L_z$ emission factor [$W m^3$]"
+    title: "Argon non-coronal radiation factors"
+    
+    show: True
+    legend: True
+    grid: True
+  
+  time_evolution:
+
+    type: xrplot1d
+    variable: charge_state_fraction_evolution
+    iterate_over: dim_charge_state
+    legend_base: "$Ar^{#}$"
+    in_legend: value
+
+    xscale: log
+    xlabel: "$T_e [eV]$"
+    title: "Charge-station-fraction without refuelling"
+    xlabel: "Time after injection [$s$]"
+    ylabel: "Charge state fraction"
+
+
+    slice:
+      # Electron temperature to plot (in eV)
+      electron_temperature: 50.0
+      # Electron density to plot (in m^-3)
+      electron_density: 1.0e+20
+      # Refuelling time to plot (in m**-3 * s)
+      ne_tau: 1.0e+19
+    
+    show: True
+    legend: True
+    grid: True

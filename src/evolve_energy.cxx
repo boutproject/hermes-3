@@ -138,7 +138,7 @@ void EvolveEnergy::transform(Options& state) {
   // Calculate pressure
   // E = Cv * P + (1/2) m n v^2
   P.allocate();
-  BOUT_FOR(i, P.getRegion("RGN_NOBNDRY")) {
+  BOUT_FOR(i, P.getRegion("RGN_ALL")) {
     P[i] = (E[i] - 0.5 * AA * N[i] * SQ(V[i])) / Cv;
     if (P[i] < 0.0) {
       P[i] = 0.0;
@@ -203,7 +203,8 @@ void EvolveEnergy::finally(const Options& state) {
 
   Field3D Pfloor = P;
 
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
+  if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
+      state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
@@ -326,6 +327,17 @@ void EvolveEnergy::finally(const Options& state) {
     }
   }
 #endif
+
+  if (diagnose) {
+    // Save flows of energy if they are set
+
+    if (species.isSet("energy_flow_xlow")) {
+      flow_xlow = get<Field3D>(species["energy_flow_xlow"]);
+    }
+    if (species.isSet("energy_flow_ylow")) {
+      flow_ylow = get<Field3D>(species["energy_flow_ylow"]);
+    }
+  }
 }
 
 void EvolveEnergy::outputVars(Options& state) {
@@ -404,6 +416,27 @@ void EvolveEnergy::outputVars(Options& state) {
                     {"long_name", name + " energy source"},
                     {"species", name},
                     {"source", "evolve_energy"}});
+
+    if (flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("EnergyFlow_") + name + std::string("_xlow")], flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "W"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                    {"standard_name", "power"},
+                    {"long_name", name + " power through X cell face. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_energy"}});
+    }
+    if (flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("EnergyFlow_") + name + std::string("_ylow")], flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "W"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                    {"standard_name", "power"},
+                    {"long_name", name + " power through Y cell face. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_energy"}});
+    }
   }
 }
 

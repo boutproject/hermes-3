@@ -1,0 +1,157 @@
+# Species to perform analysis for
+species: Neon
+
+# Electron density (in m**-3)
+electron_density: 1.0E+20
+
+# Neutral density (in m**-3)
+neutral_density: 0.0
+
+# Electron temperature (in eV)
+electron_temperature: [1.00000000e+00, 1.10200291e+00, 1.21441041e+00, 1.33828380e+00,
+       1.47479263e+00, 1.62522577e+00, 1.79100352e+00, 1.97369109e+00,
+       2.17501331e+00, 2.39687099e+00, 2.64135880e+00, 2.91078508e+00,
+       3.20769362e+00, 3.53488769e+00, 3.89545651e+00, 4.29280439e+00,
+       4.73068292e+00, 5.21322633e+00, 5.74499057e+00, 6.33099630e+00,
+       6.97677633e+00, 7.68842779e+00, 8.47266977e+00, 9.33690671e+00,
+       1.02892983e+01, 1.13388367e+01, 1.24954310e+01, 1.37700013e+01,
+       1.51745814e+01, 1.67224328e+01, 1.84281696e+01, 2.03078964e+01,
+       2.23793609e+01, 2.46621207e+01, 2.71777287e+01, 2.99499361e+01,
+       3.30049166e+01, 3.63715140e+01, 4.00815142e+01, 4.41699451e+01,
+       4.86754079e+01, 5.36404410e+01, 5.91119219e+01, 6.51415097e+01,
+       7.17861331e+01, 7.91085273e+01, 8.71778270e+01, 9.60702187e+01,
+       1.05869660e+02, 1.16668673e+02, 1.28569217e+02, 1.41683651e+02,
+       1.56135795e+02, 1.72062100e+02, 1.89612934e+02, 2.08954005e+02,
+       2.30267921e+02, 2.53755918e+02, 2.79639759e+02, 3.08163827e+02,
+       3.39597434e+02, 3.74237359e+02, 4.12410657e+02, 4.54477743e+02,
+       5.00835794e+02, 5.51922500e+02, 6.08220200e+02, 6.70260428e+02,
+       7.38628940e+02, 8.13971238e+02, 8.96998670e+02, 9.88495142e+02,
+       1.08932452e+03, 1.20043879e+03, 1.32288703e+03, 1.45782535e+03,
+       1.60652778e+03, 1.77039828e+03, 1.95098405e+03, 2.14999010e+03,
+       2.36929533e+03, 2.61097035e+03, 2.87729691e+03, 3.17078956e+03,
+       3.49421931e+03, 3.85063983e+03, 4.24341629e+03, 4.67625708e+03,
+       5.15324890e+03, 5.67889527e+03, 6.25815909e+03, 6.89650951e+03,
+       7.59997352e+03, 8.37519291e+03, 9.22948693e+03, 1.01709214e+04,
+       1.12083850e+04, 1.23516728e+04, 1.36115793e+04, 1.50000000e+04]
+
+# How long to run the time-integrator for (in s)
+evolution_start: 1.0E-8
+evolution_stop: 1.0E+2
+
+# electron density (ne) * residence time (tau) (in m^-3 s)
+ne_tau: [5.0e+16, 1.0e+17]
+
+file_output:
+  netcdf: True
+
+plotting:
+  figsize: [6, 4]
+  show_dpi: 150
+  save_dpi: 300
+
+  coronal_charge_state_fraction_2d:
+
+    type: xrplot2d
+    variable: coronal_charge_state_fraction
+
+    slice:
+      # Electron density to plot (in m^-3)
+      electron_density: 1.0e+20
+
+    xscale: "log"
+    xlabel: "$T_e [eV]$"
+    ylabel: "Charge state fraction"
+    title: "Neon coronal charge-station-fraction"
+    
+    show: False
+  
+  coronal_charge_state_fraction_1d:
+
+    type: xrplot1d
+    variable: coronal_charge_state_fraction
+    iterate_over: dim_charge_state
+    legend_base: "$Ne^{#}$"
+    in_legend: value
+    
+    slice:
+      # Electron density to plot (in m^-3)
+      electron_density: 1.0e+20
+
+    xscale: "log"
+    xlabel: "$T_e [eV]$"
+    ylabel: "Charge state fraction"
+    title: "Neon coronal charge-station-fraction"
+    
+    show: True
+    legend: True
+    grid: True
+  
+  mean_charge_state:
+
+    type: xrplot1d
+    variable: noncoronal_mean_charge_state
+    iterate_over: dim_ne_tau
+    legend_base: "$n_e \\tau = #$"
+    in_legend: ne_tau
+
+    slice:
+      # Electron density to plot (in m^-3)
+      electron_density: 1.0e+20
+
+    xscale: "log"
+    xlabel: "$T_e [eV]$"
+    ylabel: "Mean charge state"
+    title: "Neon mean charge state"
+    
+    show: True
+    legend: True
+    grid: True
+
+  electron_emission_prefactor:
+
+    type: xrplot1d
+    variable: noncoronal_electron_emission_prefactor
+    iterate_over: dim_ne_tau
+    legend_base: "$n_e \\tau = #$"
+    in_legend: ne_tau
+
+    slice:
+      # Electron density to plot (in m^-3)
+      electron_density: 1.0e+20
+
+    xscale: log
+    yscale: log
+    xlabel: "$T_e [eV]$"
+    ylabel: "$L_z$ emission factor [$W m^3$]"
+    title: "Neon non-coronal radiation factors"
+    
+    show: True
+    legend: True
+    grid: True
+  
+  time_evolution:
+
+    type: xrplot1d
+    variable: charge_state_fraction_evolution
+    iterate_over: dim_charge_state
+    legend_base: "$Ne^{#}$"
+    in_legend: value
+
+    xscale: log
+    xlabel: "$T_e [eV]$"
+    title: "Charge-station-fraction without refuelling"
+    xlabel: "Time after injection [$s$]"
+    ylabel: "Charge state fraction"
+
+
+    slice:
+      # Electron temperature to plot (in eV)
+      electron_temperature: 50.0
+      # Electron density to plot (in m^-3)
+      electron_density: 1.0e+20
+      # Refuelling time to plot (in m**-3 * s)
+      ne_tau: 1.0e+19
+    
+    show: True
+    legend: True
+    grid: True

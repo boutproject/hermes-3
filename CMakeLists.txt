@@ -49,6 +49,7 @@ else()
 endif()
 
 set(HERMES_SOURCES
+    src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
     src/ionisation.cxx
@@ -78,6 +79,7 @@ set(HERMES_SOURCES
     src/zero_current.cxx
     src/collisions.cxx
     src/anomalous_diffusion.cxx
+    src/binormal_stpm.cxx
     src/recycling.cxx
     src/amjuel_hyd_ionisation.cxx
     src/amjuel_hyd_recombination.cxx
@@ -103,6 +105,8 @@ set(HERMES_SOURCES
     include/amjuel_hyd_recombination.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
+    include/classical_diffusion.hxx
+    include/binormal_stpm.hxx
     include/collisions.hxx
     include/component.hxx
     include/component_scheduler.hxx
@@ -237,7 +241,7 @@ endif()
 
 # Compile-time options
 
-set(SLOPE_LIMITERS MinMod MC Upwind)
+set(SLOPE_LIMITERS MinMod MC Upwind Superbee)
 set(HERMES_SLOPE_LIMITER MinMod CACHE STRING "Set advection slope limiter")
 set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
 message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")

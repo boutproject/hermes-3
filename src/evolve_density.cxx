@@ -37,6 +37,12 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
+  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
+  low_p_diffuse_perp = options["low_p_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low pressure")
+                           .withDefault<bool>(false);
+
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
   evolve_log = options["evolve_log"]
@@ -195,8 +201,8 @@ void EvolveDensity::finally(const Options& state) {
   // but retain densities which fall below zero
   N.setBoundaryTo(get<Field3D>(species["density"]));
 
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
-    // Electrostatic potential set -> include ExB flow
+  if ((fabs(charge) > 1e-5) and state.isSection("fields") and state["fields"].isSet("phi")) {
+    // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
@@ -232,9 +238,15 @@ void EvolveDensity::finally(const Options& state) {
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(N) += FV::Div_par_K_Grad_par(low_n_coeff, N);
   }
+
   if (low_n_diffuse_perp) {
     ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
                                     bndry_flux);
+  }
+
+  if (low_p_diffuse_perp) {
+    Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
+    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N, true);
   }
 
   if (hyper_z > 0.) {
@@ -268,6 +280,17 @@ void EvolveDensity::finally(const Options& state) {
     }
   }
 #endif
+
+  if (diagnose) {
+    // Save flows if they are set
+
+    if (species.isSet("particle_flow_xlow")) {
+      flow_xlow = get<Field3D>(species["particle_flow_xlow"]);
+    }
+    if (species.isSet("particle_flow_ylow")) {
+      flow_ylow = get<Field3D>(species["particle_flow_ylow"]);
+    }
+  }
 }
 
 void EvolveDensity::outputVars(Options& state) {
@@ -314,6 +337,30 @@ void EvolveDensity::outputVars(Options& state) {
                     {"long_name", name + " number density source"},
                     {"species", name},
                     {"source", "evolve_density"}});
+
+    // If fluxes have been set then add them to the output
+    auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
+    if (flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_xlow")], flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                    {"standard_name", "particle flow"},
+                    {"long_name", name + " particle flow in X. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+    }
+    if (flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_ylow")], flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                    {"standard_name", "particle flow"},
+                    {"long_name", name + " particle flow in Y. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+    }
   }
 }
 
