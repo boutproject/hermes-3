@@ -97,9 +97,9 @@ protected:
     reaction_rate = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
           return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-                 / FreqNorm;
+                 / FreqNorm * rate_multiplier;
         },
-        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te) * rate_multiplier;
+        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
     // Particles
     // For ionisation, "from_ion" is the neutral and "to_ion" is the ion
@@ -159,9 +159,9 @@ protected:
     energy_loss = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
           return ne * n1 * evaluate(radiation_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-                 / (Tnorm * FreqNorm);
+                 / (Tnorm * FreqNorm) * radiation_multiplier;
         },
-        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te) * radiation_multiplier;
+        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
     // Loss is reduced by heating
     energy_loss -= (electron_heating / Tnorm) * reaction_rate;
