@@ -73,7 +73,8 @@ protected:
                          Field3D &momentum_exchange,
                          Field3D &energy_exchange,
                          Field3D &energy_loss,
-                         BoutReal multiplier) {
+                         BoutReal rate_multiplier,
+                         BoutReal radiation_multiplier) {
 
     Field3D Ne = get<Field3D>(electron["density"]);
     Field3D Te = get<Field3D>(electron["temperature"]);
@@ -98,7 +99,7 @@ protected:
           return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
                  / FreqNorm;
         },
-        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te) * multiplier;
+        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te) * rate_multiplier;
 
     // Particles
     // For ionisation, "from_ion" is the neutral and "to_ion" is the ion
@@ -160,7 +161,7 @@ protected:
           return ne * n1 * evaluate(radiation_coefs, te * Tnorm, ne * Nnorm) * Nnorm
                  / (Tnorm * FreqNorm);
         },
-        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
+        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te) * radiation_multiplier;
 
     // Loss is reduced by heating
     energy_loss -= (electron_heating / Tnorm) * reaction_rate;
