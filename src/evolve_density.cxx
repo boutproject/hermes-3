@@ -103,7 +103,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     / source_normalisation;
 
   // If time dependent, parse the function with respect to time from the input file
-  if ((source_time_dependent) and (name=="d+")) {
+  if (source_time_dependent) {
     auto str = n_options["source_prefactor"]
       .doc("Time-dependent function of multiplier on ddt(N" + name + std::string(") source."))
       .as<std::string>();
