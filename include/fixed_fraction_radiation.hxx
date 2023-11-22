@@ -164,6 +164,10 @@ struct FixedFractionRadiation : public Component {
       .doc("Output radiation diagnostic?")
       .withDefault<bool>(false);
 
+    radiation_multiplier = options["radiation_multiplier"]
+      .doc("Scale the radiation rate by this factor")
+      .withDefault<BoutReal>(1.0);
+
     // Get the units
     auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);
@@ -199,8 +203,8 @@ struct FixedFractionRadiation : public Component {
                               const BoutReal ni = fraction * ne;
                               // cooling in Wm^3 so normalise.
                               // Note factor of qe due to Watts rather than eV
-                              return ne * ni * cooling.curve(te * Tnorm) * Nnorm /
-                                (SI::qe * Tnorm * FreqNorm);
+                              return ne * ni * cooling.curve(te * Tnorm) * radiation_multiplier * 
+                              Nnorm / (SI::qe * Tnorm * FreqNorm);
                             },
                             Ne.getRegion("RGN_NOBNDRY"))(Ne, Te);
 
@@ -227,6 +231,7 @@ struct FixedFractionRadiation : public Component {
   BoutReal fraction; ///< Fixed fraction
 
   bool diagnose; ///< Output radiation diagnostic?
+  bool radiation_multiplier; ///< Scale the radiation rate by this factor
   Field3D radiation; ///< For output diagnostic
 
   // Normalisations
