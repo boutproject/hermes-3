@@ -72,7 +72,9 @@ protected:
                          Field3D &reaction_rate,
                          Field3D &momentum_exchange,
                          Field3D &energy_exchange,
-                         Field3D &energy_loss) {
+                         Field3D &energy_loss,
+                         BoutReal multiplier) {
+
     Field3D Ne = get<Field3D>(electron["density"]);
     Field3D Te = get<Field3D>(electron["temperature"]);
 
@@ -90,12 +92,13 @@ protected:
     const BoutReal to_charge =
         to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
+    // Calculate reaction rate using cell averaging. Optionally scale by multiplier
     reaction_rate = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
           return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
                  / FreqNorm;
         },
-        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
+        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te) * multiplier;
 
     // Particles
     // For ionisation, "from_ion" is the neutral and "to_ion" is the ion

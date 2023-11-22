@@ -15,7 +15,7 @@ struct AmjuelHydRecombination : public AmjuelReaction {
 
   void calculate_rates(Options& electron, Options& atom, Options& ion,
                        Field3D& reaction_rate, Field3D& momentum_exchange,
-                       Field3D& energy_exchange, Field3D& energy_loss);
+                       Field3D& energy_exchange, Field3D& energy_loss, BoutReal& multiplier);
 };
 
 /// Hydrogen recombination
@@ -28,6 +28,10 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
     diagnose = alloptions[name]["diagnose"]
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
+
+    multiplier = alloptions[name]["scale_recombination"]
+                           .doc("Scale the recombination rate by this factor")
+                           .withDefault<BoutReal>(1.0);
   }
 
   void transform(Options& state) override {
@@ -37,7 +41,7 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
     Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
 
     calculate_rates(electron, atom, ion, reaction_rate, momentum_exchange,
-                    energy_exchange, energy_loss);
+                    energy_exchange, energy_loss, multiplier);
 
     if (diagnose) {
       S = -reaction_rate;
@@ -105,6 +109,7 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
 
 private:
   bool diagnose; ///< Outputting diagnostics?
+  BoutReal multiplier; ///< Scaling factor on reaction rate
   Field3D S;     ///< Particle exchange
   Field3D F;     ///< Momentum exchange
   Field3D E;     ///< Energy exchange

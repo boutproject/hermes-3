@@ -10,16 +10,25 @@
 /// Not resolving metastables, only transporting ground state
 struct AmjuelHeIonisation01 : public AmjuelReaction {
   AmjuelHeIonisation01(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelReaction(name, alloptions, solver) {}
+      : AmjuelReaction(name, alloptions, solver) {
+
+        multiplier = alloptions[name]["scale_ionisation"]
+                           .doc("Scale the ionisation rate by this factor")
+                           .withDefault<BoutReal>(1.0);
+      }
 
   void calculate_rates(Options& state, 
                         Field3D &reaction_rate, Field3D &momentum_exchange,
-                        Field3D &energy_exchange, Field3D &energy_loss);
+                        Field3D &energy_exchange, Field3D &energy_loss, BoutReal &multiplier);
 
   void transform(Options& state) override{
     Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
-    calculate_rates(state, reaction_rate, momentum_exchange, energy_exchange, energy_loss);
+    calculate_rates(state, reaction_rate, momentum_exchange, energy_exchange, energy_loss, multiplier);
   };
+
+  private:
+  BoutReal multiplier; ///< Scaling factor on reaction rate
+
 };
 
 
@@ -29,16 +38,26 @@ struct AmjuelHeIonisation01 : public AmjuelReaction {
 /// Fujimoto Formulation II
 struct AmjuelHeRecombination10 : public AmjuelReaction {
   AmjuelHeRecombination10(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelReaction(name, alloptions, solver) {}
+      : AmjuelReaction(name, alloptions, solver) {
+
+        multiplier = alloptions[name]["scale_recombination"]
+                           .doc("Scale the recombination rate by this factor")
+                           .withDefault<BoutReal>(1.0);
+
+      }
 
   void calculate_rates(Options& state, 
                       Field3D &reaction_rate, Field3D &momentum_exchange,
-                      Field3D &energy_exchange, Field3D &energy_loss);
+                      Field3D &energy_exchange, Field3D &energy_loss, BoutReal &multiplier);
 
   void transform(Options& state) override{
     Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
-    calculate_rates(state, reaction_rate, momentum_exchange, energy_exchange, energy_loss);
+    calculate_rates(state, reaction_rate, momentum_exchange, energy_exchange, energy_loss, multiplier);
   };
+
+  private:
+  BoutReal multiplier; ///< Scaling factor on reaction rate
+
 };
 
 

@@ -68,13 +68,13 @@ static constexpr const BoutReal he01_radiation_coefs[9][9] = {
 
 void AmjuelHeIonisation01::calculate_rates(Options& state, 
                                           Field3D &reaction_rate, Field3D &momentum_exchange,
-                                          Field3D &energy_exchange, Field3D &energy_loss) {
+                                          Field3D &energy_exchange, Field3D &energy_loss, BoutReal &multiplier) {
   electron_reaction(state["species"]["e"],
                     state["species"]["he"],  // From helium atoms
                     state["species"]["he+"], // To helium ions
                     he01_rate_coefs, he01_radiation_coefs,
                     0.0, // Note: Ionisation potential included in radiation_coefs,
-                    reaction_rate, momentum_exchange, energy_exchange, energy_loss
+                    reaction_rate, momentum_exchange, energy_exchange, energy_loss, multiplier
 
   );
 }
@@ -147,12 +147,12 @@ static constexpr const BoutReal he10_radiation_coefs[9][9] = {
 
 void AmjuelHeRecombination10::calculate_rates(Options& state, 
                                               Field3D &reaction_rate, Field3D &momentum_exchange,
-                                              Field3D &energy_exchange, Field3D &energy_loss) {
+                                              Field3D &energy_exchange, Field3D &energy_loss, BoutReal &multiplier) {
   electron_reaction(state["species"]["e"],
                     state["species"]["he+"], // From helium ions
                     state["species"]["he"],  // To helium atoms
                     he10_rate_coefs, he10_radiation_coefs,
                     24.586, // Ionisation potential heating of electrons
-                    reaction_rate, momentum_exchange, energy_exchange, energy_loss
+                    reaction_rate, momentum_exchange, energy_exchange, energy_loss, multiplier
   );
 }
