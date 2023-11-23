@@ -1355,6 +1355,27 @@ twice.
 When reactions are added, all the species involved must be included, or an exception
 should be thrown.
 
+Diagnostic variables
+~~~~~~~~
+
+Diagnostic variables are provided for each reaction channel of density, momentum and energy transfer. Additionally, charge exchange
+features a diagnostic for the reaction rate (in ionisation and recombination, the reaction rate K is simply the density transfer rate S divided by the ion density).
+The sign convention is always in terms of a plasma source, so that a source of plasma density, energy or momentum is positive, and a sink is negative.
+Radiative energy transfer is provided separately as E is a transfer of energy between two species, while R is a net loss of energy from the system due to the plasma being transparent.
+
++------------------+---------------------------+-------------------------+
+| Variable prefix  |   Units                   | Description             |
++==================+===========================+=========================+
+| K                |   :math:`s^{-1}`          | Reaction rate           |
++------------------+---------------------------+-------------------------+
+| S                |   :math:`m^{-3}s^{-1}`    | Density transfer rate   |
++------------------+---------------------------+-------------------------+
+| E                |   :math:`Wm^{-3}`         | Energy transfer rate    |
++------------------+---------------------------+-------------------------+
+| R                |   :math:`Wm^{-3}`         | Radiation               |
++------------------+---------------------------+-------------------------+
+
+
 Notes:
 
 1. Charge exchange channel diagnostics: For two species `a` and `b`,
@@ -1419,6 +1440,8 @@ Notes:
   This has the property that the change in pressure of both species is
   Galilean invariant. This transfer term is included in the Amjuel reactions
   and hydrogen charge exchange.
+
+
      
 Hydrogen
 ~~~~~~~~
@@ -1689,6 +1712,33 @@ collisional-radiative model has been set to :math:`1\times 10^{20} \times 0.5ms`
 
 Each rate has an upper and lower bound beyond which the rate remains constant. 
 Please refer to the source code in `fixed_fraction_radiation.hxx` for the coefficients and bounds used for each rate.
+
+
+Adjusting reactions
+~~~~~~~~
+
+The reaction rates can be adjusted by a user-specified arbitrary multiplier. This can be useful for 
+the analysis of the impact of individual reactions. The multiplier setting must be placed under the 
+neutral species corresponding to the reaction, e.g. under `[d]` when adjusting deuterium ionisation, recombination or charge exchange.
+The multiplier for the fixed fraction impurity radiation must be placed under the impurity species header, e.g. under `[ar]` for argon.
+This functionality is not yet currently implemented for helium or neon reactions.
+
++-----------------------+------------------+---------------------------------------+
+| Setting               | Specified under  |  Reaction                             |
++=======================+==================+=======================================+
+| K_iz_multiplier       | Neutral species  | Ionisation rate                       |
++-----------------------+------------------+---------------------------------------+
+| R_ex_multiplier       | Neutral species  | Ionisation (excitation) radiation rate|
++-----------------------+------------------+---------------------------------------+
+| K_rec_multiplier      | Neutral species  | Recombination rate                    |
++-----------------------+------------------+---------------------------------------+
+| R_rec_multiplier      | Neutral species  | Recombination radiation rate          |
++-----------------------+------------------+---------------------------------------+
+| K_cx_multiplier       | Neutral species  | Charge exchange rate                  |
++-----------------------+------------------+---------------------------------------+
+| R_multiplier          | Impurity species | Fixed frac. impurity radiation rate   |
++-----------------------+------------------+---------------------------------------+
+
 
 Electromagnetic fields
 ----------------------
