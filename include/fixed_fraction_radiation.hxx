@@ -164,7 +164,7 @@ struct FixedFractionRadiation : public Component {
       .doc("Output radiation diagnostic?")
       .withDefault<bool>(false);
 
-    radiation_multiplier = options["radiation_multiplier"]
+    radiation_multiplier = options["R_multiplier"]
       .doc("Scale the radiation rate by this factor")
       .withDefault<BoutReal>(1.0);
 

@@ -29,11 +29,11 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
 
-    rate_multiplier = alloptions[{Isotope}]["recombination_rate_multiplier"]
+    rate_multiplier = alloptions[{Isotope}]["K_rec_multiplier"]
                            .doc("Scale the recombination rate by this factor")
                            .withDefault<BoutReal>(1.0);
 
-    radiation_multiplier = alloptions[{Isotope}]["recombination_radiation_multiplier"]
+    radiation_multiplier = alloptions[{Isotope}]["R_rec_multiplier"]
                            .doc("Scale the recombination radiation (incl. 3 body) rate by this factor")
                            .withDefault<BoutReal>(1.0);
   }

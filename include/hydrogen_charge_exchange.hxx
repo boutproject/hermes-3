@@ -123,7 +123,7 @@ struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
 
-    rate_multiplier = alloptions[{Isotope1}]["cx_rate_multiplier"]
+    rate_multiplier = alloptions[{Isotope1}]["K_cx_multiplier"]
                            .doc("Scale the charge exchange rate by this factor")
                            .withDefault<BoutReal>(1.0);
   }

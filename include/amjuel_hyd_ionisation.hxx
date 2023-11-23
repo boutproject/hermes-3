@@ -27,11 +27,11 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
 
-    rate_multiplier = alloptions[{Isotope}]["ionisation_rate_multiplier"]
+    rate_multiplier = alloptions[{Isotope}]["K_iz_multiplier"]
                            .doc("Scale the ionisation rate by this factor")
                            .withDefault<BoutReal>(1.0);
 
-    radiation_multiplier = alloptions[{Isotope}]["ionisation_radiation_multiplier"]
+    radiation_multiplier = alloptions[{Isotope}]["R_ex_multiplier"]
                            .doc("Scale the ionisation excitation/de-excitation radiation rate by this factor")
                            .withDefault<BoutReal>(1.0);
   }
