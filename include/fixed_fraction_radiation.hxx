@@ -168,6 +168,10 @@ struct FixedFractionRadiation : public Component {
       .doc("Scale the radiation rate by this factor")
       .withDefault<BoutReal>(1.0);
 
+    output<<std::string("\n\n****************************************************\n");
+    output << name << radiation_multiplier;
+    output<<std::string("\n****************************************************\n\n");
+
     // Get the units
     auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);
@@ -193,7 +197,7 @@ struct FixedFractionRadiation : public Component {
     // Don't need boundary cells
     const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]);
     const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]);
-
+    
     radiation = cellAverage(
                             [&](BoutReal ne, BoutReal te) {
                               if (ne < 0.0 or te < 0.0) {
@@ -231,7 +235,7 @@ struct FixedFractionRadiation : public Component {
   BoutReal fraction; ///< Fixed fraction
 
   bool diagnose; ///< Output radiation diagnostic?
-  bool radiation_multiplier; ///< Scale the radiation rate by this factor
+  BoutReal radiation_multiplier; ///< Scale the radiation rate by this factor
   Field3D radiation; ///< For output diagnostic
 
   // Normalisations
