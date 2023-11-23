@@ -1461,42 +1461,47 @@ rates calculation. The following might therefore be used
           t + e -> t+ + 2e,  # Tritium ionisation
          )
 
-+------------------+---------------------------------------+
-| Reaction         | Description                           |
-+==================+=======================================+
-| h + e -> h+ + 2e | Hydrogen ionisation (Amjuel 2.1.5)    |
-+------------------+---------------------------------------+
-| d + e -> d+ + 2e | Deuterium ionisation (Amjuel 2.1.5)   |
-+------------------+---------------------------------------+
-| t + e -> t+ + 2e | Tritium ionisation (Amjuel 2.1.5)     |
-+------------------+---------------------------------------+
-| h + h+ -> h+ + h | Hydrogen charge exchange              |
-+------------------+---------------------------------------+
-| d + d+ -> d+ + d | Deuterium charge exchange             |
-+------------------+---------------------------------------+
-| t + t+ -> t+ + t | Tritium charge exchange               |
-+------------------+---------------------------------------+
-| h + d+ -> h+ + d | Mixed hydrogen isotope CX             |
-+------------------+---------------------------------------+
-| d + h+ -> d+ + h |                                       |
-+------------------+---------------------------------------+
-| h + t+ -> h+ + t |                                       |
-+------------------+---------------------------------------+
-| t + h+ -> t+ + h |                                       |
-+------------------+---------------------------------------+
-| d + t+ -> d+ + t |                                       |
-+------------------+---------------------------------------+
-| t + d+ -> t+ + d |                                       |
-+------------------+---------------------------------------+
-| h+ + e -> h      | Hydrogen recombination (Amjuel 2.1.8) |
-+------------------+---------------------------------------+
-| d+ + e -> d      | Deuterium recombination (Amjuel 2.1.8)|
-+------------------+---------------------------------------+
-| t+ + e -> t      | Tritium recombination (Amjuel 2.1.8)  |
-+------------------+---------------------------------------+
++------------------+----------------------------------------------+
+| Reaction         | Description                                  |
++==================+==============================================+
+| h + e -> h+ + 2e | Hydrogen ionisation (Amjuel H.4 2.1.5)       |
++------------------+----------------------------------------------+
+| d + e -> d+ + 2e | Deuterium ionisation (Amjuel H.4 2.1.5)      |
++------------------+----------------------------------------------+
+| t + e -> t+ + 2e | Tritium ionisation (Amjuel H.4 2.1.5)        |
++------------------+----------------------------------------------+
+| h + h+ -> h+ + h | Hydrogen charge exchange (Amjuel H.3 3.1.8)  |
++------------------+----------------------------------------------+
+| d + d+ -> d+ + d | Deuterium charge exchange (Amjuel H.3 3.1.8) |
++------------------+----------------------------------------------+
+| t + t+ -> t+ + t | Tritium charge exchange (Amjuel H.3 3.1.8)   |
++------------------+----------------------------------------------+
+| h + d+ -> h+ + d | Mixed hydrogen isotope CX (Amjuel H.3 3.1.8) |
++------------------+----------------------------------------------+
+| d + h+ -> d+ + h |                                              |
++------------------+----------------------------------------------+
+| h + t+ -> h+ + t |                                              |
++------------------+----------------------------------------------+
+| t + h+ -> t+ + h |                                              |
++------------------+----------------------------------------------+
+| d + t+ -> d+ + t |                                              |
++------------------+----------------------------------------------+
+| t + d+ -> t+ + d |                                              |
++------------------+----------------------------------------------+
+| h+ + e -> h      | Hydrogen recombination (Amjuel H.4 2.1.8)    |
++------------------+----------------------------------------------+
+| d+ + e -> d      | Deuterium recombination (Amjuel H.4 2.1.8)   |
++------------------+----------------------------------------------+
+| t+ + e -> t      | Tritium recombination (Amjuel H.4 2.1.8)     |
++------------------+----------------------------------------------+
+
+In addition, the energy loss associated with the ionisation potential energy cost
+as well as the photon emission during excitation and de-excitation during multi-step 
+ionisation is calculated using the AMJUEL rate H.10 2.1.5. The equivalent rate
+for recombination is H.10 2.1.8.
 
 The code to calculate the charge exchange rates is in
-`hydrogen_charge_exchange.[ch]xx`. This implements reaction 3.1.8 from
+`hydrogen_charge_exchange.[ch]xx`. This implements reaction H.3 3.1.8 from
 Amjuel (p43), scaled to different isotope masses and finite neutral
 particle temperatures by using the effective temperature (Amjuel p43):
 
@@ -1506,9 +1511,9 @@ particle temperatures by using the effective temperature (Amjuel p43):
 
 
 The effective hydrogenic ionisation rates are calculated using Amjuel
-reaction 2.1.5, by D.Reiter, K.Sawada and T.Fujimoto (2016).
+reaction H.4 2.1.5, by D.Reiter, K.Sawada and T.Fujimoto (2016).
 Effective recombination rates, which combine radiative and 3-body contributions,
-are calculated using Amjuel reaction 2.1.8.
+are calculated using Amjuel reaction 2.1.8. 
 
 .. doxygenstruct:: HydrogenChargeExchange
    :members:
