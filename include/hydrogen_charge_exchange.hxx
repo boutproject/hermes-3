@@ -70,7 +70,7 @@ protected:
   ///
   void calculate_rates(Options& atom1, Options& ion1, Options& atom2, Options& ion2,
                        Field3D& R, Field3D& atom_mom, Field3D& ion_mom,
-                       Field3D& atom_energy, Field3D& ion_energy);
+                       Field3D& atom_energy, Field3D& ion_energy, BoutReal& rate_multiplier);
 };
 
 /// Hydrogen charge exchange
@@ -120,6 +120,10 @@ struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
     diagnose = alloptions[name]["diagnose"]
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
+
+    rate_multiplier = alloptions[{Isotope1}]["cx_rate_multiplier"]
+                           .doc("Scale the charge exchange rate by this factor")
+                           .withDefault<BoutReal>(1.0);
   }
 
   void transform(Options& state) override {
@@ -129,7 +133,8 @@ struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
                     state["species"][{Isotope2, '+'}],              // e.g. "d+"
                     state["species"][{Isotope2}],                   // e.g. "d"
                     state["species"][{Isotope1, '+'}],              // e.g. "h+"
-                    R, atom_mom, ion_mom, atom_energy, ion_energy); // Transfer channels
+                    R, atom_mom, ion_mom, atom_energy, ion_energy,  // Transfer channels
+                    rate_multiplier);                               // Arbitrary user set multiplier
 
     if (diagnose) {
       // Calculate diagnostics to be written to dump file
@@ -229,6 +234,7 @@ struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
 
 private:
   bool diagnose; ///< Outputting diagnostics?
+  BoutReal rate_multiplier; ///< Multiply rate by arbitrary user set factor
   Field3D S;     ///< Particle exchange, used if Isotope1 != Isotope2
   Field3D F, F2; ///< Momentum exchange
   Field3D E, E2; ///< Energy exchange
