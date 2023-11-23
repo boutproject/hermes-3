@@ -12,6 +12,11 @@ input configuration, in 1D, 2D or 3D curvlinear coordinates.  The
 manual is [here on
 Readthedocs](https://hermes3.readthedocs.io/en/latest/).
 
+Post-processing Hermes-3 is made easy by using the [xHermes](https://github.com/boutproject/xhermes) Python library.
+xHermes is built on top of [xBOUT](https://github.com/boutproject/xBOUT) and Xarray and automatically accounts 
+for the normalisation of Hermes-3 parameters, as well as providing access to many useful xBOUT post-processing functions.
+Many of these are showcased in the [xBOUT examples](https://github.com/boutproject/xBOUT-examples).
+
 *Note* Under development, research code, may change without notice.
 
 ## License
