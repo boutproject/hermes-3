@@ -741,8 +741,8 @@ Any source can be made time-dependent by adding a flag and providing a prefactor
 The already defined source will be multiplied by the prefactor, which is defined by a time-dependent input file function.
 
 Here is the implementation in the 1D-time-dependent-sources example, where the electrons and ions are set to receive 8MW
-of mean power flux each with a +/-10% sinusoidal fluctuation of a period of 50ms. The density source has a mean of zero and 
-oscillates between :math:`-1\times10^{22}` and :math:`1\times10^{22}`, also with a period of 50ms.
+of mean power flux each with a +/-10% sinusoidal fluctuation of a period of 50us. The density source has a mean of zero and 
+oscillates between :math:`-1\times10^{22}` and :math:`1\times10^{22}`, also with a period of 50us.
 
 Note that if you have the density controller enabled, it will work to counteract the imposed density source oscillation.
 
@@ -752,20 +752,20 @@ Note that if you have the density controller enabled, it will work to counteract
    function = 5e19 / hermes:Nnorm # Initial conditions
    source_time_dependent = true
    source = 1e22 * H(mesh:y_xpt - y)
-   source_prefactor = sin((2/50)*pi*1e6*t)   #  Oscillation between -1 and 1, period 50ms
+   source_prefactor = sin((2/50)*pi*1e6*t)   #  Oscillation between -1 and 1, period 50us
 
    [Pe]
    function = 0.01
    powerflux = 16e6  # Input power flux in W/m^2
    source = 0.5 * (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
    source_time_dependent = true
-   source_prefactor = 1 + 0.1 * sin((2/50)*pi*1e6*t)   #  10% fluctuation on on  top of background source, period 50ms
+   source_prefactor = 1 + 0.1 * sin((2/50)*pi*1e6*t)   #  10% fluctuation on on  top of background source, period 50us
 
    [Pd+]
    function = 0.01
    source = Pe:source
    source_time_dependent = true
-   source_prefactor = 1 + 0.1 * sin((2/50)*pi*1e6*t)   #  10% fluctuation on on  top of background source, period 50ms
+   source_prefactor = Pe:source_prefactor
 
 
 Boundary conditions
