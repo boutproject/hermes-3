@@ -13,7 +13,7 @@ struct AmjuelHydIonisation : public AmjuelReaction {
 
   void calculate_rates(Options& electron, Options& atom, Options& ion,
                        Field3D& reaction_rate, Field3D& momentum_exchange,
-                       Field3D& energy_exchange, Field3D& energy_loss);
+                       Field3D& energy_exchange, Field3D& energy_loss, BoutReal& rate_multiplier, BoutReal& radiation_multiplier);
 };
 
 /// Hydrogen ionisation
@@ -26,6 +26,14 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
     diagnose = alloptions[name]["diagnose"]
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
+
+    rate_multiplier = alloptions[{Isotope}]["K_iz_multiplier"]
+                           .doc("Scale the ionisation rate by this factor")
+                           .withDefault<BoutReal>(1.0);
+
+    radiation_multiplier = alloptions[{Isotope}]["R_ex_multiplier"]
+                           .doc("Scale the ionisation excitation/de-excitation radiation rate by this factor")
+                           .withDefault<BoutReal>(1.0);
   }
 
   void transform(Options& state) override {
@@ -35,7 +43,7 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
     Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
 
     calculate_rates(electron, atom, ion, reaction_rate, momentum_exchange,
-                    energy_exchange, energy_loss);
+                    energy_exchange, energy_loss, rate_multiplier, radiation_multiplier);
 
     if (diagnose) {
       S = reaction_rate;
@@ -100,6 +108,7 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
 
 private:
   bool diagnose; ///< Outputting diagnostics?
+  BoutReal rate_multiplier, radiation_multiplier; ///< Scaling factor on reaction rate
   Field3D S;     ///< Particle exchange
   Field3D F;     ///< Momentum exchange
   Field3D E;     ///< Energy exchange
