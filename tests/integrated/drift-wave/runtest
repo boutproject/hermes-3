@@ -31,6 +31,7 @@ else:
 for B in Bs:
     # Run hermes-3 using MPI
     print(f"Running B = {B}")
+    shell("rm data/BOUT.*.nc") # Delete data files
     s, out = launch(f"./hermes-3 mesh:B={B}", nproc=1, pipe=True)
 
     # Save output to log file
