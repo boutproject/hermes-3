@@ -19,8 +19,6 @@ do
     fi
 done
 
-pip3 install --user xarray[io]
-
 # Install Hermes-3
 git clone https://github.com/boutproject/xhermes.git
 cd xhermes

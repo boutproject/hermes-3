@@ -30,6 +30,7 @@ else:
 
 for B in Bs:
     # Run hermes-3 using MPI
+    print(f"Running B = {B}")
     s, out = launch(f"./hermes-3 mesh:B={B}", nproc=1, pipe=True)
 
     # Save output to log file
