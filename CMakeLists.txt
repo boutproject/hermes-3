@@ -243,7 +243,7 @@ endif()
 # Compile-time options
 
 set(SLOPE_LIMITERS MinMod MC Upwind Superbee)
-set(HERMES_SLOPE_LIMITER MinMod CACHE STRING "Set advection slope limiter")
+set(HERMES_SLOPE_LIMITER MC CACHE STRING "Set advection slope limiter")
 set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
 message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")
 
