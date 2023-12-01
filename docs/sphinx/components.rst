@@ -665,6 +665,109 @@ At the moment there is no attempt to limit these velocities, which has
 been found necessary in UEDGE to get physical results in better
 agreement with kinetic neutral models [Discussion, T.Rognlien].
 
+Sources
+-------------------
+Applying sources using the input file
+~~~~~~~~~~~~~~~
+The simplest way to implement a source in one of the Hermes-3 equations is through the input file.
+This is done by defining an array representing values of the source across the entire domain
+using the BOUT++ input file syntax (see `BOUT++ documentation
+<https://bout-dev.readthedocs.io/en/latest/user_docs/bout_options.html>`_).
+
+Sources are available for the density, pressure and momentum equations, and are prescribed under 
+a header corresponding to the chosen equation and species.
+
+For example, this is how a pressure source is prescribed in the 1D-recycling example. First the domain and grid
+are defined using input file functions. This creates a 400 element 1D grid with a length of 30m and an X-point at the 10m mark.
+The grid increases in resolution towards the target, with a minimum grid spacing of 0.1 times the average grid spacing:
+
+.. code-block:: ini
+   
+   [mesh]
+   # 1D simulation, use "y" as the dimension along the fieldline
+   nx = 1
+   ny = 400   # Resolution along field-line
+   nz = 1
+   length = 30           # Length of the domain in meters
+   length_xpt = 10   # Length from midplane to X-point [m] (i.e. this is where the source ends)
+
+   dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+   # Parallel grid spacing — grid refinement near the divertor target (which is where the interesting
+   # stuff happens)
+   dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+   # Calculate where the source ends in grid index (i.e. at the X-point)
+   source = length_xpt / length
+   y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+And here is how the calculated geometric information is used to prepare a pressure source. First, the 
+required total ion power flux is converted to a pressure according to :math:`E = 3/2P`, then it is 
+divided by the length of the heating region to obtain the power flux required in each cell. Note 
+that this assumes that :math:`dx = dz = J = 0` and that the volume upstream of the X-point is simply
+an integral of :math:`dy = mesh:length\_xpt`. If you are imposing a full B-field profile in your 1D simulation, 
+you will need to account for the fact that :math:`J` is no longer constant.
+In order to limit the pressure source to just the region above the X-point, it is multiplied by a Heaviside
+function which returns 1 upstream of :math:`y=mesh:y\_xpt` and 0 downstream of it.
+
+.. code-block:: ini
+
+   [Pd+]
+
+   # Initial condition for ion pressure (in terms of hermes:Nnorm * hermes:Tnorm)
+   function = 1
+
+   # Input power flux to ions in W/m^2
+   powerflux = 2.5e7
+
+   source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
+   [Pe]
+
+   # Input power flux to electrons in W/m^2
+   function = `Pd+:function`  # Same as ion pressure initially
+
+   source = `Pd+:source`  # Same as ion pressure source
+
+Applying sources using the grid file
+~~~~~~~~~~~~~~~
+The input file has limitations, and sometimes it is useful to prepare an arbitrary profile outside of BOUT++
+and import it through the grid file. In 2D, this can be done by adding an appropriate Field3D or Field2D to the
+grid netCDF file with the sources in the appropriate units.
+
+Time-dependent sources
+~~~~~~~~~~~~~~~
+Any source can be made time-dependent by adding a flag and providing a prefactor function in the input file.
+The already defined source will be multiplied by the prefactor, which is defined by a time-dependent input file function.
+
+Here is the implementation in the 1D-time-dependent-sources example, where the electrons and ions are set to receive 8MW
+of mean power flux each with a +/-10% sinusoidal fluctuation of a period of 50us. The density source has a mean of zero and 
+oscillates between :math:`-1\times10^{22}` and :math:`1\times10^{22}`, also with a period of 50us.
+
+Note that if you have the density controller enabled, it will work to counteract the imposed density source oscillation.
+
+.. code-block:: ini
+
+   [Nd+]
+   function = 5e19 / hermes:Nnorm # Initial conditions
+   source_time_dependent = true
+   source = 1e22 * H(mesh:y_xpt - y)
+   source_prefactor = sin((2/50)*pi*1e6*t)   #  Oscillation between -1 and 1, period 50us
+
+   [Pe]
+   function = 0.01
+   powerflux = 16e6  # Input power flux in W/m^2
+   source = 0.5 * (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+   source_time_dependent = true
+   source_prefactor = 1 + 0.1 * sin((2/50)*pi*1e6*t)   #  10% fluctuation on on  top of background source, period 50us
+
+   [Pd+]
+   function = 0.01
+   source = Pe:source
+   source_time_dependent = true
+   source_prefactor = Pe:source_prefactor
+
+
 Boundary conditions
 -------------------
 Simple boundary conditions
