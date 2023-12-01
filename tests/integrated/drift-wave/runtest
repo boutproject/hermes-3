@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+#
+# Resistive drift wave
+#
+# References:
+# - M.V.Umansky et al. CPP 2008 https://doi.org/10.1002/ctpp.200810004
+
+plotting = False
+
+import numpy as np
+from boututils.run_wrapper import shell, launch, getmpirun
+import sys
+
+import analysis
+
+# Link to the executable
+shell("ln -s ../../../hermes-3 hermes-3")
+
+sparns = []  # sigma_par / w_star
+analytic_gammas = []
+analytic_omegas = []
+gammas = []
+omegas = []
+
+# List of magnetic field values to run
+if plotting:
+    Bs = [0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8]
+else:
+    Bs = [0.1, 0.3, 0.6]
+
+for B in Bs:
+    # Run hermes-3 using MPI
+    s, out = launch(f"./hermes-3 mesh:B={B}", nproc=1, pipe=True)
+
+    # Save output to log file
+    f = open(f"run.log.{B}", "w")
+    f.write(out)
+    f.close()
+
+    result = analysis.extract_data("data")
+    sparns.append(result["sigmapar"] / result["wstar"])
+    analytic_gammas.append(result["analytic_gamma"])
+    analytic_omegas.append(result["analytic_omega"])
+    gammas.append(result["gamma"])
+    omegas.append(result["omega"])
+
+if plotting:
+    import matplotlib.pyplot as plt
+
+    fig, axs = plt.subplots(nrows=2, sharex=True)
+    axs[0].plot(sparns, analytic_gammas, "k--", label="Analytic")
+    axs[0].plot(sparns, gammas, "ro", label="Hermes-3")
+    axs[0].set_ylabel(r"$Im(\omega / \omega_*)$")
+    axs[0].set_xscale("log")
+
+    axs[1].plot(sparns, analytic_omegas, "k--")
+    axs[1].plot(sparns, omegas, "ro")
+    axs[1].set_xscale("log")
+    axs[1].set_xlabel(r"$\sigma_{||} / \omega_*$")
+    axs[1].set_ylabel(r"$Re(\omega / \omega_*)$")
+
+    axs[0].legend()
+    plt.savefig("drift-wave.pdf")
+    plt.savefig("drift-wave.png")
+    plt.show()
+
+analytic_gammas = np.array(analytic_gammas)
+gammas = np.array(gammas)
+analytic_omegas = np.array(analytic_omegas)
+omegas = np.array(omegas)
+
+gamma_errs = np.abs(gammas - analytic_gammas) / analytic_gammas
+omega_errs = np.abs(omegas - analytic_omegas) / analytic_omegas
+
+print(f"Growth-rate fractional errors: {np.amin(gamma_errs)} -> {np.amax(gamma_errs)}")
+print(f"Frequency fractional errors: {np.amin(omega_errs)} -> {np.amax(omega_errs)}")
+
+if np.amax(gamma_errs) < 0.1 and np.amax(omega_errs) < 0.15:
+    print(" => Test passed")
+    sys.exit(0)
+
+print(" => Test failed")
+sys.exit(1)

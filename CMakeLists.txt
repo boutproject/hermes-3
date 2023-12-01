@@ -218,6 +218,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(vorticity)
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
+  hermes_add_integrated_test(drift-wave)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
