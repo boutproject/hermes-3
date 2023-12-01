@@ -99,7 +99,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
                                     : 0.0;
 
       // F12 is the force on species 1 due to species 2 (normalised)
-      const Field3D F12 = nu_12 * A1 * density1 * (velocity2 - velocity1);
+      const Field3D F12 = momentum_coefficient * nu_12 * A1 * density1 * (velocity2 - velocity1);
 
       add(species1["momentum_source"], F12);
       subtract(species2["momentum_source"], F12);
