@@ -156,11 +156,11 @@ The equations solved are:
    \frac{\partial n_i}{\partial t} =& -\nabla\cdot\left(n_i\mathbf{v}_{E\times B}\right) \\
    n_e =& n_i \\
    \frac{\partial}{\partial t}\nabla\cdot\left(\frac{n_0 m_i}{B^2}\nabla_\perp\phi\right) =& \nabla_{||}J_{||} = -\nabla_{||}\left(en_ev_{||e}\right) \\
-   \frac{\partial}{\partial t}\left(m_en_ev_{||e}\right) =& -\nabla\cdot\left(m_en_ev_{||e} \mathbf{b}v_{||e}\right) en_e\partial_{||}\phi - \partial_{||}p_e - 0.51\nu_{ei}n_im_ev_{||e}
+   \frac{\partial}{\partial t}\left(m_en_ev_{||e}\right) =& -\nabla\cdot\left(m_en_ev_{||e} \mathbf{b}v_{||e}\right) + en_e\partial_{||}\phi - \partial_{||}p_e - 0.51\nu_{ei}n_im_ev_{||e}
    \end{aligned}
 
 Linearising around a stationary background with constant density :math:`n_0` and temperature :math:`T_0`,
-using :math:`\frac{partial}{\partial t}\rightarrow -i\omega` gives:
+using :math:`\frac{\partial}{\partial t}\rightarrow -i\omega` gives:
 
 .. math::
 
@@ -170,12 +170,13 @@ using :math:`\frac{partial}{\partial t}\rightarrow -i\omega` gives:
    \omega m_e \tilde{v_{||e}} =& -ek_{||}\tilde{\phi} + ek_{||}\frac{T_o}{n_0}\tilde{n} - i0.51\nu_{ei}m_e\tilde{v_{||e}}
    \end{aligned}
 
- where the radial density length scale coming from the radial :math:`E\times B` advection of density
- is defined as
 
- .. math::
+where the radial density length scale coming from the radial
+:math:`E\times B` advection of density is defined as
 
-    \frac{1}{L_n} \equiv \frac{1}{n_0}\frac{\partial n_0}{\partial r}
+.. math::
+
+   \frac{1}{L_n} \equiv \frac{1}{n_0}\frac{\partial n_0}{\partial r}
 
 Substituting and rearranging gives:
 
@@ -191,7 +192,7 @@ or
 
 where
 
-.. mesh::
+.. math::
 
    \begin{aligned}
    \omega_* =& \frac{k_\perp T_0}{BL_n} \\
