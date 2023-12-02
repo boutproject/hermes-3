@@ -336,7 +336,7 @@ void EvolveEnergy::finally(const Options& state) {
   if (species.isSet("energy_source")) {
     Se += get<Field3D>(species["energy_source"]); // For diagnostic output
   }
-  if (species.isSet("energy_source")) {
+  if (species.isSet("momentum_source")) {
     Se += V * get<Field3D>(species["momentum_source"]);
   }
   ddt(E) += Se;
