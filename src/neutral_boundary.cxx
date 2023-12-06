@@ -129,9 +129,13 @@ void NeutralBoundary::transform(Options& state) {
         auto ip = i.yp();
 
         // Free boundary condition on log(Nn), log(Pn)
-        Nn[ip] = SQ(Nn[i]) / Nn[im];
-        Pn[ip] = SQ(Pn[i]) / Pn[im];
-        Tn[ip] = SQ(Tn[i]) / Tn[im];
+        // Nn[ip] = SQ(Nn[i]) / Nn[im];
+        // Pn[ip] = SQ(Pn[i]) / Pn[im];
+        // Tn[ip] = SQ(Tn[i]) / Tn[im];
+
+        Nn[ip] = Nn[i];
+        Pn[ip] = Pn[i];
+        Tn[ip] = Tn[i];
 
         // No-flow boundary condition
         Vn[ip] = -Vn[i];
@@ -147,19 +151,29 @@ void NeutralBoundary::transform(Options& state) {
         // Calculate effective gamma from particle and energy reflection coefficients
         BoutReal target_gamma_heat = 1 - target_energy_refl_factor * target_fast_refl_fraction 
                                   -(1-target_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
+        
+        BoutReal particle_flux = nnsheath * v_th;
+        BoutReal heat_flux_in = 2 * particle_flux * tnsheath;  // 2 factor from Stangeby p.69, total energy of static Maxwellian
+
+        BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp
+
+        BoutReal q = 
+                      (1 - target_energy_refl_factor * target_fast_refl_fraction ) * nnsheath * tnsheath * v_th  // unreflected energy
+                    - (1 - target_fast_refl_fraction) * T_FC * 0.5 * nnsheath * v_th;  // energy returning as FC
 
         // Heat flux (> 0)
-        const BoutReal q = target_gamma_heat * nnsheath * tnsheath * v_th;
+        // const BoutReal q = target_gamma_heat * nnsheath * tnsheath * v_th;
         // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[ip])
+        BoutReal flow = q * (coord->J[i] + coord->J[ip])
                         / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
 
         // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+        BoutReal cooling_source = flow / (coord->dy[i] * coord->J[i]);
 
         // Subtract from cell next to boundary
-        energy_source[i] -= power;
-        target_energy_source[i] -= power;
+        energy_source[i] -= cooling_source;
+        target_energy_source[i] -= cooling_source;
+
       }
     }
   }
