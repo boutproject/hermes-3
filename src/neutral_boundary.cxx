@@ -85,10 +85,18 @@ void NeutralBoundary::transform(Options& state) {
         auto im = i.ym();
         auto ip = i.yp();
 
-        // Free boundary condition on log(Nn), log(Pn)
-        Nn[im] = SQ(Nn[i]) / Nn[ip];
-        Pn[im] = SQ(Pn[i]) / Pn[ip];
-        Tn[im] = SQ(Tn[i]) / Tn[ip];
+        // Free boundary condition on Nn, Pn, Tn
+        // This is problematic when Nn, Pn or Tn are zero
+        // Nn[im] = SQ(Nn[i]) / Nn[ip];
+        // Pn[im] = SQ(Pn[i]) / Pn[ip];
+        // Tn[im] = SQ(Tn[i]) / Tn[ip];
+
+        // Neumann boundary condition: do not extrapolate, but 
+        // assume the target value is same as the final cell centre.
+        // Shouldn't affect results much and more resilient to positivity issues
+        Nn[im] = Nn[i];
+        Pn[im] = Pn[i];
+        Tn[im] = Tn[i];
 
         // No-flow boundary condition
         Vn[im] = -Vn[i];
@@ -101,22 +109,28 @@ void NeutralBoundary::transform(Options& state) {
         // Thermal speed
         const BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
 
-        // Calculate effective gamma from particle and energy reflection coefficients
-        BoutReal target_gamma_heat = 1 - target_energy_refl_factor * target_fast_refl_fraction 
-                                  -(1-target_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
+        // Approach adapted from D. Power thesis 2023
+        BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
-        // Heat flux (> 0)
-        const BoutReal q = target_gamma_heat * nnsheath * tnsheath * v_th;
-        // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[im])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+        // Outgoing neutral heat flux [W/m^2]
+        BoutReal q = 
+                      (1 - target_energy_refl_factor * target_fast_refl_fraction ) * nnsheath * tnsheath * v_th  // unreflected energy
+                    - (1 - target_fast_refl_fraction) * T_FC * 0.5 * nnsheath * v_th;  // energy returning as FC
 
-        // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+      
+        // Cross-sectional area in XZ plane:
+        BoutReal da = (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
+                      * 0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]);   // [m^2]
+
+        // Multiply by area to get energy flow (power)
+        BoutReal flow = q * da;  // [W]
+        
+        // Divide by cell volume to get source [W/m^3]
+        BoutReal cooling_source = flow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
 
         // Subtract from cell next to boundary
-        energy_source[i] -= power;
-        target_energy_source[i] -= power;
+        energy_source[i] -= cooling_source;
+        target_energy_source[i] -= cooling_source;
       }
     }
   }
@@ -128,7 +142,7 @@ void NeutralBoundary::transform(Options& state) {
         auto im = i.ym();
         auto ip = i.yp();
 
-        // Free boundary condition on log(Nn), log(Pn)
+        // Free boundary condition on Nn, Pn, Tn
         // This is problematic when Nn, Pn or Tn are zero
         // Nn[ip] = SQ(Nn[i]) / Nn[im];
         // Pn[ip] = SQ(Pn[i]) / Pn[im];
@@ -160,9 +174,12 @@ void NeutralBoundary::transform(Options& state) {
                       (1 - target_energy_refl_factor * target_fast_refl_fraction ) * nnsheath * tnsheath * v_th  // unreflected energy
                     - (1 - target_fast_refl_fraction) * T_FC * 0.5 * nnsheath * v_th;  // energy returning as FC
 
-        // Multiply by cell area to get neutral heat flow [W]
-        BoutReal flow = q * (coord->J[i] + coord->J[ip])
-                        * ((coord->dx[i] * coord->dz[i]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])));
+        // Cross-sectional area in XZ plane:
+        BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
+                      * 0.5*(coord->dx[i] + coord->dx[ip]) * 0.5*(coord->dz[i] + coord->dz[ip]);   // [m^2]
+
+        // Multiply by area to get energy flow (power)
+        BoutReal flow = q * da;  // [W]
 
         // Divide by cell volume to get source [W/m^3]
         BoutReal cooling_source = flow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
@@ -201,7 +218,7 @@ void NeutralBoundary::transform(Options& state) {
           // Multiply by radial cell area to get power
           // Expanded form of the calculation for clarity
 
-          // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
+          // Converts dy to poloidal length: dl = dy / sqrt(g22) = dy * h_theta
           BoutReal dpolsheath = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
 
           // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
@@ -249,7 +266,7 @@ void NeutralBoundary::transform(Options& state) {
           // Multiply by radial cell area to get power
           // Expanded form of the calculation for clarity
 
-          // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
+          // Converts dy to poloidal length: dl = dy / sqrt(g22) = dy * h_theta
           BoutReal dpolsheath = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
 
           // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
