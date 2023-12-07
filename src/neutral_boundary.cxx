@@ -129,10 +129,14 @@ void NeutralBoundary::transform(Options& state) {
         auto ip = i.yp();
 
         // Free boundary condition on log(Nn), log(Pn)
+        // This is problematic when Nn, Pn or Tn are zero
         // Nn[ip] = SQ(Nn[i]) / Nn[im];
         // Pn[ip] = SQ(Pn[i]) / Pn[im];
         // Tn[ip] = SQ(Tn[i]) / Tn[im];
 
+        // Neumann boundary condition: do not extrapolate, but 
+        // assume the target value is same as the final cell centre.
+        // Shouldn't affect results much and more resilient to positivity issues
         Nn[ip] = Nn[i];
         Pn[ip] = Pn[i];
         Tn[ip] = Tn[i];
@@ -148,27 +152,20 @@ void NeutralBoundary::transform(Options& state) {
         // Thermal speed
         const BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
 
-        // Calculate effective gamma from particle and energy reflection coefficients
-        BoutReal target_gamma_heat = 1 - target_energy_refl_factor * target_fast_refl_fraction 
-                                  -(1-target_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
-        
-        BoutReal particle_flux = nnsheath * v_th;
-        BoutReal heat_flux_in = 2 * particle_flux * tnsheath;  // 2 factor from Stangeby p.69, total energy of static Maxwellian
+        // Approach adapted from D. Power thesis 2023
+        BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
-        BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp
-
+        // Outgoing neutral heat flux [W/m^2]
         BoutReal q = 
                       (1 - target_energy_refl_factor * target_fast_refl_fraction ) * nnsheath * tnsheath * v_th  // unreflected energy
                     - (1 - target_fast_refl_fraction) * T_FC * 0.5 * nnsheath * v_th;  // energy returning as FC
 
-        // Heat flux (> 0)
-        // const BoutReal q = target_gamma_heat * nnsheath * tnsheath * v_th;
-        // Multiply by cell area to get power
+        // Multiply by cell area to get neutral heat flow [W]
         BoutReal flow = q * (coord->J[i] + coord->J[ip])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
+                        * ((coord->dx[i] * coord->dz[i]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])));
 
-        // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal cooling_source = flow / (coord->dy[i] * coord->J[i]);
+        // Divide by cell volume to get source [W/m^3]
+        BoutReal cooling_source = flow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
 
         // Subtract from cell next to boundary
         energy_source[i] -= cooling_source;
