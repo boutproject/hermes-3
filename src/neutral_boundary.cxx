@@ -113,9 +113,13 @@ void NeutralBoundary::transform(Options& state) {
         BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
         // Outgoing neutral heat flux [W/m^2]
+        // This is rearranged from Power for clarity - note definition of v_th. 
+        // Uses standard Stangeby 1D static Maxwellian particle/heat fluxes for fast terms and simply Q = T * particle flux
+        // for the monoenergetic thermal reflected population.
         BoutReal q = 
-                      (1 - target_energy_refl_factor * target_fast_refl_fraction ) * nnsheath * tnsheath * v_th  // unreflected energy
-                    - (1 - target_fast_refl_fraction) * T_FC * 0.5 * nnsheath * v_th;  // energy returning as FC
+                      2 * nnsheath * tnsheath * v_th                                                             // Incident energy
+                    - (target_energy_refl_factor * target_fast_refl_fraction ) * 2 * nnsheath * tnsheath * v_th  // Fast reflected energy
+                    - (1 - target_fast_refl_fraction) * T_FC * nnsheath * v_th;                                  // Thermal reflected energy
 
       
         // Cross-sectional area in XZ plane:
@@ -170,9 +174,11 @@ void NeutralBoundary::transform(Options& state) {
         BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
         // Outgoing neutral heat flux [W/m^2]
+        // This is rearranged from Power for clarity - note definition of v_th. 
         BoutReal q = 
-                      (1 - target_energy_refl_factor * target_fast_refl_fraction ) * nnsheath * tnsheath * v_th  // unreflected energy
-                    - (1 - target_fast_refl_fraction) * T_FC * 0.5 * nnsheath * v_th;  // energy returning as FC
+                      2 * nnsheath * tnsheath * v_th                                                             // Incident energy
+                    - (target_energy_refl_factor * target_fast_refl_fraction ) * 2 * nnsheath * tnsheath * v_th  // Fast reflected energy
+                    - (1 - target_fast_refl_fraction) * T_FC * nnsheath * v_th;                                  // Thermal reflected energy
 
         // Cross-sectional area in XZ plane:
         BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
@@ -212,9 +218,11 @@ void NeutralBoundary::transform(Options& state) {
           BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
           // Outgoing neutral heat flux [W/m^2]
+          // This is rearranged from Power for clarity - note definition of v_th. 
           BoutReal q = 
-                        (1 - sol_energy_refl_factor * sol_fast_refl_fraction ) * nnsheath * tnsheath * v_th  // unreflected energy
-                      - (1 - sol_fast_refl_fraction) * T_FC * 0.5 * nnsheath * v_th;  // energy returning as FC
+                        2 * nnsheath * tnsheath * v_th                                                             // Incident energy
+                      - (target_energy_refl_factor * target_fast_refl_fraction ) * 2 * nnsheath * tnsheath * v_th  // Fast reflected energy
+                      - (1 - target_fast_refl_fraction) * T_FC * nnsheath * v_th;                                  // Thermal reflected energy
 
 
           // Multiply by radial cell area to get power
@@ -263,9 +271,11 @@ void NeutralBoundary::transform(Options& state) {
           BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
           // Outgoing neutral heat flux [W/m^2]
+          // This is rearranged from Power for clarity - note definition of v_th. 
           BoutReal q = 
-                        (1 - pfr_energy_refl_factor * pfr_fast_refl_fraction ) * nnsheath * tnsheath * v_th  // unreflected energy
-                      - (1 - pfr_fast_refl_fraction) * T_FC * 0.5 * nnsheath * v_th;  // energy returning as FC
+                        2 * nnsheath * tnsheath * v_th                                                             // Incident energy
+                      - (target_energy_refl_factor * target_fast_refl_fraction ) * 2 * nnsheath * tnsheath * v_th  // Fast reflected energy
+                      - (1 - target_fast_refl_fraction) * T_FC * nnsheath * v_th;                                  // Thermal reflected energy
 
 
           // Multiply by radial cell area to get power
