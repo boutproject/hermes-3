@@ -57,6 +57,8 @@ private:
   /// Include frictional heating term?
   bool frictional_heating;
 
+  BoutReal ei_multiplier;  // Arbitrary user-set multiplier on electron-ion collisions
+
   /// Calculated collision rates saved for post-processing and use by other components
   /// Saved in options, the BOUT++ dictionary-like object
   Options collision_rates;
