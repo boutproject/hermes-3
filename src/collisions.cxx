@@ -72,7 +72,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
   AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12);                           // Total collision frequency
-  std::string coll_name = std::string("coll_") + species1.name() + species2.name();
+  std::string coll_name = species1.name() + species2.name() + std::string("_coll");
   set(species1["collision_frequencies"][coll_name], nu_12);              // Collision frequency for individual reaction
   set(collision_rates[species1.name()][species2.name()], nu_12);         // Individual collision frequency used for diagnostics
 
@@ -91,7 +91,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
     });
 
     add(species2["collision_frequency"], nu);                             // Total collision frequency
-    std::string coll_name = std::string("coll_") + species2.name() + species1.name();    
+    std::string coll_name =  species2.name() + species1.name() + std::string("_coll");    
     set(species2["collision_frequencies"][coll_name], nu);                // Collision frequency for individual reaction
     set(collision_rates[species2.name()][species1.name()], nu);           // Individual collision frequency used for diagnostics
 
