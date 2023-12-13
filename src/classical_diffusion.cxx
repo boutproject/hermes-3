@@ -47,6 +47,11 @@ void ClassicalDiffusion::transform(Options &state) {
     Dn = floor(Ptotal, 1e-5) * me * nu_e / (floor(Ne, 1e-5) * Bsq);
   }
 
+  // Set D to zero in all guard cells
+  BOUT_FOR(i, Dn.getRegion("RGN_GUARDS")) {
+      Dn[i] = 0.0;
+    }
+
   for (auto& kv : allspecies.getChildren()) {
     Options& species = allspecies[kv.first]; // Note: Need non-const
 
