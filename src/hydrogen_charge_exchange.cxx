@@ -94,6 +94,12 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   // Update collision frequency for the two colliding species in s^-1
   atom_rate = Nion * sigmav;
   ion_rate = Natom * sigmav;
+
+  // Add to total collision frequency
   add(atom1["collision_frequency"], atom_rate);
   add(ion1["collision_frequency"], ion_rate);
+
+  // Set individual collision frequencies
+  set(atom1["collision_frequencies"][atom1.name() + ion1.name() + std::string("_cx")], atom_rate);
+  set(ion1["collision_frequencies"][ion1.name() + atom1.name() + std::string("_cx")], atom_rate);
 }
