@@ -6,4 +6,4 @@ BOUT.settings
 *.a
 *~
 .DS_Store
-build*
+/build*
