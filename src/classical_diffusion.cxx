@@ -9,6 +9,7 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
   Bsq = SQ(bout::globals::mesh->getCoordinates()->Bxy);
 
   diagnose = options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+  custom_D = options["custom_D"].doc("Custom diffusion coefficient override. -1: Off, calculate D normally").withDefault<BoutReal>(-1);
 }
 
 void ClassicalDiffusion::transform(Options &state) {
@@ -35,11 +36,16 @@ void ClassicalDiffusion::transform(Options &state) {
   auto& electrons = allspecies["e"];
   const auto me = get<BoutReal>(electrons["AA"]);
   const Field3D Ne = GET_VALUE(Field3D, electrons["density"]);
-  const Field3D nu_e = floor(GET_VALUE(Field3D, electrons["collision_frequency"]), 1e-10);
 
   // Particle diffusion coefficient. Applied to all charged species
   // so that net transport is ambipolar
-  Dn = floor(Ptotal, 1e-5) * me * nu_e / (floor(Ne, 1e-5) * Bsq);
+
+  if (custom_D > 0) {    // User-set
+    Dn = custom_D;   
+  } else {                  // Calculated from collisions
+    const Field3D nu_e = floor(GET_VALUE(Field3D, electrons["collision_frequency"]), 1e-10);
+    Dn = floor(Ptotal, 1e-5) * me * nu_e / (floor(Ne, 1e-5) * Bsq);
+  }
 
   for (auto& kv : allspecies.getChildren()) {
     Options& species = allspecies[kv.first]; // Note: Need non-const
@@ -73,8 +79,11 @@ void ClassicalDiffusion::transform(Options &state) {
       const auto P = GET_VALUE(Field3D, species["pressure"]);
       const auto AA = GET_VALUE(BoutReal, species["AA"]);
 
-      const Field3D nu = floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
-      add(species["energy_source"], FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA / Bsq, T));
+      // TODO: Figure out what to do with the below
+      if(custom_D < 0) {
+        const Field3D nu = floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
+        add(species["energy_source"], FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA / Bsq, T));
+      }
     }
   }
 }

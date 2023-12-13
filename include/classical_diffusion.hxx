@@ -15,6 +15,7 @@ private:
 
   bool diagnose; ///< Output additional diagnostics?
   Field3D Dn; ///< Particle diffusion coefficient
+  BoutReal custom_D; ///< User-set particle diffusion coefficient override
 };
 
 namespace {
