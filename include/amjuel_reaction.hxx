@@ -63,12 +63,22 @@ protected:
   /// Coefficients from Amjuel:
   ///  - rate_coefs        Double-polynomial log fit [T][n] for <σv>
   ///  - radiation_coefs   Double-polynomial log fit [T][n] for electron loss
-  /// electron_heating  Energy added to electrons per reaction [eV]
+  ///  - electron_heating          Energy added to electrons per reaction [eV]
+  ///  - heavy_particle_frequency  Collisionality for the heavy particle (ion/neutral)     [s^-1]
+  ///  - electron_frequency        Collisionality for the electron     [s^-1]
+  ///  - reaction_rate             Density source rate in     [m^-3 s^-1]
+  ///  - momentum_exchange         Momentum source rate     [kg m^-2 s^-1]
+  ///  - energy_exchange           Energy source rate     [W m^-3]
+  ///  - energy_loss               Electron energy loss (radiation or ionisation potential)     [W m^-3]
+  ///  - rate_multiplier           User-set arbitrary rate multiplier [-]
+  ///  - energy_loss               User-set arbitrary multiplier on the radiation rate associated with the reaction [-]
   template <size_t rows, size_t cols>
   void electron_reaction(Options& electron, Options& from_ion, Options& to_ion,
                          const BoutReal (&rate_coefs)[rows][cols],
                          const BoutReal (&radiation_coefs)[rows][cols],
                          BoutReal electron_heating,
+                         Field3D &heavy_particle_frequency,
+                         Field3D &electron_frequency,
                          Field3D &reaction_rate,
                          Field3D &momentum_exchange,
                          Field3D &energy_exchange,
@@ -93,13 +103,33 @@ protected:
     const BoutReal to_charge =
         to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
-    // Calculate reaction rate using cell averaging. Optionally scale by multiplier
+    // Calculate reaction rate in [m^3 s^-1] using cell averaging. Optionally scale by multiplier
     reaction_rate = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
           return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
                  / FreqNorm * rate_multiplier;
         },
         Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
+
+    // Same as reaction_rate but without the n1 factor: returns atom/ion collisionality in [s^-1]
+    heavy_particle_frequency = cellAverage(
+        [&](BoutReal ne, BoutReal n1, BoutReal te) {
+          return ne * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
+                 / FreqNorm * rate_multiplier;
+        },
+        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
+
+    // Same as reaction_rate but without the n1 factor: returns electron collisionality in [s^-1]
+    electron_frequency = cellAverage(
+        [&](BoutReal ne, BoutReal n1, BoutReal te) {
+          return n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
+                 / FreqNorm * rate_multiplier;
+        },
+        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
+
+    // Add collision frequency to each species' total
+    add(from_ion["collision_frequency"], heavy_particle_frequency);  // Neutral if iz, ion if rec
+    add(electron["collision_frequency"], electron_frequency);
 
     // Particles
     // For ionisation, "from_ion" is the neutral and "to_ion" is the ion
