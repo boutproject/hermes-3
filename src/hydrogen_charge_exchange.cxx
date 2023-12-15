@@ -4,7 +4,9 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
                                              Options& atom2, Options& ion2,
                                              Field3D &R,
                                              Field3D &atom_mom, Field3D &ion_mom,
-                                             Field3D &atom_energy, Field3D &ion_energy) {
+                                             Field3D &atom_energy, Field3D &ion_energy,
+                                             Field3D &atom_rate, Field3D &ion_rate,
+                                             BoutReal &rate_multiplier) {
 
   // Temperatures and masses of initial atom and ion
   const Field3D Tatom = get<Field3D>(atom1["temperature"]);
@@ -38,7 +40,8 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   }
 
   // Get rate coefficient, convert cm^3/s to m^3/s then normalise
-  const Field3D sigmav = exp(ln_sigmav) * (1e-6 * Nnorm / FreqNorm);
+  // Optionally multiply by arbitrary multiplier
+  const Field3D sigmav = exp(ln_sigmav) * (1e-6 * Nnorm / FreqNorm) * rate_multiplier;
 
   const Field3D Natom = floor(get<Field3D>(atom1["density"]), 1e-5);
   const Field3D Nion = floor(get<Field3D>(ion1["density"]), 1e-5);
@@ -88,7 +91,9 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   subtract(ion1["energy_source"], ion_energy);
   add(atom2["energy_source"], ion_energy);
 
-  // Update collision frequency for the two colliding species
-  add(atom1["collision_frequency"], Nion * sigmav);
-  add(ion1["collision_frequency"], Natom * sigmav);
+  // Update collision frequency for the two colliding species in s^-1
+  atom_rate = Nion * sigmav;
+  ion_rate = Natom * sigmav;
+  add(atom1["collision_frequency"], atom_rate);
+  add(ion1["collision_frequency"], ion_rate);
 }

@@ -100,7 +100,8 @@ thermal_conduction = true  # in evolve_pressure
 diagnose = true   # Output diagnostics for these components?
 
 recycle_as = d
-recycle_multiplier = 1.0  # Recycling fraction
+target_recycle = true
+target_recycle_multiplier = 1.0  # Recycling fraction
 
 [Nd+]
 

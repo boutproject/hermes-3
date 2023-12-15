@@ -89,3 +89,78 @@ TEST_F(CollisionsTest, OneOrTwoSpeciesCharged) {
     ASSERT_TRUE(abs(nu1[i] - nu21[i]) / (nu1[i] + nu21[i]) < 0.05 );
   }
 }
+
+TEST_F(CollisionsTest, TnormDependence) {
+  // Calculate rates with normalisation factors 1
+  Options options {{"units", {{"eV", 1.0},
+                              {"meters", 1.0},
+                              {"seconds", 1.0},
+                              {"inv_meters_cubed", 1.0}}},
+                   {"test", {{"electron_neutral", true},
+                             {"ion_neutral", true},
+                             {"electron_electron", true},
+                             {"ion_ion", true},
+                             {"neutral_neutral", true}}}};
+
+  Collisions component("test", options, nullptr);
+
+  Options state {{"species", {{"e", {{"density", 1e19},
+                                     {"temperature", 10},
+                                     {"charge", -1},
+                                     {"AA", 1./1836}}},
+                              {"d+", {{"density", 2e19},
+                                      {"temperature", 20},
+                                      {"charge", 1},
+                                      {"AA", 2}}},
+                              {"d", {{"density", 1e18},
+                                     {"temperature", 3},
+                                     {"AA", 2}}}}}};
+
+  component.transform(state);
+
+  ASSERT_TRUE(state["species"]["e"].isSet("collision_frequency"));
+  ASSERT_TRUE(state["species"]["d"].isSet("collision_frequency"));
+  ASSERT_TRUE(state["species"]["d+"].isSet("collision_frequency"));
+
+  // Collision frequencies should be positive, non-zero
+  ASSERT_GT(get<Field3D>(state["species"]["e"]["collision_frequency"])(0,0,0), 0.0);
+  ASSERT_GT(get<Field3D>(state["species"]["d"]["collision_frequency"])(0,0,0), 0.0);
+  ASSERT_GT(get<Field3D>(state["species"]["d+"]["collision_frequency"])(0,0,0), 0.0);
+
+  // Re-calculate with Tnorm != 1
+  // To keep frequency normalisation fixed, rho_s0 scales like sqrt(Tnorm)
+  const BoutReal Tnorm = 100;
+  Options options2 {{"units", {{"eV", Tnorm},
+                               {"meters", sqrt(Tnorm)},
+                               {"seconds", 1.0},
+                               {"inv_meters_cubed", 1.0}}},
+                    {"test", {{"electron_neutral", true},
+                              {"ion_neutral", true},
+                              {"electron_electron", true},
+                              {"ion_ion", true},
+                              {"neutral_neutral", true}}}};
+
+  Collisions component2("test", options2, nullptr);
+
+  Options state2 {{"species", {{"e", {{"density", 1e19},
+                                      {"temperature", 10 / Tnorm},
+                                      {"charge", -1},
+                                      {"AA", 1./1836}}},
+                               {"d+", {{"density", 2e19},
+                                       {"temperature", 20 / Tnorm},
+                                       {"charge", 1},
+                                       {"AA", 2}}},
+                               {"d", {{"density", 1e18},
+                                      {"temperature", 3 / Tnorm},
+                                      {"AA", 2}}}}}};
+
+  component2.transform(state2);
+
+  // Normalised frequencies should be unchanged
+  ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["e"]["collision_frequency"])(0,0,0),
+                  get<Field3D>(state2["species"]["e"]["collision_frequency"])(0,0,0));
+  ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["d"]["collision_frequency"])(0,0,0),
+                  get<Field3D>(state2["species"]["d"]["collision_frequency"])(0,0,0));
+  ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["d+"]["collision_frequency"])(0,0,0),
+                  get<Field3D>(state2["species"]["d+"]["collision_frequency"])(0,0,0));
+}

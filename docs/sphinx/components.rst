@@ -665,6 +665,109 @@ At the moment there is no attempt to limit these velocities, which has
 been found necessary in UEDGE to get physical results in better
 agreement with kinetic neutral models [Discussion, T.Rognlien].
 
+Sources
+-------------------
+Applying sources using the input file
+~~~~~~~~~~~~~~~
+The simplest way to implement a source in one of the Hermes-3 equations is through the input file.
+This is done by defining an array representing values of the source across the entire domain
+using the BOUT++ input file syntax (see `BOUT++ documentation
+<https://bout-dev.readthedocs.io/en/latest/user_docs/bout_options.html>`_).
+
+Sources are available for the density, pressure and momentum equations, and are prescribed under 
+a header corresponding to the chosen equation and species.
+
+For example, this is how a pressure source is prescribed in the 1D-recycling example. First the domain and grid
+are defined using input file functions. This creates a 400 element 1D grid with a length of 30m and an X-point at the 10m mark.
+The grid increases in resolution towards the target, with a minimum grid spacing of 0.1 times the average grid spacing:
+
+.. code-block:: ini
+   
+   [mesh]
+   # 1D simulation, use "y" as the dimension along the fieldline
+   nx = 1
+   ny = 400   # Resolution along field-line
+   nz = 1
+   length = 30           # Length of the domain in meters
+   length_xpt = 10   # Length from midplane to X-point [m] (i.e. this is where the source ends)
+
+   dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+   # Parallel grid spacing — grid refinement near the divertor target (which is where the interesting
+   # stuff happens)
+   dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+   # Calculate where the source ends in grid index (i.e. at the X-point)
+   source = length_xpt / length
+   y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+And here is how the calculated geometric information is used to prepare a pressure source. First, the 
+required total ion power flux is converted to a pressure according to :math:`E = 3/2P`, then it is 
+divided by the length of the heating region to obtain the power flux required in each cell. Note 
+that this assumes that :math:`dx = dz = J = 0` and that the volume upstream of the X-point is simply
+an integral of :math:`dy = mesh:length\_xpt`. If you are imposing a full B-field profile in your 1D simulation, 
+you will need to account for the fact that :math:`J` is no longer constant.
+In order to limit the pressure source to just the region above the X-point, it is multiplied by a Heaviside
+function which returns 1 upstream of :math:`y=mesh:y\_xpt` and 0 downstream of it.
+
+.. code-block:: ini
+
+   [Pd+]
+
+   # Initial condition for ion pressure (in terms of hermes:Nnorm * hermes:Tnorm)
+   function = 1
+
+   # Input power flux to ions in W/m^2
+   powerflux = 2.5e7
+
+   source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
+   [Pe]
+
+   # Input power flux to electrons in W/m^2
+   function = `Pd+:function`  # Same as ion pressure initially
+
+   source = `Pd+:source`  # Same as ion pressure source
+
+Applying sources using the grid file
+~~~~~~~~~~~~~~~
+The input file has limitations, and sometimes it is useful to prepare an arbitrary profile outside of BOUT++
+and import it through the grid file. In 2D, this can be done by adding an appropriate Field3D or Field2D to the
+grid netCDF file with the sources in the appropriate units.
+
+Time-dependent sources
+~~~~~~~~~~~~~~~
+Any source can be made time-dependent by adding a flag and providing a prefactor function in the input file.
+The already defined source will be multiplied by the prefactor, which is defined by a time-dependent input file function.
+
+Here is the implementation in the 1D-time-dependent-sources example, where the electrons and ions are set to receive 8MW
+of mean power flux each with a +/-10% sinusoidal fluctuation of a period of 50us. The density source has a mean of zero and 
+oscillates between :math:`-1\times10^{22}` and :math:`1\times10^{22}`, also with a period of 50us.
+
+Note that if you have the density controller enabled, it will work to counteract the imposed density source oscillation.
+
+.. code-block:: ini
+
+   [Nd+]
+   function = 5e19 / hermes:Nnorm # Initial conditions
+   source_time_dependent = true
+   source = 1e22 * H(mesh:y_xpt - y)
+   source_prefactor = sin((2/50)*pi*1e6*t)   #  Oscillation between -1 and 1, period 50us
+
+   [Pe]
+   function = 0.01
+   powerflux = 16e6  # Input power flux in W/m^2
+   source = 0.5 * (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+   source_time_dependent = true
+   source_prefactor = 1 + 0.1 * sin((2/50)*pi*1e6*t)   #  10% fluctuation on on  top of background source, period 50us
+
+   [Pd+]
+   function = 0.01
+   source = Pe:source
+   source_time_dependent = true
+   source_prefactor = Pe:source_prefactor
+
+
 Boundary conditions
 -------------------
 Simple boundary conditions
@@ -787,8 +890,15 @@ is set on parallel velocity and momentum. It is a species-specific
 component and so goes in the list of components for the species
 that the boundary condition should be applied to.
 
-An energy sink is added to the flux of heat to the wall, with
-heat flux `q`:
+A source of neutral cooling is added in accordance with the approach in the thesis of D.Power 2023.
+The source represents two kinds of neutral reflection:
+
+- Fast reflection, where a neutral atom hits the wall and reflects having lost some energy,
+- Thermal reflection, where a neutral atom hits the wall, recombines into a molecule, and then
+  is assumed to immediately dissociate at the Franck Condon dissociation temperature of 3eV.
+
+The energy sink has a heat flux `q` calculated from thermal velocity at the wall and a 
+heat transmission coefficient:
 
 .. math::
 
@@ -796,7 +906,19 @@ heat flux `q`:
 
    v_{th} = \sqrt{eT / m}
 
-The factor `gamma_heat`
+   \gamma_{heat} = 1 - \alpha_{n} R_{r} - (1 - R_{r}) (\frac{T_{FC}}{2 T})
+
+Where :math:`\alpha_{n}` is the energy retained by the neutral particle after reflection,
+:math:`R_{r}` is the fraction of neutral particles that undergo fast reflection and 
+:math:`T_{FC}` is the Franck-Condon dissociation temperature, currently hardcoded to 3eV.
+Since different regions of the tokamak feature different incidence angles and may feature 
+different materials, the energy reflection coefficient and the fast reflection fraction 
+can be set individually for the target, PFR and SOL walls. The default values are 0.75
+for :math:`\alpha_{n}` and 0.8 for :math:`R_{r}` and correspond to approximate values for 
+tungsten for incidence angles seen at the target. (Power, 2023)
+
+Here are the options set to their defaults. Note that the SOL and PFR are set to have no
+reflection by default so that it is compatible with a model of any dimensionality which has a target.
 
 .. code-block:: ini
 
@@ -806,9 +928,18 @@ The factor `gamma_heat`
    [d]
    type = ... , neutral_boundary
 
-   gamma_heat = 3  # Neutral boundary heat transmission coefficient
-   neutral_lower_y = true  # Boundary on lower y?
-   neutral_upper_y = true  # Boundary on upper y?
+   neutral_boundary_sol = true
+   neutral_boundary_pfr = true
+   neutral_boundary_upper_y = true
+   neutral_boundary_lower_y = true 
+
+   target_energy_refl_factor = 0.75
+   sol_energy_refl_factor = 0.75
+   pfr_energy_refl_factor = 0.75
+
+   target_fast_refl_fraction = 0.80
+   sol_fast_refl_fraction = 0.80
+   pfr_fast_refl_fraction = 0.80
 
 .. doxygenstruct:: NeutralBoundary
    :members:
@@ -1109,22 +1240,45 @@ The implementation is in the `ThermalForce` class:
 recycling
 ~~~~~~~~~
 
-This component calculates the flux of a species into a Y boundary,
+This component calculates the flux of a species into a boundary
 due to recycling of flow out of the boundary of another species.
 
 The boundary fluxes might be set by sheath boundary conditions,
 which potentially depend on the density and temperature of all species.
 Recycling therefore can't be calculated until all species boundary conditions
 have been set. It is therefore expected that this component is a top-level
-component which comes after boundary conditions are set.
+component (i.e. in the `Hermes` section) which comes after boundary conditions are set.
+
+Recycling has been implemented at the target, the SOL edge and the PFR edge.
+Each is off by default and must be activated with a separate flag. Each can be 
+assigned a separate recycle multiplier and recycle energy. 
+
+Configuring thermal recycling
+^^^^^^^^^^^^^^^
+
+A simple and commonly used way to model recycling is to assume it is fully thermal,
+i.e. that every incident ion recombines into a neutral molecule and thermalises with the surface 
+before becoming re-emitted. Hermes-3 does not yet have a hydrogenic molecule model, and so 
+the molecules are assumed to instantly dissociate at the Franck-Condon dissociation temperature of 3.5eV.
+
+In order to set this up, the chosen species must feature an outflow through the boundary - any cells
+with an inflow have their recycling source set to zero. If a sheath boundary condition
+is enabled, then this is automatically satisfied at the target through the Bohm condition.
+If it is not enabled, then the target boundary must be set to `free_o2`, `free_o3` or `decaylength` to 
+allow an outflow. 
 
 The recycling component has a `species` option, that is a list of species
 to recycle. For each of the species in that list, `recycling` will look in
 the corresponding section for the options `recycle_as`, `recycle_multiplier`
-and `recycle_energy`.
+and `recycle_energy` for each of the three implemented boundaries. Note that 
+the resulting recycling source is a simple
+multiplication of the outgoing species flow and the multiplier factor.
+This means that recycling `d+` ions into `d2` molecules would require a multiplier 
+of 0.5 to maintain a particle balance in the simulation.
 
 For example, recycling `d+` ions into `d` atoms with a recycling fraction
-of 1. Each returning atom has an energy of 3.5eV:
+of 0.95 at the target and 1.0 at the SOL and PFR edges. 
+Each returning atom has an energy of 3.5eV:
 
 .. code-block:: ini
 
@@ -1136,12 +1290,143 @@ of 1. Each returning atom has an energy of 3.5eV:
 
    [d+]
    recycle_as = d         # Species to recycle as
-   recycle_multiplier = 1 # Recycling fraction
-   recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+   target_recycle = true  
+   target_recycle_multiplier = 0.95 # Recycling fraction
+   target_recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+   sol_recycle = true
+   sol_recycle_multiplier = 1 # Recycling fraction
+   sol_recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+   pfr_recycle = true
+   pfr_recycle_multiplier = 1 # Recycling fraction
+   pfr_recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+Allowing for fast recycling
+^^^^^^^^^^^^^^^
+
+In reality, a fraction of incident ions will undergo specular reflection off the surface and 
+preserve a fraction of their energy. In the popular Monte-Carlo neutral code EIRENE, the 
+fast recycling fraction and the energy reflection factor are provided by the `TRIM database <https://www.eirene.de/old_eirene/html/surface_data.html>`_
+as a function of incident angle, surface material and incident particle energy.
+Studies found that sheath acceleration can make the ion angle relatively consistent, e.g. 60 degrees; in (`Jae-Sun Park et al 2021 Nucl. Fusion 61 016021 <https://iopscience.iop.org/article/10.1088/1741-4326/abc1ce>`_).
+
+The recycled heat flux is:
+
+.. math::
+
+   \begin{aligned}
+   \Gamma_{E_{n}} &= R \times (R_{f} \alpha_{E} \Gamma_{E_{i}}^{sheath}  + (1 - R_{f}) T_{R} \Gamma_{N_{i}})) \\
+   \end{aligned}
+
+Where :math:`R` is the recycle multiplier, :math:`R_{f}` is the fast reflection fraction, :math:`\alpha_{E}` is the energy reflection factor,
+:math:`\Gamma_{E_{i}}^{sheath}` is the incident heat flux from the sheath boundary condition, :math:`T_{R}` is the recycle energy and :math:`\Gamma_{N_{i}}` is the incident ion flux.
+
+:math:`R_{f}` and :math:`\alpha_{E}` can be set as in the below example. They can also be set to different values for the SOL and PFR by replacing
+the word "target" with either "sol" or "pfr".
+
+.. code-block:: ini
+
+   [d+]
+   recycle_as = d         # Species to recycle as
+
+   target_recycle = true  
+   target_recycle_multiplier = 0.95 # Recycling fraction
+   target_recycle_energy = 3.5   # Energy of recycled particles [eV]
+   target_fast_recycle_energy_factor = 0.70
+   target_fast_recycle_fraction = 0.80
+
+Neutral pump
+^^^^^^^^^^^^^^^
+
+The recycling component also features a neutral pump which is currently implemented for 
+the SOL and PFR edges only, and so is not available in 1D. The pump is a region of the wall
+which facilitates particle loss by incomplete recycling and neutral absorption. 
+
+The pump requires wall recycling to be enabled on the relevant wall region.
+
+The particle loss rate :math:`\Gamma_{N_{n}}` is the sum of the incident ions that are not recycled and the 
+incident neutrals which are not reflected, both of which are controlled by the pump multiplier :math:`M_{p}` 
+which is set by the `pump_multiplier` option in the input file. The unrecycled ion flux :math:`\Gamma_{N_{i}}^{unrecycled}` is calculated using the recycling
+model and allows for either thermal or fast recycling, but with the difference that the `pump_multiplier` replaces the `recycle_multiplier`. 
+
+.. math::
+
+   \begin{aligned}
+   \Gamma_{N_{n}} &= \Gamma_{N_{i}}^{unrecycled} + M_{p} \times \Gamma_{N_{n}}^{incident} \\
+   \Gamma_{N_{n}}^{incident} &= N_{n} v_{th} = N_{n} \frac{1}{4} \sqrt{\frac{8 T_{n}}{\pi m_{n}}} \\
+   \end{aligned}
+
+Where the thermal velocity formulation is for a static maxwellian in 1D (see Stangeby p.64, eqns 2.21, 2.24) 
+and the temperature is in `eV`.
+
+The heat loss rate :math:`\Gamma_{E_{n}}` is calculated as:
+
+.. math::
+
+   \begin{aligned}
+   \Gamma_{E_{n}} &= \Gamma_{E_{i}}^{unrecycled}  + M_{p} \times \Gamma_{E_{n}}^{incident} \\
+   \Gamma_{E_{n}}^{incident} &= \gamma T_{n} N_{n} v_{th} = 2 T_{n} N_{n} \frac{1}{4} \sqrt{\frac{8 T_{n}}{\pi m_{n}}} \\
+   \end{aligned}
+
+Where the incident heat flux is for a static maxwellian in 1D (see Stangeby p.69, eqn 2.30).
+
+The pump will be placed in any cell that
+ 1. Is the final domain cell before the guard cells
+ 2. Is on the SOL or PFR edge
+ 3. Has a `is_pump` value of 1
+
+The field `is_pump` must be created by the user and added to the grid file as a `Field2D`.
+
+Diagnostic variables
+^^^^^^^^^^^^^^^
+Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, the pump as well as the SOL and PFR which are grouped together as `wall`.
+as well as the pump. In addition, the field `is_pump` is saved to help in plotting the pump location.
+
 
 .. doxygenstruct:: Recycling
    :members:
+      
+.. _binormal_stpm:
 
+binormal_stpm
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This adds a term to **all** species which includes the effects of cross-field
+drifts following the stellarator two point model:
+`Y. Feng et al., Plasma Phys. Control. Fusion 53 (2011) 024009 <http://dx.doi.org/10.1088/0741-3335/53/2/024009>`_
+
+.. code-block:: ini
+
+   [hermes]
+   components = ... , binormal_stpm
+
+   [binormal_stpm]
+   D = 1         # [m^2/s]  Density diffusion coefficient
+   chi = 3       # [m^2/s]  Thermal diffusion coefficient
+   nu = 1        # [m^2/s]  Momentum diffusion coefficient
+
+   Theta = 1e-3  # Field line pitch
+
+It is intended only for 1D simulations, to provide effective parallel
+diffusion of particles, momentum and energy due to the projection of
+cross-field diffusion:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial N}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{D}{\Theta}\partial_{||}N\right) \\
+   \frac{\partial P}{\partial t} =& \ldots + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\frac{\chi}{\Theta} N\partial_{||}T\right) \\
+   \frac{\partial}{\partial t}\left(NV\right) =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{\nu}{\Theta} \partial_{||}NV\right) 
+   \end{aligned}
+   
+The diffusion coefficients `D`, `\chi` and `\nu` and field line pitch `\Theta` are prescribed in the input file.
+
+
+.. doxygenstruct:: BinormalSTPM
+   :members:
+      
 Atomic and molecular reactions
 ------------------------------
 
@@ -1172,6 +1457,27 @@ twice.
 
 When reactions are added, all the species involved must be included, or an exception
 should be thrown.
+
+Diagnostic variables
+~~~~~~~~
+
+Diagnostic variables are provided for each reaction channel of density, momentum and energy transfer. Additionally, charge exchange
+features a diagnostic for the reaction rate (in ionisation and recombination, the reaction rate K is simply the density transfer rate S divided by the ion density).
+The sign convention is always in terms of a plasma source, so that a source of plasma density, energy or momentum is positive, and a sink is negative.
+Radiative energy transfer is provided separately as E is a transfer of energy between two species, while R is a net loss of energy from the system due to the plasma being transparent.
+
++------------------+---------------------------+-------------------------+
+| Variable prefix  |   Units                   | Description             |
++==================+===========================+=========================+
+| K                |   :math:`s^{-1}`          | Reaction rate           |
++------------------+---------------------------+-------------------------+
+| S                |   :math:`m^{-3}s^{-1}`    | Density transfer rate   |
++------------------+---------------------------+-------------------------+
+| E                |   :math:`Wm^{-3}`         | Energy transfer rate    |
++------------------+---------------------------+-------------------------+
+| R                |   :math:`Wm^{-3}`         | Radiation               |
++------------------+---------------------------+-------------------------+
+
 
 Notes:
 
@@ -1237,6 +1543,8 @@ Notes:
   This has the property that the change in pressure of both species is
   Galilean invariant. This transfer term is included in the Amjuel reactions
   and hydrogen charge exchange.
+
+
      
 Hydrogen
 ~~~~~~~~
@@ -1256,42 +1564,47 @@ rates calculation. The following might therefore be used
           t + e -> t+ + 2e,  # Tritium ionisation
          )
 
-+------------------+---------------------------------------+
-| Reaction         | Description                           |
-+==================+=======================================+
-| h + e -> h+ + 2e | Hydrogen ionisation (Amjuel 2.1.5)    |
-+------------------+---------------------------------------+
-| d + e -> d+ + 2e | Deuterium ionisation (Amjuel 2.1.5)   |
-+------------------+---------------------------------------+
-| t + e -> t+ + 2e | Tritium ionisation (Amjuel 2.1.5)     |
-+------------------+---------------------------------------+
-| h + h+ -> h+ + h | Hydrogen charge exchange              |
-+------------------+---------------------------------------+
-| d + d+ -> d+ + d | Deuterium charge exchange             |
-+------------------+---------------------------------------+
-| t + t+ -> t+ + t | Tritium charge exchange               |
-+------------------+---------------------------------------+
-| h + d+ -> h+ + d | Mixed hydrogen isotope CX             |
-+------------------+---------------------------------------+
-| d + h+ -> d+ + h |                                       |
-+------------------+---------------------------------------+
-| h + t+ -> h+ + t |                                       |
-+------------------+---------------------------------------+
-| t + h+ -> t+ + h |                                       |
-+------------------+---------------------------------------+
-| d + t+ -> d+ + t |                                       |
-+------------------+---------------------------------------+
-| t + d+ -> t+ + d |                                       |
-+------------------+---------------------------------------+
-| h+ + e -> h      | Hydrogen recombination (Amjuel 2.1.8) |
-+------------------+---------------------------------------+
-| d+ + e -> d      | Deuterium recombination (Amjuel 2.1.8)|
-+------------------+---------------------------------------+
-| t+ + e -> t      | Tritium recombination (Amjuel 2.1.8)  |
-+------------------+---------------------------------------+
++------------------+----------------------------------------------+
+| Reaction         | Description                                  |
++==================+==============================================+
+| h + e -> h+ + 2e | Hydrogen ionisation (Amjuel H.4 2.1.5)       |
++------------------+----------------------------------------------+
+| d + e -> d+ + 2e | Deuterium ionisation (Amjuel H.4 2.1.5)      |
++------------------+----------------------------------------------+
+| t + e -> t+ + 2e | Tritium ionisation (Amjuel H.4 2.1.5)        |
++------------------+----------------------------------------------+
+| h + h+ -> h+ + h | Hydrogen charge exchange (Amjuel H.3 3.1.8)  |
++------------------+----------------------------------------------+
+| d + d+ -> d+ + d | Deuterium charge exchange (Amjuel H.3 3.1.8) |
++------------------+----------------------------------------------+
+| t + t+ -> t+ + t | Tritium charge exchange (Amjuel H.3 3.1.8)   |
++------------------+----------------------------------------------+
+| h + d+ -> h+ + d | Mixed hydrogen isotope CX (Amjuel H.3 3.1.8) |
++------------------+----------------------------------------------+
+| d + h+ -> d+ + h |                                              |
++------------------+----------------------------------------------+
+| h + t+ -> h+ + t |                                              |
++------------------+----------------------------------------------+
+| t + h+ -> t+ + h |                                              |
++------------------+----------------------------------------------+
+| d + t+ -> d+ + t |                                              |
++------------------+----------------------------------------------+
+| t + d+ -> t+ + d |                                              |
++------------------+----------------------------------------------+
+| h+ + e -> h      | Hydrogen recombination (Amjuel H.4 2.1.8)    |
++------------------+----------------------------------------------+
+| d+ + e -> d      | Deuterium recombination (Amjuel H.4 2.1.8)   |
++------------------+----------------------------------------------+
+| t+ + e -> t      | Tritium recombination (Amjuel H.4 2.1.8)     |
++------------------+----------------------------------------------+
+
+In addition, the energy loss associated with the ionisation potential energy cost
+as well as the photon emission during excitation and de-excitation during multi-step 
+ionisation is calculated using the AMJUEL rate H.10 2.1.5. The equivalent rate
+for recombination is H.10 2.1.8.
 
 The code to calculate the charge exchange rates is in
-`hydrogen_charge_exchange.[ch]xx`. This implements reaction 3.1.8 from
+`hydrogen_charge_exchange.[ch]xx`. This implements reaction H.3 3.1.8 from
 Amjuel (p43), scaled to different isotope masses and finite neutral
 particle temperatures by using the effective temperature (Amjuel p43):
 
@@ -1301,9 +1614,9 @@ particle temperatures by using the effective temperature (Amjuel p43):
 
 
 The effective hydrogenic ionisation rates are calculated using Amjuel
-reaction 2.1.5, by D.Reiter, K.Sawada and T.Fujimoto (2016).
+reaction H.4 2.1.5, by D.Reiter, K.Sawada and T.Fujimoto (2016).
 Effective recombination rates, which combine radiative and 3-body contributions,
-are calculated using Amjuel reaction 2.1.8.
+are calculated using Amjuel reaction 2.1.8. 
 
 .. doxygenstruct:: HydrogenChargeExchange
    :members:
@@ -1507,6 +1820,33 @@ collisional-radiative model has been set to :math:`1\times 10^{20} \times 0.5ms`
 
 Each rate has an upper and lower bound beyond which the rate remains constant. 
 Please refer to the source code in `fixed_fraction_radiation.hxx` for the coefficients and bounds used for each rate.
+
+
+Adjusting reactions
+~~~~~~~~
+
+The reaction rates can be adjusted by a user-specified arbitrary multiplier. This can be useful for 
+the analysis of the impact of individual reactions. The multiplier setting must be placed under the 
+neutral species corresponding to the reaction, e.g. under `[d]` when adjusting deuterium ionisation, recombination or charge exchange.
+The multiplier for the fixed fraction impurity radiation must be placed under the impurity species header, e.g. under `[ar]` for argon.
+This functionality is not yet currently implemented for helium or neon reactions.
+
++-----------------------+------------------+---------------------------------------+
+| Setting               | Specified under  |  Reaction                             |
++=======================+==================+=======================================+
+| K_iz_multiplier       | Neutral species  | Ionisation rate                       |
++-----------------------+------------------+---------------------------------------+
+| R_ex_multiplier       | Neutral species  | Ionisation (excitation) radiation rate|
++-----------------------+------------------+---------------------------------------+
+| K_rec_multiplier      | Neutral species  | Recombination rate                    |
++-----------------------+------------------+---------------------------------------+
+| R_rec_multiplier      | Neutral species  | Recombination radiation rate          |
++-----------------------+------------------+---------------------------------------+
+| K_cx_multiplier       | Neutral species  | Charge exchange rate                  |
++-----------------------+------------------+---------------------------------------+
+| R_multiplier          | Impurity species | Fixed frac. impurity radiation rate   |
++-----------------------+------------------+---------------------------------------+
+
 
 Electromagnetic fields
 ----------------------

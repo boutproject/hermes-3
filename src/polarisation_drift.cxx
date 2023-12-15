@@ -44,7 +44,16 @@ PolarisationDrift::PolarisationDrift(std::string name,
     // Use a density floor to prevent divide-by-zero errors
     density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
   }
-  
+
+  advection = options["advection"]
+    .doc("Include advection by polarisation drift, using potential flow approximation?")
+    .withDefault<bool>(true);
+
+  diamagnetic_polarisation =
+      options["diamagnetic_polarisation"]
+          .doc("Include diamagnetic drift in polarisation current?")
+          .withDefault<bool>(true);
+
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
@@ -55,6 +64,72 @@ void PolarisationDrift::transform(Options &state) {
 
   // Iterate through all subsections
   Options& allspecies = state["species"];
+
+  // Calculate divergence of all currents except the polarisation current
+
+  if (IS_SET(state["fields"]["DivJdia"])) {
+    DivJ = get<Field3D>(state["fields"]["DivJdia"]);
+  } else {
+    DivJ = 0.0;
+  }
+
+  // Parallel current due to species parallel flow
+  for (auto& kv : allspecies.getChildren()) {
+    const Options& species = kv.second;
+
+    if (!species.isSet("charge") or !species.isSet("momentum")) {
+      continue; // Not charged, or no parallel flow
+    }
+    const BoutReal Z = get<BoutReal>(species["charge"]);
+    if (fabs(Z) < 1e-5) {
+      continue; // Not charged
+    }
+
+    const Field3D NV = GET_VALUE(Field3D, species["momentum"]);
+    const BoutReal A = get<BoutReal>(species["AA"]);
+
+    // Note: Using NV rather than N*V so that the cell boundary flux is correct
+    DivJ += Div_par((Z / A) * NV);
+  }
+
+  if (diamagnetic_polarisation) {
+    // Compression of ion diamagnetic contribution to polarisation velocity
+    // Note: For now this ONLY includes the parallel and diamagnetic current terms
+    //       Other terms e.g. ion viscous current, are in their separate components
+    if (!boussinesq) {
+      throw BoutException("diamagnetic_polarisation not implemented for non-Boussinesq");
+    }
+
+    // Calculate energy exchange term nonlinear in pressure
+    // (3 / 2) ddt(Pi) += (Pi / n0) * Div((Pe + Pi) * Curlb_B + Jpar);
+    for (auto& kv : allspecies.getChildren()) {
+      Options& species = allspecies[kv.first]; // Note: need non-const
+
+      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
+            and species.isSet("AA"))) {
+        // No pressure, charge or mass -> no polarisation current due to
+        // diamagnetic flow
+        continue;
+      }
+
+      const auto charge = get<BoutReal>(species["charge"]);
+      if (fabs(charge) < 1e-5) {
+        // No charge
+        continue;
+      }
+
+      const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+      const auto AA = get<BoutReal>(species["AA"]);
+
+      add(species["energy_source"],
+          P * (AA / average_atomic_mass / charge) * DivJ);
+    }
+  }
+
+  if (!advection) {
+    return;
+  }
+  // Calculate advection terms using a potential-flow approximation
 
   // Calculate the total mass density of species
   // which contribute to polarisation current
@@ -81,37 +156,12 @@ void PolarisationDrift::transform(Options &state) {
     // Apply a floor to prevent divide-by-zero errors
     mass_density = floor(mass_density, density_floor);
   }
-
-  // Calculate divergence of all currents except the polarisation current
-  DivJ = 0.0;
-
+  
   if (IS_SET(state["fields"]["DivJextra"])) {
     DivJ += get<Field3D>(state["fields"]["DivJextra"]);
   }
-  if (IS_SET(state["fields"]["DivJdia"])) {
-    DivJ += get<Field3D>(state["fields"]["DivJdia"]);
-  }
   if (IS_SET(state["fields"]["DivJcol"])) {
     DivJ += get<Field3D>(state["fields"]["DivJcol"]);
-  }
-
-  // Parallel current due to species parallel flow
-  for (auto& kv : allspecies.getChildren()) {
-    const Options& species = kv.second;
-
-    if (!species.isSet("charge") or !species.isSet("momentum")) {
-      continue; // Not charged, or no parallel flow
-    }
-    const BoutReal Z = get<BoutReal>(species["charge"]);
-    if (fabs(Z) < 1e-5) {
-      continue; // Not charged
-    }
-
-    const Field3D NV = GET_VALUE(Field3D, species["momentum"]);
-    const BoutReal A = get<BoutReal>(species["AA"]);
-
-    // Note: Using NV rather than N*V so that the cell boundary flux is correct
-    DivJ += Div_par((Z / A) * NV);
   }
 
   // Solve for time derivative of potential

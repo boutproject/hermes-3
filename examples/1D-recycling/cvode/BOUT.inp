@@ -92,7 +92,9 @@ thermal_conduction = true  # in evolve_pressure
 diagnose = true
 
 recycle_as = d
-recycle_multiplier = 1  # Recycling fraction
+target_recycle = true
+target_recycle_energy = 3.5  # Franck-Condon dissociation energy
+target_recycle_multiplier = 1  # Recycling fraction
 
 [Nd+]
 

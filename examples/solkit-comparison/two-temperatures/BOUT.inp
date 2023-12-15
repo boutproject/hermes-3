@@ -100,7 +100,9 @@ AA = 2
 diagnose = true   # Output diagnostics for these components?
 
 recycle_as = d
-recycle_multiplier = 1.0  # Recycling fraction
+target_recycle = true  # Target recycling on
+target_recycle_energy = 3.5  # Franck-Condon dissociation energy
+target_recycle_multiplier = 1  # Recycling fraction
 
 [Nd+]
 

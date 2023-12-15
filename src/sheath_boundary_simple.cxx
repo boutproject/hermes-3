@@ -279,7 +279,10 @@ void SheathBoundarySimple::transform(Options& state) {
       }
     }
   }
-
+  
+  // Field to capture total sheath heat flux for diagnostics
+  Field3D electron_sheath_power_ylow = zeroFrom(Ne);
+  
   //////////////////////////////////////////////////////////////////
   // Electrons
 
@@ -327,13 +330,21 @@ void SheathBoundarySimple::transform(Options& state) {
                      * nesheath * vesheath;
 
         // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[im])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+        BoutReal heatflow = q * (coord->J[i] + coord->J[im])
+                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));  // This omits dx*dz because we divide by dx*dz next
 
         // Divide by volume of cell to get energy loss rate (< 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+        BoutReal power = heatflow / (coord->dy[i] * coord->J[i]);
 
         electron_energy_source[i] += power;
+
+        // Total heat flux for diagnostic purposes
+        q = gamma_e * tesheath  * nesheath * vesheath;   // Wm-2
+        heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
+                      * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
+
+        electron_sheath_power_ylow[i] += heatflow;       // lower Y, so power placed in final domain cell 
+                      
       }
     }
   }
@@ -379,13 +390,20 @@ void SheathBoundarySimple::transform(Options& state) {
                      * nesheath * vesheath;
 
         // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
+        BoutReal heatflow = q * (coord->J[i] + coord->J[ip])
+                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));  // This omits dx*dz because we divide by dx*dz next
 
         // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+        BoutReal power = heatflow / (coord->dy[i] * coord->J[i]);
 
         electron_energy_source[i] -= power;
+
+        // Total heat flux for diagnostic purposes
+        q = gamma_e * tesheath * nesheath * vesheath;  // Wm-2
+        heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
+                      * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
+        
+        electron_sheath_power_ylow[ip] -= heatflow;    // upper Y, so power placed in first guard cell
       }
     }
   }
@@ -398,6 +416,9 @@ void SheathBoundarySimple::transform(Options& state) {
   // Set energy source (negative in cell next to sheath)
   // Note: electron_energy_source includes any sources previously set in other components
   set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
+
+  // Add the total sheath power flux to the tracker of y power flows
+  add(electrons["energy_flow_ylow"], fromFieldAligned(electron_sheath_power_ylow));
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
     setBoundary(electrons["velocity"], fromFieldAligned(Ve));
@@ -452,6 +473,9 @@ void SheathBoundarySimple::transform(Options& state) {
       ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
       : zeroFrom(Ni);
 
+    // Field to capture total sheath heat flux for diagnostics
+    Field3D ion_sheath_power_ylow = zeroFrom(Ne);
+
     if (lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
@@ -496,13 +520,20 @@ void SheathBoundarySimple::transform(Options& state) {
               * nisheath * visheath;
 
           // Multiply by cell area to get power
-          BoutReal flux = q * (coord->J[i] + coord->J[im])
-                          / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+          BoutReal heatflow = q * (coord->J[i] + coord->J[im])
+                          / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));  // This omits dx*dz because we divide by dx*dz next
 
           // Divide by volume of cell to get energy loss rate (< 0)
-          BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          BoutReal power = heatflow / (coord->dy[i] * coord->J[i]);
 
           energy_source[i] += power;
+
+          // Calculation of total heat flux for diagnostic purposes
+          q = gamma_i * tisheath * nisheath * visheath;   // Wm-2
+          heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
+                      * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
+
+          ion_sheath_power_ylow[i] += heatflow;      // lower Y, so power placed in final domain cell
         }
       }
     }
@@ -553,18 +584,25 @@ void SheathBoundarySimple::transform(Options& state) {
               * nisheath * visheath;
 
           // Multiply by cell area to get power
-          BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                          / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
+          BoutReal heatflow = q * (coord->J[i] + coord->J[ip])
+                          / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));  // This omits dx*dz because we divide by dx*dz next
 
           // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          BoutReal power = heatflow / (coord->dy[i] * coord->J[i]);
           ASSERT2(std::isfinite(power));
 
           energy_source[i] -= power; // Note: Sign negative because power > 0
+
+          // Calculation of total heat flux for diagnostic purposes
+          q = gamma_i * tisheath * nisheath * visheath;
+          heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
+                      * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
+
+          ion_sheath_power_ylow[ip] += heatflow;       // Upper Y, so power placed in first guard cell
         }
       }
+      
     }
-
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
     setBoundary(species["density"], fromFieldAligned(Ni));
@@ -582,5 +620,8 @@ void SheathBoundarySimple::transform(Options& state) {
     // Additional loss of energy through sheath
     // Note: energy_source already includes previously set values
     set(species["energy_source"], fromFieldAligned(energy_source));
+
+    // Add the total sheath power flux to the tracker of y power flows
+    add(species["energy_flow_ylow"], fromFieldAligned(ion_sheath_power_ylow));
   }
 }

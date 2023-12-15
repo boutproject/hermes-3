@@ -1,6 +1,7 @@
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/field_factory.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 #include <bout/output_bout_types.hxx>
@@ -102,18 +103,34 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
+  auto& p_options = alloptions[std::string("P") + name];
+  source_normalisation = SI::qe * Nnorm * Tnorm * Omega_ci;   // [Pa/s] or [W/m^3] if converted to energy
+  time_normalisation = 1./Omega_ci;   // [s]
+  
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
   source = 0.0;
   mesh->get(source, std::string("P") + name + "_src");
   // Allow the user to override the source
-  source = alloptions[std::string("P") + name]["source"]
+  source = p_options["source"]
                .doc(std::string("Source term in ddt(P") + name
-                    + std::string("). Units [N/m^2/s]"))
+                    + std::string("). Units [Pa/s], note P = 2/3 E"))
                .withDefault(source)
-           / (SI::qe * Nnorm * Tnorm * Omega_ci);
+           / (source_normalisation);
 
-  if (alloptions[std::string("P") + name]["source_only_in_core"]
+  source_time_dependent = p_options["source_time_dependent"]
+    .doc("Use a time-dependent source?")
+    .withDefault<bool>(false);
+
+  // If time dependent, parse the function with respect to time from the input file
+  if (source_time_dependent) {
+    auto str = p_options["source_prefactor"]
+      .doc("Time-dependent function of multiplier on ddt(P" + name + std::string(") source."))
+      .as<std::string>();
+      source_prefactor_function = FieldFactory::get()->parse(str, &p_options);
+  }
+
+  if (p_options["source_only_in_core"]
       .doc("Zero the source outside the closed field-line region?")
       .withDefault<bool>(false)) {
     for (int x = mesh->xstart; x <= mesh->xend; x++) {
@@ -128,7 +145,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     }
   }
 
-  neumann_boundary_average_z = alloptions[std::string("P") + name]["neumann_boundary_average_z"]
+  neumann_boundary_average_z = p_options["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
 }
@@ -335,7 +352,16 @@ void EvolvePressure::finally(const Options& state) {
   //////////////////////
   // Other sources
 
-  Sp = source;
+  if (source_time_dependent) {
+    // Evaluate the source_prefactor function at the current time in seconds and scale source with it
+    BoutReal time = get<BoutReal>(state["time"]);
+    BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
+    final_source = source * source_prefactor;
+  } else {
+    final_source = source;
+  }
+
+  Sp = final_source;
   if (species.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(species["energy_source"]); // For diagnostic output
   }
@@ -432,7 +458,7 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    set_with_attrs(state[std::string("P") + name + std::string("_src")], source,
+    set_with_attrs(state[std::string("P") + name + std::string("_src")], final_source,
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
