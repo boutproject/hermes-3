@@ -258,3 +258,6 @@ endif()
 
 configure_file(include/hermes_build_config.hxx.in include/hermes_build_config.hxx)
 
+# Installation
+
+install(TARGETS hermes-3)
