@@ -890,27 +890,40 @@ is set on parallel velocity and momentum. It is a species-specific
 component and so goes in the list of components for the species
 that the boundary condition should be applied to.
 
-A source of neutral cooling is added in accordance with the approach in the thesis of D.Power 2023.
-The source represents two kinds of neutral reflection:
+Just like ions can undergo fast and thermal recycling, neutrals can undergo fast or thermal 
+reflection at the wall. In edge codes using the kinetic neutral code EIRENE, this is typically
+controlled by the `TRIM database <https://www.eirene.de/old_eirene/html/surface_data.html>`_.
+Hermes-3 features a simpler implementation for a constant, user-set fast reflection fraction :math:`R_{f}`
+and energy reflection coefficient :math:`\alpha_{n}` based on the approach in the thesis of D.Power 2023.
+
+The two types of reflection are as follows:
 
 - Fast reflection, where a neutral atom hits the wall and reflects having lost some energy,
 - Thermal reflection, where a neutral atom hits the wall, recombines into a molecule, and then
   is assumed to immediately dissociate at the Franck Condon dissociation temperature of 3eV.
 
-The energy sink has a heat flux `q` calculated from thermal velocity at the wall and a 
-heat transmission coefficient:
+They are both implemented as a neutral energy sink calculated
+from the cooling heat flux :math:`Q_{cool}`:
 
 .. math::
+   \begin{aligned}
+   Q_{cool} &= Q_{inc} - Q_{fast_refl} - Q_{th_refl}  \\
+   Q_{incident} &= 2n_{n} T_{n} v_{th}^{x}  \\
+   Q_{fast} &= 2n_{n} T_{n} v_{th}^{x} (R_{f} \alpha_{n}) \\
+   Q_{thermal} &= T_{FC} n_{n} v_{th}^{x} (1 - R_{f}) \\
+   v_{th}^{x} &= \frac{1}{4}\sqrt{\frac{8k_{B}T_{n}}{\pi m_{n}}}
+   \end{aligned}
 
-   q = \gamma_{heat} n T v_{th}
+Where :math:`Q_{incident}` is the neutral heat flux incident on the wall, :math:`Q_{fast}` is the
+returning heat flux from fast reflection, :math:`Q_{thermal}` is the returning heat flux from thermal reflection
+and :math:`T_{FC}` is the Franck-Condon dissociation temperature, currently hardcoded to 3eV.
+Note that the fast and incident heat flux are both of a Maxwellian distribution, and so their
+formula corresponds to the 1 dimensional static Maxwellian heat flux and :math:`v_{th}^{x}` the 
+corresponding 1D static Maxwellian thermal velocity (Stangeby p.69).
+The thermal heat flux represents a monoenergetic distribution at :math:`T_{n}=T_{FC}` and 
+is therefore calculated with a simpler formula.
 
-   v_{th} = \sqrt{eT / m}
 
-   \gamma_{heat} = 1 - \alpha_{n} R_{r} - (1 - R_{r}) (\frac{T_{FC}}{2 T})
-
-Where :math:`\alpha_{n}` is the energy retained by the neutral particle after reflection,
-:math:`R_{r}` is the fraction of neutral particles that undergo fast reflection and 
-:math:`T_{FC}` is the Franck-Condon dissociation temperature, currently hardcoded to 3eV.
 Since different regions of the tokamak feature different incidence angles and may feature 
 different materials, the energy reflection coefficient and the fast reflection fraction 
 can be set individually for the target, PFR and SOL walls. The default values are 0.75

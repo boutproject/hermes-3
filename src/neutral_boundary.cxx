@@ -85,10 +85,18 @@ void NeutralBoundary::transform(Options& state) {
         auto im = i.ym();
         auto ip = i.yp();
 
-        // Free boundary condition on log(Nn), log(Pn)
-        Nn[im] = SQ(Nn[i]) / Nn[ip];
-        Pn[im] = SQ(Pn[i]) / Pn[ip];
-        Tn[im] = SQ(Tn[i]) / Tn[ip];
+        // Free boundary condition on Nn, Pn, Tn
+        // This is problematic when Nn, Pn or Tn are zero
+        // Nn[im] = SQ(Nn[i]) / Nn[ip];
+        // Pn[im] = SQ(Pn[i]) / Pn[ip];
+        // Tn[im] = SQ(Tn[i]) / Tn[ip];
+
+        // Neumann boundary condition: do not extrapolate, but 
+        // assume the target value is same as the final cell centre.
+        // Shouldn't affect results much and more resilient to positivity issues
+        Nn[im] = Nn[i];
+        Pn[im] = Pn[i];
+        Tn[im] = Tn[i];
 
         // No-flow boundary condition
         Vn[im] = -Vn[i];
@@ -101,22 +109,32 @@ void NeutralBoundary::transform(Options& state) {
         // Thermal speed
         const BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
 
-        // Calculate effective gamma from particle and energy reflection coefficients
-        BoutReal target_gamma_heat = 1 - target_energy_refl_factor * target_fast_refl_fraction 
-                                  -(1-target_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
+        // Approach adapted from D. Power thesis 2023
+        BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
-        // Heat flux (> 0)
-        const BoutReal q = target_gamma_heat * nnsheath * tnsheath * v_th;
-        // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[im])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+        // Outgoing neutral heat flux [W/m^2]
+        // This is rearranged from Power for clarity - note definition of v_th. 
+        // Uses standard Stangeby 1D static Maxwellian particle/heat fluxes for fast terms and simply Q = T * particle flux
+        // for the monoenergetic thermal reflected population.
+        BoutReal q = 
+                      2 * nnsheath * tnsheath * v_th                                                             // Incident energy
+                    - (target_energy_refl_factor * target_fast_refl_fraction ) * 2 * nnsheath * tnsheath * v_th  // Fast reflected energy
+                    - (1 - target_fast_refl_fraction) * T_FC * nnsheath * v_th;                                  // Thermal reflected energy
 
-        // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+      
+        // Cross-sectional area in XZ plane:
+        BoutReal da = (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
+                      * 0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]);   // [m^2]
+
+        // Multiply by area to get energy flow (power)
+        BoutReal flow = q * da;  // [W]
+        
+        // Divide by cell volume to get source [W/m^3]
+        BoutReal cooling_source = flow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
 
         // Subtract from cell next to boundary
-        energy_source[i] -= power;
-        target_energy_source[i] -= power;
+        energy_source[i] -= cooling_source;
+        target_energy_source[i] -= cooling_source;
       }
     }
   }
@@ -128,10 +146,18 @@ void NeutralBoundary::transform(Options& state) {
         auto im = i.ym();
         auto ip = i.yp();
 
-        // Free boundary condition on log(Nn), log(Pn)
-        Nn[ip] = SQ(Nn[i]) / Nn[im];
-        Pn[ip] = SQ(Pn[i]) / Pn[im];
-        Tn[ip] = SQ(Tn[i]) / Tn[im];
+        // Free boundary condition on Nn, Pn, Tn
+        // This is problematic when Nn, Pn or Tn are zero
+        // Nn[ip] = SQ(Nn[i]) / Nn[im];
+        // Pn[ip] = SQ(Pn[i]) / Pn[im];
+        // Tn[ip] = SQ(Tn[i]) / Tn[im];
+
+        // Neumann boundary condition: do not extrapolate, but 
+        // assume the target value is same as the final cell centre.
+        // Shouldn't affect results much and more resilient to positivity issues
+        Nn[ip] = Nn[i];
+        Pn[ip] = Pn[i];
+        Tn[ip] = Tn[i];
 
         // No-flow boundary condition
         Vn[ip] = -Vn[i];
@@ -144,22 +170,30 @@ void NeutralBoundary::transform(Options& state) {
         // Thermal speed
         const BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
 
-        // Calculate effective gamma from particle and energy reflection coefficients
-        BoutReal target_gamma_heat = 1 - target_energy_refl_factor * target_fast_refl_fraction 
-                                  -(1-target_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
+        // Approach adapted from D. Power thesis 2023
+        BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
-        // Heat flux (> 0)
-        const BoutReal q = target_gamma_heat * nnsheath * tnsheath * v_th;
-        // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
+        // Outgoing neutral heat flux [W/m^2]
+        // This is rearranged from Power for clarity - note definition of v_th. 
+        BoutReal q = 
+                      2 * nnsheath * tnsheath * v_th                                                             // Incident energy
+                    - (target_energy_refl_factor * target_fast_refl_fraction ) * 2 * nnsheath * tnsheath * v_th  // Fast reflected energy
+                    - (1 - target_fast_refl_fraction) * T_FC * nnsheath * v_th;                                  // Thermal reflected energy
 
-        // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+        // Cross-sectional area in XZ plane:
+        BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
+                      * 0.5*(coord->dx[i] + coord->dx[ip]) * 0.5*(coord->dz[i] + coord->dz[ip]);   // [m^2]
+
+        // Multiply by area to get energy flow (power)
+        BoutReal flow = q * da;  // [W]
+
+        // Divide by cell volume to get source [W/m^3]
+        BoutReal cooling_source = flow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
 
         // Subtract from cell next to boundary
-        energy_source[i] -= power;
-        target_energy_source[i] -= power;
+        energy_source[i] -= cooling_source;
+        target_energy_source[i] -= cooling_source;
+
       }
     }
   }
@@ -180,31 +214,37 @@ void NeutralBoundary::transform(Options& state) {
           // Thermal speed of static Maxwellian in one direction
           const BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
 
-          // Calculate effective gamma from particle and energy reflection coefficients
-          BoutReal sol_gamma_heat = 1 - sol_energy_refl_factor * sol_fast_refl_fraction 
-                                    -(1-sol_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
+          // Approach adapted from D. Power thesis 2023
+          BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
-          // Heat flux (> 0)
-          const BoutReal q = sol_gamma_heat * nnsheath * tnsheath * v_th;
+          // Outgoing neutral heat flux [W/m^2]
+          // This is rearranged from Power for clarity - note definition of v_th. 
+          BoutReal q = 
+                        2 * nnsheath * tnsheath * v_th                                                             // Incident energy
+                      - (target_energy_refl_factor * target_fast_refl_fraction ) * 2 * nnsheath * tnsheath * v_th  // Fast reflected energy
+                      - (1 - target_fast_refl_fraction) * T_FC * nnsheath * v_th;                                  // Thermal reflected energy
+
 
           // Multiply by radial cell area to get power
           // Expanded form of the calculation for clarity
 
-          // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
-          BoutReal dpolsheath = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
+          // Converts dy to poloidal length: dl = dy / sqrt(g22) = dy * h_theta
+          BoutReal dpol = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
 
           // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
-          BoutReal dtorsheath = 0.5*(coord->dz[i] + coord->dz[ig]) * 0.5*(sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+          BoutReal dtor = 0.5*(coord->dz[i] + coord->dz[ig]) * 0.5*(sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
 
-          BoutReal dasheath = dpolsheath * dtorsheath;  // [m^2]
-          BoutReal flux = q * dasheath;  // [W]
+          BoutReal da = dpol * dtor;  // [m^2]
 
-          // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [W m^-3]
+          // Multiply by area to get energy flow (power)
+          BoutReal flow = q * da;  // [W]
+
+          // Divide by cell volume to get source [W/m^3]
+          BoutReal cooling_source = flow / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [W m^-3]
 
           // Subtract from cell next to boundary
-          energy_source[i] -= power;
-          wall_energy_source[i] -= power;
+          energy_source[i] -= cooling_source;
+          wall_energy_source[i] -= cooling_source;
 
         }
       }
@@ -227,32 +267,37 @@ void NeutralBoundary::transform(Options& state) {
           // Thermal speed of static Maxwellian in one direction
           const BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
 
-          
-          // Calculate effective gamma from particle and energy reflection coefficients
-          BoutReal pfr_gamma_heat = 1 - pfr_energy_refl_factor * pfr_fast_refl_fraction 
-                                    -(1-pfr_fast_refl_fraction) * (3/Tnorm) / (2*tnsheath);  // D. Power thesis 2023
+           // Approach adapted from D. Power thesis 2023
+          BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
-          // Heat flux (> 0)
-          const BoutReal q = pfr_gamma_heat * nnsheath * tnsheath * v_th;
+          // Outgoing neutral heat flux [W/m^2]
+          // This is rearranged from Power for clarity - note definition of v_th. 
+          BoutReal q = 
+                        2 * nnsheath * tnsheath * v_th                                                             // Incident energy
+                      - (target_energy_refl_factor * target_fast_refl_fraction ) * 2 * nnsheath * tnsheath * v_th  // Fast reflected energy
+                      - (1 - target_fast_refl_fraction) * T_FC * nnsheath * v_th;                                  // Thermal reflected energy
+
 
           // Multiply by radial cell area to get power
           // Expanded form of the calculation for clarity
 
-          // Converts dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
-          BoutReal dpolsheath = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
+          // Converts dy to poloidal length: dl = dy / sqrt(g22) = dy * h_theta
+          BoutReal dpol = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
 
           // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
-          BoutReal dtorsheath = 0.5*(coord->dz[i] + coord->dz[ig]) * 0.5*(sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+          BoutReal dtor = 0.5*(coord->dz[i] + coord->dz[ig]) * 0.5*(sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
 
-          BoutReal dasheath = dpolsheath * dtorsheath;  // [m^2]
-          BoutReal flux = q * dasheath;  // [W]
+          BoutReal da = dpol * dtor;  // [m^2]
 
-          // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = flux / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [W m^-3]
+          // Multiply by area to get energy flow (power)
+          BoutReal flow = q * da;  // [W]
+
+          // Divide by cell volume to get source [W/m^3]
+          BoutReal cooling_source = flow / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [W m^-3]
 
           // Subtract from cell next to boundary
-          energy_source[i] -= power;
-          wall_energy_source[i] -= power;
+          energy_source[i] -= cooling_source;
+          wall_energy_source[i] -= cooling_source;
 
         }
       }
