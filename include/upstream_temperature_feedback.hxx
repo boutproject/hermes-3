@@ -167,7 +167,7 @@ private:
 };
 
 namespace {
-RegisterComponent<UpstreamTemperatureFeedback> register_uds("upstream_temperature_feedback");
+RegisterComponent<UpstreamTemperatureFeedback> register_uts("upstream_temperature_feedback");
 }
 
 #endif // UPSTREAM_TEMPERATURE_FEEDBACK_H
