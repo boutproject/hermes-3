@@ -93,6 +93,7 @@ set(HERMES_SOURCES
     src/hydrogen_charge_exchange.cxx
     src/solkit_hydrogen_charge_exchange.cxx
     src/upstream_density_feedback.cxx
+    src/upstream_temperature_feedback.cxx
     src/thermal_force.cxx
     src/ion_viscosity.cxx
     src/transform.cxx
@@ -149,6 +150,7 @@ set(HERMES_SOURCES
     include/sound_speed.hxx
     include/thermal_force.hxx
     include/upstream_density_feedback.hxx
+    include/upstream_temperature_feedback.hxx
     include/vorticity.hxx
     include/zero_current.hxx
     include/transform.hxx
