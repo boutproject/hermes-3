@@ -3,6 +3,7 @@
 #define UPSTREAM_TEMPERATURE_FEEDBACK_H
 
 #include "component.hxx"
+#include <bout/constants.hxx>
 
 /// Adds a time-varying temperature source, depending on the difference
 /// between the upstream temperature at y=0 and the specified value
@@ -83,7 +84,7 @@ struct UpstreamTemperatureFeedback : public Component {
 
       // Shape is not time-dependent and has units of [W s-1]
       set_with_attrs(
-          state[std::string("temperature_feedback_src_shape_") + name], temperature_source_shape,
+          state[std::string("temperature_feedback_src_shape_") + name], pressure_source_shape,
           {{"units", "W s^-1"},
            {"conversion", Pnorm * Omega_ci},
            {"long_name", name + " temperature source shape"},
@@ -97,7 +98,7 @@ struct UpstreamTemperatureFeedback : public Component {
                       {"long_name", name + " temperature source multiplier"},
                       {"source", "upstream_temperature_feedback"}});
 
-      set_with_attrs(state[std::string("S") + name + std::string("_feedback")], temperature_source_shape * source_multiplier,
+      set_with_attrs(state[std::string("S") + name + std::string("_feedback")], pressure_source_shape * source_multiplier,
                       {{"time_dimension", "t"},
                       {"units", "W s^-1"},
                     {"conversion", Pnorm * Omega_ci},
@@ -156,7 +157,7 @@ private:
   BoutReal temperature_error_lasttime{-1.0};
   BoutReal temperature_error_last{0.0};
 
-  Field3D temperature_source_shape; ///< This shape source is scaled up and down
+  Field3D pressure_source_shape; ///< This shape source is scaled up and down
 
   BoutReal source_multiplier; ///< Factor to multiply source
 
