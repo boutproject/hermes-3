@@ -22,11 +22,15 @@ struct UpstreamTemperatureFeedback : public Component {
   ///    - source_shape  The initial source that is scaled by a time-varying factor
   ///
   UpstreamTemperatureFeedback(std::string name, Options& alloptions, Solver*) : name(name) {
-    const auto& units = alloptions["units"];
-    BoutReal Tnorm = get<BoutReal>(units["eV"]);
-    BoutReal FreqNorm = 1. / get<BoutReal>(units["seconds"]);
 
     Options& options = alloptions[name];
+    const auto& units = alloptions["units"];
+    BoutReal Tnorm = get<BoutReal>(units["eV"]);
+    BoutReal Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
+    BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+
+    BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+    BoutReal SPnorm = Pnorm * Omega_ci; // Pressure-source normalisation [Pa/s] or [W/m^3] if converted to energy
 
     temperature_upstream =
         options["temperature_upstream"].doc("Upstream temperature (at y=0) [eV]").as<BoutReal>()
@@ -53,9 +57,9 @@ struct UpstreamTemperatureFeedback : public Component {
     // Source shape the same as used in EvolvePressure
     pressure_source_shape =
       alloptions[std::string("P") + name]["source_shape"]
-            .doc("Source term in ddt(P" + name + std::string("). Units [W/s]"))
+            .doc("Source term in ddt(P" + name + std::string("). Units [Pa/s], note P = 2/3 E."))
             .withDefault(Field3D(0.0))
-        / (Tnorm * FreqNorm);
+        / (SPnorm);
 
     diagnose = options["diagnose"]
                    .doc("Output additional diagnostics?")
@@ -81,12 +85,13 @@ struct UpstreamTemperatureFeedback : public Component {
       auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
       auto Nnorm = get<BoutReal>(state["Nnorm"]);
       BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+      BoutReal SPnorm = Pnorm * Omega_ci; // Pressure-source normalisation [Pa/s] or [W/m^3] if converted to energy
 
-      // Shape is not time-dependent and has units of [W s-1]
+      // Shape is not time-dependent and has units of [Pa s-1]
       set_with_attrs(
           state[std::string("temperature_feedback_src_shape_") + name], pressure_source_shape,
-          {{"units", "W s^-1"},
-           {"conversion", Pnorm * Omega_ci},
+          {{"units", "Pa / s"},
+           {"conversion", SPnorm},
            {"long_name", name + " temperature source shape"},
            {"source", "upstream_temperature_feedback"}});
 
@@ -100,8 +105,8 @@ struct UpstreamTemperatureFeedback : public Component {
 
       set_with_attrs(state[std::string("S") + name + std::string("_feedback")], pressure_source_shape * source_multiplier,
                       {{"time_dimension", "t"},
-                      {"units", "W s^-1"},
-                    {"conversion", Pnorm * Omega_ci},
+                      {"units", "Pa / s"},
+                    {"conversion", SPnorm},
                     {"standard_name", "temperature source"},
                     {"long_name", name + "upstream temperature feedback controller source"},
                     {"source", "upstream_temperature_feedback"}});
