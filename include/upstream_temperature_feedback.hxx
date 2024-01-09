@@ -18,7 +18,7 @@ struct UpstreamTemperatureFeedback : public Component {
   ///    - temperature_source_positive    Force temperature source to be positive? (default: true)
   ///    - diagnose           Output diagnostic information?
   ///
-  ///  - N<name>  (e.g. "Nd+")
+  ///  - T<name>  (e.g. "Td+")
   ///    - source_shape  The initial source that is scaled by a time-varying factor
   ///
   UpstreamTemperatureFeedback(std::string name, Options& alloptions, Solver*) : name(name) {
@@ -27,7 +27,7 @@ struct UpstreamTemperatureFeedback : public Component {
     const auto& units = alloptions["units"];
     BoutReal Tnorm = get<BoutReal>(units["eV"]);
     BoutReal Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
-    BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+    BoutReal Omega_ci = 1. / get<BoutReal>(units["seconds"]);
 
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
     BoutReal SPnorm = Pnorm * Omega_ci; // Pressure-source normalisation [Pa/s] or [W/m^3] if converted to energy
@@ -103,7 +103,7 @@ struct UpstreamTemperatureFeedback : public Component {
                       {"long_name", name + " temperature source multiplier"},
                       {"source", "upstream_temperature_feedback"}});
 
-      set_with_attrs(state[std::string("S") + name + std::string("_feedback")], pressure_source_shape * source_multiplier,
+      set_with_attrs(state[std::string("SP") + name + std::string("_feedback")], pressure_source_shape * source_multiplier,
                       {{"time_dimension", "t"},
                       {"units", "Pa / s"},
                     {"conversion", SPnorm},
