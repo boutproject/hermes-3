@@ -72,6 +72,7 @@
 #include "include/transform.hxx"
 #include "include/upstream_density_feedback.hxx"
 #include "include/upstream_temperature_feedback.hxx"
+#include "include/set_energy_source.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
 #include <bout/constants.hxx>

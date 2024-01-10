@@ -151,6 +151,7 @@ set(HERMES_SOURCES
     include/thermal_force.hxx
     include/upstream_density_feedback.hxx
     include/upstream_temperature_feedback.hxx
+    include/set_energy_source.hxx
     include/vorticity.hxx
     include/zero_current.hxx
     include/transform.hxx
