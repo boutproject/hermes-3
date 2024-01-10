@@ -61,5 +61,5 @@ void UpstreamTemperatureFeedback::transform(Options& state) {
   ASSERT2(std::isfinite(source_multiplier));
 
   // Scale the source and add to the species temperature source
-  add(species["pressure_source"], source_multiplier * pressure_source_shape);
+  add(species["energy_source"], source_multiplier * pressure_source_shape);
 }
