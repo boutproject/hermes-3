@@ -61,10 +61,9 @@ struct UpstreamTemperatureFeedback : public Component {
 
     // Source shape the same as used in EvolvePressure
     pressure_source_shape =
-      alloptions[std::string("P") + name]["source_shape"]
-            .doc("Source term in ddt(P" + name + std::string("). Units [Pa/s], note P = 2/3 E."))
-            .withDefault(Field3D(0.0))
-        / (SPnorm);
+      (alloptions[std::string("P") + name]["source_shape"]
+            .doc("Source term in ddt(P" + name + std::string("). Units [Pa/s], note P = 2/3 E.")).as<BoutReal>()
+      ) / (SPnorm);
 
     diagnose = options["diagnose"]
                    .doc("Output additional diagnostics?")
