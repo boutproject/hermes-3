@@ -11,7 +11,8 @@ struct UpstreamTemperatureFeedback : public Component {
 
   /// Inputs
   ///  - <name> (e.g. "d+")
-  ///    - temperature_upstream        Upstream temperature (y=0) in eV
+  ///    - temperature_setpoint        Desired temperature in eV
+  ///    - control_target_temperature  Adjust the pressure source to match the upstream (if false) or target (if true) temperature
   ///    - temperature_controller_p    Feedback proportional to error
   ///    - temperature_controller_i    Feedback proportional to error integral
   ///    - temperature_integral_positive  Force integral term to be positive? (default: false)
@@ -32,9 +33,13 @@ struct UpstreamTemperatureFeedback : public Component {
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
     BoutReal SPnorm = Pnorm * Omega_ci; // Pressure-source normalisation [Pa/s] or [W/m^3] if converted to energy
 
-    temperature_upstream =
-        options["temperature_upstream"].doc("Upstream temperature (at y=0) [eV]").as<BoutReal>()
+    temperature_setpoint =
+        options["temperature_setpoint"].doc("Desired temperature in eV, upstream (y=0) unless control_target_temperature=true").as<BoutReal>()
         / Tnorm;
+    
+    control_target_temperature = options["control_target_temperature"]
+                                    .doc("Adjust the pressure source to match the upstream (if false) or target (if true) temperature")
+                                    .withDefault<bool>(false);
 
     temperature_controller_p = options["temperature_controller_p"]
                                .doc("Feedback controller proportional (p) parameter")
@@ -150,11 +155,12 @@ struct UpstreamTemperatureFeedback : public Component {
 private:
   std::string name; ///< The species name
 
-  BoutReal temperature_upstream;                           ///< Normalised upstream temperature
+  BoutReal temperature_setpoint;                           ///< Normalised setpoint temperature
   BoutReal temperature_controller_p, temperature_controller_i; ///< PI controller parameters
   BoutReal error;
   BoutReal temperature_error_integral{0.0}; ///< Time integral of the error
 
+  bool control_target_temperature; ///<Adjust the pressure source to match the upstream (if false) or target (if true) temperature
   bool temperature_integral_positive; ///< Force integral term to be positive?
   bool temperature_source_positive;   ///< Force source to be positive?
 

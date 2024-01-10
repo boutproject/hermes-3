@@ -13,7 +13,12 @@ void UpstreamTemperatureFeedback::transform(Options& state) {
 
   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
     int jz = 0;
-    error = temperature_upstream - T(r.ind, mesh->ystart, jz);
+
+    if (control_target_temperature) {
+      error = temperature_setpoint - T(r.ind, mesh->yend, jz);
+    } else {
+      error = temperature_setpoint - T(r.ind, mesh->ystart, jz);
+    }
 
     // PI controller, using crude integral of the error
     if (temperature_error_lasttime < 0.0) {
