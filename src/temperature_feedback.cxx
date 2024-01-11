@@ -1,9 +1,9 @@
-#include "../include/upstream_temperature_feedback.hxx"
+#include "../include/temperature_feedback.hxx"
 
 #include <bout/mesh.hxx>
 using bout::globals::mesh;
 
-void UpstreamTemperatureFeedback::transform(Options& state) {
+void TemperatureFeedback::transform(Options& state) {
   Options& species = state["species"][name];
 
   // Doesn't need all boundaries to be set
@@ -60,6 +60,44 @@ void UpstreamTemperatureFeedback::transform(Options& state) {
   MPI_Bcast(&integral_term, 1, MPI_DOUBLE, 0, BoutComm::get());
   ASSERT2(std::isfinite(source_multiplier));
 
+  // std::list<std::string>::iterator species_it = species_list.begin();
+  // std::list<std::string>::iterator scaling_factor_it = scaling_factors_list.begin();
+
+  // while (species_it != species_list.end() && scaling_factor_it != scaling_factors_list.end()) {
+
+  //     std::string sourced_species = trim(*species_it, " \t\r()"); // The species name in the list
+  //     BoutReal scaling_factor = stringToReal(trim(*scaling_factor_it, " \t\r()"));
+
+  //     if (sourced_species.empty())
+  //       continue; // Missing
+      
+  //     add(state["species"][sourced_species]["energy_source"], scaling_factor * source_multiplier * source_shape);
+
+  //     ++species_it;
+  //     ++scaling_factor_it;
+  // }
+
+  auto species_it = species_list.begin();
+  auto scaling_factor_it = scaling_factors_list.begin();
+
+  while (species_it != species_list.end() && scaling_factor_it != scaling_factors_list.end()) {
+      std::string trimmed_species = trim(*species_it);
+      std::string trimmed_scaling_factor = trim(*scaling_factor_it);
+
+      if (trimmed_species.empty() || trimmed_scaling_factor.empty()) {
+          ++species_it;
+          ++scaling_factor_it;
+          continue; // Skip this iteration if either trimmed string is empty
+      }
+
+      BoutReal scaling_factor = stringToReal(trimmed_scaling_factor);
+      add(state["species"][trimmed_species]["energy_source"], scaling_factor * source_multiplier * source_shape);
+
+      ++species_it;
+      ++scaling_factor_it;
+  }
+
   // Scale the source and add to the species temperature source
-  add(species["energy_source"], source_multiplier * pressure_source_shape);
+  // add(species["energy_source"], source_multiplier * source_shape);
+  // add(state["species"]["d+"]["energy_source"], source_multiplier * source_shape);
 }

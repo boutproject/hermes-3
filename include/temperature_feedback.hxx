@@ -1,13 +1,13 @@
 #pragma once
-#ifndef UPSTREAM_TEMPERATURE_FEEDBACK_H
-#define UPSTREAM_TEMPERATURE_FEEDBACK_H
+#ifndef temperature_feedback_H
+#define temperature_feedback_H
 
 #include "component.hxx"
 #include <bout/constants.hxx>
 
 /// Adds a time-varying temperature source, depending on the difference
 /// between the upstream temperature at y=0 and the specified value
-struct UpstreamTemperatureFeedback : public Component {
+struct TemperatureFeedback : public Component {
 
   /// Inputs
   ///  - <name> (e.g. "d+")
@@ -22,7 +22,7 @@ struct UpstreamTemperatureFeedback : public Component {
   ///  - T<name>  (e.g. "Td+")
   ///    - source_shape  The initial source that is scaled by a time-varying factor
   ///
-  UpstreamTemperatureFeedback(std::string name, Options& alloptions, Solver*) : name(name) {
+  TemperatureFeedback(std::string name, Options& alloptions, Solver*) : name(name) {
 
     Options& options = alloptions[name];
     const auto& units = alloptions["units"];
@@ -54,13 +54,26 @@ struct UpstreamTemperatureFeedback : public Component {
     temperature_source_positive = options["temperature_source_positive"]
                                   .doc("Force source to be positive?")
                                   .withDefault<bool>(true);
+    
+    species_list = strsplit(options["species_for_temperature_feedback"]
+                                  .doc("Comma-separated list of species to apply the PI-controlled source to")
+                                  .as<std::string>(),
+                            ',');
+    scaling_factors_list = strsplit(options["scaling_factors_for_temperature_feedback"]
+                                  .doc("Comma-separated list of scaling factors to apply to the PI-controlled source, 1 for each species")
+                                  .as<std::string>(),
+                            ',');
+
+    if (species_list.size() != scaling_factors_list.size()) {
+      throw BoutException("TemperatureFeedback: species_list length doesn't match scaling_factors length. Need 1 scaling factor per species.");
+    }
 
     // NOTE: temperature_error_integral should be set from the restart file here.
     // There doesn't seem to be a way to get the restart Options,
     // so for now this is set in restartVars
 
     // Source shape the same as used in EvolvePressure
-    pressure_source_shape =
+    source_shape =
       (alloptions[std::string("P") + name]["source_shape"]
         .doc("Source term in ddt(P" + name + std::string("). Units [Pa/s], note P = 2/3 E."))
         .as<BoutReal>()
@@ -94,11 +107,11 @@ struct UpstreamTemperatureFeedback : public Component {
 
       // Shape is not time-dependent and has units of [Pa s-1]
       set_with_attrs(
-          state[std::string("temperature_feedback_src_shape_") + name], pressure_source_shape,
+          state[std::string("temperature_feedback_src_shape_") + name], source_shape,
           {{"units", "Pa / s"},
            {"conversion", SPnorm},
            {"long_name", name + " temperature source shape"},
-           {"source", "upstream_temperature_feedback"}});
+           {"source", "temperature_feedback"}});
 
       // The source multiplier is time-dependent, but dimensionless
       // because all the units are attached to the shape
@@ -106,15 +119,15 @@ struct UpstreamTemperatureFeedback : public Component {
                      source_multiplier,
                      {{"time_dimension", "t"},
                       {"long_name", name + " temperature source multiplier"},
-                      {"source", "upstream_temperature_feedback"}});
+                      {"source", "temperature_feedback"}});
 
-      set_with_attrs(state[std::string("SP") + name + std::string("_feedback")], pressure_source_shape * source_multiplier,
+      set_with_attrs(state[std::string("SP") + name + std::string("_feedback")], source_shape * source_multiplier,
                       {{"time_dimension", "t"},
                       {"units", "Pa / s"},
                     {"conversion", SPnorm},
                     {"standard_name", "temperature source"},
                     {"long_name", name + "upstream temperature feedback controller source"},
-                    {"source", "upstream_temperature_feedback"}});
+                    {"source", "temperature_feedback"}});
 
       // Save proportional and integral component of source for diagnostics/tuning
       // Multiplier = proportional term + integral term
@@ -122,14 +135,14 @@ struct UpstreamTemperatureFeedback : public Component {
           state[std::string("temperature_feedback_src_p_") + name], proportional_term,
           {{"time_dimension", "t"},
           {"long_name", name + " proportional feedback term"},
-          {"source", "upstream_temperature_feedback"}});
+          {"source", "temperature_feedback"}});
 
       
       set_with_attrs(
           state[std::string("temperature_feedback_src_i_") + name], integral_term,
           {{"time_dimension", "t"},
            {"long_name", name + " integral feedback term"},
-           {"source", "upstream_temperature_feedback"}});
+           {"source", "temperature_feedback"}});
 
     }
   }
@@ -149,11 +162,14 @@ struct UpstreamTemperatureFeedback : public Component {
     // Save the temperature error integral
     set_with_attrs(state[name + "_temperature_error_integral"], temperature_error_integral,
                    {{"long_name", name + " temperature error integral"},
-                    {"source", "upstream_temperature_feedback"}});
+                    {"source", "temperature_feedback"}});
   }
 
 private:
   std::string name; ///< The species name
+
+  std::list<std::string> species_list; ///< Which species to apply the factor to
+  std::list<std::string> scaling_factors_list; ///< Factor to apply
 
   BoutReal temperature_setpoint;                           ///< Normalised setpoint temperature
   BoutReal temperature_controller_p, temperature_controller_i; ///< PI controller parameters
@@ -168,7 +184,7 @@ private:
   BoutReal temperature_error_lasttime{-1.0};
   BoutReal temperature_error_last{0.0};
 
-  Field3D pressure_source_shape; ///< This shape source is scaled up and down
+  Field3D source_shape; ///< This shape source is scaled up and down
 
   BoutReal source_multiplier; ///< Factor to multiply source
 
@@ -178,7 +194,7 @@ private:
 };
 
 namespace {
-RegisterComponent<UpstreamTemperatureFeedback> register_uts("upstream_temperature_feedback");
+RegisterComponent<TemperatureFeedback> register_uts("temperature_feedback");
 }
 
-#endif // UPSTREAM_TEMPERATURE_FEEDBACK_H
+#endif // temperature_feedback_H
