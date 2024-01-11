@@ -57,11 +57,11 @@ struct SetEnergySource : public Component {
     AUTO_TRACE();
 
     // Get the energy_source
-    E_src = GET_NOBOUNDARY(Field3D, state["species"][energy_source_from]["energy_source"]);
+    Field3D E_src = getNoBoundary<Field3D>(state["species"][energy_source_from]["energy_source"]);
 
     // Set energy_source
     auto& species = state["species"][name];
-    set(species["energy_source"], energy_source_ratio * E_src);
+    add(species["energy_source"], energy_source_ratio * E_src);
 
   }
 
