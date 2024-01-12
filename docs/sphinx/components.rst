@@ -1834,6 +1834,11 @@ collisional-radiative model has been set to :math:`1\times 10^{20} \times 0.5ms`
 Each rate has an upper and lower bound beyond which the rate remains constant. 
 Please refer to the source code in `fixed_fraction_radiation.hxx` for the coefficients and bounds used for each rate.
 
+In addition to the above rates, there are three simplified cooling curves for Argon: ``fixed_fraction_argon_simplified1``,
+``fixed_fraction_argon_simplified2`` and ``fixed_fraction_argon_simplified3``. They progressively reduce the nonlinearity in the 
+rate by taking out the curvature from the slopes, taking out the RHS shoulder and taking out the LHS-RHS asymmetry, respectively.
+These rates may be useful in investigating the impact of the different kinds of curve nonlinearities on the solution. 
+
 
 Adjusting reactions
 ~~~~~~~~
