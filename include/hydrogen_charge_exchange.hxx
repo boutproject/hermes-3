@@ -128,7 +128,7 @@ struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
     // This is useful for testing the impact of enabling the neutral momentum equation.
     // When set to true, CX behaves as if using diffusive neutrals but the neutral transport
     // still enjoys the full momentum equation treatment.
-    no_neutral_cx_mom_gain = alloptions[name]["K_cx_multiplier"]
+    no_neutral_cx_mom_gain = alloptions[name]["no_neutral_cx_mom_gain"]
                            .doc("If true, ion momentum in CX is still lost but not given to the neutrals")
                            .withDefault<bool>(false);
 
