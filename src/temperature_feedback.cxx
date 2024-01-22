@@ -55,9 +55,15 @@ void TemperatureFeedback::transform(Options& state) {
   // The upstream temperature is only present in processor 0, so for other
   // processors the above loop is skipped. Need to broadcast the values from
   // processor 0 to the other processors
-  MPI_Bcast(&source_multiplier, 1, MPI_DOUBLE, 0, BoutComm::get());
-  MPI_Bcast(&proportional_term, 1, MPI_DOUBLE, 0, BoutComm::get());
-  MPI_Bcast(&integral_term, 1, MPI_DOUBLE, 0, BoutComm::get());
+  if (control_target_temperature) {
+    MPI_Bcast(&source_multiplier, 1, MPI_DOUBLE, BoutComm::size()-1, BoutComm::get());
+    MPI_Bcast(&proportional_term, 1, MPI_DOUBLE, BoutComm::size()-1, BoutComm::get());
+    MPI_Bcast(&integral_term, 1, MPI_DOUBLE, BoutComm::size()-1, BoutComm::get());
+  } else  {
+    MPI_Bcast(&source_multiplier, 1, MPI_DOUBLE, 0, BoutComm::get());
+    MPI_Bcast(&proportional_term, 1, MPI_DOUBLE, 0, BoutComm::get());
+    MPI_Bcast(&integral_term, 1, MPI_DOUBLE, 0, BoutComm::get());
+  }
   ASSERT2(std::isfinite(source_multiplier));
 
   // std::list<std::string>::iterator species_it = species_list.begin();
