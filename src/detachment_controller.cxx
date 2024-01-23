@@ -11,68 +11,59 @@ void DetachmentController::transform(Options& state) {
 
     auto time = get<BoutReal>(state["time"]);
 
-    // Iterate over all y points, starting at the upstream end of the simulation.
-    BoutReal closest = 0.0;
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-        int jz = 0;
-        closest = abs(1.0 - neutral_density(r.ind, mesh->yend, jz) / electron_density(r.ind, mesh->yend, jz));
-        actual_front_location = connection_length;
-        break;
-    }
-
+    BoutReal closest = INFINITY;
+    // Iterate over all y points
     BOUT_FOR_SERIAL(i, electron_density.getRegion("RGN_NOBNDRY")) {
         BoutReal test = abs(1.0 - neutral_density[i] / electron_density[i]);
         if (
              test < closest
         ) {
             closest = test;
-            actual_front_location = i.y();
+            detachment_front_index = i.y();
         }
     }
 
-    // for (int jy = mesh->ystart; jy <= mesh->yend; jy++) {
-    //     if (neutral_density(r.ind, jy, jz) > electron_density(r.ind, jy, jz)) {
-    //         actual_front_location = coord->y(r.ind, jy, jz)
-    //         break;
-    //     }
-    // }
+    detachment_front_location = 0.0;
+    for (int j = mesh->ystart; detachment_front_index; ++j) {
+      detachment_front_location = detachment_front_location + coord->dy(0, j, 0);
+    }
 
     if (set_location_relative_to_target) {
-        error = detachment_front_location - (actual_front_location - connection_length);
+        error = detachment_front_desired_location - (detachment_front_location - connection_length);
     } else {
-        error = detachment_front_location - actual_front_location;
+        error = detachment_front_desired_location - detachment_front_location;
     }
 
 
     // PI controller, using crude integral of the error
-    if (detachment_control_error_lasttime < 0.0) {
+    if (error_lasttime < 0.0) {
     // First time this has run
-    detachment_control_error_lasttime = time;
-    detachment_control_error_last = error;
+    error_lasttime = time;
+    error_last = error;
     }
 
     // Integrate using Trapezium rule
-    if (time > detachment_control_error_lasttime) { // Since time can decrease
-    detachment_control_error_integral += (time - detachment_control_error_lasttime) * 0.5 *
-        (error + detachment_control_error_last);
+    if (time > error_lasttime) { // Since time can decrease
+    error_integral += (time - error_lasttime) * 0.5 *
+        (error + error_last);
     }
 
-    if ((detachment_control_error_integral < 0.0) && force_integral_positive) {
-    // Limit detachment_control_error_integral to be >= 0
-    detachment_control_error_integral = 0.0;
+    if ((error_integral < 0.0) && force_integral_positive) {
+    // Limit error_integral to be >= 0
+    error_integral = 0.0;
     }
 
     // Calculate source from combination of error and integral
-    integral_term = detachment_control_controller_i * detachment_control_error_integral;
-    proportional_term = detachment_control_controller_p * error;
+    integral_term = controller_i * error_integral;
+    proportional_term = controller_p * error;
     source_multiplier = proportional_term + integral_term;
 
     if ((source_multiplier < 0.0) && force_source_positive) {
     source_multiplier = 0.0; // Don't remove particles
     }
 
-    detachment_control_error_last = error;
-    detachment_control_error_lasttime = time;
+    error_last = error;
+    error_lasttime = time;
 
     // Need to think about how to do this in parallel runs.
 
