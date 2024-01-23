@@ -9,7 +9,7 @@ struct DetachmentController : public Component {
 
   DetachmentController(std::string, Options& options, Solver*) {
 
-    Options& detachment_controller_options = options["detachment_controller"]
+    Options& detachment_controller_options = options["detachment_controller"];
 
     const auto& units = options["units"];
     BoutReal Tnorm = get<BoutReal>(units["eV"]);
@@ -22,7 +22,8 @@ struct DetachmentController : public Component {
 
     detachment_front_location = 
       detachment_controller_options["detachment_front_location"]
-      .doc("Desired location of the detachment front in m, relative to y=0 unless set_location_relative_to_target=true").as<BoutReal>;
+      .doc("Desired location of the detachment front in m, relative to y=0 unless set_location_relative_to_target=true")
+      .as<BoutReal>();
     
     set_location_relative_to_target = 
       detachment_controller_options["set_location_relative_to_target"]
@@ -75,7 +76,7 @@ struct DetachmentController : public Component {
     // so for now this is set in restartVars
 
     // Source shape the same as used in EvolvePressure
-    if control_power {
+    if (control_power) {
       source_shape =
         (options[std::string("P") + species_for_source_shape]["source_shape"]
           .doc("Source term in ddt(P" + species_for_source_shape + std::string("). Units [Pa/s], note P = 2/3 E."))
@@ -108,6 +109,13 @@ struct DetachmentController : public Component {
   void outputVars(Options& state) override {
     AUTO_TRACE();
     if (diagnose) {
+      set_with_attrs(
+        state[std::string("detachment_front_location")], actual_front_location,
+        {{"units", "m"},
+         {"conversion", 1.0},
+         {"long_name", "detachment front position"},
+         {"source", "detachment_controller"}});
+
       // Shape is not time-dependent and has units
       set_with_attrs(
           state[std::string("detachment_control_src_shape")], source_shape,
@@ -183,8 +191,9 @@ private:
   BoutReal detachment_controller_i;
   bool force_integral_positive; ///< Force integral term to be positive?
   bool force_source_positive;   ///< Force source to be positive?
-  BoutReal connection_length;
 
+  BoutReal connection_length;
+  BoutReal actual_front_location;
   BoutReal detachment_control_controller_p, detachment_control_controller_i; ///< PI controller parameters
   BoutReal error;
   BoutReal detachment_control_error_integral{0.0}; ///< Time integral of the error
