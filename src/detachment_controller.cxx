@@ -12,8 +12,12 @@ void DetachmentController::transform(Options& state) {
     auto time = get<BoutReal>(state["time"]);
 
     BoutReal closest = INFINITY;
+    
+    // Set the initial value so that if no point has Nn > Ne, the detachment front is
+    // at the target.
+    detachment_front_index = mesh->yend;
+
     // Iterate over all y points
-    detachment_front_index = -1;
     BOUT_FOR_SERIAL(i, electron_density.getRegion("RGN_NOBNDRY")) {
         BoutReal N_neutral = neutral_density[i];
         BoutReal N_electron = electron_density[i];
