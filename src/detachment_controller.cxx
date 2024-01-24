@@ -23,9 +23,11 @@ void DetachmentController::transform(Options& state) {
         }
     }
 
-    detachment_front_location = 0.0;
-    for (int j = mesh->ystart; detachment_front_index; ++j) {
-      detachment_front_location = detachment_front_location + coord->dy(0, j, 0);
+    detachment_front_location = - (coord->dy(0, mesh->ystart - 1, 0) + coord->dy(0, mesh->ystart, 0)) / 4.0;
+    // Looking at https://github.com/boutproject/xhermes/blob/main/xhermes/accessors.py#L58
+    // dy from the first two cells cancels out
+    for (int j = mesh->ystart; j <= detachment_front_index; ++j) {
+        detachment_front_location = detachment_front_location + 0.5 * coord->dy(0, j-1, 0) + 0.5 * coord->dy(0, j, 0);
     }
 
     if (set_location_relative_to_target) {
