@@ -29,6 +29,10 @@ struct DetachmentController : public Component {
       detachment_controller_options["set_location_relative_to_target"]
       .doc("Set detachment_front_location relative to target (y=-1) if true, else relative to upstream (y=0)")
       .withDefault<bool>(true);
+
+    if (set_location_relative_to_target) {
+      detachment_front_desired_location = connection_length - detachment_front_desired_location;
+    }
     
     species_for_source_shape =
       detachment_controller_options["species_for_source_shape"]

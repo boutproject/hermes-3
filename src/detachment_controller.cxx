@@ -38,12 +38,13 @@ void DetachmentController::transform(Options& state) {
         detachment_front_location = detachment_front_location + 0.5 * coord->dy(0, j-1, 0) + 0.5 * coord->dy(0, j, 0);
     }
 
-    if (set_location_relative_to_target) {
-        error = detachment_front_desired_location - (detachment_front_location - connection_length);
-    } else {
-        error = detachment_front_desired_location - detachment_front_location;
-    }
-
+    // Control on the sqrt of the distance
+    // if (detachment_front_desired_location >= detachment_front_location) {
+    //     error = sqrtf(detachment_front_desired_location - detachment_front_location);
+    // } else {
+    //     error = -1.0 * sqrtf(detachment_front_location - detachment_front_desired_location);
+    // }
+    error = detachment_front_desired_location - detachment_front_location;
 
     // PI controller, using crude integral of the error
     if (error_lasttime < 0.0) {
@@ -68,8 +69,13 @@ void DetachmentController::transform(Options& state) {
     proportional_term = controller_p * error;
     source_multiplier = proportional_term + integral_term;
 
-    if ((source_multiplier < 0.0) && force_source_positive) {
-    source_multiplier = 0.0; // Don't remove particles
+    if (force_source_positive) {
+        if ((source_multiplier > 0.0) && (control_power)) {
+            source_multiplier = 0.0;
+        }
+        if ((source_multiplier < 0.0) && (not control_power)) {
+            source_multiplier = 0.0;
+        }
     }
 
     error_last = error;
@@ -95,7 +101,7 @@ void DetachmentController::transform(Options& state) {
         BoutReal scaling_factor = stringToReal(trimmed_scaling_factor);
 
         if (control_power) {
-            add(state["species"][trimmed_species]["energy_source"], scaling_factor * source_multiplier * source_shape);
+            add(state["species"][trimmed_species]["energy_source"], -1.0 * scaling_factor * source_multiplier * source_shape);
         } else {
             add(state["species"][trimmed_species]["density_source"], scaling_factor * source_multiplier * source_shape);
         }
