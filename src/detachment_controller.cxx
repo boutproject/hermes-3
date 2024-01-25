@@ -12,23 +12,6 @@ void DetachmentController::transform(Options& state) {
     auto time = get<BoutReal>(state["time"]);
 
     BoutReal closest = INFINITY;
-    
-    
-    // detachment_front_index = mesh->yend;
-
-    // Iterate over all y points
-    // BOUT_FOR_SERIAL(i, electron_density.getRegion("RGN_NOBNDRY")) {
-    //     BoutReal N_neutral = neutral_density[i];
-    //     BoutReal N_electron = electron_density[i];
-    //     BoutReal test = fabs(N_neutral - N_electron);
-
-    //     if (
-    //          ((test < closest) && (N_neutral > N_electron))
-    //     ) {
-    //         closest = test;
-    //         detachment_front_index = i.y();
-    //     }
-    // }
 
     // Set the initial value so that if no point has Nn > Ne, the detachment front is
     // at the target.
@@ -60,7 +43,6 @@ void DetachmentController::transform(Options& state) {
     } else {
         error = -1.0 * sqrtf(detachment_front_location - detachment_front_desired_location);
     }
-    // error = detachment_front_desired_location - detachment_front_location;
 
     // PI controller, using crude integral of the error
     if (error_lasttime < 0.0) {
