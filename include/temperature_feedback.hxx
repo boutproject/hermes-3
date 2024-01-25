@@ -76,7 +76,7 @@ struct TemperatureFeedback : public Component {
     source_shape =
       (alloptions[std::string("P") + name]["source_shape"]
         .doc("Source term in ddt(P" + name + std::string("). Units [Pa/s], note P = 2/3 E."))
-        .as<BoutReal>()
+        .withDefault(Field3D(0.0))
       )  / (SPnorm);
 
     diagnose = options["diagnose"]
