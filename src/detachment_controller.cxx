@@ -36,13 +36,7 @@ void DetachmentController::transform(Options& state) {
         }
 
     }
-
-    // Control on the sqrt of the distance
-    if (detachment_front_desired_location >= detachment_front_location) {
-        error = sqrtf(detachment_front_desired_location - detachment_front_location);
-    } else {
-        error = -1.0 * sqrtf(detachment_front_location - detachment_front_desired_location);
-    }
+    error = detachment_front_desired_location - detachment_front_location;
 
     // PI controller, using crude integral of the error
     if (error_lasttime < 0.0) {

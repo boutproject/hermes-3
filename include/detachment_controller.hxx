@@ -34,6 +34,10 @@ struct DetachmentController : public Component {
       detachment_front_desired_location = connection_length - detachment_front_desired_location;
     }
     
+    if (set_location_relative_to_target) {
+        detachment_front_desired_location = connection_length - detachment_front_desired_location;
+    }
+    
     species_for_source_shape =
       detachment_controller_options["species_for_source_shape"]
       .doc("Which species to select the source_shape from?")
@@ -84,7 +88,7 @@ struct DetachmentController : public Component {
       source_shape =
         (options[std::string("P") + species_for_source_shape]["source_shape"]
           .doc("Source term in ddt(P" + species_for_source_shape + std::string("). Units [Pa/s], note P = 2/3 E."))
-          .as<BoutReal>()
+          .withDefault(Field3D(0.0))
         )  / (Pnorm * Omega_ci);
 
         source_units = "Pa / s";
@@ -94,11 +98,11 @@ struct DetachmentController : public Component {
       source_shape = 
         (options[std::string("N") + species_for_source_shape]["source_shape"]
           .doc("Source term in ddt(N" + species_for_source_shape + std::string("). Units [m^-3/s]"))
-          .as<BoutReal>()
+          .withDefault(Field3D(0.0))
         ) / (Nnorm * Omega_ci);
 
         source_units = "m^-3 / s";
-        source_conversion = Pnorm * Omega_ci;
+        source_conversion = Nnorm * Omega_ci;
 
     }
 
