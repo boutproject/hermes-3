@@ -2,6 +2,7 @@
 
 #include <bout/mesh.hxx>
 using bout::globals::mesh;
+#include <algorithm>  // Include for std::max
 
 void DetachmentController::transform(Options& state) {
 
@@ -36,7 +37,13 @@ void DetachmentController::transform(Options& state) {
         }
 
     }
-    error = detachment_front_desired_location - detachment_front_location;
+    if (error_on_log_distance) {
+        // Equivalent to taking log10(detachment_front_desired_location/detachment_front_location)
+        error = log10(std::max(connection_length - detachment_front_location, minval_for_log)) - 
+                log10(std::max(connection_length - detachment_front_desired_location, minval_for_log));
+    } else {
+        error = detachment_front_desired_location - detachment_front_location;
+    }
 
     // PI controller, using crude integral of the error
     if (error_lasttime < 0.0) {
@@ -45,10 +52,12 @@ void DetachmentController::transform(Options& state) {
     error_last = error;
     }
 
-    // Integrate using Trapezium rule
-    if (time > error_lasttime) { // Since time can decrease
-    error_integral += (time - error_lasttime) * 0.5 *
-        (error + error_last);
+    if (connection_length - detachment_front_location > minval_for_log) {
+        // Integrate using Trapezium rule
+        if (time > error_lasttime) { // Since time can decrease
+        error_integral += (time - error_lasttime) * 0.5 *
+            (error + error_last);
+        }
     }
 
     if ((error_integral < 0.0) && force_integral_positive) {

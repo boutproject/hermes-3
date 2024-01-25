@@ -22,21 +22,21 @@ struct DetachmentController : public Component {
 
     detachment_front_desired_location = 
       detachment_controller_options["detachment_front_desired_location"]
-      .doc("Desired location of the detachment front in m, relative to y=0 unless set_location_relative_to_target=true")
+      .doc("Desired location of the detachment front relative to the divertor target in [m].")
       .as<BoutReal>();
     
-    set_location_relative_to_target = 
-      detachment_controller_options["set_location_relative_to_target"]
-      .doc("Set detachment_front_location relative to target (y=-1) if true, else relative to upstream (y=0)")
-      .withDefault<bool>(true);
+    // Convert from distance to target into the y coordinate.
+    detachment_front_desired_location = connection_length - detachment_front_desired_location;
 
-    if (set_location_relative_to_target) {
-      detachment_front_desired_location = connection_length - detachment_front_desired_location;
-    }
+    error_on_log_distance = 
+      detachment_controller_options["error_on_log_distance"]
+      .doc("If true, calculate the difference in log-space instead of linear space. Equivalent to taking log10(detachment_front_desired_location/detachment_front_location).")
+      .withDefault<bool>(false);
     
-    if (set_location_relative_to_target) {
-        detachment_front_desired_location = connection_length - detachment_front_desired_location;
-    }
+    minval_for_log = 
+      detachment_controller_options["minval_for_log"]
+      .doc("A floor value used instead of 0 when evaluating error_on_log_distance.")
+      .withDefault<BoutReal>(1E-12);
 
     exponential_control = 
       detachment_controller_options["exponential_control"]
@@ -194,9 +194,10 @@ private:
   std::list<std::string> scaling_factors_list; ///< Factor to apply
 
   BoutReal detachment_front_desired_location;
-  bool set_location_relative_to_target;
+  bool error_on_log_distance;
   bool exponential_control;
   bool control_power;
+  BoutReal minval_for_log;
 
   std::string species_for_source_shape;
   std::string neutral_species;
