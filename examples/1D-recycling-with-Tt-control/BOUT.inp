@@ -1,0 +1,211 @@
+# 1D system with:
+#  - no-flow boundary on lower Y (i.e. outboard midplane)
+#  - sheath boundary on upper Y (i.e. divertor target)
+#  - Evolving electron and ion species
+#  - heat conduction
+#  - Uniform source of heat and particles throughout region above the X-point
+#  - Non-uniform grid, packed towards the divertor target
+#  - Recycling of ions as atoms
+#  - Ionisation of neutrals as ions
+#  - Charge exchange between neutrals and ions
+#  - Feedback control of upstream density
+
+# This is the number of output time-steps to write out
+nout = 400
+# This is the interval between writing output time-steps (solver timestep is automatic)
+# Normalisation: see BOUT++ docs
+timestep = 5000
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+# 1D simulation, use "y" as the dimension along the fieldline
+nx = 1
+ny = 400   # Resolution along field-line
+nz = 1
+
+length = 30           # Length of the domain in meters
+length_xpt = 10   # Length from midplane to X-point [m] (i.e. this is where the source ends)
+
+dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing — grid refinement near the divertor target (which is where the interesting
+# stuff happens)
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+# Calculate where the source ends in grid index (i.e. at the X-point)
+source = length_xpt / length
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+# Index for separatrix. Doesn't have any effect in 1D.
+ixseps1 = -1
+ixseps2 = -1
+
+[hermes]
+# Evolve ion density, ion and electron pressure, then calculate force on ions due
+# to electron pressure by using electron force balance.
+# N.B. The ordering of components matters!! Need to put dependent quantities after
+# the components that they depend on.
+# If this is wrong, you'll get a runtime error (about non-existant variables)
+components = (d+, d, e,
+              sheath_boundary, collisions, recycling, reactions,
+              electron_force_balance, neutral_parallel_diffusion)
+
+loadmetric = false       # Use Rxy, Bpxy etc?
+normalise_metric = true  # Normalise the input metric?
+
+# Normalisation parameters
+Nnorm = 1e19 #particles per cubic metre
+Bnorm = 1 #tesla
+Tnorm = 100 #electron-volts
+
+[solver]
+type = beuler  # Backward Euler steady-state solver
+snes_type = newtonls
+ksp_type = gmres
+max_nonlinear_iterations = 10
+lag_jacobian = 500
+atol = 1e-7
+rtol = 1e-5
+
+[sheath_boundary]
+# Set a sheath boundary condition at which the ends of the field-line
+lower_y = false
+upper_y = true
+
+[neutral_parallel_diffusion]
+
+dneut = 10   # (B / Bpol)^2 in neutral diffusion terms
+
+####################################
+
+[d+]  # Deuterium ions
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary, upstream_density_feedback)
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+charge = 1
+AA = 2 # atomic mass number in amu
+
+# Density controller will force the upstream density towards this value
+density_upstream = 1e19  # Upstream density [m^-3]
+density_source_positive = false  # Force source to be > 0?
+# Check Hermes-3 documentation for how this source works
+density_controller_p = 5e2
+density_controller_i = 1e-2
+
+thermal_conduction = true  # in evolve_pressure
+
+diagnose = true
+
+recycle_as = d
+target_recycle = true  # Target recycling on
+target_recycle_energy = 3.5  # Franck-Condon dissociation energy
+target_recycle_multiplier = 1  # Recycling fraction
+
+[Nd+]
+# Initial condition for ion density.
+# Constant initial condition, but you could decide to write an expression in
+# terms of grid location and other variables
+# i.e. function = (y / (2 * pi) - 1)
+function = 1
+
+source_shape = H(mesh:y_xpt - y) * 1e20 # Feedback controller source shape
+
+[Pd+]
+
+# Initial condition for ion pressure (in terms of hermes:Nnorm * hermes:Tnorm)
+function = 1
+
+[NVd+]
+
+function = 0
+
+####################################
+
+[d]  # Deuterium atoms
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary)
+
+charge = 0
+# Neutral mass in amu
+AA = 2
+
+thermal_conduction = true
+# Save variable to file
+diagnose = true
+
+[Nd]
+
+# Initial condition for neutral density
+function = 0.001
+
+[Pd]
+
+# Initial condition for neutral pressure
+function = 0.0001
+
+####################################
+
+[e] # Electrons
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary, temperature_feedback
+
+noflow_upper_y = false
+
+charge = -1
+AA = 1/1836 # Electron mass in amu
+
+# What temperature should the controller aim for?
+temperature_setpoint = 10.0
+# If true, the controller will adjust the power source so the target temperature is at
+# temperature_setpoint, and if false (default) it will instead control the upstream
+# temperature towards temperature_setpoint
+control_target_temperature = true
+# If true, force the power source to be >= 0. Usually desirable for the power source.
+temperature_source_positive = true
+# Check Hermes-3 documentation for how this source works. These are the "proportional"
+# and "integral" scalars for the controller.
+temperature_controller_p = 1e1
+temperature_controller_i = 1e-2
+
+# Rather than having independent controllers for each species, we often want to control
+# just one species and set the others in terms of that species. This (somewhat complicated)
+# section lets you do just that. In species_for_temperature_feedback, you set which species
+# should have the PI-calculated source applied to them (in this case, the electrons and the
+# deuterium ions). Then, in scaling_factors_for_temperature_feedback, you can set how much
+# of the source you want to give to each species. Here, we're setting Pd = Pe, but you
+# could feasibly want to set something like Pd+ = 0.5 * Pe, in which case you'd set 
+# >>> scaling_factors_for_temperature_feedback = 1.0, 0.5
+# Note: the order of species_for_temperature_feedback must match the order of
+#       scaling_factors_for_temperature_feedback!!
+species_for_temperature_feedback = e, d+
+scaling_factors_for_temperature_feedback = 1.0, 1.0
+
+thermal_conduction = true  # in evolve_pressure
+diagnose = true
+
+[Pe]
+
+# Input power flux to electrons in W/m^2
+function = `Pd+:function`  # Same as ion pressure initially
+
+# Input power flux to electron in W/m^2
+powerflux = 2.5e7
+
+source_shape = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
+####################################
+
+[recycling]
+
+# What species should be recycled?
+species = d+
+
+[reactions]
+type = (
+        d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
+        d + d+ -> d+ + d,     # Charge exchange
+       )
