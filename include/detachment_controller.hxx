@@ -33,10 +33,25 @@ struct DetachmentController : public Component {
       .doc("If true, calculate the difference in log-space instead of linear space. Equivalent to taking log10(detachment_front_desired_location/detachment_front_location).")
       .withDefault<bool>(false);
     
-    minval_for_log = 
-      detachment_controller_options["minval_for_log"]
-      .doc("A floor value used instead of 0 when evaluating error_on_log_distance.")
+    log_floor = 
+      detachment_controller_options["log_floor"]
+      .doc("A small number used as a floor value when evaluating logs.")
       .withDefault<BoutReal>(1E-12);
+    
+    min_time_for_change = 
+      detachment_controller_options["min_time_for_change"]
+      .doc("Minimum time change before updating derivative and integral terms.")
+      .withDefault<BoutReal>(1E-12);
+    
+    min_error_for_change = 
+      detachment_controller_options["min_error_for_change"]
+      .doc("Minimum error change before updating derivative and integral terms.")
+      .withDefault<BoutReal>(1E-12);
+    
+    integral_threshold = 
+      detachment_controller_options["integral_threshold"]
+      .doc("Don't add to the integral if the error is above this value.")
+      .withDefault<BoutReal>(INFINITY);
 
     exponential_control = 
       detachment_controller_options["exponential_control"]
@@ -62,7 +77,10 @@ struct DetachmentController : public Component {
                                .withDefault(1e-2);
     controller_i = detachment_controller_options["detachment_controller_i"]
                                .doc("Feedback controller integral (i) parameter")
-                               .withDefault(1e-3);
+                               .withDefault(0.0);
+    controller_d = detachment_controller_options["detachment_controller_d"]
+                               .doc("Feedback controller derivative (d) parameter")
+                               .withDefault(0.0);
 
     force_integral_positive = detachment_controller_options["force_integral_positive"]
                                     .doc("Force integral term to be positive?")
@@ -167,6 +185,31 @@ struct DetachmentController : public Component {
           {{"time_dimension", "t"},
            {"long_name", "integral feedback term"},
            {"source", "detachment_controller"}});
+      
+      set_with_attrs(
+          state[std::string("detachment_control_src_d")], derivative_term,
+          {{"time_dimension", "t"},
+           {"long_name", "derivative feedback term"},
+           {"source", "detachment_controller"}});
+      
+      set_with_attrs(
+          state[std::string("detachment_control_src_p")], controller_p,
+          {{"time_dimension", "t"},
+          {"long_name", "proportional constant"},
+          {"source", "detachment_controller"}});
+
+      
+      set_with_attrs(
+          state[std::string("detachment_control_src_i")], controller_i,
+          {{"time_dimension", "t"},
+           {"long_name", "integral constant"},
+           {"source", "detachment_controller"}});
+      
+      set_with_attrs(
+          state[std::string("detachment_control_src_d")], controller_d,
+          {{"time_dimension", "t"},
+           {"long_name", "derivative constant"},
+           {"source", "detachment_controller"}});
 
     }
   }
@@ -197,7 +240,9 @@ private:
   bool error_on_log_distance;
   bool exponential_control;
   bool control_power;
-  BoutReal minval_for_log;
+  BoutReal log_floor;
+  BoutReal min_time_for_change;
+  BoutReal min_error_for_change;
 
   std::string species_for_source_shape;
   std::string neutral_species;
@@ -206,13 +251,18 @@ private:
   bool force_source_positive;   ///< Force source to be positive?
 
   BoutReal connection_length;
-  BoutReal controller_p, controller_i; ///< PI controller parameters
+  BoutReal controller_p, controller_i, controller_d; ///< PID controller parameters
+  BoutReal integral_threshold;
+  
   BoutReal error;
   BoutReal error_integral{0.0}; ///< Time integral of the error
+  BoutReal error_derivative{0.0};
 
   // Terms used in Trapezium rule integration of error
-  BoutReal error_lasttime{-1.0};
-  BoutReal error_last{0.0};
+  BoutReal previous_time{-1.0};
+  BoutReal previous_error{0.0};
+  BoutReal previous_error_integral{0.0};
+  BoutReal previous_error_derivative{0.0};
 
   Field3D source_shape; ///< This shape source is scaled up and down
   Field3D detachment_source_feedback;
@@ -220,9 +270,8 @@ private:
   BoutReal source_conversion;
 
   BoutReal detachment_front_location{0.0};
-  int detachment_front_index{0};
   BoutReal source_multiplier; ///< Factor to multiply source
-  BoutReal proportional_term, integral_term; ///< Components of resulting source for diagnostics
+  BoutReal proportional_term, integral_term, derivative_term; ///< Components of resulting source for diagnostics
 
   bool diagnose; ///< Output diagnostic information?
 };
