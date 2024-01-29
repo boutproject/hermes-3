@@ -15,11 +15,11 @@ void DetachmentController::transform(Options& state) {
     Coordinates *coord = mesh->getCoordinates();
 
     bool first_time = (previous_time < 0.0);
-    auto time = get<BoutReal>(state["time"]) / Omega_ci;
+    auto time = get<BoutReal>(state["time"]);
     if (first_time) {
         previous_time = time;
     }
-    bool time_changed = (fabs(time - previous_time) > min_time_for_change);
+    bool state_changed = (fabs(time - previous_time) > min_time_for_change);
 
     // Set the initial value so that if no point has Nn > Ne, the detachment front is
     // at the target.
@@ -53,8 +53,10 @@ void DetachmentController::transform(Options& state) {
     if (first_time) {
         previous_error = error;
     }
-    bool error_changed = (fabs(error - previous_error) > min_error_for_change);
-    if ((time_changed) && (error_changed)) {
+
+    bool state_changed = state_changed && (fabs(error - previous_error) > min_error_for_change);
+
+    if (state_changed) {
         std::cout << "Time: " << time << std::endl;
         std::cout << "Time change: " << (time - previous_time) << std::endl;
         std::cout << "Error: " << error << std::endl;
@@ -64,16 +66,16 @@ void DetachmentController::transform(Options& state) {
     // Integrate using Trapezium rule
     // Don't add to the integral when error is larger than integral_threshold. This prevents excessive
     // integral windup.
-    if ((time_changed) && (error_changed) && (fabs(error) < integral_threshold)) {
+    if (state_changed && (fabs(error) < integral_threshold)) {
         error_integral = previous_error_integral + (time - previous_time) * 0.5 * (error + previous_error);
         std::cout << "Error integral: " << error_integral << std::endl;
     } else {
         error_integral = previous_error_integral;
     }
 
-    if (fabs(error) > derivative_threshold) {
+    if (fabs(error) < derivative_threshold) {
         error_derivative = 0.0;
-    } else if ((time_changed) && (error_changed)) {
+    } else if (state_changed) {
         error_derivative = (error - previous_error) / (time - previous_time);
         std::cout << "Error derivative: " << error_derivative << std::endl;
     } else {
@@ -97,7 +99,7 @@ void DetachmentController::transform(Options& state) {
     }
 
     // Only update the error when the time has changed
-    if ((time_changed) && (error_changed)) {
+    if (state_changed) {
         previous_error = error;
         previous_time = time;
         previous_error_integral = error_integral;
