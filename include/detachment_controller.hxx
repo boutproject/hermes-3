@@ -14,7 +14,7 @@ struct DetachmentController : public Component {
     const auto& units = options["units"];
     BoutReal Tnorm = get<BoutReal>(units["eV"]);
     BoutReal Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
-    BoutReal Omega_ci = 1. / get<BoutReal>(units["seconds"]);
+    Omega_ci = 1. / get<BoutReal>(units["seconds"]);
 
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
@@ -52,6 +52,11 @@ struct DetachmentController : public Component {
       detachment_controller_options["integral_threshold"]
       .doc("Don't add to the integral if the error is above this value.")
       .withDefault<BoutReal>(INFINITY);
+    
+    derivative_threshold = 
+      detachment_controller_options["derivative_threshold"]
+      .doc("Don't apply the derivative correction if the error is above this value.")
+      .withDefault<BoutReal>(INFINITY);
 
     exponential_control = 
       detachment_controller_options["exponential_control"]
@@ -82,13 +87,6 @@ struct DetachmentController : public Component {
                                .doc("Feedback controller derivative (d) parameter")
                                .withDefault(0.0);
 
-    force_integral_positive = detachment_controller_options["force_integral_positive"]
-                                    .doc("Force integral term to be positive?")
-                                    .withDefault<bool>(false);
-    force_source_positive = detachment_controller_options["force_source_positive"]
-                                  .doc("Force source to be positive?")
-                                  .withDefault<bool>(true);
-    
     species_list = strsplit(detachment_controller_options["species_for_detachment_feedback"]
                                   .doc("Comma-separated list of species to apply the PI-controlled source to")
                                   .as<std::string>(),
@@ -191,22 +189,41 @@ struct DetachmentController : public Component {
           {{"time_dimension", "t"},
            {"long_name", "derivative feedback term"},
            {"source", "detachment_controller"}});
+
+      set_with_attrs(
+          state[std::string("error")], error,
+          {{"time_dimension", "t"},
+          {"long_name", "error"},
+          {"source", "detachment_controller"}});
+
       
       set_with_attrs(
-          state[std::string("detachment_control_src_p")], controller_p,
+          state[std::string("error_integral")], error_integral,
+          {{"time_dimension", "t"},
+           {"long_name", "error integral"},
+           {"source", "detachment_controller"}});
+      
+      set_with_attrs(
+          state[std::string("error_derivative")], error_derivative,
+          {{"time_dimension", "t"},
+           {"long_name", "error derivative"},
+           {"source", "detachment_controller"}});
+      
+      set_with_attrs(
+          state[std::string("controller_p")], controller_p,
           {{"time_dimension", "t"},
           {"long_name", "proportional constant"},
           {"source", "detachment_controller"}});
 
       
       set_with_attrs(
-          state[std::string("detachment_control_src_i")], controller_i,
+          state[std::string("controller_i")], controller_i,
           {{"time_dimension", "t"},
            {"long_name", "integral constant"},
            {"source", "detachment_controller"}});
       
       set_with_attrs(
-          state[std::string("detachment_control_src_d")], controller_d,
+          state[std::string("controller_d")], controller_d,
           {{"time_dimension", "t"},
            {"long_name", "derivative constant"},
            {"source", "detachment_controller"}});
@@ -226,9 +243,18 @@ struct DetachmentController : public Component {
       error_integral = state["detachment_control_error_integral"].as<BoutReal>();
     }
 
+    if (first and state.isSet("detachment_control_error_derivative")) {
+      first = false;
+      error_derivative = state["detachment_control_error_derivative"].as<BoutReal>();
+    }
+
     // Save the detachment control error integral
     set_with_attrs(state["detachment_control_error_integral"], error_integral,
                    {{"long_name", "detachment control error integral"},
+                    {"source", "detachment_controller"}});
+    
+    set_with_attrs(state["detachment_control_error_derivative"], error_derivative,
+                   {{"long_name", "detachment control error derivative"},
                     {"source", "detachment_controller"}});
   }
 
@@ -243,16 +269,15 @@ private:
   BoutReal log_floor;
   BoutReal min_time_for_change;
   BoutReal min_error_for_change;
+  BoutReal Omega_ci;
 
   std::string species_for_source_shape;
   std::string neutral_species;
   
-  bool force_integral_positive; ///< Force integral term to be positive?
-  bool force_source_positive;   ///< Force source to be positive?
-
   BoutReal connection_length;
   BoutReal controller_p, controller_i, controller_d; ///< PID controller parameters
   BoutReal integral_threshold;
+  BoutReal derivative_threshold;
   
   BoutReal error;
   BoutReal error_integral{0.0}; ///< Time integral of the error

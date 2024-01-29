@@ -8,14 +8,14 @@ using bout::globals::mesh;
 
 void DetachmentController::transform(Options& state) {
 
-    // std::cout << std::fixed << std::setprecision(15);
+    std::cout << std::fixed << std::setprecision(15);
 
     Field3D neutral_density = getNoBoundary<Field3D>(state["species"][neutral_species]["density"]);
     Field3D electron_density = getNoBoundary<Field3D>(state["species"]["e"]["density"]);
     Coordinates *coord = mesh->getCoordinates();
 
     bool first_time = (previous_time < 0.0);
-    auto time = get<BoutReal>(state["time"]);
+    auto time = get<BoutReal>(state["time"]) / Omega_ci;
     if (first_time) {
         previous_time = time;
     }
@@ -54,55 +54,46 @@ void DetachmentController::transform(Options& state) {
         previous_error = error;
     }
     bool error_changed = (fabs(error - previous_error) > min_error_for_change);
+    if ((time_changed) && (error_changed)) {
+        std::cout << "Time: " << time << std::endl;
+        std::cout << "Time change: " << (time - previous_time) << std::endl;
+        std::cout << "Error: " << error << std::endl;
+        std::cout << "Error change: " << (error - previous_error) << std::endl;
+    }
 
     // Integrate using Trapezium rule
     // Don't add to the integral when error is larger than integral_threshold. This prevents excessive
     // integral windup.
     if ((time_changed) && (error_changed) && (fabs(error) < integral_threshold)) {
-        // std::cout << "Calculating error_integral..." << std::endl;
-        // std::cout << "Current time: " << time << std::endl;
-        // std::cout << "Last time: " << previous_time << std::endl;
-        // std::cout << "Current error: " << error << std::endl;
-        // std::cout << "Last error: " << previous_error << std::endl;
-        // std::cout << "Error trapz: " << (0.5 * (error + previous_error)) << std::endl;
-        // std::cout << "Change in time: " << (time - previous_time) << std::endl;
         error_integral = previous_error_integral + (time - previous_time) * 0.5 * (error + previous_error);
-        // std::cout << "Previous error integral: " << previous_error_integral << std::endl;
-        // std::cout << "Error integral: " << error_integral << std::endl;
+        std::cout << "Error integral: " << error_integral << std::endl;
     } else {
         error_integral = previous_error_integral;
     }
-    if ((error_integral < 0.0) && force_integral_positive) { // Limit error_integral to be >= 0
-        error_integral = 0.0;
-    }
 
-    if ((time_changed) && (error_changed)) {
-        std::cout << "Calculating error_derivative..." << std::endl;
-        // std::cout << "Current time: " << time << std::endl;
-        // std::cout << "Last time: " << previous_time << std::endl;
-        // std::cout << "Current error: " << error << std::endl;
-        // std::cout << "Last error: " << previous_error << std::endl;
-        std::cout << "Change in error: " << (error - previous_error) << std::endl;
-        std::cout << "Change in time: " << (time - previous_time) << std::endl;
+    if (fabs(error) > derivative_threshold) {
+        error_derivative = 0.0;
+    } else if ((time_changed) && (error_changed)) {
         error_derivative = (error - previous_error) / (time - previous_time);
         std::cout << "Error derivative: " << error_derivative << std::endl;
     } else {
         error_derivative = previous_error_derivative;
     }
+    
 
     // Calculate source from combination of error and integral
-    proportional_term = controller_p * error;
-    integral_term = controller_i * error_integral;
-    derivative_term = controller_d * error_derivative;
-    source_multiplier = proportional_term + integral_term + derivative_term;
-
-    if (force_source_positive) {
-        if ((source_multiplier < 0.0) && (control_power)) {
-            source_multiplier = 0.0;
-        }
-        if ((source_multiplier > 0.0) && (not control_power)) {
-            source_multiplier = 0.0;
-        }
+    if (exponential_control) {
+        proportional_term = controller_p * pow(10, error);
+        integral_term = controller_i * pow(10, error_integral);
+        derivative_term = -1.0 * controller_d * pow(10, error_derivative);
+        source_multiplier = proportional_term + integral_term + derivative_term;
+        detachment_source_feedback = source_shape * source_multiplier;
+    } else {
+        proportional_term = controller_p * error;
+        integral_term = controller_i * error_integral;
+        derivative_term = -1.0 * controller_d * error_derivative;
+        source_multiplier = proportional_term + integral_term + derivative_term;
+        detachment_source_feedback = source_shape * source_multiplier;
     }
 
     // Only update the error when the time has changed
@@ -119,12 +110,6 @@ void DetachmentController::transform(Options& state) {
 
     auto species_it = species_list.begin();
     auto scaling_factor_it = scaling_factors_list.begin();
-
-    if (exponential_control) {
-        detachment_source_feedback = source_shape * pow(10, source_multiplier);
-    } else {
-        detachment_source_feedback = source_shape * source_multiplier;
-    }
 
     while (species_it != species_list.end() && scaling_factor_it != scaling_factors_list.end()) {
         std::string trimmed_species = trim(*species_it);
