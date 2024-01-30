@@ -30,17 +30,25 @@ struct DetachmentController : public Component {
       .doc("Initial source multiplier for controller.")
       .withDefault<BoutReal>(0.0);
 
-    previous_control = initial_control;
-
     min_time_for_change = 
       detachment_controller_options["min_time_for_change"]
       .doc("Minimum time change before changing the control signal.")
+      .withDefault<BoutReal>(1E-12);
+    
+    min_error_for_change = 
+      detachment_controller_options["min_error_for_change"]
+      .doc("Minimum error change before changing the control signal.")
       .withDefault<BoutReal>(1E-12);
     
     minval_for_source_multiplier = 
       detachment_controller_options["minval_for_source_multiplier"]
       .doc("Minimum value for the control signal.")
       .withDefault<BoutReal>(-INFINITY);
+    
+    maxval_for_source_multiplier = 
+      detachment_controller_options["maxval_for_source_multiplier"]
+      .doc("Maximum value for the control signal.")
+      .withDefault<BoutReal>(INFINITY);
     
     species_for_source_shape =
       detachment_controller_options["species_for_source_shape"]
@@ -52,6 +60,14 @@ struct DetachmentController : public Component {
       .doc("Which is the main neutral species?")
       .as<std::string>();
     
+    inverted_response = detachment_controller_options["inverted_response"]
+                               .doc("Multiply the controller gain by -1. This is desired for power control: increasing error means the detachment front is moving upstream, which requires an increase in power to stabilise.")
+                               .withDefault(true);
+    if (inverted_response) {
+      response_sign = -1.0;
+    } else {
+      response_sign = 1.0;
+    }
     controller_gain = detachment_controller_options["controller_gain"]
                                .doc("Detachment controller gain (Kc parameter)")
                                .withDefault(0.0);
@@ -165,16 +181,42 @@ struct DetachmentController : public Component {
 
   void restartVars(Options& state) override {
     AUTO_TRACE();
-
-    if (first_step and state.isSet("detachment_control_src_mult")) {
-      first_step = false;
-      control = state["detachment_control_src_mult"].as<BoutReal>();
-    }
-
-    set_with_attrs(state["detachment_control_src_mult"], control,
-                      {{"long_name", "detachment control source multiplier"},
-                      {"source", "detachment_controller"}});
     
+    if (first_step) {
+      if (state.isSet("detachment_control_src_mult")) {
+        control = state["detachment_control_src_mult"].as<BoutReal>();
+      }
+      if (state.isSet("detachment_control_previous_control")) {
+        previous_control = state["detachment_control_previous_control"].as<BoutReal>();
+      }
+      if (state.isSet("detachment_control_previous_time")) {
+        previous_time = state["detachment_control_previous_time"].as<BoutReal>();
+      }
+      if (state.isSet("detachment_control_previous_error")) {
+        previous_error = state["detachment_control_previous_error"].as<BoutReal>();
+      }
+      if (state.isSet("detachment_control_previous_derivative")) {
+        previous_derivative = state["detachment_control_previous_derivative"].as<BoutReal>();
+      }
+
+      first_step = false;
+    }
+    
+    set_with_attrs(state["detachment_control_src_mult"], control,
+                   {{"long_name", "detachment control source multiplier"},
+                   {"source", "detachment_controller"}});
+    set_with_attrs(state["detachment_control_previous_control"], previous_control,
+                   {{"long_name", "detachment control previous_control"},
+                   {"source", "detachment_controller"}});
+    set_with_attrs(state["detachment_control_previous_time"], previous_time,
+                   {{"long_name", "detachment control previous_time"},
+                   {"source", "detachment_controller"}});
+    set_with_attrs(state["detachment_control_previous_error"], previous_error,
+                   {{"long_name", "detachment control previous_error"},
+                   {"source", "detachment_controller"}});
+    set_with_attrs(state["detachment_control_previous_derivative"], previous_derivative,
+                   {{"long_name", "detachment control previous_derivative"},
+                   {"source", "detachment_controller"}});
   }
 
   private:
@@ -182,8 +224,11 @@ struct DetachmentController : public Component {
     BoutReal connection_length;
     BoutReal detachment_front_setpoint;
     BoutReal min_time_for_change;
+    BoutReal min_error_for_change;
     std::string species_for_source_shape;
     std::string neutral_species;
+    bool inverted_response;
+    BoutReal response_sign;
     BoutReal controller_gain;
     BoutReal initial_control;
     BoutReal integral_time;
@@ -195,6 +240,7 @@ struct DetachmentController : public Component {
     BoutReal source_conversion;
     bool diagnose;
     BoutReal minval_for_source_multiplier;
+    BoutReal maxval_for_source_multiplier;
     int debug;
 
     // System state variables for output

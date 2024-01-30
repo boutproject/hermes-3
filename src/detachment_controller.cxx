@@ -29,66 +29,71 @@ void DetachmentController::transform(Options& state) {
             break;
         }
     }
-    if ((not detachment_front_found) && (first_step)) {
-        control = initial_control;
-    } else {
+    // Part 2: compute the response
+    if (first_step) {
+        previous_control = initial_control;
         first_step = false;
-        detachment_front_location = connection_length - distance_from_upstream;
+    }
+    detachment_front_location = connection_length - distance_from_upstream;
         
-        // Part 2: compute the response
-        BoutReal time = get<BoutReal>(state["time"]);
-        error = detachment_front_setpoint - detachment_front_location;
+    BoutReal time = get<BoutReal>(state["time"]);
+    error = detachment_front_setpoint - detachment_front_location;
 
-        change_in_time = time - previous_time;
-        change_in_error = error - previous_error;
-        derivative = change_in_error / change_in_time;
-        change_in_derivative = derivative - previous_derivative;
+    change_in_time = time - previous_time;
+    change_in_error = error - previous_error;
+    derivative = change_in_error / change_in_time;
+    change_in_derivative = derivative - previous_derivative;
 
-        change_in_control = controller_gain * (
-            change_in_error
-            + (change_in_time / integral_time) * error
-            + (derivative_time / change_in_time) * change_in_derivative
-        );
-        
-        if (debug >= 2) {
-            std::cout << std::endl;
-            std::cout << "detachment_front_location: " << detachment_front_location << std::endl;
-            std::cout << "time: " << time << std::endl;
-            std::cout << "error: " << error << std::endl;
-            std::cout << "change_in_time: " << change_in_time << std::endl;
-            std::cout << "change_in_error: " << change_in_error << std::endl;
-            std::cout << "control: " << error << std::endl;
-            std::cout << std::endl;
-        }
-
-        if (change_in_time > min_time_for_change) {
-            if (debug >= 1) {
-                std::cout << std::endl;
-                std::cout << "detachment_front_location: " << detachment_front_location << std::endl;
-                std::cout << "time: " << time << std::endl;
-                std::cout << "error: " << error << std::endl;
-                std::cout << "change_in_time: " << change_in_time << std::endl;
-                std::cout << "change_in_error: " << change_in_error << std::endl;
-                std::cout << "derivative: " << derivative << std::endl;
-                std::cout << "change_in_derivative: " << change_in_derivative << std::endl;
-                std::cout << "change_in_control: " << change_in_control << std::endl;
-                std::cout << "control: " << control << std::endl;
-                std::cout << "previous_error: " << previous_error << std::endl;
-                std::cout << "previous_derivative: " << previous_derivative << std::endl;
-                std::cout << "previous_control: " << previous_control << std::endl;
-                std::cout << std::endl;
-            }
-
-            control = previous_control + change_in_control;
-            previous_error = error;
-            previous_derivative = derivative;
-            previous_control = control;
-        }
+    change_in_control = response_sign * controller_gain * (
+        change_in_error
+        + (change_in_time / integral_time) * error
+        + (derivative_time / change_in_time) * change_in_derivative
+    );
+    
+    if (debug >= 2) {
+        std::cout << std::endl;
+        std::cout << "detachment_front_location: " << detachment_front_location << std::endl;
+        std::cout << "time: " << time << std::endl;
+        std::cout << "error: " << error << std::endl;
+        std::cout << "change_in_time: " << change_in_time << std::endl;
+        std::cout << "change_in_error: " << change_in_error << std::endl;
+        std::cout << "control: " << error << std::endl;
+        std::cout << std::endl;
     }
 
+    if ((change_in_time > min_time_for_change) && (fabs(change_in_error) > min_error_for_change)) {
+        control = previous_control + change_in_control;
+        control = std::max(control, minval_for_source_multiplier);
+        control = std::min(control, maxval_for_source_multiplier);
+
+        previous_time = time;
+        previous_error = error;
+        previous_derivative = derivative;
+        previous_control = control;
+
+        if (debug >= 1) {
+            std::cout << std::endl;
+            std::cout << "detachment_front_location: " << detachment_front_location << std::endl;
+            std::cout << "previous_time:             " << previous_time << std::endl;
+            std::cout << "change_in_time:            " << change_in_time << std::endl;
+            std::cout << "time:                      " << time << std::endl;
+            std::cout << "previous_error:            " << previous_error << std::endl;
+            std::cout << "change_in_error:           " << change_in_error << std::endl;
+            std::cout << "error:                     " << error << std::endl;
+            std::cout << "previous_derivative:       " << previous_derivative << std::endl;
+            std::cout << "change_in_derivative:      " << change_in_derivative << std::endl;
+            std::cout << "derivative:                " << derivative << std::endl;
+            std::cout << "previous_control:          " << previous_control << std::endl;
+            std::cout << "change_in_control:         " << change_in_control << std::endl;
+            std::cout << "control:                   " << control << std::endl;
+            std::cout << std::endl;
+        }
+            
+    } else {
+        control = previous_control;
+    }
 
     // Part 3: Apply the source
-    control = std::max(control, minval_for_source_multiplier);
     detachment_source_feedback = control * source_shape;
 
     ASSERT2(std::isfinite(control));
