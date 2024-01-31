@@ -14,7 +14,8 @@ struct DetachmentController : public Component {
     const auto& units = options["units"];
     BoutReal Tnorm = get<BoutReal>(units["eV"]);
     BoutReal Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
-    BoutReal Omega_ci = 1. / get<BoutReal>(units["seconds"]);
+    BoutReal Omega_ci = 1.0 / get<BoutReal>(units["seconds"]);
+    time_normalisation = 1.0 / Omega_ci;
 
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
@@ -60,14 +61,19 @@ struct DetachmentController : public Component {
       .doc("Which is the main neutral species?")
       .as<std::string>();
     
-    inverted_response = detachment_controller_options["inverted_response"]
+    invert_response = detachment_controller_options["invert_response"]
                                .doc("Multiply the controller gain by -1. This is desired for power control: increasing error means the detachment front is moving upstream, which requires an increase in power to stabilise.")
                                .withDefault(true);
-    if (inverted_response) {
+    if (invert_response) {
       response_sign = -1.0;
     } else {
       response_sign = 1.0;
     }
+
+    ignore_restart = detachment_controller_options["ignore_restart"]
+                               .doc("Ignore the restart file (mainly useful for development).")
+                               .withDefault(false);
+
     controller_gain = detachment_controller_options["controller_gain"]
                                .doc("Detachment controller gain (Kc parameter)")
                                .withDefault(0.0);
@@ -182,7 +188,7 @@ struct DetachmentController : public Component {
   void restartVars(Options& state) override {
     AUTO_TRACE();
     
-    if (first_step) {
+    if ((first_step) && (not ignore_restart)) {
       if (state.isSet("detachment_control_src_mult")) {
         control = state["detachment_control_src_mult"].as<BoutReal>();
       }
@@ -227,7 +233,8 @@ struct DetachmentController : public Component {
     BoutReal min_error_for_change;
     std::string species_for_source_shape;
     std::string neutral_species;
-    bool inverted_response;
+    bool invert_response;
+    bool ignore_restart;
     BoutReal response_sign;
     BoutReal controller_gain;
     BoutReal initial_control;
@@ -261,6 +268,7 @@ struct DetachmentController : public Component {
     BoutReal previous_error{0.0};
     BoutReal previous_derivative{0.0};
     bool first_step{true};
+    BoutReal time_normalisation;
 
 };
 
