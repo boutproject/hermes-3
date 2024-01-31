@@ -23,21 +23,61 @@ void DetachmentController::transform(Options& state) {
     // Looking at https://github.com/boutproject/xhermes/blob/main/xhermes/accessors.py#L58
     // dy from the first two cells cancels out
     for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+        BoutReal x1 = distance_from_upstream; //y position of previous point
+        BoutReal a1 = neutral_density(0, j-1, 0); //Nn at previous point
+        BoutReal b1 = electron_density(0, j-1, 0); //Ne at previous point
+
         distance_from_upstream = distance_from_upstream + 0.5 * coord->dy(0, j-1, 0) + 0.5 * coord->dy(0, j, 0);
-        if (neutral_density(0, j, 0) > electron_density(0, j, 0)) {
+        
+        BoutReal x2 = distance_from_upstream; //y position of current point
+        BoutReal a2 = neutral_density(0, j, 0); //Nn at current point
+        BoutReal b2 = electron_density(0, j, 0); //Ne at current point
+        
+        // Find the first point where Nn > Ne, when iterating from upstream to target
+        if (a2 > b2) {
+            
+            // Compute the x-value of the intersection between
+            // (x1, a1)->(x2, a2) and (x1, b1)->(x2, b2)
+            // https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+            // 
+            // This gives a linear approximation of the detachment front position
+            distance_from_upstream = ((x1*b2 - b1*x2) - (x1*a2 - a1*x2)) / ((a1 - a2) - (b1 - b2));
+
+            // Make sure that the linear interpolation returns a point between the two sample
+            // points
+            ASSERT2(((x1 < distance_from_upstream) && (distance_from_upstream < x2)));
+
+            if (debug >= 2) {
+                std::cout << std::endl;
+                std::cout << "x1: " << x1 << std::endl;
+                std::cout << "x2: " << x2 << std::endl;
+                std::cout << "xp: " << distance_from_upstream << std::endl;
+                std::cout << "a1: " << a1 << std::endl;
+                std::cout << "a2: " << a2 << std::endl;
+                std::cout << "b1: " << b1 << std::endl;
+                std::cout << "b2: " << b2 << std::endl;
+                std::cout << "detachment_front_location: " << (connection_length - distance_from_upstream) << std::endl;
+                std::cout << std::endl;
+            }
+
             detachment_front_found = true;
             break;
         }
     }
+    // Apply corrections in case something funky happened in the linear interpolation
+    distance_from_upstream = std::max(distance_from_upstream, 0.0);
+    distance_from_upstream = std::min(distance_from_upstream, connection_length);
+
+    detachment_front_location = connection_length - distance_from_upstream;
+
     // Part 2: compute the response
     if (first_step) {
         previous_control = initial_control;
         first_step = false;
     }
-    detachment_front_location = connection_length - distance_from_upstream;
     
     // Get the time in real units
-    BoutReal time = get<BoutReal>(state["time"]) * time_normalisation;
+    time = get<BoutReal>(state["time"]) * time_normalisation;
     // Compute the error
     error = detachment_front_setpoint - detachment_front_location;
 

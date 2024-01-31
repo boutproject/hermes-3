@@ -257,6 +257,7 @@ struct DetachmentController : public Component {
     BoutReal change_in_error;
     BoutReal change_in_time;
 
+    BoutReal time;
     BoutReal error;
     BoutReal derivative;
     BoutReal change_in_derivative;
