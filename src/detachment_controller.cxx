@@ -79,23 +79,22 @@ void DetachmentController::transform(Options& state) {
     // Get the time in real units
     time = get<BoutReal>(state["time"]) * time_normalisation;
     // Compute the error
-    error = (1 - alpha_e) * (detachment_front_setpoint - detachment_front_location) + alpha_e * previous_error;
+    error = detachment_front_setpoint - detachment_front_location;
 
     if (((time - previous_time) > min_time_for_change) && (fabs(error - previous_error) > min_error_for_change)) {
         change_in_time = time - previous_time;
+        change_in_error = error - previous_error;
 
-        change_in_error = (1.0 - alpha_de) * (error - previous_error) + alpha_de * previous_change_in_error;
-        derivative = change_in_error / change_in_time;
-
-        change_in_derivative = (1.0 - alpha_d2e) * (derivative - previous_derivative) - alpha_d2e * previous_change_in_derivative;
+        derivative = ((1.0 - alpha_de) * change_in_error + alpha_de * previous_change_in_error) / change_in_time;
+        change_in_derivative = (1.0 - alpha_d2e) * (derivative - previous_derivative) + alpha_d2e * previous_change_in_derivative;
 
         change_in_control = response_sign * controller_gain * (
             change_in_error
             + (change_in_time / integral_time) * error
-            + (derivative_time / change_in_time) * change_in_derivative
+            + derivative_time * change_in_derivative
         );
 
-        control = (1.0 - alpha_c) * (previous_control + change_in_control) + alpha_c * previous_change_in_control;
+        control = previous_control + change_in_control;
         control = std::max(control, minval_for_source_multiplier);
         control = std::min(control, maxval_for_source_multiplier);
 
@@ -123,10 +122,7 @@ void DetachmentController::transform(Options& state) {
         previous_control = control;
         previous_change_in_error = change_in_error;
         previous_change_in_derivative = change_in_derivative;
-        previous_change_in_control = change_in_control;
-            
-    } else {
-        control = previous_control;
+    
     }
 
     // Part 3: Apply the source
