@@ -43,11 +43,7 @@ void DetachmentController::transform(Options& state) {
             // This gives a linear approximation of the detachment front position
             distance_from_upstream = ((x1*b2 - b1*x2) - (x1*a2 - a1*x2)) / ((a1 - a2) - (b1 - b2));
 
-            // Make sure that the linear interpolation returns a point between the two sample
-            // points
-            ASSERT2(((x1 < distance_from_upstream) && (distance_from_upstream < x2)));
-
-            if (debug >= 2) {
+            if (debug >= 3) {
                 std::cout << std::endl;
                 std::cout << "x1: " << x1 << std::endl;
                 std::cout << "x2: " << x2 << std::endl;
@@ -60,6 +56,11 @@ void DetachmentController::transform(Options& state) {
                 std::cout << std::endl;
             }
 
+            // Make sure that the linear interpolation returns a point between the two sample
+            // points
+            ASSERT2(((x1 < distance_from_upstream) && (distance_from_upstream < x2)));
+            ASSERT2(((0.0 < distance_from_upstream) && (distance_from_upstream < connection_length)));
+
             detachment_front_found = true;
             break;
         }
@@ -71,9 +72,14 @@ void DetachmentController::transform(Options& state) {
     detachment_front_location = connection_length - distance_from_upstream;
 
     // Part 2: compute the response
-    if (first_step) {
+    if (set_initial_control) {
         previous_control = initial_control;
-        first_step = false;
+        if (exponential_control) {
+            source_multiplier = pow(10.0, initial_control);
+        } else {
+            source_multiplier = initial_control;
+        }
+        set_initial_control = false;
     }
     
     // Get the time in real units
@@ -83,7 +89,11 @@ void DetachmentController::transform(Options& state) {
 
     if (((time - previous_time) > min_time_for_change) && (fabs(error - previous_error) > min_error_for_change)) {
         change_in_time = time - previous_time;
-        change_in_error = error - previous_error;
+        if (evaluate_derivatives) {
+            change_in_error = error - previous_error;
+        } else {
+            change_in_error = 0.0;
+        }
 
         derivative = ((1.0 - alpha_de) * change_in_error + alpha_de * previous_change_in_error) / change_in_time;
         change_in_derivative = (1.0 - alpha_d2e) * (derivative - previous_derivative) + alpha_d2e * previous_change_in_derivative;
@@ -97,6 +107,13 @@ void DetachmentController::transform(Options& state) {
         control = previous_control + change_in_control;
         control = std::max(control, minval_for_source_multiplier);
         control = std::min(control, maxval_for_source_multiplier);
+
+        if (exponential_control) {
+            source_multiplier = pow(10.0, control);
+        } else {
+            source_multiplier = control;
+        }
+        detachment_source_feedback = source_multiplier * source_shape;
 
         if (debug >= 1) {
             std::cout << std::endl;
@@ -113,23 +130,23 @@ void DetachmentController::transform(Options& state) {
             std::cout << "previous_control:          " << previous_control << std::endl;
             std::cout << "change_in_control:         " << change_in_control << std::endl;
             std::cout << "control:                   " << control << std::endl;
+            std::cout << "source_multiplier:         " << source_multiplier << std::endl;
             std::cout << std::endl;
         }
 
         previous_time = time;
         previous_error = error;
+        
         previous_derivative = derivative;
         previous_control = control;
         previous_change_in_error = change_in_error;
         previous_change_in_derivative = change_in_derivative;
     
+        evaluate_derivatives = true;
     }
-
-    // Part 3: Apply the source
-    detachment_source_feedback = control * source_shape;
-
     ASSERT2(std::isfinite(control));
 
+    // Part 3: Apply the source
     auto species_it = species_list.begin();
     auto scaling_factor_it = scaling_factors_list.begin();
 

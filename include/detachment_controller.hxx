@@ -70,6 +70,10 @@ struct DetachmentController : public Component {
       response_sign = 1.0;
     }
 
+    exponential_control = detachment_controller_options["exponential_control"]
+                               .doc("Set the source multiplier equal to pow(10, control)")
+                               .withDefault(false);
+
     ignore_restart = detachment_controller_options["ignore_restart"]
                                .doc("Ignore the restart file (mainly useful for development).")
                                .withDefault(false);
@@ -84,11 +88,6 @@ struct DetachmentController : public Component {
                                .doc("Detachment controller detachment time")
                                .withDefault(0.0);
     
-    alpha_e = detachment_controller_options["alpha_e"]
-                               .doc("Smoothing factor applied to the error (low pass filter, must be between 0 and 1)")
-                               .withDefault(0.0);
-    ASSERT2(((alpha_e >= 0.0) && (alpha_e <= 1.0)));
-    
     alpha_de = detachment_controller_options["alpha_de"]
                                .doc("Smoothing factor applied to the change_in_error (low pass filter, must be between 0 and 1)")
                                .withDefault(0.0);
@@ -98,11 +97,6 @@ struct DetachmentController : public Component {
                                .doc("Smoothing factor applied to the change_in_derivative (low pass filter, must be between 0 and 1)")
                                .withDefault(0.0);
     ASSERT2(((alpha_d2e >= 0.0) && (alpha_d2e <= 1.0)));
-
-    alpha_c = detachment_controller_options["alpha_c"]
-                               .doc("Smoothing factor applied to the change_in_control (low pass filter, must be between 0 and 1)")
-                               .withDefault(0.0);
-    ASSERT2(((alpha_c >= 0.0) && (alpha_c <= 1.0)));
 
     species_list = strsplit(detachment_controller_options["species_list"]
                                   .doc("Comma-separated list of species to apply the PI-controlled source to")
@@ -160,7 +154,7 @@ struct DetachmentController : public Component {
 
       // The source multiplier is time-dependent, but dimensionless
       // because all the units are attached to the shape
-      set_with_attrs(state[std::string("detachment_control_src_mult")], control,
+      set_with_attrs(state[std::string("detachment_control_src_mult")], source_multiplier,
                      {{"time_dimension", "t"},
                       {"long_name", "detachment control source multiplier"},
                       {"source", "detachment_controller"}});
@@ -208,10 +202,17 @@ struct DetachmentController : public Component {
   void restartVars(Options& state) override {
     AUTO_TRACE();
     
-    if ((first_step) && (not ignore_restart)) {
+    if ((set_initial_control) && (not ignore_restart)) {
       if (state.isSet("detachment_control_src_mult")) {
         control = state["detachment_control_src_mult"].as<BoutReal>();
       }
+
+      if (exponential_control) {
+          source_multiplier = pow(10.0, control);
+      } else {
+          source_multiplier = control;
+      }
+
       if (state.isSet("detachment_control_previous_control")) {
         previous_control = state["detachment_control_previous_control"].as<BoutReal>();
       }
@@ -230,11 +231,8 @@ struct DetachmentController : public Component {
       if (state.isSet("detachment_control_previous_change_in_derivative")) {
         previous_change_in_derivative = state["detachment_control_previous_change_in_derivative"].as<BoutReal>();
       }
-      if (state.isSet("detachment_control_previous_change_in_control")) {
-        previous_change_in_control = state["detachment_control_previous_change_in_control"].as<BoutReal>();
-      }
 
-      first_step = false;
+      set_initial_control = false;
     }
     
     set_with_attrs(state["detachment_control_src_mult"], control, {{"source", "detachment_controller"}});
@@ -244,7 +242,6 @@ struct DetachmentController : public Component {
     set_with_attrs(state["detachment_control_previous_derivative"], previous_derivative, {{"source", "detachment_controller"}});
     set_with_attrs(state["detachment_control_previous_change_in_error"], previous_change_in_error, {{"source", "detachment_controller"}});
     set_with_attrs(state["detachment_control_previous_change_in_derivative"], previous_change_in_derivative, {{"source", "detachment_controller"}});
-    set_with_attrs(state["detachment_control_previous_change_in_control"], previous_change_in_control, {{"source", "detachment_controller"}});
   }
 
   private:
@@ -257,6 +254,7 @@ struct DetachmentController : public Component {
     std::string neutral_species;
     bool invert_response;
     bool ignore_restart;
+    bool exponential_control;
     BoutReal response_sign;
     BoutReal controller_gain;
     BoutReal initial_control;
@@ -270,11 +268,10 @@ struct DetachmentController : public Component {
     bool diagnose;
     BoutReal minval_for_source_multiplier;
     BoutReal maxval_for_source_multiplier;
-    BoutReal alpha_e;
     BoutReal alpha_de;
     BoutReal alpha_d2e;
-    BoutReal alpha_c;
     int debug;
+    BoutReal source_multiplier;
 
     // System state variables for output
     Field3D detachment_source_feedback;
@@ -296,9 +293,9 @@ struct DetachmentController : public Component {
     BoutReal previous_derivative{0.0};
     BoutReal previous_change_in_error{0.0};
     BoutReal previous_change_in_derivative{0.0};
-    BoutReal previous_change_in_control{0.0};
-    bool first_step{true};
     BoutReal time_normalisation;
+    bool set_initial_control{true};
+    bool evaluate_derivatives{false};
 
 };
 
