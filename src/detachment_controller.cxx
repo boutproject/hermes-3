@@ -72,15 +72,6 @@ void DetachmentController::transform(Options& state) {
     detachment_front_location = connection_length - distance_from_upstream;
 
     // Part 2: compute the response
-    if (set_initial_control) {
-        previous_control = initial_control;
-        if (exponential_control) {
-            source_multiplier = pow(10.0, initial_control);
-        } else {
-            source_multiplier = initial_control;
-        }
-        set_initial_control = false;
-    }
     
     // Get the time in real units
     time = get<BoutReal>(state["time"]) * time_normalisation;
@@ -105,15 +96,14 @@ void DetachmentController::transform(Options& state) {
         );
 
         control = previous_control + change_in_control;
+        
+        source_multiplier = exponential_control ? pow(10.0, control) : control;
         control = std::max(control, minval_for_source_multiplier);
         control = std::min(control, maxval_for_source_multiplier);
-
         if (exponential_control) {
-            source_multiplier = pow(10.0, control);
-        } else {
-            source_multiplier = control;
+            // Apply the limits back onto the control variable.
+            control = log10(source_multiplier);
         }
-        detachment_source_feedback = source_multiplier * source_shape;
 
         if (debug >= 1) {
             std::cout << std::endl;
@@ -147,6 +137,15 @@ void DetachmentController::transform(Options& state) {
     ASSERT2(std::isfinite(control));
 
     // Part 3: Apply the source
+    if (debug >= 2) {
+        std::cout << std::endl;
+        std::cout << "detachment_front_location: " << detachment_front_location << std::endl;
+        std::cout << "time:                      " << time << std::endl;
+        std::cout << "control:                   " << control << std::endl;
+        std::cout << "source_multiplier:         " << source_multiplier << std::endl;
+        std::cout << std::endl;
+    }
+    detachment_source_feedback = source_multiplier * source_shape;
     auto species_it = species_list.begin();
     auto scaling_factor_it = scaling_factors_list.begin();
 

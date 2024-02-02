@@ -26,11 +26,6 @@ struct DetachmentController : public Component {
       .doc("How far from the divertor target should the detachment front be? (in m).")
       .as<BoutReal>();
     
-    initial_control = 
-      detachment_controller_options["initial_control"]
-      .doc("Initial source multiplier for controller.")
-      .withDefault<BoutReal>(0.0);
-
     min_time_for_change = 
       detachment_controller_options["min_time_for_change"]
       .doc("Minimum time change before changing the control signal.")
@@ -64,15 +59,23 @@ struct DetachmentController : public Component {
     invert_response = detachment_controller_options["invert_response"]
                                .doc("Multiply the controller gain by -1. This is desired for power control: increasing error means the detachment front is moving upstream, which requires an increase in power to stabilise.")
                                .withDefault(true);
-    if (invert_response) {
-      response_sign = -1.0;
-    } else {
-      response_sign = 1.0;
-    }
+    response_sign = invert_response ? -1.0 : 1.0;
 
     exponential_control = detachment_controller_options["exponential_control"]
                                .doc("Set the source multiplier equal to pow(10, control)")
                                .withDefault(false);
+    
+    source_multiplier = detachment_controller_options["initial_source_multiplier"]
+      .doc("Initial source multiplier for controller.")
+      .withDefault<BoutReal>(1.0);
+    
+    if (exponential_control) {
+      ASSERT2(source_multiplier > 0.0);
+      previous_control = log10(source_multiplier);
+    } else {
+      previous_control = source_multiplier;
+    }
+    control = previous_control;
 
     ignore_restart = detachment_controller_options["ignore_restart"]
                                .doc("Ignore the restart file (mainly useful for development).")
@@ -197,21 +200,20 @@ struct DetachmentController : public Component {
                     {"standard_name", "change_in_control"},
                     {"long_name", "detachment control change_in_control"},
                     {"source", "detachment_controller"}});
+      set_with_attrs(state[std::string("detachment_control_control")], control,
+                     {{"time_dimension", "t"},
+                      {"long_name", "detachment control response"},
+                      {"source", "detachment_controller"}});
   }}
 
   void restartVars(Options& state) override {
     AUTO_TRACE();
     
-    if ((set_initial_control) && (not ignore_restart)) {
+    if ((initialise) && (not ignore_restart)) {
       if (state.isSet("detachment_control_src_mult")) {
         control = state["detachment_control_src_mult"].as<BoutReal>();
       }
-
-      if (exponential_control) {
-          source_multiplier = pow(10.0, control);
-      } else {
-          source_multiplier = control;
-      }
+      source_multiplier = exponential_control ? pow(10.0, control) : control;
 
       if (state.isSet("detachment_control_previous_control")) {
         previous_control = state["detachment_control_previous_control"].as<BoutReal>();
@@ -232,7 +234,7 @@ struct DetachmentController : public Component {
         previous_change_in_derivative = state["detachment_control_previous_change_in_derivative"].as<BoutReal>();
       }
 
-      set_initial_control = false;
+      initialise = false;
     }
     
     set_with_attrs(state["detachment_control_src_mult"], control, {{"source", "detachment_controller"}});
@@ -257,7 +259,6 @@ struct DetachmentController : public Component {
     bool exponential_control;
     BoutReal response_sign;
     BoutReal controller_gain;
-    BoutReal initial_control;
     BoutReal integral_time;
     BoutReal derivative_time;
     std::list<std::string> species_list; ///< Which species to apply the factor to
@@ -294,7 +295,7 @@ struct DetachmentController : public Component {
     BoutReal previous_change_in_error{0.0};
     BoutReal previous_change_in_derivative{0.0};
     BoutReal time_normalisation;
-    bool set_initial_control{true};
+    bool initialise{true};
     bool evaluate_derivatives{false};
 
 };
