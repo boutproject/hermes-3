@@ -25,6 +25,7 @@
 
 #include "include/adas_carbon.hxx"
 #include "include/adas_neon.hxx"
+#include "include/adas_lithium.hxx"
 #include "include/amjuel_helium.hxx"
 #include "include/amjuel_hyd_ionisation.hxx"
 #include "include/amjuel_hyd_recombination.hxx"
