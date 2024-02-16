@@ -34,7 +34,7 @@ struct DetachmentController : public Component {
     min_error_for_change = 
       detachment_controller_options["min_error_for_change"]
       .doc("Minimum error change before changing the control signal.")
-      .withDefault<BoutReal>(1E-12);
+      .withDefault<BoutReal>(0.0);
     
     minval_for_source_multiplier = 
       detachment_controller_options["minval_for_source_multiplier"]
@@ -56,11 +56,21 @@ struct DetachmentController : public Component {
       .doc("Which is the main neutral species?")
       .as<std::string>();
     
-    invert_response = detachment_controller_options["invert_response"]
-                               .doc("Multiply the controller gain by -1. This is desired for power control: increasing error means the detachment front is moving upstream, which requires an increase in power to stabilise.")
-                               .withDefault(true);
-    response_sign = invert_response ? -1.0 : 1.0;
-
+    actuator = 
+      detachment_controller_options["actuator"]
+      .doc("What should we adjust to control the detachment front position (options are 'power' or 'particles' (either main species or impurity))?")
+      .as<std::string>(); 
+    if (actuator == "power") {
+      control_mode = control_power;
+      response_sign = -1.0;
+    } else if (actuator == "particles") {
+      control_mode = control_particles;
+      response_sign = 1.0;
+    } else {
+      // Invalid control mode
+      ASSERT2(false);
+    }
+    
     exponential_control = detachment_controller_options["exponential_control"]
                                .doc("Set the source multiplier equal to pow(10, control)")
                                .withDefault(false);
@@ -86,7 +96,7 @@ struct DetachmentController : public Component {
                                .withDefault(0.0);
     integral_time = detachment_controller_options["integral_time"]
                                .doc("Detachment controller integral time")
-                               .withDefault(0.0);
+                               .withDefault(INFINITY);
     derivative_time = detachment_controller_options["derivative_time"]
                                .doc("Detachment controller detachment time")
                                .withDefault(0.0);
@@ -114,14 +124,25 @@ struct DetachmentController : public Component {
       throw BoutException("DetachmentController: species_list length doesn't match scaling_factors length. Need 1 scaling factor per species.");
     }
 
-    source_shape =
-      (options[std::string("P") + species_for_source_shape]["source_shape"]
-        .doc("Source term in ddt(P" + species_for_source_shape + std::string("). Units [Pa/s], note P = 2/3 E."))
-        .withDefault(Field3D(0.0))
-      )  / (Pnorm * Omega_ci);
+    if (control_mode == control_power) {
+      source_shape =
+        (options[std::string("P") + species_for_source_shape]["source_shape"]
+          .doc("Source term in ddt(P" + species_for_source_shape + std::string("). Units [Pa/s], note P = 2/3 E."))
+          .withDefault(Field3D(0.0))
+        )  / (Pnorm * Omega_ci);
 
-    source_units = "Pa / s";
-    source_conversion = Pnorm * Omega_ci;
+      source_units = "Pa / s";
+      source_conversion = Pnorm * Omega_ci;
+    } else if (control_mode == control_particles) {
+      source_shape =
+        (options[std::string("N") + species_for_source_shape]["source_shape"]
+          .doc("Source term in ddt(N" + species_for_source_shape + std::string("). Units [m^-3/s]"))
+          .withDefault(Field3D(0.0))
+        ) / (Nnorm * Omega_ci);
+
+      source_units = "m^-3 / s";
+      source_conversion = Nnorm * Omega_ci;
+    }
 
     diagnose = detachment_controller_options["diagnose"]
                   .doc("Output additional diagnostics?")
@@ -254,7 +275,7 @@ struct DetachmentController : public Component {
     BoutReal min_error_for_change;
     std::string species_for_source_shape;
     std::string neutral_species;
-    bool invert_response;
+    std::string actuator;
     bool ignore_restart;
     bool exponential_control;
     BoutReal response_sign;
@@ -273,6 +294,10 @@ struct DetachmentController : public Component {
     BoutReal alpha_d2e;
     int debug;
     BoutReal source_multiplier;
+
+    int control_mode;
+    int control_power{0};
+    int control_particles{1};
 
     // System state variables for output
     Field3D detachment_source_feedback;

@@ -78,7 +78,21 @@ void DetachmentController::transform(Options& state) {
     // Compute the error
     error = detachment_front_setpoint - detachment_front_location;
 
-    if (((time - previous_time) > min_time_for_change) && (fabs(error - previous_error) > min_error_for_change)) {
+    if ((((time - previous_time) > min_time_for_change) and (debug >= 2)) or (debug >= 3)) {
+        output << endl;
+        output << "detachment_front_location: " << detachment_front_location << endl;
+        output << "time:                      " << time << endl;
+        output << "time - previous_time       " << (time - previous_time) << endl;
+        output << "error - previous_error     " << (error - previous_error) << endl;
+        output << "time threshold met?        " << ((time - previous_time) >= min_time_for_change) << endl;
+        output << "error threshold met?       " << (fabs(error - previous_error) >= min_error_for_change) << endl;
+        output << "reevaluate control?        " << (((time - previous_time) >= min_time_for_change) && (fabs(error - previous_error) >= min_error_for_change)) << endl;
+        output << "control:                   " << control << endl;
+        output << "source_multiplier:         " << source_multiplier << endl;
+        output << endl;
+    }
+
+    if (((time - previous_time) >= min_time_for_change) && (fabs(error - previous_error) >= min_error_for_change)) {
         change_in_time = time - previous_time;
         if (evaluate_derivatives) {
             change_in_error = error - previous_error;
@@ -106,22 +120,22 @@ void DetachmentController::transform(Options& state) {
         }
 
         if (debug >= 1) {
-            std::cout << std::endl;
-            std::cout << "detachment_front_location: " << detachment_front_location << std::endl;
-            std::cout << "previous_time:             " << previous_time << std::endl;
-            std::cout << "change_in_time:            " << change_in_time << std::endl;
-            std::cout << "time:                      " << time << std::endl;
-            std::cout << "previous_error:            " << previous_error << std::endl;
-            std::cout << "change_in_error:           " << change_in_error << std::endl;
-            std::cout << "error:                     " << error << std::endl;
-            std::cout << "previous_derivative:       " << previous_derivative << std::endl;
-            std::cout << "change_in_derivative:      " << change_in_derivative << std::endl;
-            std::cout << "derivative:                " << derivative << std::endl;
-            std::cout << "previous_control:          " << previous_control << std::endl;
-            std::cout << "change_in_control:         " << change_in_control << std::endl;
-            std::cout << "control:                   " << control << std::endl;
-            std::cout << "source_multiplier:         " << source_multiplier << std::endl;
-            std::cout << std::endl;
+            output << endl;
+            output << "detachment_front_location: " << detachment_front_location << endl;
+            output << "previous_time:             " << previous_time << endl;
+            output << "change_in_time:            " << change_in_time << endl;
+            output << "time:                      " << time << endl;
+            output << "previous_error:            " << previous_error << endl;
+            output << "change_in_error:           " << change_in_error << endl;
+            output << "error:                     " << error << endl;
+            output << "previous_derivative:       " << previous_derivative << endl;
+            output << "change_in_derivative:      " << change_in_derivative << endl;
+            output << "derivative:                " << derivative << endl;
+            output << "previous_control:          " << previous_control << endl;
+            output << "change_in_control:         " << change_in_control << endl;
+            output << "control:                   " << control << endl;
+            output << "source_multiplier:         " << source_multiplier << endl;
+            output << endl;
         }
 
         previous_time = time;
@@ -137,14 +151,6 @@ void DetachmentController::transform(Options& state) {
     ASSERT2(std::isfinite(control));
 
     // Part 3: Apply the source
-    if (debug >= 2) {
-        std::cout << std::endl;
-        std::cout << "detachment_front_location: " << detachment_front_location << std::endl;
-        std::cout << "time:                      " << time << std::endl;
-        std::cout << "control:                   " << control << std::endl;
-        std::cout << "source_multiplier:         " << source_multiplier << std::endl;
-        std::cout << std::endl;
-    }
     detachment_source_feedback = source_multiplier * source_shape;
     auto species_it = species_list.begin();
     auto scaling_factor_it = scaling_factors_list.begin();
@@ -161,7 +167,13 @@ void DetachmentController::transform(Options& state) {
 
         BoutReal scaling_factor = stringToReal(trimmed_scaling_factor);
 
-        add(state["species"][trimmed_species]["energy_source"], scaling_factor * detachment_source_feedback);
+        if (control_mode == control_power) {
+            add(state["species"][trimmed_species]["energy_source"], scaling_factor * detachment_source_feedback);
+        } else if (control_mode == control_particles) {
+            add(state["species"][trimmed_species]["density_source"], scaling_factor * detachment_source_feedback);
+        } else {
+            ASSERT2(false);
+        }
 
         ++species_it;
         ++scaling_factor_it;
