@@ -37,6 +37,11 @@ struct DetachmentController : public Component {
     if (set_location_relative_to_target) {
         detachment_front_desired_location = connection_length - detachment_front_desired_location;
     }
+
+    exponential_control = 
+      detachment_controller_options["exponential_control"]
+      .doc("Raise the PI correction to the power of 10.")
+      .withDefault<bool>(false);
     
     species_for_source_shape =
       detachment_controller_options["species_for_source_shape"]
@@ -124,12 +129,6 @@ struct DetachmentController : public Component {
          {"long_name", "detachment front position"},
          {"source", "detachment_controller"}});
       
-      set_with_attrs(
-        state[std::string("detachment_front_index")], detachment_front_index,
-         {{"long_name", "detachment front grid index"},
-          {"time_dimension", "t"},
-          {"source", "detachment_controller"}});
-
       // Shape is not time-dependent and has units
       set_with_attrs(
           state[std::string("detachment_control_src_shape")], source_shape,
@@ -146,7 +145,7 @@ struct DetachmentController : public Component {
                       {"long_name", "detachment control source multiplier"},
                       {"source", "detachment_controller"}});
 
-      set_with_attrs(state[std::string("detachment_source_feedback")], source_shape * source_multiplier,
+      set_with_attrs(state[std::string("detachment_source_feedback")], detachment_source_feedback,
                       {{"time_dimension", "t"},
                       {"units", source_units},
                       {"conversion", source_conversion},
@@ -196,6 +195,7 @@ private:
 
   BoutReal detachment_front_desired_location;
   bool set_location_relative_to_target;
+  bool exponential_control;
   bool control_power;
 
   std::string species_for_source_shape;
@@ -214,6 +214,7 @@ private:
   BoutReal error_last{0.0};
 
   Field3D source_shape; ///< This shape source is scaled up and down
+  Field3D detachment_source_feedback;
   std::string source_units;
   BoutReal source_conversion;
 

@@ -80,6 +80,12 @@ void DetachmentController::transform(Options& state) {
     auto species_it = species_list.begin();
     auto scaling_factor_it = scaling_factors_list.begin();
 
+    if (exponential_control) {
+        detachment_source_feedback = source_shape * pow(10, source_multiplier);
+    } else {
+        detachment_source_feedback = source_shape * source_multiplier;
+    }
+
     while (species_it != species_list.end() && scaling_factor_it != scaling_factors_list.end()) {
         std::string trimmed_species = trim(*species_it);
         std::string trimmed_scaling_factor = trim(*scaling_factor_it);
@@ -93,9 +99,9 @@ void DetachmentController::transform(Options& state) {
         BoutReal scaling_factor = stringToReal(trimmed_scaling_factor);
 
         if (control_power) {
-            add(state["species"][trimmed_species]["energy_source"], scaling_factor * source_multiplier * source_shape);
+            add(state["species"][trimmed_species]["energy_source"], scaling_factor * detachment_source_feedback);
         } else {
-            subtract(state["species"][trimmed_species]["density_source"], scaling_factor * source_multiplier * source_shape);
+            add(state["species"][trimmed_species]["density_source"], scaling_factor * detachment_source_feedback);
         }
 
         ++species_it;
