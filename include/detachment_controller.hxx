@@ -71,21 +71,10 @@ struct DetachmentController : public Component {
       ASSERT2(false);
     }
     
-    exponential_control = detachment_controller_options["exponential_control"]
-                               .doc("Set the source multiplier equal to pow(10, control)")
-                               .withDefault(false);
-    
-    source_multiplier = detachment_controller_options["initial_source_multiplier"]
+    control = detachment_controller_options["initial_source_multiplier"]
       .doc("Initial source multiplier for controller.")
       .withDefault<BoutReal>(1.0);
-    
-    if (exponential_control) {
-      ASSERT2(source_multiplier > 0.0);
-      previous_control = log10(source_multiplier);
-    } else {
-      previous_control = source_multiplier;
-    }
-    control = previous_control;
+    previous_control = control;
 
     ignore_restart = detachment_controller_options["ignore_restart"]
                                .doc("Ignore the restart file (mainly useful for development).")
@@ -178,7 +167,7 @@ struct DetachmentController : public Component {
 
       // The source multiplier is time-dependent, but dimensionless
       // because all the units are attached to the shape
-      set_with_attrs(state[std::string("detachment_control_src_mult")], source_multiplier,
+      set_with_attrs(state[std::string("detachment_control_src_mult")], control,
                      {{"time_dimension", "t"},
                       {"long_name", "detachment control source multiplier"},
                       {"source", "detachment_controller"}});
@@ -234,7 +223,6 @@ struct DetachmentController : public Component {
       if (state.isSet("detachment_control_src_mult")) {
         control = state["detachment_control_src_mult"].as<BoutReal>();
       }
-      source_multiplier = exponential_control ? pow(10.0, control) : control;
 
       if (state.isSet("detachment_control_previous_control")) {
         previous_control = state["detachment_control_previous_control"].as<BoutReal>();
@@ -277,7 +265,6 @@ struct DetachmentController : public Component {
     std::string neutral_species;
     std::string actuator;
     bool ignore_restart;
-    bool exponential_control;
     BoutReal response_sign;
     BoutReal controller_gain;
     BoutReal integral_time;
@@ -293,7 +280,6 @@ struct DetachmentController : public Component {
     BoutReal alpha_de;
     BoutReal alpha_d2e;
     int debug;
-    BoutReal source_multiplier;
 
     int control_mode;
     int control_power{0};

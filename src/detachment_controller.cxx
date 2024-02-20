@@ -88,7 +88,6 @@ void DetachmentController::transform(Options& state) {
         output << "error threshold met?       " << (fabs(error - previous_error) >= min_error_for_change) << endl;
         output << "reevaluate control?        " << (((time - previous_time) >= min_time_for_change) && (fabs(error - previous_error) >= min_error_for_change)) << endl;
         output << "control:                   " << control << endl;
-        output << "source_multiplier:         " << source_multiplier << endl;
         output << endl;
     }
 
@@ -111,13 +110,8 @@ void DetachmentController::transform(Options& state) {
 
         control = previous_control + change_in_control;
         
-        source_multiplier = exponential_control ? pow(10.0, control) : control;
         control = std::max(control, minval_for_source_multiplier);
         control = std::min(control, maxval_for_source_multiplier);
-        if (exponential_control) {
-            // Apply the limits back onto the control variable.
-            control = log10(source_multiplier);
-        }
 
         if (debug >= 1) {
             output << endl;
@@ -134,7 +128,6 @@ void DetachmentController::transform(Options& state) {
             output << "previous_control:          " << previous_control << endl;
             output << "change_in_control:         " << change_in_control << endl;
             output << "control:                   " << control << endl;
-            output << "source_multiplier:         " << source_multiplier << endl;
             output << endl;
         }
 
@@ -151,7 +144,7 @@ void DetachmentController::transform(Options& state) {
     ASSERT2(std::isfinite(control));
 
     // Part 3: Apply the source
-    detachment_source_feedback = source_multiplier * source_shape;
+    detachment_source_feedback = control * source_shape;
     auto species_it = species_list.begin();
     auto scaling_factor_it = scaling_factors_list.begin();
 
