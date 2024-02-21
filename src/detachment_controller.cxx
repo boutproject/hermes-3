@@ -86,29 +86,38 @@ void DetachmentController::transform(Options& state) {
         output << "error - previous_error     " << (error - previous_error) << endl;
         output << "time threshold met?        " << ((time - previous_time) >= min_time_for_change) << endl;
         output << "error threshold met?       " << (fabs(error - previous_error) >= min_error_for_change) << endl;
-        output << "reevaluate control?        " << (((time - previous_time) >= min_time_for_change) && (fabs(error - previous_error) >= min_error_for_change)) << endl;
+        output << "passed threshold time?     " << (time > settling_time) << endl;
+        output << "reevaluate control?        " << ((time > settling_time) && ((time - previous_time) >= min_time_for_change) && (fabs(error - previous_error) >= min_error_for_change)) << endl;
         output << "control:                   " << control << endl;
         output << endl;
     }
 
-    if (((time - previous_time) >= min_time_for_change) && (fabs(error - previous_error) >= min_error_for_change)) {
+    if ((time > settling_time) && ((time - previous_time) >= min_time_for_change) && (fabs(error - previous_error) >= min_error_for_change)) {
         change_in_time = time - previous_time;
-        if (evaluate_derivatives) {
-            change_in_error = error - previous_error;
-        } else {
-            change_in_error = 0.0;
-        }
-
+        change_in_error = first_step ? 0.0 : error - previous_error;
+            
         derivative = ((1.0 - alpha_de) * change_in_error + alpha_de * previous_change_in_error) / change_in_time;
         change_in_derivative = (1.0 - alpha_d2e) * (derivative - previous_derivative) + alpha_d2e * previous_change_in_derivative;
+        
+        error_integral = first_step ? 0.0 : error_integral + change_in_time * 0.5 * (error + previous_error);
 
-        change_in_control = response_sign * controller_gain * (
-            change_in_error
-            + (change_in_time / integral_time) * error
-            + derivative_time * change_in_derivative
-        );
+        if (velocity_form) {
+            change_in_control = response_sign * controller_gain * (
+                change_in_error
+                + (change_in_time / integral_time) * error
+                + derivative_time * change_in_derivative
+            );
 
-        control = previous_control + change_in_control;
+            control = previous_control + change_in_control;
+        } else {
+            control = control_offset + response_sign * controller_gain * (
+                error
+                + error_integral / integral_time
+                + derivative_time * derivative
+            );
+
+            change_in_control = control - previous_control;
+        }
         
         control = std::max(control, minval_for_source_multiplier);
         control = std::min(control, maxval_for_source_multiplier);
@@ -122,6 +131,7 @@ void DetachmentController::transform(Options& state) {
             output << "previous_error:            " << previous_error << endl;
             output << "change_in_error:           " << change_in_error << endl;
             output << "error:                     " << error << endl;
+            output << "error_integral:            " << error_integral << endl;
             output << "previous_derivative:       " << previous_derivative << endl;
             output << "change_in_derivative:      " << change_in_derivative << endl;
             output << "derivative:                " << derivative << endl;
@@ -139,7 +149,7 @@ void DetachmentController::transform(Options& state) {
         previous_change_in_error = change_in_error;
         previous_change_in_derivative = change_in_derivative;
     
-        evaluate_derivatives = true;
+        first_step = false;
     }
     ASSERT2(std::isfinite(control));
 

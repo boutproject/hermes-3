@@ -25,6 +25,10 @@ struct DetachmentController : public Component {
       detachment_controller_options["detachment_front_setpoint"]
       .doc("How far from the divertor target should the detachment front be? (in m).")
       .as<BoutReal>();
+
+    velocity_form = detachment_controller_options["velocity_form"]
+                               .doc("Use the velocity form if true (default) or the position form if false.")
+                               .withDefault(true);
     
     min_time_for_change = 
       detachment_controller_options["min_time_for_change"]
@@ -70,11 +74,19 @@ struct DetachmentController : public Component {
       // Invalid control mode
       ASSERT2(false);
     }
-    
-    control = detachment_controller_options["initial_source_multiplier"]
-      .doc("Initial source multiplier for controller.")
-      .withDefault<BoutReal>(1.0);
+
+    control = detachment_controller_options["initial_control"]
+        .doc("Initial value for the source multiplier.")
+        .withDefault<BoutReal>(1.0);
     previous_control = control;
+
+    control_offset = detachment_controller_options["control_offset"]
+        .doc("Expected control value when error equals zero.")
+        .withDefault<BoutReal>(1.0);
+
+    settling_time = detachment_controller_options["settling_time"]
+      .doc("Time taken to allow system to settle before switching on certain control terms (in seconds).")
+      .withDefault<BoutReal>(0.0);
 
     ignore_restart = detachment_controller_options["ignore_restart"]
                                .doc("Ignore the restart file (mainly useful for development).")
@@ -93,8 +105,6 @@ struct DetachmentController : public Component {
     alpha_de = detachment_controller_options["alpha_de"]
                                .doc("Smoothing factor applied to the change_in_error (low pass filter, must be between 0 and 1)")
                                .withDefault(0.0);
-    ASSERT2(((alpha_de >= 0.0) && (alpha_de <= 1.0)));
-    
     alpha_d2e = detachment_controller_options["alpha_d2e"]
                                .doc("Smoothing factor applied to the change_in_derivative (low pass filter, must be between 0 and 1)")
                                .withDefault(0.0);
@@ -180,6 +190,11 @@ struct DetachmentController : public Component {
                       {"long_name", "detachment control source"},
                       {"source", "detachment_controller"}});
       
+      set_with_attrs(state[std::string("detachment_control_error_integral")], error_integral,
+                    {{"time_dimension", "t"},
+                    {"standard_name", "error_integral"},
+                    {"long_name", "detachment control error integral"},
+                    {"source", "detachment_controller"}});
       set_with_attrs(state[std::string("detachment_control_change_in_error")], change_in_error,
                     {{"time_dimension", "t"},
                     {"standard_name", "change_in_error"},
@@ -227,6 +242,9 @@ struct DetachmentController : public Component {
       if (state.isSet("detachment_control_previous_control")) {
         previous_control = state["detachment_control_previous_control"].as<BoutReal>();
       }
+      if (state.isSet("detachment_control_error_integral")) {
+        error_integral = state["detachment_control_error_integral"].as<BoutReal>();
+      }
       if (state.isSet("detachment_control_previous_time")) {
         previous_time = state["detachment_control_previous_time"].as<BoutReal>();
       }
@@ -244,10 +262,12 @@ struct DetachmentController : public Component {
       }
 
       initialise = false;
+      first_step = false;
     }
     
     set_with_attrs(state["detachment_control_src_mult"], control, {{"source", "detachment_controller"}});
     set_with_attrs(state["detachment_control_previous_control"], previous_control, {{"source", "detachment_controller"}});
+    set_with_attrs(state["detachment_control_error_integral"], error_integral, {{"source", "detachment_controller"}});
     set_with_attrs(state["detachment_control_previous_time"], previous_time, {{"source", "detachment_controller"}});
     set_with_attrs(state["detachment_control_previous_error"], previous_error, {{"source", "detachment_controller"}});
     set_with_attrs(state["detachment_control_previous_derivative"], previous_derivative, {{"source", "detachment_controller"}});
@@ -265,6 +285,7 @@ struct DetachmentController : public Component {
     std::string neutral_species;
     std::string actuator;
     bool ignore_restart;
+    bool velocity_form;
     BoutReal response_sign;
     BoutReal controller_gain;
     BoutReal integral_time;
@@ -279,6 +300,8 @@ struct DetachmentController : public Component {
     BoutReal maxval_for_source_multiplier;
     BoutReal alpha_de;
     BoutReal alpha_d2e;
+    BoutReal control_offset;
+    BoutReal settling_time;
     int debug;
 
     int control_mode;
@@ -286,20 +309,21 @@ struct DetachmentController : public Component {
     int control_particles{1};
 
     // System state variables for output
-    Field3D detachment_source_feedback;
-    BoutReal detachment_front_location;
-    BoutReal control;
-    BoutReal change_in_error;
-    BoutReal change_in_time;
+    Field3D detachment_source_feedback{0.0};
+    BoutReal detachment_front_location{0.0};
+    BoutReal control{0.0};
+    BoutReal change_in_error{0.0};
+    BoutReal change_in_time{0.0};
 
-    BoutReal time;
-    BoutReal error;
-    BoutReal derivative;
-    BoutReal change_in_derivative;
-    BoutReal change_in_control;
+    BoutReal time{0.0};
+    BoutReal error{0.0};
+    BoutReal derivative{0.0};
+    BoutReal change_in_derivative{0.0};
+    BoutReal change_in_control{0.0};
 
     // Private system state variables for calculations
-    BoutReal previous_control;
+    BoutReal previous_control{0.0};
+    BoutReal error_integral{0.0};
     BoutReal previous_time{0.0};
     BoutReal previous_error{0.0};
     BoutReal previous_derivative{0.0};
@@ -307,7 +331,7 @@ struct DetachmentController : public Component {
     BoutReal previous_change_in_derivative{0.0};
     BoutReal time_normalisation;
     bool initialise{true};
-    bool evaluate_derivatives{false};
+    bool first_step{true};
 
 };
 
