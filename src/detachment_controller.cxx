@@ -5,6 +5,29 @@ using bout::globals::mesh;
 #include <algorithm>  // Include for std::max
 #include <iostream>
 #include <iomanip>
+#include <numeric>
+
+BoutReal calculateGradient(const std::vector<BoutReal>& x, const std::vector<BoutReal>& y) {
+    size_t N = x.size();
+    BoutReal sum_x = std::accumulate(x.begin(), x.end(), 0.0);
+    BoutReal sum_y = std::accumulate(y.begin(), y.end(), 0.0);
+    BoutReal sum_xy = 0.0;
+    BoutReal sum_x_squared = 0.0;
+    
+    for (size_t i = 0; i < N; ++i) {
+        sum_xy += x[i] * y[i];
+        sum_x_squared += x[i] * x[i];
+    }
+    
+    BoutReal numerator = N * sum_xy - sum_x * sum_y;
+    BoutReal denominator = N * sum_x_squared - sum_x * sum_x;
+    
+    if (denominator == 0) {
+        return 0.0; // Handle division by zero or return an error code
+    }
+
+    return numerator / denominator;
+}
 
 void DetachmentController::transform(Options& state) {
 
@@ -94,11 +117,17 @@ void DetachmentController::transform(Options& state) {
 
     if ((time > settling_time) && ((time - previous_time) >= min_time_for_change) && (fabs(error - previous_error) >= min_error_for_change)) {
         change_in_time = time - previous_time;
+
+        if (time_buffer.size() >= buffer_size) {
+            time_buffer.erase(time_buffer.begin());
+            error_buffer.erase(error_buffer.begin());
+        }
+        time_buffer.push_back(time);
+        error_buffer.push_back(error);
+        derivative = calculateGradient(time_buffer, error_buffer);
+
         change_in_error = first_step ? 0.0 : error - previous_error;
-            
-        derivative = ((1.0 - alpha_de) * change_in_error + alpha_de * previous_change_in_error) / change_in_time;
-        change_in_derivative = (1.0 - alpha_d2e) * (derivative - previous_derivative) + alpha_d2e * previous_change_in_derivative;
-        
+        change_in_derivative = first_step ? 0.0 : derivative - previous_derivative;
         error_integral = first_step ? 0.0 : error_integral + change_in_time * 0.5 * (error + previous_error);
 
         if (velocity_form) {
@@ -143,12 +172,9 @@ void DetachmentController::transform(Options& state) {
 
         previous_time = time;
         previous_error = error;
-        
-        previous_derivative = derivative;
         previous_control = control;
-        previous_change_in_error = change_in_error;
-        previous_change_in_derivative = change_in_derivative;
-    
+        previous_derivative = derivative;
+
         first_step = false;
     }
     ASSERT2(std::isfinite(control));

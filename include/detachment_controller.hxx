@@ -101,15 +101,11 @@ struct DetachmentController : public Component {
     derivative_time = detachment_controller_options["derivative_time"]
                                .doc("Detachment controller detachment time")
                                .withDefault(0.0);
-    
-    alpha_de = detachment_controller_options["alpha_de"]
-                               .doc("Smoothing factor applied to the change_in_error (low pass filter, must be between 0 and 1)")
-                               .withDefault(0.0);
-    alpha_d2e = detachment_controller_options["alpha_d2e"]
-                               .doc("Smoothing factor applied to the change_in_derivative (low pass filter, must be between 0 and 1)")
-                               .withDefault(0.0);
-    ASSERT2(((alpha_d2e >= 0.0) && (alpha_d2e <= 1.0)));
 
+    buffer_size = detachment_controller_options["buffer_size"]
+                               .doc("Number of points to store for calculating derivatives.")
+                               .withDefault(10);
+    
     species_list = strsplit(detachment_controller_options["species_list"]
                                   .doc("Comma-separated list of species to apply the PI-controlled source to")
                                   .as<std::string>(),
@@ -254,12 +250,6 @@ struct DetachmentController : public Component {
       if (state.isSet("detachment_control_previous_derivative")) {
         previous_derivative = state["detachment_control_previous_derivative"].as<BoutReal>();
       }
-      if (state.isSet("detachment_control_previous_change_in_error")) {
-        previous_change_in_error = state["detachment_control_previous_change_in_error"].as<BoutReal>();
-      }
-      if (state.isSet("detachment_control_previous_change_in_derivative")) {
-        previous_change_in_derivative = state["detachment_control_previous_change_in_derivative"].as<BoutReal>();
-      }
 
       initialise = false;
       first_step = false;
@@ -271,8 +261,6 @@ struct DetachmentController : public Component {
     set_with_attrs(state["detachment_control_previous_time"], previous_time, {{"source", "detachment_controller"}});
     set_with_attrs(state["detachment_control_previous_error"], previous_error, {{"source", "detachment_controller"}});
     set_with_attrs(state["detachment_control_previous_derivative"], previous_derivative, {{"source", "detachment_controller"}});
-    set_with_attrs(state["detachment_control_previous_change_in_error"], previous_change_in_error, {{"source", "detachment_controller"}});
-    set_with_attrs(state["detachment_control_previous_change_in_derivative"], previous_change_in_derivative, {{"source", "detachment_controller"}});
   }
 
   private:
@@ -298,8 +286,6 @@ struct DetachmentController : public Component {
     bool diagnose;
     BoutReal minval_for_source_multiplier;
     BoutReal maxval_for_source_multiplier;
-    BoutReal alpha_de;
-    BoutReal alpha_d2e;
     BoutReal control_offset;
     BoutReal settling_time;
     int debug;
@@ -322,16 +308,19 @@ struct DetachmentController : public Component {
     BoutReal change_in_control{0.0};
 
     // Private system state variables for calculations
-    BoutReal previous_control{0.0};
     BoutReal error_integral{0.0};
     BoutReal previous_time{0.0};
     BoutReal previous_error{0.0};
+    BoutReal previous_control{0.0};
     BoutReal previous_derivative{0.0};
-    BoutReal previous_change_in_error{0.0};
-    BoutReal previous_change_in_derivative{0.0};
     BoutReal time_normalisation;
+    
     bool initialise{true};
     bool first_step{true};
+
+    int buffer_size = 0;
+    std::vector<BoutReal> time_buffer;
+    std::vector<BoutReal> error_buffer;
 
 };
 
