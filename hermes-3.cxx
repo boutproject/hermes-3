@@ -76,6 +76,7 @@
 #include "include/detachment_controller.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
+#include "include/simple_pump.hxx"
 #include <bout/constants.hxx>
 #include <bout/boundary_factory.hxx>
 #include <bout/boundary_op.hxx>
