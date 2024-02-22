@@ -21,9 +21,9 @@ struct SimplePump : public Component {
     ) * Omega_ci;
 
     sink_shape = (options["sink_shape"]
-        .doc("Shape of pumping sink. Units [m^-3/s]")
+        .doc("Shape of pumping sink.")
         .withDefault(Field3D(0.0))
-    ) / (Nnorm * Omega_ci);
+    );
 
     diagnose = options["diagnose"]
                   .doc("Output additional diagnostics?")
@@ -47,9 +47,7 @@ struct SimplePump : public Component {
 
       set_with_attrs(
           state[std::string("simple_pump_src_shape_" + name)], sink_shape,
-          {{"units", "m^-3 / s"},
-           {"conversion", Nnorm * Omega_ci},
-           {"long_name", "simple pump source shape"},
+          {{"long_name", "simple pump source shape"},
            {"source", "simple_pump"}});
     
       set_with_attrs(
