@@ -92,6 +92,10 @@ struct DetachmentController : public Component {
                                .doc("Ignore the restart file (mainly useful for development).")
                                .withDefault(false);
 
+    reset_integral_on_first_crossing = detachment_controller_options["reset_integral_on_first_crossing"]
+                               .doc("Reset the error integral to zero when the detachment front first reaches the desired position.")
+                               .withDefault(true);
+
     controller_gain = detachment_controller_options["controller_gain"]
                                .doc("Detachment controller gain (Kc parameter)")
                                .withDefault(0.0);
@@ -186,45 +190,23 @@ struct DetachmentController : public Component {
                       {"long_name", "detachment control source"},
                       {"source", "detachment_controller"}});
       
-      set_with_attrs(state[std::string("detachment_control_error_integral")], error_integral,
+      set_with_attrs(state[std::string("detachment_control_proportional_term")], proportional_term,
                     {{"time_dimension", "t"},
-                    {"standard_name", "error_integral"},
-                    {"long_name", "detachment control error integral"},
+                    {"standard_name", "proportional_term"},
+                    {"long_name", "detachment control proportional term"},
                     {"source", "detachment_controller"}});
-      set_with_attrs(state[std::string("detachment_control_change_in_error")], change_in_error,
+
+      set_with_attrs(state[std::string("detachment_control_integral_term")], integral_term,
                     {{"time_dimension", "t"},
-                    {"standard_name", "change_in_error"},
-                    {"long_name", "detachment control change_in_error"},
+                    {"standard_name", "integral_term"},
+                    {"long_name", "detachment control integral term"},
                     {"source", "detachment_controller"}});
-      set_with_attrs(state[std::string("detachment_control_change_in_time")], change_in_time,
+
+      set_with_attrs(state[std::string("detachment_control_derivative_term")], derivative_term,
                     {{"time_dimension", "t"},
-                    {"standard_name", "change_in_time"},
-                    {"long_name", "detachment control change_in_time"},
+                    {"standard_name", "derivative_term"},
+                    {"long_name", "detachment control derivative term"},
                     {"source", "detachment_controller"}});
-      set_with_attrs(state[std::string("detachment_control_error")], error,
-                    {{"time_dimension", "t"},
-                    {"standard_name", "error"},
-                    {"long_name", "detachment control error"},
-                    {"source", "detachment_controller"}});
-      set_with_attrs(state[std::string("detachment_control_derivative")], derivative,
-                    {{"time_dimension", "t"},
-                    {"standard_name", "derivative"},
-                    {"long_name", "detachment control derivative"},
-                    {"source", "detachment_controller"}});
-      set_with_attrs(state[std::string("detachment_control_change_in_derivative")], change_in_derivative,
-                    {{"time_dimension", "t"},
-                    {"standard_name", "change_in_derivative"},
-                    {"long_name", "detachment control change_in_derivative"},
-                    {"source", "detachment_controller"}});
-      set_with_attrs(state[std::string("detachment_control_change_in_control")], change_in_control,
-                    {{"time_dimension", "t"},
-                    {"standard_name", "change_in_control"},
-                    {"long_name", "detachment control change_in_control"},
-                    {"source", "detachment_controller"}});
-      set_with_attrs(state[std::string("detachment_control_control")], control,
-                     {{"time_dimension", "t"},
-                      {"long_name", "detachment control response"},
-                      {"source", "detachment_controller"}});
   }}
 
   void restartVars(Options& state) override {
@@ -250,6 +232,9 @@ struct DetachmentController : public Component {
       if (state.isSet("detachment_control_previous_derivative")) {
         previous_derivative = state["detachment_control_previous_derivative"].as<BoutReal>();
       }
+      if (state.isSet("detachment_control_number_of_crossings")) {
+        number_of_crossings = state["detachment_control_number_of_crossings"].as<BoutReal>();
+      }
 
       initialise = false;
       first_step = false;
@@ -261,6 +246,7 @@ struct DetachmentController : public Component {
     set_with_attrs(state["detachment_control_previous_time"], previous_time, {{"source", "detachment_controller"}});
     set_with_attrs(state["detachment_control_previous_error"], previous_error, {{"source", "detachment_controller"}});
     set_with_attrs(state["detachment_control_previous_derivative"], previous_derivative, {{"source", "detachment_controller"}});
+    set_with_attrs(state["detachment_control_number_of_crossings"], number_of_crossings, {{"source", "detachment_controller"}});
   }
 
   private:
@@ -274,6 +260,7 @@ struct DetachmentController : public Component {
     std::string actuator;
     bool ignore_restart;
     bool velocity_form;
+    bool reset_integral_on_first_crossing;
     BoutReal response_sign;
     BoutReal controller_gain;
     BoutReal integral_time;
@@ -301,6 +288,10 @@ struct DetachmentController : public Component {
     BoutReal change_in_error{0.0};
     BoutReal change_in_time{0.0};
 
+    BoutReal proportional_term{0.0};
+    BoutReal integral_term{0.0};
+    BoutReal derivative_term{0.0};
+
     BoutReal time{0.0};
     BoutReal error{0.0};
     BoutReal derivative{0.0};
@@ -317,6 +308,7 @@ struct DetachmentController : public Component {
     
     bool initialise{true};
     bool first_step{true};
+    BoutReal number_of_crossings{0.0};
 
     int buffer_size = 0;
     std::vector<BoutReal> time_buffer;

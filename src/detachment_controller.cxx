@@ -131,19 +131,19 @@ void DetachmentController::transform(Options& state) {
         error_integral = first_step ? 0.0 : error_integral + change_in_time * 0.5 * (error + previous_error);
 
         if (velocity_form) {
-            change_in_control = response_sign * controller_gain * (
-                change_in_error
-                + (change_in_time / integral_time) * error
-                + derivative_time * change_in_derivative
-            );
+            proportional_term = response_sign * controller_gain * change_in_error;
+            integral_term = response_sign * controller_gain * (change_in_time / integral_time) * error;
+            derivative_term = response_sign * controller_gain * derivative_time * change_in_derivative;
+
+            change_in_control = proportional_term + integral_term + derivative_term;
 
             control = previous_control + change_in_control;
         } else {
-            control = control_offset + response_sign * controller_gain * (
-                error
-                + error_integral / integral_time
-                + derivative_time * derivative
-            );
+            proportional_term = response_sign * controller_gain * error;
+            integral_term = response_sign * controller_gain * error_integral / integral_time;
+            derivative_term = response_sign * controller_gain * derivative_time * derivative;
+
+            control = control_offset + proportional_term + integral_term + derivative_term;
 
             change_in_control = control - previous_control;
         }
@@ -168,6 +168,25 @@ void DetachmentController::transform(Options& state) {
             output << "change_in_control:         " << change_in_control << endl;
             output << "control:                   " << control << endl;
             output << endl;
+        }
+
+        if (((error < 0.0) && (previous_error > 0.0)) || ((error > 0.0) && (previous_error < 0.0))) {
+            // Detachment front has crossed the setpoint location.
+            if ((number_of_crossings < 1.0) && reset_integral_on_first_crossing) {
+                error_integral = 0.0;
+                if (debug >= 1) {
+                    output << endl;
+                    output << "Resetting error integral" << endl;
+                    output << endl;
+                }
+            }
+
+            number_of_crossings = number_of_crossings + 1.0;
+            if (debug >= 1) {
+                output << endl;
+                output << "Number of crossings: " << number_of_crossings << endl;
+                output << endl;
+            }
         }
 
         previous_time = time;
