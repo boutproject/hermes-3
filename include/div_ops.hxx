@@ -23,12 +23,12 @@
 
  */
 
-#ifndef __DIV_OPS_H__
-#define __DIV_OPS_H__
+#ifndef HERMES_DIV_OPS_H
+#define HERMES_DIV_OPS_H
 
 #include <bout/field3d.hxx>
-#include <bout/vector3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/vector3d.hxx>
 
 /*!
  * Diffusion in index space
@@ -58,7 +58,8 @@ const Field2D Laplace_FV(const Field2D& k, const Field2D& f);
 /// Perpendicular diffusion including X and Y directions
 const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
 /// Version of function that returns flows
-const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f, Field3D& flux_xlow, Field3D& flux_ylow);
+const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
+                                           Field3D& flux_xlow, Field3D& flux_ylow);
 
 namespace FV {
 
@@ -100,8 +101,7 @@ struct Superbee {
       BoutReal sign = SIGN(gL);
       gL = fabs(gL);
       gR = fabs(gR);
-      BoutReal half_slope = sign * BOUTMAX(BOUTMIN(gL, 0.5*gR),
-                                           BOUTMIN(gR, 0.5*gL));
+      BoutReal half_slope = sign * BOUTMAX(BOUTMIN(gL, 0.5 * gR), BOUTMIN(gR, 0.5 * gL));
       n.L = n.c - half_slope;
       n.R = n.c + half_slope;
     }
@@ -210,10 +210,9 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
             flux = bndryval * vpar * vpar;
           } else {
             // Add flux due to difference in boundary values
-            flux =
-                s.R * vpar * sv.R
-                + BOUTMAX(wave_speed(i, j, k), fabs(v(i, j, k)), fabs(v(i, j + 1, k)))
-                  * (s.R * sv.R - bndryval * vpar);
+            flux = s.R * vpar * sv.R
+                   + BOUTMAX(wave_speed(i, j, k), fabs(v(i, j, k)), fabs(v(i, j + 1, k)))
+                         * (s.R * sv.R - bndryval * vpar);
           }
         } else {
           // Maximum wave speed in the two cells
@@ -239,10 +238,9 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
             flux = bndryval * vpar * vpar;
           } else {
             // Add flux due to difference in boundary values
-            flux =
-                s.L * vpar * sv.L
-                - BOUTMAX(wave_speed(i, j, k), fabs(v(i, j, k)), fabs(v(i, j - 1, k)))
-                  * (s.L * sv.L - bndryval * vpar);
+            flux = s.L * vpar * sv.L
+                   - BOUTMAX(wave_speed(i, j, k), fabs(v(i, j, k)), fabs(v(i, j - 1, k)))
+                         * (s.L * sv.L - bndryval * vpar);
           }
         } else {
           // Maximum wave speed in the two cells
@@ -454,6 +452,226 @@ const Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
   return are_unaligned ? fromFieldAligned(result, "RGN_NOBNDRY") : result;
 }
 
+/// Div ( a Grad_perp(f) )  -- diffusion
+///
+/// This version uses a slope limiter to calculate cell edge values in X,
+/// the advects the upwind cell edge.
+///
+/// 1st order upwinding is used in Y.
+template <typename CellEdges = MC>
+const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& f) {
+  ASSERT2(a.getLocation() == f.getLocation());
+
+  Mesh* mesh = a.getMesh();
+
+  // Requires at least 2 communication guard cells in X, 1 in Y
+  ASSERT1(mesh->xstart >= 2);
+  ASSERT1(mesh->ystart >= 1);
+
+  CellEdges cellboundary;
+
+  Field3D result{zeroFrom(f)};
+
+  Coordinates* coord = f.getCoordinates();
+
+  // Flux in x
+
+  int xs = mesh->xstart - 1;
+  int xe = mesh->xend;
+
+  for (int i = xs; i <= xe; i++) {
+    for (int j = mesh->ystart; j <= mesh->yend; j++) {
+      for (int k = 0; k < mesh->LocalNz; k++) {
+        // Calculate flux from i to i+1
+
+        const BoutReal gradient = f(i + 1, j, k) - f(i, j, k);
+
+        BoutReal aedge; // 'a' at the cell edge
+        if (((i == xs) and mesh->firstX()) or ((i == xe) and mesh->lastX())) {
+          // Mid-point average boundary value
+          aedge = 0.5 * (a(i + 1, j, k) + a(i, j, k));
+        } else if (gradient > 0) {
+          // Flux is from (i+1) to (i)
+          // Reconstruct `a` at left of (i+1, j, k)
+
+          Stencil1D sa;
+          sa.m = a(i, j, k);
+          sa.c = a(i + 1, j, k);
+          sa.p = a(i + 2, j, k);
+          cellboundary(sa); // Calculate sa.R and sa.L
+
+          aedge = sa.L;
+        } else {
+          // Flux is from (i) to (i+1)
+          // Reconstruct `a` at right of (i, j, k)
+
+          Stencil1D sa;
+          sa.m = a(i - 1, j, k);
+          sa.c = a(i, j, k);
+          sa.p = a(i + 1, j, k);
+          cellboundary(sa); // Calculate sa.R and sa.L
+
+          aedge = sa.R;
+        }
+
+        // Flux across cell edge
+        const BoutReal fout = gradient * aedge
+                              * (coord->J(i, j) * coord->g11(i, j)
+                                 + coord->J(i + 1, j) * coord->g11(i + 1, j))
+                              / (coord->dx(i, j) + coord->dx(i + 1, j));
+
+        result(i, j, k) += fout / (coord->dx(i, j) * coord->J(i, j));
+        result(i + 1, j, k) -= fout / (coord->dx(i + 1, j) * coord->J(i + 1, j));
+      }
+    }
+  }
+
+  // Y and Z fluxes require Y derivatives
+
+  // Fields containing values along the magnetic field
+  Field3D fup(mesh), fdown(mesh);
+  Field3D aup(mesh), adown(mesh);
+
+  // Values on this y slice (centre).
+  // This is needed because toFieldAligned may modify the field
+  Field3D fc = f;
+  Field3D ac = a;
+
+  // Result of the Y and Z fluxes
+  Field3D yzresult(mesh);
+  yzresult.allocate();
+
+  if (f.hasParallelSlices() && a.hasParallelSlices()) {
+    // Both inputs have yup and ydown
+
+    fup = f.yup();
+    fdown = f.ydown();
+
+    aup = a.yup();
+    adown = a.ydown();
+  } else {
+    // At least one input doesn't have yup/ydown fields.
+    // Need to shift to/from field aligned coordinates
+
+    fup = fdown = fc = toFieldAligned(f);
+    aup = adown = ac = toFieldAligned(a);
+    yzresult.setDirectionY(YDirectionType::Aligned);
+  }
+
+  // Y flux
+
+  for (int i = mesh->xstart; i <= mesh->xend; i++) {
+    for (int j = mesh->ystart; j <= mesh->yend; j++) {
+
+      BoutReal coef_u =
+          0.5
+          * (coord->g_23(i, j) / SQ(coord->J(i, j) * coord->Bxy(i, j))
+             + coord->g_23(i, j + 1) / SQ(coord->J(i, j + 1) * coord->Bxy(i, j + 1)));
+
+      BoutReal coef_d =
+          0.5
+          * (coord->g_23(i, j) / SQ(coord->J(i, j) * coord->Bxy(i, j))
+             + coord->g_23(i, j - 1) / SQ(coord->J(i, j - 1) * coord->Bxy(i, j - 1)));
+
+      for (int k = 0; k < mesh->LocalNz; k++) {
+        // Calculate flux between j and j+1
+        int kp = (k + 1) % mesh->LocalNz;
+        int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+
+        // Calculate Z derivative at y boundary
+        BoutReal dfdz =
+            0.25 * (fc(i, j, kp) - fc(i, j, km) + fup(i, j + 1, kp) - fup(i, j + 1, km))
+            / coord->dz(i, j);
+
+        // Y derivative
+        BoutReal dfdy = 2. * (fup(i, j + 1, k) - fc(i, j, k))
+                        / (coord->dy(i, j + 1) + coord->dy(i, j));
+
+        BoutReal aedge;
+        if ((j == mesh->yend) and mesh->lastY(i)) {
+          // Midpoint boundary value
+          aedge = 0.5 * (ac(i, j, k) + aup(i, j + 1, k));
+        } else if (dfdy > 0) {
+          // Flux from (j+1) to (j)
+          aedge = aup(i, j + 1, k);
+        } else {
+          // Flux from (j) to (j+1)
+          aedge = ac(i, j, k);
+        }
+
+        BoutReal fout = aedge * 0.5
+                        * (coord->J(i, j) * coord->g23(i, j)
+                           + coord->J(i, j + 1) * coord->g23(i, j + 1))
+                        * (dfdz - coef_u * dfdy);
+
+        yzresult(i, j, k) = fout / (coord->dy(i, j) * coord->J(i, j));
+
+        // Calculate flux between j and j-1
+        dfdz = 0.25
+               * (fc(i, j, kp) - fc(i, j, km) + fdown(i, j - 1, kp) - fdown(i, j - 1, km))
+               / coord->dz(i, j);
+
+        dfdy = 2. * (fc(i, j, k) - fdown(i, j - 1, k))
+               / (coord->dy(i, j) + coord->dy(i, j - 1));
+
+        if ((j == mesh->ystart) and mesh->firstY(i)) {
+          aedge = 0.5 * (ac(i, j, k) + adown(i, j - 1, k));
+        } else if (dfdy > 0) {
+          aedge = ac(i, j, k);
+        } else {
+          aedge = adown(i, j - 1, k);
+        }
+
+        fout = aedge * 0.5
+               * (coord->J(i, j) * coord->g23(i, j)
+                  + coord->J(i, j - 1) * coord->g23(i, j - 1))
+               * (dfdz - coef_d * dfdy);
+
+        yzresult(i, j, k) -= fout / (coord->dy(i, j) * coord->J(i, j));
+      }
+    }
+  }
+
+  // Z flux
+  // Easier since all metrics constant in Z
+
+  for (int i = mesh->xstart; i <= mesh->xend; i++) {
+    for (int j = mesh->ystart; j <= mesh->yend; j++) {
+      // Coefficient in front of df/dy term
+      BoutReal coef = coord->g_23(i, j)
+                      / (coord->dy(i, j + 1) + 2. * coord->dy(i, j) + coord->dy(i, j - 1))
+                      / SQ(coord->J(i, j) * coord->Bxy(i, j));
+
+      for (int k = 0; k < mesh->LocalNz; k++) {
+        // Calculate flux between k and k+1
+        int kp = (k + 1) % mesh->LocalNz;
+
+        BoutReal gradient =
+            // df/dz
+            (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j)
+
+            // - g_yz * df/dy / SQ(J*B)
+            - coef
+                  * (fup(i, j + 1, k) + fup(i, j + 1, kp) - fdown(i, j - 1, k)
+                     - fdown(i, j - 1, kp));
+
+        BoutReal fout = gradient * ((gradient > 0) ? ac(i, j, kp) : ac(i, j, k));
+
+        yzresult(i, j, k) += fout / coord->dz(i, j);
+        yzresult(i, j, kp) -= fout / coord->dz(i, j);
+      }
+    }
+  }
+  // Check if we need to transform back
+  if (f.hasParallelSlices() && a.hasParallelSlices()) {
+    result += yzresult;
+  } else {
+    result += fromFieldAligned(yzresult);
+  }
+
+  return result;
+}
+
 } // namespace FV
 
-#endif //  __DIV_OPS_H__
+#endif //  HERMES_DIV_OPS_H
