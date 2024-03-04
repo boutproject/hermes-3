@@ -16,3 +16,4 @@ Welcome to Hermes-3 documentation!
    code_structure
    components
    numerical_methods
+   detachment_controller
