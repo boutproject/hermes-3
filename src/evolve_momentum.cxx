@@ -75,9 +75,10 @@ void EvolveMomentum::transform(Options &state) {
   V.applyBoundary();
   set(species["velocity"], V);
 
-  NV_solver = NV; // Save the momentum as calculated by the solver
+  Field3D NV_solver = NV; // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
+  NV_err = NV - NV_solver; // This is used in the finally() function
   set(species["momentum"], NV);
 }
 
@@ -168,7 +169,7 @@ void EvolveMomentum::finally(const Options &state) {
 
   // If N < density_floor then NV and NV_solver may differ
   // -> Add term to force NV_solver towards NV
-  ddt(NV) += NV - NV_solver;
+  ddt(NV) += NV_err;
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {

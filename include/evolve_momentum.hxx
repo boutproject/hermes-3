@@ -35,7 +35,7 @@ private:
   std::string name;     ///< Short name of species e.g "e"
 
   Field3D NV;           ///< Species parallel momentum (normalised, evolving)
-  Field3D NV_solver;    ///< Momentum as input from solver
+  Field3D NV_err;       ///< Difference from momentum as input from solver
   Field3D V;            ///< Species parallel velocity
 
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
