@@ -1,0 +1,82 @@
+nout = 50
+timestep = 10
+
+[mesh]
+nx = 5  # Radial. Includes 4 boundary cells
+ny = 32  # Parallel direction
+nz = 27  # Perpendicular direction
+
+Lx = 0.01 # X domain size [meters]
+Ly = 10   # Y domain size [meters]
+Lz = 0.01 # Z domain size [meters]
+
+B = 0.2  # Magnetic field [Tesla]
+
+ixseps1 = nx # Domain is periodic in Y and Z
+ixseps2 = nx
+
+# Define an orthogonal slab mesh in Clebsch coordinates
+# In terms of BOUT++ coordinates
+# https://bout-dev.readthedocs.io/en/stable/user_docs/coordinates.html#id1
+# this corresponds to R = 1, hthe = 1, Bpol = B, Btor = 0, I = 0
+
+dr = Lx / (nx - 4)
+dx = dr * B
+dy = Ly / ny
+dz = Lz / nz
+
+g11 = B^2
+g22 = 1
+g33 = 1
+
+J = 1 / B  # Note: Volume = J * dx * dy * dx
+
+[mesh:paralleltransform]
+type = identity
+
+[solver]
+mxstep = 10000
+
+[hermes]
+components = i, e, electromagnetic, vorticity, sound_speed
+
+loadmetric = false # Load metric from Bxy, Rxy etc?
+
+[electromagnetic]
+diagnose = true
+
+[vorticity]
+
+diamagnetic = false  # Include diamagnetic current?
+diamagnetic_polarisation = false # Include diamagnetic drift in polarisation current?
+average_atomic_mass = 1 # Weighted average atomic mass, for polarisaion current
+bndry_flux = false # Allow flows through radial boundaries
+poloidal_flows = false  # Include poloidal ExB flow
+
+[vorticity:laplacian]
+inner_boundary_flags = 2
+outer_boundary_flags = 2
+
+[Vort]
+function = 1e-3 * sin(z - y)
+
+### Ions
+[i]
+type = fixed_density, fixed_velocity, fixed_temperature
+
+charge = 1
+AA = 1
+
+density = 1e19 # [m^-3]
+velocity = 0
+temperature = 100  # eV
+
+### Electrons
+[e]
+type = quasineutral, evolve_momentum, fixed_temperature
+
+charge = -1
+AA = 1/1836
+
+temperature = 100 # eV
+
