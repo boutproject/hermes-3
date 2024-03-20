@@ -1388,14 +1388,28 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
   Field3D yzresult(mesh);
   yzresult.allocate();
 
-  if (f.hasParallelSlices() && a.hasParallelSlices()) {
+  if (f.isFci()) {
+    Field3D f_tmp = f;
+    Field3D a_tmp = a;
+#if BOUT_USE_FCI_AUTOMAGIC
+    if (!f_tmp.hasParallelSlices()) {
+      f_tmp.calcParallelSlices();
+    }
+    if (!a_tmp.hasParallelSlices()) {
+      a_tmp.calcParallelSlices();
+    }
+#else
+    ASSERT0(f.hasParallelSlices());
+    ASSERT0(a.hasParallelSlices());
+#endif
+
     // Both inputs have yup and ydown
 
-    fup = f.yup();
-    fdown = f.ydown();
+    fup = f_tmp.yup();
+    fdown = f_tmp.ydown();
 
-    aup = a.yup();
-    adown = a.ydown();
+    aup = a_tmp.yup();
+    adown = a_tmp.ydown();
   } else {
     // At least one input doesn't have yup/ydown fields.
     // Need to shift to/from field aligned coordinates
@@ -1493,7 +1507,7 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
     }
   }
   // Check if we need to transform back
-  if (f.hasParallelSlices() && a.hasParallelSlices()) {
+  if (f.isFci()) {
     result += yzresult;
   } else {
     result += fromFieldAligned(yzresult);

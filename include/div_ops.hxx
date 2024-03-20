@@ -29,6 +29,7 @@
 #include <bout/field3d.hxx>
 #include <bout/vector3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/difops.hxx>
 
 /*!
  * Diffusion in index space
@@ -120,6 +121,10 @@ struct Superbee {
 template <typename CellEdges = MC>
 const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in, bool fixflux = true) {
+
+  if (f_in.isFci()){
+    return Div_par(f_in * v_in);
+  }
 
   ASSERT1(areFieldsCompatible(f_in, v_in));
   ASSERT1(areFieldsCompatible(f_in, wave_speed_in));
@@ -289,6 +294,9 @@ template <typename CellEdges = MC>
 const Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in, bool fixflux = true) {
 
+  if (f_in.isFci()){
+    return Div_par(f_in * v_in);
+  }
   ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
   ASSERT1_FIELDS_COMPATIBLE(f_in, wave_speed_in);
 
