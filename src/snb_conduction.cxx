@@ -5,7 +5,7 @@
 using bout::globals::mesh;
 
 void SNBConduction::transform(Options& state) {
-  auto units = state["units"];
+  auto& units = state["units"];
   const auto rho_s0 = get<BoutReal>(units["meters"]);
   const auto Tnorm = get<BoutReal>(units["eV"]);
   const auto Nnorm = get<BoutReal>(units["inv_meters_cubed"]);

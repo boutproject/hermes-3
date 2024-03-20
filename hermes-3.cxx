@@ -186,7 +186,7 @@ int Hermes::init(bool restarting) {
 
   // Put into the options tree, so quantities can be normalised
   // when creating components
-  Options::root()["units"] = units;
+  Options::root()["units"] = units.copy();
   Options::root()["units"].setConditionallyUsed();
 
   // Add the decay length boundary condition to the boundary factory
@@ -255,7 +255,7 @@ int Hermes::rhs(BoutReal time) {
   state = Options();
   
   set(state["time"], time);
-  state["units"] = units; 
+  state["units"] = units.copy();
 
   // Call all the components
   scheduler->transform(state);
