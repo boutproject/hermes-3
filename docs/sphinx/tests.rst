@@ -203,3 +203,9 @@ where
 This is a cubic dispersion relation, so we find the three roots (using
 NumPy), and choose the root with the most positive growth rate
 (imaginary component of :math:`\omega`).
+
+.. figure:: figs/drift-wave.png
+   :name: drift-wave
+   :alt: Comparison of drift-wave growth rate (top) and frequency (bottom)
+   :width: 60%
+
