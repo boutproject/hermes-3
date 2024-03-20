@@ -27,6 +27,6 @@ Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solve
 
 void Transform::transform(Options& state) {
   for (const auto& lr : transforms) {
-    state[lr.first] = state[lr.second];
+    state[lr.first] = state[lr.second].copy();
   }
 }
