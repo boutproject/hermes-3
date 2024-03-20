@@ -8,7 +8,7 @@
 struct DetachmentController : public Component {
 
   DetachmentController(std::string, Options& options, Solver*) {
-
+ASSERT0(BoutComm::size() == 1); // Only works on one processor
     Options& detachment_controller_options = options["detachment_controller"];
 
     const auto& units = options["units"];
