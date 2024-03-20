@@ -25,6 +25,7 @@
 
 #include "include/adas_carbon.hxx"
 #include "include/adas_neon.hxx"
+#include "include/adas_lithium.hxx"
 #include "include/amjuel_helium.hxx"
 #include "include/amjuel_hyd_ionisation.hxx"
 #include "include/amjuel_hyd_recombination.hxx"
@@ -71,6 +72,7 @@
 #include "include/thermal_force.hxx"
 #include "include/transform.hxx"
 #include "include/upstream_density_feedback.hxx"
+#include "include/temperature_feedback.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
 #include <bout/constants.hxx>

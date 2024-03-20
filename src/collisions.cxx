@@ -48,6 +48,10 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
     .doc("Include R dot v heating term as energy source?")
     .withDefault<bool>(true);
 
+  ei_multiplier = options["ei_multiplier"]
+                      .doc("User-set arbitrary multiplier on electron-ion collision rate")
+                      .withDefault<BoutReal>(1.0);
+
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 }
@@ -99,7 +103,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
                                     : 0.0;
 
       // F12 is the force on species 1 due to species 2 (normalised)
-      const Field3D F12 = nu_12 * A1 * density1 * (velocity2 - velocity1);
+      const Field3D F12 = momentum_coefficient * nu_12 * A1 * density1 * (velocity2 - velocity1);
 
       add(species1["momentum_source"], F12);
       subtract(species2["momentum_source"], F12);
@@ -227,7 +231,8 @@ void Collisions::transform(Options& state) {
           // Collision frequency
           const BoutReal nu = SQ(SQ(SI::qe) * Zi) * floor(Ni[i], 0.0)
                               * floor(coulomb_log, 1.0) * (1. + me_mi)
-                              / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me));
+                              / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me))
+                              * ei_multiplier;
 #if CHECK >= 2
 	  if (!std::isfinite(nu)) {
 	    throw BoutException("Collisions 195 {}: {} at {}: Ni {}, Ne {}, Clog {}, vesq {}, visq {}, Te {}, Ti {}\n",

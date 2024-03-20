@@ -144,6 +144,92 @@ namespace {
     }
     }
   };
+
+  /// Argon simplified 1
+  /// Based on the ADAS curve above but simplified as a linear interpolation
+  /// between the LHS minimum, peak, bottom of RHS slope and final value at Te = 3000eV.
+  /// RHS shoulder is preserved.
+  /// Helpful for studying impact of cooling curve nonlinearity 
+  struct Argon_simplified1{
+    BoutReal curve(BoutReal Te) {
+      
+     if (Te < 0.52) { 
+        return 0; 
+    
+     } else if (Te >= 0.52 and Te < 2.50) {
+        return (1.953534e-35*(2.50 - Te) + 6.053680e-34*(Te - 0.52)) / (2.50 - 0.52);
+
+     } else if (Te >= 2.50 and Te < 19.72) {
+        return (6.053680e-34*(19.72 - Te) + 2.175237e-31*(Te - 2.50)) / (19.72 - 2.50);
+
+     } else if (Te >= 19.72 and Te < 59.98) {
+        return (2.175237e-31*(59.98 - Te) + 4.190918e-32*(Te - 19.72)) / (59.98 - 19.72);
+
+     } else if (Te >= 59.98 and Te < 3000.00) {
+        return (4.190918e-32*(3000.00 - Te) + 1.226496e-32*(Te - 59.98)) / (3000.00 - 59.98);
+
+     } else {
+        return 1.226496e-32;
+     }
+    }
+  };
+
+  /// Argon simplified 2
+  /// Based on the ADAS curve above but simplified as a linear interpolation
+  /// between the LHS minimum, peak, and the bottom of RHS slope.
+  /// RHS shoulder is eliminated, radiation becomes 0 at 60eV.
+  /// Helpful for studying impact of cooling curve nonlinearity 
+  struct Argon_simplified2{
+    BoutReal curve(BoutReal Te) {
+      
+     if (Te < 0.52) { 
+        return 0; 
+    
+     } else if (Te >= 0.52 and Te < 2.50) {
+        return (1.953534e-35*(2.50 - Te) + 6.053680e-34*(Te - 0.52)) / (2.50 - 0.52);
+
+     } else if (Te >= 2.50 and Te < 19.72) {
+        return (6.053680e-34*(19.72 - Te) + 2.175237e-31*(Te - 2.50)) / (19.72 - 2.50);
+
+     } else if (Te >= 19.72 and Te < 59.98) {
+        return (2.175237e-31*(59.98 - Te) + 0.000000e+00*(Te - 19.72)) / (59.98 - 19.72);
+
+     } else {
+        return 0.0;
+     }
+    }
+  };
+
+  /// Argon simplified 3
+  /// Based on the ADAS curve above but simplified as a linear interpolation
+  /// between the LHS minimum, peak, and the bottom of RHS slope.
+  /// RHS shoulder is eliminated, radiation becomes 0 at 60eV.
+  /// LHS / RHS asymmetry is eliminated.
+  /// Helpful for studying impact of cooling curve nonlinearity 
+  struct Argon_simplified3{
+    BoutReal curve(BoutReal Te) {
+      
+     if (Te < 0.52) { 
+        return 0; 
+    
+     } else if (Te >= 0.52 and Te < 2.50) {
+        return (1.953534e-35*(2.50 - Te) + 6.053680e-34*(Te - 0.52)) / (2.50 - 0.52);
+
+     } else if (Te >= 2.50 and Te < 19.72) {
+        return (6.053680e-34*(19.72 - Te) + 2.175237e-31*(Te - 2.50)) / (19.72 - 2.50);
+
+     } else if (Te >= 19.72 and Te < 38.02) {
+        return (2.175237e-31*(38.02 - Te) + 0.000000e+00*(Te - 19.72)) / (38.02 - 19.72);
+
+     } else {
+        return 0.0;
+     };
+    }
+  };
+
+
+
+
 }
 
 /// Set ion densities from electron densities
@@ -163,6 +249,10 @@ struct FixedFractionRadiation : public Component {
     diagnose = options["diagnose"]
       .doc("Output radiation diagnostic?")
       .withDefault<bool>(false);
+
+    radiation_multiplier = options["R_multiplier"]
+      .doc("Scale the radiation rate by this factor")
+      .withDefault<BoutReal>(1.0);
 
     // Get the units
     auto& units = alloptions["units"];
@@ -189,7 +279,7 @@ struct FixedFractionRadiation : public Component {
     // Don't need boundary cells
     const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]);
     const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]);
-
+    
     radiation = cellAverage(
                             [&](BoutReal ne, BoutReal te) {
                               if (ne < 0.0 or te < 0.0) {
@@ -199,8 +289,8 @@ struct FixedFractionRadiation : public Component {
                               const BoutReal ni = fraction * ne;
                               // cooling in Wm^3 so normalise.
                               // Note factor of qe due to Watts rather than eV
-                              return ne * ni * cooling.curve(te * Tnorm) * Nnorm /
-                                (SI::qe * Tnorm * FreqNorm);
+                              return ne * ni * cooling.curve(te * Tnorm) * radiation_multiplier * 
+                              Nnorm / (SI::qe * Tnorm * FreqNorm);
                             },
                             Ne.getRegion("RGN_NOBNDRY"))(Ne, Te);
 
@@ -227,6 +317,7 @@ struct FixedFractionRadiation : public Component {
   BoutReal fraction; ///< Fixed fraction
 
   bool diagnose; ///< Output radiation diagnostic?
+  BoutReal radiation_multiplier; ///< Scale the radiation rate by this factor
   Field3D radiation; ///< For output diagnostic
 
   // Normalisations
@@ -248,6 +339,15 @@ namespace {
 
   RegisterComponent<FixedFractionRadiation<Argon_adas>>
     registercomponentfixedfractionargon("fixed_fraction_argon");
+
+  RegisterComponent<FixedFractionRadiation<Argon_simplified1>>
+    registercomponentfixedfractionargonsimplified1("fixed_fraction_argon_simplified1");
+
+  RegisterComponent<FixedFractionRadiation<Argon_simplified2>>
+    registercomponentfixedfractionargonsimplified2("fixed_fraction_argon_simplified2");
+
+  RegisterComponent<FixedFractionRadiation<Argon_simplified3>>
+    registercomponentfixedfractionargonsimplified3("fixed_fraction_argon_simplified3");
 
 }
 
