@@ -7,7 +7,7 @@ ny = 32  # Parallel direction
 nz = 27  # Perpendicular direction
 
 Lx = 0.01 # X domain size [meters]
-Ly = 10   # Y domain size [meters]
+Ly = 2    # Y domain size [meters]
 Lz = 0.01 # Z domain size [meters]
 
 B = 0.2  # Magnetic field [Tesla]

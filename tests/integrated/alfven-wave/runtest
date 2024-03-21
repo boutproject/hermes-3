@@ -1,83 +1,109 @@
 #!/usr/bin/env python3
 #
-# Resistive drift wave
+# Alfven wave test
 #
 # References:
 # - M.V.Umansky et al. CPP 2008 https://doi.org/10.1002/ctpp.200810004
 
 plotting = False
+fail_early = True # Stop on the first failure?
 
 import numpy as np
 from boututils.run_wrapper import shell, launch, getmpirun
 import sys
-
-import analysis
+from boutdata import collect
 
 # Link to the executable
 shell("ln -s ../../../hermes-3 hermes-3")
 
-sparns = []  # sigma_par / w_star
-analytic_gammas = []
-analytic_omegas = []
-gammas = []
-omegas = []
+B = 0.2 # T
+n0 = 1e19 # m^-3
+AA = 1  # amu
 
-# List of magnetic field values to run
+mu0 = 4e-7 * np.pi
+m_e = 9.11e-31
+qe = 1.602e-19
+
+V_A = B / np.sqrt(mu0 * n0 * 1.67e-27 * AA) # Alfven speed
+delta_e = np.sqrt(m_e / (mu0 * n0 * qe**2)) # Electron skin depth
+
+# List of 
 if plotting:
-    Bs = [0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8]
+    Lys = [2, 3, 4]
+    Lzs = [1, 0.1, 0.05, 0.02, 0.01]
 else:
-    Bs = [0.1, 0.3, 0.6]
-
-for B in Bs:
-    # Run hermes-3 using MPI
-    print(f"Running B = {B}")
-    shell("rm data/BOUT.*.nc") # Delete data files
-    s, out = launch(f"./hermes-3 mesh:B={B}", nproc=1, pipe=True)
-
-    # Save output to log file
-    f = open(f"run.log.{B}", "w")
-    f.write(out)
-    f.close()
-
-    result = analysis.extract_data("data")
-    sparns.append(result["sigmapar"] / result["wstar"])
-    analytic_gammas.append(result["analytic_gamma"])
-    analytic_omegas.append(result["analytic_omega"])
-    gammas.append(result["gamma"])
-    omegas.append(result["omega"])
+    Lys = [2]
+    Lzs = [0.1, 0.01]
 
 if plotting:
     import matplotlib.pyplot as plt
 
-    fig, axs = plt.subplots(nrows=2, sharex=True)
-    axs[0].plot(sparns, analytic_gammas, "k--", label="Analytic")
-    axs[0].plot(sparns, gammas, "ro", label="Hermes-3")
-    axs[0].set_ylabel(r"$Im(\omega / \omega_*)$")
-    axs[0].set_xscale("log")
+passed = True
 
-    axs[1].plot(sparns, analytic_omegas, "k--")
-    axs[1].plot(sparns, omegas, "ro")
-    axs[1].set_xscale("log")
-    axs[1].set_xlabel(r"$\sigma_{||} / \omega_*$")
-    axs[1].set_ylabel(r"$Re(\omega / \omega_*)$")
+for Ly in Lys:
+    kdeltas = []
+    expected_results = []
+    simulation_results = []
 
-    axs[0].legend()
-    plt.savefig("drift-wave.pdf")
-    plt.savefig("drift-wave.png")
+    for Lz in Lzs:
+        # Run hermes-3 using MPI
+        print(f"Running Ly = {Ly} Lz = {Lz}")
+        shell("rm data/BOUT.*.nc") # Delete data files
+        s, out = launch(f"./hermes-3 mesh:B={B} i:density={n0} i:AA={AA} mesh:Ly={Ly} mesh:Lz={Lz}", nproc=1, pipe=True)
+
+        # Save output to log file
+        f = open(f"run.log_{Ly}_{Lz}", "w")
+        f.write(out)
+        f.close()
+
+        Omega_ci = collect("Omega_ci", path="data")
+        t_array = collect("t_array", path="data")
+        dt = (t_array[1] - t_array[0]) / Omega_ci  # Seconds
+
+        phi = collect("phi", xind=2, path="data").squeeze()
+        phi_ms = np.mean(phi**2, axis=(1,2))
+        dphidt = np.gradient(phi_ms[1:])
+        # Find zero crossings
+        inds = np.where(dphidt[1:] * dphidt[:-1] < 0)[0]
+        crossings = (inds * abs(dphidt[inds + 1]) +
+                     (inds + 1) * abs(dphidt[inds])) / abs(dphidt[inds + 1] - dphidt[inds])
+
+        # Mean^2 value doubles frequency; two crossings per period
+        period = 4 * np.mean(crossings[1:] - crossings[:-1]) * dt # Seconds
+
+        omega = 2.*np.pi / period
+        k_par = 2.*np.pi / Ly
+        k_perp = 2.*np.pi / Lz
+
+        result = omega / k_par
+        expected = V_A / np.sqrt(1 + (k_perp * delta_e)**2)
+
+        err = abs(result - expected) / expected
+        if err > 0.02:
+            # Failed!
+            print(f"Ly = {Ly}, Lz = {Lz} (k_par = {k_par}, k_perp = {k_perp}): Expected {expected} but got {result}. Error: {err}")
+            if fail_early:
+                sys.exit(1)
+            passed = False
+
+        simulation_results.append(result)
+        expected_results.append(expected)
+        kdeltas.append(k_perp * delta_e)
+
+    if plotting:
+        plt.plot(kdeltas, simulation_results, 'o', label=f'L = {Ly}m')
+
+if plotting:
+    kds = np.linspace(0, max(kdeltas), 100)
+    plt.plot(kds, V_A / np.sqrt(1 + kds**2), 'k', label='Analytic')
+    plt.legend()
+    plt.xlabel(r"$k_\perp \delta_e$")
+    plt.ylabel(r"$\omega / k_{||}$")
+    plt.savefig("alfven-wave.pdf")
+    plt.savefig("alfven-wave.png")
     plt.show()
 
-analytic_gammas = np.array(analytic_gammas)
-gammas = np.array(gammas)
-analytic_omegas = np.array(analytic_omegas)
-omegas = np.array(omegas)
-
-gamma_errs = np.abs(gammas - analytic_gammas) / analytic_gammas
-omega_errs = np.abs(omegas - analytic_omegas) / analytic_omegas
-
-print(f"Growth-rate fractional errors: {np.amin(gamma_errs)} -> {np.amax(gamma_errs)}")
-print(f"Frequency fractional errors: {np.amin(omega_errs)} -> {np.amax(omega_errs)}")
-
-if np.amax(gamma_errs) < 0.1 and np.amax(omega_errs) < 0.15:
+if passed:
     print(" => Test passed")
     sys.exit(0)
 

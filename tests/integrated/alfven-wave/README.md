@@ -1,22 +1,24 @@
 # Electromagnetic Alfven wave with finite electron mass
 
+![Alfven wave speed](alfven-wave.png)
+
 ## Equations
 
-The ion density is evolved, with zero velocity and fixed temperature:
+The ion density is fixed, with zero velocity and fixed temperature:
 ```
 [i]
-type = evolve_density, fixed_velocity, fixed_temperature
+type = fixed_density, fixed_velocity, fixed_temperature
 
 charge = 1
 AA = 1
 
+density = 1e19 # [m^-3]
 velocity = 0
 temperature = 100  # eV
 ```
-So only the ExB drift advection of density is included.
 
 The electron density is set to the ion density by quasi-neutrality,
-and the parallel momentum is evolved:
+and only the parallel momentum is evolved:
 ```
 [e]
 type = quasineutral, evolve_momentum, fixed_temperature
@@ -24,14 +26,18 @@ type = quasineutral, evolve_momentum, fixed_temperature
 charge = -1
 AA = 1./1836
 
-temperature = 100 # eV
-```
+temperature = 100 # eV ```
+Note that the momentum is the canonical momentum because the
+`electromagnetic` component calculates and corrects for the vector
+potential term in the parallel momentum of all (charged) species.
+
 Finally, the potential is evolved by a vorticity equation.
 
 ## Slab domain
 
 The domain is a thin slab, with one cell in the X (radial) direction,
 and periodic in both Y (parallel) and Z (binormal) directions.
+The Y direction is used to set k_parallel, and the Z direction sets k_perp.
 
 The number of cells in each dimension are specified by `nx`, `ny` and
 `nz`. Note that `nx` includes 2 boundary cells on either side, so `nx
@@ -64,4 +70,4 @@ non-constant (AC) components, and zero for the constant (DC) component:
 inner_boundary_flags = 2
 outer_boundary_flags = 2
 ```
-
+All other boundary conditions are Neumann.
