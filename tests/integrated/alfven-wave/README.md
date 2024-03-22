@@ -26,7 +26,8 @@ type = quasineutral, evolve_momentum, fixed_temperature
 charge = -1
 AA = 1./1836
 
-temperature = 100 # eV ```
+temperature = 100 # eV
+```
 Note that the momentum is the canonical momentum because the
 `electromagnetic` component calculates and corrects for the vector
 potential term in the parallel momentum of all (charged) species.
