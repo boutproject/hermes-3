@@ -1,0 +1,68 @@
+# Tokamak diffusion and parallel flow example
+
+nout = 50
+timestep = 50
+
+NXPE = 1
+
+[mesh]
+
+file = "W7X.nc"
+
+[mesh:paralleltransform]
+type = fci
+
+[solver]
+mxstep = 10000
+
+[hermes]
+components = h+, e, sheath_boundary_parallel
+
+Nnorm = 2e18  # Reference density [m^-3]
+Bnorm = 1   # Reference magnetic field [T]
+Tnorm = 5   # Reference temperature [eV]
+
+loadmetric = false # Assume a tokomak?
+
+[h+]
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
+
+AA = 1
+charge = 1
+anomalous_D = 2    # Density diffusion [m^2/s]
+anomalous_chi = 1
+
+thermal_conduction = false  # No collision rate calculated
+
+[e]
+type = quasineutral, evolve_pressure, anomalous_diffusion, zero_current
+
+AA = 1
+charge = 1
+anomalous_D = 2    # Density diffusion [m^2/s]
+anomalous_chi = 1
+
+thermal_conduction = false  # No collision rate calculated
+
+[Nh+]
+
+function = 1
+
+bndry_core = dirichlet(1.0)  # Core boundary high density
+bndry_all = dirichlet(0.1)   # All other boundaries low density
+
+[NVh+]
+# Momentum
+
+function = 0
+bndry_all = neumann
+
+[Ph+]
+function = 1
+bndry_core = dirichlet(1.0)  # Core boundary high density 
+bndry_all = dirichlet(0.01)   # All other boundaries low density
+
+[Vh+]
+
+bndry_all = neumann
+
