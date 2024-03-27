@@ -100,6 +100,32 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
                        .withDefault(Field3D(0.0))
                    / Tnorm;
 
+  bool lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
+  bool upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
+  bool outer_x = options["outer_x"].doc("Boundary on inner y?").withDefault<bool>(true);
+  bool inner_x = options["inner_x"].doc("Boundary on outer y?").withDefault<bool>(false);
+  if (wall_potential.isFci()) {
+    if (outer_x) {
+      for (auto& bndry : mesh->getBoundariesPar(BoundaryParType::xout)) {
+        boundary_regions_par.push_back(bndry);
+      }
+    }
+    if (inner_x) {
+      for (auto& bndry : mesh->getBoundariesPar(BoundaryParType::xin)) {
+        boundary_regions_par.push_back(bndry);
+      }
+    }
+  } else {
+    for (auto& bndry : mesh->getBoundaries()) {
+      if (upper_y && bndry->location == BndryLoc::yup) {
+        boundary_regions.push_back(bndry);
+      }
+      if (lower_y && bndry->location == BndryLoc::ydown) {
+        boundary_regions.push_back(bndry);
+      }
+    }
+  }
+
   // Note: wall potential at the last cell before the boundary is used,
   // not the value at the boundary half-way between cells. This is due
   // to how twist-shift boundary conditions and non-aligned inputs are

@@ -86,7 +86,8 @@ private:
   bool upper_y{true};
   bool lower_y{true};
 
-  std::vector<std::shared_ptr<BoundaryRegionPar>> boundary_regions;
+  std::vector<std::shared_ptr<const BoundaryRegionPar>> boundary_regions_par;
+  std::vector<BoundaryRegion*> boundary_regions;
 };
 
 namespace {
