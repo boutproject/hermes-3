@@ -88,6 +88,16 @@ private:
 
   std::vector<std::shared_ptr<const BoundaryRegionPar>> boundary_regions_par;
   std::vector<BoundaryRegion*> boundary_regions;
+
+  template <class T>
+  void iter_regions(const T& f) {
+    for (auto* region : boundary_regions) {
+      f(*region);
+    }
+    for (const auto& region : boundary_regions) {
+      f(*region);
+    }
+  }
 };
 
 namespace {

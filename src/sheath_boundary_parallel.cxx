@@ -209,7 +209,7 @@ void SheathBoundaryParallel::transform(Options &state) {
                                      ? get<BoutReal>(species["adiabatic"])
                                      : 5. / 3; // Ratio of specific heats (ideal gas)
 
-      for (auto* region : boundary_regions) {
+      iter_regions([](auto& region) {
         for (auto& pnt : region) {
           const auto& i = pnt.ind();
           BoutReal s_i =
@@ -241,16 +241,16 @@ void SheathBoundaryParallel::transform(Options &state) {
           // Note: Vzi = C_i * sin(α)
           ion_sum[pnt.ind()] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
         }
-      }
+      });
     }
 
     phi.allocate();
 
     // ion_sum now contains  sum  s_i Z_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
-    for (const auto& region: boundary_regions) {
-      for (const auto& pnt: *region) {
-	auto i = pnt.ind();
+    iter_regions([&](auto& region) {
+      for (const auto& pnt : region) {
+        auto i = pnt.ind();
 
 	if (Te[i] <= 0.0) {
 	  phi[i] = 0.0;
@@ -263,7 +263,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 
 	phi.ynext(1)[i.yp()] = phi.ynext(-1)[i.ym()] = phi[i]; // Constant into sheath
       }
-    }
+    });
   }
 
   //////////////////////////////////////////////////////////////////
@@ -273,8 +273,8 @@ void SheathBoundaryParallel::transform(Options &state) {
     ? (getNonFinal<Field3D>(electrons["energy_source"]))
     : zeroFrom(Ne);
 
-  for (const auto& region: boundary_regions) {
-    for (const auto& pnt: *region) {
+  iter_regions([&](auto region) {
+    for (const auto& pnt : region) {
       auto i = pnt.ind();
 
       // Free gradient of log electron density and temperature
@@ -336,7 +336,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 
       electron_energy_source[i] -= pnt.dir * power;
     }
-  }
+  });
 
   // Set electron density and temperature, now with boundary conditions
   setBoundary(electrons["density"], (Ne));
@@ -407,10 +407,10 @@ void SheathBoundaryParallel::transform(Options &state) {
       ? (getNonFinal<Field3D>(species["energy_source"]))
       : zeroFrom(Ni);
 
-    for (auto& region : boundary_regions) {
-      for (const auto& pnt: *region) {
-	
-	auto i = pnt.ind();
+    iter_regions([&](auto region) {
+      for (const auto& pnt : region) {
+
+        auto i = pnt.ind();
 
 	// Free gradient of log electron density and temperature
 	// This ensures that the guard cell values remain positive
@@ -480,7 +480,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 
 	energy_source[i] -= power * pnt.dir; // Note: Sign negative because power * direction > 0
       }
-    }
+    });
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
