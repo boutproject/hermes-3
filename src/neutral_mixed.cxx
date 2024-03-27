@@ -80,6 +80,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas viscosity?")
                           .withDefault<bool>(true);
 
+  neutral_conduction = options["neutral_conduction"]
+                          .doc("Include neutral gas heat conduction?")
+                          .withDefault<bool>(true);
+
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
 
@@ -147,9 +151,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   // Product of Dnn and another parameter has same BC as Dnn - see eqns to see why this is
   // necessary
   DnnNn.setBoundary(std::string("Dnn") + name);
-  DnnPn.setBoundary(std::string("Dnn") + name);
-  DnnTn.setBoundary(std::string("Dnn") + name);
-  DnnNVn.setBoundary(std::string("Dnn") + name);
 }
 
 void NeutralMixed::transform(Options& state) {
@@ -175,7 +176,7 @@ void NeutralMixed::transform(Options& state) {
   Vn.applyBoundary("neumann");
   Vnlim.applyBoundary("neumann");
 
-  Pnlim = floor(Nnlim * Tn, 1e-8);
+  Pnlim = floor(Pn, 1e-8);
   Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
@@ -275,7 +276,7 @@ void NeutralMixed::finally(const Options& state) {
       0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
   Field3D Rnn =
-      sqrt(Tn / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+    sqrt(floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
     // Dnn = Vth^2 / sigma
@@ -303,20 +304,14 @@ void NeutralMixed::finally(const Options& state) {
   Dnn.applyBoundary();
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
-  DnnPn = Dnn * Pn;
-  DnnPn.applyBoundary();
   DnnNn = Dnn * Nn;
   DnnNn.applyBoundary();
-  Field3D DnnNVn = Dnn * NVn;
-  DnnNVn.applyBoundary();
 
   if (sheath_ydown) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         Dnn(r.ind, mesh->ystart - 1, jz) = -Dnn(r.ind, mesh->ystart, jz);
-        DnnPn(r.ind, mesh->ystart - 1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
         DnnNn(r.ind, mesh->ystart - 1, jz) = -DnnNn(r.ind, mesh->ystart, jz);
-        DnnNVn(r.ind, mesh->ystart - 1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
       }
     }
   }
@@ -325,9 +320,7 @@ void NeutralMixed::finally(const Options& state) {
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         Dnn(r.ind, mesh->yend + 1, jz) = -Dnn(r.ind, mesh->yend, jz);
-        DnnPn(r.ind, mesh->yend + 1, jz) = -DnnPn(r.ind, mesh->yend, jz);
         DnnNn(r.ind, mesh->yend + 1, jz) = -DnnNn(r.ind, mesh->yend, jz);
-        DnnNVn(r.ind, mesh->yend + 1, jz) = -DnnNVn(r.ind, mesh->yend, jz);
       }
     }
   }
@@ -338,10 +331,10 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed) // Parallel advection
-            + FV::Div_a_Grad_perp_limit<PerpLimiter>(
-                DnnNn, logPnlim) // Perpendicular advection
-      ;
+  ddt(Nn) =
+    -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed) // Parallel advection
+    + FV::Div_a_Grad_perp_limit<PerpLimiter>(Dnn, Nn, logPnlim) // Perpendicular advection
+    ;
 
   Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
@@ -358,12 +351,11 @@ void NeutralMixed::finally(const Options& state) {
     ddt(NVn) =
         -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed) // Momentum flow
         - Grad_par(Pn) // Pressure gradient
-        + FV::Div_a_Grad_perp_limit<PerpLimiter>(DnnNVn,
-                                                 logPnlim) // Perpendicular advection
-        ;
+        + FV::Div_a_Grad_perp_limit<PerpLimiter>(Dnn, NVn, logPnlim) // Perpendicular advection
+      ;
 
     if (neutral_viscosity) {
-      // NOTE: The following viscosity terms are are not (yet) balanced
+      // NOTE: The following viscosity terms are not (yet) balanced
       //       by a viscous heating term
 
       // Relationship between heat conduction and viscosity for neutral
@@ -395,12 +387,15 @@ void NeutralMixed::finally(const Options& state) {
 
   ddt(Pn) = -FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed) // Parallel advection
             - (2. / 3) * Pn * Div_par(Vn)                          // Compression
-            + FV::Div_a_Grad_perp_limit<PerpLimiter>(
-                DnnPn, logPnlim)                // Perpendicular advection
-            + FV::Div_a_Grad_perp(DnnNn, Tn)    // Perpendicular conduction
-            + FV::Div_par_K_Grad_par(DnnNn, Tn) // Parallel conduction
-      ;
+            + FV::Div_a_Grad_perp_limit<PerpLimiter>(Dnn, Pn, logPnlim) // Perpendicular advection
+     ;
 
+  if (neutral_conduction) {
+    ddt(Pn) += FV::Div_a_Grad_perp(DnnNn, Tn)    // Perpendicular conduction
+      + FV::Div_par_K_Grad_par(DnnNn, Tn)        // Parallel conduction
+      ;
+  }
+  
   Sp = pressure_source;
   if (localstate.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);

@@ -452,14 +452,14 @@ const Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
   return are_unaligned ? fromFieldAligned(result, "RGN_NOBNDRY") : result;
 }
 
-/// Div ( a Grad_perp(f) )  -- diffusion
+/// Div ( a g Grad_perp(f) )  -- Perpendicular gradient-driven advection
 ///
-/// This version uses a slope limiter to calculate cell edge values in X,
+/// This version uses a slope limiter to calculate cell edge values of g in X,
 /// the advects the upwind cell edge.
 ///
 /// 1st order upwinding is used in Y.
 template <typename CellEdges = MC>
-const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& f) {
+const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g, const Field3D& f) {
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
@@ -476,46 +476,46 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& f) {
 
   // Flux in x
 
-  int xs = mesh->xstart - 1;
-  int xe = mesh->xend;
-
-  for (int i = xs; i <= xe; i++) {
+  for (int i = mesh->xstart - 1; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux from i to i+1
 
         const BoutReal gradient = f(i + 1, j, k) - f(i, j, k);
 
-        BoutReal aedge; // 'a' at the cell edge
-        if (((i == xs) and mesh->firstX()) or ((i == xe) and mesh->lastX())) {
-          // Mid-point average boundary value
-          aedge = 0.5 * (a(i + 1, j, k) + a(i, j, k));
+        // Mid-point average boundary value of 'a'
+        const BoutReal aedge = 0.5 * (a(i + 1, j, k) + a(i, j, k));
+        BoutReal gedge;
+        if (((i == mesh->xstart - 1) and mesh->firstX()) or
+            ((i == mesh->xend) and mesh->lastX())) {
+          // Mid-point average boundary value of 'g'
+          gedge = 0.5 * (g(i + 1, j, k) + g(i, j, k));
         } else if (gradient > 0) {
           // Flux is from (i+1) to (i)
-          // Reconstruct `a` at left of (i+1, j, k)
+          // Reconstruct `g` at left of (i+1, j, k)
 
-          Stencil1D sa;
-          sa.m = a(i, j, k);
-          sa.c = a(i + 1, j, k);
-          sa.p = a(i + 2, j, k);
-          cellboundary(sa); // Calculate sa.R and sa.L
+          Stencil1D sg;
+          sg.m = g(i, j, k);
+          sg.c = g(i + 1, j, k);
+          sg.p = g(i + 2, j, k);
+          cellboundary(sg); // Calculate sg.R and sg.L
 
-          aedge = sa.L;
+          gedge = sg.L;
         } else {
           // Flux is from (i) to (i+1)
-          // Reconstruct `a` at right of (i, j, k)
+          // Reconstruct `g` at right of (i, j, k)
 
-          Stencil1D sa;
-          sa.m = a(i - 1, j, k);
-          sa.c = a(i, j, k);
-          sa.p = a(i + 1, j, k);
-          cellboundary(sa); // Calculate sa.R and sa.L
+          Stencil1D sg;
+          sg.m = g(i - 1, j, k);
+          sg.c = g(i, j, k);
+          sg.p = g(i + 1, j, k);
+          cellboundary(sg); // Calculate sg.R and sg.L
 
-          aedge = sa.R;
+          gedge = sg.R;
         }
 
         // Flux across cell edge
-        const BoutReal fout = gradient * aedge
+        const BoutReal fout = gradient * aedge * gedge
                               * (coord->J(i, j) * coord->g11(i, j)
                                  + coord->J(i + 1, j) * coord->g11(i + 1, j))
                               / (coord->dx(i, j) + coord->dx(i + 1, j));
@@ -531,11 +531,13 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& f) {
   // Fields containing values along the magnetic field
   Field3D fup(mesh), fdown(mesh);
   Field3D aup(mesh), adown(mesh);
+  Field3D gup(mesh), gdown(mesh);
 
   // Values on this y slice (centre).
   // This is needed because toFieldAligned may modify the field
-  Field3D fc = f;
   Field3D ac = a;
+  Field3D gc = g;
+  Field3D fc = f;
 
   // Result of the Y and Z fluxes
   Field3D yzresult(mesh);
@@ -549,12 +551,16 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& f) {
 
     aup = a.yup();
     adown = a.ydown();
+
+    gup = g.yup();
+    gdown = g.ydown();
   } else {
     // At least one input doesn't have yup/ydown fields.
     // Need to shift to/from field aligned coordinates
 
     fup = fdown = fc = toFieldAligned(f);
     aup = adown = ac = toFieldAligned(a);
+    gup = gdown = gc = toFieldAligned(g);
     yzresult.setDirectionY(YDirectionType::Aligned);
   }
 
@@ -587,19 +593,20 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& f) {
         BoutReal dfdy = 2. * (fup(i, j + 1, k) - fc(i, j, k))
                         / (coord->dy(i, j + 1) + coord->dy(i, j));
 
-        BoutReal aedge;
+        BoutReal aedge = 0.5 * (ac(i, j, k) + aup(i, j + 1, k));
+        BoutReal gedge;
         if ((j == mesh->yend) and mesh->lastY(i)) {
           // Midpoint boundary value
-          aedge = 0.5 * (ac(i, j, k) + aup(i, j + 1, k));
+          gedge = 0.5 * (gc(i, j, k) + gup(i, j + 1, k));
         } else if (dfdy > 0) {
           // Flux from (j+1) to (j)
-          aedge = aup(i, j + 1, k);
+          gedge = gup(i, j + 1, k);
         } else {
           // Flux from (j) to (j+1)
-          aedge = ac(i, j, k);
+          gedge = gc(i, j, k);
         }
 
-        BoutReal fout = aedge * 0.5
+        BoutReal fout = aedge * gedge * 0.5
                         * (coord->J(i, j) * coord->g23(i, j)
                            + coord->J(i, j + 1) * coord->g23(i, j + 1))
                         * (dfdz - coef_u * dfdy);
@@ -614,15 +621,16 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& f) {
         dfdy = 2. * (fc(i, j, k) - fdown(i, j - 1, k))
                / (coord->dy(i, j) + coord->dy(i, j - 1));
 
+        aedge = 0.5 * (ac(i, j, k) + adown(i, j - 1, k));
         if ((j == mesh->ystart) and mesh->firstY(i)) {
-          aedge = 0.5 * (ac(i, j, k) + adown(i, j - 1, k));
+          gedge = 0.5 * (gc(i, j, k) + gdown(i, j - 1, k));
         } else if (dfdy > 0) {
-          aedge = ac(i, j, k);
+          gedge = gc(i, j, k);
         } else {
-          aedge = adown(i, j - 1, k);
+          gedge = gdown(i, j - 1, k);
         }
 
-        fout = aedge * 0.5
+        fout = aedge * gedge * 0.5
                * (coord->J(i, j) * coord->g23(i, j)
                   + coord->J(i, j - 1) * coord->g23(i, j - 1))
                * (dfdz - coef_d * dfdy);
@@ -655,7 +663,8 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& f) {
                   * (fup(i, j + 1, k) + fup(i, j + 1, kp) - fdown(i, j - 1, k)
                      - fdown(i, j - 1, kp));
 
-        BoutReal fout = gradient * ((gradient > 0) ? ac(i, j, kp) : ac(i, j, k));
+        BoutReal fout = gradient * 0.5*(ac(i,j,kp) + ac(i,j,k)) *
+          ((gradient > 0) ? gc(i, j, kp) : gc(i, j, k));
 
         yzresult(i, j, k) += fout / coord->dz(i, j);
         yzresult(i, j, kp) -= fout / coord->dz(i, j);

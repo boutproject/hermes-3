@@ -42,7 +42,7 @@ private:
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn; ///< Diffusion coefficient
-  Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
+  Field3D DnnNn;
 
   bool sheath_ydown, sheath_yup;
 
@@ -52,6 +52,7 @@ private:
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
   bool neutral_viscosity; ///< include viscosity?
+  bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
 
   bool precondition {true}; ///< Enable preconditioner?
