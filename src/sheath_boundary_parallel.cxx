@@ -62,6 +62,10 @@ BoutReal limitFree(const Field3D& f, const BoundaryRegionParIter& pnt) {
   }
   return f[pnt.ind()];
 }
+
+BoutReal limitFree(const Field3D& f, const BoundaryRegionIter& pnt) {
+  return limitFree(pnt.yprev(f), f[pnt.ind()]);
+}
 }
 
 SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &alloptions, Solver *) {
@@ -205,37 +209,38 @@ void SheathBoundaryParallel::transform(Options &state) {
                                      ? get<BoutReal>(species["adiabatic"])
                                      : 5. / 3; // Ratio of specific heats (ideal gas)
 
-      for (const auto& region: boundary_regions) {
-	for (const auto& pnt: *region) {
-	  const auto& i = pnt.ind();
-	  BoutReal s_i = clip(0.5 * pnt.extrapolate_next_o2([&, Ni, Ne](int yoffset, Ind3D ind){
-	    return Ni.ynext(yoffset)[ind] / Ne.ynext(yoffset)[ind];
-	  }), 0.0, 1.0);
+      for (auto* region : boundary_regions) {
+        for (auto& pnt : region) {
+          const auto& i = pnt.ind();
+          BoutReal s_i =
+              clip(0.5 * pnt.extrapolate_next_o2([&, Ni, Ne](int yoffset, Ind3D ind) {
+                return Ni.ynext(yoffset)[ind] / Ne.ynext(yoffset)[ind];
+              }),
+                   0.0, 1.0);
 
-	  if (!std::isfinite(s_i)) {
-	    s_i = 1.0;
-	  }
-	  BoutReal te = Te[i];
-	  BoutReal ti = Ti[i];
+          if (!std::isfinite(s_i)) {
+            s_i = 1.0;
+          }
+          BoutReal te = Te[i];
+          BoutReal ti = Ti[i];
 
-	  // Equation (9) in Tskhakaya 2005
-	  BoutReal grad_ne = pnt.extrapolate_grad_o2(Ne);
-	  BoutReal grad_ni = pnt.extrapolate_grad_o2(Ni);
-	  
-	  // Note: Needed to get past initial conditions, perhaps transients
-	  // but this shouldn't happen in steady state
-	  if (fabs(grad_ni) < 1e-3) {
-	    grad_ni = grad_ne = 1e-3;  // Remove kinetic correction term
-	  }
+          // Equation (9) in Tskhakaya 2005
+          BoutReal grad_ne = pnt.extrapolate_grad_o2(Ne);
+          BoutReal grad_ni = pnt.extrapolate_grad_o2(Ni);
 
-	  BoutReal C_i_sq = clip(
-                (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
-                    / Mi,
-                0, 100); // Limit for e.g. Ni zero gradient
+          // Note: Needed to get past initial conditions, perhaps
+          // transients but this shouldn't happen in steady state
+          if (fabs(grad_ni) < 1e-3) {
+            grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
+          }
 
-	  // Note: Vzi = C_i * sin(α)
-	  ion_sum[pnt.ind()] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
-	}
+          BoutReal C_i_sq =
+              clip((adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0,
+                   100); // Limit for e.g. Ni zero gradient
+
+          // Note: Vzi = C_i * sin(α)
+          ion_sum[pnt.ind()] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+        }
       }
     }
 
@@ -402,7 +407,7 @@ void SheathBoundaryParallel::transform(Options &state) {
       ? (getNonFinal<Field3D>(species["energy_source"]))
       : zeroFrom(Ni);
 
-    for (const auto& region: boundary_regions) {
+    for (auto& region : boundary_regions) {
       for (const auto& pnt: *region) {
 	
 	auto i = pnt.ind();
