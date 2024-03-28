@@ -525,7 +525,7 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g, const Fi
       }
     }
   }
-
+  
   // Y and Z fluxes require Y derivatives
 
   // Fields containing values along the magnetic field
@@ -543,8 +543,8 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g, const Fi
   Field3D yzresult(mesh);
   yzresult.allocate();
 
-  if (f.hasParallelSlices() && a.hasParallelSlices()) {
-    // Both inputs have yup and ydown
+  if (f.hasParallelSlices() && a.hasParallelSlices() && g.hasParallelSlices()) {
+    // All inputs have yup and ydown
 
     fup = f.yup();
     fdown = f.ydown();

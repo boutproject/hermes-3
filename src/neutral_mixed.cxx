@@ -14,6 +14,7 @@ using bout::globals::mesh;
 /// The limiter method in the radial pressure-diffusion.
 /// Upwind is consistent with the Y (poloidal) advection.
 using PerpLimiter = FV::Upwind;
+using ParLimiter = FV::Upwind;
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
     : name(name) {
@@ -332,7 +333,7 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral density
   TRACE("Neutral density");
   ddt(Nn) =
-    -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed) // Parallel advection
+    - FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed) // Parallel advection
     + FV::Div_a_Grad_perp_limit<PerpLimiter>(Dnn, Nn, logPnlim) // Perpendicular advection
     ;
 
@@ -349,7 +350,7 @@ void NeutralMixed::finally(const Options& state) {
     TRACE("Neutral momentum");
 
     ddt(NVn) =
-        -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed) // Momentum flow
+        -AA * FV::Div_par_fvv<ParLimiter>(Nnlim, Vn, sound_speed) // Momentum flow
         - Grad_par(Pn) // Pressure gradient
         + FV::Div_a_Grad_perp_limit<PerpLimiter>(Dnn, NVn, logPnlim) // Perpendicular advection
       ;
@@ -385,8 +386,8 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = -FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed) // Parallel advection
-            - (2. / 3) * Pn * Div_par(Vn)                          // Compression
+  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(Pn, Vn, sound_speed) // Parallel advection
+            - (2. / 3) * Pn * Div_par(Vn)                      // Compression
             + FV::Div_a_Grad_perp_limit<PerpLimiter>(Dnn, Pn, logPnlim) // Perpendicular advection
      ;
 
