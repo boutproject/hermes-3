@@ -192,7 +192,7 @@ void IonViscosity::transform(Options &state) {
     Coordinates::FieldMetric Pi_ci = Pi_cipar + Pi_ciperp;
 
 #if CHECKLEVEL >= 1
-    for (auto& i : N_av.getRegion("RGN_NOBNDRY")) {
+    for (auto& i : Pi_cipar.getRegion("RGN_NOBNDRY")) {
       if (!std::isfinite(Pi_cipar[i])) {
         throw BoutException("{} Pi_cipar non-finite at {}.\n", species_name, i);
       }
