@@ -42,7 +42,7 @@ private:
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn; ///< Diffusion coefficient
-  Field3D DnnNn;
+  Field3D DnnNn, DnnPn, DnnNVn;
 
   bool sheath_ydown, sheath_yup;
 
@@ -63,6 +63,11 @@ private:
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
+
+  // Flow diagnostics
+  Field3D particle_flow_xlow, particle_flow_ylow;
+  Field3D momentum_flow_xlow, momentum_flow_ylow;
+  Field3D energy_flow_xlow, energy_flow_ylow;
 };
 
 namespace {

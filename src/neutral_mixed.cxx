@@ -11,9 +11,6 @@
 
 using bout::globals::mesh;
 
-/// The limiter method in the radial pressure-diffusion.
-/// Upwind is consistent with the Y (poloidal) advection.
-using PerpLimiter = FV::Upwind;
 using ParLimiter = FV::Upwind;
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
@@ -152,6 +149,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   // Product of Dnn and another parameter has same BC as Dnn - see eqns to see why this is
   // necessary
   DnnNn.setBoundary(std::string("Dnn") + name);
+  DnnPn.setBoundary(std::string("Dnn") + name);
+  DnnNVn.setBoundary(std::string("Dnn") + name);
 }
 
 void NeutralMixed::transform(Options& state) {
@@ -305,14 +304,20 @@ void NeutralMixed::finally(const Options& state) {
   Dnn.applyBoundary();
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
+  DnnPn = Dnn * Pn;
+  DnnPn.applyBoundary();
   DnnNn = Dnn * Nn;
   DnnNn.applyBoundary();
+  DnnNVn = Dnn * NVn;
+  DnnNVn.applyBoundary();
 
   if (sheath_ydown) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         Dnn(r.ind, mesh->ystart - 1, jz) = -Dnn(r.ind, mesh->ystart, jz);
         DnnNn(r.ind, mesh->ystart - 1, jz) = -DnnNn(r.ind, mesh->ystart, jz);
+        DnnPn(r.ind, mesh->ystart - 1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
+        DnnNVn(r.ind, mesh->ystart - 1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
       }
     }
   }
@@ -322,6 +327,8 @@ void NeutralMixed::finally(const Options& state) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         Dnn(r.ind, mesh->yend + 1, jz) = -Dnn(r.ind, mesh->yend, jz);
         DnnNn(r.ind, mesh->yend + 1, jz) = -DnnNn(r.ind, mesh->yend, jz);
+        DnnPn(r.ind, mesh->yend + 1, jz) = -DnnPn(r.ind, mesh->yend, jz);
+        DnnNVn(r.ind, mesh->yend + 1, jz) = -DnnNVn(r.ind, mesh->yend, jz);
       }
     }
   }
@@ -334,7 +341,9 @@ void NeutralMixed::finally(const Options& state) {
   TRACE("Neutral density");
   ddt(Nn) =
     - FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed) // Parallel advection
-    + FV::Div_a_Grad_perp_limit<PerpLimiter>(Dnn, Nn, logPnlim) // Perpendicular advection
+    + Div_a_Grad_perp_upwind_flows(DnnNn, logPnlim,
+                                   particle_flow_xlow,
+                                   particle_flow_ylow) // Perpendicular advection
     ;
 
   Sn = density_source; // Save for possible output
@@ -352,7 +361,9 @@ void NeutralMixed::finally(const Options& state) {
     ddt(NVn) =
         -AA * FV::Div_par_fvv<ParLimiter>(Nnlim, Vn, sound_speed) // Momentum flow
         - Grad_par(Pn) // Pressure gradient
-        + FV::Div_a_Grad_perp_limit<PerpLimiter>(Dnn, NVn, logPnlim) // Perpendicular advection
+      + Div_a_Grad_perp_upwind_flows(DnnNVn, logPnlim,
+                                     momentum_flow_xlow,
+                                     momentum_flow_ylow) // Perpendicular advection
       ;
 
     if (neutral_viscosity) {
@@ -388,8 +399,11 @@ void NeutralMixed::finally(const Options& state) {
 
   ddt(Pn) = - FV::Div_par_mod<ParLimiter>(Pn, Vn, sound_speed) // Parallel advection
             - (2. / 3) * Pn * Div_par(Vn)                      // Compression
-            + FV::Div_a_Grad_perp_limit<PerpLimiter>(Dnn, Pn, logPnlim) // Perpendicular advection
+    + Div_a_Grad_perp_upwind_flows(DnnPn, logPnlim,
+                                   energy_flow_xlow, energy_flow_ylow) // Perpendicular advection
      ;
+  energy_flow_xlow *= 3/2; // Note: Should this be 5/2?
+  energy_flow_ylow *= 3/2;
 
   if (neutral_conduction) {
     ddt(Pn) += FV::Div_a_Grad_perp(DnnNn, Tn)    // Perpendicular conduction
@@ -441,6 +455,7 @@ void NeutralMixed::outputVars(Options& state) {
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
+  auto rho_s0 = get<BoutReal>(state["rho_s0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
 
   state[std::string("N") + name].setAttributes({{"time_dimension", "t"},
@@ -539,6 +554,67 @@ void NeutralMixed::outputVars(Options& state) {
                     {"long_name", name + " pressure source"},
                     {"species", name},
                     {"source", "neutral_mixed"}});
+
+    if (particle_flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_xlow")], particle_flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                    {"standard_name", "particle flow"},
+                    {"long_name", name + " particle flow in X. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    }
+    if (particle_flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_ylow")], particle_flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                    {"standard_name", "particle flow"},
+                    {"long_name", name + " particle flow in Y. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+    }
+    if (momentum_flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("MomentumFlow_") + name + std::string("_xlow")], momentum_flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "N"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum flow"},
+                    {"long_name", name + " momentum flow in X. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+    }
+    if (momentum_flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("MomentumFlow_") + name + std::string("_ylow")], momentum_flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "N"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum flow"},
+                    {"long_name", name + " momentum flow in Y. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+    }
+    if (energy_flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("EnergyFlow_") + name + std::string("_xlow")], energy_flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "W"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                    {"standard_name", "power"},
+                    {"long_name", name + " power through X cell face. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+    }
+    if (energy_flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("EnergyFlow_") + name + std::string("_ylow")], energy_flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "W"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                    {"standard_name", "power"},
+                    {"long_name", name + " power through Y cell face. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+    }
   }
 }
 
