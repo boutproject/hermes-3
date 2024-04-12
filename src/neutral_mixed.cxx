@@ -64,6 +64,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                      .doc("Enable preconditioning in neutral model?")
                      .withDefault<bool>(true);
 
+  lax_flux = options["lax_flux"]
+                     .doc("Enable stabilising lax flux?")
+                     .withDefault<bool>(true);
+
   flux_limit =
       options["flux_limit"]
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
@@ -334,7 +338,10 @@ void NeutralMixed::finally(const Options& state) {
   }
 
   // Sound speed appearing in Lax flux for advection terms
-  Field3D sound_speed = sqrt(Tn * (5. / 3) / AA);
+  sound_speed = 0;
+  if (lax_flux) {
+    sound_speed = sqrt(Tn * (5. / 3) / AA);
+  }
 
   /////////////////////////////////////////////////////
   // Neutral density

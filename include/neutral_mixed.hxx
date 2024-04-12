@@ -56,10 +56,12 @@ private:
   bool evolve_momentum; ///< Evolve parallel momentum?
 
   bool precondition {true}; ///< Enable preconditioner?
+  bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
   Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
+  Field3D sound_speed; ///< Sound speed for use with Lax flux
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
