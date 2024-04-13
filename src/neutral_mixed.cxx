@@ -60,6 +60,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e-5);
 
+  pn_floor = options["pn_floor"]
+                 .doc("A minimum pressure used when dividing Pn by Nn. "
+                      "Normalised units.")
+                 .withDefault(1e-8);
+
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
                      .withDefault<bool>(true);
@@ -67,6 +72,14 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   lax_flux = options["lax_flux"]
                      .doc("Enable stabilising lax flux?")
                      .withDefault<bool>(true);
+
+  dnnpnfix = options["dnnpnfix"]
+               .doc("Use DnnPn with Pnlim")
+               .withDefault<bool>(false);
+
+  dnnnnfix = options["dnnnnfix"]
+               .doc("Use DnnNn with Nnlim")
+               .withDefault<bool>(false);
 
   flux_limit =
       options["flux_limit"]
@@ -180,7 +193,7 @@ void NeutralMixed::transform(Options& state) {
   Vn.applyBoundary("neumann");
   Vnlim.applyBoundary("neumann");
 
-  Pnlim = floor(Pn, 1e-8);
+  Pnlim = floor(Pn, pn_floor);
   Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
@@ -308,9 +321,20 @@ void NeutralMixed::finally(const Options& state) {
   Dnn.applyBoundary();
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
-  DnnPn = Dnn * Pn;
+  if (dnnnnfix) {
+    DnnNn = Dnn * Nnlim;
+  } else {
+    DnnNn = Dnn * Nn;
+  }
+
+  if (dnnpnfix) {
+    DnnPn = Dnn * Pnlim;
+  } else {
+    DnnPn = Dnn * Pn;
+  }
+
   DnnPn.applyBoundary();
-  DnnNn = Dnn * Nn;
+  
   DnnNn.applyBoundary();
   DnnNVn = Dnn * NVn;
   DnnNVn.applyBoundary();
@@ -346,11 +370,16 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  ddt(Nn) =
-    - FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed) // Parallel advection
-    + Div_a_Grad_perp_upwind_flows(DnnNn, logPnlim,
+
+  perp_nn_adv_src = Div_a_Grad_perp_upwind_flows(DnnNn, logPnlim,
                                    particle_flow_xlow,
-                                   particle_flow_ylow) // Perpendicular advection
+                                   particle_flow_ylow); // Perpendicular advection
+
+  par_nn_adv_src = FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed); // Parallel advection
+
+  ddt(Nn) =
+    - par_nn_adv_src
+    + perp_nn_adv_src
     ;
 
   Sn = density_source; // Save for possible output
@@ -425,10 +454,10 @@ void NeutralMixed::finally(const Options& state) {
   ddt(Pn) += Sp;
 
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
-    if ((Pn[i] < 1e-9) && (ddt(Pn)[i] < 0.0)) {
+    if ((Pn[i] < pn_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
       ddt(Pn)[i] = 0.0;
     }
-    if ((Nn[i] < 1e-7) && (ddt(Nn)[i] < 0.0)) {
+    if ((Nn[i] < nn_floor * 1e-2) && (ddt(Nn)[i] < 0.0)) {
       ddt(Nn)[i] = 0.0;
     }
   }
@@ -559,6 +588,22 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", Pnorm * Omega_ci},
                     {"standard_name", "pressure source"},
                     {"long_name", name + " pressure source"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("S") + name + std::string("_perp_adv")], perp_nn_adv_src,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "density source due to perp advection"},
+                    {"long_name", name + " number density source due to perp advection"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("S") + name + std::string("_par_adv")], par_nn_adv_src,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "density source due to par advection"},
+                    {"long_name", name + " number density source due to par advection"},
                     {"species", name},
                     {"source", "neutral_mixed"}});
 
