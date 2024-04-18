@@ -1,0 +1,262 @@
+# 1D system with:
+#  - no-flow boundary on lower Y (i.e. outboard midplane)
+#  - sheath boundary on upper Y (i.e. divertor target)
+#  - Evolving electron and ion species
+#  - heat conduction
+#  - Uniform source of heat and particles throughout region above the X-point
+#  - Non-uniform grid, packed towards the divertor target
+#  - Recycling of ions as atoms
+#  - Ionisation of neutrals as ions
+#  - Charge exchange between neutrals and ions
+#  - Fixed fraction nitrogen impurity
+#  - Feedback control of upstream density to achieve a desired detachment front location
+
+# This is the number of output time-steps to write out
+nout = 1000
+# This is the interval between writing output time-steps (solver timestep is automatic)
+# Normalisation: see BOUT++ docs
+timestep = 5000
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+# 1D simulation, use "y" as the dimension along the fieldline
+nx = 1
+ny = 400   # Resolution along field-line
+nz = 1
+
+length = 30           # Length of the domain in meters
+length_xpt = 10   # Length from midplane to X-point [m] (i.e. this is where the source ends)
+
+dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing — grid refinement near the divertor target (which is where the interesting
+# stuff happens)
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+# Calculate where the source ends in grid index (i.e. at the X-point)
+source = length_xpt / length
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+# Index for separatrix. Doesn't have any effect in 1D.
+ixseps1 = -1
+ixseps2 = -1
+
+[hermes]
+# Evolve ion density, ion and electron pressure, then calculate force on ions due
+# to electron pressure by using electron force balance.
+# N.B. The ordering of components matters!! Need to put dependent quantities after
+# the components that they depend on.
+# If this is wrong, you'll get a runtime error (about non-existant variables)
+components = (d+, d, e, fixed_fraction_nitrogen, detachment_controller,
+              sheath_boundary, collisions, recycling, reactions,
+              electron_force_balance, neutral_parallel_diffusion)
+
+loadmetric = false       # Use Rxy, Bpxy etc?
+normalise_metric = true  # Normalise the input metric?
+
+# Normalisation parameters
+Nnorm = 1e19 #particles per cubic metre
+Bnorm = 1 #tesla
+Tnorm = 100 #electron-volts
+
+[solver]
+type = beuler  # Backward Euler steady-state solver
+snes_type = newtonls
+ksp_type = gmres
+max_nonlinear_iterations = 10
+lag_jacobian = 500
+atol = 1e-7
+rtol = 1e-5
+
+[sheath_boundary]
+# Set a sheath boundary condition at which the ends of the field-line
+lower_y = false
+upper_y = true
+
+[neutral_parallel_diffusion]
+
+dneut = 10   # (B / Bpol)^2 in neutral diffusion terms
+
+[e] # Electrons
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
+
+noflow_upper_y = false
+
+charge = -1
+AA = 1/1836 # Electron mass in amu
+
+thermal_conduction = true  # in evolve_pressure
+diagnose = true
+
+[Pe]
+
+# Initial condition for electron pressure (in terms of hermes:Nnorm * hermes:Tnorm)
+function = 1.0
+# Input power flux to electrons and ions in W/m^2
+powerflux = 5.0e7
+powerflux_to_electrons = powerflux / 2.0
+
+source = (powerflux_to_electrons*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
+####################################
+
+####################################
+
+[d+]  # Deuterium ions
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+charge = 1
+AA = 2 # atomic mass number in amu
+
+thermal_conduction = true  # in evolve_pressure
+
+diagnose = true
+
+recycle_as = d
+target_recycle = true  # Target recycling on
+target_recycle_energy = 3.5  # Franck-Condon dissociation energy
+target_recycle_multiplier = 0.99  # Recycling fraction
+
+[Nd+]
+# Initial condition for ion density.
+# Constant initial condition, but you could decide to write an expression in
+# terms of grid location and other variables
+# i.e. function = (y / (2 * pi) - 1)
+function = 1
+
+source_shape = 60 * H(mesh:y_xpt - y) * 1e20 # Feedback controller source shape
+
+[Pd+]
+
+function = Pe:function
+source = Pe:source
+
+[NVd+]
+
+function = 0
+
+####################################
+
+[d]  # Deuterium atoms
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary, simple_pump)
+
+charge = 0
+# Neutral mass in amu
+AA = 2
+
+thermal_conduction = true
+# Save variable to file
+diagnose = true
+
+residence_time = 0.1
+
+lpar = ((2-mesh:dymin)^2 - (2 - mesh:dymin - ((1 - mesh:dymin) * y / pi))^2) / (4*(1-mesh:dymin)) * mesh:length
+
+gradient = 1.0 / (mesh:length - mesh:length_xpt)
+intercept = -mesh:length_xpt * gradient
+sink_shape = clamp(gradient * lpar + intercept, 0.0, 1.0)
+
+[Nd]
+
+# Initial condition for neutral density
+function = 0.001
+
+[Pd]
+
+# Initial condition for neutral pressure
+function = 0.0001
+
+####################################
+
+[detachment_controller]
+; Most of these values have sensible defaults. You don't have to set them all! However, here,
+; we're being explicit in all of the available options.
+
+; The desired position of the detachment front from the divertor target, measured in meters from 
+; the divertor target. It represents the target location where the control system aims to 
+; maintain the front.
+detachment_front_setpoint = 1.0
+; A boolean flag indicating whether to use the velocity form (if true) or the position form 
+; (if false) of the PID controller.
+velocity_form = false
+; The minimum time interval, in seconds, before the control signal can be updated. 
+; This parameter prevents divide-by-zero errors when evaluating the error derivative.
+min_time_for_change = 1E-12
+; The minimum change in error required before the control signal is updated. 
+; This term is mostly left for experimenting.
+min_error_for_change = 0.0
+; The minimum value that the control signal (source multiplier) can take.
+minval_for_source_multiplier = -1e12
+; The maximum value for the control signal (source multiplier).
+maxval_for_source_multiplier = 1e12
+; Specifies the plasma species from which to select the source shape. The feedback source is the 
+; product of the control signal (source multiplier) and the source shape. If actuator='power' 
+; this will set source_shape=Ps::source_shape where s=species_for_source_shape, and if 
+; actuator='particles' this will set source_shape=Ns::source_shape.
+species_for_source_shape = "d+"
+; Indicates the main neutral species in the plasma. This species is used to determine the 
+; location of the detachment front.
+neutral_species = "d"
+; Defines the actuator to be adjusted to control the detachment front position. Options include 
+; 'power' for energy sources or 'particles' for particle density sources.
+actuator = "particles"
+; The initial value for the source multiplier (control signal) at the start of the simulation.
+initial_control = 1.0
+; The expected control value when the error equals zero. It serves as a baseline around which 
+; the control signal is modulated. Only used in position form.
+control_offset = 0.0
+; The time allowed for the system to settle before activating certain control terms, measured in 
+; seconds. It delays the start of control actions to ensure initial transients have subsided.
+settling_time = 1e-3
+; A flag to ignore the restart file, mainly useful for development purposes. It forces the 
+; controller to initialize from the provided settings rather than loading a previous state.
+ignore_restart = false
+; Resets the error integral to zero when the detachment front first reaches the desired 
+; position. This feature can help prevent integral wind-up and improve control stability.
+reset_integral_on_first_crossing = true
+; The proportional gain of the PID controller. It determines the strength of the response to 
+; the error.
+controller_gain = 1.5
+; The integral time of the PID controller, which influences the rate at which the integral term 
+; accumulates error over time.
+integral_time = 2e-4
+; The derivative time of the PID controller, affecting how strongly the controller reacts to the 
+; rate of change of the error.
+derivative_time = 5e-5
+; The number of points to store for calculating derivatives. It determines the size of the window 
+; over which the derivative of the error is computed. Usually a value of around 3 to 5 seems 
+; to filter out the worst of the noise due to small time-steps. Very large values will 
+; potentially introduce a destabilising lag in the derivative response (and also will eventually 
+; start to impact computational performance).
+buffer_size = 5
+; A comma-separated list of species to which the PI-controlled source will be applied.
+species_list = d+
+; A comma-separated list of scaling factors corresponding to each species listed in species_list.
+;  These factors adjust the magnitude of the control action applied to each species.
+scaling_factors_list = 1.0
+; Enables the output of additional diagnostic variables related to the control process if set 
+; to true.
+diagnose = true
+; Controls the level of debugging information printed to the screen. A value of 0 disables 
+; debugging output, 1 enables basic output, and 2 provides extensive debugging information.
+debug = 0.0
+
+[fixed_fraction_nitrogen]
+fraction = 0.01 # Fraction of electron density
+diagnose = true
+
+[recycling]
+
+# What species should be recycled?
+species = d+
+
+[reactions]
+type = (
+        d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
+        d + d+ -> d+ + d,     # Charge exchange
+       )
