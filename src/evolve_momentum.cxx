@@ -58,6 +58,9 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   fix_momentum_boundary_flux = options["fix_momentum_boundary_flux"]
     .doc("Fix Y boundary momentum flux to boundary midpoint value?")
     .withDefault<bool>(false);
+
+  // Set to zero so set for output
+  momentum_source = 0.0;
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -78,6 +81,7 @@ void EvolveMomentum::transform(Options &state) {
   NV_solver = NV; // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
+  NV_err = NV - NV_solver; // This is used in the finally() function
   set(species["momentum"], NV);
 }
 
@@ -88,6 +92,7 @@ void EvolveMomentum::finally(const Options &state) {
   BoutReal AA = get<BoutReal>(species["AA"]);
 
   // Get updated momentum with boundary conditions
+  // Note: This momentum may be modified by electromagnetic terms
   NV = get<Field3D>(species["momentum"]);
 
   // Get the species density
@@ -111,6 +116,8 @@ void EvolveMomentum::finally(const Options &state) {
       // Parallel electric field
       // Force density = - Z N ∇ϕ
       ddt(NV) -= Z * N * Grad_par(phi);
+    } else {
+      ddt(NV) = 0.0;
     }
   } else {
     ddt(NV) = 0.0;
@@ -168,7 +175,7 @@ void EvolveMomentum::finally(const Options &state) {
 
   // If N < density_floor then NV and NV_solver may differ
   // -> Add term to force NV_solver towards NV
-  ddt(NV) += NV - NV_solver;
+  ddt(NV) += NV_err;
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
@@ -193,6 +200,9 @@ void EvolveMomentum::finally(const Options &state) {
       flow_ylow = get<Field3D>(species["momentum_flow_ylow"]);
     }
   }
+  // Restore NV to the value returned by the solver
+  // so that restart files contain the correct values
+  NV = NV_solver;
 }
 
 void EvolveMomentum::outputVars(Options &state) {

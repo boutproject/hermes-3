@@ -24,6 +24,8 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
   // Set zero-gradient (neumann) boundary conditions
   aparSolver->setInnerBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD);
   aparSolver->setOuterBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD);
+  //aparSolver->setInnerBoundaryFlags(INVERT_DC_LAP + INVERT_AC_LAP);
+  //aparSolver->setOuterBoundaryFlags(INVERT_DC_LAP + INVERT_AC_LAP);
 
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
@@ -32,7 +34,7 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
 
 void Electromagnetic::transform(Options &state) {
   AUTO_TRACE();
-
+  
   Options& allspecies = state["species"];
 
   // Sum coefficients over species
@@ -58,7 +60,7 @@ void Electromagnetic::transform(Options &state) {
     const BoutReal A = get<BoutReal>(species["AA"]);
 
     // Coefficient in front of A_||
-    alpha_em += N * (SQ(Z) / A);
+    alpha_em += floor(N, 1e-5) * (SQ(Z) / A);
 
     // Right hand side
     Ajpar += mom * (Z / A);
@@ -86,12 +88,14 @@ void Electromagnetic::transform(Options &state) {
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
     Field3D nv = getNonFinal<Field3D>(species["momentum"]);
-    nv -= Z * N * Apar;
+    nv -= Z * DC(N) * Apar;
     // Note: velocity is momentum / (A * N)
     Field3D v = getNonFinal<Field3D>(species["velocity"]);
-    v -= (Z / A) * Apar;
+    v -= (Z / A) * DC(N) * Apar / floor(N, 1e-5);
     // Need to update the guard cells
     bout::globals::mesh->communicate(nv, v);
+    v.applyBoundary("dirichlet");
+    nv.applyBoundary("dirichlet");
 
     set(species["momentum"], nv);
     set(species["velocity"], v);
@@ -104,8 +108,8 @@ void Electromagnetic::outputVars(Options &state) {
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   set_with_attrs(state["beta_em"], beta_em, {
-      {"long_name", "Helmholtz equation parameter"}
-    });
+     {"long_name", "Helmholtz equation parameter"}
+   });
 
   set_with_attrs(state["Apar"], Apar, {
       {"time_dimension", "t"},

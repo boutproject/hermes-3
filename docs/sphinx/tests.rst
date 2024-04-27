@@ -203,3 +203,53 @@ where
 This is a cubic dispersion relation, so we find the three roots (using
 NumPy), and choose the root with the most positive growth rate
 (imaginary component of :math:`\omega`).
+
+.. figure:: figs/drift-wave.png
+   :name: drift-wave
+   :alt: Comparison of drift-wave growth rate (top) and frequency (bottom)
+   :width: 60%
+
+Alfven wave
+-----------
+
+The equations solved are
+.. math::
+
+   \begin{aligned}
+   \frac{\partial}{\partial t}\nabla\cdot\left(\frac{n_0 m_i}{B^2}\nabla_\perp\phi\right) =& \nabla_{||}J_{||} = -\nabla_{||}\left(en_ev_{||e}\right) \\
+   \frac{\partial}{\partial t}\left(m_en_ev_{||e} - en_eA_{||}\right) =& -\nabla\cdot\left(m_en_ev_{||e} \mathbf{b}v_{||e}\right) + en_e\partial_{||}\phi - 0.51\nu_{ei}n_im_ev_{||e} \\
+   J_{||} =& \frac{1}{\mu_0}\nabla_\perp^2 A_{||}
+   \end{aligned}
+
+Linearising around a stationary background with constant density
+:math:`n_0` and temperature :math:`T_0`, using
+:math:`\frac{\partial}{\partial t}\rightarrow -i\omega` gives:
+
+.. math::
+
+   \begin{aligned}
+   \tilde{\phi} =& -\frac{k_{||}}{\omega k_\perp^2}\frac{eB^2}{m_i}\tilde{v_{||e}} \\
+   \omega \left( m_e \tilde{v_{||e}} - e\tilde{A}_{||}\right) =& -ek_{||}\tilde{\phi} - i0.51\nu_{ei}m_e\tilde{v_{||e}} \\
+   en_0\tilde{v_{||e}} =& -\frac{k_\perp^2}{\mu_0}\tilde{A}_{||}
+   \end{aligned}
+
+Rearranging results in a quadratic dispersion relation:
+
+.. math::
+
+   \omega^2\left(1 + \frac{k_\perp^2 c^2}{\omega_{pe}^2}\right) + i 0.51\nu_{ei}\frac{k_\perp^2 c^2}{\omega_{pe}^2\omega - k_{||}^2V_A^2 = 0
+
+where :math:`V_A = B / \sqrt{\mu_0 n_0 m_i}` is the Alfven speed, and
+:math:`c / \omega_{pe} = \sqrt{m_e / \left(\mu_0 n_0 e^2\right)}` is
+the electron skin depth.
+
+When collisions are neglected, we obtain the result
+
+.. math::
+
+   \omega^2 = V_A^2\frac{k_{||}^2}{1 + k_\perp^2 c^2 / \omega_{pe}^2}
+
+.. figure:: figs/alfven-wave.png
+   :name: alfven-wave
+   :alt: Alfven wave speed, as function of parallel and perpendicular wavenumbers
+   :width: 60%
