@@ -265,5 +265,8 @@ endif()
 configure_file(include/hermes_build_config.hxx.in include/hermes_build_config.hxx)
 
 # Installation
-
-install(TARGETS hermes-3)
+if (BUILD_SHARED_LIBS)
+  install(TARGETS hermes-3 hermes-3-lib)
+else()
+  install(TARGETS hermes-3)
+endif()
