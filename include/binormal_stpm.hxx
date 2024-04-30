@@ -31,12 +31,15 @@ struct BinormalSTPM : public Component {
   ///     - density correction
   ///
   void transform(Options& state) override;
+  void outputVars(Options &state) override;
 
 
 private:
   std::string name; ///< Short name of the species e.g. h+
+  bool diagnose; ///< Output diagnostics?
   Field3D Theta, chi, D, nu; ///< Field line pitch, anomalous thermal, momentum diffusion
   Field3D nu_Theta, chi_Theta, D_Theta; ///< nu/Theta, chi/Theta, D/Theta, precalculated
+  Field3D Theta_inv; ///< Precalculate 1/Theta
 
 };
 
