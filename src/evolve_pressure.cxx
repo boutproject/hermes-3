@@ -365,6 +365,11 @@ void EvolvePressure::finally(const Options& state) {
   if (species.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(species["energy_source"]); // For diagnostic output
   }
+#if CHECKLEVEL >= 1
+  if (species.isSet("pressure_source")) {
+    throw BoutException("Components must evolve `energy_source` rather then `pressure_source`");
+  }
+#endif
   ddt(P) += Sp;
 
   // Term to force evolved P towards N * T
