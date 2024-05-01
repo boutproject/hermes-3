@@ -32,6 +32,10 @@ struct NeutralParallelDiffusion : public Component {
     diagnose = options["diagnose"]
       .doc("Output additional diagnostics?")
       .withDefault<bool>(false);
+
+    legacy_collisions = options["legacy_collisions"]
+      .doc("Use old model including only in, en, cx instead of cx, iz only?")
+      .withDefault<bool>(false);
   }
 
   ///
@@ -60,6 +64,7 @@ private:
   BoutReal dneut; ///< cross-field diffusion projection (B  / Bpol)^2
 
   bool diagnose; ///< Output diagnostics?
+  bool legacy_collisions; ///< Use old choice of collisions to calculate Dn?
 
   /// Per-species diagnostics
   struct Diagnostics {

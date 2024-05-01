@@ -19,12 +19,23 @@ void NeutralParallelDiffusion::transform(Options& state) {
       continue;
     }
 
-    auto nu = GET_VALUE(Field3D, species["collision_frequency"]);
     const BoutReal AA = GET_VALUE(BoutReal, species["AA"]); // Atomic mass
     const Field3D Nn = GET_VALUE(Field3D, species["density"]);
     const Field3D Tn = GET_VALUE(Field3D, species["temperature"]);
     const Field3D Pn = IS_SET(species["pressure"]) ?
       GET_VALUE(Field3D, species["pressure"]) : Nn * Tn;
+
+    // Collisionality
+    // Legacy mode: in, en, nn, cx
+    // New mode: cx, iz (in line with SOLPS AFN, Horsten 2017)
+    Field3D nu;
+    if (legacy_collisions) {
+      nu = GET_VALUE(Field3D, species["collision_frequency"]);
+    } else {
+      Field3D nu_iz = GET_VALUE(Field3D, species["collision_frequencies"][species.name() + std::string("+_iz")]);
+      Field3D nu_rec = GET_VALUE(Field3D, species["collision_frequencies"][species.name() + std::string("+_rec")]);
+      nu = nu_iz + nu_rec;
+    }
 
     // Diffusion coefficient
     Field3D Dn = dneut * Tn / (AA * nu);
