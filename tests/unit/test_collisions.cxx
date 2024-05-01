@@ -70,7 +70,7 @@ TEST_F(CollisionsTest, OneOrTwoSpeciesCharged) {
   state2["species"]["s1"]["charge"] = 1;
   state2["species"]["s1"]["AA"] = 2;
 
-  state2["species"]["s2"] = state2["species"]["s1"];
+  state2["species"]["s2"] = state2["species"]["s1"].copy();
 
   // Run calculations
   component.transform(state1);

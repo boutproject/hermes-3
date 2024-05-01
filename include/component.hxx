@@ -319,4 +319,15 @@ void set_with_attrs(Options& option, T value, std::initializer_list<std::pair<st
   option.setAttributes(attrs);
 }
 
+#if CHECKLEVEL >= 1
+template<>
+inline void set_with_attrs(Options& option, Field3D value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  if (!value.isAllocated()) {
+    throw BoutException("set_with_attrs: Field3D assigned to {:s} is not allocated", option.str());
+  }
+  option.force(value);
+  option.setAttributes(attrs);
+}
+#endif
+
 #endif // HERMES_COMPONENT_H

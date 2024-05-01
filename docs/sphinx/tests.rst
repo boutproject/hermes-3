@@ -139,3 +139,117 @@ stationary at the initial jump location.  Left state
 :math:`\left(\rho_L, u_L, p_L\right) = \left(1, -19.59745,
 1000.0\right)` Right state :math:`\left(\rho_R, u_R, p_R\right) =
 \left(1, -19.59745, 0.01\right)`.  Result at time :math:`t = 0.03`.
+
+Drift wave
+----------
+
+``tests/integrated/drift-wave``
+
+This calculates the growth rate and frequency of a resistive drift
+wave with finite electron mass. 
+
+The equations solved are:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial n_i}{\partial t} =& -\nabla\cdot\left(n_i\mathbf{v}_{E\times B}\right) \\
+   n_e =& n_i \\
+   \frac{\partial}{\partial t}\nabla\cdot\left(\frac{n_0 m_i}{B^2}\nabla_\perp\phi\right) =& \nabla_{||}J_{||} = -\nabla_{||}\left(en_ev_{||e}\right) \\
+   \frac{\partial}{\partial t}\left(m_en_ev_{||e}\right) =& -\nabla\cdot\left(m_en_ev_{||e} \mathbf{b}v_{||e}\right) + en_e\partial_{||}\phi - \partial_{||}p_e - 0.51\nu_{ei}n_im_ev_{||e}
+   \end{aligned}
+
+Linearising around a stationary background with constant density :math:`n_0` and temperature :math:`T_0`,
+using :math:`\frac{\partial}{\partial t}\rightarrow -i\omega` gives:
+
+.. math::
+
+   \begin{aligned}
+   \tilde{n} =& \frac{k_\perp}{\omega}\frac{n_0}{BL_n}\tilde{\phi} \\
+   \tilde{\phi} =& -\frac{k_{||}}{\omega k_\perp^2}\frac{eB^2}{m_i}\tilde{v_{||e}} \\
+   \omega m_e \tilde{v_{||e}} =& -ek_{||}\tilde{\phi} + ek_{||}\frac{T_o}{n_0}\tilde{n} - i0.51\nu_{ei}m_e\tilde{v_{||e}}
+   \end{aligned}
+
+
+where the radial density length scale coming from the radial
+:math:`E\times B` advection of density is defined as
+
+.. math::
+
+   \frac{1}{L_n} \equiv \frac{1}{n_0}\frac{\partial n_0}{\partial r}
+
+Substituting and rearranging gives:
+
+.. math::
+
+   i\left(\frac{\omega}{\omega*}\right)^3 \frac{\omega_*}{0.51\nu_{ei}} = \left(\frac{\omega}{\omega_*} - 1\right)\frac{i\sigma_{||}}{\omega_*} + \left(\frac{\omega}{\omega*}\right)^2
+
+or
+
+.. math::
+
+   \frac{\omega_*}{0.51\nu_{ei}}\left(\frac{\omega}{\omega_*}\right)^3 + i\left(\frac{\omega}{\omega_*}\right)^2 - \frac{\sigma_{||}}{\omega_*}\left(\frac{\omega}{\omega_*}\right) + \frac{\sigma_{||}}{\omega_*} = 0
+
+where
+
+.. math::
+
+   \begin{aligned}
+   \omega_* =& \frac{k_\perp T_0}{BL_n} \\
+   \sigma_{||} =& \frac{k_{||}^2}{k_\perp^2}\frac{\Omega_i\Omega_e}{0.51\nu_{ei}} \\
+   \Omega_s =& eB / m_s
+   \end{aligned}
+
+This is a cubic dispersion relation, so we find the three roots (using
+NumPy), and choose the root with the most positive growth rate
+(imaginary component of :math:`\omega`).
+
+.. figure:: figs/drift-wave.png
+   :name: drift-wave
+   :alt: Comparison of drift-wave growth rate (top) and frequency (bottom)
+   :width: 60%
+
+Alfven wave
+-----------
+
+The equations solved are
+.. math::
+
+   \begin{aligned}
+   \frac{\partial}{\partial t}\nabla\cdot\left(\frac{n_0 m_i}{B^2}\nabla_\perp\phi\right) =& \nabla_{||}J_{||} = -\nabla_{||}\left(en_ev_{||e}\right) \\
+   \frac{\partial}{\partial t}\left(m_en_ev_{||e} - en_eA_{||}\right) =& -\nabla\cdot\left(m_en_ev_{||e} \mathbf{b}v_{||e}\right) + en_e\partial_{||}\phi - 0.51\nu_{ei}n_im_ev_{||e} \\
+   J_{||} =& \frac{1}{\mu_0}\nabla_\perp^2 A_{||}
+   \end{aligned}
+
+Linearising around a stationary background with constant density
+:math:`n_0` and temperature :math:`T_0`, using
+:math:`\frac{\partial}{\partial t}\rightarrow -i\omega` gives:
+
+.. math::
+
+   \begin{aligned}
+   \tilde{\phi} =& -\frac{k_{||}}{\omega k_\perp^2}\frac{eB^2}{m_i}\tilde{v_{||e}} \\
+   \omega \left( m_e \tilde{v_{||e}} - e\tilde{A}_{||}\right) =& -ek_{||}\tilde{\phi} - i0.51\nu_{ei}m_e\tilde{v_{||e}} \\
+   en_0\tilde{v_{||e}} =& -\frac{k_\perp^2}{\mu_0}\tilde{A}_{||}
+   \end{aligned}
+
+Rearranging results in a quadratic dispersion relation:
+
+.. math::
+
+   \omega^2\left(1 + \frac{k_\perp^2 c^2}{\omega_{pe}^2}\right) + i 0.51\nu_{ei}\frac{k_\perp^2 c^2}{\omega_{pe}^2\omega - k_{||}^2V_A^2 = 0
+
+where :math:`V_A = B / \sqrt{\mu_0 n_0 m_i}` is the Alfven speed, and
+:math:`c / \omega_{pe} = \sqrt{m_e / \left(\mu_0 n_0 e^2\right)}` is
+the electron skin depth.
+
+When collisions are neglected, we obtain the result
+
+.. math::
+
+   \omega^2 = V_A^2\frac{k_{||}^2}{1 + k_\perp^2 c^2 / \omega_{pe}^2}
+
+.. figure:: figs/alfven-wave.png
+   :name: alfven-wave
+   :alt: Alfven wave speed, as function of parallel and perpendicular wavenumbers
+   :width: 60%

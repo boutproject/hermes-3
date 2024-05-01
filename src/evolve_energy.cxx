@@ -144,7 +144,6 @@ void EvolveEnergy::transform(Options& state) {
       P[i] = 0.0;
     }
   }
-
   P.applyBoundary("neumann");
 
   if (neumann_boundary_average_z) {
@@ -200,6 +199,37 @@ void EvolveEnergy::finally(const Options& state) {
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
   const Field3D V = get<Field3D>(species["velocity"]);
+  const BoutReal AA = get<BoutReal>(species["AA"]);
+
+  // Update boundaries of E from boundaries of P and V
+  E = toFieldAligned(E);
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      auto i = indexAt(N, r.ind, mesh->ystart, jz);
+      auto im = i.ym();
+
+      const BoutReal psheath = 0.5 * (P[im] + P[i]);
+      const BoutReal nsheath = 0.5 * (N[im] + N[i]);
+      const BoutReal vsheath = 0.5 * (V[im] + V[i]);
+
+      const BoutReal Esheath = Cv * psheath + 0.5 * AA * nsheath * SQ(vsheath);
+      E[im] = 2 * Esheath - E[i];
+    }
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      auto i = indexAt(N, r.ind, mesh->yend, jz);
+      auto ip = i.yp();
+
+      const BoutReal psheath = 0.5 * (P[ip] + P[i]);
+      const BoutReal nsheath = 0.5 * (N[ip] + N[i]);
+      const BoutReal vsheath = 0.5 * (V[ip] + V[i]);
+
+      const BoutReal Esheath = Cv * psheath + 0.5 * AA * nsheath * SQ(vsheath);
+      E[ip] = 2 * Esheath - E[i];
+    }
+  }
+  E = fromFieldAligned(E);
 
   Field3D Pfloor = P;
 
@@ -306,7 +336,7 @@ void EvolveEnergy::finally(const Options& state) {
   if (species.isSet("energy_source")) {
     Se += get<Field3D>(species["energy_source"]); // For diagnostic output
   }
-  if (species.isSet("energy_source")) {
+  if (species.isSet("momentum_source")) {
     Se += V * get<Field3D>(species["momentum_source"]);
   }
   ddt(E) += Se;
