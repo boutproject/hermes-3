@@ -52,20 +52,6 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
       E = energy_exchange;
       R = -energy_loss;
     }
-
-     // Check for reaction type
-    std::string reaction_type;
-    if (from_ion.name().find("+") != std::string::npos) {
-      reaction_type = "rec";
-    } else {
-      reaction_type = "iz";
-    }
-
-    // Add individual reaction collision frequency to each species
-    set(from_ion["collision_frequencies"][from_ion.name() + std::string("_iz")]
-    , heavy_particle_frequency);
-    set(electron["collision_frequencies"][from_ion.name() + std::string("_iz")], electron_frequency);
-
   }
 
   void outputVars(Options& state) override {

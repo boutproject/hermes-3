@@ -103,6 +103,14 @@ protected:
     const BoutReal to_charge =
         to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
+    // Check for reaction type
+    std::string reaction_type;
+    if (from_ion.name().find("+") != std::string::npos) {
+      reaction_type = "rec";
+    } else {
+      reaction_type = "iz";
+    }
+
     // Calculate reaction rate in [m^3 s^-1] using cell averaging. Optionally scale by multiplier
     reaction_rate = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
@@ -130,6 +138,15 @@ protected:
     // Add collision frequency to each species' total
     add(from_ion["collision_frequency"], heavy_particle_frequency);  // Neutral if iz, ion if rec
     add(electron["collision_frequency"], electron_frequency);
+
+    // Add individual reaction collision frequency to each species
+    if (reaction_type == "iz") {
+      set(from_ion["collision_frequencies"][to_ion.name() + std::string("_iz")], heavy_particle_frequency);
+      set(electron["collision_frequencies"][to_ion.name() + std::string("_iz")], electron_frequency);
+    } else if (reaction_type == "rec") {
+      set(from_ion["collision_frequencies"][from_ion.name() + std::string("_rec")], heavy_particle_frequency);
+      set(electron["collision_frequencies"][from_ion.name() + std::string("_rec")], electron_frequency);
+    }
 
     // Particles
     // For ionisation, "from_ion" is the neutral and "to_ion" is the ion
