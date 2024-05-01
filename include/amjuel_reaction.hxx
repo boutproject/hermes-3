@@ -135,11 +135,8 @@ protected:
         },
         Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
-    // Add collision frequency to each species' total
-    add(from_ion["collision_frequency"], heavy_particle_frequency);  // Neutral if iz, ion if rec
-    add(electron["collision_frequency"], electron_frequency);
-
     // Add individual reaction collision frequency to each species
+    // No collisions are added to the species as per legacy model where IZ, REC doesn't count towards collisions
     if (reaction_type == "iz") {
       set(from_ion["collision_frequencies"][to_ion.name() + std::string("_iz")], heavy_particle_frequency);
       set(electron["collision_frequencies"][to_ion.name() + std::string("_iz")], electron_frequency);
