@@ -336,6 +336,11 @@ void EvolveEnergy::finally(const Options& state) {
   if (species.isSet("energy_source")) {
     Se += get<Field3D>(species["energy_source"]); // For diagnostic output
   }
+#if CHECKLEVEL >= 1
+  if (species.isSet("pressure_source")) {
+    throw BoutException("Components must evolve `energy_source` rather then `pressure_source`");
+  }
+#endif
   if (species.isSet("momentum_source")) {
     Se += V * get<Field3D>(species["momentum_source"]);
   }
