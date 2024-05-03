@@ -138,11 +138,9 @@ protected:
     // Add individual reaction collision frequency to each species
     // No collisions are added to the species as per legacy model where IZ, REC doesn't count towards collisions
     if (reaction_type == "iz") {
-      set(from_ion["collision_frequencies"][to_ion.name() + std::string("_iz")], heavy_particle_frequency);
-      set(electron["collision_frequencies"][to_ion.name() + std::string("_iz")], electron_frequency);
+      set(from_ion["collision_frequencies"][from_ion.name() + std::string("_") + to_ion.name() + std::string("_iz")], heavy_particle_frequency);
     } else if (reaction_type == "rec") {
-      set(to_ion["collision_frequencies"][from_ion.name() + std::string("_rec")], heavy_particle_frequency);
-      set(electron["collision_frequencies"][from_ion.name() + std::string("_rec")], electron_frequency);
+      set(to_ion["collision_frequencies"][from_ion.name() + std::string("_") + to_ion.name() + std::string("_rec")], heavy_particle_frequency);
     }
 
     // Particles
