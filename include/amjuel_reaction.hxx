@@ -141,7 +141,7 @@ protected:
       set(from_ion["collision_frequencies"][to_ion.name() + std::string("_iz")], heavy_particle_frequency);
       set(electron["collision_frequencies"][to_ion.name() + std::string("_iz")], electron_frequency);
     } else if (reaction_type == "rec") {
-      set(from_ion["collision_frequencies"][from_ion.name() + std::string("_rec")], heavy_particle_frequency);
+      set(to_ion["collision_frequencies"][from_ion.name() + std::string("_rec")], heavy_particle_frequency);
       set(electron["collision_frequencies"][from_ion.name() + std::string("_rec")], electron_frequency);
     }
 

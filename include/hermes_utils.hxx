@@ -32,3 +32,14 @@ Ind3D indexAt(const T& f, int x, int y, int z) {
 }
 
 #endif // HERMES_UTILS_H
+
+/// Function which returns true if any of a list of subtstrings is contained within string
+inline bool containsAnySubstring(const std::string& mainString, const std::vector<std::string>& substrings) {
+  for (const auto& subString : substrings) {
+      if (mainString.find(subString) != std::string::npos) {
+          return true;  // Found at least one substring
+      }
+  }
+  return false;  // None of the substrings found
+}
+

@@ -1,4 +1,5 @@
 #include "../include/neutral_parallel_diffusion.hxx"
+#include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
@@ -29,12 +30,16 @@ void NeutralParallelDiffusion::transform(Options& state) {
     // Legacy mode: in, en, nn, cx
     // New mode: cx, iz (in line with SOLPS AFN, Horsten 2017)
     Field3D nu;
+    nu = 0;
     if (legacy_collisions) {
       nu = GET_VALUE(Field3D, species["collision_frequency"]);
     } else {
-      Field3D nu_iz = GET_VALUE(Field3D, species["collision_frequencies"][species.name() + std::string("+_iz")]);
-      Field3D nu_rec = GET_VALUE(Field3D, species["collision_frequencies"][species.name() + std::string("+_rec")]);
-      nu = nu_iz + nu_rec;
+      // This picks up all collisions with certain substrings in string name. Careful about double counting!
+      for (const auto& coll : species["collision_frequencies"].getChildren()) {
+        if (containsAnySubstring(coll.second.name(), std::vector<std::string> {"cx", "iz"})) {
+          nu += GET_VALUE(Field3D, species["collision_frequencies"][coll.second.name()]);
+        }
+      }
     }
 
     // Diffusion coefficient
