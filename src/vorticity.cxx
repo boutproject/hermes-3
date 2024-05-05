@@ -49,6 +49,27 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 
   return fp;
 }
+
+void applyDirichletBoundary(Field2D &f) {
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    f(r.ind, mesh->ystart - 1) = -f(r.ind, mesh->ystart);
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    f(r.ind, mesh->yend + 1) = -f(r.ind, mesh->yend);
+  }
+
+  if (mesh->lastX()) {
+    for (int y = mesh->ystart; y <= mesh->yend; y++) {
+      f(mesh->xend + 1, y) = -f(mesh->xend, y);
+    }
+  }
+  // Not applying to core boundary
+  if (mesh->firstX() && !mesh->periodicY(mesh->xstart)) {
+    for (int y = mesh->ystart; y <= mesh->yend; y++) {
+      f(mesh->xstart - 1, y) = -f(mesh->xstart, y);
+    }
+  }
+}
 }
 
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
@@ -206,6 +227,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   Curlb_B.z *= SQ(Lnorm);
 
   Curlb_B *= 2. / coord->Bxy;
+
+  applyDirichletBoundary(Curlb_B.x);
+  applyDirichletBoundary(Curlb_B.y);
+  applyDirichletBoundary(Curlb_B.z);
 
   Bsq = SQ(coord->Bxy);
 
@@ -486,6 +511,9 @@ void Vorticity::transform(Options& state) {
 
       auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 
+      P.clearParallelSlices();
+      phi.clearParallelSlices();
+      
       // Note: We need boundary conditions on P, so apply the same
       //       free boundary condition as sheath_boundary.
       if (P.hasParallelSlices()) {
@@ -493,12 +521,12 @@ void Vorticity::transform(Options& state) {
         Field3D &P_yup = P.yup();
         for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
           for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            P_ydown(r.ind, mesh->ystart - 1, jz) = 2 * P(r.ind, mesh->ystart, jz) - P_yup(r.ind, mesh->ystart + 1, jz);
+            P_ydown(r.ind, mesh->ystart - 1, jz) = P(r.ind, mesh->ystart, jz); //2 * P(r.ind, mesh->ystart, jz) - P_yup(r.ind, mesh->ystart + 1, jz);
           }
         }
         for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
           for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
+            P_yup(r.ind, mesh->yend + 1, jz) = P(r.ind, mesh->yend, jz); //2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
           }
         }
       } else {
@@ -506,13 +534,13 @@ void Vorticity::transform(Options& state) {
         for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
           for (int jz = 0; jz < mesh->LocalNz; jz++) {
             auto i = indexAt(P_fa, r.ind, mesh->ystart, jz);
-            P_fa[i.ym()] = limitFree(P_fa[i.yp()], P_fa[i]);
+            P_fa[i.ym()] = P_fa[i]; //limitFree(P_fa[i.yp()], P_fa[i]);
           }
         }
         for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
           for (int jz = 0; jz < mesh->LocalNz; jz++) {
             auto i = indexAt(P_fa, r.ind, mesh->yend, jz);
-            P_fa[i.yp()] = limitFree(P_fa[i.ym()], P_fa[i]);
+            P_fa[i.yp()] = P_fa[i]; //limitFree(P_fa[i.ym()], P_fa[i]);
           }
         }
         P = fromFieldAligned(P_fa);
