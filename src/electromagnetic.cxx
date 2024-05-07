@@ -21,11 +21,18 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
   auto& options = alloptions[name];
 
   aparSolver = Laplacian::create(&options["laplacian"]);
-  // Set zero-gradient (neumann) boundary conditions
-  aparSolver->setInnerBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD);
-  aparSolver->setOuterBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD);
-  //aparSolver->setInnerBoundaryFlags(INVERT_DC_LAP + INVERT_AC_LAP);
-  //aparSolver->setOuterBoundaryFlags(INVERT_DC_LAP + INVERT_AC_LAP);
+
+  if (options["apar_boundary_neumann"]
+      .doc("Neumann radial boundaries? False => Zero Laplace")
+      .withDefault<bool>(false)) {
+    // Set zero-gradient (neumann) boundary conditions
+    aparSolver->setInnerBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD);
+    aparSolver->setOuterBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD);
+  } else {
+    // Laplacian = 0 boundary conditions
+    aparSolver->setInnerBoundaryFlags(INVERT_DC_LAP + INVERT_AC_LAP);
+    aparSolver->setOuterBoundaryFlags(INVERT_DC_LAP + INVERT_AC_LAP);
+  }
 
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
