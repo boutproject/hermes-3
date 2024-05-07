@@ -486,9 +486,6 @@ void Vorticity::transform(Options& state) {
 
       auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 
-      P.clearParallelSlices();
-      phi.clearParallelSlices();
-      
       // Note: We need boundary conditions on P, so apply the same
       //       free boundary condition as sheath_boundary.
       if (P.hasParallelSlices()) {
