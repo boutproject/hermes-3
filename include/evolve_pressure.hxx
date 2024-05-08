@@ -79,6 +79,8 @@ private:
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
+  bool braginskii_collisions;
+  Field3D nu;   ///< Collision frequency for conduction
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
 
