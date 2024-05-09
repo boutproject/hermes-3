@@ -33,9 +33,9 @@ struct NeutralParallelDiffusion : public Component {
       .doc("Output additional diagnostics?")
       .withDefault<bool>(false);
 
-    legacy_collisions = options["legacy_collisions"]
-      .doc("Use old model including only in, en, cx instead of cx, iz only?")
-      .withDefault<bool>(false);
+    diffusion_collisions_mode = options["diffusion_collisions_mode"]
+      .doc("Can be afn: CX and IZ, or legacy: CX and nn, ni, ne (if enabled)")
+      .withDefault<std::string>("afn");
   }
 
   ///
@@ -64,7 +64,9 @@ private:
   BoutReal dneut; ///< cross-field diffusion projection (B  / Bpol)^2
 
   bool diagnose; ///< Output diagnostics?
-  bool legacy_collisions; ///< Use old choice of collisions to calculate Dn?
+  std::vector<std::string> collision_names; ///< Collisions used for collisionality
+  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or legacy
+  Field3D nu;   ///< Collision frequency for conduction
 
   /// Per-species diagnostics
   struct Diagnostics {

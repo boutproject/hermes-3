@@ -29,17 +29,58 @@ void NeutralParallelDiffusion::transform(Options& state) {
     // Collisionality
     // Legacy mode: in, en, nn, cx
     // New mode: cx, iz (in line with SOLPS AFN, Horsten 2017)
-    Field3D nu;
-    nu = 0;
-    if (legacy_collisions) {
-      nu = GET_VALUE(Field3D, species["collision_frequency"]);
-    } else {
-      // This picks up all collisions with certain substrings in string name. Careful about double counting!
-      for (const auto& coll : species["collision_frequencies"].getChildren()) {
-        if (containsAnySubstring(coll.second.name(), std::vector<std::string> {"cx", "iz"})) {
-          nu += GET_VALUE(Field3D, species["collision_frequencies"][coll.second.name()]);
+    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+
+      if (diffusion_collisions_mode == "afn") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Self-collisions
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "+", "cx", "partial")) or
+              /// Ion-electron collisions
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "+", "iz", "partial"))) {
+                  
+                  collision_names.push_back(collision_name);
+                }
         }
+      // Legacy mode: all collisions and CX are included
+      } else if (diffusion_collisions_mode == "legacy") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "cx", "partial")) or
+              /// Any collision (ne, ni, nn)
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "coll", "partial"))) {
+                  
+                  collision_names.push_back(collision_name);
+                }
+        }
+
+      } else {
+        throw BoutException("\tdiffusion_collisions_mode for {:s} must be either legacy or afn", species.name());
       }
+
+      /// Write chosen collisions to log file
+      output_info.write("\t{:s} neutral diffusion collisionality mode: '{:s}' using ",
+                      species.name(), diffusion_collisions_mode);
+      for (const auto& collision : collision_names) {        
+        output_info.write("{:s} ", collision);
+      }
+      output_info.write("\n");
+
+    }
+
+    /// Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
     }
 
     // Diffusion coefficient
