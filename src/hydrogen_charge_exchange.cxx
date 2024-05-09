@@ -101,5 +101,5 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
 
   // Set individual collision frequencies
   set(atom1["collision_frequencies"][atom1.name() + std::string("_") + ion1.name() + std::string("_cx")], atom_rate);
-  set(ion1["collision_frequencies"][ion1.name() + std::string("_") + atom1.name() + std::string("_cx")], atom_rate);
+  set(ion1["collision_frequencies"][ion1.name() + std::string("_") + atom1.name() + std::string("_cx")], ion_rate);
 }
