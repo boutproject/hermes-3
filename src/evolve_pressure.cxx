@@ -152,7 +152,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   neumann_boundary_average_z = p_options["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
-    
+
   already_printed = false;    ///< Enables printing collision choices just once
 }
 
@@ -354,7 +354,7 @@ void EvolvePressure::finally(const Options& state) {
               }
       }
     } else {
-      throw BoutException("\tconduction_collisions_mode for {must be either legacy or braginskii");
+      throw BoutException("\tconduction_collisions_mode for {:s} must be either legacy or braginskii", species.name());
     }
 
     if (already_printed == false) {
