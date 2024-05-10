@@ -36,6 +36,14 @@ struct NeutralParallelDiffusion : public Component {
     equation_fix = options["equation_fix"]
       .doc("Fix correcting pressure advection and conductivity factors?")
       .withDefault<bool>(true);
+
+    thermal_conduction = options["thermal_conducton"]
+      .doc("Enable conduction?")
+      .withDefault<bool>(true);
+
+    viscosity = options["viscosity"]
+      .doc("Enable viscosity?")
+      .withDefault<bool>(true);
   }
 
   ///
@@ -65,6 +73,8 @@ private:
 
   bool diagnose; ///< Output diagnostics?
   bool equation_fix;  ///< Fix incorrect 3/2 factor in pressure advection?
+  bool thermal_conduction; ///< Enable conduction?
+  bool viscosity; ///< Enable viscosity?
 
   /// Per-species diagnostics
   struct Diagnostics {

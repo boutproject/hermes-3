@@ -55,12 +55,15 @@ void NeutralParallelDiffusion::transform(Options& state) {
     kappa_n.applyBoundary("neumann");
 
     // Heat transfer
-    Field3D E = FV::Div_par_K_Grad_par(kappa_n, Tn)                 // Conduction
-      + FV::Div_par_K_Grad_par(Dn * advection_factor * Pn, logPn);  // Pressure advection
+    Field3D E = + FV::Div_par_K_Grad_par(
+      Dn * advection_factor * Pn, logPn);        // Pressure advection
+    if (thermal_conduction) {
+      E += FV::Div_par_K_Grad_par(kappa_n, Tn);   // Conduction
+    }
     add(species["energy_source"], E);
 
     Field3D F = 0.0;
-    if (IS_SET(species["velocity"])) {
+    if (IS_SET(species["velocity"]) and viscosity) {
       // Relationship between heat conduction and viscosity for neutral
       // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
       // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
