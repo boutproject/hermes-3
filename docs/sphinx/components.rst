@@ -2017,8 +2017,17 @@ the potential in time as a diffusion equation.
 .. doxygenstruct:: RelaxPotential
    :members:
 
+.. _electromagnetic:
+
 electromagnetic
 ~~~~~~~~~~~~~~~
+
+**Notes**: When using this module,
+1. Set ``sound_speed:alfven_wave=true`` so that the shear Alfven wave
+   speed is included in the calculation of the fastest parallel wave
+   speed for numerical dissipation.
+2. For tokamak simulations use zero-Laplacian boundary conditions
+   by setting ``electromagnetic:apar_boundary_neumann=false``.
 
 This component modifies the definition of momentum of all species, to
 include the contribution from the electromagnetic potential

@@ -44,6 +44,7 @@ loadmetric = false # Load metric from Bxy, Rxy etc?
 
 [electromagnetic]
 diagnose = true
+apar_boundary_neumann = true # Neumann radial boundary conditions
 
 [vorticity]
 

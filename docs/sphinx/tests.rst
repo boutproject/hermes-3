@@ -213,6 +213,7 @@ Alfven wave
 -----------
 
 The equations solved are
+
 .. math::
 
    \begin{aligned}
@@ -237,7 +238,7 @@ Rearranging results in a quadratic dispersion relation:
 
 .. math::
 
-   \omega^2\left(1 + \frac{k_\perp^2 c^2}{\omega_{pe}^2}\right) + i 0.51\nu_{ei}\frac{k_\perp^2 c^2}{\omega_{pe}^2\omega - k_{||}^2V_A^2 = 0
+   \omega^2\left(1 + \frac{k_\perp^2 c^2}{\omega_{pe}^2}\right) + i 0.51\nu_{ei}\frac{k_\perp^2 c^2}{\omega_{pe}^2}\omega - k_{||}^2V_A^2 = 0
 
 where :math:`V_A = B / \sqrt{\mu_0 n_0 m_i}` is the Alfven speed, and
 :math:`c / \omega_{pe} = \sqrt{m_e / \left(\mu_0 n_0 e^2\right)}` is
