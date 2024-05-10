@@ -1916,6 +1916,20 @@ This functionality is not yet currently implemented for helium or neon reactions
 | R_multiplier          | Impurity species | Fixed frac. impurity radiation rate   |
 +-----------------------+------------------+---------------------------------------+
 
+The charge exchange reaction can also be modified so that the momentum transfer channel is disabled. This can be useful when
+testing the impact of the full neutral momentum equation equation compared to purely diffusive neutrals. A diffusive only model 
+leads to all of the ion momentum being lost during charge exchange due to the lack of a neutral momentum equation.
+Enabling neutral momentum introduces a more accurate transport model but also prevents CX momentum from being lost, which
+can have a significant impact on the solution and may be difficult to analyse.
+Disabling the momentum transfer channel allows you to study the impact of the improved transport only and is set as:
+
+.. code-block:: ini
+
+   [hermes]
+   components = ..., c, ...
+
+   [reactions]
+   no_neutral_cx_mom_gain = true
 
 Electromagnetic fields
 ----------------------
