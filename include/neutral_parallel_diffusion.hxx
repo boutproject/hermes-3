@@ -32,6 +32,10 @@ struct NeutralParallelDiffusion : public Component {
     diagnose = options["diagnose"]
       .doc("Output additional diagnostics?")
       .withDefault<bool>(false);
+
+    equation_fix = options["equation_fix"]
+      .doc("Fix correcting pressure advection and conductivity factors?")
+      .withDefault<bool>(true);
   }
 
   ///
@@ -60,6 +64,7 @@ private:
   BoutReal dneut; ///< cross-field diffusion projection (B  / Bpol)^2
 
   bool diagnose; ///< Output diagnostics?
+  bool equation_fix;  ///< Fix incorrect 3/2 factor in pressure advection?
 
   /// Per-species diagnostics
   struct Diagnostics {
