@@ -293,55 +293,69 @@ void EvolvePressure::finally(const Options& state) {
 
     // Collisionality
     // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
-        if (collision_names.empty()) {     /// Calculate only once - at the beginning
+    if (collision_names.empty()) {     /// Calculate only once - at the beginning
 
-          if (conduction_collisions_mode == "braginskii") {
-            for (const auto& collision : species["collision_frequencies"].getChildren()) {
+      if (conduction_collisions_mode == "braginskii") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-              std::string collision_name = collision.second.name();
+          std::string collision_name = collision.second.name();
 
-              if (/// Self-collisions
-                  (collisionSpeciesMatch(    
-                    collision_name, species.name(), species.name(), "coll", "exact")) or
-                  /// Ion-electron collisions
-                  (collisionSpeciesMatch(    
-                    collision_name, species.name(), "+", "coll", "partial")) or
-                  /// Electron-ion collisions
-                  (collisionSpeciesMatch(    
-                    collision_name, species.name(), "e", "coll", "exact"))) {
-                      
-                      collision_names.push_back(collision_name);
-                    }
-            }
-          // Legacy mode: all collisions and CX are included
-          } else if (conduction_collisions_mode == "legacy") {
-            for (const auto& collision : species["collision_frequencies"].getChildren()) {
+          if (identifySpeciesType(species.name()) == "neutral") {
+            if (/// Charge exchange
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "+", "cx", "partial")) or
+                /// Ionisation
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "+", "iz", "partial"))) {
+                    
+                    collision_names.push_back(collision_name);
+                  }
 
-              std::string collision_name = collision.second.name();
-
-              if (/// Charge exchange
-                  (collisionSpeciesMatch(    
-                    collision_name, species.name(), "", "cx", "partial")) or
-                  /// Any collision (en, in, ee, ii, nn)
-                  (collisionSpeciesMatch(    
-                    collision_name, species.name(), "", "coll", "partial"))) {
-                      
-                      collision_names.push_back(collision_name);
-                    }
-            }
-            
           } else {
-            throw BoutException("\tconduction_collisions_mode for {:s} must be either legacy or braginskii", species.name());
+            if (/// Self-collisions
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), species.name(), "coll", "exact")) or
+              /// Ion-electron collisions
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "+", "coll", "partial")) or
+              /// Electron-ion collisions
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "e", "coll", "exact"))) {
+                  
+                  collision_names.push_back(collision_name);
+                }
           }
+          
+        }
+      // Legacy mode: all collisions and CX are included
+      } else if (conduction_collisions_mode == "legacy") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          /// Write chosen collisions to log file
-          output_info.write("\t{:s} conduction collisionality mode: '{:s}' using ",
-                          species.name(), conduction_collisions_mode);
-          for (const auto& collision : collision_names) {        
-            output_info.write("{:s} ", collision);
-          }
+          std::string collision_name = collision.second.name();
 
-          output_info.write("\n");
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "cx", "partial")) or
+              /// Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "coll", "partial"))) {
+                  
+                  collision_names.push_back(collision_name);
+                }
+        }
+        
+      } else {
+        throw BoutException("\tconduction_collisions_mode for {:s} must be either legacy or braginskii", species.name());
+      }
+
+      /// Write chosen collisions to log file
+      output_info.write("\t{:s} conduction collisionality mode: '{:s}' using ",
+                      species.name(), conduction_collisions_mode);
+      for (const auto& collision : collision_names) {        
+        output_info.write("{:s} ", collision);
+      }
+
+      output_info.write("\n");
 
       }
 
