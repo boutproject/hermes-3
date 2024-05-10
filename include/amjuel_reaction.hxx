@@ -136,7 +136,6 @@ protected:
         Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
     // Add individual reaction collision frequency to each species
-    // No collisions are added to the species as per legacy model where IZ, REC doesn't count towards collisions
     if (reaction_type == "iz") {
       set(from_ion["collision_frequencies"][from_ion.name() + std::string("_") + to_ion.name() + std::string("_iz")], heavy_particle_frequency);
     } else if (reaction_type == "rec") {

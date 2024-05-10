@@ -36,10 +36,10 @@ void NeutralParallelDiffusion::transform(Options& state) {
 
           std::string collision_name = collision.second.name();
 
-          if (/// Self-collisions
+          if (/// Charge exchange
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "+", "cx", "partial")) or
-              /// Ion-electron collisions
+              /// Ionisation
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "+", "iz", "partial"))) {
                   
