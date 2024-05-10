@@ -25,6 +25,7 @@
 
 #include "include/adas_carbon.hxx"
 #include "include/adas_neon.hxx"
+#include "include/adas_lithium.hxx"
 #include "include/amjuel_helium.hxx"
 #include "include/amjuel_hyd_ionisation.hxx"
 #include "include/amjuel_hyd_recombination.hxx"
@@ -71,8 +72,11 @@
 #include "include/thermal_force.hxx"
 #include "include/transform.hxx"
 #include "include/upstream_density_feedback.hxx"
+#include "include/temperature_feedback.hxx"
+#include "include/detachment_controller.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
+#include "include/simple_pump.hxx"
 #include <bout/constants.hxx>
 #include <bout/boundary_factory.hxx>
 #include <bout/boundary_op.hxx>
@@ -184,7 +188,7 @@ int Hermes::init(bool restarting) {
 
   // Put into the options tree, so quantities can be normalised
   // when creating components
-  Options::root()["units"] = units;
+  Options::root()["units"] = units.copy();
   Options::root()["units"].setConditionallyUsed();
 
   // Add the decay length boundary condition to the boundary factory
@@ -253,7 +257,7 @@ int Hermes::rhs(BoutReal time) {
   state = Options();
   
   set(state["time"], time);
-  state["units"] = units; 
+  state["units"] = units.copy();
 
   // Call all the components
   scheduler->transform(state);
