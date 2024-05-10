@@ -138,10 +138,12 @@ void IonViscosity::transform(Options &state) {
       output_info.write("\t{:s} viscosity collisionality mode: '{:s}' using ",
                       species.name(), viscosity_collisions_mode);
       for (const auto& collision : collision_names) {        
-        output_info.write("\t{:s} ");
+        output_info.write("{:s} ", collision);
       }
 
-    }
+      output_info.write("\n");
+
+      }
 
     /// Collect the collisionalities based on list of names
     nu = 0;
