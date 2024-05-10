@@ -5,6 +5,7 @@
 #include <bout/difops.hxx>
 #include <bout/output_bout_types.hxx>
 #include <bout/mesh.hxx>
+#include "../include/hermes_utils.hxx"
 
 #include "../include/ion_viscosity.hxx"
 #include "../include/div_ops.hxx"
@@ -25,6 +26,10 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
   perpendicular = options["perpendicular"]
     .doc("Include perpendicular flow? (Requires phi)")
     .withDefault<bool>(false);
+
+  viscosity_collisions_mode = options["viscosity_collisions_mode"]
+      .doc("Can be legacy: all collisions, or braginskii: self collisions")
+      .withDefault<std::string>("legacy");
   
   if (perpendicular) {
     // Read curvature vector
@@ -92,7 +97,59 @@ void IonViscosity::transform(Options &state) {
       continue;
     }
 
-    const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
+    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+
+      if (viscosity_collisions_mode == "braginskii") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Self-collisions
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), species.name(), "coll", "exact")) or
+              /// Ion-electron collisions
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "+", "coll", "partial"))) {
+                  
+                  collision_names.push_back(collision_name);
+                }
+        }
+      // Legacy mode: all collisions and CX are included
+      } else if (viscosity_collisions_mode == "legacy") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "cx", "partial")) or
+              /// Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "coll", "partial"))) {
+                  
+                  collision_names.push_back(collision_name);
+                }
+        }
+      } else {
+        throw BoutException("\tviscosity_collisions_mode for {:s} must be either legacy or braginskii", species.name());
+      }
+
+      /// Write chosen collisions to log file
+      output_info.write("\t{:s} viscosity collisionality mode: '{:s}' using ",
+                      species.name(), viscosity_collisions_mode);
+      for (const auto& collision : collision_names) {        
+        output_info.write("\t{:s} ");
+      }
+
+    }
+
+    /// Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
+    }
+
+    const Field3D tau = 1. / nu;
     const Field3D P = get<Field3D>(species["pressure"]);
     const Field3D V = get<Field3D>(species["velocity"]);
 
