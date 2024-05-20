@@ -367,15 +367,29 @@ void NeutralMixed::finally(const Options& state) {
     sound_speed = sqrt(Tn * (5. / 3) / AA);
   }
 
+  // Heat conductivity 
+  // Note: This is kappa_n = (5/2) * Pn / (m * nu)
+  //       where nu is the collision frequency used in Dnn
+  kappa_n = (5. / 2) * DnnNn;
+
+  // Viscosity
+  // Relationship between heat conduction and viscosity for neutral
+  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+  // Transport Processes in Gases", 1972
+  // eta_n = (2. / 5) * m_n * kappa_n;
+  //
+  eta_n = AA * (5. / 2) * kappa_n;
+
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
 
-  perp_nn_adv_src = Div_a_Grad_perp_upwind_flows(DnnNn, logPnlim,
+  perp_nn_adv_src = Div_a_Grad_perp_upwind_flows(DnnNn, logPnlim,       // Perpendicular advection
                                    particle_flow_xlow,
-                                   particle_flow_ylow); // Perpendicular advection
+                                   particle_flow_ylow);                 
 
-  par_nn_adv_src = FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed); // Parallel advection
+  par_nn_adv_src = FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed);    // Parallel advection
 
   ddt(Nn) =
     - par_nn_adv_src
@@ -388,6 +402,35 @@ void NeutralMixed::finally(const Options& state) {
   }
   ddt(Nn) += Sn; // Always add density_source
 
+  /////////////////////////////////////////////////////
+  // Neutral pressure
+  TRACE("Neutral pressure");
+
+  ddt(Pn) = 
+    - FV::Div_par_mod<ParLimiter>(Pn, Vn, sound_speed)                  // Parallel advection
+    - (2. / 3) * Pn * Div_par(Vn)                                       // Parallel compression
+    + Div_a_Grad_perp_upwind_flows((5. / 3) * DnnPn, logPnlim,          // Perpendicular advection
+                                   energy_flow_xlow, energy_flow_ylow)  
+     ;
+  energy_flow_xlow *= 3/2; // Note: Should this be 5/2?
+  energy_flow_ylow *= 3/2;
+
+  
+
+  if (neutral_conduction) {
+    ddt(Pn) += 
+      (2. / 3) * Div_a_Grad_perp_upwind(DnnNn, Tn)                      // Perpendicular conduction
+      + FV::Div_par_K_Grad_par(kappa_n, Tn)                             // Parallel conduction
+      ;
+  }
+  
+  Sp = pressure_source;
+  if (localstate.isSet("energy_source")) {
+    Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
+  }
+  ddt(Pn) += Sp;
+
+
   if (evolve_momentum) {
 
     /////////////////////////////////////////////////////
@@ -395,28 +438,24 @@ void NeutralMixed::finally(const Options& state) {
     TRACE("Neutral momentum");
 
     ddt(NVn) =
-        -AA * FV::Div_par_fvv<ParLimiter>(Nnlim, Vn, sound_speed) // Momentum flow
-        - Grad_par(Pn) // Pressure gradient
-      + Div_a_Grad_perp_upwind_flows(DnnNVn, logPnlim,
+        -AA * FV::Div_par_fvv<ParLimiter>(Nnlim, Vn, sound_speed)       // Parallel advection
+        - Grad_par(Pn)                                                  // Pressure gradient
+      + Div_a_Grad_perp_upwind_flows(DnnNVn, logPnlim,                  // Perpendicular advection
                                      momentum_flow_xlow,
-                                     momentum_flow_ylow) // Perpendicular advection
+                                     momentum_flow_ylow) 
       ;
 
     if (neutral_viscosity) {
       // NOTE: The following viscosity terms are not (yet) balanced
       //       by a viscous heating term
 
-      // Relationship between heat conduction and viscosity for neutral
-      // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
-      // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
-      // Transport Processes in Gases", 1972
-      // eta_n = (2. / 5) * kappa_n;
-      //
+      Field3D momentum_source = FV::Div_a_Grad_perp(eta_n, Vn)          // Perpendicular viscosity
+              + FV::Div_par_K_Grad_par(eta_n, Vn)                       // Parallel viscosity
+      ;
 
-      ddt(NVn) +=
-          AA * FV::Div_a_Grad_perp((2. / 5) * DnnNn, Vn)      // Perpendicular viscosity
-          + AA * FV::Div_par_K_Grad_par((2. / 5) * DnnNn, Vn) // Parallel viscosity
-          ;
+      ddt(NVn) += momentum_source; // Viscosity
+      ddt(Pn) += -(2. /3) * Vn * momentum_source;                       // Viscous heating
+
     }
 
     if (localstate.isSet("momentum_source")) {
@@ -428,30 +467,6 @@ void NeutralMixed::finally(const Options& state) {
     ddt(NVn) = 0;
     Snv = 0;
   }
-
-  /////////////////////////////////////////////////////
-  // Neutral pressure
-  TRACE("Neutral pressure");
-
-  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(Pn, Vn, sound_speed) // Parallel advection
-            - (2. / 3) * Pn * Div_par(Vn)                      // Compression
-    + Div_a_Grad_perp_upwind_flows(DnnPn, logPnlim,
-                                   energy_flow_xlow, energy_flow_ylow) // Perpendicular advection
-     ;
-  energy_flow_xlow *= 3/2; // Note: Should this be 5/2?
-  energy_flow_ylow *= 3/2;
-
-  if (neutral_conduction) {
-    ddt(Pn) += FV::Div_a_Grad_perp(DnnNn, Tn)    // Perpendicular conduction
-      + FV::Div_par_K_Grad_par(DnnNn, Tn)        // Parallel conduction
-      ;
-  }
-  
-  Sp = pressure_source;
-  if (localstate.isSet("energy_source")) {
-    Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
-  }
-  ddt(Pn) += Sp;
 
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
     if ((Pn[i] < pn_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
