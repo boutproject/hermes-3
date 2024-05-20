@@ -132,7 +132,10 @@ void EvolveMomentum::finally(const Options &state) {
       if (state["fields"].isSet("Apar")) {
         // Include a correction term for electromagnetic simulations
         const Field3D Apar = get<Field3D>(state["fields"]["Apar"]);
-        const Field3D density_source = get<Field3D>(species["density_source"]);
+
+        const Field3D density_source = species.isSet("density_source") ?
+          get<Field3D>(species["density_source"])
+          : zeroFrom(Apar);
 
         // This is Z * Apar * dn/dt, keeping just leading order terms
         ddt(NV) += Z * Apar * (density_source
