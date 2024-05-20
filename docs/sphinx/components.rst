@@ -2040,8 +2040,11 @@ electromagnetic
 1. Set ``sound_speed:alfven_wave=true`` so that the shear Alfven wave
    speed is included in the calculation of the fastest parallel wave
    speed for numerical dissipation.
-2. For tokamak simulations use zero-Laplacian boundary conditions
-   by setting ``electromagnetic:apar_boundary_neumann=false``.
+2. For tokamak simulations use Neumann boundary condition on the core
+   and Dirichlet on SOL and PF boundaries by setting
+   ``electromagnetic:apar_core_neumann=true`` (this is the default).
+3. Set the potential core boundary to be constant in Y by setting
+   ``vorticity:phi_core_averagey = true``
 
 This component modifies the definition of momentum of all species, to
 include the contribution from the electromagnetic potential
@@ -2055,8 +2058,14 @@ Assumes that "momentum" :math:`p_s` calculated for all species
    p_s = m_s n_s v_{||s} + Z_s e n_s A_{||}
 
 which arises once the electromagnetic contribution to the force on
-each species is included in the momentum equation. This is normalised
-so that in dimensionless quantities
+each species is included in the momentum equation. This requires
+an additional term in the momentum equation:
+
+.. math::
+
+   \frac{\partial p_s}{\partial t} = \cdots + Z_s e A_{||} \frac{\partial n_s}{\partial t}
+
+These equations are normalised so that in dimensionless quantities
 
 .. math::
 

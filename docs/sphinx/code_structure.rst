@@ -54,7 +54,7 @@ for new variables which are added to the state:
     * `charge`  Charge, in units of proton charge (i.e. electron=-1)
     
     * `density`
-    * `momentum`
+    * `momentum` Parallel momentum
     * `pressure`
     * `velocity` Parallel velocity
     * `temperature`
@@ -75,6 +75,7 @@ for new variables which are added to the state:
 
   * `vorticity`
   * `phi`       Electrostatic potential
+  * `Apar`      Electromagnetic potential b dot A
   * `DivJdia`   Divergence of diamagnetic current
   * `DivJcol`   Divergence of collisional current
   * `DivJextra` Divergence of current, including 2D parallel current

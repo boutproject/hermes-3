@@ -64,6 +64,10 @@ private:
 
   std::unique_ptr<Laplacian> aparSolver; // Laplacian solver in X-Z
 
+  bool const_gradient; // Set neumann boundaries by extrapolation
+  BoutReal apar_boundary_timescale; // Relaxation timescale
+  BoutReal last_time;  // The last time the boundaries were updated
+
   bool diagnose; ///< Output additional diagnostics?
 };
 

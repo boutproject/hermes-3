@@ -161,6 +161,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     // the first time RHS function is called
     phi_boundary_last_update = -1.;
 
+    phi_core_averagey = options["phi_core_averagey"]
+      .doc("Average phi core boundary in Y?")
+      .withDefault<bool>(false) and mesh->periodicY(mesh->xstart);
+
     phi_boundary_timescale = options["phi_boundary_timescale"]
                                  .doc("Timescale for phi boundary relaxation [seconds]")
                                  .withDefault(1e-4)
@@ -270,12 +274,32 @@ void Vorticity::transform(Options& state) {
       phi_boundary_last_update = time;
 
       if (mesh->firstX()) {
-        for (int j = mesh->ystart; j <= mesh->yend; j++) {
-          BoutReal phivalue = 0.0;
-          for (int k = 0; k < mesh->LocalNz; k++) {
-            phivalue += phi(mesh->xstart, j, k);
+        BoutReal phivalue = 0.0;
+        if (phi_core_averagey) {
+          BoutReal philocal = 0.0;
+          for (int j = mesh->ystart; j <= mesh->yend; j++) {
+            for (int k = 0; k < mesh->LocalNz; k++) {
+              philocal += phi(mesh->xstart, j, k);
+            }
           }
-          phivalue /= mesh->LocalNz; // Average in Z of point next to boundary
+          MPI_Comm comm_inner = mesh->getYcomm(0);
+          int np;
+          MPI_Comm_size(comm_inner, &np);
+          MPI_Allreduce(&philocal,
+                        &phivalue,
+                        1, MPI_DOUBLE,
+                        MPI_SUM, comm_inner);
+          phivalue /= (np * mesh->LocalNz * mesh->LocalNy);
+        }
+
+        for (int j = mesh->ystart; j <= mesh->yend; j++) {
+          if (!phi_core_averagey) {
+            phivalue = 0.0; // Calculate phi boundary for each Y index separately
+            for (int k = 0; k < mesh->LocalNz; k++) {
+              phivalue += phi(mesh->xstart, j, k);
+            }
+            phivalue /= mesh->LocalNz; // Average in Z of point next to boundary
+          }
 
           // Old value of phi at boundary
           BoutReal oldvalue =

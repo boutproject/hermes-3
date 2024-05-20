@@ -100,32 +100,6 @@ void EvolveMomentum::finally(const Options &state) {
   // Apply a floor to the density
   Field3D Nlim = floor(N, density_floor);
 
-  if (state.isSection("fields") and state["fields"].isSet("phi")
-      and species.isSet("charge")) {
-
-    BoutReal Z = get<BoutReal>(species["charge"]);
-    if (Z != 0.0) {
-      // Electrostatic potential set and species has charge
-      // -> include ExB flow and parallel force
-
-      Field3D phi = get<Field3D>(state["fields"]["phi"]);
-
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                       true); // ExB drift
-
-      // Parallel electric field
-      // Force density = - Z N ∇ϕ
-      ddt(NV) -= Z * N * Grad_par(phi);
-    } else {
-      ddt(NV) = 0.0;
-    }
-  } else {
-    ddt(NV) = 0.0;
-  }
-
-  // Parallel flow
-  V = get<Field3D>(species["velocity"]);
-
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
   if (state.isSet("fastest_wave")) {
@@ -133,6 +107,44 @@ void EvolveMomentum::finally(const Options &state) {
   } else {
     Field3D T = get<Field3D>(species["temperature"]);
     fastest_wave = sqrt(T / AA);
+  }
+
+  // Parallel flow
+  V = get<Field3D>(species["velocity"]);
+
+  if (state.isSection("fields") and state["fields"].isSet("phi")
+      and species.isSet("charge")) {
+
+    const BoutReal Z = get<BoutReal>(species["charge"]);
+    if (Z != 0.0) {
+      // Electrostatic potential set and species has charge
+      // -> include ExB flow and parallel force
+
+      const Field3D phi = get<Field3D>(state["fields"]["phi"]);
+
+      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+                                       true); // ExB drift
+
+      // Parallel electric field
+      // Force density = - Z N ∇ϕ
+      ddt(NV) -= Z * N * Grad_par(phi);
+
+      if (state["fields"].isSet("Apar")) {
+        // Include a correction term for electromagnetic simulations
+        const Field3D Apar = get<Field3D>(state["fields"]["Apar"]);
+        const Field3D density_source = get<Field3D>(species["density_source"]);
+
+        // This is Z * Apar * dn/dt, keeping just leading order terms
+        ddt(NV) += Z * Apar * (density_source
+                               - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave)
+                               - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
+                                                       true));
+      }
+    } else {
+      ddt(NV) = 0.0;
+    }
+  } else {
+    ddt(NV) = 0.0;
   }
 
   // Note:

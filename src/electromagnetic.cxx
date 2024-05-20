@@ -22,16 +22,34 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
 
   aparSolver = Laplacian::create(&options["laplacian"]);
 
-  if (options["apar_boundary_neumann"]
-      .doc("Neumann radial boundaries? False => Zero Laplace")
+  const_gradient = options["const_gradient"]
+    .doc("Extrapolate gradient of Apar into all radial boundaries?")
+    .withDefault<bool>(false);
+  if (const_gradient) {
+    // Set flags to take the gradient from the RHS
+    aparSolver->setInnerBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD + INVERT_RHS);
+    aparSolver->setOuterBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD + INVERT_RHS);
+    Apar = 0.0;
+    last_time = 0.0;
+
+    apar_boundary_timescale = options["apar_boundary_timescale"]
+      .doc("Timescale for Apar boundary relaxation [seconds]")
+      .withDefault(1e-8)
+      / get<BoutReal>(alloptions["units"]["seconds"]);
+
+  } else if (options["apar_boundary_neumann"]
+      .doc("Neumann on all radial boundaries?")
       .withDefault<bool>(false)) {
-    // Set zero-gradient (neumann) boundary conditions
+    // Set zero-gradient (neumann) boundary condition DC on the core
     aparSolver->setInnerBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD);
     aparSolver->setOuterBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD);
-  } else {
-    // Laplacian = 0 boundary conditions
-    aparSolver->setInnerBoundaryFlags(INVERT_DC_LAP + INVERT_AC_LAP);
-    aparSolver->setOuterBoundaryFlags(INVERT_DC_LAP + INVERT_AC_LAP);
+
+  } else if (options["apar_core_neumann"]
+      .doc("Neumann radial boundary in the core? False => Dirichlet")
+        .withDefault<bool>(true)
+             and bout::globals::mesh->periodicY(bout::globals::mesh->xstart)) {
+    // Set zero-gradient (neumann) boundary condition DC on the core
+    aparSolver->setInnerBoundaryFlags(INVERT_DC_GRAD);
   }
 
   diagnose = options["diagnose"]
@@ -75,7 +93,45 @@ void Electromagnetic::transform(Options &state) {
 
   // Invert Helmholtz equation for Apar
   aparSolver->setCoefA((-beta_em) * alpha_em);
-  Apar = aparSolver->solve((-beta_em) * Ajpar);
+
+  if (const_gradient) {
+    // Set gradient boundary condition from gradient inside boundary
+    Field3D rhs = (-beta_em) * Ajpar;
+
+    const auto* mesh = Apar.getMesh();
+    const auto* coords = Apar.getCoordinates();
+
+    BoutReal time = get<BoutReal>(state["time"]);
+    BoutReal weight = 1.0;
+    if (time > last_time) {
+      weight = exp((last_time - time) / apar_boundary_timescale);
+    }
+    last_time = time;
+
+    if (mesh->firstX()) {
+      const int x = mesh->xstart - 1;
+      for (int y = mesh->ystart; y <= mesh->yend; y++) {
+        for (int z = mesh->zstart; z <= mesh->zend; z++) {
+          rhs(x, y, z) = (weight * (Apar(x + 1, y, z) - Apar(x, y, z)) +
+                          (1 - weight) * (Apar(x + 2, y, z) - Apar(x + 1, y, z))) /
+            (sqrt(coords->g_11(x, y)) * coords->dx(x, y));
+        }
+      }
+    }
+    if (mesh->lastX()) {
+      const int x = mesh->xend + 1;
+      for (int y = mesh->ystart; y <= mesh->yend; y++) {
+        for (int z = mesh->zstart; z <= mesh->zend; z++) {
+          rhs(x, y, z) =  (weight * (Apar(x, y, z) - Apar(x - 1, y, z)) +
+                           (1 - weight) * (Apar(x - 1, y, z) - Apar(x - 2, y, z))) /
+            sqrt(coords->g_11(x, y)) / coords->dx(x, y);
+        }
+      }
+    }
+    Apar = aparSolver->solve(rhs);
+  } else {
+    Apar = aparSolver->solve((-beta_em) * Ajpar);
+  }
 
   // Save in the state
   set(state["fields"]["Apar"], Apar);
