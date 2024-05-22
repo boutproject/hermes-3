@@ -70,7 +70,6 @@ private:
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
-  bool dnnnnfix, dnnpnfix;
 
   // Flow diagnostics
   Field3D particle_flow_xlow, particle_flow_ylow;
