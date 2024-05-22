@@ -6,7 +6,8 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
                                              Field3D &atom_mom, Field3D &ion_mom,
                                              Field3D &atom_energy, Field3D &ion_energy,
                                              Field3D &atom_rate, Field3D &ion_rate,
-                                             BoutReal &rate_multiplier) {
+                                             BoutReal &rate_multiplier,
+                                             bool &no_neutral_cx_mom_gain) {
 
   // Temperatures and masses of initial atom and ion
   const Field3D Tatom = get<Field3D>(atom1["temperature"]);
@@ -63,7 +64,9 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   // Transfer fom atom1 to ion2
   atom_mom = R * Aatom * atom1_velocity;
   subtract(atom1["momentum_source"], atom_mom);
-  add(ion2["momentum_source"], atom_mom);
+  if (no_neutral_cx_mom_gain == false) {
+    add(ion2["momentum_source"], atom_mom);
+  }
 
   // Transfer from ion1 to atom2
   ion_mom = R * Aion * ion1_velocity;

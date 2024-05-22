@@ -72,7 +72,8 @@ protected:
                        Field3D& R, Field3D& atom_mom, Field3D& ion_mom,
                        Field3D& atom_energy, Field3D& ion_energy, 
                        Field3D& atom_rate, Field3D& ion_rate,
-                       BoutReal& rate_multiplier);
+                       BoutReal& rate_multiplier,
+                       bool& no_neutral_cx_mom_gain);
 };
 
 /// Hydrogen charge exchange
@@ -119,13 +120,24 @@ struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
   HydrogenChargeExchangeIsotope(std::string name, Options& alloptions, Solver* solver)
       : HydrogenChargeExchange(name, alloptions, solver) {
 
+    //// Options under [reactions]
     diagnose = alloptions[name]["diagnose"]
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
 
+    // This is useful for testing the impact of enabling the neutral momentum equation.
+    // When set to true, CX behaves as if using diffusive neutrals but the neutral transport
+    // still enjoys the full momentum equation treatment.
+    no_neutral_cx_mom_gain = alloptions[name]["no_neutral_cx_mom_gain"]
+                           .doc("If true, ion momentum in CX is still lost but not given to the neutrals")
+                           .withDefault<bool>(false);
+
+    // Options under neutral species of isotope 1 (on LHS of reaction)
     rate_multiplier = alloptions[{Isotope1}]["K_cx_multiplier"]
                            .doc("Scale the charge exchange rate by this factor")
                            .withDefault<BoutReal>(1.0);
+
+    
   }
 
   void transform(Options& state) override {
@@ -137,7 +149,8 @@ struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
                     state["species"][{Isotope1, '+'}],              // e.g. "h+"
                     R, atom_mom, ion_mom, atom_energy, ion_energy,  // Transfer channels
                     atom_rate, ion_rate,                            // Collision rates in s^-1
-                    rate_multiplier);                               // Arbitrary user set multiplier
+                    rate_multiplier,                                // Arbitrary user set multiplier
+                    no_neutral_cx_mom_gain);                        // Make CX behave as in diffusive neutrals?
 
     if (diagnose) {
       // Calculate diagnostics to be written to dump file
@@ -252,6 +265,7 @@ private:
   Field3D F, F2; ///< Momentum exchange
   Field3D E, E2; ///< Energy exchange
   Field3D atom_rate, ion_rate; ///< Collision rates in s^-1
+  bool no_neutral_cx_mom_gain; ///< Make CX behave as in diffusive neutrals?
 };
 
 namespace {
