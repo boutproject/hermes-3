@@ -73,14 +73,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                      .doc("Enable stabilising lax flux?")
                      .withDefault<bool>(true);
 
-  dnnpnfix = options["dnnpnfix"]
-               .doc("Use DnnPn with Pnlim")
-               .withDefault<bool>(false);
-
-  dnnnnfix = options["dnnnnfix"]
-               .doc("Use DnnNn with Nnlim")
-               .withDefault<bool>(false);
-
   flux_limit =
       options["flux_limit"]
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
@@ -321,22 +313,12 @@ void NeutralMixed::finally(const Options& state) {
   Dnn.applyBoundary();
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
-  if (dnnnnfix) {
-    DnnNn = Dnn * Nnlim;
-  } else {
-    DnnNn = Dnn * Nn;
-  }
-
-  if (dnnpnfix) {
-    DnnPn = Dnn * Pnlim;
-  } else {
-    DnnPn = Dnn * Pn;
-  }
+  DnnNn = Dnn * Nnlim;
+  DnnPn = Dnn * Pnlim;
+  DnnNVn = Dnn * NVn;
 
   DnnPn.applyBoundary();
-  
   DnnNn.applyBoundary();
-  DnnNVn = Dnn * NVn;
   DnnNVn.applyBoundary();
 
   if (sheath_ydown) {
