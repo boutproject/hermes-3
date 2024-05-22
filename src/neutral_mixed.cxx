@@ -58,12 +58,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   nn_floor = options["nn_floor"]
                  .doc("A minimum density used when dividing NVn by Nn. "
                       "Normalised units.")
-                 .withDefault(1e-5);
-
-  pn_floor = options["pn_floor"]
-                 .doc("A minimum pressure used when dividing Pn by Nn. "
-                      "Normalised units.")
                  .withDefault(1e-8);
+
+  pn_floor = pressure_floor = nn_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
