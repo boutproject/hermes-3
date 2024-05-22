@@ -307,15 +307,13 @@ void EvolvePressure::finally(const Options& state) {
                 /// Ionisation
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), "+", "iz", "partial"))) {
-                    
                     collision_names.push_back(collision_name);
                   }
 
           } else if (identifySpeciesType(species.name()) == "electron") {
-            if (/// Electron-ion collisions
+            if (/// Electron-electron collisions
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), "e", "coll", "exact"))) {
-                    
                     collision_names.push_back(collision_name);
                   }
 
@@ -323,7 +321,6 @@ void EvolvePressure::finally(const Options& state) {
             if (/// Self-collisions
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), species.name(), "coll", "exact"))) {
-                    
                     collision_names.push_back(collision_name);
                   }
           }
@@ -341,7 +338,6 @@ void EvolvePressure::finally(const Options& state) {
               /// Any collision (en, in, ee, ii, nn)
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "", "coll", "partial"))) {
-                  
                   collision_names.push_back(collision_name);
                 }
         }
