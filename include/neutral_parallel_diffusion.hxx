@@ -41,12 +41,12 @@ struct NeutralParallelDiffusion : public Component {
       .doc("Fix correcting pressure advection and conductivity factors?")
       .withDefault<bool>(true);
 
-    thermal_conduction = options["thermal_conducton"]
-      .doc("Enable conduction?")
+    perpendicular_conduction = options["perpendicular_conduction"]
+      .doc("Enable parallel projection of perpendicular conduction?")
       .withDefault<bool>(true);
 
-    viscosity = options["viscosity"]
-      .doc("Enable viscosity?")
+    perpendicular_viscosity = options["perpendicular_viscosity"]
+      .doc("Enable parallel projection of perpendicular viscosity?")
       .withDefault<bool>(true);
   }
 
@@ -80,8 +80,8 @@ private:
   std::string diffusion_collisions_mode;  ///< Collision selection, either afn or legacy
   Field3D nu;   ///< Collision frequency for conduction
   bool equation_fix;  ///< Fix incorrect 3/2 factor in pressure advection?
-  bool thermal_conduction; ///< Enable conduction?
-  bool viscosity; ///< Enable viscosity?
+  bool perpendicular_conduction; ///< Enable conduction?
+  bool perpendicular_viscosity; ///< Enable viscosity?
 
   /// Per-species diagnostics
   struct Diagnostics {
