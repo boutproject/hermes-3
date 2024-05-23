@@ -60,7 +60,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e-8);
 
-  pn_floor = pressure_floor = nn_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pn_floor = nn_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
