@@ -41,15 +41,19 @@ private:
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
+  std::vector<std::string> collision_names; ///< Collisions used for collisionality
+  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or legacy
+  Field3D nu; ///< Collisionality to use for diffusion
   Field3D Dnn; ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
+  BoutReal flux_limit; ///< Diffusive flux limit
+  BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
   bool sheath_ydown, sheath_yup;
 
   BoutReal nn_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
 
-  BoutReal flux_limit; ///< Diffusive flux limit
-  BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
+  
 
   bool neutral_viscosity; ///< include viscosity?
   bool evolve_momentum; ///< Evolve parallel momentum?
