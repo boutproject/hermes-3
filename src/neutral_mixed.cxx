@@ -389,7 +389,7 @@ void NeutralMixed::finally(const Options& state) {
     - FV::Div_par_mod<ParLimiter>(Pn, Vn, sound_speed)                  // Parallel advection
     - (2. / 3) * Pn * Div_par(Vn)                                       // Parallel compression
     + Div_a_Grad_perp_upwind_flows((5. / 3) * DnnPn, logPnlim,          // Perpendicular advection
-                                   energy_flow_xlow, energy_flow_ylow)  
+                                   energy_flow_xlow, energy_flow_ylow);  
      ;
   // The factor here is likely 5/2 as we're advecting internal energy and pressure.
   // Doing this still leaves a heat imbalance factor of 0.11 in the cells, but better than 0.33 with 3/2.
@@ -399,8 +399,8 @@ void NeutralMixed::finally(const Options& state) {
   
 
   if (neutral_conduction) {
-    ddt(Pn) += (2. / 3) Div_a_Grad_perp_upwind_flows(kappa_n, Tn,
-                        conduction_flow_xlow, conduction_flow_ylow)    // Perpendicular conduction
+    ddt(Pn) += (2. / 3) * Div_a_Grad_perp_upwind_flows(kappa_n, Tn,
+                        conduction_flow_xlow, conduction_flow_ylow);    // Perpendicular conduction
       + FV::Div_par_K_Grad_par(kappa_n, Tn)                               // Parallel conduction
       ;
   }
