@@ -421,7 +421,8 @@ void NeutralMixed::finally(const Options& state) {
   energy_flow_ylow *= 5/2;
 
   if (neutral_conduction) {
-    ddt(Pn) += FV::Div_a_Grad_perp(DnnNn, Tn)    // Perpendicular conduction
+    ddt(Pn) += Div_a_Grad_perp_upwind_flows(DnnNn, Tn,
+                        conduction_flow_xlow, conduction_flow_ylow)    // Perpendicular conduction
       + FV::Div_par_K_Grad_par(DnnNn, Tn)        // Parallel conduction
       ;
   }
@@ -643,6 +644,26 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
                     {"long_name", name + " power through Y cell face. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+    }
+    if (conduction_flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("ConductionFlow_") + name + std::string("_xlow")],conduction_flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "W"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                    {"standard_name", "power"},
+                    {"long_name", name + " conducted power through X cell face. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+    }
+    if (conduction_flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("ConductionFlow_") + name + std::string("_ylow")], conduction_flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "W"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                    {"standard_name", "power"},
+                    {"long_name", name + " conducted power through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
