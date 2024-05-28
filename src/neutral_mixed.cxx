@@ -358,7 +358,7 @@ void NeutralMixed::finally(const Options& state) {
   // Transport Processes in Gases", 1972
   // eta_n = (2. / 5) * m_n * kappa_n;
   //
-  eta_n = AA * (5. / 2) * kappa_n;
+  eta_n = AA * (2. / 5) * kappa_n;
 
   /////////////////////////////////////////////////////
   // Neutral density
@@ -399,7 +399,7 @@ void NeutralMixed::finally(const Options& state) {
   if (neutral_conduction) {
     ddt(Pn) += 
       (2. / 3) * Div_a_Grad_perp_upwind(kappa_n, Tn)                      // Perpendicular conduction
-      + FV::Div_par_K_Grad_par(kappa_n, Tn)                             // Parallel conduction
+      + FV::Div_par_K_Grad_par(kappa_n, Tn)                               // Parallel conduction
       ;
   }
   
