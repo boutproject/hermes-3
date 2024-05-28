@@ -417,7 +417,10 @@ void NeutralMixed::finally(const Options& state) {
     + Div_a_Grad_perp_upwind_flows(DnnPn, logPnlim,
                                    energy_flow_xlow, energy_flow_ylow) // Perpendicular advection
      ;
-  energy_flow_xlow *= 5/2; // Note: Should this be 5/2?
+
+  // The factor here is likely 5/2 as we're advecting internal energy and pressure.
+  // Doing this still leaves a heat imbalance factor of 0.11 in the cells, but better than 0.33 with 3/2.
+  energy_flow_xlow *= 5/2; 
   energy_flow_ylow *= 5/2;
 
   if (neutral_conduction) {
@@ -426,6 +429,10 @@ void NeutralMixed::finally(const Options& state) {
       + FV::Div_par_K_Grad_par(DnnNn, Tn)        // Parallel conduction
       ;
   }
+
+  // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
+  energy_flow_xlow *= 3/2;
+  energy_flow_ylow *= 3/2;
   
   Sp = pressure_source;
   if (localstate.isSet("energy_source")) {
