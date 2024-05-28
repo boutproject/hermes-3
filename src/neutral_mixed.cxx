@@ -398,7 +398,7 @@ void NeutralMixed::finally(const Options& state) {
 
   if (neutral_conduction) {
     ddt(Pn) += 
-      (2. / 3) * Div_a_Grad_perp_upwind(DnnNn, Tn)                      // Perpendicular conduction
+      (2. / 3) * Div_a_Grad_perp_upwind(kappa_n, Tn)                      // Perpendicular conduction
       + FV::Div_par_K_Grad_par(kappa_n, Tn)                             // Parallel conduction
       ;
   }
