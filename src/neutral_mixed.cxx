@@ -417,8 +417,8 @@ void NeutralMixed::finally(const Options& state) {
     + Div_a_Grad_perp_upwind_flows(DnnPn, logPnlim,
                                    energy_flow_xlow, energy_flow_ylow) // Perpendicular advection
      ;
-  energy_flow_xlow *= 3/2; // Note: Should this be 5/2?
-  energy_flow_ylow *= 3/2;
+  energy_flow_xlow *= 5/2; // Note: Should this be 5/2?
+  energy_flow_ylow *= 5/2;
 
   if (neutral_conduction) {
     ddt(Pn) += FV::Div_a_Grad_perp(DnnNn, Tn)    // Perpendicular conduction
