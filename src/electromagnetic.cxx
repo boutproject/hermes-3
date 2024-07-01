@@ -20,16 +20,25 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
 
   auto& options = alloptions[name];
 
+  // Use the "Naulin" solver because we need to include toroidal
+  // variations of the density (A coefficient)
+  if (!options["laplacian"].isSet("type")) {
+    options["laplacian"]["type"] = "naulin";
+  }
   aparSolver = Laplacian::create(&options["laplacian"]);
 
   const_gradient = options["const_gradient"]
     .doc("Extrapolate gradient of Apar into all radial boundaries?")
     .withDefault<bool>(false);
+
+  // Give Apar an initial value because we solve Apar by iteration
+  // starting from the previous solution
+  Apar = 0.0;
+
   if (const_gradient) {
     // Set flags to take the gradient from the RHS
     aparSolver->setInnerBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD + INVERT_RHS);
     aparSolver->setOuterBoundaryFlags(INVERT_DC_GRAD + INVERT_AC_GRAD + INVERT_RHS);
-    Apar = 0.0;
     last_time = 0.0;
 
     apar_boundary_timescale = options["apar_boundary_timescale"]
@@ -128,9 +137,10 @@ void Electromagnetic::transform(Options &state) {
         }
       }
     }
-    Apar = aparSolver->solve(rhs);
+    // Use previous value of Apar as initial guess
+    Apar = aparSolver->solve(rhs, Apar);
   } else {
-    Apar = aparSolver->solve((-beta_em) * Ajpar);
+    Apar = aparSolver->solve((-beta_em) * Ajpar, Apar);
   }
 
   // Save in the state
@@ -151,10 +161,10 @@ void Electromagnetic::transform(Options &state) {
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
     Field3D nv = getNonFinal<Field3D>(species["momentum"]);
-    nv -= Z * DC(N) * Apar;
+    nv -= Z * N * Apar;
     // Note: velocity is momentum / (A * N)
     Field3D v = getNonFinal<Field3D>(species["velocity"]);
-    v -= (Z / A) * DC(N) * Apar / floor(N, 1e-5);
+    v -= (Z / A) * N * Apar / floor(N, 1e-5);
     // Need to update the guard cells
     bout::globals::mesh->communicate(nv, v);
     v.applyBoundary("dirichlet");
