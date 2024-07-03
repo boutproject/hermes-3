@@ -74,13 +74,14 @@ for new variables which are added to the state:
 * `fields`
 
   * `vorticity`
-  * `phi`       Electrostatic potential
-  * `Apar`      Electromagnetic potential b dot A
-  * `DivJdia`   Divergence of diamagnetic current
-  * `DivJcol`   Divergence of collisional current
-  * `DivJextra` Divergence of current, including 2D parallel current
-    closures.  Not including diamagnetic, parallel current due to
-    flows, or polarisation currents
+  * `phi`           Electrostatic potential
+  * `Apar`          Electromagnetic potential b dot A in induction terms
+  * `Apar_flutter`  The electromagnetic potential (b dot A) in flutter terms
+  * `DivJdia`       Divergence of diamagnetic current
+  * `DivJcol`       Divergence of collisional current
+  * `DivJextra`     Divergence of current, including 2D parallel current
+                    closures.  Not including diamagnetic, parallel current due to
+                    flows, or polarisation currents
 
 For example to get the electron density::
 

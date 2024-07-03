@@ -2045,6 +2045,9 @@ electromagnetic
    ``electromagnetic:apar_core_neumann=true`` (this is the default).
 3. Set the potential core boundary to be constant in Y by setting
    ``vorticity:phi_core_averagey = true``
+4. Magnetic flutter terms must be enabled to be active. They use an
+   ``Apar_flutter`` field, not the ``Apar`` field that is calculated
+   from the induction terms.
 
 This component modifies the definition of momentum of all species, to
 include the contribution from the electromagnetic potential
@@ -2065,7 +2068,10 @@ an additional term in the momentum equation:
 
    \frac{\partial p_s}{\partial t} = \cdots + Z_s e A_{||} \frac{\partial n_s}{\partial t}
 
-These equations are normalised so that in dimensionless quantities
+This is implemented so that the density time-derivative is calculated using the lowest order
+terms (parallel flow and ExB drift).
+
+The above equations are normalised so that in dimensionless quantities
 
 .. math::
 
@@ -2099,6 +2105,14 @@ To convert the species momenta into a current, we take the sum of
 .. math::
 
    - \frac{1}{\beta_{em}} \nabla_\perp^2 A_{||} + \sum_s \frac{Z^2 n_s}{A}A_{||} = \sum_s \frac{Z}{A} p_s
+
+The toroidal variation of density :math:`n_s` must be kept in this
+equation.  By default the iterative "Naulin" solver is used to do
+this: A fast FFT-based method is used in a fixed point iteration,
+correcting for the density variation.
+
+Magnetic flutter terms are 
+
 
 .. doxygenstruct:: Electromagnetic
    :members:

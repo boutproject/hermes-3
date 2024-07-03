@@ -64,6 +64,10 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
+
+  magnetic_flutter = options["magnetic_flutter"]
+    .doc("Set magnetic flutter terms (Apar_flutter)?")
+    .withDefault<bool>(false);
 }
 
 void Electromagnetic::transform(Options &state) {
@@ -173,6 +177,36 @@ void Electromagnetic::transform(Options &state) {
     set(species["momentum"], nv);
     set(species["velocity"], v);
   }
+
+  if (magnetic_flutter) {
+    // Magnetic flutter terms
+    Apar_flutter = Apar - DC(Apar);
+
+    // Ensure that guard cells are communicated
+    Apar.getMesh()->communicate(Apar_flutter);
+
+    set(state["fields"]["Apar_flutter"], Apar_flutter);
+
+#if 0
+    // Create a vector A from covariant components
+    // (A^x, A^y, A^z)
+    // Note: b = e_y / (JB)
+    const auto* coords = Apar.getCoordinates();
+    Vector3D A;
+    A.covariant = true;
+    A.x = A.z = 0.0;
+    A.y = Apar_flutter * (coords->J * coords->Bxy);
+
+    // Perturbed magnetic field vector
+    // Note: Contravariant components (dB_x, dB_y, dB_z)
+    Vector3D delta_B = Curl(A);
+
+    // Set components of the perturbed unit vector
+    // Note: Options can't (yet) contain vectors
+    set(state["fields"]["deltab_flutter_x"], delta_B.x / coords->Bxy);
+    set(state["fields"]["deltab_flutter_z"], delta_B.z / coords->Bxy);
+#endif
+  }
 }
 
 void Electromagnetic::outputVars(Options &state) {
@@ -191,6 +225,16 @@ void Electromagnetic::outputVars(Options &state) {
       {"standard_name", "b dot A"},
       {"long_name", "Parallel component of vector potential A"}
     });
+
+  if (magnetic_flutter) {
+    set_with_attrs(state["Apar_flutter"], Apar_flutter, {
+      {"time_dimension", "t"},
+      {"units", "T m"},
+      {"conversion", Bnorm * rho_s0},
+      {"standard_name", "b dot A"},
+      {"long_name", "Vector potential A|| used in flutter terms"}
+    });
+  }
 
   if (diagnose) {
     set_with_attrs(state["Ajpar"], Ajpar, {

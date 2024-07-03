@@ -155,11 +155,22 @@ void EvolveMomentum::finally(const Options &state) {
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
   ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
-
+  
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
     Field3D P = get<Field3D>(species["pressure"]);
     ddt(NV) -= Grad_par(P);
+  }
+
+  if (state["fields"].isSet("Apar_flutter")) {
+    // Magnetic flutter term
+    const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+    ddt(NV) -= Div_n_g_bxGrad_f_B_XZ(NV, V, -Apar_flutter);
+
+    if (species.isSet("pressure")) {
+      Field3D P = get<Field3D>(species["pressure"]);
+      ddt(NV) -= bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+    }
   }
 
   if (species.isSet("low_n_coeff")) {
