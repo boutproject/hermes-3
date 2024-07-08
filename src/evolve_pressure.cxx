@@ -76,9 +76,11 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
 
+  // This is consistent with Bragkinskii definition of kappa and tau_e but with the sqrt(2) 
+  // moved into the kappa so that the collision time is consistent with Fitzpatrick.
   kappa_coefficient = options["kappa_coefficient"]
-    .doc("Numerical coefficient in parallel heat conduction. Default is 3.16 for electrons, 3.9 otherwise")
-    .withDefault((name == "e") ? 3.16 : 3.9);
+    .doc("Numerical coefficient in parallel heat conduction. Default is 3.16/sqrt(2) for electrons, 3.9 otherwise")
+    .withDefault((name == "e") ? 3.16/sqrt(2) : 3.9);
 
   kappa_limit_alpha = options["kappa_limit_alpha"]
     .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
