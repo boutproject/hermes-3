@@ -6,6 +6,7 @@
 #include "bout/mesh.hxx"
 
 #include "bout/parallel_boundary_region.hxx"
+#include "../include/boundary_iterator.hxx"
 
 using bout::globals::mesh;
 
@@ -120,13 +121,11 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
       }
     }
   } else {
-    for (auto& bndry : mesh->getBoundaries()) {
-      if (upper_y && bndry->location == BndryLoc::yup) {
-        boundary_regions.push_back(bndry);
-      }
-      if (lower_y && bndry->location == BndryLoc::ydown) {
-        boundary_regions.push_back(bndry);
-      }
+    if (upper_y) {
+      boundary_regions.push_back(std::make_shared<NewBoundaryRegionY>(mesh, false, mesh->iterateBndryUpperY()));
+    }
+    if (lower_y) {
+      boundary_regions.push_back(std::make_shared<NewBoundaryRegionY>(mesh, true, mesh->iterateBndryLowerY()));
     }
   }
 
@@ -148,10 +147,10 @@ void SheathBoundaryParallel::transform(Options &state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = (floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
-  Field3D Te = (GET_NOBOUNDARY(Field3D, electrons["temperature"]));
+  Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
+  Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
   Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
-    ? (getNoBoundary<Field3D>(electrons["pressure"]))
+    ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
     : Te * Ne;
 
   // Ratio of specific heats
@@ -164,11 +163,11 @@ void SheathBoundaryParallel::transform(Options &state) {
 
   // This is for applying boundary conditions
   Field3D Ve = IS_SET_NOBOUNDARY(electrons["velocity"])
-    ? (getNoBoundary<Field3D>(electrons["velocity"]))
+    ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
     : zeroFrom(Ne);
 
   Field3D NVe = IS_SET_NOBOUNDARY(electrons["momentum"])
-    ? (getNoBoundary<Field3D>(electrons["momentum"]))
+    ? toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]))
     : zeroFrom(Ne);
 
   Coordinates *coord = mesh->getCoordinates();
@@ -179,7 +178,7 @@ void SheathBoundaryParallel::transform(Options &state) {
   // If phi not set, calculate assuming zero current
   Field3D phi;
   if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
-    phi = (getNoBoundary<Field3D>(state["fields"]["phi"]));
+    phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   } else {
     // Calculate potential phi assuming zero current
     // Note: This is equation (22) in Tskhakaya 2005, with I = 0
@@ -200,8 +199,8 @@ void SheathBoundaryParallel::transform(Options &state) {
         continue; // Skip electrons and non-charged ions
       }
 
-      const Field3D Ni = (floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0));
-      const Field3D Ti = (GET_NOBOUNDARY(Field3D, species["temperature"]));
+      const Field3D Ni = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0));
+      const Field3D Ti = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
       const BoutReal Mi = GET_NOBOUNDARY(BoutReal, species["AA"]);
       const BoutReal Zi = GET_NOBOUNDARY(BoutReal, species["charge"]);
 
@@ -209,11 +208,11 @@ void SheathBoundaryParallel::transform(Options &state) {
                                      ? get<BoutReal>(species["adiabatic"])
                                      : 5. / 3; // Ratio of specific heats (ideal gas)
 
-      iter_regions([](auto& region) {
+      iter_regions([&](auto& region) {
         for (auto& pnt : region) {
           const auto& i = pnt.ind();
           BoutReal s_i =
-              clip(0.5 * pnt.extrapolate_next_o2([&, Ni, Ne](int yoffset, Ind3D ind) {
+              clip(pnt.extrapolate_next_o2([&, Ni, Ne](int yoffset, Ind3D ind) {
                 return Ni.ynext(yoffset)[ind] / Ne.ynext(yoffset)[ind];
               }),
                    0.0, 1.0);
@@ -239,7 +238,7 @@ void SheathBoundaryParallel::transform(Options &state) {
                    100); // Limit for e.g. Ni zero gradient
 
           // Note: Vzi = C_i * sin(α)
-          ion_sum[pnt.ind()] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+          ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
         }
       });
     }
@@ -261,19 +260,21 @@ void SheathBoundaryParallel::transform(Options &state) {
 	const BoutReal phi_wall = wall_potential[i];
 	phi[i] += phi_wall; // Add bias potential
 
-	phi.ynext(1)[i.yp()] = phi.ynext(-1)[i.ym()] = phi[i]; // Constant into sheath
+	pnt.ynext(phi) = pnt.yprev(phi) = phi[i]; // Constant into sheath
       }
     });
   }
 
+  ion_sum = 0;
+  
   //////////////////////////////////////////////////////////////////
   // Electrons
 
   Field3D electron_energy_source = electrons.isSet("energy_source")
-    ? (getNonFinal<Field3D>(electrons["energy_source"]))
+    ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
     : zeroFrom(Ne);
 
-  iter_regions([&](auto region) {
+  iter_regions([&](auto& region) {
     for (const auto& pnt : region) {
       auto i = pnt.ind();
 
@@ -289,13 +290,13 @@ void SheathBoundaryParallel::transform(Options &state) {
       // Free boundary potential linearly extrapolated
       pnt.ynext(phi) = phi[i] + pnt.extrapolate_grad_o2(phi);
 
-      const BoutReal nesheath = pnt.interpolate_sheath(Ne);
-      const BoutReal tesheath = pnt.interpolate_sheath(Te);  // electron temperature
+      const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);
+      const BoutReal tesheath = pnt.interpolate_sheath_o1(Te);  // electron temperature
       const BoutReal phi_wall = wall_potential[i];
 
       const BoutReal phisheath = floor_potential ? floor(
-            pnt.interpolate_sheath(phi), phi_wall) // Electron saturation at phi = phi_wall
-	    : pnt.interpolate_sheath(phi);
+            pnt.interpolate_sheath_o1(phi), phi_wall) // Electron saturation at phi = phi_wall
+	    : pnt.interpolate_sheath_o1(phi);
 
       // Electron sheath heat transmission
       const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
@@ -330,7 +331,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 #if CHECKLEVEL >= 1
       if (!std::isfinite(power)) {
 	throw BoutException("Non-finite power {} at {} : Te {} Ne {} Ve {} phi {}, {} => q {}, flux {}",
-			    power, i, tesheath, nesheath, vesheath, phi[i], phi[im], q, flux);
+			    power, i, tesheath, nesheath, vesheath, phi[i], phisheath, q, flux);
       }
 #endif
 
@@ -339,24 +340,24 @@ void SheathBoundaryParallel::transform(Options &state) {
   });
 
   // Set electron density and temperature, now with boundary conditions
-  setBoundary(electrons["density"], (Ne));
-  setBoundary(electrons["temperature"], (Te));
-  setBoundary(electrons["pressure"], (Pe));
+  setBoundary(electrons["density"], fromFieldAligned(Ne));
+  setBoundary(electrons["temperature"], fromFieldAligned(Te));
+  setBoundary(electrons["pressure"], fromFieldAligned(Pe));
 
   // Add energy source (negative in cell next to sheath)
   // Note: already includes previously set sources
-  set(electrons["energy_source"], (electron_energy_source));
+  set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
-    setBoundary(electrons["velocity"], (Ve));
+    setBoundary(electrons["velocity"], fromFieldAligned(Ve));
   }
   if (IS_SET_NOBOUNDARY(electrons["momentum"])) {
-    setBoundary(electrons["momentum"], (NVe));
+    setBoundary(electrons["momentum"], fromFieldAligned(NVe));
   }
 
   if (always_set_phi or IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     // Set the potential, including boundary conditions
-    phi = (phi);
+    phi = fromFieldAligned(phi);
     //output.write("-> phi {}\n", phi(10, mesh->yend+1, 0));
     setBoundary(state["fields"]["phi"], phi);
   }
@@ -386,28 +387,28 @@ void SheathBoundaryParallel::transform(Options &state) {
                                    : 5. / 3; // Ratio of specific heats (ideal gas)
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = (floor(getNoBoundary<Field3D>(species["density"]), 0.0));
-    Field3D Ti = (getNoBoundary<Field3D>(species["temperature"]));
+    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
+    Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
     Field3D Pi = species.isSet("pressure")
-      ? (getNoBoundary<Field3D>(species["pressure"]))
+      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
       : Ni * Ti;
 
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
     Field3D Vi = species.isSet("velocity")
-      ? (getNoBoundary<Field3D>(species["velocity"]))
+      ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
       : zeroFrom(Ni);
     Field3D NVi = species.isSet("momentum")
-      ? (getNoBoundary<Field3D>(species["momentum"]))
+      ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
       : Mi * Ni * Vi;
 
     // Energy source will be modified in the domain
     Field3D energy_source = species.isSet("energy_source")
-      ? (getNonFinal<Field3D>(species["energy_source"]))
+      ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
       : zeroFrom(Ni);
 
-    iter_regions([&](auto region) {
+    iter_regions([&](auto& region) {
       for (const auto& pnt : region) {
 
         auto i = pnt.ind();
@@ -421,15 +422,20 @@ void SheathBoundaryParallel::transform(Options &state) {
 	pnt.ynext(Pi) = limitFree(Pi, pnt);
 
 	// Calculate sheath values at half-way points (cell edge)
-	const BoutReal nesheath = pnt.extrapolate_sheath_o2(Ne);
-	const BoutReal nisheath = pnt.extrapolate_sheath_o2(Ni);
-	const BoutReal tesheath = floor(pnt.extrapolate_sheath_o2(Te), 1e-5);  // electron temperature
-	const BoutReal tisheath = floor(pnt.extrapolate_sheath_o2(Ti), 1e-5);  // ion temperature
+	const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);
+	const BoutReal nisheath = pnt.interpolate_sheath_o1(Ni);
+	const BoutReal tesheath = floor(pnt.interpolate_sheath_o1(Te), 1e-5);  // electron temperature
+	const BoutReal tisheath = floor(pnt.interpolate_sheath_o1(Ti), 1e-5);  // ion temperature
 
 	// Ion sheath heat transmission coefficient
+	// Equation (22) in Tskhakaya 2005
+	// with 
 	//
-	// 1 / (1 + ∂_{ln n_e} ln s_i = s_i * ∂n_e / (s_i * ∂n_e + ∂ n_i) 
-	BoutReal s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0; // Concentration
+	// 1 / (1 + ∂_{ln n_e} ln s_i = s_i ∂_z n_e / ∂_z n_i
+	// (from comparing C_i^2 in eq. 9 with eq. 20
+	//
+	//BoutReal s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0; // Concentration
+	BoutReal s_i = clip(nisheath / floor(nesheath, 1e-10), 0, 1); // Concentration
 	BoutReal grad_ne = pnt.extrapolate_grad_o2(Ne);
 	BoutReal grad_ni = pnt.extrapolate_grad_o2(Ni);
 
@@ -446,11 +452,11 @@ void SheathBoundaryParallel::transform(Options &state) {
 
 	const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath; // + Δγ 
 
-	const BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
+	const BoutReal visheath = pnt.dir * sqrt(C_i_sq); // sign changes -> into sheath
 
 	// Set boundary conditions on flows
 	pnt.dirichlet_o2(Vi, visheath);
-	pnt.dirichlet_o2(NVi, Mi * nisheath * visheath);
+       	pnt.dirichlet_o2(NVi, Mi * nisheath * visheath);
 
 	// Take into account the flow of energy due to fluid flow
 	// This is additional energy flux through the sheath
@@ -484,20 +490,20 @@ void SheathBoundaryParallel::transform(Options &state) {
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
-    setBoundary(species["density"], (Ni));
-    setBoundary(species["temperature"], (Ti));
-    setBoundary(species["pressure"], (Pi));
+    setBoundary(species["density"], fromFieldAligned(Ni));
+    setBoundary(species["temperature"], fromFieldAligned(Ti));
+    setBoundary(species["pressure"], fromFieldAligned(Pi));
 
     if (species.isSet("velocity")) {
-      setBoundary(species["velocity"], (Vi));
+      setBoundary(species["velocity"], fromFieldAligned(Vi));
     }
 
     if (species.isSet("momentum")) {
-      setBoundary(species["momentum"], (NVi));
+      setBoundary(species["momentum"], fromFieldAligned(NVi));
     }
 
     // Additional loss of energy through sheath
     // Note: Already includes previously set sources
-    set(species["energy_source"], (energy_source));
+    set(species["energy_source"], fromFieldAligned(energy_source));
   }
 }

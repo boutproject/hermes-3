@@ -4,6 +4,8 @@
 
 #include "component.hxx"
 
+#include "./boundary_iterator.hxx"
+
 /// Boundary condition at the wall in Y
 ///
 /// This is a collective component, because it couples all charged species
@@ -86,17 +88,30 @@ private:
   bool upper_y{true};
   bool lower_y{true};
 
-  std::vector<std::shared_ptr<const BoundaryRegionPar>> boundary_regions_par;
-  std::vector<BoundaryRegion*> boundary_regions;
+  std::vector<std::shared_ptr<BoundaryRegionPar>> boundary_regions_par;
+  std::vector<std::shared_ptr<NewBoundaryRegionY>> boundary_regions;
 
   template <class T>
   void iter_regions(const T& f) {
-    for (auto* region : boundary_regions) {
+    for (auto& region : boundary_regions) {
       f(*region);
     }
-    for (const auto& region : boundary_regions) {
+    for (auto& region : boundary_regions_par) {
       f(*region);
     }
+  }
+
+  Field3D fromFieldAligned(const Field3D& f) {
+    if (f.isFci()) {
+      return f;
+    }
+    return ::fromFieldAligned(f);
+  }
+  Field3D toFieldAligned(const Field3D& f) {
+    if (f.isFci()) {
+      return f;
+    }
+    return ::toFieldAligned(f);
   }
 };
 
