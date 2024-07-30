@@ -403,7 +403,7 @@ void SheathBoundarySimple::transform(Options& state) {
                         / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));  // This omits dx*dz because we divide by dx*dz next
 
         // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = heatflow / (coord->dy[i] * coord->J[i]);
+        BoutReal power = heatflow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
 
         hflux_e[i] -= power;
         electron_energy_source[i] -= power;
@@ -548,7 +548,7 @@ void SheathBoundarySimple::transform(Options& state) {
                           / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));  // This omits dx*dz because we divide by dx*dz next
 
           // Divide by volume of cell to get energy loss rate (< 0)
-          BoutReal power = heatflow / (coord->dy[i] * coord->J[i]);
+          BoutReal power = heatflow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
 
           hflux_i[i] += power;
           energy_source[i] += power;
