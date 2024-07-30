@@ -1,14 +1,16 @@
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/field_factory.hxx>
 #include <bout/output_bout_types.hxx>
-#include <derivs.hxx>
-#include <difops.hxx>
-#include <initialprofiles.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
+#include <bout/initialprofiles.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_density.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/hermes_build_config.hxx"
 
 using bout::globals::mesh;
 
@@ -33,6 +35,12 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
+                           .withDefault<bool>(false);
+
+  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
+  low_p_diffuse_perp = options["low_p_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
@@ -72,19 +80,38 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
+  auto& n_options = alloptions[std::string("N") + name];
+  source_time_dependent = n_options["source_time_dependent"]
+    .doc("Use a time-dependent source?")
+    .withDefault<bool>(false);
+
+  source_only_in_core = n_options["source_only_in_core"]
+    .doc("Zero the source outside the closed field-line region?")
+    .withDefault<bool>(false);
+
+  source_normalisation = Nnorm * Omega_ci;
+  time_normalisation = 1./Omega_ci;
+
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
   source = 0.0;
   mesh->get(source, std::string("N") + name + "_src");
-  // Allow the user to override the source
-  source = alloptions[std::string("N") + name]["source"]
-               .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
-               .withDefault(source)
-           / (Nnorm * Omega_ci);
+  // Allow the user to override the source from input file
+  source = n_options["source"]
+    .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
+    .withDefault(source)
+    / source_normalisation;
 
-  if (alloptions[std::string("N") + name]["source_only_in_core"]
-      .doc("Zero the source outside the closed field-line region?")
-      .withDefault<bool>(false)) {
+  // If time dependent, parse the function with respect to time from the input file
+  if (source_time_dependent) {
+    auto str = n_options["source_prefactor"]
+      .doc("Time-dependent function of multiplier on ddt(N" + name + std::string(") source."))
+      .as<std::string>();
+      source_prefactor_function = FieldFactory::get()->parse(str, &n_options);
+  }
+
+  // Putting source at first X index would put it in both PFR in core, this ensures only core
+  if (source_only_in_core) {
     for (int x = mesh->xstart; x <= mesh->xend; x++) {
       if (!mesh->periodicY(x)) {
         // Not periodic, so not in core
@@ -96,6 +123,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
       }
     }
   }
+
+
 
   neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
@@ -175,8 +204,8 @@ void EvolveDensity::finally(const Options& state) {
   // but retain densities which fall below zero
   N.setBoundaryTo(get<Field3D>(species["density"]));
 
-  if (state.isSection("fields") and state["fields"].isSet("phi")) {
-    // Electrostatic potential set -> include ExB flow
+  if ((fabs(charge) > 1e-5) and state.isSection("fields") and state["fields"].isSet("phi")) {
+    // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
@@ -202,7 +231,7 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par(N, V, fastest_wave);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave);
   }
 
   if (low_n_diffuse) {
@@ -212,9 +241,15 @@ void EvolveDensity::finally(const Options& state) {
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(N) += FV::Div_par_K_Grad_par(low_n_coeff, N);
   }
+
   if (low_n_diffuse_perp) {
     ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
                                     bndry_flux);
+  }
+
+  if (low_p_diffuse_perp) {
+    Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
+    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N, true);
   }
 
   if (hyper_z > 0.) {
@@ -222,7 +257,17 @@ void EvolveDensity::finally(const Options& state) {
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 
-  Sn = source; // Save for possible output
+  if (source_time_dependent) {
+    // Evaluate the source_prefactor function at the current time in seconds and scale source with it
+    BoutReal time = get<BoutReal>(state["time"]);
+    BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
+    final_source = source * source_prefactor;
+  } else {
+    final_source = source;
+  }
+
+  // Collect the external source from above with all the sources from elsewhere (collisions, reactions, etc) for diagnostics
+  Sn = final_source;
   if (species.isSet("density_source")) {
     Sn += get<Field3D>(species["density_source"]);
   }
@@ -244,6 +289,17 @@ void EvolveDensity::finally(const Options& state) {
     }
   }
 #endif
+
+  if (diagnose) {
+    // Save flows if they are set
+
+    if (species.isSet("particle_flow_xlow")) {
+      flow_xlow = get<Field3D>(species["particle_flow_xlow"]);
+    }
+    if (species.isSet("particle_flow_ylow")) {
+      flow_ylow = get<Field3D>(species["particle_flow_ylow"]);
+    }
+  }
 }
 
 void EvolveDensity::outputVars(Options& state) {
@@ -277,18 +333,43 @@ void EvolveDensity::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "m^-3 s^-1"},
                     {"conversion", Nnorm * Omega_ci},
-                    {"standard_name", "density source"},
-                    {"long_name", name + " number density source"},
+                    {"standard_name", "total density source"},
+                    {"long_name", name + " total number density source"},
                     {"species", name},
                     {"source", "evolve_density"}});
 
-    set_with_attrs(state[std::string("S") + name + std::string("_src")], source,
+    set_with_attrs(state[std::string("S") + name + std::string("_src")], final_source,
                    {{"time_dimension", "t"},
                     {"units", "m^-3 s^-1"},
                     {"conversion", Nnorm * Omega_ci},
-                    {"standard_name", "density source"},
-                    {"long_name", name + " number density source"},
+                    {"standard_name", "external density source"},
+                    {"long_name", name + " external number density source"},
                     {"species", name},
                     {"source", "evolve_density"}});
+
+    // If fluxes have been set then add them to the output
+    auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
+    if (flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_xlow")], flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                    {"standard_name", "particle flow"},
+                    {"long_name", name + " particle flow in X. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+    }
+    if (flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_ylow")], flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                    {"standard_name", "particle flow"},
+                    {"long_name", name + " particle flow in Y. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+    }
   }
 }
+

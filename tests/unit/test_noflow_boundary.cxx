@@ -17,7 +17,7 @@ extern Mesh *mesh;
 using namespace bout::globals;
 
 #include <bout/constants.hxx>
-#include <field_factory.hxx>  // For generating functions
+#include <bout/field_factory.hxx>  // For generating functions
 
 // Reuse the "standard" fixture for FakeMesh
 using NoFlowBoundaryTest = FakeMeshFixture;

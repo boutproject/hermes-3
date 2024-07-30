@@ -1,0 +1,15 @@
+#pragma once
+#ifndef HERMES_BUILD_CONFIG_HXX
+#define HERMES_BUILD_CONFIG_HXX
+
+#include <bout/fv_ops.hxx>
+
+#include "div_ops.hxx" // For Superbee
+
+namespace hermes {
+  /// Slope limiter to use in advection operators
+  using Limiter=FV::@HERMES_SLOPE_LIMITER@;
+  const char* const limiter_typename = "@HERMES_SLOPE_LIMITER@";
+}
+
+#endif // HERMES_BUILD_CONFIG_HXX

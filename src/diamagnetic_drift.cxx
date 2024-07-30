@@ -1,5 +1,5 @@
 #include <bout/fv_ops.hxx>
-#include <vecops.hxx>
+#include <bout/vecops.hxx>
 
 #include "../include/diamagnetic_drift.hxx"
 
@@ -69,6 +69,9 @@ void DiamagneticDrift::transform(Options& state) {
 
     // Calculate diamagnetic drift velocity for this species
     auto q = get<BoutReal>(species["charge"]);
+    if (fabs(q) < 1e-5) {
+      continue;
+    }
     auto T = GET_VALUE(Field3D, species["temperature"]);
 
     // Diamagnetic drift velocity

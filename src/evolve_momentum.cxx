@@ -1,12 +1,13 @@
 
-#include <derivs.hxx>
-#include <difops.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
 
 #include "../include/evolve_momentum.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_build_config.hxx"
 
 namespace {
 BoutReal floor(BoutReal value, BoutReal min) {
@@ -28,6 +29,16 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
 
+  low_n_diffuse_perp = options["low_n_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low density")
+                           .withDefault<bool>(false);
+
+  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
+  low_p_diffuse_perp = options["low_p_diffuse_perp"]
+                           .doc("Perpendicular diffusion at low pressure")
+                           .withDefault<bool>(false);
+
   bndry_flux = options["bndry_flux"]
                       .doc("Allow flows through radial boundaries")
                       .withDefault<bool>(true);
@@ -47,6 +58,9 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   fix_momentum_boundary_flux = options["fix_momentum_boundary_flux"]
     .doc("Fix Y boundary momentum flux to boundary midpoint value?")
     .withDefault<bool>(false);
+
+  // Set to zero so set for output
+  momentum_source = 0.0;
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -67,6 +81,7 @@ void EvolveMomentum::transform(Options &state) {
   NV_solver = NV; // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
+  NV_err = NV - NV_solver; // This is used in the finally() function
   set(species["momentum"], NV);
 }
 
@@ -77,6 +92,7 @@ void EvolveMomentum::finally(const Options &state) {
   BoutReal AA = get<BoutReal>(species["AA"]);
 
   // Get updated momentum with boundary conditions
+  // Note: This momentum may be modified by electromagnetic terms
   NV = get<Field3D>(species["momentum"]);
 
   // Get the species density
@@ -100,6 +116,8 @@ void EvolveMomentum::finally(const Options &state) {
       // Parallel electric field
       // Force density = - Z N ∇ϕ
       ddt(NV) -= Z * N * Grad_par(phi);
+    } else {
+      ddt(NV) = 0.0;
     }
   } else {
     ddt(NV) = 0.0;
@@ -117,9 +135,11 @@ void EvolveMomentum::finally(const Options &state) {
     fastest_wave = sqrt(T / AA);
   }
 
-  // Note: Density floor should be consistent with calculation of V
-  //       otherwise energy conservation is affected
-  ddt(NV) -= AA * FV::Div_par_fvv(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
+  // Note:
+  //  - Density floor should be consistent with calculation of V
+  //    otherwise energy conservation is affected
+  //  - using the same operator as in density and pressure equations doesn't work
+  ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
 
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
@@ -131,6 +151,15 @@ void EvolveMomentum::finally(const Options &state) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N) + FV::Div_par_K_Grad_par(low_n_coeff * Nlim, V);
+  }
+
+  if (low_n_diffuse_perp) {
+    ddt(NV) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), NV, true);
+  }
+
+  if (low_p_diffuse_perp) {
+    Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
+    ddt(NV) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV, true);
   }
 
   if (hyper_z > 0.) {
@@ -146,7 +175,7 @@ void EvolveMomentum::finally(const Options &state) {
 
   // If N < density_floor then NV and NV_solver may differ
   // -> Add term to force NV_solver towards NV
-  ddt(NV) += NV - NV_solver;
+  ddt(NV) += NV_err;
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
@@ -160,6 +189,20 @@ void EvolveMomentum::finally(const Options &state) {
     }
   }
 #endif
+
+  if (diagnose) {
+    // Save flows if they are set
+
+    if (species.isSet("momentum_flow_xlow")) {
+      flow_xlow = get<Field3D>(species["momentum_flow_xlow"]);
+    }
+    if (species.isSet("momentum_flux_ylow")) {
+      flow_ylow = get<Field3D>(species["momentum_flow_ylow"]);
+    }
+  }
+  // Restore NV to the value returned by the solver
+  // so that restart files contain the correct values
+  NV = NV_solver;
 }
 
 void EvolveMomentum::outputVars(Options &state) {
@@ -204,5 +247,29 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"long_name", name + " momentum source"},
                     {"species", name},
                     {"source", "evolve_momentum"}});
+
+    // If fluxes have been set then add them to the output
+    auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
+    if (flow_xlow.isAllocated()) {
+      set_with_attrs(state[std::string("MomentumFlow_") + name + std::string("_xlow")], flow_xlow,
+                   {{"time_dimension", "t"},
+                    {"units", "N"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum flow"},
+                    {"long_name", name + " momentum flow in X. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+    }
+    if (flow_ylow.isAllocated()) {
+      set_with_attrs(state[std::string("MomentumFlow_") + name + std::string("_ylow")], flow_ylow,
+                   {{"time_dimension", "t"},
+                    {"units", "N"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum flow"},
+                    {"long_name", name + " momentum flow in Y. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_momentum"}});
+    }
   }
 }

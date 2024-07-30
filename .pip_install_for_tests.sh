@@ -18,3 +18,10 @@ do
         pip3 install --user $package
     fi
 done
+
+# Install Hermes-3
+git clone https://github.com/boutproject/xhermes.git
+cd xhermes
+pip3 install --user .
+cd ..
+

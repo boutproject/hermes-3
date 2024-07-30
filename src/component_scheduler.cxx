@@ -1,6 +1,6 @@
 #include "../include/component_scheduler.hxx"
 
-#include "utils.hxx" // for trim, strsplit
+#include <bout/utils.hxx> // for trim, strsplit
 
 ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                        Options &component_options,

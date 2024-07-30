@@ -72,7 +72,10 @@ protected:
                          Field3D &reaction_rate,
                          Field3D &momentum_exchange,
                          Field3D &energy_exchange,
-                         Field3D &energy_loss) {
+                         Field3D &energy_loss,
+                         BoutReal rate_multiplier,
+                         BoutReal radiation_multiplier) {
+
     Field3D Ne = get<Field3D>(electron["density"]);
     Field3D Te = get<Field3D>(electron["temperature"]);
 
@@ -90,10 +93,11 @@ protected:
     const BoutReal to_charge =
         to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
+    // Calculate reaction rate using cell averaging. Optionally scale by multiplier
     reaction_rate = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
           return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-                 / FreqNorm;
+                 / FreqNorm * rate_multiplier;
         },
         Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
@@ -155,12 +159,12 @@ protected:
     energy_loss = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
           return ne * n1 * evaluate(radiation_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-                 / (Tnorm * FreqNorm);
+                 / (Tnorm * FreqNorm) * radiation_multiplier;
         },
         Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
     // Loss is reduced by heating
-    energy_loss -= (electron_heating / Tnorm) * reaction_rate;
+    energy_loss -= (electron_heating / Tnorm) * reaction_rate * radiation_multiplier;
 
     subtract(electron["energy_source"], energy_loss);
   }

@@ -13,8 +13,8 @@
 #  Does not include recombination
 
 
-nout = 100
-timestep = 20
+nout = 400
+timestep = 300
 
 MXG = 0  # No guard cells in X
 
@@ -53,7 +53,8 @@ Bnorm = 1
 Tnorm = 100
 
 [solver]
-type = pvode  # Backward Euler steady-state solver
+type = cvode  # Backward Euler steady-state solver
+use_precon = true
 
 mxstep = 50000
 
@@ -83,22 +84,23 @@ AA = 2
 
 density_upstream = 1e19  # Upstream density [m^-3]
 density_source_positive = false  # Force source to be > 0?
-density_controller_i = 5e-4
-density_controller_p = 1e-2
+density_controller_i = 1e-2
+density_controller_p = 5e2
 
 thermal_conduction = true  # in evolve_pressure
 
 diagnose = true
 
 recycle_as = d
-recycle_multiplier = 1  # Recycling fraction
+target_recycle = true
+target_recycle_energy = 3.5  # Franck-Condon dissociation energy
+target_recycle_multiplier = 1  # Recycling fraction
 
 [Nd+]
 
 function = 1
 
-flux = 4e23  # Particles per m^2 per second input
-source = (flux/(mesh:length_xpt))*H(mesh:y_xpt - y)
+source_shape = H(mesh:y_xpt - y) * 1e20 # Feedback controller source shape
 
 [Pd+]
 function = 1
