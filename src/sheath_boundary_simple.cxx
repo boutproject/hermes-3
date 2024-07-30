@@ -111,12 +111,6 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
       .doc("Output additional diagnostics?")
       .withDefault<bool>(false);
 
-  // Save diagnostics
-  if (diagnose) {
-    bout::globals::dump.addRepeat(hflux_e, std::string("Ee_sheath"));
-    bout::globals::dump.addRepeat(phi, std::string("phi_sheath"));
-    bout::globals::dump.addRepeat(ion_sum, std::string("J_sheath"));
-  }
       
 }
 
@@ -424,6 +418,8 @@ void SheathBoundarySimple::transform(Options& state) {
     }
   }
 
+  set(diagnostics["e"]["hflux"], hflux_e);
+
   // Set electron density and temperature, now with boundary conditions
   // Note: Clear parallel slices because they do not contain boundary conditions.
   Ne.clearParallelSlices();
@@ -634,20 +630,6 @@ void SheathBoundarySimple::transform(Options& state) {
       
     }
 
-    if (diagnose) {
-      // Find the diagnostics struct for this species
-      auto search = diagnostics.find(kv.first);
-      if (search == diagnostics.end()) {
-        // If not found, create a diagnostics struct and initialise fields
-        auto it_bool_pair = diagnostics.emplace(kv.first, Diagnostics {hflux_i});
-        auto& d = it_bool_pair.first->second;
-        bout::globals::dump.addRepeat(d.E, std::string("E") + kv.first + std::string("_sheath"));
-      } else {
-      // Update diagnostic values
-      auto& d = search->second;
-      d.E = hflux_i;
-      } 
-    }
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
@@ -674,5 +656,37 @@ void SheathBoundarySimple::transform(Options& state) {
 
     // Add the total sheath power flux to the tracker of y power flows
     add(species["energy_flow_ylow"], fromFieldAligned(ion_sheath_power_ylow));
+
+    set(diagnostics[species.name()]["hflux"], hflux_i);
+
   }
 }
+
+void SheathBoundarySimple::outputVars(Options& state) {
+  AUTO_TRACE();
+  // Normalisations
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+
+  /// Iterate through the first species in each collision pair
+  const std::map<std::string, Options>& level1 = diagnostics.getChildren();
+  for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
+    auto species_name = s1->first;
+    const Options& section = diagnostics[species_name];
+
+    // TODO: What is "getNonFinal"?
+
+    set_with_attrs(state[{"E" + species_name + "_sheath"}], getNonFinal<Field3D>(section["hflux"]),
+                          {{"time_dimension", "t"},
+                          {"units", "W / m^3"},
+                          {"conversion", Pnorm * Omega_ci},
+                          {"standard_name", "energy source"},
+                          {"long_name", species_name + " sheath energy source"},
+                          {"source", "sheath_boundary_simple"}});
+
+  }
+
+  }

@@ -73,6 +73,7 @@ struct SheathBoundarySimple : public Component {
   ///
   ///
   void transform(Options &state) override;
+  void outputVars(Options &state) override;
 private:
   BoutReal Ge; // Secondary electron emission coefficient
   BoutReal sin_alpha; // sin of angle between magnetic field and wall.
@@ -90,16 +91,11 @@ private:
 
   bool diagnose; // Save additional diagnostics?
 
-  Field3D hflux_e;
-  Field3D phi; // Phi on boundaries
-  Field3D ion_sum; // Sum of ion current on boundaries
+  Field3D hflux_e;  // Electron heat flux through sheath
+  Field3D phi; // Phi at sheath
+  Field3D ion_sum; // Sum of ion current at sheath
 
-  struct Diagnostics {
-    Field3D E;
-  };
-
-  /// Store sheath diagnostics for each species separately
-  std::map<std::string, Diagnostics> diagnostics;
+  Options diagnostics;   // Options object to store diagnostic fields like a dict
 
 };
 
