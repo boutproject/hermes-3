@@ -344,13 +344,15 @@ void SheathBoundarySimple::transform(Options& state) {
         // Divide by volume of cell to get energy loss rate (< 0)
         BoutReal power = heatflow / (coord->dy[i] * coord->J[i]);
 
-        hflux_e[i] += power;
         electron_energy_source[i] += power;
 
         // Total heat flux for diagnostic purposes
         q = gamma_e * tesheath  * nesheath * vesheath;   // Wm-2
         heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
                       * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
+
+        power = heatflow / (coord->dy[i] * coord->J[i]);
+        hflux_e[i] += power;
 
         electron_sheath_power_ylow[i] += heatflow;       // lower Y, so power placed in final domain cell 
                       
@@ -403,15 +405,17 @@ void SheathBoundarySimple::transform(Options& state) {
                         / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));  // This omits dx*dz because we divide by dx*dz next
 
         // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = heatflow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
+        BoutReal power = heatflow / (coord->dy[i] * coord->J[i]);
 
-        hflux_e[i] -= power;
         electron_energy_source[i] -= power;
 
         // Total heat flux for diagnostic purposes
         q = gamma_e * tesheath * nesheath * vesheath;  // Wm-2
         heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
                       * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
+
+        power = heatflow / (coord->dy[i] * coord->J[i]);
+        hflux_e[i] -= power;
         
         electron_sheath_power_ylow[ip] -= heatflow;    // upper Y, so power placed in first guard cell
       }
@@ -549,15 +553,17 @@ void SheathBoundarySimple::transform(Options& state) {
 
           // Divide by volume of cell to get energy loss rate (< 0)
           BoutReal power = heatflow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
+          ASSERT2(std::isfinite(power));
 
-          hflux_i[i] += power;
           energy_source[i] += power;
 
           // Calculation of total heat flux for diagnostic purposes
           q = gamma_i * tisheath * nisheath * visheath;   // Wm-2
           heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
                       * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
+          power = heatflow / (coord->dy[i] * coord->J[i]);   // W/m3.  This omits dx*dz because we omit it above
 
+          hflux_i[i] += power;
           ion_sheath_power_ylow[i] += heatflow;      // lower Y, so power placed in final domain cell
         }
       }
@@ -613,17 +619,18 @@ void SheathBoundarySimple::transform(Options& state) {
                           / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));  // This omits dx*dz because we divide by dx*dz next
 
           // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = heatflow / (coord->dy[i] * coord->J[i]);
+          BoutReal power = heatflow / (coord->dy[i] * coord->J[i]);   // This omits dx*dz because we omit it above
           ASSERT2(std::isfinite(power));
 
-          hflux_i[i] -= power;
           energy_source[i] -= power; // Note: Sign negative because power > 0
 
           // Calculation of total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath;
+          q = gamma_i * tisheath * nisheath * visheath;   // Wm-2
           heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
                       * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
+          power = heatflow / (coord->dy[i] * coord->J[i]);  // W/m3
 
+          hflux_i[i] -= power;
           ion_sheath_power_ylow[ip] += heatflow;       // Upper Y, so power placed in first guard cell
         }
       }
