@@ -86,6 +86,8 @@ private:
 
   bool always_set_phi; ///< Set phi field?
 
+  bool suppress_outflow; ///< Suppress outflow of particles?
+
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
 };
 

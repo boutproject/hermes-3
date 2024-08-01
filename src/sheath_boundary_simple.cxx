@@ -96,6 +96,11 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
 
+  suppress_outflow =
+      options["suppress_outflow"]
+          .doc("Suppress outflow of particles?")
+          .withDefault<bool>(false);
+
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
 
@@ -516,8 +521,13 @@ void SheathBoundarySimple::transform(Options& state) {
           }
 
           // Set boundary conditions on flows
-          Vi[im] = 2. * visheath - Vi[i];
-          NVi[im] = 2. * Mi * nisheath * visheath - NVi[i];
+          if (suppress_outflow == false) {
+            Vi[im] = 2. * visheath - Vi[i];
+            NVi[im] = 2. * Mi * nisheath * visheath - NVi[i];
+          } else {
+            Vi[im] = -Vi[i];
+            NVi[im] = -NVi[i];
+          }
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
@@ -580,8 +590,14 @@ void SheathBoundarySimple::transform(Options& state) {
           }
 
           // Set boundary conditions on flows
-          Vi[ip] = 2. * visheath - Vi[i];
-          NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
+          if (suppress_outflow == false) {
+            Vi[ip] = 2. * visheath - Vi[i];
+            NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
+          } else {
+            Vi[ip] = -Vi[i];
+            NVi[ip] = -NVi[i];
+          }
+
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
@@ -606,6 +622,11 @@ void SheathBoundarySimple::transform(Options& state) {
                       * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
 
           ion_sheath_power_ylow[ip] += heatflow;       // Upper Y, so power placed in first guard cell
+
+          output << "\n****************************\n";
+          output << "visheath = " << visheath << "\n";
+          output << "ion heatflow = " << heatflow;
+          output << "\n****************************\n";
         }
       }
       
