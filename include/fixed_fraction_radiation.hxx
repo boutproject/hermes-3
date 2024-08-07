@@ -302,7 +302,7 @@ struct FixedFractionRadiation : public Component {
     AUTO_TRACE();
 
     if (diagnose) {
-      set_with_attrs(state[std::string("R") + name], radiation,
+      set_with_attrs(state[std::string("R") + name], -radiation,
                      {{"time_dimension", "t"},
                       {"units", "W / m^3"},
                       {"conversion", SI::qe * Tnorm * Nnorm * FreqNorm},
