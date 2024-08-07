@@ -969,7 +969,8 @@ listed after all the species groups in the component list, so that all
 the species are present in the state.
 
 One of the most important is the `collisions`_ component. This sets collision
-times for all species, which are then used 
+times for all species, which are then used in other components to calculate
+quantities like heat diffusivities and viscosity closures.
 
 .. _sound_speed:
 
@@ -1176,12 +1177,18 @@ species :math:`b` due to temperature differences, is given by:
 
 - Ion-neutral and electron-neutral collisions
 
+  *Note*: These are disabled by default. If enabled, care is needed to
+  avoid double-counting collisions in atomic reactions e.g charge-exchange
+  reacgtions.
+  
   The cross-section for elastic collisions between charged and neutral
   particles can vary significantly. Here for simplicity we just take
   a value of :math:`5\times 10^{-19}m^2` from the NRL formulary.
 
 - Neutral-neutral collisions
 
+  *Note* This is enabled by default.
+  
   The cross-section is given by
 
 .. math::
