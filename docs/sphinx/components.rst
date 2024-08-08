@@ -1179,7 +1179,7 @@ species :math:`b` due to temperature differences, is given by:
 
   *Note*: These are disabled by default. If enabled, care is needed to
   avoid double-counting collisions in atomic reactions e.g charge-exchange
-  reacgtions.
+  reactions.
   
   The cross-section for elastic collisions between charged and neutral
   particles can vary significantly. Here for simplicity we just take
