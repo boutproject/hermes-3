@@ -77,6 +77,14 @@ void EvolveMomentum::transform(Options &state) {
 
   NV_solver = NV; // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
+  {
+    Options* opt = ddt(NV).getTracking();
+    if (opt) {
+      saveParallel(*opt, "NV_initial", NV);
+      saveParallel(*opt, "N_initial", N);
+      saveParallel(*opt, "V_initial", V);
+    }
+  }
   // Note: Now NV and NV_solver will differ when N < density_floor
   set(species["momentum"], NV);
 }
