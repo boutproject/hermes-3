@@ -213,7 +213,7 @@ void SheathBoundary::transform(Options &state) {
             ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
           }
         }
-      }
+      } // end if lower
 
       if (upper_y) {
         // Sum values, put results in mesh->yend
@@ -251,7 +251,7 @@ void SheathBoundary::transform(Options &state) {
 
           }
         }
-      }
+      } // end if upper
     }
 
     phi.allocate();
@@ -275,7 +275,7 @@ void SheathBoundary::transform(Options &state) {
           phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
         }
       }
-    }
+    } // end if lower
 
     if (upper_y) {
       for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
@@ -294,7 +294,7 @@ void SheathBoundary::transform(Options &state) {
           phi[i.yp()] = phi[i.ym()] = phi[i];
         }
       }
-    }
+    } // end if upper
   }
 
   //////////////////////////////////////////////////////////////////
@@ -572,7 +572,7 @@ void SheathBoundary::transform(Options &state) {
           energy_source[i] += power;
         }
       }
-    }
+    } // end if lower
     if (upper_y) {
       // Note: This is essentially the same as the lower boundary,
       // but with directions reversed e.g. ystart -> yend, ip <-> im
@@ -646,7 +646,7 @@ void SheathBoundary::transform(Options &state) {
           energy_source[i] -= power; // Note: Sign negative because power > 0
         }
       }
-    }
+    } // end if upper
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.

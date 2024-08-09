@@ -30,44 +30,8 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int nz = f.getNz();
   return Ind3D{(x * ny + y) * nz + z, ny, nz};
 }
-
-/// Limited free gradient of log of a quantity
-/// This ensures that the guard cell values remain positive
-/// while also ensuring that the quantity never increases
-///
-///  fm  fc | fp
-///         ^ boundary
-///
-/// exp( 2*log(fc) - log(fm) )
-///
-BoutReal limitFree(BoutReal fm, BoutReal fc) {
-  if (fm < fc) {
-    return fc; // Neumann rather than increasing into boundary
-  }
-  if (fm < 1e-10) {
-    return fc; // Low / no density condition
-  }
-  BoutReal fp = SQ(fc) / fm;
-#if CHECKLEVEL >= 2
-  if (!std::isfinite(fp)) {
-    throw BoutException("SheathBoundaryParallel limitFree: {}, {} -> {}", fm, fc, fp);
-  }
-#endif
-
-  return fp;
 }
 
-BoutReal limitFree(const Field3D& f, const BoundaryRegionParIter& pnt) {
-  if (pnt.valid() > 0) {
-    return limitFree(pnt.yprev(f), f[pnt.ind()]);
-  }
-  return f[pnt.ind()];
-}
-
-BoutReal limitFree(const Field3D& f, const BoundaryRegionIter& pnt) {
-  return limitFree(pnt.yprev(f), f[pnt.ind()]);
-}
-}
 
 SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &alloptions, Solver *) {
   AUTO_TRACE();
@@ -105,30 +69,8 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
                        .withDefault(Field3D(0.0))
                    / Tnorm;
 
-  bool lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
-  bool upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
-  bool outer_x = options["outer_x"].doc("Boundary on inner y?").withDefault<bool>(true);
-  bool inner_x = options["inner_x"].doc("Boundary on outer y?").withDefault<bool>(false);
-  if (wall_potential.isFci()) {
-    if (outer_x) {
-      for (auto& bndry : mesh->getBoundariesPar(BoundaryParType::xout)) {
-        boundary_regions_par.push_back(bndry);
-      }
-    }
-    if (inner_x) {
-      for (auto& bndry : mesh->getBoundariesPar(BoundaryParType::xin)) {
-        boundary_regions_par.push_back(bndry);
-      }
-    }
-  } else {
-    if (upper_y) {
-      boundary_regions.push_back(std::make_shared<NewBoundaryRegionY>(mesh, false, mesh->iterateBndryUpperY()));
-    }
-    if (lower_y) {
-      boundary_regions.push_back(std::make_shared<NewBoundaryRegionY>(mesh, true, mesh->iterateBndryLowerY()));
-    }
-  }
-
+  // init parallel bc iterator
+  yboundary.init(options);
   // Note: wall potential at the last cell before the boundary is used,
   // not the value at the boundary half-way between cells. This is due
   // to how twist-shift boundary conditions and non-aligned inputs are
@@ -166,9 +108,11 @@ void SheathBoundaryParallel::transform(Options &state) {
     ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
     : zeroFrom(Ne);
 
-  Field3D NVe = IS_SET_NOBOUNDARY(electrons["momentum"])
-    ? toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]))
-    : zeroFrom(Ne);
+  bool has_NVe = IS_SET_NOBOUNDARY(electrons["momentum"]);
+  Field3D NVe;
+  if (has_NVe) {
+    toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]));
+  }
 
   Coordinates *coord = mesh->getCoordinates();
 
@@ -212,7 +156,7 @@ void SheathBoundaryParallel::transform(Options &state) {
         for (auto& pnt : region) {
           const auto& i = pnt.ind();
           BoutReal s_i =
-              clip(pnt.extrapolate_next_o2([&, Ni, Ne](int yoffset, Ind3D ind) {
+              clip(pnt.extrapolate_sheath_o2([&, Ni, Ne](int yoffset, Ind3D ind) {
                 return Ni.ynext(yoffset)[ind] / Ne.ynext(yoffset)[ind];
               }),
                    0.0, 1.0);
@@ -238,9 +182,14 @@ void SheathBoundaryParallel::transform(Options &state) {
                    100); // Limit for e.g. Ni zero gradient
 
           // Note: Vzi = C_i * sin(α)
-          ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+	  BoutReal toadd = s_i * Zi * sin_alpha * sqrt(C_i_sq);
+	  if (legacy_match && pnt.dir == 1) {
+	    // sin_alpha missing
+	    toadd = s_i * Zi * sqrt(C_i_sq);
+	  }
+          ion_sum[i] += toadd;
         }
-      });
+      }); // end iter_regions
     }
 
     phi.allocate();
@@ -262,11 +211,9 @@ void SheathBoundaryParallel::transform(Options &state) {
 
 	pnt.ynext(phi) = pnt.yprev(phi) = phi[i]; // Constant into sheath
       }
-    });
+    }); // end iter_regions
   }
 
-  ion_sum = 0;
-  
   //////////////////////////////////////////////////////////////////
   // Electrons
 
@@ -307,7 +254,9 @@ void SheathBoundaryParallel::transform(Options &state) {
           pnt.dir * sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / tesheath);
 
       pnt.dirichlet_o2(Ve, vesheath);
-      pnt.dirichlet_o2(NVe, Me * nesheath * vesheath);
+      if (has_NVe) {
+	pnt.dirichlet_o2(NVe, Me * nesheath * vesheath);
+      }
 
       // Take into account the flow of energy due to fluid flow
       // This is additional energy flux through the sheath
@@ -337,7 +286,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 
       electron_energy_source[i] -= pnt.dir * power;
     }
-  });
+  }); // end iter_regions
 
   // Set electron density and temperature, now with boundary conditions
   setBoundary(electrons["density"], fromFieldAligned(Ne));
@@ -351,7 +300,7 @@ void SheathBoundaryParallel::transform(Options &state) {
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
     setBoundary(electrons["velocity"], fromFieldAligned(Ve));
   }
-  if (IS_SET_NOBOUNDARY(electrons["momentum"])) {
+  if (has_NVe) {
     setBoundary(electrons["momentum"], fromFieldAligned(NVe));
   }
 
@@ -434,8 +383,12 @@ void SheathBoundaryParallel::transform(Options &state) {
 	// 1 / (1 + ∂_{ln n_e} ln s_i = s_i ∂_z n_e / ∂_z n_i
 	// (from comparing C_i^2 in eq. 9 with eq. 20
 	//
-	//BoutReal s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0; // Concentration
-	BoutReal s_i = clip(nisheath / floor(nesheath, 1e-10), 0, 1); // Concentration
+	//BoutReal s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0; // Concentration ; upper_y
+	BoutReal s_i = clip(nisheath / floor(nesheath, 1e-10), 0, 1); // Concentration ; lower_y
+	if (legacy_match && pnt.dir == -1){
+	  s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0;
+	}
+
 	BoutReal grad_ne = pnt.extrapolate_grad_o2(Ne);
 	BoutReal grad_ni = pnt.extrapolate_grad_o2(Ni);
 
@@ -464,6 +417,12 @@ void SheathBoundaryParallel::transform(Options &state) {
 	BoutReal q =
 	  ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * C_i_sq * Mi)
 	  * nisheath * visheath;
+	if (legacy_match and pnt.dir == -1) {
+	  // Mi position switched with C_i_sq
+	  q =
+              ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * Mi * C_i_sq)
+              * nisheath * visheath;
+	}
 
 	if (q * pnt.dir < 0.0) {
 	  q = 0.0;
@@ -486,7 +445,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 
 	energy_source[i] -= power * pnt.dir; // Note: Sign negative because power * direction > 0
       }
-    });
+    }); // end iter_regions
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.

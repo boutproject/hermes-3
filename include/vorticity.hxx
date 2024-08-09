@@ -141,6 +141,20 @@ private:
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
   bool diagnose; ///< Output additional diagnostics?
+
+  Field3D fromFieldAligned(const Field3D& f) {
+    if (f.isFci()) {
+      return f;
+    }
+    return ::fromFieldAligned(f);
+  }
+  Field3D toFieldAligned(const Field3D& f) {
+    if (f.isFci()) {
+      return f;
+    }
+    return ::toFieldAligned(f);
+  }
+
 };
 
 namespace {

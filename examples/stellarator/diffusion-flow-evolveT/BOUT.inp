@@ -3,8 +3,6 @@
 nout = 50
 timestep = 50
 
-NXPE = 1
-
 [mesh]
 
 file = "W7X.nc"
@@ -14,9 +12,11 @@ type = fci
 
 [solver]
 mxstep = 10000
+type = pvode
+debug_on_failure = True
 
 [hermes]
-components = h+, e, sheath_boundary_parallel
+components = h+, e, sound_speed, vorticity, sheath_boundary_parallel
 
 Nnorm = 2e18  # Reference density [m^-3]
 Bnorm = 1   # Reference magnetic field [T]
@@ -25,22 +25,23 @@ Tnorm = 5   # Reference temperature [eV]
 loadmetric = false # Assume a tokomak?
 
 [h+]
-type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion_3d
 
 AA = 1
 charge = 1
-anomalous_D = 2    # Density diffusion [m^2/s]
-anomalous_chi = 1
+anomalous_D = .2    # Density diffusion [m^2/s]
+anomalous_chi = .4
+#anomalous_nu = 0
 
 thermal_conduction = false  # No collision rate calculated
 
 [e]
-type = quasineutral, evolve_pressure, anomalous_diffusion, zero_current
+type = quasineutral, evolve_pressure, zero_current, anomalous_diffusion_3d
 
 AA = 1
 charge = 1
-anomalous_D = 2    # Density diffusion [m^2/s]
-anomalous_chi = 1
+anomalous_D = .2    # Density diffusion [m^2/s]
+anomalous_chi = .4
 
 thermal_conduction = false  # No collision rate calculated
 
@@ -66,3 +67,7 @@ bndry_all = dirichlet(0.01)   # All other boundaries low density
 
 bndry_all = neumann
 
+[vorticity:laplacian]
+type = petsc
+direct = 1
+all_terms = false

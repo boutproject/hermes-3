@@ -62,7 +62,6 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
 void EvolveMomentum::transform(Options &state) {
   AUTO_TRACE();
-  mesh->communicate(NV);
 
   auto& species = state["species"][name];
 
@@ -73,6 +72,7 @@ void EvolveMomentum::transform(Options &state) {
 
   V = NV / (AA * Nlim);
   V.applyBoundary();
+  mesh->communicate(V);
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver

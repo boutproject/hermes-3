@@ -1,6 +1,7 @@
 
 #include "../include/vorticity.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/yboundary_regions.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
@@ -22,32 +23,6 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int ny = f.getNy();
   int nz = f.getNz();
   return Ind3D{(x * ny + y) * nz + z, ny, nz};
-}
-
-/// Limited free gradient of log of a quantity
-/// This ensures that the guard cell values remain positive
-/// while also ensuring that the quantity never increases
-///
-///  fm  fc | fp
-///         ^ boundary
-///
-/// exp( 2*log(fc) - log(fm) )
-///
-BoutReal limitFree(BoutReal fm, BoutReal fc) {
-  if (fm < fc) {
-    return fc; // Neumann rather than increasing into boundary
-  }
-  if (fm < 1e-10) {
-    return fc; // Low / no density condition
-  }
-  BoutReal fp = SQ(fc) / fm;
-#if CHECKLEVEL >= 2
-  if (!std::isfinite(fp)) {
-    throw BoutException("SheathBoundary limitFree: {}, {} -> {}", fm, fc, fp);
-  }
-#endif
-
-  return fp;
 }
 }
 
@@ -386,6 +361,7 @@ void Vorticity::transform(Options& state) {
       }
     }
   }
+  phi.name = "phi";
 
   // Update boundary conditions. Two issues:
   // 1) Solving here for phi + Pi, and then subtracting Pi from the result
@@ -433,7 +409,31 @@ void Vorticity::transform(Options& state) {
           - Pi_hat;
 
   } else {
-    phi = phiSolver->solve(Vort * (Bsq / average_atomic_mass), phi_plus_pi) - Pi_hat;
+    const auto tosolve = Vort * (Bsq / average_atomic_mass);
+    checkData(tosolve);
+    checkData(phi_plus_pi);
+    //output.write("WE ARE SOLVING!!!!\n");
+    try {
+      phi = phiSolver->solve(tosolve, phi_plus_pi) - Pi_hat;
+    } catch (const BoutException& e) {
+      output.write("WE ARE DEBUGGING!!!!\n");
+      Options debug;
+      debug["tosolve"] = tosolve;
+      debug["guess"] = phi_plus_pi;
+      debug["Vort"] = Vort;
+      debug["Bsq"] = Bsq;
+      debug["Pi_hat"] = Pi_hat;
+      mesh->outputVars(debug);
+      debug["BOUT_VERSION"].force(bout::version::as_double);
+      const std::string outname =
+        fmt::format("{}/BOUT.debug_vorticity.{}.nc",
+                    Options::root()["datadir"].withDefault<std::string>("data"),
+                    BoutComm::rank());
+
+      bout::OptionsIO::create(outname)->write(debug);
+      MPI_Barrier(BoutComm::get());
+      throw e;
+    }
   }
 
   // Ensure that potential is set in the communication guard cells
@@ -491,19 +491,17 @@ void Vorticity::transform(Options& state) {
 
       // Note: We need boundary conditions on P, so apply the same
       //       free boundary condition as sheath_boundary.
-      if (P.hasParallelSlices()) {
-        Field3D &P_ydown = P.ydown();
-        Field3D &P_yup = P.yup();
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            P_ydown(r.ind, mesh->ystart - 1, jz) = 2 * P(r.ind, mesh->ystart, jz) - P_yup(r.ind, mesh->ystart + 1, jz);
+      if (P.isFci()) {
+	if (! P.hasParallelSlices()){
+	  P.calcParallelSlices();
+	}
+	yboundary.iter([&](auto& region) {
+	  for (auto& pnt : region) {
+	    // const auto& i = pnt.ind();
+	    pnt.ynext(P) = limitFree(P, pnt);
+            // P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
           }
-        }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
-          }
-        }
+        });
       } else {
         Field3D P_fa = toFieldAligned(P);
         for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -524,18 +522,11 @@ void Vorticity::transform(Options& state) {
       // Note: This calculation requires phi derivatives at the Y boundaries
       //       Setting to free boundaries
       if (phi.hasParallelSlices()) {
-        Field3D &phi_ydown = phi.ydown();
-        Field3D &phi_yup = phi.yup();
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_ydown(r.ind, mesh->ystart - 1, jz) = 2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
+	yboundary.iter([&](auto& region) {
+	  for (auto& pnt : region) {
+	    pnt.ynext(phi) = pnt.extrapolate_next_o2(phi);
           }
-        }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_yup(r.ind, mesh->yend + 1, jz) = 2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
-          }
-        }
+        });
       } else {
         Field3D phi_fa = toFieldAligned(phi);
         for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
