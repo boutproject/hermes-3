@@ -113,12 +113,12 @@ void EvolveMomentum::finally(const Options &state) {
 
       Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                       true); // ExB drift
+
+      ddt(NV) = setName( -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows, true), "-Div_n_bxGrad_f_B_XPPM(NV, phi)");
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
-      ddt(NV) -= Z * N * Grad_par(phi);
+      ddt(NV) -= setName(Z * N * Grad_par(phi), "Z * N * Grad_par(phi)");
     }
   } else {
     ddt(NV) = 0.0;
@@ -170,13 +170,12 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Other sources/sinks
   if (species.isSet("momentum_source")) {
-    momentum_source = get<Field3D>(species["momentum_source"]);
-    ddt(NV) += momentum_source;
+    ddt(NV) += setName(get<Field3D>(species["momentum_source"]), "momentum_source {}", momentum_source.name);
   }
 
   // If N < density_floor then NV and NV_solver may differ
   // -> Add term to force NV_solver towards NV
-  ddt(NV) += NV - NV_solver;
+  ddt(NV) += setName(NV - NV_solver, "correction(NV - NV_solver)");
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
