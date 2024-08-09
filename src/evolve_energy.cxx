@@ -128,8 +128,6 @@ void EvolveEnergy::transform(Options& state) {
     E = exp(logE);
   }
 
-  mesh->communicate(E);
-
   auto& species = state["species"][name];
   N = getNoBoundary<Field3D>(species["density"]);
   const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
@@ -183,6 +181,7 @@ void EvolveEnergy::transform(Options& state) {
   // Calculate temperature
   T = P / floor(N, density_floor);
   P = N * T; // Ensure consistency
+  mesh->communicate(E);
 
   set(species["pressure"], P);
   set(species["temperature"], T);
