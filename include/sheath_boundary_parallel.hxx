@@ -4,7 +4,7 @@
 
 #include "component.hxx"
 
-#include "./boundary_iterator.hxx"
+#include "./yboundary_regions.hxx"
 
 /// Boundary condition at the wall in Y
 ///
@@ -85,21 +85,7 @@ private:
 
   bool floor_potential; ///< Apply floor to sheath potential?
 
-  bool upper_y{true};
-  bool lower_y{true};
-
-  std::vector<std::shared_ptr<BoundaryRegionPar>> boundary_regions_par;
-  std::vector<std::shared_ptr<NewBoundaryRegionY>> boundary_regions;
-
-  template <class T>
-  void iter_regions(const T& f) {
-    for (auto& region : boundary_regions) {
-      f(*region);
-    }
-    for (auto& region : boundary_regions_par) {
-      f(*region);
-    }
-  }
+  bool legacy_match{true};
 
   Field3D fromFieldAligned(const Field3D& f) {
     if (f.isFci()) {
@@ -112,6 +98,10 @@ private:
       return f;
     }
     return ::toFieldAligned(f);
+  }
+  template <class F>
+  void iter_regions(const F& f) {
+    yboundary.iter_regions(f);
   }
 };
 

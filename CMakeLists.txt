@@ -100,6 +100,7 @@ set(HERMES_SOURCES
     src/ion_viscosity.cxx
     src/transform.cxx
     src/vorticity.cxx
+    src/yboundary_regions.cxx
     include/adas_reaction.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
@@ -155,6 +156,7 @@ set(HERMES_SOURCES
     include/upstream_density_feedback.hxx
     include/temperature_feedback.hxx
     include/vorticity.hxx
+    include/yboundary_regions.hxx
     include/zero_current.hxx
     include/transform.hxx
     include/fixed_fraction_radiation.hxx
