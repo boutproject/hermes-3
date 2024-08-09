@@ -62,15 +62,14 @@ void BinormalSTPM::transform(Options& state) {
       ? GET_NOBOUNDARY(Field3D, species["momentum"])
       : 0.0;
     
-    add(species["pressure_source"],
-	(2. / 3) * (1/Theta) * FV::Div_par_K_Grad_par(chi_Theta*N, T, false));
+    add(species["energy_source"],
+	(1/Theta) * FV::Div_par_K_Grad_par(chi_Theta*N, T, false));
 
     add(species["momentum_source"],
 	(1/Theta) * FV::Div_par_K_Grad_par(AA*nu_Theta, NV, false));
     
     add(species["density_source"],
 	(1/Theta) * FV::Div_par_K_Grad_par(D_Theta, N, false));
-
   }
 }
 
