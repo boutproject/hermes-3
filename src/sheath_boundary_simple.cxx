@@ -623,10 +623,6 @@ void SheathBoundarySimple::transform(Options& state) {
 
           ion_sheath_power_ylow[ip] += heatflow;       // Upper Y, so power placed in first guard cell
 
-          output << "\n****************************\n";
-          output << "visheath = " << visheath << "\n";
-          output << "ion heatflow = " << heatflow;
-          output << "\n****************************\n";
         }
       }
       
