@@ -348,7 +348,7 @@ void SheathBoundarySimple::transform(Options& state) {
         electron_energy_source[i] -= power;
 
         // Total heat flux for diagnostic purposes
-        q = gamma_e * tesheath * nesheath * vesheath;  // [Wm^-2]
+        q = (gamma_e * tesheath + 0.5 * vesheath * Me) * nesheath * vesheath;   // [Wm^-2]
         hflux_e[i] -= q * da / dv;   // [Wm^-3]
         electron_sheath_power_ylow[i] += heatflow;       // [W], lower Y, so sheath boundary power placed in final domain cell 
                       
@@ -407,7 +407,7 @@ void SheathBoundarySimple::transform(Options& state) {
         electron_energy_source[i] -= power;
 
         // Total heat flux for diagnostic purposes
-        q = gamma_e * tesheath * nesheath * vesheath;  // [Wm^-2]
+        q = (gamma_e * tesheath + 0.5 * vesheath * Me) * nesheath * vesheath;   // [Wm^-2]
         hflux_e[i] -= q * da / dv;   // [Wm^-3]
         electron_sheath_power_ylow[ip] -= q * da;    // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
 
@@ -554,7 +554,7 @@ void SheathBoundarySimple::transform(Options& state) {
           particle_source[i] -= nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath;   // [Wm^-2]
+          q = (gamma_i * tisheath + 0.5 * C_i_sq * Mi) * nisheath * visheath;   // [Wm^-2]
           hflux_i[i] -= q * da / dv;   // [Wm^-3]
           ion_sheath_power_ylow[i] += heatflow;      // [W] lower Y, so power placed in final domain cell
         }
@@ -619,7 +619,7 @@ void SheathBoundarySimple::transform(Options& state) {
           particle_source[i] -= nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath;   // [Wm^-2]
+          q = (gamma_i * tisheath + 0.5 * C_i_sq * Mi) * nisheath * visheath;   // [Wm^-2]
           hflux_i[i] -= q * da / dv;   // [Wm^-3]
           ion_sheath_power_ylow[ip] += q * da;  // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
         }
@@ -675,8 +675,6 @@ void SheathBoundarySimple::outputVars(Options& state) {
   for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
     auto species_name = s1->first;
     const Options& section = diagnostics[species_name];
-
-    // TODO: What is "getNonFinal"?
 
     set_with_attrs(state[{"E" + species_name + "_sheath"}], getNonFinal<Field3D>(section["energy_source"]),
                           {{"time_dimension", "t"},
