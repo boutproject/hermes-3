@@ -2037,6 +2037,7 @@ electromagnetic
 ~~~~~~~~~~~~~~~
 
 **Notes**: When using this module,
+
 1. Set ``sound_speed:alfven_wave=true`` so that the shear Alfven wave
    speed is included in the calculation of the fastest parallel wave
    speed for numerical dissipation.
@@ -2045,7 +2046,8 @@ electromagnetic
    ``electromagnetic:apar_core_neumann=true`` (this is the default).
 3. Set the potential core boundary to be constant in Y by setting
    ``vorticity:phi_core_averagey = true``
-4. Magnetic flutter terms must be enabled to be active. They use an
+4. Magnetic flutter terms must be enabled to be active
+   (``electromagnetic:magnetic_flutter=true``).  They use an
    ``Apar_flutter`` field, not the ``Apar`` field that is calculated
    from the induction terms.
 
@@ -2069,9 +2071,9 @@ an additional term in the momentum equation:
    \frac{\partial p_s}{\partial t} = \cdots + Z_s e A_{||} \frac{\partial n_s}{\partial t}
 
 This is implemented so that the density time-derivative is calculated using the lowest order
-terms (parallel flow and ExB drift).
+terms (parallel flow, ExB drift and a low density numerical diffusion term).
 
-The above equations are normalised so that in dimensionless quantities
+The above equations are normalised so that in dimensionless quantities:
 
 .. math::
 
@@ -2111,8 +2113,17 @@ equation.  By default the iterative "Naulin" solver is used to do
 this: A fast FFT-based method is used in a fixed point iteration,
 correcting for the density variation.
 
-Magnetic flutter terms are 
+Magnetic flutter terms are disabled by default, and can be enabled by setting
 
+.. code-block:: ini
+
+   [electromagnetic]
+   magnetic_flutter = true
+
+This writes an ``Apar_flutter`` field to the state, which then enables perturbed
+parallel derivative terms in the ``evolve_density``, ``evolve_pressure``, ``evolve_energy`` and
+``evolve_momentum`` components. Parallel flow terms are modified, and parallel heat
+conduction.
 
 .. doxygenstruct:: Electromagnetic
    :members:
