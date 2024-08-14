@@ -73,6 +73,7 @@ struct SheathBoundarySimple : public Component {
   ///
   ///
   void transform(Options &state) override;
+  void outputVars(Options &state) override;
 private:
   BoutReal Ge; // Secondary electron emission coefficient
   BoutReal sin_alpha; // sin of angle between magnetic field and wall.
@@ -89,6 +90,15 @@ private:
   bool suppress_outflow; ///< Suppress outflow of particles?
 
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
+
+  bool diagnose; // Save additional diagnostics?
+
+  Field3D hflux_e;  // Electron heat flux through sheath
+  Field3D phi; // Phi at sheath
+  Field3D ion_sum; // Sum of ion current at sheath
+
+  Options diagnostics;   // Options object to store diagnostic fields like a dict
+
 };
 
 namespace {
