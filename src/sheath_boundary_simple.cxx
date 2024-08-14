@@ -329,18 +329,28 @@ void SheathBoundarySimple::transform(Options& state) {
             floor(0.5 * (phi[im] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
 
         // Electron velocity into sheath (< 0)
+        // Equal to Bohm for single ions and no currents
         BoutReal vesheath =
 	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
-        Ve[im] = 2 * vesheath - Ve[i];
-        NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
+        BoutReal q = 0;
 
-        // Take into account the flow of energy due to fluid flow
-        // This is additional energy flux through the sheath
-        // Note: Here this is positive because vesheath > 0
-        BoutReal q = ((gamma_e - 2.5) * tesheath
-                      - 0.5 * Me * SQ(vesheath))
-                     * nesheath * vesheath;
+        // Set boundary conditions on flows
+        if (suppress_outflow == false) {
+          Ve[im] = 2 * vesheath - Ve[i];
+          NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
+
+          // Take into account the flow of energy due to fluid flow
+          // This is additional energy flux through the sheath
+          // Note: Here this is positive because vesheath > 0
+          q = ((gamma_e - 2.5) * tesheath - 0.5 * Me * SQ(vesheath)) * nesheath * vesheath; 
+
+        } else {
+          // Vesheath is already equal to Bohm due to C_i_sq assumption in ion_sum
+          Ve[im] = -Ve[i];
+          NVe[im] = -NVe[i];        // Forcing particle outflow to zero
+          q = gamma_e * tesheath * nesheath * vesheath;   // Hardcode total gamma heat flux
+        }
 
         // Cross-sectional area in XZ plane and cell volume
         BoutReal da = (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
@@ -350,11 +360,11 @@ void SheathBoundarySimple::transform(Options& state) {
         // Get power and energy source
         BoutReal heatflow = q * da;   // [W]
         BoutReal power = heatflow / dv;  // [Wm^-3]
-        electron_energy_source[i] -= power;
+        electron_energy_source[i] += power;
 
         // Total heat flux for diagnostic purposes
-        q = (gamma_e * tesheath + 0.5 * vesheath * Me) * nesheath * vesheath;   // [Wm^-2]
-        hflux_e[i] -= q * da / dv;   // [Wm^-3]
+        q = gamma_e * nesheath * vesheath;   // [Wm^-2]
+        hflux_e[i] += q * da / dv;   // [Wm^-3]
         electron_sheath_power_ylow[i] += heatflow;       // [W], lower Y, so sheath boundary power placed in final domain cell 
                       
       }
@@ -391,15 +401,24 @@ void SheathBoundarySimple::transform(Options& state) {
         BoutReal vesheath =
 	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
-        Ve[ip] = 2 * vesheath - Ve[i];
-        NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
+        BoutReal q = 0;
 
-        // Take into account the flow of energy due to fluid flow
-        // This is additional energy flux through the sheath
-        // Note: Here this is positive because vesheath > 0
-        BoutReal q = ((gamma_e - 2.5) * tesheath
-                      - 0.5 * Me * SQ(vesheath))
-                     * nesheath * vesheath;
+        // Set boundary conditions on flows
+        if (suppress_outflow == false) {
+          Ve[ip] = 2 * vesheath - Ve[i];
+          NVe[ip] = 2 * Me * nesheath * vesheath - NVe[i];
+
+          // Take into account the flow of energy due to fluid flow
+          // This is additional energy flux through the sheath
+          // Note: Here this is positive because vesheath > 0
+          q = ((gamma_e - 2.5) * tesheath - 0.5 * Me * SQ(vesheath)) * nesheath * vesheath; 
+
+        } else {
+          // Vesheath is already equal to Bohm due to C_i_sq assumption in ion_sum
+          Ve[ip] = -Ve[i];
+          NVe[ip] = -NVe[i];        // Forcing particle outflow to zero
+          q = gamma_e * tesheath * nesheath * vesheath;   // Hardcode total gamma heat flux
+        }
 
         // Cross-sectional area in XZ plane and cell volume
         BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
@@ -412,7 +431,7 @@ void SheathBoundarySimple::transform(Options& state) {
         electron_energy_source[i] -= power;
 
         // Total heat flux for diagnostic purposes
-        q = (gamma_e * tesheath + 0.5 * vesheath * Me) * nesheath * vesheath;   // [Wm^-2]
+        q = gamma_e * nesheath * vesheath;   // [Wm^-2]
         hflux_e[i] -= q * da / dv;   // [Wm^-3]
         electron_sheath_power_ylow[ip] -= q * da;    // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
 
@@ -535,21 +554,24 @@ void SheathBoundarySimple::transform(Options& state) {
             visheath = Vi[i];
           }
 
+          BoutReal q = 0;
+
           // Set boundary conditions on flows
           if (suppress_outflow == false) {
             Vi[im] = 2. * visheath - Vi[i];
             NVi[im] = 2. * Mi * nisheath * visheath - NVi[i];
+
+            // Take into account the flow of energy due to fluid flow
+            // This is additional energy flux through the sheath
+            // Note: Here this is negative because visheath < 0
+            q = ((gamma_i - 2.5) * tisheath - 0.5 * Mi * C_i_sq) * nisheath * visheath;  // TODO: C_i_sq should be visheath!!
+
           } else {
             Vi[im] = -Vi[i];
-            NVi[im] = -NVi[i];
+            NVi[im] = -NVi[i];        // Forcing particle outflow to zero
+            visheath = -sqrt(C_i_sq);   // Forcing visheath to Bohm for the heat flux
+            q = gamma_i * tisheath * nisheath * visheath;   // Hardcode total gamma heat flux
           }
-
-          // Take into account the flow of energy due to fluid flow
-          // This is additional energy flux through the sheath
-          // Note: Here this is negative because visheath < 0
-          BoutReal q =
-              ((gamma_i - 2.5) * tisheath - 0.5 * Mi * C_i_sq)
-              * nisheath * visheath;
 
           // Cross-sectional area in XZ plane and cell volume
           BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
@@ -560,12 +582,12 @@ void SheathBoundarySimple::transform(Options& state) {
           BoutReal heatflow = q * da;   // [W]
           BoutReal power = heatflow / dv;  // [Wm^-3]
           ASSERT2(std::isfinite(power));
-          energy_source[i] -= power; // Note: Sign negative because power > 0
-          particle_source[i] -= nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
+          energy_source[i] += power; // Note: Sign negative because power > 0
+          particle_source[i] += nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
-          q = (gamma_i * tisheath + 0.5 * C_i_sq * Mi) * nisheath * visheath;   // [Wm^-2]
-          hflux_i[i] -= q * da / dv;   // [Wm^-3]
+          q = gamma_i * nisheath * visheath;   // [Wm^-2]
+          hflux_i[i] += q * da / dv;   // [Wm^-3]
           ion_sheath_power_ylow[i] += heatflow;      // [W] lower Y, so power placed in final domain cell
         }
       }
@@ -614,13 +636,25 @@ void SheathBoundarySimple::transform(Options& state) {
             NVi[ip] = -NVi[i];
           }
 
+          BoutReal q = 0;
 
-          // Take into account the flow of energy due to fluid flow
-          // This is additional energy flux through the sheath
-          // Note: Here this is positive because visheath > 0
-          BoutReal q =
-              ((gamma_i - 2.5) * tisheath - 0.5 * C_i_sq * Mi)
-              * nisheath * visheath;  // [Wm^-2]
+          // Set boundary conditions on flows
+          if (suppress_outflow == false) {
+            Vi[ip] = 2. * visheath - Vi[i];
+            NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
+
+            // Take into account the flow of energy due to fluid flow
+            // This is additional energy flux through the sheath
+            // Note: Here this is negative because visheath < 0
+            q = ((gamma_i - 2.5) * tisheath - 0.5 * Mi * C_i_sq) * nisheath * visheath;  // TODO: C_i_sq should be visheath!!
+
+          } else {
+            Vi[ip] = -Vi[i];
+            NVi[ip] = -NVi[i];        // Forcing particle outflow to zero
+            visheath = sqrt(C_i_sq);   // Forcing visheath to Bohm for the heat flux
+            q = gamma_i * tisheath * nisheath * visheath;   // Hardcode total gamma heat flux
+          }
+
 
           // Cross-sectional area in XZ plane and cell volume
           BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
@@ -637,7 +671,7 @@ void SheathBoundarySimple::transform(Options& state) {
           // Total heat flux for diagnostic purposes
           q = (gamma_i * tisheath + 0.5 * C_i_sq * Mi) * nisheath * visheath;   // [Wm^-2]
           hflux_i[i] -= q * da / dv;   // [Wm^-3]
-          ion_sheath_power_ylow[ip] += q * da;  // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
+          ion_sheath_power_ylow[ip] -= q * da;  // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
         }
       }
       
