@@ -138,10 +138,15 @@ void EvolveMomentum::finally(const Options &state) {
           : zeroFrom(Apar);
 
         // This is Z * Apar * dn/dt, keeping just leading order terms
-        ddt(NV) += Z * Apar * (density_source
-                               - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave)
-                               - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
-                                                       true));
+        Field3D dndt = density_source
+          - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave)
+          - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true)
+          ;
+        if (low_n_diffuse_perp) {
+          dndt += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
+                                        bndry_flux);
+        }
+        ddt(NV) += Z * Apar * dndt;
       }
     } else {
       ddt(NV) = 0.0;
@@ -201,6 +206,8 @@ void EvolveMomentum::finally(const Options &state) {
 
   // If N < density_floor then NV and NV_solver may differ
   // -> Add term to force NV_solver towards NV
+  // Note: This correction is calculated in transform()
+  //       because NV may be modified by electromagnetic terms
   ddt(NV) += NV_err;
 
   // Scale time derivatives
@@ -228,6 +235,8 @@ void EvolveMomentum::finally(const Options &state) {
   }
   // Restore NV to the value returned by the solver
   // so that restart files contain the correct values
+  // Note: Copy boundary condition so dump file has correct boundary.
+  NV_solver.setBoundaryTo(NV);
   NV = NV_solver;
 }
 

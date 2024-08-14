@@ -348,6 +348,10 @@ void SheathBoundary::transform(Options &state) {
         BoutReal q = ((gamma_e - 1 - 1 / (electron_adiabatic - 1)) * tesheath
                       - 0.5 * Me * SQ(vesheath))
                      * nesheath * vesheath;
+        if (q > 0.0) {
+          // Note: This could happen if tesheath > 2*phisheath
+          q = 0.0;
+        }
 
         // Multiply by cell area to get power
         BoutReal flux = q * (coord->J[i] + coord->J[im])
@@ -410,7 +414,10 @@ void SheathBoundary::transform(Options &state) {
         BoutReal q = ((gamma_e - 1 - 1 / (electron_adiabatic - 1)) * tesheath
                       - 0.5 * Me * SQ(vesheath))
                      * nesheath * vesheath;
-
+        if (q < 0.0) {
+          // Note: This could happen if tesheath > 2*phisheath
+          q = 0.0;
+        }
         // Multiply by cell area to get power
         BoutReal flux = q * (coord->J[i] + coord->J[ip])
                         / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
