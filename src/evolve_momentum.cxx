@@ -167,7 +167,7 @@ void EvolveMomentum::finally(const Options &state) {
     ddt(NV) -= Grad_par(P);
   }
 
-  if (state["fields"].isSet("Apar_flutter")) {
+  if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
     // Magnetic flutter term
     const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
     ddt(NV) -= Div_n_g_bxGrad_f_B_XZ(NV, V, -Apar_flutter);

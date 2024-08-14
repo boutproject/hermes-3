@@ -258,7 +258,7 @@ void EvolveEnergy::finally(const Options& state) {
 
     ddt(E) -= FV::Div_par_mod<hermes::Limiter>(E + P, V, fastest_wave);
 
-    if (state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       ddt(E) -= Div_n_g_bxGrad_f_B_XZ(E + P, V, -Apar_flutter);
@@ -329,7 +329,7 @@ void EvolveEnergy::finally(const Options& state) {
     // is calculated and removed separately
     ddt(E) += FV::Div_par_K_Grad_par(kappa_par, T, false);
 
-    if (state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term. The operator splits into 4 pieces:
       // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))
       //                    + Div(k db b0.Grad(T)) + Div(k db db.Grad(T))

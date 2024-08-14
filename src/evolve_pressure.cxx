@@ -262,7 +262,7 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) += (2. / 3) * V * Grad_par(P);
     }
 
-    if (state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
@@ -347,7 +347,7 @@ void EvolvePressure::finally(const Options& state) {
     // is calculated and removed separately
     ddt(P) += (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T, false);
 
-    if (state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term. The operator splits into 4 pieces:
       // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))
       //                    + Div(k db b0.Grad(T)) + Div(k db db.Grad(T))

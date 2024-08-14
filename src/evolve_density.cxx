@@ -231,7 +231,7 @@ void EvolveDensity::finally(const Options& state) {
 
     ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave);
 
-    if (state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       // Note: Using -Apar_flutter rather than reversing sign in front,
