@@ -217,6 +217,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
 void Vorticity::transform(Options& state) {
   AUTO_TRACE();
 
+  phi.name = "phi";
   auto& fields = state["fields"];
 
   // Set the boundary of phi. Both 2D and 3D fields are kept, though the 3D field
