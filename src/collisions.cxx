@@ -33,13 +33,13 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
                      .withDefault<bool>(true);
   electron_neutral = options["electron_neutral"]
                          .doc("Include electron-neutral elastic collisions?")
-                         .withDefault<bool>(true);
+                         .withDefault<bool>(false);
   ion_ion = options["ion_ion"]
                 .doc("Include ion-ion elastic collisions?")
                 .withDefault<bool>(true);
   ion_neutral = options["ion_neutral"]
                     .doc("Include ion-neutral elastic collisions?")
-                    .withDefault<bool>(true);
+                    .withDefault<bool>(false);
   neutral_neutral = options["neutral_neutral"]
                         .doc("Include neutral-neutral elastic collisions?")
                         .withDefault<bool>(true);
