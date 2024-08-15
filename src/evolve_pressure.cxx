@@ -441,7 +441,7 @@ void EvolvePressure::outputVars(Options& state) {
                       {"species", name},
                       {"source", "evolve_pressure"}});
 
-      set_with_attrs(state[std::string("ConductionDiv_") + name + "_par"], conduction_div * 3/2,
+      set_with_attrs(state[std::string("div_cond_par_") + name], conduction_div * 3/2,
                      {{"time_dimension", "t"},
                       {"units", "W m^-3"},
                       {"conversion", Pnorm * Omega_ci},
