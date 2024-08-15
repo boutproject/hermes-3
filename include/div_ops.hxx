@@ -23,8 +23,8 @@
 
  */
 
-#ifndef __DIV_OPS_H__
-#define __DIV_OPS_H__
+#ifndef DIV_OPS_H
+#define DIV_OPS_H
 
 #include <bout/field3d.hxx>
 #include <bout/vector3d.hxx>
@@ -43,6 +43,11 @@ const Field3D Div_par_diffusion_index(const Field3D& f, bool bndry_flux = true);
 const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f,
                                     bool bndry_flux = true, bool poloidal = false,
                                     bool positive = false);
+
+/// This version has an extra coefficient 'g' that is linearly interpolated
+/// onto cell faces
+const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Field3D &f, 
+                                    bool bndry_flux = true, bool positive = false);
 
 const Field3D Div_Perp_Lap_FV_Index(const Field3D& a, const Field3D& f, bool xflux);
 
@@ -211,7 +216,7 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
           } else {
             // Add flux due to difference in boundary values
             flux =
-                s.R * vpar * sv.R
+                s.R * sv.R * sv.R
                 + BOUTMAX(wave_speed(i, j, k), fabs(v(i, j, k)), fabs(v(i, j + 1, k)))
                   * (s.R * sv.R - bndryval * vpar);
           }
@@ -240,7 +245,7 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
           } else {
             // Add flux due to difference in boundary values
             flux =
-                s.L * vpar * sv.L
+                s.L * sv.L * sv.L
                 - BOUTMAX(wave_speed(i, j, k), fabs(v(i, j, k)), fabs(v(i, j - 1, k)))
                   * (s.L * sv.L - bndryval * vpar);
           }
@@ -456,4 +461,4 @@ const Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 
 } // namespace FV
 
-#endif //  __DIV_OPS_H__
+#endif //  DIV_OPS_H
