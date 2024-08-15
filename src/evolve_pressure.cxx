@@ -136,6 +136,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       source_prefactor_function = FieldFactory::get()->parse(str, &p_options);
   }
 
+
   if (p_options["source_only_in_core"]
       .doc("Zero the source outside the closed field-line region?")
       .withDefault<bool>(false)) {
@@ -228,6 +229,8 @@ void EvolvePressure::finally(const Options& state) {
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
+  
+  Coordinates* coord = mesh->getCoordinates();
 
   if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
       state.isSection("fields") and state["fields"].isSet("phi")) {
@@ -418,7 +421,8 @@ void EvolvePressure::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    ddt(P) += (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T, false);
+    conduction_div = (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T, false);   // [W/m3]
+    ddt(P) += conduction_div;
   }
 
   if (hyper_z > 0.) {
@@ -516,6 +520,7 @@ void EvolvePressure::outputVars(Options& state) {
                       {"long_name", name + " heat conduction coefficient"},
                       {"species", name},
                       {"source", "evolve_pressure"}});
+                      
       set_with_attrs(state[std::string("K") + name + std::string("_cond")], nu,
                      {{"time_dimension", "t"},
                       {"units", "s^-1"},
@@ -523,6 +528,15 @@ void EvolvePressure::outputVars(Options& state) {
                       {"long_name", "collision frequency for conduction"},
                       {"species", name},
                       {"source", "evolve_pressure"}});
+
+      set_with_attrs(state[std::string("div_cond_par_") + name], conduction_div * 3/2,
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", name + " parallel energy flow divergence due to heat conduction"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+
     }
     set_with_attrs(state[std::string("T") + name], T,
                    {{"time_dimension", "t"},

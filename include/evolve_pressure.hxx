@@ -99,6 +99,8 @@ private:
 
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 
+  Field3D conduction_div; ///< Divergence of heat conduction flux
+
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;     ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
