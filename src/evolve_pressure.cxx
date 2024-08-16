@@ -367,7 +367,7 @@ void EvolvePressure::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    Field3D flow_ylow_conduction;
+    flow_ylow_conduction;
     conduction_div = (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
     ddt(P) += conduction_div;
     flow_ylow += flow_ylow_conduction;
