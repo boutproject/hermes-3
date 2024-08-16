@@ -256,7 +256,7 @@ void EvolveEnergy::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(E) -= FV::Div_par_mod<hermes::Limiter>(E + P, V, fastest_wave);
+    ddt(E) -= FV::Div_par_mod<hermes::Limiter>(E + P, V, fastest_wave, flow_ylow);
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -327,7 +327,9 @@ void EvolveEnergy::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    ddt(E) += FV::Div_par_K_Grad_par(kappa_par, T, false);
+    Field3D flow_ylow_conduction;
+    ddt(E) += Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    flow_ylow += flow_ylow_conduction;
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term. The operator splits into 4 pieces:
@@ -390,7 +392,7 @@ void EvolveEnergy::finally(const Options& state) {
       flow_xlow = get<Field3D>(species["energy_flow_xlow"]);
     }
     if (species.isSet("energy_flow_ylow")) {
-      flow_ylow = get<Field3D>(species["energy_flow_ylow"]);
+      flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
   }
 }

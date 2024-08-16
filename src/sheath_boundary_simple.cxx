@@ -338,13 +338,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
         electron_energy_source[i] += power;
 
-        // Total heat flux for diagnostic purposes
-        q = gamma_e * tesheath  * nesheath * vesheath;   // Wm-2
-        heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
-                      * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
-
-        electron_sheath_power_ylow[i] += heatflow;       // lower Y, so power placed in final domain cell 
-                      
+        electron_sheath_power_ylow[i] += heatflow * coord->dx[i] * coord->dz[i];       // lower Y, so power placed in final domain cell 
       }
     }
   }
@@ -398,12 +392,8 @@ void SheathBoundarySimple::transform(Options& state) {
 
         electron_energy_source[i] -= power;
 
-        // Total heat flux for diagnostic purposes
-        q = gamma_e * tesheath * nesheath * vesheath;  // Wm-2
-        heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
-                      * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
-        
-        electron_sheath_power_ylow[ip] -= heatflow;    // upper Y, so power placed in first guard cell
+        // Diagnostic contains energy removed in the sheath
+        electron_sheath_power_ylow[ip] += heatflow * coord->dx[i] * coord->dz[i];    // upper Y, so power placed in first guard cell
       }
     }
   }
@@ -535,12 +525,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
           energy_source[i] += power;
 
-          // Calculation of total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath;   // Wm-2
-          heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
-                      * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
-
-          ion_sheath_power_ylow[i] += heatflow;      // lower Y, so power placed in final domain cell
+          ion_sheath_power_ylow[i] += heatflow * coord->dx[i] * coord->dz[i];      // lower Y, so power placed in final domain cell
         }
       }
     }
@@ -600,18 +585,13 @@ void SheathBoundarySimple::transform(Options& state) {
 
           energy_source[i] -= power; // Note: Sign negative because power > 0
 
-          // Calculation of total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath;
-          heatflow = q * (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
-                      * (0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]));  // W
-
-          ion_sheath_power_ylow[ip] += heatflow;       // Upper Y, so power placed in first guard cell
+          ion_sheath_power_ylow[ip] += heatflow * coord->dx[i] * coord->dz[i];       // Upper Y, so power placed in first guard cell
         }
       }
-      
     }
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
+
     Ni.clearParallelSlices();
     Ti.clearParallelSlices();
     Pi.clearParallelSlices();

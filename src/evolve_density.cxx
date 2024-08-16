@@ -229,7 +229,7 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -303,7 +303,7 @@ void EvolveDensity::finally(const Options& state) {
       flow_xlow = get<Field3D>(species["particle_flow_xlow"]);
     }
     if (species.isSet("particle_flow_ylow")) {
-      flow_ylow = get<Field3D>(species["particle_flow_ylow"]);
+      flow_ylow += get<Field3D>(species["particle_flow_ylow"]);
     }
   }
 }
