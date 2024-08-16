@@ -546,6 +546,15 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " power through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
+
+      set_with_attrs(state[std::string("ConductionFlow_") + name + std::string("_ylow")], flow_ylow_conduction,
+                   {{"time_dimension", "t"},
+                    {"units", "W"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                    {"standard_name", "power"},
+                    {"long_name", name + " power through Y cell face. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
     }
 
     if (numerical_viscous_heating) {
