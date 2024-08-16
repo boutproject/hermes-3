@@ -271,6 +271,13 @@ void EvolvePressure::finally(const Options& state) {
 
       ddt(P) += (2. / 3) * V * Grad_par(P);
     }
+
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+      // Magnetic flutter term
+      const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+      ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
+      ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+    }
   }
 
   if (species.isSet("low_n_coeff")) {
@@ -423,6 +430,20 @@ void EvolvePressure::finally(const Options& state) {
     // is calculated and removed separately
     conduction_div = (2. / 3) * FV::Div_par_K_Grad_par(kappa_par, T, false);   // [W/m3]
     ddt(P) += conduction_div;
+    
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+      // Magnetic flutter term. The operator splits into 4 pieces:
+      // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))
+      //                    + Div(k db b0.Grad(T)) + Div(k db db.Grad(T))
+      // The first term is already calculated above.
+      // Here we add the terms containing db
+      const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+      Field3D db_dot_T = bracket(T, Apar_flutter, BRACKET_ARAKAWA);
+      Field3D b0_dot_T = Grad_par(T);
+      mesh->communicate(db_dot_T, b0_dot_T);
+      ddt(P) += (2. / 3) * (Div_par(kappa_par * db_dot_T) -
+                            Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter));
+    }
   }
 
   if (hyper_z > 0.) {
