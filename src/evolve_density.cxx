@@ -124,8 +124,6 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     }
   }
 
-
-
   neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
@@ -231,7 +229,15 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
+
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+      // Magnetic flutter term
+      const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+      // Note: Using -Apar_flutter rather than reversing sign in front,
+      //       so that upwinding is handled correctly
+      ddt(N) -= Div_n_g_bxGrad_f_B_XZ(N, V, -Apar_flutter);
+    }
   }
 
   if (low_n_diffuse) {
@@ -297,7 +303,7 @@ void EvolveDensity::finally(const Options& state) {
       flow_xlow = get<Field3D>(species["particle_flow_xlow"]);
     }
     if (species.isSet("particle_flow_ylow")) {
-      flow_ylow = get<Field3D>(species["particle_flow_ylow"]);
+      flow_ylow += get<Field3D>(species["particle_flow_ylow"]);
     }
   }
 }

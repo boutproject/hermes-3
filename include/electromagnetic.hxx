@@ -64,6 +64,13 @@ private:
 
   std::unique_ptr<Laplacian> aparSolver; // Laplacian solver in X-Z
 
+  bool const_gradient; // Set neumann boundaries by extrapolation
+  BoutReal apar_boundary_timescale; // Relaxation timescale
+  BoutReal last_time;  // The last time the boundaries were updated
+
+  bool magnetic_flutter; ///< Set the magnetic flutter term?
+  Field3D Apar_flutter;
+
   bool diagnose; ///< Output additional diagnostics?
 };
 
