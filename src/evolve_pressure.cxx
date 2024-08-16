@@ -148,6 +148,16 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   neumann_boundary_average_z = p_options["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
+
+  numerical_viscous_heating = options["numerical_viscous_heating"]
+    .doc("Include heating due to numerical viscosity?")
+    .withDefault<bool>(false);
+
+  if (numerical_viscous_heating) {
+    fix_momentum_boundary_flux = options["fix_momentum_boundary_flux"]
+      .doc("Fix Y boundary momentum flux to boundary midpoint value?")
+      .withDefault<bool>(false);
+  }
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -268,6 +278,14 @@ void EvolvePressure::finally(const Options& state) {
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
       ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+    }
+
+    if (numerical_viscous_heating) {
+      // Viscous heating coming from numerical viscosity
+      Field3D Nlim = floor(N, density_floor);
+      const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
+      Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
+      ddt(P) += Sp_nvh;
     }
   }
 
@@ -513,6 +531,17 @@ void EvolvePressure::outputVars(Options& state) {
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
                     {"long_name", name + " power through Y cell face. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+    }
+
+    if (numerical_viscous_heating) {
+      set_with_attrs(state[std::string("SP") + name + std::string("_nvh")], Sp_nvh,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source from numerical viscous heating"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
