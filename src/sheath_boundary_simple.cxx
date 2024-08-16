@@ -363,7 +363,7 @@ void SheathBoundarySimple::transform(Options& state) {
         electron_energy_source[i] += power;
 
         // Total heat flux for diagnostic purposes
-        q = gamma_e * nesheath * vesheath;   // [Wm^-2]
+        q = gamma_e * tesheath * nesheath * vesheath;   // [Wm^-2]
         hflux_e[i] += q * da / dv;   // [Wm^-3]
         electron_sheath_power_ylow[i] += heatflow;       // [W], lower Y, so sheath boundary power placed in final domain cell 
                       
@@ -431,9 +431,9 @@ void SheathBoundarySimple::transform(Options& state) {
         electron_energy_source[i] -= power;
 
         // Total heat flux for diagnostic purposes
-        q = gamma_e * nesheath * vesheath;   // [Wm^-2]
+        q = gamma_e * tesheath * nesheath * vesheath;   // [Wm^-2]
         hflux_e[i] -= q * da / dv;   // [Wm^-3]
-        electron_sheath_power_ylow[ip] -= q * da;    // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
+        electron_sheath_power_ylow[ip] += heatflow;    // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
 
       }
     }
@@ -583,10 +583,10 @@ void SheathBoundarySimple::transform(Options& state) {
           BoutReal power = heatflow / dv;  // [Wm^-3]
           ASSERT2(std::isfinite(power));
           energy_source[i] += power; // Note: Sign negative because power > 0
-          particle_source[i] += nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
+          particle_source[i] -= nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
-          q = gamma_i * nisheath * visheath;   // [Wm^-2]
+          q = gamma_i * tisheath * nisheath * visheath;   // [Wm^-2]
           hflux_i[i] += q * da / dv;   // [Wm^-3]
           ion_sheath_power_ylow[i] += heatflow;      // [W] lower Y, so power placed in final domain cell
         }
@@ -669,17 +669,26 @@ void SheathBoundarySimple::transform(Options& state) {
           particle_source[i] -= nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
-          q = (gamma_i * tisheath + 0.5 * C_i_sq * Mi) * nisheath * visheath;   // [Wm^-2]
+          q = gamma_i * tisheath * nisheath * visheath;   // [Wm^-2]
           hflux_i[i] -= q * da / dv;   // [Wm^-3]
-          ion_sheath_power_ylow[ip] -= q * da;  // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
+          ion_sheath_power_ylow[ip] += heatflow;  // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
+
+          // output << "\n*****************************\n";
+          // output << "dasheath = " << da << "\n";
+          // output << "nesheath = " << nesheath << "\n";
+          // output << "visheath = " << visheath << "\n";
+          // output << "tesheath = " << tesheath << "\n";
+          // output << "tisheath = " << tisheath << "\n";
+          // output << "cssheath  = " << sqrt(C_i_sq) << "\n";
+          // output << "*****************************\n";
         }
       }
-      
     }
 
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
+
     Ni.clearParallelSlices();
     Ti.clearParallelSlices();
     Pi.clearParallelSlices();

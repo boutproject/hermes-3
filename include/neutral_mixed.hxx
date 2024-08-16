@@ -66,6 +66,9 @@ private:
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
+
+  Field3D particle_flow_ylow; ///< Flow diagnostics
+  Field3D energy_flow_ylow;
 };
 
 namespace {

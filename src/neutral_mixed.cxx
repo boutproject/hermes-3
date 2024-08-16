@@ -393,7 +393,7 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed) // Advection
+  ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, particle_flow_ylow) // Advection
             + FV::Div_a_Grad_perp(DnnNn, logPnlim) // Perpendicular diffusion
       ;
 
@@ -445,12 +445,14 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = -FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed) // Advection
+  ddt(Pn) = -FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, energy_flow_ylow) // Advection
             - (2. / 3) * Pn * Div_par(Vn)                          // Compression
             + FV::Div_a_Grad_perp(DnnPn, logPnlim) // Perpendicular diffusion
             + FV::Div_a_Grad_perp(DnnNn, Tn)       // Conduction
             + FV::Div_par_K_Grad_par(DnnNn, Tn)    // Parallel conduction
       ;
+
+  energy_flow_ylow *= 5./2;
 
   Sp = pressure_source;
   if (localstate.isSet("energy_source")) {

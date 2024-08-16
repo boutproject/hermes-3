@@ -137,9 +137,11 @@ void EvolveMomentum::finally(const Options &state) {
           get<Field3D>(species["density_source"])
           : zeroFrom(Apar);
 
+        Field3D dummy;
+        
         // This is Z * Apar * dn/dt, keeping just leading order terms
         Field3D dndt = density_source
-          - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave)
+          - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, dummy)
           - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true)
           ;
         if (low_n_diffuse_perp) {

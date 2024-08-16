@@ -1298,3 +1298,74 @@ const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Fi
   FV::communicateFluxes(result);
   return result;
 }
+
+const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
+                                     Field3D& flow_ylow,
+                                     bool bndry_flux) {
+  TRACE("FV::Div_par_K_Grad_par_mod");
+
+  ASSERT2(Kin.getLocation() == fin.getLocation());
+
+  Mesh* mesh = Kin.getMesh();
+
+  bool use_parallel_slices = (Kin.hasParallelSlices() && fin.hasParallelSlices());
+
+  const auto& K = use_parallel_slices ? Kin : toFieldAligned(Kin, "RGN_NOX");
+  const auto& f = use_parallel_slices ? fin : toFieldAligned(fin, "RGN_NOX");
+
+  Field3D result{zeroFrom(f)};
+  flow_ylow = zeroFrom(f);
+
+  // K and f fields in yup and ydown directions
+  const auto& Kup = use_parallel_slices ? Kin.yup() : K;
+  const auto& Kdown = use_parallel_slices ? Kin.ydown() : K;
+  const auto& fup = use_parallel_slices ? fin.yup() : f;
+  const auto& fdown = use_parallel_slices ? fin.ydown() : f;
+
+  Coordinates* coord = fin.getCoordinates();
+
+  BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
+    // Calculate flux at upper surface
+
+    const auto iyp = i.yp();
+    const auto iym = i.ym();
+
+    if (bndry_flux || mesh->periodicY(i.x()) || !mesh->lastY(i.x())
+        || (i.y() != mesh->yend)) {
+
+      BoutReal c = 0.5 * (K[i] + Kup[iyp]);             // K at the upper boundary
+      BoutReal J = 0.5 * (coord->J[i] + coord->J[iyp]); // Jacobian at boundary
+      BoutReal g_22 = 0.5 * (coord->g_22[i] + coord->g_22[iyp]);
+
+      BoutReal gradient = 2. * (fup[iyp] - f[i]) / (coord->dy[i] + coord->dy[iyp]);
+
+      BoutReal flux = c * J * gradient / g_22;
+
+      result[i] += flux / (coord->dy[i] * coord->J[i]);
+    }
+
+    // Calculate flux at lower surface
+    if (bndry_flux || mesh->periodicY(i.x()) || !mesh->firstY(i.x())
+        || (i.y() != mesh->ystart)) {
+      BoutReal c = 0.5 * (K[i] + Kdown[iym]);           // K at the lower boundary
+      BoutReal J = 0.5 * (coord->J[i] + coord->J[iym]); // Jacobian at boundary
+
+      BoutReal g_22 = 0.5 * (coord->g_22[i] + coord->g_22[iym]);
+
+      BoutReal gradient = 2. * (f[i] - fdown[iym]) / (coord->dy[i] + coord->dy[iym]);
+
+      BoutReal flux = c * J * gradient / g_22;
+
+      result[i] -= flux / (coord->dy[i] * coord->J[i]);
+      flow_ylow[i] = - flux * coord->dx[i] * coord->dz[i];
+    }
+  }
+
+  if (!use_parallel_slices) {
+    // Shifted to field aligned coordinates, so need to shift back
+    result = fromFieldAligned(result, "RGN_NOBNDRY");
+    flow_ylow = fromFieldAligned(flow_ylow);
+  }
+
+  return result;
+}
