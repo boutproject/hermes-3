@@ -280,12 +280,16 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
     }
 
-    if (numerical_viscous_heating) {
+    if (numerical_viscous_heating || diagnose) {
       // Viscous heating coming from numerical viscosity
       Field3D Nlim = floor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-      Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
-      ddt(P) += Sp_nvh;
+      Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
+      flow_ylow_kinetic *= AA;
+      flow_ylow += flow_ylow_kinetic;
+      if (numerical_viscous_heating) {
+        ddt(P) += Sp_nvh;
+      }
     }
   }
 
@@ -539,7 +543,16 @@ void EvolvePressure::outputVars(Options& state) {
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " power through Y cell face. Note: May be incomplete."},
+                    {"long_name", name + " conduction through Y cell face. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+      set_with_attrs(state[std::string("KineticFlow_") + name + std::string("_ylow")], flow_ylow_kinetic,
+                   {{"time_dimension", "t"},
+                    {"units", "W"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                    {"standard_name", "power"},
+                    {"long_name", name + " kinetic energy flow through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
