@@ -57,4 +57,13 @@ void UpstreamDensityFeedback::transform(Options& state) {
 
   // Scale the source and add to the species density source
   add(species["density_source"], source_multiplier * density_source_shape);
+
+  // Adding particles to a flowing plasma reduces its kinetic energy
+  // -> Increase internal energy
+  if (IS_SET_NOBOUNDARY(species["velocity"]) and IS_SET(species["AA"])) {
+    const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
+    const BoutReal Mi = get<BoutReal>(species["AA"]);
+    // Internal energy source
+    add(species["energy_source"], 0.5 * Mi * SQ(V) * source_multiplier * density_source_shape);
+  }
 }
