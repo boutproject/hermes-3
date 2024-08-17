@@ -166,6 +166,9 @@ void SheathBoundarySimple::transform(Options& state) {
       const Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
       const BoutReal Mi = getNoBoundary<BoutReal>(species["AA"]);
       const BoutReal Zi = getNoBoundary<BoutReal>(species["charge"]);
+      Field3D Vi = species.isSet("velocity")
+        ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
+        : zeroFrom(Ni);
 
       if (lower_y) {
         // Sum values, put result in mesh->ystart
@@ -193,7 +196,12 @@ void SheathBoundarySimple::transform(Options& state) {
             // Sound speed squared
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-            ion_sum[i] += Zi * nisheath * sqrt(C_i_sq);
+            BoutReal visheath = -sqrt(C_i_sq);
+            if (Vi[i] < visheath) {
+              visheath = Vi[i];
+            }
+
+            ion_sum[i] -= Zi * nisheath * visheath;
           }
         }
       }
@@ -219,7 +227,12 @@ void SheathBoundarySimple::transform(Options& state) {
 
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-            ion_sum[i] += Zi * nisheath * sqrt(C_i_sq);
+            BoutReal visheath = sqrt(C_i_sq);
+            if (Vi[i] > visheath) {
+              visheath = Vi[i];
+            }
+
+            ion_sum[i] += Zi * nisheath * visheath;
           }
         }
       }
