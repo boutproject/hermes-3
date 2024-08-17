@@ -542,7 +542,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
-          q -= (2.5 * tisheath + 0.5 * Mi * C_i_sq) * nisheath * visheath;
+          q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
 
           // Multiply by cell area to get power
           BoutReal heatflow = q * (coord->J[i] + coord->J[im])
@@ -605,7 +605,7 @@ void SheathBoundarySimple::transform(Options& state) {
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
           // Note: Here this is positive because visheath > 0
-          q -= (2.5 * tisheath + 0.5 * SQ(visheath) * Mi) * nisheath * visheath;
+          q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
 
           // Multiply by cell area to get power
           BoutReal heatflow = q * (coord->J[i] + coord->J[ip])
