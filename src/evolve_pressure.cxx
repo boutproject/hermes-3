@@ -226,6 +226,7 @@ void EvolvePressure::finally(const Options& state) {
 
   // Get updated pressure and temperature with boundary conditions
   // Note: Retain pressures which fall below zero
+  P.clearParallelSlices();
   P.setBoundaryTo(get<Field3D>(species["pressure"]));
   Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
 
