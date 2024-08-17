@@ -87,6 +87,8 @@ private:
   bool always_set_phi; ///< Set phi field?
 
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
+
+  bool no_flow; ///< No flow speed, only remove energy
 };
 
 namespace {

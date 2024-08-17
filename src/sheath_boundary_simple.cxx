@@ -106,6 +106,10 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
                    / Tnorm;
   // Convert to field aligned coordinates
   wall_potential = toFieldAligned(wall_potential);
+
+  no_flow = options["no_flow"]
+    .doc("Set zero particle flow, keeping energy flow")
+    .withDefault<bool>(false);
 }
 
 void SheathBoundarySimple::transform(Options& state) {
@@ -332,15 +336,19 @@ void SheathBoundarySimple::transform(Options& state) {
         BoutReal vesheath =
 	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
+        // Heat flux. Note: Here this is negative because vesheath < 0
+        BoutReal q = gamma_e * tesheath * nesheath * vesheath;
+
+        if (no_flow) {
+          vesheath = 0.0;
+        }
+
         Ve[im] = 2 * vesheath - Ve[i];
         NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
 
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
-        // Note: Here this is negative because vesheath < 0
-        BoutReal q = ((gamma_e - 2.5) * tesheath
-                      - 0.5 * Me * SQ(vesheath))
-                     * nesheath * vesheath;
+        q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
 
         // Multiply by cell area to get power
         BoutReal heatflow = q * (coord->J[i] + coord->J[im])
@@ -386,15 +394,18 @@ void SheathBoundarySimple::transform(Options& state) {
         BoutReal vesheath =
 	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
+        BoutReal q = gamma_e * tesheath * nesheath * vesheath;
+
+        if (no_flow) {
+          vesheath = 0.0;
+        }
+
         Ve[ip] = 2 * vesheath - Ve[i];
         NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
-
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
         // Note: Here this is positive because vesheath > 0
-        BoutReal q = ((gamma_e - 2.5) * tesheath
-                      - 0.5 * Me * SQ(vesheath))
-                     * nesheath * vesheath;
+        q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
 
         // Multiply by cell area to get power
         BoutReal heatflow = q * (coord->J[i] + coord->J[ip])
@@ -518,16 +529,20 @@ void SheathBoundarySimple::transform(Options& state) {
             visheath = Vi[i];
           }
 
+          // Note: Here this is negative because visheath < 0
+          BoutReal q = gamma_i * tisheath * nisheath * visheath;
+
+          if (no_flow) {
+            visheath = 0.0;
+          }
+
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
           NVi[im] = 2. * Mi * nisheath * visheath - NVi[i];
 
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
-          // Note: Here this is negative because visheath < 0
-          BoutReal q =
-              ((gamma_i - 2.5) * tisheath - 0.5 * Mi * C_i_sq)
-              * nisheath * visheath;
+          q -= (2.5 * tisheath + 0.5 * Mi * C_i_sq) * nisheath * visheath;
 
           // Multiply by cell area to get power
           BoutReal heatflow = q * (coord->J[i] + coord->J[im])
@@ -577,6 +592,12 @@ void SheathBoundarySimple::transform(Options& state) {
             visheath = Vi[i];
           }
 
+          BoutReal q = gamma_i * tisheath * nisheath * visheath;
+
+          if (no_flow) {
+            visheath = 0.0;
+          }
+
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
           NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
@@ -584,9 +605,7 @@ void SheathBoundarySimple::transform(Options& state) {
           // Take into account the flow of energy due to fluid flow
           // This is additional energy flux through the sheath
           // Note: Here this is positive because visheath > 0
-          BoutReal q =
-              ((gamma_i - 2.5) * tisheath - 0.5 * C_i_sq * Mi)
-              * nisheath * visheath;
+          q -= (2.5 * tisheath + 0.5 * SQ(visheath) * Mi) * nisheath * visheath;
 
           // Multiply by cell area to get power
           BoutReal heatflow = q * (coord->J[i] + coord->J[ip])
