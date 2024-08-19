@@ -222,7 +222,7 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
             // Add flux due to difference in boundary values
             flux = s.R * sv.R * sv.R // Use right cell edge values
               + BOUTMAX(wave_speed(i, j, k), fabs(sv.c), fabs(sv.p))
-              * (s.R * sv.R - n_mid * v_mid);
+              * n_mid * (sv.R - v_mid); // Damp differences in velocity, not flux
           }
         } else {
           // Maximum wave speed in the two cells
@@ -251,7 +251,7 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
             flux =
               s.L * sv.L * sv.L
               - BOUTMAX(wave_speed(i, j, k), fabs(sv.c), fabs(sv.m))
-              * (s.L * sv.L - n_mid * v_mid);
+              * n_mid * (sv.L - v_mid);
           }
         } else {
           // Maximum wave speed in the two cells
