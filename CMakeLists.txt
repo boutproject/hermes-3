@@ -43,7 +43,8 @@ message(STATUS "Git revision: ${HERMES_REVISION}")
 option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
   set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
-  add_subdirectory(external/BOUT-dev)
+  set(HERMES_BOUT_SRC "external/BOUT-dev" CACHE STRING "Directory of BOUT++ dir")
+  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev)
 else()
   find_package(bout++ REQUIRED)
 endif()
@@ -224,6 +225,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave)
+  hermes_add_integrated_test(alfven-wave)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -264,5 +266,8 @@ endif()
 configure_file(include/hermes_build_config.hxx.in include/hermes_build_config.hxx)
 
 # Installation
-
-install(TARGETS hermes-3)
+if (BUILD_SHARED_LIBS)
+  install(TARGETS hermes-3 hermes-3-lib)
+else()
+  install(TARGETS hermes-3)
+endif()

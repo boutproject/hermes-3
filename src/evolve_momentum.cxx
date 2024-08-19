@@ -58,6 +58,9 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   fix_momentum_boundary_flux = options["fix_momentum_boundary_flux"]
     .doc("Fix Y boundary momentum flux to boundary midpoint value?")
     .withDefault<bool>(false);
+
+  // Set to zero so set for output
+  momentum_source = 0.0;
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -78,6 +81,7 @@ void EvolveMomentum::transform(Options &state) {
   NV_solver = NV; // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
+  NV_err = NV - NV_solver; // This is used in the finally() function
   set(species["momentum"], NV);
 }
 
@@ -88,36 +92,13 @@ void EvolveMomentum::finally(const Options &state) {
   BoutReal AA = get<BoutReal>(species["AA"]);
 
   // Get updated momentum with boundary conditions
+  // Note: This momentum may be modified by electromagnetic terms
   NV = get<Field3D>(species["momentum"]);
 
   // Get the species density
   Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
   Field3D Nlim = floor(N, density_floor);
-
-  if (state.isSection("fields") and state["fields"].isSet("phi")
-      and species.isSet("charge")) {
-
-    BoutReal Z = get<BoutReal>(species["charge"]);
-    if (Z != 0.0) {
-      // Electrostatic potential set and species has charge
-      // -> include ExB flow and parallel force
-
-      Field3D phi = get<Field3D>(state["fields"]["phi"]);
-
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                       true); // ExB drift
-
-      // Parallel electric field
-      // Force density = - Z N ∇ϕ
-      ddt(NV) -= Z * N * Grad_par(phi);
-    }
-  } else {
-    ddt(NV) = 0.0;
-  }
-
-  // Parallel flow
-  V = get<Field3D>(species["velocity"]);
 
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
@@ -128,16 +109,73 @@ void EvolveMomentum::finally(const Options &state) {
     fastest_wave = sqrt(T / AA);
   }
 
+  // Parallel flow
+  V = get<Field3D>(species["velocity"]);
+
+  if (state.isSection("fields") and state["fields"].isSet("phi")
+      and species.isSet("charge")) {
+
+    const BoutReal Z = get<BoutReal>(species["charge"]);
+    if (Z != 0.0) {
+      // Electrostatic potential set and species has charge
+      // -> include ExB flow and parallel force
+
+      const Field3D phi = get<Field3D>(state["fields"]["phi"]);
+
+      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+                                       true); // ExB drift
+
+      // Parallel electric field
+      // Force density = - Z N ∇ϕ
+      ddt(NV) -= Z * N * Grad_par(phi);
+
+      if (state["fields"].isSet("Apar")) {
+        // Include a correction term for electromagnetic simulations
+        const Field3D Apar = get<Field3D>(state["fields"]["Apar"]);
+
+        const Field3D density_source = species.isSet("density_source") ?
+          get<Field3D>(species["density_source"])
+          : zeroFrom(Apar);
+
+        // This is Z * Apar * dn/dt, keeping just leading order terms
+        Field3D dndt = density_source
+          - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave)
+          - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true)
+          ;
+        if (low_n_diffuse_perp) {
+          dndt += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
+                                        bndry_flux);
+        }
+        ddt(NV) += Z * Apar * dndt;
+      }
+    } else {
+      ddt(NV) = 0.0;
+    }
+  } else {
+    ddt(NV) = 0.0;
+  }
+
   // Note:
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
   ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
-
+  
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
     Field3D P = get<Field3D>(species["pressure"]);
     ddt(NV) -= Grad_par(P);
+  }
+
+  if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+    // Magnetic flutter term
+    const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+    ddt(NV) -= Div_n_g_bxGrad_f_B_XZ(NV, V, -Apar_flutter);
+
+    if (species.isSet("pressure")) {
+      Field3D P = get<Field3D>(species["pressure"]);
+      ddt(NV) -= bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+    }
   }
 
   if (species.isSet("low_n_coeff")) {
@@ -168,7 +206,9 @@ void EvolveMomentum::finally(const Options &state) {
 
   // If N < density_floor then NV and NV_solver may differ
   // -> Add term to force NV_solver towards NV
-  ddt(NV) += NV - NV_solver;
+  // Note: This correction is calculated in transform()
+  //       because NV may be modified by electromagnetic terms
+  ddt(NV) += NV_err;
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
@@ -193,6 +233,11 @@ void EvolveMomentum::finally(const Options &state) {
       flow_ylow = get<Field3D>(species["momentum_flow_ylow"]);
     }
   }
+  // Restore NV to the value returned by the solver
+  // so that restart files contain the correct values
+  // Note: Copy boundary condition so dump file has correct boundary.
+  NV_solver.setBoundaryTo(NV);
+  NV = NV_solver;
 }
 
 void EvolveMomentum::outputVars(Options &state) {

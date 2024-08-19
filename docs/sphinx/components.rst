@@ -969,7 +969,8 @@ listed after all the species groups in the component list, so that all
 the species are present in the state.
 
 One of the most important is the `collisions`_ component. This sets collision
-times for all species, which are then used 
+times for all species, which are then used in other components to calculate
+quantities like heat diffusivities and viscosity closures.
 
 .. _sound_speed:
 
@@ -1176,12 +1177,18 @@ species :math:`b` due to temperature differences, is given by:
 
 - Ion-neutral and electron-neutral collisions
 
+  *Note*: These are disabled by default. If enabled, care is needed to
+  avoid double-counting collisions in atomic reactions e.g charge-exchange
+  reactions.
+  
   The cross-section for elastic collisions between charged and neutral
   particles can vary significantly. Here for simplicity we just take
   a value of :math:`5\times 10^{-19}m^2` from the NRL formulary.
 
 - Neutral-neutral collisions
 
+  *Note* This is enabled by default.
+  
   The cross-section is given by
 
 .. math::
@@ -1916,6 +1923,20 @@ This functionality is not yet currently implemented for helium or neon reactions
 | R_multiplier          | Impurity species | Fixed frac. impurity radiation rate   |
 +-----------------------+------------------+---------------------------------------+
 
+The charge exchange reaction can also be modified so that the momentum transfer channel is disabled. This can be useful when
+testing the impact of the full neutral momentum equation equation compared to purely diffusive neutrals. A diffusive only model 
+leads to all of the ion momentum being lost during charge exchange due to the lack of a neutral momentum equation.
+Enabling neutral momentum introduces a more accurate transport model but also prevents CX momentum from being lost, which
+can have a significant impact on the solution and may be difficult to analyse.
+Disabling the momentum transfer channel allows you to study the impact of the improved transport only and is set as:
+
+.. code-block:: ini
+
+   [hermes]
+   components = ..., c, ...
+
+   [reactions]
+   no_neutral_cx_mom_gain = true
 
 Electromagnetic fields
 ----------------------
@@ -2017,8 +2038,25 @@ the potential in time as a diffusion equation.
 .. doxygenstruct:: RelaxPotential
    :members:
 
+.. _electromagnetic:
+
 electromagnetic
 ~~~~~~~~~~~~~~~
+
+**Notes**: When using this module,
+
+1. Set ``sound_speed:alfven_wave=true`` so that the shear Alfven wave
+   speed is included in the calculation of the fastest parallel wave
+   speed for numerical dissipation.
+2. For tokamak simulations use Neumann boundary condition on the core
+   and Dirichlet on SOL and PF boundaries by setting
+   ``electromagnetic:apar_core_neumann=true`` (this is the default).
+3. Set the potential core boundary to be constant in Y by setting
+   ``vorticity:phi_core_averagey = true``
+4. Magnetic flutter terms must be enabled to be active
+   (``electromagnetic:magnetic_flutter=true``).  They use an
+   ``Apar_flutter`` field, not the ``Apar`` field that is calculated
+   from the induction terms.
 
 This component modifies the definition of momentum of all species, to
 include the contribution from the electromagnetic potential
@@ -2032,8 +2070,17 @@ Assumes that "momentum" :math:`p_s` calculated for all species
    p_s = m_s n_s v_{||s} + Z_s e n_s A_{||}
 
 which arises once the electromagnetic contribution to the force on
-each species is included in the momentum equation. This is normalised
-so that in dimensionless quantities
+each species is included in the momentum equation. This requires
+an additional term in the momentum equation:
+
+.. math::
+
+   \frac{\partial p_s}{\partial t} = \cdots + Z_s e A_{||} \frac{\partial n_s}{\partial t}
+
+This is implemented so that the density time-derivative is calculated using the lowest order
+terms (parallel flow, ExB drift and a low density numerical diffusion term).
+
+The above equations are normalised so that in dimensionless quantities:
 
 .. math::
 
@@ -2067,6 +2114,23 @@ To convert the species momenta into a current, we take the sum of
 .. math::
 
    - \frac{1}{\beta_{em}} \nabla_\perp^2 A_{||} + \sum_s \frac{Z^2 n_s}{A}A_{||} = \sum_s \frac{Z}{A} p_s
+
+The toroidal variation of density :math:`n_s` must be kept in this
+equation.  By default the iterative "Naulin" solver is used to do
+this: A fast FFT-based method is used in a fixed point iteration,
+correcting for the density variation.
+
+Magnetic flutter terms are disabled by default, and can be enabled by setting
+
+.. code-block:: ini
+
+   [electromagnetic]
+   magnetic_flutter = true
+
+This writes an ``Apar_flutter`` field to the state, which then enables perturbed
+parallel derivative terms in the ``evolve_density``, ``evolve_pressure``, ``evolve_energy`` and
+``evolve_momentum`` components. Parallel flow terms are modified, and parallel heat
+conduction.
 
 .. doxygenstruct:: Electromagnetic
    :members:

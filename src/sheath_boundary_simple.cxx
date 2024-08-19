@@ -409,6 +409,10 @@ void SheathBoundarySimple::transform(Options& state) {
   }
 
   // Set electron density and temperature, now with boundary conditions
+  // Note: Clear parallel slices because they do not contain boundary conditions.
+  Ne.clearParallelSlices();
+  Te.clearParallelSlices();
+  Pe.clearParallelSlices();
   setBoundary(electrons["density"], fromFieldAligned(Ne));
   setBoundary(electrons["temperature"], fromFieldAligned(Te));
   setBoundary(electrons["pressure"], fromFieldAligned(Pe));
@@ -421,14 +425,17 @@ void SheathBoundarySimple::transform(Options& state) {
   add(electrons["energy_flow_ylow"], fromFieldAligned(electron_sheath_power_ylow));
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
+    Ve.clearParallelSlices();
     setBoundary(electrons["velocity"], fromFieldAligned(Ve));
   }
   if (IS_SET_NOBOUNDARY(electrons["momentum"])) {
+    NVe.clearParallelSlices();
     setBoundary(electrons["momentum"], fromFieldAligned(NVe));
   }
 
   if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
     // Set the potential, including boundary conditions
+    phi.clearParallelSlices();
     setBoundary(state["fields"]["phi"], fromFieldAligned(phi));
   }
 
@@ -605,15 +612,20 @@ void SheathBoundarySimple::transform(Options& state) {
     }
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
+    Ni.clearParallelSlices();
+    Ti.clearParallelSlices();
+    Pi.clearParallelSlices();
     setBoundary(species["density"], fromFieldAligned(Ni));
     setBoundary(species["temperature"], fromFieldAligned(Ti));
     setBoundary(species["pressure"], fromFieldAligned(Pi));
 
     if (species.isSet("velocity")) {
+      Vi.clearParallelSlices();
       setBoundary(species["velocity"], fromFieldAligned(Vi));
     }
 
     if (species.isSet("momentum")) {
+      NVi.clearParallelSlices();
       setBoundary(species["momentum"], fromFieldAligned(NVi));
     }
 

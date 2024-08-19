@@ -26,29 +26,44 @@ void NeutralParallelDiffusion::transform(Options& state) {
     const Field3D Pn = IS_SET(species["pressure"]) ?
       GET_VALUE(Field3D, species["pressure"]) : Nn * Tn;
 
-    // Diffusion coefficient
+    BoutReal advection_factor = 0;
+    BoutReal kappa_factor = 0;
+
+    if (equation_fix) {
+      advection_factor = (5. / 2);    // This is equivalent to 5/3 if on pressure basis
+      kappa_factor = (5. / 2);
+    } else {
+      advection_factor = (3. / 2);
+      kappa_factor = 1;
+    }
+
+    // Pressure-diffusion coefficient
     Field3D Dn = dneut * Tn / (AA * nu);
     Dn.applyBoundary("dirichlet_o2");
     mesh->communicate(Dn);
 
     // Cross-field diffusion calculated from pressure gradient
+    // This is the pressure-diffusion approximation 
     Field3D logPn = log(floor(Pn, 1e-7));
     logPn.applyBoundary("neumann");
 
-    // Particle diffusion
+    // Particle advection
     Field3D S = FV::Div_par_K_Grad_par(Dn * Nn, logPn);
     add(species["density_source"], S);
 
-    Field3D kappa_n = Nn * Dn;
+    Field3D kappa_n = kappa_factor * Nn * Dn;
     kappa_n.applyBoundary("neumann");
 
-    // Heat conduction
-    Field3D E = FV::Div_par_K_Grad_par(kappa_n, Tn) // Parallel
-      + FV::Div_par_K_Grad_par(Dn * (3. / 2) * Pn, logPn); // Perpendicular diffusion
+    // Heat transfer
+    Field3D E = + FV::Div_par_K_Grad_par(
+      Dn * advection_factor * Pn, logPn);        // Pressure advection
+    if (thermal_conduction) {
+      E += FV::Div_par_K_Grad_par(kappa_n, Tn);   // Conduction
+    }
     add(species["energy_source"], E);
 
     Field3D F = 0.0;
-    if (IS_SET(species["velocity"])) {
+    if (IS_SET(species["velocity"]) and viscosity) {
       // Relationship between heat conduction and viscosity for neutral
       // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
       // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
