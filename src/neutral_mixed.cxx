@@ -350,7 +350,7 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral density
   TRACE("Neutral density");
 
-  perp_nn_adv_src = Div_a_Grad_perp_upwind_flows(DnnNn, logPnlim,
+  perp_nn_adv_src = Div_a_Grad_perp_flows(DnnNn, logPnlim,
                                    particle_flow_xlow,
                                    particle_flow_ylow); // Perpendicular advection
 
@@ -376,7 +376,7 @@ void NeutralMixed::finally(const Options& state) {
     ddt(NVn) =
         -AA * FV::Div_par_fvv<ParLimiter>(Nnlim, Vn, sound_speed) // Momentum flow
         - Grad_par(Pn) // Pressure gradient
-      + Div_a_Grad_perp_upwind_flows(DnnNVn, logPnlim,
+      + Div_a_Grad_perp_flows(DnnNVn, logPnlim,
                                      momentum_flow_xlow,
                                      momentum_flow_ylow) // Perpendicular advection
       ;
@@ -414,17 +414,16 @@ void NeutralMixed::finally(const Options& state) {
 
   ddt(Pn) = - FV::Div_par_mod<ParLimiter>(Pn, Vn, sound_speed) // Parallel advection
             - (2. / 3) * Pn * Div_par(Vn)                      // Compression
-    + Div_a_Grad_perp_upwind_flows(DnnPn, logPnlim,
+    + Div_a_Grad_perp_flows(DnnPn, logPnlim,
                                    energy_flow_xlow, energy_flow_ylow) // Perpendicular advection
      ;
 
-  // The factor here is likely 5/2 as we're advecting internal energy and pressure.
-  // Doing this still leaves a heat imbalance factor of 0.11 in the cells, but better than 0.33 with 3/2.
+  // The factor here is 5/2 as we're advecting internal energy and pressure.
   energy_flow_xlow *= 5/2; 
   energy_flow_ylow *= 5/2;
 
   if (neutral_conduction) {
-    ddt(Pn) += Div_a_Grad_perp_upwind_flows(DnnNn, Tn,
+    ddt(Pn) += Div_a_Grad_perp_flows(DnnNn, Tn,
                         conduction_flow_xlow, conduction_flow_ylow)    // Perpendicular conduction
       + FV::Div_par_K_Grad_par(DnnNn, Tn)        // Parallel conduction
       ;
