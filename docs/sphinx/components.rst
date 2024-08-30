@@ -704,7 +704,7 @@ The grid increases in resolution towards the target, with a minimum grid spacing
 And here is how the calculated geometric information is used to prepare a pressure source. First, the 
 required total ion power flux is converted to a pressure according to :math:`E = 3/2P`, then it is 
 divided by the length of the heating region to obtain the power flux required in each cell. Note 
-that this assumes that :math:`dx = dz = J = 0` and that the volume upstream of the X-point is simply
+that this assumes that :math:`dx = dz = J = 1` and that the volume upstream of the X-point is simply
 an integral of :math:`dy = mesh:length\_xpt`. If you are imposing a full B-field profile in your 1D simulation, 
 you will need to account for the fact that :math:`J` is no longer constant.
 In order to limit the pressure source to just the region above the X-point, it is multiplied by a Heaviside
