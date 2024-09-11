@@ -289,7 +289,7 @@ void EvolveMomentum::outputVars(Options &state) {
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
     if (flow_xlow.isAllocated()) {
-      set_with_attrs(state[std::string("MomentumFlow_") + name + std::string("_xlow")], flow_xlow,
+      set_with_attrs(state[fmt::format("mf{}_tot_xlow", name)], flow_xlow,
                    {{"time_dimension", "t"},
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
@@ -299,7 +299,7 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"source", "evolve_momentum"}});
     }
     if (flow_ylow.isAllocated()) {
-      set_with_attrs(state[std::string("MomentumFlow_") + name + std::string("_ylow")], flow_ylow,
+      set_with_attrs(state[fmt::format("mf{}_tot_ylow", name)], flow_ylow,
                    {{"time_dimension", "t"},
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
