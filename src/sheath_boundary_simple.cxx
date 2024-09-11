@@ -128,15 +128,15 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
 
   density_boundary_mode = options["density_boundary_mode"]
     .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-    .withDefault<BoutReal>(0);
+    .withDefault<BoutReal>(1);
 
   pressure_boundary_mode = options["pressure_boundary_mode"]
     .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-    .withDefault<BoutReal>(0);
+    .withDefault<BoutReal>(1);
 
   temperature_boundary_mode = options["temperature_boundary_mode"]
     .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-    .withDefault<BoutReal>(0);
+    .withDefault<BoutReal>(1);
 
   
 }
