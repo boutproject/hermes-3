@@ -701,11 +701,11 @@ The grid increases in resolution towards the target, with a minimum grid spacing
    source = length_xpt / length
    y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
 
-And here is how the calculated geometric information is used to prepare a pressure source. First, the 
-required total ion power flux is converted to a pressure according to :math:`E = 3/2P`, then it is 
-divided by the length of the heating region to obtain the power flux required in each cell. Note 
-that this assumes that :math:`dx = dz = J = 0` and that the volume upstream of the X-point is simply
-an integral of :math:`dy = mesh:length\_xpt`. If you are imposing a full B-field profile in your 1D simulation, 
+And here is how the calculated geometric information is used to prepare a pressure source. The user 
+inputs a parallel heatflux in :math:`W/m^2`, or Watts per cross-sectional flux tube area.
+This is converted to a pressure flux in :math:`Pa/{m^2s}` by the :math:`2/3` factor, and then
+converted to a pressure source in :math:`Pa/{m^3s}` by dividing by the length of the heating region :math:`mesh:length_xpt`. 
+Note that this assumes a constant cross-sectional area, i.e. :math:`dx = dz = J = 1`. If you are imposing a full B-field profile in your 1D simulation, 
 you will need to account for the fact that :math:`J` is no longer constant.
 In order to limit the pressure source to just the region above the X-point, it is multiplied by a Heaviside
 function which returns 1 upstream of :math:`y=mesh:y\_xpt` and 0 downstream of it.
@@ -724,9 +724,9 @@ function which returns 1 upstream of :math:`y=mesh:y\_xpt` and 0 downstream of i
 
    [Pe]
 
-   # Input power flux to electrons in W/m^2
    function = `Pd+:function`  # Same as ion pressure initially
 
+   # Input power flux to electrons in W/m^2
    source = `Pd+:source`  # Same as ion pressure source
 
 Applying sources using the grid file
