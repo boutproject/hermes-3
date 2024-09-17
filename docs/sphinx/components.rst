@@ -1881,11 +1881,13 @@ defined like this:
    diagnose = true   # Saves Rc (R + section name)
 
 
-Carbon is also provided as an ADAS rate along with nitrogen, neon and argon. The component names are  
-``fixed_fraction_carbon``, ``fixed_fraction_nitrogen``, ``fixed_fraction_neon`` and ``fixed_fraction_argon``.
+Carbon is also provided as an ADAS rate along with nitrogen, neon, argon, krypton, xenon and tungsten.
+The component names are ``fixed_fraction_carbon``, ``fixed_fraction_nitrogen``, ``fixed_fraction_neon``,
+``fixed_fraction_argon``, ``fixed_fraction_krypton``, ``fixed_fraction_xenon`` and ``fixed_fraction_tungsten``.
 
 These can be used in the same way as ``fixed_fraction_hutchinson_carbon``. Each rate is in the form of a 10 coefficient 
-log-log polynomial fit of data obtained using the open source tool `radas <https://github.com/cfs-energy/radas>`_.
+log-log polynomial fit of data obtained using the open source tool `radas <https://github.com/cfs-energy/radas>`_, except
+xenon and tungsten that use 15 and 20 coefficients respectively.
 The :math:`n {\tau}` parameter representing the density and residence time assumed in the radas 
 collisional-radiative model has been set to :math:`1\times 10^{20} \times 0.5ms` based on `David Moulton et al 2017 Plasma Phys. Control. Fusion 59(6) <https://doi.org10.1088/1361-6587/aa6b13>`_.
 
