@@ -203,6 +203,7 @@ int Hermes::init(bool restarting) {
   if (options["loadmetric"]
           .doc("Load Rxy, Bpxy etc. to create orthogonal metric?")
           .withDefault(true)) {
+    ASSERT0(! mesh->isFci());
     LoadMetric(rho_s0, Bnorm);
   } else if (options["normalise_metric"]
                  .doc("Normalise input metric tensor? (assumes input is in SI units)")
@@ -210,25 +211,44 @@ int Hermes::init(bool restarting) {
     Coordinates *coord = mesh->getCoordinates();
     // To use non-orthogonal metric
     // Normalise
-    coord->dx /= rho_s0 * rho_s0 * Bnorm;
-    coord->Bxy /= Bnorm;
-    // Metric is in grid file - just need to normalise
-    coord->g11 /= SQ(Bnorm * rho_s0);
-    coord->g22 *= SQ(rho_s0);
-    coord->g33 *= SQ(rho_s0);
-    coord->g12 /= Bnorm;
-    coord->g13 /= Bnorm;
-    coord->g23 *= SQ(rho_s0);
+    if (mesh->isFci()) {
+      coord->Bxy /= Bnorm;
+      // Metric is in grid file - just need to normalise
+      coord->g11 *= SQ(rho_s0);
+      coord->g22 *= SQ(rho_s0);
+      coord->g33 *= SQ(rho_s0);
+      coord->g12 *= SQ(rho_s0);
+      coord->g13 *= SQ(rho_s0);
+      coord->g23 *= SQ(rho_s0);
 
-    coord->J *= Bnorm / rho_s0;
+      coord->J *= rho_s0 * rho_s0 * rho_s0;
 
-    coord->g_11 *= SQ(Bnorm * rho_s0);
-    coord->g_22 /= SQ(rho_s0);
-    coord->g_33 /= SQ(rho_s0);
-    coord->g_12 *= Bnorm;
-    coord->g_13 *= Bnorm;
-    coord->g_23 /= SQ(rho_s0);
+      coord->g_11 /= SQ(rho_s0);
+      coord->g_22 /= SQ(rho_s0);
+      coord->g_33 /= SQ(rho_s0);
+      coord->g_12 /= SQ(rho_s0);
+      coord->g_13 /= SQ(rho_s0);
+      coord->g_23 /= SQ(rho_s0);
+    } else {
+      coord->dx /= rho_s0 * rho_s0 * Bnorm;
+      coord->Bxy /= Bnorm;
+      // Metric is in grid file - just need to normalise
+      coord->g11 /= SQ(Bnorm * rho_s0);
+      coord->g22 *= SQ(rho_s0);
+      coord->g33 *= SQ(rho_s0);
+      coord->g12 /= Bnorm;
+      coord->g13 /= Bnorm;
+      coord->g23 *= SQ(rho_s0);
 
+      coord->J *= Bnorm / rho_s0;
+
+      coord->g_11 *= SQ(Bnorm * rho_s0);
+      coord->g_22 /= SQ(rho_s0);
+      coord->g_33 /= SQ(rho_s0);
+      coord->g_12 *= Bnorm;
+      coord->g_13 *= Bnorm;
+      coord->g_23 /= SQ(rho_s0);
+    }
     coord->geometry(); // Calculate other metrics
   }
 
