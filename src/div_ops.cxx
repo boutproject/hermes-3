@@ -1051,44 +1051,10 @@ const Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f) {
     yzresult.setDirectionY(YDirectionType::Aligned);
   }
 
-  if (bout::build::use_metric_3d and coord->J.hasParallelSlices()) {
-    // 3D Metric, need yup/ydown fields.
-    // Requires previous communication of metrics
-    // -- should insert communication here?
-    if (!coord->g23.hasParallelSlices() || !coord->g_23.hasParallelSlices()
-        || !coord->dy.hasParallelSlices() || !coord->dz.hasParallelSlices()
-        || !coord->Bxy.hasParallelSlices() || !coord->J.hasParallelSlices()) {
-      mesh->communicate(coord->g23, coord->g_23, coord->g_12, coord->g12,
-			coord->dy, coord->Bxy, coord->dz, coord->J);
-      // throw BoutException("metrics have no yup/down: Maybe communicate in init?");
-    }
-
-    g23up = coord->g23.yup();
-    g23down = coord->g23.ydown();
-
-    g_23up = coord->g_23.yup();
-    g_23down = coord->g_23.ydown();
-
-    g12up = coord->g12.yup();
-    g12down = coord->g12.ydown();
-
-    g_12up = coord->g_12.yup();
-    g_12down = coord->g_12.ydown();
-
-    Jup = coord->J.yup();
-    Jdown = coord->J.ydown();
-
-    dyup = coord->dy.yup();
-    dydown = coord->dy.ydown();
-
-    dzup = coord->dz.yup();
-    dzdown = coord->dz.ydown();
-
-    Bxyup = coord->Bxy.yup();
-    Bxydown = coord->Bxy.ydown();
-
+  if (f.isFci()) {
+    throw BoutException("FCI is inherently incompatible with this FV method");
   } else {
-    // No 3D metrics
+    // No FCI metrics
     // Need to shift to/from field aligned coordinates
     g23up = g23down = g23c = toFieldAligned(coord->g23);
     g_23up = g_23down = g_23c = toFieldAligned(coord->g_23);
