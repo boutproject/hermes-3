@@ -2,6 +2,7 @@
 #include <bout/vecops.hxx>
 
 #include "../include/diamagnetic_drift.hxx"
+#include "yboundary_regions.hxx"
 
 using bout::globals::mesh;
 
@@ -47,18 +48,15 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
 
   Curlb_B *= 2. / mesh->getCoordinates()->Bxy;
 
+  mesh->communicate(Curlb_B.y);
+
   // Set drift to zero through sheath boundaries.
   // Flux through those cell faces should be set by sheath.
-  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-    for (int jz = 0; jz < mesh->LocalNz; jz++) {
-      Curlb_B.y(r.ind, mesh->ystart - 1, jz) = -Curlb_B.y(r.ind, mesh->ystart, jz);
+  yboundary.iter_regions([&](auto& region) {
+    for (auto& pnt : region) {
+      pnt.ynext(Curlb_B.y) = -Curlb_B.y[pnt.ind()];
     }
-  }
-  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-    for (int jz = 0; jz < mesh->LocalNz; jz++) {
-      Curlb_B.y(r.ind, mesh->yend + 1, jz) = -Curlb_B.y(r.ind, mesh->yend, jz);
-    }
-  }
+  });
 }
 
 void DiamagneticDrift::transform(Options& state) {
