@@ -19,7 +19,8 @@ BoutReal floor(BoutReal value, BoutReal min) {
 
 using bout::globals::mesh;
 
-EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) : name(name) {
+EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) :
+  name(name), Vname(fmt::format("V{}", name)) {
   AUTO_TRACE();
   
   // Evolve the momentum in time
@@ -72,6 +73,7 @@ void EvolveMomentum::transform(Options &state) {
 
   V = NV / (AA * Nlim);
   V.applyBoundary();
+  V.name = Vname;
   mesh->communicate(V);
   set(species["velocity"], V);
 
