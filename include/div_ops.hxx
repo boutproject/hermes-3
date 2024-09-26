@@ -295,7 +295,11 @@ const Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in, bool fixflux = true) {
 
   if (f_in.isFci()){
-    return Div_par(f_in * v_in);
+    auto fv_in = f_in * v_in;
+    fv_in.splitParallelSlices();
+    fv_in.yup() = f_in.yup() * v_in.yup();
+    fv_in.ydown() = f_in.ydown() * v_in.ydown();
+    return Div_par(fv_in);
   }
   ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
   ASSERT1_FIELDS_COMPATIBLE(f_in, wave_speed_in);
