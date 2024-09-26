@@ -247,8 +247,7 @@ void SheathBoundary::transform(Options &state) {
                     / Mi,
                 0, 100); // Limit for e.g. Ni zero gradient
 
-            ion_sum(r.ind, mesh->yend, jz) += s_i * Zi * sqrt(C_i_sq);
-
+            ion_sum(r.ind, mesh->yend, jz) += s_i * Zi * sin_alpha * sqrt(C_i_sq);
           }
         }
       } // end if upper
