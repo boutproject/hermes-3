@@ -59,5 +59,6 @@ private:
   BoutReal Cs0, Omega_ci, rho_s0;
 };
 
+extern Options* tracking;
 
 #endif // HERMES_H
