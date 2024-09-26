@@ -364,7 +364,7 @@ void SheathBoundary::transform(Options &state) {
         electron_energy_source[i] += power;
       }
     }
-  }
+  } // end if lower
   if (upper_y) {
     // This is essentially the same as at the lower y boundary
     // except ystart -> yend, ip <-> im
@@ -424,7 +424,7 @@ void SheathBoundary::transform(Options &state) {
 #endif
         electron_energy_source[i] -= power;
       }
-    }
+    } // end if upper
   }
 
   // Set electron density and temperature, now with boundary conditions
