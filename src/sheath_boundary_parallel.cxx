@@ -33,6 +33,7 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 }
 
 
+extern Options* tracking;
 SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &alloptions, Solver *) {
   AUTO_TRACE();
   
@@ -460,9 +461,21 @@ void SheathBoundaryParallel::transform(Options &state) {
     if (species.isSet("momentum")) {
       setBoundary(species["momentum"], fromFieldAligned(NVi));
     }
-
+    if (tracking) {
+      saveParallel(*tracking, fmt::format("NV{}_sheath", kv.first), NVi);
+      saveParallel(*tracking, fmt::format("N{}_sheath",kv.first), Ni);
+      saveParallel(*tracking, fmt::format("V{}_sheath", kv.first), Vi);
+    }
     // Additional loss of energy through sheath
     // Note: Already includes previously set sources
     set(species["energy_source"], fromFieldAligned(energy_source));
+  }
+  if (tracking) {
+    saveParallel(*tracking, "Ne_sheath", Ne);
+    if (has_NVe) {
+      saveParallel(*tracking, "NVe_sheath", NVe);
+    }
+    saveParallel(*tracking, "Ve_sheath", Ve);
+    saveParallel(*tracking, "phi_sheath", phi);
   }
 }
