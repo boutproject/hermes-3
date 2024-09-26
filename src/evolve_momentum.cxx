@@ -85,6 +85,10 @@ void EvolveMomentum::transform(Options &state) {
 
   NV_solver = NV; // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
+  if (NV.isFci()) {
+    NV.splitParallelSlices();
+    NV.yup() = AA * N.yup() * V.yup();
+    NV.ydown() = AA * N.ydown() * V.ydown();
   }
   if (tracking) {
     saveParallel(*tracking, fmt::format("NV{}_initial", name), NV);
@@ -242,14 +246,16 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
 
-    set_with_attrs(state[std::string("SNV") + name], momentum_source,
-                   {{"time_dimension", "t"},
-                    {"units", "kg m^-2 s^-2"},
-                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum source"},
-                    {"long_name", name + " momentum source"},
-                    {"species", name},
-                    {"source", "evolve_momentum"}});
+    if (momentum_source.isAllocated()) {
+      set_with_attrs(state[std::string("SNV") + name], momentum_source,
+                     {{"time_dimension", "t"},
+                      {"units", "kg m^-2 s^-2"},
+                      {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                      {"standard_name", "momentum source"},
+                      {"long_name", name + " momentum source"},
+                      {"species", name},
+                      {"source", "evolve_momentum"}});
+    }
 
     // If fluxes have been set then add them to the output
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);
