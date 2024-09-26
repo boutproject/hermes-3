@@ -19,6 +19,8 @@ BoutReal floor(BoutReal value, BoutReal min) {
 
 using bout::globals::mesh;
 
+Options * tracking{nullptr};
+
 EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) :
   name(name), Vname(fmt::format("V{}", name)) {
   AUTO_TRACE();
@@ -64,6 +66,10 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 void EvolveMomentum::transform(Options &state) {
   AUTO_TRACE();
 
+  tracking = ddt(NV).getTracking();
+  if (tracking) {
+    saveParallel(*opt, fmt::format("NV{}_initial0", name), NV);
+  }
   auto& species = state["species"][name];
 
   // Not using density boundary condition
@@ -71,21 +77,19 @@ void EvolveMomentum::transform(Options &state) {
   Field3D Nlim = floor(N, density_floor);
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
+  NV.applyBoundary();
   V = NV / (AA * Nlim);
-  V.applyBoundary();
   V.name = Vname;
   mesh->communicate(V);
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
-  {
-    Options* opt = ddt(NV).getTracking();
-    if (opt) {
-      saveParallel(*opt, "NV_initial", NV);
-      saveParallel(*opt, "N_initial", N);
-      saveParallel(*opt, "V_initial", V);
-    }
+  }
+  if (tracking) {
+    saveParallel(*tracking, fmt::format("NV{}_initial", name), NV);
+    saveParallel(*tracking, fmt::format("N{}_initial",name), N);
+    saveParallel(*tracking, fmt::format("V{}_initial", name), V);
   }
   // Note: Now NV and NV_solver will differ when N < density_floor
   set(species["momentum"], NV);
