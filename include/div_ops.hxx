@@ -472,4 +472,34 @@ const Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 
 } // namespace FV
 
+namespace FCI {
+
+class dagp_fv {
+public:
+  Field3D operator()(const Field3D &a, const Field3D &f, Field3D& low_xlow, Field3D& flow_zlow);
+  Field3D operator()(const Field3D &a, const Field3D &f);
+  dagp_fv(Mesh &mesh);
+  dagp_fv &operator*=(BoutReal fac) {
+    volume /= fac * fac;
+    return *this;
+  }
+  dagp_fv &operator/=(BoutReal fac) { return operator*=(1 / fac); }
+
+private:
+  template <bool extra>
+  Field3D operator()(const Field3D &a, const Field3D &f, Field3D* low_xlow, Field3D* flow_zlow);
+  Field3D fac_XX;
+  Field3D fac_XZ;
+  Field3D fac_ZX;
+  Field3D fac_ZZ;
+  Field3D volume;
+  BoutReal xflux(const Field3D &a, const Field3D &f, const Ind3D &i);
+  BoutReal zflux(const Field3D &a, const Field3D &f, const Ind3D &i);
+};
+
+std::shared_ptr<dagp_fv>
+getDagp_fv(Options& alloptions, Mesh* mesh);
+}
+
+
 #endif //  __DIV_OPS_H__
