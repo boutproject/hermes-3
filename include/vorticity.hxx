@@ -6,6 +6,7 @@
 
 #include "component.hxx"
 
+#include "div_ops.hxx"
 class LaplaceXY;
 class Laplacian;
 
@@ -106,6 +107,7 @@ private:
   Field3D phi; // Electrostatic potential
   std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
 
+  std::shared_ptr<FCI::dagp_fv> dagp;
   Field3D Pi_hat; ///< Contribution from ion pressure, weighted by atomic mass / charge
 
   bool exb_advection; // Include nonlinear ExB advection?
@@ -154,6 +156,13 @@ private:
     }
     return ::toFieldAligned(f);
   }
+  Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
+    if (Vort.isFci()) {
+      return (*dagp)(a,b);
+    }
+    return FV::Div_a_Grad_perp(a, b);
+  }
+   
 
 };
 

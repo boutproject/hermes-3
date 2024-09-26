@@ -190,6 +190,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
+
+  if (Vort.isFci()) {
+    dagp = FCI::getDagp_fv(alloptions, mesh);
+  }
 }
 
 void Vorticity::transform(Options& state) {
@@ -590,7 +594,7 @@ void Vorticity::transform(Options& state) {
     Field3D weighted_collision_frequency = sum_A_nu_n / sum_A_n;
     weighted_collision_frequency.applyBoundary("neumann");
 
-    DivJcol = -FV::Div_a_Grad_perp(
+    DivJcol = -Div_a_Grad_perp(
         weighted_collision_frequency * average_atomic_mass / Bsq, phi + Pi_hat);
 
     ddt(Vort) += DivJcol;
@@ -633,7 +637,7 @@ void Vorticity::finally(const Options& state) {
 
       mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
-      ddt(Vort) -= FV::Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
+      ddt(Vort) -= Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
       ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux,
                                          poloidal_flows);
     }
@@ -668,7 +672,7 @@ void Vorticity::finally(const Options& state) {
   }
 
   // Viscosity
-  ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
+  ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
 
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
