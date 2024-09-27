@@ -68,7 +68,7 @@ void EvolveMomentum::transform(Options &state) {
 
   tracking = ddt(NV).getTracking();
   if (tracking) {
-    saveParallel(*opt, fmt::format("NV{}_initial0", name), NV);
+    saveParallel(*tracking, fmt::format("NV{}_initial0", name), NV);
   }
   auto& species = state["species"][name];
 
