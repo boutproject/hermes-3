@@ -54,6 +54,7 @@ public:
   const BoutReal& ynext(const Field3D& f) const { return f[ind().yp(by).xp(bx)]; }
   BoutReal& yprev(Field3D& f) const { return f[ind().yp(-by).xp(-bx)]; }
   const BoutReal& yprev(const Field3D& f) const { return f[ind().yp(-by).xp(-bx)]; }
+  void setYPrevIfValid(Field3D& f, BoutReal val) const { yprev(f) = val; }
 
 #if BOUT_USE_METRIC_3D == 0
   BoutReal& ynext(Field2D& f) const { return f[ind().yp(by).xp(bx)]; }
