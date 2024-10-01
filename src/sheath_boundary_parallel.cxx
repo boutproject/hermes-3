@@ -193,7 +193,10 @@ void SheathBoundaryParallel::transform(Options &state) {
       }); // end iter_regions
     }
 
-    phi.allocate();
+    phi.allocate(); // = 0.0;
+    phi.splitParallelSlices();
+    phi.yup().allocate();
+    phi.ydown().allocate();
 
     // ion_sum now contains  sum  s_i Z_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
@@ -201,16 +204,18 @@ void SheathBoundaryParallel::transform(Options &state) {
       for (const auto& pnt : region) {
         auto i = pnt.ind();
 
+	BoutReal thisphi;
 	if (Te[i] <= 0.0) {
-	  phi[i] = 0.0;
+	  thisphi = 0.0;
 	} else {
-	  phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+	  thisphi = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
 	}
 
-	const BoutReal phi_wall = wall_potential[i];
-	phi[i] += phi_wall; // Add bias potential
+	thisphi += wall_potential[i];
 
-	pnt.ynext(phi) = pnt.yprev(phi) = phi[i]; // Constant into sheath
+	phi[i] = thisphi;
+	pnt.ynext(phi) = thisphi;
+	pnt.setYPrevIfValid(phi, thisphi);
       }
     }); // end iter_regions
   }
