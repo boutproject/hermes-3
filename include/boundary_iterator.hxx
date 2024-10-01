@@ -55,6 +55,13 @@ public:
   BoutReal& yprev(Field3D& f) const { return f[ind().yp(-by).xp(-bx)]; }
   const BoutReal& yprev(const Field3D& f) const { return f[ind().yp(-by).xp(-bx)]; }
 
+#if BOUT_USE_METRIC_3D == 0
+  BoutReal& ynext(Field2D& f) const { return f[ind().yp(by).xp(bx)]; }
+  const BoutReal& ynext(const Field2D& f) const { return f[ind().yp(by).xp(bx)]; }
+  BoutReal& yprev(Field2D& f) const { return f[ind().yp(-by).xp(-bx)]; }
+  const BoutReal& yprev(const Field2D& f) const { return f[ind().yp(-by).xp(-bx)]; }
+#endif
+
   const int dir;
 
 protected:
