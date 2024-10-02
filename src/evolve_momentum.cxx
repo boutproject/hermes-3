@@ -67,10 +67,14 @@ void EvolveMomentum::transform(Options &state) {
   AUTO_TRACE();
 
   tracking = ddt(NV).getTracking();
+  auto& species = state["species"][name];
   if (tracking) {
     saveParallel(*tracking, fmt::format("NV{}_initial0", name), NV);
+    species["momentum_source"] = zeroFrom(ddt(NV));
+    auto src = mpark::get_if<Field3D>(&species["momentum_source"].value);
+    src->enableTracking(fmt::format("ddt_NV{}_momentum", name), *tracking);
+    setName(*src, fmt::format("NV{}_momentum", name));
   }
-  auto& species = state["species"][name];
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
