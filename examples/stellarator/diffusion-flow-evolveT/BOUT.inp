@@ -1,4 +1,4 @@
-# Tokamak diffusion and parallel flow example
+# Stellarator diffusion and parallel flow example
 
 nout = 50
 timestep = 50
