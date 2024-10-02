@@ -219,16 +219,8 @@ inline bool hermesDataInvalid(const Field3D& value) {
   return false;
 }
 
-/// Set values in an option. This could be optimised, but
-/// currently the is_value private variable would need to be modified.
-///
-/// If the value has been used then raise an exception (if CHECK >= 1)
-/// This is to prevent values being modified after use.
-///
-/// @tparam T The type of the value to set. Usually this is inferred
 template<typename T>
-Options& set(Options& option, T value) {
-  // Check that the value has not already been used
+void setCheck(Options& option, T value) {
 #if CHECKLEVEL >= 1
   if (option.hasAttribute("final")) {
     throw BoutException("Setting value of {} but it has already been used in {}.",
@@ -244,6 +236,19 @@ Options& set(Options& option, T value) {
     throw BoutException("Setting invalid value for '{}'", option.str());
   }
 #endif
+}
+
+/// Set values in an option. This could be optimised, but
+/// currently the is_value private variable would need to be modified.
+///
+/// If the value has been used then raise an exception (if CHECK >= 1)
+/// This is to prevent values being modified after use.
+///
+/// @tparam T The type of the value to set. Usually this is inferred
+template<typename T>
+Options& set(Options& option, T value) {
+  // Check that the value has not already been used
+  setCheck(option, value);
 
   option.force(std::move(value));
   return option;
@@ -283,33 +288,38 @@ Options& add(Options& option, T value) {
   if (!option.isSet()) {
     return set(option, value);
   } else {
-    try {
-      return set(option, value + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value));
-    } catch (const std::bad_cast &e) {
-      // Convert to a more useful error message
-      throw BoutException("Could not convert {:s} to type {:s}",
-                          option.str(), typeid(T).name());
+    auto old = mpark::get_if<T>(&option.value);
+    if (old) {
+      setCheck(option, value);
+      *old += value;
+      return option;
     }
+    // Convert to a more useful error message
+    throw BoutException("Could not convert {:s} to type {:s}",
+			option.str(), typeid(T).name());
   }
 }
 
-/// Add value to a given option. If not already set, treats
-/// as zero and sets the option to the value.
+/// Subtract value froma a given option. If not already set, treats
+/// as zero and sets the option to the negative value.
 ///
 /// @param option  The value to modify (or set if not already set)
-/// @param value   The quantity to add.
+/// @param value   The quantity to subtract.
 template<typename T>
 Options& subtract(Options& option, T value) {
   if (!option.isSet()) {
     return set(option, -value);
   } else {
-    try {
-      return set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value) - value);
-    } catch (const std::bad_cast &e) {
-      // Convert to a more useful error message
-      throw BoutException("Could not convert {:s} to type {:s}",
-                          option.str(), typeid(T).name());
+    auto old = mpark::get_if<T>(&option.value);
+    if (old) {
+      setCheck(option, value);
+      *old -= value;
+      return option;
     }
+    // This is a fall-back when the cast fails
+    // Convert to a more useful error message
+    throw BoutException("Could not convert {:s} to type {:s}",
+			option.str(), typeid(T).name());
   }
 }
 
