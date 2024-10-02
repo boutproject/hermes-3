@@ -4,6 +4,13 @@
 #include <bout/mesh.hxx>
 #include <bout/invert_laplace.hxx>
 
+// Set the default acceptance tolerances for the Naulin solver.
+// These are used if the maximum iterations is reached.
+// Note: A loose tolerance is used because repeated iterations
+//       can usually recover tight tolerances.
+BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:rtol_accept", 1e-2);
+BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:atol_accept", 1e-6);
+
 Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*) {
   AUTO_TRACE();
 
@@ -81,7 +88,7 @@ void Electromagnetic::restartVars(Options& state) {
   if (first and state.isSet("Apar")) {
     first = false;
     Apar = state["Apar"].as<Field3D>();
-    output.write("\nelectromagnetic: Read Apar from restart file (min {}, max {})\n", min(Apar), max(Apar));
+    output.write("\nElectromagnetic: Read Apar from restart file (min {}, max {})\n", min(Apar), max(Apar));
   }
 
   // Save the Apar field. It is solved using an iterative method,
