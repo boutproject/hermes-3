@@ -12,6 +12,8 @@
 #include "../include/evolve_pressure.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
+#include "../include/yboundary_regions.hxx"
+
 
 using bout::globals::mesh;
 
@@ -321,20 +323,15 @@ void EvolvePressure::finally(const Options& state) {
       mesh->communicate(kappa_par);
     }
 
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(kappa_par, r.ind, mesh->ystart, jz);
-        auto im = i.ym();
-        kappa_par[im] = kappa_par[i];
-      }
+    if (kappa_par.isFci()) {
+      mesh->communicate(kappa_par);
     }
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(kappa_par, r.ind, mesh->yend, jz);
-        auto ip = i.yp();
-        kappa_par[ip] = kappa_par[i];
+
+    yboundary.iter([&](auto& region) {
+      for (auto& pnt : region) {
+	pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
       }
-    }
+    });
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
