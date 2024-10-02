@@ -33,6 +33,7 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
 
   // Give Apar an initial value because we solve Apar by iteration
   // starting from the previous solution
+  // Note: On restart the value is restored (if available) in restartVars
   Apar = 0.0;
 
   if (const_gradient) {
@@ -68,6 +69,27 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
   magnetic_flutter = options["magnetic_flutter"]
     .doc("Set magnetic flutter terms (Apar_flutter)?")
     .withDefault<bool>(false);
+}
+
+void Electromagnetic::restartVars(Options& state) {
+  AUTO_TRACE();
+
+  // NOTE: This is a hack because we know that the loaded restart file
+  //       is passed into restartVars in PhysicsModel::postInit
+  // The restart value should be used in init() rather than here
+  static bool first = true;
+  if (first and state.isSet("Apar")) {
+    first = false;
+    Apar = state["Apar"].as<Field3D>();
+    output.write("\nelectromagnetic: Read Apar from restart file (min {}, max {})\n", min(Apar), max(Apar));
+  }
+
+  // Save the Apar field. It is solved using an iterative method,
+  // so converges faster with the value from the previous iteration.
+  set_with_attrs(state["Apar"], Apar,
+                 {{"standard_name", "b dot A"},
+                  {"long_name", "Parallel component of vector potential A"},
+                  {"source", "electromagnetic"}});
 }
 
 void Electromagnetic::transform(Options &state) {

@@ -55,6 +55,9 @@ struct Electromagnetic : public Component {
   ///
   void transform(Options &state) override;
 
+  // Save and restore Apar from restart files
+  void restartVars(Options& state) override;
+
   void outputVars(Options &state) override;
 private:
   Field3D Apar; // Electromagnetic potential A_||
