@@ -376,6 +376,10 @@ void EvolvePressure::finally(const Options& state) {
         throw BoutException("\tconduction_collisions_mode for {:s} must be either legacy or braginskii", species.name());
       }
 
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in evolve_pressure for selected collisions mode", species.name());
+      }
+
       /// Write chosen collisions to log file
       output_info.write("\t{:s} conduction collisionality mode: '{:s}' using ",
                       species.name(), conduction_collisions_mode);

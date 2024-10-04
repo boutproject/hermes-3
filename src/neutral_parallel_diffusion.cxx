@@ -67,6 +67,10 @@ void NeutralParallelDiffusion::transform(Options& state) {
         throw BoutException("\tdiffusion_collisions_mode for {:s} must be either legacy or afn", species.name());
       }
 
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in neutral_parallel_diffusion for selected collisions mode", species.name());
+      }
+
       /// Write chosen collisions to log file
       output_info.write("\t{:s} neutral diffusion collisionality mode: '{:s}' using ",
                       species.name(), diffusion_collisions_mode);

@@ -314,6 +314,10 @@ void NeutralMixed::finally(const Options& state) {
         throw BoutException("\ndiffusion_collisions_mode for {:s} must be either legacy or braginskii", name);
       }
 
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in neutral_mixed for selected collisions mode", name);
+      }
+
       /// Write chosen collisions to log file
       output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ",
                       name, diffusion_collisions_mode);

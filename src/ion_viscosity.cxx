@@ -134,6 +134,10 @@ void IonViscosity::transform(Options &state) {
         throw BoutException("\tviscosity_collisions_mode for {:s} must be either legacy or braginskii", species.name());
       }
 
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in ion_viscosity for selected collisions mode", species.name());
+      }
+
       /// Write chosen collisions to log file
       output_info.write("\t{:s} viscosity collisionality mode: '{:s}' using ",
                       species.name(), viscosity_collisions_mode);
