@@ -14,9 +14,7 @@ void ElectronForceBalance::transform(Options &state) {
     throw BoutException("Cannot calculate potential and use electron force balance\n");
   }
 
-  // Get the electron pressure
-  // Note: The pressure boundary can be set in sheath boundary condition
-  //       which depends on the electron velocity being set here first.
+  // Get the electron pressure, with boundary condition applied
   Options& electrons = state["species"]["e"];
   Field3D Pe = GET_VALUE(Field3D, electrons["pressure"]);
   Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]);

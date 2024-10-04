@@ -229,7 +229,7 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -303,7 +303,7 @@ void EvolveDensity::finally(const Options& state) {
       flow_xlow = get<Field3D>(species["particle_flow_xlow"]);
     }
     if (species.isSet("particle_flow_ylow")) {
-      flow_ylow = get<Field3D>(species["particle_flow_ylow"]);
+      flow_ylow += get<Field3D>(species["particle_flow_ylow"]);
     }
   }
 }
@@ -357,7 +357,7 @@ void EvolveDensity::outputVars(Options& state) {
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
     if (flow_xlow.isAllocated()) {
-      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_xlow")], flow_xlow,
+      set_with_attrs(state[fmt::format("pf{}_tot_xlow", name)], flow_xlow,
                    {{"time_dimension", "t"},
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
@@ -367,7 +367,7 @@ void EvolveDensity::outputVars(Options& state) {
                     {"source", "evolve_density"}});
     }
     if (flow_ylow.isAllocated()) {
-      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_ylow")], flow_ylow,
+      set_with_attrs(state[fmt::format("pf{}_tot_ylow", name)], flow_ylow,
                    {{"time_dimension", "t"},
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
