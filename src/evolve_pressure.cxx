@@ -559,12 +559,12 @@ void EvolvePressure::outputVars(Options& state) {
     }
 
     if (numerical_viscous_heating) {
-      set_with_attrs(state[std::string("SP") + name + std::string("_nvh")], Sp_nvh,
+      set_with_attrs(state[std::string("E") + name + std::string("_nvh")], Sp_nvh * 3/.2,
                    {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
+                    {"units", "W"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "pressure source"},
-                    {"long_name", name + " pressure source from numerical viscous heating"},
+                    {"standard_name", "energy source"},
+                    {"long_name", name + " energy source from numerical viscous heating"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
