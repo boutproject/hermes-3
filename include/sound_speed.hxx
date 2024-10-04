@@ -32,6 +32,11 @@ struct SoundSpeed : public Component {
     temperature_floor = options["temperature_floor"]
       .doc("Minimum temperature when calculating sound speeds [eV]")
       .withDefault(0.0);
+
+    fastest_wave_factor = options["fastest_wave_factor"]
+      .doc("Multiply the fastest wave by this factor, affecting lax flux strength")
+      .withDefault(0.0);
+
     if (temperature_floor > 0.0) {
       temperature_floor /= get<BoutReal>(alloptions["units"]["eV"]);
     }
@@ -55,6 +60,7 @@ private:
   bool alfven_wave; ///< Include Alfven wave speed?
   BoutReal beta_norm{0.0}; ///< Normalisation factor for Alfven speed
   BoutReal temperature_floor; ///< Minimum temperature when calculating speed
+  BoutReal fastest_wave_factor; ///< Multiply the fastest wave by this factor
 };
 
 namespace {
