@@ -1012,20 +1012,24 @@ cross-field diffusion:
 .. math::
 
    \begin{aligned}
-   \frac{\partial n_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_n\partial_{||}p_n\right) \\
-   \frac{\partial p_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n p_n\partial_{||}p_n\right) + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\kappa_n \partial_{||}T_n\right) \\
-   \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_nv_{||n} \partial_{||}p_n\right) + \nabla\cdot\left(\mathbf{b}\eta_n \partial_{||}T_n\right)
+   \frac{\partial n_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_n \frac{1}{p_n}{\partial_{||}p_n}\right) \\
+   \frac{\partial p_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n p_n \frac{1}{p_n}\partial_{||}p_n\right) + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\kappa_n \partial_{||}T_n\right) \\
+   \frac{\partial}{\partial t}\left(m_nn_nv_{||n}\right) =& \ldots + \nabla\cdot\left(\mathbf{b}D_n m_n n_nv_{||n} \frac{1}{p_n} \partial_{||}p_n\right) + \nabla\cdot\left(\mathbf{b}\eta_n \partial_{||}v_{||n}\right)
    \end{aligned}
 
-The diffusion coefficient is calculated as
+The diffusion coefficient is in :math:`m^2/s` and is calculated as
 
 .. math::
 
-   D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{T_n}{A \nu}
+   D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{eT_n}{m_{n} \nu}
 
-where `A` is the atomic mass number; :math:`\nu` is the collision
-frequency. The factor :math:`B / B_{pol}` is the projection of the cross-field
-direction on the parallel transport, and is the `dneut` input setting.
+where `m_{n}` is the neutral species mass in kg and :math:`\nu` is the collision
+frequency (by default, this sums up all of the enabled neutral collisions from 
+the collisions component as well as the charge exchange rate).
+The factor :math:`B / B_{pol}` is the projection of the cross-field
+direction on the parallel transport, and is the `dneut` input setting. Currently, the recommended
+use case for this component is to represent the neutrals diffusing orthogonal to the target wall, and
+it is recommended to set `dneut` according to the field line pitch at the target.
 
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
