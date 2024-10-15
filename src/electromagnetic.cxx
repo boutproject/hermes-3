@@ -11,7 +11,7 @@
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:rtol_accept", 1e-2);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:atol_accept", 1e-6);
 
-Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*) {
+Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* solver) {
   AUTO_TRACE();
 
   Options& units = alloptions["units"];
@@ -33,6 +33,7 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
     options["laplacian"]["type"] = "naulin";
   }
   aparSolver = Laplacian::create(&options["laplacian"]);
+  aparSolver->savePerformance(*solver, "AparSolver");
 
   const_gradient = options["const_gradient"]
     .doc("Extrapolate gradient of Apar into all radial boundaries?")
