@@ -480,8 +480,9 @@ namespace FCI {
 
 class dagp_fv {
 public:
-  Field3D operator()(const Field3D &a, const Field3D &f, Field3D& low_xlow, Field3D& flow_zlow);
-  Field3D operator()(const Field3D &a, const Field3D &f);
+  Field3D operator()(const Field3D& a, const Field3D& f, Field3D& low_xlow,
+                     Field3D& flow_zlow, bool upwinding);
+  Field3D operator()(const Field3D& a, const Field3D& f, bool upwinding);
   dagp_fv(Mesh &mesh);
   dagp_fv &operator*=(BoutReal fac) {
     volume /= fac * fac;
@@ -490,15 +491,18 @@ public:
   dagp_fv &operator/=(BoutReal fac) { return operator*=(1 / fac); }
 
 private:
-  template <bool extra>
-  Field3D operator()(const Field3D &a, const Field3D &f, Field3D* low_xlow, Field3D* flow_zlow);
+  template <bool extra, bool upwinding>
+  Field3D operator()(const Field3D& a, const Field3D& f, Field3D* low_xlow,
+                     Field3D* flow_zlow);
   Field3D fac_XX;
   Field3D fac_XZ;
   Field3D fac_ZX;
   Field3D fac_ZZ;
   Field3D volume;
-  BoutReal xflux(const Field3D &a, const Field3D &f, const Ind3D &i);
-  BoutReal zflux(const Field3D &a, const Field3D &f, const Ind3D &i);
+  template <bool upwinding>
+  BoutReal xflux(const Field3D& a, const Field3D& f, const Ind3D& i);
+  template <bool upwinding>
+  BoutReal zflux(const Field3D& a, const Field3D& f, const Ind3D& i);
 };
 
 std::shared_ptr<dagp_fv>

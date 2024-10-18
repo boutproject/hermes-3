@@ -98,6 +98,8 @@ void AnomalousDiffusion3D::transform(Options& state) {
 
   Field3D flow_xlow, flow_zlow; // Flows through cell faces
 
+  bool upwind = true;
+
   if (include_D) {
     // Particle diffusion. Gradients of density drive flows of particles,
     // momentum and energy. The implementation here is equivalent to an
@@ -105,29 +107,28 @@ void AnomalousDiffusion3D::transform(Options& state) {
     //
     //  v_D = - D Grad_perp(N) / N
 
-    add(species["density_source"], (*dagp)(anomalous_D, N,
-					flow_xlow, flow_zlow));
+    add(species["density_source"], (*dagp)(anomalous_D, N, flow_xlow, flow_zlow, upwind));
     add(species["particle_flow_xlow"], flow_xlow);
     add(species["particle_flow_zlow"], flow_zlow);
 
     // Note: Upwind operators used, or unphysical increases
     // in temperature and flow can be produced
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"], (*dagp)(AA * V * anomalous_D, N,
-					 flow_xlow, flow_zlow));
+    add(species["momentum_source"],
+        (*dagp)(AA * V * anomalous_D, N, flow_xlow, flow_zlow, upwind));
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_zlow"], flow_zlow);
 
     add(species["energy_source"],
-        (*dagp)((3. / 2) * T * anomalous_D, N,
-	     flow_xlow, flow_zlow));
+        (*dagp)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_zlow, upwind));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_zlow"], flow_zlow);
   }
 
   if (include_chi) {
     // Gradients in temperature that drive energy flows
-    add(species["energy_source"], (*dagp)(anomalous_chi * N, T, flow_xlow, flow_zlow));
+    add(species["energy_source"],
+        (*dagp)(anomalous_chi * N, T, flow_xlow, flow_zlow, upwind));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_zlow"], flow_zlow);
   }
@@ -135,7 +136,9 @@ void AnomalousDiffusion3D::transform(Options& state) {
   if (include_nu) {
     // Gradients in flow speed that drive momentum flows
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"], (*dagp)(anomalous_nu * AA * N, V, flow_xlow, flow_zlow));
+    add(species["momentum_source"],
+        setName((*dagp)(anomalous_nu * AA * N, V, flow_xlow, flow_zlow, upwind),
+                "dagp_fv(anomalous_nu * AA * N{}, V{}", name, name));
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_zlow"], flow_zlow);
   }

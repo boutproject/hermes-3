@@ -158,7 +158,7 @@ private:
   }
   Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
     if (Vort.isFci()) {
-      return (*dagp)(a,b);
+      return (*dagp)(a, b, false);
     }
     return FV::Div_a_Grad_perp(a, b);
   }

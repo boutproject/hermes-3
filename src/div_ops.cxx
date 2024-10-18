@@ -1524,16 +1524,26 @@ dagp_fv::dagp_fv(Mesh &mesh)
   }
 }
 
-Field3D dagp_fv::operator()(const Field3D &a, const Field3D &f, Field3D& flow_xlow, Field3D& flow_zlow) {
-  return operator()<true>(a, f, &flow_xlow, &flow_zlow);
+Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D& flow_xlow,
+                            Field3D& flow_zlow, bool upwinding) {
+  if (upwinding) {
+    return operator()<true, true>(a, f, &flow_xlow, &flow_zlow);
+  } else {
+    return operator()<true, false>(a, f, &flow_xlow, &flow_zlow);
+  }
 }
-  
-Field3D dagp_fv::operator()(const Field3D &a, const Field3D &f) {
-  return operator()<false>(a, f, nullptr, nullptr);
+
+Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, bool upwinding) {
+  if (upwinding) {
+    return operator()<false, true>(a, f, nullptr, nullptr);
+  } else {
+    return operator()<false, false>(a, f, nullptr, nullptr);
+  }
 }
- 
-template <bool extra>
-Field3D dagp_fv::operator()(const Field3D &a, const Field3D &f, Field3D* flow_xlow, Field3D* flow_zlow) {
+
+template <bool extra, bool upwinding>
+Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xlow,
+                            Field3D* flow_zlow) {
   auto result{zeroFrom(f)};
   ASSERT1_FIELDS_COMPATIBLE(a, f);
   if constexpr (extra) {
@@ -1541,20 +1551,20 @@ Field3D dagp_fv::operator()(const Field3D &a, const Field3D &f, Field3D* flow_xl
     flow_zlow->allocate();
   }
   BOUT_FOR(i, f.getRegion("RGN_dapg_fv_xbndry")) {
-    const auto xf = xflux(a, f, i);
+    const auto xf = xflux<upwinding>(a, f, i);
     result[i.xp()] = xf;
     if constexpr (extra) {
       (*flow_xlow)[i.xp()] = xf;
     }
   }
   BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
-    const auto xf = xflux(a, f, i);
+    const auto xf = xflux<upwinding>(a, f, i);
     result[i.xp()] = xf;
     result[i] -= xf;
     if constexpr (extra) {
       (*flow_xlow)[i.xp()] = xf;
     }
-    const auto zf = zflux(a, f, i);
+    const auto zf = zflux<upwinding>(a, f, i);
     result[i.zp()] += zf;
     result[i] -= zf;
     if constexpr (extra) {
@@ -1574,21 +1584,31 @@ Field3D dagp_fv::operator()(const Field3D &a, const Field3D &f, Field3D* flow_xl
   return result;
 }
 
-inline BoutReal dagp_fv::xflux(const Field3D &a, const Field3D &f,
-                               const Ind3D &i) {
+template <bool upwinding>
+inline BoutReal dagp_fv::xflux(const Field3D& a, const Field3D& f, const Ind3D& i) {
   const auto ixp = i.xp();
-  const auto av = 0.5 * (a[i] + a[ixp]);
   const auto dx = f[ixp] - f[i];
+  BoutReal av;
+  if constexpr (upwinding) {
+    av = dx > 0 ? a[ixp] : a[i];
+  } else {
+    av = 0.5 * (a[i] + a[ixp]);
+  };
   const auto dz =
       0.5 * (f[i.zp()] - f[i.zm()] + f[i.zp().xp()] - f[i.zm().xp()]);
   return -(fac_XX[i] * dx + fac_XZ[i] * dz) * av;
 }
 
-inline BoutReal dagp_fv::zflux(const Field3D &a, const Field3D &f,
-                               const Ind3D &i) {
+template <bool upwinding>
+inline BoutReal dagp_fv::zflux(const Field3D& a, const Field3D& f, const Ind3D& i) {
   const auto izp = i.zp();
-  const auto av = 0.5 * (a[i] + a[izp]);
   const auto dz = f[izp] - f[i];
+  BoutReal av;
+  if constexpr (upwinding) {
+    av = dz > 0 ? a[izp] : a[i];
+  } else {
+    av = 0.5 * (a[i] + a[izp]);
+  }
   const auto dx = 0.5 * (f[i.xp()] - f[i.xm()] + f[izp.xp()] - f[izp.xm()]);
   return -(fac_ZX[i] * dx + fac_ZZ[i] * dz) * av;
 }
