@@ -138,6 +138,9 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
     .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
     .withDefault<BoutReal>(1);
 
+  diagnose = options["diagnose"]
+    .doc("Save additional output diagnostics")
+    .withDefault<bool>(false);
   
 }
 
@@ -727,31 +730,32 @@ void SheathBoundarySimple::outputVars(Options& state) {
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
+  if (diagnose) {
+    /// Iterate through the first species in each collision pair
+    const std::map<std::string, Options>& level1 = diagnostics.getChildren();
+    for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
+      auto species_name = s1->first;
+      const Options& section = diagnostics[species_name];
 
-  /// Iterate through the first species in each collision pair
-  const std::map<std::string, Options>& level1 = diagnostics.getChildren();
-  for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
-    auto species_name = s1->first;
-    const Options& section = diagnostics[species_name];
-
-    set_with_attrs(state[{"E" + species_name + "_sheath"}], getNonFinal<Field3D>(section["energy_source"]),
-                          {{"time_dimension", "t"},
-                          {"units", "W / m^3"},
-                          {"conversion", Pnorm * Omega_ci},
-                          {"standard_name", "energy source"},
-                          {"long_name", species_name + " sheath energy source"},
-                          {"source", "sheath_boundary_simple"}});
-
-    if (species_name != "e") {
-      set_with_attrs(state[{"S" + species_name + "_sheath"}], getNonFinal<Field3D>(section["particle_source"]),
+      set_with_attrs(state[{"E" + species_name + "_sheath"}], getNonFinal<Field3D>(section["energy_source"]),
                             {{"time_dimension", "t"},
-                            {"units", "m^-3 s^-1"},
-                            {"conversion", Nnorm * Omega_ci},
+                            {"units", "W / m^3"},
+                            {"conversion", Pnorm * Omega_ci},
                             {"standard_name", "energy source"},
                             {"long_name", species_name + " sheath energy source"},
                             {"source", "sheath_boundary_simple"}});
-    }
 
+      if (species_name != "e") {
+        set_with_attrs(state[{"S" + species_name + "_sheath"}], getNonFinal<Field3D>(section["particle_source"]),
+                              {{"time_dimension", "t"},
+                              {"units", "m^-3 s^-1"},
+                              {"conversion", Nnorm * Omega_ci},
+                              {"standard_name", "energy source"},
+                              {"long_name", species_name + " sheath energy source"},
+                              {"source", "sheath_boundary_simple"}});
+      }
+
+    }
   }
 
   }

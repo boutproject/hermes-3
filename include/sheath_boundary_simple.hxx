@@ -93,6 +93,7 @@ private:
   Field3D phi; // Phi at sheath
   Field3D ion_sum; // Sum of ion current at sheath
 
+  bool diagnose; // Save diagnostic variables?
   Options diagnostics;   // Options object to store diagnostic fields like a dict
 
   bool no_flow; ///< No flow speed, only remove energy
