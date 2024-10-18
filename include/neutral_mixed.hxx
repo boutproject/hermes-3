@@ -42,7 +42,7 @@ private:
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
-  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or legacy
+  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or multispecies
   Field3D nu; ///< Collisionality to use for diffusion
   Field3D Dnn; ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators

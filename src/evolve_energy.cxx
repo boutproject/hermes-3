@@ -33,8 +33,8 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
 
   conduction_collisions_mode = options["conduction_collisions_mode"]
-      .doc("Can be legacy: all collisions, or braginskii: self collisions and ie")
-      .withDefault<std::string>("legacy");
+      .doc("Can be multispecies: all collisions, or braginskii: self collisions and ie")
+      .withDefault<std::string>("multispecies");
 
   if (evolve_log) {
     // Evolve logarithm of energy
@@ -315,8 +315,8 @@ void EvolveEnergy::finally(const Options& state) {
           }
           
         }
-      // Legacy mode: all collisions and CX are included
-      } else if (conduction_collisions_mode == "legacy") {
+      // Multispecies mode: all collisions and CX are included
+      } else if (conduction_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
@@ -332,7 +332,7 @@ void EvolveEnergy::finally(const Options& state) {
         }
         
       } else {
-        throw BoutException("\tconduction_collisions_mode for {:s} must be either legacy or braginskii", species.name());
+        throw BoutException("\tconduction_collisions_mode for {:s} must be either multispecies or braginskii", species.name());
       }
 
       if (collision_names.empty()) {

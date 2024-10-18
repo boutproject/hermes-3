@@ -34,7 +34,7 @@ struct NeutralParallelDiffusion : public Component {
       .withDefault<bool>(false);
 
     diffusion_collisions_mode = options["diffusion_collisions_mode"]
-      .doc("Can be afn: CX and IZ, or legacy: CX and nn, ni, ne (if enabled)")
+      .doc("Can be afn: CX and IZ, or multispecies: CX and nn, ni, ne (if enabled)")
       .withDefault<std::string>("afn");
       
     equation_fix = options["equation_fix"]
@@ -77,7 +77,7 @@ private:
 
   bool diagnose; ///< Output diagnostics?
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
-  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or legacy
+  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or multispecies
   Field3D nu;   ///< Collision frequency for conduction
   bool equation_fix;  ///< Fix incorrect 3/2 factor in pressure advection?
   bool perpendicular_conduction; ///< Enable conduction?

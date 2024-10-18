@@ -87,7 +87,7 @@ private:
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
-  std::string conduction_collisions_mode;  ///< Collision selection, either legacy or braginskii
+  std::string conduction_collisions_mode;  ///< Collision selection, either multispecies or braginskii
   Field3D nu;   ///< Collision frequency for conduction
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
                               ///< calculation

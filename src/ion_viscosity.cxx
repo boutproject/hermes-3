@@ -28,8 +28,8 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
     .withDefault<bool>(false);
 
   viscosity_collisions_mode = options["viscosity_collisions_mode"]
-      .doc("Can be legacy: all collisions, or braginskii: self collisions")
-      .withDefault<std::string>("legacy");
+      .doc("Can be multispecies: all collisions, or braginskii: self collisions")
+      .withDefault<std::string>("multispecies");
   
   if (perpendicular) {
     // Read curvature vector
@@ -114,8 +114,8 @@ void IonViscosity::transform(Options &state) {
                   collision_names.push_back(collision_name);
                 }
         }
-      // Legacy mode: all collisions and CX are included
-      } else if (viscosity_collisions_mode == "legacy") {
+      // Multispecies mode: all collisions and CX are included
+      } else if (viscosity_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
@@ -131,7 +131,7 @@ void IonViscosity::transform(Options &state) {
                 }
         }
       } else {
-        throw BoutException("\tviscosity_collisions_mode for {:s} must be either legacy or braginskii", species.name());
+        throw BoutException("\tviscosity_collisions_mode for {:s} must be either multispecies or braginskii", species.name());
       }
 
       if (collision_names.empty()) {

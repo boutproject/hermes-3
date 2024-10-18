@@ -27,7 +27,7 @@ void NeutralParallelDiffusion::transform(Options& state) {
       GET_VALUE(Field3D, species["pressure"]) : Nn * Tn;
 
     // Collisionality
-    // Legacy mode: in, en, nn, cx
+    // Multispecies mode: in, en, nn, cx
     // New mode: cx, iz (in line with SOLPS AFN, Horsten 2017)
     if (collision_names.empty()) {     /// Calculate only once - at the beginning
 
@@ -46,8 +46,8 @@ void NeutralParallelDiffusion::transform(Options& state) {
                   collision_names.push_back(collision_name);
                 }
         }
-      // Legacy mode: all collisions and CX are included
-      } else if (diffusion_collisions_mode == "legacy") {
+      // Multispecies mode: all collisions and CX are included
+      } else if (diffusion_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
@@ -64,7 +64,7 @@ void NeutralParallelDiffusion::transform(Options& state) {
         }
 
       } else {
-        throw BoutException("\tdiffusion_collisions_mode for {:s} must be either legacy or afn", species.name());
+        throw BoutException("\tdiffusion_collisions_mode for {:s} must be either multispecies or afn", species.name());
       }
 
       if (collision_names.empty()) {

@@ -77,8 +77,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     .withDefault<bool>(true);
 
   diffusion_collisions_mode = options["diffusion_collisions_mode"]
-      .doc("Can be legacy: all enabled collisions excl. IZ, or afn: CX, IZ and NN collisions")
-      .withDefault<std::string>("legacy");
+      .doc("Can be multispecies: all enabled collisions excl. IZ, or afn: CX, IZ and NN collisions")
+      .withDefault<std::string>("multispecies");
 
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
@@ -294,8 +294,8 @@ void NeutralMixed::finally(const Options& state) {
                   collision_names.push_back(collision_name);
                 }
         }
-      // Legacy mode: all collisions and CX are included
-      } else if (diffusion_collisions_mode == "legacy") {
+      // Multispecies mode: all collisions and CX are included
+      } else if (diffusion_collisions_mode == "multispecies") {
         for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
@@ -311,7 +311,7 @@ void NeutralMixed::finally(const Options& state) {
         }
         
       } else {
-        throw BoutException("\ndiffusion_collisions_mode for {:s} must be either legacy or braginskii", name);
+        throw BoutException("\ndiffusion_collisions_mode for {:s} must be either multispecies or braginskii", name);
       }
 
       if (collision_names.empty()) {

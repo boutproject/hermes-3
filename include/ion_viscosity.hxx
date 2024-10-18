@@ -54,7 +54,7 @@ private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
   bool perpendicular; ///< Include perpendicular flow? (Requires phi)
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
-  std::string viscosity_collisions_mode;  ///< Collision selection, either legacy or braginskii
+  std::string viscosity_collisions_mode;  ///< Collision selection, either multispecies or braginskii
   Field3D nu;   ///< Collision frequency for conduction
   Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
 
