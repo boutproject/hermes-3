@@ -1140,3 +1140,232 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 
   return result;
 }
+
+const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Field3D &f, 
+                                    bool bndry_flux, bool positive) {
+  Field3D result{0.0};
+
+  Coordinates *coord = mesh->getCoordinates();
+  
+  //////////////////////////////////////////
+  // X-Z advection.
+  //
+  //             Z
+  //             |
+  //
+  //    fmp --- vU --- fpp
+  //     |      nU      |
+  //     |               |
+  //    vL nL        nR vR    -> X
+  //     |               |
+  //     |      nD       |
+  //    fmm --- vD --- fpm
+  //
+
+  int nz = mesh->LocalNz;
+  for (int i = mesh->xstart; i <= mesh->xend; i++) {
+    for (int j = mesh->ystart; j <= mesh->yend; j++) {
+      for (int k = 0; k < nz; k++) {
+        int kp = (k + 1) % nz;
+        int kpp = (kp + 1) % nz;
+        int km = (k - 1 + nz) % nz;
+        int kmm = (km - 1 + nz) % nz;
+
+        // 1) Interpolate stream function f onto corners fmp, fpp, fpm
+
+        BoutReal fmm = 0.25 * (f(i, j, k) + f(i - 1, j, k) + f(i, j, km) +
+                               f(i - 1, j, km));
+        BoutReal fmp = 0.25 * (f(i, j, k) + f(i, j, kp) + f(i - 1, j, k) +
+                               f(i - 1, j, kp)); // 2nd order accurate
+        BoutReal fpp = 0.25 * (f(i, j, k) + f(i, j, kp) + f(i + 1, j, k) +
+                               f(i + 1, j, kp));
+        BoutReal fpm = 0.25 * (f(i, j, k) + f(i + 1, j, k) + f(i, j, km) +
+                               f(i + 1, j, km));
+
+        // 2) Calculate velocities on cell faces
+
+        BoutReal vU = coord->J(i, j) * (fmp - fpp) / coord->dx(i, j); // -J*df/dx
+        BoutReal vD = coord->J(i, j) * (fmm - fpm) / coord->dx(i, j); // -J*df/dx
+
+        BoutReal vR = 0.5 * (coord->J(i, j) + coord->J(i + 1, j)) * (fpp - fpm) /
+                      coord->dz(i, j); // J*df/dz
+        BoutReal vL = 0.5 * (coord->J(i, j) + coord->J(i - 1, j)) * (fmp - fmm) /
+                      coord->dz(i, j); // J*df/dz
+
+        // 3) Calculate g on cell faces
+
+        BoutReal gU = 0.5 * (g(i, j, kp) + g(i, j, k));
+        BoutReal gD = 0.5 * (g(i, j, km) + g(i, j, k));
+        BoutReal gR = 0.5 * (g(i + 1, j, k) + g(i, j, k));
+        BoutReal gL = 0.5 * (g(i - 1, j, k) + g(i, j, k));
+
+        // 4) Calculate n on the cell faces. The sign of the
+        //    velocity determines which side is used.
+
+        // X direction
+        Stencil1D s;
+        s.c = n(i, j, k);
+        s.m = n(i - 1, j, k);
+        s.mm = n(i - 2, j, k);
+        s.p = n(i + 1, j, k);
+        s.pp = n(i + 2, j, k);
+
+        MC(s, coord->dx(i, j));
+        
+        // Right side
+        if ((i == mesh->xend) && (mesh->lastX())) {
+          // At right boundary in X
+
+          if (bndry_flux) {
+            BoutReal flux;
+            if (vR > 0.0) {
+              // Flux to boundary
+              flux = vR * s.R * gR;
+            } else {
+              // Flux in from boundary
+              flux = vR * 0.5 * (n(i + 1, j, k) + n(i, j, k)) * gR;
+            }
+
+            result(i, j, k) += flux / (coord->dx(i, j) * coord->J(i, j));
+            result(i + 1, j, k) -=
+                flux / (coord->dx(i + 1, j) * coord->J(i + 1, j));
+          }
+        } else {
+          // Not at a boundary
+          if (vR > 0.0) {
+            // Flux out into next cell
+            BoutReal flux = vR * s.R * gR;
+            result(i, j, k) += flux / (coord->dx(i, j) * coord->J(i, j));
+            result(i + 1, j, k) -=
+                flux / (coord->dx(i + 1, j) * coord->J(i + 1, j));
+          }
+        }
+
+        // Left side
+
+        if ((i == mesh->xstart) && (mesh->firstX())) {
+          // At left boundary in X
+
+          if (bndry_flux) {
+            BoutReal flux;
+
+            if (vL < 0.0) {
+              // Flux to boundary
+              flux = vL * s.L * gL;
+
+            } else {
+              // Flux in from boundary
+              flux = vL * 0.5 * (n(i - 1, j, k) + n(i, j, k)) * gL;
+            }
+            result(i, j, k) -= flux / (coord->dx(i, j) * coord->J(i, j));
+            result(i - 1, j, k) +=
+                flux / (coord->dx(i - 1, j) * coord->J(i - 1, j));
+          }
+        } else {
+          // Not at a boundary
+
+          if (vL < 0.0) {
+            BoutReal flux = vL * s.L * gL;
+            result(i, j, k) -= flux / (coord->dx(i, j) * coord->J(i, j));
+            result(i - 1, j, k) +=
+                flux / (coord->dx(i - 1, j) * coord->J(i - 1, j));
+          }
+        }
+
+        /// NOTE: Need to communicate fluxes
+
+        // Z direction
+        s.m = n(i, j, km);
+        s.mm = n(i, j, kmm);
+        s.p = n(i, j, kp);
+        s.pp = n(i, j, kpp);
+
+        MC(s, coord->dz(i, j));
+
+        if (vU > 0.0) {
+          BoutReal flux = vU * s.R * gU/ (coord->J(i, j) * coord->dz(i, j));
+          result(i, j, k) += flux;
+          result(i, j, kp) -= flux;
+        }
+        if (vD < 0.0) {
+          BoutReal flux = vD * s.L * gD / (coord->J(i, j) * coord->dz(i, j));
+          result(i, j, k) -= flux;
+          result(i, j, km) += flux;
+        }
+      }
+    }
+  }
+  FV::communicateFluxes(result);
+  return result;
+}
+
+const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
+                                     Field3D& flow_ylow,
+                                     bool bndry_flux) {
+  TRACE("FV::Div_par_K_Grad_par_mod");
+
+  ASSERT2(Kin.getLocation() == fin.getLocation());
+
+  Mesh* mesh = Kin.getMesh();
+
+  bool use_parallel_slices = (Kin.hasParallelSlices() && fin.hasParallelSlices());
+
+  const auto& K = use_parallel_slices ? Kin : toFieldAligned(Kin, "RGN_NOX");
+  const auto& f = use_parallel_slices ? fin : toFieldAligned(fin, "RGN_NOX");
+
+  Field3D result{zeroFrom(f)};
+  flow_ylow = zeroFrom(f);
+
+  // K and f fields in yup and ydown directions
+  const auto& Kup = use_parallel_slices ? Kin.yup() : K;
+  const auto& Kdown = use_parallel_slices ? Kin.ydown() : K;
+  const auto& fup = use_parallel_slices ? fin.yup() : f;
+  const auto& fdown = use_parallel_slices ? fin.ydown() : f;
+
+  Coordinates* coord = fin.getCoordinates();
+
+  BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
+    // Calculate flux at upper surface
+
+    const auto iyp = i.yp();
+    const auto iym = i.ym();
+
+    if (bndry_flux || mesh->periodicY(i.x()) || !mesh->lastY(i.x())
+        || (i.y() != mesh->yend)) {
+
+      BoutReal c = 0.5 * (K[i] + Kup[iyp]);             // K at the upper boundary
+      BoutReal J = 0.5 * (coord->J[i] + coord->J[iyp]); // Jacobian at boundary
+      BoutReal g_22 = 0.5 * (coord->g_22[i] + coord->g_22[iyp]);
+
+      BoutReal gradient = 2. * (fup[iyp] - f[i]) / (coord->dy[i] + coord->dy[iyp]);
+
+      BoutReal flux = c * J * gradient / g_22;
+
+      result[i] += flux / (coord->dy[i] * coord->J[i]);
+    }
+
+    // Calculate flux at lower surface
+    if (bndry_flux || mesh->periodicY(i.x()) || !mesh->firstY(i.x())
+        || (i.y() != mesh->ystart)) {
+      BoutReal c = 0.5 * (K[i] + Kdown[iym]);           // K at the lower boundary
+      BoutReal J = 0.5 * (coord->J[i] + coord->J[iym]); // Jacobian at boundary
+
+      BoutReal g_22 = 0.5 * (coord->g_22[i] + coord->g_22[iym]);
+
+      BoutReal gradient = 2. * (f[i] - fdown[iym]) / (coord->dy[i] + coord->dy[iym]);
+
+      BoutReal flux = c * J * gradient / g_22;
+
+      result[i] -= flux / (coord->dy[i] * coord->J[i]);
+      flow_ylow[i] = - flux * coord->dx[i] * coord->dz[i];
+    }
+  }
+
+  if (!use_parallel_slices) {
+    // Shifted to field aligned coordinates, so need to shift back
+    result = fromFieldAligned(result, "RGN_NOBNDRY");
+    flow_ylow = fromFieldAligned(flow_ylow);
+  }
+
+  return result;
+}

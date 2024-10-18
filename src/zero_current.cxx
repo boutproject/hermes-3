@@ -56,6 +56,9 @@ void ZeroCurrent::transform(Options &state) {
 
   // Get the species density
   Options& species = state["species"][name];
+  if (species["velocity"].isSet()) {
+    throw BoutException("Cannot use zero_current in species {} if velocity already set\n", name);
+  }
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
   velocity = current / (-charge * floor(N, 1e-5));
