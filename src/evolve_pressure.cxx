@@ -346,15 +346,7 @@ void EvolvePressure::finally(const Options& state) {
           std::string collision_name = collision.second.name();
 
           if (identifySpeciesType(species.name()) == "neutral") {
-            if (/// Charge exchange
-                (collisionSpeciesMatch(    
-                  collision_name, species.name(), "+", "cx", "partial")) or
-                /// Ionisation
-                (collisionSpeciesMatch(    
-                  collision_name, species.name(), "+", "iz", "partial"))) {
-                    collision_names.push_back(collision_name);
-                  }
-
+            throw BoutException("\tBraginskii conduction collisions mode not available for neutrals, choose multispecies or afn");
           } else if (identifySpeciesType(species.name()) == "electron") {
             if (/// Electron-electron collisions
                 (collisionSpeciesMatch(    
@@ -369,8 +361,8 @@ void EvolvePressure::finally(const Options& state) {
                     collision_names.push_back(collision_name);
                   }
           }
-          
         }
+          
       // Multispecies mode: all collisions and CX are included
       } else if (conduction_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
@@ -387,8 +379,26 @@ void EvolvePressure::finally(const Options& state) {
                 }
         }
         
+      } else if (conduction_collisions_mode == "afn") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (identifySpeciesType(species.name()) != "neutral") {
+                throw BoutException("\tAFN conduction collisions mode not available for ions or electrons, choose braginskii or multispecies");
+              }
+          if (/// Charge exchange
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "+", "cx", "partial")) or
+                /// Ionisation
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "+", "iz", "partial"))) {
+                    collision_names.push_back(collision_name);
+                  }
+        }
+
       } else {
-        throw BoutException("\tconduction_collisions_mode for {:s} must be either multispecies or braginskii", species.name());
+        throw BoutException("\tConduction_collisions_mode incorrect", species.name());
       }
 
       if (collision_names.empty()) {
