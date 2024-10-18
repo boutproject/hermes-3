@@ -673,14 +673,6 @@ void SheathBoundarySimple::transform(Options& state) {
           hflux_i[i] -= q * da / dv;   // [Wm^-3]
           ion_sheath_power_ylow[ip] += heatflow;  // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
 
-          // output << "\n*****************************\n";
-          // output << "dasheath = " << da << "\n";
-          // output << "nesheath = " << nesheath << "\n";
-          // output << "visheath = " << visheath << "\n";
-          // output << "tesheath = " << tesheath << "\n";
-          // output << "tisheath = " << tisheath << "\n";
-          // output << "cssheath  = " << sqrt(C_i_sq) << "\n";
-          // output << "*****************************\n";
         }
       }
     }
