@@ -115,6 +115,7 @@ private:
   bool source_time_dependent; ///< Is the input source time dependent?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
   Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
+  Field3D flow_ylow_kinetic;    ///< Parallel flow of kinetic energy
 
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?

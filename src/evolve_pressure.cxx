@@ -233,6 +233,7 @@ void EvolvePressure::finally(const Options& state) {
 
   // Get updated pressure and temperature with boundary conditions
   // Note: Retain pressures which fall below zero
+  P.clearParallelSlices();
   P.setBoundaryTo(get<Field3D>(species["pressure"]));
   Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
 
@@ -289,12 +290,16 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
     }
 
-    if (numerical_viscous_heating) {
+    if (numerical_viscous_heating || diagnose) {
       // Viscous heating coming from numerical viscosity
       Field3D Nlim = floor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-      Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
-      ddt(P) += Sp_nvh;
+      Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
+      flow_ylow_kinetic *= AA;
+      flow_ylow += flow_ylow_kinetic;
+      if (numerical_viscous_heating) {
+        ddt(P) += Sp_nvh;
+      }
     }
   }
 
@@ -619,7 +624,7 @@ void EvolvePressure::outputVars(Options& state) {
                     {"source", "evolve_pressure"}});
 
     if (flow_xlow.isAllocated()) {
-      set_with_attrs(state[std::string("EnergyFlow_") + name + std::string("_xlow")], flow_xlow,
+      set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
                    {{"time_dimension", "t"},
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
@@ -629,7 +634,7 @@ void EvolvePressure::outputVars(Options& state) {
                     {"source", "evolve_pressure"}});
     }
     if (flow_ylow.isAllocated()) {
-      set_with_attrs(state[std::string("EnergyFlow_") + name + std::string("_ylow")], flow_ylow,
+      set_with_attrs(state[fmt::format("ef{}_tot_ylow", name)], flow_ylow,
                    {{"time_dimension", "t"},
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
@@ -637,24 +642,33 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " power through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
-
-      set_with_attrs(state[std::string("ConductionFlow_") + name + std::string("_ylow")], flow_ylow_conduction,
+                    
+      set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
                    {{"time_dimension", "t"},
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " power through Y cell face. Note: May be incomplete."},
+                    {"long_name", name + " conduction through Y cell face. Note: May be incomplete."},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+      set_with_attrs(state[fmt::format("ef{}_kin_ylow", name)], flow_ylow_kinetic,
+                   {{"time_dimension", "t"},
+                    {"units", "W"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                    {"standard_name", "power"},
+                    {"long_name", name + " kinetic energy flow through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
 
     if (numerical_viscous_heating) {
-      set_with_attrs(state[std::string("SP") + name + std::string("_nvh")], Sp_nvh,
+      set_with_attrs(state[std::string("E") + name + std::string("_nvh")], Sp_nvh * 3/.2,
                    {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
+                    {"units", "W"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "pressure source"},
-                    {"long_name", name + " pressure source from numerical viscous heating"},
+                    {"standard_name", "energy source"},
+                    {"long_name", name + " energy source from numerical viscous heating"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
