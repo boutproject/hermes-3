@@ -73,7 +73,7 @@ void EvolveMomentum::transform(Options &state) {
     species["momentum_source"] = zeroFrom(ddt(NV));
     auto src = mpark::get_if<Field3D>(&species["momentum_source"].value);
     src->enableTracking(fmt::format("ddt_NV{}_momentum", name), *tracking);
-    setName(*src, fmt::format("NV{}_momentum", name));
+    setName(*src, "NV{}_momentum", name);
   }
 
   // Not using density boundary condition
