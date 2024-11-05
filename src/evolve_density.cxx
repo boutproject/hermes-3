@@ -203,6 +203,7 @@ void EvolveDensity::transform(Options& state) {
   } else {
     final_source = source;
   }
+  final_source.allocate(); // Ensure unique memory storage.
   add(species["density_source"], final_source);
 }
 
