@@ -112,7 +112,7 @@ void SheathBoundaryParallel::transform(Options &state) {
   bool has_NVe = IS_SET_NOBOUNDARY(electrons["momentum"]);
   Field3D NVe;
   if (has_NVe) {
-    toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]));
+    NVe = toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]));
   }
 
   Coordinates *coord = mesh->getCoordinates();
@@ -235,7 +235,6 @@ void SheathBoundaryParallel::transform(Options &state) {
       // Limited so that the values don't increase into the sheath
       // This ensures that the guard cell values remain positive
       // exp( 2*log(N[i]) - log(N[ip]) )
-
       pnt.ynext(Ne) = limitFree(Ne, pnt);
       pnt.ynext(Te) = limitFree(Te, pnt);
       pnt.ynext(Pe) = limitFree(Pe, pnt);
