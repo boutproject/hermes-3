@@ -26,8 +26,8 @@ public:
 
     bool lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
     bool upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
-    bool outer_x = options["outer_x"].doc("Boundary on inner y?").withDefault<bool>(true);
-    bool inner_x = options["inner_x"].doc("Boundary on outer y?").withDefault<bool>(false);
+    bool outer_x = options["outer_x"].doc("Boundary on outer x?").withDefault<bool>(true);
+    bool inner_x = options["inner_x"].doc("Boundary on inner x?").withDefault<bool>(false);
 
     if (mesh->isFci()) {
       if (outer_x) {
