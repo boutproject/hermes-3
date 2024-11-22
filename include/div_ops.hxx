@@ -118,27 +118,75 @@ struct Superbee {
   }
 };
 
+/// This operator calculates Div_par(f v v)
+/// It is used primarily (only?) in the parallel momentum equation.
+///
+/// This operator is used rather than Div(f fv) so that the values of
+/// f and v are consistent with other advection equations: The product
+/// fv is not interpolated to cell boundaries.
 template <typename CellEdges = MC>
 const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in, bool fixflux = true) {
+  ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
+  Mesh* mesh = f_in.getMesh();
+  Coordinates* coord = f_in.getCoordinates();
+  CellEdges cellboundary;
 
   if (f_in.isFci()){
-    return Div_par(f_in * v_in);
+    // FCI version, using yup/down fields
+    ASSERT1(f_in.hasParallelSlices());
+    ASSERT1(v_in.hasParallelSlices());
+
+    Field3D result{emptyFrom(f_in)};
+
+    for (int i = mesh->xstart; i <= mesh->xend; i++) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        for (int k = mesh->zstart; k <= mesh->zend; k++) {
+          // Value of f and v at left cell face
+          const BoutReal fL = 0.5 * (f_in(i, j, k) + f_in.ydown()(i, j - 1, k));
+          const BoutReal vL = 0.5 * (v_in(i, j, k) + v_in.ydown()(i, j - 1, k));
+
+          const BoutReal fR = 0.5 * (f_in(i, j, k) + f_in.yup()(i, j + 1, k));
+          const BoutReal vR = 0.5 * (v_in(i, j, k) + v_in.yup()(i, j + 1, k));
+
+          // Reconstruct v at the cell faces
+          Stencil1D sv;
+          sv.c = v_in(i, j, k);
+          sv.m = v_in.ydown()(i, j - 1, k);
+          sv.p = v_in.yup()(i, j + 1, k);
+          cellboundary(sv);
+
+          // Maximum local wave speed
+          const BoutReal amax = BOUTMAX(wave_speed_in
+                                        (i, j, k),
+                                        fabs(v_in(i, j, k)),
+                                        fabs(v_in.yup()(i, j + 1, k)),
+                                        fabs(v_in.ydown()(i, j - 1, k)));
+
+          // Calculate flux at right boundary (y+1/2)
+          BoutReal fluxRight =
+            fR * (vR * vR  + amax * (sv.c - vR)) * (coord->J(i, j, k) + coord->J(i, j + 1, k))
+            / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j + 1, k)));
+
+          // Calculate at left boundary (y-1/2)
+          BoutReal fluxLeft =
+            fL * (vL * vL - amax * (sv.c - vL)) * (coord->J(i, j, k) + coord->J(i, j - 1, k))
+            / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j - 1, k)));
+
+          result(i, j, k) =
+            (fluxRight - fluxLeft) / (coord->dy(i, j, k) * coord->J(i, j, k));
+        }
+      }
+    }
+    return result;
   }
 
-  ASSERT1(areFieldsCompatible(f_in, v_in));
   ASSERT1(areFieldsCompatible(f_in, wave_speed_in));
-
-  Mesh* mesh = f_in.getMesh();
-
-  CellEdges cellboundary;
 
   /// Ensure that f, v and wave_speed are field aligned
   Field3D f = toFieldAligned(f_in, "RGN_NOX");
   Field3D v = toFieldAligned(v_in, "RGN_NOX");
   Field3D wave_speed = toFieldAligned(wave_speed_in, "RGN_NOX");
-
-  Coordinates* coord = f_in.getCoordinates();
 
   Field3D result{zeroFrom(f)};
 
