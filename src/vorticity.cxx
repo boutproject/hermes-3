@@ -428,7 +428,7 @@ void Vorticity::transform(Options& state) {
       debug["Bsq"] = Bsq;
       debug["Pi_hat"] = Pi_hat;
       mesh->outputVars(debug);
-      debug["BOUT_VERSION"].force(bout::version::as_double);
+      //debug["BOUT_VERSION"].force(bout::version::as_double);
       const std::string outname =
         fmt::format("{}/BOUT.debug_vorticity.{}.nc",
                     Options::root()["datadir"].withDefault<std::string>("data"),

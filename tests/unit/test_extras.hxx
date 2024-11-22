@@ -10,6 +10,7 @@
 
 #include "bout/boutcomm.hxx"
 #include "bout/field3d.hxx"
+#include "bout/griddata.hxx"
 #include "bout/unused.hxx"
 #include "bout/coordinates.hxx"
 #include "bout/mesh.hxx"
