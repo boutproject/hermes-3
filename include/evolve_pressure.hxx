@@ -5,6 +5,7 @@
 #include <bout/field3d.hxx>
 
 #include "component.hxx"
+#include "yboundary_regions.hxx"
 
 /// Evolves species pressure in time
 ///
@@ -109,6 +110,8 @@ private:
   BoutReal time_normalisation; ///< Normalisation factor [s]
   bool source_time_dependent; ///< Is the input source time dependent?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
+
+  YBoundary yboundary;
 };
 
 namespace {

@@ -5,8 +5,9 @@
 #include <bout/vectormetric.hxx>
 
 #include "component.hxx"
-
 #include "div_ops.hxx"
+#include "yboundary_regions.hxx"
+
 class LaplaceXY;
 class Laplacian;
 
@@ -143,6 +144,8 @@ private:
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
   bool diagnose; ///< Output additional diagnostics?
+
+  YBoundary yboundary;
 
   Field3D fromFieldAligned(const Field3D& f) {
     if (f.isFci()) {

@@ -1,3 +1,5 @@
+#pragma once
+
 #include "./boundary_iterator.hxx"
 #include "bout/parallel_boundary_region.hxx"
 

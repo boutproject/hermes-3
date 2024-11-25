@@ -12,6 +12,8 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   // Get options for this component
   auto& options = alloptions[name];
 
+  yboundary.init(options);
+
   bndry_flux =
       options["bndry_flux"].doc("Allow fluxes through boundary?").withDefault<bool>(true);
 

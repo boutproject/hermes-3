@@ -2,8 +2,8 @@
 #ifndef DIAMAGNETIC_DRIFT_H
 #define DIAMAGNETIC_DRIFT_H
 
-
 #include "component.hxx"
+#include "yboundary_regions.hxx"
 #include <bout/vectormetric.hxx>
 
 /// Calculate diamagnetic flows
@@ -25,6 +25,7 @@ private:
   VectorMetric Curlb_B;
   bool bndry_flux;
   Coordinates::FieldMetric diamag_form;
+  YBoundary yboundary;
 };
 
 namespace {
