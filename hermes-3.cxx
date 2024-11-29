@@ -195,6 +195,13 @@ int Hermes::init(bool restarting) {
   // e.g. bndry_sol = decaylength(0.003 / rho_s0) sets up a decay length of 3mm
   BoundaryFactory::getInstance()->add(new DecayLengthBoundary(), "decaylength");
 
+  show_timesteps = options["show_timesteps"]
+                       .doc("Print the current simulation time to stdout?")
+                       .withDefault(show_timesteps);
+  if (BoutComm::rank() != 0) {
+    show_timesteps = false;
+  }
+
   /////////////////////////////////////////////////////////
   // Load metric tensor from the mesh, passing length and B
   // field normalisations
@@ -272,6 +279,10 @@ int Hermes::init(bool restarting) {
 }
 
 int Hermes::rhs(BoutReal time) {
+  if (show_timesteps) {
+    printf("TIME = %e\r", t);
+  }
+
   // Need to reset the state, since fields may be modified in transform steps
   state = Options();
   
