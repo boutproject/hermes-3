@@ -29,7 +29,9 @@ void ElectronForceBalance::transform(Options &state) {
     // Note: marked as final so can't be changed later
     force_density += GET_VALUE(Field3D, electrons["momentum_source"]);
   }
-  const Field3D Epar = force_density / floor(Ne, 1e-5);
+  // Parallel electric field. Stored as a private member variable
+  // and may be saved as an output diagnostic
+  Epar = force_density / floor(Ne, 1e-5);
 
   // Now calculate forces on other species
   Options& allspecies = state["species"];
@@ -49,4 +51,22 @@ void ElectronForceBalance::transform(Options &state) {
     add(species["momentum_source"],
         charge * N * Epar);
   }
+}
+
+void ElectronForceBalance::outputVars(Options& state) {
+  if (!diagnose) {
+    return;
+  }
+  AUTO_TRACE();
+  // Get normalisations
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Lnorm = get<BoutReal>(state["rho_s0"]);
+
+  set_with_attrs(state["Epar"], Epar,
+                 {{"time_dimension", "t"},
+                  {"units", "V / m"},
+                  {"conversion", Tnorm / Lnorm},
+                  {"standard_name", "Epar"},
+                  {"long_name", "Parallel electric field"},
+                  {"source", "electron_force_balance"}});
 }
