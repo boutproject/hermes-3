@@ -17,6 +17,7 @@
 #include "bout/mpi_wrapper.hxx"
 #include "bout/operatorstencil.hxx"
 #include "bout/boundary_region.hxx"
+#include "bout/griddata.hxx"
 
 static constexpr BoutReal BoutRealTolerance{1e-15};
 // FFTs have a slightly looser tolerance than other functions

@@ -23,6 +23,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   auto& options = alloptions[name];
 
+  yboundary.init(options);
+
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);

@@ -81,7 +81,7 @@ void AnomalousDiffusion3D::transform(Options& state) {
 
   Field3D flow_xlow, flow_zlow; // Flows through cell faces
 
-  bool upwind = true;
+  bool upwind = false;
 
   if (include_D) {
     // Particle diffusion. Gradients of density drive flows of particles,
@@ -99,7 +99,7 @@ void AnomalousDiffusion3D::transform(Options& state) {
     // in temperature and flow can be produced
     auto AA = get<BoutReal>(species["AA"]);
     add(species["momentum_source"],
-        (*dagp)(AA * V * anomalous_D, N, flow_xlow, flow_zlow, upwind));
+        (*dagp)(AA * V * anomalous_D, N, flow_xlow, flow_zlow, true));
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_zlow"], flow_zlow);
 

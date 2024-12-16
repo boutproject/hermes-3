@@ -57,6 +57,8 @@ private:
   BoutReal Tnorm, Nnorm, Bnorm;
   /// Derived normalisation constants
   BoutReal Cs0, Omega_ci, rho_s0;
+
+  bool show_timesteps{false};
 };
 
 extern Options* tracking;

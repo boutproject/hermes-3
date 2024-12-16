@@ -4,11 +4,12 @@
 #include "../include/yboundary_regions.hxx"
 
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/invert/laplacexy.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/fv_ops.hxx>
+#include <bout/invert/laplacexy.hxx>
 #include <bout/invert_laplace.hxx>
+#include <bout/version.hxx>
 
 using bout::globals::mesh;
 
@@ -32,6 +33,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   solver->add(Vort, "Vort");
 
   auto& options = alloptions[name];
+  yboundary.init(options);
   // Normalisations
   const Options& units = alloptions["units"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
