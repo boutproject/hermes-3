@@ -53,9 +53,9 @@ private:
 
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
   std::shared_ptr<FCI::dagp_fv> dagp;
+
+  Field3D density_source {0.0}; ///< Output diagnostic
 };
-
-
 
 namespace {
 RegisterComponent<AnomalousDiffusion3D> registercomponentanomalousdiffusion("anomalous_diffusion_3d");
