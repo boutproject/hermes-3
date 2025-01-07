@@ -25,7 +25,19 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
   perpendicular = options["perpendicular"]
     .doc("Include perpendicular flow? (Requires phi)")
     .withDefault<bool>(false);
-  
+
+  bounce_frequency = options["bounce_frequency"]
+    .doc("Include neoclassical modification of the collision time?")
+    .withDefault<bool>(false);
+
+  input_bf_q95 = options["bounce_frequency_q95"]
+    .doc("Include input for q95 when using bounce frequency modification to viscosity")
+    .withDefault(4.0);
+
+  input_bf_epsilon = options["bounce_frequency_epsilon"]
+    .doc("Include input for inverse aspect ratio epsilon when using bounce frequency modification to viscosity")
+    .withDefault(0.3);
+
   if (perpendicular) {
     // Read curvature vector
     try {
@@ -98,6 +110,17 @@ void IonViscosity::transform(Options &state) {
 
     // Parallel ion viscosity (4/3 * 0.96 coefficient)
     Field3D eta = 1.28 * P * tau;
+
+    if (bounce_frequency) {
+      // Need to collect the DC density and temperature to calculate the bounce frequency, with the equation taken as in Zholobenko 2024. 
+     
+      const Field2D N_av = DC(get<Field3D>(species["density"]));
+      const Field2D T_av = DC(get<Field3D>(species["temperature"]));
+      const Field2D bf_ratio = 0.96 * input_bf_q95 * N_av / (sqrt(2.0) * pow(input_bf_epsilon, 1.5) * SQ(T_av))
+
+      // this equation is the harmonic average as well as the geometry term with epsilon^(-3/2). 
+      eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(input_bf_epsilon, 1.5) / (bf_ratio * pow(input_bf_epsilon, 1.5) + eta )))
+    }
 
     if (eta_limit_alpha > 0.) {
       // SOLPS-style flux limiter

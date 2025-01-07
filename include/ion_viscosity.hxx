@@ -54,7 +54,9 @@ private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
   bool perpendicular; ///< Include perpendicular flow? (Requires phi)
   Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
-
+  bool bounce_frequency; ///< Modify the collision time with the bounce frequency?
+  BoutReal bounce_frequency_q95; ///< Input q95 for when including bounce frequency change
+  BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce frequency change
   bool diagnose; ///< Output additional diagnostics?
 
   /// Per-species diagnostics
