@@ -30,11 +30,11 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
     .doc("Include neoclassical modification of the collision time?")
     .withDefault<bool>(false);
 
-  input_bf_q95 = options["bounce_frequency_q95"]
+  bounce_frequency_q95 = options["bounce_frequency_q95"]
     .doc("Include input for q95 when using bounce frequency modification to viscosity")
     .withDefault(4.0);
 
-  input_bf_epsilon = options["bounce_frequency_epsilon"]
+  bounce_frequency_epsilon = options["bounce_frequency_epsilon"]
     .doc("Include input for inverse aspect ratio epsilon when using bounce frequency modification to viscosity")
     .withDefault(0.3);
 
@@ -116,10 +116,10 @@ void IonViscosity::transform(Options &state) {
      
       const Field2D N_av = DC(get<Field3D>(species["density"]));
       const Field2D T_av = DC(get<Field3D>(species["temperature"]));
-      const Field2D bf_ratio = 0.96 * input_bf_q95 * N_av / (sqrt(2.0) * pow(input_bf_epsilon, 1.5) * SQ(T_av))
+      const Field2D bf_ratio = 0.96 * bounce_frequency_q95 * N_av / (sqrt(2.0) * pow(bounce_frequency_epsilon, 1.5) * SQ(T_av))
 
       // this equation is the harmonic average as well as the geometry term with epsilon^(-3/2). 
-      eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(input_bf_epsilon, 1.5) / (bf_ratio * pow(input_bf_epsilon, 1.5) + eta )))
+      eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta )))
     }
 
     if (eta_limit_alpha > 0.) {
