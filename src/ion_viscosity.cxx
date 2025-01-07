@@ -119,7 +119,7 @@ void IonViscosity::transform(Options &state) {
       const Field2D bf_ratio = 0.96 * bounce_frequency_q95 * N_av / (sqrt(2.0) * pow(bounce_frequency_epsilon, 1.5) * SQ(T_av));
 
       // this equation is the harmonic average as well as the geometry term with epsilon^(-3/2). 
-      eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta )));
+      eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
     }
 
     if (eta_limit_alpha > 0.) {
