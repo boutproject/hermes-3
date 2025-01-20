@@ -10,6 +10,10 @@ file = "W7X.nc"
 [mesh:paralleltransform]
 type = fci
 
+[mesh:diff]
+first = C4
+second = C4
+
 [solver]
 mxstep = 10000
 type = pvode
