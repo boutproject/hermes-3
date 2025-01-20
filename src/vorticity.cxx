@@ -497,54 +497,35 @@ void Vorticity::transform(Options& state) {
 
       // Note: We need boundary conditions on P, so apply the same
       //       free boundary condition as sheath_boundary.
-      if (P.isFci()) {
-	if (! P.hasParallelSlices()){
-	  P.calcParallelSlices();
-	}
-	yboundary.iter([&](auto& region) {
-	  for (auto& pnt : region) {
-	    // const auto& i = pnt.ind();
-	    pnt.ynext(P) = limitFree(P, pnt);
-            // P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
-          }
-        });
-      } else {
-        Field3D P_fa = toFieldAligned(P);
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            auto i = indexAt(P_fa, r.ind, mesh->ystart, jz);
-            P_fa[i.ym()] = limitFree(P_fa[i.yp()], P_fa[i]);
-          }
+      auto P_fa_tmp = P.isFci() ? P : toFieldAligned(P);
+      auto& P_fa = P.isFci() ? P : P_fa_tmp;
+
+      if (P.isFci() && !P.hasParallelSlices()) {
+        P.calcParallelSlices();
+      }
+      yboundary.iter([&](auto& region) {
+        for (auto& pnt : region) {
+          // const auto& i = pnt.ind();
+          pnt.limitFree(P_fa);
+          // P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) -
+          // P_ydown(r.ind, mesh->yend - 1, jz);
         }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            auto i = indexAt(P_fa, r.ind, mesh->yend, jz);
-            P_fa[i.yp()] = limitFree(P_fa[i.ym()], P_fa[i]);
-          }
-        }
+      });
+      if (!P.isFci()) {
         P = fromFieldAligned(P_fa);
       }
 
       // Note: This calculation requires phi derivatives at the Y boundaries
       //       Setting to free boundaries
-      if (phi.hasParallelSlices()) {
-	yboundary.iter([&](auto& region) {
-	  for (auto& pnt : region) {
-	    pnt.ynext(phi) = pnt.extrapolate_next_o2(phi);
-          }
-        });
-      } else {
-        Field3D phi_fa = toFieldAligned(phi);
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_fa(r.ind, mesh->ystart - 1, jz) = 2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
-          }
+      auto phi_fa_tmp = phi.isFci() ? phi : toFieldAligned(phi);
+      auto& phi_fa = phi.isFci() ? phi : phi_fa_tmp;
+      yboundary.iter([&](auto& region) {
+        for (auto& pnt : region) {
+          const auto grad = pnt.extrapolate_grad_o2(phi_fa);
+          pnt.neumann_o2(phi_fa, grad);
         }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_fa(r.ind, mesh->yend + 1, jz) = 2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
-          }
-        }
+      });
+      if (!phi.isFci()) {
         phi = fromFieldAligned(phi_fa);
       }
 

@@ -61,42 +61,4 @@ private:
   bool is_init{false};
 };
 
-/// Limited free gradient of log of a quantity
-/// This ensures that the guard cell values remain positive
-/// while also ensuring that the quantity never increases
-///
-///  fm  fc | fp
-///         ^ boundary
-///
-/// exp( 2*log(fc) - log(fm) )
-///
-inline BoutReal limitFree(BoutReal fm, BoutReal fc) {
-  if (fm < fc) {
-    return fc; // Neumann rather than increasing into boundary
-  }
-  if (fm < 1e-10) {
-    return fc; // Low / no density condition
-  }
-  BoutReal fp = SQ(fc) / fm;
-#if CHECKLEVEL >= 2
-  if (!std::isfinite(fp)) {
-    throw BoutException("SheathBoundaryParallel limitFree: {}, {} -> {}", fm, fc, fp);
-  }
-#endif
-
-  return fp;
-}
-
-inline BoutReal limitFree(const Field3D& f, const BoundaryRegionParIter& pnt) {
-  if (pnt.valid() > 0) {
-    return limitFree(pnt.yprev(f), f[pnt.ind()]);
-  }
-  return f[pnt.ind()];
-}
-
-inline BoutReal limitFree(const Field3D& f, const BoundaryRegionIter& pnt) {
-  return limitFree(pnt.yprev(f), f[pnt.ind()]);
-}
-
-
 extern YBoundary yboundary;

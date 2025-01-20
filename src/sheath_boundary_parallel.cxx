@@ -193,10 +193,8 @@ void SheathBoundaryParallel::transform(Options &state) {
       }); // end iter_regions
     }
 
-    phi.allocate(); // = 0.0;
-    phi.splitParallelSlices();
-    phi.yup().allocate();
-    phi.ydown().allocate();
+    phi.allocate();
+    phi.splitParallelSlicesAndAllocate();
 
     // ion_sum now contains  sum  s_i Z_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
@@ -213,9 +211,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 
 	thisphi += wall_potential[i];
 
-	phi[i] = thisphi;
-	pnt.ynext(phi) = thisphi;
-	pnt.setYPrevIfValid(phi, thisphi);
+        pnt.setAll(phi, thisphi);
       }
     }); // end iter_regions
   }
@@ -235,16 +231,17 @@ void SheathBoundaryParallel::transform(Options &state) {
       // Limited so that the values don't increase into the sheath
       // This ensures that the guard cell values remain positive
       // exp( 2*log(N[i]) - log(N[ip]) )
-      pnt.ynext(Ne) = limitFree(Ne, pnt);
-      pnt.ynext(Te) = limitFree(Te, pnt);
-      pnt.ynext(Pe) = limitFree(Pe, pnt);
+      pnt.limitFree(Ne);
+      pnt.limitFree(Te);
+      pnt.limitFree(Pe);
 
       // Free boundary potential linearly extrapolated
-      pnt.ynext(phi) = phi[i] + pnt.extrapolate_grad_o2(phi);
+      const BoutReal phiGradient = pnt.extrapolate_grad_o2(phi);
+      pnt.neumann_o1(phi, phiGradient);
 
       const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);
       const BoutReal tesheath = pnt.interpolate_sheath_o1(Te);  // electron temperature
-      const BoutReal phi_wall = wall_potential[i];
+      const BoutReal phi_wall = pnt.ythis(wall_potential);
 
       const BoutReal phisheath = floor_potential ? floor(
             pnt.interpolate_sheath_o1(phi), phi_wall) // Electron saturation at phi = phi_wall
@@ -270,17 +267,13 @@ void SheathBoundaryParallel::transform(Options &state) {
                       - 0.5 * Me * SQ(vesheath))
                      * nesheath * vesheath;
 
-      BoutReal flux;
       // Multiply by cell area to get power
-      if (! Ve.isFci()) {
-	const auto ip = i.yp(pnt.dir);
-        flux = q * (coord->J[i] + coord->J[ip])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
-      } else {
-	flux = q * coord->J[i] / sqrt(coord->g_22[i]);
-      }
+      const BoutReal flux =
+          q * (pnt.ythis(coord->J) + pnt.ynext(coord->J))
+          / (sqrt(pnt.ythis(coord->g_22)) + sqrt(pnt.ynext(coord->g_22)));
+
       // Divide by volume of cell to get energy loss rate (sign depending on vesheath)
-      BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+      const BoutReal power = flux / (coord->dy[pnt.ind()] * pnt.ythis(coord->J));
 
 #if CHECKLEVEL >= 1
       if (!std::isfinite(power)) {
@@ -365,18 +358,18 @@ void SheathBoundaryParallel::transform(Options &state) {
     iter_regions([&](auto& region) {
       for (const auto& pnt : region) {
 
-        auto i = pnt.ind();
+        // auto i = pnt.ind();
 
-	// Free gradient of log electron density and temperature
-	// This ensures that the guard cell values remain positive
-	// exp( 2*log(N[i]) - log(N[ip]) )
+        // Free gradient of log electron density and temperature
+        // This ensures that the guard cell values remain positive
+        // exp( 2*log(N[i]) - log(N[ip]) )
 
-	pnt.ynext(Ni) = limitFree(Ni, pnt);
-	pnt.ynext(Ti) = limitFree(Ti, pnt);
-	pnt.ynext(Pi) = limitFree(Pi, pnt);
+        pnt.limitFree(Ni);
+        pnt.limitFree(Ti);
+        pnt.limitFree(Pi);
 
-	// Calculate sheath values at half-way points (cell edge)
-	const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);
+        // Calculate sheath values at half-way points (cell edge)
+        const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);
 	const BoutReal nisheath = pnt.interpolate_sheath_o1(Ni);
 	const BoutReal tesheath = floor(pnt.interpolate_sheath_o1(Te), 1e-5);  // electron temperature
 	const BoutReal tisheath = floor(pnt.interpolate_sheath_o1(Ti), 1e-5);  // ion temperature
@@ -434,21 +427,20 @@ void SheathBoundaryParallel::transform(Options &state) {
 	}
 
 	// Multiply by cell area to get power
-	BoutReal flux;
-	if (! Ti.isFci()) {
-	  const auto ip = i.yp(pnt.dir);
-	  flux = q * (coord->J[i] + coord->J[ip])
-                          / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
-	} else {
-	  flux = q * coord->J[i] / sqrt(coord->g_22[i]);
-	}
+        const BoutReal flux =
+            q * (pnt.ythis(coord->J) + pnt.ynext(coord->J))
+            / (sqrt(pnt.ythis(coord->g_22)) + sqrt(pnt.ynext(coord->g_22)));
 
-	// Divide by volume of cell to get energy loss rate
-	BoutReal power = flux / (coord->dy[i] * coord->J[i]);
-	ASSERT1(std::isfinite(power));
-	ASSERT2(power * pnt.dir >= 0.0);
+        // Divide by volume of cell to get energy loss rate (sign depending on vesheath)
+        const BoutReal power = flux / (coord->dy[pnt.ind()] * pnt.ythis(coord->J));
 
-	energy_source[i] -= power * pnt.dir; // Note: Sign negative because power * direction > 0
+        ASSERT1(std::isfinite(power));
+        ASSERT2(power * pnt.dir >= 0.0);
+
+        if (pnt.abs_offset() == 1) {
+          energy_source[pnt.ind()] -=
+              power * pnt.dir; // Note: Sign negative because power * direction > 0
+        }
       }
     }); // end iter_regions
 
