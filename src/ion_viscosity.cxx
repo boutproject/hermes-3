@@ -119,7 +119,11 @@ void IonViscosity::transform(Options &state) {
       const Field2D bf_ratio = 0.96 * bounce_frequency_q95 * N_av / (sqrt(2.0) * pow(bounce_frequency_epsilon, 1.5) * SQ(T_av));
 
       // this equation is the harmonic average as well as the geometry term with epsilon^(-3/2). 
-      eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
+      //eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
+      const Field2D bounce_factor =  (bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
+      eta = eta * bounce_factor
+    } else {
+      const Field2D bounce_factor = 1.
     }
 
     if (eta_limit_alpha > 0.) {
@@ -149,7 +153,7 @@ void IonViscosity::transform(Options &state) {
         const Field2D V_av = DC(V);
 
         // Parallel ion stress tensor component, calculated here because before it was only div_Pi_cipar
-        Field2D Pi_cipar = -0.96 * P_av * tau_av *
+        Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor *
                           (2. * Grad_par(V_av) + V_av * Grad_par_logB);
         Field2D Pi_ciperp = 0 * Pi_cipar; // Perpendicular components and divergence of current J equal to 0 for only parallel viscosity case
         Field2D DivJ = 0 * Pi_cipar;
@@ -182,7 +186,7 @@ void IonViscosity::transform(Options &state) {
     const Field2D V_av = DC(V);
 
     // Parallel ion stress tensor component
-    Field2D Pi_cipar = -0.96 * P_av * tau_av *
+    Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor *
                           (2. * Grad_par(V_av) + V_av * Grad_par_logB);
     // Could also be written as:
     // Pi_cipar = -0.96*Pi*tau*2.*Grad_par(sqrt(Bxy)*Vi)/sqrt(Bxy);
@@ -190,7 +194,7 @@ void IonViscosity::transform(Options &state) {
     // Perpendicular ion stress tensor
     // 0.96 P tau kappa * (V_E + V_di + 1.61 b x Grad(T)/B )
     // Note: Heat flux terms are neglected for now
-    Field2D Pi_ciperp = -0.5 * 0.96 * P_av * tau_av *
+    Field2D Pi_ciperp = -0.5 * 0.96 * P_av * tau_av * bounce_factor * 
       (Curlb_B * Grad(phi_av + 1.61 * T_av) - Curlb_B * Grad(P_av) / N_av);
 
     // Limit size of stress tensor components
