@@ -120,12 +120,12 @@ void IonViscosity::transform(Options &state) {
 
       // this equation is the harmonic average as well as the geometry term with epsilon^(-3/2). 
       //eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
-      const Field3D bounce_factor =  (bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
-      eta = eta * bounce_factor;
+      bounce_factor =  bounce_factor * (bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
+      eta *= bounce_factor;
     } else {
-      const Field3D bounce_factor = 1.;
+      bounce_factor = 1.; // if bounce_frequency = false, this factor does nothing to anything
     }
-
+    
     if (eta_limit_alpha > 0.) {
       // SOLPS-style flux limiter
       // Values of alpha ~ 0.5 typically

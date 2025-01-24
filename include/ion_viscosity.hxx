@@ -59,6 +59,7 @@ private:
   BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce frequency change
   bool diagnose; ///< Output additional diagnostics?
 
+  Field3D bounce_factor;
   /// Per-species diagnostics
   struct Diagnostics {
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar
