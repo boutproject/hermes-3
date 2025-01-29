@@ -38,6 +38,10 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
     .doc("Include input for inverse aspect ratio epsilon when using bounce frequency modification to viscosity")
     .withDefault(0.3);
 
+  bounce_frequency_R = options["bounce_frequency_R"]
+    .doc("Include input for major radius R when using bounce frequency modification to viscosity")
+    .withDefault(2.0);
+
   if (perpendicular) {
     // Read curvature vector
     try {
@@ -65,12 +69,17 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
 
     auto coord = mesh->getCoordinates();
 
+
+
     Curlb_B.x /= Bnorm;
     Curlb_B.y *= SQ(Lnorm);
     Curlb_B.z *= SQ(Lnorm);
     
     Curlb_B *= 2. / coord->Bxy;
   }
+
+  bounce_frequency_R /= Lnorm
+
 }
 
 void IonViscosity::transform(Options &state) {
@@ -110,21 +119,21 @@ void IonViscosity::transform(Options &state) {
 
     // Parallel ion viscosity (4/3 * 0.96 coefficient)
     Field3D eta = 1.28 * P * tau;
+    
+    bounce_factor = 1.0; // if bounce_frequency = false, this factor does nothing to anything
 
     if (bounce_frequency) {
       // Need to collect the DC density and temperature to calculate the bounce frequency, with the equation taken as in Zholobenko 2024. 
-     
+      
       const Field2D N_av = DC(get<Field3D>(species["density"]));
       const Field2D T_av = DC(get<Field3D>(species["temperature"]));
-      const Field2D bf_ratio = 0.96 * bounce_frequency_q95 * N_av / (sqrt(2.0) * pow(bounce_frequency_epsilon, 1.5) * SQ(T_av));
+      const Field2D bf_ratio = 0.96 * bounce_frequency_R * bounce_frequency_q95 * N_av / (sqrt(2.0) * pow(bounce_frequency_epsilon, 1.5) * SQ(T_av)) ;
 
       // this equation is the harmonic average as well as the geometry term with epsilon^(-3/2). 
       //eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
-      Field3D bounce_factor =  (bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
+      bounce_factor *= (bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
       eta *= bounce_factor;
-    } else {
-      Field3D bounce_factor = 1.; // if bounce_frequency = false, this factor does nothing to anything
-    }
+    } 
     
     if (eta_limit_alpha > 0.) {
       // SOLPS-style flux limiter
@@ -162,13 +171,14 @@ void IonViscosity::transform(Options &state) {
         auto search = diagnostics.find(species_name);
         if (search == diagnostics.end()) {
           // First time, create diagnostic
-          diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ});
+          diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor});
         } else {
           // Update diagnostic values
           auto& d = search->second;
           d.Pi_ciperp = Pi_ciperp;
           d.Pi_cipar = Pi_cipar;
           d.DivJ = DivJ;
+          d.bounce_factor = bounce_factor;
         }
       }
       continue; // Skip perpendicular flow parts below
@@ -267,13 +277,14 @@ void IonViscosity::transform(Options &state) {
       auto search = diagnostics.find(species_name);
       if (search == diagnostics.end()) {
         // First time, create diagnostic
-        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ});
+        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor});
       } else {
         // Update diagnostic values
         auto& d = search->second;
         d.Pi_ciperp = Pi_ciperp;
         d.Pi_cipar = Pi_cipar;
         d.DivJ = DivJ;
+        d.bounce_factor = bounce_factor;
       }
     }
   }
@@ -316,6 +327,14 @@ void IonViscosity::outputVars(Options &state) {
                       {"units", "A m^-3"},
                       {"conversion", SI::qe * Nnorm * Omega_ci},
                       {"long_name", std::string("Divergence of viscous current due to species") + species_name},
+                      {"species", species_name},
+                      {"source", "ion_viscosity"}});
+
+      set_with_attrs(state[std::string("bounce_factor_") + species_name], d.bounce_factor,
+                     {{"time_dimension", "t"},
+                      {"units", "none"},
+                      {"conversion", 1},
+                      {"long_name", std::string("Bounce factor for viscosity calculation") + species_name},
                       {"species", species_name},
                       {"source", "ion_viscosity"}});
     }

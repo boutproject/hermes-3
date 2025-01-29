@@ -57,6 +57,7 @@ private:
   bool bounce_frequency; ///< Modify the collision time with the bounce frequency?
   BoutReal bounce_frequency_q95; ///< Input q95 for when including bounce frequency change
   BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce frequency change
+  BoutReal bounce_frequency_R; ///< Input major radius
   bool diagnose; ///< Output additional diagnostics?
   
   /// Per-species diagnostics
@@ -64,6 +65,7 @@ private:
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar
     Field3D Pi_cipar;  ///< Parallel part of Pi scalar
     Field3D DivJ;      ///< Divergence of current in vorticity equation
+    Field3D bounce_factor;
   };
 
   /// Store diagnostics for each species
