@@ -19,8 +19,6 @@ mxstep = 1000
 [hermes]
 components = h
 
-loadmetric = false # Load metric from Bxy, Rxy etc?
-
 [h]
 type = neutral_mixed
 

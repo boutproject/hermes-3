@@ -14,8 +14,6 @@ nz = 1
 [hermes]
 components = d+, e, collisions
 
-loadmetric = false
-
 Nnorm = 1e19
 Bnorm = 1
 Tnorm = 100

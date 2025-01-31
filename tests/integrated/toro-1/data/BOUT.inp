@@ -20,7 +20,6 @@ mxstep = 10000
 [hermes]
 components = i, sound_speed
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = false  # Normalise the input metric?
 
 Mp = 1.672621898e-27 # Proton mass

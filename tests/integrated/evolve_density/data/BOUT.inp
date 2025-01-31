@@ -15,8 +15,6 @@ mxstep = 1000
 [hermes]
 components = e
 
-loadmetric = false # Load metric from Bxy, Rxy etc?
-
 [e]
 type = evolve_density
 

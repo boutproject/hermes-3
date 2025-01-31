@@ -31,7 +31,6 @@ ixseps2 = -1
 # Collisions are needed to calculate heat conduction
 components = i, e, sheath_boundary, collisions, electron_force_balance
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
 
 Nnorm = 1e19

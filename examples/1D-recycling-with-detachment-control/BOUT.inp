@@ -52,7 +52,6 @@ components = (d+, d, e, fixed_fraction_nitrogen, detachment_controller,
               sheath_boundary, collisions, recycling, reactions,
               electron_force_balance, neutral_parallel_diffusion)
 
-loadmetric = false       # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
 
 # Normalisation parameters
