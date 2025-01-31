@@ -1,7 +1,7 @@
 /*
 
-    Copyright B.Dudson, J.Leddy, University of York, 2016-2020
-              email: benjamin.dudson@york.ac.uk
+    Copyright Hermes-3 contributors, 2016-2025
+              email: dudson2@llnl.gov
 
     This file is part of Hermes-3 (Hot ion, multifluid)
 
@@ -82,7 +82,7 @@
 #include <bout/boundary_op.hxx>
 #include <bout/field_factory.hxx>
 
-#include "include/loadmetric.hxx"
+#include "include/recalculate_metric.hxx"
 
 #if !BOUT_ENABLE_METRIC_3D
 // For standard 2D metrics,
@@ -210,7 +210,8 @@ int Hermes::init(bool restarting) {
   if (options["recalculate_metric"]
           .doc("Load Rxy, Bpxy etc. to calculate an orthogonal metric?")
           .withDefault(false)) {
-    LoadMetric(rho_s0, Bnorm);
+    recalculate_metric(rho_s0, Bnorm);
+
   } else if (options["normalise_metric"]
                  .doc("Normalise input metric tensor? (assumes input is in SI units)")
                  .withDefault<bool>(true)) {
