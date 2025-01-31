@@ -2,7 +2,7 @@
 #ifndef RELAX_POTENTIAL_H
 #define RELAX_POTENTIAL_H
 
-#include <vector2d.hxx>
+#include <bout/vector2d.hxx>
 
 #include "component.hxx"
 
@@ -54,6 +54,7 @@ struct RelaxPotential : public Component {
   ///
   void finally(const Options& state) override;
 
+  void outputVars(Options& state) override;
 private:
   Field3D Vort; // Evolving vorticity
 

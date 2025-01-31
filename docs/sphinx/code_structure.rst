@@ -54,7 +54,7 @@ for new variables which are added to the state:
     * `charge`  Charge, in units of proton charge (i.e. electron=-1)
     
     * `density`
-    * `momentum`
+    * `momentum` Parallel momentum
     * `pressure`
     * `velocity` Parallel velocity
     * `temperature`
@@ -64,15 +64,24 @@ for new variables which are added to the state:
     * `momentum_source` Normalised momentum source
     * `energy_source`  Normalised energy source
 
+    * `particle_flow_xlow` Normalised particle flow through lower X cell face
+    * `particle_flow_ylow` Normalised particle flow through lower Y cell face
+    * `momentum_flow_xlow` Normalised momentum flow through lower X cell face
+    * `momentum_flow_ylow` Normalised momentum flow through lower Y cell face
+    * `energy_flow_xlow`   Normalised energy flow through lower X cell face
+    * `energy_flow_ylow`   Normalised energy flow through lower Y cell face
+
 * `fields`
 
   * `vorticity`
-  * `phi`       Electrostatic potential
-  * `DivJdia`   Divergence of diamagnetic current
-  * `DivJcol`   Divergence of collisional current
-  * `DivJextra` Divergence of current, including 2D parallel current
-    closures.  Not including diamagnetic, parallel current due to
-    flows, or polarisation currents
+  * `phi`           Electrostatic potential
+  * `Apar`          Electromagnetic potential b dot A in induction terms
+  * `Apar_flutter`  The electromagnetic potential (b dot A) in flutter terms
+  * `DivJdia`       Divergence of diamagnetic current
+  * `DivJcol`       Divergence of collisional current
+  * `DivJextra`     Divergence of current, including 2D parallel current
+                    closures.  Not including diamagnetic, parallel current due to
+                    flows, or polarisation currents
 
 For example to get the electron density::
 

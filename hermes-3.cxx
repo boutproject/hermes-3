@@ -23,16 +23,22 @@
 #include "hermes-3.hxx"
 #include "revision.hxx"
 
+#include "include/adas_carbon.hxx"
 #include "include/adas_neon.hxx"
+#include "include/adas_lithium.hxx"
 #include "include/amjuel_helium.hxx"
 #include "include/amjuel_hyd_ionisation.hxx"
 #include "include/amjuel_hyd_recombination.hxx"
 #include "include/anomalous_diffusion.hxx"
+#include "include/classical_diffusion.hxx"
+#include "include/binormal_stpm.hxx"
 #include "include/collisions.hxx"
 #include "include/diamagnetic_drift.hxx"
 #include "include/electromagnetic.hxx"
 #include "include/electron_force_balance.hxx"
+#include "include/electron_viscosity.hxx"
 #include "include/evolve_density.hxx"
+#include "include/evolve_energy.hxx"
 #include "include/evolve_momentum.hxx"
 #include "include/evolve_pressure.hxx"
 #include "include/fixed_density.hxx"
@@ -52,6 +58,7 @@
 #include "include/quasineutral.hxx"
 #include "include/recycling.hxx"
 #include "include/relax_potential.hxx"
+#include "include/scale_timederivs.hxx"
 #include "include/set_temperature.hxx"
 #include "include/sheath_boundary.hxx"
 #include "include/sheath_boundary_insulating.hxx"
@@ -65,14 +72,97 @@
 #include "include/thermal_force.hxx"
 #include "include/transform.hxx"
 #include "include/upstream_density_feedback.hxx"
+#include "include/temperature_feedback.hxx"
+#include "include/detachment_controller.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
+#include "include/simple_pump.hxx"
 #include <bout/constants.hxx>
+#include <bout/boundary_factory.hxx>
+#include <bout/boundary_op.hxx>
+#include <bout/field_factory.hxx>
 
 #include "include/loadmetric.hxx"
 
+#if !BOUT_ENABLE_METRIC_3D
+// For standard 2D metrics,
 // Hermes operators don't need parallel slices
 BOUT_OVERRIDE_DEFAULT_OPTION("mesh:calcParallelSlices_on_communicate", false);
+#endif
+
+class DecayLengthBoundary : public BoundaryOp {
+public:
+  DecayLengthBoundary() : gen(nullptr) {}
+  DecayLengthBoundary(BoundaryRegion* region,  std::shared_ptr<FieldGenerator> g)
+    : BoundaryOp(region), gen(std::move(g)) {}
+
+  using BoundaryOp::clone;
+  /// Create a copy of this boundary condition
+  /// This is called by the Boundary Factory
+  BoundaryOp* clone(BoundaryRegion* region, const std::list<std::string>& args) override {
+    std::shared_ptr<FieldGenerator> newgen;
+    if (!args.empty()) {
+      // First argument should be an expression
+      newgen = FieldFactory::get()->parse(args.front());
+    }
+    return new DecayLengthBoundary(region, newgen);
+  }
+
+  // Only implementing for Field3D, no time dependence
+  void apply(Field3D& f) override {
+    // Ensure that field and boundary are on the same mesh
+    Mesh* mesh = bndry->localmesh;
+    ASSERT1(mesh == f.getMesh());
+
+    // Get cell radial length
+    Coordinates *coord = mesh->getCoordinates();
+    Field2D dx = coord->dx;
+    Field2D g11 = coord->g11;
+    Field2D dr = dx / sqrt(g11); // cell radial length. dr = dx/(Bpol * R) and g11 = (Bpol*R)**2 
+
+    // Only implemented for cell centre quantities
+    ASSERT1(f.getLocation() == CELL_CENTRE);
+
+    // This loop goes over the first row of boundary cells (in X and Y)
+    for (bndry->first(); !bndry->isDone(); bndry->next1d()) {
+      for (int zk = 0; zk < mesh->LocalNz; zk++) { // Loop over Z points
+        BoutReal decay_length = 3; // Default decay length is 3 normalised units (usually ~3mm)
+        if (gen) {
+          // Pick up the boundary condition setting from the input file
+          // Must be specified in normalised units like the other BCs inputs
+          decay_length = gen->generate(bout::generator::Context(bndry, zk, CELL_CENTRE, 0.0, mesh));
+        }
+        // Set value in inner guard cell f(bndry->x, bndry->y, zk)
+        // using the final domain cell value f(bndry->x - bndry->bx, bndry->y - bndry->by, zk)
+        // Note: (bx, by) is the direction into the boundary, so
+        //    (1, 0)  X outer boundary (SOL)
+        //    (-1, 0) X inner boundary (Core or PF)
+        //    (0, 1)  Y upper boundary (outer lower target)
+        //    (0, -1) Y lower boundary (inner lower target)
+        
+        // Distance between final cell centre and inner guard cell centre in normalised units
+        BoutReal distance = 0.5 * (dr(bndry->x, bndry->y) + 
+          dr(bndry->x - bndry->bx, bndry->y - bndry->by));
+
+        // Exponential decay 
+        f(bndry->x, bndry->y, zk) =
+          f(bndry->x - bndry->bx, bndry->y - bndry->by, zk) * exp(-1 * distance / decay_length);
+
+        // Set any remaining guard cells (i.e. the outer guards) to the same value
+        // Should the outer guards have the decay continue, or just copy what the inners have?
+        for (int i = 1; i < bndry->width; i++) {
+          f(bndry->x + i * bndry->bx, bndry->y + i * bndry->by, zk) = f(bndry->x, bndry->y, zk);
+        }
+      }
+    }
+  }
+
+  void apply(Field2D& f) override {
+    throw BoutException("DecayLengthBoundary not implemented for Field2D");
+  }
+private:
+  std::shared_ptr<FieldGenerator> gen; // Generator
+};
 
 int Hermes::init(bool restarting) {
 
@@ -82,8 +172,9 @@ int Hermes::init(bool restarting) {
   options["revision"] = hermes::version::revision;
   options["revision"].setConditionallyUsed();
 
-  // Save the Hermes version in the output dump files
-  dump.setAttribute("", "HERMES_REVISION", hermes::version::revision);
+  output.write("Slope limiter: {}\n", hermes::limiter_typename);
+  options["slope_limiter"] = hermes::limiter_typename;
+  options["slope_limiter"].setConditionallyUsed();
 
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
@@ -94,9 +185,6 @@ int Hermes::init(bool restarting) {
   Omega_ci = SI::qe * Bnorm / SI::Mp;  // Ion cyclotron frequency [1/s]
   rho_s0 = Cs0 / Omega_ci;             // Length scale [m]
 
-  SAVE_ONCE(Tnorm, Nnorm, Bnorm); // Save normalisations
-  SAVE_ONCE(Cs0, Omega_ci, rho_s0);
-
   // Put normalisation quantities into an Options to use later
   units["inv_meters_cubed"] = Nnorm;
   units["eV"] = Tnorm;
@@ -106,8 +194,13 @@ int Hermes::init(bool restarting) {
 
   // Put into the options tree, so quantities can be normalised
   // when creating components
-  Options::root()["units"] = units;
+  Options::root()["units"] = units.copy();
   Options::root()["units"].setConditionallyUsed();
+
+  // Add the decay length boundary condition to the boundary factory
+  // This will make it available as an input option
+  // e.g. bndry_sol = decaylength(0.003 / rho_s0) sets up a decay length of 3mm
+  BoundaryFactory::getInstance()->add(new DecayLengthBoundary(), "decaylength");
 
   /////////////////////////////////////////////////////////
   // Load metric tensor from the mesh, passing length and B
@@ -150,20 +243,18 @@ int Hermes::init(bool restarting) {
   options["restarting"] = restarting;
   options["restarting"].setConditionallyUsed();
 
-  // Put pointer to restart file in global variable
-  // Note: It would probably be better to pass to components as argument,
-  // but awaiting DataFile refactoring
-  set_restart_datafile(&restart);
-
   TRACE("Creating components");
-  
+
   // Create the components
   // Here options is passed as the scheduler configuration, so that
   // settings in [hermes] are used.
   // Options::root() is passed as the root of the component options, so that
   // individual components use their own sections, rather than subsections of [hermes].
   scheduler = ComponentScheduler::create(options, Options::root(), solver);
-  
+
+  // Preconditioner
+  setPrecon((preconfunc)&Hermes::precon);
+
   return 0;
 }
 
@@ -172,7 +263,7 @@ int Hermes::rhs(BoutReal time) {
   state = Options();
   
   set(state["time"], time);
-  state["units"] = units; 
+  state["units"] = units.copy();
 
   // Call all the components
   scheduler->transform(state);
@@ -192,6 +283,98 @@ int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal UNUSED(delta)) {
   state["time"] = t;
   scheduler->precon(state, gamma);
   return 0;
+}
+
+void Hermes::outputVars(Options& options) {
+  AUTO_TRACE();
+
+  // Save the Hermes version in the output dump files
+  options["HERMES_REVISION"].force(hermes::version::revision);
+
+  options["HERMES_SLOPE_LIMITER"].force(hermes::limiter_typename);
+
+  // Save normalisation quantities. These may be used by components
+  // to calculate conversion factors to SI units
+
+  set_with_attrs(options["Tnorm"], Tnorm, {
+      {"units", "eV"},
+      {"conversion", 1}, // Already in SI units
+      {"standard_name", "temperature normalisation"},
+      {"long_name", "temperature normalisation"}
+    });
+  set_with_attrs(options["Nnorm"], Nnorm, {
+      {"units", "m^-3"},
+      {"conversion", 1},
+      {"standard_name", "density normalisation"},
+      {"long_name", "Number density normalisation"}
+    });
+  set_with_attrs(options["Bnorm"], Bnorm, {
+      {"units", "T"},
+      {"conversion", 1},
+      {"standard_name", "magnetic field normalisation"},
+      {"long_name", "Magnetic field normalisation"}
+    });
+  set_with_attrs(options["Cs0"], Cs0, {
+      {"units", "m/s"},
+      {"conversion", 1},
+      {"standard_name", "velocity normalisation"},
+      {"long_name", "Sound speed normalisation"}
+    });
+  set_with_attrs(options["Omega_ci"], Omega_ci, {
+      {"units", "s^-1"},
+      {"conversion", 1},
+      {"standard_name", "frequency normalisation"},
+      {"long_name", "Cyclotron frequency normalisation"}
+    });
+  set_with_attrs(options["rho_s0"], rho_s0, {
+      {"units", "m"},
+      {"conversion", 1},
+      {"standard_name", "length normalisation"},
+      {"long_name", "Gyro-radius length normalisation"}
+    });
+  scheduler->outputVars(options);
+}
+
+void Hermes::restartVars(Options& options) {
+  AUTO_TRACE();
+
+  set_with_attrs(options["Tnorm"], Tnorm, {
+      {"units", "eV"},
+      {"conversion", 1}, // Already in SI units
+      {"standard_name", "temperature normalisation"},
+      {"long_name", "temperature normalisation"}
+    });
+  set_with_attrs(options["Nnorm"], Nnorm, {
+      {"units", "m^-3"},
+      {"conversion", 1},
+      {"standard_name", "density normalisation"},
+      {"long_name", "Number density normalisation"}
+    });
+  set_with_attrs(options["Bnorm"], Bnorm, {
+      {"units", "T"},
+      {"conversion", 1},
+      {"standard_name", "magnetic field normalisation"},
+      {"long_name", "Magnetic field normalisation"}
+    });
+  set_with_attrs(options["Cs0"], Cs0, {
+      {"units", "m/s"},
+      {"conversion", 1},
+      {"standard_name", "velocity normalisation"},
+      {"long_name", "Sound speed normalisation"}
+    });
+  set_with_attrs(options["Omega_ci"], Omega_ci, {
+      {"units", "s^-1"},
+      {"conversion", 1},
+      {"standard_name", "frequency normalisation"},
+      {"long_name", "Cyclotron frequency normalisation"}
+    });
+  set_with_attrs(options["rho_s0"], rho_s0, {
+      {"units", "m"},
+      {"conversion", 1},
+      {"standard_name", "length normalisation"},
+      {"long_name", "Gyro-radius length normalisation"}
+    });
+  scheduler->restartVars(options);
 }
 
 // Standard main() function

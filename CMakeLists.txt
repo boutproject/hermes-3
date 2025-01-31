@@ -6,23 +6,30 @@ else()
   cmake_policy(VERSION 3.12)
 endif()
 
-project(hermes-3 LANGUAGES CXX)
+project(hermes-3 LANGUAGES CXX C)
 
 # Extra CMake scripts in cmake/ subdirectory
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
-# Update submodules
+option(HERMES_UPDATE_GIT_SUBMODULE "Check submodules are up-to-date during build" ON)
 # Adapted from https://cliutils.gitlab.io/modern-cmake/chapters/projects/submodule.html
-find_package(Git QUIET)
-if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
-  message(STATUS "Submodule update")
-  execute_process(COMMAND ${GIT_EXECUTABLE} -c submodule.recurse=false submodule update --init --recursive
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    RESULT_VARIABLE GIT_SUBMOD_RESULT)
-  if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-    message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+# Update submodules as needed
+function(hermes_update_submodules)
+  if(NOT HERMES_UPDATE_GIT_SUBMODULE)
+    return()
   endif()
-endif()
+  find_package(Git QUIET)
+  if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+    message(STATUS "Submodule update")
+    execute_process(COMMAND ${GIT_EXECUTABLE} -c submodule.recurse=false submodule update --init --recursive
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+      RESULT_VARIABLE GIT_SUBMOD_RESULT)
+    if(NOT GIT_SUBMOD_RESULT EQUAL "0")
+      message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+    endif()
+  endif()
+endfunction()
+hermes_update_submodules()
 
 # Get the Git revision
 include(GetGitRevisionDescription)
@@ -36,12 +43,14 @@ message(STATUS "Git revision: ${HERMES_REVISION}")
 option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
   set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
-  add_subdirectory(external/BOUT-dev)
+  set(HERMES_BOUT_SRC "external/BOUT-dev" CACHE STRING "Directory of BOUT++ dir")
+  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev)
 else()
   find_package(bout++ REQUIRED)
 endif()
 
 set(HERMES_SOURCES
+    src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
     src/ionisation.cxx
@@ -52,8 +61,9 @@ set(HERMES_SOURCES
     src/full_velocity.cxx
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
+    src/electron_viscosity.cxx
     src/evolve_density.cxx
-    src/vorticity.cxx
+    src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
     src/isothermal.cxx
@@ -70,6 +80,7 @@ set(HERMES_SOURCES
     src/zero_current.cxx
     src/collisions.cxx
     src/anomalous_diffusion.cxx
+    src/binormal_stpm.cxx
     src/recycling.cxx
     src/amjuel_hyd_ionisation.cxx
     src/amjuel_hyd_recombination.cxx
@@ -83,16 +94,22 @@ set(HERMES_SOURCES
     src/hydrogen_charge_exchange.cxx
     src/solkit_hydrogen_charge_exchange.cxx
     src/upstream_density_feedback.cxx
+    src/temperature_feedback.cxx
+    src/detachment_controller.cxx
     src/thermal_force.cxx
     src/ion_viscosity.cxx
     src/transform.cxx
+    src/vorticity.cxx
     include/adas_reaction.hxx
+    include/adas_carbon.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
     include/amjuel_hyd_ionisation.hxx
     include/amjuel_hyd_recombination.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
+    include/classical_diffusion.hxx
+    include/binormal_stpm.hxx
     include/collisions.hxx
     include/component.hxx
     include/component_scheduler.hxx
@@ -100,7 +117,9 @@ set(HERMES_SOURCES
     include/div_ops.hxx
     include/electromagnetic.hxx
     include/electron_force_balance.hxx
+    include/electron_viscosity.hxx
     include/evolve_density.hxx
+    include/evolve_energy.hxx
     include/evolve_momentum.hxx
     include/evolve_pressure.hxx
     include/fixed_density.hxx
@@ -133,10 +152,13 @@ set(HERMES_SOURCES
     include/sound_speed.hxx
     include/thermal_force.hxx
     include/upstream_density_feedback.hxx
+    include/temperature_feedback.hxx
+    include/detachment_controller.hxx
     include/vorticity.hxx
     include/zero_current.hxx
     include/transform.hxx
     include/fixed_fraction_radiation.hxx
+    include/simple_pump.hxx
     )
 
 # Compile Hermes sources into a library, which can be used for unit tests
@@ -195,10 +217,15 @@ if(HERMES_TESTS)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
+  hermes_add_integrated_test(1D-recycling)
   hermes_add_integrated_test(diffusion)
   hermes_add_integrated_test(evolve_density)
   hermes_add_integrated_test(neutral_mixed)
   hermes_add_integrated_test(vorticity)
+  hermes_add_integrated_test(sod-shock)
+  hermes_add_integrated_test(sod-shock-energy)
+  hermes_add_integrated_test(drift-wave)
+  hermes_add_integrated_test(alfven-wave)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -218,4 +245,29 @@ if(HERMES_TESTS)
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
   endif()
+endif()
+
+# Compile-time options
+
+set(SLOPE_LIMITERS MinMod MC Upwind Superbee)
+set(HERMES_SLOPE_LIMITER MC CACHE STRING "Set advection slope limiter")
+set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
+message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")
+
+# Generate the build config header
+
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx")
+  # If we do in source builds, this is fine
+  if (NOT ${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
+    message(FATAL_ERROR "Generated hermes_build_config.hxx header already exists; please remove '${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx' before continuing")
+  endif()
+endif()
+
+configure_file(include/hermes_build_config.hxx.in include/hermes_build_config.hxx)
+
+# Installation
+if (BUILD_SHARED_LIBS)
+  install(TARGETS hermes-3 hermes-3-lib)
+else()
+  install(TARGETS hermes-3)
 endif()

@@ -2,7 +2,7 @@
 #ifndef COLLISIONS_H
 #define COLLISIONS_H
 
-#include <field3d.hxx>
+#include <bout/field3d.hxx>
 
 #include "component.hxx"
 
@@ -41,6 +41,9 @@ struct Collisions : public Component {
 
   void transform(Options &state) override;
 
+  /// Add extra fields for output, or set attributes e.g docstrings
+  void outputVars(Options &state) override;
+
 private:
   BoutReal Tnorm; // Temperature normalisation [eV]
   BoutReal Nnorm; // Density normalisation [m^-3]
@@ -53,6 +56,15 @@ private:
 
   /// Include frictional heating term?
   bool frictional_heating;
+
+  BoutReal ei_multiplier;  // Arbitrary user-set multiplier on electron-ion collisions
+
+  /// Calculated collision rates saved for post-processing and use by other components
+  /// Saved in options, the BOUT++ dictionary-like object
+  Options collision_rates;
+
+  /// Save more diagnostics?
+  bool diagnose;
 
   /// Update collision frequencies, momentum and energy exchange
   /// nu_12    normalised frequency

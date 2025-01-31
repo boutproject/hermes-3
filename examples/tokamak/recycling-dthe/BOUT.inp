@@ -1,7 +1,7 @@
 # Transport simulation with deuterium, tritium and helium
 
-nout = 300
-timestep = 200
+nout = 100
+timestep = 1000
 
 MZ = 1
 
@@ -16,10 +16,15 @@ type = shifted
 
 [solver]
 #type = beuler
-#diagnose = true
-mxstep = 10000
+#pc_type = hypre
+type = pvode
+mxstep=10000
+
 atol = 1e-7
 rtol = 1e-5
+
+#diagnose = true
+predictor = false
 
 [hermes]
 components = (d+, d, t+, t, he+, he, e,
@@ -27,9 +32,9 @@ components = (d+, d, t+, t, he+, he, e,
               reactions, electron_force_balance,
               ion_viscosity)
 
-Nnorm = 1e18  # Reference density [m^-3]
+Nnorm = 2e18  # Reference density [m^-3]
 Bnorm = 1   # Reference magnetic field [T]
-Tnorm = 50   # Reference temperature [eV]
+Tnorm = 200   # Reference temperature [eV]
 
 loadmetric = false  # Recalculate metric tensor? (false -> use grid values)
 normalise_metric = true
@@ -42,13 +47,14 @@ type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
 
 AA = 2
 charge = 1
-anomalous_D = 2    # Density diffusion [m^2/s]
+anomalous_D = 0.5    # Density diffusion [m^2/s]
 anomalous_chi = 1
 
 thermal_conduction = true
 
 recycle_as = d
-recycle_multiplier = 0.99  # Recycling fraction
+target_recycle = true
+target_recycle_multiplier = 0.99  # Recycling fraction
 
 [Nd+]
 
@@ -78,13 +84,14 @@ type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
 
 AA = 3
 charge = 1
-anomalous_D = 2    # Density diffusion [m^2/s]
-anomalous_chi = 1
+anomalous_D = 0.5    # Density diffusion [m^2/s]
+anomalous_chi = 1.0
 
 thermal_conduction = true
 
 recycle_as = t
-recycle_multiplier = 0.99  # Recycling fraction
+target_recycle = true
+target_recycle_multiplier = 0.99  # Recycling fraction
 
 [Nt+]
 
@@ -114,13 +121,16 @@ type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
 
 AA = 4
 charge = 1
-anomalous_D = 2    # Density diffusion [m^2/s]
-anomalous_chi = 1
+anomalous_D = 0.5    # Density diffusion [m^2/s]
+anomalous_chi = 1.0
 
 thermal_conduction = true
 
 recycle_as = he
-recycle_multiplier = 0.99  # Recycling fraction
+target_recycle = true
+target_recycle_multiplier = 0.99  # Recycling fraction
+
+diagnose = true
 
 [Nhe+]
 
@@ -154,7 +164,7 @@ AA = 1/1836
 charge = -1
 
 anomalous_D = `d+`:anomalous_D  # Note: needed for thermal transport
-anomalous_chi = 0.1
+anomalous_chi = 1
 thermal_conduction = true
 
 [Pe]

@@ -16,20 +16,22 @@ extern Mesh *mesh;
 using namespace bout::globals;
 
 #include <bout/constants.hxx>
-#include <field_factory.hxx>  // For generating functions
+#include <bout/field_factory.hxx>  // For generating functions
 
 // Reuse the "standard" fixture for FakeMesh
 using SheathBoundaryTest = FakeMeshFixture;
 
 TEST_F(SheathBoundaryTest, CreateComponent) {
   Options options;
-  
+  options["units"]["eV"] = 1.0; // Voltage normalisation 
+
   SheathBoundary component("test", options, nullptr);
 }
 
 TEST_F(SheathBoundaryTest, DontSetPotential) {
   Options options;
-  
+  options["units"]["eV"] = 1.0; // Voltage normalisation 
+ 
   SheathBoundary component("test", options, nullptr);
 
   Field3D N = FieldFactory::get()->create3D("1 + y", &options, mesh);
@@ -58,6 +60,7 @@ TEST_F(SheathBoundaryTest, DontSetPotential) {
 
 TEST_F(SheathBoundaryTest, CalculatePotential) {
   Options options{{"test", {{"always_set_phi", true}}}};
+  options["units"]["eV"] = 1.0; // Voltage normalisation 
 
   SheathBoundary component("test", options, nullptr);
 

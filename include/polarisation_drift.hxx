@@ -55,18 +55,23 @@ struct PolarisationDrift : public Component {
   ///     - momentum_source  (if momentum set)
   /// 
   void transform(Options &state) override;
+
+  void outputVars(Options &state) override;
 private:
   std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
 
   Field2D Bsq; // Cached SQ(coord->Bxy)
   
   // Diagnostic outputs
-  Field3D DivJ; // Divergence of all other currents
-  Field3D phi_pol; // Polarisation drift potential
+  bool diagnose; ///< Save diagnostic outputs?
+  Field3D DivJ; //< Divergence of all other currents
+  Field3D phi_pol; //< Polarisation drift potential
 
   bool boussinesq; // If true, assume a constant mass density in Jpol
   BoutReal average_atomic_mass; // If boussinesq=true, mass density to use
   BoutReal density_floor; // Minimum mass density if boussinesq=false
+  bool advection; // Advect fluids by an approximate polarisation velocity?
+  bool diamagnetic_polarisation; // Calculate compression terms?
 };
 
 namespace {

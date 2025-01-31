@@ -1,6 +1,6 @@
 #include "../include/component_scheduler.hxx"
 
-#include "utils.hxx" // for trim, strsplit
+#include <bout/utils.hxx> // for trim, strsplit
 
 ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                        Options &component_options,
@@ -59,10 +59,17 @@ void ComponentScheduler::transform(Options &state) {
   }
 }
 
-void ComponentScheduler::annotate(Options &state) {
+void ComponentScheduler::outputVars(Options &state) {
   // Run through each component
   for(auto &component : components) {
-    component->annotate(state);
+    component->outputVars(state);
+  }
+}
+
+void ComponentScheduler::restartVars(Options &state) {
+  // Run through each component
+  for(auto &component : components) {
+    component->restartVars(state);
   }
 }
 

@@ -6,3 +6,5 @@ BOUT.settings
 *.a
 *~
 .DS_Store
+/build*
+/docs/build/*

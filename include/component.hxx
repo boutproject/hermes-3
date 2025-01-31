@@ -3,7 +3,7 @@
 #ifndef HERMES_COMPONENT_H
 #define HERMES_COMPONENT_H
 
-#include <options.hxx>
+#include <bout/options.hxx>
 #include <bout/generic_factory.hxx>
 
 #include <map>
@@ -11,9 +11,6 @@
 #include <memory>
 
 class Solver; // Time integrator
-
-Datafile *get_restart_datafile(); ///< Temporary hack, to allow save/load from restarts
-void set_restart_datafile(Datafile *file);
 
 /// Interface for a component of a simulation model
 /// 
@@ -32,7 +29,10 @@ struct Component {
   virtual void finally(const Options &UNUSED(state)) { }
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  virtual void annotate(Options &UNUSED(state)) { }
+  virtual void outputVars(Options &UNUSED(state)) { }
+
+  /// Add extra fields to restart files
+  virtual void restartVars(Options &UNUSED(state)) { }
 
   /// Preconditioning
   virtual void precon(const Options &UNUSED(state), BoutReal UNUSED(gamma)) { }
@@ -200,6 +200,25 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
   getNoBoundary<Type>(option)
 #endif
 
+/// Check whether value is valid, returning true
+/// if invalid i.e contains non-finite values
+template<typename T>
+bool hermesDataInvalid(const T& value) {
+  return false; // Default
+}
+
+/// Check Field3D values.
+/// Doesn't check boundary cells
+template<>
+inline bool hermesDataInvalid(const Field3D& value) {
+  for (auto& i : value.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(value[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
 ///
@@ -221,7 +240,11 @@ Options& set(Options& option, T value) {
                         option.attributes["final-domain"].as<std::string>());
   }
 
+  if (hermesDataInvalid(value)) {
+    throw BoutException("Setting invalid value for '{}'", option.str());
+  }
 #endif
+
   option.force(std::move(value));
   return option;
 }
@@ -278,17 +301,33 @@ Options& add(Options& option, T value) {
 template<typename T>
 Options& subtract(Options& option, T value) {
   if (!option.isSet()) {
-    option = -value;
+    return set(option, -value);
   } else {
     try {
-      set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value) - value);
+      return set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value) - value);
     } catch (const std::bad_cast &e) {
       // Convert to a more useful error message
       throw BoutException("Could not convert {:s} to type {:s}",
                           option.str(), typeid(T).name());
     }
   }
-  return option;
 }
+
+template<typename T>
+void set_with_attrs(Options& option, T value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  option.force(value);
+  option.setAttributes(attrs);
+}
+
+#if CHECKLEVEL >= 1
+template<>
+inline void set_with_attrs(Options& option, Field3D value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  if (!value.isAllocated()) {
+    throw BoutException("set_with_attrs: Field3D assigned to {:s} is not allocated", option.str());
+  }
+  option.force(value);
+  option.setAttributes(attrs);
+}
+#endif
 
 #endif // HERMES_COMPONENT_H

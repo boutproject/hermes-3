@@ -20,9 +20,6 @@ struct FixedVelocity : public Component {
 
     // Get the velocity and normalise
     V = options["velocity"].as<Field3D>() / Cs0;
-
-    // Save velocity to output files
-    bout::globals::dump.addOnce(V, std::string("V") + name);
   }
 
   /// This sets in the state
@@ -42,6 +39,20 @@ struct FixedVelocity : public Component {
 
       set(species["momentum"], AA * N * V);
     }
+  }
+
+  void outputVars(Options& state) override {
+    AUTO_TRACE();
+    auto Cs0 = get<BoutReal>(state["Cs0"]);
+
+    // Save the density, not time dependent
+    set_with_attrs(state[std::string("V") + name], V,
+                   {{"units", "m / s"},
+                    {"conversion", Cs0},
+                    {"long_name", name + " parallel velocity"},
+                    {"standard_name", "velocity"},
+                    {"species", name},
+                    {"source", "fixed_velocity"}});
   }
 
 private:

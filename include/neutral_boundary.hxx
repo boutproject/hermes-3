@@ -43,14 +43,24 @@ struct NeutralBoundary : public Component {
   ///      - energy_source  Adds wall losses
   ///
   void transform(Options& state) override;
+  void outputVars(Options &state) override;
 
 private:
   std::string name; ///< Short name of species e.g "d"
 
-  BoutReal gamma_heat; ///< Heat flux coefficient
+  BoutReal Tnorm; // Temperature normalisation [eV]
+
+  BoutReal target_energy_refl_factor, sol_energy_refl_factor, pfr_energy_refl_factor; ///< Fraction of energy retained after reflection
+  BoutReal target_fast_refl_fraction, sol_fast_refl_fraction, pfr_fast_refl_fraction; ///< Fraction of neutrals undergoing fast reflection
+
+  Field3D target_energy_source, wall_energy_source; ///< Diagnostic for power loss
+
+  bool diagnose; ///> Save diagnostic variables?
 
   bool lower_y; ///< Boundary condition at lower y?
   bool upper_y; ///< Boundary condition at upper y?
+  bool sol; ///< Boundary condition at sol?
+  bool pfr; ///< Boundary condition at pfr?
 };
 
 namespace {

@@ -7,19 +7,16 @@ Quasineutral::Quasineutral(std::string name, Options &alloptions,
                            Solver *UNUSED(solver))
     : name(name) {
   Options &options = alloptions[name];
-  
+
   // Need to have a charge and mass
   charge = options["charge"].doc("Particle charge. electrons = -1");
   AA = options["AA"].doc("Particle atomic mass. Proton = 1");
-
-  // Save the density
-  bout::globals::dump.addRepeat(density, std::string("N") + name);
-  density = 0.0;
 
   ASSERT0(charge != 0.0);
 }
 
 void Quasineutral::transform(Options &state) {
+  AUTO_TRACE();
   // Iterate through all subsections
   Options &allspecies = state["species"];
 
@@ -57,4 +54,19 @@ void Quasineutral::transform(Options &state) {
 void Quasineutral::finally(const Options &state) {
   // Density may have had boundary conditions applied
   density = get<Field3D>(state["species"][name]["density"]);
+}
+
+void Quasineutral::outputVars(Options &state) {
+  AUTO_TRACE();
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+
+  // Save the density
+  set_with_attrs(state[std::string("N") + name], density,
+                 {{"time_dimension", "t"},
+                  {"units", "m^-3"},
+                  {"conversion", Nnorm},
+                  {"long_name", name + " number density"},
+                  {"standard_name", "density"},
+                  {"species", name},
+                  {"source", "quasineutral"}});
 }
