@@ -3,9 +3,9 @@
 #define EVOLVE_PRESSURE_H
 
 #include <bout/field3d.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include "component.hxx"
-#include "yboundary_regions.hxx"
 
 /// Evolves species pressure in time
 ///

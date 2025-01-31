@@ -6,7 +6,7 @@
 #include "bout/mesh.hxx"
 
 #include "bout/parallel_boundary_region.hxx"
-#include "../include/boundary_iterator.hxx"
+#include "bout/boundary_iterator.hxx"
 
 using bout::globals::mesh;
 

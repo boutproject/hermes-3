@@ -4,7 +4,7 @@
 
 #include "component.hxx"
 
-#include "./yboundary_regions.hxx"
+#include <bout/yboundary_regions.hxx>
 
 /// Boundary condition at the wall in Y
 ///

@@ -7,12 +7,12 @@
 #include <bout/output_bout_types.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
-#include "../include/yboundary_regions.hxx"
 
 
 using bout::globals::mesh;

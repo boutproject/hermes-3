@@ -158,7 +158,6 @@ set(HERMES_SOURCES
     include/upstream_density_feedback.hxx
     include/temperature_feedback.hxx
     include/vorticity.hxx
-    include/yboundary_regions.hxx
     include/zero_current.hxx
     include/transform.hxx
     include/fixed_fraction_radiation.hxx

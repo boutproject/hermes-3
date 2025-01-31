@@ -3,10 +3,10 @@
 #define VORTICITY_H
 
 #include <bout/vectormetric.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include "component.hxx"
 #include "div_ops.hxx"
-#include "yboundary_regions.hxx"
 
 class LaplaceXY;
 class Laplacian;

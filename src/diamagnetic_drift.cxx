@@ -1,8 +1,8 @@
 #include <bout/fv_ops.hxx>
 #include <bout/vecops.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include "../include/diamagnetic_drift.hxx"
-#include "yboundary_regions.hxx"
 
 using bout::globals::mesh;
 

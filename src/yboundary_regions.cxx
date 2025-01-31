@@ -1,3 +1,3 @@
-#include  <yboundary_regions.hxx>
+#include  <bout/yboundary_regions.hxx>
 
 YBoundary yboundary;
