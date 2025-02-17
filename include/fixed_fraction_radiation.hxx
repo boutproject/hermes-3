@@ -356,7 +356,7 @@ struct FixedFractionRadiation : public Component {
       .doc("Output radiation diagnostic?")
       .withDefault<bool>(false);
 
-    no_core_radiation = options["diagnose"]
+    no_core_radiation = options["no_core_radiation"]
       .doc("Set radiation to zero in core?")
       .withDefault<bool>(true);
 
