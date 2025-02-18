@@ -70,10 +70,11 @@ private:
   bool diagnose; ///< Save additional diagnostics?
 
   // Flow diagnostics
-  Field3D particle_flow_xlow, particle_flow_ylow;
-  Field3D momentum_flow_xlow, momentum_flow_ylow;
-  Field3D energy_flow_xlow, energy_flow_ylow;
-  Field3D conduction_flow_xlow, conduction_flow_ylow;
+  Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
+  Field3D mf_adv_perp_xlow, mf_adv_perp_ylow, mf_adv_par_ylow;
+  Field3D mf_visc_perp_xlow, mf_visc_perp_ylow, mf_visc_par_ylow;
+  Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
+  Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
 };
 
 namespace {
