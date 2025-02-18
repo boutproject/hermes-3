@@ -412,8 +412,8 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(Pn, Vn, sound_speed) // Parallel advection
-            - (2. / 3) * Pn * Div_par(Vn)                      // Compression
+  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(Pn, Vn, sound_speed)         // Parallel advection
+            - (2. / 3) * Pn * Div_par(Vn)                              // Compression
     + Div_a_Grad_perp_flows(DnnPn, logPnlim,
                                    energy_flow_xlow, energy_flow_ylow) // Perpendicular advection
      ;
@@ -425,7 +425,7 @@ void NeutralMixed::finally(const Options& state) {
   if (neutral_conduction) {
     ddt(Pn) += Div_a_Grad_perp_flows(DnnNn, Tn,
                         conduction_flow_xlow, conduction_flow_ylow)    // Perpendicular conduction
-      + FV::Div_par_K_Grad_par(DnnNn, Tn)        // Parallel conduction
+      + FV::Div_par_K_Grad_par(DnnNn, Tn)                              // Parallel conduction
       ;
   }
 

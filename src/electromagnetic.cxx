@@ -4,7 +4,16 @@
 #include <bout/mesh.hxx>
 #include <bout/invert_laplace.hxx>
 
-Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*) {
+// Set the default acceptance tolerances for the Naulin solver.
+// These are used if the maximum iterations is reached.
+// Note: A loose tolerance is used because repeated iterations
+//       can usually recover tight tolerances.
+BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:type", "naulin");
+BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:rtol_accept", 1e-2);
+BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:atol_accept", 1e-6);
+BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:maxits", 1000);
+
+Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* solver) {
   AUTO_TRACE();
 
   Options& units = alloptions["units"];
@@ -22,10 +31,8 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
 
   // Use the "Naulin" solver because we need to include toroidal
   // variations of the density (A coefficient)
-  if (!options["laplacian"].isSet("type")) {
-    options["laplacian"]["type"] = "naulin";
-  }
   aparSolver = Laplacian::create(&options["laplacian"]);
+  aparSolver->savePerformance(*solver, "AparSolver");
 
   const_gradient = options["const_gradient"]
     .doc("Extrapolate gradient of Apar into all radial boundaries?")
@@ -33,6 +40,7 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
 
   // Give Apar an initial value because we solve Apar by iteration
   // starting from the previous solution
+  // Note: On restart the value is restored (if available) in restartVars
   Apar = 0.0;
 
   if (const_gradient) {
@@ -68,6 +76,27 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
   magnetic_flutter = options["magnetic_flutter"]
     .doc("Set magnetic flutter terms (Apar_flutter)?")
     .withDefault<bool>(false);
+}
+
+void Electromagnetic::restartVars(Options& state) {
+  AUTO_TRACE();
+
+  // NOTE: This is a hack because we know that the loaded restart file
+  //       is passed into restartVars in PhysicsModel::postInit
+  // The restart value should be used in init() rather than here
+  static bool first = true;
+  if (first and state.isSet("Apar")) {
+    first = false;
+    Apar = state["Apar"].as<Field3D>();
+    output.write("\nElectromagnetic: Read Apar from restart file (min {}, max {})\n", min(Apar), max(Apar));
+  }
+
+  // Save the Apar field. It is solved using an iterative method,
+  // so converges faster with the value from the previous iteration.
+  set_with_attrs(state["Apar"], Apar,
+                 {{"standard_name", "b dot A"},
+                  {"long_name", "Parallel component of vector potential A"},
+                  {"source", "electromagnetic"}});
 }
 
 void Electromagnetic::transform(Options &state) {

@@ -61,5 +61,5 @@ void SoundSpeed::transform(Options &state) {
   }
 
   set(state["sound_speed"], sound_speed);
-  set(state["fastest_wave"], fastest_wave);
+  set(state["fastest_wave"], fastest_wave*fastest_wave_factor);
 }

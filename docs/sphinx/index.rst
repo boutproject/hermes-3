@@ -9,6 +9,7 @@ Welcome to Hermes-3 documentation!
 
    introduction
    getting_started
+   installation_using_spack
    examples
    tests
    transport_2d

@@ -701,11 +701,11 @@ The grid increases in resolution towards the target, with a minimum grid spacing
    source = length_xpt / length
    y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
 
-And here is how the calculated geometric information is used to prepare a pressure source. First, the 
-required total ion power flux is converted to a pressure according to :math:`E = 3/2P`, then it is 
-divided by the length of the heating region to obtain the power flux required in each cell. Note 
-that this assumes that :math:`dx = dz = J = 0` and that the volume upstream of the X-point is simply
-an integral of :math:`dy = mesh:length\_xpt`. If you are imposing a full B-field profile in your 1D simulation, 
+And here is how the calculated geometric information is used to prepare a pressure source. The user 
+inputs a parallel heatflux in :math:`W/m^2`, or Watts per cross-sectional flux tube area.
+This is converted to a pressure flux in :math:`Pa/{m^2s}` by the :math:`2/3` factor, and then
+converted to a pressure source in :math:`Pa/{m^3s}` by dividing by the length of the heating region :math:`mesh:length_xpt`. 
+Note that this assumes a constant cross-sectional area, i.e. :math:`dx = dz = J = 1`. If you are imposing a full B-field profile in your 1D simulation, 
 you will need to account for the fact that :math:`J` is no longer constant.
 In order to limit the pressure source to just the region above the X-point, it is multiplied by a Heaviside
 function which returns 1 upstream of :math:`y=mesh:y\_xpt` and 0 downstream of it.
@@ -724,9 +724,9 @@ function which returns 1 upstream of :math:`y=mesh:y\_xpt` and 0 downstream of i
 
    [Pe]
 
-   # Input power flux to electrons in W/m^2
    function = `Pd+:function`  # Same as ion pressure initially
 
+   # Input power flux to electrons in W/m^2
    source = `Pd+:source`  # Same as ion pressure source
 
 Applying sources using the grid file
@@ -834,6 +834,157 @@ Component boundary conditions
 ~~~~~~~~~~~~~~~
 Hermes-3 includes additional boundary conditions whose complexity requires their implementation
 as components. They may overwrite simple boundary conditions and must be set in the same way as other components.
+
+.. _sheath_boundary_simple:
+
+sheath_boundary_simple
+^^^^^^^^^^^^^^^
+
+This is a top-level component which determines the conditions and sources at the divertor target. 
+First, density, temperature and pressure are extrapolated into the target boundary.
+The extrapolation method for each can be user set, e.g. `density_boundary_mode`. At the moment, 
+the available modes are:
+
+- 0: LimitFree
+   An exponential extrapolation for decreasing quantities and a Neumann boundary for increasing
+   quantities. It is inconsistent between increasing and decreasing values and is not recommended
+   unless you have a reason to use it - it's legacy behaviour.
+
+- 1: ExponentialFree
+   An exponential extrapolation. It is more consistent than LimitFree and has the advantage of 
+   inherently preventing negative values at the target. This is the default and is recommended for most cases.
+   It is defined as :math:`guard = (last)^2 / previous`
+
+- 2: LinearFree
+   A linear extrapolation. It can lead to negative values at the target. However, it is the most 
+   consistent (the linear extrapolation is what second order differencing reduces to at the wall) and has been shown to 
+   reduce "zigzags" or "squiggles" near the target which are common in cell centered codes. Use only
+   if you have a particular reason to care about this.
+   It's defined as :math:`guard = 2 * last - previous`.
+
+In the above definitions, `last`, `previous` and `guard` refer to the final domain cell, the penultimate 
+domain cell and the guard cell respectively. The value at the target is defined to be 
+an interpolation between the last and guard cells, i.e:
+
+.. math::
+   \begin{aligned}
+   target = (last + guard)/2
+   \end{aligned}
+
+After the initial extrapolation, the sheath velocity is set to greater or equal to Bohm speed as according
+to Stangeby, eq. 2.55b, with temperature in eV:
+
+.. math::
+   \begin{aligned}
+   v_{i}^{sheath} \geq [(e T_{e} + \gamma e T_{i})/m_{i}]^{1/2}
+   \end{aligned}
+
+where :math:`\gamma` is the ion polytropic coefficient, which is set to 1 by default as per SOLPS-ITER.
+The electron velocity is calculated from the potential:
+
+.. math::
+   \begin{aligned}
+   \phi^{sheath} &= T_{e} \  ln \biggl[ \sqrt{ T_{e} / (2 \pi m_e) \cdot (1 - G_{e}) \cdot n_{e} / \Gamma_{i}^{tot}} \biggr]   \\ 
+   v_{e}^{sheath} &= -\sqrt{ T_{e} / 2 \pi m_e} \cdot (1-G_{e}) \cdot e^{(- \frac{\phi_{sheath} - \phi_{wall}} {T_{e}})}
+   \end{aligned}
+
+Where :math:`\Gamma_{i}^{tot}` is the total ion particle flux across all species, :math:`G_{e}` is the electron secondary
+emission coefficient (default 1) and :math:`\phi_{wall}` is the wall potential (default 0). Both can be user-set through the
+options `secondary_electron_coef` and `wall_potential`, respectively.
+
+
+Hermes-3 allows the pressure and momentum equations to advect internal and 
+kinetic energy out of the sheath, but disables the conduction term, so before applying any sheath boundary condition,
+the "underlying" sheath heat flux is:
+
+.. math::
+   \begin{aligned}
+   q_{i}^{sheath} &= n_{i} v_{i} (\frac{5}{2} e T_{i}n_{i} + \frac{1}{2} m_i v_{i}^{2})
+
+   q_{e}^{sheath} &= n_{e} v_{e} (\frac{5}{2} e T_{e}n_{e} + \frac{1}{2} m_e v_{e}^{2})
+   \end{aligned}
+
+With both of the above definitions following Stangeby (eqns. 9.61 and 9.63) with the addition of electron kinetic
+energy, and where each variable is evaluated at the sheath (target). Continuing from Stangeby (eqs. 2.89 and 2.94), 
+the above can be represented as the internal energy multiplied by the sheath heat transfer coefficient:
+
+.. math::
+   \begin{aligned}
+   q_{i}^{sheath} &= n_{i} v_{i} \gamma_{i} (e T_{i}n_{i})
+   q_{e}^{sheath} &= n_{e} v_{e} \gamma_{e} (e T_{e}n_{e})
+   \end{aligned}
+
+Where :math:`\gamma_{i}` and :math:`\gamma_{e}` are the **total** ion and electron sheath heat transfer coefficients 
+and are user set through the options `gamma_i` and `gamma_e`. The easiest way to calculate the sheath heat flux leaving the model
+is to use this form of the equations.
+
+Assuming :math:`T_e = T_i`, the "underlying" heat flux corresponds to :math:`\gamma_{i} = 3.5` and :math:`\gamma_{e} = 3.5`.
+In order to facilitate a user-set total gamma, `sheath_boundary_simple` creates a heat sink (or source) 
+based on the difference between the required and "underlying" coefficient:
+
+.. math::
+   \begin{aligned}
+   q_{i}^{additional} &= \gamma_i T_i n_i v_i - (2.5 T_{i} + \frac{1}{2} m_i v_{i}^{2}) n_{i} v_{i}
+
+   q_{e}^{additional} &= \gamma_e T_e n_e v_e - (2.5 T_{e} + \frac{1}{2} m_e v_{e}^{2}) n_{e} v_{e}
+   \end{aligned}
+
+The sheath ion particle flux is facilitated through the underlying density equation advecting density out of the domain:
+
+.. math::
+   \begin{aligned}
+   \Gamma_{i}^{sheath}&= n_{i} v_{i}
+   \end{aligned}
+
+If recycling is enabled, a corresponding recycled neutral particle source is set up in the `recycling` component.
+
+**Usage and other options**
+
+To enable the boundary condition, add `sheath_boundary_simple` to the list of components. The settings are
+accessed through the component header. Use the `lower_y` and `upper_y` flags to enable the boundary on each 
+end of the domain, where `lower` and `upper` refer to the start and end of the poloidal index space, respectively:
+
+.. code-block:: ini
+
+   [hermes]
+   components = d+, sheath_boundary_simple
+
+   [d+]
+   type = noflow_boundary
+
+   noflow_lower_y = true   # This is the default
+   noflow_upper_y = false  # Turn off no-flow at upper y for d+ species
+
+   [sheath_boundary_simple]
+   lower_y = false         # Turn off sheath lower boundary for all species
+   upper_y = true
+
+It can be useful to run the code without neutrals/recycling in order to simplify the physics, e.g. for debugging.
+However, just disabling `recycling` would result in mach flows throughout the whole domain due to the lack of the
+neutral source. To avoid this, you can set `no_flow = true` under `sheath_boundary_simple`. This will set the ion 
+velocity to zero for the particle flux but will keep it at the :math: `v_i \geq c_{bohm}` condition for the heat flux.
+
+By default, the Bohm condition is imposed on the target by the Lax flux. This allows the code to have a small amount 
+of slack, resulting in a not-perfectly-exact setting but a smoother and more stable solution. For debugging, you can
+disable this behaviour and fix the Bohm condition explicitly. This can be done by setting `fix_momentum_boundary_flux` 
+to `true` in the `evolve_pressure` component. Note that this has been observed to increase numerical oscillations near
+the boundary and is not recommended.
+
+.. _sheath_boundary:
+
+sheath_boundary
+^^^^^^^^^^^^^^^
+
+This is intended to give a more rigorous treatment when simulating multi-species, as well as to add models for
+:math:`gamma_e` and :math:`gamma_i` based on Tskhakaya 2005. As this component is considerably more complex, the 
+development may lag behind `sheath_boundary_simple`.
+
+.. _sheath_boundary_insulating:
+
+sheath_boundary_insulating
+^^^^^^^^^^^^^^^
+
+Not yet documented.
 
 .. _noflow_boundary:
 
@@ -1012,20 +1163,24 @@ cross-field diffusion:
 .. math::
 
    \begin{aligned}
-   \frac{\partial n_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_n\partial_{||}p_n\right) \\
-   \frac{\partial p_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n p_n\partial_{||}p_n\right) + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\kappa_n \partial_{||}T_n\right) \\
-   \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_nv_{||n} \partial_{||}p_n\right) + \nabla\cdot\left(\mathbf{b}\eta_n \partial_{||}T_n\right)
+   \frac{\partial n_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_n \frac{1}{p_n}{\partial_{||}p_n}\right) \\
+   \frac{\partial p_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n p_n \frac{1}{p_n}\partial_{||}p_n\right) + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\kappa_n \partial_{||}T_n\right) \\
+   \frac{\partial}{\partial t}\left(m_nn_nv_{||n}\right) =& \ldots + \nabla\cdot\left(\mathbf{b}D_n m_n n_nv_{||n} \frac{1}{p_n} \partial_{||}p_n\right) + \nabla\cdot\left(\mathbf{b}\eta_n \partial_{||}v_{||n}\right)
    \end{aligned}
 
-The diffusion coefficient is calculated as
+The diffusion coefficient is in :math:`m^2/s` and is calculated as
 
 .. math::
 
-   D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{T_n}{A \nu}
+   D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{eT_n}{m_{n} \nu}
 
-where `A` is the atomic mass number; :math:`\nu` is the collision
-frequency. The factor :math:`B / B_{pol}` is the projection of the cross-field
-direction on the parallel transport, and is the `dneut` input setting.
+where `m_{n}` is the neutral species mass in kg and :math:`\nu` is the collision
+frequency (by default, this sums up all of the enabled neutral collisions from 
+the collisions component as well as the charge exchange rate).
+The factor :math:`B / B_{pol}` is the projection of the cross-field
+direction on the parallel transport, and is the `dneut` input setting. Currently, the recommended
+use case for this component is to represent the neutrals diffusing orthogonal to the target wall, and
+it is recommended to set `dneut` according to the field line pitch at the target.
 
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
@@ -1881,11 +2036,13 @@ defined like this:
    diagnose = true   # Saves Rc (R + section name)
 
 
-Carbon is also provided as an ADAS rate along with nitrogen, neon and argon. The component names are  
-``fixed_fraction_carbon``, ``fixed_fraction_nitrogen``, ``fixed_fraction_neon`` and ``fixed_fraction_argon``.
+Carbon is also provided as an ADAS rate along with nitrogen, neon, argon, krypton, xenon and tungsten.
+The component names are ``fixed_fraction_carbon``, ``fixed_fraction_nitrogen``, ``fixed_fraction_neon``,
+``fixed_fraction_argon``, ``fixed_fraction_krypton``, ``fixed_fraction_xenon`` and ``fixed_fraction_tungsten``.
 
 These can be used in the same way as ``fixed_fraction_hutchinson_carbon``. Each rate is in the form of a 10 coefficient 
-log-log polynomial fit of data obtained using the open source tool `radas <https://github.com/cfs-energy/radas>`_.
+log-log polynomial fit of data obtained using the open source tool `radas <https://github.com/cfs-energy/radas>`_, except
+xenon and tungsten that use 15 and 20 coefficients respectively.
 The :math:`n {\tau}` parameter representing the density and residence time assumed in the radas 
 collisional-radiative model has been set to :math:`1\times 10^{20} \times 0.5ms` based on `David Moulton et al 2017 Plasma Phys. Control. Fusion 59(6) <https://doi.org10.1088/1361-6587/aa6b13>`_.
 
