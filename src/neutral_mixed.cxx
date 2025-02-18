@@ -408,6 +408,8 @@ void NeutralMixed::finally(const Options& state) {
     if (localstate.isSet("momentum_source")) {
       Snv = get<Field3D>(localstate["momentum_source"]);
       ddt(NVn) += Snv;
+    } else {
+      Snv = 0;
     }
 
   } else {
@@ -606,7 +608,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"long_name", name + " number density source due to par advection"},
                     {"species", name},
                     {"source", "neutral_mixed"}});
-    /////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////
     // Parallel flow diagnostics
 
     // Particle flows due to advection
