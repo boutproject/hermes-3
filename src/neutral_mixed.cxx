@@ -618,7 +618,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
                     {"standard_name", "particle flow"},
-                    {"long_name", name + " radial component of perpendicular advection flow. Note: May be incomplete."},
+                    {"long_name", name + " radial component of perpendicular advection flow."},
                     {"species", name},
                     {"source", "neutral_mixed"}});
     }
@@ -628,7 +628,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
                     {"standard_name", "particle flow"},
-                    {"long_name", name + " poloidal component of perpendicular advection flow. Note: May be incomplete."},
+                    {"long_name", name + " poloidal component of perpendicular advection flow."},
                     {"species", name},
                     {"source", "evolve_density"}});
     }
@@ -638,7 +638,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
                     {"standard_name", "particle flow"},
-                    {"long_name", name + " parallel advection flow. Note: May be incomplete."},
+                    {"long_name", name + " parallel advection flow."},
                     {"species", name},
                     {"source", "evolve_density"}});
     }
@@ -650,7 +650,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"standard_name", "momentum flow"},
-                    {"long_name", name + " radial component of perpendicular momentum advection flow. Note: May be incomplete."},
+                    {"long_name", name + " radial component of perpendicular momentum advection flow."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
@@ -660,7 +660,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"standard_name", "momentum flow"},
-                    {"long_name", name + " poloidal component of perpendicular momentum advection flow. Note: May be incomplete."},
+                    {"long_name", name + " poloidal component of perpendicular momentum advection flow."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
@@ -685,7 +685,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"standard_name", "momentum flow"},
-                    {"long_name", name + " poloidal component of perpendicular viscosity. Note: May be incomplete."},
+                    {"long_name", name + " poloidal component of perpendicular viscosity."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
@@ -695,7 +695,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"standard_name", "momentum flow"},
-                    {"long_name", name + " poloidal component of perpendicular viscosity. Note: May be incomplete."},
+                    {"long_name", name + " poloidal component of perpendicular viscosity."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
@@ -705,7 +705,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"standard_name", "momentum flow"},
-                    {"long_name", name + " parallel viscosity. Note: May be incomplete."},
+                    {"long_name", name + " parallel viscosity."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
@@ -718,7 +718,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " radial component of perpendicular energy advection. Note: May be incomplete."},
+                    {"long_name", name + " radial component of perpendicular energy advection."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
@@ -728,7 +728,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " poloidal component of perpendicular energy advection. Note: May be incomplete."},
+                    {"long_name", name + " poloidal component of perpendicular energy advection."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
@@ -738,7 +738,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " parallel energy advection. Note: May be incomplete."},
+                    {"long_name", name + " parallel energy advection."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
@@ -750,7 +750,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " radial component of perpendicular conduction. Note: May be incomplete."},
+                    {"long_name", name + " radial component of perpendicular conduction."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
@@ -760,7 +760,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " poloidal component of perpendicular conduction. Note: May be incomplete."},
+                    {"long_name", name + " poloidal component of perpendicular conduction."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
@@ -770,7 +770,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " parallel conduction. Note: May be incomplete."},
+                    {"long_name", name + " parallel conduction."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
