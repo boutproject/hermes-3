@@ -375,9 +375,11 @@ void NeutralMixed::finally(const Options& state) {
     TRACE("Neutral momentum");
 
     ddt(NVn) =
-        -AA * FV::Div_par_fvv<ParLimiter>(
-              Nnlim, Vn, sound_speed)                  // Momentum flow
+        -AA * FV::Div_par_fvv<ParLimiter>(             // Momentum flow
+              Nnlim, Vn, sound_speed)                  
+
         - Grad_par(Pn)                                 // Pressure gradient
+        
         + Div_a_Grad_perp_flows(DnnNVn, logPnlim,
                                      mf_adv_perp_xlow,
                                      mf_adv_perp_ylow) // Perpendicular advection
@@ -395,13 +397,15 @@ void NeutralMixed::finally(const Options& state) {
       //
 
       ddt(NVn) +=
-          AA * Div_a_Grad_perp_flows((2. / 5) * DnnNn, Vn,    // Perpendicular viscosity
-                                          mf_visc_perp_xlow,
-                                          mf_visc_perp_ylow)    
+          AA * Div_a_Grad_perp_flows(
+                    (2. / 5) * DnnNn, Vn,              // Perpendicular viscosity
+                    mf_visc_perp_xlow,
+                    mf_visc_perp_ylow)    
 
-          + AA * Div_par_K_Grad_par_mod((2. / 5) * DnnNn, Vn, // Parallel viscosity
-                                          mf_visc_par_ylow,
-                                          false) // No viscosity through target boundary
+          + AA * Div_par_K_Grad_par_mod(               // Parallel viscosity 
+                    (2. / 5) * DnnNn, Vn,
+                    mf_visc_par_ylow,
+                    false) // No viscosity through target boundary
           ;
     }
 
@@ -421,12 +425,14 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(Pn, Vn, sound_speed, ef_adv_par_ylow) // Parallel advection
+  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(               // Parallel advection
+                    Pn, Vn, sound_speed, ef_adv_par_ylow)
 
-            - (2. / 3) * Pn * Div_par(Vn)                                       // Compression
+            - (2. / 3) * Pn * Div_par(Vn)                // Compression
 
-            + Div_a_Grad_perp_flows(DnnPn, logPnlim,                            // Perpendicular advection
-                                          ef_adv_perp_xlow, ef_adv_perp_ylow)  
+            + Div_a_Grad_perp_flows(                     // Perpendicular advection
+                    DnnPn, logPnlim,
+                    ef_adv_perp_xlow, ef_adv_perp_ylow)  
      ;
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -435,12 +441,13 @@ void NeutralMixed::finally(const Options& state) {
   ef_adv_perp_ylow *= 5/2;
 
   if (neutral_conduction) {
-    ddt(Pn) += Div_a_Grad_perp_flows(DnnNn, Tn,
-                        ef_cond_perp_xlow, ef_cond_perp_ylow)           // Perpendicular conduction
+    ddt(Pn) += Div_a_Grad_perp_flows(
+                    DnnNn, Tn,                            // Perpendicular conduction
+                    ef_cond_perp_xlow, ef_cond_perp_ylow)
 
-            + Div_par_K_Grad_par_mod(DnnNn, Tn,                     // Parallel conduction 
-                        ef_cond_par_ylow,        
-                        false)  // No conduction through target boundary
+            + Div_par_K_Grad_par_mod(DnnNn, Tn,           // Parallel conduction 
+                      ef_cond_par_ylow,        
+                      false)  // No conduction through target boundary
       ;
   }
 
