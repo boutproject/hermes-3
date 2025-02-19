@@ -55,12 +55,12 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                    .doc("Enable wall boundary conditions at yup")
                    .withDefault<bool>(true);
 
-  nn_floor = options["nn_floor"]
+  density_floor = options["density_floor"]
                  .doc("A minimum density used when dividing NVn by Nn. "
                       "Normalised units.")
                  .withDefault(1e-8);
 
-  pn_floor = nn_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
@@ -172,7 +172,7 @@ void NeutralMixed::transform(Options& state) {
   Pn = floor(Pn, 0.0);
 
   // Nnlim Used where division by neutral density is needed
-  Nnlim = floor(Nn, nn_floor);
+  Nnlim = floor(Nn, density_floor);
   Tn = Pn / Nnlim;
   Tn.applyBoundary();
 
@@ -182,7 +182,7 @@ void NeutralMixed::transform(Options& state) {
   Vn.applyBoundary("neumann");
   Vnlim.applyBoundary("neumann");
 
-  Pnlim = floor(Pn, pn_floor);
+  Pnlim = floor(Pn, pressure_floor);
   Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
@@ -463,10 +463,10 @@ void NeutralMixed::finally(const Options& state) {
   ddt(Pn) += Sp;
 
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
-    if ((Pn[i] < pn_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
+    if ((Pn[i] < pressure_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
       ddt(Pn)[i] = 0.0;
     }
-    if ((Nn[i] < nn_floor * 1e-2) && (ddt(Nn)[i] < 0.0)) {
+    if ((Nn[i] < density_floor * 1e-2) && (ddt(Nn)[i] < 0.0)) {
       ddt(Nn)[i] = 0.0;
     }
   }

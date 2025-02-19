@@ -46,8 +46,8 @@ private:
 
   bool sheath_ydown, sheath_yup;
 
-  BoutReal nn_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
-  BoutReal pn_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
+  BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
+  BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
 
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
