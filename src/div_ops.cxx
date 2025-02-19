@@ -886,6 +886,7 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
     aup = adown = ac = toFieldAligned(a);
 
     yzresult.setDirectionY(YDirectionType::Aligned);
+    flow_ylow.setDirectionY(YDirectionType::Aligned);
   }
 
   if (bout::build::use_metric_3d) {
