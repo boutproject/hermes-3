@@ -366,6 +366,47 @@ void NeutralMixed::finally(const Options& state) {
   }
   ddt(Nn) += Sn; // Always add density_source
 
+  /////////////////////////////////////////////////////
+  // Neutral pressure
+  TRACE("Neutral pressure");
+
+  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(               // Parallel advection
+                    Pn, Vn, sound_speed, ef_adv_par_ylow)
+
+            - (2. / 3) * Pn * Div_par(Vn)                // Compression
+
+            + Div_a_Grad_perp_flows(                     // Perpendicular advection
+                    DnnPn, logPnlim,
+                    ef_adv_perp_xlow, ef_adv_perp_ylow)  
+     ;
+
+  // The factor here is 5/2 as we're advecting internal energy and pressure.
+  ef_adv_par_ylow  *= 5/2;
+  ef_adv_perp_xlow *= 5/2; 
+  ef_adv_perp_ylow *= 5/2;
+
+  if (neutral_conduction) {
+    ddt(Pn) += Div_a_Grad_perp_flows(
+                    DnnNn, Tn,                            // Perpendicular conduction
+                    ef_cond_perp_xlow, ef_cond_perp_ylow)
+
+            + Div_par_K_Grad_par_mod(DnnNn, Tn,           // Parallel conduction 
+                      ef_cond_par_ylow,        
+                      false)  // No conduction through target boundary
+      ;
+  }
+
+  // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
+  ef_cond_perp_xlow *= 3/2;
+  ef_cond_perp_ylow *= 3/2;
+  ef_cond_par_ylow *= 3/2;
+  
+  Sp = pressure_source;
+  if (localstate.isSet("energy_source")) {
+    Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
+  }
+  ddt(Pn) += Sp;
+
   if (evolve_momentum) {
 
     /////////////////////////////////////////////////////
@@ -419,46 +460,6 @@ void NeutralMixed::finally(const Options& state) {
     Snv = 0;
   }
 
-  /////////////////////////////////////////////////////
-  // Neutral pressure
-  TRACE("Neutral pressure");
-
-  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(               // Parallel advection
-                    Pn, Vn, sound_speed, ef_adv_par_ylow)
-
-            - (2. / 3) * Pn * Div_par(Vn)                // Compression
-
-            + Div_a_Grad_perp_flows(                     // Perpendicular advection
-                    DnnPn, logPnlim,
-                    ef_adv_perp_xlow, ef_adv_perp_ylow)  
-     ;
-
-  // The factor here is 5/2 as we're advecting internal energy and pressure.
-  ef_adv_par_ylow  *= 5/2;
-  ef_adv_perp_xlow *= 5/2; 
-  ef_adv_perp_ylow *= 5/2;
-
-  if (neutral_conduction) {
-    ddt(Pn) += Div_a_Grad_perp_flows(
-                    DnnNn, Tn,                            // Perpendicular conduction
-                    ef_cond_perp_xlow, ef_cond_perp_ylow)
-
-            + Div_par_K_Grad_par_mod(DnnNn, Tn,           // Parallel conduction 
-                      ef_cond_par_ylow,        
-                      false)  // No conduction through target boundary
-      ;
-  }
-
-  // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-  ef_cond_perp_xlow *= 3/2;
-  ef_cond_perp_ylow *= 3/2;
-  ef_cond_par_ylow *= 3/2;
-  
-  Sp = pressure_source;
-  if (localstate.isSet("energy_source")) {
-    Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
-  }
-  ddt(Pn) += Sp;
 
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
     if ((Pn[i] < pressure_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
