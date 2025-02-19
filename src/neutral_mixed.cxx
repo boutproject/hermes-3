@@ -350,16 +350,14 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral density
   TRACE("Neutral density");
 
-  perp_nn_adv_src = Div_a_Grad_perp_flows(DnnNn, logPnlim,
-                                   pf_adv_perp_xlow,
-                                   pf_adv_perp_ylow);  // Perpendicular advection
-
-  par_nn_adv_src = FV::Div_par_mod<ParLimiter>(
-                Nn, Vn, sound_speed, pf_adv_par_ylow); // Parallel advection
 
   ddt(Nn) =
-    - par_nn_adv_src
-    + perp_nn_adv_src
+    - FV::Div_par_mod<ParLimiter>(
+                  Nn, Vn, sound_speed, pf_adv_par_ylow) // Parallel advection
+                  
+    + Div_a_Grad_perp_flows(DnnNn, logPnlim,
+                                   pf_adv_perp_xlow,
+                                   pf_adv_perp_ylow);    // Perpendicular advection
     ;
 
   Sn = density_source; // Save for possible output
@@ -599,22 +597,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"long_name", name + " pressure source"},
                     {"species", name},
                     {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("S") + name + std::string("_perp_adv")], perp_nn_adv_src,
-                   {{"time_dimension", "t"},
-                    {"units", "m^-3 s^-1"},
-                    {"conversion", Nnorm * Omega_ci},
-                    {"standard_name", "density source due to perp advection"},
-                    {"long_name", name + " number density source due to perp advection"},
-                    {"species", name},
-                    {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("S") + name + std::string("_par_adv")], par_nn_adv_src,
-                   {{"time_dimension", "t"},
-                    {"units", "m^-3 s^-1"},
-                    {"conversion", Nnorm * Omega_ci},
-                    {"standard_name", "density source due to par advection"},
-                    {"long_name", name + " number density source due to par advection"},
-                    {"species", name},
-                    {"source", "neutral_mixed"}});
+
     ///////////////////////////////////////////////////
     // Parallel flow diagnostics
 

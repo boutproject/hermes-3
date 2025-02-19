@@ -63,8 +63,6 @@ private:
   Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
-  Field3D perp_nn_adv_src; ///< Source due to perpendicular advection operator
-  Field3D par_nn_adv_src; ///< Source due to parallel advection operator
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
