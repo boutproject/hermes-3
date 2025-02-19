@@ -46,8 +46,8 @@ private:
 
   bool sheath_ydown, sheath_yup;
 
-  BoutReal nn_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
-  BoutReal pn_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
+  BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
+  BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
 
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
@@ -65,17 +65,16 @@ private:
   Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
-  Field3D perp_nn_adv_src; ///< Source due to perpendicular advection operator
-  Field3D par_nn_adv_src; ///< Source due to parallel advection operator
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
 
   // Flow diagnostics
-  Field3D particle_flow_xlow, particle_flow_ylow;
-  Field3D momentum_flow_xlow, momentum_flow_ylow;
-  Field3D energy_flow_xlow, energy_flow_ylow;
-  Field3D conduction_flow_xlow, conduction_flow_ylow;
+  Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
+  Field3D mf_adv_perp_xlow, mf_adv_perp_ylow, mf_adv_par_ylow;
+  Field3D mf_visc_perp_xlow, mf_visc_perp_ylow, mf_visc_par_ylow;
+  Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
+  Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
 };
 
 namespace {

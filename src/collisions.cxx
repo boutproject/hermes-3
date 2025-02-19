@@ -33,13 +33,13 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
                      .withDefault<bool>(true);
   electron_neutral = options["electron_neutral"]
                          .doc("Include electron-neutral elastic collisions?")
-                         .withDefault<bool>(true);
+                         .withDefault<bool>(false);
   ion_ion = options["ion_ion"]
                 .doc("Include ion-ion elastic collisions?")
                 .withDefault<bool>(true);
   ion_neutral = options["ion_neutral"]
                     .doc("Include ion-neutral elastic collisions?")
-                    .withDefault<bool>(true);
+                    .withDefault<bool>(false);
   neutral_neutral = options["neutral_neutral"]
                         .doc("Include neutral-neutral elastic collisions?")
                         .withDefault<bool>(true);
@@ -218,7 +218,7 @@ void Collisions::transform(Options& state) {
               ((Te[i] < 0.1) || (Ni[i] < 1e10) || (Ne[i] < 1e10)) ? 10
               : (Te[i] < Ti[i] * me_mi)
                   ? 23 - 0.5 * log(Ni[i]) + 1.5 * log(Ti[i]) - log(SQ(Zi) * Ai)
-              : (Te[i] < 10 * SQ(Zi))
+              : (Te[i] < exp(2) * SQ(Zi)) // Fix to ei coulomb log from S.Mijin ReMKiT1D
                   // Ti m_e/m_i < Te < 10 Z^2
                   ? 30.0 - 0.5 * log(Ne[i]) - log(Zi) + 1.5 * log(Te[i])
                   // Ti m_e/m_i < 10 Z^2 < Te

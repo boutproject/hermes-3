@@ -227,9 +227,113 @@ namespace {
     }
   };
 
+  /// Krypton
+  ///
+  /// Radas version d50d6c3b (Oct 27, 2023)
+  /// Using N = 1E20m-3 and tau = 0.5ms
+  struct Krypton_adas {
+    BoutReal curve(BoutReal Te) {
+      if (Te >= 2 and Te <= 1500) {
+        BoutReal logT = log(Te);
+        BoutReal log_out =
+        -2.97405917e+01 * pow(logT, 0)
+        -2.25443986e+02 * pow(logT, 1)
+        +4.08713640e+02 * pow(logT, 2)
+        -3.86540549e+02 * pow(logT, 3)
+        +2.19566710e+02 * pow(logT, 4)
+        -7.93264990e+01 * pow(logT, 5)
+        +1.86185949e+01 * pow(logT, 6)
+        -2.82487288e+00 * pow(logT, 7)
+        +2.67070863e-01 * pow(logT, 8)
+        -1.43001273e-02 * pow(logT, 9)
+        +3.31179737e-04 * pow(logT, 10);
+        return exp(log_out);
 
+      } else if (Te < 2) {
+        return 8.01651285e-35;
+      } else {
+        return 6.17035971e-32;
+      }
+    }
+  };
 
+  /// Xenon
+  ///
+  /// Radas version d50d6c3b (Oct 27, 2023)
+  /// Using N = 1E20m-3 and tau = 0.5ms
+  ///
+  /// Note: Requires more than 10 coefficients to capture multiple
+  /// radiation peaks.
+  struct Xenon_adas {
+    BoutReal curve(BoutReal Te) {
+      if (Te >= 2 and Te <= 1300) {
+        BoutReal logT = log(Te);
+        BoutReal log_out =
+        +3.80572137e+02 * pow(logT, 0)
+        -3.05839745e+03 * pow(logT, 1)
+        +9.01104594e+03 * pow(logT, 2)
+        -1.55327244e+04 * pow(logT, 3)
+        +1.75819719e+04 * pow(logT, 4)
+        -1.38754866e+04 * pow(logT, 5)
+        +7.90608220e+03 * pow(logT, 6)
+        -3.32041900e+03 * pow(logT, 7)
+        +1.03912363e+03 * pow(logT, 8)
+        -2.42980719e+02 * pow(logT, 9)
+        +4.22211209e+01 * pow(logT, 10)
+        -5.36813849e+00 * pow(logT, 11)
+        +4.84652106e-01 * pow(logT, 12)
+        -2.94023979e-02 * pow(logT, 13)
+        +1.07416308e-03 * pow(logT, 14)
+        -1.78510623e-05 * pow(logT, 15);
+        return exp(log_out);
 
+      } else if (Te < 2) {
+        return 1.87187135e-33;
+      } else {
+        return 1.29785519e-31;
+      }
+    }
+  };
+
+  /// Tungsten
+  ///
+  /// Radas version d50d6c3b (Oct 27, 2023)
+  /// Using N = 1E20m-3 and tau = 0.5ms
+  struct Tungsten_adas {
+    BoutReal curve(BoutReal Te) {
+      if (Te >= 1.25 and Te <= 1500) {
+        BoutReal logT = log(Te);
+        BoutReal log_out =
+          -7.24602210e+01 * pow(logT, 0)
+          -2.17524363e+01 * pow(logT, 1)
+          +1.90745408e+02 * pow(logT, 2)
+          -7.57571067e+02 * pow(logT, 3)
+          +1.84119395e+03 * pow(logT, 4)
+          -2.99842204e+03 * pow(logT, 5)
+          +3.40395125e+03 * pow(logT, 6)
+          -2.76328977e+03 * pow(logT, 7)
+          +1.63368844e+03 * pow(logT, 8)
+          -7.11076320e+02 * pow(logT, 9)
+          +2.28027010e+02 * pow(logT, 10)
+          -5.30145974e+01 * pow(logT, 11)
+          +8.46066686e+00 * pow(logT, 12)
+          -7.54960450e-01 * pow(logT, 13)
+          -1.61054010e-02 * pow(logT, 14)
+          +1.65520152e-02 * pow(logT, 15)
+          -2.70054697e-03 * pow(logT, 16)
+          +2.50286873e-04 * pow(logT, 17)
+          -1.43319310e-05 * pow(logT, 18)
+          +4.75258630e-07 * pow(logT, 19)
+          -7.03012454e-09 * pow(logT, 20);
+        return exp(log_out);
+
+      } else if (Te < 1.25) {
+        return 2.09814651e-32;
+      } else {
+        return 1.85078767e-31;
+      }
+    }
+  };
 }
 
 /// Set ion densities from electron densities
@@ -302,7 +406,7 @@ struct FixedFractionRadiation : public Component {
     AUTO_TRACE();
 
     if (diagnose) {
-      set_with_attrs(state[std::string("R") + name], radiation,
+      set_with_attrs(state[std::string("R") + name], -radiation,
                      {{"time_dimension", "t"},
                       {"units", "W / m^3"},
                       {"conversion", SI::qe * Tnorm * Nnorm * FreqNorm},
@@ -349,6 +453,14 @@ namespace {
   RegisterComponent<FixedFractionRadiation<Argon_simplified3>>
     registercomponentfixedfractionargonsimplified3("fixed_fraction_argon_simplified3");
 
+  RegisterComponent<FixedFractionRadiation<Krypton_adas>>
+    registercomponentfixedfractionkrypton("fixed_fraction_krypton");
+
+  RegisterComponent<FixedFractionRadiation<Xenon_adas>>
+    registercomponentfixedfractionxenon("fixed_fraction_xenon");
+
+  RegisterComponent<FixedFractionRadiation<Tungsten_adas>>
+    registercomponentfixedfractiontungsten("fixed_fraction_tungsten");
 }
 
 #endif // FIXED_FRACTION_IONS_H

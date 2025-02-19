@@ -256,7 +256,13 @@ void EvolveEnergy::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(E) -= FV::Div_par_mod<hermes::Limiter>(E + P, V, fastest_wave);
+    ddt(E) -= FV::Div_par_mod<hermes::Limiter>(E + P, V, fastest_wave, flow_ylow);
+
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+      // Magnetic flutter term
+      const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+      ddt(E) -= Div_n_g_bxGrad_f_B_XZ(E + P, V, -Apar_flutter);
+    }
   }
 
   if (species.isSet("low_n_coeff")) {
@@ -321,7 +327,23 @@ void EvolveEnergy::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    ddt(E) += FV::Div_par_K_Grad_par(kappa_par, T, false);
+    Field3D flow_ylow_conduction;
+    ddt(E) += Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    flow_ylow += flow_ylow_conduction;
+
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+      // Magnetic flutter term. The operator splits into 4 pieces:
+      // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))
+      //                    + Div(k db b0.Grad(T)) + Div(k db db.Grad(T))
+      // The first term is already calculated above.
+      // Here we add the terms containing db
+      const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+      Field3D db_dot_T = bracket(T, Apar_flutter, BRACKET_ARAKAWA);
+      Field3D b0_dot_T = Grad_par(T);
+      mesh->communicate(db_dot_T, b0_dot_T);
+      ddt(E) += Div_par(kappa_par * db_dot_T)
+        - Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter);
+    }
   }
 
   if (hyper_z > 0.) {
@@ -370,7 +392,7 @@ void EvolveEnergy::finally(const Options& state) {
       flow_xlow = get<Field3D>(species["energy_flow_xlow"]);
     }
     if (species.isSet("energy_flow_ylow")) {
-      flow_ylow = get<Field3D>(species["energy_flow_ylow"]);
+      flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
   }
 }
@@ -453,7 +475,7 @@ void EvolveEnergy::outputVars(Options& state) {
                     {"source", "evolve_energy"}});
 
     if (flow_xlow.isAllocated()) {
-      set_with_attrs(state[std::string("EnergyFlow_") + name + std::string("_xlow")], flow_xlow,
+      set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
                    {{"time_dimension", "t"},
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
@@ -463,7 +485,7 @@ void EvolveEnergy::outputVars(Options& state) {
                     {"source", "evolve_energy"}});
     }
     if (flow_ylow.isAllocated()) {
-      set_with_attrs(state[std::string("EnergyFlow_") + name + std::string("_ylow")], flow_ylow,
+      set_with_attrs(state[fmt::format("ef{}_tot_ylow", name)], flow_ylow,
                    {{"time_dimension", "t"},
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},

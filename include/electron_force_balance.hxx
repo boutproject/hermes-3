@@ -19,7 +19,13 @@
 ///       components which impose forces on electrons
 ///
 struct ElectronForceBalance : public Component {
-  ElectronForceBalance(std::string, Options&, Solver*) {}
+  ElectronForceBalance(std::string name, Options& alloptions, Solver*) {
+    AUTO_TRACE();
+    auto& options = alloptions[name];
+    diagnose = options["diagnose"]
+      .doc("Save additional output diagnostics")
+      .withDefault<bool>(false);
+  }
 
   /// Required inputs
   /// - species
@@ -35,6 +41,13 @@ struct ElectronForceBalance : public Component {
   ///     - momentum_source
   /// 
   void transform(Options &state) override;
+
+  /// Save output diagnostics
+  void outputVars(Options& state) override;
+private:
+  bool diagnose; ///< Output additional fields
+
+  Field3D Epar; ///< Parallel electric field
 };
 
 namespace {

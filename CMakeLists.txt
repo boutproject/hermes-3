@@ -6,7 +6,7 @@ else()
   cmake_policy(VERSION 3.12)
 endif()
 
-project(hermes-3 LANGUAGES CXX)
+project(hermes-3 LANGUAGES CXX C)
 
 # Extra CMake scripts in cmake/ subdirectory
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
@@ -43,7 +43,8 @@ message(STATUS "Git revision: ${HERMES_REVISION}")
 option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
   set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
-  add_subdirectory(external/BOUT-dev)
+  set(HERMES_BOUT_SRC "external/BOUT-dev" CACHE STRING "Directory of BOUT++ dir")
+  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev)
 else()
   find_package(bout++ REQUIRED)
 endif()

@@ -124,8 +124,6 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     }
   }
 
-
-
   neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
@@ -193,6 +191,20 @@ void EvolveDensity::transform(Options& state) {
     low_n_coeff.applyBoundary("neumann");
     set(species["low_n_coeff"], low_n_coeff);
   }
+
+  // The particle source needs to be known in other components
+  // (e.g when electromagnetic terms are enabled)
+  // So evaluate them here rather than in finally()
+  if (source_time_dependent) {
+    // Evaluate the source_prefactor function at the current time in seconds and scale source with it
+    BoutReal time = get<BoutReal>(state["time"]);
+    BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
+    final_source = source * source_prefactor;
+  } else {
+    final_source = source;
+  }
+  final_source.allocate(); // Ensure unique memory storage.
+  add(species["density_source"], final_source);
 }
 
 void EvolveDensity::finally(const Options& state) {
@@ -231,7 +243,15 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
+
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+      // Magnetic flutter term
+      const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+      // Note: Using -Apar_flutter rather than reversing sign in front,
+      //       so that upwinding is handled correctly
+      ddt(N) -= Div_n_g_bxGrad_f_B_XZ(N, V, -Apar_flutter);
+    }
   }
 
   if (low_n_diffuse) {
@@ -257,20 +277,9 @@ void EvolveDensity::finally(const Options& state) {
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 
-  if (source_time_dependent) {
-    // Evaluate the source_prefactor function at the current time in seconds and scale source with it
-    BoutReal time = get<BoutReal>(state["time"]);
-    BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
-    final_source = source * source_prefactor;
-  } else {
-    final_source = source;
-  }
-
-  // Collect the external source from above with all the sources from elsewhere (collisions, reactions, etc) for diagnostics
-  Sn = final_source;
-  if (species.isSet("density_source")) {
-    Sn += get<Field3D>(species["density_source"]);
-  }
+  // Collect the external source from above with all the sources from
+  // elsewhere (collisions, reactions, etc) for diagnostics
+  Sn = get<Field3D>(species["density_source"]);
   ddt(N) += Sn;
 
   // Scale time derivatives
@@ -297,7 +306,7 @@ void EvolveDensity::finally(const Options& state) {
       flow_xlow = get<Field3D>(species["particle_flow_xlow"]);
     }
     if (species.isSet("particle_flow_ylow")) {
-      flow_ylow = get<Field3D>(species["particle_flow_ylow"]);
+      flow_ylow += get<Field3D>(species["particle_flow_ylow"]);
     }
   }
 }
@@ -351,7 +360,7 @@ void EvolveDensity::outputVars(Options& state) {
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
     if (flow_xlow.isAllocated()) {
-      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_xlow")], flow_xlow,
+      set_with_attrs(state[fmt::format("pf{}_tot_xlow", name)], flow_xlow,
                    {{"time_dimension", "t"},
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
@@ -361,7 +370,7 @@ void EvolveDensity::outputVars(Options& state) {
                     {"source", "evolve_density"}});
     }
     if (flow_ylow.isAllocated()) {
-      set_with_attrs(state[std::string("ParticleFlow_") + name + std::string("_ylow")], flow_ylow,
+      set_with_attrs(state[fmt::format("pf{}_tot_ylow", name)], flow_ylow,
                    {{"time_dimension", "t"},
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
