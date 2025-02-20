@@ -208,8 +208,8 @@ int Hermes::init(bool restarting) {
   TRACE("Loading metric tensor");
 
   if (options.isSet("loadmetric")) {
-    throw BoutException("Error: The loadmetric option has been replaced with recalculate_metric.\n"
-                        "Note: The value (true/false) is inverted for the new option.\n"
+    throw BoutException("Error: The loadmetric option has been renamed to recalculate_metric.\n"
+                        "Note: The default (true/false) is inverted for the new option.\n"
                         "Setting recalculate_metric=false (the default) uses the metric in the grid file.\n"
                         "Setting recalculate_metric=true loads Rxy, Bpxy etc from the grid file.\n"
                         "  This assumes an orthogonal coordinate system. See manual for details.");
@@ -221,12 +221,24 @@ int Hermes::init(bool restarting) {
     recalculate_metric(rho_s0, Bnorm);
 
   } else {
-    // Check that the grid file contains metric tensor components
-    // Note: Older grid files did not, so would default to the identity metric
-    if (!mesh->sourceHasVar("J")) {
-      throw BoutException("Grid input does not contain expected Jacobian 'J'.\n"
+    // Check that the grid file contains at least one metric tensor component
+    // Note: Older grid files did not, so would silently default to the identity metric
+    if (!(mesh->sourceHasVar("J") or
+          mesh->sourceHasVar("g11") or
+          mesh->sourceHasVar("g22") or
+          mesh->sourceHasVar("g33") or
+          mesh->sourceHasVar("g12") or
+          mesh->sourceHasVar("g23") or
+          mesh->sourceHasVar("g13") or
+          mesh->sourceHasVar("g_11") or
+          mesh->sourceHasVar("g_22") or
+          mesh->sourceHasVar("g_33") or
+          mesh->sourceHasVar("g_12") or
+          mesh->sourceHasVar("g_23") or
+          mesh->sourceHasVar("g_13")) {
+      throw BoutException("Grid input does not contain any metric components (J, g11, g_22 etc).\n"
                           "Set hermes:recalculate_metric=true to calculate from Rxy, Bpxy etc.\n"
-                          "If the default identity metric is intended then set mesh:J=1\n");
+                          "If the default identity metric is intended then set e.g. mesh:J=1\n");
     }
 
     if (options["normalise_metric"]
