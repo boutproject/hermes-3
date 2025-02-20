@@ -191,6 +191,20 @@ void EvolveDensity::transform(Options& state) {
     low_n_coeff.applyBoundary("neumann");
     set(species["low_n_coeff"], low_n_coeff);
   }
+
+  // The particle source needs to be known in other components
+  // (e.g when electromagnetic terms are enabled)
+  // So evaluate them here rather than in finally()
+  if (source_time_dependent) {
+    // Evaluate the source_prefactor function at the current time in seconds and scale source with it
+    BoutReal time = get<BoutReal>(state["time"]);
+    BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
+    final_source = source * source_prefactor;
+  } else {
+    final_source = source;
+  }
+  final_source.allocate(); // Ensure unique memory storage.
+  add(species["density_source"], final_source);
 }
 
 void EvolveDensity::finally(const Options& state) {
@@ -263,20 +277,9 @@ void EvolveDensity::finally(const Options& state) {
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 
-  if (source_time_dependent) {
-    // Evaluate the source_prefactor function at the current time in seconds and scale source with it
-    BoutReal time = get<BoutReal>(state["time"]);
-    BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
-    final_source = source * source_prefactor;
-  } else {
-    final_source = source;
-  }
-
-  // Collect the external source from above with all the sources from elsewhere (collisions, reactions, etc) for diagnostics
-  Sn = final_source;
-  if (species.isSet("density_source")) {
-    Sn += get<Field3D>(species["density_source"]);
-  }
+  // Collect the external source from above with all the sources from
+  // elsewhere (collisions, reactions, etc) for diagnostics
+  Sn = get<Field3D>(species["density_source"]);
   ddt(N) += Sn;
 
   // Scale time derivatives

@@ -222,7 +222,7 @@ void Collisions::transform(Options& state) {
               ((Te[i] < 0.1) || (Ni[i] < 1e10) || (Ne[i] < 1e10)) ? 10
               : (Te[i] < Ti[i] * me_mi)
                   ? 23 - 0.5 * log(Ni[i]) + 1.5 * log(Ti[i]) - log(SQ(Zi) * Ai)
-              : (Te[i] < 10 * SQ(Zi))
+              : (Te[i] < exp(2) * SQ(Zi)) // Fix to ei coulomb log from S.Mijin ReMKiT1D
                   // Ti m_e/m_i < Te < 10 Z^2
                   ? 30.0 - 0.5 * log(Ne[i]) - log(Zi) + 1.5 * log(Te[i])
                   // Ti m_e/m_i < 10 Z^2 < Te

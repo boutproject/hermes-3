@@ -8,10 +8,12 @@
 // These are used if the maximum iterations is reached.
 // Note: A loose tolerance is used because repeated iterations
 //       can usually recover tight tolerances.
+BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:type", "naulin");
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:rtol_accept", 1e-2);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:atol_accept", 1e-6);
+BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:maxits", 1000);
 
-Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*) {
+Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* solver) {
   AUTO_TRACE();
 
   Options& units = alloptions["units"];
@@ -29,10 +31,8 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver*)
 
   // Use the "Naulin" solver because we need to include toroidal
   // variations of the density (A coefficient)
-  if (!options["laplacian"].isSet("type")) {
-    options["laplacian"]["type"] = "naulin";
-  }
   aparSolver = Laplacian::create(&options["laplacian"]);
+  aparSolver->savePerformance(*solver, "AparSolver");
 
   const_gradient = options["const_gradient"]
     .doc("Extrapolate gradient of Apar into all radial boundaries?")
