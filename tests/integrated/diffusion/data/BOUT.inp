@@ -10,6 +10,8 @@ dx = 0.0075 + 0.005*x
 dy = 0.01
 dz = 0.01
 
+J = 1  # Identity metric
+
 [solver]
 mxstep = 1000
 

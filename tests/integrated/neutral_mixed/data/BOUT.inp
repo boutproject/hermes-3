@@ -13,6 +13,8 @@ dz = 1e-3
 yn = y / (2π)
 zn = z / (2π)
 
+J = 1  # Identity metric
+
 [solver]
 mxstep = 1000
 

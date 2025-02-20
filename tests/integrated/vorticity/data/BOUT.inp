@@ -10,6 +10,8 @@ nz = 10
 
 zn = z / (2π)
 
+J = 1  # Identity metric
+
 [mesh:paralleltransform]
 type = identity
 

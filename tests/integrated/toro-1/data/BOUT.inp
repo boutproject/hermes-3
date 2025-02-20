@@ -13,6 +13,7 @@ ixseps1 = -1 # Boundaries in Y
 Ly = 5  # Length of the domain
 
 dy = Ly / ny
+J = 1  # Identity metric
 
 [solver]
 mxstep = 10000

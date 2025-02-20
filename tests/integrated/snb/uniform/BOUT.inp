@@ -13,6 +13,8 @@ yn = y / (2π)
 
 ixseps1 = 0  # Domain is not periodic in Y
 
+J = 1  # Identity metric
+
 [mesh:paralleltransform]
 type = identity
 

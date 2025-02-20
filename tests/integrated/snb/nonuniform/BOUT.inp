@@ -19,6 +19,7 @@ dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be
 
 # Parallel grid spacing
 dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+J = 1  # Identity metric
 
 [mesh:paralleltransform]
 type = identity
