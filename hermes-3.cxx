@@ -235,7 +235,7 @@ int Hermes::init(bool restarting) {
           mesh->sourceHasVar("g_33") or
           mesh->sourceHasVar("g_12") or
           mesh->sourceHasVar("g_23") or
-          mesh->sourceHasVar("g_13")) {
+          mesh->sourceHasVar("g_13"))) {
       throw BoutException("Grid input does not contain any metric components (J, g11, g_22 etc).\n"
                           "Set hermes:recalculate_metric=true to calculate from Rxy, Bpxy etc.\n"
                           "If the default identity metric is intended then set e.g. mesh:J=1\n");
