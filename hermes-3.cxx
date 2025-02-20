@@ -207,6 +207,14 @@ int Hermes::init(bool restarting) {
   // field normalisations
   TRACE("Loading metric tensor");
 
+  if (options.isSet("loadmetric")) {
+    throw BoutException("Error: The loadmetric option has been replaced with recalculate_metric.\n"
+                        "Note: The value (true/false) is inverted for the new option.\n"
+                        "Setting recalculate_metric=false (the default) uses the metric in the grid file.\n"
+                        "Setting recalculate_metric=true loads Rxy, Bpxy etc from the grid file.\n"
+                        "  This assumes an orthogonal coordinate system. See manual for details.");
+  }
+
   if (options["recalculate_metric"]
           .doc("Load Rxy, Bpxy etc. to calculate an orthogonal metric?")
           .withDefault(false)) {
