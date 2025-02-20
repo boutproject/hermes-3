@@ -404,7 +404,7 @@ void NeutralMixed::finally(const Options& state) {
                     kappa_n, Tn,                            // Perpendicular conduction
                     ef_cond_perp_xlow, ef_cond_perp_ylow)
 
-            + Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
+            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
                       ef_cond_par_ylow,        
                       false)  // No conduction through target boundary
       ;
