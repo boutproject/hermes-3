@@ -12,6 +12,8 @@ Ly = 2π
 
 dy = Ly / ny
 
+J = 1 # Identity metric
+
 [solver]
 mxstep = 10000
 

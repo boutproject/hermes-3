@@ -11,6 +11,8 @@ nx = 1
 ny = 1
 nz = 1
 
+J = 1 # Identity metric
+
 [hermes]
 components = d+, e, collisions
 

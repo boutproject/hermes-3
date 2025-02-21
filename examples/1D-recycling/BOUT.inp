@@ -41,6 +41,8 @@ y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dym
 ixseps1 = -1
 ixseps2 = -1
 
+J = 1 # Identity metric
+
 [hermes]
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
 # to electron pressure by using electron force balance.
