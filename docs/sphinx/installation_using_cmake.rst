@@ -6,6 +6,14 @@ Installation using CMake
 Compilation process
 ----------
 
+Compilation is achieved in two stages - the first is configuration where all the compile-time
+options are read in. The second is the build which results in a ready-to-use Hermes-3 installation
+in a directory named `build` by default. The build directory name can be changed to have
+multiple builds available at the same time.
+
+If you make changes to the code, you can skip straight to the build stage to save time.
+Only modified files will be recompiled.
+
 Hermes-3 is built using `CMake <https://cmake.org>`_. During configuration `BOUT++
 <https://github.com/boutproject/BOUT-dev/>`_ will be automatically
 downloaded as a submodule, together with some dependencies. The correct version 
