@@ -5,6 +5,8 @@
 #include <bout/constants.hxx>
 #include "component.hxx"
 
+using bout::globals::mesh;
+
 namespace {
   /// Carbon in coronal equilibrium
   /// From I.H.Hutchinson Nucl. Fusion 34 (10) 1337 - 1348 (1994)
@@ -354,6 +356,10 @@ struct FixedFractionRadiation : public Component {
       .doc("Output radiation diagnostic?")
       .withDefault<bool>(false);
 
+    no_core_radiation = options["no_core_radiation"]
+      .doc("Set radiation to zero in core?")
+      .withDefault<bool>(true);
+
     radiation_multiplier = options["R_multiplier"]
       .doc("Scale the radiation rate by this factor")
       .withDefault<BoutReal>(1.0);
@@ -398,6 +404,20 @@ struct FixedFractionRadiation : public Component {
                             },
                             Ne.getRegion("RGN_NOBNDRY"))(Ne, Te);
 
+    // Disable radiation in core to emulate coronal conditions in the core
+    // This is a trick D. Moulton uses in SOLPS to avoid runaway fronts with fixed fraction
+    if (no_core_radiation) {
+      for (int x = mesh->xstart; x <= mesh->xend; x++) {
+        if (mesh->periodicY(x)) {
+          for (int y = mesh->ystart; y <= mesh->yend; y++) {
+            for (int z = mesh->zstart; z <= mesh->zend; z++) {
+              radiation(x, y, z) = 0.0;
+            }
+          }
+        }
+      }
+    }
+
     // Remove radiation from the electron energy source
     subtract(electrons["energy_source"], radiation);
   }
@@ -421,6 +441,7 @@ struct FixedFractionRadiation : public Component {
   BoutReal fraction; ///< Fixed fraction
 
   bool diagnose; ///< Output radiation diagnostic?
+  bool no_core_radiation; ///< Set radiation to zero in core?
   BoutReal radiation_multiplier; ///< Scale the radiation rate by this factor
   Field3D radiation; ///< For output diagnostic
 
