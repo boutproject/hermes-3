@@ -1,4 +1,4 @@
-.. _sec-installation_cmake:
+.. _sec-installation_using_cmake:
 
 Installation using CMake
 ===============
