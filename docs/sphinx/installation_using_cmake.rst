@@ -188,7 +188,7 @@ The CMake flag ``-DHERMES_SLOPE_LIMITER`` sets the choice of slope
 limiter.  The default method is ``MC``, which has been found to
 provide a good balance for problems of interest. If more dissipation
 is required then this can be changed to ``MinMod``; 
-if more dissipation is required then this can be changed
+if less dissipation is required then this can be changed
 to ``Superbee``.
 
 The appropriate limiter is problem-dependent. ``MinMod`` can work well
