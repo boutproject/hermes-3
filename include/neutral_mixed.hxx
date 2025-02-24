@@ -42,29 +42,37 @@ private:
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn; ///< Diffusion coefficient
-  Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
+  Field3D DnnNn, DnnPn, DnnNVn;
 
   bool sheath_ydown, sheath_yup;
 
-  BoutReal nn_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
+  BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
+  BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
 
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
   bool neutral_viscosity; ///< include viscosity?
+  bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
 
   bool precondition {true}; ///< Enable preconditioner?
+  bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
   Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
+  Field3D sound_speed; ///< Sound speed for use with Lax flux
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
 
-  Field3D particle_flow_ylow; ///< Flow diagnostics
-  Field3D energy_flow_ylow;
+  // Flow diagnostics
+  Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
+  Field3D mf_adv_perp_xlow, mf_adv_perp_ylow, mf_adv_par_ylow;
+  Field3D mf_visc_perp_xlow, mf_visc_perp_ylow, mf_visc_par_ylow;
+  Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
+  Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
 };
 
 namespace {
