@@ -2214,6 +2214,11 @@ electromagnetic
    (``electromagnetic:magnetic_flutter=true``).  They use an
    ``Apar_flutter`` field, not the ``Apar`` field that is calculated
    from the induction terms.
+5. If using ``vorticity:phi_boundary_relax`` to evolve the radial
+   boundary of the electrostatic potential, the timescale
+   ``phi_boundary_timescale`` should be set much longer than the
+   Alfven wave period or unphysical instabilities may grow from the
+   boundaries.
 
 This component modifies the definition of momentum of all species, to
 include the contribution from the electromagnetic potential
@@ -2288,6 +2293,13 @@ This writes an ``Apar_flutter`` field to the state, which then enables perturbed
 parallel derivative terms in the ``evolve_density``, ``evolve_pressure``, ``evolve_energy`` and
 ``evolve_momentum`` components. Parallel flow terms are modified, and parallel heat
 conduction.
+
+.. math::
+
+   \begin{aligned}\mathbf{b}\cdot\nabla f =& \mathbf{b}_0\cdot\nabla f + \delta\mathbf{b}\cdot\nabla f \\
+   =& \mathbf{b}_0\cdot\nabla f + \frac{1}{B}\nabla\times\left(\mathbf{b}A_{||}\right)\cdot\nabla f \\
+   \simeq& \mathbf{b}_0\cdot\nabla f + \frac{1}{B_0}\left[A_{||}\nabla\times\mathbf{b} + \left(\nabla A_{||}\right)\times\mathbf{b}_0\right]\cdot\nabla f \\
+   \simeq& \mathbf{b}_0\cdot\nabla f + \frac{1}{B_0}\mathbf{b}_0\times \nabla A_{||} \cdot \nabla f\end{aligned}
 
 .. doxygenstruct:: Electromagnetic
    :members:
