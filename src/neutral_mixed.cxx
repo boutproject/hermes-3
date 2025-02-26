@@ -388,8 +388,8 @@ void NeutralMixed::finally(const Options& state) {
                     Pn, Vn, sound_speed, ef_adv_par_ylow)
 
             - (2. / 3) * Pn * Div_par(Vn)                // Compression
+            + (5. / 3) * Div_a_Grad_perp_flows(          // Perpendicular advection
 
-            + (5. / 3) * Div_a_Grad_perp_flows(                     // Perpendicular advection
                     DnnPn, logPnlim,
                     ef_adv_perp_xlow, ef_adv_perp_ylow)  
      ;
@@ -447,7 +447,6 @@ void NeutralMixed::finally(const Options& state) {
       // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
-      //
 
       Field3D viscosity_source = AA * Div_a_Grad_perp_flows(
                                 eta_n, Vn,              // Perpendicular viscosity

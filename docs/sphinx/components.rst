@@ -2067,6 +2067,11 @@ in coronal equilibrium, using a simple formula from `I.H.Hutchinson Nucl. Fusion
 
 which has units of :math:`Wm^3` with :math:`T_e` in eV.
 
+By default, fixed fraction radiation is disabled in the core region. This represents the fact that
+the impurity will likely be coronal on closed field lines and feature reduced radiation. This 
+can prevent unphysical MARFE-like behaviour in deep detachment. This behaviour can be disabled
+by setting ``no_core_radiation=false`` in the impurity options block.
+
 To use this component you can just add it to the list of components and then
 configure the impurity fraction:
 
