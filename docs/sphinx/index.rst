@@ -10,6 +10,7 @@ Welcome to Hermes-3 documentation!
    introduction
    installation_using_cmake
    installation_using_spack
+   inputs
    examples
    tests
    transport_2d

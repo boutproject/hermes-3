@@ -12,6 +12,8 @@ Ly = 2π
 
 dy = Ly / ny
 
+J = 1 # Identity metric
+
 [solver]
 mxstep = 10000
 
@@ -20,7 +22,6 @@ mxstep = 10000
 # to electron pressure by imposing zero current.
 components = i, e, electron_force_balance
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = false  # Normalise the input metric?
 
 Nnorm = 1e18

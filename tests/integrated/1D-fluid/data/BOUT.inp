@@ -11,6 +11,7 @@ nz = 1
 Ly = 10
 
 dy = Ly / ny
+J = 1  # Identity metric
 
 [solver]
 mxstep = 10000
@@ -21,7 +22,6 @@ mms = true  # Run with MMS sources and output diagnostics
 [hermes]
 components = i
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = false  # Normalise the input metric?
 
 Nnorm = 1e18

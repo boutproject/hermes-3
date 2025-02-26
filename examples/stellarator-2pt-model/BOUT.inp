@@ -34,7 +34,6 @@ ixseps2 = -1          # Necessary to set boundary conditions in y
 
 components = i, e, sheath_boundary, collisions, binormal_stpm, electron_force_balance
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true   # Normalise the input metric?
 
 Nnorm = 1e19   # [m^-3]
