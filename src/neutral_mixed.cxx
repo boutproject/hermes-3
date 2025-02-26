@@ -346,6 +346,20 @@ void NeutralMixed::finally(const Options& state) {
     sound_speed = sqrt(Tn * (5. / 3) / AA);
   }
 
+  // Heat conductivity 
+  // Note: This is kappa_n = (5/2) * Pn / (m * nu)
+  //       where nu is the collision frequency used in Dnn
+  kappa_n = (5. / 2) * DnnNn;
+
+  // Viscosity
+  // Relationship between heat conduction and viscosity for neutral
+  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+  // Transport Processes in Gases", 1972
+  // eta_n = (2. / 5) * m_n * kappa_n;
+  //
+  eta_n = AA * (2. / 5) * kappa_n;
+
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
@@ -374,8 +388,8 @@ void NeutralMixed::finally(const Options& state) {
                     Pn, Vn, sound_speed, ef_adv_par_ylow)
 
             - (2. / 3) * Pn * Div_par(Vn)                // Compression
+            + (5. / 3) * Div_a_Grad_perp_flows(          // Perpendicular advection
 
-            + Div_a_Grad_perp_flows(                     // Perpendicular advection
                     DnnPn, logPnlim,
                     ef_adv_perp_xlow, ef_adv_perp_ylow)  
      ;
@@ -386,11 +400,11 @@ void NeutralMixed::finally(const Options& state) {
   ef_adv_perp_ylow *= 5/2;
 
   if (neutral_conduction) {
-    ddt(Pn) += Div_a_Grad_perp_flows(
-                    DnnNn, Tn,                            // Perpendicular conduction
+    ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(
+                    kappa_n, Tn,                            // Perpendicular conduction
                     ef_cond_perp_xlow, ef_cond_perp_ylow)
 
-            + Div_par_K_Grad_par_mod(DnnNn, Tn,           // Parallel conduction 
+            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
                       ef_cond_par_ylow,        
                       false)  // No conduction through target boundary
       ;
@@ -433,19 +447,20 @@ void NeutralMixed::finally(const Options& state) {
       // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
-      //
 
-      ddt(NVn) +=
-          AA * Div_a_Grad_perp_flows(
-                    (2. / 5) * DnnNn, Vn,              // Perpendicular viscosity
-                    mf_visc_perp_xlow,
-                    mf_visc_perp_ylow)    
+      Field3D viscosity_source = AA * Div_a_Grad_perp_flows(
+                                eta_n, Vn,              // Perpendicular viscosity
+                                mf_visc_perp_xlow,
+                                mf_visc_perp_ylow)    
+                              
+                              + AA * Div_par_K_Grad_par_mod(               // Parallel viscosity 
+                                eta_n, Vn,
+                                mf_visc_par_ylow,
+                                false) // No viscosity through target boundary
+                          ;
 
-          + AA * Div_par_K_Grad_par_mod(               // Parallel viscosity 
-                    (2. / 5) * DnnNn, Vn,
-                    mf_visc_par_ylow,
-                    false) // No viscosity through target boundary
-          ;
+      ddt(NVn) += viscosity_source;
+      ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
     }
 
     if (localstate.isSet("momentum_source")) {

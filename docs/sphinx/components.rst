@@ -642,28 +642,85 @@ with velocity :math:`v_D = -D \nabla_\perp N / N`.
 Neutral gas models
 ------------------
 
+In 1D, neutral transport is currently done through the same components as for plasma, i.e. `evolve_density`,
+`evolve_momentum` and `evolve_pressure` with the additional, optional `neutral_parallel_diffusion` component.
+It is planned for the neutral models to be unified in the near future. 
+
+The below describes the `neutral_mixed` component used for 2D and 3D simulations. Note that all dimensionalities
+are compatible with the `neutral_boundary` component which facilitates energy losses to the wall through neutral reflection.
+
 The `neutral_mixed` component solves fluid equations along :math:`y`
 (parallel to the magnetic field), and uses diffusive transport in :math:`x`
-and :math:`z`.  It was adopted from the approach used in UEDGE and this paper
-[Journal of Nuclear Materials, vol. 313-316, pp. 559-563 (2003)].
+and :math:`z`.  It was adopted from the approach used in UEDGE and this [M.V. Umansky, J.N.M (2003)]. The Hermes-3 approach
+is more advanced in having a separate neutral pressure equation, similar to the 
+new AFN (Advanced Fluid Neutral) model in SOLPS-ITER [N. Horsten, N.F. (2017)].
 
 .. math::
    
-   \begin{aligned}\frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{||n} + n_n\mathbf{v}_{\perp n}\right) + S\\ \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& -\nabla\cdot\left(n_nv_{||n} \mathbf{b}v_{||n} + n_nv_{||n}\mathbf{v}_{\perp n}\right) - \partial_{||}p_n + \nabla_{||}\left(D_{nn}n_n\partial_{||}v_{||n}\right) + F \\ \frac{\partial p_n}{\partial t} =& -\nabla\cdot\left(p_n\mathbf{b}v_{||n} + p_n\mathbf{v}_{\perp n}\right) - \frac{2}{3}p_n\nabla\cdot\left(\mathbf{b}v_{||n}\right) + \nabla\cdot\left(D_{nn}n_n\nabla_\perp T_n\right) + \frac{2}{3}Q \end{aligned}
+   \begin{aligned}
 
-The parallel momentum is evolved, so that it can be exchanged with the
-plasma parallel momentum, but the mass is neglected for perpendicular
-motion. In the perpendicular direction, therefore, the motion is a
-balance between the friction (primarily with the plasma through charge
-exchange) and the pressure gradient:
+   \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{||n} + n_n\mathbf{v}_{\perp n}\right) \\
+         &    + S \\
+   \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& -\nabla\cdot\left(n_nv_{||n} \mathbf{b}v_{||n} + n_nv_{||n}\mathbf{v}_{\perp n}\right) \\
+         &    - \partial_{||}p_n \\
+         &    + \nabla \cdot (m_n \eta_{n} \nabla_{\perp} v_{\parallel n}) + \nabla \cdot( m_n \eta_{n} \nabla{\parallel} v_{\parallel n} ) \\
+         &    + F \\
+   \frac{\partial p_n}{\partial t} =& -\nabla\cdot\left(p_n\mathbf{b}v_{||n} + \frac{5}{3} p_n\mathbf{v}_{\perp n}\right) \\
+         &    - \frac{2}{3}p_n\nabla\cdot\left(\mathbf{b}v_{||n}\right) \\
+         &    + \frac{2}{3} \nabla\cdot\left(\kappa_n \nabla_\perp T_n\right) + \frac{2}{3} \nabla\cdot\left(\kappa_n \nabla_{\parallel} T_n\right) \\
+         &    - \frac{2}{3} v_n \nabla \cdot (m_n \eta_{n} \nabla_{\perp} v_{\parallel n}) + \frac{2}{3} \nabla \cdot( m_n \eta_{n} \nabla_{\parallel} v_{\parallel n} ) \\
+         &    + \frac{2}{3}E \\
+
+   \end{aligned}
+
+Where for the density equation, the first row of terms contains the parallel and perpendicular 
+advection and the second row the particle sources. In the parallel momentum equation, the first row of terms
+features parallel and perpendicular advection of parallel momentum. This is followed by the compression term
+and the perpendicular and parallel viscosity (diffusion of parallel momentum) as well as the momentum source term.
+In the pressure equation, the first row contains the parallel and perpendicular advection of pressure. This is followed
+by the compression term, the perpendicular and parallel conduction (diffusion of temperature) and perpendicular and parallel
+viscous heating, finally followed by the energy sources.
+
+While parallel momentum is evolved and is exchanged with the plasma parallel momentum, the advection of momentum is neglected in the perpendicular direction,
+resulting in the pressure diffusion model, where the pressure gradient is balanced by frictional forces. This is similar to Fickian diffusion with the pressure
+gradient replacing the density gradient as the flow driver, in an approach similar to that taken in nuclear fission neutronic transport modelling and several other edge codes.
+
+The perpendicular velocity is calculated as:
+
+.. math::
+   \begin{aligned}
+   v_{\perp} =& -D_n \frac{1}{P_n} \nabla_{\perp} p_n
+   \end{aligned}
+
+Where in the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`ln(P_n)`, which helps
+preserve pressure positivity.
+
+The diffusion coefficients are defined as:
 
 .. math::
 
-   \mathbf{v}_{\perp n} = -D_{nn}\frac{1}{p_n}\nabla_\perp p_n
+   \begin{aligned} 
+   D_n =& v_{th,n}^{2} \nu_{n, tot}  \\
+   \kappa_{n} =& \frac{5}{2} D_n N_n \\
+   \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
+   \end{aligned}
 
-At the moment there is no attempt to limit these velocities, which has
-been found necessary in UEDGE to get physical results in better
-agreement with kinetic neutral models [Discussion, T.Rognlien].
+Where :math:`v_{th,n}= \sqrt{\frac{T_n}{m_n}}` is the thermal velocity of neutrals and :math:`\nu_{n, tot}` is the total
+neutral collisionality. This is primarily driven by charge exchange and ionisation, which can cause issues in regions
+where plasma density is low. Because of this, an additional pseudo-collisionality is calculated based on the maximum vessel 
+mean free path and added to the total neutral collisionality.
+
+In an additional effort to limit the diffusivitiy to more physical values, a flux limiter has been implemented which clamps
+:math:`D_n` to :math:`D_{n,max}` defined as:
+
+.. math::
+   
+   \begin{aligned}
+   D_{n,max} =& f_l \frac{v_{th,n}}{abs(\nabla ln(P_n) + 1/l_{max}}
+   \end{aligned}
+
+This formulation is equivalent to defining a :math:`D_n` with a free streaming velocity while accounting for the pseudo collisionality due 
+to the maximum vessel mean free path :math:`l_{max}`. The flux limiter :math:`f_l` is set to 1.0 by default.
 
 Sources
 -------------------
