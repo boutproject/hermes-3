@@ -407,7 +407,7 @@ void Recycling::transform(Options& state) {
       Field3D radial_energy_outflow = energy_flow_xlow * -1;
 
       if(mesh->firstX()){   // Only do this for the processor which has the core region
-        if (!mesh->periodicY(mesh->xstart)) {   // Only do this for the processor with a periodic Y, i.e. the PFR
+        if (!mesh->periodicY(mesh->xstart)) {   // Only do this for the processor without a periodic Y, i.e. the PFR
           for(int iy=0; iy < mesh->LocalNy ; iy++){
             for(int iz=0; iz < mesh->LocalNz; iz++){
             
