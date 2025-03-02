@@ -150,6 +150,14 @@ void EvolveMomentum::finally(const Options &state) {
         }
         ddt(NV) += Z * Apar * dndt;
       }
+      if (state["fields"].isSet("Apar_flutter")) {
+        // Magnetic flutter term
+        const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+
+        // Using the approximation for small delta-B/B
+        // b dot Grad(phi) = Grad_par(phi) + [phi, Apar]
+        ddt(NV) -= Z * N * bracket(phi, Apar_flutter, BRACKET_ARAKAWA);
+      }
     } else {
       ddt(NV) = 0.0;
     }
