@@ -115,6 +115,9 @@ private:
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
+
+  bool initialize_from_mesh;  ///< Initilize the Field3D P from 2D/3D profiles stored in the mesh file. 
+
 };
 
 namespace {
