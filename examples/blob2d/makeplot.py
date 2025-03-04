@@ -13,3 +13,6 @@ plt.tight_layout()
 plt.savefig("blob2d.png")
 
 plt.show()
+
+
+

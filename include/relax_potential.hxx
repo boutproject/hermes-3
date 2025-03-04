@@ -76,6 +76,9 @@ private:
   Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
 
   BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
+
+  bool initialize_phi_from_mesh;  ///< Initilize the Field3D phi1 from 2D/3D profiles stored in the mesh file. 
+  bool initialize_vort_from_mesh;  ///< Initilize the Field3D vort from 2D/3D profiles stored in the mesh file. 
 };
 
 namespace {
