@@ -43,6 +43,12 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
 
+
+  Options& units = alloptions["units"];
+  const BoutReal Bnorm = units["Tesla"];
+  const BoutReal Lnorm = units["meters"];
+  const BoutReal Tnorm = units["eV"];
+
   if (diamagnetic) {
     // Read curvature vector
     try {
@@ -64,10 +70,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
       Curlb_B.z += I * Curlb_B.x;
     }
 
-    Options& units = alloptions["units"];
-    BoutReal Bnorm = units["Tesla"];
-    BoutReal Lnorm = units["meters"];
-
     Curlb_B.x /= Bnorm;
     Curlb_B.y *= SQ(Lnorm);
     Curlb_B.z *= SQ(Lnorm);
@@ -76,6 +78,30 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   }
 
   Bsq = SQ(coord->Bxy);
+
+
+  // Initilize the Field3D phi1 from 2D profiles stored in the mesh file.
+  initialize_phi_from_mesh = options["initialize_phi_from_mesh"]
+    .doc("Initilize field from 2D profiles stored in the mesh file?")
+    .withDefault<bool>(false);
+
+  if (initialize_phi_from_mesh) {
+  // Try to read the initial field from the mesh
+    mesh->get(phi1, std::string("phi_init")); // Units: Volt [V]
+    phi1 /= Tnorm; // Normalization
+  }
+
+  initialize_vort_from_mesh = options["initialize_vort_from_mesh"]
+    .doc("Initilize field from 2D profiles stored in the mesh file?")
+    .withDefault<bool>(false);
+
+  if (initialize_vort_from_mesh) {
+  // Try to read the initial field from the mesh
+    mesh->get(Vort, std::string("vort_init")); // Units: ?? is it [kg/m^3/s]?? 
+    // !< TO DO: check units and how we normalize it
+    // Vort_norm = Nnorm * Mi / Tnorm ?? where Mi is the mass of ions?
+    // Vort /= Vort_norm; // Normalization
+  }
 }
 
 void RelaxPotential::transform(Options& state) {
