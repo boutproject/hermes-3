@@ -6,6 +6,8 @@
 
 #include <bout/yboundary_regions.hxx>
 
+extern YBoundary yboundary;
+
 /// Boundary condition at the wall in Y
 ///
 /// This is a collective component, because it couples all charged species
