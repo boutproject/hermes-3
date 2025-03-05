@@ -252,6 +252,8 @@ void EvolveDensity::finally(const Options& state) {
       //       so that upwinding is handled correctly
       ddt(N) -= Div_n_g_bxGrad_f_B_XZ(N, V, -Apar_flutter);
     }
+  } else {
+    flow_ylow = 0.0;
   }
 
   if (low_n_diffuse) {
