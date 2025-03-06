@@ -512,14 +512,18 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    set_with_attrs(state[std::string("P") + name + std::string("_src")], final_source,
-                   {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
+    Options& final_source_output = state[std::string("P") + name + std::string("_src")];
+    set_with_attrs(final_source_output, final_source,
+                   {{"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
                     {"standard_name", "pressure source"},
                     {"long_name", name + " pressure source"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
+    if (source_time_dependent) {
+      // Pressure source changes in time, so add a time dimension
+      final_source_output.attributes["time_dimension"] = "t";
+    }
 
     if (flow_xlow.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
