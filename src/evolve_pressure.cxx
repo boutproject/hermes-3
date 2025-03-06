@@ -238,8 +238,12 @@ void EvolvePressure::finally(const Options& state) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
+    Field3D advection = Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) = -advection;
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    if (diagnose) {
+      set(channels["E_Div_VExB_3/2P_" + name], (3./2) * advection);
+    }
   } else {
     ddt(P) = 0.0;
   }
@@ -256,29 +260,38 @@ void EvolvePressure::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
+    Field3D advection = FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
+    flow_ylow *= 5. / 2; // Energy flow
+
+    Field3D channel; // Energy transfer channel
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
-
       // Work done. This balances energetically a term in the momentum equation
-      ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
+      channel = Pfloor * Div_par(V);
 
     } else {
       // Use V * Grad(P) form
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
-
-      ddt(P) += (2. / 3) * V * Grad_par(P);
+      channel = advection - V * Grad_par(P);
     }
-    flow_ylow *= 5. / 2; // Energy flow
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
       ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+    }
+
+    ddt(P) -= advection;
+    ddt(P) -= (2. / 3) * channel;
+
+    if (diagnose) {
+      // Advection
+      set(channels["E_Div_Vpar_3/2P_" + name], (3. / 2) * advection);
+      // Energy transfer channel
+      set(channels["E_P_Divpar_V_" + name], channel);
     }
 
     if (numerical_viscous_heating || diagnose) {
@@ -370,7 +383,7 @@ void EvolvePressure::finally(const Options& state) {
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
     flow_ylow_conduction;
-    ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    Field3D conduction = Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
     flow_ylow += flow_ylow_conduction;
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -385,8 +398,14 @@ void EvolvePressure::finally(const Options& state) {
       mesh->communicate(db_dot_T, b0_dot_T);
       db_dot_T.applyBoundary("neumann");
       b0_dot_T.applyBoundary("neumann");
-      ddt(P) += (2. / 3) * (Div_par(kappa_par * db_dot_T) -
-                            Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter));
+      conduction += Div_par(kappa_par * db_dot_T) -
+        Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter);
+    }
+    ddt(P) += (2. / 3) * conduction;
+
+    if (diagnose) {
+      // Energy conduction channel
+      set(channels["E_conduction_" + name], conduction);
     }
   }
 
@@ -573,6 +592,16 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " energy source from numerical viscous heating"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
+    }
+
+    // Energy transfer channels
+    for (const auto& kv : channels.getChildren()) {
+      set_with_attrs(state[kv.first], get<Field3D>(kv.second),
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", "Energy transfer channel"},
+                      {"source", "evolve_pressure"}});
     }
   }
 }
