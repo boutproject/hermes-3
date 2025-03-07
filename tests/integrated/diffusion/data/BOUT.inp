@@ -10,13 +10,13 @@ dx = 0.0075 + 0.005*x
 dy = 0.01
 dz = 0.01
 
+J = 1  # Identity metric
+
 [solver]
 mxstep = 1000
 
 [hermes]
 components = h
-
-loadmetric = false # Load metric from Bxy, Rxy etc?
 
 [h]
 type = evolve_density, evolve_pressure, anomalous_diffusion

@@ -18,7 +18,6 @@ mxstep = 10000
 [hermes]
 components = i
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = false  # Normalise the input metric?
 
 Nnorm = 1e18

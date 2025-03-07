@@ -156,7 +156,7 @@ void Recycling::transform(Options& state) {
   const Field2D& g_22 = coord->g_22;
   const Field2D& g11 = coord->g11;
 
-  for (const auto& channel : channels) {
+  for (auto& channel : channels) {
     const Options& species_from = state["species"][channel.from];
 
     const Field3D N = get<Field3D>(species_from["density"]);
@@ -178,7 +178,6 @@ void Recycling::transform(Options& state) {
                                 ? getNonFinal<Field3D>(species_to["energy_source"])
                                 : 0.0;
 
-
     // Recycling at the divertor target plates
     if (target_recycle) {
 
@@ -192,8 +191,8 @@ void Recycling::transform(Options& state) {
         }
       }
 
-      target_recycle_density_source = 0;
-      target_recycle_energy_source = 0;
+      channel.target_recycle_density_source = 0;
+      channel.target_recycle_energy_source = 0;
 
       // Lower Y boundary
 
@@ -218,7 +217,7 @@ void Recycling::transform(Options& state) {
           BoutReal volume  = J(r.ind, mesh->ystart) * dx(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart) * dz(r.ind, mesh->ystart);
 
           // Calculate sources in the final cell [m^-3 s^-1]
-          target_recycle_density_source(r.ind, mesh->ystart, jz) += flow / volume;    // For diagnostic 
+          channel.target_recycle_density_source(r.ind, mesh->ystart, jz) += flow / volume;    // For diagnostic
           density_source(r.ind, mesh->ystart, jz) += flow / volume;         // For use in solver
 
           // Energy of recycled particles
@@ -231,7 +230,7 @@ void Recycling::transform(Options& state) {
             + flow * (1 - channel.target_fast_recycle_fraction) * channel.target_energy;   // Thermal recycling part
 
           // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
-          target_recycle_energy_source(r.ind, mesh->ystart, jz) += recycle_energy_flow / volume;
+          channel.target_recycle_energy_source(r.ind, mesh->ystart, jz) += recycle_energy_flow / volume;
           energy_source(r.ind, mesh->ystart, jz) += recycle_energy_flow / volume;
         }
       }
@@ -260,7 +259,7 @@ void Recycling::transform(Options& state) {
           BoutReal volume  = J(r.ind, mesh->yend) * dx(r.ind, mesh->yend) * dy(r.ind, mesh->yend) * dz(r.ind, mesh->yend);
 
           // Calculate sources in the final cell [m^-3 s^-1]
-          target_recycle_density_source(r.ind, mesh->yend, jz) += flow / volume;    // For diagnostic 
+          channel.target_recycle_density_source(r.ind, mesh->yend, jz) += flow / volume;    // For diagnostic
           density_source(r.ind, mesh->yend, jz) += flow / volume;         // For use in solver
 
           // Energy of recycled particles
@@ -274,20 +273,20 @@ void Recycling::transform(Options& state) {
 
 
           // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
-          target_recycle_energy_source(r.ind, mesh->yend, jz) += recycle_energy_flow / volume;
+          channel.target_recycle_energy_source(r.ind, mesh->yend, jz) += recycle_energy_flow / volume;
           energy_source(r.ind, mesh->yend, jz) += recycle_energy_flow / volume;
         }
       }
     }
 
-    // Initialise counters of pump recycling fluxes
-    wall_recycle_density_source = 0;
-    wall_recycle_energy_source = 0;
-    pump_density_source = 0;
-    pump_energy_source = 0;
-
     // Get edge particle and heat for the species being recycled
     if (sol_recycle or pfr_recycle) {
+
+      // Initialise counters of pump recycling fluxes
+      channel.wall_recycle_density_source = 0;
+      channel.wall_recycle_energy_source = 0;
+      channel.pump_density_source = 0;
+      channel.pump_energy_source = 0;
 
       if (species_from.isSet("energy_flow_xlow")) {
         energy_flow_xlow = get<Field3D>(species_from["energy_flow_xlow"]);
@@ -300,7 +299,6 @@ void Recycling::transform(Options& state) {
       } else if ((channel.sol_fast_recycle_fraction > 0) or (channel.pfr_fast_recycle_fraction > 0)) {
         throw BoutException("SOL/PFR fast recycle enabled but no cell edge particle flow available, check your wall BC choice");
       };
-      
     }
 
     // Recycling at the SOL edge (2D/3D only)
@@ -310,9 +308,9 @@ void Recycling::transform(Options& state) {
       Field3D radial_particle_outflow = particle_flow_xlow;
       Field3D radial_energy_outflow = energy_flow_xlow;
 
-      if(mesh->lastX()){  // Only do this for the processor which has the edge region
-        for(int iy=0; iy < mesh->LocalNy ; iy++){
-          for(int iz=0; iz < mesh->LocalNz; iz++){
+      if (mesh->lastX()) {  // Only do this for the processor which has the edge region
+        for (int iy=0; iy < mesh->LocalNy ; iy++) {
+          for (int iz=0; iz < mesh->LocalNz; iz++) {
 
             // Volume of cell adjacent to wall which will receive source
             BoutReal volume = J(mesh->xend, iy) * dx(mesh->xend, iy)
@@ -341,10 +339,10 @@ void Recycling::transform(Options& state) {
               + recycle_particle_flow * (1 - channel.sol_fast_recycle_fraction) * channel.sol_energy;   // Thermal recycling part
 
             // Calculate neutral pump neutral sinks due to neutral impingement
-            // These are additional to particle sinks due to recycling
-            BoutReal pump_neutral_energy_sink = 0;
-            BoutReal pump_neutral_particle_sink = 0;
+            BoutReal pump_neutral_particle_sink = 0.0;
+            BoutReal pump_neutral_energy_sink = 0.0;
 
+            // These are additional to particle sinks due to recycling
             if ((is_pump(mesh->xend, iy) == 1.0) and (neutral_pump)) {
 
               auto i = indexAt(Nn, mesh->xend, iy, iz);   // Final domain cell
@@ -384,21 +382,18 @@ void Recycling::transform(Options& state) {
 
               // Divide flows by volume to get sources
               // Save to pump diagnostic
-              pump_density_source(mesh->xend, iy, iz) += recycle_particle_flow/volume - pump_neutral_particle_sink;
-              pump_energy_source(mesh->xend, iy, iz) += recycle_energy_flow/volume - pump_neutral_energy_sink;  
-
+              channel.pump_density_source(mesh->xend, iy, iz) += recycle_particle_flow/volume - pump_neutral_particle_sink;
+              channel.pump_energy_source(mesh->xend, iy, iz) += recycle_energy_flow/volume - pump_neutral_energy_sink;
 
             } else {
-            // Save to wall diagnostic (pump sinks are 0 if not on pump)
-            wall_recycle_density_source(mesh->xend, iy, iz) += recycle_particle_flow/volume - pump_neutral_particle_sink;
-            wall_recycle_energy_source(mesh->xend, iy, iz) += recycle_energy_flow/volume - pump_neutral_energy_sink; 
+              // Save to wall diagnostic (pump sinks are 0 if not on pump)
+              channel.wall_recycle_density_source(mesh->xend, iy, iz) += recycle_particle_flow/volume ;
+              channel.wall_recycle_energy_source(mesh->xend, iy, iz) += recycle_energy_flow/volume;
             }
 
             // Save to solver
             density_source(mesh->xend, iy, iz) += recycle_particle_flow/volume - pump_neutral_particle_sink;
             energy_source(mesh->xend, iy, iz) += recycle_energy_flow/volume - pump_neutral_energy_sink; 
-
-
           }
         }
       }
@@ -444,8 +439,8 @@ void Recycling::transform(Options& state) {
 
               // Calculate neutral pump neutral sinks due to neutral impingement
               // These are additional to particle sinks due to recycling
-              BoutReal pump_neutral_energy_sink = 0;
-              BoutReal pump_neutral_particle_sink = 0;
+              BoutReal pump_neutral_particle_sink = 0.0;
+              BoutReal pump_neutral_energy_sink = 0.0;
 
               // Add to appropriate diagnostic field depending if pump or not
               if ((is_pump(mesh->xstart, iy) == 1.0) and (neutral_pump))  {
@@ -487,15 +482,13 @@ void Recycling::transform(Options& state) {
 
                 // Divide flows by volume to get sources
                 // Save to pump diagnostic
-                pump_density_source(mesh->xstart, iy, iz) += recycle_particle_flow/volume - pump_neutral_particle_sink;
-                pump_energy_source(mesh->xstart, iy, iz) += recycle_energy_flow/volume - pump_neutral_energy_sink;
-
+                channel.pump_density_source(mesh->xstart, iy, iz) += recycle_particle_flow/volume - pump_neutral_particle_sink;
+                channel.pump_energy_source(mesh->xstart, iy, iz) += recycle_energy_flow/volume - pump_neutral_energy_sink;
 
               } else {
                 // Save to wall diagnostic (pump sinks are 0 if not on pump)
-                wall_recycle_density_source(mesh->xstart, iy, iz) += recycle_particle_flow/volume - pump_neutral_particle_sink;
-                wall_recycle_energy_source(mesh->xstart, iy, iz) += recycle_energy_flow/volume - pump_neutral_energy_sink;   
-                 
+                channel.wall_recycle_density_source(mesh->xstart, iy, iz) += recycle_particle_flow/volume - pump_neutral_particle_sink;
+                channel.wall_recycle_energy_source(mesh->xstart, iy, iz) += recycle_energy_flow/volume - pump_neutral_energy_sink;
               }
 
               // Save to solver
@@ -506,7 +499,6 @@ void Recycling::transform(Options& state) {
           }
         }
       }
-
     }
 
     // Put the updated sources back into the state
@@ -516,83 +508,89 @@ void Recycling::transform(Options& state) {
 }
 
 void Recycling::outputVars(Options& state) {
-  
   AUTO_TRACE();
-  // Normalisations
-  auto Nnorm = get<BoutReal>(state["Nnorm"]);
-  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
-  auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+  if (neutral_pump) {
+    // Save the pump mask as a time-independent field
+    set_with_attrs(state[{std::string("is_pump")}], is_pump,
+                   {{"standard_name", "neutral pump location"},
+                    {"long_name", std::string("Neutral pump location")},
+                    {"source", "recycling"}});
+  }
 
   if (diagnose) {
+    // Normalisations
+    auto Nnorm = get<BoutReal>(state["Nnorm"]);
+    auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+    auto Tnorm = get<BoutReal>(state["Tnorm"]);
+    BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
-      for (const auto& channel : channels) {
-        AUTO_TRACE();
+    for (const auto& channel : channels) {
+      // Save particle and energy source for the species created during recycling
 
-        // Save particle and energy source for the species created during recycling
+      // Target recycling
+      if (target_recycle) {
+        set_with_attrs(state[{std::string("S") + channel.to + std::string("_target_recycle")}],
+                       channel.target_recycle_density_source,
+                       {{"time_dimension", "t"},
+                        {"units", "m^-3 s^-1"},
+                        {"conversion", Nnorm * Omega_ci},
+                        {"standard_name", "particle source"},
+                        {"long_name", std::string("Target recycling particle source of ") + channel.to},
+                        {"source", "recycling"}});
 
-        // Target recycling
-        if (target_recycle) {
-          set_with_attrs(state[{std::string("S") + channel.to + std::string("_target_recycle")}], target_recycle_density_source,
-                          {{"time_dimension", "t"},
-                          {"units", "m^-3 s^-1"},
-                          {"conversion", Nnorm * Omega_ci},
-                          {"standard_name", "particle source"},
-                          {"long_name", std::string("Target recycling particle source of ") + channel.to},
-                          {"source", "recycling"}});
-    
-          set_with_attrs(state[{std::string("E") + channel.to + std::string("_target_recycle")}], target_recycle_energy_source,
-                          {{"time_dimension", "t"},
-                          {"units", "W m^-3"},
-                          {"conversion", Pnorm * Omega_ci},
-                          {"standard_name", "energy source"},
-                          {"long_name", std::string("Target recycling energy source of ") + channel.to},
-                          {"source", "recycling"}});
-          }
-
-        // Wall recycling
-        if ((sol_recycle) or (pfr_recycle)) {
-          set_with_attrs(state[{std::string("S") + channel.to + std::string("_wall_recycle")}], wall_recycle_density_source,
-                          {{"time_dimension", "t"},
-                          {"units", "m^-3 s^-1"},
-                          {"conversion", Nnorm * Omega_ci},
-                          {"standard_name", "particle source"},
-                          {"long_name", std::string("Wall recycling particle source of ") + channel.to},
-                          {"source", "recycling"}});
-    
-          set_with_attrs(state[{std::string("E") + channel.to + std::string("_wall_recycle")}], wall_recycle_energy_source,
-                          {{"time_dimension", "t"},
-                          {"units", "W m^-3"},
-                          {"conversion", Pnorm * Omega_ci},
-                          {"standard_name", "energy source"},
-                          {"long_name", std::string("Wall recycling energy source of ") + channel.to},
-                          {"source", "recycling"}});
-          }
-
-        // Neutral pump
-        if (neutral_pump) {
-          set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump")}], pump_density_source,
-                          {{"time_dimension", "t"},
-                          {"units", "m^-3 s^-1"},
-                          {"conversion", Nnorm * Omega_ci},
-                          {"standard_name", "particle source"},
-                          {"long_name", std::string("Pump recycling particle source of ") + channel.to},
-                          {"source", "recycling"}});
-    
-          set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump")}], pump_energy_source,
-                          {{"time_dimension", "t"},
-                          {"units", "W m^-3"},
-                          {"conversion", Pnorm * Omega_ci},
-                          {"standard_name", "energy source"},
-                          {"long_name", std::string("Pump recycling energy source of ") + channel.to},
-                          {"source", "recycling"}});
-
-          set_with_attrs(state[{std::string("is_pump")}], is_pump,
-                          {{"standard_name", "neutral pump location"},
-                          {"long_name", std::string("Neutral pump location")},
-                          {"source", "recycling"}});
-        }
+        set_with_attrs(state[{std::string("E") + channel.to + std::string("_target_recycle")}],
+                       channel.target_recycle_energy_source,
+                       {{"time_dimension", "t"},
+                        {"units", "W m^-3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", std::string("Target recycling energy source of ") + channel.to},
+                        {"source", "recycling"}});
       }
 
+      // Wall recycling
+      if ((sol_recycle) or (pfr_recycle)) {
+        set_with_attrs(state[{std::string("S") + channel.to + std::string("_wall_recycle")}],
+                       channel.wall_recycle_density_source,
+                       {{"time_dimension", "t"},
+                        {"units", "m^-3 s^-1"},
+                        {"conversion", Nnorm * Omega_ci},
+                        {"standard_name", "particle source"},
+                        {"long_name", std::string("Wall recycling particle source of ") + channel.to},
+                        {"source", "recycling"}});
+
+        set_with_attrs(state[{std::string("E") + channel.to + std::string("_wall_recycle")}],
+                       channel.wall_recycle_energy_source,
+                       {{"time_dimension", "t"},
+                        {"units", "W m^-3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", std::string("Wall recycling energy source of ") + channel.to},
+                        {"source", "recycling"}});
+      }
+
+      // Neutral pump
+      if (neutral_pump) {
+        set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump")}],
+                       channel.pump_density_source,
+                       {{"time_dimension", "t"},
+                        {"units", "m^-3 s^-1"},
+                        {"conversion", Nnorm * Omega_ci},
+                        {"standard_name", "particle source"},
+                        {"long_name", std::string("Pump recycling particle source of ") + channel.to},
+                        {"source", "recycling"}});
+
+        set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump")}],
+                       channel.pump_energy_source,
+                       {{"time_dimension", "t"},
+                        {"units", "W m^-3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", std::string("Pump recycling energy source of ") + channel.to},
+                        {"source", "recycling"}});
+      }
+
+    }
   }
 }

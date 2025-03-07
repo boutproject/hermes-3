@@ -33,6 +33,8 @@ mxstep = 10000
 # Two species, electrons and ions
 components = e, h+, vorticity, sheath_closure
 
+recalculate_metric = true  # Calculate metrics from Rxy, Bpxy etc.
+
 Nnorm = 1e19
 Bnorm = mesh:Bxy
 Tnorm = 50.0

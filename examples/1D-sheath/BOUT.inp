@@ -25,12 +25,13 @@ ypos = y * length / (2*pi) # Y position [m]
 ixseps1 = -1
 ixseps2 = -1
 
+J = 1 # Identity metric
+
 [hermes]
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
 # to electron pressure using electron force balance
 components = i, e, sheath_boundary, electron_force_balance
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
 
 Nnorm = 1e19

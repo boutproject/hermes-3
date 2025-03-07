@@ -1,4 +1,4 @@
 breathe
 recommonmark
-sphinx-rtd-theme
+sphinx-book-theme
 

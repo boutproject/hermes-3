@@ -47,7 +47,6 @@ components = (d+, d, e, equilibriate,
               sheath_boundary_simple, collisions, recycling, reactions,
               electron_force_balance, solkit_neutral_parallel_diffusion)
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
 
 Nnorm = 1e20

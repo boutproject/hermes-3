@@ -36,7 +36,6 @@ Nnorm = 2e18  # Reference density [m^-3]
 Bnorm = 1   # Reference magnetic field [T]
 Tnorm = 200   # Reference temperature [eV]
 
-loadmetric = false  # Recalculate metric tensor? (false -> use grid values)
 normalise_metric = true
 
 ################################################################

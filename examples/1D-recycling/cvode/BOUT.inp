@@ -38,6 +38,8 @@ y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dym
 ixseps1 = -1
 ixseps2 = -1
 
+J = 1
+
 [hermes]
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
 # to electron pressure by using electron force balance.
@@ -45,7 +47,6 @@ components = (d+, d, e,
               sheath_boundary, collisions, recycling, reactions,
               electron_force_balance, neutral_parallel_diffusion)
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
 
 Nnorm = 1e19
