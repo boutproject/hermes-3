@@ -340,7 +340,7 @@ void EvolveMomentum::outputVars(Options &state) {
     }
     // Energy transfer channels
     for (const auto& kv : channels.getChildren()) {
-      set_with_attrs(state[kv.first], get<Field3D>(kv.second),
+      set_with_attrs(state[kv.first], getNonFinal<Field3D>(kv.second),
                      {{"time_dimension", "t"},
                       {"units", "W m^-3"},
                       {"conversion", Pnorm * Omega_ci},

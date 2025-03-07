@@ -242,7 +242,7 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) = -advection;
 
     if (diagnose) {
-      set(channels["E_Div_VExB_3/2P_" + name], (3./2) * advection);
+      set(channels["E_Div_VExB_32P_" + name], (3./2) * advection);
     }
   } else {
     ddt(P) = 0.0;
@@ -289,7 +289,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (diagnose) {
       // Advection
-      set(channels["E_Div_Vpar_3/2P_" + name], (3. / 2) * advection);
+      set(channels["E_Div_Vpar_32P_" + name], (3. / 2) * advection);
       // Energy transfer channel
       set(channels["E_P_Divpar_V_" + name], channel);
     }
@@ -596,7 +596,7 @@ void EvolvePressure::outputVars(Options& state) {
 
     // Energy transfer channels
     for (const auto& kv : channels.getChildren()) {
-      set_with_attrs(state[kv.first], get<Field3D>(kv.second),
+      set_with_attrs(state[kv.first], getNonFinal<Field3D>(kv.second),
                      {{"time_dimension", "t"},
                       {"units", "W m^-3"},
                       {"conversion", Pnorm * Omega_ci},
