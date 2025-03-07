@@ -68,17 +68,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  thermal_conduction = options["thermal_conduction"]
-                           .doc("Include parallel heat conduction?")
-                           .withDefault<bool>(true);
-
-  kappa_coefficient = options["kappa_coefficient"]
-    .doc("Numerical coefficient in parallel heat conduction. Default is 3.16 for electrons, 3.9 otherwise")
-    .withDefault((name == "e") ? 3.16 : 3.9);
-
-  kappa_limit_alpha = options["kappa_limit_alpha"]
-    .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
-    .withDefault(-1.0);
+  
 
   p_div_v = options["p_div_v"]
                 .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
@@ -158,6 +148,29 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       .doc("Fix Y boundary momentum flux to boundary midpoint value?")
       .withDefault<bool>(false);
   }
+
+  thermal_conduction = options["thermal_conduction"]
+                           .doc("Include parallel heat conduction?")
+                           .withDefault<bool>(true);
+
+
+  if (identifySpeciesType(name) == "ion") {
+    default_kappa = 3.9;
+  } else if (identifySpeciesType(name) == "electron") {
+    // Hermes-3 electron collision time is in Fitzpatrick form (3.187 in https://farside.ph.utexas.edu/teaching/plasma/Plasma/node41.html)
+    // This means that the Braginskii prefactor of 3.16 needs to be divided by sqrt(2) to be consistent. 
+    default_kappa = 3.16/sqrt(2);  
+  } else if (identifySpeciesType(name) == "neutral") {
+    default_kappa = 2.5;
+  }
+
+  kappa_coefficient = options["kappa_coefficient"]
+    .doc("Numerical coefficient in parallel heat conduction. Default is 3.16/sqrt(2) for electrons, 2.5 for neutrals and 3.9 otherwise")
+    .withDefault(default_kappa);
+
+  kappa_limit_alpha = options["kappa_limit_alpha"]
+    .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
+    .withDefault(-1.0);
 }
 
 void EvolvePressure::transform(Options& state) {

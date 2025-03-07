@@ -24,6 +24,23 @@ inline T clamp(const T& var, BoutReal lo, BoutReal hi, const std::string& rgn = 
   return result;
 }
 
+
+/// Identify species name string as electron, ion or neutral
+inline std::string identifySpeciesType(const std::string& species) {
+
+  std::string type = "";
+
+  if (species == "e") {
+    type = "electron";
+  } else if (species.find(std::string("+")) != std::string::npos) {
+    type = "ion";
+  } else {
+    type = "neutral";
+  }
+
+  return type;
+}
+
 template<typename T, typename = bout::utils::EnableIfField<T>>
 Ind3D indexAt(const T& f, int x, int y, int z) {
   int ny = f.getNy();
