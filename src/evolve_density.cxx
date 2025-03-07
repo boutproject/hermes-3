@@ -27,7 +27,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   low_n_diffuse = options["low_n_diffuse"]
                       .doc("Parallel diffusion at low density")
