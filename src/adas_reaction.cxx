@@ -123,7 +123,8 @@ BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
   return pow(10., eval_log_coef);
 }
 
-void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to_ion) {
+void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to_ion,
+                               Field3D& energy_loss) {
   AUTO_TRACE();
 
   Field3D Ne = GET_VALUE(Field3D, electron["density"]);
@@ -170,7 +171,7 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   add(to_ion["energy_source"], energy_exchange);
 
   // Electron energy loss (radiation, ionisation potential)
-  Field3D energy_loss = cellAverage(
+  energy_loss = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
         return floor(ne, 0.0) * floor(n1, 0.0) *
           radiation_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm
