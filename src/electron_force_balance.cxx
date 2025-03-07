@@ -41,7 +41,7 @@ void ElectronForceBalance::transform(Options &state) {
     }
     Options& species = allspecies[kv.first]; // Note: Need non-const
 
-    if (!(IS_SET(species["density"]) and IS_SET(species["charge"]))) {
+    if (!(IS_SET_NOBOUNDARY(species["density"]) and IS_SET(species["charge"]))) {
       continue; // Needs both density and charge to experience a force
     }
 

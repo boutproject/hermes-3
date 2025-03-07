@@ -1,4 +1,5 @@
 #include "../include/neutral_parallel_diffusion.hxx"
+#include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
@@ -39,13 +40,54 @@ void NeutralParallelDiffusion::transform(Options& state) {
 
     // Pressure-diffusion coefficient
     Field3D Dn = dneut * Tn / (AA * nu);
-    Dn.applyBoundary("dirichlet_o2");
     mesh->communicate(Dn);
 
     // Cross-field diffusion calculated from pressure gradient
     // This is the pressure-diffusion approximation 
     Field3D logPn = log(floor(Pn, 1e-7));
-    logPn.applyBoundary("neumann");
+
+    if (toroidal_slip and IS_SET_NOBOUNDARY(species["velocity"])) {
+      // Allow non-zero toroidal flow. Parallel flow into the target
+      // is balanced by perpendicular flow away from the target.
+
+      const auto g_22 = mesh->getCoordinates()->g_22;
+      const auto dy = mesh->getCoordinates()->dy;
+
+      Field3D Vn = GET_NOBOUNDARY(Field3D, species["velocity"]);
+      Field3D NVn = GET_NOBOUNDARY(Field3D, species["momentum"]);
+
+      iterateBoundaries([&](const Ind3D& i_bndry,
+                            const Ind3D& i,
+                            const Ind3D& ip,
+                            int sign) {
+        // Neumann boundary on Dn
+        Dn[i_bndry] = Dn[i];
+
+        // Neumann boundary on parallel flows
+        // Note: This allows parallel flows into the target, that
+        //       must be cancelled by a perpendicular flow out of the target
+        Vn[i_bndry] = Vn[i];
+        NVn[i_bndry] = NVn[i];
+        BoutReal vpar = 0.5 * (Vn[i_bndry] + Vn[i]); // Parallel flow at boundary
+
+        // Calculate logPn boundary to set perpendicular flow
+        // at the target. This is a rearrangement of
+        //     vpar = -Dn[i] * (logPn[i] - logPn[i_bndry]) / (dy[i] * sqrt(g_22[i]));
+        logPn[i_bndry] = logPn[i] + sign * vpar * dy[i] * sqrt(g_22[i]) / Dn[i];
+
+      });
+
+      // Set parallel boundary for the momentum equation
+      setBoundary(species["velocity"], Vn);
+      setBoundary(species["momentum"], NVn);
+
+    } else {
+      // Set perpendicular flow to zero.
+      // The parallel flow is already set to zero by default, so this
+      // sets all components of the velocity to zero at the target.
+      Dn.applyBoundary("dirichlet_o2");
+      logPn.applyBoundary("neumann");
+    }
 
     // Particle advection
     Field3D S = FV::Div_par_K_Grad_par(Dn * Nn, logPn);
@@ -63,20 +105,25 @@ void NeutralParallelDiffusion::transform(Options& state) {
     add(species["energy_source"], E);
 
     Field3D F = 0.0;
-    if (IS_SET(species["velocity"]) and viscosity) {
-      // Relationship between heat conduction and viscosity for neutral
-      // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
-      // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
-      // Transport Processes in Gases", 1972
-      //
-
-      Field3D Vn = GET_VALUE(Field3D, species["velocity"]);
+    if (IS_SET(species["velocity"])) {
       Field3D NVn = GET_VALUE(Field3D, species["momentum"]);
 
-      Field3D eta_n = (2. / 5) * kappa_n;
+      // Momentum advection
+      F = FV::Div_par_K_Grad_par(NVn * Dn, logPn);
 
-      // Momentum diffusion
-      F = FV::Div_par_K_Grad_par(NVn * Dn, logPn) + FV::Div_par_K_Grad_par(eta_n, Vn);
+      if (viscosity) {
+        // Momentum diffusion
+        // Relationship between heat conduction and viscosity for neutral
+        // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+        // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+        // Transport Processes in Gases", 1972
+
+        Field3D Vn = GET_VALUE(Field3D, species["velocity"]);
+        Field3D eta_n = (2. / 5) * kappa_n;
+
+        F += FV::Div_par_K_Grad_par(eta_n, Vn);
+      }
+
       add(species["momentum_source"], F);
     }
 

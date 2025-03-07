@@ -76,17 +76,17 @@ protected:
                          BoutReal rate_multiplier,
                          BoutReal radiation_multiplier) {
 
-    Field3D Ne = get<Field3D>(electron["density"]);
-    Field3D Te = get<Field3D>(electron["temperature"]);
+    Field3D Ne = GET_VALUE(Field3D, electron["density"]);
+    Field3D Te = GET_VALUE(Field3D, electron["temperature"]);
 
-    Field3D N1 = get<Field3D>(from_ion["density"]);
-    Field3D T1 = get<Field3D>(from_ion["temperature"]);
-    Field3D V1 = get<Field3D>(from_ion["velocity"]);
+    Field3D N1 = GET_VALUE(Field3D, from_ion["density"]);
+    Field3D T1 = GET_VALUE(Field3D, from_ion["temperature"]);
+    Field3D V1 = GET_NOBOUNDARY(Field3D, from_ion["velocity"]);
 
-    auto AA = get<BoutReal>(from_ion["AA"]);
-    ASSERT1(AA == get<BoutReal>(to_ion["AA"]));
+    auto AA = GET_VALUE(BoutReal, from_ion["AA"]);
+    ASSERT1(AA == GET_VALUE(BoutReal, to_ion["AA"]));
 
-    Field3D V2 = get<Field3D>(to_ion["velocity"]);
+    Field3D V2 = GET_NOBOUNDARY(Field3D, to_ion["velocity"]);
 
     const BoutReal from_charge =
         from_ion.isSet("charge") ? get<BoutReal>(from_ion["charge"]) : 0.0;
@@ -109,10 +109,10 @@ protected:
     if (from_charge != to_charge) {
       // To ensure quasineutrality, add electron density source
       add(electron["density_source"], (to_charge - from_charge) * reaction_rate);
-      if (electron.isSet("velocity")) {
+      if (IS_SET(electron["velocity"])) {
         // Transfer of electron kinetic to thermal energy due to density source
-        auto Ve = get<Field3D>(electron["velocity"]);
-        auto Ae = get<BoutReal>(electron["AA"]);
+        auto Ve = GET_NOBOUNDARY(Field3D, electron["velocity"]);
+        auto Ae = GET_NOBOUNDARY(BoutReal, electron["AA"]);
         add(electron["energy_source"], 0.5 * Ae * (to_charge - from_charge) * reaction_rate * SQ(Ve));
       }
     }

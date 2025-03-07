@@ -44,6 +44,10 @@ struct NeutralParallelDiffusion : public Component {
     viscosity = options["viscosity"]
       .doc("Enable viscosity?")
       .withDefault<bool>(true);
+
+    toroidal_slip = options["toroidal_slip"]
+      .doc("Allow non-zero toroidal flow at the target?")
+      .withDefault<bool>(true);
   }
 
   ///
@@ -75,6 +79,8 @@ private:
   bool equation_fix;  ///< Fix incorrect 3/2 factor in pressure advection?
   bool thermal_conduction; ///< Enable conduction?
   bool viscosity; ///< Enable viscosity?
+
+  bool toroidal_slip; ///< Allow non-zero toroidal flow at the target?
 
   /// Per-species diagnostics
   struct Diagnostics {

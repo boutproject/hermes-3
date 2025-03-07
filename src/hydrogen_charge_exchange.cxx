@@ -10,13 +10,13 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
                                              bool &no_neutral_cx_mom_gain) {
 
   // Temperatures and masses of initial atom and ion
-  const Field3D Tatom = get<Field3D>(atom1["temperature"]);
-  const BoutReal Aatom = get<BoutReal>(atom1["AA"]);
-  ASSERT1(get<BoutReal>(ion2["AA"]) == Aatom); // Check that the mass is consistent
+  const Field3D Tatom = GET_VALUE(Field3D, atom1["temperature"]);
+  const BoutReal Aatom = GET_VALUE(BoutReal, atom1["AA"]);
+  ASSERT1(GET_VALUE(BoutReal, ion2["AA"]) == Aatom); // Check that the mass is consistent
 
-  const Field3D Tion = get<Field3D>(ion1["temperature"]);
-  const BoutReal Aion = get<BoutReal>(ion1["AA"]);
-  ASSERT1(get<BoutReal>(atom2["AA"]) == Aion); // Check that the mass is consistent
+  const Field3D Tion = GET_VALUE(Field3D, ion1["temperature"]);
+  const BoutReal Aion = GET_VALUE(BoutReal, ion1["AA"]);
+  ASSERT1(GET_VALUE(BoutReal, atom2["AA"]) == Aion); // Check that the mass is consistent
 
   // Calculate effective temperature in eV
   Field3D Teff = (Tatom / Aatom + Tion / Aion) * Tnorm;
@@ -44,8 +44,8 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   // Optionally multiply by arbitrary multiplier
   const Field3D sigmav = exp(ln_sigmav) * (1e-6 * Nnorm / FreqNorm) * rate_multiplier;
 
-  const Field3D Natom = floor(get<Field3D>(atom1["density"]), 1e-5);
-  const Field3D Nion = floor(get<Field3D>(ion1["density"]), 1e-5);
+  const Field3D Natom = floor(GET_VALUE(Field3D, atom1["density"]), 1e-5);
+  const Field3D Nion = floor(GET_VALUE(Field3D, ion1["density"]), 1e-5);
 
   R = Natom * Nion * sigmav; // Rate coefficient. This is an output parameter.
 
@@ -58,8 +58,8 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   } // Skip the case where the same isotope swaps places
 
   // Transfer momentum
-  auto atom1_velocity = get<Field3D>(atom1["velocity"]);
-  auto ion1_velocity = get<Field3D>(ion1["velocity"]);
+  auto atom1_velocity = GET_NOBOUNDARY(Field3D, atom1["velocity"]);
+  auto ion1_velocity = GET_NOBOUNDARY(Field3D, ion1["velocity"]);
 
   // Transfer fom atom1 to ion2
   atom_mom = R * Aatom * atom1_velocity;
@@ -79,10 +79,10 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   // This handles the general case that ion1 != ion2
   // and atom1 != atom2
 
-  auto ion2_velocity = get<Field3D>(ion2["velocity"]);
+  auto ion2_velocity = GET_NOBOUNDARY(Field3D, ion2["velocity"]);
   add(ion2["energy_source"], 0.5 * Aatom * R * SQ(ion2_velocity - atom1_velocity));
 
-  auto atom2_velocity = get<Field3D>(atom2["velocity"]);
+  auto atom2_velocity = GET_NOBOUNDARY(Field3D, atom2["velocity"]);
   add(atom2["energy_source"], 0.5 * Aion * R * SQ(atom2_velocity - ion1_velocity));
 
   // Transfer thermal energy
