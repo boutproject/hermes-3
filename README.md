@@ -30,7 +30,7 @@ All new contributions must be made under the GPLv3 license.
 LLNL-CODE-845139
 
 
-    Copyright Hermes-3 contributors 2017-2023
+    Copyright Hermes-3 contributors 2017-2025
               email: dudson2@llnl.gov
 
     This program is free software: you can redistribute it and/or modify
@@ -116,4 +116,12 @@ for more complicated cases.
   108991. doi:[10.1016/j.cpc.2023.108991](https://doi.org/10.1016/j.cpc.2023.108991).
   Preprint:
   [arXiv.2303.12131](https://doi.org/10.48550/arXiv.2303.12131).
-
+* Thomas Body, Thomas Eich, Adam Kuang, Tom Looby, Mike Kryjak, Ben Dudson, Matthew Reinke
+  [Detachment scalings derived from 1D scrape-off-layer simulations](https://doi.org/10.1016/j.nme.2024.101819)
+  Nucl. Mat. Energy 2024 101819
+  doi:[10.1016/j.nme.2024.101819](https://doi.org/10.1016/j.nme.2024.101819)
+* Huayi Chang, Ben Dudson, Jizhong Sun, Mike Kryjak, Yang Ye, Mao Li,
+  Weikang Wang [Hermes-3 simulation of the low-n X-point mode driven
+  by impurity in tokamak edge
+  plasmas](https://doi.org/10.1016/j.nme.2025.101913) Nucl. Mat. Energy 2025 101913
+  doi:[10.1016/j.nme.2025.101913](https://doi.org/10.1016/j.nme.2025.101913)
