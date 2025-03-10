@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+
+import numpy as np
+import pickle
+
+from boutdata import collect
+from boututils.run_wrapper import shell, launch, getmpirun
+
+import matplotlib.pyplot as plt
+
+# Link to the executable
+shell("ln -s ../../../hermes-3 hermes-3")
+
+def replace_guards(var1d):
+    """
+    Replace the two guard cells on each side with one point at the boundary
+    """
+    var1d[1] = 0.5*(var1d[1] + var1d[2])
+    var1d[-2] = 0.5*(var1d[-2] + var1d[-3])
+    return var1d[1:-1]
+
+nys = [10, 20, 40, 80, 160, 320, 640, 1280]
+paths = ["sheath", "penalty"]
+recalculate = True
+
+if recalculate:
+    vals = {path: [] for path in paths}
+
+    for ny in nys:
+        nproc = 1
+        if ny > 10:
+            nproc = 2
+        if nproc > 40:
+            nproc = 4
+        for path in paths:
+            # Launch using MPI
+            s, out = launch(f"./hermes-3 mesh:ny={ny} -d {path}",
+                            nproc=2,
+                            pipe=True)
+
+            # Save output to log file
+            f = open(f"run.log.{ny}.{path}", "w")
+            f.write(out)
+            f.close()
+
+            dy = collect("dy", path=path, info=False).squeeze()
+            position = 0.5 * dy
+            position[1:] += 0.5 * dy[:-1]
+            position = np.cumsum(np.concatenate(([0], position, [0.5 * dy[-1]])))
+
+            n = replace_guards(collect("Nd+", path=path, tind=-1,
+                                       yguards=True, info=False)
+                               .squeeze())
+            plt.plot(position, n, label=f"{ny} {path}")
+
+            vals[path].append(n[0])
+
+    with open("penalty-1.pkg", "wb") as f:
+        pickle.dump(vals, f)
+
+    plt.legend()
+
+    plt.savefig("penalty-1.pdf")
+    plt.show()
+else:
+    with open("penalty-1.pkg", "rb") as f:
+        vals = pickle.load(f)
+
+print(vals)
+
+for path in vals:
+    plt.plot(nys, vals[path], label=path)
+
+plt.legend()
+plt.show()
+
+diff = abs(np.array(vals['sheath']) - np.array(vals['penalty']))
+
+plt.plot(nys, diff, '-o')
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('Number of cells')
+plt.ylabel('Difference in Upstream density')
+plt.show()
