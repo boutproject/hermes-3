@@ -154,14 +154,21 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .withDefault<bool>(true);
 
 
-  if (identifySpeciesType(name) == "ion") {
+  BoutReal default_kappa; // default conductivity, changes depending on species
+  switch(identifySpeciesType(name)) {
+  case SpeciesType::ion:
     default_kappa = 3.9;
-  } else if (identifySpeciesType(name) == "electron") {
+    break;
+  case SpeciesType::electron:
     // Hermes-3 electron collision time is in Fitzpatrick form (3.187 in https://farside.ph.utexas.edu/teaching/plasma/Plasma/node41.html)
     // This means that the Braginskii prefactor of 3.16 needs to be divided by sqrt(2) to be consistent. 
-    default_kappa = 3.16/sqrt(2);  
-  } else if (identifySpeciesType(name) == "neutral") {
+    default_kappa = 3.16/sqrt(2);
+    break;
+  case SpeciesType::neutral:
     default_kappa = 2.5;
+    break;
+  default:
+    throw BoutException("Unhandled species type in default_kappa switch");
   }
 
   kappa_coefficient = options["kappa_coefficient"]

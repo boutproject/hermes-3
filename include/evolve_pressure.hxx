@@ -81,7 +81,6 @@ private:
   bool thermal_conduction;    ///< Include thermal conduction?
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
-  BoutReal default_kappa;     ///< default conductivity, changes depending on species
 
   bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
 

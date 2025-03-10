@@ -2,6 +2,8 @@
 #ifndef HERMES_UTILS_H
 #define HERMES_UTILS_H
 
+#include "bout/bout_enum_class.hxx"
+
 inline BoutReal floor(BoutReal value, BoutReal min) {
   if (value < min)
     return min;
@@ -24,21 +26,19 @@ inline T clamp(const T& var, BoutReal lo, BoutReal hi, const std::string& rgn = 
   return result;
 }
 
+/// Enum that identifies the type of a species: electtron, ion, neutral
+BOUT_ENUM_CLASS(SpeciesType, electron, ion, neutral);
 
 /// Identify species name string as electron, ion or neutral
-inline std::string identifySpeciesType(const std::string& species) {
-
-  std::string type = "";
-
+inline SpeciesType identifySpeciesType(const std::string& species) {
   if (species == "e") {
-    type = "electron";
-  } else if (species.find(std::string("+")) != std::string::npos) {
-    type = "ion";
-  } else {
-    type = "neutral";
+    return SpeciesType::electron;
+  } else if ((species == "i") or
+             species.find(std::string("+")) != std::string::npos) {
+    return SpeciesType::ion;
   }
-
-  return type;
+  // Not electron or ion -> neutral
+  return SpeciesType::neutral;
 }
 
 template<typename T, typename = bout::utils::EnableIfField<T>>
