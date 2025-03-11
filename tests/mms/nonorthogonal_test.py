@@ -20,7 +20,7 @@ div_a_grad_perp_f = div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, a, 
 test_input = {
     "ntest" : 3, 
     "ngrid" : 20,
-    "differential_operator_list": [["Div_a_Grad_perp_nonorthog(a, f)", str(div_a_grad_perp_f)]],
+    "differential_operator_list": [["Div_a_Grad_perp_nonorthog(a, f)", str(div_a_grad_perp_f)],],
     "a_string": str(a),
     "f_string": str(f),
     "g11_string": str(g11),

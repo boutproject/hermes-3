@@ -1163,12 +1163,18 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
 // Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) --  Vorticity
 // Includes nonorthogonal X-Y and X-Z metric corrections
 //
-Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f) {
+Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f,
+                                        Field3D &flow_xlow, 
+                                        Field3D &flow_ylow) {
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
 
   Coordinates* coord = f.getCoordinates();
+
+  // Zero all flows
+  flow_xlow = 0.0;
+  flow_ylow = 0.0;
 
   // Y and Z fluxes require Y derivatives
 
@@ -1241,6 +1247,7 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f) {
     fddx_xhigh_up = fddx_xhigh_down = toFieldAligned(fddx_xhigh);
 
     yzresult.setDirectionY(YDirectionType::Aligned);
+    flow_ylow.setDirectionY(YDirectionType::Aligned);
   }
 
   if (bout::build::use_metric_3d) {
@@ -1372,6 +1379,9 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f) {
                       * (dfdx - coef_xy * dfdy));
 
         yzresult(i, j, k) -= fout / (dyc(i, j, k) * Jc(i, j, k));
+   
+        // Flow will be positive in the positive coordinate direction
+        flow_ylow(i, j, k) = -1.0 * fout * coord->dx(i, j) * coord->dz(i, j);
       }
     }
   }
@@ -1500,6 +1510,9 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f) {
 
         result(i, j, k) += fout / (coord->dx(i, j, k) * coord->J(i, j, k));
         result(i + 1, j, k) -= fout / (coord->dx(i + 1, j, k) * coord->J(i + 1, j, k));
+        
+        // Flow will be positive in the positive coordinate direction
+        flow_xlow(i + 1, j, k) = -1.0 * fout * coord->dy(i, j) * coord->dz(i, j);
       }
     }
   }

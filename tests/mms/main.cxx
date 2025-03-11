@@ -15,16 +15,35 @@ public:
   std::function<Field3D(const Field3D&, const Field3D&)> func;
 };
 
-// List of tested operators
-const auto differential_operators = {
+// Class used to store function of four arguments
+// in operator list below. Second pair of arguments are
+// internal diagnostics to the function
+class nameandfunction4 {
+  public:
+    std::string name;
+    std::function<Field3D(const Field3D&, const Field3D&, Field3D&, Field3D&)> func;
+  };
+  
+
+// List of tested operators of 2 arguments
+const auto differential_operators_2_arg = {
     nameandfunction2{"FV::Div_a_Grad_perp(a, f)",
                  [](const Field3D &a, const Field3D &f) {
                    return FV::Div_a_Grad_perp(a, f);
                  }},
-    nameandfunction2{"Div_a_Grad_perp_nonorthog(a, f)",
-                 [](const Field3D &a, const Field3D &f) {
-                   return Div_a_Grad_perp_nonorthog(a, f);
+};
+// List of tested operators of 4 arguments
+const auto differential_operators_4_arg = {
+    nameandfunction4{"Div_a_Grad_perp_nonorthog(a, f)",
+                 [](const Field3D &a, const Field3D &f, 
+                    Field3D &flow_xlow, Field3D &flow_ylow) {
+                   return Div_a_Grad_perp_nonorthog(a, f, flow_xlow, flow_ylow);
                  }},
+    nameandfunction4{"Div_a_Grad_perp_flows(a, f)",
+                  [](const Field3D &a, const Field3D &f, 
+                     Field3D &flow_xlow, Field3D &flow_ylow) {
+                    return Div_a_Grad_perp_flows(a, f, flow_xlow, flow_ylow);
+                  }},
 };
 
 int main(int argc, char** argv) {
@@ -62,14 +81,20 @@ int main(int argc, char** argv) {
   mesh->communicate(f);
   dump["f"] = f;
 
+  // diagnostic variables
+  Field3D flow_xlow{mesh};
+  Field3D flow_ylow{mesh};
+
   for (int i = 0; i < n_operators; i++){
       std::string inputname = "differential_operator_name_"+std::to_string(i);
       std::string expectedname = "expected_result_"+std::to_string(i);
       std::string outname = "result_"+std::to_string(i);
+      std::string outname_flow_xlow = "result_flow_xlow_"+std::to_string(i);
+      std::string outname_flow_ylow = "result_flow_ylow_"+std::to_string(i);
       std::string differential_operator_name = Options::root()["mesh"][inputname].withDefault("FV::Div_a_Grad_perp(a, f)");
       // the for loop and if statement below should be replaced
       // by a neater indexing syntax below if possible
-      for (const auto& difop: differential_operators) {
+      for (const auto& difop: differential_operators_2_arg) {
           if (difop.name.compare(differential_operator_name) == 0){
               // Get result of applying the named differential operator
               Field3D result = difop.func(a, f);
@@ -83,6 +108,23 @@ int main(int argc, char** argv) {
               dump[expectedname] = expected_result;
           }
       }
+      for (const auto& difop: differential_operators_4_arg) {
+        if (difop.name.compare(differential_operator_name) == 0){
+            // Get result of applying the named differential operator
+            Field3D result = difop.func(a, f, flow_xlow, flow_ylow);
+            dump[outname] = result;
+            dump[outname].setAttributes({
+                  {"operator", difop.name},
+              });
+            // Get expected result from input file
+            Field3D expected_result{mesh};
+            mesh->get(expected_result, expectedname, 0.0, false);
+            dump[expectedname] = expected_result;
+            // dump diagnostics
+            dump[outname_flow_xlow] = flow_xlow;
+            dump[outname_flow_ylow] = flow_ylow;
+        }
+    }
   }
   //Field3D result = FV::Div_a_Grad_perp(a, f);
   //dump["result"] = result;
