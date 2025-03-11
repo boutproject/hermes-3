@@ -116,6 +116,12 @@ for more complicated cases.
   108991. doi:[10.1016/j.cpc.2023.108991](https://doi.org/10.1016/j.cpc.2023.108991).
   Preprint:
   [arXiv.2303.12131](https://doi.org/10.48550/arXiv.2303.12131).
+* G.K. Holt, A. Keats, S. Pamela, M. Kryjak, A. Agnello,
+  N.C. Amorisco, B.D. Dudson and M. Smyrnakis [Tokamak divertor plasma
+  emulation with machine
+  learning](https://doi.org/10.1088/1741-4326/ad4f9e) 2024
+  Nucl. Fusion 64 086009
+  doi:[10.1088/1741-4326/ad4f9e](https://doi.org/10.1088/1741-4326/ad4f9e)
 * Thomas Body, Thomas Eich, Adam Kuang, Tom Looby, Mike Kryjak, Ben Dudson, Matthew Reinke
   [Detachment scalings derived from 1D scrape-off-layer simulations](https://doi.org/10.1016/j.nme.2024.101819)
   Nucl. Mat. Energy 2024 101819
