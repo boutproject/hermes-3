@@ -157,9 +157,9 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
   auto& dy = coord->dy;
   auto& dz = coord->dz;
   if (dx.isFci()){
-    dx.splitParallelSlices();
-    dy.splitParallelSlices();
-    dz.splitParallelSlices();
+    dx.calcParallelSlices();
+    dy.calcParallelSlices();
+    dz.calcParallelSlices();
     for (int i=0;i<mesh->ystart ; ++i){
       dx.yup(i) = dx;
       dx.ydown(i) = dx;
