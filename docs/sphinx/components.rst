@@ -1310,6 +1310,13 @@ Note that with this definition we recover the `Braginskii expressions
 <https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html>`_
 for e-i and i-i collision times.
 
+The electron-electron collision time definition follows Braginskii (note that Fitzpatrick uses 
+a different definition in his `notes <https://farside.ph.utexas.edu/teaching/plasma/Plasma/node41.html>`_,
+these are not consistent with Braginskii):
+
+.. math::
+   \nu_{ee} = \frac{ln \Lambda e^4 n_e} { 12 \pi^{3/2} \varepsilon_0^2 m_{e}^{1/2} T_{e}^{3/2} } 
+
 For conservation of momentum, the collision frequencies :math:`\nu_{ab}` and :math:`\nu_{ba}` are
 related by:
 
