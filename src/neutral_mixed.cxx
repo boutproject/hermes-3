@@ -412,13 +412,13 @@ void NeutralMixed::finally(const Options& state) {
             + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
                       ef_cond_par_ylow,        
                       false)  // No conduction through target boundary
-      ;
-  }
+    ;
 
-  // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-  ef_cond_perp_xlow *= 3/2;
-  ef_cond_perp_ylow *= 3/2;
-  ef_cond_par_ylow *= 3/2;
+    // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
+    ef_cond_perp_xlow *= 3/2;
+    ef_cond_perp_ylow *= 3/2;
+    ef_cond_par_ylow *= 3/2;
+  }
   
   Sp = pressure_source;
   if (localstate.isSet("energy_source")) {
