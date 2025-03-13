@@ -245,6 +245,22 @@ if(HERMES_TESTS)
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
   endif()
+  
+# Method of manufactured solutions (MMS) tests
+  option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
+  if(HERMES_DIVOPS_MMS_TESTS)
+    #TEST_SOURCES=
+    add_executable(hermes_mms_tests
+                   tests/mms/main.cxx)
+                   #${TEST_SOURCES})
+    target_link_libraries(hermes_mms_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
+    add_test(NAME differential_operators_mms_orthogonal
+           WORKING_DIRECTORY tests/mms/
+           COMMAND python3 orthogonal_test.py)
+    add_test(NAME differential_operators_mms_nonorthogonal
+           WORKING_DIRECTORY tests/mms/
+           COMMAND python3 nonorthogonal_test.py)
+  endif()
 endif()
 
 # Compile-time options

@@ -363,15 +363,15 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-
-
   ddt(Nn) =
     - FV::Div_par_mod<ParLimiter>(
                   Nn, Vn, sound_speed, pf_adv_par_ylow) // Parallel advection
                   
-    + Div_a_Grad_perp_flows(DnnNn, logPnlim,
-                                   pf_adv_perp_xlow,
-                                   pf_adv_perp_ylow);    // Perpendicular advection
+    + Div_a_Grad_perp_nonorthog(DnnNn, logPnlim,
+        pf_adv_perp_xlow, pf_adv_perp_ylow); // Perpendicular diffusion
+   // + Div_a_Grad_perp_flows(DnnNn, logPnlim,
+   //                                pf_adv_perp_xlow,
+   //                               pf_adv_perp_ylow);    // Perpendicular advection
     ;
 
   Sn = density_source; // Save for possible output
@@ -388,10 +388,12 @@ void NeutralMixed::finally(const Options& state) {
                     Pn, Vn, sound_speed, ef_adv_par_ylow)
 
             - (2. / 3) * Pn * Div_par(Vn)                // Compression
-            + (5. / 3) * Div_a_Grad_perp_flows(          // Perpendicular advection
 
-                    DnnPn, logPnlim,
-                    ef_adv_perp_xlow, ef_adv_perp_ylow)  
+            + (5. / 3) * Div_a_Grad_perp_nonorthog(DnnNn, logPnlim,
+                           ef_adv_perp_xlow, ef_adv_perp_ylow) // Perpendicular diffusion
+            //+ (5. / 3) * Div_a_Grad_perp_flows(          // Perpendicular advection
+            //        DnnPn, logPnlim,
+            //        ef_adv_perp_xlow, ef_adv_perp_ylow)  
      ;
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -400,20 +402,23 @@ void NeutralMixed::finally(const Options& state) {
   ef_adv_perp_ylow *= 5/2;
 
   if (neutral_conduction) {
-    ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(
-                    kappa_n, Tn,                            // Perpendicular conduction
-                    ef_cond_perp_xlow, ef_cond_perp_ylow)
+    ddt(Pn) += 
+               (2. / 3) * Div_a_Grad_perp_nonorthog(kappa_n, Tn,
+                             ef_cond_perp_xlow, ef_cond_perp_ylow) // Perpendicular diffusion
+             //(2. / 3) * Div_a_Grad_perp_flows(
+             //       kappa_n, Tn,                            // Perpendicular conduction
+             //       ef_cond_perp_xlow, ef_cond_perp_ylow)
 
             + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
                       ef_cond_par_ylow,        
                       false)  // No conduction through target boundary
-      ;
-  }
+    ;
 
-  // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-  ef_cond_perp_xlow *= 3/2;
-  ef_cond_perp_ylow *= 3/2;
-  ef_cond_par_ylow *= 3/2;
+    // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
+    ef_cond_perp_xlow *= 3/2;
+    ef_cond_perp_ylow *= 3/2;
+    ef_cond_par_ylow *= 3/2;
+  }
   
   Sp = pressure_source;
   if (localstate.isSet("energy_source")) {
@@ -433,25 +438,28 @@ void NeutralMixed::finally(const Options& state) {
 
         - Grad_par(Pn)                                 // Pressure gradient
         
-        + Div_a_Grad_perp_flows(DnnNVn, logPnlim,
-                                     mf_adv_perp_xlow,
-                                     mf_adv_perp_ylow) // Perpendicular advection
+        + Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim, 
+                      mf_adv_perp_xlow, mf_adv_perp_ylow) // Perpendicular diffusion
+       // + Div_a_Grad_perp_flows(DnnNVn, logPnlim,
+       //                              mf_adv_perp_xlow,
+       //                              mf_adv_perp_ylow) // Perpendicular advection
       ;
 
     if (neutral_viscosity) {
       // NOTE: The following viscosity terms are not (yet) balanced
       //       by a viscous heating term
-
       // Relationship between heat conduction and viscosity for neutral
       // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
       // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = AA * Div_a_Grad_perp_flows(
-                                eta_n, Vn,              // Perpendicular viscosity
-                                mf_visc_perp_xlow,
-                                mf_visc_perp_ylow)    
+      Field3D viscosity_source = AA * Div_a_Grad_perp_nonorthog(eta_n, Vn,
+                                        mf_visc_perp_xlow, mf_visc_perp_ylow) // Perpendicular viscosity
+                               // AA * Div_a_Grad_perp_flows(
+                               // eta_n, Vn,              // Perpendicular viscosity
+                               // mf_visc_perp_xlow,
+                               // mf_visc_perp_ylow)    
                               
                               + AA * Div_par_K_Grad_par_mod(               // Parallel viscosity 
                                 eta_n, Vn,
@@ -474,7 +482,6 @@ void NeutralMixed::finally(const Options& state) {
     ddt(NVn) = 0;
     Snv = 0;
   }
-
 
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
     if ((Pn[i] < pressure_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
@@ -695,13 +702,13 @@ void NeutralMixed::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
-    if (mf_visc_perp_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("mf{}_visc_perp_ylow", name)], mf_visc_perp_ylow,
+    if (mf_visc_perp_xlow.isAllocated()) {
+      set_with_attrs(state[fmt::format("mf{}_visc_perp_xlow", name)], mf_visc_perp_xlow,
                    {{"time_dimension", "t"},
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"standard_name", "momentum flow"},
-                    {"long_name", name + " poloidal component of perpendicular viscosity."},
+                    {"long_name", name + " radial component of perpendicular viscosity."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
