@@ -280,7 +280,7 @@ int Hermes::init(bool restarting) {
 
 int Hermes::rhs(BoutReal time) {
   if (show_timesteps) {
-    printf("TIME = %e\r", time);
+    fprintf(stderr, "TIME = %e\r", time);
   }
 
   // Need to reset the state, since fields may be modified in transform steps
