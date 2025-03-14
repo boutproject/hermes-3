@@ -395,7 +395,11 @@ void EvolvePressure::finally(const Options& state) {
     // is calculated and removed separately
     ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
     if (    flow_ylow_conduction.isAllocated()) {
-      flow_ylow += flow_ylow_conduction;
+      if (flow_ylow.isAllocated()) {
+	flow_ylow += flow_ylow_conduction;
+      } else {
+	flow_ylow = flow_ylow_conduction;
+      }
     }
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -565,7 +569,8 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " power through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
-                    
+    }
+    if (flow_ylow_conduction.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
                    {{"time_dimension", "t"},
                     {"units", "W"},
@@ -574,7 +579,8 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " conduction through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
-
+    }
+    if (flow_ylow_kinetic.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_kin_ylow", name)], flow_ylow_kinetic,
                    {{"time_dimension", "t"},
                     {"units", "W"},
