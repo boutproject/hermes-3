@@ -126,10 +126,12 @@ void IonViscosity::transform(Options &state) {
         const Field2D V_av = DC(V);
 
         // Parallel ion stress tensor component, calculated here because before it was only div_Pi_cipar
-        Field2D Pi_cipar = -0.96 * P_av * tau_av *
-                          (2. * Grad_par(V_av) + V_av * Grad_par_logB);
-        Field2D Pi_ciperp = 0 * Pi_cipar; // Perpendicular components and divergence of current J equal to 0 for only parallel viscosity case
-        Field2D DivJ = 0 * Pi_cipar;
+        auto Pi_cipar =
+            -0.96 * P_av * tau_av * (2. * Grad_par(V_av) + V_av * Grad_par_logB);
+        auto Pi_ciperp =
+            0 * Pi_cipar; // Perpendicular components and divergence of current J equal to
+                          // 0 for only parallel viscosity case
+        auto DivJ = 0 * Pi_cipar;
         // Find the diagnostics struct for this species
         auto search = diagnostics.find(species_name);
         if (search == diagnostics.end()) {

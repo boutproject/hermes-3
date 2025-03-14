@@ -343,6 +343,10 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
                                   const Field3D& wave_speed_in, Field3D &flow_ylow,
                                   bool fixflux = true) {
 
+#if BOUT_USE_METRIC_3D
+  throw BoutException("This is currently not ported to FCI yet");
+#else
+
   ASSERT1(areFieldsCompatible(f_in, v_in));
   ASSERT1(areFieldsCompatible(f_in, wave_speed_in));
 
@@ -535,6 +539,7 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
   }
   flow_ylow = fromFieldAligned(flow_ylow, "RGN_NOBNDRY");
   return fromFieldAligned(result, "RGN_NOBNDRY");
+#endif
 }
   
 /// Finite volume parallel divergence
@@ -765,6 +770,9 @@ const Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 /// 1st order upwinding is used in Y.
 template <typename CellEdges = MC>
 const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g, const Field3D& f) {
+#if BOUT_USE_METRIC_3D
+  throw BoutException("Currently not supported with FCI");
+#else
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
@@ -984,6 +992,7 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g, const Fi
   }
 
   return result;
+#endif
 }
 
 } // namespace FV
