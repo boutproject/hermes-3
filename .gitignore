@@ -9,3 +9,4 @@ BOUT.settings
 /build*
 .#*
 .ipynb_checkpoints/
+/docs/build/*

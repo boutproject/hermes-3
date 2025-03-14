@@ -120,6 +120,29 @@ void IonViscosity::transform(Options &state) {
     subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
 
     if (!perpendicular) {
+      if (diagnose) {
+        const Field2D P_av = DC(P);
+        const Field2D tau_av = DC(tau);
+        const Field2D V_av = DC(V);
+
+        // Parallel ion stress tensor component, calculated here because before it was only div_Pi_cipar
+        Field2D Pi_cipar = -0.96 * P_av * tau_av *
+                          (2. * Grad_par(V_av) + V_av * Grad_par_logB);
+        Field2D Pi_ciperp = 0 * Pi_cipar; // Perpendicular components and divergence of current J equal to 0 for only parallel viscosity case
+        Field2D DivJ = 0 * Pi_cipar;
+        // Find the diagnostics struct for this species
+        auto search = diagnostics.find(species_name);
+        if (search == diagnostics.end()) {
+          // First time, create diagnostic
+          diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ});
+        } else {
+          // Update diagnostic values
+          auto& d = search->second;
+          d.Pi_ciperp = Pi_ciperp;
+          d.Pi_cipar = Pi_cipar;
+          d.DivJ = DivJ;
+        }
+      }
       continue; // Skip perpendicular flow parts below
     }
 

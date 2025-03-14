@@ -642,28 +642,85 @@ with velocity :math:`v_D = -D \nabla_\perp N / N`.
 Neutral gas models
 ------------------
 
+In 1D, neutral transport is currently done through the same components as for plasma, i.e. `evolve_density`,
+`evolve_momentum` and `evolve_pressure` with the additional, optional `neutral_parallel_diffusion` component.
+It is planned for the neutral models to be unified in the near future. 
+
+The below describes the `neutral_mixed` component used for 2D and 3D simulations. Note that all dimensionalities
+are compatible with the `neutral_boundary` component which facilitates energy losses to the wall through neutral reflection.
+
 The `neutral_mixed` component solves fluid equations along :math:`y`
 (parallel to the magnetic field), and uses diffusive transport in :math:`x`
-and :math:`z`.  It was adopted from the approach used in UEDGE and this paper
-[Journal of Nuclear Materials, vol. 313-316, pp. 559-563 (2003)].
+and :math:`z`.  It was adopted from the approach used in UEDGE and this [M.V. Umansky, J.N.M (2003)]. The Hermes-3 approach
+is more advanced in having a separate neutral pressure equation, similar to the 
+new AFN (Advanced Fluid Neutral) model in SOLPS-ITER [N. Horsten, N.F. (2017)].
 
 .. math::
    
-   \begin{aligned}\frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{||n} + n_n\mathbf{v}_{\perp n}\right) + S\\ \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& -\nabla\cdot\left(n_nv_{||n} \mathbf{b}v_{||n} + n_nv_{||n}\mathbf{v}_{\perp n}\right) - \partial_{||}p_n + \nabla_{||}\left(D_{nn}n_n\partial_{||}v_{||n}\right) + F \\ \frac{\partial p_n}{\partial t} =& -\nabla\cdot\left(p_n\mathbf{b}v_{||n} + p_n\mathbf{v}_{\perp n}\right) - \frac{2}{3}p_n\nabla\cdot\left(\mathbf{b}v_{||n}\right) + \nabla\cdot\left(D_{nn}n_n\nabla_\perp T_n\right) + \frac{2}{3}Q \end{aligned}
+   \begin{aligned}
 
-The parallel momentum is evolved, so that it can be exchanged with the
-plasma parallel momentum, but the mass is neglected for perpendicular
-motion. In the perpendicular direction, therefore, the motion is a
-balance between the friction (primarily with the plasma through charge
-exchange) and the pressure gradient:
+   \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{||n} + n_n\mathbf{v}_{\perp n}\right) \\
+         &    + S \\
+   \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& -\nabla\cdot\left(n_nv_{||n} \mathbf{b}v_{||n} + n_nv_{||n}\mathbf{v}_{\perp n}\right) \\
+         &    - \partial_{||}p_n \\
+         &    + \nabla \cdot (m_n \eta_{n} \nabla_{\perp} v_{\parallel n}) + \nabla \cdot( m_n \eta_{n} \nabla{\parallel} v_{\parallel n} ) \\
+         &    + F \\
+   \frac{\partial p_n}{\partial t} =& -\nabla\cdot\left(p_n\mathbf{b}v_{||n} + \frac{5}{3} p_n\mathbf{v}_{\perp n}\right) \\
+         &    - \frac{2}{3}p_n\nabla\cdot\left(\mathbf{b}v_{||n}\right) \\
+         &    + \frac{2}{3} \nabla\cdot\left(\kappa_n \nabla_\perp T_n\right) + \frac{2}{3} \nabla\cdot\left(\kappa_n \nabla_{\parallel} T_n\right) \\
+         &    - \frac{2}{3} v_n \nabla \cdot (m_n \eta_{n} \nabla_{\perp} v_{\parallel n}) + \frac{2}{3} \nabla \cdot( m_n \eta_{n} \nabla_{\parallel} v_{\parallel n} ) \\
+         &    + \frac{2}{3}E \\
+
+   \end{aligned}
+
+Where for the density equation, the first row of terms contains the parallel and perpendicular 
+advection and the second row the particle sources. In the parallel momentum equation, the first row of terms
+features parallel and perpendicular advection of parallel momentum. This is followed by the compression term
+and the perpendicular and parallel viscosity (diffusion of parallel momentum) as well as the momentum source term.
+In the pressure equation, the first row contains the parallel and perpendicular advection of pressure. This is followed
+by the compression term, the perpendicular and parallel conduction (diffusion of temperature) and perpendicular and parallel
+viscous heating, finally followed by the energy sources.
+
+While parallel momentum is evolved and is exchanged with the plasma parallel momentum, the advection of momentum is neglected in the perpendicular direction,
+resulting in the pressure diffusion model, where the pressure gradient is balanced by frictional forces. This is similar to Fickian diffusion with the pressure
+gradient replacing the density gradient as the flow driver, in an approach similar to that taken in nuclear fission neutronic transport modelling and several other edge codes.
+
+The perpendicular velocity is calculated as:
+
+.. math::
+   \begin{aligned}
+   v_{\perp} =& -D_n \frac{1}{P_n} \nabla_{\perp} p_n
+   \end{aligned}
+
+Where in the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`ln(P_n)`, which helps
+preserve pressure positivity.
+
+The diffusion coefficients are defined as:
 
 .. math::
 
-   \mathbf{v}_{\perp n} = -D_{nn}\frac{1}{p_n}\nabla_\perp p_n
+   \begin{aligned} 
+   D_n =& v_{th,n}^{2} \nu_{n, tot}  \\
+   \kappa_{n} =& \frac{5}{2} D_n N_n \\
+   \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
+   \end{aligned}
 
-At the moment there is no attempt to limit these velocities, which has
-been found necessary in UEDGE to get physical results in better
-agreement with kinetic neutral models [Discussion, T.Rognlien].
+Where :math:`v_{th,n}= \sqrt{\frac{T_n}{m_n}}` is the thermal velocity of neutrals and :math:`\nu_{n, tot}` is the total
+neutral collisionality. This is primarily driven by charge exchange and ionisation, which can cause issues in regions
+where plasma density is low. Because of this, an additional pseudo-collisionality is calculated based on the maximum vessel 
+mean free path and added to the total neutral collisionality.
+
+In an additional effort to limit the diffusivitiy to more physical values, a flux limiter has been implemented which clamps
+:math:`D_n` to :math:`D_{n,max}` defined as:
+
+.. math::
+   
+   \begin{aligned}
+   D_{n,max} =& f_l \frac{v_{th,n}}{abs(\nabla ln(P_n) + 1/l_{max}}
+   \end{aligned}
+
+This formulation is equivalent to defining a :math:`D_n` with a free streaming velocity while accounting for the pseudo collisionality due 
+to the maximum vessel mean free path :math:`l_{max}`. The flux limiter :math:`f_l` is set to 1.0 by default.
 
 Sources
 -------------------
@@ -701,11 +758,11 @@ The grid increases in resolution towards the target, with a minimum grid spacing
    source = length_xpt / length
    y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
 
-And here is how the calculated geometric information is used to prepare a pressure source. First, the 
-required total ion power flux is converted to a pressure according to :math:`E = 3/2P`, then it is 
-divided by the length of the heating region to obtain the power flux required in each cell. Note 
-that this assumes that :math:`dx = dz = J = 0` and that the volume upstream of the X-point is simply
-an integral of :math:`dy = mesh:length\_xpt`. If you are imposing a full B-field profile in your 1D simulation, 
+And here is how the calculated geometric information is used to prepare a pressure source. The user 
+inputs a parallel heatflux in :math:`W/m^2`, or Watts per cross-sectional flux tube area.
+This is converted to a pressure flux in :math:`Pa/{m^2s}` by the :math:`2/3` factor, and then
+converted to a pressure source in :math:`Pa/{m^3s}` by dividing by the length of the heating region :math:`mesh:length_xpt`. 
+Note that this assumes a constant cross-sectional area, i.e. :math:`dx = dz = J = 1`. If you are imposing a full B-field profile in your 1D simulation, 
 you will need to account for the fact that :math:`J` is no longer constant.
 In order to limit the pressure source to just the region above the X-point, it is multiplied by a Heaviside
 function which returns 1 upstream of :math:`y=mesh:y\_xpt` and 0 downstream of it.
@@ -724,9 +781,9 @@ function which returns 1 upstream of :math:`y=mesh:y\_xpt` and 0 downstream of i
 
    [Pe]
 
-   # Input power flux to electrons in W/m^2
    function = `Pd+:function`  # Same as ion pressure initially
 
+   # Input power flux to electrons in W/m^2
    source = `Pd+:source`  # Same as ion pressure source
 
 Applying sources using the grid file
@@ -834,6 +891,157 @@ Component boundary conditions
 ~~~~~~~~~~~~~~~
 Hermes-3 includes additional boundary conditions whose complexity requires their implementation
 as components. They may overwrite simple boundary conditions and must be set in the same way as other components.
+
+.. _sheath_boundary_simple:
+
+sheath_boundary_simple
+^^^^^^^^^^^^^^^
+
+This is a top-level component which determines the conditions and sources at the divertor target. 
+First, density, temperature and pressure are extrapolated into the target boundary.
+The extrapolation method for each can be user set, e.g. `density_boundary_mode`. At the moment, 
+the available modes are:
+
+- 0: LimitFree
+   An exponential extrapolation for decreasing quantities and a Neumann boundary for increasing
+   quantities. It is inconsistent between increasing and decreasing values and is not recommended
+   unless you have a reason to use it - it's legacy behaviour.
+
+- 1: ExponentialFree
+   An exponential extrapolation. It is more consistent than LimitFree and has the advantage of 
+   inherently preventing negative values at the target. This is the default and is recommended for most cases.
+   It is defined as :math:`guard = (last)^2 / previous`
+
+- 2: LinearFree
+   A linear extrapolation. It can lead to negative values at the target. However, it is the most 
+   consistent (the linear extrapolation is what second order differencing reduces to at the wall) and has been shown to 
+   reduce "zigzags" or "squiggles" near the target which are common in cell centered codes. Use only
+   if you have a particular reason to care about this.
+   It's defined as :math:`guard = 2 * last - previous`.
+
+In the above definitions, `last`, `previous` and `guard` refer to the final domain cell, the penultimate 
+domain cell and the guard cell respectively. The value at the target is defined to be 
+an interpolation between the last and guard cells, i.e:
+
+.. math::
+   \begin{aligned}
+   target = (last + guard)/2
+   \end{aligned}
+
+After the initial extrapolation, the sheath velocity is set to greater or equal to Bohm speed as according
+to Stangeby, eq. 2.55b, with temperature in eV:
+
+.. math::
+   \begin{aligned}
+   v_{i}^{sheath} \geq [(e T_{e} + \gamma e T_{i})/m_{i}]^{1/2}
+   \end{aligned}
+
+where :math:`\gamma` is the ion polytropic coefficient, which is set to 1 by default as per SOLPS-ITER.
+The electron velocity is calculated from the potential:
+
+.. math::
+   \begin{aligned}
+   \phi^{sheath} &= T_{e} \  ln \biggl[ \sqrt{ T_{e} / (2 \pi m_e) \cdot (1 - G_{e}) \cdot n_{e} / \Gamma_{i}^{tot}} \biggr]   \\ 
+   v_{e}^{sheath} &= -\sqrt{ T_{e} / 2 \pi m_e} \cdot (1-G_{e}) \cdot e^{(- \frac{\phi_{sheath} - \phi_{wall}} {T_{e}})}
+   \end{aligned}
+
+Where :math:`\Gamma_{i}^{tot}` is the total ion particle flux across all species, :math:`G_{e}` is the electron secondary
+emission coefficient (default 1) and :math:`\phi_{wall}` is the wall potential (default 0). Both can be user-set through the
+options `secondary_electron_coef` and `wall_potential`, respectively.
+
+
+Hermes-3 allows the pressure and momentum equations to advect internal and 
+kinetic energy out of the sheath, but disables the conduction term, so before applying any sheath boundary condition,
+the "underlying" sheath heat flux is:
+
+.. math::
+   \begin{aligned}
+   q_{i}^{sheath} &= n_{i} v_{i} (\frac{5}{2} e T_{i}n_{i} + \frac{1}{2} m_i v_{i}^{2})
+
+   q_{e}^{sheath} &= n_{e} v_{e} (\frac{5}{2} e T_{e}n_{e} + \frac{1}{2} m_e v_{e}^{2})
+   \end{aligned}
+
+With both of the above definitions following Stangeby (eqns. 9.61 and 9.63) with the addition of electron kinetic
+energy, and where each variable is evaluated at the sheath (target). Continuing from Stangeby (eqs. 2.89 and 2.94), 
+the above can be represented as the internal energy multiplied by the sheath heat transfer coefficient:
+
+.. math::
+   \begin{aligned}
+   q_{i}^{sheath} &= n_{i} v_{i} \gamma_{i} (e T_{i}n_{i})
+   q_{e}^{sheath} &= n_{e} v_{e} \gamma_{e} (e T_{e}n_{e})
+   \end{aligned}
+
+Where :math:`\gamma_{i}` and :math:`\gamma_{e}` are the **total** ion and electron sheath heat transfer coefficients 
+and are user set through the options `gamma_i` and `gamma_e`. The easiest way to calculate the sheath heat flux leaving the model
+is to use this form of the equations.
+
+Assuming :math:`T_e = T_i`, the "underlying" heat flux corresponds to :math:`\gamma_{i} = 3.5` and :math:`\gamma_{e} = 3.5`.
+In order to facilitate a user-set total gamma, `sheath_boundary_simple` creates a heat sink (or source) 
+based on the difference between the required and "underlying" coefficient:
+
+.. math::
+   \begin{aligned}
+   q_{i}^{additional} &= \gamma_i T_i n_i v_i - (2.5 T_{i} + \frac{1}{2} m_i v_{i}^{2}) n_{i} v_{i}
+
+   q_{e}^{additional} &= \gamma_e T_e n_e v_e - (2.5 T_{e} + \frac{1}{2} m_e v_{e}^{2}) n_{e} v_{e}
+   \end{aligned}
+
+The sheath ion particle flux is facilitated through the underlying density equation advecting density out of the domain:
+
+.. math::
+   \begin{aligned}
+   \Gamma_{i}^{sheath}&= n_{i} v_{i}
+   \end{aligned}
+
+If recycling is enabled, a corresponding recycled neutral particle source is set up in the `recycling` component.
+
+**Usage and other options**
+
+To enable the boundary condition, add `sheath_boundary_simple` to the list of components. The settings are
+accessed through the component header. Use the `lower_y` and `upper_y` flags to enable the boundary on each 
+end of the domain, where `lower` and `upper` refer to the start and end of the poloidal index space, respectively:
+
+.. code-block:: ini
+
+   [hermes]
+   components = d+, sheath_boundary_simple
+
+   [d+]
+   type = noflow_boundary
+
+   noflow_lower_y = true   # This is the default
+   noflow_upper_y = false  # Turn off no-flow at upper y for d+ species
+
+   [sheath_boundary_simple]
+   lower_y = false         # Turn off sheath lower boundary for all species
+   upper_y = true
+
+It can be useful to run the code without neutrals/recycling in order to simplify the physics, e.g. for debugging.
+However, just disabling `recycling` would result in mach flows throughout the whole domain due to the lack of the
+neutral source. To avoid this, you can set `no_flow = true` under `sheath_boundary_simple`. This will set the ion 
+velocity to zero for the particle flux but will keep it at the :math: `v_i \geq c_{bohm}` condition for the heat flux.
+
+By default, the Bohm condition is imposed on the target by the Lax flux. This allows the code to have a small amount 
+of slack, resulting in a not-perfectly-exact setting but a smoother and more stable solution. For debugging, you can
+disable this behaviour and fix the Bohm condition explicitly. This can be done by setting `fix_momentum_boundary_flux` 
+to `true` in the `evolve_pressure` component. Note that this has been observed to increase numerical oscillations near
+the boundary and is not recommended.
+
+.. _sheath_boundary:
+
+sheath_boundary
+^^^^^^^^^^^^^^^
+
+This is intended to give a more rigorous treatment when simulating multi-species, as well as to add models for
+:math:`gamma_e` and :math:`gamma_i` based on Tskhakaya 2005. As this component is considerably more complex, the 
+development may lag behind `sheath_boundary_simple`.
+
+.. _sheath_boundary_insulating:
+
+sheath_boundary_insulating
+^^^^^^^^^^^^^^^
+
+Not yet documented.
 
 .. _noflow_boundary:
 
@@ -969,7 +1177,8 @@ listed after all the species groups in the component list, so that all
 the species are present in the state.
 
 One of the most important is the `collisions`_ component. This sets collision
-times for all species, which are then used 
+times for all species, which are then used in other components to calculate
+quantities like heat diffusivities and viscosity closures.
 
 .. _sound_speed:
 
@@ -1011,20 +1220,24 @@ cross-field diffusion:
 .. math::
 
    \begin{aligned}
-   \frac{\partial n_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_n\partial_{||}p_n\right) \\
-   \frac{\partial p_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n p_n\partial_{||}p_n\right) + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\kappa_n \partial_{||}T_n\right) \\
-   \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_nv_{||n} \partial_{||}p_n\right) + \nabla\cdot\left(\mathbf{b}\eta_n \partial_{||}T_n\right)
+   \frac{\partial n_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n n_n \frac{1}{p_n}{\partial_{||}p_n}\right) \\
+   \frac{\partial p_n}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}D_n p_n \frac{1}{p_n}\partial_{||}p_n\right) + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\kappa_n \partial_{||}T_n\right) \\
+   \frac{\partial}{\partial t}\left(m_nn_nv_{||n}\right) =& \ldots + \nabla\cdot\left(\mathbf{b}D_n m_n n_nv_{||n} \frac{1}{p_n} \partial_{||}p_n\right) + \nabla\cdot\left(\mathbf{b}\eta_n \partial_{||}v_{||n}\right)
    \end{aligned}
 
-The diffusion coefficient is calculated as
+The diffusion coefficient is in :math:`m^2/s` and is calculated as
 
 .. math::
 
-   D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{T_n}{A \nu}
+   D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{eT_n}{m_{n} \nu}
 
-where `A` is the atomic mass number; :math:`\nu` is the collision
-frequency. The factor :math:`B / B_{pol}` is the projection of the cross-field
-direction on the parallel transport, and is the `dneut` input setting.
+where `m_{n}` is the neutral species mass in kg and :math:`\nu` is the collision
+frequency (by default, this sums up all of the enabled neutral collisions from 
+the collisions component as well as the charge exchange rate).
+The factor :math:`B / B_{pol}` is the projection of the cross-field
+direction on the parallel transport, and is the `dneut` input setting. Currently, the recommended
+use case for this component is to represent the neutrals diffusing orthogonal to the target wall, and
+it is recommended to set `dneut` according to the field line pitch at the target.
 
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
@@ -1096,6 +1309,13 @@ the expression in SI units. The thermal speeds in this expression are defined as
 Note that with this definition we recover the `Braginskii expressions
 <https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html>`_
 for e-i and i-i collision times.
+
+The electron-electron collision time definition follows Braginskii (note that Fitzpatrick uses 
+a different definition in his `notes <https://farside.ph.utexas.edu/teaching/plasma/Plasma/node41.html>`_,
+these are not consistent with Braginskii):
+
+.. math::
+   \nu_{ee} = \frac{ln \Lambda e^4 n_e} { 12 \pi^{3/2} \varepsilon_0^2 m_{e}^{1/2} T_{e}^{3/2} } 
 
 For conservation of momentum, the collision frequencies :math:`\nu_{ab}` and :math:`\nu_{ba}` are
 related by:
@@ -1176,12 +1396,18 @@ species :math:`b` due to temperature differences, is given by:
 
 - Ion-neutral and electron-neutral collisions
 
+  *Note*: These are disabled by default. If enabled, care is needed to
+  avoid double-counting collisions in atomic reactions e.g charge-exchange
+  reactions.
+  
   The cross-section for elastic collisions between charged and neutral
   particles can vary significantly. Here for simplicity we just take
   a value of :math:`5\times 10^{-19}m^2` from the NRL formulary.
 
 - Neutral-neutral collisions
 
+  *Note* This is enabled by default.
+  
   The cross-section is given by
 
 .. math::
@@ -1848,6 +2074,11 @@ in coronal equilibrium, using a simple formula from `I.H.Hutchinson Nucl. Fusion
 
 which has units of :math:`Wm^3` with :math:`T_e` in eV.
 
+By default, fixed fraction radiation is disabled in the core region. This represents the fact that
+the impurity will likely be coronal on closed field lines and feature reduced radiation. This 
+can prevent unphysical MARFE-like behaviour in deep detachment. This behaviour can be disabled
+by setting ``no_core_radiation=false`` in the impurity options block.
+
 To use this component you can just add it to the list of components and then
 configure the impurity fraction:
 
@@ -1874,11 +2105,13 @@ defined like this:
    diagnose = true   # Saves Rc (R + section name)
 
 
-Carbon is also provided as an ADAS rate along with nitrogen, neon and argon. The component names are  
-``fixed_fraction_carbon``, ``fixed_fraction_nitrogen``, ``fixed_fraction_neon`` and ``fixed_fraction_argon``.
+Carbon is also provided as an ADAS rate along with nitrogen, neon, argon, krypton, xenon and tungsten.
+The component names are ``fixed_fraction_carbon``, ``fixed_fraction_nitrogen``, ``fixed_fraction_neon``,
+``fixed_fraction_argon``, ``fixed_fraction_krypton``, ``fixed_fraction_xenon`` and ``fixed_fraction_tungsten``.
 
 These can be used in the same way as ``fixed_fraction_hutchinson_carbon``. Each rate is in the form of a 10 coefficient 
-log-log polynomial fit of data obtained using the open source tool `radas <https://github.com/cfs-energy/radas>`_.
+log-log polynomial fit of data obtained using the open source tool `radas <https://github.com/cfs-energy/radas>`_, except
+xenon and tungsten that use 15 and 20 coefficients respectively.
 The :math:`n {\tau}` parameter representing the density and residence time assumed in the radas 
 collisional-radiative model has been set to :math:`1\times 10^{20} \times 0.5ms` based on `David Moulton et al 2017 Plasma Phys. Control. Fusion 59(6) <https://doi.org10.1088/1361-6587/aa6b13>`_.
 
@@ -1916,6 +2149,20 @@ This functionality is not yet currently implemented for helium or neon reactions
 | R_multiplier          | Impurity species | Fixed frac. impurity radiation rate   |
 +-----------------------+------------------+---------------------------------------+
 
+The charge exchange reaction can also be modified so that the momentum transfer channel is disabled. This can be useful when
+testing the impact of the full neutral momentum equation equation compared to purely diffusive neutrals. A diffusive only model 
+leads to all of the ion momentum being lost during charge exchange due to the lack of a neutral momentum equation.
+Enabling neutral momentum introduces a more accurate transport model but also prevents CX momentum from being lost, which
+can have a significant impact on the solution and may be difficult to analyse.
+Disabling the momentum transfer channel allows you to study the impact of the improved transport only and is set as:
+
+.. code-block:: ini
+
+   [hermes]
+   components = ..., c, ...
+
+   [reactions]
+   no_neutral_cx_mom_gain = true
 
 Electromagnetic fields
 ----------------------
@@ -2017,8 +2264,30 @@ the potential in time as a diffusion equation.
 .. doxygenstruct:: RelaxPotential
    :members:
 
+.. _electromagnetic:
+
 electromagnetic
 ~~~~~~~~~~~~~~~
+
+**Notes**: When using this module,
+
+1. Set ``sound_speed:alfven_wave=true`` so that the shear Alfven wave
+   speed is included in the calculation of the fastest parallel wave
+   speed for numerical dissipation.
+2. For tokamak simulations use Neumann boundary condition on the core
+   and Dirichlet on SOL and PF boundaries by setting
+   ``electromagnetic:apar_core_neumann=true`` (this is the default).
+3. Set the potential core boundary to be constant in Y by setting
+   ``vorticity:phi_core_averagey = true``
+4. Magnetic flutter terms must be enabled to be active
+   (``electromagnetic:magnetic_flutter=true``).  They use an
+   ``Apar_flutter`` field, not the ``Apar`` field that is calculated
+   from the induction terms.
+5. If using ``vorticity:phi_boundary_relax`` to evolve the radial
+   boundary of the electrostatic potential, the timescale
+   ``phi_boundary_timescale`` should be set much longer than the
+   Alfven wave period or unphysical instabilities may grow from the
+   boundaries.
 
 This component modifies the definition of momentum of all species, to
 include the contribution from the electromagnetic potential
@@ -2032,8 +2301,17 @@ Assumes that "momentum" :math:`p_s` calculated for all species
    p_s = m_s n_s v_{||s} + Z_s e n_s A_{||}
 
 which arises once the electromagnetic contribution to the force on
-each species is included in the momentum equation. This is normalised
-so that in dimensionless quantities
+each species is included in the momentum equation. This requires
+an additional term in the momentum equation:
+
+.. math::
+
+   \frac{\partial p_s}{\partial t} = \cdots + Z_s e A_{||} \frac{\partial n_s}{\partial t}
+
+This is implemented so that the density time-derivative is calculated using the lowest order
+terms (parallel flow, ExB drift and a low density numerical diffusion term).
+
+The above equations are normalised so that in dimensionless quantities:
 
 .. math::
 
@@ -2067,6 +2345,30 @@ To convert the species momenta into a current, we take the sum of
 .. math::
 
    - \frac{1}{\beta_{em}} \nabla_\perp^2 A_{||} + \sum_s \frac{Z^2 n_s}{A}A_{||} = \sum_s \frac{Z}{A} p_s
+
+The toroidal variation of density :math:`n_s` must be kept in this
+equation.  By default the iterative "Naulin" solver is used to do
+this: A fast FFT-based method is used in a fixed point iteration,
+correcting for the density variation.
+
+Magnetic flutter terms are disabled by default, and can be enabled by setting
+
+.. code-block:: ini
+
+   [electromagnetic]
+   magnetic_flutter = true
+
+This writes an ``Apar_flutter`` field to the state, which then enables perturbed
+parallel derivative terms in the ``evolve_density``, ``evolve_pressure``, ``evolve_energy`` and
+``evolve_momentum`` components. Parallel flow terms are modified, and parallel heat
+conduction.
+
+.. math::
+
+   \begin{aligned}\mathbf{b}\cdot\nabla f =& \mathbf{b}_0\cdot\nabla f + \delta\mathbf{b}\cdot\nabla f \\
+   =& \mathbf{b}_0\cdot\nabla f + \frac{1}{B}\nabla\times\left(\mathbf{b}A_{||}\right)\cdot\nabla f \\
+   \simeq& \mathbf{b}_0\cdot\nabla f + \frac{1}{B_0}\left[A_{||}\nabla\times\mathbf{b} + \left(\nabla A_{||}\right)\times\mathbf{b}_0\right]\cdot\nabla f \\
+   \simeq& \mathbf{b}_0\cdot\nabla f + \frac{1}{B_0}\mathbf{b}_0\times \nabla A_{||} \cdot \nabla f\end{aligned}
 
 .. doxygenstruct:: Electromagnetic
    :members:

@@ -9,13 +9,13 @@ nz = 10
 yn = y / (2π)
 zn = z / (2π)
 
+J = 1  # Identity metric
+
 [solver]
 mxstep = 1000
 
 [hermes]
 components = e
-
-loadmetric = false # Load metric from Bxy, Rxy etc?
 
 [e]
 type = evolve_density

@@ -8,7 +8,9 @@ Welcome to Hermes-3 documentation!
    :name: contents
 
    introduction
-   getting_started
+   installation_using_cmake
+   installation_using_spack
+   inputs
    examples
    tests
    transport_2d
@@ -16,3 +18,4 @@ Welcome to Hermes-3 documentation!
    code_structure
    components
    numerical_methods
+   detachment_controller

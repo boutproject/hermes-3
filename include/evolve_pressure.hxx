@@ -5,6 +5,7 @@
 #include <bout/field3d.hxx>
 #include <bout/yboundary_regions.hxx>
 
+#include "../include/hermes_utils.hxx"
 #include "component.hxx"
 
 /// Evolves species pressure in time
@@ -112,6 +113,12 @@ private:
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
 
   YBoundary yboundary;
+  Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
+  Field3D flow_ylow_kinetic;    ///< Parallel flow of kinetic energy
+
+  bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
+  bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
+  Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
 };
 
 namespace {

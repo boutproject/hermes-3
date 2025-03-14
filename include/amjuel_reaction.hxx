@@ -164,7 +164,7 @@ protected:
         Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
     // Loss is reduced by heating
-    energy_loss -= (electron_heating / Tnorm) * reaction_rate;
+    energy_loss -= (electron_heating / Tnorm) * reaction_rate * radiation_multiplier;
 
     subtract(electron["energy_source"], energy_loss);
   }
