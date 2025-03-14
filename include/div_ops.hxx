@@ -565,7 +565,7 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
 ///
 /// NB: Uses to/from FieldAligned coordinates
 template <typename CellEdges = MC>
-const Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
+Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in,
                           Field3D &flow_ylow, bool fixflux = true) {
 
