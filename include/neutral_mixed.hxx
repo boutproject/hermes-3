@@ -9,6 +9,9 @@
 #include <bout/invert_laplace.hxx>
 
 #include "component.hxx"
+#include <bout/yboundary_regions.hxx>
+
+extern YBoundary yboundary;
 
 /// Evolve density, parallel momentum and pressure
 /// for a neutral gas species with cross-field diffusion
@@ -34,6 +37,7 @@ struct NeutralMixed : public Component {
 private:
   std::string name;  ///< Species name
   
+  std::shared_ptr<FCI::dagp_fv> dagp;
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
@@ -75,6 +79,13 @@ private:
   Field3D mf_visc_perp_xlow, mf_visc_perp_ylow, mf_visc_par_ylow;
   Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
   Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
+
+  Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
+    if (a.isFci()) {
+      return (*dagp)(a, b, false);
+    }
+    return FV::Div_a_Grad_perp(a, b);
+  }
 };
 
 namespace {
