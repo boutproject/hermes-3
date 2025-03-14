@@ -571,6 +571,9 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 
   if (f_in.isFci()){
     // Use mid-point (cell boundary) averages
+    if (flow_ylow.isAllocated()) {
+      flow_ylow = emptyFrom(flow_ylow);
+    }
     return Div_par(f_in, v_in);
   }
   ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
