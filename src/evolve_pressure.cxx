@@ -311,8 +311,9 @@ void EvolvePressure::finally(const Options& state) {
       // Viscous heating coming from numerical viscosity
       Field3D Nlim = floor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-      Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
-      if (flow_ylow_kinetic.isAllocated()) {
+      // skip if only for diagnostic with FCI, as not yet implemented
+      if (numerical_viscous_heating || (!Nlim.isFci())) {
+	Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
 	flow_ylow_kinetic *= AA;
 	flow_ylow += flow_ylow_kinetic;
       }
