@@ -67,9 +67,9 @@ void IonViscosity::transform(Options &state) {
   Options& allspecies = state["species"];
 
   auto coord = mesh->getCoordinates();
-  const Field2D Bxy = coord->Bxy;
-  const Field2D sqrtB = sqrt(Bxy);
-  const Field2D Grad_par_logB = Grad_par(log(Bxy));
+  const Coordinates::FieldMetric Bxy = coord->Bxy;
+  const Coordinates::FieldMetric sqrtB = sqrt(Bxy);
+  const Coordinates::FieldMetric Grad_par_logB = Grad_par(log(Bxy));
 
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
@@ -126,10 +126,12 @@ void IonViscosity::transform(Options &state) {
         const Field2D V_av = DC(V);
 
         // Parallel ion stress tensor component, calculated here because before it was only div_Pi_cipar
-        Field2D Pi_cipar = -0.96 * P_av * tau_av *
-                          (2. * Grad_par(V_av) + V_av * Grad_par_logB);
-        Field2D Pi_ciperp = 0 * Pi_cipar; // Perpendicular components and divergence of current J equal to 0 for only parallel viscosity case
-        Field2D DivJ = 0 * Pi_cipar;
+        auto Pi_cipar =
+            -0.96 * P_av * tau_av * (2. * Grad_par(V_av) + V_av * Grad_par_logB);
+        auto Pi_ciperp =
+            0 * Pi_cipar; // Perpendicular components and divergence of current J equal to
+                          // 0 for only parallel viscosity case
+        auto DivJ = 0 * Pi_cipar;
         // Find the diagnostics struct for this species
         auto search = diagnostics.find(species_name);
         if (search == diagnostics.end()) {
@@ -159,7 +161,7 @@ void IonViscosity::transform(Options &state) {
     const Field2D V_av = DC(V);
 
     // Parallel ion stress tensor component
-    Field2D Pi_cipar = -0.96 * P_av * tau_av *
+    Coordinates::FieldMetric Pi_cipar = -0.96 * P_av * tau_av *
                           (2. * Grad_par(V_av) + V_av * Grad_par_logB);
     // Could also be written as:
     // Pi_cipar = -0.96*Pi*tau*2.*Grad_par(sqrt(Bxy)*Vi)/sqrt(Bxy);
@@ -167,7 +169,7 @@ void IonViscosity::transform(Options &state) {
     // Perpendicular ion stress tensor
     // 0.96 P tau kappa * (V_E + V_di + 1.61 b x Grad(T)/B )
     // Note: Heat flux terms are neglected for now
-    Field2D Pi_ciperp = -0.5 * 0.96 * P_av * tau_av *
+    Coordinates::FieldMetric Pi_ciperp = -0.5 * 0.96 * P_av * tau_av *
       (Curlb_B * Grad(phi_av + 1.61 * T_av) - Curlb_B * Grad(P_av) / N_av);
 
     // Limit size of stress tensor components
@@ -190,13 +192,17 @@ void IonViscosity::transform(Options &state) {
     // Apply parallel boundary conditions
     int jy = 1;
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      Pi_ciperp(r.ind, jy) = Pi_ciperp(r.ind, jy + 1);
-      Pi_cipar(r.ind, jy) = Pi_cipar(r.ind, jy + 1);
+      	for (int jz = 0; jz < mesh->LocalNz; jz++) {
+	  Pi_ciperp(r.ind, jy, jz) = Pi_ciperp(r.ind, jy + 1, jz);
+	  Pi_cipar(r.ind, jy, jz) = Pi_cipar(r.ind, jy + 1, jz);
+	}
     }
     jy = mesh->yend + 1;
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      Pi_ciperp(r.ind, jy) = Pi_ciperp(r.ind, jy - 1);
-      Pi_cipar(r.ind, jy) = Pi_cipar(r.ind, jy - 1);
+      	for (int jz = 0; jz < mesh->LocalNz; jz++) {
+	  Pi_ciperp(r.ind, jy, jz) = Pi_ciperp(r.ind, jy - 1, jz);
+	  Pi_cipar(r.ind, jy, jz) = Pi_cipar(r.ind, jy - 1, jz);
+	}
     }
 
     mesh->communicate(Pi_ciperp, Pi_cipar);
@@ -208,10 +214,10 @@ void IonViscosity::transform(Options &state) {
     subtract(species["energy_source"], V_av * div_Pi_ciperp);
 
     // Total scalar ion viscous pressure
-    Field2D Pi_ci = Pi_cipar + Pi_ciperp;
+    Coordinates::FieldMetric Pi_ci = Pi_cipar + Pi_ciperp;
 
 #if CHECKLEVEL >= 1
-    for (auto& i : N_av.getRegion("RGN_NOBNDRY")) {
+    for (auto& i : Pi_cipar.getRegion("RGN_NOBNDRY")) {
       if (!std::isfinite(Pi_cipar[i])) {
         throw BoutException("{} Pi_cipar non-finite at {}.\n", species_name, i);
       }

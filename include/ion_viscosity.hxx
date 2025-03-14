@@ -3,6 +3,7 @@
 #define ION_VISCOSITY_H
 
 #include "component.hxx"
+#include "bout/vectormetric.hxx"
 
 /// Ion viscosity terms
 ///
@@ -53,7 +54,7 @@ struct IonViscosity : public Component {
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
   bool perpendicular; ///< Include perpendicular flow? (Requires phi)
-  Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
+  VectorMetric Curlb_B; ///< Curvature vector Curl(b/B)
 
   bool diagnose; ///< Output additional diagnostics?
 

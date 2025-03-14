@@ -154,9 +154,9 @@ void Electromagnetic::transform(Options &state) {
       const int x = mesh->xstart - 1;
       for (int y = mesh->ystart; y <= mesh->yend; y++) {
         for (int z = mesh->zstart; z <= mesh->zend; z++) {
-          rhs(x, y, z) = (weight * (Apar(x + 1, y, z) - Apar(x, y, z)) +
-                          (1 - weight) * (Apar(x + 2, y, z) - Apar(x + 1, y, z))) /
-            (sqrt(coords->g_11(x, y)) * coords->dx(x, y));
+          rhs(x, y, z) = (weight * (Apar(x + 1, y, z) - Apar(x, y, z))
+                          + (1 - weight) * (Apar(x + 2, y, z) - Apar(x + 1, y, z)))
+                         / (sqrt(coords->g_11(x, y, z)) * coords->dx(x, y, z));
         }
       }
     }
@@ -164,9 +164,9 @@ void Electromagnetic::transform(Options &state) {
       const int x = mesh->xend + 1;
       for (int y = mesh->ystart; y <= mesh->yend; y++) {
         for (int z = mesh->zstart; z <= mesh->zend; z++) {
-          rhs(x, y, z) =  (weight * (Apar(x, y, z) - Apar(x - 1, y, z)) +
-                           (1 - weight) * (Apar(x - 1, y, z) - Apar(x - 2, y, z))) /
-            sqrt(coords->g_11(x, y)) / coords->dx(x, y);
+          rhs(x, y, z) = (weight * (Apar(x, y, z) - Apar(x - 1, y, z))
+                          + (1 - weight) * (Apar(x - 1, y, z) - Apar(x - 2, y, z)))
+                         / sqrt(coords->g_11(x, y, z)) / coords->dx(x, y, z);
         }
       }
     }

@@ -7,11 +7,13 @@
 #include <bout/output_bout_types.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
+
 
 using bout::globals::mesh;
 
@@ -20,6 +22,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   AUTO_TRACE();
 
   auto& options = alloptions[name];
+
+  yboundary.init(options);
 
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
@@ -246,7 +250,9 @@ void EvolvePressure::finally(const Options& state) {
 
   // Get updated pressure and temperature with boundary conditions
   // Note: Retain pressures which fall below zero
-  P.clearParallelSlices();
+  if (!P.isFci()) {
+    P.clearParallelSlices();
+  }
   P.setBoundaryTo(get<Field3D>(species["pressure"]));
   Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
 
@@ -292,7 +298,9 @@ void EvolvePressure::finally(const Options& state) {
 
       ddt(P) += (2. / 3) * V * Grad_par(P);
     }
-    flow_ylow *= 5. / 2; // Energy flow
+    if (flow_ylow.isAllocated()) {
+      flow_ylow *= 5. / 2; // Energy flow
+    }
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -305,9 +313,12 @@ void EvolvePressure::finally(const Options& state) {
       // Viscous heating coming from numerical viscosity
       Field3D Nlim = floor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-      Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
-      flow_ylow_kinetic *= AA;
-      flow_ylow += flow_ylow_kinetic;
+      // skip if only for diagnostic with FCI, as not yet implemented
+      if (numerical_viscous_heating || (!Nlim.isFci())) {
+	Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
+	flow_ylow_kinetic *= AA;
+	flow_ylow += flow_ylow_kinetic;
+      }
       if (numerical_viscous_heating) {
         ddt(P) += Sp_nvh;
       }
@@ -372,26 +383,26 @@ void EvolvePressure::finally(const Options& state) {
       mesh->communicate(kappa_par);
     }
 
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(kappa_par, r.ind, mesh->ystart, jz);
-        auto im = i.ym();
-        kappa_par[im] = kappa_par[i];
-      }
+    if (kappa_par.isFci()) {
+      mesh->communicate(kappa_par);
     }
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(kappa_par, r.ind, mesh->yend, jz);
-        auto ip = i.yp();
-        kappa_par[ip] = kappa_par[i];
+
+    yboundary.iter([&](auto& region) {
+      for (auto& pnt : region) {
+	pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
       }
-    }
+    });
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    flow_ylow_conduction;
     ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
-    flow_ylow += flow_ylow_conduction;
+    if (    flow_ylow_conduction.isAllocated()) {
+      if (flow_ylow.isAllocated()) {
+	flow_ylow += flow_ylow_conduction;
+      } else {
+	flow_ylow = flow_ylow_conduction;
+      }
+    }
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term. The operator splits into 4 pieces:
@@ -560,7 +571,8 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " power through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
-                    
+    }
+    if (flow_ylow_conduction.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
                    {{"time_dimension", "t"},
                     {"units", "W"},
@@ -569,7 +581,8 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " conduction through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
-
+    }
+    if (flow_ylow_kinetic.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_kin_ylow", name)], flow_ylow_kinetic,
                    {{"time_dimension", "t"},
                     {"units", "W"},
