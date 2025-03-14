@@ -310,8 +310,8 @@ void NeutralMixed::finally(const Options& state) {
   Dnn.applyBoundary();
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
-  DnnNn = Dnn * Nnlim;
-  DnnPn = Dnn * Pnlim;
+  DnnNn = 1.0; //Dnn * Nnlim;
+  DnnPn = 1.0; //Dnn * Pnlim;
   DnnNVn = Dnn * NVn;
 
   DnnPn.applyBoundary();
