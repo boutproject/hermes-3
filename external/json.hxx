@@ -33,7 +33,6 @@ SOFTWARE.
 #include <array> // array
 #include <cassert> // assert
 #include <cctype> // isdigit
-#include <ciso646> // and, not, or
 #include <cmath> // isfinite, labs, ldexp, signbit
 #include <cstddef> // nullptr_t, ptrdiff_t, size_t
 #include <cstdint> // int64_t, uint64_t
