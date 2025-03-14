@@ -266,7 +266,9 @@ int Hermes::init(bool restarting) {
 	coord->g13 *= SQ(rho_s0);
 	coord->g23 *= SQ(rho_s0);
 
-	coord->J *= rho_s0 * rho_s0 * rho_s0;
+        // dx,dy and dz are dimensionless,
+        // so J has SI units of volume. Divide by volume to normalise.
+	coord->J /= rho_s0 * rho_s0 * rho_s0;
 
 	coord->g_11 /= SQ(rho_s0);
 	coord->g_22 /= SQ(rho_s0);
