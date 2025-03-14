@@ -56,6 +56,8 @@ struct RelaxPotential : public Component {
 
   void outputVars(Options& state) override;
 private:
+  std::shared_ptr<FCI::dagp_fv> dagp;
+
   Field3D Vort; // Evolving vorticity
 
   Field3D phi1; // Scaled electrostatic potential, evolving in time ϕ_1 = λ_2 ϕ
@@ -76,6 +78,14 @@ private:
   VectorMetric Curlb_B; ///< Curvature vector Curl(b/B)
 
   BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
+
+  Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
+    if (a.isFci()) {
+      return (*dagp)(a, b, false);
+    }
+    return FV::Div_a_Grad_perp(a, b);
+  }
+
 };
 
 namespace {
