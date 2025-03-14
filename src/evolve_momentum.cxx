@@ -267,7 +267,7 @@ void EvolveMomentum::finally(const Options &state) {
   // Restore NV to the value returned by the solver
   // so that restart files contain the correct values
   // Note: Copy boundary condition so dump file has correct boundary.
-  NV_solver.setBoundaryTo(NV);
+  NV_solver.setBoundaryTo(NV, true);
   NV = NV_solver;
 }
 

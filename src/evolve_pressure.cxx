@@ -296,7 +296,9 @@ void EvolvePressure::finally(const Options& state) {
 
       ddt(P) += (2. / 3) * V * Grad_par(P);
     }
-    flow_ylow *= 5. / 2; // Energy flow
+    if (flow_ylow.isAllocated()) {
+      flow_ylow *= 5. / 2; // Energy flow
+    }
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -310,8 +312,10 @@ void EvolvePressure::finally(const Options& state) {
       Field3D Nlim = floor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
       Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
-      flow_ylow_kinetic *= AA;
-      flow_ylow += flow_ylow_kinetic;
+      if (flow_ylow_kinetic.isAllocated()) {
+	flow_ylow_kinetic *= AA;
+	flow_ylow += flow_ylow_kinetic;
+      }
       if (numerical_viscous_heating) {
         ddt(P) += Sp_nvh;
       }
@@ -388,9 +392,10 @@ void EvolvePressure::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    flow_ylow_conduction;
     ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
-    flow_ylow += flow_ylow_conduction;
+    if (    flow_ylow_conduction.isAllocated()) {
+      flow_ylow += flow_ylow_conduction;
+    }
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term. The operator splits into 4 pieces:
