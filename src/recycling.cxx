@@ -231,7 +231,7 @@ void Recycling::transform(Options& state) {
       
       // Y boundaries
       yboundary.iter_pnts([&](auto& pnt) {
-	BoutReal flux = - pnt.interpolate_sheath_o1(N) * pnt.interpolate_sheath_o1(V);
+	BoutReal flux = pnt.dir * pnt.interpolate_sheath_o1(N) * pnt.interpolate_sheath_o1(V);
 	if (flux < 0.0) {
 	  flux = 0.0;
 	}
