@@ -268,12 +268,14 @@ void SheathBoundaryParallel::transform(Options &state) {
                      * nesheath * vesheath;
 
       // Multiply by cell area to get power
+      // Note: J cannot be compared between slices, but B can
+      //       Area * B = const along flux tube
       const BoutReal flux =
-          q * (pnt.ythis(coord->J) + pnt.ynext(coord->J))
+          q / (pnt.ythis(coord->Bxy) + pnt.ynext(coord->Bxy))
           / (sqrt(pnt.ythis(coord->g_22)) + sqrt(pnt.ynext(coord->g_22)));
 
       // Divide by volume of cell to get energy loss rate (sign depending on vesheath)
-      const BoutReal power = flux / (coord->dy[pnt.ind()] * pnt.ythis(coord->J));
+      const BoutReal power = flux * pnt.ythis(coord->Bxy) / (coord->dy[pnt.ind()]);
 
 #if CHECKLEVEL >= 1
       if (!std::isfinite(power)) {
@@ -428,11 +430,11 @@ void SheathBoundaryParallel::transform(Options &state) {
 
 	// Multiply by cell area to get power
         const BoutReal flux =
-            q * (pnt.ythis(coord->J) + pnt.ynext(coord->J))
+            q / (pnt.ythis(coord->Bxy) + pnt.ynext(coord->Bxy))
             / (sqrt(pnt.ythis(coord->g_22)) + sqrt(pnt.ynext(coord->g_22)));
 
         // Divide by volume of cell to get energy loss rate (sign depending on vesheath)
-        const BoutReal power = flux / (coord->dy[pnt.ind()] * pnt.ythis(coord->J));
+        const BoutReal power = flux * pnt.ythis(coord->Bxy) / coord->dy[pnt.ind()];
 
         ASSERT1(std::isfinite(power));
         ASSERT2(power * pnt.dir >= 0.0);
