@@ -148,51 +148,37 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
   Coordinates* coord = f_in.getCoordinates();
   CellEdges cellboundary;
 
-  if (f_in.isFci()){
-    // FCI version, using yup/down fields
-    ASSERT1(f_in.hasParallelSlices());
+  if (f_in.hasParallelSlices()){
+    // FCI version, using yup/down fields.
+    // Both f and v must have parallel slices
     ASSERT1(v_in.hasParallelSlices());
 
+    auto B = coord->Bxy;
+    auto B_up = coord->Bxy.yup();
+    auto B_down = coord->Bxy.ydown();
+
+    auto f_up = f_in.yup();
+    auto f_down = f_in.ydown();
+
+    auto v_up = v_in.yup();
+    auto v_down = v_in.ydown();
+
+    auto g_22 = coord->g_22;
+    auto dy = coord->dy;
+
     Field3D result{emptyFrom(f_in)};
+    BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
+      result[i] = B[i] * ((f_up[i] * v_up[i] * v_up[i] / B_up[i])
+                          - (f_down[i] * v_down[i] * v_down[i] / B_down[i]))
+        / (2 * dy[i] * sqrt(g_22[i]));
 
-    for (int i = mesh->xstart; i <= mesh->xend; i++) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        for (int k = mesh->zstart; k <= mesh->zend; k++) {
-          // Value of f and v at left cell face
-          const BoutReal fL = 0.5 * (f_in(i, j, k) + f_in.ydown()(i, j - 1, k));
-          const BoutReal vL = 0.5 * (v_in(i, j, k) + v_in.ydown()(i, j - 1, k));
-
-          const BoutReal fR = 0.5 * (f_in(i, j, k) + f_in.yup()(i, j + 1, k));
-          const BoutReal vR = 0.5 * (v_in(i, j, k) + v_in.yup()(i, j + 1, k));
-
-          // Reconstruct v at the cell faces
-          Stencil1D sv;
-          sv.c = v_in(i, j, k);
-          sv.m = v_in.ydown()(i, j - 1, k);
-          sv.p = v_in.yup()(i, j + 1, k);
-          cellboundary(sv);
-
-          // Maximum local wave speed
-          const BoutReal amax = BOUTMAX(wave_speed_in
-                                        (i, j, k),
-                                        fabs(v_in(i, j, k)),
-                                        fabs(v_in.yup()(i, j + 1, k)),
-                                        fabs(v_in.ydown()(i, j - 1, k)));
-
-          // Calculate flux at right boundary (y+1/2)
-          BoutReal fluxRight =
-            fR * (vR * vR  + amax * (sv.c - vR)) * (coord->J(i, j, k) + coord->J(i, j + 1, k))
-            / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j + 1, k)));
-
-          // Calculate at left boundary (y-1/2)
-          BoutReal fluxLeft =
-            fL * (vL * vL - amax * (sv.c - vL)) * (coord->J(i, j, k) + coord->J(i, j - 1, k))
-            / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j - 1, k)));
-
-          result(i, j, k) =
-            (fluxRight - fluxLeft) / (coord->dy(i, j, k) * coord->J(i, j, k));
-        }
+#if CHECK > 0
+      if(!std::isfinite(result[i])) {
+        output.write("{} {} {} {}\n", f_up[i], v_up[i], f_down[i], v_down[i]);
+        output.write("{} {} {} {} {}\n", B[i], B_up[i], B_down[i], dy[i], sqrt(g_22[i]));
+        throw BoutException("Non-finite value in Div_par_fvv");
       }
+#endif
     }
     return result;
   }
@@ -574,7 +560,9 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
     if (flow_ylow.isAllocated()) {
       flow_ylow = emptyFrom(flow_ylow);
     }
-    return Div_par(f_in, v_in);
+    return 0.5 * (Div_par(f_in, v_in) +
+                  0.5 * (f_in * Div_par(v_in) +
+                         v_in * Grad_par(f_in)));
   }
   ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
   ASSERT1_FIELDS_COMPATIBLE(f_in, wave_speed_in);
