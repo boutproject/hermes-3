@@ -363,7 +363,6 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  pf_adv_par_ylow = 0.0; // zero flow to permit following lines to be commented out
   ddt(Nn) =
     //- FV::Div_par_mod<ParLimiter>(
     //              Nn, Vn, sound_speed, pf_adv_par_ylow) // Parallel advection
@@ -384,7 +383,7 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral pressure
   TRACE("Neutral pressure");
-  ef_adv_par_ylow = 0.0; // zero flow to permit following lines to be commented out
+
   ddt(Pn) = //- FV::Div_par_mod<ParLimiter>(               // Parallel advection
             //        Pn, Vn, sound_speed, ef_adv_par_ylow)
 
@@ -403,7 +402,6 @@ void NeutralMixed::finally(const Options& state) {
   ef_adv_perp_ylow *= 5/2;
 
   if (neutral_conduction) {
-    ef_cond_par_ylow = 0.0; // needed to allow following line to be commented out
     ddt(Pn) += 
                (2. / 3) * Div_a_Grad_perp_nonorthog(kappa_n, Tn,
                              ef_cond_perp_xlow, ef_cond_perp_ylow) // Perpendicular diffusion
@@ -455,7 +453,7 @@ void NeutralMixed::finally(const Options& state) {
       // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
-      mf_visc_par_ylow = 0.0; // needed to permit following lines to be commented out
+
       Field3D viscosity_source = AA * Div_a_Grad_perp_nonorthog(eta_n, Vn,
                                         mf_visc_perp_xlow, mf_visc_perp_ylow) // Perpendicular viscosity
                                // AA * Div_a_Grad_perp_flows(
