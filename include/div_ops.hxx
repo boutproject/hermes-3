@@ -30,6 +30,7 @@
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/vector3d.hxx>
+#include <bout/output_bout_types.hxx>
 
 /*!
  * Diffusion in index space
@@ -148,35 +149,49 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
   Coordinates* coord = f_in.getCoordinates();
   CellEdges cellboundary;
 
-  if (f_in.hasParallelSlices()){
-    // FCI version, using yup/down fields.
-    // Both f and v must have parallel slices
+  if (f_in.isFci()){
+    // FCI version, using yup/down fields
+    ASSERT1(f_in.hasParallelSlices());
     ASSERT1(v_in.hasParallelSlices());
 
-    auto B = coord->Bxy;
-    auto B_up = coord->Bxy.yup();
-    auto B_down = coord->Bxy.ydown();
+    const auto B = coord->Bxy;
+    const auto B_up = coord->Bxy.yup();
+    const auto B_down = coord->Bxy.ydown();
 
-    auto f_up = f_in.yup();
-    auto f_down = f_in.ydown();
+    const auto f_up = f_in.yup();
+    const auto f_down = f_in.ydown();
 
-    auto v_up = v_in.yup();
-    auto v_down = v_in.ydown();
+    const auto v_up = v_in.yup();
+    const auto v_down = v_in.ydown();
 
-    auto g_22 = coord->g_22;
-    auto dy = coord->dy;
+    const auto g_22 = coord->g_22;
+    const auto dy = coord->dy;
 
     Field3D result{emptyFrom(f_in)};
     BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
-      result[i] = B[i] * ((f_up[i] * v_up[i] * v_up[i] / B_up[i])
-                          - (f_down[i] * v_down[i] * v_down[i] / B_down[i]))
+      // Maximum local wave speed
+      const BoutReal amax = BOUTMAX(wave_speed_in[i],
+                                    fabs(v_in[i]),
+                                    fabs(v_up[i]),
+                                    fabs(v_down[i]));
+
+      result[i] = B[i] * (
+                          (f_up[i] * v_up[i] * v_up[i] / B_up[i])
+                          - (f_down[i] * v_down[i] * v_down[i] / B_down[i])
+                          // Penalty terms. This implementation is very dissipative.
+                          + amax * (f_in[i] * v_in[i] - f_up[i] * v_up[i]) / (B[i] + B_up[i])
+                          + amax * (f_in[i] * v_in[i] - f_down[i] * v_down[i]) / (B[i] + B_down[i])
+                          )
         / (2 * dy[i] * sqrt(g_22[i]));
 
 #if CHECK > 0
       if(!std::isfinite(result[i])) {
-        output.write("{} {} {} {}\n", f_up[i], v_up[i], f_down[i], v_down[i]);
-        output.write("{} {} {} {} {}\n", B[i], B_up[i], B_down[i], dy[i], sqrt(g_22[i]));
-        throw BoutException("Non-finite value in Div_par_fvv");
+        throw BoutException("Non-finite value in Div_par_fvv at {}\n"
+                            "fup {} vup {} fdown {} vdown {} amax {}\n",
+                            "B {} Bup {} Bdown {} dy {} sqrt(g_22} {}",
+                            i,
+                            f_up[i], v_up[i], f_down[i], v_down[i], amax,
+                            B[i], B_up[i], B_down[i], dy[i], sqrt(g_22[i]));
       }
 #endif
     }
