@@ -3,6 +3,8 @@
 #define EVOLVE_PRESSURE_H
 
 #include <bout/field3d.hxx>
+#include <bout/yboundary_regions.hxx>
+
 #include "../include/hermes_utils.hxx"
 #include "component.hxx"
 
@@ -109,6 +111,8 @@ private:
   BoutReal time_normalisation; ///< Normalisation factor [s]
   bool source_time_dependent; ///< Is the input source time dependent?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
+
+  YBoundary yboundary;
   Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
   Field3D flow_ylow_kinetic;    ///< Parallel flow of kinetic energy
 

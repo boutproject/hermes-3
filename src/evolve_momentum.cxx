@@ -19,7 +19,10 @@ BoutReal floor(BoutReal value, BoutReal min) {
 
 using bout::globals::mesh;
 
-EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) : name(name) {
+Options * tracking{nullptr};
+
+EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) :
+  name(name), Vname(fmt::format("V{}", name)) {
   AUTO_TRACE();
   
   // Evolve the momentum in time
@@ -65,23 +68,42 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
 void EvolveMomentum::transform(Options &state) {
   AUTO_TRACE();
-  mesh->communicate(NV);
 
+  tracking = ddt(NV).getTracking();
   auto& species = state["species"][name];
+  if (tracking) {
+    saveParallel(*tracking, fmt::format("NV{}_initial0", name), NV);
+    species["momentum_source"] = zeroFrom(ddt(NV));
+    auto src = mpark::get_if<Field3D>(&species["momentum_source"].value);
+    src->enableTracking(fmt::format("ddt_NV{}_momentum", name), *tracking);
+    setName(*src, "NV{}_momentum", name);
+  }
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
   Field3D Nlim = floor(N, density_floor);
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
+  NV.applyBoundary();
   V = NV / (AA * Nlim);
-  V.applyBoundary();
+  V.name = Vname;
+  mesh->communicate(V);
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
+  if (NV.isFci()) {
+    NV.splitParallelSlices();
+    NV.yup() = AA * N.yup() * V.yup();
+    NV.ydown() = AA * N.ydown() * V.ydown();
+  }
+  if (tracking) {
+    saveParallel(*tracking, fmt::format("NV{}_initial", name), NV);
+    saveParallel(*tracking, fmt::format("N{}_initial",name), N);
+    saveParallel(*tracking, fmt::format("V{}_initial", name), V);
+  }
   // Note: Now NV and NV_solver will differ when N < density_floor
-  NV_err = NV - NV_solver; // This is used in the finally() function
+  NV_err = setName(NV - NV_solver, "correction(NV - NV_solver)"); // This is used in the finally() function
   set(species["momentum"], NV);
 }
 
@@ -210,8 +232,7 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Other sources/sinks
   if (species.isSet("momentum_source")) {
-    momentum_source = get<Field3D>(species["momentum_source"]);
-    ddt(NV) += momentum_source;
+    ddt(NV) += setName(get<Field3D>(species["momentum_source"]), "momentum_source {}", momentum_source.name);
   }
 
   // If N < density_floor then NV and NV_solver may differ
@@ -246,7 +267,7 @@ void EvolveMomentum::finally(const Options &state) {
   // Restore NV to the value returned by the solver
   // so that restart files contain the correct values
   // Note: Copy boundary condition so dump file has correct boundary.
-  NV_solver.setBoundaryTo(NV);
+  NV_solver.setBoundaryTo(NV, true);
   NV = NV_solver;
 }
 
@@ -284,14 +305,16 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
 
-    set_with_attrs(state[std::string("SNV") + name], momentum_source,
-                   {{"time_dimension", "t"},
-                    {"units", "kg m^-2 s^-2"},
-                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum source"},
-                    {"long_name", name + " momentum source"},
-                    {"species", name},
-                    {"source", "evolve_momentum"}});
+    if (momentum_source.isAllocated()) {
+      set_with_attrs(state[std::string("SNV") + name], momentum_source,
+                     {{"time_dimension", "t"},
+                      {"units", "kg m^-2 s^-2"},
+                      {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                      {"standard_name", "momentum source"},
+                      {"long_name", name + " momentum source"},
+                      {"species", name},
+                      {"source", "evolve_momentum"}});
+    }
 
     // If fluxes have been set then add them to the output
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);

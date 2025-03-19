@@ -20,6 +20,9 @@ struct FixedVelocity : public Component {
 
     // Get the velocity and normalise
     V = options["velocity"].as<Field3D>() / Cs0;
+    if (V.isFci()) {
+      bout::globals::mesh->communicate(V);
+    }
   }
 
   /// This sets in the state
@@ -37,7 +40,11 @@ struct FixedVelocity : public Component {
       const Field3D N = getNoBoundary<Field3D>(species["density"]);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-      set(species["momentum"], AA * N * V);
+      Field3D NV = AA * N * V;
+      if (NV.isFci()) {
+        bout::globals::mesh->communicate(NV);
+      }
+      set(species["momentum"], NV);
     }
   }
 

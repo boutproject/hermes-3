@@ -26,6 +26,7 @@
 #ifndef DIV_OPS_H
 #define DIV_OPS_H
 
+#include <bout/difops.hxx>
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/vector3d.hxx>
@@ -67,6 +68,7 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
 /// Same but with upwinding
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
 const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
+
 /// Same but with upwinding and flows
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
 const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
@@ -75,6 +77,15 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 /// Version with energy flow diagnostic
 const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f, Field3D& flow_ylow,
                                      bool bndry_flux = true);
+
+/*!
+ * Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) -- Vorticity
+ *
+ * This version includes corrections for non-orthogonal meshes
+ * in which the g12 and g13 components can be non-zero
+ * i.e. X-Y, X-Z and Y-Z coordinates can all be non-orthogonal.
+ */
+const Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x);
 
 namespace FV {
 
@@ -123,23 +134,75 @@ struct Superbee {
   }
 };
 
+/// This operator calculates Div_par(f v v)
+/// It is used primarily (only?) in the parallel momentum equation.
+///
+/// This operator is used rather than Div(f fv) so that the values of
+/// f and v are consistent with other advection equations: The product
+/// fv is not interpolated to cell boundaries.
 template <typename CellEdges = MC>
 const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in, bool fixflux = true) {
-
-  ASSERT1(areFieldsCompatible(f_in, v_in));
-  ASSERT1(areFieldsCompatible(f_in, wave_speed_in));
-
+  ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
   Mesh* mesh = f_in.getMesh();
-
+  Coordinates* coord = f_in.getCoordinates();
   CellEdges cellboundary;
+
+  if (f_in.isFci()){
+    // FCI version, using yup/down fields
+    ASSERT1(f_in.hasParallelSlices());
+    ASSERT1(v_in.hasParallelSlices());
+
+    Field3D result{emptyFrom(f_in)};
+
+    for (int i = mesh->xstart; i <= mesh->xend; i++) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        for (int k = mesh->zstart; k <= mesh->zend; k++) {
+          // Value of f and v at left cell face
+          const BoutReal fL = 0.5 * (f_in(i, j, k) + f_in.ydown()(i, j - 1, k));
+          const BoutReal vL = 0.5 * (v_in(i, j, k) + v_in.ydown()(i, j - 1, k));
+
+          const BoutReal fR = 0.5 * (f_in(i, j, k) + f_in.yup()(i, j + 1, k));
+          const BoutReal vR = 0.5 * (v_in(i, j, k) + v_in.yup()(i, j + 1, k));
+
+          // Reconstruct v at the cell faces
+          Stencil1D sv;
+          sv.c = v_in(i, j, k);
+          sv.m = v_in.ydown()(i, j - 1, k);
+          sv.p = v_in.yup()(i, j + 1, k);
+          cellboundary(sv);
+
+          // Maximum local wave speed
+          const BoutReal amax = BOUTMAX(wave_speed_in
+                                        (i, j, k),
+                                        fabs(v_in(i, j, k)),
+                                        fabs(v_in.yup()(i, j + 1, k)),
+                                        fabs(v_in.ydown()(i, j - 1, k)));
+
+          // Calculate flux at right boundary (y+1/2)
+          BoutReal fluxRight =
+            fR * (vR * vR  + amax * (sv.c - vR)) * (coord->J(i, j, k) + coord->J(i, j + 1, k))
+            / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j + 1, k)));
+
+          // Calculate at left boundary (y-1/2)
+          BoutReal fluxLeft =
+            fL * (vL * vL - amax * (sv.c - vL)) * (coord->J(i, j, k) + coord->J(i, j - 1, k))
+            / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j - 1, k)));
+
+          result(i, j, k) =
+            (fluxRight - fluxLeft) / (coord->dy(i, j, k) * coord->J(i, j, k));
+        }
+      }
+    }
+    return result;
+  }
+
+  ASSERT1(areFieldsCompatible(f_in, wave_speed_in));
 
   /// Ensure that f, v and wave_speed are field aligned
   Field3D f = toFieldAligned(f_in, "RGN_NOX");
   Field3D v = toFieldAligned(v_in, "RGN_NOX");
   Field3D wave_speed = toFieldAligned(wave_speed_in, "RGN_NOX");
-
-  Coordinates* coord = f_in.getCoordinates();
 
   Field3D result{zeroFrom(f)};
 
@@ -170,23 +233,21 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
     for (int j = ys; j <= ye; j++) {
       // Pre-calculate factors which multiply fluxes
 
-      // For right cell boundaries
-      BoutReal common_factor = (coord->J(i, j) + coord->J(i, j + 1))
-                               / (sqrt(coord->g_22(i, j)) + sqrt(coord->g_22(i, j + 1)));
-
-      BoutReal flux_factor_rc = common_factor / (coord->dy(i, j) * coord->J(i, j));
-      BoutReal flux_factor_rp =
-          common_factor / (coord->dy(i, j + 1) * coord->J(i, j + 1));
-
-      // For left cell boundaries
-      common_factor = (coord->J(i, j) + coord->J(i, j - 1))
-                      / (sqrt(coord->g_22(i, j)) + sqrt(coord->g_22(i, j - 1)));
-
-      BoutReal flux_factor_lc = common_factor / (coord->dy(i, j) * coord->J(i, j));
-      BoutReal flux_factor_lm =
-          common_factor / (coord->dy(i, j - 1) * coord->J(i, j - 1));
 
       for (int k = 0; k < mesh->LocalNz; k++) {
+	// For right cell boundaries
+	BoutReal common_factor = (coord->J(i, j, k) + coord->J(i, j + 1, k))
+	  / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j + 1, k)));
+	
+	BoutReal flux_factor_rc = common_factor / (coord->dy(i, j, k) * coord->J(i, j, k));
+	BoutReal flux_factor_rp = common_factor / (coord->dy(i, j + 1, k) * coord->J(i, j + 1, k));
+	
+	// For left cell boundaries
+	common_factor = (coord->J(i, j, k) + coord->J(i, j - 1, k))
+	  / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j - 1, k)));
+	
+	BoutReal flux_factor_lc = common_factor / (coord->dy(i, j, k) * coord->J(i, j, k));
+	BoutReal flux_factor_lm = common_factor / (coord->dy(i, j - 1, k) * coord->J(i, j - 1, k));
 
         ////////////////////////////////////////////
         // Reconstruct f at the cell faces
@@ -281,6 +342,10 @@ template <typename CellEdges = MC>
 const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
                                   const Field3D& wave_speed_in, Field3D &flow_ylow,
                                   bool fixflux = true) {
+
+#if BOUT_USE_METRIC_3D
+  throw BoutException("This is currently not ported to FCI yet");
+#else
 
   ASSERT1(areFieldsCompatible(f_in, v_in));
   ASSERT1(areFieldsCompatible(f_in, wave_speed_in));
@@ -474,6 +539,7 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
   }
   flow_ylow = fromFieldAligned(flow_ylow, "RGN_NOBNDRY");
   return fromFieldAligned(result, "RGN_NOBNDRY");
+#endif
 }
   
 /// Finite volume parallel divergence
@@ -499,12 +565,20 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
 ///
 /// NB: Uses to/from FieldAligned coordinates
 template <typename CellEdges = MC>
-const Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
+Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in,
                           Field3D &flow_ylow, bool fixflux = true) {
 
+  if (f_in.isFci()){
+    // Use mid-point (cell boundary) averages
+    if (flow_ylow.isAllocated()) {
+      flow_ylow = emptyFrom(flow_ylow);
+    }
+    return Div_par(f_in, v_in);
+  }
   ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
   ASSERT1_FIELDS_COMPATIBLE(f_in, wave_speed_in);
+
 
   Mesh* mesh = f_in.getMesh();
 
@@ -699,6 +773,9 @@ const Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 /// 1st order upwinding is used in Y.
 template <typename CellEdges = MC>
 const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g, const Field3D& f) {
+#if BOUT_USE_METRIC_3D
+  throw BoutException("Currently not supported with FCI");
+#else
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
@@ -918,8 +995,43 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g, const Fi
   }
 
   return result;
+#endif
 }
 
 } // namespace FV
+
+namespace FCI {
+
+class dagp_fv {
+public:
+  Field3D operator()(const Field3D& a, const Field3D& f, Field3D& low_xlow,
+                     Field3D& flow_zlow, bool upwinding);
+  Field3D operator()(const Field3D& a, const Field3D& f, bool upwinding);
+  dagp_fv(Mesh &mesh);
+  dagp_fv &operator*=(BoutReal fac) {
+    volume /= fac * fac;
+    return *this;
+  }
+  dagp_fv &operator/=(BoutReal fac) { return operator*=(1 / fac); }
+
+private:
+  template <bool extra, bool upwinding>
+  Field3D operator()(const Field3D& a, const Field3D& f, Field3D* low_xlow,
+                     Field3D* flow_zlow);
+  Field3D fac_XX;
+  Field3D fac_XZ;
+  Field3D fac_ZX;
+  Field3D fac_ZZ;
+  Field3D volume;
+  template <bool upwinding>
+  BoutReal xflux(const Field3D& a, const Field3D& f, const Ind3D& i);
+  template <bool upwinding>
+  BoutReal zflux(const Field3D& a, const Field3D& f, const Ind3D& i);
+};
+
+std::shared_ptr<dagp_fv>
+getDagp_fv(Options& alloptions, Mesh* mesh);
+}
+
 
 #endif //  DIV_OPS_H
