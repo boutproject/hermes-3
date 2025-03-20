@@ -257,8 +257,8 @@ int Hermes::init(bool restarting) {
       // To use non-orthogonal metric
       // Normalise
       if (mesh->isFci()) {
-	coord->Bxy /= Bnorm;
 	// Metric is in grid file - just need to normalise
+	// Note: Arithmetic operators modify yup/down fields if present
 	coord->g11 *= SQ(rho_s0);
 	coord->g22 *= SQ(rho_s0);
 	coord->g33 *= SQ(rho_s0);
@@ -270,12 +270,28 @@ int Hermes::init(bool restarting) {
         // so J has SI units of volume. Divide by volume to normalise.
 	coord->J /= rho_s0 * rho_s0 * rho_s0;
 
+	coord->Bxy /= Bnorm;
+
 	coord->g_11 /= SQ(rho_s0);
 	coord->g_22 /= SQ(rho_s0);
 	coord->g_33 /= SQ(rho_s0);
 	coord->g_12 /= SQ(rho_s0);
 	coord->g_13 /= SQ(rho_s0);
 	coord->g_23 /= SQ(rho_s0);
+
+        // Need yup/down fields on Bxy
+        coord->Bxy.applyBoundary("neumann_o2");
+        mesh->communicate(coord->Bxy);
+        coord->Bxy.applyParallelBoundary("parallel_neumann_o2");
+
+        BOUT_FOR(i, coord->Bxy.getRegion("RGN_NOBNDRY")) {
+          if (fabs(coord->Bxy.yup()[i]) < 1e-3) {
+            coord->Bxy.yup()[i] = coord->Bxy[i];
+          }
+          if (fabs(coord->Bxy.ydown()[i]) < 1e-3) {
+            coord->Bxy.ydown()[i] = coord->Bxy[i];
+          }
+        }
       } else {
 	coord->dx /= rho_s0 * rho_s0 * Bnorm;
 	coord->Bxy /= Bnorm;
