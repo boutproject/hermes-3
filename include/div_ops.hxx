@@ -169,20 +169,32 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
 
     Field3D result{emptyFrom(f_in)};
     BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+
       // Maximum local wave speed
       const BoutReal amax = BOUTMAX(wave_speed_in[i],
                                     fabs(v_in[i]),
-                                    fabs(v_up[i]),
-                                    fabs(v_down[i]));
+                                    fabs(v_up[iyp]),
+                                    fabs(v_down[iym]));
 
-      result[i] = B[i] * (
-                          (f_up[i] * v_up[i] * v_up[i] / B_up[i])
-                          - (f_down[i] * v_down[i] * v_down[i] / B_down[i])
-                          // Penalty terms. This implementation is very dissipative.
-                          + amax * (f_in[i] * v_in[i] - f_up[i] * v_up[i]) / (B[i] + B_up[i])
-                          + amax * (f_in[i] * v_in[i] - f_down[i] * v_down[i]) / (B[i] + B_down[i])
-                          )
-        / (2 * dy[i] * sqrt(g_22[i]));
+      // result[i] = B[i] * (
+      //                     (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
+      //                     - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
+      //                     // Penalty terms. This implementation is very dissipative.
+      //                     + amax * (f_in[i] * v_in[i] - f_up[iyp] * v_up[iyp]) / (B[i] + B_up[iyp])
+      //                     + amax * (f_in[i] * v_in[i] - f_down[iym] * v_down[iym]) / (B[i] + B_down[iym])
+      //                     )
+      //   / (2 * dy[i] * sqrt(g_22[i]));
+
+      result[i] = (0.5 * (f_in[i] * v_in[i] * (v_in[i] + amax) +
+                          f_up[iyp] * v_up[iyp] * (v_up[iyp] - amax))
+                   * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
+                   -
+                   0.5 * (f_in[i] * v_in[i] * (v_in[i] - amax) +
+                          f_down[iym] * v_down[iym] * (v_down[iym] + amax))
+                   * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
+        / (dy[i] * coord->J[i]);
 
 #if CHECK > 0
       if(!std::isfinite(result[i])) {
@@ -570,18 +582,47 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in,
                           Field3D &flow_ylow, bool fixflux = true) {
 
+  Coordinates* coord = f_in.getCoordinates();
+
   if (f_in.isFci()){
     // Use mid-point (cell boundary) averages
     if (flow_ylow.isAllocated()) {
       flow_ylow = emptyFrom(flow_ylow);
     }
-    return 0.5 * (Div_par(f_in, v_in) +
-                  0.5 * (f_in * Div_par(v_in) +
-                         v_in * Grad_par(f_in)));
+
+    ASSERT1(f_in.hasParallelSlices());
+    ASSERT1(v_in.hasParallelSlices());
+
+    const auto& f_up = f_in.yup();
+    const auto& f_down = f_in.ydown();
+
+    const auto& v_up = v_in.yup();
+    const auto& v_down = v_in.ydown();
+
+    Field3D result{emptyFrom(f_in)};
+    BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+
+      // Maximum local wave speed
+      const BoutReal amax = BOUTMAX(wave_speed_in[i],
+                                    fabs(v_in[i]),
+                                    fabs(v_up[iyp]),
+                                    fabs(v_down[iym]));
+
+      result[i] = (0.5 * (f_in[i] * (v_in[i] + amax) +
+                          f_up[iyp] * (v_up[iyp] - amax))
+                   * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
+                   -
+                   0.5 * (f_in[i] * (v_in[i] - amax) +
+                          f_down[iym] * (v_down[iym] + amax))
+                   * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
+        / (coord->dy[i] * coord->J[i]);
+    }
+    return result;
   }
   ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
   ASSERT1_FIELDS_COMPATIBLE(f_in, wave_speed_in);
-
 
   Mesh* mesh = f_in.getMesh();
 
@@ -598,8 +639,6 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
   Field3D v = are_unaligned ? toFieldAligned(v_in, "RGN_NOX") : v_in;
   Field3D wave_speed =
       are_unaligned ? toFieldAligned(wave_speed_in, "RGN_NOX") : wave_speed_in;
-
-  Coordinates* coord = f_in.getCoordinates();
 
   Field3D result{zeroFrom(f)};
   flow_ylow = zeroFrom(f);
