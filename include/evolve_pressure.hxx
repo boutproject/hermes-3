@@ -79,6 +79,7 @@ private:
 
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
+  bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
@@ -119,6 +120,8 @@ private:
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
+
+  Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 
 namespace {

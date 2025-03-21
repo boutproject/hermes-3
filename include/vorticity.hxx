@@ -168,8 +168,8 @@ private:
     }
     return FV::Div_a_Grad_perp(a, b);
   }
-   
 
+  Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 
 namespace {

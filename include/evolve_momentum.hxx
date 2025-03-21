@@ -42,6 +42,7 @@ private:
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
 
   bool bndry_flux;      // Allow flows through boundaries?
+  bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;  // Include ExB flow in Y direction?
 
   BoutReal density_floor;
@@ -55,6 +56,8 @@ private:
   bool diagnose; ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D flow_xlow, flow_ylow; ///< Momentum flow diagnostics
+
+  Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 
 namespace {

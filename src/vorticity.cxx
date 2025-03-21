@@ -189,15 +189,12 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     // All coordinates (x,y,z) are dimensionless
     // -> e_x has dimensions of length
     Curlb_B.x *= SQ(Lnorm);
-    Curlb_B.y *= SQ(Lnorm);
-    Curlb_B.z *= SQ(Lnorm);
-
   } else {
     // Field-aligned (Clebsch) coordinates
     Curlb_B.x /= Bnorm;
-    Curlb_B.y *= SQ(Lnorm);
-    Curlb_B.z *= SQ(Lnorm);
   }
+  Curlb_B.y *= SQ(Lnorm);
+  Curlb_B.z *= SQ(Lnorm);
 
   Curlb_B *= 2. / coord->Bxy;
 
@@ -209,6 +206,13 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
 
   if (Vort.isFci()) {
     dagp = FCI::getDagp_fv(alloptions, mesh);
+
+    const auto coord = mesh->getCoordinates();
+    // Note: This is 1 for a Clebsch coordinate system
+    //       Remove parallel slices before operations
+    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+  } else {
+    bracket_factor = 1.0;
   }
 }
 
@@ -634,7 +638,7 @@ void Vorticity::finally(const Options& state) {
 
     if (exb_advection_simplified) {
       // By default this is a simplified nonlinear term
-      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows);
+      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
 
     } else {
       // If diamagnetic_polarisation = false and B is constant, then
@@ -644,10 +648,10 @@ void Vorticity::finally(const Options& state) {
       // of an operation, we need to communicate and the resulting stencil is
       // wider than the simple form.
       ddt(Vort) -=
-        Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows);
+        Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
 
       // V_ExB dot Grad(Pi)
-      Field3D vEdotGradPi = bracket(phi, Pi_hat, BRACKET_ARAKAWA);
+      Field3D vEdotGradPi = bracket(phi, Pi_hat, BRACKET_ARAKAWA) * bracket_factor;
       vEdotGradPi.applyBoundary("free_o2");
 
       // delp2(phi) term
@@ -658,7 +662,7 @@ void Vorticity::finally(const Options& state) {
 
       ddt(Vort) -= Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
       ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux,
-                                         poloidal_flows);
+                                         poloidal_flows) * bracket_factor;
     }
   }
 
