@@ -2031,18 +2031,39 @@ const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
       const auto iyp = i.yp();
       const auto iym = i.ym();
 
-      // Parallel lengths
-      BoutReal dl = dy[i] * sqrt(g_22[i]);
-      BoutReal dl_up = dy_up[iyp] * sqrt(g_22_up[iyp]);
-      BoutReal dl_down = dy_down[iym] * sqrt(g_22_down[iym]);
+      // // parallel lengths
+      // BoutReal dl = dy[i] * sqrt(g_22[i]);
+      // BoutReal dl_up = dy_up[iyp] * sqrt(g_22_up[iyp]);
+      // BoutReal dl_down = dy_down[iym] * sqrt(g_22_down[iym]);
 
-      BoutReal gradient_up = 2 * (f_up[iyp] - fin[i]) / (dl_up + dl);
-      BoutReal gradient_down = 2 * (fin[i] - f_down[iym]) / (dl + dl_down);
+      // BoutReal gradient_up = 2 * (f_up[iyp] - fin[i]) / (dl_up + dl);
+      // BoutReal gradient_down = 2 * (fin[i] - f_down[iym]) / (dl + dl_down);
 
-      result[i] = B[i]
-                  * (gradient_up * (K_up[iyp] + Kin[i]) / (B_up[iyp] + B[i])
-                     - gradient_down * (K_down[iym] + Kin[i]) / (B_down[iym] + B[i]))
-                  / dl;
+      // result[i] = B[i]
+      //             * (gradient_up * (K_up[iyp] + Kin[i]) / (B_up[iyp] + B[i])
+      //                - gradient_down * (K_down[iym] + Kin[i]) / (B_down[iym] + B[i]))
+      //             / dl;
+
+      // Upper cell edge
+      BoutReal c = 0.5 * (Kin[i] + K_up[iyp]);               // K at the upper boundary
+      BoutReal J = 0.5 * (coord->J[i] + coord->J.yup()[iyp]); // Jacobian at boundary
+      BoutReal g_22 = 0.5 * (coord->g_22[i] + coord->g_22.yup()[iyp]);
+
+      BoutReal gradient = 2. * (f_up[iyp] - fin[i]) / (coord->dy[i] + coord->dy.yup()[iyp]);
+
+      BoutReal flux_up = c * J * gradient / g_22;
+
+      // Lower cell edge
+      c = 0.5 * (Kin[i] + K_down[iym]);               // K at the lower boundary
+      J = 0.5 * (coord->J[i] + coord->J.ydown()[iym]); // Jacobian at boundary
+
+      g_22 = 0.5 * (coord->g_22[i] + coord->g_22.ydown()[iym]);
+
+      gradient = 2. * (fin[i] - f_down[iym]) / (coord->dy[i] + coord->dy.ydown()[iym]);
+
+      BoutReal flux_down = c * J * gradient / g_22;
+
+      result[i] = (flux_up - flux_down) / (coord->dy[i] * coord->J[i]);
     }
 
     return result;
