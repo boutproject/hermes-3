@@ -88,15 +88,12 @@ void EvolveMomentum::transform(Options &state) {
   V = NV / (AA * Nlim);
   V.name = Vname;
   mesh->communicate(V);
+  V.applyParallelBoundary();
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
-  if (NV.isFci()) {
-    NV.splitParallelSlices();
-    NV.yup() = AA * N.yup() * V.yup();
-    NV.ydown() = AA * N.ydown() * V.ydown();
-  }
+
   if (tracking) {
     saveParallel(*tracking, fmt::format("NV{}_initial", name), NV);
     saveParallel(*tracking, fmt::format("N{}_initial",name), N);
