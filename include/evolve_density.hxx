@@ -66,6 +66,7 @@ private:
   Field3D N;            ///< Species density (normalised, evolving)
 
   bool bndry_flux;      ///< Allow flows through boundaries?
+  bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;  ///< Include ExB flow in Y direction?
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
 
@@ -93,6 +94,8 @@ private:
 
   bool diagnose; ///< Output additional diagnostics?
   Field3D flow_xlow, flow_ylow; ///< Particle flow diagnostics
+
+  Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 
 namespace {

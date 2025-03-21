@@ -24,6 +24,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Allow flows through radial boundaries")
                    .withDefault<bool>(true);
 
+  exb_advection = options["exb_advection"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(true);
+
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
@@ -127,6 +131,16 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
+
+  if (mesh->isFci()) {
+    const auto coord = mesh->getCoordinates();
+    // Note: This is 1 for a Clebsch coordinate system
+    //       Remove parallel slices before operations
+    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+  } else {
+    // Clebsch coordinate system
+    bracket_factor = 1.0;
+  }
 }
 
 void EvolveDensity::transform(Options& state) {
@@ -216,13 +230,14 @@ void EvolveDensity::finally(const Options& state) {
   // but retain densities which fall below zero
   N.setBoundaryTo(get<Field3D>(species["density"]));
 
-  if ((fabs(charge) > 1e-5) and state.isSection("fields") and state["fields"].isSet("phi")) {
+  if (exb_advection and (fabs(charge) > 1e-5) and
+      state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
     ddt(N) = -Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
-                                    true); // ExB drift
+                                    true) * bracket_factor; // ExB drift
   } else {
     ddt(N) = 0.0;
   }
