@@ -185,9 +185,19 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     Curlb_B.z += I * Curlb_B.x;
   }
 
-  Curlb_B.x /= Bnorm;
-  Curlb_B.y *= SQ(Lnorm);
-  Curlb_B.z *= SQ(Lnorm);
+  if (mesh->isFci()) {
+    // All coordinates (x,y,z) are dimensionless
+    // -> e_x has dimensions of length
+    Curlb_B.x *= SQ(Lnorm);
+    Curlb_B.y *= SQ(Lnorm);
+    Curlb_B.z *= SQ(Lnorm);
+
+  } else {
+    // Field-aligned (Clebsch) coordinates
+    Curlb_B.x /= Bnorm;
+    Curlb_B.y *= SQ(Lnorm);
+    Curlb_B.z *= SQ(Lnorm);
+  }
 
   Curlb_B *= 2. / coord->Bxy;
 
