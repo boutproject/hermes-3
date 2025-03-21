@@ -84,6 +84,7 @@ private:
   BoutReal Cv; /// Heat capacity at constant volume (3/2 for ideal monatomic gas)
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
+  bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
@@ -104,6 +105,8 @@ private:
   bool diagnose;      ///< Output additional diagnostics?
   bool enable_precon; ///< Enable preconditioner?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
+
+  Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 
 namespace {

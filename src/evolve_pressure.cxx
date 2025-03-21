@@ -69,6 +69,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                    .doc("Allow flows through radial boundaries")
                    .withDefault<bool>(true);
 
+  exb_advection = options["exb_advection"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(true);
+
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
@@ -182,6 +186,16 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   kappa_limit_alpha = options["kappa_limit_alpha"]
     .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
     .withDefault(-1.0);
+
+  if (mesh->isFci()) {
+    const auto coord = mesh->getCoordinates();
+    // Note: This is 1 for a Clebsch coordinate system
+    //       Remove parallel slices before operations
+    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+  } else {
+    // Clebsch coordinate system
+    bracket_factor = 1.0;
+  }
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -259,13 +273,14 @@ void EvolvePressure::finally(const Options& state) {
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
 
-  if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
+  if (exb_advection and species.isSet("charge") and
+      (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
       state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
   } else {
     ddt(P) = 0.0;
   }
