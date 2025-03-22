@@ -68,7 +68,15 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     BoutReal Bnorm = units["Tesla"];
     BoutReal Lnorm = units["meters"];
 
-    Curlb_B.x /= Bnorm;
+    if (mesh->isFci()) {
+      // All coordinates (x,y,z) are dimensionless
+      // -> e_x has dimensions of length
+      Curlb_B.x *= SQ(Lnorm);
+    } else {
+      // Field-aligned (Clebsch) coordinates
+      Curlb_B.x /= Bnorm;
+    }
+
     Curlb_B.y *= SQ(Lnorm);
     Curlb_B.z *= SQ(Lnorm);
 
