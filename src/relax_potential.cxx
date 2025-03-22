@@ -97,7 +97,8 @@ void RelaxPotential::transform(Options& state) {
   phi.applyBoundary("neumann");
   Vort.applyBoundary("neumann");
   if (phi.isFci()){
-    mesh->communicate(phi); //need parallel slices for FCI
+    mesh->communicate(phi); // need parallel slices for FCI
+    phi.applyParallelBoundary("parallel_neumann_o2");
   }
   auto& fields = state["fields"];
 
@@ -268,7 +269,7 @@ void RelaxPotential::finally(const Options& state) {
 void RelaxPotential::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
-  auto Tnorm = state["Tnorm"].as<BoutReal>();
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
 
   set_with_attrs(state["phi"], phi,
                  {{"time_dimension", "t"},
