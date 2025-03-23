@@ -146,7 +146,7 @@ void EvolveMomentum::finally(const Options &state) {
   // Parallel flow
   V = get<Field3D>(species["velocity"]);
 
-  if (exb_advection and state.isSection("fields") and state["fields"].isSet("phi")
+  if (state.isSection("fields") and state["fields"].isSet("phi")
       and species.isSet("charge")) {
 
     const BoutReal Z = get<BoutReal>(species["charge"]);
@@ -156,8 +156,12 @@ void EvolveMomentum::finally(const Options &state) {
 
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                       true) * bracket_factor; // ExB drift
+      if (exb_advection) {
+        ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+                                         true) * bracket_factor; // ExB drift
+      } else {
+        ddt(NV) = 0.0;
+      }
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
@@ -176,8 +180,12 @@ void EvolveMomentum::finally(const Options &state) {
         // This is Z * Apar * dn/dt, keeping just leading order terms
         Field3D dndt = density_source
           - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, dummy)
-          - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true) * bracket_factor
           ;
+
+        if (exb_advection) {
+          dndt -= Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
+        }
+
         if (low_n_diffuse_perp) {
           dndt += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
                                         bndry_flux);
@@ -190,7 +198,7 @@ void EvolveMomentum::finally(const Options &state) {
 
         // Using the approximation for small delta-B/B
         // b dot Grad(phi) = Grad_par(phi) + [phi, Apar]
-        ddt(NV) -= Z * N * bracket(phi, Apar_flutter, BRACKET_ARAKAWA);
+        ddt(NV) -= Z * N * bracket(phi, Apar_flutter, BRACKET_ARAKAWA) * bracket_factor;
       }
     } else {
       ddt(NV) = 0.0;
