@@ -22,6 +22,7 @@ struct FixedVelocity : public Component {
     V = options["velocity"].as<Field3D>() / Cs0;
     if (V.isFci()) {
       bout::globals::mesh->communicate(V);
+      V.applyParallelBoundary("parallel_neumann_o2");
     }
   }
 
