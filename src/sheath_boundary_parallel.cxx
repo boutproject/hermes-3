@@ -61,6 +61,9 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
 
+  always_zero_current = options["always_zero_current"]
+    .doc("Always set zero current?").withDefault<bool>(false);
+
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
 
@@ -125,6 +128,11 @@ void SheathBoundaryParallel::transform(Options &state) {
   if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   } else {
+    phi = zeroFrom(Ne); // So phi is field aligned
+    always_zero_current = true; // Assume zero current to calculate phi on boundary
+  }
+
+  if (always_zero_current) {
     // Calculate potential phi assuming zero current
     // Note: This is equation (22) in Tskhakaya 2005, with I = 0
 
@@ -133,7 +141,6 @@ void SheathBoundaryParallel::transform(Options &state) {
     // To avoid looking up species for every grid point, this
     // loops over the boundaries once per species.
     Field3D ion_sum {zeroFrom(Ne)};
-    phi = emptyFrom(Ne); // So phi is field aligned
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {

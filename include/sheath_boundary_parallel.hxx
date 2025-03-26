@@ -83,6 +83,8 @@ private:
 
   bool always_set_phi; ///< Set phi field?
 
+  bool always_zero_current; ///< Set phi boundary assuming zero current?
+
   Field3D wall_potential; ///< Voltage at the wall. Normalised units.
 
   bool floor_potential; ///< Apply floor to sheath potential?
