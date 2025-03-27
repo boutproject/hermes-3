@@ -399,7 +399,9 @@ void EvolvePressure::finally(const Options& state) {
     }
 
     if (kappa_par.isFci()) {
+      kappa_par.applyBoundary("neumann");
       mesh->communicate(kappa_par);
+      kappa_par.applyParallelBoundary("parallel_dirichlet_o2");
     }
 
     yboundary.iter([&](auto& region) {
