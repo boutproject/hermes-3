@@ -33,6 +33,8 @@ mxstep = 10000
 # Specify the species (electrons), a vorticity equation, and 2D sheath closure
 components = e, vorticity, sheath_closure
 
+recalculate_metric = true  # Calculate metrics from Rxy, Bpxy etc.
+
 Nnorm = 2e18
 Bnorm = mesh:Bxy
 Tnorm = 5

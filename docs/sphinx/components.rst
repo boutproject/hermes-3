@@ -1310,6 +1310,13 @@ Note that with this definition we recover the `Braginskii expressions
 <https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html>`_
 for e-i and i-i collision times.
 
+The electron-electron collision time definition follows Braginskii (note that Fitzpatrick uses 
+a different definition in his `notes <https://farside.ph.utexas.edu/teaching/plasma/Plasma/node41.html>`_,
+these are not consistent with Braginskii):
+
+.. math::
+   \nu_{ee} = \frac{ln \Lambda e^4 n_e} { 12 \pi^{3/2} \varepsilon_0^2 m_{e}^{1/2} T_{e}^{3/2} } 
+
 For conservation of momentum, the collision frequencies :math:`\nu_{ab}` and :math:`\nu_{ba}` are
 related by:
 
@@ -2276,6 +2283,11 @@ electromagnetic
    (``electromagnetic:magnetic_flutter=true``).  They use an
    ``Apar_flutter`` field, not the ``Apar`` field that is calculated
    from the induction terms.
+5. If using ``vorticity:phi_boundary_relax`` to evolve the radial
+   boundary of the electrostatic potential, the timescale
+   ``phi_boundary_timescale`` should be set much longer than the
+   Alfven wave period or unphysical instabilities may grow from the
+   boundaries.
 
 This component modifies the definition of momentum of all species, to
 include the contribution from the electromagnetic potential
@@ -2350,6 +2362,13 @@ This writes an ``Apar_flutter`` field to the state, which then enables perturbed
 parallel derivative terms in the ``evolve_density``, ``evolve_pressure``, ``evolve_energy`` and
 ``evolve_momentum`` components. Parallel flow terms are modified, and parallel heat
 conduction.
+
+.. math::
+
+   \begin{aligned}\mathbf{b}\cdot\nabla f =& \mathbf{b}_0\cdot\nabla f + \delta\mathbf{b}\cdot\nabla f \\
+   =& \mathbf{b}_0\cdot\nabla f + \frac{1}{B}\nabla\times\left(\mathbf{b}A_{||}\right)\cdot\nabla f \\
+   \simeq& \mathbf{b}_0\cdot\nabla f + \frac{1}{B_0}\left[A_{||}\nabla\times\mathbf{b} + \left(\nabla A_{||}\right)\times\mathbf{b}_0\right]\cdot\nabla f \\
+   \simeq& \mathbf{b}_0\cdot\nabla f + \frac{1}{B_0}\mathbf{b}_0\times \nabla A_{||} \cdot \nabla f\end{aligned}
 
 .. doxygenstruct:: Electromagnetic
    :members:

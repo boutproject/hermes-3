@@ -4,12 +4,12 @@
 #include <bout/field2d.hxx>
 #include <bout/mesh.hxx>
 
-#include "../include/loadmetric.hxx"
+#include "../include/recalculate_metric.hxx"
 
 using bout::globals::mesh;
 
-void LoadMetric(BoutReal Lnorm, BoutReal Bnorm) {
-  // Load metric coefficients from the mesh
+void recalculate_metric(BoutReal Lnorm, BoutReal Bnorm) {
+  // Load Rxy etc from from the mesh
   Field2D Rxy, Bpxy, Btxy, hthe, sinty;
   GRID_LOAD5(Rxy, Bpxy, Btxy, hthe, sinty); // Load metrics
 

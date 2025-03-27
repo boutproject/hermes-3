@@ -634,6 +634,7 @@ void Vorticity::transform(Options& state) {
 
 void Vorticity::finally(const Options& state) {
   AUTO_TRACE();
+  auto coord = mesh->getCoordinates();
 
   phi = get<Field3D>(state["fields"]["phi"]);
 
@@ -670,7 +671,7 @@ void Vorticity::finally(const Options& state) {
     }
   }
 
-  if (state.isSection("fields") and state["fields"].isSet("DivJextra")) {
+  if (state["fields"].isSet("DivJextra")) {
     auto DivJextra = get<Field3D>(state["fields"]["DivJextra"]);
 
     // Parallel current is handled here, to allow different 2D or 3D closures
@@ -695,7 +696,18 @@ void Vorticity::finally(const Options& state) {
     const BoutReal A = get<BoutReal>(species["AA"]);
 
     // Note: Using NV rather than N*V so that the cell boundary flux is correct
-    ddt(Vort) += Div_par((Z / A) * NV);
+    const Field3D jpar = (Z / A) * NV;
+    ddt(Vort) += Div_par(jpar);
+
+    if (state["fields"].isSet("Apar_flutter")) {
+      // Magnetic flutter term
+      const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+
+      // Div_par(jpar) = B * Grad_par(jpar / B)
+      // Using the approximation for small delta-B/B
+      // b dot Grad(jpar) = Grad_par(jpar) + [jpar, Apar]
+      ddt(Vort) += coord->Bxy * bracket(jpar / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA);
+    }
   }
 
   // Viscosity

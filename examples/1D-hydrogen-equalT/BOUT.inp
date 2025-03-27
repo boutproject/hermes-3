@@ -49,7 +49,6 @@ components = (d+, d, e, equilibriate,
               electron_force_balance, neutral_parallel_diffusion,
               ion_viscosity)
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = true  # Normalise the input metric?
 
 Nnorm = 1e19
