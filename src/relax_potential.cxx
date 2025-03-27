@@ -5,12 +5,18 @@ using bout::globals::mesh;
 
 #include "../include/div_ops.hxx"
 #include "../include/relax_potential.hxx"
+#include "../include/hermes_build_config.hxx"
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver) {
   AUTO_TRACE();
 
   auto* coord = mesh->getCoordinates();
 
+  // Normalisations
+  const Options& units = alloptions["units"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Bnorm = units["Tesla"];
+  const BoutReal Lnorm = units["meters"];
   auto& options = alloptions[name];
 
   exb_advection = options["exb_advection"]
@@ -29,6 +35,19 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                    .doc("Use the Boussinesq approximation?")
                    .withDefault<bool>(true);
 
+  viscosity = options["viscosity"]
+    .doc("Kinematic viscosity [m^2/s]")
+    .withDefault<Field3D>(0.0)
+    / (Lnorm * Lnorm * Omega_ci);
+
+  mesh->communicate(viscosity);
+  viscosity.applyBoundary("dirichlet");
+  viscosity.applyParallelBoundary("parallel_dirichlet_o2");
+
+  phi_dissipation = options["phi_dissipation"]
+                        .doc("Parallel dissipation of potential [Recommended]")
+                        .withDefault<bool>(true);
+
   average_atomic_mass = options["average_atomic_mass"]
                             .doc("Weighted average atomic mass, for polarisaion current "
                                  "(Boussinesq approximation)")
@@ -37,8 +56,8 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  lambda_1 = options["lambda_1"].doc("λ_1 > λ_2 > 1").withDefault(1.0);
-  lambda_2 = options["lambda_2"].doc("λ_2 > 1").withDefault(10.0);
+  lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault(100);
+  lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault(1e5);
 
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
@@ -53,7 +72,9 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
       // May be 2D, reading as 3D
       Vector2D curv2d;
       curv2d.covariant = false;
-      mesh->get(curv2d, "bxcv");
+      if (mesh->get(curv2d, "bxcv")) {
+        throw BoutException("Curvature vector not found in input");
+      }
       Curlb_B = curv2d;
     }
 
@@ -86,6 +107,13 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   Bsq = SQ(coord->Bxy);
   if (Vort.isFci()) {
     dagp = FCI::getDagp_fv(alloptions, mesh);
+
+    const auto coord = mesh->getCoordinates();
+    // Note: This is 1 for a Clebsch coordinate system
+    //       Remove parallel slices before operations
+    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+  } else {
+    bracket_factor = 1.0;
   }
 }
 
@@ -96,8 +124,10 @@ void RelaxPotential::transform(Options& state) {
   phi = phi1 / lambda_2;
   phi.applyBoundary("neumann");
   Vort.applyBoundary("neumann");
+
+  mesh->communicate(Vort, phi);
+
   if (phi.isFci()){
-    mesh->communicate(phi); // need parallel slices for FCI
     phi.applyParallelBoundary("parallel_neumann_o2");
   }
   auto& fields = state["fields"];
@@ -142,6 +172,11 @@ void RelaxPotential::transform(Options& state) {
 
     // Note: This term is central differencing so that it balances
     // the corresponding compression term in the species pressure equations
+    if (phi.isFci()) {
+      mesh->communicate(Jdia);
+      Jdia.applyBoundary("neumann");
+      Jdia.y.applyParallelBoundary("parallel_neumann_o2");
+    }
     Field3D DivJdia = Div(Jdia);
     ddt(Vort) += DivJdia;
 
@@ -178,7 +213,7 @@ void RelaxPotential::finally(const Options& state) {
   Vort = get<Field3D>(state["fields"]["vorticity"]);
 
   if (exb_advection) {
-    ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows);
+    ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
   }
 
   if (state.isSection("fields") and state["fields"].isSet("DivJextra")) {
@@ -208,6 +243,23 @@ void RelaxPotential::finally(const Options& state) {
     // Note: Using NV rather than N*V so that the cell boundary flux is correct
     ddt(Vort) += Div_par((Z / A) * NV);
   }
+
+  if (phi_dissipation) {
+    // Adds dissipation term like in other equations, but depending on gradient of
+    // potential
+    Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+
+    Field3D zero {0.0};
+    zero.splitParallelSlices();
+    zero.yup() = 0.0;
+    zero.ydown() = 0.0;
+
+    Field3D dummy;
+    ddt(Vort) -= FV::Div_par_mod<hermes::Limiter>(-phi, zero, sound_speed, dummy);
+  }
+
+  // Viscosity
+  ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
 
   // Solve diffusion equation for potential
 
