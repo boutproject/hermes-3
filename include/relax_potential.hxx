@@ -86,6 +86,10 @@ private:
     return FV::Div_a_Grad_perp(a, b);
   }
 
+  Field3D viscosity; /// Kinematic viscosity
+  bool phi_dissipation; /// Parallel dissipation of potential
+
+  Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 
 namespace {
