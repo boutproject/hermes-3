@@ -15,6 +15,12 @@ public:
   std::function<Field3D(const Field3D&, const Field3D&)> func;
 };
 
+class nameandfunction3 {
+public:
+  std::string name;
+  std::function<Field3D(const Field3D&, const Field3D&, Field3D&)> func;
+};
+
 // Class used to store function of four arguments
 // in operator list below. Second pair of arguments are
 // internal diagnostics to the function
@@ -31,6 +37,13 @@ const auto differential_operators_2_arg = {
                  [](const Field3D &a, const Field3D &f) {
                    return FV::Div_a_Grad_perp(a, f);
                  }},
+};
+// List of tested operators of 3 arguments
+const auto differential_operators_3_arg = {
+  nameandfunction3{"Div_par_K_Grad_par_mod(a, f)",
+               [](const Field3D &a, const Field3D &f, Field3D &flow_ylow) {
+                 return Div_par_K_Grad_par_mod(a, f, flow_ylow, true);
+               }},
 };
 // List of tested operators of 4 arguments
 const auto differential_operators_4_arg = {
@@ -108,6 +121,22 @@ int main(int argc, char** argv) {
               dump[expectedname] = expected_result;
           }
       }
+      for (const auto& difop: differential_operators_3_arg) {
+        if (difop.name.compare(differential_operator_name) == 0){
+            // Get result of applying the named differential operator
+            Field3D result = difop.func(a, f, flow_ylow);
+            dump[outname] = result;
+            dump[outname].setAttributes({
+                  {"operator", difop.name},
+              });
+            // Get expected result from input file
+            Field3D expected_result{mesh};
+            mesh->get(expected_result, expectedname, 0.0, false);
+            dump[expectedname] = expected_result;
+            // dump diagnostics
+            dump[outname_flow_ylow] = flow_ylow;
+        }
+      }
       for (const auto& difop: differential_operators_4_arg) {
         if (difop.name.compare(differential_operator_name) == 0){
             // Get result of applying the named differential operator
@@ -124,7 +153,7 @@ int main(int argc, char** argv) {
             dump[outname_flow_xlow] = flow_xlow;
             dump[outname_flow_ylow] = flow_ylow;
         }
-    }
+      }
   }
   //Field3D result = FV::Div_a_Grad_perp(a, f);
   //dump["result"] = result;

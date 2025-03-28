@@ -7,10 +7,7 @@ x = symbols('x')
 y = symbols('y')
 z = symbols('z')
 
-# Div . ( a Grad_perp f )
-# see notes for formulae
-# https://bout-dev.readthedocs.io/en/stable/user_docs/coordinates.html#the-perpendicular-laplacian-in-divergence-form
-def div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, a, f):
+def metric_coefficients(g11, g12, g13, g22, g23, g33):
    gup = Matrix(3,3,[g11,g12,g13,g12,g22,g23,g13,g23,g33])
    gdown = gup.inv()
    g_11 = gdown[0,0]
@@ -23,6 +20,13 @@ def div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, a, f):
    detgup = gup.det()
    #detgup = g11*g22*g33 - g11*g23*g23 - g12*g12*g33 + g12*g13*g23 - g13*g13*g22 + g13*g12*g23
    J = 1/sqrt(detgup)
+   return g_11, g_12, g_13, g_22, g_23, g_33, J
+
+# Div . ( a Grad_perp f )
+# see notes for formulae
+# https://bout-dev.readthedocs.io/en/stable/user_docs/coordinates.html#the-perpendicular-laplacian-in-divergence-form
+def div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, a, f):
+   g_11, g_12, g_13, g_22, g_23, g_33, J = metric_coefficients(g11, g12, g13, g22, g23, g33)
    #print("f(x,y,z) = ",f)
    #print("a(x,y,z) = ",a)
 
@@ -46,3 +50,10 @@ def div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, a, f):
 #   zval = 0.345
 #   print(f"div_a_grad_perp_f({xval},{yval},{zval}) = ",div_a_grad_perp_f_func(xval,yval,zval))
    return div_a_grad_perp_f
+
+def div_par_k_grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, a, f):
+   g_11, g_12, g_13, g_22, g_23, g_33, J = metric_coefficients(g11, g12, g13, g22, g23, g33)
+   dfdy = diff(f,y)
+   k_grad_par_f = a*J*dfdy/g_22
+   div_par_k_grad_par_f = (1/J)*(diff(k_grad_par_f,y))
+   return div_par_k_grad_par_f
