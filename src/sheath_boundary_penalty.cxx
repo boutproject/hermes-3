@@ -148,13 +148,17 @@ void SheathBoundaryPenalty::transform(Options& state) {
     Options& species = allspecies[kv.first]; // Note: Need non-const
 
     // Characteristics of this species
-    const BoutReal Mi = GET_VALUE(BoutReal, species["AA"]);
+    if (!IS_SET(species["charge"])) {
+      // Skip neutrals
+      continue;
+    }
     const BoutReal Zi = GET_VALUE(BoutReal, species["charge"]);
-
     if (fabs(Zi) < 1e-5) {
       // Skip neutrals
       continue;
     }
+
+    const BoutReal Mi = GET_VALUE(BoutReal, species["AA"]);
 
     // Boundary conditions should already have been applied
     Field3D Ni = GET_VALUE(Field3D, species["density"]);
