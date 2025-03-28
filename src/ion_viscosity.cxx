@@ -152,7 +152,7 @@ void IonViscosity::transform(Options &state) {
       bounce_factor_rozhansky *= (1 / (1 + (1./nu_star_rozh))) * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1./nu_star_rozh)));
 
       BoutReal mass = get<BoutReal>(species["AA"]);
-      const Field2D v_thermal = sqrt(2.0 * T_av / mass)
+      const Field2D v_thermal = sqrt(2.0 * T_av / mass);
 
       nu_star_vthermal *=  (bounce_frequency_R * bounce_frequency_q95) / ( tau_av * pow(bounce_frequency_epsilon, 1.5) * v_thermal);
 
