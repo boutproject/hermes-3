@@ -7,6 +7,14 @@
 #include "bout/difops.hxx"
 #include "../include/div_ops.hxx"
 
+// Class used to store function of one argument
+// in operator list below
+class nameandfunction1 {
+public:
+  std::string name;
+  std::function<Field3D(const Field3D&)> func;
+};
+
 // Class used to store function of two arguments
 // in operator list below
 class nameandfunction2 {
@@ -31,6 +39,13 @@ class nameandfunction4 {
   };
   
 
+// List of tested operators of 1 arguments
+const auto differential_operators_1_arg = {
+    nameandfunction1{"Div_par(f)",
+                 [](const Field3D &f) {
+                   return Div_par(f);
+                 }},
+};
 // List of tested operators of 2 arguments
 const auto differential_operators_2_arg = {
     nameandfunction2{"FV::Div_a_Grad_perp(a, f)",
@@ -107,6 +122,20 @@ int main(int argc, char** argv) {
       std::string differential_operator_name = Options::root()["mesh"][inputname].withDefault("FV::Div_a_Grad_perp(a, f)");
       // the for loop and if statement below should be replaced
       // by a neater indexing syntax below if possible
+      for (const auto& difop: differential_operators_1_arg) {
+          if (difop.name.compare(differential_operator_name) == 0){
+              // Get result of applying the named differential operator
+              Field3D result = difop.func(f);
+              dump[outname] = result;
+              dump[outname].setAttributes({
+                    {"operator", difop.name},
+                });
+              // Get expected result from input file
+              Field3D expected_result{mesh};
+              mesh->get(expected_result, expectedname, 0.0, false);
+              dump[expectedname] = expected_result;
+          }
+      }
       for (const auto& difop: differential_operators_2_arg) {
           if (difop.name.compare(differential_operator_name) == 0){
               // Get result of applying the named differential operator

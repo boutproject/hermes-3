@@ -2,6 +2,7 @@
 from job_functions import run_manufactured_solutions_test
 from perpendicular_laplacian import x, y, z, div_a_grad_perp_f_symbolic
 from perpendicular_laplacian import div_par_k_grad_par_f_symbolic
+from perpendicular_laplacian import div_par_f_symbolic
 from sympy import sin, cos
 
 # specify symbolic inputs
@@ -19,6 +20,8 @@ a = 1.0 + 0.1*x**3*sin(2*y)*sin(2*z)
 div_a_grad_perp_f = div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, a, f)
 # Div . ( a Grad_par f)
 div_par_k_grad_par_f = div_par_k_grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, a, f)
+# Div . ( vec(b) f)
+div_par_f = div_par_f_symbolic(g11, g12, g13, g22, g23, g33, f)
 
 test_input = {
     "ntest" : 3, 
@@ -26,7 +29,8 @@ test_input = {
     "differential_operator_list": [["FV::Div_a_Grad_perp(a, f)", str(div_a_grad_perp_f)],
                                    ["Div_a_Grad_perp_nonorthog(a, f)", str(div_a_grad_perp_f)],
                                    ["Div_a_Grad_perp_flows(a, f)", str(div_a_grad_perp_f)],
-                                   ["Div_par_K_Grad_par_mod(a, f)", str(div_par_k_grad_par_f)],],
+                                   ["Div_par_K_Grad_par_mod(a, f)", str(div_par_k_grad_par_f)],
+                                   ["Div_par(f)", str(div_par_f)],],
     "a_string": str(a),
     "f_string": str(f),
     "g11_string": str(g11),
