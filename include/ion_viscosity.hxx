@@ -67,6 +67,8 @@ private:
     Field3D DivJ;      ///< Divergence of current in vorticity equation
     Field3D bounce_factor;
     Field3D bounce_factor_rozhansky;
+    Field2D nu_star_rozh;
+    Field2D nu_star;
   };
 
   /// Store diagnostics for each species
