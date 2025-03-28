@@ -68,7 +68,9 @@ private:
     Field3D bounce_factor;
     Field2D bounce_factor_rozhansky;
     Field2D nu_star_rozh;
-    Field2D nu_star;
+    Field3D nu_star;
+    Field2D nu_star_vthermal;
+    Field2D bounce_factor_vthermal;
   };
 
   /// Store diagnostics for each species
