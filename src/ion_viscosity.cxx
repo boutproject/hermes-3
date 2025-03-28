@@ -77,8 +77,12 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
     
     Curlb_B *= 2. / coord->Bxy;
   }
-
-  bounce_frequency_R /= Lnorm
+  if (bounce_frequency) {
+    const Options& units = alloptions["units"];
+    const BoutReal Lnorm = units["meters"];
+    bounce_frequency_R /= Lnorm;
+  }
+  
 
 }
 
@@ -120,7 +124,9 @@ void IonViscosity::transform(Options &state) {
     // Parallel ion viscosity (4/3 * 0.96 coefficient)
     Field3D eta = 1.28 * P * tau;
     
-    bounce_factor = 1.0; // if bounce_frequency = false, this factor does nothing to anything
+    Field3D bounce_factor = 1.0; // if bounce_frequency = false, this factor does nothing to anything
+
+    Field3D bounce_factor_rozhansky = 1.0;
 
     if (bounce_frequency) {
       // Need to collect the DC density and temperature to calculate the bounce frequency, with the equation taken as in Zholobenko 2024. 
@@ -133,6 +139,14 @@ void IonViscosity::transform(Options &state) {
       //eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
       bounce_factor *= (bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
       eta *= bounce_factor;
+
+      // calculating the alternative method, bounce_factor_rozhansky, based on tau, V-parallel and the input parameters. 
+      const Field2D tau_av = DC(tau);
+      const Field2D V_av = DC(V);
+      const Field2D nu_star_inv = ( tau_av * pow(bounce_frequency_epsilon, 1.5) * V_av) / (bounce_frequency_R * bounce_frequency_q95);
+
+      bounce_factor_rozhansky *= (1 / (1 + nu_star_inv)) * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * nu_star_inv));
+
     } 
     
     if (eta_limit_alpha > 0.) {
@@ -277,7 +291,7 @@ void IonViscosity::transform(Options &state) {
       auto search = diagnostics.find(species_name);
       if (search == diagnostics.end()) {
         // First time, create diagnostic
-        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor});
+        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor, bounce_factor_rozhansky});
       } else {
         // Update diagnostic values
         auto& d = search->second;
@@ -285,6 +299,7 @@ void IonViscosity::transform(Options &state) {
         d.Pi_cipar = Pi_cipar;
         d.DivJ = DivJ;
         d.bounce_factor = bounce_factor;
+        d.bounce_factor_rozhansky = bounce_factor_rozhansky;
       }
     }
   }
@@ -337,6 +352,14 @@ void IonViscosity::outputVars(Options &state) {
                       {"long_name", std::string("Bounce factor for viscosity calculation") + species_name},
                       {"species", species_name},
                       {"source", "ion_viscosity"}});
+
+      set_with_attrs(state[std::string("bounce_factor_rozh_") + species_name], d.bounce_factor_rozhansky,
+                      {{"time_dimension", "t"},
+                       {"units", "none"},
+                       {"conversion", 1},
+                       {"long_name", std::string("Bounce factor from Roshansky") + species_name},
+                       {"species", species_name},
+                       {"source", "ion_viscosity"}});
     }
   }
 }
