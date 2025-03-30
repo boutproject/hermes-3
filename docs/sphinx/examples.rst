@@ -3,16 +3,109 @@
 Examples
 ========
 
+Hermes-3 contains a large number of example simulations. As the development
+of the code has progressed rapidly, it has been difficult to keep all of the examples
+up to date, and as such, some of the example simulations may not represent
+the most optimal setup.
 
-1D flux-tube
-------------
+A review is currently in process to select a few of the most useful examples
+and keep them up to date regularly, with the remaining examples being updated
+in the future.
 
-These simulations follow the dynamics of one or more species along the
-magnetic field. By putting a source at one end of the domain, and a
-sheath at the other, this can be a useful model of plasma dynamics in
-the Scrape-Off Layer (SOL) of a tokamak or other magnetised plasma.
+So far, only 1D example cases received this treatment, resulting in a new,
+updated example ``1D-threshold``.  The remaining examples are available
+in ``examples/1D-tokamak/extra`` but are not guaranteed to be the most optimal
+or work right out of the box.
 
-1D periodic domain, Te and Ti
+
+
+
+1D Scrape-off Layer (SOL)
+-----------------------
+
+.. _1D-threshold:
+
+1D-threshold
+~~~~~~
+
+This is the 
+This simulates a similar setup to the `SD1D
+<https://github.com/boutproject/SD1D/>`_ code: A 1D domain, with a
+source of heat and particles on one side, and a sheath boundary on the
+other. Ions recycle into neutrals, which charge exchange and are
+ionised.  A difference is that separate ion and electron temperatures
+are evolved here.
+
+.. figure:: figs/1d_threshold.*
+   :name: 1d_threshold
+   :alt:
+   :width: 60%
+
+   Evolution of ion and neutral density (blue); ion, electron and
+   neutral temperature (red), starting from flat profiles.
+
+Due to the short length-scales near the sheath, the grid is packed
+close to the target, by setting the grid spacing to be a linear
+function of index:
+
+.. code-block:: ini
+
+   [mesh]
+   dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+where `dymin` is 0.1 here, and sets the smallest grid spacing (at the
+target) as a fraction of the average grid spacing.
+
+The components are ion species `d+`, atoms `d`, electrons `e`:
+
+.. code-block:: ini
+
+   [hermes]
+   components = (d+, d, e,
+              sheath_boundary_simple, collisions, recycling, reactions,
+              electron_force_balance, neutral_parallel_diffusion)
+
+The electron velocity is set to the ion by specifying :ref:`zero_current`;
+A sheath boundary is included; Collisions are needed to be able to calculate
+heat conduction, as well as neutral diffusion rates; Recycling at the targets
+provides a source of atoms; :ref:`neutral_parallel_diffusion` simulates cross-field
+diffusion in a 1D system. The electron force balance links electron pressure gradient
+with the ion momentum equation. Please see the relevant documentation pages about these
+components for further information.
+
+The sheath boundary is only imposed on the upper Y boundary:
+
+.. code-block:: ini
+
+   [sheath_boundary]
+
+   lower_y = false
+   upper_y = true
+
+The reactions component is a group, which lists the reactions included:
+
+.. code-block:: ini
+
+   [reactions]
+   type = (
+           d + e -> d+ + 2e,   # Deuterium ionisation
+           d+ + e -> d,          # Deuterium recombination
+           d + d+ -> d+ + d,   # Charge exchange
+          )
+
+To run this example:
+
+.. code-block:: bash
+
+   nice -n 10 ./hermes-3 -d examples/1D-recycling
+
+This should take 5-10 minutes to run. There is a `makeplots.py` script in the
+`examples/1D-recycling` directory which will generate plots and a gif animation
+(if `ImageMagick <https://imagemagick.org/index.php>`_ is installed).
+
+
+
+1D-te-ti
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A fluid is evolved in 1D, imposing quasineutrality and zero net current.
@@ -99,79 +192,6 @@ The :ref:`zero_current` component sets:
    v_{||e} =& v_{||i}
    \end{aligned}
 
-1D Scrape-off Layer (SOL)
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-This simulates a similar setup to the `SD1D
-<https://github.com/boutproject/SD1D/>`_ code: A 1D domain, with a
-source of heat and particles on one side, and a sheath boundary on the
-other. Ions recycle into neutrals, which charge exchange and are
-ionised.  A difference is that separate ion and electron temperatures
-are evolved here.
-
-.. figure:: figs/1d_recycling.*
-   :name: 1d_recycling
-   :alt:
-   :width: 60%
-
-   Evolution of ion and neutral density (blue); ion, electron and
-   neutral temperature (red), starting from flat profiles.
-
-Due to the short length-scales near the sheath, the grid is packed
-close to the target, by setting the grid spacing to be a linear
-function of index:
-
-.. code-block:: ini
-
-   [mesh]
-   dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
-
-where `dymin` is 0.1 here, and sets the smallest grid spacing (at the
-target) as a fraction of the average grid spacing.
-
-The components are ion species `d+`, atoms `d`, electrons `e`:
-
-.. code-block:: ini
-
-   [hermes]
-   components = (d+, d, e,
-                zero_current, sheath_boundary, collisions, recycling, reactions,
-                neutral_parallel_diffusion)
-
-The electron velocity is set to the ion by specifying :ref:`zero_current`;
-A sheath boundary is included; Collisions are needed to be able to calculate
-heat conduction, as well as neutral diffusion rates; Recycling at the targets
-provides a source of atoms; :ref:`neutral_parallel_diffusion` simulates cross-field
-diffusion in a 1D system.
-
-The sheath boundary is only imposed on the upper Y boundary:
-
-.. code-block:: ini
-
-   [sheath_boundary]
-
-   lower_y = false
-   upper_y = true
-
-The reactions component is a group, which lists the reactions included:
-
-.. code-block:: ini
-
-   [reactions]
-   type = (
-           d + e -> d+ + 2e,   # Deuterium ionisation
-           d + d+ -> d+ + d,   # Charge exchange
-          )
-
-To run this example:
-
-.. code-block:: bash
-
-   nice -n 10 ./hermes-3 -d examples/1D-recycling
-
-This should take 5-10 minutes to run. There is a `makeplots.py` script in the
-`examples/1D-recycling` directory which will generate plots and a gif animation
-(if `ImageMagick <https://imagemagick.org/index.php>`_ is installed).
 
 2D drift-plane
 --------------
