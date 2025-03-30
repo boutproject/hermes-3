@@ -104,93 +104,93 @@ This should take 5-10 minutes to run. There is a `makeplots.py` script in the
 (if `ImageMagick <https://imagemagick.org/index.php>`_ is installed).
 
 
+.. 
+   1D-te-ti
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1D-te-ti
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   A fluid is evolved in 1D, imposing quasineutrality and zero net current.
+   Both electron and ion pressures are evolved, but there is no exchange
+   of energy between them, or heat conduction.
 
-A fluid is evolved in 1D, imposing quasineutrality and zero net current.
-Both electron and ion pressures are evolved, but there is no exchange
-of energy between them, or heat conduction.
+   .. figure:: figs/1d_te_ti.*
+      :name: 1d_te_ti
+      :alt:
+      :width: 60%
+      
+      Evolution of pressure, starting from a top hat. Input in ``examples/1D-te-ti``.
 
-.. figure:: figs/1d_te_ti.*
-   :name: 1d_te_ti
-   :alt:
-   :width: 60%
-   
-   Evolution of pressure, starting from a top hat. Input in ``examples/1D-te-ti``.
+   To run this example:
 
-To run this example:
+   .. code-block:: bash
 
-.. code-block:: bash
+      ./hermes-3 -d examples/1D-te-ti
 
-   ./hermes-3 -d examples/1D-te-ti
+   Which takes a few seconds to run on a single core. Then in the
+   ``examples/1D-te-ti`` directory run the analysis script
 
-Which takes a few seconds to run on a single core. Then in the
-``examples/1D-te-ti`` directory run the analysis script
+   .. code-block:: bash
 
-.. code-block:: bash
+      python3 makeplot.py
 
-   python3 makeplot.py
+   That should generate png files and an animated gif if ImageMagick is
+   installed (the ``convert`` program). If an error like
+   ``ModuleNotFoundError: No module named 'boutdata'`` occurs, then
+   install the ``boutdata`` package with ``python3 -m pip install
+   boutdata``.
 
-That should generate png files and an animated gif if ImageMagick is
-installed (the ``convert`` program). If an error like
-``ModuleNotFoundError: No module named 'boutdata'`` occurs, then
-install the ``boutdata`` package with ``python3 -m pip install
-boutdata``.
+   The model components are ions (i) and electrons (e), and a component
+   which uses the force on the electrons to calculate the parallel electric field,
+   which transfers the force to the ions.
 
-The model components are ions (i) and electrons (e), and a component
-which uses the force on the electrons to calculate the parallel electric field,
-which transfers the force to the ions.
+   .. code-block:: ini
 
-.. code-block:: ini
-
-   [hermes]
-   components = i, e, electron_force_balance
+      [hermes]
+      components = i, e, electron_force_balance
 
 
-The ion density, pressure and momentum equations are evolved:
+   The ion density, pressure and momentum equations are evolved:
 
-.. code-block:: ini
+   .. code-block:: ini
 
-   [i]  # Ions
-   type = evolve_density, evolve_pressure, evolve_momentum
+      [i]  # Ions
+      type = evolve_density, evolve_pressure, evolve_momentum
 
-which solves the equations
+   which solves the equations
 
-.. math::
+   .. math::
 
-   \begin{aligned}
-   \frac{\partial n_i}{\partial t} =& -\nabla\cdot\left(n_i\mathbf{b}v_{||i}\right) \\
-   \frac{\partial p_i}{\partial t} =& -\nabla\cdot\left(p_i\mathbf{b}v_{||i}\right) - \frac{2}{3}p_i\nabla\cdot\left(\mathbf{b}v_{||i}\right) \\
-   \frac{\partial}{\partial t}\left(n_iv_{||i}\right) =& -\nabla\cdot\left(n_iv_{||i} \mathbf{b}v_{||i}\right) - \partial_{||}p_i + E
-   \end{aligned}
+      \begin{aligned}
+      \frac{\partial n_i}{\partial t} =& -\nabla\cdot\left(n_i\mathbf{b}v_{||i}\right) \\
+      \frac{\partial p_i}{\partial t} =& -\nabla\cdot\left(p_i\mathbf{b}v_{||i}\right) - \frac{2}{3}p_i\nabla\cdot\left(\mathbf{b}v_{||i}\right) \\
+      \frac{\partial}{\partial t}\left(n_iv_{||i}\right) =& -\nabla\cdot\left(n_iv_{||i} \mathbf{b}v_{||i}\right) - \partial_{||}p_i + E
+      \end{aligned}
 
-The electron density is set to the ion density by quasineutrality, the
-parallel velocity is set by a zero current condition, and only the
-electron pressure is evolved.
+   The electron density is set to the ion density by quasineutrality, the
+   parallel velocity is set by a zero current condition, and only the
+   electron pressure is evolved.
 
-.. code-block:: ini
+   .. code-block:: ini
 
-   [e] # Electrons
-   type = quasineutral, zero_current, evolve_pressure
+      [e] # Electrons
+      type = quasineutral, zero_current, evolve_pressure
 
-which adds the equations:
+   which adds the equations:
 
-.. math::
+   .. math::
 
-   \begin{aligned}
-   n_e =& n_i \\
-   \frac{\partial p_e}{\partial t} =& -\nabla\cdot\left(p_e\mathbf{b}v_{||e}\right) - \frac{2}{3}p_e\nabla\cdot\left(\mathbf{b}v_{||e}\right)
-   \end{aligned}
+      \begin{aligned}
+      n_e =& n_i \\
+      \frac{\partial p_e}{\partial t} =& -\nabla\cdot\left(p_e\mathbf{b}v_{||e}\right) - \frac{2}{3}p_e\nabla\cdot\left(\mathbf{b}v_{||e}\right)
+      \end{aligned}
 
-The :ref:`zero_current` component sets:
+   The :ref:`zero_current` component sets:
 
-.. math::
+   .. math::
 
-   \begin{aligned}
-   E =& -\partial_{||}p_e \\
-   v_{||e} =& v_{||i}
-   \end{aligned}
+      \begin{aligned}
+      E =& -\partial_{||}p_e \\
+      v_{||e} =& v_{||i}
+      \end{aligned}
 
 
 2D drift-plane
