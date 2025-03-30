@@ -84,7 +84,7 @@
 
 #include "include/recalculate_metric.hxx"
 
-#if !BOUT_ENABLE_METRIC_3D
+#if !BOUT_USE_METRIC_3D
 // For standard 2D metrics,
 // Hermes operators don't need parallel slices
 BOUT_OVERRIDE_DEFAULT_OPTION("mesh:calcParallelSlices_on_communicate", false);
