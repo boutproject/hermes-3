@@ -3,9 +3,11 @@
 Examples
 ========
 
-Hermes-3 contains a large number of example simulations. As the development
-of the code has progressed rapidly, it has been difficult to keep all of the examples
-up to date, and as such, some of the example simulations may not represent
+Hermes-3 contains a large number of example simulations, with only a selection
+shown here. Please refer to the ``examples`` directory for more.
+
+As the development of the code has progressed rapidly, it has been difficult
+To keep all of the examples up to date and not all are guaranteed to represent
 the most optimal setup.
 
 A review is currently in process to select a few of the most useful examples
@@ -13,14 +15,10 @@ and keep them up to date regularly, with the remaining examples being updated
 in the future.
 
 So far, only 1D example cases received this treatment, resulting in a new,
-updated example ``1D-threshold``.  The remaining examples are available
-in ``examples/1D-tokamak/extra`` but are not guaranteed to be the most optimal
-or work right out of the box.
+updated example ``1D-threshold`` and the remaining 1D cases moved to ``examples/1D-tokamak/extra``.
+Note that many will likely work with no modifications.
 
-
-
-
-1D Scrape-off Layer (SOL)
+1D Field line
 -----------------------
 
 .. _1D-threshold:
@@ -193,13 +191,16 @@ This should take 5-10 minutes to run. There is a `makeplots.py` script in the
       \end{aligned}
 
 
-2D drift-plane
+2D Drift-plane
 --------------
 
 Simulations where the dynamics along the magnetic field is not
 included, or only included in a parameterised way as sources or
-sinks. These are useful for the study of the basic physics of plasma
-"blobs" / filaments, and tokamak edge turbulence.
+sinks. The field line direction is then "into the page", and the
+domain represents a slice somewhere along the field line, e.g. 
+at the midplane.
+ These are useful for the study of the basic physics of plasma
+"blobs" / filaments, and tokamak edge turbulence. 
 
 .. _Blob2d:
 
@@ -434,7 +435,7 @@ the best choices, especially for cases with multiple ion species; they were
 chosen as being simple to implement by John Omotani in May 2022.
 
 
-2D axisymmetric tokamak
+2D Axisymmetric SOL
 -----------------------
 
 These are transport simulations, where the cross-field transport is given
