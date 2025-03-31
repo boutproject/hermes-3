@@ -223,8 +223,10 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    # the number of points in the ith test is ngrid*i
    nnbase = test_input["ngrid"]
    # list of [name, symbolic string, expected convergence order]
-   astr = test_input["a_string"]
-   fstr = test_input["f_string"]
+   Nd_string = test_input["Nd_string"]
+   Pd_string = test_input["Pd_string"]
+   source_Nd_string = test_input["source_Nd_string"]
+   source_Pd_string = test_input["source_Pd_string"]
    g11_str = test_input["g11_string"]
    g22_str = test_input["g22_string"]
    g33_str = test_input["g33_string"]
@@ -290,14 +292,16 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    diagnose = true
    [Nd]
 
-   function = 1 - 0.5*x^2
+   function = {Nd_string}
    bndry_core = neumann
    bndry_all = neumann
+   source = {source_Nd_string}
 
    [Pd]
-   function = 1 - 0.5*x^2
+   function = {Pd_string}
    bndry_core = neumann
    bndry_all = neumann
+   source = {source_Pd_string}
    """
          file.write(mesh_string.replace("**","^"))
 
