@@ -45,6 +45,10 @@ const auto differential_operators_1_arg = {
                  [](const Field3D &f) {
                    return Div_par(f);
                  }},
+    nameandfunction1{"Grad_par(f)",
+                 [](const Field3D &f) {
+                   return Grad_par(f);
+                 }},
 };
 // List of tested operators of 2 arguments
 const auto differential_operators_2_arg = {

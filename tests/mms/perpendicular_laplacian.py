@@ -64,3 +64,9 @@ def div_par_f_symbolic(g11, g12, g13, g22, g23, g33, f):
    # should multiply also by sigma_Bpol here, but sigma_Bpol seems absent from BOUT-dev/src/mesh/difops.cxx
    div_par_f = (1/J)*diff(J*f_over_sqrt_g_22,y)
    return div_par_f
+
+def grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, f):
+   g_11, g_12, g_13, g_22, g_23, g_33, J = metric_coefficients(g11, g12, g13, g22, g23, g33)
+   # should multiply also by sigma_Bpol here, but sigma_Bpol seems absent from BOUT-dev/src/mesh/difops.cxx
+   grad_par_f = (1/sqrt(g_22))*diff(f,y)
+   return grad_par_f
