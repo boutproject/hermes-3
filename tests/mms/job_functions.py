@@ -17,7 +17,7 @@ def run_manufactured_solutions_test(test_input):
    # the minimum number of points in each of the x, y, z grids in the test
    # the number of points in the ith test is ngrid*i
    nnbase = test_input["ngrid"]
-   # list of [name, symbolic string] pairs
+   # list of [name, symbolic string, expected convergence order]
    differential_operator_test_list = test_input["differential_operator_list"]
    astr = test_input["a_string"]
    fstr = test_input["f_string"]
@@ -113,6 +113,7 @@ def run_manufactured_solutions_test(test_input):
    # make a easy scan over the two operators, generalisation to N operators possible
    for i, values in enumerate(differential_operator_test_list):
       label = values[0]
+      expected_slope = values[2]
       l2norm = []
       nylist = []
       dylist = []
@@ -158,17 +159,17 @@ def run_manufactured_solutions_test(test_input):
       # record results in dictionary and plot
       #label = attrs["operator"] + " : f = " + attrs["inp"]
       #label = "FV::Div_a_Grad_perp(a, f)"
-      plot_data[label] = [dylist, l2norm, fitfunc, slope, offset]
+      plot_data[label] = [dylist, l2norm, fitfunc, slope, offset, expected_slope]
 
    # plot the results
    try:
       import matplotlib.pyplot as plt
       ifig = 0
       for key, variable_set in plot_data.items():
-         (xaxis, yaxis, fit, slope, offset) = variable_set
+         (xaxis, yaxis, fit, slope, offset, expected_slope) = variable_set
          plt.figure()
          plt.plot(xaxis, yaxis, "x-", label="$\\epsilon(\\mathcal{L}\\ast f)$: "+key)
-         plt.plot(xaxis, yaxis[0]*(xaxis/xaxis[0])**2, "x-", label="$\\propto \\Delta^2$")
+         plt.plot(xaxis, yaxis[0]*(xaxis/xaxis[0])**expected_slope, "x-", label="$\\propto \\Delta^{{{:.2f}}}$".format(expected_slope))
          if not fit is None:
                plt.plot(xaxis, fit, "x-", label="$e^{{{:.2f}}}\\Delta^{{{:.2f}}}$".format(offset,slope))
          plt.xlabel("$\\Delta = 1/N_y$")
@@ -195,10 +196,11 @@ def run_manufactured_solutions_test(test_input):
    output_message = ""
    for key, variable_set in plot_data.items():
       this_test_success = True
-      (xaxis, yaxis, fit, slope, offset) = variable_set
+      (xaxis, yaxis, fit, slope, offset, expected_slope) = variable_set
       # check slope of fit ~= 2
+      slope_min = 0.975*expected_slope
       if not slope is None:
-         if slope < 1.95:
+         if slope < slope_min:
                this_test_success = False
       else: # or permit near-zero errors, but nothing larger
          for error in yaxis:
@@ -206,9 +208,9 @@ def run_manufactured_solutions_test(test_input):
                   this_test_success = False
       # append test message and set global success variable
       if this_test_success:
-         output_message += f"{key} convergence order {slope:.2f} => Test passed \n"
+         output_message += f"{key} convergence order {slope:.2f} > {slope_min:.2f} => Test passed \n"
       else:
-         output_message += f"{key} convergence order {slope:.2f}  => Test failed \n"
+         output_message += f"{key} convergence order {slope:.2f} < {slope_min:.2f} => Test failed \n"
          success = False
 
    return success, output_message

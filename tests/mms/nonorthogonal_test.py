@@ -29,10 +29,12 @@ grad_par_f = grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, f)
 test_input = {
     "ntest" : 3, 
     "ngrid" : 20,
-    "differential_operator_list": [["Div_a_Grad_perp_nonorthog(a, f)", str(div_a_grad_perp_f)],
-                                   ["Div_par_K_Grad_par_mod(a, f)", str(div_par_k_grad_par_f)],
-                                   ["Div_par(f)", str(div_par_f)],
-                                   ["Grad_par(f)", str(grad_par_f)],
+    # list of list of ["name", symbolic function, expected convergence order]
+    "differential_operator_list": [["Div_a_Grad_perp_nonorthog(a, f)", str(div_a_grad_perp_f), 2],
+                                   ["Div_par_K_Grad_par_mod(a, f)", str(div_par_k_grad_par_f), 2],
+                                   ["Div_par(f)", str(div_par_f), 2],
+                                   ["FV::Div_par_fvv(f, v, wave_speed)", str(div_par_f), 1],
+                                   ["Grad_par(f)", str(grad_par_f), 2],
                                    ],
     "a_string": str(a),
     "f_string": str(f),
