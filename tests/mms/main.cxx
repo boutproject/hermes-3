@@ -6,6 +6,7 @@
 #include "bout/fv_ops.hxx"
 #include "bout/difops.hxx"
 #include "../include/div_ops.hxx"
+using ParLimiter = FV::Upwind;
 
 // Class used to store function of one argument
 // in operator list below
@@ -27,6 +28,12 @@ class nameandfunction3 {
 public:
   std::string name;
   std::function<Field3D(const Field3D&, const Field3D&, Field3D&)> func;
+};
+
+class nameandfunction3_mod {
+  public:
+    std::string name;
+    std::function<Field3D(const Field3D&, const Field3D&, const Field3D&)> func;
 };
 
 // Class used to store function of four arguments
@@ -62,6 +69,13 @@ const auto differential_operators_3_arg = {
   nameandfunction3{"Div_par_K_Grad_par_mod(a, f)",
                [](const Field3D &a, const Field3D &f, Field3D &flow_ylow) {
                  return Div_par_K_Grad_par_mod(a, f, flow_ylow, true);
+               }},
+};
+// List of tested operators of 3 arguments
+const auto differential_operators_3_arg_mod = {
+  nameandfunction3_mod{"FV::Div_par_fvv(f, v, wave_speed)",
+               [](const Field3D &f, const Field3D &v, const Field3D &wave_speed) {
+                 return FV::Div_par_fvv<ParLimiter>(f, v, wave_speed, true);
                }},
 };
 // List of tested operators of 4 arguments
@@ -116,6 +130,11 @@ int main(int argc, char** argv) {
   // diagnostic variables
   Field3D flow_xlow{mesh};
   Field3D flow_ylow{mesh};
+  // auxiliary variables
+  Field3D ones{mesh};
+  ones = 1.0;
+  Field3D zeros{mesh};
+  zeros = 0.0;
 
   for (int i = 0; i < n_operators; i++){
       std::string inputname = "differential_operator_name_"+std::to_string(i);
@@ -168,6 +187,20 @@ int main(int argc, char** argv) {
             dump[expectedname] = expected_result;
             // dump diagnostics
             dump[outname_flow_ylow] = flow_ylow;
+        }
+      }
+      for (const auto& difop: differential_operators_3_arg_mod) {
+        if (difop.name.compare(differential_operator_name) == 0){
+            // Get result of applying the named differential operator
+            Field3D result = difop.func(f, ones, zeros);
+            dump[outname] = result;
+            dump[outname].setAttributes({
+                  {"operator", difop.name},
+              });
+            // Get expected result from input file
+            Field3D expected_result{mesh};
+            mesh->get(expected_result, expectedname, 0.0, false);
+            dump[expectedname] = expected_result;
         }
       }
       for (const auto& difop: differential_operators_4_arg) {

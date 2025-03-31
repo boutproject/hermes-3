@@ -27,13 +27,14 @@ div_par_f = div_par_f_symbolic(g11, g12, g13, g22, g23, g33, f)
 grad_par_f = grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, f)
 
 test_input = {
-    "ntest" : 3, 
+    "ntest" : 5, 
     "ngrid" : 20,
     "differential_operator_list": [["FV::Div_a_Grad_perp(a, f)", str(div_a_grad_perp_f)],
                                    ["Div_a_Grad_perp_nonorthog(a, f)", str(div_a_grad_perp_f)],
                                    ["Div_a_Grad_perp_flows(a, f)", str(div_a_grad_perp_f)],
                                    ["Div_par_K_Grad_par_mod(a, f)", str(div_par_k_grad_par_f)],
                                    ["Div_par(f)", str(div_par_f)],
+                                   ["FV::Div_par_fvv(f, v, wave_speed)", str(div_par_f)],
                                    ["Grad_par(f)", str(grad_par_f)],
                                    ],
     "a_string": str(a),
@@ -45,7 +46,7 @@ test_input = {
     "g13_string": str(g13),
     "g23_string": str(g23),
     "test_dir" : "orthogonal",
-    "interactive_plots" : False
+    "interactive_plots" : True
 }
 
 success, output_message = run_manufactured_solutions_test(test_input)
