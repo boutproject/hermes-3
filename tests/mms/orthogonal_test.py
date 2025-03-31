@@ -36,6 +36,7 @@ test_input = {
                                    ["Div_par_K_Grad_par_mod(a, f)", str(div_par_k_grad_par_f), 2],
                                    ["Div_par(f)", str(div_par_f), 2],
                                    ["FV::Div_par_fvv(f, v, wave_speed)", str(div_par_f), 1],
+                                   ["FV::Div_par_mod(f, v, wave_speed)", str(div_par_f), 1],
                                    ["Grad_par(f)", str(grad_par_f), 2],
                                    ],
     "a_string": str(a),

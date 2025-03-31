@@ -36,6 +36,12 @@ class nameandfunction3_mod {
     std::function<Field3D(const Field3D&, const Field3D&, const Field3D&)> func;
 };
 
+class nameandfunction3_mod_diagnose {
+  public:
+    std::string name;
+    std::function<Field3D(const Field3D&, const Field3D&, const Field3D&, Field3D&)> func;
+};
+
 // Class used to store function of four arguments
 // in operator list below. Second pair of arguments are
 // internal diagnostics to the function
@@ -76,6 +82,13 @@ const auto differential_operators_3_arg_mod = {
   nameandfunction3_mod{"FV::Div_par_fvv(f, v, wave_speed)",
                [](const Field3D &f, const Field3D &v, const Field3D &wave_speed) {
                  return FV::Div_par_fvv<ParLimiter>(f, v, wave_speed, true);
+               }},
+};
+// List of tested operators of 3 arguments with a diagnostic
+const auto differential_operators_3_arg_mod_diagnose = {
+  nameandfunction3_mod_diagnose{"FV::Div_par_mod(f, v, wave_speed)",
+               [](const Field3D &f, const Field3D &v, const Field3D &wave_speed, Field3D &flow_ylow) {
+                 return FV::Div_par_mod<ParLimiter>(f, v, wave_speed, flow_ylow, true);
                }},
 };
 // List of tested operators of 4 arguments
@@ -201,6 +214,22 @@ int main(int argc, char** argv) {
             Field3D expected_result{mesh};
             mesh->get(expected_result, expectedname, 0.0, false);
             dump[expectedname] = expected_result;
+        }
+      }
+      for (const auto& difop: differential_operators_3_arg_mod_diagnose) {
+        if (difop.name.compare(differential_operator_name) == 0){
+            // Get result of applying the named differential operator
+            Field3D result = difop.func(f, ones, zeros, flow_ylow);
+            dump[outname] = result;
+            dump[outname].setAttributes({
+                  {"operator", difop.name},
+              });
+            // Get expected result from input file
+            Field3D expected_result{mesh};
+            mesh->get(expected_result, expectedname, 0.0, false);
+            dump[expectedname] = expected_result;
+            // dump diagnostics
+            dump[outname_flow_ylow] = flow_ylow;
         }
       }
       for (const auto& difop: differential_operators_4_arg) {
