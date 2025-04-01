@@ -52,7 +52,7 @@ source_Pn = -ddt_Pn
 
 test_input = {
     "ntest" : 3, 
-    "ngrid" : 5,
+    "ngrid" : 20,
     "g11_string": str(g11),
     "g22_string": str(g22),
     "g33_string": str(g33),
