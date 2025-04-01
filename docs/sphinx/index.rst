@@ -14,7 +14,6 @@ Welcome to Hermes-3 documentation!
    examples
    tests
    transport_2d
-   tokamak_turbulence
    code_structure
    components
    numerical_methods
