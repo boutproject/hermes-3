@@ -21,12 +21,30 @@ Note that many will likely work with no modifications.
 1D Field line
 -----------------------
 
+In 1D, Hermes-3 follows a single flux tube, typically from midplane to target.
+The code inherits a lot of capability and convention from the code `SD1D
+<https://github.com/boutproject/SD1D/>`_ - see `Dudson 2019
+<https://iopscience.iop.org/article/10.1088/1361-6587/ab1321/meta>`_. for a good description
+of the equations and capabilities. Note that SD1D features a "plasma" pressure equation, 
+combining the ion and electron pressures, which are separate in Hermes-3.
+
+There is an `xHermes 1D post-processing example
+<https://github.com/boutproject/xhermes/blob/main/examples/1d-postprocessing.ipynb>`_
+to guide you through results analysis.
+
+For published Hermes-1D applications, see `Body 2024 
+<https://www.sciencedirect.com/science/article/pii/S2352179124002424>`_
+and `Holt 2024 <https://iopscience.iop.org/article/10.1088/1741-4326/ad4f9e/meta>`_. 
+
+
+
+
+
 .. _1D-threshold:
 
 1D-threshold
 ~~~~~~
 
-This is the 
 This simulates a similar setup to the `SD1D
 <https://github.com/boutproject/SD1D/>`_ code: A 1D domain, with a
 source of heat and particles on one side, and a sheath boundary on the
@@ -34,8 +52,8 @@ other. Ions recycle into neutrals, which charge exchange and are
 ionised.  A difference is that separate ion and electron temperatures
 are evolved here.
 
-.. figure:: figs/1d_threshold.*
-   :name: 1d_threshold
+.. figure:: figs/1d_threshold.gif
+   :name: 1d_threshold_fig
    :alt:
    :width: 60%
 
@@ -90,16 +108,6 @@ The reactions component is a group, which lists the reactions included:
            d+ + e -> d,          # Deuterium recombination
            d + d+ -> d+ + d,   # Charge exchange
           )
-
-To run this example:
-
-.. code-block:: bash
-
-   nice -n 10 ./hermes-3 -d examples/1D-recycling
-
-This should take 5-10 minutes to run. There is a `makeplots.py` script in the
-`examples/1D-recycling` directory which will generate plots and a gif animation
-(if `ImageMagick <https://imagemagick.org/index.php>`_ is installed).
 
 
 .. 
