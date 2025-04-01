@@ -10,6 +10,7 @@ Welcome to Hermes-3 documentation!
    introduction
    installation
    inputs
+   execution_postprocessing
    examples
    tests
    transport_2d
