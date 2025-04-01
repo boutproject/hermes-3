@@ -26,7 +26,7 @@ g13 = 0.0
 # mass 
 AA = 2
 # collision frequency
-nu_cfreq = 1.0
+nu_cfreq = 10.0
 # Manufactured solutions
 Nn = 0.5 + 0.1*(x**2)*sin(y)*sin(z)
 NVn = 0.0
@@ -34,7 +34,7 @@ Vn = NVn/(Nn*AA)
 Pn = 1.0 + 0.5*(x**2)*sin(2*y)*sin(2*z)
 Tn = Pn/Nn
 logPn = log(Pn)
-Dn = nu_cfreq*Tn/AA
+Dn = (Tn/AA)/nu_cfreq
 Kn = (5.0/2.0)*Nn*Dn
 # time evolution equations without sources
 ddt_Nn = (# -div_par_f_symbolic(g11, g12, g13, g22, g23, g33, Nn*Vn)
@@ -53,6 +53,7 @@ source_Pn = -ddt_Pn
 test_input = {
     "ntest" : 3, 
     "ngrid" : 20,
+    "collision_frequency" : nu_cfreq,
     "g11_string": str(g11),
     "g22_string": str(g22),
     "g33_string": str(g33),

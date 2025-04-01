@@ -88,6 +88,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(true);
 
+  rnn_override = options["rnn_override"]
+                    .doc("Paramter for overriding the neutral collision frequency in Dn for testing")
+                    .withDefault(-1.0);
+
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
 
@@ -283,14 +287,17 @@ void NeutralMixed::finally(const Options& state) {
 
   Field3D Rnn =
     sqrt(floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
-
-  if (localstate.isSet("collision_frequency")) {
-    // Dnn = Vth^2 / sigma
-    Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+  if (rnn_override > 0.0) { 
+    // user has set an override for collision frequency
+    Dnn = (Tn / AA) / rnn_override;
   } else {
-    Dnn = (Tn / AA) / Rnn;
+    if (localstate.isSet("collision_frequency")) {
+      // Dnn = Vth^2 / sigma
+      Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+    } else {
+      Dnn = (Tn / AA) / Rnn;
+    }
   }
-
   if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude

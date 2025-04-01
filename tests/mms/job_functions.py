@@ -223,6 +223,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    # the number of points in the ith test is ngrid*i
    nnbase = test_input["ngrid"]
    # list of [name, symbolic string, expected convergence order]
+   nu_cfreq = test_input["collision_frequency"]
    Nd_string = test_input["Nd_string"]
    Pd_string = test_input["Pd_string"]
    source_Nd_string = test_input["source_Nd_string"]
@@ -290,6 +291,10 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    evolve_momentum = false
    precondition = true
    diagnose = true
+   rnn_override = {nu_cfreq}
+   flux_limit = -1.0
+   diffusion_limit = -1.0
+   lax_flux = false
    [Nd]
 
    function = {Nd_string}
