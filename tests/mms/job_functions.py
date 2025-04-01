@@ -311,101 +311,106 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
 
    # now analyse the results of the test
    # this slice avoids including guard cells in the test
+   # need to select last time point
    # need guard cells in x (assume 2 here) and guard cells in y (assume 1)
    # no guard cells in z
-   # s = slice(2, -2), slice(1, -1), slice(None)
+   s = slice(1, 2), slice(2, -2), slice(1, -1), slice(None)
 
-   # # a dictionary of plot data, filled later on
-   # plot_data = dict()
+   # a dictionary of plot data, filled later on
+   plot_data = dict()
 
-   # # open the series of "workdir/BOUT.0.nc" files, 
-   # # saving them in a list `datasets`
-   # datasets = []
-   # for workdir in workdirs:
-   #    boutmeshpath = workdir+"/"+f'BOUT.0.nc'
-   #    boutinppath = workdir+"/"+'BOUT.inp'
-   #    datasets.append(open_boutdataset(boutmeshpath, inputfilepath=boutinppath, keep_yboundaries=False))
-
-   # # make a easy scan over the two operators, generalisation to N operators possible
-   # for i, values in enumerate(differential_operator_test_list):
-   #    label = values[0]
-   #    expected_slope = values[2]
-   #    l2norm = []
-   #    nylist = []
-   #    dylist = []
-   #    for m in range(0,ntest):
-   #       numerical = collectvar(datasets, f"result_{i}", m)
-   #       expected = collectvar(datasets, f"expected_result_{i}", m)
-   #       xx = collectvar(datasets, "x_input", m)
-   #       yy = collectvar(datasets, "y_input", m)
-   #       zz = collectvar(datasets, "z_input", m)
-   #       ff = collectvar(datasets, "f", m)
-   #       aa = collectvar(datasets, "a", m)
-      
-   #       error_values = (numerical - expected)[s]
-   #       thisl2 = np.sqrt(np.mean(error_values**2))
-   #       l2norm.append(thisl2)
-   #       nylist.append(yy.shape[1])
-   #       # proxy for grid spacing
-   #       dylist.append(1.0/yy.shape[1])
+   # open the series of "workdir/BOUT.0.nc" files, 
+   # saving them in a list `datasets`
+   datasets = []
+   for workdir in workdirs:
+      boutmeshpath = workdir+"/"+f'BOUT.dmp.0.nc'
+      boutinppath = workdir+"/"+'BOUT.inp'
+      datasets.append(open_boutdataset(boutmeshpath, inputfilepath=boutinppath, keep_yboundaries=False))
+   #for dataset in datasets:
+   #   keys = dataset.keys()
+   #   for key in keys:
+   #      print(key)     
+   # make a easy scan over the two operators, generalisation to N operators possible
+   
+   for varstring in ["ddt(Nd)", "ddt(Pd)"]:
+      label = varstring
+      expected_slope = 2.0
+      l2norm = []
+      nylist = []
+      dylist = []
+      for m in range(0,ntest):
+         #print(varstring)
+         numerical = collectvar(datasets, varstring, m)
+         error_values = (numerical)[s]
+         #print("values", error_values.values)
+         #print("data" , error_values.data)
+         #print("shape" , error_values.shape)
+         thisl2 = np.sqrt(np.mean(error_values**2))
+         #print("thisl2",thisl2)
+         l2norm.append(thisl2)
+         nylist.append(numerical.shape[1])
+         # proxy for grid spacing
+         dylist.append(1.0/numerical.shape[1])
                
-   #    # cast lists as numpy arrays for further manipulation
-   #    l2norm = np.array(l2norm)
-   #    #print("test error: ",l2norm)
-   #    nylist = np.array(nylist)
-   #    dylist = np.array(dylist)
+      # cast lists as numpy arrays for further manipulation
+      print(varstring)
+      l2norm = np.array(l2norm)
+      print("test error: ",l2norm)
+      nylist = np.array(nylist)
+      dylist = np.array(dylist)
+      print("dylist: ",dylist)
       
-   #    # find linear fit coefficients to test convergence rate
-   #    # and construct fit function for plotting
-   #    try:
-   #       logl2norm = np.log(l2norm)
-   #       logdylist = np.log(dylist)
-   #       outvals = curve_fit(lin_func,logdylist,logl2norm)
-   #       coeffs = outvals[0]
-   #       slope = coeffs[0] # the convergence order
-   #       offset = coeffs[1]
-   #       logfit = slope*logdylist + offset
-   #       fitfunc = np.exp(logfit)
-   #    except ValueError:
-   #       print("Infs/Nans encountered in fit, skipping")
-   #       slope = None
-   #       offset = None
-   #       fitfunc = None
+      # find linear fit coefficients to test convergence rate
+      # and construct fit function for plotting
+      try:
+         logl2norm = np.log(l2norm)
+         logdylist = np.log(dylist)
+         outvals = curve_fit(lin_func,logdylist,logl2norm)
+         coeffs = outvals[0]
+         slope = coeffs[0] # the convergence order
+         offset = coeffs[1]
+         logfit = slope*logdylist + offset
+         fitfunc = np.exp(logfit)
+      except ValueError:
+         print("Infs/Nans encountered in fit, skipping")
+         slope = None
+         offset = None
+         fitfunc = None
       
-   #    # record results in dictionary and plot
-   #    #label = attrs["operator"] + " : f = " + attrs["inp"]
-   #    #label = "FV::Div_a_Grad_perp(a, f)"
-   #    plot_data[label] = [dylist, l2norm, fitfunc, slope, offset, expected_slope]
+      # record results in dictionary and plot
+      #label = attrs["operator"] + " : f = " + attrs["inp"]
+      #label = "FV::Div_a_Grad_perp(a, f)"
+      plot_data[label] = [dylist, l2norm, fitfunc, slope, offset, expected_slope]
 
-   # # plot the results
-   # try:
-   #    import matplotlib.pyplot as plt
-   #    ifig = 0
-   #    for key, variable_set in plot_data.items():
-   #       (xaxis, yaxis, fit, slope, offset, expected_slope) = variable_set
-   #       plt.figure()
-   #       plt.plot(xaxis, yaxis, "x-", label="$\\epsilon(\\mathcal{L}\\ast f)$: "+key)
-   #       plt.plot(xaxis, yaxis[0]*(xaxis/xaxis[0])**expected_slope, "x-", label="$\\propto \\Delta^{{{:.2f}}}$".format(expected_slope))
-   #       if not fit is None:
-   #             plt.plot(xaxis, fit, "x-", label="$e^{{{:.2f}}}\\Delta^{{{:.2f}}}$".format(offset,slope))
-   #       plt.xlabel("$\\Delta = 1/N_y$")
-   #       plt.title(key)
-   #       plt.legend()
-   #       if not fit is None:
-   #             plt.gca().set_yscale("log")
-   #             plt.gca().set_xscale("log")
-   #       else:
-   #             print("l2 error: ",yaxis)
-   #       plt.savefig(f"{base_test_dir}/fig_{ifig}.png")
-   #       if interactive_plots:
-   #           plt.show()
-   #       plt.close()
-   #       ifig+=1
-   # except:
-   # # Plotting could fail for any number of reasons, and the actual
-   # # error raised may depend on, among other things, the current
-   # # matplotlib backend, so catch everything
-   #    pass
+   # plot the results
+   try:
+      import matplotlib.pyplot as plt
+      ifig = 0
+      for key, variable_set in plot_data.items():
+         (xaxis, yaxis, fit, slope, offset, expected_slope) = variable_set
+         plt.figure()
+         plt.plot(xaxis, yaxis, "x-", label="$\\epsilon$ "+key)
+         plt.plot(xaxis, yaxis[0]*(xaxis/xaxis[0])**expected_slope, "x-", label="$\\propto \\Delta^{{{:.2f}}}$".format(expected_slope))
+         if not fit is None:
+               plt.plot(xaxis, fit, "x-", label="$e^{{{:.2f}}}\\Delta^{{{:.2f}}}$".format(offset,slope))
+         plt.xlabel("$\\Delta = 1/N_y$")
+         plt.title(key)
+         plt.legend()
+         if not fit is None:
+               plt.gca().set_yscale("log")
+               plt.gca().set_xscale("log")
+         else:
+               print("l2 error: ",yaxis)
+         plt.savefig(f"{base_test_dir}/fig_{ifig}.png")
+         if interactive_plots:
+             plt.show()
+         plt.close()
+         ifig+=1
+   except:
+   # Plotting could fail for any number of reasons, and the actual
+   # error raised may depend on, among other things, the current
+   # matplotlib backend, so catch everything
+      pass
 
    # # test the convergence rates
    # success = True

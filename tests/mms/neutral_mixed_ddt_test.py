@@ -51,8 +51,8 @@ source_Nn = -ddt_Nn
 source_Pn = -ddt_Pn
 
 test_input = {
-    "ntest" : 1, 
-    "ngrid" : 20,
+    "ntest" : 3, 
+    "ngrid" : 5,
     "g11_string": str(g11),
     "g22_string": str(g22),
     "g33_string": str(g33),
@@ -64,7 +64,7 @@ test_input = {
     "source_Nd_string" : str(source_Nn),
     "source_Pd_string" : str(source_Pn),
     "test_dir" : "neutral_mixed",
-    "interactive_plots" : False
+    "interactive_plots" : True
 }
 
 run_neutral_mixed_manufactured_solutions_test(test_input)
