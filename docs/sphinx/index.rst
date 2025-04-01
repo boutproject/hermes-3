@@ -12,9 +12,8 @@ Welcome to Hermes-3 documentation!
    inputs
    execution_postprocessing
    examples
+   solver_numerics
    tests
-   transport_2d
    code_structure
    components
-   numerical_methods
    detachment_controller

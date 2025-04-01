@@ -91,6 +91,11 @@ Guard cells
 Grid redistribution and interpolation
 ~~~~~~~~~~~~~~
 
+A useful strategy is to start with a low resolution grid, run until
+close to steady-state, then interpolate the solution onto a finer mesh
+and restart. This process can be repeated as a kind of simplified
+multigrid method.
+
 
 Using grids to pass inputs to Hermes-3
 ~~~~~~~~~~~~~~
