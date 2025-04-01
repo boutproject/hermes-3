@@ -8,8 +8,7 @@ Welcome to Hermes-3 documentation!
    :name: contents
 
    introduction
-   installation_using_cmake
-   installation_using_spack
+   installation
    inputs
    examples
    tests
