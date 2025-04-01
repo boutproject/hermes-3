@@ -191,10 +191,31 @@ The divergence of the flux, and so the rate of change of :math:`f` in cell
 
    \nabla\cdot\left(\mathbf{b} f v_{||}\right)_{i} = \frac{1}{V_i}\left[\frac{A_{i} + A_{i+1}}{2}\Gamma_{f, i+1/2} - \frac{A_{i-1} + A_{i}}{2}\Gamma_{f, i-1/2}\right]
 
-Controlling Lax flux strength
+Controlling Lax flux strength with sound_speed
 ~~~~~~~~~~
 
-See the ``sound_speed`` component.
+.. _sound_speed:
+
+**sound_speed**
+
+By default, the Lax flux strength is calculated based on the sound speed
+of each species individually. This component calculates the collective sound speed
+by summing the pressure of all species and dividing by the sum of the mass density 
+of all species:
+
+.. math::
+   
+   c_s = \sqrt{\sum_i P_i / \sum_i m_in_i}
+
+This is set in the state as `sound_speed`. It is highly recommended to use 
+this when evolving electron momentum, as the electrons will represent the fastest
+sound speed in the system, increasing the amount of numerical damping from the Lax flux.
+This is enabled by default.
+
+NOTE:
+   When using this component **without** electron momentum being evolved,
+   set ``electron_dynamics = false`` in the ``[sound_speed]`` section to prevent
+   the electron timescale from being applied, or you will have too much damping.
 
 Boundaries
 ~~~~~~~~~~

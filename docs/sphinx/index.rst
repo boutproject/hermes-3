@@ -13,7 +13,11 @@ Welcome to Hermes-3 documentation!
    execution_postprocessing
    examples
    solver_numerics
+   equations
+   boundary_conditions
+   reactions
+   closure
+   feedback_control
    tests
    code_structure
-   components
    detachment_controller
