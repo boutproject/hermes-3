@@ -32,7 +32,3 @@ And finally compile the html docs with Sphinx:
 
 Where "sphinx" and "build" are the source and build directories, respectively.
 
-You'll also need something like pdflatex to build the LaTeX into a PDF. Then run
-
-    make pdf
-
