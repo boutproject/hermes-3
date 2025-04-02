@@ -1,4 +1,4 @@
-.. _sec-components:
+.. _sec-equations:
 
 Equations
 ==========
