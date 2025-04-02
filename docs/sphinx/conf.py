@@ -157,7 +157,7 @@ html_theme = 'sphinx_book_theme'
 #
 html_theme_options = {
     # Expand RHS menu
-    'show_toc_level': 4,
+    'show_toc_level': 2,
     
     # RHS menu title
     'toc_title': 'Contents',
