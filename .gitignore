@@ -8,3 +8,5 @@ BOUT.settings
 .DS_Store
 /build*
 /docs/build/*
+/docs/doxygen/*
+/docs/sphinx/_breathe*
