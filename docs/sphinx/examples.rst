@@ -3,104 +3,47 @@
 Examples
 ========
 
+Hermes-3 contains a large number of example simulations, with only a selection
+shown here. Please refer to the ``examples`` directory for more.
 
-1D flux-tube
-------------
+As the development of the code has progressed rapidly, it has been difficult
+To keep all of the examples up to date and not all are guaranteed to represent
+the most optimal setup.
 
-These simulations follow the dynamics of one or more species along the
-magnetic field. By putting a source at one end of the domain, and a
-sheath at the other, this can be a useful model of plasma dynamics in
-the Scrape-Off Layer (SOL) of a tokamak or other magnetised plasma.
+A review is currently in process to select a few of the most useful examples
+and keep them up to date regularly, with the remaining examples being updated
+in the future.
 
-1D periodic domain, Te and Ti
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+So far, only 1D example cases received this treatment, resulting in a new,
+updated example ``1D-threshold`` and the remaining 1D cases moved to ``examples/1D-tokamak/extra``.
+Note that many will likely work with no modifications.
 
-A fluid is evolved in 1D, imposing quasineutrality and zero net current.
-Both electron and ion pressures are evolved, but there is no exchange
-of energy between them, or heat conduction.
+1D Field line
+-----------------------
 
-.. figure:: figs/1d_te_ti.*
-   :name: 1d_te_ti
-   :alt:
-   :width: 60%
-   
-   Evolution of pressure, starting from a top hat. Input in ``examples/1D-te-ti``.
+In 1D, Hermes-3 follows a single flux tube, typically from midplane to target.
+The code inherits a lot of capability and convention from the code `SD1D
+<https://github.com/boutproject/SD1D/>`_ - see `Dudson 2019
+<https://iopscience.iop.org/article/10.1088/1361-6587/ab1321/meta>`_. for a good description
+of the equations and capabilities. Note that SD1D features a "plasma" pressure equation, 
+combining the ion and electron pressures, which are separate in Hermes-3.
 
-To run this example:
+There is an `xHermes 1D post-processing example
+<https://github.com/boutproject/xhermes/blob/main/examples/1d-postprocessing.ipynb>`_
+to guide you through results analysis.
 
-.. code-block:: bash
-
-   ./hermes-3 -d examples/1D-te-ti
-
-Which takes a few seconds to run on a single core. Then in the
-``examples/1D-te-ti`` directory run the analysis script
-
-.. code-block:: bash
-
-   python3 makeplot.py
-
-That should generate png files and an animated gif if ImageMagick is
-installed (the ``convert`` program). If an error like
-``ModuleNotFoundError: No module named 'boutdata'`` occurs, then
-install the ``boutdata`` package with ``python3 -m pip install
-boutdata``.
-
-The model components are ions (i) and electrons (e), and a component
-which uses the force on the electrons to calculate the parallel electric field,
-which transfers the force to the ions.
-
-.. code-block:: ini
-
-   [hermes]
-   components = i, e, electron_force_balance
+For published Hermes-1D applications, see `Body 2024 
+<https://www.sciencedirect.com/science/article/pii/S2352179124002424>`_
+and `Holt 2024 <https://iopscience.iop.org/article/10.1088/1741-4326/ad4f9e/meta>`_. 
 
 
-The ion density, pressure and momentum equations are evolved:
 
-.. code-block:: ini
 
-   [i]  # Ions
-   type = evolve_density, evolve_pressure, evolve_momentum
 
-which solves the equations
+.. _1D-threshold:
 
-.. math::
-
-   \begin{aligned}
-   \frac{\partial n_i}{\partial t} =& -\nabla\cdot\left(n_i\mathbf{b}v_{||i}\right) \\
-   \frac{\partial p_i}{\partial t} =& -\nabla\cdot\left(p_i\mathbf{b}v_{||i}\right) - \frac{2}{3}p_i\nabla\cdot\left(\mathbf{b}v_{||i}\right) \\
-   \frac{\partial}{\partial t}\left(n_iv_{||i}\right) =& -\nabla\cdot\left(n_iv_{||i} \mathbf{b}v_{||i}\right) - \partial_{||}p_i + E
-   \end{aligned}
-
-The electron density is set to the ion density by quasineutrality, the
-parallel velocity is set by a zero current condition, and only the
-electron pressure is evolved.
-
-.. code-block:: ini
-
-   [e] # Electrons
-   type = quasineutral, zero_current, evolve_pressure
-
-which adds the equations:
-
-.. math::
-
-   \begin{aligned}
-   n_e =& n_i \\
-   \frac{\partial p_e}{\partial t} =& -\nabla\cdot\left(p_e\mathbf{b}v_{||e}\right) - \frac{2}{3}p_e\nabla\cdot\left(\mathbf{b}v_{||e}\right)
-   \end{aligned}
-
-The :ref:`zero_current` component sets:
-
-.. math::
-
-   \begin{aligned}
-   E =& -\partial_{||}p_e \\
-   v_{||e} =& v_{||i}
-   \end{aligned}
-
-1D Scrape-off Layer (SOL)
-~~~~~~~~~~~~~~~~~~~~~~~~~
+1D-threshold
+~~~~~~
 
 This simulates a similar setup to the `SD1D
 <https://github.com/boutproject/SD1D/>`_ code: A 1D domain, with a
@@ -109,8 +52,8 @@ other. Ions recycle into neutrals, which charge exchange and are
 ionised.  A difference is that separate ion and electron temperatures
 are evolved here.
 
-.. figure:: figs/1d_recycling.*
-   :name: 1d_recycling
+.. figure:: figs/1d_threshold.gif
+   :name: 1d_threshold_fig
    :alt:
    :width: 60%
 
@@ -135,14 +78,16 @@ The components are ion species `d+`, atoms `d`, electrons `e`:
 
    [hermes]
    components = (d+, d, e,
-                zero_current, sheath_boundary, collisions, recycling, reactions,
-                neutral_parallel_diffusion)
+              sheath_boundary_simple, collisions, recycling, reactions,
+              electron_force_balance, neutral_parallel_diffusion)
 
 The electron velocity is set to the ion by specifying :ref:`zero_current`;
 A sheath boundary is included; Collisions are needed to be able to calculate
 heat conduction, as well as neutral diffusion rates; Recycling at the targets
 provides a source of atoms; :ref:`neutral_parallel_diffusion` simulates cross-field
-diffusion in a 1D system.
+diffusion in a 1D system. The electron force balance links electron pressure gradient
+with the ion momentum equation. Please see the relevant documentation pages about these
+components for further information.
 
 The sheath boundary is only imposed on the upper Y boundary:
 
@@ -160,26 +105,110 @@ The reactions component is a group, which lists the reactions included:
    [reactions]
    type = (
            d + e -> d+ + 2e,   # Deuterium ionisation
+           d+ + e -> d,          # Deuterium recombination
            d + d+ -> d+ + d,   # Charge exchange
           )
 
-To run this example:
 
-.. code-block:: bash
+.. 
+   1D-te-ti
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-   nice -n 10 ./hermes-3 -d examples/1D-recycling
+   A fluid is evolved in 1D, imposing quasineutrality and zero net current.
+   Both electron and ion pressures are evolved, but there is no exchange
+   of energy between them, or heat conduction.
 
-This should take 5-10 minutes to run. There is a `makeplots.py` script in the
-`examples/1D-recycling` directory which will generate plots and a gif animation
-(if `ImageMagick <https://imagemagick.org/index.php>`_ is installed).
+   .. figure:: figs/1d_te_ti.*
+      :name: 1d_te_ti
+      :alt:
+      :width: 60%
+      
+      Evolution of pressure, starting from a top hat. Input in ``examples/1D-te-ti``.
 
-2D drift-plane
+   To run this example:
+
+   .. code-block:: bash
+
+      ./hermes-3 -d examples/1D-te-ti
+
+   Which takes a few seconds to run on a single core. Then in the
+   ``examples/1D-te-ti`` directory run the analysis script
+
+   .. code-block:: bash
+
+      python3 makeplot.py
+
+   That should generate png files and an animated gif if ImageMagick is
+   installed (the ``convert`` program). If an error like
+   ``ModuleNotFoundError: No module named 'boutdata'`` occurs, then
+   install the ``boutdata`` package with ``python3 -m pip install
+   boutdata``.
+
+   The model components are ions (i) and electrons (e), and a component
+   which uses the force on the electrons to calculate the parallel electric field,
+   which transfers the force to the ions.
+
+   .. code-block:: ini
+
+      [hermes]
+      components = i, e, electron_force_balance
+
+
+   The ion density, pressure and momentum equations are evolved:
+
+   .. code-block:: ini
+
+      [i]  # Ions
+      type = evolve_density, evolve_pressure, evolve_momentum
+
+   which solves the equations
+
+   .. math::
+
+      \begin{aligned}
+      \frac{\partial n_i}{\partial t} =& -\nabla\cdot\left(n_i\mathbf{b}v_{||i}\right) \\
+      \frac{\partial p_i}{\partial t} =& -\nabla\cdot\left(p_i\mathbf{b}v_{||i}\right) - \frac{2}{3}p_i\nabla\cdot\left(\mathbf{b}v_{||i}\right) \\
+      \frac{\partial}{\partial t}\left(n_iv_{||i}\right) =& -\nabla\cdot\left(n_iv_{||i} \mathbf{b}v_{||i}\right) - \partial_{||}p_i + E
+      \end{aligned}
+
+   The electron density is set to the ion density by quasineutrality, the
+   parallel velocity is set by a zero current condition, and only the
+   electron pressure is evolved.
+
+   .. code-block:: ini
+
+      [e] # Electrons
+      type = quasineutral, zero_current, evolve_pressure
+
+   which adds the equations:
+
+   .. math::
+
+      \begin{aligned}
+      n_e =& n_i \\
+      \frac{\partial p_e}{\partial t} =& -\nabla\cdot\left(p_e\mathbf{b}v_{||e}\right) - \frac{2}{3}p_e\nabla\cdot\left(\mathbf{b}v_{||e}\right)
+      \end{aligned}
+
+   The :ref:`zero_current` component sets:
+
+   .. math::
+
+      \begin{aligned}
+      E =& -\partial_{||}p_e \\
+      v_{||e} =& v_{||i}
+      \end{aligned}
+
+
+2D Drift-plane
 --------------
 
 Simulations where the dynamics along the magnetic field is not
 included, or only included in a parameterised way as sources or
-sinks. These are useful for the study of the basic physics of plasma
-"blobs" / filaments, and tokamak edge turbulence.
+sinks. The field line direction is then "into the page", and the
+domain represents a slice somewhere along the field line, e.g. 
+at the midplane.
+ These are useful for the study of the basic physics of plasma
+"blobs" / filaments, and tokamak edge turbulence. 
 
 .. _Blob2d:
 
@@ -414,7 +443,7 @@ the best choices, especially for cases with multiple ion species; they were
 chosen as being simple to implement by John Omotani in May 2022.
 
 
-2D axisymmetric tokamak
+2D Axisymmetric SOL
 -----------------------
 
 These are transport simulations, where the cross-field transport is given
