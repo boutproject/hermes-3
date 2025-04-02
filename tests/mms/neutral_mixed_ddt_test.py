@@ -28,10 +28,10 @@ AA = 2
 # collision frequency
 nu_cfreq = 10.0
 # Manufactured solutions
-Nn = 0.5 + 0.1*(x**2)*sin(y)*sin(z)
+Nn = 0.5 + 0.1*(x**2)*sin(y) #*sin(z)
 NVn = 0.0
 Vn = NVn/(Nn*AA)
-Pn = 1.0 + 0.5*(x**2)*sin(2*y)*sin(2*z)
+Pn = 1.0 + 0.5*(x**2)*sin(2*y) #*sin(2*z)
 Tn = Pn/Nn
 logPn = log(Pn)
 Dn = (Tn/AA)/nu_cfreq

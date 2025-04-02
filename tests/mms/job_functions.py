@@ -268,8 +268,8 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    dx = {ddx}
    ny = {nn}
    dy = {dd}
-   nz = {nn}
-   dz = {dd}
+   nz = {1}
+   dz = {1.0}
 
    g11 = {g11_str}
    g22 = {g22_str}
