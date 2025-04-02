@@ -94,6 +94,9 @@ fixed_fraction_ions
 
 This sets the density of a species to a fraction of the electron density.
 
+.. doxygenstruct:: FixedFractionIons
+   :members:
+
 .. _quasineutral:
 
 quasineutral
@@ -104,6 +107,8 @@ charge density is zero everywhere. This must therefore be done after
 all other charged species densities have been calculated. It only
 makes sense to use this component for species with a non-zero charge.
 
+.. doxygenstruct:: Quasineutral
+   :members:
 
 Species pressure and temperature
 --------------------------------
@@ -324,6 +329,8 @@ using flows already calculated for other species. It is used like `quasineutral`
 
    charge = -1 # Species must have a charge
 
+.. doxygenstruct:: ZeroCurrent
+   :members:
 
 electron_force_balance
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -667,6 +674,8 @@ In an additional effort to limit the diffusivitiy to more physical values, a flu
 This formulation is equivalent to defining a :math:`D_n` with a free streaming velocity while accounting for the pseudo collisionality due 
 to the maximum vessel mean free path :math:`l_{max}`. The flux limiter :math:`f_l` is set to 1.0 by default.
 
+.. doxygenstruct:: NeutralMixed
+   :members:
 
 Drifts and transport
 --------------------
