@@ -320,7 +320,10 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    # need guard cells in x (assume 2 here) and guard cells in y (assume 1)
    # no guard cells in z
    s = slice(1, 2), slice(2, -2), slice(1, -1), slice(None)
-
+   sxyz = slice(2, -2), slice(1, -1), slice(None)
+   sx = slice(2, -2)
+   sy = slice(1, -1)
+   sz = slice(None)
    # a dictionary of plot data, filled later on
    plot_data = dict()
 
@@ -337,7 +340,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    #      print(key)     
    # make a easy scan over the two operators, generalisation to N operators possible
    
-   for varstring in ["ddt(Nd)", "ddt(Pd)"]:
+   for varstring in ["ddt(Nd)", "ddt(Pd)", "Nd", "Pd"]:
       label = varstring
       expected_slope = 2.0
       l2norm = []
@@ -346,10 +349,14 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
       for m in range(0,ntest):
          #print(varstring)
          numerical = collectvar(datasets, varstring, m)
-         error_values = (numerical)[s]
-         #print("values", error_values.values)
-         #print("data" , error_values.data)
-         #print("shape" , error_values.shape)
+         if label[0:3] == "ddt":
+            error_values = (numerical)[s]
+         else:
+            error_values = numerical[-1,sx,sy,sz] - numerical[0,sx,sy,sz]
+         # error_values = numerical[0,sx,sy,sz]
+         # print("values", error_values.values)
+         # print("data" , error_values.data)
+         # print("shape" , error_values.shape)
          thisl2 = np.sqrt(np.mean(error_values**2))
          #print("thisl2",thisl2)
          l2norm.append(thisl2)
