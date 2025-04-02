@@ -234,6 +234,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    g12_str = test_input["g12_string"]
    g13_str = test_input["g13_string"]
    g23_str = test_input["g23_string"]
+   neutral_conduction = test_input["neutral_conduction"]
    base_test_dir = test_input["test_dir"]
    interactive_plots = test_input["interactive_plots"]
 
@@ -295,6 +296,8 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    flux_limit = -1.0
    diffusion_limit = -1.0
    lax_flux = false
+   density_floor = 1.0e-15
+   neutral_conduction = {neutral_conduction}
    [Nd]
 
    function = {Nd_string}

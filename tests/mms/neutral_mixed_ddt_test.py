@@ -26,7 +26,7 @@ g13 = 0.0
 # mass 
 AA = 2
 # collision frequency
-nu_cfreq = 10.0
+nu_cfreq = 1.0
 # Manufactured solutions
 Nn = 0.5 + 0.1*(x**2)*sin(y) #*sin(z)
 NVn = 0.0
@@ -36,13 +36,17 @@ Tn = Pn/Nn
 logPn = log(Pn)
 Dn = (Tn/AA)/nu_cfreq
 Kn = (5.0/2.0)*Nn*Dn
+neutral_conduction = False
 # time evolution equations without sources
 ddt_Nn = (# -div_par_f_symbolic(g11, g12, g13, g22, g23, g33, Nn*Vn)
           -div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, -Dn*Nn, logPn)
           )
 
 ddt_Pn = (# -div_par_f_symbolic(g11, g12, g13, g22, g23, g33, Nn*Vn)
-          -div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, -Dn*Pn, logPn)
+          -(5.0/3.0)*div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, -Dn*Pn, logPn)
+)
+if neutral_conduction:
+   ddt_Pn = (ddt_Pn +
           +(2.0/3.0)*div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, Kn, Tn)
           +(2.0/3.0)*div_par_k_grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, Kn, Tn)
           )
@@ -64,6 +68,7 @@ test_input = {
     "Pd_string" : str(Pn),
     "source_Nd_string" : str(source_Nn),
     "source_Pd_string" : str(source_Pn),
+    "neutral_conduction" : neutral_conduction,
     "test_dir" : "neutral_mixed",
     "interactive_plots" : True
 }
