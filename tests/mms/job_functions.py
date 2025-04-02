@@ -344,7 +344,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    #      print(key)     
    # make a easy scan over the two operators, generalisation to N operators possible
    
-   for varstring in ["ddt(Nd)", "ddt(Pd)"]:#, "Nd", "Pd"]:
+   for varstring in ["ddt(Nd)", "ddt(Pd)", "Nd", "Pd"]:
       label = varstring
       expected_slope = 2.0
       l2norm = []
@@ -353,10 +353,10 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
       for m in range(0,ntest):
          #print(varstring)
          numerical = collectvar(datasets, varstring, m)
-         if label[0:3] == "ddt":
-            error_values = (numerical)[s]
-         else:
-            error_values = numerical[-1,sx,sy,sz] - numerical[0,sx,sy,sz]
+         #if label[0:3] == "ddt":
+         error_values = (numerical)[s]
+         #else:
+         #   error_values = numerical[-1,sx,sy,sz] - numerical[0,sx,sy,sz]
          # error_values = numerical[0,sx,sy,sz]
          # print("values", error_values.values)
          # print("data" , error_values.data)
