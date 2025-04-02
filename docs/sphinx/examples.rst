@@ -93,7 +93,7 @@ The sheath boundary is only imposed on the upper Y boundary:
 
 .. code-block:: ini
 
-   [sheath_boundary]
+   [sheath_boundary_simple]
 
    lower_y = false
    upper_y = true
