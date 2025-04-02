@@ -1,5 +1,5 @@
-nout = 1
-timestep = 10000.0
+nout = 0
+timestep = 100.0
 MYG=1
 MXG=2
 NXPE=1

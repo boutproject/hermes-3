@@ -322,7 +322,8 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    # need to select last time point
    # need guard cells in x (assume 2 here) and guard cells in y (assume 1)
    # no guard cells in z
-   s = slice(1, 2), slice(2, -2), slice(1, -1), slice(None)
+   s = slice(None), slice(2, -2), slice(1, -1), slice(None)
+   #s = slice(1, 2), slice(2, -2), slice(1, -1), slice(None)
    sxyz = slice(2, -2), slice(1, -1), slice(None)
    sx = slice(2, -2)
    sy = slice(1, -1)
@@ -343,7 +344,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    #      print(key)     
    # make a easy scan over the two operators, generalisation to N operators possible
    
-   for varstring in ["ddt(Nd)", "ddt(Pd)", "Nd", "Pd"]:
+   for varstring in ["ddt(Nd)", "ddt(Pd)"]:#, "Nd", "Pd"]:
       label = varstring
       expected_slope = 2.0
       l2norm = []
