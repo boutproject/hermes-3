@@ -82,7 +82,7 @@ Here is an example working script to automatically download and compile PETSc on
       make -j 4 PETSC_DIR=$PWD PETSC_ARCH=arch-linux-c-opt install
       make -j 4 PETSC_DIR=$PWD/../petsc-build PETSC_ARCH="" check
 
-And one for `ARCHER2`:
+and on `ARCHER2`:
 
 .. code-block:: bash
 
@@ -94,6 +94,16 @@ And one for `ARCHER2`:
       make -j 4 PETSC_DIR=$PWD PETSC_ARCH=arch-linux-c-opt all
       make -j 4 PETSC_DIR=$PWD PETSC_ARCH=arch-linux-c-opt install
       make -j 4 PETSC_DIR=$PWD/../petsc-build PETSC_ARCH="" check
+
+And here is a working configure example for `Perlmutter`:
+
+.. code-block:: bash
+
+    ./configure \
+      --with-mpi=yes --with-precision=double --with-scalar-type=real --with-shared-libraries=1 \
+      --with-debugging=0 {C,CXX,F}OPTFLAGS="-O3 -march=native" \
+      --download-hypre --download-fblaslapack=1 \
+      --prefix=$HOME/local/petsc-3.22.3
 
 Once PETSc is installed, link it to Hermes-3 using the ``-DBOUT_USE_PETSC=ON`` CMake flag:
 
@@ -111,7 +121,8 @@ Dependencies
 Since Hermes-3 heavily relies on BOUT++, the `BOUT++ documentation on installation and
 dependencies <https://bout-dev.readthedocs.io/en/stable/user_docs/quickstart.html#prerequisites>`_ 
 contains a lot of useful information. Below is a selection of working module lists
-for several HPC systems:
+for several HPC systems. It is recommended you start with a clean module environment 
+by executing `module purge` first.
 
 YPI Workstations:
 
@@ -169,6 +180,23 @@ Ancalagon:
    module load OpenBLAS/0.3.15-GCC-10.3.0 
    module load SciPy-bundle/2021.05-foss-2021a 
    module load netCDF/4.8.0-gompi-2021a
+
+Perlmutter:
+
+.. code-block:: bash
+
+   source /opt/cray/pe/cpe/23.03/restore_lmod_system_defaults.sh
+   module load craype-x86-rome
+   module load libfabric
+   module load craype-network-ofi
+   module load xpmem
+   module load cray-libsci
+   module load PrgEnv-gnu
+   module load cray-mpich
+   module load python
+   module load cray-fftw
+   module load cray-hdf5
+   module load cray-netcdf
 
 
 Slope (flux) limiter settings
@@ -238,8 +266,10 @@ interactively before building:
 Troubleshooting issues
 -----------------
 
-The first thing to try is to remove the build directory for a clean
-compilation. If you use Conda, it can cause several issues (e.g. making 
+The first step to troubleshooting compilation issues should always to delete
+build folder for a fresh compilation. This can resolve several types of issues.
+
+There have also been several reported issues due to Conda (e.g. making 
 BOUT++ pick up the Conda MPI installation instead of the module one). A 
 workaround is to compile with the CMake flag `-DBOUT_IGNORE_CONDA_ENV=ON`.
 
