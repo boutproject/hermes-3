@@ -18,6 +18,4 @@ Welcome to Hermes-3 documentation!
    reactions
    closure
    feedback_control
-   tests
-   code_structure
-   detachment_controller
+   developer
