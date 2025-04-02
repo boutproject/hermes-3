@@ -3,7 +3,24 @@
 Equations
 ==========
 
-This section describes the model components currently available. 
+This section contains components which determine which equations are
+being solved in the code. There are two broad classes of components:
+
+Whole equations
+   For example, ``fixed_temperature``, ``evolve_pressure``, 
+   ``evolve_energy`` allow the solution of energy in three levels
+   of fidelity: constant temperature, a pressure equation and the
+   conservative total energy equation. ``neutral_mixed`` contains
+   both parallel and perpendicular transport of neutrals and 
+   has several equations included within.
+
+Terms
+   For example, ``anomalous_diffusion`` adds cross-field transport
+   to the density, energy and momentum equations if they are available
+   while  ``diamagnetic_drift`` and ``polarisation_drift`` 
+   add drift terms.
+   
+Please refer to the examples for common component configurations.
 
 
 Species density
