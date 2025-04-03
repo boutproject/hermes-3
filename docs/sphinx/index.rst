@@ -1,6 +1,8 @@
 ==================================
-Welcome to Hermes-3 documentation!
+Hermes-3 documentation
 ==================================
+
+.. include:: introduction.rst
 
 .. toctree::
    :maxdepth: 2
