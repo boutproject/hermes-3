@@ -173,6 +173,69 @@ Disabling the momentum transfer channel allows you to study the impact of the im
 
    [reactions]
    no_neutral_cx_mom_gain = true
+
+
+Fixed fraction radiation model
+---------------
+
+In the fixed fraction radiation model, the impurity density is assumed to be a constant
+fraction of the electron density. The impurity only affects the plasma solution through
+radiation, which is calculated using a "cooling curve", which is a function of the radiation
+in terms of temperature in units of :math:`Wm^{-3}`. More information on cooling curves
+can be found in literature, e.g. `A. Kallenbach PPCF 55(12) (2013) <https://doi.org/10.1088/0741-3335/55/12/124041>`_.
+
+
+
+To use this component you can just add it to the list of components and then
+configure the impurity fraction:
+
+.. code-block:: ini
+
+   [hermes]
+   components = ..., c, ...
+
+   [c]
+   type = fixed_fraction_carbon
+   fraction = 0.05   # 5% of electron density
+   diagnose = true   # Saves Rc (R + section name)
+
+This will create a diagnostic variable named ``Rc`` containing the radiation
+source in :math:`Wm^{-3}` where ``c`` is the species name.
+
+
+Several ADAS rates are provided: nitrogen, neon, argon, krypton, xenon and tungsten.
+The component names are ``fixed_fraction_carbon``, ``fixed_fraction_nitrogen``, ``fixed_fraction_neon``,
+``fixed_fraction_argon``, ``fixed_fraction_krypton``, ``fixed_fraction_xenon`` and ``fixed_fraction_tungsten``.
+
+Each rate is in the form of a 10 coefficient 
+log-log polynomial fit of data obtained using the open source tool `radas <https://github.com/cfs-energy/radas>`_, except
+xenon and tungsten that use 15 and 20 coefficients respectively.
+The :math:`n {\tau}` parameter representing the density and residence time assumed in the radas 
+collisional-radiative model has been set to :math:`1\times 10^{20} \times 0.5ms` based on `David Moulton et al 2017 PPCF 59(6) <https://doi.org10.1088/1361-6587/aa6b13>`_.
+
+Each rate has an upper and lower bound beyond which the rate remains constant. 
+Please refer to the source code in `fixed_fraction_radiation.hxx` for the coefficients and bounds used for each rate.
+
+In addition to the above rates, there are three simplified cooling curves for Argon: ``fixed_fraction_argon_simplified1``,
+``fixed_fraction_argon_simplified2`` and ``fixed_fraction_argon_simplified3``. They progressively reduce the nonlinearity in the 
+rate by taking out the curvature from the slopes, taking out the RHS shoulder and taking out the LHS-RHS asymmetry, respectively.
+These rates may be useful in investigating the impact of the different kinds of curve nonlinearities on the solution. 
+
+There is also a very simple carbon radiation function ``fixed_fraction_hutchinson_carbon`` which is
+in coronal equilibrium, using a simple formula from `I.H.Hutchinson Nucl. Fusion 34 (10) 1337 - 1348 (1994) <https://doi.org/10.1088/0029-5515/34/10/I04>`_:
+
+.. math::
+
+   L\left(T_e\right) = 2\times 10^{-31} \frac{\left(T_e/10\right)^3}{1 + \left(T_e / 10\right)^{4.5}}
+
+which has units of :math:`Wm^3` with :math:`T_e` in eV.
+
+NOTE:
+   By default, fixed fraction radiation is disabled in the core region. This represents the fact that
+   the impurity will likely be coronal on closed field lines and feature reduced radiation. This 
+   can prevent unphysical MARFE-like behaviour in deep detachment. This behaviour can be disabled
+   by setting ``no_core_radiation=false`` in the impurity options block.
+
      
 Implemented reactions 
 -----------
@@ -449,70 +512,5 @@ The implementation of these rates is in `ADASNeonIonisation`,
 .. doxygenstruct:: ADASNeonCX
    :members:
 
-Fixed fraction radiation
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-These components produce volumetric electron energy losses, but don't
-otherwise modify the plasma solution: Their charge and mass density
-are not calculated, and there are no interactions with other species
-or boundary conditions.
-
-The ``fixed_fraction_hutchinson_carbon`` component calculates radiation due to carbon
-in coronal equilibrium, using a simple formula from `I.H.Hutchinson Nucl. Fusion 34 (10) 1337 - 1348 (1994) <https://doi.org/10.1088/0029-5515/34/10/I04>`_:
-
-.. math::
-
-   L\left(T_e\right) = 2\times 10^{-31} \frac{\left(T_e/10\right)^3}{1 + \left(T_e / 10\right)^{4.5}}
-
-which has units of :math:`Wm^3` with :math:`T_e` in eV.
-
-By default, fixed fraction radiation is disabled in the core region. This represents the fact that
-the impurity will likely be coronal on closed field lines and feature reduced radiation. This 
-can prevent unphysical MARFE-like behaviour in deep detachment. This behaviour can be disabled
-by setting ``no_core_radiation=false`` in the impurity options block.
-
-To use this component you can just add it to the list of components and then
-configure the impurity fraction:
-
-.. code-block:: ini
-
-   [hermes]
-   components = ..., fixed_fraction_hutchinson_carbon, ...
-
-   [fixed_fraction_hutchinson_carbon]
-   fraction = 0.05   # 5% of electron density
-   diagnose = true   # Saves Rfixed_fraction_carbon to output
-
-Or to customise the name of the radiation output diagnostic a section can be
-defined like this:
-
-.. code-block:: ini
-
-   [hermes]
-   components = ..., c, ...
-
-   [c]
-   type = fixed_fraction_hutchinson_carbon
-   fraction = 0.05   # 5% of electron density
-   diagnose = true   # Saves Rc (R + section name)
-
-
-Carbon is also provided as an ADAS rate along with nitrogen, neon, argon, krypton, xenon and tungsten.
-The component names are ``fixed_fraction_carbon``, ``fixed_fraction_nitrogen``, ``fixed_fraction_neon``,
-``fixed_fraction_argon``, ``fixed_fraction_krypton``, ``fixed_fraction_xenon`` and ``fixed_fraction_tungsten``.
-
-These can be used in the same way as ``fixed_fraction_hutchinson_carbon``. Each rate is in the form of a 10 coefficient 
-log-log polynomial fit of data obtained using the open source tool `radas <https://github.com/cfs-energy/radas>`_, except
-xenon and tungsten that use 15 and 20 coefficients respectively.
-The :math:`n {\tau}` parameter representing the density and residence time assumed in the radas 
-collisional-radiative model has been set to :math:`1\times 10^{20} \times 0.5ms` based on `David Moulton et al 2017 Plasma Phys. Control. Fusion 59(6) <https://doi.org10.1088/1361-6587/aa6b13>`_.
-
-Each rate has an upper and lower bound beyond which the rate remains constant. 
-Please refer to the source code in `fixed_fraction_radiation.hxx` for the coefficients and bounds used for each rate.
-
-In addition to the above rates, there are three simplified cooling curves for Argon: ``fixed_fraction_argon_simplified1``,
-``fixed_fraction_argon_simplified2`` and ``fixed_fraction_argon_simplified3``. They progressively reduce the nonlinearity in the 
-rate by taking out the curvature from the slopes, taking out the RHS shoulder and taking out the LHS-RHS asymmetry, respectively.
-These rates may be useful in investigating the impact of the different kinds of curve nonlinearities on the solution. 
 
 
