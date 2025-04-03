@@ -160,7 +160,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
 
   BoutReal default_kappa; // default conductivity, changes depending on species
-  switch(identifySpeciesType(name)) {
+  switch(identifySpeciesTypeEnum(name)) {
   case SpeciesType::ion:
     default_kappa = 3.9;
     break;
