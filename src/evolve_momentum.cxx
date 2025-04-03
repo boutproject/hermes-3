@@ -27,7 +27,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   auto& options = alloptions[name];
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
@@ -149,6 +149,14 @@ void EvolveMomentum::finally(const Options &state) {
                                         bndry_flux);
         }
         ddt(NV) += Z * Apar * dndt;
+      }
+      if (state["fields"].isSet("Apar_flutter")) {
+        // Magnetic flutter term
+        const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+
+        // Using the approximation for small delta-B/B
+        // b dot Grad(phi) = Grad_par(phi) + [phi, Apar]
+        ddt(NV) -= Z * N * bracket(phi, Apar_flutter, BRACKET_ARAKAWA);
       }
     } else {
       ddt(NV) = 0.0;

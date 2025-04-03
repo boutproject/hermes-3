@@ -11,6 +11,7 @@ nz = 1
 Ly = 10
 
 dy = Ly / ny
+J = 1  # Identity metric
 
 [solver]
 mxstep = 10000
@@ -18,7 +19,6 @@ mxstep = 10000
 [hermes]
 components = d, he, d+, collisions, neutral_parallel_diffusion
 
-loadmetric = false        # Use Rxy, Bpxy etc?
 normalise_metric = false  # Normalise the input metric?
 
 Nnorm = 1e18

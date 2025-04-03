@@ -56,7 +56,6 @@ set(HERMES_SOURCES
     src/ionisation.cxx
     src/radiation.cxx
     src/div_ops.cxx
-    src/loadmetric.cxx
     src/neutral_mixed.cxx
     src/full_velocity.cxx
     src/electromagnetic.cxx
@@ -69,6 +68,7 @@ set(HERMES_SOURCES
     src/isothermal.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
+    src/recalculate_metric.cxx
     src/relax_potential.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
@@ -132,7 +132,6 @@ set(HERMES_SOURCES
     include/integrate.hxx
     include/ion_viscosity.hxx
     include/ionisation.hxx
-    include/loadmetric.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
@@ -141,6 +140,7 @@ set(HERMES_SOURCES
     include/polarisation_drift.hxx
     include/quasineutral.hxx
     include/radiation.hxx
+    include/recalculate_metric.hxx
     include/recycling.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx

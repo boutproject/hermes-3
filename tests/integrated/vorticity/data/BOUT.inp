@@ -10,6 +10,8 @@ nz = 10
 
 zn = z / (2π)
 
+J = 1  # Identity metric
+
 [mesh:paralleltransform]
 type = identity
 
@@ -18,8 +20,6 @@ mxstep = 1000
 
 [hermes]
 components = vorticity
-
-loadmetric = false # Load metric from Bxy, Rxy etc?
 
 [vorticity]
 

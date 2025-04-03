@@ -1,0 +1,199 @@
+# 1D system with:
+#  - no-flow boundary on lower Y (i.e. outboard midplane)
+#  - sheath boundary on upper Y (i.e. divertor target)
+#  - Evolving electron and ion species
+#  - heat conduction
+#  - Uniform source of heat and particles throughout region above the X-point
+#  - Non-uniform grid, packed towards the divertor target
+#  - Recycling of ions as atoms
+#  - Ionisation of neutrals as ions
+#  - Charge exchange between neutrals and ions
+#  - Feedback control of upstream density
+
+# This is the number of output time-steps to write out
+nout = 50
+# This is the interval between writing output time-steps (solver timestep is automatic)
+# Normalisation: see BOUT++ docs
+
+timestep = 95788 * 0.05   # 95788 = 1 milisecond
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+# 1D simulation, use "y" as the dimension along the fieldline
+nx = 1
+ny = 400   # Resolution along field-line
+nz = 1
+
+length = 30           # Length of the domain in meters
+length_xpt = 10   # Length from midplane to X-point [m] (i.e. this is where the source ends)
+
+dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing — grid refinement near the divertor target 
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+# Calculate where the source ends in grid index (i.e. at the X-point)
+source = length_xpt / length
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+# Separatrix index set to -1 for 1D simulations
+ixseps1 = -1
+ixseps2 = -1
+
+# In 1D, the Jacobian is inversely proportional to volume
+# Total flux expansion can be set up with a non-constant J profile
+J = 1  
+
+[hermes]
+# Evolve ion density, ion and electron pressure, then calculate force on ions due
+# to electron pressure by using electron force balance.
+# Component order matters - please refer to the documentation.
+components = (d+, d, e,
+              sheath_boundary_simple, collisions, recycling, reactions,
+              electron_force_balance, neutral_parallel_diffusion)
+
+normalise_metric = true  # Normalise the input metric?
+
+# Normalisation parameters
+Nnorm = 1e19 #particles per cubic metre
+Bnorm = 1 #tesla
+Tnorm = 100 #electron-volts
+
+[solver]
+# Select solver by uncommenting one of the below blocks.
+
+#### HIGH ORDER IN TIME, SLOWER SOLVER CVODE
+# type = cvode                     # CVODE time-accurate solver
+# use_precon = true                # Enable solution acceleration with preconditioning
+# mxstep = 1e9                     # Solver timeout
+####
+
+#### FIRST ORDER IN TIME, FASTER SOLVER BEULER
+type = beuler                    # Backward Euler steady-state solver
+snes_type = newtonls             # Newton iterations
+ksp_type = gmres                 # GMRES method
+pc_type = hypre                  # Preconditioner type
+pc_hypre_type = euclid           # Hypre preconditioner type
+max_nonlinear_iterations = 10    # Max Newton iterations per timestep
+lag_jacobian = 500               # How long to wait before Jacobian recalculation per Newton iteration
+####
+
+# Solver tolerances
+atol = 1e-7                      # Absolute tolerance (controls small numbers)
+rtol = 1e-5                      # Relative tolerance (primary convergence control)
+
+[sheath_boundary_simple]
+# Sheath boundary at target end
+lower_y = false
+upper_y = true
+
+# Sheath heat transmission coefficients
+gamma_e = 3.5
+gamma_i = 3.5
+
+
+[neutral_parallel_diffusion]
+# Diffusive enhancement due to recycled neutrals flowing normal to target wall
+dneut = 10   # measure of field line incidence angle: (B / Bpol)^2
+
+
+####################################
+
+[d+]  # Deuterium ions
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary, upstream_density_feedback)
+
+noflow_lower_y = true   # Reflective boundary at midplane
+noflow_upper_y = false  # This is already covered by sheath boundary
+
+charge = 1
+AA = 2  # atomic mass number in amu
+
+# Upstream density feedback controller
+density_upstream = 5e19          # Upstream density [m^-3]
+density_source_positive = false  # Can stabilise controller
+density_controller_i = 1e-2      # "I" in PID control
+density_controller_p = 5e2       # "P" in PID control
+
+thermal_conduction = true  # Enable conduction in evolve_pressure
+
+diagnose = true
+
+recycle_as = d
+target_recycle = true  
+target_recycle_energy = 3.5    # Franck-Condon dissociation energy
+target_recycle_multiplier = 1  # Recycling fraction
+
+[Nd+]
+# Initial condition for ion density.
+# Constant initial condition, but you could decide to write an expression in
+# terms of grid location and other variables
+# i.e. function = (y / (2 * pi) - 1)
+function = 1
+
+source_shape = H(mesh:y_xpt - y) * 1e20 # Feedback controller source shape
+
+[Pd+]
+
+# Initial condition for ion pressure (in terms of hermes:Nnorm * hermes:Tnorm)
+function = 1
+
+# Unmitigated heat flux at the X-point in W/m2
+powerflux = 2.5e7
+
+# Divide by length of source region to get heat source in W/m3
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
+[NVd+]
+
+function = 0  # Initialise with Vi=0
+
+####################################
+
+[d]  # Deuterium atoms
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary)
+
+charge = 0
+AA = 2
+
+thermal_conduction = true
+diagnose = true
+density_floor = 1e-7
+
+[Nd]
+function = 0.001
+
+[Pd]
+function = 0.0001
+
+####################################
+
+[e] # Electrons
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
+
+noflow_upper_y = false
+
+charge = -1
+AA = 1/1836
+thermal_conduction = true  # in evolve_pressure
+diagnose = true
+
+[Pe]
+
+function = `Pd+:function`  # Same as ion pressure initially
+source = `Pd+:source`      # Same as ion pressure source
+
+####################################
+
+[recycling]
+species = d+
+
+[reactions]
+diagnose = true
+type = (
+        d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
+        d + d+ -> d+ + d,     # Charge exchange
+       )

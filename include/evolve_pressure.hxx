@@ -3,7 +3,7 @@
 #define EVOLVE_PRESSURE_H
 
 #include <bout/field3d.hxx>
-
+#include "../include/hermes_utils.hxx"
 #include "component.hxx"
 
 /// Evolves species pressure in time
