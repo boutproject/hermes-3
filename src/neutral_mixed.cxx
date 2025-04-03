@@ -455,8 +455,8 @@ void NeutralMixed::finally(const Options& state) {
                     Pn, Vn, sound_speed, ef_adv_par_ylow)
 
             - (2. / 3) * Pn * Div_par(Vn)                // Compression
+            + (5. / 3) * Div_a_Grad_perp_flows(          // Perpendicular advection
 
-            + (5. / 3) * Div_a_Grad_perp_flows(                     // Perpendicular advection
                     DnnPn, logPnlim,
                     ef_adv_perp_xlow, ef_adv_perp_ylow)  
      ;
@@ -471,7 +471,7 @@ void NeutralMixed::finally(const Options& state) {
                     kappa_n, Tn,                            // Perpendicular conduction
                     ef_cond_perp_xlow, ef_cond_perp_ylow)
 
-            + Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
+            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
                       ef_cond_par_ylow,        
                       false)  // No conduction through target boundary
       ;
@@ -514,7 +514,6 @@ void NeutralMixed::finally(const Options& state) {
       // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
-      //
 
       Field3D viscosity_source = AA * Div_a_Grad_perp_flows(
                                 eta_n, Vn,              // Perpendicular viscosity

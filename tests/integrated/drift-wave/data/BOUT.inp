@@ -42,8 +42,6 @@ mxstep = 10000
 [hermes]
 components = i, e, vorticity, sound_speed, collisions
 
-loadmetric = false # Load metric from Bxy, Rxy etc?
-
 [vorticity]
 
 diamagnetic = false  # Include diamagnetic current?
