@@ -80,17 +80,18 @@ section <https://bout-dev.readthedocs.io/en/stable/user_docs/boundary_options.ht
 
 Gridding
 --------------
+WIP
 Hermes-3 can be configured using an analytically defined grid, or one created
 in Hypnotoad.
 
 
 Guard cells
 ~~~~~~~~~~~~~~
-
+WIP
 
 Grid redistribution and interpolation
 ~~~~~~~~~~~~~~
-
+WIP
 A useful strategy is to start with a low resolution grid, run until
 close to steady-state, then interpolate the solution onto a finer mesh
 and restart. This process can be repeated as a kind of simplified
@@ -99,7 +100,7 @@ multigrid method.
 
 Using grids to pass inputs to Hermes-3
 ~~~~~~~~~~~~~~
-
+WIP
 
 Metric coefficients
 ~~~~~~~~~~~~~~
