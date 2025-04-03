@@ -1,6 +1,6 @@
 .. _sec-introduction:
 
-Introduction
+Introduction / FAQ
 ============
 
 Hermes-3 is a plasma simulation model built on `BOUT++
@@ -17,6 +17,10 @@ run-time.
 
 FAQs
 -------------
+
+How do I join the Hermes-3 community?
+  We have regular group meetings and a Slack channel.
+  Contact Mike (mike.kryjak@ukaea.uk) or Ben (dudson2@llnl.gov) for details.
 
 How do I install Hermes-3?
   Should be relatively straightforward, whether using CMake or Spack.
@@ -43,7 +47,7 @@ What equations am I solving?
   radiation, and one on :ref:`sec-boundary_conditions`. 
 
 What about tests?
-  See :ref:`sec-developer` for details on the test suite.
+  See :ref:`sec-tests` for details on the test suite.
 
 How do I contribute?
   Please see the :ref:`sec-developer` section for details on how to
