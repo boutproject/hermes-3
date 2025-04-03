@@ -22,9 +22,37 @@ can have values inserted and retrieved by the components. The components
 are created and then run by a scheduler, based on settings in the
 input (BOUT.inp) file.
 
+For example a transport simulation with deuterium and tritium ions and
+atoms has an input file specifying the components
+
+.. code-block:: ini
+  
+  [hermes]
+  components = d+, d, t+, t, e, collisions, sheath_boundary, recycling, reactions
+
+The governing equations for each species are specified e.g.
+
+.. code-block:: ini
+
+  [d+]
+  type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
+  AA = 2   # Atomic mass
+  charge = 1
+
+and other components have their configuration options e.g. for reactions:
+
+.. code-block:: ini
+
+  [reactions]
+  type = (
+          d + e -> d+ + 2e,   # Deuterium ionisation
+          t + e -> t+ + 2e,   # Tritium ionisation
+         )
+
 In terms of design patterns, the method used here is essentially a combination
 of the `Encapsulate Context <https://accu.org/journals/overload/12/63/kelly_246/>`_
 and `Command <https://en.wikipedia.org/wiki/Command_pattern>`_ patterns.
+
 
 Simulation state
 ~~~~~~~~~~~~~~
