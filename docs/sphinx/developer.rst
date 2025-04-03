@@ -3,6 +3,182 @@
 Developer manual
 ==============
 
+
+Developer tips
+--------------
+
+Header vs. implementation files
+~~~~~~~~~~~~~~
+
+C++ code is split into implementation (.cxx) and header (.hxx) files.
+The convention of what should be in each one is not consistent in Hermes-3 at
+the moment. The most common standard is for the header file to contain all of the
+variable and class declarations and the implementation file to contain the rest.
+An example of this is in the ``evolve_density`` component - see the
+`implementation file <https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`_
+and the `header file <https://github.com/boutproject/hermes-3/blob/master/include/evolve_density.hxx>`_.
+
+Data types
+~~~~~~~~~~~~~~
+
+Hermes-3 casts its variables in a variety of BOUT++ classes. Floats are 
+usually represented as ``BoutReal``, and fields as ``Field3D``. Note that
+Hermes-3 always runs "in 3D" - when configured in 1D, the x and z dimensions
+are of unit length. See relevant `BOUT++ docs 
+<https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`_ 
+for more info.
+
+
+Adding new options
+~~~~~~~~~~~~~~
+
+Adding new settings is simple and uses the following syntax:
+
+.. code-block:: ini
+   bndry_flux = options["bndry_flux"]
+                     .doc("Allow flows through radial boundaries")
+                     .withDefault<bool>(true);
+
+See `this real world example 
+<https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`_.
+
+The variable must also be declared in the corresponding header file.
+
+Adding new diagnostics
+~~~~~~~~~~~~~~
+
+Adding new diagnostics is also simple, provided there is already an ``outputVars``
+function set up in your component. This is usually located at the end of the
+implementation file. See this example from ``evolve_momentum.cxx``:
+
+.. code-block:: ini
+
+   void EvolveMomentum::outputVars(Options &state) {
+   AUTO_TRACE();
+   // Normalisations
+   auto Nnorm = get<BoutReal>(state["Nnorm"]);
+   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+   auto Cs0 = get<BoutReal>(state["Cs0"]);
+
+   state[std::string("NV") + name].setAttributes(
+         {{"time_dimension", "t"},
+         {"units", "kg / m^2 / s"},
+         {"conversion", SI::Mp * Nnorm * Cs0},
+         {"standard_name", "momentum"},
+         {"long_name", name + " parallel momentum"},
+         {"species", name},
+         {"source", "evolve_momentum"}});
+
+Each diagnostic is saved with metadata, which is available in xHermes, e.g.
+
+.. code-block:: ini
+
+   ds["Nd"].attrs()
+
+time_dimension
+   This indicates that the variable is time evolving. If you remove this line,
+   it will be saved only at the first RHS evaluation.
+
+units
+   A string showing the units for post-processing. xHermes picks this up.
+
+conversion
+   A float representing the normalisation factor. xHermes picks this up to do
+   automatic conversion to SI units.
+
+standard_name, long_name
+   We aren't consistent on what should be in each, but they are meant to describe
+   the variables in post-processing.
+
+species, source
+   The relevant species and component that the diagnostic is coming from
+
+Looping over cells
+~~~~~~~~~~~~~~
+
+BOUT++ provides a really easy way to loop over the domain using ``BOUT_FOR`` and
+similar loops, see `BOUT++ docs <https://bout-dev.readthedocs
+.io/en/stable/developer_docs/data_types.html#iterating-over-fields>`_.
+
+There is a way to way to tell if you are in the core or not. The ``mesh`` object
+has a function to indicate if the coordinate is in a periodic region or not.
+Only the core is periodic. See below for an example from ``evolve_pressure.cxx``
+which makes sure a pressure source is set to zero outside of the core:
+
+.. code-block:: ini
+
+   if (p_options["source_only_in_core"]
+      .doc("Zero the source outside the closed field-line region?")
+      .withDefault<bool>(false)) {
+    for (int x = mesh->xstart; x <= mesh->xend; x++) {
+      if (!mesh->periodicY(x)) {
+        // Not periodic, so not in core
+        for (int y = mesh->ystart; y <= mesh->yend; y++) {
+          for (int z = mesh->zstart; z <= mesh->zend; z++) {
+            source(x, y, z) = 0.0;
+          }
+        }
+      }
+    }
+
+Compiling documentation
+~~~~~~~~~~~~~~
+
+The Hermes-3 documentation is built using `Sphinx <https:
+//www.sphinx-doc.org/en/master/usage/installation.html>`_ and 
+`Doxygen <https://www.doxygen.nl/index.html>`_. It's written in 
+`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`_, 
+which is a markup language similar to Markdown. Doxygen generates automatic 
+documentation based on the C++ code, while Sphinx handles everything else.
+
+Editing documentation is much easier if you can compile it locally using the following steps:
+
+1. Install Sphinx and our theme in your Python environment:
+
+   .. code-block:: bash
+
+      pip install sphinx sphinx_book_theme
+
+2. Install Doxygen (modify as necessary for your OS) and Breathe, the package that
+   connects it to Sphinx:
+
+   .. code-block:: bash
+
+      sudo apt install doxygen
+
+3. Install Breathe (modify as necessary for your OS):
+
+   .. code-block:: bash
+
+      pip install breathe
+
+4. Run Doxygen - this will parse the C++ code:
+
+   .. code-block:: bash
+
+      cd hermes-3/docs/doxygen
+      Doxygen doxyfile
+
+5. Run Sphinx - this will parse the RST files and generate the
+   documentation. ``sphinx`` and ``build`` are the source and build
+   directories, respectively.
+
+   .. code-block:: bash
+
+      cd hermes-3/docs
+      sphinx-build sphinx build
+
+6. Open the generated HTML files, either by double clicking on the file in your
+   browser, or some other way. If you use VS Code locally or on a remote
+   machine through SSH, you can use the extension `Live Preview <https:
+   //marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`_ which
+   can stream it to your browser.
+
+
+Getting/setting values
+~~~~~~~~~~~~~~
+WIP
+
 .. _sec-code_structure:
 
 Code structure
