@@ -672,7 +672,9 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " power through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
-                    
+    }
+            
+    if (flow_ylow_conduction.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
                    {{"time_dimension", "t"},
                     {"units", "W"},
@@ -681,7 +683,9 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " conduction through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
+    }
 
+    if (flow_ylow_kinetic.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_kin_ylow", name)], flow_ylow_kinetic,
                    {{"time_dimension", "t"},
                     {"units", "W"},
