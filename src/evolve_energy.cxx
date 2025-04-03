@@ -30,7 +30,7 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
                    .doc("Evolve the logarithm of energy?")
                    .withDefault<bool>(false);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
   if (evolve_log) {
     // Evolve logarithm of energy
     solver->add(logE, std::string("logE") + name);

@@ -27,7 +27,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   auto& options = alloptions[name];
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
