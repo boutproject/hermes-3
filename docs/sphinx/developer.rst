@@ -29,12 +29,13 @@ are of unit length. See relevant `BOUT++ docs
 for more info.
 
 
-Adding new options
+Adding new settings
 ~~~~~~~~~~~~~~
 
-Adding new settings is simple and uses the following syntax:
+This is simple and uses the following syntax:
 
 .. code-block:: ini
+
    bndry_flux = options["bndry_flux"]
                      .doc("Allow flows through radial boundaries")
                      .withDefault<bool>(true);
@@ -92,6 +93,93 @@ standard_name, long_name
 
 species, source
    The relevant species and component that the diagnostic is coming from
+
+What is "Options"?
+~~~~~~~~~~~~~~
+
+Options is a dictionary-like class originally developed for parsing BOUT++ options.
+In Hermes-3, it is used as a general purpose dictionary.
+
+Getting/setting values
+~~~~~~~~~~~~~~
+
+Hermes-3 has a system to prevent quantities from being modified after they are used.
+This is important as it uses a single dictionary-like ``state`` class to hold all of 
+the variables in one place, which could allow some components to overwrite others.
+
+In ``component.hxx`` there is the function ``get``, which once called sets the 
+"final" and "final-domain" attributes:
+
+.. code-bloc:: ini
+
+   T get(const Options& option, const std::string& location = "") {
+   #if CHECKLEVEL >= 1
+   // Mark option as final, both inside the domain and the boundary
+   const_cast<Options&>(option).attributes["final"] = location;
+   const_cast<Options&>(option).attributes["final-domain"] = location;
+   #endif
+   return getNonFinal<T>(option);
+   }
+
+When you call ``set``, these attributes are checked for, so that if they have 
+already been "gotten", they can't be set again:
+
+.. code-block:: ini
+
+   Options& set(Options& option, T value) {
+   // Check that the value has not already been used
+   #if CHECKLEVEL >= 1
+   if (option.hasAttribute("final")) {
+      throw BoutException("Setting value of {} but it has already been used in {}.",
+                           option.name(), option.attributes["final"].as<std::string>());
+   }
+   if (option.hasAttribute("final-domain")) {
+      throw BoutException("Setting value of {} but it has already been used in {}.",
+                           option.name(),
+                           option.attributes["final-domain"].as<std::string>());
+   }
+
+   if (hermesDataInvalid(value)) {
+      throw BoutException("Setting invalid value for '{}'", option.str());
+   }
+   #endif
+
+There is a special use case which allows you to use this "locking" scheme for only
+the domain cells, leaving the guard cells to be settable using ``getNoBoundary``:
+
+.. code-block:: ini
+
+   T getNoBoundary(const Options& option, const std::string& location = "") {
+   #if CHECKLEVEL >= 1
+   // Mark option as final inside the domain
+   const_cast<Options&>(option).attributes["final-domain"] = location;
+   #endif
+   return getNonFinal<T>(option);
+   }
+
+And there is a corresponding ``setBoundary`` that can be used for BC operations:
+
+.. code-block:: ini
+   
+   Options& setBoundary(Options& option, T value) {
+   // Check that the value has not already been used
+   #if CHECKLEVEL >= 1
+   if (option.hasAttribute("final")) {
+      throw BoutException("Setting boundary of {} but it has already been used in {}.",
+                           option.name(), option.attributes["final"].as<std::string>());
+   }
+   #endif
+   option.force(std::move(value));
+   return option;
+   }
+
+These functions take a second argument which tells you where they were set, which is easier for debugging.
+They are wrapped into additional functions, ``GET_VALUE`` and ``GET_NOBOUNDARY`` which automatically
+include this argument.
+
+Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`_ 
+for more details.
+
 
 Looping over cells
 ~~~~~~~~~~~~~~
@@ -175,9 +263,6 @@ Editing documentation is much easier if you can compile it locally using the fol
    can stream it to your browser.
 
 
-Getting/setting values
-~~~~~~~~~~~~~~
-WIP
 
 .. _sec-code_structure:
 
