@@ -508,18 +508,6 @@ void Recycling::transform(Options& state) {
       }
     }
 
-    for(int ix=0; ix < mesh->LocalNx ; ix++){
-      for(int iy=0; iy < mesh->LocalNy ; iy++){
-          for(int iz=0; iz < mesh->LocalNz; iz++){
-
-            // output << "("" << ix << "Y:" << iy << "Z:" << iz << "T:" << Tn(ix, iy, iz) << "  ";
-            std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy)+ std::string(",") + std::to_string(iz) + std::string(")");
-            output << string_count + std::string(": ") + std::to_string(density_source(ix,iy,iz)) + std::string("; ");
-          }
-      }
-    output << "\n";
-    }
-
     // Put the updated sources back into the state
     set<Field3D>(species_to["density_source"], density_source);
     set<Field3D>(species_to["energy_source"], energy_source);
