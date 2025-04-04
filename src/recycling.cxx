@@ -572,23 +572,31 @@ void Recycling::outputVars(Options& state) {
 
       // Neutral pump
       if (neutral_pump) {
-        set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump")}],
-                       channel.pump_density_source,
-                       {{"time_dimension", "t"},
-                        {"units", "m^-3 s^-1"},
-                        {"conversion", Nnorm * Omega_ci},
-                        {"standard_name", "particle source"},
-                        {"long_name", std::string("Pump recycling particle source of ") + channel.to},
-                        {"source", "recycling"}});
 
-        set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump")}],
-                       channel.pump_energy_source,
-                       {{"time_dimension", "t"},
-                        {"units", "W m^-3"},
-                        {"conversion", Pnorm * Omega_ci},
-                        {"standard_name", "energy source"},
-                        {"long_name", std::string("Pump recycling energy source of ") + channel.to},
-                        {"source", "recycling"}});
+        if (channel.pump_density_source.isAllocated()) { 
+          set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump")}],
+                        channel.pump_density_source,
+                        {{"time_dimension", "t"},
+                          {"units", "m^-3 s^-1"},
+                          {"conversion", Nnorm * Omega_ci},
+                          {"standard_name", "particle source"},
+                          {"long_name", std::string("Pump recycling particle source of ") + channel.to},
+                          {"source", "recycling"}});
+
+          set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump")}],
+                        channel.pump_energy_source,
+                        {{"time_dimension", "t"},
+                          {"units", "W m^-3"},
+                          {"conversion", Pnorm * Omega_ci},
+                          {"standard_name", "energy source"},
+                          {"long_name", std::string("Pump recycling energy source of ") + channel.to},
+                          {"source", "recycling"}});
+        } else {
+          throw BoutException("Error: neutral pump sources unallocated, likely because recycling " 
+            "on the relevant surface is disabled. Check that all boundaries with a neutral pump " 
+            "have recycling enabled!");
+        }
+
       }
 
     }
