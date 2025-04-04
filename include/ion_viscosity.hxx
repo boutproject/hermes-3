@@ -66,11 +66,7 @@ private:
     Field3D Pi_cipar;  ///< Parallel part of Pi scalar
     Field3D DivJ;      ///< Divergence of current in vorticity equation
     Field3D bounce_factor;
-    Field2D bounce_factor_rozhansky;
-    Field2D nu_star_rozh;
     Field3D nu_star;
-    Field2D nu_star_vthermal;
-    Field2D bounce_factor_vthermal;
   };
 
   /// Store diagnostics for each species

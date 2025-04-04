@@ -124,40 +124,24 @@ void IonViscosity::transform(Options &state) {
     // Parallel ion viscosity (4/3 * 0.96 coefficient)
     Field3D eta = 1.28 * P * tau;
     
-    Field3D bounce_factor = 1.0; // if bounce_frequency = false, this factor does nothing to anything
-    Field2D bounce_factor_rozhansky = 1.0;
-    Field2D bounce_factor_vthermal = 1.0;
-
-    Field3D nu_star = 1.0;
-    Field2D nu_star_rozh = 1.0;
-    Field2D nu_star_vthermal = 1.0;
+    Field2D bounce_factor = 1.0; // if bounce_frequency = false, this factor does nothing to anything
+    Field2D nu_star = 1.0;
 
     if (bounce_frequency) {
-      // Need to collect the DC density and temperature to calculate the bounce frequency, with the equation taken as in Zholobenko 2024. 
+      // Need to collect the DC density and temperature, ion collision time and thermal velocity to calculate the bounce frequency, with the equation taken as in Rozhansky 2009. 
       
       const Field2D N_av = DC(get<Field3D>(species["density"]));
       const Field2D T_av = DC(get<Field3D>(species["temperature"]));
-      const Field2D bf_ratio = 0.96 * bounce_frequency_R * bounce_frequency_q95 * N_av / (sqrt(2.0) * pow(bounce_frequency_epsilon, 1.5) * SQ(T_av)) ;
-      nu_star *= (bf_ratio/eta);
-      // this equation is the harmonic average as well as the geometry term with epsilon^(-3/2). 
-      //eta = (eta * bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
-      bounce_factor *= (bf_ratio / (eta + bf_ratio)) * (bf_ratio * pow(bounce_frequency_epsilon, 1.5) / (bf_ratio * pow(bounce_frequency_epsilon, 1.5) + eta ));
-      eta *= bounce_factor;
-
-      // calculating the alternative method, bounce_factor_rozhansky, based on tau, V-parallel and the input parameters. 
       const Field2D tau_av = DC(tau);
-      const Field2D V_av = DC(V);
-      nu_star_rozh *=  (bounce_frequency_R * bounce_frequency_q95) / ( tau_av * pow(bounce_frequency_epsilon, 1.5) * V_av);
 
-      bounce_factor_rozhansky *= (1 / (1 + (1./nu_star_rozh))) * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1./nu_star_rozh)));
-
+      // calculating ion thermal velocity
       BoutReal mass = get<BoutReal>(species["AA"]);
       const Field2D v_thermal = sqrt(2.0 * T_av / mass);
 
-      nu_star_vthermal *=  (bounce_frequency_R * bounce_frequency_q95) / ( tau_av * pow(bounce_frequency_epsilon, 1.5) * v_thermal);
+      nu_star *=  (bounce_frequency_R * bounce_frequency_q95) / ( tau_av * pow(bounce_frequency_epsilon, 1.5) * v_thermal);
 
-      bounce_factor_vthermal *= (1 / (1 + (1./nu_star_vthermal))) * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1./nu_star_vthermal)));
-
+      bounce_factor *= (1 / (1 + (1./nu_star))) * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1./nu_star)));
+      eta *= bounce_factor;
     } 
     
     if (eta_limit_alpha > 0.) {
@@ -185,10 +169,9 @@ void IonViscosity::transform(Options &state) {
         const Field2D P_av = DC(P);
         const Field2D tau_av = DC(tau);
         const Field2D V_av = DC(V);
-        const Field2D bounce_factor_av = DC(bounce_factor);
 
         // Parallel ion stress tensor component, calculated here because before it was only div_Pi_cipar
-        Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor_av *
+        Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor *
                           (2. * Grad_par(V_av) + V_av * Grad_par_logB);
         Field2D Pi_ciperp = 0 * Pi_cipar; // Perpendicular components and divergence of current J equal to 0 for only parallel viscosity case
         Field2D DivJ = 0 * Pi_cipar;
@@ -220,10 +203,9 @@ void IonViscosity::transform(Options &state) {
     const Field2D P_av = DC(P);
     const Field2D tau_av = DC(tau);
     const Field2D V_av = DC(V);
-    const Field2D bounce_factor_av = DC(bounce_factor);
 
     // Parallel ion stress tensor component
-    Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor_av *
+    Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor *
                           (2. * Grad_par(V_av) + V_av * Grad_par_logB);
     // Could also be written as:
     // Pi_cipar = -0.96*Pi*tau*2.*Grad_par(sqrt(Bxy)*Vi)/sqrt(Bxy);
@@ -231,7 +213,7 @@ void IonViscosity::transform(Options &state) {
     // Perpendicular ion stress tensor
     // 0.96 P tau kappa * (V_E + V_di + 1.61 b x Grad(T)/B )
     // Note: Heat flux terms are neglected for now
-    Field2D Pi_ciperp = -0.5 * 0.96 * P_av * tau_av * bounce_factor_av * 
+    Field2D Pi_ciperp = -0.5 * 0.96 * P_av * tau_av * bounce_factor * 
       (Curlb_B * Grad(phi_av + 1.61 * T_av) - Curlb_B * Grad(P_av) / N_av);
 
     // Limit size of stress tensor components
@@ -302,7 +284,7 @@ void IonViscosity::transform(Options &state) {
       auto search = diagnostics.find(species_name);
       if (search == diagnostics.end()) {
         // First time, create diagnostic
-        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor, bounce_factor_rozhansky, nu_star_rozh, nu_star, nu_star_vthermal, bounce_factor_vthermal});
+        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star});
       } else {
         // Update diagnostic values
         auto& d = search->second;
@@ -310,11 +292,7 @@ void IonViscosity::transform(Options &state) {
         d.Pi_cipar = Pi_cipar;
         d.DivJ = DivJ;
         d.bounce_factor = bounce_factor;
-        d.bounce_factor_rozhansky = bounce_factor_rozhansky;
-        d.nu_star_rozh = nu_star_rozh;
         d.nu_star = nu_star;
-        d.nu_star_vthermal = nu_star_vthermal;
-        d.bounce_factor_vthermal = bounce_factor_vthermal;
       }
     }
   }
@@ -368,39 +346,11 @@ void IonViscosity::outputVars(Options &state) {
                       {"species", species_name},
                       {"source", "ion_viscosity"}});
 
-      set_with_attrs(state[std::string("bounce_factor_rozh_") + species_name], d.bounce_factor_rozhansky,
-                    {{"time_dimension", "t"},
-                      {"units", "none"},
-                      {"conversion", 1},
-                      {"long_name", std::string("Bounce factor from Roshansky") + species_name},
-                      {"species", species_name},
-                      {"source", "ion_viscosity"}});
-      set_with_attrs(state[std::string("nu_star_rozh_") + species_name], d.nu_star_rozh,
-                    {{"time_dimension", "t"},
-                      {"units", "none"},
-                      {"conversion", 1},
-                      {"long_name", std::string("nu star from Roshansky") + species_name},
-                      {"species", species_name},
-                      {"source", "ion_viscosity"}});
       set_with_attrs(state[std::string("nu_star_") + species_name], d.nu_star,
                     {{"time_dimension", "t"},
                       {"units", "none"},
                       {"conversion", 1},
                       {"long_name", std::string("nu star") + species_name},
-                      {"species", species_name},
-                      {"source", "ion_viscosity"}});
-      set_with_attrs(state[std::string("nu_star_vtherm_") + species_name], d.nu_star_vthermal,
-                    {{"time_dimension", "t"},
-                      {"units", "none"},
-                      {"conversion", 1},
-                      {"long_name", std::string("nu star vthermal ") + species_name},
-                      {"species", species_name},
-                      {"source", "ion_viscosity"}});
-      set_with_attrs(state[std::string("bounce_factor_vtherm_") + species_name], d.bounce_factor_vthermal,
-                    {{"time_dimension", "t"},
-                      {"units", "none"},
-                      {"conversion", 1},
-                      {"long_name", std::string("Bounce factor from vthermal ") + species_name},
                       {"species", species_name},
                       {"source", "ion_viscosity"}});
     }
