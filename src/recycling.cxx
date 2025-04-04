@@ -42,6 +42,9 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                          .doc("Name of the species to recycle into")
                          .as<std::string>();
 
+    density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
+    pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
     diagnose =
       from_options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
 
@@ -168,6 +171,10 @@ void Recycling::transform(Options& state) {
     const Field3D Pn = get<Field3D>(species_to["pressure"]);
     const Field3D Tn = get<Field3D>(species_to["temperature"]);
     const BoutReal AAn = get<BoutReal>(species_to["AA"]);
+
+    const Field3D Nnlim = floor(Nn, density_floor);
+    const Field3D Pnlim = floor(Pn, pressure_floor);
+    const Field3D Tnlim = Pnlim / Nnlim;
 
     // Recycling particle and energy sources will be added to these global sources 
     // which are then passed to the density and pressure equations
@@ -353,13 +360,13 @@ void Recycling::transform(Options& state) {
               // These are NOT communicated back into state and will exist only in this component
               // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
               // While enabling us to still calculate radial wall fluxes separately here
-              BoutReal nnguard = SQ(Nn[i]) / Nn[is];
-              BoutReal pnguard = SQ(Pn[i]) / Pn[is];
-              BoutReal tnguard = SQ(Tn[i]) / Tn[is];
+              BoutReal nnguard = SQ(Nnlim[i]) / Nnlim[is];
+              BoutReal pnguard = SQ(Pnlim[i]) / Pnlim[is];
+              BoutReal tnguard = SQ(Tnlim[i]) / Tnlim[is];
 
               // Calculate wall conditions
-              BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
-              BoutReal tnsheath = 0.5 * (Tn[i] + tnguard);
+              BoutReal nnsheath = 0.5 * (Nnlim[i] + nnguard);
+              BoutReal tnsheath = 0.5 * (Tnlim[i] + tnguard);
               BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AAn) );   // Stangeby p.69 eqns. 2.21, 2.24
 
               // Convert dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
@@ -453,13 +460,13 @@ void Recycling::transform(Options& state) {
                 // These are NOT communicated back into state and will exist only in this component
                 // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
                 // While enabling us to still calculate radial wall fluxes separately here
-                BoutReal nnguard = SQ(Nn[i]) / Nn[is];
-                BoutReal pnguard = SQ(Pn[i]) / Pn[is];
-                BoutReal tnguard = SQ(Tn[i]) / Tn[is];
+                BoutReal nnguard = SQ(Nnlim[i]) / Nnlim[is];
+                BoutReal pnguard = SQ(Pnlim[i]) / Pnlim[is];
+                BoutReal tnguard = SQ(Tnlim[i]) / Tnlim[is];
 
                 // Calculate wall conditions
-                BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
-                BoutReal tnsheath = 0.5 * (Tn[i] + tnguard);
+                BoutReal nnsheath = 0.5 * (Nnlim[i] + nnguard);
+                BoutReal tnsheath = 0.5 * (Tnlim[i] + tnguard);
                 BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AAn) );   // Stangeby p.69 eqns. 2.21, 2.24
 
                 // Convert dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
@@ -499,6 +506,18 @@ void Recycling::transform(Options& state) {
           }
         }
       }
+    }
+
+    for(int ix=0; ix < mesh->LocalNx ; ix++){
+      for(int iy=0; iy < mesh->LocalNy ; iy++){
+          for(int iz=0; iz < mesh->LocalNz; iz++){
+
+            // output << "("" << ix << "Y:" << iy << "Z:" << iz << "T:" << Tn(ix, iy, iz) << "  ";
+            std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy)+ std::string(",") + std::to_string(iz) + std::string(")");
+            output << string_count + std::string(": ") + std::to_string(density_source(ix,iy,iz)) + std::string("; ");
+          }
+      }
+    output << "\n";
     }
 
     // Put the updated sources back into the state
