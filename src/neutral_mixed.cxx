@@ -5,6 +5,7 @@
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
 
+#include "../include/hermes_utils.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/neutral_mixed.hxx"
@@ -87,6 +88,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   neutral_conduction = options["neutral_conduction"]
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(true);
+
+  diffusion_collisions_mode = options["diffusion_collisions_mode"]
+      .doc("Can be multispecies: all enabled collisions excl. IZ, or afn: CX, IZ and NN collisions")
+      .withDefault<std::string>("multispecies");
 
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
@@ -285,8 +290,70 @@ void NeutralMixed::finally(const Options& state) {
     sqrt(floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
+
+    // Collisionality
+    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+
+      if (diffusion_collisions_mode == "afn") {
+        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, name, "+", "cx", "partial")) or
+              /// Ionisation
+              (collisionSpeciesMatch(    
+                collision_name, name, "+", "iz", "partial")) or
+              /// Neutral-neutral collisions
+              (collisionSpeciesMatch(    
+                collision_name, name, name, "coll", "exact"))) {
+                  collision_names.push_back(collision_name);
+                }
+        }
+      // Multispecies mode: all collisions and CX are included
+      } else if (diffusion_collisions_mode == "multispecies") {
+        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, name, "", "cx", "partial")) or
+              /// Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(    
+                collision_name, name, "", "coll", "partial"))) {
+                  collision_names.push_back(collision_name);
+                }
+        }
+        
+      } else {
+        throw BoutException("\ndiffusion_collisions_mode for {:s} must be either multispecies or braginskii", name);
+      }
+
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in neutral_mixed for selected collisions mode", name);
+      }
+
+      /// Write chosen collisions to log file
+      output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ",
+                      name, diffusion_collisions_mode);
+      for (const auto& collision : collision_names) {        
+        output_info.write("{:s} ", collision);
+      }
+      output_info.write("\n");
+      }
+
+    /// Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
+    }
+
+
     // Dnn = Vth^2 / sigma
-    Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+    Dnn = (Tn / AA) / (nu + Rnn);
   } else {
     Dnn = (Tn / AA) / Rnn;
   }

@@ -41,6 +41,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
 
+  conduction_collisions_mode = options["conduction_collisions_mode"]
+      .doc("Can be multispecies: all collisions, or braginskii: self collisions and ie")
+      .withDefault<std::string>("multispecies");
+
   if (evolve_log) {
     // Evolve logarithm of pressure
     solver->add(logP, std::string("logP") + name);
@@ -120,6 +124,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       source_prefactor_function = FieldFactory::get()->parse(str, &p_options);
   }
 
+
   if (p_options["source_only_in_core"]
       .doc("Zero the source outside the closed field-line region?")
       .withDefault<bool>(false)) {
@@ -155,7 +160,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
 
   BoutReal default_kappa; // default conductivity, changes depending on species
-  switch(identifySpeciesType(name)) {
+  switch(identifySpeciesTypeEnum(name)) {
   case SpeciesType::ion:
     default_kappa = 3.9;
     break;
@@ -252,6 +257,8 @@ void EvolvePressure::finally(const Options& state) {
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
+  
+  Coordinates* coord = mesh->getCoordinates();
 
   if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
       state.isSection("fields") and state["fields"].isSet("phi")) {
@@ -337,8 +344,95 @@ void EvolvePressure::finally(const Options& state) {
   // Parallel heat conduction
   if (thermal_conduction) {
 
-    // Calculate ion collision times
-    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    // Collisionality
+    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+
+      if (conduction_collisions_mode == "braginskii") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (identifySpeciesType(species.name()) == "neutral") {
+            throw BoutException("\tBraginskii conduction collisions mode not available for neutrals, choose multispecies or afn");
+          } else if (identifySpeciesType(species.name()) == "electron") {
+            if (/// Electron-electron collisions
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "e", "coll", "exact"))) {
+                    collision_names.push_back(collision_name);
+                  }
+
+          } else if (identifySpeciesType(species.name()) == "ion") {
+            if (/// Self-collisions
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), species.name(), "coll", "exact"))) {
+                    collision_names.push_back(collision_name);
+                  }
+          }
+        }
+          
+      // Multispecies mode: all collisions and CX are included
+      } else if (conduction_collisions_mode == "multispecies") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "cx", "partial")) or
+              /// Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "coll", "partial"))) {
+                  collision_names.push_back(collision_name);
+                }
+        }
+        
+      } else if (conduction_collisions_mode == "afn") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (identifySpeciesType(species.name()) != "neutral") {
+                throw BoutException("\tAFN conduction collisions mode not available for ions or electrons, choose braginskii or multispecies");
+              }
+          if (/// Charge exchange
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "+", "cx", "partial")) or
+                /// Ionisation
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "+", "iz", "partial"))) {
+                    collision_names.push_back(collision_name);
+                  }
+        }
+
+      } else {
+        throw BoutException("\tConduction_collisions_mode incorrect", species.name());
+      }
+
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in evolve_pressure for selected collisions mode", species.name());
+      }
+
+      /// Write chosen collisions to log file
+      output_info.write("\t{:s} conduction collisionality mode: '{:s}' using ",
+                      species.name(), conduction_collisions_mode);
+      for (const auto& collision : collision_names) {        
+        output_info.write("{:s} ", collision);
+      }
+
+      output_info.write("\n");
+
+      }
+
+    /// Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
+    }
+
+
+        // Calculate ion collision times
+    const Field3D tau = 1. / floor(nu, 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -390,7 +484,8 @@ void EvolvePressure::finally(const Options& state) {
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
     flow_ylow_conduction;
-    ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    conduction_div = (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    ddt(P) += conduction_div;
     flow_ylow += flow_ylow_conduction;
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -505,6 +600,23 @@ void EvolvePressure::outputVars(Options& state) {
                       {"long_name", name + " heat conduction coefficient"},
                       {"species", name},
                       {"source", "evolve_pressure"}});
+                      
+      set_with_attrs(state[std::string("K") + name + std::string("_cond")], nu,
+                     {{"time_dimension", "t"},
+                      {"units", "s^-1"},
+                      {"conversion", Omega_ci},
+                      {"long_name", "collision frequency for conduction"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+
+      set_with_attrs(state[std::string("div_cond_par_") + name], conduction_div * 3/2,
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", name + " parallel energy flow divergence due to heat conduction"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+
     }
     set_with_attrs(state[std::string("T") + name], T,
                    {{"time_dimension", "t"},

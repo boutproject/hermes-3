@@ -86,6 +86,9 @@ private:
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
+  std::vector<std::string> collision_names; ///< Collisions used for collisionality
+  std::string conduction_collisions_mode;  ///< Collision selection, either multispecies or braginskii
+  Field3D nu;   ///< Collision frequency for conduction
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
                               ///< calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0

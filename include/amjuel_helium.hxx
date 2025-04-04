@@ -23,11 +23,12 @@ struct AmjuelHeIonisation01 : public AmjuelReaction {
 
   void calculate_rates(Options& state, 
                         Field3D &reaction_rate, Field3D &momentum_exchange,
+                        Field3D &heavy_particle_frequency, Field3D &electron_frequency,
                         Field3D &energy_exchange, Field3D &energy_loss, BoutReal &rate_multiplier, BoutReal &radiation_multiplier);
 
   void transform(Options& state) override{
-    Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
-    calculate_rates(state, reaction_rate, momentum_exchange, energy_exchange, energy_loss, rate_multiplier, radiation_multiplier);
+    Field3D heavy_particle_frequency, electron_frequency, reaction_rate, momentum_exchange, energy_exchange, energy_loss;
+    calculate_rates(state, heavy_particle_frequency, electron_frequency, reaction_rate, momentum_exchange, energy_exchange, energy_loss, rate_multiplier, radiation_multiplier);
   };
 
   private:
@@ -56,11 +57,12 @@ struct AmjuelHeRecombination10 : public AmjuelReaction {
 
   void calculate_rates(Options& state, 
                       Field3D &reaction_rate, Field3D &momentum_exchange,
+                      Field3D &heavy_particle_frequency, Field3D &electron_frequency,
                       Field3D &energy_exchange, Field3D &energy_loss, BoutReal &rate_multiplier, BoutReal &radiation_multiplier);
 
   void transform(Options& state) override{
-    Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
-    calculate_rates(state, reaction_rate, momentum_exchange, energy_exchange, energy_loss, rate_multiplier, radiation_multiplier);
+    Field3D heavy_particle_frequency, electron_frequency, reaction_rate, momentum_exchange, energy_exchange, energy_loss;
+    calculate_rates(state, heavy_particle_frequency, electron_frequency, reaction_rate, momentum_exchange, energy_exchange, energy_loss, rate_multiplier, radiation_multiplier);
   };
 
   private:

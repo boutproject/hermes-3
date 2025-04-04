@@ -71,8 +71,10 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
 void Collisions::collide(Options& species1, Options& species2, const Field3D& nu_12, BoutReal momentum_coefficient) {
   AUTO_TRACE();
 
-  add(species1["collision_frequency"], nu_12);
-  set(collision_rates[species1.name()][species2.name()], nu_12);
+  add(species1["collision_frequency"], nu_12);                           // Total collision frequency
+  std::string coll_name = species1.name() + std::string("_") + species2.name() + std::string("_coll");
+  set(species1["collision_frequencies"][coll_name], nu_12);              // Collision frequency for individual reaction
+  set(collision_rates[species1.name()][species2.name()], nu_12);         // Individual collision frequency used for diagnostics
 
   if (&species1 != &species2) {
     // For collisions between different species
@@ -88,8 +90,10 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
       return nu_12[i] * (A1 / A2) * density1[i] / floor(density2[i], 1e-5);
     });
 
-    add(species2["collision_frequency"], nu);
-    set(collision_rates[species2.name()][species1.name()], nu);
+    add(species2["collision_frequency"], nu);                             // Total collision frequency
+    std::string coll_name =  species2.name() + std::string("_") + species1.name() + std::string("_coll");    
+    set(species2["collision_frequencies"][coll_name], nu);                // Collision frequency for individual reaction
+    set(collision_rates[species2.name()][species1.name()], nu);           // Individual collision frequency used for diagnostics
 
     // Momentum exchange
     if (isSetFinalNoBoundary(species1["velocity"]) or

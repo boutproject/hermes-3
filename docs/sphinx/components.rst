@@ -210,6 +210,12 @@ By default parallel thermal conduction is included, which requires a collision
 time. If collisions are not calculated, then thermal conduction should be turned off
 by setting `thermal_conduction = false` in the input options.
 
+The choice of collision frequency is set by the flag `conduction_collisions_mode`: `legacy` uses
+all available collision frequencies involving the chosen species, while `braginskii` uses only
+self-collisions .The default is `legacy` and it is recommended for use in multispecies. If you are solving
+for a single ion and want to recover Braginskii, use the `braginskii` mode.
+
+
 If the component option ``diagnose = true`` then additional fields
 will be saved to the dump files: The species temperature ``T + name``
 (e.g. ``Td+`` or ``Te``), the time derivative ``ddt(P + name)``
@@ -404,6 +410,11 @@ must be calculated after collisions:
 
    [hermes]
    components =  ..., collisions, ion_viscosity
+
+The choice of collision frequency is set by the flag `viscosity_collisions_mode`: `legacy` uses
+all available collision frequencies involving the chosen species, while `braginskii` uses only
+ii collisions. The default is `legacy` and it is recommended for use in multispecies. If you are solving
+for a single ion and want to recover Braginskii, use the `braginskii` mode.
 
 By default only the parallel diffusion of momentum is included, adding a force to each
 ion's momentum equation:
@@ -639,7 +650,7 @@ with velocity :math:`v_D = -D \nabla_\perp N / N`.
 .. doxygenstruct:: AnomalousDiffusion
    :members:
 
-Neutral gas models
+2D Neutral transport
 ------------------
 
 In 1D, neutral transport is currently done through the same components as for plasma, i.e. `evolve_density`,
@@ -721,6 +732,14 @@ In an additional effort to limit the diffusivitiy to more physical values, a flu
 
 This formulation is equivalent to defining a :math:`D_n` with a free streaming velocity while accounting for the pseudo collisionality due 
 to the maximum vessel mean free path :math:`l_{max}`. The flux limiter :math:`f_l` is set to 1.0 by default.
+
+   \mathbf{v}_{\perp n} = -D_{nn}\frac{1}{p_n}\nabla_\perp p_n
+
+The choice of collision frequency is set by the flag `diffusion_collisions_mode`: `legacy` uses
+all available collision frequencies involving the chosen species, while `afn` uses only
+CX and IZ rates. The default is `afn` and corresponds to the choice in UEDGE and 
+the SOLPS-ITER AFN (Advanced Fluid Neutral) model. 
+
 
 Sources
 -------------------
@@ -1239,6 +1258,12 @@ direction on the parallel transport, and is the `dneut` input setting. Currently
 use case for this component is to represent the neutrals diffusing orthogonal to the target wall, and
 it is recommended to set `dneut` according to the field line pitch at the target.
 
+The choice of collision frequency is set by the flag `diffusion_collisions_mode`: `legacy` uses
+all available collision frequencies involving the chosen species, while `afn` uses only
+CX and IZ rates. The default is `afn` and corresponds to the choice in UEDGE
+and the SOLPS-ITER AFN (Advanced Fluid Neutral) model. 
+
+
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
 
@@ -1296,7 +1321,7 @@ The frequency of charged species `a` colliding with charged species `b` is
 
 .. math::
 
-   \nu_{ab} = \frac{1}{3\pi^{3/2}\epsilon_0^2}\frac{Z_a^2 Z_b^2 n_b \ln\Lambda}{\left(v_a^2 + v_b^2\right)^{3/2}}\frac{\left(1 + m_a / m_b\right)}{m_a^2}
+   \nu_{ab} = \frac{1}{3\pi^{3/2}\varepsilon_0^2}\frac{Z_a^2 Z_b^2 n_b \ln\Lambda}{\left(v_a^2 + v_b^2\right)^{3/2}}\frac{\left(1 + m_a / m_b\right)}{m_a^2}
 
 
 Note that the cgs expression in Hinton is divided by :math:`\left(4\pi\epsilon_0\right)^2` to get
@@ -1309,6 +1334,15 @@ the expression in SI units. The thermal speeds in this expression are defined as
 Note that with this definition we recover the `Braginskii expressions
 <https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html>`_
 for e-i and i-i collision times.
+
+The electron-electron collision time definition follows Braginskii (note that Fitzpatrick uses 
+a different definition in his `notes <https://farside.ph.utexas.edu/teaching/plasma/Plasma/node41.html>`_,
+these are not consistent with Braginskii):
+
+.. math::
+
+   \nu_{ee} = \frac{ln \Lambda e^4 n_e} { 12 \pi^{3/2} \varepsilon_0^2 m_{e}^{1/2} T_{e}^{3/2} } 
+
 
 The electron-electron collision time definition follows Braginskii (note that Fitzpatrick uses 
 a different definition in his `notes <https://farside.ph.utexas.edu/teaching/plasma/Plasma/node41.html>`_,
