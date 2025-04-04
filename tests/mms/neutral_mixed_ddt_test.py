@@ -2,7 +2,7 @@
 from job_functions import run_neutral_mixed_manufactured_solutions_test
 from perpendicular_laplacian import x, y, z, div_a_grad_perp_f_symbolic
 from perpendicular_laplacian import div_par_k_grad_par_f_symbolic
-from perpendicular_laplacian import div_par_f_symbolic
+from perpendicular_laplacian import div_par_f_symbolic, metric_coefficients
 from perpendicular_laplacian import grad_par_f_symbolic
 from sympy import sin, cos, log
 
@@ -14,6 +14,7 @@ g33 = 1.2 + 0.2*x*cos(y)
 g12 = 0.0
 g23 = 0.5 + 0.15*x*cos(y)
 g13 = 0.0
+g_11, g_12, g_13, g_22, g_23, g_33, J = metric_coefficients(g11, g12, g13, g22, g23, g33)
 # Div . ( a Grad_perp f )
 #div_a_grad_perp_f = div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, a, f)
 # Div . ( a Grad_par f)
@@ -28,12 +29,13 @@ AA = 2
 # collision frequency
 nu_cfreq = 1.0
 # Manufactured solutions
-Nn = 0.5 + 0.1*(x**2)*sin(y) #*sin(z)
+Nn = 0.5 + x #0.1*(x**2)*sin(y) #*sin(z)
 NVn = 0.0
 Vn = NVn/(Nn*AA)
-Pn = 1.0 + 0.5*(x**2)*sin(2*y) #*sin(2*z)
+Pn = 1.0 + x**2 #0.5*(x**2)*sin(2*y) #*sin(2*z)
 Tn = Pn/Nn
 logPn = log(Pn)
+print(logPn)
 Dn = (Tn/AA)/nu_cfreq
 Kn = (5.0/2.0)*Nn*Dn
 neutral_conduction = False
@@ -56,7 +58,7 @@ source_Pn = -ddt_Pn
 
 test_input = {
     "ntest" : 3, 
-    "ngrid" : 20,
+    "ngrid" : 10,
     "collision_frequency" : nu_cfreq,
     "g11_string": str(g11),
     "g22_string": str(g22),
@@ -64,6 +66,13 @@ test_input = {
     "g12_string": str(g12),
     "g13_string": str(g13),
     "g23_string": str(g23),
+    "g_11_string": str(g_11),
+    "g_22_string": str(g_22),
+    "g_33_string": str(g_33),
+    "g_12_string": str(g_12),
+    "g_13_string": str(g_13),
+    "g_23_string": str(g_23),
+    "J_string": str(J),
     "Nd_string" : str(Nn),
     "Pd_string" : str(Pn),
     "source_Nd_string" : str(source_Nn),

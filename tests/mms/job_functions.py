@@ -234,6 +234,13 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    g12_str = test_input["g12_string"]
    g13_str = test_input["g13_string"]
    g23_str = test_input["g23_string"]
+   g_11_str = test_input["g_11_string"]
+   g_22_str = test_input["g_22_string"]
+   g_33_str = test_input["g_33_string"]
+   g_12_str = test_input["g_12_string"]
+   g_13_str = test_input["g_13_string"]
+   g_23_str = test_input["g_23_string"]
+   J_str = test_input["J_string"]
    neutral_conduction = test_input["neutral_conduction"]
    base_test_dir = test_input["test_dir"]
    interactive_plots = test_input["interactive_plots"]
@@ -278,6 +285,13 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    g12 = {g12_str}
    g23 = {g23_str}
    g13 = {g13_str}
+   g_11 = {g_11_str}
+   g_22 = {g_22_str}
+   g_33 = {g_33_str}
+   g_12 = {g_12_str}
+   g_23 = {g_23_str}
+   g_13 = {g_13_str}
+   J = {J_str}
    
    #################################################################
    # Neutrals
