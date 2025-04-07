@@ -7,10 +7,154 @@ Developer manual
 Developer tips
 --------------
 
+Compiling Hermes-3 quickly
+~~~~~~~~~~~~~~
+
+After compiling Hermes-3 and changing something, you can avoid unnecessary recompilation of 
+unchanged files. Simply enter the build directory and do:
+
+.. code-block:: bash
+
+   make -j 4
+
+Where ``4`` will make it compile using 4 cores. You can increase or decrease this as necessary.
+Sometimes, CMake will think that it needs to recompile parts of BOUT++ even if it wasn't changed.
+To stop this try adding the flag ``-DHERMES_UPDATE_GIT_SUBMODULE=OFF`` in your CMake command.
+This and other useful options can be found in ``hermes-3/CMakeLists.txt``.
+
+Compiling documentation
+~~~~~~~~~~~~~~
+
+The Hermes-3 documentation is built using `Sphinx <https:
+//www.sphinx-doc.org/en/master/usage/installation.html>`_ and 
+`Doxygen <https://www.doxygen.nl/index.html>`_. It's written in 
+`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`_, 
+which is a markup language similar to Markdown. Doxygen generates automatic 
+documentation based on the C++ code, while Sphinx handles everything else.
+
+Editing documentation is much easier if you can compile it locally using the following steps:
+
+1. **Install Sphinx** and our theme in your Python environment:
+
+   .. code-block:: bash
+
+      pip install sphinx sphinx_book_theme
+
+2. **Install Doxygen** (modify as necessary for your OS) and Breathe, the package that
+   connects it to Sphinx:
+
+   .. code-block:: bash
+
+      sudo apt install doxygen
+
+3. **Install Breathe** (modify as necessary for your OS):
+
+   .. code-block:: bash
+
+      pip install breathe
+
+4. **Run Doxygen** - this will parse the C++ code:
+
+   .. code-block:: bash
+
+      cd hermes-3/docs/doxygen
+      Doxygen doxyfile
+
+5. **Run Sphinx** - this will parse the RST files and generate the
+   documentation. ``sphinx`` and ``build`` are the source and build
+   directories, respectively.
+
+   .. code-block:: bash
+
+      cd hermes-3/docs
+      sphinx-build sphinx build
+
+6. **Open the generated HTML files**, either by double clicking on the file in your
+   browser, or some other way. If you use VS Code locally or on a remote
+   machine through SSH, you can use the extension `Live Preview <https:
+   //marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`_ which
+   can stream it to your browser.
+
+Debugging: running for one iteration
+~~~~~~~~~~~~~~
+
+Any BOUT++ code can be run for just one right-hand side (RHS) iteration. This will
+run instantly for any simulation and not need any kind of solver convergence, making
+it ideal for debugging. 
+
+This can be done by setting the following in the input file:
+
+.. code-block:: ini
+
+   nout = 0
+
+The ``timestep`` setting will be ignored. 
+
+Debugging: printing values
+~~~~~~~~~~~~~~
+
+When debugging, it can be useful to print things out. This is simple in C++. 
+For example, if you want to print the value of the variable ``particle_flow``, do:
+
+.. code-block:: ini
+
+   output << "\n*******************************\n"
+   output << "particle_flow: " << particle_flow << "\n"
+   output << "*******************************\n"
+
+Which will result in:
+
+.. code-block:: ini
+
+   *******************************
+   particle_flow: 0.123456
+   *******************************
+
+Sometimes you need to deal with printing whole fields. In this case, it is useful
+to print out every cell value along with its coordinates. The below code snippet will
+do this for the variable ``Tn``:
+
+.. code-block:: ini
+
+   or(int ix=0; ix < mesh->LocalNx ; ix++){
+      for(int iy=0; iy < mesh->LocalNy ; iy++){
+          for(int iz=0; iz < mesh->LocalNz; iz++){
+
+            std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy)+ std::string(",") + std::to_string(iz) + std::string(")");
+            output << string_count + std::string(": ") + std::to_string(Tn(ix,iy,iz)) + std::string("; ");
+          }
+      }
+    output << "\n";
+    }
+
+The output will look something like:
+
+.. code-block:: bash
+
+   (0,0,0): 0.123456; (0,0,1): 0.654321; (0,0,2): 0.987654; (0,1,0): 0.123456; (0,1,1): 0.654321; (0,1,2): 0.987654;
+   (1,0,0): 0.123456; (1,0,1): 0.654321; (1,0,2): 0.987654; (1,1,0): 0.123456; (1,1,1): 0.654321; (1,1,2): 0.987654;
+   ...
+
+Note that there are multiple ways to print out values in C++, and both ``std::string(text)`` and ``"text"`` are valid.
+
+Debugging: segmentation faults
+~~~~~~~~~~~~~~
+
+`Segmentation faults <https://thelinuxcode.com/segmentation-fault-cpp/>`_ can be frustrating because
+they give very little verbosity. In practice, the most common cause is trying to access a variable
+that hasn't been initialised yet. The easiest way to debug this is to carefully review the new lines of 
+code to make sure all variables exist and have been declared and initialised. If this is tricky,
+another simple way is to comment out large parts of the code until the segmentation fault disappears, 
+helping to narrow down its location. 
+
+While the above methods are very simple and can be effective, debugging tools such as 
+`gdb <https://sourceware.org/gdb/>`_ or `valgrind <https://valgrind.org/>`_ can be used to find 
+the segmentation fault as well.
+
 Header vs. implementation files
 ~~~~~~~~~~~~~~
 
-C++ code is split into implementation (.cxx) and header (.hxx) files.
+C++ allows you to split code into implementation (.cxx) and header (.hxx) files.
 The convention of what should be in each one is not consistent in Hermes-3 at
 the moment. The most common standard is for the header file to contain all of the
 variable and class declarations and the implementation file to contain the rest.
@@ -26,7 +170,9 @@ usually represented as ``BoutReal``, and fields as ``Field3D``. Note that
 Hermes-3 always runs "in 3D" - when configured in 1D, the x and z dimensions
 are of unit length. See relevant `BOUT++ docs 
 <https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`_ 
-for more info.
+for more info. There is also a data type called ``Options`` which is equivalent
+to a Python dictionary with extra functionality, and is used to store input
+options, the entire simulation state and many other data.
 
 
 Adding new settings
@@ -208,59 +354,6 @@ which makes sure a pressure source is set to zero outside of the core:
         }
       }
     }
-
-Compiling documentation
-~~~~~~~~~~~~~~
-
-The Hermes-3 documentation is built using `Sphinx <https:
-//www.sphinx-doc.org/en/master/usage/installation.html>`_ and 
-`Doxygen <https://www.doxygen.nl/index.html>`_. It's written in 
-`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`_, 
-which is a markup language similar to Markdown. Doxygen generates automatic 
-documentation based on the C++ code, while Sphinx handles everything else.
-
-Editing documentation is much easier if you can compile it locally using the following steps:
-
-1. Install Sphinx and our theme in your Python environment:
-
-   .. code-block:: bash
-
-      pip install sphinx sphinx_book_theme
-
-2. Install Doxygen (modify as necessary for your OS) and Breathe, the package that
-   connects it to Sphinx:
-
-   .. code-block:: bash
-
-      sudo apt install doxygen
-
-3. Install Breathe (modify as necessary for your OS):
-
-   .. code-block:: bash
-
-      pip install breathe
-
-4. Run Doxygen - this will parse the C++ code:
-
-   .. code-block:: bash
-
-      cd hermes-3/docs/doxygen
-      Doxygen doxyfile
-
-5. Run Sphinx - this will parse the RST files and generate the
-   documentation. ``sphinx`` and ``build`` are the source and build
-   directories, respectively.
-
-   .. code-block:: bash
-
-      cd hermes-3/docs
-      sphinx-build sphinx build
-
-6. Open the generated HTML files, either by double clicking on the file in your
-   browser, or some other way. If you use VS Code locally or on a remote
-   machine through SSH, you can use the extension `Live Preview <https:
-   //marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`_ which
-   can stream it to your browser.
 
 
 
