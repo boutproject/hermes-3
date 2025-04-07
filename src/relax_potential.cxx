@@ -5,6 +5,8 @@ using bout::globals::mesh;
 
 #include "../include/div_ops.hxx"
 #include "../include/relax_potential.hxx"
+#include <bout/constants.hxx>
+
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver) {
   AUTO_TRACE();
@@ -48,6 +50,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   const BoutReal Bnorm = units["Tesla"];
   const BoutReal Lnorm = units["meters"];
   const BoutReal Tnorm = units["eV"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
 
   if (diamagnetic) {
     // Read curvature vector
@@ -97,10 +100,9 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 
   if (initialize_vort_from_mesh) {
   // Try to read the initial field from the mesh
-    mesh->get(Vort, std::string("vort_init")); // Units: ?? is it [kg/m^3/s]?? 
-    // !< TO DO: check units and how we normalize it
-    // Vort_norm = Nnorm * Mi / Tnorm ?? where Mi is the mass of ions?
-    // Vort /= Vort_norm; // Normalization
+    mesh->get(Vort, std::string("vort_init")); // Units: C m^-3 
+    // NOTE(Malamast): I took the units from the vorticity component.
+    Vort /= SI::qe * Nnorm; // Normalization
   }
 }
 
@@ -282,7 +284,15 @@ void RelaxPotential::finally(const Options& state) {
 void RelaxPotential::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = state["Tnorm"].as<BoutReal>();
+
+  // NOTE(Malamast): I added the below from the vorticity component. I need to check the units for Vort in the present component.
+  state["Vort"].setAttributes({{"time_dimension", "t"},
+                               {"units", "C m^-3"},
+                               {"conversion", SI::qe * Nnorm},
+                               {"long_name", "vorticity"},
+                               {"source", "vorticity"}});
 
   set_with_attrs(state["phi"], phi,
                  {{"time_dimension", "t"},
@@ -291,4 +301,10 @@ void RelaxPotential::outputVars(Options& state) {
                   {"standard_name", "potential"},
                   {"long_name", "plasma potential"},
                   {"source", "relax_potential"}});
+
+
+
+
+
+
 }
