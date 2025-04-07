@@ -360,13 +360,13 @@ void Recycling::transform(Options& state) {
               // These are NOT communicated back into state and will exist only in this component
               // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
               // While enabling us to still calculate radial wall fluxes separately here
-              BoutReal nnguard = SQ(Nnlim[i]) / Nnlim[is];
-              BoutReal pnguard = SQ(Pnlim[i]) / Pnlim[is];
-              BoutReal tnguard = SQ(Tnlim[i]) / Tnlim[is];
+              BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
+              BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
+              BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
               // Calculate wall conditions
-              BoutReal nnsheath = 0.5 * (Nnlim[i] + nnguard);
-              BoutReal tnsheath = 0.5 * (Tnlim[i] + tnguard);
+              BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
+              BoutReal tnsheath = 0.5 * (Tn[i] + tnguard);
               BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AAn) );   // Stangeby p.69 eqns. 2.21, 2.24
 
               // Convert dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
@@ -460,13 +460,13 @@ void Recycling::transform(Options& state) {
                 // These are NOT communicated back into state and will exist only in this component
                 // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
                 // While enabling us to still calculate radial wall fluxes separately here
-                BoutReal nnguard = SQ(Nnlim[i]) / Nnlim[is];
-                BoutReal pnguard = SQ(Pnlim[i]) / Pnlim[is];
-                BoutReal tnguard = SQ(Tnlim[i]) / Tnlim[is];
+                BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
+                BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
+                BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
                 // Calculate wall conditions
-                BoutReal nnsheath = 0.5 * (Nnlim[i] + nnguard);
-                BoutReal tnsheath = 0.5 * (Tnlim[i] + tnguard);
+                BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
+                BoutReal tnsheath = 0.5 * (Tn[i] + tnguard);
                 BoutReal v_th = 0.25 * sqrt( 8*tnsheath / (PI*AAn) );   // Stangeby p.69 eqns. 2.21, 2.24
 
                 // Convert dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
