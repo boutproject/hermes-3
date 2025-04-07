@@ -1,10 +1,8 @@
-.. _sec-execution-postprocessing:
+.. _sec-execution:
 
-Executing and post-processing simulations
+Executing simulations
 ===========
 
-Running Hermes-3
------------
 
 Running Hermes-3 is done in the same way as any BOUT++ simulation.
 Please refer to the relevant `BOUT++ documentation 
@@ -74,26 +72,4 @@ Manipulating restart files
 Restart files can be created from an arbitrary time slice of the simulation using 
 `boutdata.restart.create <https://github.com/boutproject/
 boutdata/blob/0aaef417af092882ac295c4d84e4532e4a10e01f/src/boutdata/restart.py#L459>`_.
-
-
-
-Post-processing
------------
-
-There are two workflows for post-processing Hermes-3 results. The legacy way
-is to use the `boutdata <https://github.com/boutproject/boutdata>`_ package, which
-can be used to extract the raw variables from the dump files individually, which
-then have to be unnormalised to be converted into SI units.
-
-The recommended way is to use `xHermes <https://github.com/boutproject/xhermes>`_, 
-which is built upon the Xarray BOUT++ post-processing tool `xBOUT 
-<https://github.com/boutproject/xBOUT>`_.
-The main advantage of xHermes is that it contains several routines for pre-processing
-the data, including automatic unnormalisation and geometry calaculations. The disadvantage
-is that it may be slower than ``boutdata`` when running in parallel due to the netCDF
-I/O overhead. This can be mitigated by squashing the dump files. Efforts to improve
-the performance are ongoing.
-
-Please refer to the xHermes `readme <https://github.com/boutproject/xhermes?tab=readme-ov-file#xhermes>`_
-and `examples <https://github.com/boutproject/xhermes/tree/main/examples>`_ for details.
 

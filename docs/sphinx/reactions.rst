@@ -3,6 +3,10 @@
 Reactions
 ===========
 
+The following content gives some background to the reactions implemented in Hermes-3.
+Please see the :ref:`postprocessing` section for related diagnostics.
+
+
 Reaction basics
 ------------------------------
 
@@ -36,48 +40,7 @@ should be thrown.
 
 
 
-Categories of diagnostics
-~~~~~~~~~~~
 
-NOTE:
-   Each diagnostic in Hermes-3 has metadata containing a description, units and
-   the normalisation factor. These are automatically present in xHermes output (
-   e.g. ds["Ne"].attrs) and can also be obtained from the source code directly.
-
-There are five categories of diagnostics. ``K`` is a simple reaction rate (always positive).
-``S`` is a source of density and is positive if the ion density is increasing.
-``E`` is a source of energy due to energy transfer (e.g. charge exchange) and 
-is positive if the ion energy is increasing.
-``F`` is a momentum transfer rate and is currently negative if the ion energy is increasing.
-``R`` is a loss of energy from the system, e.g. due to radiation. It is always negative.
-
-+------------------+---------------------------+-------------------------+
-| Variable prefix  |   Units                   | Description             |
-+==================+===========================+=========================+
-| K                |   :math:`s^{-1}`          | Reaction rate           |
-+------------------+---------------------------+-------------------------+
-| S                |   :math:`m^{-3}s^{-1}`    | Density transfer source |
-+------------------+---------------------------+-------------------------+
-| E                |   :math:`Wm^{-3}`         | Energy transfer source  |
-+------------------+---------------------------+-------------------------+
-| F                |   :math:`kgm^{-2}s^{-2}`  | Momentum transfer rate  |
-+------------------+---------------------------+-------------------------+
-| R                |   :math:`Wm^{-3}`         | System loss source      |
-+------------------+---------------------------+-------------------------+
-
-Charge exchange can be slightly complicated:
-
-For two species `a` and `b`, the channel `Fab_cx` is a source of momentum for species `a` due to
-charge exchange with species `b`. There are corresponding sinks for
-the products of the charge exchange reaction which are not saved.
-
-For example,reaction `d + t+ -> d+ + t` will save the following
-forces (momentum sources):
-- `Fdt+_cx` is a source of momentum for deuterium atoms `d` and sink of momentum for deuterium ions `d+`.
-- `Ft+d_cx` is a source of momentum for tritium ions `t+` and sink of momentum for tritium atoms `t`.
-
-The reason for this convention is the existence of the inverse reactions:
-`t + d+ -> t+ + d` outputs diagnostics `Ftd+_cx` and `Fd+t_cx`.
 
 
 

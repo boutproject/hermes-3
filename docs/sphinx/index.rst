@@ -12,7 +12,8 @@ Hermes-3 documentation
    introduction
    installation
    inputs
-   execution_postprocessing
+   execution
+   postprocessing
    examples
    solver_numerics
    equations
