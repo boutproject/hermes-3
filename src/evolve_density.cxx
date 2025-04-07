@@ -49,6 +49,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Evolve the logarithm of density?")
                    .withDefault<bool>(false);
 
+
+
   if (evolve_log) {
     // Evolve logarithm of density
     solver->add(logN, std::string("logN") + name);
@@ -139,6 +141,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     // NOTE(malamast): What happens if the stored variable in the mesh is 2D and N is 3D? 
     //                 Will it still work? If not, do something like below where N_init is 2D. 
     N /= Nnorm; // Normalization
+
   }
 
 }
