@@ -3,6 +3,8 @@
 Feedback control
 ===============================
 
+The two feedback controllers detailed in this section are implemented for 1D only at the moment.
+
 .. _upstream_density_feedback:
 
 Upstream density controller

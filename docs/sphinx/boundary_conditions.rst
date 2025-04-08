@@ -54,7 +54,7 @@ Currently, there is only one additional simple boundary condition implemented in
 This is a commonly used setting for plasma density and pressure in the tokamak SOL boundary in 2D and 3D but is not applicable in 1D.
 Note that this must be provided in normalised units just like the BOUT++ simple boundary conditions.
 
-The below example for a 2D tokamak simulation sets the electron density to a constant value of 1e20 m:sup:`-3` in the core and
+The below example for a 2D tokamak simulation sets the electron density to a constant value of :math:`1e20^{-3}` in the core and
 sets a decay length of 3mm in the SOL and PFR regions, while setting the remaining boundaries to `neumann`.
 Example settings of the fundamental normalisation factors and the calculation of the derived ones is provided
 in the `hermes` component which can be accessed by using the `hermes:` prefix in any other component in the input file.
@@ -223,19 +223,22 @@ the boundary and is not recommended.
 sheath_boundary
 ^^^^^^^^^^^^^^^
 
-This is intended to give a more rigorous treatment when simulating multi-species, as well as to add models for
-:math:`gamma_e` and :math:`gamma_i` based on Tskhakaya 2005. As this component is considerably more complex, the 
-development may lag behind `sheath_boundary_simple`.
+This component is required to calculate correct sheath heat transfer coefficients considering multiple main ions
+based on Tskhakaya 2005. As this component is more complex, the development may lag behind `sheath_boundary_simple`.
 
 .. _sheath_boundary_insulating:
 
 sheath_boundary_insulating
 ^^^^^^^^^^^^^^^
 
-Not yet documented.
+WIP
 
 .. _noflow_boundary:
 
+noflow_boundary
+^^^^^^^^^^^^^^^
+
+WIP
 
 Recycling
 ~~~~~~~~~
@@ -544,6 +547,7 @@ The grid increases in resolution towards the target, with a minimum grid spacing
 
    # Parallel grid spacing — grid refinement near the divertor target (which is where the interesting
    # stuff happens)
+   dz = 1
    dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
 
    # Calculate where the source ends in grid index (i.e. at the X-point)
@@ -553,9 +557,11 @@ The grid increases in resolution towards the target, with a minimum grid spacing
 And here is how the calculated geometric information is used to prepare a pressure source. The user 
 inputs a parallel heatflux in :math:`W/m^2`, or Watts per cross-sectional flux tube area.
 This is converted to a pressure flux in :math:`Pa/{m^2s}` by the :math:`2/3` factor, and then
-converted to a pressure source in :math:`Pa/{m^3s}` by dividing by the length of the heating region :math:`mesh:length_xpt`. 
-Note that this assumes a constant cross-sectional area, i.e. :math:`dx = dz = J = 1`. If you are imposing a full B-field profile in your 1D simulation, 
-you will need to account for the fact that :math:`J` is no longer constant.
+converted to a pressure source in :math:`Pa/{m^3s}` by dividing by the length of the heating region ``mesh:length_xpt``. 
+Note that this assumes a constant cross-sectional area, i.e. :math:`dx = dz = J = 1` due to the fact this 
+is a 1D simulation. Note that ``dz`` is actually :math:`2 \pi` by default, and must be set to 1 in the input file for
+this particular expression to work.
+If you are imposing a full B-field profile in your 1D simulation, you will need to account for the fact that :math:`J` is no longer constant.
 In order to limit the pressure source to just the region above the X-point, it is multiplied by a Heaviside
 function which returns 1 upstream of :math:`y=mesh:y\_xpt` and 0 downstream of it.
 

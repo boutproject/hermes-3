@@ -17,13 +17,13 @@ which is built upon the Xarray BOUT++ post-processing tool `xBOUT
 The main advantage of xHermes is that it contains several routines for pre-processing
 the data, including automatic unnormalisation and geometry calaculations. The disadvantage
 is that it may be slower than ``boutdata`` when running in parallel due to the netCDF
-I/O overhead. This can be mitigated by squashing the dump files. Efforts to improve
-the performance are ongoing.
+I/O overhead. This can be mitigated by squashing the dump files (see section :ref:`sec-execution-squashing`).
+Efforts to improve the performance are ongoing.
 
 Please refer to the xHermes `readme <https://github.com/boutproject/xhermes?tab=readme-ov-file#xhermes>`_
 and `examples <https://github.com/boutproject/xhermes/tree/main/examples>`_ for details.
 
-List of diagnostic variables
+Available diagnostic variables
 ~~~~~~~~~~~
 
 It can be problematic to record all of the diagnostic variables in the documentation
@@ -97,6 +97,21 @@ forces (momentum sources):
 
 The reason for this convention is the existence of the inverse reactions:
 `t + d+ -> t+ + d` outputs diagnostics `Ftd+_cx` and `Fd+t_cx`.
+
+Here are the definitions of some common channels:
+
++------------------+--------------------------------------+
+| Short name       |   Description                        |
++==================+======================================+
+| iz               |   Ionisation                         |
++------------------+--------------------------------------+
+| ex               |   Excitation (ionisation) radiation  |
++------------------+--------------------------------------+
+| rec              |   Recombination                      |
++------------------+--------------------------------------+
+| cx               |   Charge exchange                    |
++------------------+--------------------------------------+
+
 
 Flow diagnostics convention
 ~~~~~~~~~~~

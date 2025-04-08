@@ -58,6 +58,8 @@ BOUT++ generates four types of output files:
 * ``BOUT.restart.*``: These files are required to restart the simulation, 
   and are generally smaller than the dump files.
 
+.. _sec-execution-squashing:
+
 Squashing output
 ~~~~~~~~~~~
 

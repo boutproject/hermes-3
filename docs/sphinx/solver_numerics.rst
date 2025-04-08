@@ -23,7 +23,7 @@ CVODE
    projects/sundials/cvode>`_ for details. CVODE is required for 3D
    turbulence simulations and currently gives better results in 2D 
    simulations. `The BOUT++ implementation is here. <https
-   ://github.com/mikekryjak/BOUT-dev/blob/master/src/solver/impls/cvode/cvode.cxx>``
+   ://github.com/mikekryjak/BOUT-dev/blob/master/src/solver/impls/cvode/cvode.cxx>`_
 
 beuler
    A first-order in time implementation of the backward Euler method.
@@ -87,7 +87,9 @@ rtol = 1e-5
 Configuring beuler
 ~~~~~~~~~~~~~~~~~~~~~
 
-Here is the re
+Here is the recommended configuration for the ``beuler`` solver using the
+Hypre Euclid preconditioner:
+
 .. code-block:: ini
 
    [solver]
@@ -125,6 +127,12 @@ Numerics
 
 Slope (flux) limiters 
 ~~~~~~~~~~~~~~~~~~~~~
+
+The choice of slope limiter is important: a dissipative limiter increases
+numerical dissipation but can substantially improve solver stability and
+robustness. See :ref:`sec-slope-limiter-settings` for how to change the 
+limiter. The default is ``MC``, which has a good balance between 
+stability and accuracy.
 
 Dynamics parallel to the magnetic field are solved using a 2nd-order
 slope-limiter method.  For any number of fluids we solve the number
@@ -199,8 +207,8 @@ Controlling Lax flux strength with sound_speed
 **sound_speed**
 
 By default, the Lax flux strength is calculated based on the sound speed
-of each species individually. This component calculates the collective sound speed
-by summing the pressure of all species and dividing by the sum of the mass density 
+of each species individually. Instead, the ``sound_speed`` component can be used
+component to sum the pressure of all species and divide by the sum of the mass density 
 of all species:
 
 .. math::

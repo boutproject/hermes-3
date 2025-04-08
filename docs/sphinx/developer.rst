@@ -151,6 +151,13 @@ While the above methods are very simple and can be effective, debugging tools su
 `gdb <https://sourceware.org/gdb/>`_ or `valgrind <https://valgrind.org/>`_ can be used to find 
 the segmentation fault as well.
 
+Debugging: compiling in debug mode
+~~~~~~~~~~~~~~
+
+This can be a useful way to catch errors. Please see the
+`relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`_ 
+in the BOUT++ documentation.
+
 Header vs. implementation files
 ~~~~~~~~~~~~~~
 
@@ -161,6 +168,8 @@ variable and class declarations and the implementation file to contain the rest.
 An example of this is in the ``evolve_density`` component - see the
 `implementation file <https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`_
 and the `header file <https://github.com/boutproject/hermes-3/blob/master/include/evolve_density.hxx>`_.
+
+
 
 Data types
 ~~~~~~~~~~~~~~

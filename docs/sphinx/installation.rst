@@ -51,8 +51,7 @@ recommended way to build Hermes-3 links to the SUNDIALS library:
 
       cmake . -B build -DBOUT_DOWNLOAD_SUNDIALS=ON -DBOUT_DOWNLOAD_NETCDF_CXX4=ON
 
-2. Build, compiling Hermes-3 and all dependencies using 4 parallel cores
-(adjust as necessary):
+2. Build, compiling Hermes-3 and all dependencies using 4 parallel cores (adjust as necessary):
 
    .. code-block:: bash
 
@@ -210,6 +209,7 @@ Perlmutter:
    module load cray-hdf5
    module load cray-netcdf
 
+.. _sec-slope-limiter-settings:
 
 Slope (flux) limiter settings
 ~~~~~~~~~~

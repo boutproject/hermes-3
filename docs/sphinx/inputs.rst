@@ -90,6 +90,7 @@ and `documentation <https://hypnotoad.readthedocs.io/en/latest/>`_.
 
 Guard cells
 ~~~~~~~~~~~~~~
+
 WIP
 
 Grid redistribution and interpolation

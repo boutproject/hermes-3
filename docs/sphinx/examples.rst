@@ -7,7 +7,7 @@ Hermes-3 contains a large number of example simulations, with only a selection
 shown here. Please refer to the ``examples`` directory for more.
 
 As the development of the code has progressed rapidly, it has been difficult
-To keep all of the examples up to date and not all are guaranteed to represent
+to keep all of the examples up to date and not all are guaranteed to represent
 the most optimal setup.
 
 A review is currently in process to select a few of the most useful examples
@@ -207,7 +207,7 @@ included, or only included in a parameterised way as sources or
 sinks. The field line direction is then "into the page", and the
 domain represents a slice somewhere along the field line, e.g. 
 at the midplane.
- These are useful for the study of the basic physics of plasma
+These are useful for the study of the basic physics of plasma
 "blobs" / filaments, and tokamak edge turbulence. 
 
 .. _Blob2d:
@@ -589,6 +589,11 @@ the `collisions` manual section for the expressions used in other regimes.
 
 recycling-dthene
 ~~~~~~~~~~~~~~~~
+
+Warning
+   Impurity transport can be notoriously computationally expensive to run.
+   If you are interested in 2D transport simulations, consider starting 
+   with the much simpler ``recycling`` example (not yet in documentation)
    
 The `recycling-dthene` example includes cross-field diffusion,
 parallel flow and heat conduction, collisions between species, sheath

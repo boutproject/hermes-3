@@ -73,11 +73,14 @@ How do I configure a simulation?
   the ``hermes-3\examples\`` directory for extra examples.
   Recommended solver settings are in the :ref:`sec-solver_numerics` section.
 
+How do I run Hermes-3, how do I restart simulations?
+  See :ref:`sec-execution`.
+
 How do I post-process a simulation?
   There are two interfaces: the legacy Python package boutdata
   and the newer, Xarray powered xHermes. xHermes can be a bit 
   slower but handles normalisation for you and has many quality
-  of life features. See section :ref:`sec-execution-postprocessing`.
+  of life features. See section :ref:`sec-postprocessing`.
 
 What equations am I solving?
   Hermes-3 is modular and the solved equations are built from "components".
@@ -88,7 +91,7 @@ What equations am I solving?
 What about tests?
   See :ref:`sec-tests` for details on the test suite.
 
-How do I contribute?
+How can I modify Hermes-3?
   Please see the :ref:`sec-developer` section for details on how to
   contribute to Hermes-3. We welcome contributions, whether they are
   bug fixes, new features or documentation improvements.
