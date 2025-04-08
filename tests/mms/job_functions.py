@@ -380,33 +380,38 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    #      print(key)     
    # make a easy scan over the two operators, generalisation to N operators possible
    function_list = ["ddt(Nd)", "ddt(Pd)"]
-   if evolve_momentum:
+   if evolve_momentum and not conservation_test:
        function_list.append("ddt(NVd)")
 
-   for varstring in function_list: #, "Nd", "Pd"
-      label = varstring
+   for varstring in function_list:
       expected_slope = 2.0
       l2norm = []
       nylist = []
       dylist = []
       for m in range(0,ntest):
-         #print(varstring)
-         numerical = collectvar(datasets, varstring, m)
+         if varstring == "ddt(Pd)" and evolve_momentum and conservation_test:
+            NVd = collectvar(datasets, "NVd", m)
+            Nd = collectvar(datasets, "Nd", m)
+            Vd = NVd/(Nd*mass)
+            numerical = (3.0/2.0)*collectvar(datasets, "ddt(Pd)", m) + Vd*collectvar(datasets, "ddt(NVd)", m)
+            label = "ddt(Ed) = 3/2 ddt(Pd) + Vd * ddt(NVd)"
+         else:
+            label = varstring
+            numerical = collectvar(datasets, varstring, m)
          normvar = (collectvar(datasets, varstring[4:-1], m))[s]
          dx = (collectvar(datasets, "dx", m))[sxy]
          dy = (collectvar(datasets, "dy", m))[sxy]
          dz = (collectvar(datasets, "dz", m))[sxy]
          J = (collectvar(datasets, "J", m))[sxy]
-         #if label[0:3] == "ddt":
          error_values = (numerical)[s]
-         #else:
+         
          if conservation_test:
             thisl2 = np.abs(volume_integral(error_values,dx,dy,dz,J)/
                            volume_integral(normvar,dx,dy,dz,J))
          else:
             thisl2 = np.sqrt(volume_integral(error_values**2,dx,dy,dz,J)/
                               volume_integral(normvar**2,dx,dy,dz,J))
-            #print("thisl2",thisl2)
+         #print("thisl2",thisl2)
          l2norm.append(thisl2)
          nylist.append(numerical.shape[1])
          # proxy for grid spacing

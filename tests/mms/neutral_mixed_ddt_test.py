@@ -6,7 +6,7 @@ from perpendicular_laplacian import div_par_f_symbolic, metric_coefficients
 from perpendicular_laplacian import grad_par_f_symbolic
 from sympy import sin, cos, log
 
-conservation_test = False
+conservation_test = True#False
 evolve_momentum = True
 # specify symbolic inputs
 # contravariant metric coeffs
