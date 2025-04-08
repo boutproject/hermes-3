@@ -142,6 +142,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                              + std::string("). Units [N/m^2/s]"))
                         .withDefault(pressure_source)
                     / pressure_norm;
+  // Try to read the pressure source from the mesh
+  // Units of Pascals per second
+  momentum_source = 0.0;
+  mesh->get(momentum_source, std::string("NV") + name + "_src");
+  // need some normalisation convention here
 
   // Set boundary condition defaults: Neumann for all but the diffusivity.
   // The dirichlet on diffusivity ensures no radial flux.
@@ -488,13 +493,11 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn) += viscosity_source;
       ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
     }
-
+    Snv = momentum_source;
     if (localstate.isSet("momentum_source")) {
-      Snv = get<Field3D>(localstate["momentum_source"]);
-      ddt(NVn) += Snv;
-    } else {
-      Snv = 0;
+      Snv += get<Field3D>(localstate["momentum_source"]);
     }
+    ddt(NVn) += Snv;
 
   } else {
     ddt(NVn) = 0;

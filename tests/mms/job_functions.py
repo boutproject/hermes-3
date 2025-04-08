@@ -230,8 +230,10 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    nu_cfreq = test_input["collision_frequency"]
    Nd_string = test_input["Nd_string"]
    Pd_string = test_input["Pd_string"]
+   NVd_string = test_input["NVd_string"]
    source_Nd_string = test_input["source_Nd_string"]
    source_Pd_string = test_input["source_Pd_string"]
+   source_NVd_string = test_input["source_NVd_string"]
    g11_str = test_input["g11_string"]
    g22_str = test_input["g22_string"]
    g33_str = test_input["g33_string"]
@@ -245,7 +247,10 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    g_13_str = test_input["g_13_string"]
    g_23_str = test_input["g_23_string"]
    J_str = test_input["J_string"]
+   mass = test_input["mass"]
    neutral_conduction = test_input["neutral_conduction"]
+   neutral_viscosity = test_input["neutral_viscosity"]
+   evolve_momentum = test_input["evolve_momentum"]
    base_test_dir = test_input["test_dir"]
    interactive_plots = test_input["interactive_plots"]
    conservation_test = test_input["conservation_test"]
@@ -300,6 +305,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    
    Nd_src = {source_Nd_string}
    Pd_src = {source_Pd_string}
+   NVd_src = {source_NVd_string}
 
    #################################################################
    # Neutrals
@@ -307,11 +313,11 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    [d]
    type = neutral_mixed
 
-   AA = 2
+   AA = {mass}
 
    diagnose = true
    output_ddt = true
-   evolve_momentum = false
+   evolve_momentum = {evolve_momentum}
    precondition = true
    diagnose = true
    rnn_override = {nu_cfreq}
@@ -320,6 +326,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    lax_flux = false
    density_floor = 1.0e-15
    neutral_conduction = {neutral_conduction}
+   neutral_viscosity = {neutral_viscosity}
    normalise_sources = false
    [Nd]
 
@@ -329,6 +336,13 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    
    [Pd]
    function = {Pd_string}
+   bndry_core = neumann
+   bndry_all = neumann
+   """
+         if evolve_momentum:
+             mesh_string = mesh_string + f"""
+   [NVd]
+   function = {NVd_string}
    bndry_core = neumann
    bndry_all = neumann
    """
@@ -365,8 +379,11 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    #   for key in keys:
    #      print(key)     
    # make a easy scan over the two operators, generalisation to N operators possible
-   
-   for varstring in ["ddt(Nd)", "ddt(Pd)"]: #, "Nd", "Pd"
+   function_list = ["ddt(Nd)", "ddt(Pd)"]
+   if evolve_momentum:
+       function_list.append("ddt(NVd)")
+
+   for varstring in function_list: #, "Nd", "Pd"
       label = varstring
       expected_slope = 2.0
       l2norm = []

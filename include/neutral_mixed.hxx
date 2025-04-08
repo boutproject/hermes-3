@@ -65,7 +65,7 @@ private:
   bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
-  Field3D density_source, pressure_source; ///< External input source
+  Field3D density_source, pressure_source, momentum_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
 
