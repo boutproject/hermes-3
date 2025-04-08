@@ -302,12 +302,4 @@ message("
 
    ScoreP support           : ${HERMES_HAS_SCOREP}
 
-   === Python ===
-
-   Make sure that the tools/pylib directory is in your PYTHONPATH
-   e.g. by adding to your ~/.bashrc file
-
-       export PYTHONPATH=${BOUT_PYTHONPATH}:\$PYTHONPATH
-
-*** Now run `cmake --build ${CMAKE_BINARY_DIR}` to compile BOUT++ ***
 ")
