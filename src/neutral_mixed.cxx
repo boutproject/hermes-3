@@ -92,6 +92,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                     .doc("Paramter for overriding the neutral collision frequency in Dn for testing")
                     .withDefault(-1.0);
 
+  normalise_sources = options["normalise_sources"]
+                          .doc("Normalise input sources?")
+                          .withDefault<bool>(true);
+
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
 
@@ -110,6 +114,13 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(1.0);
 
+  if (normalise_sources) {
+    density_norm = Nnorm * Omega_ci;
+    pressure_norm = SI::qe * Nnorm * Tnorm * Omega_ci;
+  } else {
+    density_norm = 1.0;
+    pressure_norm = 1.0;
+  }
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
   density_source = 0.0;
@@ -119,7 +130,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
       alloptions[std::string("N") + name]["source"]
           .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
           .withDefault(density_source)
-      / (Nnorm * Omega_ci);
+      / density_norm;
 
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
@@ -130,7 +141,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                         .doc(std::string("Source term in ddt(P") + name
                              + std::string("). Units [N/m^2/s]"))
                         .withDefault(pressure_source)
-                    / (SI::qe * Nnorm * Tnorm * Omega_ci);
+                    / pressure_norm;
 
   // Set boundary condition defaults: Neumann for all but the diffusivity.
   // The dirichlet on diffusivity ensures no radial flux.

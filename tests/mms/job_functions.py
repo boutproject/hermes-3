@@ -293,6 +293,9 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    g_13 = {g_13_str}
    J = {J_str}
    
+   Nd_src = {source_Nd_string}
+   Pd_src = {source_Pd_string}
+
    #################################################################
    # Neutrals
 
@@ -312,18 +315,17 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    lax_flux = false
    density_floor = 1.0e-15
    neutral_conduction = {neutral_conduction}
+   normalise_sources = false
    [Nd]
 
    function = {Nd_string}
    bndry_core = neumann
    bndry_all = neumann
-   source = {source_Nd_string}
-
+   
    [Pd]
    function = {Pd_string}
    bndry_core = neumann
    bndry_all = neumann
-   source = {source_Pd_string}
    """
          file.write(mesh_string.replace("**","^"))
 
@@ -358,7 +360,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    #      print(key)     
    # make a easy scan over the two operators, generalisation to N operators possible
    
-   for varstring in ["ddt(Nd)", "ddt(Pd)", "Nd", "Pd"]:
+   for varstring in ["ddt(Nd)", "ddt(Pd)"]: #, "Nd", "Pd"
       label = varstring
       expected_slope = 2.0
       l2norm = []

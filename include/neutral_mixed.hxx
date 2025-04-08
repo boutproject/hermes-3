@@ -51,12 +51,14 @@ private:
 
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
-  BoutReal rnn_override;
-  
+  BoutReal rnn_override; ///< Rnn input for testing
+  BoutReal density_norm, pressure_norm; ///< Normalisations
+
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
-  
+  bool normalise_sources; ///< Normalise input sources?
+
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
   bool precondition {true}; ///< Enable preconditioner?
