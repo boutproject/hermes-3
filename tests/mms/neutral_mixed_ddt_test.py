@@ -6,6 +6,7 @@ from perpendicular_laplacian import div_par_f_symbolic, metric_coefficients
 from perpendicular_laplacian import grad_par_f_symbolic
 from sympy import sin, cos, log
 
+conservation_test = False
 # specify symbolic inputs
 # contravariant metric coeffs
 g11 = 1.1 + 0.16*x*cos(y)
@@ -54,9 +55,14 @@ if neutral_conduction:
           +(2.0/3.0)*div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, Kn, Tn)
           +(2.0/3.0)*div_par_k_grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, Kn, Tn)
           )
+
 # Sources for steady state
-source_Nn = -ddt_Nn
-source_Pn = -ddt_Pn
+if conservation_test:
+    source_Nn = 0.0
+    source_Pn = 0.0
+else:
+    source_Nn = -ddt_Nn
+    source_Pn = -ddt_Pn
 
 test_input = {
     "ntest" : 3, 
@@ -81,7 +87,8 @@ test_input = {
     "source_Pd_string" : str(source_Pn),
     "neutral_conduction" : neutral_conduction,
     "test_dir" : "neutral_mixed",
-    "interactive_plots" : True
+    "interactive_plots" : True,
+    "conservation_test" : conservation_test
 }
 
 run_neutral_mixed_manufactured_solutions_test(test_input)

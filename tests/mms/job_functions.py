@@ -10,6 +10,10 @@ def lin_func(x,b,a):
 def collectvar(datasets, var, mesh=0):
     return datasets[mesh][var]
 
+def volume_integral(var,dx,dy,dz,J):
+   intV = np.sum(var[-1,:,:,0]*dx*dy*dz*J)
+   return intV
+
 def run_manufactured_solutions_test(test_input):
    # expand inputs from input dictionary
    # the number of grids generated
@@ -244,6 +248,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    neutral_conduction = test_input["neutral_conduction"]
    base_test_dir = test_input["test_dir"]
    interactive_plots = test_input["interactive_plots"]
+   conservation_test = test_input["conservation_test"]
 
    # create directory 
    if not os.path.isdir(base_test_dir):
@@ -341,6 +346,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    s = slice(None), slice(2, -2), slice(1, -1), slice(None)
    #s = slice(1, 2), slice(2, -2), slice(1, -1), slice(None)
    sxyz = slice(2, -2), slice(1, -1), slice(None)
+   sxy = slice(2, -2), slice(1, -1)
    sx = slice(2, -2)
    sy = slice(1, -1)
    sz = slice(None)
@@ -369,16 +375,21 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
       for m in range(0,ntest):
          #print(varstring)
          numerical = collectvar(datasets, varstring, m)
+         normvar = (collectvar(datasets, varstring[4:-1], m))[s]
+         dx = (collectvar(datasets, "dx", m))[sxy]
+         dy = (collectvar(datasets, "dy", m))[sxy]
+         dz = (collectvar(datasets, "dz", m))[sxy]
+         J = (collectvar(datasets, "J", m))[sxy]
          #if label[0:3] == "ddt":
          error_values = (numerical)[s]
          #else:
-         #   error_values = numerical[-1,sx,sy,sz] - numerical[0,sx,sy,sz]
-         # error_values = numerical[0,sx,sy,sz]
-         # print("values", error_values.values)
-         # print("data" , error_values.data)
-         # print("shape" , error_values.shape)
-         thisl2 = np.sqrt(np.mean(error_values**2))
-         #print("thisl2",thisl2)
+         if conservation_test:
+            thisl2 = np.abs(volume_integral(error_values,dx,dy,dz,J)/
+                           volume_integral(normvar,dx,dy,dz,J))
+         else:
+            thisl2 = np.sqrt(volume_integral(error_values**2,dx,dy,dz,J)/
+                              volume_integral(normvar**2,dx,dy,dz,J))
+            #print("thisl2",thisl2)
          l2norm.append(thisl2)
          nylist.append(numerical.shape[1])
          # proxy for grid spacing
