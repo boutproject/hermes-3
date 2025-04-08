@@ -396,7 +396,7 @@ void NeutralMixed::finally(const Options& state) {
 
             - (2. / 3) * Pn * Div_par(Vn)                // Compression
 
-            + (5. / 3) * Div_a_Grad_perp_nonorthog(DnnNn, logPnlim,
+            + (5. / 3) * Div_a_Grad_perp_nonorthog(DnnPn, logPnlim,
                            ef_adv_perp_xlow, ef_adv_perp_ylow) // Perpendicular diffusion
             //+ (5. / 3) * Div_a_Grad_perp_flows(          // Perpendicular advection
             //        DnnPn, logPnlim,
