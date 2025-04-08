@@ -118,8 +118,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   density_source =
       alloptions[std::string("N") + name]["source"]
           .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
-          .withDefault(density_source);
-      // / (Nnorm * Omega_ci);
+          .withDefault(density_source)
+      / (Nnorm * Omega_ci);
 
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
@@ -129,8 +129,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   pressure_source = alloptions[std::string("P") + name]["source"]
                         .doc(std::string("Source term in ddt(P") + name
                              + std::string("). Units [N/m^2/s]"))
-                        .withDefault(pressure_source);
-                    // / (SI::qe * Nnorm * Tnorm * Omega_ci);
+                        .withDefault(pressure_source)
+                    / (SI::qe * Nnorm * Tnorm * Omega_ci);
 
   // Set boundary condition defaults: Neumann for all but the diffusivity.
   // The dirichlet on diffusivity ensures no radial flux.
