@@ -49,6 +49,9 @@ else()
   find_package(bout++ REQUIRED)
 endif()
 
+# Optional dependencies
+include(cmake/SetupBOUTThirdParty.cmake)
+
 set(HERMES_SOURCES
     src/classical_diffusion.cxx
     src/component.cxx
@@ -280,3 +283,31 @@ if (BUILD_SHARED_LIBS)
 else()
   install(TARGETS hermes-3)
 endif()
+
+# CMake configuration files
+install(
+  FILES
+      "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindScoreP.cmake"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/hermes-3"
+  )
+
+
+##################################################
+# Configure summary
+
+message("
+   --------------------------------
+     HERMES Configuration Summary
+   --------------------------------
+
+   ScoreP support           : ${HERMES_HAS_SCOREP}
+
+   === Python ===
+
+   Make sure that the tools/pylib directory is in your PYTHONPATH
+   e.g. by adding to your ~/.bashrc file
+
+       export PYTHONPATH=${BOUT_PYTHONPATH}:\$PYTHONPATH
+
+*** Now run `cmake --build ${CMAKE_BINARY_DIR}` to compile BOUT++ ***
+")
