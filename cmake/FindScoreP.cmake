@@ -77,7 +77,7 @@ endif()
 if(ScoreP_CONFIG)
   message(STATUS "SCOREP library found. (using ${ScoreP_CONFIG})")
 
-  execute_process(COMMAND ${ScoreP_CONFIG} "--user" "--nocompiler" "--cppflags"
+  execute_process(COMMAND ${ScoreP_CONFIG} "--user" "--nocompiler" "--cppflags" "--mpp=mpi" "--pomp"
     OUTPUT_VARIABLE ScoreP_CONFIG_FLAGS)
 
   string(REGEX MATCHALL "-I[^ ]*" ScoreP_CONFIG_INCLUDES "${ScoreP_CONFIG_FLAGS}")
