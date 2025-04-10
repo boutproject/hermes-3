@@ -6,5 +6,9 @@ if (HERMES_USE_SCOREP)
 
   SCOREP_WRAPPER=off cmake -DCMAKE_C_COMPILER=scorep-mpicc -DCMAKE_CXX_COMPILER=scorep-mpicxx <other CMake options>
 ")
+
+find_package(ScoreP REQUIRED)
+# target_link_libraries(hermes-3 PRIVATE ScoreP::ScoreP)
+
 endif()
 set(HERMES_HAS_SCOREP ${HERMES_USE_SCOREP})

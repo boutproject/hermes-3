@@ -50,7 +50,7 @@ else()
 endif()
 
 # Optional dependencies
-include(cmake/SetupBOUTThirdParty.cmake)
+# include(cmake/SetupBOUTThirdParty.cmake)
 
 set(HERMES_SOURCES
     src/classical_diffusion.cxx
@@ -163,6 +163,9 @@ set(HERMES_SOURCES
     include/fixed_fraction_radiation.hxx
     include/simple_pump.hxx
     )
+
+# Optional dependencies
+include(cmake/SetupBOUTThirdParty.cmake)
 
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
@@ -283,23 +286,3 @@ if (BUILD_SHARED_LIBS)
 else()
   install(TARGETS hermes-3)
 endif()
-
-# CMake configuration files
-install(
-  FILES
-      "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindScoreP.cmake"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/hermes-3"
-  )
-
-
-##################################################
-# Configure summary
-
-message("
-   --------------------------------
-     HERMES Configuration Summary
-   --------------------------------
-
-   ScoreP support           : ${HERMES_HAS_SCOREP}
-
-")
