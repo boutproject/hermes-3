@@ -79,6 +79,9 @@ private:
 
   bool initialize_phi_from_mesh;  ///< Initilize the Field3D phi1 from 2D/3D profiles stored in the mesh file. 
   bool initialize_vort_from_mesh;  ///< Initilize the Field3D vort from 2D/3D profiles stored in the mesh file. 
+
+  Field3D viscosity; /// Kinematic viscosity
+  bool phi_dissipation; /// Parallel dissipation of potential
 };
 
 namespace {
