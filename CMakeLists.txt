@@ -49,8 +49,6 @@ else()
   find_package(bout++ REQUIRED)
 endif()
 
-# Optional dependencies
-include(cmake/SetupBOUTThirdParty.cmake)
 
 set(HERMES_SOURCES
     src/classical_diffusion.cxx
