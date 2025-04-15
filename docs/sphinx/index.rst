@@ -1,6 +1,8 @@
 ==================================
-Welcome to Hermes-3 documentation!
+Hermes-3 documentation
 ==================================
+
+.. include:: introduction.rst
 
 .. toctree::
    :maxdepth: 2
@@ -8,14 +10,15 @@ Welcome to Hermes-3 documentation!
    :name: contents
 
    introduction
-   installation_using_cmake
-   installation_using_spack
+   installation
    inputs
+   execution
+   postprocessing
    examples
-   tests
-   transport_2d
-   tokamak_turbulence
-   code_structure
-   components
-   numerical_methods
-   detachment_controller
+   solver_numerics
+   equations
+   boundary_conditions
+   reactions
+   closure
+   feedback_control
+   developer
