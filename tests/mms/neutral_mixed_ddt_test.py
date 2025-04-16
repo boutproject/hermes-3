@@ -8,21 +8,21 @@ from sympy import sin, cos, log
 
 # specify symbolic inputs
 # contravariant metric coeffs
-g11 = 1.1 + 0.16*x*cos(y)
-g22 = 0.9 + 0.09*x*cos(y)
-g33 = 1.2 + 0.2*x*cos(y)
-g12 = 0.0
-g23 = 0.5 + 0.15*x*cos(y)
-g13 = 0.0
-# g11 = 1.0
-# g22 = 1.0
-# g33 = 1.0
+# g11 = 1.1 + 0.16*x*cos(y)
+# g22 = 0.9 + 0.09*x*cos(y)
+# g33 = 1.2 + 0.2*x*cos(y)
 # g12 = 0.0
-# g23 = 0.0
+# g23 = 0.5 + 0.15*x*cos(y)
 # g13 = 0.0
+g11 = 1.0
+g22 = 1.0
+g33 = 1.0
+g12 = 0.0
+g23 = 0.0
+g13 = 0.0
 g_11, g_12, g_13, g_22, g_23, g_33, J = metric_coefficients(g11, g12, g13, g22, g23, g33)
 
-def neutral_mixed_equations(evolve_momentum=False, conservation_test=False):
+def neutral_mixed_equations(evolve_momentum=False, conservation_test=False, test_dir="neutral_mixed"):
     pfac = 0.2
     nfac = 0.2
     # mass 
@@ -132,17 +132,18 @@ def neutral_mixed_equations(evolve_momentum=False, conservation_test=False):
         "neutral_conduction" : neutral_conduction,
         "neutral_viscosity" : neutral_viscosity,
         "evolve_momentum" : evolve_momentum,
-        "test_dir" : "neutral_mixed",
+        "test_dir" : test_dir,
+        "sub_test_dir" : "evolve_momentum_"+str(evolve_momentum)+"_conservation_test_"+str(conservation_test),
         "interactive_plots" : True,
-        "conservation_test" : conservation_test
+        "conservation_test" : conservation_test,
     }
     return test_input
 
-#test_input = neutral_mixed_equations(evolve_momentum=False,conservation_test=False)
-#run_neutral_mixed_manufactured_solutions_test(test_input)
-#test_input = neutral_mixed_equations(evolve_momentum=False,conservation_test=True)
-#run_neutral_mixed_manufactured_solutions_test(test_input)
-#test_input = neutral_mixed_equations(evolve_momentum=True,conservation_test=False)
-#run_neutral_mixed_manufactured_solutions_test(test_input)
+test_input = neutral_mixed_equations(evolve_momentum=False,conservation_test=False)
+run_neutral_mixed_manufactured_solutions_test(test_input)
+test_input = neutral_mixed_equations(evolve_momentum=False,conservation_test=True)
+run_neutral_mixed_manufactured_solutions_test(test_input)
+test_input = neutral_mixed_equations(evolve_momentum=True,conservation_test=False)
+run_neutral_mixed_manufactured_solutions_test(test_input)
 test_input = neutral_mixed_equations(evolve_momentum=True,conservation_test=True)
 run_neutral_mixed_manufactured_solutions_test(test_input)

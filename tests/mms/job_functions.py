@@ -252,12 +252,19 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    neutral_viscosity = test_input["neutral_viscosity"]
    evolve_momentum = test_input["evolve_momentum"]
    base_test_dir = test_input["test_dir"]
+   sub_test_dir = test_input["sub_test_dir"]
    interactive_plots = test_input["interactive_plots"]
    conservation_test = test_input["conservation_test"]
 
    # create directory 
    if not os.path.isdir(base_test_dir):
        os.system("mkdir "+base_test_dir)
+   # create sub-directory, if required
+   if not sub_test_dir is None:
+      base_test_dir = base_test_dir + "/" + sub_test_dir
+      if not os.path.isdir(base_test_dir):
+         os.system("mkdir "+base_test_dir)
+
    workdirs = []
    # make test for each resolution based on template file
    for i in range(0,ntest):
