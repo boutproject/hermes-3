@@ -216,6 +216,7 @@ if(HERMES_TESTS)
            COMMAND runtest)
   endfunction()
 
+  hermes_add_integrated_test(neutral_mixed_ddt_test)
   hermes_add_integrated_test(1D-fluid)
   hermes_add_integrated_test(1D-recycling)
   hermes_add_integrated_test(diffusion)
@@ -260,9 +261,9 @@ if(HERMES_TESTS)
     add_test(NAME differential_operators_mms_nonorthogonal
            WORKING_DIRECTORY tests/mms/
            COMMAND python3 nonorthogonal_test.py)
-    add_test(NAME rhs_mms_neutral_mixed
-           WORKING_DIRECTORY tests/mms/
-           COMMAND python3 neutral_mixed_ddt_test.py)
+#    add_test(NAME rhs_mms_neutral_mixed
+#           WORKING_DIRECTORY tests/mms/
+#           COMMAND python3 neutral_mixed_ddt_test.py)
   endif()
 endif()
 
