@@ -3,6 +3,7 @@ import os
 from xbout import open_boutdataset
 import numpy as np
 from scipy.optimize import curve_fit
+from boututils.run_wrapper import launch
 
 def lin_func(x,b,a):
     return b*x + a
@@ -357,8 +358,11 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
          file.write(mesh_string.replace("**","^"))
 
       # run job on this input
-      print("../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt")
-      os.system("../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt")
+      print("mpirun -n 1 ../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt")
+      # Command to run
+      cmd = "../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt"
+      # Launch using MPI
+      s, out = launch(cmd, nproc=1, pipe=True)
 
    # now analyse the results of the test
    # this slice avoids including guard cells in the test
