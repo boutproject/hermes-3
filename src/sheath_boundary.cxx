@@ -104,6 +104,9 @@ SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) 
   floor_potential = options["floor_potential"]
                         .doc("Apply a floor to wall potential when calculating Ve?")
                         .withDefault<bool>(true);
+
+  diagnose =
+      options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 }
 
 void SheathBoundary::transform(Options &state) {
@@ -304,6 +307,13 @@ void SheathBoundary::transform(Options &state) {
     ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
     : zeroFrom(Ne);
 
+  Field3D total_energy_source; // An output diagnostic: gamma_e n T v
+  Field3D gamma_diagnostic; // Output gamma_e
+  if (diagnose) {
+    total_energy_source = zeroFrom(Ne);
+    gamma_diagnostic = zeroFrom(Ne);
+  }
+
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
@@ -367,6 +377,13 @@ void SheathBoundary::transform(Options &state) {
 #endif
 
         electron_energy_source[i] += power;
+
+        if (diagnose) {
+          // Calculate total energy loss: gamma_e n T v
+          total_energy_source[i] += (gamma_e * tesheath * nesheath * vesheath) * (coord->J[i] + coord->J[im])
+            / ((sqrt(coord->g_22[i]) + sqrt(coord->g_22[im])) * coord->dy[i] * coord->J[i]);
+          gamma_diagnostic[i] = gamma_e;
+        }
       }
     }
   }
@@ -431,6 +448,12 @@ void SheathBoundary::transform(Options &state) {
         }
 #endif
         electron_energy_source[i] -= power;
+
+        if (diagnose) {
+          total_energy_source[i] -= gamma_e * tesheath * nesheath * vesheath * (coord->J[i] + coord->J[ip])
+            / ((sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])) * coord->dy[i] * coord->J[i]);
+          gamma_diagnostic[i] = gamma_e;
+        }
       }
     }
   }
@@ -447,6 +470,12 @@ void SheathBoundary::transform(Options &state) {
   // Add energy source (negative in cell next to sheath)
   // Note: already includes previously set sources
   set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
+
+  if (diagnose) {
+    // Save electron diagnostics
+    set(diagnostics["e"]["energy"], fromFieldAligned(total_energy_source));
+    set(diagnostics["e"]["gamma"], fromFieldAligned(gamma_diagnostic));
+  }
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
     Ve.clearParallelSlices();
@@ -508,6 +537,12 @@ void SheathBoundary::transform(Options &state) {
     Field3D energy_source = species.isSet("energy_source")
       ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
       : zeroFrom(Ni);
+
+    if (diagnose) {
+      // An output diagnostic: gamma_i n T v
+      total_energy_source = zeroFrom(Ni);
+      gamma_diagnostic = zeroFrom(Ni);
+    }
 
     if (lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -582,6 +617,13 @@ void SheathBoundary::transform(Options &state) {
           ASSERT2(power <= 0.0);
 
           energy_source[i] += power;
+
+          if (diagnose) {
+            // Calculate total energy loss: gamma_i n T v
+            total_energy_source[i] += (gamma_i * tisheath * nisheath * visheath) * (coord->J[i] + coord->J[im])
+              / ((sqrt(coord->g_22[i]) + sqrt(coord->g_22[im])) * coord->dy[i] * coord->J[i]);
+            gamma_diagnostic[i] = gamma_i;
+          }
         }
       }
     }
@@ -656,6 +698,12 @@ void SheathBoundary::transform(Options &state) {
           ASSERT2(power >= 0.0);
 
           energy_source[i] -= power; // Note: Sign negative because power > 0
+
+          if (diagnose) {
+            total_energy_source[i] -= gamma_i * tisheath * nisheath * visheath * (coord->J[i] + coord->J[ip])
+              / ((sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])) * coord->dy[i] * coord->J[i]);
+            gamma_diagnostic[i] = gamma_i;
+          }
         }
       }
     }
@@ -682,5 +730,45 @@ void SheathBoundary::transform(Options &state) {
     // Additional loss of energy through sheath
     // Note: Already includes previously set sources
     set(species["energy_source"], fromFieldAligned(energy_source));
+
+    if (diagnose) {
+      // Save total_energy_source for this species
+      set(diagnostics[kv.first]["energy"], fromFieldAligned(total_energy_source));
+      set(diagnostics[kv.first]["gamma"], fromFieldAligned(gamma_diagnostic));
+    }
+  }
+}
+
+void SheathBoundary::outputVars(Options &state) {
+  if (!diagnose) {
+    return;
+  }
+  AUTO_TRACE();
+
+  // Normalisations
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+  for (auto& kv : diagnostics.getChildren()) {
+    set_with_attrs(state[std::string("R") + kv.first + std::string("_sheath")],
+                   getNonFinal<Field3D>(kv.second["energy"]),
+                   {{"time_dimension", "t"},
+                    {"units", "W m^-3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "energy source"},
+                    {"long_name", kv.first + " energy source"},
+                    {"species", kv.first},
+                    {"source", "sheath_boundary"}});
+
+    set_with_attrs(state[std::string("gamma_") + kv.first + std::string("_sheath")],
+                   getNonFinal<Field3D>(kv.second["gamma"]),
+                   {{"time_dimension", "t"},
+                    {"standard_name", "sheath gamma"},
+                    {"long_name", kv.first + " sheath gamma"},
+                    {"species", kv.first},
+                    {"source", "sheath_boundary"}});
   }
 }
