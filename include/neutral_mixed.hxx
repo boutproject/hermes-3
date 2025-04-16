@@ -53,6 +53,7 @@ private:
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
   BoutReal rnn_override; ///< Rnn input for testing
   BoutReal density_norm, pressure_norm; ///< Normalisations
+  BoutReal momentum_norm; ///< Normalisations
 
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?

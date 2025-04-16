@@ -24,6 +24,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Cs0 = sqrt(SI::qe * Tnorm / SI::Mp);
 
   // Need to take derivatives in X for cross-field diffusion terms
   ASSERT0(mesh->xstart > 0);
@@ -117,9 +118,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   if (normalise_sources) {
     density_norm = Nnorm * Omega_ci;
     pressure_norm = SI::qe * Nnorm * Tnorm * Omega_ci;
+    momentum_norm = SI::Mp * Nnorm * Cs0 * Omega_ci;
   } else {
     density_norm = 1.0;
     pressure_norm = 1.0;
+    momentum_norm = 1.0;
   }
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
@@ -142,10 +145,15 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                              + std::string("). Units [N/m^2/s]"))
                         .withDefault(pressure_source)
                     / pressure_norm;
-  // Try to read the pressure source from the mesh
-  // Units of Pascals per second
+  // Try to read the momentum source from the mesh
   momentum_source = 0.0;
   mesh->get(momentum_source, std::string("NV") + name + "_src");
+   // Allow the user to override the source
+  momentum_source = alloptions[std::string("NV") + name]["source"]
+                        .doc(std::string("Source term in ddt(NV") + name
+                             + std::string("). Units [kg m^-2 s^-2]"))
+                        .withDefault(momentum_source)
+                    / momentum_norm;
   // need some normalisation convention here
 
   // Set boundary condition defaults: Neumann for all but the diffusivity.
