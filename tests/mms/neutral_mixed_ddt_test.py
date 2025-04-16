@@ -14,6 +14,10 @@ from sympy import sin, cos, log
 # g12 = 0.0
 # g23 = 0.5 + 0.15*x*cos(y)
 # g13 = 0.0
+# we can safely specify the simplest metric
+# here knowing that the symbolic operators
+# are used in orthogonal_test.py and nonorthogonal_test.py
+# to test more complex metrics.
 g11 = 1.0
 g22 = 1.0
 g33 = 1.0
@@ -22,7 +26,10 @@ g23 = 0.0
 g13 = 0.0
 g_11, g_12, g_13, g_22, g_23, g_33, J = metric_coefficients(g11, g12, g13, g22, g23, g33)
 
-def neutral_mixed_equations(evolve_momentum=False, conservation_test=False, test_dir="neutral_mixed"):
+def neutral_mixed_equations(evolve_momentum=False, 
+                            conservation_test=False,
+                            # expected N in discretisation error ~ (grid_spacing)^N
+                            expected_convergence_order=2.0):
     pfac = 0.2
     nfac = 0.2
     # mass 
@@ -91,7 +98,10 @@ def neutral_mixed_equations(evolve_momentum=False, conservation_test=False, test
                 (2.0/3.0)*Vn*viscosity_source
                 )
 
-    # Sources for steady state
+    # Sources for steady state, set to exactly cancel
+    # the RHS operators if aiming to test the definition
+    # of the RHS, or set to zero if we just want to test
+    # that the RHS is conservative.
     if conservation_test:
         # we just want to make ddt and test conservation properties
         # so no sources are required here
@@ -132,18 +142,46 @@ def neutral_mixed_equations(evolve_momentum=False, conservation_test=False, test
         "neutral_conduction" : neutral_conduction,
         "neutral_viscosity" : neutral_viscosity,
         "evolve_momentum" : evolve_momentum,
-        "test_dir" : test_dir,
+        "test_dir" : "neutral_mixed",
         "sub_test_dir" : "evolve_momentum_"+str(evolve_momentum)+"_conservation_test_"+str(conservation_test),
-        "interactive_plots" : True,
+        "interactive_plots" : False,
         "conservation_test" : conservation_test,
+        "expected_convergence_order" : expected_convergence_order,
     }
     return test_input
 
-test_input = neutral_mixed_equations(evolve_momentum=False,conservation_test=False)
-run_neutral_mixed_manufactured_solutions_test(test_input)
-test_input = neutral_mixed_equations(evolve_momentum=False,conservation_test=True)
-run_neutral_mixed_manufactured_solutions_test(test_input)
-test_input = neutral_mixed_equations(evolve_momentum=True,conservation_test=False)
-run_neutral_mixed_manufactured_solutions_test(test_input)
-test_input = neutral_mixed_equations(evolve_momentum=True,conservation_test=True)
-run_neutral_mixed_manufactured_solutions_test(test_input)
+global_success = True
+
+test_input = neutral_mixed_equations(evolve_momentum=False,
+                                    conservation_test=False,
+                                    expected_convergence_order=2.0)
+success, output_message_0 = run_neutral_mixed_manufactured_solutions_test(test_input)
+global_success = success and global_success
+
+test_input = neutral_mixed_equations(evolve_momentum=False,
+                                    conservation_test=True,
+                                    expected_convergence_order=2.0)
+success, output_message_1 = run_neutral_mixed_manufactured_solutions_test(test_input)
+global_success = success and global_success
+
+test_input = neutral_mixed_equations(evolve_momentum=True,
+                                    conservation_test=False,
+                                    expected_convergence_order=1.0)
+success, output_message_2 = run_neutral_mixed_manufactured_solutions_test(test_input)
+global_success = success and global_success
+
+test_input = neutral_mixed_equations(evolve_momentum=True,
+                                    conservation_test=True,
+                                    expected_convergence_order=0.8)
+success, output_message_3 = run_neutral_mixed_manufactured_solutions_test(test_input)
+global_success = success and global_success
+
+print(output_message_0)
+print(output_message_1)
+print(output_message_2)
+print(output_message_3)
+
+if global_success:
+    exit(0)
+else:
+    exit(1)

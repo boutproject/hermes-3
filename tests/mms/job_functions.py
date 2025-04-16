@@ -255,6 +255,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    sub_test_dir = test_input["sub_test_dir"]
    interactive_plots = test_input["interactive_plots"]
    conservation_test = test_input["conservation_test"]
+   expected_convergence_order = test_input["expected_convergence_order"]
 
    # create directory 
    if not os.path.isdir(base_test_dir):
@@ -391,7 +392,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
        function_list.append("ddt(NVd)")
 
    for varstring in function_list:
-      expected_slope = 2.0
+      expected_slope = expected_convergence_order
       l2norm = []
       nylist = []
       dylist = []
@@ -484,27 +485,26 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    # matplotlib backend, so catch everything
       pass
 
-   # # test the convergence rates
-   # success = True
-   # output_message = ""
-   # for key, variable_set in plot_data.items():
-   #    this_test_success = True
-   #    (xaxis, yaxis, fit, slope, offset, expected_slope) = variable_set
-   #    # check slope of fit ~= 2
-   #    slope_min = 0.975*expected_slope
-   #    if not slope is None:
-   #       if slope < slope_min:
-   #             this_test_success = False
-   #    else: # or permit near-zero errors, but nothing larger
-   #       for error in yaxis:
-   #             if error > 1.0e-10:
-   #                this_test_success = False
-   #    # append test message and set global success variable
-   #    if this_test_success:
-   #       output_message += f"{key} convergence order {slope:.2f} > {slope_min:.2f} => Test passed \n"
-   #    else:
-   #       output_message += f"{key} convergence order {slope:.2f} < {slope_min:.2f} => Test failed \n"
-   #       success = False
+   # test the convergence rates
+   success = True
+   output_message = ""
+   for key, variable_set in plot_data.items():
+      this_test_success = True
+      (xaxis, yaxis, fit, slope, offset, expected_slope) = variable_set
+      # check slope of fit ~= 2
+      slope_min = 0.975*expected_slope
+      if not slope is None:
+         if slope < slope_min:
+               this_test_success = False
+      else: # or permit near-zero errors, but nothing larger
+         for error in yaxis:
+               if error > 1.0e-10:
+                  this_test_success = False
+      # append test message and set global success variable
+      if this_test_success:
+         output_message += f"{base_test_dir}: {key} convergence order {slope:.2f} > {slope_min:.2f} => Test passed \n"
+      else:
+         output_message += f"{base_test_dir}: {key} convergence order {slope:.2f} < {slope_min:.2f} => Test failed \n"
+         success = False
 
-   # return success, output_message
-   return None
+   return success, output_message
