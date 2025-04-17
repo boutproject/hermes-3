@@ -45,6 +45,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     / (Lnorm * Lnorm * Omega_ci);
 
   mesh->communicate(viscosity);
+  viscosity.splitParallelSlices(); // We need this otherwise applyParallelBoundary gives and assertion error. 
   viscosity.applyBoundary("dirichlet");
   viscosity.applyParallelBoundary("parallel_dirichlet_o2");
 
@@ -99,6 +100,10 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 
   Bsq = SQ(coord->Bxy);
 
+
+  diagnose = options["diagnose"]
+    .doc("Output additional diagnostics?")
+    .withDefault<bool>(false);
 
   // Initilize the Field3D phi1 from 2D profiles stored in the mesh file.
   initialize_phi_from_mesh = options["initialize_phi_from_mesh"]
@@ -175,7 +180,8 @@ void RelaxPotential::transform(Options& state) {
 
     // Note: This term is central differencing so that it balances
     // the corresponding compression term in the species pressure equations
-    Field3D DivJdia = Div(Jdia);
+    // Field3D DivJdia = Div(Jdia);
+    DivJdia = Div(Jdia);
     ddt(Vort) += DivJdia;
 
     if (diamagnetic_polarisation) {
@@ -256,6 +262,7 @@ void RelaxPotential::finally(const Options& state) {
     ddt(Vort) -= FV::Div_par_mod<hermes::Limiter>(-phi, zero, sound_speed, dummy);
   }
 
+
   // Viscosity
   ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
 
@@ -323,6 +330,7 @@ void RelaxPotential::outputVars(Options& state) {
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
   // NOTE(Malamast): I added the below from the vorticity component. I need to check the units for Vort in the present component.
   state["Vort"].setAttributes({{"time_dimension", "t"},
@@ -339,9 +347,22 @@ void RelaxPotential::outputVars(Options& state) {
                   {"long_name", "plasma potential"},
                   {"source", "relax_potential"}});
 
+  if (diagnose) {
+    set_with_attrs(state["ddt(Vort)"], ddt(Vort),
+                   {{"time_dimension", "t"},
+                    {"units", "A m^-3"},
+                    {"conversion", SI::qe * Nnorm * Omega_ci},
+                    {"long_name", "Rate of change of vorticity"},
+                    {"source", "vorticity"}});
 
-
-
-
+    if (diamagnetic) {
+      set_with_attrs(state["DivJdia"], DivJdia,
+                     {{"time_dimension", "t"},
+                      {"units", "A m^-3"},
+                      {"conversion", SI::qe * Nnorm * Omega_ci},
+                      {"long_name", "Divergence of diamagnetic current"},
+                      {"source", "vorticity"}});
+    }
+  }
 
 }
