@@ -17,6 +17,7 @@ ParallelOhmsLaw::ParallelOhmsLaw(std::string name, Options& alloptions, Solver*)
 
 
   Ve.setBoundary(std::string("Ve"));
+  NVe.setBoundary(std::string("NVe"));
 
   const Options& units = alloptions["units"];
   // Normalisations
@@ -33,7 +34,7 @@ void ParallelOhmsLaw::transform(Options &state) {
 
   if (!IS_SET(state["fields"]["phi"])) {
     // Here we use the electrostatic potential to calculate the parallel current
-    throw BoutException("Parallel Ohm's law requires the electrostatic potentia. Otherwise use electron force balance\n");
+    throw BoutException("Parallel Ohm's law requires the electrostatic potential. Otherwise use electron force balance\n");
   }
 
   if (!state["species"].isSection("e")) {
@@ -63,9 +64,6 @@ void ParallelOhmsLaw::transform(Options &state) {
   const BoutReal eta_norm = Tnorm / (rho_s0 * Nnorm * Cs0 * SI::qe);
 
   Field3D eta = resistivity_eta / eta_norm;
-
-  // std::cout << " nu = " << *nu(0,0) << std::endl;
-  // exit(0);
 
 
   // Calculate the contribution of each term 
@@ -119,34 +117,18 @@ void ParallelOhmsLaw::transform(Options &state) {
     }
   }
 
-
   Ve = (jpar - current) / (-1.0 * Ne_lim);
   Ve.applyBoundary();
-  set(electrons["velocity"], Ve);
+  // set(electrons["velocity"], Ve); # This is causing a problem with option.hasAttribute("final-domain") check in set function.
+  electrons["velocity"].force(Ve);
 
   NVe = AA * Ne * Ve; // Re-calculate consistent with V and N
   set(electrons["momentum"], NVe);
 
-
 }
 
 void ParallelOhmsLaw::outputVars(Options& state) {
-  if (!diagnose) {
-    return;
-  }
   AUTO_TRACE();
-  // Get normalisations
-  // auto Nnorm = get<BoutReal>(state["Nnorm"]);
-  // // auto Lnorm = get<BoutReal>(state["rho_s0"]);
-
-  set_with_attrs(state["jpar"], jpar,
-                 {{"time_dimension", "t"},
-                  {"units", "A / m^2"},
-                  {"conversion", SI::qe * Nnorm * Cs0},
-                  {"standard_name", "jpar"},
-                  {"long_name", "Parallel electric current"},
-                  {"source", "parallel_ohms_law"}});
-
 
     set_with_attrs(state["Ve"], Ve,
                    {{"time_dimension", "t"},
@@ -167,4 +149,14 @@ void ParallelOhmsLaw::outputVars(Options& state) {
                     {"species", "e"},
                     {"source", "parallel_ohms_law"}});
 
+  if (diagnose) {
+    set_with_attrs(state["jpar"], jpar,
+                  {{"time_dimension", "t"},
+                    {"units", "A / m^2"},
+                    {"conversion", SI::qe * Nnorm * Cs0},
+                    {"standard_name", "jpar"},
+                    {"long_name", "Parallel electric current"},
+                    {"source", "parallel_ohms_law"}});
+
+  }
 }

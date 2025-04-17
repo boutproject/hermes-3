@@ -48,12 +48,12 @@ struct ParallelOhmsLaw : public Component {
   /// 
   void transform(Options &state) override;
 
-  // void finally(const Options &state) override {
-  //   // Get the velocity with boundary condition applied.
-  //   // This is for output only
-  //   Ve = get<Field3D>(state["species"]["e"]["velocity"]);
-  //   NVe = get<Field3D>(state["species"]["e"]["momentum"]);
-  // }
+  void finally(const Options &state) override {
+    // Get the velocity with boundary condition applied.
+    // This is for output only
+    Ve = get<Field3D>(state["species"]["e"]["velocity"]);
+    NVe = get<Field3D>(state["species"]["e"]["momentum"]);
+  }
 
   /// Save output diagnostics
   void outputVars(Options& state) override;
