@@ -120,12 +120,6 @@ void ParallelOhmsLaw::transform(Options &state) {
   }
 
 
-
-  // std::cout << (electrons["velocity"].hasAttribute("final-domain")) << std::endl;
-  std::cout << (isSetFinal(electrons["velocity"], "e")) << std::endl;
-
-  // exit(0);
-
   Ve = (jpar - current) / (-1.0 * Ne_lim);
   Ve.applyBoundary();
   set(electrons["velocity"], Ve);
@@ -133,7 +127,6 @@ void ParallelOhmsLaw::transform(Options &state) {
   NVe = AA * Ne * Ve; // Re-calculate consistent with V and N
   set(electrons["momentum"], NVe);
 
-  exit(0);
 
 }
 
