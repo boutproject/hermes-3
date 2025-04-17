@@ -82,6 +82,11 @@ private:
 
   Field3D viscosity; /// Kinematic viscosity
   bool phi_dissipation; /// Parallel dissipation of potential
+
+  // Diagnostic outputs
+  Field3D DivJdia; // Divergence of diamagnetic and collisional current
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {

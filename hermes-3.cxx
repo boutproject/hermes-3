@@ -36,6 +36,7 @@
 #include "include/diamagnetic_drift.hxx"
 #include "include/electromagnetic.hxx"
 #include "include/electron_force_balance.hxx"
+#include "include/parallel_ohms_law.hxx"
 #include "include/electron_viscosity.hxx"
 #include "include/evolve_density.hxx"
 #include "include/evolve_energy.hxx"
