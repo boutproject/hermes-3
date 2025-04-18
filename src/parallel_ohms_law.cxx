@@ -15,11 +15,11 @@ ParallelOhmsLaw::ParallelOhmsLaw(std::string name, Options& alloptions, Solver*)
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
 
-  resistivity_floor = options["resistivity_floor"].doc("Minimum resistivity floor").withDefault(1e-6);
+  resistivity_floor = options["resistivity_floor"].doc("Minimum resistivity floor").withDefault(1e-4);
 
+  spitzer_resist = 
+        options["spitzer_resist"].doc("Use Spitzer resistivity?").withDefault<bool>(true);
 
-  Ve.setBoundary(std::string("Ve"));
-  NVe.setBoundary(std::string("NVe"));
 
   const Options& units = alloptions["units"];
   // Normalisations
@@ -28,6 +28,48 @@ ParallelOhmsLaw::ParallelOhmsLaw(std::string name, Options& alloptions, Solver*)
   rho_s0 = units["meters"];
   Omega_ci = 1. / units["seconds"].as<BoutReal>();
   Cs0 = rho_s0 * Omega_ci; 
+
+  Ve.setBoundary(std::string("Ve"));
+  NVe.setBoundary(std::string("NVe"));
+
+}
+
+
+
+void ParallelOhmsLaw::calculateResistivity(Options &electrons, Field3D &Ne_lim) {
+
+  // Normalization constant
+  const BoutReal eta_norm = Tnorm / (rho_s0 * Nnorm * Cs0 * SI::qe);
+
+  Field3D resistivity_eta;
+
+  if (!spitzer_resist){
+
+    // Get electron collision frequency
+    const Field3D nu = GET_VALUE(Field3D, electrons["collision_frequency"]); // Nondimentionalized. Multiply with Omega_ci to get nu in [s^-1]
+
+    // Calculate resistivity eta
+    resistivity_eta =  ( nu * Omega_ci) * SI::Me / (Ne_lim * Nnorm) / SQ(SI::qe ); // In [Ohm m]
+
+  } else {
+
+    // Get electron temperature
+    const Field3D Te = GET_VALUE(Field3D, electrons["temperature"]); 
+
+    BoutReal Zi = 1.0;      // ion charge number
+    BoutReal Zeff = 2.5;    // effective charge?
+
+    Field3D LnLambda = 24.0 - log(sqrt(Zi * Ne_lim * Nnorm / 1.e6) / (Te * Tnorm)); // ln(Lambda)
+
+    BoutReal FZ = (1. + 1.198 * Zi + 0.222 * Zi * Zi) / (1. + 2.996 * Zi + 0.753 * Zi * Zi);  // correction coefficient in Spitzer model
+
+    resistivity_eta = Zeff * FZ * 1.03e-4 * Zi * LnLambda * pow(Te * Tnorm,-1.5); // eta in Ohm-m.
+
+  }
+  
+  // eta = floor( resistivity_eta / eta_norm , resistivity_floor );
+  eta = sqrt( SQ(resistivity_eta / eta_norm) + resistivity_floor*resistivity_floor ); // This mitigates discontinuities.
+
 }
 
 
@@ -50,24 +92,16 @@ void ParallelOhmsLaw::transform(Options &state) {
   Options& electrons = state["species"]["e"];
   const Field3D Te = GET_VALUE(Field3D, electrons["temperature"]); // Need boundary to take gradient
   const Field3D Pe = GET_VALUE(Field3D, electrons["pressure"]);
+  const Field3D Ne = GET_VALUE(Field3D, electrons["density"]);
 
-  auto Ne = getNoBoundary<Field3D>(electrons["density"]);
-  const Field3D Ne_lim = floor(Ne, 1e-7);
+  // auto Ne = getNoBoundary<Field3D>(electrons["density"]);
+  Field3D Ne_lim = floor(Ne, 1e-7);
 
   const BoutReal AA = get<BoutReal>(electrons["AA"]); // Atomic mass
   ASSERT1(get<BoutReal>(electrons["charge"]) == -1.0);
 
 
-  // Get electron collision frequency
-  const Field3D nu = GET_VALUE(Field3D, electrons["collision_frequency"]) * Omega_ci; // In s^-1
-
-  // Calculate resistivity eta
-  Field3D resistivity_eta =  nu * SI::Me / (Ne_lim * Nnorm) / SQ(SI::qe ); // In [Ohm m]
-  const BoutReal eta_norm = Tnorm / (rho_s0 * Nnorm * Cs0 * SI::qe);
-
-  Field3D eta = floor(resistivity_eta / eta_norm,  resistivity_floor);
-
-
+  calculateResistivity(electrons, Ne_lim); // Sets eta
 
   // Calculate the contribution of each term 
   Field3D term_phi = -Grad_par(phi) / eta;
@@ -160,6 +194,18 @@ void ParallelOhmsLaw::outputVars(Options& state) {
                     {"standard_name", "jpar"},
                     {"long_name", "Parallel electric current"},
                     {"source", "parallel_ohms_law"}});
+
+
+    const BoutReal eta_norm = Tnorm / (rho_s0 * Nnorm * Cs0 * SI::qe);
+
+    set_with_attrs(state["eta_resist"], eta,
+                  {{"time_dimension", "t"},
+                    {"units", "Ohm m"},
+                    {"conversion", eta_norm},
+                    {"standard_name", "eta"},
+                    {"long_name", "plasma resistivity"},
+                    {"source", "parallel_ohms_law"}});
+
 
   }
 }
