@@ -15,6 +15,8 @@ ParallelOhmsLaw::ParallelOhmsLaw(std::string name, Options& alloptions, Solver*)
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
 
+  resistivity_floor = options["resistivity_floor"].doc("Minimum resistivity floor").withDefault(1e-6);
+
 
   Ve.setBoundary(std::string("Ve"));
   NVe.setBoundary(std::string("NVe"));
@@ -63,7 +65,8 @@ void ParallelOhmsLaw::transform(Options &state) {
   Field3D resistivity_eta =  nu * SI::Me / (Ne_lim * Nnorm) / SQ(SI::qe ); // In [Ohm m]
   const BoutReal eta_norm = Tnorm / (rho_s0 * Nnorm * Cs0 * SI::qe);
 
-  Field3D eta = resistivity_eta / eta_norm;
+  Field3D eta = floor(resistivity_eta / eta_norm,  resistivity_floor);
+
 
 
   // Calculate the contribution of each term 

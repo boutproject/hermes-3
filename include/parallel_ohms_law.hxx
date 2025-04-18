@@ -60,6 +60,7 @@ struct ParallelOhmsLaw : public Component {
 private:
   std::string name; ///< Name of this species
   bool diagnose; ///< Output additional fields
+  BoutReal resistivity_floor;
 
   BoutReal Tnorm;    // Temperature normalisation [eV]
   BoutReal Nnorm;    // Density normalisation [m^-3]
