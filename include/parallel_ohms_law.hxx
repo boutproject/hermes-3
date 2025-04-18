@@ -46,6 +46,9 @@ struct ParallelOhmsLaw : public Component {
   ///   - <only for e>  if phi is set.  if both density and charge are set
   ///     - electron parallel velocity
   /// 
+
+  void calculateResistivity(Options &options, Field3D &Ne);
+
   void transform(Options &state) override;
 
   void finally(const Options &state) override {
@@ -68,8 +71,11 @@ private:
   BoutReal Omega_ci; // Frequency normalisation [s^-1]
   BoutReal Cs0;      // Velocity normalisation [m/s]
 
+  bool spitzer_resist;  // Use Spitzer formula for resistivity. Otherwise, get collision frequency from collisions component. 
+
 
   Field3D jpar; ///< Parallel current
+  Field3D eta; ///< Parallel plasma resistivity
 
   Field3D Ve;   ///< Electron parallel velocity
   Field3D NVe;  ///< Electron parallel momentum (normalised)
