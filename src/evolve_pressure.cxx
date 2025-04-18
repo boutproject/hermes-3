@@ -224,6 +224,11 @@ void EvolvePressure::finally(const Options& state) {
   /// Get the section containing this species
   const auto& species = state["species"][name];
 
+  if (diagnose) {
+    // Numerical energy channel
+    set(channels["E_numerical_P_" + name], zeroFrom(P));
+  }
+
   // Get updated pressure and temperature with boundary conditions
   // Note: Retain pressures which fall below zero
   P.clearParallelSlices();
@@ -310,21 +315,42 @@ void EvolvePressure::finally(const Options& state) {
   if (species.isSet("low_n_coeff")) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
-    ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N) + FV::Div_par_K_Grad_par(low_n_coeff, P);
+    Field3D rhs = FV::Div_par_K_Grad_par(low_n_coeff * T, N) + FV::Div_par_K_Grad_par(low_n_coeff, P);
+    ddt(P) += rhs;
+
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   if (low_n_diffuse_perp) {
-    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), P, true);
+    Field3D rhs = Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), P, true);
+    ddt(P) += rhs;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) += 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / floor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
+    Field3D rhs = 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / floor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
                                            T, false);
+    ddt(P) += rhs;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   if (low_p_diffuse_perp) {
     Field3D Plim = floor(P, 1e-3 * pressure_floor);
-    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
+    Field3D rhs = Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
+    ddt(P) += rhs;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   // Parallel heat conduction
@@ -410,11 +436,21 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (hyper_z > 0.) {
-    ddt(P) -= hyper_z * D4DZ4_Index(P);
+    Field3D rhs = - hyper_z * D4DZ4_Index(P);
+    ddt(P) += rhs;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   if (hyper_z_T > 0.) {
-    ddt(P) -= hyper_z_T * D4DZ4_Index(T);
+    Field3D rhs = - hyper_z_T * D4DZ4_Index(T);
+    ddt(P) += rhs;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   //////////////////////
@@ -443,6 +479,10 @@ void EvolvePressure::finally(const Options& state) {
   // Term to force evolved P towards N * T
   // This is active when P < 0 or when N < density_floor
   ddt(P) += N * T - P;
+  if (diagnose) {
+    // Numerical energy channel
+    add(channels["E_numerical_P_" + name], (3./2) * (N * T - P));
+  }
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
