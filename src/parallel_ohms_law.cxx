@@ -18,7 +18,7 @@ ParallelOhmsLaw::ParallelOhmsLaw(std::string name, Options& alloptions, Solver*)
   resistivity_floor = options["resistivity_floor"].doc("Minimum resistivity floor").withDefault(1e-4);
 
   spitzer_resist = 
-        options["spitzer_resist"].doc("Use Spitzer resistivity?").withDefault<bool>(true);
+        options["spitzer_resist"].doc("Use Spitzer resistivity?").withDefault<bool>(false);
 
 
   const Options& units = alloptions["units"];
