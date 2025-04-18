@@ -727,23 +727,43 @@ void Vorticity::finally(const Options& state) {
   // Viscosity
   ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
 
+  if (diagnose) {
+    // Numerical energy channel
+    set(channels["E_numerical_Vort"], zeroFrom(Vort));
+  }
+  
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    ddt(Vort) -= FV::Div_par(Vort, 0.0, sound_speed);
+    Field3D rhs = rhs;
+    ddt(Vort) -= rhs;
+
+    if (diagnose) {
+      add(channels["E_numerical_Vort"], (phi + Pi_hat) * rhs);
+    }
   }
 
   if (phi_dissipation) {
     // Adds dissipation term like in other equations, but depending on gradient of
     // potential
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    ddt(Vort) -= FV::Div_par(-phi, 0.0, sound_speed);
+    Field3D rhs = FV::Div_par(-phi, 0.0, sound_speed);
+    ddt(Vort) -= rhs;
+
+    if (diagnose) {
+      add(channels["E_numerical_Vort"], (phi + Pi_hat) * rhs);
+    }
   }
 
   if (hyper_z > 0) {
     // Form of hyper-viscosity to suppress zig-zags in Z
     auto* coord = Vort.getCoordinates();
-    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+    Field3D rhs = hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+    ddt(Vort) -= rhs;
+
+    if (diagnose) {
+      add(channels["E_numerical_Vort"], (phi + Pi_hat) * rhs);
+    }
   }
 
   if (phi_sheath_dissipation) {
@@ -766,12 +786,19 @@ void Vorticity::finally(const Options& state) {
         dissipation[i] = -floor(-phisheath, 0.0);
       }
     }
-    ddt(Vort) += fromFieldAligned(dissipation);
+    dissipation = fromFieldAligned(dissipation);
+    ddt(Vort) += dissipation;
+
+    if (diagnose) {
+      subtract(channels["E_numerical_Vort"], (phi + Pi_hat) * dissipation);
+    }
   }
 
   if (damp_core_vorticity) {
     // Damp axisymmetric vorticity near core boundary
     if (mesh->firstX() and mesh->periodicY(mesh->xstart)) {
+      Field3D damping{zeroFrom(Vort)};
+
       for (int j = mesh->ystart; j <= mesh->yend; j++) {
         BoutReal vort_avg = 0.0; // Average Vort in Z
         for (int k = 0; k < mesh->LocalNz; k++) {
@@ -780,7 +807,12 @@ void Vorticity::finally(const Options& state) {
         vort_avg /= mesh->LocalNz;
         for (int k = 0; k < mesh->LocalNz; k++) {
           ddt(Vort)(mesh->xstart, j, k) -= 0.01 * vort_avg;
+          damping(mesh->xstart, j, k) = 0.01 * vort_avg;
         }
+      }
+
+      if (diagnose) {
+        add(channels["E_numerical_Vort"], (phi + Pi_hat) * damping);
       }
     }
   }
