@@ -75,13 +75,21 @@ private:
   Field2D Bsq;      ///< SQ(coord->Bxy)
   Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
 
-  BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
-
-  bool initialize_phi_from_mesh;  ///< Initilize the Field3D phi1 from 2D/3D profiles stored in the mesh file. 
-  bool initialize_vort_from_mesh;  ///< Initilize the Field3D vort from 2D/3D profiles stored in the mesh file. 
-
   Field3D viscosity; /// Kinematic viscosity
-  bool phi_dissipation; /// Parallel dissipation of potential
+
+  bool vort_dissipation; ///< Parallel dissipation of vorticity
+  bool phi_dissipation;  ///< Parallel dissipation of potential
+  bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
+  bool damp_core_vorticity; ///< Damp axisymmetric component of vorticity
+
+  bool phi_boundary_relax; ///< Relax boundary to zero-gradient
+  BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
+  BoutReal phi_boundary_last_update; ///< Time when last updated
+  bool phi_core_averagey; ///< Average phi core boundary in Y?
+
+
+  // Relax-potential related variables
+  BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
 
   // Diagnostic outputs
   Field3D DivJdia; // Divergence of diamagnetic and collisional current
