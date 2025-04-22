@@ -1,0 +1,74 @@
+services:
+  shell:
+    # Start an interactive terminal shell
+    image: "hermes3"
+    user: ${UID}:${GID}
+    volumes:
+      - ${PWD}/work:/hermes_project/work
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    environment:
+    - PUID=$UID
+    - PGID=$GID
+    - OMPI_ALLOW_RUN_AS_ROOT=1
+    - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+    command: ["/bin/bash"]
+  sudo:
+    # Start an interactive terminal shell with root access
+    image: "hermes3"
+    volumes:
+      - ${PWD}/work:/hermes_project/work
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    environment:
+    - PUID=$UID
+    - PGID=$GID
+    - OMPI_ALLOW_RUN_AS_ROOT=1
+    - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+    command: ["/bin/bash"]
+  build_hermes:
+    # Rebuild hermes, using ./work/hermes-3 if available
+    image: "hermes3"
+    volumes:
+      - ${PWD}/work:/hermes_project/work
+    command: ["image", "build_hermes"]
+  build_boutpp:
+    # Rebuild BOUT++, using ./work/BOUT-dev if available
+    image: "hermes3"
+    volumes:
+      - ${PWD}/work:/hermes_project/work
+    command: ["image", "build_boutpp"]
+  build_both:
+    # Rebuild both hermes and BOUT++, using overrides
+    # if they are available in ./work
+    image: "hermes3"
+    volumes:
+      - ${PWD}/work:/hermes_project/work
+    command: ['image', "build_both"]
+  hermes:
+    # Run a hermes-3 case in 
+    image: "hermes3"
+    user: ${UID}:${GID}
+    volumes:
+      - ${PWD}/work:/hermes_project/work
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    environment:
+    - PUID=$UID
+    - PGID=$GID
+    - HOST_DIR=$HOST_DIR
+    - OMPI_ALLOW_RUN_AS_ROOT=1
+    - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+    entrypoint: ["image", "run"]
+    # command: ["image", "run", "PATH"]
+    command: ""
+  fix_permissions:
+    # Adjust the permissions of ./work to make sure
+    # a user can access them
+    image: "hermes3"
+    volumes:
+      - ${PWD}/work:/hermes_project/work
+    environment:
+    - PUID=$UID
+    - PGID=$GID
+    command: ["image", "fix_permissions"]

@@ -1,0 +1,20 @@
+spack:
+  specs:
+  - python
+  - py-cython
+  - py-numpy
+  - py-pip
+  - py-jinja2
+  - netcdf-cxx4
+  - openmpi
+  - sundials
+  - petsc+double+fftw+hdf5+hypre+mpi
+  - slepc
+
+  concretizer:
+    unify: true
+  
+  view: /opt/views/view
+
+  config:
+    install_tree: /opt/software
