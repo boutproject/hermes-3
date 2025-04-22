@@ -110,6 +110,21 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
             .doc("Fraction of energy retained by fast recycled neutrals at pfr")
             .withDefault<BoutReal>(0);
 
+    BoutReal target_fast_recycle_momentum_factor =
+        from_options["target_fast_recycle_momentum_factor"]
+            .doc("Fraction of momentum retained by fast recycled neutrals at target")
+            .withDefault<BoutReal>(0);
+
+    BoutReal sol_fast_recycle_momentum_factor =
+        from_options["sol_fast_recycle_momentum_factor"]
+            .doc("Fraction of momentum retained by fast recycled neutrals at sol")
+            .withDefault<BoutReal>(0);
+
+    BoutReal pfr_fast_recycle_momentum_factor =
+        from_options["pfr_fast_recycle_momentum_factor"]
+            .doc("Fraction of momentum retained by fast recycled neutrals at pfr")
+            .withDefault<BoutReal>(0);
+
     if ((target_recycle_multiplier < 0.0) or (target_recycle_multiplier > 1.0)
     or (sol_recycle_multiplier < 0.0) or (sol_recycle_multiplier > 1.0)
     or (pfr_recycle_multiplier < 0.0) or (pfr_recycle_multiplier > 1.0)
@@ -119,11 +134,12 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
 
     // Populate recycling channel vector
     channels.push_back({
-      from, to, 
+      from, to,
       target_recycle_multiplier, sol_recycle_multiplier, pfr_recycle_multiplier, pump_recycle_multiplier,
       target_recycle_energy, sol_recycle_energy, pfr_recycle_energy,
       target_fast_recycle_fraction, pfr_fast_recycle_fraction, sol_fast_recycle_fraction,
-      target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor, pfr_fast_recycle_energy_factor});
+      target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor, pfr_fast_recycle_energy_factor,
+      target_fast_recycle_momentum_factor, sol_fast_recycle_momentum_factor, pfr_fast_recycle_momentum_factor});
 
     // Boolean flags for enabling recycling in different regions
     target_recycle = from_options["target_recycle"]
@@ -169,12 +185,15 @@ void Recycling::transform(Options& state) {
     const Field3D Tn = get<Field3D>(species_to["temperature"]);
     const BoutReal AAn = get<BoutReal>(species_to["AA"]);
 
-    // Recycling particle and energy sources will be added to these global sources 
-    // which are then passed to the density and pressure equations
-    density_source = species_to.isSet("density_source")
+    // Recycling particle, momentum and energy sources will be added to these global sources 
+    // which are then passed to the density, momentum and pressure equations
+    Field3D density_source = species_to.isSet("density_source")
                                  ? getNonFinal<Field3D>(species_to["density_source"])
                                  : 0.0;
-    energy_source = species_to.isSet("energy_source")
+    Field3D momentum_source = species_to.isSet("momentum_source")
+                                 ? getNonFinal<Field3D>(species_to["momentum_source"])
+                                 : 0.0;
+    Field3D energy_source = species_to.isSet("energy_source")
                                 ? getNonFinal<Field3D>(species_to["energy_source"])
                                 : 0.0;
 
@@ -200,9 +219,9 @@ void Recycling::transform(Options& state) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           // Calculate flux through surface [normalised m^-2 s^-1],
           // should be positive since V < 0.0
+          BoutReal Vpar = 0.5 * (V(r.ind, mesh->ystart, jz) + V(r.ind, mesh->ystart - 1, jz));
           BoutReal flux =
-              -0.5 * (N(r.ind, mesh->ystart, jz) + N(r.ind, mesh->ystart - 1, jz)) * 0.5
-              * (V(r.ind, mesh->ystart, jz) + V(r.ind, mesh->ystart - 1, jz));
+              -0.5 * (N(r.ind, mesh->ystart, jz) + N(r.ind, mesh->ystart - 1, jz)) * Vpar;
 
           if (flux < 0.0) {
             flux = 0.0;
@@ -232,6 +251,10 @@ void Recycling::transform(Options& state) {
           // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
           channel.target_recycle_energy_source(r.ind, mesh->ystart, jz) += recycle_energy_flow / volume;
           energy_source(r.ind, mesh->ystart, jz) += recycle_energy_flow / volume;
+
+          // Momentum source
+          BoutReal recycle_momentum_flow = Vpar * flow * channel.target_fast_recycle_fraction * channel.target_fast_recycle_momentum_factor;
+          momentum_source(r.ind, mesh->ystart, jz) += recycle_momentum_flow / volume;
         }
       }
 
@@ -242,9 +265,10 @@ void Recycling::transform(Options& state) {
         // This calculation is supposed to be consistent with the flow
         // of plasma from FV::Div_par(N, V)
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          BoutReal Vpar = 0.5 * (V(r.ind, mesh->yend, jz) + V(r.ind, mesh->yend + 1, jz));
           // Flux through surface [normalised m^-2 s^-1], should be positive
           BoutReal flux = 0.5 * (N(r.ind, mesh->yend, jz) + N(r.ind, mesh->yend + 1, jz))
-                          * 0.5 * (V(r.ind, mesh->yend, jz) + V(r.ind, mesh->yend + 1, jz));
+                          * Vpar;
 
           if (flux < 0.0) {
             flux = 0.0;
@@ -275,6 +299,10 @@ void Recycling::transform(Options& state) {
           // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
           channel.target_recycle_energy_source(r.ind, mesh->yend, jz) += recycle_energy_flow / volume;
           energy_source(r.ind, mesh->yend, jz) += recycle_energy_flow / volume;
+
+          // Momentum source
+          BoutReal recycle_momentum_flow = Vpar * flow * channel.target_fast_recycle_fraction * channel.target_fast_recycle_momentum_factor;
+          momentum_source(r.ind, mesh->ystart, jz) += recycle_momentum_flow / volume;
         }
       }
     }
@@ -503,6 +531,7 @@ void Recycling::transform(Options& state) {
 
     // Put the updated sources back into the state
     set<Field3D>(species_to["density_source"], density_source);
+    set<Field3D>(species_to["momentum_source"], momentum_source);
     set<Field3D>(species_to["energy_source"], energy_source);
   }
 }
