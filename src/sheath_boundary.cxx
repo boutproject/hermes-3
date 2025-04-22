@@ -150,12 +150,9 @@ void SheathBoundary::transform(Options &state) {
   Field3D phi;
   if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
-
   } else {
-
     phi = emptyFrom(Ne); // So phi is field aligned
     phi.allocate();
-
   }
 
   if (!IS_SET_NOBOUNDARY(state["fields"]["phi"]) or zero_current_sheath_boundary) {

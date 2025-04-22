@@ -86,6 +86,7 @@ private:
   bool upper_y; // Boundary on upper y?
 
   bool always_set_phi; ///< Set phi field?
+  bool zero_current_sheath_boundary; ///< Set sheath boundary to j=0 (at the target)?
 
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
 

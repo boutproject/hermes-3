@@ -111,6 +111,10 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
 
+  zero_current_sheath_boundary = options["zero_current_sheath_boundary"]
+                        .doc("Set potential to j=0 sheath at sheath boundaries (at the target)? (default = 0)")
+                        .withDefault<bool>(false);
+
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
 
@@ -181,6 +185,12 @@ void SheathBoundarySimple::transform(Options& state) {
   if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   } else {
+    phi = emptyFrom(Ne); // So phi is field aligned
+    phi.allocate();
+  }
+
+  if (!IS_SET_NOBOUNDARY(state["fields"]["phi"]) or zero_current_sheath_boundary) {
+
     // Calculate potential phi assuming zero current
 
     // Need to sum  n_i Z_i C_i over all ion species
@@ -273,8 +283,6 @@ void SheathBoundarySimple::transform(Options& state) {
         }
       }
     }
-
-    phi.allocate();
 
     // ion_sum now contains the ion current, sum Z_i n_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
@@ -496,7 +504,7 @@ void SheathBoundarySimple::transform(Options& state) {
     setBoundary(electrons["momentum"], fromFieldAligned(NVe));
   }
 
-  if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
+  if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi")) or zero_current_sheath_boundary) {
     // Set the potential, including boundary conditions
     phi.clearParallelSlices();
     setBoundary(state["fields"]["phi"], fromFieldAligned(phi));

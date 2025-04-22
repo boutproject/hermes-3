@@ -65,6 +65,13 @@ private:
   bool upper_y; // Boundary on upper y?
 
   BoutReal gamma_e; ///< Electron sheath heat transmission
+
+  bool always_set_phi; ///< Set phi field?
+  bool zero_current_sheath_boundary; ///< Set sheath boundary to j=0 (at the target)?
+
+  Field3D wall_potential; ///< Voltage at the wall. Normalised units.
+
+  bool floor_potential; ///< Apply floor to sheath potential?
 };
 
 namespace {
