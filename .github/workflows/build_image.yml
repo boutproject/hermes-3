@@ -1,10 +1,16 @@
 # From https://docs.github.com/en/actions/use-cases-and-examples/publishing-packages/publishing-docker-images
 name: Create and publish a Docker image
 
-# Configures this workflow to run every time a change is pushed to the branch called `release`.
+# Configures this workflow to run every time a change is pushed to the release branch,
+# when a PR is opened/updated targeting the release branch, or when manually triggered.
 on:
   push:
-    branches: ['release']
+    branches:
+      - 'release'
+  pull_request:
+    branches:
+      - 'release'
+  workflow_dispatch:  # Allows manual triggering
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
@@ -33,28 +39,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       # This step uses [docker/metadata-action](https://github.com/docker/metadata-action#about) to extract tags and labels that will be applied to the specified image. The `id` "meta" allows the output of this step to be referenced in a subsequent step. The `images` value provides the base name for the tags and labels.
+      # Tags are configured based on the event type.
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Regular tags for branch pushes and git tags
+            type=sha,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=tag
+            # Tag for pull requests: pr-<number>
+            type=ref,event=pr,prefix=pr-
       # This step uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
       # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see [Usage](https://github.com/docker/build-push-action#usage) in the README of the `docker/build-push-action` repository.
       # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
+      # It only pushes the image if the event is a push to the 'release' branch.
+      # Caching is enabled to speed up builds.
       - name: Build and push Docker image
         id: push
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
           context: ./docker
-          push: true
+          # Only push for pushes to the release branch
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/release' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       
       # This step generates an artifact attestation for the image, which is an unforgeable statement about where and how it was built. It increases supply chain security for people who consume the image. For more information, see [Using artifact attestations to establish provenance for builds](/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds).
+      # Only run attestation if the image was pushed
       - name: Generate artifact attestation
+        if: steps.push.outputs.digest != '' # Only run if the image was pushed (digest is set)
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
-      
