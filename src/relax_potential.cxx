@@ -82,6 +82,10 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                         .doc("Set potential to j=0 sheath at radial boundaries? (default = 0)")
                         .withDefault<bool>(false);
 
+  zero_current_sheath_boundary = options["zero_current_sheath_boundary"]
+                        .doc("Set potential to j=0 sheath at sheath boundaries (at the target)? (default = 0)")
+                        .withDefault<bool>(false);
+
   diamagnetic_polarisation =
       options["diamagnetic_polarisation"]
           .doc("Include diamagnetic drift in polarisation current?")
@@ -213,6 +217,8 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 void RelaxPotential::transform(Options& state) {
   AUTO_TRACE();
 
+  Options& allspecies = state["species"];
+
   phi.name = "phi";
   auto& fields = state["fields"];
 
@@ -231,7 +237,7 @@ void RelaxPotential::transform(Options& state) {
   if (diamagnetic_polarisation) {
     // Diamagnetic term in vorticity. Note this is weighted by the mass
     // This includes all species, including electrons
-    Options& allspecies = state["species"];
+    // Options& allspecies = state["species"];
     for (auto& kv : allspecies.getChildren()) {
       Options& species = allspecies[kv.first]; // Note: need non-const
 
@@ -409,10 +415,6 @@ void RelaxPotential::transform(Options& state) {
   }
 
 
-
-  // Ensure that potential is set in the communication guard cells
-  mesh->communicate(Vort, phi); //NOTE(malamast): Should we include phi1?
-
   // Outer boundary cells
   if (mesh->firstX()) {
     for (int i = mesh->xstart - 2; i >= 0; --i) {
@@ -433,6 +435,171 @@ void RelaxPotential::transform(Options& state) {
     }
   }
 
+
+  // if (zero_current_sheath_boundary) {
+  //   // Calculate potential phi assuming zero current
+  //   // Note: This is equation (22) in Tskhakaya 2005, with I = 0
+
+  //   // Options& allspecies = state["species"];
+  //   Options& electrons = allspecies["e"];
+
+  //   // Need electron properties
+  //   const Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));    
+
+  //   // Need to sum  s_i Z_i C_i over all ion species
+  //   //
+  //   // To avoid looking up species for every grid point, this
+  //   // loops over the boundaries once per species.
+    
+  //   Field3D ion_sum {zeroFrom(Ne)}; // So ion_sum is field aligned
+  //   Field3D phi_fa = toFieldAligned(phi);
+
+  //   // Iterate through charged ion species
+  //   for (auto& kv : allspecies.getChildren()) {
+  //     Options& species = allspecies[kv.first];
+
+  //     if ((kv.first == "e") or !IS_SET(species["charge"])
+  //         or (get<BoutReal>(species["charge"]) == 0.0)) {
+  //       continue; // Skip electrons and non-charged ions
+  //     }
+
+  //     const Field3D Ni = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0));
+  //     const Field3D Ti = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
+  //     const BoutReal Mi = GET_NOBOUNDARY(BoutReal, species["AA"]);
+  //     const BoutReal Zi = GET_NOBOUNDARY(BoutReal, species["charge"]);
+
+  //     const BoutReal adiabatic = IS_SET(species["adiabatic"])
+  //                                    ? get<BoutReal>(species["adiabatic"])
+  //                                    : 5. / 3; // Ratio of specific heats (ideal gas)
+
+  //     if (lower_y) {
+  //       // Sum values, put result in mesh->ystart
+
+  //       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+  //         for (int jz = 0; jz < mesh->LocalNz; jz++) {
+  //           auto i = indexAt(Ni, r.ind, mesh->ystart, jz);
+  //           auto ip = i.yp();
+            
+  //           // Free boundary extrapolate ion concentration
+  //           BoutReal s_i = clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[ip] / Ne[ip]),
+  //                                     0.0, 1.0); // Limit range to [0,1]
+
+  //           if (!std::isfinite(s_i)) {
+  //             s_i = 1.0;
+  //           }
+  //           BoutReal te = Te[i];
+  //           BoutReal ti = Ti[i];
+            
+  //           // Equation (9) in Tskhakaya 2005
+
+  //           BoutReal grad_ne = Ne[ip] - Ne[i];
+  //           BoutReal grad_ni = Ni[ip] - Ni[i];
+
+  //           // Note: Needed to get past initial conditions, perhaps transients
+  //           // but this shouldn't happen in steady state
+  //           // Note: Factor of 2 to be consistent with later calculation
+  //           if (fabs(grad_ni) < 2e-3) {
+  //               grad_ni = grad_ne = 2e-3;  // Remove kinetic correction term
+  //           }
+
+  //           BoutReal C_i_sq = clip(
+  //               (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
+  //                   / Mi,
+  //               0, 100); // Limit for e.g. Ni zero gradient
+
+  //           // Note: Vzi = C_i * sin(α)
+  //           ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+  //         }
+  //       }
+  //     }
+
+  //     if (upper_y) {
+  //       // Sum values, put results in mesh->yend
+        
+  //       for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+  //         for (int jz = 0; jz < mesh->LocalNz; jz++) {
+  //           auto i = indexAt(Ni, r.ind, mesh->yend, jz);
+  //           auto im = i.ym();
+
+  //           BoutReal s_i =
+  //               clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[im] / Ne[im]), 0.0, 1.0);
+
+  //           if (!std::isfinite(s_i)) {
+  //             s_i = 1.0;
+  //           }
+
+  //           BoutReal te = Te[i];
+  //           BoutReal ti = Ti[i];
+            
+  //           // Equation (9) in Tskhakaya 2005
+
+  //           BoutReal grad_ne = Ne[i] - Ne[im];
+  //           BoutReal grad_ni = Ni[i] - Ni[im];
+
+  //           if (fabs(grad_ni) < 2e-3) {
+  //               grad_ni = grad_ne = 2e-3; // Remove kinetic correction term
+  //           }
+
+  //           BoutReal C_i_sq = clip(
+  //               (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
+  //                   / Mi,
+  //               0, 100); // Limit for e.g. Ni zero gradient
+
+  //           ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+  //         }
+  //       }
+  //     }
+  //   }
+
+  //   // ion_sum now contains  sum  s_i Z_i C_i over all ion species
+  //   // at mesh->ystart and mesh->yend indices
+  //   if (lower_y) {
+  //     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+  //       for (int jz = 0; jz < mesh->LocalNz; jz++) {
+  //         auto i = indexAt(phi_fa, r.ind, mesh->ystart, jz);
+
+  //         if (Te[i] <= 0.0) {
+  //           phi_fa[i] = 0.0;
+  //         } else {
+  //           phi_fa[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+  //         }
+
+  //         const BoutReal phi_wall = wall_potential[i];
+  //         phi_fa[i] += phi_wall; // Add bias potential
+
+  //         phi_fa[i.yp()] = phi_fa[i.ym()] = phi_fa[i]; // Constant into sheath
+  //       }
+  //     }
+  //   }
+
+  //   if (upper_y) {
+  //     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+  //       for (int jz = 0; jz < mesh->LocalNz; jz++) {
+  //         auto i = indexAt(phi_fa, r.ind, mesh->yend, jz);
+
+  //         if (Te[i] <= 0.0) {
+  //           phi_fa[i] = 0.0;
+  //         } else {
+  //           phi_fa[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+  //         }
+
+  //         const BoutReal phi_wall = wall_potential[i];
+  //         phi_fa[i] += phi_wall; // Add bias potential
+
+  //         phi_fa[i.yp()] = phi_fa[i.ym()] = phi_fa[i];
+  //       }
+  //     }
+  //   }
+
+  //   phi = fromFieldAligned(phi_fa);
+
+  // }
+
+  // Ensure that potential is set in the communication guard cells
+  mesh->communicate(phi, Vort); //NOTE(malamast): Should we include phi1?
+
+  // Vorticity equation
+
   ddt(Vort) = 0.0;
 
   if (diamagnetic) {
@@ -445,7 +612,7 @@ void RelaxPotential::transform(Options& state) {
     Jdia.z = 0.0;
     Jdia.covariant = Curlb_B.covariant;
 
-    Options& allspecies = state["species"];
+    // Options& allspecies = state["species"];
 
     // Pre-calculate this rather than calculate for each species
     // Vector3D Grad_phi = Grad(phi);
@@ -572,7 +739,7 @@ void RelaxPotential::transform(Options& state) {
         zeroFrom(Vort); // Sum of atomic mass * collision frequency * density
     Field3D sum_A_n = zeroFrom(Vort); // Sum of atomic mass * density
 
-    const Options& allspecies = state["species"];
+    // const Options& allspecies = state["species"];
     for (const auto& kv : allspecies.getChildren()) {
       const Options& species = kv.second;
 
@@ -615,6 +782,9 @@ void RelaxPotential::finally(const Options& state) {
 
   phi = get<Field3D>(state["fields"]["phi"]);
   Vort = get<Field3D>(state["fields"]["vorticity"]);
+
+
+  // Solve vorticity equation
 
   if (exb_advection) {
     // These terms come from divergence of polarisation current

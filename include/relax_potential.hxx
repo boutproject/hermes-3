@@ -49,7 +49,7 @@ struct RelaxPotential : public Component {
   ///   - damp_core_vorticity: bool, default false
   ///     Damp axisymmetric component of vorticity in cell next to core boundary
   ///
-  
+
   RelaxPotential(std::string name, Options& options, Solver* solver);
 
   /// Optional inputs
@@ -119,7 +119,9 @@ private:
 
   bool collisional_friction; ///< Damping of vorticity due to collisional friction
 
-  bool sheath_boundary; ///< Set outer boundary to j=0?
+  bool sheath_boundary; ///< Set outer radial boundary to j=0? // NOTE(malamast): The name of this variable might cause confusion. It should be changed.
+  bool zero_current_sheath_boundary; ///< Set sheath boundary to j=0 (at the target)?
+
 
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential

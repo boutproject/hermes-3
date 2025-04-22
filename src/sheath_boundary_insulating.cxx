@@ -324,7 +324,7 @@ void SheathBoundaryInsulating::transform(Options &state) {
 
           // Divide by volume of cell to get energy loss rate (< 0)
           BoutReal power = flux / (coord->dy[i] * coord->J[i]);
-	  ASSERT1(std::isfinite(power));
+	        ASSERT1(std::isfinite(power));
           ASSERT2(power <= 0.0);
 
           energy_source[i] += power;

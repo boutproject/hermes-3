@@ -85,6 +85,10 @@ SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) 
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
 
+  zero_current_sheath_boundary = options["zero_current_sheath_boundary"]
+                        .doc("Set potential to j=0 sheath at sheath boundaries (at the target)? (default = 0)")
+                        .withDefault<bool>(false);
+
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
 
@@ -146,7 +150,16 @@ void SheathBoundary::transform(Options &state) {
   Field3D phi;
   if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
+
   } else {
+
+    phi = emptyFrom(Ne); // So phi is field aligned
+    phi.allocate();
+
+  }
+
+  if (!IS_SET_NOBOUNDARY(state["fields"]["phi"]) or zero_current_sheath_boundary) {
+
     // Calculate potential phi assuming zero current
     // Note: This is equation (22) in Tskhakaya 2005, with I = 0
 
@@ -155,7 +168,6 @@ void SheathBoundary::transform(Options &state) {
     // To avoid looking up species for every grid point, this
     // loops over the boundaries once per species.
     Field3D ion_sum {zeroFrom(Ne)};
-    phi = emptyFrom(Ne); // So phi is field aligned
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {
@@ -254,8 +266,6 @@ void SheathBoundary::transform(Options &state) {
       }
     }
 
-    phi.allocate();
-
     // ion_sum now contains  sum  s_i Z_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
     if (lower_y) {
@@ -329,7 +339,7 @@ void SheathBoundary::transform(Options &state) {
 
         const BoutReal phisheath = floor_potential ? floor(
             0.5 * (phi[im] + phi[i]), phi_wall) // Electron saturation at phi = phi_wall
-	    : 0.5 * (phi[im] + phi[i]);
+	        : 0.5 * (phi[im] + phi[i]);
 
         // Electron sheath heat transmission
         const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
@@ -457,7 +467,7 @@ void SheathBoundary::transform(Options &state) {
     setBoundary(electrons["momentum"], fromFieldAligned(NVe));
   }
 
-  if (always_set_phi or IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
+  if (always_set_phi or IS_SET_NOBOUNDARY(state["fields"]["phi"]) or zero_current_sheath_boundary) {
     // Set the potential, including boundary conditions
     phi.clearParallelSlices();
     setBoundary(state["fields"]["phi"], fromFieldAligned(phi));

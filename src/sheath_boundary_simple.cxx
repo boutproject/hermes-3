@@ -369,7 +369,8 @@ void SheathBoundarySimple::transform(Options& state) {
         // Electron velocity into sheath (< 0)
         // Equal to Bohm for single ions and no currents
         BoutReal vesheath =
-	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
+	          -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * 
+            exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
         // Heat flux. Note: Here this is negative because vesheath < 0
         BoutReal q = gamma_e * tesheath * nesheath * vesheath;
@@ -432,7 +433,8 @@ void SheathBoundarySimple::transform(Options& state) {
 
         // Electron velocity into sheath (> 0)
         BoutReal vesheath =
-          sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
+	          sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * 
+            exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
         // Heat flux. Note: Here this is positive because vesheath > 0
         BoutReal q = gamma_e * tesheath * nesheath * vesheath;
