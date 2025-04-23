@@ -66,9 +66,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                    .withDefault<bool>(true);
 
   poloidal_flows =
-      options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
-
-  
+      options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);  
 
   p_div_v = options["p_div_v"]
                 .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")

@@ -10,6 +10,14 @@ using bout::globals::mesh;
 
 
 namespace {
+BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
+  if (value < min)
+    return min;
+  if (value > max)
+    return max;
+  return value;
+}
+
 BoutReal floor(BoutReal value, BoutReal min) {
   if (value < min)
     return min;
@@ -85,6 +93,40 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   zero_current_sheath_boundary = options["zero_current_sheath_boundary"]
                         .doc("Set potential to j=0 sheath at sheath boundaries (at the target)? (default = 0)")
                         .withDefault<bool>(false);
+  
+  Ge = options["secondary_electron_coef"]
+           .doc("Effective secondary electron emission coefficient")
+           .withDefault(0.0);
+
+  if ((Ge < 0.0) or (Ge > 1.0)) {
+    throw BoutException("Secondary electron emission must be between 0 and 1 ({:e})", Ge);
+  }
+
+  sin_alpha = options["sin_alpha"]
+                  .doc("Sin of the angle between magnetic field line and wall surface. "
+                       "Should be between 0 and 1")
+                  .withDefault(1.0);
+
+  if ((sin_alpha < 0.0) or (sin_alpha > 1.0)) {
+    throw BoutException("Range of sin_alpha must be between 0 and 1");
+  }
+
+  // Read wall voltage, convert to normalised units
+  wall_potential = options["wall_potential"]
+                       .doc("Voltage of the wall [Volts]")
+                       .withDefault(Field3D(0.0))
+                   / Tnorm;
+  // Convert to field aligned coordinates
+  wall_potential = toFieldAligned(wall_potential);
+
+  // Note: wall potential at the last cell before the boundary is used,
+  // not the value at the boundary half-way between cells. This is due
+  // to how twist-shift boundary conditions and non-aligned inputs are
+  // treated; using the cell boundary gives incorrect results.
+
+  floor_potential = options["floor_potential"]
+                        .doc("Apply a floor to wall potential when calculating Ve?")
+                        .withDefault<bool>(true);
 
   diamagnetic_polarisation =
       options["diamagnetic_polarisation"]
@@ -223,14 +265,15 @@ void RelaxPotential::transform(Options& state) {
   auto& fields = state["fields"];
 
   // Scale potential
-  phi1.applyBoundary("neumann");
-
   phi = phi1 / lambda_2;
+
+  // Set the boundary of Vort. 
   Vort.applyBoundary("neumann");
 
+  // Set the boundary of phi. 
+  // phi1.applyBoundary("neumann");
   // phi.applyBoundary("neumann");
 
-  // Set the boundary of phi. 
   // Note: For now the boundary values are all at the midpoint,
   //       and only phi is considered, not phi + Pi which is handled in Boussinesq solves
   Pi_hat = 0.0; // Contribution from ion pressure, weighted by atomic mass / charge
@@ -435,6 +478,165 @@ void RelaxPotential::transform(Options& state) {
     }
   }
 
+  // If you set the potential at the sheath/target boundary here, 
+  // then no need to re-calculate it at sheath_boundary component. 
+  if (zero_current_sheath_boundary) {
+
+    // Calculate potential phi assuming zero current
+    // Note: This is equation (22) in Tskhakaya 2005, with I = 0
+
+    // ****CAUTION!**** We now work with FieldAligned variables.
+
+    Options& electrons = allspecies["e"];
+
+    // Need electron properties
+    // Not const because boundary conditions will be set
+    Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
+    Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
+
+    // Mass, normalised to proton mass
+    const BoutReal Me =
+        IS_SET(electrons["AA"]) ? get<BoutReal>(electrons["AA"]) : SI::Me / SI::Mp;
+
+    // Need to sum  s_i Z_i C_i over all ion species
+    //
+    // To avoid looking up species for every grid point, this
+    // loops over the boundaries once per species.
+    Field3D ion_sum {zeroFrom(Ne)};  // So ion_sum is field aligned
+
+    // Iterate through charged ion species
+    for (auto& kv : allspecies.getChildren()) {
+      Options& species = allspecies[kv.first];
+
+      if ((kv.first == "e") or !IS_SET(species["charge"])
+          or (fabs(get<BoutReal>(species["charge"])) < 1e-5)) {
+        continue; // Skip electrons and non-charged ions
+      }
+
+      const Field3D Ni = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0));
+      const Field3D Ti = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
+      const BoutReal Mi = GET_NOBOUNDARY(BoutReal, species["AA"]);
+      const BoutReal Zi = GET_NOBOUNDARY(BoutReal, species["charge"]);
+
+      const BoutReal adiabatic = IS_SET(species["adiabatic"])
+                                     ? get<BoutReal>(species["adiabatic"])
+                                     : 5. / 3; // Ratio of specific heats (ideal gas)
+
+      // Sum values, put result in mesh->ystart
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          auto i = indexAt(Ni, r.ind, mesh->ystart, jz);
+          auto ip = i.yp();
+          
+          // Free boundary extrapolate ion concentration
+          BoutReal s_i = clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[ip] / Ne[ip]),
+                                    0.0, 1.0); // Limit range to [0,1]
+
+          if (!std::isfinite(s_i)) {
+            s_i = 1.0;
+          }
+          BoutReal te = Te[i];
+          BoutReal ti = Ti[i];
+          
+          // Equation (9) in Tskhakaya 2005
+
+          BoutReal grad_ne = Ne[ip] - Ne[i];
+          BoutReal grad_ni = Ni[ip] - Ni[i];
+
+          // Note: Needed to get past initial conditions, perhaps transients
+          // but this shouldn't happen in steady state
+          // Note: Factor of 2 to be consistent with later calculation
+          if (fabs(grad_ni) < 2e-3) {
+              grad_ni = grad_ne = 2e-3;  // Remove kinetic correction term
+          }
+
+          BoutReal C_i_sq = clip(
+              (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
+                  / Mi,
+              0, 100); // Limit for e.g. Ni zero gradient
+
+          // Note: Vzi = C_i * sin(α)
+          ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+        }
+      }
+
+      // Sum values, put results in mesh->yend
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          auto i = indexAt(Ni, r.ind, mesh->yend, jz);
+          auto im = i.ym();
+
+          BoutReal s_i =
+              clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[im] / Ne[im]), 0.0, 1.0);
+
+          if (!std::isfinite(s_i)) {
+            s_i = 1.0;
+          }
+
+          BoutReal te = Te[i];
+          BoutReal ti = Ti[i];
+          
+          // Equation (9) in Tskhakaya 2005
+
+          BoutReal grad_ne = Ne[i] - Ne[im];
+          BoutReal grad_ni = Ni[i] - Ni[im];
+
+          if (fabs(grad_ni) < 2e-3) {
+              grad_ni = grad_ne = 2e-3; // Remove kinetic correction term
+          }
+
+          BoutReal C_i_sq = clip(
+              (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
+                  / Mi,
+              0, 100); // Limit for e.g. Ni zero gradient
+
+          ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+        }
+      }
+    }
+  
+    Field3D phi_fa = toFieldAligned(phi);
+    // NOTE(malamast): What if phi.hasParallelSlices() is true?
+
+    // ion_sum now contains  sum  s_i Z_i C_i over all ion species
+    // at mesh->ystart and mesh->yend indices
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        auto i = indexAt(phi_fa, r.ind, mesh->ystart, jz);
+
+        if (Te[i] <= 0.0) {
+          phi_fa[i] = 0.0;
+        } else {
+          phi_fa[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+        }
+
+        const BoutReal phi_wall = wall_potential[i];
+        phi_fa[i] += phi_wall; // Add bias potential
+
+        phi_fa[i.yp()] = phi_fa[i.ym()] = phi_fa[i]; // Constant into sheath
+      }
+    }
+
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        auto i = indexAt(phi_fa, r.ind, mesh->yend, jz);
+
+        if (Te[i] <= 0.0) {
+          phi_fa[i] = 0.0;
+        } else {
+          phi_fa[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+        }
+
+        const BoutReal phi_wall = wall_potential[i];
+        phi_fa[i] += phi_wall; // Add bias potential
+
+        phi_fa[i.yp()] = phi_fa[i.ym()] = phi_fa[i];
+      }
+    }
+
+    phi = fromFieldAligned(phi_fa);
+  }
+
 
   // Ensure that potential is set in the communication guard cells
   mesh->communicate(phi, Vort); //NOTE(malamast): Should we include phi1?
@@ -456,7 +658,40 @@ void RelaxPotential::transform(Options& state) {
     // Options& allspecies = state["species"];
 
     // Pre-calculate this rather than calculate for each species
-    // Vector3D Grad_phi = Grad(phi);
+    // Note: The below calculation requires phi derivatives at the Y boundaries
+    //       Setting to free boundaries
+
+    if (!zero_current_sheath_boundary) {
+      if (phi.hasParallelSlices()) {
+        Field3D &phi_ydown = phi.ydown();
+        Field3D &phi_yup = phi.yup();
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            phi_ydown(r.ind, mesh->ystart - 1, jz) = 2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            phi_yup(r.ind, mesh->yend + 1, jz) = 2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
+          }
+        }
+      } else {
+        Field3D phi_fa = toFieldAligned(phi);
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            phi_fa(r.ind, mesh->ystart - 1, jz) = 2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            phi_fa(r.ind, mesh->yend + 1, jz) = 2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
+          }
+        }
+        phi = fromFieldAligned(phi_fa);
+      }
+    }
+
+    Vector3D Grad_phi = Grad(phi);
 
     for (auto& kv : allspecies.getChildren()) {
       Options& species = allspecies[kv.first]; // Note: need non-const
@@ -506,42 +741,11 @@ void RelaxPotential::transform(Options& state) {
         P = fromFieldAligned(P_fa);
       }
 
-      // Note: This calculation requires phi derivatives at the Y boundaries
-      //       Setting to free boundaries
-      if (phi.hasParallelSlices()) {
-        Field3D &phi_ydown = phi.ydown();
-        Field3D &phi_yup = phi.yup();
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_ydown(r.ind, mesh->ystart - 1, jz) = 2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
-          }
-        }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_yup(r.ind, mesh->yend + 1, jz) = 2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
-          }
-        }
-      } else {
-        Field3D phi_fa = toFieldAligned(phi);
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_fa(r.ind, mesh->ystart - 1, jz) = 2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
-          }
-        }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_fa(r.ind, mesh->yend + 1, jz) = 2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
-          }
-        }
-        phi = fromFieldAligned(phi_fa);
-      }
-
       Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
 
       // This term energetically balances diamagnetic term
       // in the vorticity equation
-      // subtract(species["energy_source"], Jdia_species * Grad_phi);
-      subtract(species["energy_source"], Jdia_species * Grad(phi));
+      subtract(species["energy_source"], Jdia_species * Grad_phi);
 
       Jdia += Jdia_species; // Collect total diamagnetic current
     }

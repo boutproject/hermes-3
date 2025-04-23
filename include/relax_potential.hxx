@@ -122,6 +122,11 @@ private:
   bool sheath_boundary; ///< Set outer radial boundary to j=0? // NOTE(malamast): The name of this variable might cause confusion. It should be changed.
   bool zero_current_sheath_boundary; ///< Set sheath boundary to j=0 (at the target)?
 
+  BoutReal Ge; // Secondary electron emission coefficient
+  BoutReal sin_alpha; // sin of angle between magnetic field and wall.
+  Field3D wall_potential; ///< Voltage at the wall. Normalised units.
+  bool floor_potential; ///< Apply floor to sheath potential?
+
 
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
