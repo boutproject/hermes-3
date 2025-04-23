@@ -12,6 +12,7 @@ Hermes-3 documentation
    introduction
    installation
    inputs
+   domain_grid
    execution
    postprocessing
    examples
