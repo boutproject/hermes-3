@@ -713,6 +713,22 @@ equations. Calculates the diamagnetic drift velocity as
 where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
 is read from the `bxcv` mesh input variable.
 
+Two forms are available. Form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P; 
+at the boundaries this velocity is perpendicular to the boundary. Form 1 uses the magnetic gyro-center drifts, which are mostly vertical;
+at the boundaries this form produces a flow through the boundary. 
+Forms 0 and 1 are analytically equivalent and should give the same result away from boundaries, 
+but form 0 doesn't produce flows through boundaries. This is an approach that UEDGE uses to avoid unphysical boundary flows.
+
+
+However, Form 1 is nice because the flow velocity depends on the temperature, not the pressure gradient. 
+This usually makes it better behaved numerically. To make the most of both, the `diamagnetic_drift` component allows the forms to be mixed
+using the ``diamag_form`` setting. For example, the `tcv-x21` example blends it such that form 0 is at the boundary:
+
+.. code-block:: ini
+
+   [diamagnetic_drift]
+   diamag_form = x * (1 - x)  # 0 = gradient; 1 = divergence
+
 .. doxygenstruct:: DiamagneticDrift
    :members:
 
