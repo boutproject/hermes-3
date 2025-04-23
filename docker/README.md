@@ -8,28 +8,27 @@ This Docker configuration provides a containerized environment for building and 
 
 ## Quickstart
 
+Before starting, `cd` into the `docker` folder and run `./setup.sh` to make a `.env` file needed by `docker compose`, as well as a `work` subfolder which you'll use to pass data to and from the image.
+
 ### Running a simulation
 
 The fastest way to run a Hermes-3 simulation is
-1. Run `./setup.sh` to make a `.env` file with environment variables needed by `docker` and make a `work` subfolder in your current working directory.
-2. Copy a `BOUT.inp` file into `work/case` to configure a simulation.
-3. Run `docker compose run --rm hermes work/case` to run a Hermes-3 case in the `work` folder
+1. Copy a `BOUT.inp` file into `work/case` to configure a simulation.
+2. Run `docker compose run --rm hermes work/case` to run a Hermes-3 case in the `work` folder
 
 ### Modifying the source code of Hermes-3
 
 If you want to directly edit the source code of `hermes-3`
-1. Run `./setup.sh` to make a `.env` file with environment variables needed by `docker` and make a `work` subfolder in your current working directory.
-2. Get a copy of the source code using `https://github.com/boutproject/hermes-3.git work/hermes-3`. Note: you must call your source code `work/hermes-3`, otherwise it will be ignored.
-3. Run `docker compose run --rm build_hermes` to rebuild `hermes-3`. Note: this will use the version of `BOUT-dev` which was used by `hermes-3` when the docker image was built.
-4. Follow the steps from the 'running a simulation' section to use the updated executable.
+1. Get a copy of the source code using `https://github.com/boutproject/hermes-3.git work/hermes-3`. Note: you must call your source code `work/hermes-3`, otherwise it will be ignored.
+2. Run `docker compose run --rm build_hermes` to rebuild `hermes-3`. Note: this will use the version of `BOUT-dev` which was used by `hermes-3` when the docker image was built.
+3. Follow the steps from the 'running a simulation' section to use the updated executable.
 
 ### Modifying the source code of BOUT++
 
 If you want to directly edit the source code of `BOUT-dev`
-1. Run `./setup.sh` to make a `.env` file with environment variables needed by `docker` and make a `work` subfolder in your current working directory.
-2. Get a copy of the source code using `https://github.com/boutproject/BOUT-dev.git work/BOUT-dev`. Note: you must call your source code `work/BOUT-dev`, otherwise it will be ignored.
-3. Run `docker compose run --rm build_both` to rebuild `BOUT-dev` and `hermes-3`.
-4. Follow the steps from the 'running a simulation' section to use the updated executable.
+1. Get a copy of the source code using `https://github.com/boutproject/BOUT-dev.git work/BOUT-dev`. Note: you must call your source code `work/BOUT-dev`, otherwise it will be ignored.
+2. Run `docker compose run --rm build_both` to rebuild `BOUT-dev` and `hermes-3`.
+3. Follow the steps from the 'running a simulation' section to use the updated executable.
 
 ### Interact with the image via a terminal
 
@@ -39,11 +38,10 @@ If you'd like fine-tuned control of the image, you can start an interactive term
 
 ### Tidying up
 
-In case you want to tidy up after using the image, you can use `docker compose down --remove-orphans` to remove instances which are no longer being used.
-
-You can also
+In case you want to tidy up after using the image, you can use
+* `docker compose down --remove-orphans` to remove instances which are no longer being used.
 * `docker system prune --volumes` to remove all unused containers, networks and images.
 
 ### Building an image locally
 
-To build the `hermes3` image locally, you can use the command `sudo docker build -t hermes3 docker` from the `hermes-3` directory. Note: the `spack install` step takes several hours to run. 
+To build the `hermes3` image locally, you can use the command `docker build -f docker/Dockerfile -t hermes3 .` from the `hermes-3` directory. Note: the `spack install` step takes several hours to run. 

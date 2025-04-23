@@ -6,13 +6,13 @@ FROM spack/ubuntu-jammy@sha256:d9acf9ed998cbde8d12bd302c5921291086bfe6f70d2d0e26
 
 # Install OS packages needed to build the software
 RUN apt-get -yqq update && apt-get -yqq upgrade \
- && apt-get -yqq install git build-essential vim cmake \
+ && apt-get -yqq install --no-install-recommends git build-essential vim cmake \
  && rm -rf /var/lib/apt/lists/*
 
 # What we want to install and how we want to install it
 # is specified in a manifest file (spack.yaml)
 RUN mkdir -p /opt/spack-environment
-COPY image_ingredients/docker_spack.yaml /opt/spack-environment/spack.yaml
+COPY docker/image_ingredients/docker_spack.yaml /opt/spack-environment/spack.yaml
 
 # Install the software
 WORKDIR /opt/spack-environment
@@ -32,7 +32,7 @@ COPY --from=builder /opt/views /opt/views
 
 # Install useful tools you'll want in the container
 RUN apt-get -yqq update && apt-get -yqq upgrade \
- && apt-get -yqq install git build-essential vim cmake \
+ && apt-get -yqq install --no-install-recommends git build-essential vim cmake \
  && rm -rf /var/lib/apt/lists/*
 
 # Change into the /hermes_project, and define paths
@@ -53,16 +53,15 @@ ENV BOUTPP_CONFIG=/hermes_project/config/boutpp_config.cmake
 ENV HERMES_CONFIG_OVERRIDE=/hermes_project/work/hermes_config.cmake
 ENV BOUTPP_CONFIG_OVERRIDE=/hermes_project/work/boutpp_config.cmake
 
-# Clone in the Hermes repository, then initialize submodules, and apply a 
-# patch for BOUT++.
-RUN git clone https://github.com/boutproject/hermes-3.git ${HERMES_SRC_DIR}
-RUN git -C ${HERMES_SRC_DIR} submodule update --init --recursive
-COPY image_ingredients/enable_c.patch ${BOUTPP_SRC_DIR}/enable_c.patch
+# Copy in required files for a minimal build of Hermes-3 and BOUT++
+COPY . ${HERMES_SRC_DIR}
+
+COPY docker/image_ingredients/enable_c.patch ${BOUTPP_SRC_DIR}/enable_c.patch
 RUN git -C ${BOUTPP_SRC_DIR} apply ./enable_c.patch
 
 # Copy in the default CMake config files
-COPY image_ingredients/boutpp_config.cmake ${BOUTPP_CONFIG}
-COPY image_ingredients/hermes_config.cmake ${HERMES_CONFIG}
+COPY docker/image_ingredients/boutpp_config.cmake ${BOUTPP_CONFIG}
+COPY docker/image_ingredients/hermes_config.cmake ${HERMES_CONFIG}
 
 # Configure and build BOUT++
 RUN . /opt/spack-environment/activate.sh \
@@ -84,12 +83,12 @@ RUN . /opt/spack-environment/activate.sh \
 # Copy in some helpful commands which can be used in
 # the image. Make sure these can be executed when setting
 # --user=${UID}:${GID}
-COPY image_ingredients/docker_image_commands.sh /bin/image
+COPY docker/image_ingredients/docker_image_commands.sh /bin/image
 RUN chmod u+x,o+x /bin/image
 
 # Copy in a script which runs before any instance is
 # launched
-COPY image_ingredients/docker_entrypoint.sh /entrypoint.sh
+COPY docker/image_ingredients/docker_entrypoint.sh /entrypoint.sh
 RUN chmod a+x /entrypoint.sh
 
 # Set the default entrypoint and command for the image

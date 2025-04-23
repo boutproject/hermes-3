@@ -61,7 +61,9 @@ jobs:
         id: push
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
-          context: ./docker
+          # Equivalent to docker build -f docker/Dockerfile .
+          context: .
+          file: docker/Dockerfile
           # Only push for pushes to the release branch
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/release' }}
           tags: ${{ steps.meta.outputs.tags }}
