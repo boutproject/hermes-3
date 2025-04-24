@@ -124,10 +124,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   // to how twist-shift boundary conditions and non-aligned inputs are
   // treated; using the cell boundary gives incorrect results.
 
-  floor_potential = options["floor_potential"]
-                        .doc("Apply a floor to wall potential when calculating Ve?")
-                        .withDefault<bool>(true);
-
   diamagnetic_polarisation =
       options["diamagnetic_polarisation"]
           .doc("Include diamagnetic drift in polarisation current?")

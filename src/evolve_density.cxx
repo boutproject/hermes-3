@@ -27,6 +27,9 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
+  scale_drifts =
+      options["scale_ExB_drifts"].doc("Scale time derivates related to ExB flow").withDefault(1.0);
+
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   low_n_diffuse = options["low_n_diffuse"]
@@ -237,9 +240,8 @@ void EvolveDensity::finally(const Options& state) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
-
-    ddt(N) = -Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
-                                    true); // ExB drift
+    ddt(N) = -Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, 
+                                    poloidal_flows, true) * scale_drifts; // ExB drift
   } else {
     ddt(N) = 0.0;
   }

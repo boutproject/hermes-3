@@ -125,8 +125,6 @@ private:
   BoutReal Ge; // Secondary electron emission coefficient
   BoutReal sin_alpha; // sin of angle between magnetic field and wall.
   Field3D wall_potential; ///< Voltage at the wall. Normalised units.
-  bool floor_potential; ///< Apply floor to sheath potential?
-
 
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential

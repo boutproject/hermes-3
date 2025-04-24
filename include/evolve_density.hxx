@@ -67,6 +67,8 @@ private:
 
   bool bndry_flux;      ///< Allow flows through boundaries?
   bool poloidal_flows;  ///< Include ExB flow in Y direction?
+  BoutReal scale_drifts; ///< Scale time derivates related to ExB flow
+
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
 
   BoutReal density_floor;

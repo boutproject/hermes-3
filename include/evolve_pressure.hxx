@@ -77,7 +77,9 @@ private:
 
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
-  bool poloidal_flows;
+  bool poloidal_flows;  // Include ExB flow in Y direction?
+  BoutReal scale_drifts; ///< Scale time derivates related to ExB flow
+
   bool thermal_conduction;    ///< Include thermal conduction?
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0

@@ -47,6 +47,9 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
 
+  scale_drifts =
+      options["scale_ExB_drifts"].doc("Scale time derivates related to ExB flow").withDefault(1.0);
+
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
   V.setBoundary(std::string("V") + name);
@@ -122,12 +125,12 @@ void EvolveMomentum::finally(const Options &state) {
 
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                       true); // ExB drift
+      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, 
+                  poloidal_flows, true) * scale_drifts; // ExB drift
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
-      ddt(NV) -= Z * N * Grad_par(phi);
+      ddt(NV) -= Z * N * Grad_par(phi) * scale_drifts;
 
       if (state["fields"].isSet("Apar")) {
         // Include a correction term for electromagnetic simulations
@@ -142,7 +145,7 @@ void EvolveMomentum::finally(const Options &state) {
         // This is Z * Apar * dn/dt, keeping just leading order terms
         Field3D dndt = density_source
           - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, dummy)
-          - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true)
+          - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true) * scale_drifts
           ;
         if (low_n_diffuse_perp) {
           dndt += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
@@ -156,7 +159,7 @@ void EvolveMomentum::finally(const Options &state) {
 
         // Using the approximation for small delta-B/B
         // b dot Grad(phi) = Grad_par(phi) + [phi, Apar]
-        ddt(NV) -= Z * N * bracket(phi, Apar_flutter, BRACKET_ARAKAWA);
+        ddt(NV) -= Z * N * bracket(phi, Apar_flutter, BRACKET_ARAKAWA) * scale_drifts;
       }
     } else {
       ddt(NV) = 0.0;

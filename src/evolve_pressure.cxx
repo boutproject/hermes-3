@@ -68,6 +68,9 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);  
 
+  scale_drifts =
+      options["scale_ExB_drifts"].doc("Scale time derivates related to ExB flow").withDefault(1.0);
+
   p_div_v = options["p_div_v"]
                 .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
                 .withDefault<bool>(false);
@@ -270,8 +273,7 @@ void EvolvePressure::finally(const Options& state) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
-
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true) * scale_drifts;
   } else {
     ddt(P) = 0.0;
   }
