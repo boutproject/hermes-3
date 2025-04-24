@@ -97,6 +97,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     inv->setCoefA(1.0);
   }
 
+  zero_timederivs = options["zero_timederivs"]
+                          .doc("Set the time derivatives to zero?")
+                          .withDefault<bool>(false);
+
   // Optionally output time derivatives
   output_ddt =
       options["output_ddt"].doc("Save derivatives to output?").withDefault<bool>(false);
@@ -261,6 +265,7 @@ void NeutralMixed::transform(Options& state) {
 
 void NeutralMixed::finally(const Options& state) {
   AUTO_TRACE();
+
   auto& localstate = state["species"][name];
 
   // Logarithms used to calculate perpendicular velocity
@@ -427,6 +432,7 @@ void NeutralMixed::finally(const Options& state) {
     // Neutral momentum
     TRACE("Neutral momentum");
 
+
     ddt(NVn) =
         -AA * FV::Div_par_fvv<ParLimiter>(             // Momentum flow
               Nnlim, Vn, sound_speed)                  
@@ -461,6 +467,7 @@ void NeutralMixed::finally(const Options& state) {
 
       ddt(NVn) += viscosity_source;
       ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
+
     }
 
     if (localstate.isSet("momentum_source")) {
@@ -483,6 +490,23 @@ void NeutralMixed::finally(const Options& state) {
     if ((Nn[i] < density_floor * 1e-2) && (ddt(Nn)[i] < 0.0)) {
       ddt(Nn)[i] = 0.0;
     }
+  }
+
+
+  // Ste time derivatives to zero
+  if (zero_timederivs) {
+
+    Field3D zero {0.0};
+    zero.splitParallelSlices();
+    zero.yup() = 0.0;
+    zero.ydown() = 0.0;
+
+    ddt(Nn) = zero;
+    ddt(Pn) = zero;
+    if (evolve_momentum) {
+      ddt(NVn) = zero;
+    }
+    return;
   }
 
   // Scale time derivatives

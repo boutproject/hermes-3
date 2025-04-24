@@ -66,6 +66,8 @@ private:
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
 
+  bool zero_timederivs; ///< Set the time derivatives to zero?
+
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
 
