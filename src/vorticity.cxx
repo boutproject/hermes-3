@@ -493,6 +493,39 @@ void Vorticity::transform(Options& state) {
     Jdia.z = 0.0;
     Jdia.covariant = Curlb_B.covariant;
 
+    // Pre-calculate this rather than calculate for each species
+    // Note: The below calculation requires phi derivatives at the Y boundaries
+    //       Setting to free boundaries
+    if (phi.hasParallelSlices()) {
+      Field3D &phi_ydown = phi.ydown();
+      Field3D &phi_yup = phi.yup();
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          phi_ydown(r.ind, mesh->ystart - 1, jz) = 2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
+        }
+      }
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          phi_yup(r.ind, mesh->yend + 1, jz) = 2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
+        }
+      }
+    } else {
+      Field3D phi_fa = toFieldAligned(phi);
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          phi_fa(r.ind, mesh->ystart - 1, jz) = 2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
+        }
+      }
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          phi_fa(r.ind, mesh->yend + 1, jz) = 2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
+        }
+      }
+      phi = fromFieldAligned(phi_fa);
+    }
+
+    Vector3D Grad_phi = Grad(phi);
+
     Options& allspecies = state["species"];
 
     for (auto& kv : allspecies.getChildren()) {
@@ -543,41 +576,11 @@ void Vorticity::transform(Options& state) {
         P = fromFieldAligned(P_fa);
       }
 
-      // Note: This calculation requires phi derivatives at the Y boundaries
-      //       Setting to free boundaries
-      if (phi.hasParallelSlices()) {
-        Field3D &phi_ydown = phi.ydown();
-        Field3D &phi_yup = phi.yup();
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_ydown(r.ind, mesh->ystart - 1, jz) = 2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
-          }
-        }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_yup(r.ind, mesh->yend + 1, jz) = 2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
-          }
-        }
-      } else {
-        Field3D phi_fa = toFieldAligned(phi);
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_fa(r.ind, mesh->ystart - 1, jz) = 2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
-          }
-        }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_fa(r.ind, mesh->yend + 1, jz) = 2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
-          }
-        }
-        phi = fromFieldAligned(phi_fa);
-      }
-
       Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
 
       // This term energetically balances diamagnetic term
       // in the vorticity equation
-      subtract(species["energy_source"], Jdia_species * Grad(phi));
+      subtract(species["energy_source"], Jdia_species * Grad_phi);
 
       Jdia += Jdia_species; // Collect total diamagnetic current
     }
