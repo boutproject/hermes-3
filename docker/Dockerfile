@@ -40,6 +40,8 @@ WORKDIR /hermes_project
 # Build dirs hold the actual executables
 ENV HERMES_BUILD_DIR=/hermes_project/build/hermes-3-build
 ENV BOUTPP_BUILD_DIR=/hermes_project/build/boutpp-build
+ENV HERMES_BUILD_DIR_OVERRIDE=/hermes_project/work/hermes-3-build
+ENV BOUTPP_BUILD_DIR_OVERRIDE=/hermes_project/work/boutpp-build
 # Source dirs hold the source code. If you want to edit the source,
 # do it in the OVERRIDE directories
 ENV HERMES_SRC_DIR=/hermes_project/src/hermes-3

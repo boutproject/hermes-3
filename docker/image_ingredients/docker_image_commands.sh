@@ -61,20 +61,25 @@ fi
 build_boutpp () {
     local source_dir="${BOUTPP_SRC_DIR}"
     local config_file="${BOUTPP_CONFIG}"
+    local build_dir="${BOUTPP_BUILD_DIR_OVERRIDE}"
 
     # Check for overrides
     [[ -d "${BOUTPP_SRC_DIR_OVERRIDE}" ]] && source_dir="${BOUTPP_SRC_DIR_OVERRIDE}"
     [[ -f "${BOUTPP_CONFIG_OVERRIDE}" ]] && config_file="${BOUTPP_CONFIG_OVERRIDE}"
 
-    info "Removing previous build directory ${BOUTPP_BUILD_DIR}"
-    rm -rf "${BOUTPP_BUILD_DIR}"
+    if [[ -d "${build_dir}" ]]; then
+        info "Removing previous build directory ${build_dir}"
+        rm -rf "${build_dir}"
+    else
+        info "Build directory ${build_dir} is empty."
+    fi
 
     notice "Configuring BOUT++ from ${source_dir} using the config file ${config_file}"
-    cmake -Wno-dev -B "${BOUTPP_BUILD_DIR}" -S "${source_dir}" -C "${config_file}"
+    cmake -Wno-dev -B "${build_dir}" -S "${source_dir}" -C "${config_file}"
     check_exit_code "BOUT++ configuration failed"
 
     notice "Finished configuring BOUT++. Starting build"
-    cmake --build "${BOUTPP_BUILD_DIR}" --parallel
+    cmake --build "${build_dir}" --parallel
     check_exit_code "BOUT++ build failed"
 
     notice "Finished building BOUT++"
@@ -83,21 +88,28 @@ build_boutpp () {
 build_hermes () {
     local source_dir="${HERMES_SRC_DIR}"
     local config_file="${HERMES_CONFIG}"
+    local boutpp_dir="${BOUTPP_BUILD_DIR}"
+    local build_dir="${HERMES_BUILD_DIR_OVERRIDE}"
 
     # Check for overrides
     [[ -d "${HERMES_SRC_DIR_OVERRIDE}" ]] && source_dir="${HERMES_SRC_DIR_OVERRIDE}"
     [[ -f "${HERMES_CONFIG_OVERRIDE}" ]] && config_file="${HERMES_CONFIG_OVERRIDE}"
+    [[ -d "${BOUTPP_BUILD_DIR_OVERRIDE}" ]] && boutpp_dir="${BOUTPP_BUILD_DIR_OVERRIDE}"
 
-    info "Removing previous build directory ${HERMES_BUILD_DIR}"
-    rm -rf "${HERMES_BUILD_DIR}"
+    if [[ -d "${build_dir}" ]]; then
+        info "Removing previous build directory ${build_dir}"
+        rm -rf "${build_dir}"
+    else
+        info "Build directory ${build_dir} is empty."
+    fi
 
     notice "Configuring Hermes-3 from ${source_dir} using the config file ${config_file}"
-    cmake -Wno-dev -B "${HERMES_BUILD_DIR}" -S "${source_dir}" -C "${config_file}" \
-           -DCMAKE_PREFIX_PATH="${BOUTPP_BUILD_DIR}"
+    cmake -Wno-dev -B "${build_dir}" -S "${source_dir}" -C "${config_file}" \
+           -DCMAKE_PREFIX_PATH="${boutpp_dir}"
     check_exit_code "Hermes-3 configuration failed"
 
     notice "Finished configuring Hermes-3. Starting build"
-    cmake --build "${HERMES_BUILD_DIR}" --parallel
+    cmake --build "${build_dir}" --parallel
     check_exit_code "Hermes-3 build failed"
 
     notice "Finished building Hermes-3"
@@ -109,6 +121,11 @@ run_hermes () {
         exit 1
     fi
     local run_dir="/hermes_project/${run_directory}"
+    local hermes_dir="${HERMES_BUILD_DIR}"
+
+    [[ -d "${HERMES_BUILD_DIR_OVERRIDE}" ]] && hermes_dir="${HERMES_BUILD_DIR_OVERRIDE}"
+    info "Using ${hermes_dir}/hermes-3"
+
     notice "Run directory on host machine: ${HOST_DIR}/${run_directory}"
     notice "Run directory in image: ${run_dir}"
     if [[ ! -d "${run_dir}" ]]; then
@@ -120,7 +137,7 @@ run_hermes () {
     else
         notice "Running Hermes-3 in ${run_dir}"
         # Execute hermes-3 directly without changing directory
-        "${HERMES_BUILD_DIR}/hermes-3" -d "${run_dir}"
+        "${hermes_dir}/hermes-3" -d "${run_dir}"
         check_exit_code "Hermes-3 execution failed"
         notice "Finished running Hermes-3"
     fi
