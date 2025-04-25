@@ -264,7 +264,8 @@ void RelaxPotential::transform(Options& state) {
   phi = phi1 / lambda_2;
 
   // Set the boundary of Vort. 
-  Vort.applyBoundary("neumann");
+  // Vort.applyBoundary("neumann");
+  // Vort.applyBoundary("dirichlet");
 
   // Set the boundary of phi. 
   // phi1.applyBoundary("neumann");
