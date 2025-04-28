@@ -68,6 +68,8 @@ if [ -n "$GITHUB_USERNAME" ]; then
     notice "Setting the 'fork' remotes to git@github.com:$GITHUB_USERNAME/hermes-3.git and git@github.com:$GITHUB_USERNAME/BOUT-dev.git."
     git -C $HERMES_SRC_DIR_OVERRIDE remote add fork git@github.com:$GITHUB_USERNAME/hermes-3.git
     git -C $BOUTPP_SRC_DIR_OVERRIDE remote add fork git@github.com:$GITHUB_USERNAME/BOUT-dev.git
+    quiet git -C $HERMES_SRC_DIR_OVERRIDE fetch fork
+    quiet git -C $BOUTPP_SRC_DIR_OVERRIDE fetch fork
 else
     warn "Must set the GITHUB_USERNAME variable to set up the 'fork' remotes."
 fi
