@@ -3,7 +3,6 @@
 #include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
 #include <bout/field_factory.hxx>
-#include <iostream> // For outputting to log file
 #include <cmath>
 
 using bout::globals::mesh;
@@ -15,7 +14,7 @@ Field3D calculateLpar() {
     const int NYPE = NPES / mesh->NXPE;    // Number of procs in Y
     Coordinates *coord = mesh->getCoordinates();
     Field3D lpar{0.0};
-    
+
     BoutReal offset = 0;   // Offset to ensure ylow domain boundary starts at 0
     auto dy = coord->dy;
     lpar(0,0,0) = 0.5 * dy(0,0,0);
@@ -37,7 +36,6 @@ Field3D calculateLpar() {
 }
 
 FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
-
     Options& geo_options = options["fieldline_geometry"];
     Options& mesh_options = options["mesh"];
     Coordinates *coord = mesh->getCoordinates();
@@ -47,19 +45,18 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
 
     lpar = calculateLpar();
 
-    auto geometric_broadening_str = geo_options["geometric_broadening"]
-      .doc("Function for R(lpar) / R(lpar=0) (for lpar in [m]).")
-      .as<std::string>();
+    std::string geometric_broadening_str = geo_options["geometric_broadening"]
+        .doc("Function for R(lpar) / R(lpar=0) (for lpar in [m]).")
+        .as<std::string>();
+    std::string transport_broadening_str = geo_options["transport_broadening"]
+        .doc("Function for lambda_INT(lpar) / lambda_q(lpar=0) (for lpar in [m]).")
+        .as<std::string>();
+    std::string flux_expansion_str = geo_options["flux_expansion"]
+        .doc("Function for (B_pol/B_tot(lpar=0)) / (B_pol/B_tot(lpar)) (for lpar in [m]).")
+        .as<std::string>();
+
     FieldGeneratorPtr geometric_broadening_function = FieldFactory::get()->parse(geometric_broadening_str, &geo_options);
-
-    auto transport_broadening_factor_str = geo_options["transport_broadening"]
-      .doc("Function for lambda_INT(lpar) / lambda_q(lpar=0) (for lpar in [m]).")
-      .as<std::string>();
-    FieldGeneratorPtr transport_broadening_factor_function = FieldFactory::get()->parse(transport_broadening_factor_str, &geo_options);
-
-    auto flux_expansion_str = geo_options["flux_expansion"]
-      .doc("Function for (B_pol/B_tot(lpar=0)) / (B_pol/B_tot(lpar)) (for lpar in [m]).")
-      .as<std::string>();
+    FieldGeneratorPtr transport_broadening_function = FieldFactory::get()->parse(transport_broadening_str, &geo_options);
     FieldGeneratorPtr flux_expansion_function = FieldFactory::get()->parse(flux_expansion_str, &geo_options);
 
     geometric_broadening.allocate();
@@ -68,16 +65,21 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
 
     BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
         geometric_broadening[i] = geometric_broadening_function->generate(bout::generator::Context().set("lpar", lpar[i]));
-        transport_broadening[i] = transport_broadening_factor_function->generate(bout::generator::Context().set("lpar", lpar[i]));
+        transport_broadening[i] = transport_broadening_function->generate(bout::generator::Context().set("lpar", lpar[i]));
         flux_expansion[i] = flux_expansion_function->generate(bout::generator::Context().set("lpar", lpar[i]));
     }
 
-    // Make sure that all the broadening factors are normalized to their upstream values
-    geometric_broadening /= geometric_broadening(0, mesh->ystart, 0);
-    transport_broadening /= transport_broadening(0, mesh->ystart, 0);
-    flux_expansion /= flux_expansion(0, mesh->ystart, 0);
+    bool normalize = geo_options["normalize"]
+                    .doc("Normalize broadening factors such that they have a value of 1 upstream.")
+                    .withDefault<bool>(false);
+    if (normalize) {
+        geometric_broadening /= geometric_broadening(0, mesh->ystart, 0);
+        transport_broadening /= transport_broadening(0, mesh->ystart, 0);
+        flux_expansion /= flux_expansion(0, mesh->ystart, 0);
+    }
 
     flux_tube_broadening = geometric_broadening * transport_broadening * flux_expansion;
+    
     // Bxy is no longer consistent with the Jacobian. Set equal to NaN, to prevent anyone from using it.
     BOUT_FOR(i, coord->Bxy.getRegion("RGN_ALL")) {
         coord->Bxy[i] = std::numeric_limits<BoutReal>::quiet_NaN();
@@ -89,7 +91,6 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
     diagnose = geo_options["diagnose"]
                     .doc("Output additional diagnostics?")
                     .withDefault<bool>(false);
-
 }
 
 void FieldlineGeometry::transform(Options& state) {
