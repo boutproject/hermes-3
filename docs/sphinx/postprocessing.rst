@@ -112,14 +112,13 @@ Here are the definitions of some common channels:
 | cx               |   Charge exchange                    |
 +------------------+--------------------------------------+
 
+.. _sec-flow-diagnostics:
 
 Flow diagnostics convention
 ~~~~~~~~~~~
 
 Hermes-3 saves a number of different flow rates at a cell boundary. The boundary is 
-located at either the "xlow" or "ylow" side, where "low" refers to the negative 
-direction in index space, and "up" would refer to the positive direction. For example,
-the "xlow" side of the cell at (i,j,k) is the boundary between cells (i,j,k) and (i-1,j,k).
+located at either the "xlow" or "ylow" side (see :ref:`sec-cell-face-notation`).
 Positive values correspond to flow into the cell.
 
 There are several types of flow diagnostics at the moment:
@@ -136,7 +135,7 @@ There are several types of flow diagnostics at the moment:
 
 There are numerous variants of the above throughout the code, which are
 described in their metadata. Note that the diagnostics have not yet been 
-implemented for each term.
+implemented for every term.
 
 
 
