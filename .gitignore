@@ -10,3 +10,8 @@ BOUT.settings
 /docs/build/*
 /docs/doxygen/*
 /docs/sphinx/_breathe*
+__pycache__
+spack-build*
+spack.lock
+.spack-env
+views
