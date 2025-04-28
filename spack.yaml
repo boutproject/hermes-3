@@ -5,7 +5,7 @@
 spack:
   # add package specs to the `specs` list
   specs:
-    - hermes-3%gcc
+    - hermes-3%gcc+petsc
   view:
     gcc:
       root: ./views/gcc
