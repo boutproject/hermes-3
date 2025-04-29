@@ -42,8 +42,10 @@ struct RelaxPotential : public Component {
   ///     Include poloidal ExB flow?
   ///   - sheath_boundary: bool, default false
   ///     If phi_boundary_relax is false, set the radial boundary to the sheath potential?
-  ///   - viscosity: Field2D, default 0.0
-  ///     Kinematic viscosity [m^2/s]
+  ///   - viscosity_perp: Field2D, default 0.0
+  ///     Kinematic viscosity in perpendicular diraction  [m^2/s]
+  ///   - viscosity_par: Field2D, default 0.0
+  ///     Kinematic viscosity in parallel diraction  [m^2/s]
   ///   - vort_dissipation: bool, default false
   ///     Parallel dissipation of vorticity?
   ///   - damp_core_vorticity: bool, default false
@@ -138,7 +140,9 @@ private:
 
   Field2D Bsq;      ///< SQ(coord->Bxy)
   Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
-  Field3D viscosity; /// Kinematic viscosity
+  Field3D viscosity_perp; /// Perpendicular Kinematic viscosity
+  Field3D viscosity_par;  /// Parallel Kinematic viscosity
+
 
   // Relax-potential related variables
   BoutReal lambda_1, lambda_2;  ///< Relaxation parameters

@@ -4,6 +4,9 @@
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
 
+#include <bout/difops.hxx>
+
+
 using bout::globals::mesh;
 
 AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, Solver*)
@@ -90,7 +93,6 @@ void AnomalousDiffusion::transform(Options& state) {
   }
 
   Field3D flow_xlow, flow_ylow; // Flows through cell faces
-
   if (include_D) {
     // Particle diffusion. Gradients of density drive flows of particles,
     // momentum and energy. The implementation here is equivalent to an
@@ -116,6 +118,21 @@ void AnomalousDiffusion::transform(Options& state) {
                                      flow_xlow, flow_ylow));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
+
+
+    const BoutReal charge = get<BoutReal>(species["charge"]);
+    if ((fabs(charge) > 1e-5) and state.isSection("fields") and state["fields"].isSet("Vort")) {
+      // Vorticity or Electrostatic potential are set and species is charged -> include flow in vorticity equation 
+
+      const Field3D Vort = get<Field3D>(state["fields"]["Vort"]);
+
+      add(species["vorticity_source"], Div_a_Grad_perp_upwind_flows(Vort * anomalous_D / floor(N,1e-8), N2D,
+                                                                 flow_xlow, flow_ylow));
+
+      // add(species["vorticity_flow_xlow"], flow_xlow);
+      // add(species["vorticity_flow_ylow"], flow_ylow);
+    }
+
   }
 
   if (include_chi) {

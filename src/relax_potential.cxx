@@ -150,14 +150,23 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  viscosity = options["viscosity"]
-    .doc("Kinematic viscosity [m^2/s]")
+  viscosity_perp = options["viscosity_perp"]
+    .doc("Perpendicular Kinematic viscosity [m^2/s]")
     .withDefault<Field3D>(0.0)
     / (Lnorm * Lnorm * Omega_ci);
-  mesh->communicate(viscosity);
-  viscosity.splitParallelSlices(); // We need this otherwise applyParallelBoundary gives and assertion error. 
-  viscosity.applyBoundary("dirichlet");
-  viscosity.applyParallelBoundary("parallel_dirichlet_o2");
+  mesh->communicate(viscosity_perp);
+  viscosity_perp.splitParallelSlices(); // We need this otherwise applyParallelBoundary gives and assertion error. 
+  viscosity_perp.applyBoundary("dirichlet");
+  viscosity_perp.applyParallelBoundary("parallel_dirichlet_o2");
+
+  viscosity_par = options["viscosity_par"]
+    .doc("Parallel Kinematic viscosity [m^2/s]")
+    .withDefault<Field3D>(0.0)
+    / (Lnorm * Lnorm * Omega_ci);
+  mesh->communicate(viscosity_par);
+  viscosity_par.splitParallelSlices(); // We need this otherwise applyParallelBoundary gives and assertion error. 
+  viscosity_par.applyBoundary("dirichlet");
+  viscosity_par.applyParallelBoundary("parallel_dirichlet_o2");
 
   vort_dissipation = options["vort_dissipation"]
                          .doc("Parallel dissipation of vorticity")
@@ -863,11 +872,35 @@ void RelaxPotential::finally(const Options& state) {
 
   if (state.isSection("fields") and state["fields"].isSet("DivJextra")) {
     auto DivJextra = get<Field3D>(state["fields"]["DivJextra"]);
-
     // Parallel current is handled here, to allow different 2D or 3D closures
     // to be used
     ddt(Vort) += DivJextra;
   }
+
+
+  // Other sources/sinks fro each species (i.e. anomalous transport)
+  for (auto& kv : allspecies.getChildren()) {
+    // Note: includes electrons (should it?)
+
+    const Options& species = kv.second;
+    if (!species.isSet("charge")) {
+      continue; // Not charged
+    }
+    const BoutReal Z = get<BoutReal>(species["charge"]); // NOTE(malamast): Do we include non-charged species in the vorticity eq.?
+    if (fabs(Z) < 1e-5) {
+      continue; // Not charged
+    }
+
+    if (species.isSet("vorticity_source")) {
+
+      const BoutReal AA = get<BoutReal>(species["AA"]);
+
+      ddt(Vort) += get<Field3D>(species["vorticity_source"]) * AA / average_atomic_mass;; // NOTE(malamast): Usually they add only ions. 
+                                          // How do we generalize it to include the contribution from other species?
+                                          // Do we need to divide by charge like in Pi_hat?
+    }
+  }
+
 
   // Parallel current due to species parallel flow
   for (auto& kv : allspecies.getChildren()) {
@@ -901,7 +934,11 @@ void RelaxPotential::finally(const Options& state) {
   }
 
   // Viscosity
-  ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
+  ddt(Vort) += FV::Div_a_Grad_perp(viscosity_perp, Vort);
+
+  ddt(Vort) += FV::Div_par_K_Grad_par(viscosity_par, Vort);  //NOTE(malamast): Need to check if this equivalent with the Laplace_par operator.
+  // ddt(Vort) += viscosity_par * Laplace_par(Vort); 
+
 
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
@@ -962,6 +999,7 @@ void RelaxPotential::finally(const Options& state) {
     }
   }
 
+
   // Solve diffusion equation for potential
 
   if (boussinesq) {
@@ -1007,12 +1045,12 @@ void RelaxPotential::finally(const Options& state) {
       const BoutReal Ai = get<BoutReal>(species["AA"]);
       const Field3D Ni = get<Field3D>(species["density"]);
 
-      phi_vort += FV::Div_a_Grad_perp((Ai / Bsq) * Ni, phi);
+      phi_vort += FV::Div_a_Grad_perp((Ai / Bsq) * Ni, phi); // NOTE(malamast): Do we need to divide by species charge??
 
       if (diamagnetic_polarisation and species.isSet("pressure")) {
         // Calculate the diamagnetic flow contribution
         const Field3D Pi = get<Field3D>(species["pressure"]);
-        phi_vort += FV::Div_a_Grad_perp(Ai / Bsq, Pi);
+        phi_vort += FV::Div_a_Grad_perp(Ai / Bsq / Zi, Pi); // NOTE(malamast): Why do we not divide by species charge??
       }
     }
 
