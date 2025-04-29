@@ -60,7 +60,7 @@ BOUT_SUBMODULE_HASH=$(git -C $HERMES_SRC_DIR_OVERRIDE submodule status | grep "B
 notice "Cloning BOUT-dev/$BOUT_SUBMODULE_HASH into $PWD/$BOUTPP_SRC_DIR_OVERRIDE"
 quiet git clone git@github.com:boutproject/BOUT-dev.git $BOUTPP_SRC_DIR_OVERRIDE
 quiet git -C $BOUTPP_SRC_DIR_OVERRIDE checkout $BOUT_SUBMODULE_HASH
-quiet git -C $BOUTPP_SRC_DIR_OVERRIDE submodule update --init --update
+quiet git -C $BOUTPP_SRC_DIR_OVERRIDE submodule update --init --recursive
 notice "Copying boutpp_config.cmake into $BOUTPP_CONFIG_OVERRIDE"
 cp image_ingredients/boutpp_config.cmake $BOUTPP_CONFIG_OVERRIDE
 
