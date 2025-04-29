@@ -639,6 +639,8 @@ void Vorticity::finally(const Options& state) {
   AUTO_TRACE();
   auto coord = mesh->getCoordinates();
 
+  const Options& allspecies = state["species"];
+
   phi = get<Field3D>(state["fields"]["phi"]);
 
   if (exb_advection) {
@@ -680,6 +682,35 @@ void Vorticity::finally(const Options& state) {
     // Parallel current is handled here, to allow different 2D or 3D closures
     // to be used
     ddt(Vort) += DivJextra;
+  }
+
+  // Other sources/sinks from each species (i.e. anomalous transport)
+  for (auto& kv : allspecies.getChildren()) {
+    // Note: includes electrons (should it?)
+
+    const Options& species = kv.second;
+    if (!species.isSet("charge")) {
+      continue; // Not charged
+    }
+    const BoutReal Z = get<BoutReal>(species["charge"]); // NOTE(malamast): Do we include non-charged species in the vorticity eq.?
+    if (fabs(Z) < 1e-5) {
+      continue; // Not charged
+    }
+
+    // sources/sinks due to anomalous transport
+    if (species.isSet("anomalous_D")) {
+      const Field3D N = get<Field3D>(species["density"]);
+      Field2D N2D = DC(N);
+
+      const BoutReal AA = get<BoutReal>(species["AA"]);
+
+      const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
+
+      ddt(Vort) += Div_a_Grad_perp_upwind (Vort * anomalous_D / floor(N,1e-8), N2D) * AA / average_atomic_mass;
+                                          // NOTE(malamast): Usually they add only ions. 
+                                          // How do we generalize it to include the contribution from other species?
+                                          // Do we need to divide by charge like in Pi_hat?
+    }
   }
 
   // Parallel current due to species parallel flow

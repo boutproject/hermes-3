@@ -838,7 +838,6 @@ void RelaxPotential::finally(const Options& state) {
   phi = get<Field3D>(state["fields"]["phi"]);
   Vort = get<Field3D>(state["fields"]["vorticity"]);
 
-
   // Solve vorticity equation
 
   if (exb_advection) {
@@ -881,8 +880,7 @@ void RelaxPotential::finally(const Options& state) {
     ddt(Vort) += DivJextra;
   }
 
-
-  // Other sources/sinks fro each species (i.e. anomalous transport)
+  // Other sources/sinks from each species (i.e. anomalous transport)
   for (auto& kv : allspecies.getChildren()) {
     // Note: includes electrons (should it?)
 
@@ -895,17 +893,21 @@ void RelaxPotential::finally(const Options& state) {
       continue; // Not charged
     }
 
-
-    if (species.isSet("vorticity_source")) {
+    // sources/sinks due to anomalous transport
+    if (species.isSet("anomalous_D")) {
+      const Field3D N = get<Field3D>(species["density"]);
+      Field2D N2D = DC(N);
 
       const BoutReal AA = get<BoutReal>(species["AA"]);
 
-      ddt(Vort) += get<Field3D>(species["vorticity_source"]) * AA / average_atomic_mass;; // NOTE(malamast): Usually they add only ions. 
+      const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
+
+      ddt(Vort) += Div_a_Grad_perp_upwind (Vort * anomalous_D / floor(N,1e-8), N2D) * AA / average_atomic_mass;
+                                          // NOTE(malamast): Usually they add only ions. 
                                           // How do we generalize it to include the contribution from other species?
                                           // Do we need to divide by charge like in Pi_hat?
     }
   }
-
 
   // Parallel current due to species parallel flow
   for (auto& kv : allspecies.getChildren()) {
