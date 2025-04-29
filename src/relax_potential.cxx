@@ -1,4 +1,3 @@
-// #include <bout/fv_ops.hxx>
 #include <bout/solver.hxx>
 
 #include "../include/relax_potential.hxx"
@@ -943,7 +942,8 @@ void RelaxPotential::finally(const Options& state) {
   // Viscosity
   ddt(Vort) += FV::Div_a_Grad_perp(viscosity_perp, Vort);
 
-  ddt(Vort) += FV::Div_par_K_Grad_par(viscosity_par, Vort);  //NOTE(malamast): Need to check if this equivalent with the Laplace_par operator.
+  ddt(Vort) += FV::Div_par_K_Grad_par(viscosity_par, Vort);  
+  // NOTE(malamast): Need to check if Div_par_K_Grad_par is equivalent with the Laplace_par operator.
   // ddt(Vort) += viscosity_par * Laplace_par(Vort); 
 
 

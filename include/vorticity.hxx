@@ -47,8 +47,10 @@ struct Vorticity : public Component {
   ///     If phi_boundary_relax is false, set the radial boundary to the sheath potential?
   ///   - split_n0: bool, default false
   ///     Split phi into n=0 and n!=0 components?
-  ///   - viscosity: Field2D, default 0.0
-  ///     Kinematic viscosity [m^2/s]
+  ///   - viscosity_perp: Field2D, default 0.0
+  ///     Kinematic viscosity in perpendicular diraction  [m^2/s]
+  ///   - viscosity_par: Field2D, default 0.0
+  ///     Kinematic viscosity in parallel diraction  [m^2/s]
   ///   - vort_dissipation: bool, default false
   ///     Parallel dissipation of vorticity?
   ///   - damp_core_vorticity: bool, default false
@@ -138,7 +140,8 @@ private:
   Field2D Bsq; // SQ(coord->Bxy)
   Vector2D Curlb_B; // Curvature vector Curl(b/B)
   BoutReal hyper_z; ///< Hyper-viscosity in Z
-  Field2D viscosity; ///< Kinematic viscosity
+  Field3D viscosity_perp; /// Perpendicular Kinematic viscosity
+  Field3D viscosity_par;  /// Parallel Kinematic viscosity
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current

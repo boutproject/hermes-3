@@ -104,11 +104,23 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                  .doc("Split phi into n=0 and n!=0 components")
                  .withDefault<bool>(false);
 
-  viscosity = options["viscosity"]
-    .doc("Kinematic viscosity [m^2/s]")
-    .withDefault<BoutReal>(0.0)
+  viscosity_perp = options["viscosity_perp"]
+    .doc("Perpendicular Kinematic viscosity [m^2/s]")
+    .withDefault<Field3D>(0.0)
     / (Lnorm * Lnorm * Omega_ci);
-  viscosity.applyBoundary("dirichlet");
+  mesh->communicate(viscosity_perp);
+  viscosity_perp.splitParallelSlices(); // We need this otherwise applyParallelBoundary gives and assertion error. 
+  viscosity_perp.applyBoundary("dirichlet");
+  viscosity_perp.applyParallelBoundary("parallel_dirichlet_o2");
+
+  viscosity_par = options["viscosity_par"]
+    .doc("Parallel Kinematic viscosity [m^2/s]")
+    .withDefault<Field3D>(0.0)
+    / (Lnorm * Lnorm * Omega_ci);
+  mesh->communicate(viscosity_par);
+  viscosity_par.splitParallelSlices(); // We need this otherwise applyParallelBoundary gives and assertion error. 
+  viscosity_par.applyBoundary("dirichlet");
+  viscosity_par.applyParallelBoundary("parallel_dirichlet_o2");
 
   hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
 
@@ -745,7 +757,12 @@ void Vorticity::finally(const Options& state) {
   }
 
   // Viscosity
-  ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
+  ddt(Vort) += FV::Div_a_Grad_perp(viscosity_perp, Vort);
+
+  ddt(Vort) += FV::Div_par_K_Grad_par(viscosity_par, Vort);  
+  // NOTE(malamast): Need to check if Div_par_K_Grad_par is equivalent with the Laplace_par operator.
+  // ddt(Vort) += viscosity_par * Laplace_par(Vort); 
+
 
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
