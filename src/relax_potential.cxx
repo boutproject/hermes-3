@@ -1,12 +1,15 @@
-#include <bout/fv_ops.hxx>
+// #include <bout/fv_ops.hxx>
 #include <bout/solver.hxx>
 
-using bout::globals::mesh;
+#include "../include/relax_potential.hxx"
 
 #include "../include/div_ops.hxx"
-#include "../include/relax_potential.hxx"
+#include <bout/fv_ops.hxx>
+
 #include <bout/constants.hxx>
 #include "../include/hermes_build_config.hxx"
+
+using bout::globals::mesh;
 
 
 namespace {
@@ -39,6 +42,7 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 ///
 /// exp( 2*log(fc) - log(fm) )
 ///
+
 BoutReal limitFree(BoutReal fm, BoutReal fc) {
   if (fm < fc) {
     return fc; // Neumann rather than increasing into boundary
@@ -890,6 +894,7 @@ void RelaxPotential::finally(const Options& state) {
     if (fabs(Z) < 1e-5) {
       continue; // Not charged
     }
+
 
     if (species.isSet("vorticity_source")) {
 

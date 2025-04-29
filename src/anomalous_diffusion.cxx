@@ -119,20 +119,21 @@ void AnomalousDiffusion::transform(Options& state) {
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
 
+    if (species.isSet("charge")) { // Has a charge
+      const BoutReal charge = get<BoutReal>(species["charge"]);
 
-    const BoutReal charge = get<BoutReal>(species["charge"]);
-    if ((fabs(charge) > 1e-5) and state.isSection("fields") and state["fields"].isSet("Vort")) {
-      // Vorticity or Electrostatic potential are set and species is charged -> include flow in vorticity equation 
+      if ((fabs(charge) > 1e-5) and state.isSection("fields") and state["fields"].isSet("Vort")) {
+        // Vorticity or Electrostatic potential are set and species is charged -> include flow in vorticity equation 
 
-      const Field3D Vort = get<Field3D>(state["fields"]["Vort"]);
+        const Field3D Vort = get<Field3D>(state["fields"]["Vort"]);
 
-      add(species["vorticity_source"], Div_a_Grad_perp_upwind_flows(Vort * anomalous_D / floor(N,1e-8), N2D,
-                                                                 flow_xlow, flow_ylow));
+        add(species["vorticity_source"], Div_a_Grad_perp_upwind_flows(Vort * anomalous_D / floor(N,1e-8), N2D,
+                                                                  flow_xlow, flow_ylow));
 
-      // add(species["vorticity_flow_xlow"], flow_xlow);
-      // add(species["vorticity_flow_ylow"], flow_ylow);
+        // add(species["vorticity_flow_xlow"], flow_xlow);
+        // add(species["vorticity_flow_ylow"], flow_ylow);
+      }
     }
-
   }
 
   if (include_chi) {
