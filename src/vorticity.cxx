@@ -109,18 +109,18 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     .withDefault<Field3D>(0.0)
     / (Lnorm * Lnorm * Omega_ci);
   mesh->communicate(viscosity_perp);
-  viscosity_perp.splitParallelSlices(); // We need this otherwise applyParallelBoundary gives and assertion error. 
+  // viscosity_perp.splitParallelSlices(); // We need this otherwise applyParallelBoundary gives and assertion error. 
   viscosity_perp.applyBoundary("dirichlet");
-  viscosity_perp.applyParallelBoundary("parallel_dirichlet_o2");
+  // viscosity_perp.applyParallelBoundary("parallel_dirichlet_o2");
 
   viscosity_par = options["viscosity_par"]
     .doc("Parallel Kinematic viscosity [m^2/s]")
     .withDefault<Field3D>(0.0)
     / (Lnorm * Lnorm * Omega_ci);
   mesh->communicate(viscosity_par);
-  viscosity_par.splitParallelSlices(); // We need this otherwise applyParallelBoundary gives and assertion error. 
+  // viscosity_par.splitParallelSlices(); // We need this otherwise applyParallelBoundary gives and assertion error. 
   viscosity_par.applyBoundary("dirichlet");
-  viscosity_par.applyParallelBoundary("parallel_dirichlet_o2");
+  // viscosity_par.applyParallelBoundary("parallel_dirichlet_o2");
 
   hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
 

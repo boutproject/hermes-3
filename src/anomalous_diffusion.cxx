@@ -121,7 +121,6 @@ void AnomalousDiffusion::transform(Options& state) {
 
 
     set(species["anomalous_D"], anomalous_D);
-
   }
 
   if (include_chi) {
