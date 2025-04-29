@@ -47,13 +47,13 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
 
     std::string geometric_broadening_str = geo_options["geometric_broadening"]
         .doc("Function for R(lpar) / R(lpar=0) (for lpar in [m]).")
-        .as<std::string>();
+        .withDefault<std::string>("1.0");
     std::string transport_broadening_str = geo_options["transport_broadening"]
         .doc("Function for lambda_INT(lpar) / lambda_q(lpar=0) (for lpar in [m]).")
-        .as<std::string>();
+        .withDefault<std::string>("1.0");
     std::string flux_expansion_str = geo_options["flux_expansion"]
         .doc("Function for (B_pol/B_tot(lpar=0)) / (B_pol/B_tot(lpar)) (for lpar in [m]).")
-        .as<std::string>();
+        .withDefault<std::string>("1.0");
 
     FieldGeneratorPtr geometric_broadening_function = FieldFactory::get()->parse(geometric_broadening_str, &geo_options);
     FieldGeneratorPtr transport_broadening_function = FieldFactory::get()->parse(transport_broadening_str, &geo_options);
