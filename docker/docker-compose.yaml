@@ -51,8 +51,6 @@ services:
     user: ${UID}:${GID}
     volumes:
       - ${PWD}/work:/hermes_project/work
-    stdin_open: true # docker run -i
-    tty: true        # docker run -t
     environment:
     - PUID=$UID
     - PGID=$GID
@@ -60,7 +58,6 @@ services:
     - OMPI_ALLOW_RUN_AS_ROOT=1
     - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
     entrypoint: ["image", "run"]
-    # command: ["image", "run", "PATH"]
     command: ""
   fix_permissions:
     # Adjust the permissions of ./work to make sure
@@ -72,3 +69,15 @@ services:
     - PUID=$UID
     - PGID=$GID
     command: ["image", "fix_permissions"]
+  
+  jupyter:
+    image: "hermes3-jupyter"
+    user: root
+    volumes:
+      - ${PWD}/work:/home/jovyan/work
+    ports:
+    - 8888:8888
+    environment:
+    - NB_UID=$UID
+    - NB_GID=$GID
+    attach: false
