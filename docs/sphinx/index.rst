@@ -22,6 +22,7 @@ Hermes-3 documentation
    reactions
    closure
    feedback_control
+   geometry_1d
    developer
 
 
