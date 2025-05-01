@@ -10,6 +10,13 @@ class Hermes3(CMakePackage):
     version("working", branch="master")
     version("master", branch="master")
 
+    variant(
+        "limiter",
+        default="MC",
+        description="Slope limiter",
+        values=("MC", "MinMod"),
+        multi=False,
+    )
     variant("petsc", default=False, description="Builds with PETSc support.")
     variant("sundials", default=True, description="Builds with SUNDIALS support.")
     variant("xhermes", default=True, description="Builds xhermes.")
@@ -34,8 +41,11 @@ class Hermes3(CMakePackage):
 
     def cmake_args(self):
         args = []
-        if "+petsc" in self.spec:
-            args.append("-DBOUT_USE_PETSC=ON")
-        if "+sundials" in self.spec:
-            args.append("-DBOUT_DOWNLOAD_SUNDIALS=ON")
-        return args
+
+        return [
+            # Always build with Sundials
+            self.define("BOUT_DOWNLOAD_SUNDIALS", True),
+            # Use variants to trigger petsc, limiter options
+            self.define_from_variant("BOUT_USE_PETSC", "petsc"),
+            self.define_from_variant("HERMES_SLOPE_LIMITER", "limiter"),
+        ]
