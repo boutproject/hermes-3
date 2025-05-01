@@ -48,13 +48,13 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
 
     std::string lambda_int_str = geo_options["lambda_int"]
         .doc("Function for the integral heat flux width lambda_int = lambda_q + 1.64 S [m].")
-        .withDefault<std::string>("1.0");
+        .as<std::string>();
     std::string pitch_angle_str = geo_options["fieldline_pitch_angle"]
         .doc("Function for the fieldline pitch angle sin(theta)=Bpol/Bt [~].")
-        .withDefault<std::string>("1.0");
+        .as<std::string>();
     std::string fieldline_radius_str = geo_options["fieldline_radius"]
         .doc("Function for the fieldline major radius R [m].")
-        .withDefault<std::string>("1.0");
+        .as<std::string>();
     
     FieldGeneratorPtr lambda_int_function = FieldFactory::get()->parse(lambda_int_str, &geo_options);
     FieldGeneratorPtr pitch_angle_function = FieldFactory::get()->parse(pitch_angle_str, &geo_options);
@@ -76,15 +76,19 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
         .withDefault<bool>(true);
     
     if (compute_B_from_R) {
+        geo_options["magnetic_field_strength"].setConditionallyUsed();
+
         BoutReal upstream_magnetic_field_strength = geo_options["upstream_magnetic_field_strength"]
             .doc("Upstream magnetic field strength [T]")
             .as<BoutReal>();
         
         magnetic_field_strength = upstream_magnetic_field_strength * fieldline_radius(0, mesh->ystart, 0) / fieldline_radius / Bnorm;
     } else {
+        geo_options["upstream_magnetic_field_strength"].setConditionallyUsed();
+        
         std::string magnetic_field_strength_str = geo_options["magnetic_field_strength"]
             .doc("Function for the fieldline magnetic field strength B [T].")
-            .withDefault<std::string>("1.0");
+            .as<std::string>();
         FieldGeneratorPtr magnetic_field_strength_function = FieldFactory::get()->parse(magnetic_field_strength_str, &geo_options);
 
         BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
@@ -124,7 +128,7 @@ void FieldlineGeometry::transform(Options& state) {
 
 void FieldlineGeometry::outputVars(Options& state) {
     AUTO_TRACE();
-    auto Lnorm = get<BoutReal>(state["Lnorm"]);
+    auto Lnorm = get<BoutReal>(state["rho_s0"]);
     auto Bnorm = get<BoutReal>(state["Bnorm"]);
 
     if (diagnose) {

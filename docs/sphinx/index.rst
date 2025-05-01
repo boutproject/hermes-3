@@ -22,7 +22,7 @@ Hermes-3 documentation
    reactions
    closure
    feedback_control
-   geometry_1d
+   fieldline_geometry
    developer
 
 
