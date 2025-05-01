@@ -11,7 +11,7 @@
 /// Includes both radiative and 3-body recombination
 struct AmjuelHydRecombination : public AmjuelReaction {
   AmjuelHydRecombination(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelReaction(name, alloptions, solver) {}
+      : AmjuelReaction(name, "hyd_recombination", alloptions, solver) {}
 
   void calculate_rates(Options& electron, Options& atom, Options& ion,
                        Field3D& reaction_rate, Field3D& momentum_exchange,

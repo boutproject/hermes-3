@@ -9,7 +9,7 @@
 /// Hydrogen ionisation, Amjuel rates
 struct AmjuelHydIonisation : public AmjuelReaction {
   AmjuelHydIonisation(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelReaction(name, alloptions, solver) {}
+      : AmjuelReaction(name, "hyd_ionisation", alloptions, solver) {}
 
   void calculate_rates(Options& electron, Options& atom, Options& ion,
                        Field3D& reaction_rate, Field3D& momentum_exchange,

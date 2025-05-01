@@ -10,7 +10,7 @@
 /// Not resolving metastables, only transporting ground state
 struct AmjuelHeIonisation01 : public AmjuelReaction {
   AmjuelHeIonisation01(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelReaction(name, alloptions, solver) {
+      : AmjuelReaction(name, "he_ionisation01", alloptions, solver) {
 
         rate_multiplier = alloptions[std::string("he")]["ionisation_rate_multiplier"]
                            .doc("Scale the ionisation rate by this factor")
@@ -42,7 +42,7 @@ struct AmjuelHeIonisation01 : public AmjuelReaction {
 /// Fujimoto Formulation II
 struct AmjuelHeRecombination10 : public AmjuelReaction {
   AmjuelHeRecombination10(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelReaction(name, alloptions, solver) {
+      : AmjuelReaction(name, "he_recombination10", alloptions, solver) {
 
         rate_multiplier = alloptions[name]["recombination_rate_multiplier"]
                            .doc("Scale the recombination rate by this factor")

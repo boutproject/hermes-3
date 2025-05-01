@@ -2,11 +2,55 @@
 #ifndef AMJUEL_REACTION_H
 #define AMJUEL_REACTION_H
 
+#include "../external/json.hxx"
 #include "component.hxx"
 #include "integrate.hxx"
+#include <filesystem>
+#include <string>
+
+struct AmjuelData {
+
+  AmjuelData(const std::string& amjuel_label) {
+    AUTO_TRACE();
+
+    std::filesystem::path filename =
+        std::filesystem::path(__FILE__).parent_path().parent_path() / "json_database"
+        / (std::string(amjuel_label) + ".json");
+
+    // Read the data file
+    std::ifstream json_file(filename);
+
+    if (!json_file.good()) {
+      throw BoutException("Could not read Amjuel data file '{}'", std::string(filename));
+    }
+
+    nlohmann::json data;
+    json_file >> data;
+
+    // Extract coeffs and copy them to the member vars
+    std::vector<std::vector<double>> rate_coeffs_tmp = data["rate_coeffs"];
+    this->rate_coeffs = rate_coeffs_tmp;
+    std::vector<std::vector<double>> rad_coeffs_tmp = data["radiation_coeffs"];
+    this->rad_coeffs = rad_coeffs_tmp;
+
+    // Extract electron heating value
+    double electron_heating_tmp = data["electron_heating"];
+    this->electron_heating = electron_heating_tmp;
+  }
+
+  // N.B. E-index varies fastest, so coefficient is [T][n]
+  std::vector<std::vector<BoutReal>> rate_coeffs;
+  std::vector<std::vector<BoutReal>> rad_coeffs;
+
+  BoutReal electron_heating;
+
+  // BoutReal Tmin, Tmax; ///< Range of T  [eV]
+  // BoutReal nmin, nmax; ///< Range of density [m^-3]
+};
 
 struct AmjuelReaction : public Component {
-  AmjuelReaction(std::string name, Options& alloptions, Solver*) {
+  AmjuelReaction(std::string name, std::string amjuel_label, Options& alloptions, Solver*)
+      : amjuel_data(amjuel_label) {
     // Get the units
     const auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);
@@ -15,7 +59,16 @@ struct AmjuelReaction : public Component {
   }
 
 protected:
+  AmjuelData amjuel_data;
   BoutReal Tnorm, Nnorm, FreqNorm; // Normalisations
+
+  const BoutReal get_electron_heating() { return amjuel_data.electron_heating; }
+  const std::vector<std::vector<BoutReal>>& get_rad_coeffs() {
+    return amjuel_data.rad_coeffs;
+  }
+  const std::vector<std::vector<BoutReal>>& get_rate_coeffs() {
+    return amjuel_data.rate_coeffs;
+  }
 
   BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
     if (value < min)
@@ -88,17 +141,41 @@ protected:
     return exp(result) * 1e-6; // Note: convert cm^3 to m^3
   }
 
-  /// Electron-driven reaction
-  /// e + from_ion -> to_ion [ + e? + e?]
-  ///
-  /// Coefficients from Amjuel:
-  ///  - rate_coefs        Double-polynomial log fit [T][n] for <σv>
-  ///  - radiation_coefs   Double-polynomial log fit [T][n] for electron loss
-  /// electron_heating  Energy added to electrons per reaction [eV]
-  template <size_t rows, size_t cols>
+  /**
+   * @brief
+   * @param electron
+   * @param from_ion
+   * @param to_ion
+   * @param electron_heating
+   * @param reaction_rate
+   * @param momentum_exchange
+   * @param energy_exchange
+   * @param energy_loss
+   * @param rate_multiplier
+   * @param radiation_multiplier
+
+
+   */
+
+  /**
+   * @brief Electron-driven reaction
+   *   e + from_ion -> to_ion [ + e? + e?]
+   * @param electron
+   * @param from_ion
+   * @param to_ion
+   * @param rate_coefs Amjuel Double-polynomial log fit [T][n] for <σv>
+   * @param radiation_coefs Amjuel Double-polynomial log fit [T][n] for electron loss
+   * @param electron_heating
+   * @param reaction_rate
+   * @param momentum_exchange
+   * @param energy_exchange
+   * @param energy_loss
+   * @param rate_multiplier
+   * @param radiation_multiplier
+   */
   void electron_reaction(Options& electron, Options& from_ion, Options& to_ion,
-                         const BoutReal (&rate_coefs)[rows][cols],
-                         const BoutReal (&radiation_coefs)[rows][cols],
+                         const std::vector<std::vector<BoutReal>>& rate_coefs,
+                         const std::vector<std::vector<BoutReal>>& radiation_coefs,
                          BoutReal electron_heating, Field3D& reaction_rate,
                          Field3D& momentum_exchange, Field3D& energy_exchange,
                          Field3D& energy_loss, BoutReal rate_multiplier,
