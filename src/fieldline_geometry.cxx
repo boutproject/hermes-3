@@ -7,7 +7,7 @@
 
 using bout::globals::mesh;
 
-Field3D calculateLpar() {
+Field3D calculate_Lpar() {
     // Get lpar
     const int MYPE = BoutComm::rank();   // Current rank
     const int NPES = BoutComm::size();    // Number of procs
@@ -37,56 +37,81 @@ Field3D calculateLpar() {
 
 FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
     Options& geo_options = options["fieldline_geometry"];
-    Options& mesh_options = options["mesh"];
+    const Options& mesh_options = options["mesh"];
+    const Options& units = options["units"];
+    BoutReal Lnorm = get<BoutReal>(units["meters"]);
+    BoutReal Bnorm = get<BoutReal>(units["Tesla"]);
+
     Coordinates *coord = mesh->getCoordinates();
 
-    const auto& units = options["units"];
-    Lnorm = get<BoutReal>(units["meters"]);
+    lpar = calculate_Lpar() / Lnorm;
 
-    lpar = calculateLpar();
-
-    std::string geometric_broadening_str = geo_options["geometric_broadening"]
-        .doc("Function for R(lpar) / R(lpar=0) (for lpar in [m]).")
+    std::string lambda_int_str = geo_options["lambda_int"]
+        .doc("Function for the integral heat flux width lambda_int = lambda_q + 1.64 S [m].")
         .withDefault<std::string>("1.0");
-    std::string transport_broadening_str = geo_options["transport_broadening"]
-        .doc("Function for lambda_INT(lpar) / lambda_q(lpar=0) (for lpar in [m]).")
+    std::string pitch_angle_str = geo_options["fieldline_pitch_angle"]
+        .doc("Function for the fieldline pitch angle sin(theta)=Bpol/Bt [~].")
         .withDefault<std::string>("1.0");
-    std::string flux_expansion_str = geo_options["flux_expansion"]
-        .doc("Function for (B_pol/B_tot(lpar=0)) / (B_pol/B_tot(lpar)) (for lpar in [m]).")
+    std::string fieldline_radius_str = geo_options["fieldline_radius"]
+        .doc("Function for the fieldline major radius R [m].")
         .withDefault<std::string>("1.0");
+    
+    FieldGeneratorPtr lambda_int_function = FieldFactory::get()->parse(lambda_int_str, &geo_options);
+    FieldGeneratorPtr pitch_angle_function = FieldFactory::get()->parse(pitch_angle_str, &geo_options);
+    FieldGeneratorPtr fieldline_radius_function = FieldFactory::get()->parse(fieldline_radius_str, &geo_options);
 
-    FieldGeneratorPtr geometric_broadening_function = FieldFactory::get()->parse(geometric_broadening_str, &geo_options);
-    FieldGeneratorPtr transport_broadening_function = FieldFactory::get()->parse(transport_broadening_str, &geo_options);
-    FieldGeneratorPtr flux_expansion_function = FieldFactory::get()->parse(flux_expansion_str, &geo_options);
-
-    geometric_broadening.allocate();
-    transport_broadening.allocate();
-    flux_expansion.allocate();
+    lambda_int.allocate();
+    pitch_angle.allocate();
+    fieldline_radius.allocate();
+    magnetic_field_strength.allocate();
 
     BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
-        geometric_broadening[i] = geometric_broadening_function->generate(bout::generator::Context().set("lpar", lpar[i]));
-        transport_broadening[i] = transport_broadening_function->generate(bout::generator::Context().set("lpar", lpar[i]));
-        flux_expansion[i] = flux_expansion_function->generate(bout::generator::Context().set("lpar", lpar[i]));
+        lambda_int[i] = lambda_int_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
+        pitch_angle[i] = pitch_angle_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm));
+        fieldline_radius[i] = fieldline_radius_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
     }
 
-    bool normalize = geo_options["normalize"]
-                    .doc("Normalize broadening factors such that they have a value of 1 upstream.")
-                    .withDefault<bool>(false);
-    if (normalize) {
-        geometric_broadening /= geometric_broadening(0, mesh->ystart, 0);
-        transport_broadening /= transport_broadening(0, mesh->ystart, 0);
-        flux_expansion /= flux_expansion(0, mesh->ystart, 0);
-    }
-
-    flux_tube_broadening = geometric_broadening * transport_broadening * flux_expansion;
+    bool compute_B_from_R = geo_options["compute_B_from_R"]
+        .doc("Compute B = B_upstream * R_upstream / R if true, or else use a function for magnetic_field_strength")
+        .withDefault<bool>(true);
     
+    if (compute_B_from_R) {
+        BoutReal upstream_magnetic_field_strength = geo_options["upstream_magnetic_field_strength"]
+            .doc("Upstream magnetic field strength [T]")
+            .as<BoutReal>();
+        
+        magnetic_field_strength = upstream_magnetic_field_strength * fieldline_radius(0, mesh->ystart, 0) / fieldline_radius / Bnorm;
+    } else {
+        std::string magnetic_field_strength_str = geo_options["magnetic_field_strength"]
+            .doc("Function for the fieldline magnetic field strength B [T].")
+            .withDefault<std::string>("1.0");
+        FieldGeneratorPtr magnetic_field_strength_function = FieldFactory::get()->parse(magnetic_field_strength_str, &geo_options);
+
+        BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
+            magnetic_field_strength[i] = magnetic_field_strength_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm));
+        }
+    }
+    transport_broadening = lambda_int / lambda_int(0, mesh->ystart, 0);
+    flux_expansion = pitch_angle(0, mesh->ystart, 0) / pitch_angle;
+
+    // Compute the effective magnetic field strength, which is the actual magnetic field strength divided by the transport broadening.
+    Field3D effective_magnetic_field_strength = magnetic_field_strength / transport_broadening;
     // Bxy is no longer consistent with the Jacobian. Set equal to NaN, to prevent anyone from using it.
     BOUT_FOR(i, coord->Bxy.getRegion("RGN_ALL")) {
         coord->Bxy[i] = std::numeric_limits<BoutReal>::quiet_NaN();
     }
     for (int j = mesh->ystart; j <= mesh->yend; ++j) {
-        coord->J(0, j) = flux_tube_broadening(0, j, 0);
+        coord->J(0, j) = 1 / effective_magnetic_field_strength(0, j, 0);
     }
+
+    // Width of flux tube in the radial direction
+    flux_tube_width = lambda_int * flux_expansion;
+    // Length of the cell in the poloidal direction
+    cell_poloidal_length = (coord->dy) * pitch_angle;
+    // Poloidal area of the cell (poloidal length times circumference)
+    cell_side_area = cell_poloidal_length * 2.0 * PI * fieldline_radius;
+    // Volume of the cell (poloidal area times flux tube width)
+    cell_volume = cell_side_area * flux_tube_width;
 
     diagnose = geo_options["diagnose"]
                     .doc("Output additional diagnostics?")
@@ -99,36 +124,116 @@ void FieldlineGeometry::transform(Options& state) {
 
 void FieldlineGeometry::outputVars(Options& state) {
     AUTO_TRACE();
+    auto Lnorm = get<BoutReal>(state["Lnorm"]);
+    auto Bnorm = get<BoutReal>(state["Bnorm"]);
+
     if (diagnose) {
 
         set_with_attrs(
-            state[std::string("fieldline_geometry_parallel_length")], lpar,
-            {{"units", "m"},
-            {"long_name", "Parallel length"},
-            {"source", "fieldline_geometry"}});
-
-        set_with_attrs(
-            state[std::string("fieldline_geometry_geometric_broadening")], geometric_broadening,
-            {{"units", ""},
-            {"long_name", "R(lpar) / R(lpar=0) for lpar in [m]"},
-            {"source", "fieldline_geometry"}});
+            state[std::string("fieldline_geometry_lpar")], lpar,
+            {
+                {"units", "m"},
+                {"conversion", Lnorm},
+                {"long_name", "Parallel distance from upstream"},
+                {"source", "fieldline_geometry"}
+            }
+        );
         
         set_with_attrs(
+            state[std::string("fieldline_geometry_lambda_int")], lambda_int,
+            {
+                {"units", "m"},
+                {"conversion", Lnorm},
+                {"long_name", "Flux tube radial width mapped upstream (lambda_q + 1.64S)"},
+                {"source", "fieldline_geometry"}
+            }
+        );
+
+        set_with_attrs(
+            state[std::string("fieldline_geometry_pitch_angle")], pitch_angle,
+            {
+                {"units", ""},
+                {"long_name", "sin(theta) = Bpol/B"},
+                {"source", "fieldline_geometry"}
+            }
+        );
+
+        set_with_attrs(
+            state[std::string("fieldline_geometry_fieldline_radius")], fieldline_radius,
+            {
+                {"units", "m"},
+                {"conversion", Lnorm},
+                {"long_name", "Major radius of fieldline"},
+                {"source", "fieldline_geometry"}
+            }
+        );
+
+        set_with_attrs(
+            state[std::string("fieldline_geometry_magnetic_field_strength")], magnetic_field_strength,
+            {
+                {"units", "T"},
+                {"conversion", Bnorm},
+                {"long_name", "Magnetic field strength along fieldline"},
+                {"source", "fieldline_geometry"}
+            }
+        );
+
+        set_with_attrs(
             state[std::string("fieldline_geometry_transport_broadening")], transport_broadening,
-            {{"units", ""},
-            {"long_name", "lambda_INT(lpar) / lambda_q(lpar=0) for lpar in [m]"},
-            {"source", "fieldline_geometry"}});
+            {
+                {"units", ""},
+                {"long_name", "Flux tube broadening factor due to cross-field transport"},
+                {"source", "fieldline_geometry"}
+            }
+        );
 
         set_with_attrs(
             state[std::string("fieldline_geometry_flux_expansion")], flux_expansion,
-            {{"units", ""},
-            {"long_name", "(B_pol/B_tot(lpar=0)) / (B_pol/B_tot(lpar)) for lpar in [m]"},
-            {"source", "fieldline_geometry"}});
-        
+            {
+                {"units", ""},
+                {"long_name", "Flux expansion"},
+                {"source", "fieldline_geometry"}
+            }
+        );
+
         set_with_attrs(
-            state[std::string("fieldline_geometry_flux_tube_broadening")], flux_tube_broadening,
-            {{"units", ""},
-            {"long_name", "Total factor increase for effective flux tube cross-sectional area."},
-            {"source", "fieldline_geometry"}});
+            state[std::string("fieldline_geometry_flux_tube_width")], flux_tube_width,
+            {
+                {"units", "m"},
+                {"conversion", Lnorm},
+                {"long_name", "Local flux tube radial width (lambda_q + 1.64S) * flux_expansion"},
+                {"source", "fieldline_geometry"}
+            }
+        );
+
+        set_with_attrs(
+            state[std::string("fieldline_geometry_cell_poloidal_length")], cell_poloidal_length,
+            {
+                {"units", "m"},
+                {"conversion", Lnorm},
+                {"long_name", "Poloidal length of cell (dl * Bpol / B)"},
+                {"source", "fieldline_geometry"}
+            }
+        );
+
+        set_with_attrs(
+            state[std::string("fieldline_geometry_cell_side_area")], cell_side_area,
+            {
+                {"units", "m^2"},
+                {"conversion", Lnorm*Lnorm},
+                {"long_name", "Poloidal length of cell times circumference"},
+                {"source", "fieldline_geometry"}
+            }
+        );
+
+        set_with_attrs(
+            state[std::string("fieldline_geometry_cell_volume")], cell_volume,
+            {
+                {"units", "m^3"},
+                {"conversion", Lnorm*Lnorm*Lnorm},
+                {"long_name", "Poloidal length of cell times circumference times flux tube radial width"},
+                {"source", "fieldline_geometry"}
+            }
+        );
 
 }}
