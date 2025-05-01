@@ -57,6 +57,37 @@ protected:
     return exp(result) * 1e-6; // Note: convert cm^3 to m^3
   }
 
+  /**
+   * @brief
+   *
+   *
+   * @param T
+   * @param n
+   * @return BoutReal
+   */
+  BoutReal evaluate(const std::vector<std::vector<BoutReal>>& coefs, BoutReal T,
+                    BoutReal n) {
+
+    // Enforce range of validity
+    n = clip(n, 1e14, 1e22); // 1e8 - 1e16 cm^-3
+    T = clip(T, 0.1, 1e4);
+
+    BoutReal logntilde = log(n / 1e14); // Note: 1e8 cm^-3
+    BoutReal logT = log(T);
+    BoutReal result = 0.0;
+
+    BoutReal logT_n = 1.0; // log(T) ** n
+    for (size_t n = 0; n < coefs.size(); ++n) {
+      BoutReal logn_m = 1.0; // log(ntilde) ** m
+      for (size_t m = 0; m < coefs[n].size(); ++m) {
+        result += coefs[n][m] * logn_m * logT_n;
+        logn_m *= logntilde;
+      }
+      logT_n *= logT;
+    }
+    return exp(result) * 1e-6; // Note: convert cm^3 to m^3
+  }
+
   /// Electron-driven reaction
   /// e + from_ion -> to_ion [ + e? + e?]
   ///
@@ -68,12 +99,9 @@ protected:
   void electron_reaction(Options& electron, Options& from_ion, Options& to_ion,
                          const BoutReal (&rate_coefs)[rows][cols],
                          const BoutReal (&radiation_coefs)[rows][cols],
-                         BoutReal electron_heating,
-                         Field3D &reaction_rate,
-                         Field3D &momentum_exchange,
-                         Field3D &energy_exchange,
-                         Field3D &energy_loss,
-                         BoutReal rate_multiplier,
+                         BoutReal electron_heating, Field3D& reaction_rate,
+                         Field3D& momentum_exchange, Field3D& energy_exchange,
+                         Field3D& energy_loss, BoutReal rate_multiplier,
                          BoutReal radiation_multiplier) {
 
     Field3D Ne = get<Field3D>(electron["density"]);
@@ -96,8 +124,8 @@ protected:
     // Calculate reaction rate using cell averaging. Optionally scale by multiplier
     reaction_rate = cellAverage(
         [&](BoutReal ne, BoutReal n1, BoutReal te) {
-          return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-                 / FreqNorm * rate_multiplier;
+          return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
+                 * rate_multiplier;
         },
         Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
@@ -113,7 +141,8 @@ protected:
         // Transfer of electron kinetic to thermal energy due to density source
         auto Ve = get<Field3D>(electron["velocity"]);
         auto Ae = get<BoutReal>(electron["AA"]);
-        add(electron["energy_source"], 0.5 * Ae * (to_charge - from_charge) * reaction_rate * SQ(Ve));
+        add(electron["energy_source"],
+            0.5 * Ae * (to_charge - from_charge) * reaction_rate * SQ(Ve));
       }
     }
 
