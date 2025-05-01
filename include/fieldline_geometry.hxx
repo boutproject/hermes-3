@@ -18,11 +18,19 @@ struct FieldlineGeometry : public Component {
 
     Field3D lpar{0.0};
 
-    Field3D geometric_broadening{0.0};
+    Field3D lambda_int{0.0};
+    Field3D pitch_angle{0.0};
+    Field3D fieldline_radius{0.0};
+    Field3D magnetic_field_strength{0.0};
+
     Field3D transport_broadening{0.0};
     Field3D flux_expansion{0.0};
 
-    Field3D flux_tube_broadening{0.0};
+    Field3D flux_tube_width{0.0};
+    Field3D cell_poloidal_length{0.0};
+    Field3D cell_side_area{0.0};
+    Field3D cell_volume{0.0};
+
 };
 
 namespace {
