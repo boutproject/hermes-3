@@ -144,8 +144,9 @@ private:
   Field3D viscosity_par;  /// Parallel Kinematic viscosity
 
 
-  // Relax-potential related variables
-  BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
+  // Relax-potential related variables 
+  BoutReal lambda_1;  ///< Relaxation parameters.  NOTE: lambda_1 has dimentions! 
+  BoutReal lambda_2;  ///< Relaxation parameters
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current

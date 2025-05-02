@@ -191,8 +191,9 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 	  .doc("Damp vorticity at the core boundary?")
 	  .withDefault<bool>(false);
 
-  lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault(100);
+  lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault(100.0) / (Tnorm * Omega_ci / SI::qe / Nnorm);
   lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault(1e5);
+
 
   // NOTE(malamast): How do we do that?
   // Add phi to restart files so that the value in the boundaries
@@ -272,6 +273,9 @@ void RelaxPotential::transform(Options& state) {
   phi.name = "phi";
   auto& fields = state["fields"];
 
+  // Set the boundary of phi1. 
+  phi1.applyBoundary("neumann");
+
   // Scale potential
   phi = phi1 / lambda_2;
 
@@ -280,7 +284,6 @@ void RelaxPotential::transform(Options& state) {
   // Vort.applyBoundary("dirichlet");
 
   // Set the boundary of phi. 
-  // phi1.applyBoundary("neumann");
   // phi.applyBoundary("neumann");
 
   // Note: For now the boundary values are all at the midpoint,
@@ -754,7 +757,7 @@ void RelaxPotential::transform(Options& state) {
 
       // This term energetically balances diamagnetic term
       // in the vorticity equation
-      subtract(species["energy_source"], Jdia_species * Grad_phi);
+      subtract(species["energy_source"], Jdia_species * Grad_phi); //NOTE(malamast): What is this diamagnetic term? Where does it come from?
 
       Jdia += Jdia_species; // Collect total diamagnetic current
     }
@@ -766,23 +769,23 @@ void RelaxPotential::transform(Options& state) {
 
     set(fields["DivJdia"], DivJdia);
 
-    // NOTE(malamast): Do we need this? It is not included in the vorticity component.
-    if (diamagnetic_polarisation) {
-      // Calculate energy exchange term nonlinear in pressure
-      // ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
-      for (auto& kv : allspecies.getChildren()) {
-        Options& species = allspecies[kv.first]; // Note: need non-const
+    // // NOTE(malamast): Do we need this? It is not included in the vorticity component.
+    // if (diamagnetic_polarisation) {
+    //   // Calculate energy exchange term nonlinear in pressure
+    //   // ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
+    //   for (auto& kv : allspecies.getChildren()) {
+    //     Options& species = allspecies[kv.first]; // Note: need non-const
 
-        if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
-              and IS_SET(species["AA"]))) {
-          continue; // No pressure, charge or mass -> no polarisation current due to
-                    // rate of change of diamagnetic flow
-        }
-        auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+    //     if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
+    //           and IS_SET(species["AA"]))) {
+    //       continue; // No pressure, charge or mass -> no polarisation current due to
+    //                 // rate of change of diamagnetic flow
+    //     }
+    //     auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 
-        add(species["energy_source"], (3. / 2) * P * DivJdia);
-      }
-    }
+    //     add(species["energy_source"], (3. / 2) * P * DivJdia); // NOTE(malamast): Do we need this? It is not included in the vorticity component.
+    //   }
+    // }
   }
 
   if (collisional_friction) {
@@ -835,7 +838,7 @@ void RelaxPotential::finally(const Options& state) {
   const Options& allspecies = state["species"];
 
   phi = get<Field3D>(state["fields"]["phi"]);
-  Vort = get<Field3D>(state["fields"]["vorticity"]);
+  // Vort = get<Field3D>(state["fields"]["vorticity"]);
 
   // Solve vorticity equation
 
@@ -1052,12 +1055,12 @@ void RelaxPotential::finally(const Options& state) {
       const BoutReal Ai = get<BoutReal>(species["AA"]);
       const Field3D Ni = get<Field3D>(species["density"]);
 
-      phi_vort += FV::Div_a_Grad_perp((Ai / Bsq) * Ni, phi); // NOTE(malamast): Do we need to divide by species charge??
+      phi_vort += FV::Div_a_Grad_perp((Ai / Bsq) * Ni, phi);
 
       if (diamagnetic_polarisation and species.isSet("pressure")) {
         // Calculate the diamagnetic flow contribution
         const Field3D Pi = get<Field3D>(species["pressure"]);
-        phi_vort += FV::Div_a_Grad_perp(Ai / Bsq / Zi, Pi); // NOTE(malamast): Why do we not divide by species charge??
+        phi_vort += FV::Div_a_Grad_perp(Ai / Bsq / Zi, Pi); // NOTE(malamast): Here, we had forgotten to divide by species charge.
       }
     }
 
@@ -1072,12 +1075,11 @@ void RelaxPotential::outputVars(Options& state) {
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
-  // NOTE(Malamast): I added the below from the vorticity component. I need to check the units for Vort in the present component.
   state["Vort"].setAttributes({{"time_dimension", "t"},
                                {"units", "C m^-3"},
                                {"conversion", SI::qe * Nnorm},
                                {"long_name", "vorticity"},
-                               {"source", "vorticity"}});
+                               {"source", "relax_potential"}});
 
   set_with_attrs(state["phi"], phi,
                  {{"time_dimension", "t"},
@@ -1093,7 +1095,16 @@ void RelaxPotential::outputVars(Options& state) {
                     {"units", "A m^-3"},
                     {"conversion", SI::qe * Nnorm * Omega_ci},
                     {"long_name", "Rate of change of vorticity"},
-                    {"source", "vorticity"}});
+                    {"source", "relax_potential"}});
+
+
+    set_with_attrs(state["ddt(phi)"], ddt(phi),
+                   {{"time_dimension", "t"},
+                    {"units", "V/s"},
+                    {"conversion", Tnorm * Omega_ci},
+                    {"long_name", "Rate of change of electrostatic potential"},
+                    {"source", "relax_potential"}});
+
 
     if (diamagnetic) {
       set_with_attrs(state["DivJdia"], DivJdia,
@@ -1101,7 +1112,7 @@ void RelaxPotential::outputVars(Options& state) {
                       {"units", "A m^-3"},
                       {"conversion", SI::qe * Nnorm * Omega_ci},
                       {"long_name", "Divergence of diamagnetic current"},
-                      {"source", "vorticity"}});
+                      {"source", "relax_potential"}});
     }
   }
 

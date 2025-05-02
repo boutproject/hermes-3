@@ -95,7 +95,7 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
                                      + atom + " to " + ion)},
                       {"source", "amjuel_hyd_ionisation"}});
 
-      set_with_attrs(state[{'R', Isotope, '+', '_', 'e', 'x'}], R,
+      set_with_attrs(state[{'R', Isotope, '+', '_', 'e', 'x'}], R, //NOTE(malamast): Sould we rename it to 'i', 'z' to make it consistent with the above?
                      {{"time_dimension", "t"},
                       {"units", "W / m^3"},
                       {"conversion", Pnorm * Omega_ci},
