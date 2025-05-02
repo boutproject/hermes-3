@@ -49,69 +49,79 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
     std::string lambda_int_str = geo_options["lambda_int"]
         .doc("Function for the integral heat flux width lambda_int = lambda_q + 1.64 S [m].")
         .as<std::string>();
-    std::string pitch_angle_str = geo_options["fieldline_pitch_angle"]
-        .doc("Function for the fieldline pitch angle sin(theta)=Bpol/Bt [~].")
-        .as<std::string>();
+    
     std::string fieldline_radius_str = geo_options["fieldline_radius"]
         .doc("Function for the fieldline major radius R [m].")
         .as<std::string>();
     
+    std::string poloidal_magnetic_field_str = geo_options["poloidal_magnetic_field"]
+        .doc("Function for the poloidal magnetic field strength Bpol [T].")
+        .as<std::string>();
+    
     FieldGeneratorPtr lambda_int_function = FieldFactory::get()->parse(lambda_int_str, &geo_options);
-    FieldGeneratorPtr pitch_angle_function = FieldFactory::get()->parse(pitch_angle_str, &geo_options);
+    FieldGeneratorPtr poloidal_magnetic_field_function = FieldFactory::get()->parse(poloidal_magnetic_field_str, &geo_options);
     FieldGeneratorPtr fieldline_radius_function = FieldFactory::get()->parse(fieldline_radius_str, &geo_options);
 
     lambda_int.allocate();
-    pitch_angle.allocate();
     fieldline_radius.allocate();
-    magnetic_field_strength.allocate();
+    poloidal_magnetic_field.allocate();
+    toroidal_magnetic_field.allocate();
+    total_magnetic_field.allocate();
+    pitch_angle.allocate();
 
     BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
         lambda_int[i] = lambda_int_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
-        pitch_angle[i] = pitch_angle_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm));
         fieldline_radius[i] = fieldline_radius_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
+        poloidal_magnetic_field[i] = poloidal_magnetic_field_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Bnorm;
     }
 
-    bool compute_B_from_R = geo_options["compute_B_from_R"]
-        .doc("Compute B = B_upstream * R_upstream / R if true, or else use a function for magnetic_field_strength")
+    bool compute_B_from_R = geo_options["compute_Btor_from_R"]
+        .doc("Compute Btor = B_tor,upstream * R_upstream / R if true, or else use a function for toroidal_magnetic_field")
         .withDefault<bool>(true);
     
     if (compute_B_from_R) {
-        geo_options["magnetic_field_strength"].setConditionallyUsed();
+        geo_options["toroidal_magnetic_field"].setConditionallyUsed();
 
-        BoutReal upstream_magnetic_field_strength = geo_options["upstream_magnetic_field_strength"]
-            .doc("Upstream magnetic field strength [T]")
+        BoutReal upstream_toroidal_magnetic_field = geo_options["upstream_toroidal_magnetic_field"]
+            .doc("Upstream toroidal magnetic field strength Btor,u [T]")
             .as<BoutReal>();
         
-        magnetic_field_strength = upstream_magnetic_field_strength * fieldline_radius(0, mesh->ystart, 0) / fieldline_radius / Bnorm;
+        toroidal_magnetic_field = (upstream_toroidal_magnetic_field / Bnorm) * fieldline_radius(0, mesh->ystart, 0) / fieldline_radius;
     } else {
-        geo_options["upstream_magnetic_field_strength"].setConditionallyUsed();
+        geo_options["upstream_toroidal_magnetic_field"].setConditionallyUsed();
         
-        std::string magnetic_field_strength_str = geo_options["magnetic_field_strength"]
-            .doc("Function for the fieldline magnetic field strength B [T].")
+        std::string toroidal_magnetic_field_str = geo_options["toroidal_magnetic_field"]
+            .doc("Function for the toroidal magnetic field strength Btor [T].")
             .as<std::string>();
-        FieldGeneratorPtr magnetic_field_strength_function = FieldFactory::get()->parse(magnetic_field_strength_str, &geo_options);
+        FieldGeneratorPtr toroidal_magnetic_field_function = FieldFactory::get()->parse(toroidal_magnetic_field_str, &geo_options);
 
         BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
-            magnetic_field_strength[i] = magnetic_field_strength_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm));
+            toroidal_magnetic_field[i] = toroidal_magnetic_field_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Bnorm;
         }
     }
+    total_magnetic_field = sqrt(toroidal_magnetic_field*toroidal_magnetic_field + poloidal_magnetic_field*poloidal_magnetic_field);
+    pitch_angle = poloidal_magnetic_field / total_magnetic_field;
+
     transport_broadening = lambda_int / lambda_int(0, mesh->ystart, 0);
     flux_expansion = pitch_angle(0, mesh->ystart, 0) / pitch_angle;
 
     // Compute the effective magnetic field strength, which is the actual magnetic field strength divided by the transport broadening.
-    Field3D effective_magnetic_field_strength = magnetic_field_strength / transport_broadening;
+    Field3D effective_magnetic_field_strength = total_magnetic_field / transport_broadening;
     // Bxy is no longer consistent with the Jacobian. Set equal to NaN, to prevent anyone from using it.
     BOUT_FOR(i, coord->Bxy.getRegion("RGN_ALL")) {
         coord->Bxy[i] = std::numeric_limits<BoutReal>::quiet_NaN();
     }
     for (int j = mesh->ystart; j <= mesh->yend; ++j) {
-        coord->J(0, j) = 1 / effective_magnetic_field_strength(0, j, 0);
+        // N.b. The Jacobian has units of [m / radian T], which is why we need an extra factor of Lnorm.
+        coord->J(0, j) = 1 / effective_magnetic_field_strength(0, j, 0) / Lnorm;
     }
 
+    // Parallel length of cell
+    Field3D dlpar = coord->dy / Lnorm;
     // Width of flux tube in the radial direction
     flux_tube_width = lambda_int * flux_expansion;
     // Length of the cell in the poloidal direction
-    cell_poloidal_length = (coord->dy) * pitch_angle;
+    cell_poloidal_length = dlpar * pitch_angle;
     // Poloidal area of the cell (poloidal length times circumference)
     cell_side_area = cell_poloidal_length * 2.0 * PI * fieldline_radius;
     // Volume of the cell (poloidal area times flux tube width)
@@ -171,9 +181,29 @@ void FieldlineGeometry::outputVars(Options& state) {
                 {"source", "fieldline_geometry"}
             }
         );
+        
+        set_with_attrs(
+            state[std::string("fieldline_geometry_poloidal_magnetic_field")], poloidal_magnetic_field,
+            {
+                {"units", "T"},
+                {"conversion", Bnorm},
+                {"long_name", "Poloidal magnetic field strength along fieldline"},
+                {"source", "fieldline_geometry"}
+            }
+        );
 
         set_with_attrs(
-            state[std::string("fieldline_geometry_magnetic_field_strength")], magnetic_field_strength,
+            state[std::string("fieldline_geometry_toroidal_magnetic_field")], toroidal_magnetic_field,
+            {
+                {"units", "T"},
+                {"conversion", Bnorm},
+                {"long_name", "Toroidal magnetic field strength along fieldline"},
+                {"source", "fieldline_geometry"}
+            }
+        );
+
+        set_with_attrs(
+            state[std::string("fieldline_geometry_total_magnetic_field")], total_magnetic_field,
             {
                 {"units", "T"},
                 {"conversion", Bnorm},
