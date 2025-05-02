@@ -19,10 +19,12 @@ struct FieldlineGeometry : public Component {
     Field3D lpar{0.0};
 
     Field3D lambda_int{0.0};
-    Field3D pitch_angle{0.0};
     Field3D fieldline_radius{0.0};
-    Field3D magnetic_field_strength{0.0};
-
+    Field3D poloidal_magnetic_field{0.0};
+    Field3D toroidal_magnetic_field{0.0};
+    Field3D total_magnetic_field{0.0};
+    Field3D pitch_angle{0.0};
+    
     Field3D transport_broadening{0.0};
     Field3D flux_expansion{0.0};
 
