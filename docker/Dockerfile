@@ -1,5 +1,5 @@
-# Dockerfile for building BOUT++ and Hermes-3
-# Build stage with Spack pre-installed and ready to be used
+# Build as "hermes3"
+# with sudo docker build -f docker/Dockerfile -t hermes3 docker
 
 # Use a spack image with a pinned SHA
 FROM spack/ubuntu-jammy@sha256:d9acf9ed998cbde8d12bd302c5921291086bfe6f70d2d0e26908fdc48c272324 AS builder
@@ -87,6 +87,9 @@ RUN . /opt/spack-environment/activate.sh \
 # --user=${UID}:${GID}
 COPY docker/image_ingredients/docker_image_commands.sh /bin/image
 RUN chmod u+x,o+x /bin/image
+
+# Prevent an issue where only one process can open a HDF file at a time
+ENV HDF5_USE_FILE_LOCKING=False
 
 # Copy in a script which runs before any instance is
 # launched
