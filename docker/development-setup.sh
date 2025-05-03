@@ -18,8 +18,21 @@ print_message() {
 # Simplified function calls for different message types
 warn() { print_message "${LIGHTRED}" "$1"; }
 notice() { print_message "${LIGHTGREEN}" "$1"; }
+
+verbose=false
+for arg in "$@"; do
+  if [ "$arg" = "-v" ]; then
+    verbose=true
+  fi
+done
+
+# Compact quiet function
 quiet() {
-  "$@" > /dev/null 2>&1
+  if $verbose; then
+    "$@"
+  else
+    "$@" > /dev/null 2>&1
+  fi
 }
 
 if [ -d "hermes-3-docker" ]; then
@@ -60,7 +73,9 @@ BOUT_SUBMODULE_HASH=$(git -C $HERMES_SRC_DIR_OVERRIDE submodule status | grep "B
 notice "Cloning BOUT-dev/$BOUT_SUBMODULE_HASH into $PWD/$BOUTPP_SRC_DIR_OVERRIDE"
 quiet git clone git@github.com:boutproject/BOUT-dev.git $BOUTPP_SRC_DIR_OVERRIDE
 quiet git -C $BOUTPP_SRC_DIR_OVERRIDE checkout $BOUT_SUBMODULE_HASH
-quiet git -C $BOUTPP_SRC_DIR_OVERRIDE submodule update --init --update
+quiet git -C $BOUTPP_SRC_DIR_OVERRIDE submodule update --init --recursive
+notice "Applying 'enable_c.patch' to $BOUTPP_SRC_DIR_OVERRIDE (TODO: remove patch once BOUT-dev version updated)."
+git -C $BOUTPP_SRC_DIR_OVERRIDE apply $PWD/image_ingredients/enable_c.patch
 notice "Copying boutpp_config.cmake into $BOUTPP_CONFIG_OVERRIDE"
 cp image_ingredients/boutpp_config.cmake $BOUTPP_CONFIG_OVERRIDE
 
