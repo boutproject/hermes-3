@@ -1,23 +1,22 @@
-name: Create and publish hermes-3-jupyter Docker image
-# name: Build hermes-3-jupyter Docker image
+name: Build hermes-3 Docker image
 
 # Configures this workflow to run every time a change is pushed to the master branch,
-# when a release is released, or when manually triggered.
+# or when manually triggered.
 on:
   push:
     branches:
       - 'master'
-  release:
-    types: [released]
+  
   workflow_dispatch:  # Allows manual triggering
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: boutproject/hermes-3-jupyter
-  DOCKERFILE: docker/hermes-3-jupyter.dockerfile
+  IMAGE_NAME: boutproject/hermes-3
+  DOCKERFILE: docker/hermes-3.dockerfile
 
 jobs:
-  build:
+
+  build-final-image:
 
     runs-on: ubuntu-latest
 
@@ -59,3 +58,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+  
