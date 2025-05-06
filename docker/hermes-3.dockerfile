@@ -60,7 +60,7 @@ RUN . /opt/spack-environment/activate.sh \
           -S ${BOUTPP_SRC_DIR} \
           -C ${BOUTPP_CONFIG} \
           -Wno-dev \
-&& cmake --build ${BOUTPP_BUILD_DIR} --parallel
+&& cmake --build ${BOUTPP_BUILD_DIR}
 
 # Configure and build Hermes
 RUN . /opt/spack-environment/activate.sh \
@@ -69,7 +69,7 @@ RUN . /opt/spack-environment/activate.sh \
           -C ${HERMES_CONFIG} \
           -DCMAKE_PREFIX_PATH=${BOUTPP_BUILD_DIR} \
           -Wno-dev \
-&& cmake --build ${HERMES_BUILD_DIR} --parallel
+&& cmake --build ${HERMES_BUILD_DIR}
 
 # Copy in some helpful commands which can be used in
 # the image. Make sure these can be executed when setting
