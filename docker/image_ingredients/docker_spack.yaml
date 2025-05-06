@@ -19,3 +19,4 @@ spack:
 
   config:
     install_tree: /opt/software
+    build_jobs: 2
