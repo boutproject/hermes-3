@@ -2,11 +2,11 @@
 # with sudo docker build -f docker/hermes-3-builder.dockerfile -t hermes-3-builder .
 
 # Use a spack image with a pinned SHA
-FROM spack/ubuntu-jammy:develop AS builder
+FROM spack/ubuntu-jammy@sha256:d9acf9ed998cbde8d12bd302c5921291086bfe6f70d2d0e26908fdc48c272324 AS builder
 
 # Install OS packages needed to build the software
 RUN apt-get -yqq update && apt-get -yqq upgrade \
- && apt-get -yqq install --no-install-recommends git build-essential cmake \
+ && apt-get -yqq install --no-install-recommends git build-essential vim cmake \
  && rm -rf /var/lib/apt/lists/*
 
 # What we want to install and how we want to install it
