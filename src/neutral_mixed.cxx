@@ -283,8 +283,7 @@ void NeutralMixed::finally(const Options& state) {
   // Calculate cross-field diffusion from collision frequency
   //
   //
-  BoutReal neutral_lmax =
-      0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
+  BoutReal neutral_lmax = 0.01 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
   Field3D Rnn =
     sqrt(floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
@@ -557,14 +556,13 @@ void NeutralMixed::outputVars(Options& state) {
                                                 {"species", name},
                                                 {"source", "neutral_mixed"}});
 
-  state[std::string("NV") + name].setAttributes(
-      {{"time_dimension", "t"},
-       {"units", "kg / m^2 / s"},
-       {"conversion", SI::Mp * Nnorm * Cs0},
-       {"standard_name", "momentum"},
-       {"long_name", name + " parallel momentum"},
-       {"species", name},
-       {"source", "neutral_mixed"}});
+  state[std::string("NV") + name].setAttributes({{"time_dimension", "t"},
+                                                {"units", "kg / m^2 / s"},
+                                                {"conversion", SI::Mp * Nnorm * Cs0},
+                                                {"standard_name", "momentum"},
+                                                {"long_name", name + " parallel momentum"},
+                                                {"species", name},
+                                                {"source", "neutral_mixed"}});
 
   if (output_ddt) {
     set_with_attrs(
@@ -593,6 +591,13 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "temperature"},
                     {"long_name", name + " temperature"},
                     {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("V") + name], Vn,
+                   {{"time_dimension", "t"},
+                    {"units", "m / s"},
+                    {"conversion", Cs0},
+                    {"standard_name", "velocity"},
+                    {"long_name", name + " parallel velocity"},
+                    {"source", "neutral_mixed"}});                    
     set_with_attrs(state[std::string("Dnn") + name], Dnn,
                    {{"time_dimension", "t"},
                     {"units", "m^2/s"},

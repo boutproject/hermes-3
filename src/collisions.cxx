@@ -85,7 +85,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
     const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]);
 
     const Field3D nu = filledFrom(nu_12, [&](auto& i) {
-      return nu_12[i] * (A1 / A2) * density1[i] / floor(density2[i], 1e-5);
+      return nu_12[i] * (A1 / A2) * density1[i] / floor(density2[i], 1e-8);
     });
 
     add(species2["collision_frequency"], nu);

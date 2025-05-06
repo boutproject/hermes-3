@@ -2,6 +2,7 @@
 #include <bout/difops.hxx>
 
 #include "../include/zero_current.hxx"
+#include <bout/constants.hxx>
 
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : name(name) {
@@ -9,8 +10,15 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
   Options &options = alloptions[name];
 
   charge = options["charge"].doc("Particle charge. electrons = -1");
-
   ASSERT0(charge != 0.0);
+
+  atomic_mass = options["AA"].doc("Particle atomic number."); // Atomic mass
+  ASSERT0(atomic_mass != 0.0);
+
+  // diagnose = options["diagnose"]
+  //   .doc("Output additional diagnostics?")
+  //   .withDefault<bool>(false);
+
 }
 
 void ZeroCurrent::transform(Options &state) {
@@ -63,11 +71,17 @@ void ZeroCurrent::transform(Options &state) {
 
   velocity = current / (-charge * floor(N, 1e-5));
   set(species["velocity"], velocity);
+
+  // NOTE(malamast): Do we need to set the species momentum as well in the state?
+  momentum = atomic_mass * N * velocity; // Re-calculate consistent with V and N
+  set(species["momentum"], momentum);
+
 }
 
 void ZeroCurrent::outputVars(Options &state) {
   AUTO_TRACE();
   auto Cs0 = get<BoutReal>(state["Cs0"]);
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
 
   // Save the velocity
   set_with_attrs(state[std::string("V") + name], velocity,
@@ -78,4 +92,16 @@ void ZeroCurrent::outputVars(Options &state) {
                   {"standard_name", "velocity"},
                   {"species", name},
                   {"source", "zero_current"}});
+
+
+  set_with_attrs(state[std::string("NV") + name], momentum,
+                  {{"time_dimension", "t"},
+                  {"units", "kg / m^2 / s"},
+                  {"conversion", SI::Mp * Nnorm * Cs0},
+                  {"long_name", name + " parallel momentum"},
+                  {"standard_name", "momentum"},
+                  {"species", name},
+                  {"source", "zero_current"}});
+
+
 }
