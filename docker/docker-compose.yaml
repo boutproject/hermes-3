@@ -1,7 +1,7 @@
 services:
   shell:
     # Start an interactive terminal shell
-    image: "hermes-3"
+    image: "ghcr.io/boutproject/hermes-3"
     user: ${UID}:${GID}
     volumes:
       - ${PWD}/work:/hermes_project/work
@@ -15,7 +15,7 @@ services:
     command: ["/bin/bash"]
   sudo:
     # Start an interactive terminal shell with root access
-    image: "hermes-3"
+    image: "ghcr.io/boutproject/hermes-3"
     volumes:
       - ${PWD}/work:/hermes_project/work
     stdin_open: true # docker run -i
@@ -28,26 +28,26 @@ services:
     command: ["/bin/bash"]
   build_hermes:
     # Rebuild hermes, using ./work/hermes-3 if available
-    image: "hermes-3"
+    image: "ghcr.io/boutproject/hermes-3"
     volumes:
       - ${PWD}/work:/hermes_project/work
     command: ["image", "build_hermes"]
   build_boutpp:
     # Rebuild BOUT++, using ./work/BOUT-dev if available
-    image: "hermes-3"
+    image: "ghcr.io/boutproject/hermes-3"
     volumes:
       - ${PWD}/work:/hermes_project/work
     command: ["image", "build_boutpp"]
   build_both:
     # Rebuild both hermes and BOUT++, using overrides
     # if they are available in ./work
-    image: "hermes-3"
+    image: "ghcr.io/boutproject/hermes-3"
     volumes:
       - ${PWD}/work:/hermes_project/work
     command: ['image', "build_both"]
   hermes:
     # Run a hermes-3 case in 
-    image: "hermes-3"
+    image: "ghcr.io/boutproject/hermes-3"
     user: ${UID}:${GID}
     volumes:
       - ${PWD}/work:/hermes_project/work
@@ -62,7 +62,7 @@ services:
   fix_permissions:
     # Adjust the permissions of ./work to make sure
     # a user can access them
-    image: "hermes-3"
+    image: "ghcr.io/boutproject/hermes-3"
     volumes:
       - ${PWD}/work:/hermes_project/work
     environment:
@@ -71,7 +71,7 @@ services:
     command: ["image", "fix_permissions"]
   
   jupyter:
-    image: "hermes-3-jupyter"
+    image: "ghcr.io/boutproject/hermes-3-jupyter"
     user: root
     volumes:
       - ${PWD}/work:/home/jovyan/work
