@@ -286,19 +286,22 @@ void NeutralMixed::finally(const Options& state) {
   BoutReal neutral_lmax = 0.01 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
   Field3D Rnn =
-    sqrt(floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+    sqrt(2.0 * floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
-    // Dnn = Vth^2 / sigma
-    Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+    // Dnn = Vth^2 / nue
+    // Dnn = (2.0 * Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+    Dnn = (2.0 * Tn / AA) / (get<Field3D>(localstate["collision_frequency"]));
   } else {
-    Dnn = (Tn / AA) / Rnn;
+    Dnn = (2.0 * Tn / AA) / Rnn;
   }
 
   if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax = flux_limit * sqrt(Tn / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    // Field3D Dmax = flux_limit * sqrt(2.0 * Tn / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    Field3D Dmax = flux_limit * sqrt(8.0 / PI * Tn / AA) / 4.0 / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    // Field3D Dmax = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad(logPnlim)) + 1. / neutral_lmax) / (0.25 * sqrt(8.0 / PI * Tn / AA))));
     BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]); }
   }
 

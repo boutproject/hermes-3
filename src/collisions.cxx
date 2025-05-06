@@ -275,7 +275,7 @@ void Collisions::transform(Options& state) {
 
         const Field3D nu_en = filledFrom(Ne, [&](auto& i) {
           // Electron thermal speed (normalised)
-          const BoutReal vth_e = sqrt((SI::Mp / SI::Me) * Te[i] / Tnorm);
+          const BoutReal vth_e = sqrt(2.0 * (SI::Mp / SI::Me) * Te[i] / Tnorm);
 
           // Electron-neutral collision rate
           return vth_e * Nnorm * Nn[i] * a0 * rho_s0;
@@ -394,7 +394,7 @@ void Collisions::transform(Options& state) {
           const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
             // Relative velocity is sqrt( v1^2 + v2^2 )
             const BoutReal vrel =
-                sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));
+                sqrt(2.0 * temperature1[i] / (Tnorm * AA1) + 2.0 * temperature2[i] / (Tnorm * AA2));
 
             // Ion-neutral collision rate
             // Units: density [m^-3], a0 [m^2], rho_s0 [m]
@@ -440,7 +440,7 @@ void Collisions::transform(Options& state) {
           const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
             // Relative velocity is sqrt( v1^2 + v2^2 )
             const BoutReal vrel =
-                sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));
+                sqrt(2.0 * temperature1[i] / (Tnorm * AA1) + 2.0 * temperature2[i] / (Tnorm * AA2));
 
             // Ion-neutral collision rate
             // Units: density [m^-3], a0 [m^2], rho_s0 [m]
@@ -468,7 +468,7 @@ void Collisions::transform(Options& state) {
           const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
             // Relative velocity is sqrt( v1^2 + v2^2 )
             const BoutReal vrel =
-                sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));
+                sqrt(2.0 * temperature1[i] / (Tnorm * AA1) + 2.0 * temperature2[i] / (Tnorm * AA2));
 
             // Ion-neutral collision rate
             // Units: density [m^-3], a0 [m^2], rho_s0 [m]
