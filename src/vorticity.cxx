@@ -592,7 +592,7 @@ void Vorticity::transform(Options& state) {
 
       // This term energetically balances diamagnetic term
       // in the vorticity equation
-      // subtract(species["energy_source"], Jdia_species * Grad_phi); //NOTE(malamast): What is this diamagnetic term? Where does it come from?
+      subtract(species["energy_source"], Jdia_species * Grad_phi); //NOTE(malamast): What is this diamagnetic term? Where does it come from?
 
       Jdia += Jdia_species; // Collect total diamagnetic current
     }

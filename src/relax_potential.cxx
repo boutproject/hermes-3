@@ -192,7 +192,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 	  .withDefault<bool>(false);
 
   lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault(100.0) / (Tnorm * Omega_ci / SI::qe / Nnorm);
-  lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault(1e5);
+  lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault(1.0);
 
 
   // NOTE(malamast): How do we do that?
@@ -769,23 +769,23 @@ void RelaxPotential::transform(Options& state) {
 
     set(fields["DivJdia"], DivJdia);
 
-    // // NOTE(malamast): Do we need this? It is not included in the vorticity component.
-    // if (diamagnetic_polarisation) {
-    //   // Calculate energy exchange term nonlinear in pressure
-    //   // ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
-    //   for (auto& kv : allspecies.getChildren()) {
-    //     Options& species = allspecies[kv.first]; // Note: need non-const
+    // NOTE(malamast): Do we need this? It is not included in the vorticity component.
+    if (diamagnetic_polarisation) {
+      // Calculate energy exchange term nonlinear in pressure
+      // ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
+      for (auto& kv : allspecies.getChildren()) {
+        Options& species = allspecies[kv.first]; // Note: need non-const
 
-    //     if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
-    //           and IS_SET(species["AA"]))) {
-    //       continue; // No pressure, charge or mass -> no polarisation current due to
-    //                 // rate of change of diamagnetic flow
-    //     }
-    //     auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+        if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
+              and IS_SET(species["AA"]))) {
+          continue; // No pressure, charge or mass -> no polarisation current due to
+                    // rate of change of diamagnetic flow
+        }
+        auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 
-    //     add(species["energy_source"], (3. / 2) * P * DivJdia); // NOTE(malamast): Do we need this? It is not included in the vorticity component.
-    //   }
-    // }
+        add(species["energy_source"], (3. / 2) * P * DivJdia); // NOTE(malamast): Do we need this? It is not included in the vorticity component.
+      }
+    }
   }
 
   if (collisional_friction) {
