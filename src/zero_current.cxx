@@ -12,8 +12,8 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
   charge = options["charge"].doc("Particle charge. electrons = -1");
   ASSERT0(charge != 0.0);
 
-  atomic_mass = options["AA"].doc("Particle atomic number."); // Atomic mass
-  ASSERT0(atomic_mass != 0.0);
+  atomic_mass = options["AA"].doc("Particle atomic number.").withDefault(0.0); // Atomic mass
+  // ASSERT0(atomic_mass != 0.0);
 
   // diagnose = options["diagnose"]
   //   .doc("Output additional diagnostics?")
