@@ -1,20 +1,23 @@
 spack:
   specs:
-  - gcc@14 languages:='c,c++'
+  - gcc@14
   - python@3.12
   - py-cython
   - py-numpy
   - py-pip
   - py-jinja2
+  - cmake ~ncurses
   - netcdf-cxx4
   - openmpi
-  - sundials+petsc+hypre+mpi~examples~examples-install
-  - petsc+double+fftw+hdf5+hypre+mpi~fortran
+  - openblas
+  - hypre +mpi
+  - sundials +petsc+hypre+mpi~examples~examples-install
+  - petsc +double+fftw+hdf5+hypre+mpi~fortran
   - slepc
 
   concretizer:
     unify: true
-  
+
   view: /opt/views/view
 
   config:
