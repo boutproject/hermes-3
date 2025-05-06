@@ -51,7 +51,8 @@ struct AmjuelData {
 struct AmjuelReaction : public Component {
   AmjuelReaction(std::string name, std::string amjuel_label, std::string from_species,
                  std::string to_species, Options& alloptions, Solver*)
-      : amjuel_data(amjuel_label), from_species(from_species), to_species(to_species){
+      : amjuel_data(amjuel_label), amjuel_src(std::string("amjuel_") + amjuel_label),
+        from_species(from_species), to_species(to_species) {
     // Get the units
     const auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);
@@ -84,6 +85,7 @@ protected:
   const AmjuelData amjuel_data;
   BoutReal Tnorm, Nnorm, FreqNorm; // Normalisations
 
+  const std::string amjuel_src;
   const std::string from_species;
   const std::string to_species;
 
@@ -104,7 +106,7 @@ protected:
   }
 
   virtual void set_diagnostic_fields(Field3D& reaction_rate, Field3D& momentum_exchange,
-                             Field3D& energy_exchange, Field3D& energy_loss){};
+                                     Field3D& energy_exchange, Field3D& energy_loss){};
 
   BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
     if (value < min)
@@ -145,7 +147,7 @@ protected:
     return exp(result) * 1e-6; // Note: convert cm^3 to m^3
   }
 
-   /**
+  /**
    * @brief Electron-driven reaction
    *   e + from_ion -> to_ion [ + e? + e?]
    * @param electron

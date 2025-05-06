@@ -101,8 +101,7 @@ set(HERMES_SOURCES
     include/adas_carbon.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
-    include/amjuel_hyd_ionisation.hxx
-    include/amjuel_hyd_recombination.hxx
+    include/amjuel_hyd.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
     include/classical_diffusion.hxx

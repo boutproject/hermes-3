@@ -3,7 +3,7 @@
 
 #include "test_extras.hxx" // FakeMesh
 
-#include "../../include/amjuel_hyd_recombination.hxx"
+#include "../../include/amjuel_hyd.hxx"
 
 /// Global mesh
 namespace bout {
