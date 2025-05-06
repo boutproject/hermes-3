@@ -6,7 +6,7 @@ FROM spack/ubuntu-jammy@sha256:d9acf9ed998cbde8d12bd302c5921291086bfe6f70d2d0e26
 
 # Install OS packages needed to build the software
 RUN apt-get -yqq update && apt-get -yqq upgrade \
- && apt-get -yqq install --no-install-recommends git build-essential vim cmake \
+ && apt-get -yqq install --no-install-recommends git build-essential cmake \
  && rm -rf /var/lib/apt/lists/*
 
 # What we want to install and how we want to install it
@@ -16,7 +16,7 @@ COPY docker/image_ingredients/docker_spack.yaml /opt/spack-environment/spack.yam
 
 # Install the software
 WORKDIR /opt/spack-environment
-RUN spack env activate . && spack install --fail-fast && spack gc -y
+RUN spack env activate . && spack install --fail-fast
 
 # Make an 'entrypoint.sh' script which activates the spack environment
 RUN spack env activate --sh -d . > activate.sh

@@ -1,15 +1,15 @@
 spack:
   specs:
-  - gcc
-  - python
+  - gcc@14 languages:='c,c++'
+  - python@3.12
   - py-cython
   - py-numpy
   - py-pip
   - py-jinja2
   - netcdf-cxx4
   - openmpi
-  - sundials
-  - petsc+double+fftw+hdf5+hypre+mpi
+  - sundials+petsc+hypre+mpi~examples~examples-install
+  - petsc+double+fftw+hdf5+hypre+mpi~fortran
   - slepc
 
   concretizer:
@@ -19,4 +19,3 @@ spack:
 
   config:
     install_tree: /opt/software
-    build_jobs: 2
