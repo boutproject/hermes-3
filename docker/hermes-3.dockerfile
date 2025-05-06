@@ -45,7 +45,7 @@ ENV BOUTPP_CONFIG_OVERRIDE=/hermes_project/work/boutpp_config.cmake
 # Copy in required files for a minimal build of Hermes-3 and BOUT++
 COPY . ${HERMES_SRC_DIR}
 # Initialize the git submodules (needed for CI/CD build)
-RUN git -C ${HERMES_SRC_DIR} submodule update --init --recursive
+RUN git -C ${HERMES_SRC_DIR} submodule update --init --recursive --depth 1 --single-branch
 
 COPY docker/image_ingredients/enable_c.patch ${BOUTPP_SRC_DIR}/enable_c.patch
 RUN git -C ${BOUTPP_SRC_DIR} apply ./enable_c.patch
@@ -60,7 +60,7 @@ RUN . /opt/spack-environment/activate.sh \
           -S ${BOUTPP_SRC_DIR} \
           -C ${BOUTPP_CONFIG} \
           -Wno-dev \
-&& cmake --build ${BOUTPP_BUILD_DIR}
+&& cmake --build ${BOUTPP_BUILD_DIR} --parallel 2
 
 # Configure and build Hermes
 RUN . /opt/spack-environment/activate.sh \
@@ -69,7 +69,7 @@ RUN . /opt/spack-environment/activate.sh \
           -C ${HERMES_CONFIG} \
           -DCMAKE_PREFIX_PATH=${BOUTPP_BUILD_DIR} \
           -Wno-dev \
-&& cmake --build ${HERMES_BUILD_DIR}
+&& cmake --build ${HERMES_BUILD_DIR} --parallel 2
 
 # Copy in some helpful commands which can be used in
 # the image. Make sure these can be executed when setting
