@@ -52,7 +52,9 @@ jobs:
             type=raw,value=monthly-$(date +'%Y-%m')
             {% endif %}
             # set "latest" tag
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
+            # whichever workflow runs last will be tagged as edge
+            type=raw,value=edge
             # short sha tag
             type=sha,enable={{is_default_branch}}
             # tag with semantic version
@@ -111,7 +113,9 @@ jobs:
             type=raw,value=monthly-$(date +'%Y-%m')
             {% endif %}
             # set "latest" tag
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
+            # whichever workflow runs last will be tagged as edge
+            type=raw,value=edge
             # short sha tag
             type=sha,enable={{is_default_branch}}
             # tag with semantic version
