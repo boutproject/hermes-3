@@ -49,26 +49,62 @@ struct AmjuelData {
 };
 
 struct AmjuelReaction : public Component {
-  AmjuelReaction(std::string name, std::string amjuel_label, Options& alloptions, Solver*)
-      : amjuel_data(amjuel_label) {
+  AmjuelReaction(std::string name, std::string amjuel_label, std::string from_species,
+                 std::string to_species, Options& alloptions, Solver*)
+      : amjuel_data(amjuel_label), from_species(from_species), to_species(to_species){
     // Get the units
     const auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
+
+    diagnose = alloptions[name]["diagnose"]
+                   .doc("Output additional diagnostics?")
+                   .withDefault<bool>(false);
+  }
+
+  void transform(Options& state) override {
+    Options& electron = state["species"]["e"];
+    Options& from = state["species"][this->from_species]; // e.g. "h"
+    Options& to = state["species"][this->to_species];     // e.g. "h+"
+    Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
+
+    electron_reaction(electron, from, to, get_rate_coeffs(), get_rad_coeffs(),
+                      get_electron_heating(), reaction_rate, momentum_exchange,
+                      energy_exchange, energy_loss, this->rate_multiplier,
+                      this->radiation_multiplier);
+
+    if (this->diagnose) {
+      set_diagnostic_fields(reaction_rate, momentum_exchange, energy_exchange,
+                            energy_loss);
+    }
   }
 
 protected:
-  AmjuelData amjuel_data;
+  const AmjuelData amjuel_data;
   BoutReal Tnorm, Nnorm, FreqNorm; // Normalisations
 
-  const BoutReal get_electron_heating() { return amjuel_data.electron_heating; }
-  const std::vector<std::vector<BoutReal>>& get_rad_coeffs() {
+  const std::string from_species;
+  const std::string to_species;
+
+  // For diagnostics
+  bool diagnose;                                  ///< Outputting diagnostics?
+  BoutReal rate_multiplier, radiation_multiplier; ///< Scaling factor on reaction rate
+  Field3D S;                                      ///< Particle exchange
+  Field3D F;                                      ///< Momentum exchange
+  Field3D E;                                      ///< Energy exchange
+  Field3D R;                                      ///< Radiation loss
+
+  const BoutReal get_electron_heating() const { return amjuel_data.electron_heating; }
+  const std::vector<std::vector<BoutReal>>& get_rad_coeffs() const {
     return amjuel_data.rad_coeffs;
   }
-  const std::vector<std::vector<BoutReal>>& get_rate_coeffs() {
+  const std::vector<std::vector<BoutReal>>& get_rate_coeffs() const {
     return amjuel_data.rate_coeffs;
   }
+
+  virtual void set_diagnostic_fields(Field3D& reaction_rate, Field3D& momentum_exchange,
+                             Field3D& energy_exchange, Field3D& energy_loss){};
 
   BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
     if (value < min)
@@ -76,38 +112,6 @@ protected:
     if (value > max)
       return max;
     return value;
-  }
-
-  /// Evaluate a double polynomial fit in n and T
-  /// (page 20 of amjuel.pdf)
-  ///
-  ///  coefs[T][n]
-  /// Input in units:
-  ///     n in m^-3
-  ///     T in eV
-  ///
-  /// Output in SI, units m^3/s, or eV m^3/s for energy loss
-  template <size_t rows, size_t cols>
-  BoutReal evaluate(const BoutReal (&coefs)[rows][cols], BoutReal T, BoutReal n) {
-
-    // Enforce range of validity
-    n = clip(n, 1e14, 1e22); // 1e8 - 1e16 cm^-3
-    T = clip(T, 0.1, 1e4);
-
-    BoutReal logntilde = log(n / 1e14); // Note: 1e8 cm^-3
-    BoutReal logT = log(T);
-    BoutReal result = 0.0;
-
-    BoutReal logT_n = 1.0; // log(T) ** n
-    for (size_t n = 0; n < cols; ++n) {
-      BoutReal logn_m = 1.0; // log(ntilde) ** m
-      for (size_t m = 0; m < rows; ++m) {
-        result += coefs[n][m] * logn_m * logT_n;
-        logn_m *= logntilde;
-      }
-      logT_n *= logT;
-    }
-    return exp(result) * 1e-6; // Note: convert cm^3 to m^3
   }
 
   /**
@@ -141,23 +145,7 @@ protected:
     return exp(result) * 1e-6; // Note: convert cm^3 to m^3
   }
 
-  /**
-   * @brief
-   * @param electron
-   * @param from_ion
-   * @param to_ion
-   * @param electron_heating
-   * @param reaction_rate
-   * @param momentum_exchange
-   * @param energy_exchange
-   * @param energy_loss
-   * @param rate_multiplier
-   * @param radiation_multiplier
-
-
-   */
-
-  /**
+   /**
    * @brief Electron-driven reaction
    *   e + from_ion -> to_ion [ + e? + e?]
    * @param electron

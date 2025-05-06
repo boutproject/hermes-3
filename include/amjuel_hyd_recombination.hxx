@@ -9,50 +9,31 @@
 /// Hydrogen recombination, Amjuel rates
 ///
 /// Includes both radiative and 3-body recombination
-struct AmjuelHydRecombination : public AmjuelReaction {
-  AmjuelHydRecombination(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelReaction(name, "hyd_recombination", alloptions, solver) {}
-
-  void calculate_rates(Options& electron, Options& atom, Options& ion,
-                       Field3D& reaction_rate, Field3D& momentum_exchange,
-                       Field3D& energy_exchange, Field3D& energy_loss, BoutReal& rate_multiplier, BoutReal& radiation_multiplier);
-};
 
 /// Hydrogen recombination
 /// Templated on a char to allow 'h', 'd' and 't' species to be treated with the same code
 template <char Isotope>
-struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
+struct AmjuelHydRecombinationIsotope : public AmjuelReaction {
   AmjuelHydRecombinationIsotope(std::string name, Options& alloptions, Solver* solver)
-      : AmjuelHydRecombination(name, alloptions, solver) {
-
-    diagnose = alloptions[name]["diagnose"]
-                   .doc("Output additional diagnostics?")
-                   .withDefault<bool>(false);
+      : AmjuelReaction(name, "hyd_recombination", {Isotope, '+'}, {Isotope}, alloptions,
+                       solver) {
 
     rate_multiplier = alloptions[{Isotope}]["K_rec_multiplier"]
-                           .doc("Scale the recombination rate by this factor")
-                           .withDefault<BoutReal>(1.0);
+                          .doc("Scale the recombination rate by this factor")
+                          .withDefault<BoutReal>(1.0);
 
-    radiation_multiplier = alloptions[{Isotope}]["R_rec_multiplier"]
-                           .doc("Scale the recombination radiation (incl. 3 body) rate by this factor")
-                           .withDefault<BoutReal>(1.0);
+    radiation_multiplier =
+        alloptions[{Isotope}]["R_rec_multiplier"]
+            .doc("Scale the recombination radiation (incl. 3 body) rate by this factor")
+            .withDefault<BoutReal>(1.0);
   }
 
-  void transform(Options& state) override {
-    Options& electron = state["species"]["e"];
-    Options& atom = state["species"][{Isotope}];     // e.g. "h"
-    Options& ion = state["species"][{Isotope, '+'}]; // e.g. "h+"
-    Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
-
-    calculate_rates(electron, atom, ion, reaction_rate, momentum_exchange,
-                    energy_exchange, energy_loss, rate_multiplier, radiation_multiplier);
-
-    if (diagnose) {
-      S = -reaction_rate;
-      F = -momentum_exchange;
-      E = -energy_exchange;
-      R = -energy_loss;
-    }
+  void set_diagnostic_fields(Field3D& reaction_rate, Field3D& momentum_exchange,
+                             Field3D& energy_exchange, Field3D& energy_loss) override final {
+    S = -reaction_rate;
+    F = -momentum_exchange;
+    E = -energy_exchange;
+    R = -energy_loss;
   }
 
   void outputVars(Options& state) override {
@@ -66,17 +47,13 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
 
     if (diagnose) {
       // Save particle, momentum and energy channels
-
-      std::string atom{Isotope};
-      std::string ion{Isotope, '+'};
-
       set_with_attrs(state[{'S', Isotope, '+', '_', 'r', 'e', 'c'}], S,
                      {{"time_dimension", "t"},
                       {"units", "m^-3 s^-1"},
                       {"conversion", Nnorm * Omega_ci},
                       {"standard_name", "particle source"},
                       {"long_name", std::string("Particle source due to recombnation of ")
-                                        + ion + " to " + atom},
+                                        + from_species + " to " + to_species},
                       {"source", "amjuel_hyd_recombination"}});
 
       set_with_attrs(
@@ -85,8 +62,8 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
            {"units", "kg m^-2 s^-2"},
            {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
            {"standard_name", "momentum transfer"},
-           {"long_name", (std::string("Momentum transfer due to recombination of ") + ion
-                          + " to " + atom)},
+           {"long_name", (std::string("Momentum transfer due to recombination of ")
+                          + from_species + " to " + to_species)},
            {"source", "amjuel_hyd_recombination"}});
 
       set_with_attrs(
@@ -95,8 +72,8 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
            {"units", "W / m^3"},
            {"conversion", Pnorm * Omega_ci},
            {"standard_name", "energy transfer"},
-           {"long_name", (std::string("Energy transfer due to recombination of ") + ion
-                          + " to " + atom)},
+           {"long_name", (std::string("Energy transfer due to recombination of ")
+                          + from_species + " to " + to_species)},
            {"source", "amjuel_hyd_recombination"}});
 
       set_with_attrs(
@@ -105,19 +82,11 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
            {"units", "W / m^3"},
            {"conversion", Pnorm * Omega_ci},
            {"standard_name", "radiation loss"},
-           {"long_name", (std::string("Radiation loss due to recombination of ") + ion
-                          + " to " + atom)},
+           {"long_name", (std::string("Radiation loss due to recombination of ")
+                          + from_species + " to " + to_species)},
            {"source", "amjuel_hyd_recombination"}});
     }
   }
-
-private:
-  bool diagnose; ///< Outputting diagnostics?
-  BoutReal rate_multiplier, radiation_multiplier; ///< Scaling factor on reaction rate
-  Field3D S;     ///< Particle exchange
-  Field3D F;     ///< Momentum exchange
-  Field3D E;     ///< Energy exchange
-  Field3D R;     ///< Radiation loss
 };
 
 namespace {
