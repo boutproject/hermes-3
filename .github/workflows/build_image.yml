@@ -4,10 +4,14 @@ name: Create and publish hermes-3 Docker image
 
 # Configures this workflow to run when a release is released, or when manually triggered.
 on:
+  workflow_dispatch:  # Allows manual triggering
   release:
     types: [released]
-  workflow_dispatch:  # Allows manual triggering
+  schedule:
+    # Run monthly, at midnight on the first day of the month
+    - cron: '0 0 1 * *'
 
+    
 env:
   REGISTRY: ghcr.io
   BUILDER_IMAGE_NAME: boutproject/hermes-3-builder
@@ -45,6 +49,15 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}
+          tags: |
+            # set "latest" tag
+            type=raw,value=latest
+            # short sha tag
+            type=sha
+            # tag with semantic version
+            type=semver,pattern={{version}}
+            # tag with date
+            type=schedule,pattern={{date 'YYYYMMDD'}}
 
       # Build and push Docker image with Buildx
       # https://github.com/docker/build-push-action
@@ -90,6 +103,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}
+          tags: |
+            # set "latest" tag
+            type=raw,value=latest
+            # short sha tag
+            type=sha
+            # tag with semantic version
+            type=semver,pattern={{version}}
 
       # Build and push Docker image with Buildx
       # https://github.com/docker/build-push-action

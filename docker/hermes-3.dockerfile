@@ -1,7 +1,7 @@
 # Build as "hermes-3"
 # with sudo docker build -f docker/hermes-3.dockerfile -t hermes-3 .
 
-FROM ghcr.io/boutproject/hermes-3-builder AS builder
+FROM ghcr.io/boutproject/hermes-3-builder:latest AS builder
 
 # Bare OS image to run the installed executables
 FROM ubuntu:22.04
