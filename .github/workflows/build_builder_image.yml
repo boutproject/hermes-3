@@ -1,6 +1,4 @@
-name: Create and publish hermes-3 Docker image
-# TODO: rename file to build_builder_image.yml
-# name: Build hermes-3-builder and hermes-3 Docker images
+name: Build hermes-3-builder and hermes-3 Docker images
 
 # Configures this workflow to run when a release is released, or when manually triggered.
 on:
@@ -11,7 +9,6 @@ on:
     # Run monthly, at midnight on the first day of the month
     - cron: '0 0 1 * *'
 
-    
 env:
   REGISTRY: ghcr.io
   BUILDER_IMAGE_NAME: boutproject/hermes-3-builder

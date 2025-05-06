@@ -1,5 +1,4 @@
-name: Create and publish hermes-3-jupyter Docker image
-# name: Build hermes-3-jupyter Docker image
+name: Build hermes-3-jupyter Docker image
 
 # Configures this workflow to run every time a change is pushed to the master branch,
 # when a release is released, or when manually triggered.
