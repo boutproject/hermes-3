@@ -1,24 +1,21 @@
 spack:
+
+  view: /opt/views/view
+
   specs:
-  - gcc@14
   - python@3.12
   - py-cython
   - py-numpy
   - py-pip
   - py-jinja2
-  - cmake ~ncurses
+  - cmake
   - netcdf-cxx4
   - openmpi
   - openblas
   - hypre +mpi
   - sundials +petsc+hypre+mpi~examples~examples-install
-  - petsc +double+fftw+hdf5+hypre+mpi~fortran
+  - petsc +double+fftw+hdf5+hypre+mpi
   - slepc
 
   concretizer:
     unify: true
-
-  view: /opt/views/view
-
-  config:
-    install_tree: /opt/software
