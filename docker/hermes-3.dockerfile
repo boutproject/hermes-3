@@ -1,7 +1,8 @@
 # Build as "hermes-3"
 # with sudo docker build -f docker/hermes-3.dockerfile -t hermes-3 .
 
-FROM ghcr.io/boutproject/hermes-3-builder:latest AS builder
+ARG BUILDER_TAG=latest
+FROM ghcr.io/boutproject/hermes-3-builder:${BUILDER_TAG} AS builder
 
 # Bare OS image to run the installed executables
 FROM ubuntu:22.04
@@ -15,11 +16,7 @@ COPY --from=builder /opt/views /opt/views
 # Install useful tools you'll want in the container
 RUN apt-get -yqq update && apt-get -yqq upgrade \
  && apt-get -yqq install --no-install-recommends\
- git \
- build-essential \
- vim \
- ca-certificates \
- cmake \
+ git vim ca-certificates cmake build-essential \
  && rm -rf /var/lib/apt/lists/*
 
 # Change into the /hermes_project, and define paths
