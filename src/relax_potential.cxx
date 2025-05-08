@@ -191,9 +191,8 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 	  .doc("Damp vorticity at the core boundary?")
 	  .withDefault<bool>(false);
 
-  lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault(100.0) / (Tnorm * Omega_ci / SI::qe / Nnorm);
+  lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault(3e8) / (Tnorm * Omega_ci / SI::qe / Nnorm);
   lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault(1.0);
-
 
   // NOTE(malamast): How do we do that?
   // Add phi to restart files so that the value in the boundaries
