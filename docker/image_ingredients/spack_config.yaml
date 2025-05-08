@@ -1,3 +1,0 @@
-# Global configuration for spack. Save as ~/.spack/config.yaml
-config:
-  install_tree: /opt/software

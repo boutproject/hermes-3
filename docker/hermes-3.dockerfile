@@ -16,7 +16,9 @@ COPY --from=builder /opt/views /opt/views
 # Install useful tools you'll want in the container
 RUN apt-get -yqq update && apt-get -yqq upgrade \
  && apt-get -yqq install --no-install-recommends\
- git vim ca-certificates cmake build-essential \
+ git \
+ vim \
+ ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 # Change into the /hermes_project, and define paths
