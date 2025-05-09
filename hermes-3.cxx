@@ -30,6 +30,7 @@
 #include "include/amjuel_hyd_ionisation.hxx"
 #include "include/amjuel_hyd_recombination.hxx"
 #include "include/anomalous_diffusion.hxx"
+#include "include/centrifugal_drift.hxx"
 #include "include/classical_diffusion.hxx"
 #include "include/binormal_stpm.hxx"
 #include "include/collisions.hxx"
