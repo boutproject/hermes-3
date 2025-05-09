@@ -465,9 +465,9 @@ void EvolveEnergy::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_energy"}});
 
+    // Note: External source is not time-dependent
     set_with_attrs(state[std::string("E") + name + std::string("_src")], source,
-                   {{"time_dimension", "t"},
-                    {"units", "W/m^3"},
+                   {{"units", "W/m^3"},
                     {"conversion", Pnorm * Omega_ci},
                     {"standard_name", "energy source"},
                     {"long_name", name + " energy source"},
