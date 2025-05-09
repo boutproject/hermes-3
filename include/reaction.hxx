@@ -3,8 +3,18 @@
 #define REACTION_H
 
 #include "component.hxx"
+#include "reaction_parser.hxx"
+
 struct Reaction : public Component {
   Reaction(std::string name, Options& alloptions);
+
+  static int get_instance_num() {
+    static int instance_num{0};
+    return instance_num++;
+  }
+
+  // Stoich vector
+  std::map<std::string, int> S;
 
   //   void transform(Options& state) override {
   //     Options& electron = state["species"]["e"];
@@ -51,6 +61,6 @@ protected:
 
 private:
   const std::string name;
+  std::unique_ptr<ReactionParser> parser;
 };
-
 #endif
