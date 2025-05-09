@@ -57,6 +57,7 @@
 #include "include/polarisation_drift.hxx"
 #include "include/quasineutral.hxx"
 #include "include/recycling.hxx"
+#include "include/reservoir.hxx"
 #include "include/relax_potential.hxx"
 #include "include/scale_timederivs.hxx"
 #include "include/set_temperature.hxx"
