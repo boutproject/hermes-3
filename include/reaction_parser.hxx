@@ -2,8 +2,10 @@
 #ifndef REACTION_PARSER_H
 #define REACTION_PARSER_H
 
-#include "bout/utils.hxx"
+#include <algorithm>
 #include <regex>
+
+#include "bout/utils.hxx"
 
 static inline std::map<std::string, int> count_species(std::string expr) {
   // std::regex_iterator instead?
@@ -28,6 +30,14 @@ static inline std::map<std::string, int> count_species(std::string expr) {
   return counts;
 }
 
+template <typename T>
+static inline std::vector<std::string> get_str_keys(const std::map<std::string, T>& map) {
+  std::vector<std::string> keys;
+  std::transform(map.begin(), map.end(), std::back_inserter(keys),
+                 [](const std::pair<std::string, T>& pair) { return pair.first; });
+  return keys;
+}
+
 class ReactionParser {
 public:
   ReactionParser(const std::string& reaction_str) : reaction_str(reaction_str) {
@@ -48,6 +58,11 @@ public:
   }
 
   const std::map<std::string, int>& get_stoich() { return this->stoich; }
+
+  std::vector<std::string> get_product_species() { return get_str_keys(this->products); }
+  std::vector<std::string> get_reactant_species() {
+    return get_str_keys(this->reactants);
+  }
 
 private:
   const std::string reaction_str;
