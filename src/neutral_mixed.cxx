@@ -58,7 +58,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   density_floor = options["density_floor"]
                  .doc("A minimum density used when dividing NVn by Nn. "
                       "Normalised units.")
-                 .withDefault(1e-8);
+                 .withDefault(1e-10);
 
   pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 

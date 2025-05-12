@@ -899,6 +899,19 @@ void RelaxPotential::finally(const Options& state) {
       const Field3D N = get<Field3D>(species["density"]);
       Field2D N2D = DC(N);
 
+      // Apply Neumann Y boundary condition, so no additional flux into boundary
+      // Note: Not setting radial (X) boundaries since those set radial fluxes
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        N2D(r.ind, mesh->ystart - 1) = N2D(r.ind, mesh->ystart);
+        // T2D(r.ind, mesh->ystart - 1) = T2D(r.ind, mesh->ystart);
+        // V2D(r.ind, mesh->ystart - 1) = V2D(r.ind, mesh->ystart);
+      }
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        N2D(r.ind, mesh->yend + 1) = N2D(r.ind, mesh->yend);
+        // T2D(r.ind, mesh->yend + 1) = T2D(r.ind, mesh->yend);
+        // V2D(r.ind, mesh->yend + 1) = V2D(r.ind, mesh->yend);
+      }
+
       const BoutReal AA = get<BoutReal>(species["AA"]);
 
       const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
