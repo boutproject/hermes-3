@@ -300,8 +300,8 @@ void NeutralMixed::finally(const Options& state) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
     // Field3D Dmax = flux_limit * sqrt(2.0 * Tn / AA) / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
-    Field3D Dmax = flux_limit * sqrt(8.0 / PI * Tn / AA) / 4.0 / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
-    // Field3D Dmax = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / (0.25 * sqrt(8.0 / PI * Tn / AA))));
+    // Field3D Dmax = flux_limit * sqrt(8.0 / PI * Tn / AA) / 4.0 / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
+    Field3D Dmax = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / (0.25 * sqrt(8.0 / PI * Tn / AA))));
     BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]); }
   }
 
@@ -415,13 +415,13 @@ void NeutralMixed::finally(const Options& state) {
                       ef_cond_par_ylow,        
                       false)  // No conduction through target boundary
       ;
+
+    // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
+    ef_cond_perp_xlow *= 3/2;
+    ef_cond_perp_ylow *= 3/2;
+    ef_cond_par_ylow *= 3/2;
   }
 
-  // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-  ef_cond_perp_xlow *= 3/2;
-  ef_cond_perp_ylow *= 3/2;
-  ef_cond_par_ylow *= 3/2;
-  
   Sp = pressure_source;
   if (localstate.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
