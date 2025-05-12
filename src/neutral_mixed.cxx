@@ -484,6 +484,51 @@ void NeutralMixed::finally(const Options& state) {
     Snv = 0;
   }
 
+  // Add the contribution of ion perp velocity (i.e. anomalous transport)
+  const Options& allspecies = state["species"];
+
+  for (auto& kv : allspecies.getChildren()) {
+    //TODO !<  
+    // NOTE:: This is only true for d+ ions. How do we generalize? 
+    //        How do we include the perpendicular ion velocity from other drifts?
+
+    const Options& species = kv.second;
+
+    if ((kv.first == "e") or !species.isSet("charge")
+        or (fabs(get<BoutReal>(species["charge"])) < 1e-5)) {
+      continue; // Skip electrons and non-charged ions
+    }
+
+    // sources/sinks due to anomalous transport
+    if (species.isSet("anomalous_D")) {
+      const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
+
+      const Field3D Ni = get<Field3D>(species["density"]);
+      Field2D Ni2D = DC(Ni);
+
+      // // Apply Neumann Y boundary condition, so no additional flux into boundary
+      // // Note: Not setting radial (X) boundaries since those set radial fluxes
+      // for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      //   N2D(r.ind, mesh->ystart - 1) = N2D(r.ind, mesh->ystart);
+      //   // T2D(r.ind, mesh->ystart - 1) = T2D(r.ind, mesh->ystart);
+      //   // V2D(r.ind, mesh->ystart - 1) = V2D(r.ind, mesh->ystart);
+      // }
+      // for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      //   N2D(r.ind, mesh->yend + 1) = N2D(r.ind, mesh->yend);
+      //   // T2D(r.ind, mesh->yend + 1) = T2D(r.ind, mesh->yend);
+      //   // V2D(r.ind, mesh->yend + 1) = V2D(r.ind, mesh->yend);
+      // }
+
+      ddt(Nn) += Div_a_Grad_perp_upwind (Nn * anomalous_D / floor(Ni,1e-10), Ni2D);
+
+      ddt(Pn) += (5. / 3) * Div_a_Grad_perp_upwind ( Pn * anomalous_D / floor(Ni,1e-10), Ni2D);         
+
+      if (evolve_momentum) {
+        ddt(NVn) += Div_a_Grad_perp_upwind (NVn * anomalous_D / floor(Ni,1e-10), Ni2D);
+      }
+
+    }
+  }
 
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
     if ((Pn[i] < pressure_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
