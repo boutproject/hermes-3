@@ -1,5 +1,12 @@
 name: Tests
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - '*' # This will trigger for PRs against any branch
+      - master
 
 defaults:
   run:
