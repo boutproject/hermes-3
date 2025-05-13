@@ -301,8 +301,9 @@ void NeutralMixed::finally(const Options& state) {
     // using the local thermal speed and pressure gradient magnitude
     // Field3D Dmax = flux_limit * sqrt(2.0 * Tn / AA) / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
     // Field3D Dmax = flux_limit * sqrt(8.0 / PI * Tn / AA) / 4.0 / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
-    Field3D Dmax = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / (0.25 * sqrt(8.0 / PI * Tn / AA))));
-    BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]); }
+    // Field3D Dmax = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / (0.25 * sqrt(8.0 / PI * Tn / AA))));
+    // BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]); }
+    Dnn = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / (0.25 * sqrt(8.0 / PI * floor(Tn, 1e-5)/ AA))));
   }
 
   if (diffusion_limit > 0.0) {
