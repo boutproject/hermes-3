@@ -10,3 +10,6 @@ BOUT.settings
 /docs/build/*
 /docs/doxygen/*
 /docs/sphinx/_breathe*
+
+# IDE config files
+.vscode
