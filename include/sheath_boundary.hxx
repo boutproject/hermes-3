@@ -75,6 +75,9 @@ struct SheathBoundary : public Component {
   ///
   ///
   void transform(Options &state) override;
+
+  /// Save diagnostics
+  void outputVars(Options &state) override;
 private:
   BoutReal Ge; // Secondary electron emission coefficient
   BoutReal sin_alpha; // sin of angle between magnetic field and wall.
@@ -87,6 +90,9 @@ private:
   Field3D wall_potential; ///< Voltage at the wall. Normalised units.
 
   bool floor_potential; ///< Apply floor to sheath potential?
+
+  bool diagnose; ///< Output additional diagnostics?
+  Options diagnostics; ///< Diagnostics to be saved
 };
 
 namespace {
