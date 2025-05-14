@@ -55,7 +55,10 @@ private:
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
-  
+
+  BoutReal background_density; ///< Include a background source to prevent the 
+                              ///< neutral density from becoming to small? Same as in UEDGE
+
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
   bool precondition {true}; ///< Enable preconditioner?

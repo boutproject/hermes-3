@@ -88,6 +88,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(true);
 
+  background_density = options["background_density"]
+                          .doc("Include a background source to prevent the neutral density from becoming to small?")
+                          .withDefault(1e15) / Nnorm;
+
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
 
@@ -387,6 +391,16 @@ void NeutralMixed::finally(const Options& state) {
     Sn += get<Field3D>(localstate["density_source"]);
   }
   ddt(Nn) += Sn; // Always add density_source
+
+
+  // Include a background source to prevent the neutral density from
+  // becoming to small? (UEDGE manual, p. 58, 2023). The only differecne with
+  // UEDGE is that it uses the ionization collision frequency and not the total collision frequency
+
+  if (background_density > 0.0) {
+    ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * (Nn - background_density/Nnlim)); 
+    // ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * SQ(Nn - background_density/Nnlim)); 
+  }
 
   /////////////////////////////////////////////////////
   // Neutral pressure
