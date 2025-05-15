@@ -58,7 +58,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   density_floor = options["density_floor"]
                  .doc("A minimum density used when dividing NVn by Nn. "
                       "Normalised units.")
-                 .withDefault(1e-7);
+                 .withDefault(1e-8);
 
   pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
@@ -336,12 +336,18 @@ void NeutralMixed::finally(const Options& state) {
     // Field3D Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
     // BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]); }
 
-    Dnn = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
+    // Dnn = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
 
-    kappa_n = flux_limit * kappa_n / sqrt( 1.0 + SQ(kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
+    // kappa_n = flux_limit * kappa_n / sqrt( 1.0 + SQ(kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
 
-    // eta_n = flux_limit * eta_n / sqrt( 1.0 + SQ(eta_n * abs(Grad_perp(Vn)) / (Vnth * Nnlim * AA * abs(Vn))));
     // eta_n = flux_limit * eta_n / sqrt( 1.0 + SQ(eta_n * abs(Grad_perp(Vn)) / (Vnth * NVn)));
+
+
+    Dnn = flux_limit * Dnn / ( 1.0 + (Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
+
+    kappa_n = flux_limit * kappa_n / ( 1.0 + (kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
+
+    // eta_n = flux_limit * eta_n / ( 1.0 + (eta_n * abs(Grad_perp(Vn)) / (Vnth * abs(NVn))));
 
   }
 
@@ -428,8 +434,8 @@ void NeutralMixed::finally(const Options& state) {
   // UEDGE is that it uses the ionization collision frequency and not the total collision frequency
   // NOTE(malamast): Do we need to add a background source term in the momentum and energy equation?
   if (background_source) {
-    ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * ((background_density - Nn) / Nnlim)); 
-    // ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * SQ((background_density - Nn) / Nnlim)); 
+    ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * (background_density / Nnlim)); 
+    // ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * SQ(background_density / Nnlim)); 
   }
 
   /////////////////////////////////////////////////////
