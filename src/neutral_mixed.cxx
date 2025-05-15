@@ -6,6 +6,7 @@
 #include <bout/output_bout_types.hxx>
 
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/neutral_mixed.hxx"
 
@@ -172,7 +173,7 @@ void NeutralMixed::transform(Options& state) {
   Pn = floor(Pn, 0.0);
 
   // Nnlim Used where division by neutral density is needed
-  Nnlim = floor(Nn, density_floor);
+  Nnlim = softFloor(Nn, density_floor);
   Tn = Pn / Nnlim;
   Tn.applyBoundary();
 
@@ -182,7 +183,7 @@ void NeutralMixed::transform(Options& state) {
   Vn.applyBoundary("neumann");
   Vnlim.applyBoundary("neumann");
 
-  Pnlim = floor(Pn, pressure_floor);
+  Pnlim = softFloor(Pn, pressure_floor);
   Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
@@ -282,7 +283,7 @@ void NeutralMixed::finally(const Options& state) {
       0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
   Field3D Rnn =
-    sqrt(floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+    sqrt(softFloor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
     // Dnn = Vth^2 / sigma
@@ -473,16 +474,6 @@ void NeutralMixed::finally(const Options& state) {
   } else {
     ddt(NVn) = 0;
     Snv = 0;
-  }
-
-
-  BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
-    if ((Pn[i] < pressure_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
-      ddt(Pn)[i] = 0.0;
-    }
-    if ((Nn[i] < density_floor * 1e-2) && (ddt(Nn)[i] < 0.0)) {
-      ddt(Nn)[i] = 0.0;
-    }
   }
 
   // Scale time derivatives
