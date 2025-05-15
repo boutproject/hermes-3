@@ -35,7 +35,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   low_T_diffuse_perp = options["low_T_diffuse_perp"].doc("Add cross-field diffusion at low temperature?")
     .withDefault<bool>(false);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pressure_floor = density_floor * temperature_floor;
 
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
@@ -246,7 +246,7 @@ void EvolvePressure::transform(Options& state) {
   N = getNoBoundary<Field3D>(species["density"]);
 
   Field3D Pfloor = floor(P, 0.0);
-  T = Pfloor / floor(N, density_floor);
+  T = Pfloor / softFloor(N, density_floor);
   Pfloor = N * T; // Ensure consistency
 
   set(species["pressure"], Pfloor);
@@ -317,7 +317,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (numerical_viscous_heating || diagnose) {
       // Viscous heating coming from numerical viscosity
-      Field3D Nlim = floor(N, density_floor);
+      Field3D Nlim = softFloor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
       Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
       flow_ylow_kinetic *= AA;
@@ -335,16 +335,16 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_n_diffuse_perp) {
-    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), P, true);
+    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P, true);
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) += 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / floor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
+    ddt(P) += 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
                                            T, false);
   }
 
   if (low_p_diffuse_perp) {
-    Field3D Plim = floor(P, 1e-3 * pressure_floor);
+    Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
     ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
   }
 
@@ -352,7 +352,7 @@ void EvolvePressure::finally(const Options& state) {
   if (thermal_conduction) {
 
     // Calculate ion collision times
-    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau = 1. / softFloor(get<Field3D>(species["collision_frequency"]), 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -380,7 +380,7 @@ void EvolvePressure::finally(const Options& state) {
       Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
 
       // This results in a harmonic average of the heat fluxes
-      kappa_par = kappa_par / (1. + abs(q_SH / floor(q_fl, 1e-10)));
+      kappa_par = kappa_par / (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
       mesh->communicate(kappa_par);
@@ -626,7 +626,7 @@ void EvolvePressure::precon(const Options &state, BoutReal gamma) {
   const Field3D N = get<Field3D>(species["density"]);
 
   // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coef = -(2. / 3) * gamma * kappa_par / floor(N, density_floor);
+  Field3D coef = -(2. / 3) * gamma * kappa_par / softFloor(N, density_floor);
 
   if (state.isSet("scale_timederivs")) {
     coef *= get<Field3D>(state["scale_timederivs"]);

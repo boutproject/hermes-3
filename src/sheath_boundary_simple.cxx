@@ -1,4 +1,5 @@
 #include "../include/sheath_boundary_simple.hxx"
+#include "../include/hermes_utils.hxx"
 
 #include "bout/constants.hxx"
 #include "bout/mesh.hxx"
@@ -10,12 +11,6 @@ BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
     return min;
   if (value > max)
     return max;
-  return value;
-}
-
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
   return value;
 }
 

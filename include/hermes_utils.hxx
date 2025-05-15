@@ -2,12 +2,42 @@
 #ifndef HERMES_UTILS_H
 #define HERMES_UTILS_H
 
+#include "bout/traits.hxx"
 #include "bout/bout_enum_class.hxx"
 
 inline BoutReal floor(BoutReal value, BoutReal min) {
   if (value < min)
     return min;
   return value;
+}
+
+/// Apply a smoothly varying "soft" floor to the value
+/// The intention is to keep the RHS function differentiable
+///
+/// Note: This function cannot be used with min = 0!
+inline BoutReal softFloor(BoutReal value, BoutReal min) {
+  if (value < 0.0)
+    value = 0.0;
+  return value + min * exp(-value / min);
+}
+
+/// Apply a soft floor value \p f to a field \p var. Any value lower than
+/// the floor is set to the floor.
+///
+/// @param[in] var  Variable to apply floor to
+/// @param[in] f    The floor value. Must be > 0 (NOT zero)
+/// @param[in] rgn  The region to calculate the result over
+template <typename T, typename = bout::utils::EnableIfField<T>>
+inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_ALL") {
+  checkData(var);
+  T result {emptyFrom(var)};
+  result.allocate();
+
+  BOUT_FOR(d, var.getRegion(rgn)) {
+    result[d] = softFloor(var[d], f);
+  }
+
+  return result;
 }
 
 template<typename T, typename = bout::utils::EnableIfField<T>>

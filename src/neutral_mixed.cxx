@@ -6,6 +6,7 @@
 #include <bout/output_bout_types.hxx>
 
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/neutral_mixed.hxx"
 
@@ -184,7 +185,7 @@ void NeutralMixed::transform(Options& state) {
   Pn = floor(Pn, 0.0);
 
   // Nnlim Used where division by neutral density is needed
-  Nnlim = floor(Nn, density_floor);
+  Nnlim = softFloor(Nn, density_floor);
   Tn = Pn / Nnlim;
   Tn.applyBoundary();
 
@@ -197,7 +198,7 @@ void NeutralMixed::transform(Options& state) {
   Vn.applyBoundary("neumann");
   Vnlim.applyBoundary("neumann");
 
-  Pnlim = floor(Pn, pressure_floor);
+  Pnlim = softFloor(Pn, pressure_floor);
   Pnlim.applyBoundary();
 
 
@@ -298,7 +299,7 @@ void NeutralMixed::finally(const Options& state) {
   BoutReal neutral_lmax = 0.01 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
   Field3D Rnn =
-    sqrt(2.0 * Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+    sqrt(2.0 * softFloor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
     // Dnn = Vth^2 / nue
@@ -572,12 +573,12 @@ void NeutralMixed::finally(const Options& state) {
       //   // V2D(r.ind, mesh->yend + 1) = V2D(r.ind, mesh->yend);
       // }
 
-      ddt(Nn) += Div_a_Grad_perp_upwind (Nn * anomalous_D / floor(Ni,density_floor), Ni2D);
+      ddt(Nn) += Div_a_Grad_perp_upwind (Nn * anomalous_D / softFloor(Ni,density_floor), Ni2D);
 
-      ddt(Pn) += (5. / 3) * Div_a_Grad_perp_upwind ( Pn * anomalous_D / floor(Ni,density_floor), Ni2D);         
+      ddt(Pn) += (5. / 3) * Div_a_Grad_perp_upwind ( Pn * anomalous_D / softFloor(Ni,density_floor), Ni2D);         
 
       if (evolve_momentum) {
-        ddt(NVn) += Div_a_Grad_perp_upwind (NVn * anomalous_D / floor(Ni,density_floor), Ni2D);
+        ddt(NVn) += Div_a_Grad_perp_upwind (NVn * anomalous_D / softFloor(Ni,density_floor), Ni2D);
       }
 
     }
