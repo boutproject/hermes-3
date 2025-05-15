@@ -58,7 +58,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   density_floor = options["density_floor"]
                  .doc("A minimum density used when dividing NVn by Nn. "
                       "Normalised units.")
-                 .withDefault(1e-10);
+                 .withDefault(1e-7);
 
   pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
@@ -88,9 +88,13 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(true);
 
-  background_density = options["background_density"]
+  background_source = options["background_source"]
                           .doc("Include a background source to prevent the neutral density from becoming to small?")
-                          .withDefault(1e15) / Nnorm;
+                          .withDefault<bool>(false);                        
+
+  background_density = options["background_density"]
+                          .doc("Value of the background density used if background source is true.")
+                          .withDefault(1e14) / Nnorm; // nb = 1e15 [#/m^3] is a typical value.
 
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
@@ -184,6 +188,9 @@ void NeutralMixed::transform(Options& state) {
   Tn = Pn / Nnlim;
   Tn.applyBoundary();
 
+  Tnlim = floor(Tn, 1e-5);
+  Tnlim.applyBoundary();
+
   Vn = NVn / (AA * Nnlim);
   Vnlim = Vn;
 
@@ -192,6 +199,7 @@ void NeutralMixed::transform(Options& state) {
 
   Pnlim = floor(Pn, pressure_floor);
   Pnlim.applyBoundary();
+
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
@@ -290,7 +298,7 @@ void NeutralMixed::finally(const Options& state) {
   BoutReal neutral_lmax = 0.01 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
   Field3D Rnn =
-    sqrt(2.0 * floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+    sqrt(2.0 * Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
     // Dnn = Vth^2 / nue
@@ -300,15 +308,43 @@ void NeutralMixed::finally(const Options& state) {
     Dnn = (2.0 * Tn / AA) / Rnn;
   }
 
+
+  // Heat conductivity 
+  // Note: This is kappa_n = (5/2) * Pn / (m * nu)
+  //       where nu is the collision frequency used in Dnn
+  kappa_n = (5. / 2) * Dnn * Nnlim;
+
+  // Viscosity
+  // Relationship between heat conduction and viscosity for neutral
+  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+  // Transport Processes in Gases", 1972
+  // eta_n = (2. / 5) * m_n * kappa_n;
+  //
+  eta_n = AA * (2. / 5) * kappa_n;
+
+
   if (flux_limit > 0.0) {
+
+    // Thermal velocity of neutrals
+    // Field3D Vnth = sqrt(Tnlim / AA); 
+    // Field3D Vnth = sqrt(2.0 * Tnlim / AA); 
+    Field3D Vnth = 0.25 * sqrt(8.0 / PI * Tnlim / AA);
+
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
-    // Field3D Dmax = flux_limit * sqrt(2.0 * Tn / AA) / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
-    // Field3D Dmax = flux_limit * sqrt(8.0 / PI * Tn / AA) / 4.0 / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
-    // Field3D Dmax = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / (0.25 * sqrt(8.0 / PI * Tn / AA))));
+    // Field3D Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
     // BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]); }
-    Dnn = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / (0.25 * sqrt(8.0 / PI * floor(Tn, 1e-5)/ AA))));
+
+    Dnn = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
+
+    kappa_n = flux_limit * kappa_n / sqrt( 1.0 + SQ(kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
+
+    // eta_n = flux_limit * eta_n / sqrt( 1.0 + SQ(eta_n * abs(Grad_perp(Vn)) / (Vnth * Nnlim * AA * abs(Vn))));
+    // eta_n = flux_limit * eta_n / sqrt( 1.0 + SQ(eta_n * abs(Grad_perp(Vn)) / (Vnth * NVn)));
+
   }
+
 
   if (diffusion_limit > 0.0) {
     // Impose an upper limit on the diffusion coefficient
@@ -320,6 +356,14 @@ void NeutralMixed::finally(const Options& state) {
   mesh->communicate(Dnn);
   Dnn.clearParallelSlices();
   Dnn.applyBoundary();
+
+  //NOTE(malamast): Do we need to communicate kappa_n and eta_n?
+  mesh->communicate(kappa_n);
+  mesh->communicate(eta_n);
+
+  kappa_n.applyBoundary("neumann");
+  eta_n.applyBoundary("neumann");
+
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
@@ -358,20 +402,6 @@ void NeutralMixed::finally(const Options& state) {
     sound_speed = sqrt(Tn * (5. / 3) / AA);
   }
 
-  // Heat conductivity 
-  // Note: This is kappa_n = (5/2) * Pn / (m * nu)
-  //       where nu is the collision frequency used in Dnn
-  kappa_n = (5. / 2) * DnnNn;
-
-  // Viscosity
-  // Relationship between heat conduction and viscosity for neutral
-  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
-  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
-  // Transport Processes in Gases", 1972
-  // eta_n = (2. / 5) * m_n * kappa_n;
-  //
-  eta_n = AA * (2. / 5) * kappa_n;
-
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
@@ -396,10 +426,10 @@ void NeutralMixed::finally(const Options& state) {
   // Include a background source to prevent the neutral density from
   // becoming to small? (UEDGE manual, p. 58, 2023). The only differecne with
   // UEDGE is that it uses the ionization collision frequency and not the total collision frequency
-
-  if (background_density > 0.0) {
-    ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * ((Nn - background_density)/Nnlim)); 
-    // ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * SQ((Nn - background_density)/Nnlim)); 
+  // NOTE(malamast): Do we need to add a background source term in the momentum and energy equation?
+  if (background_source) {
+    ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * ((background_density - Nn) / Nnlim)); 
+    // ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * SQ((background_density - Nn) / Nnlim)); 
   }
 
   /////////////////////////////////////////////////////
@@ -471,19 +501,20 @@ void NeutralMixed::finally(const Options& state) {
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = AA * Div_a_Grad_perp_flows(
+      // NOTE(malamast): Here, we used to multiply the viscosity_source with AA but we have already counted for thin in eta_n.
+      Field3D viscosity_source = Div_a_Grad_perp_flows(
                                 eta_n, Vn,              // Perpendicular viscosity
                                 mf_visc_perp_xlow,
                                 mf_visc_perp_ylow)    
                               
-                              + AA * Div_par_K_Grad_par_mod(               // Parallel viscosity 
+                              + Div_par_K_Grad_par_mod(               // Parallel viscosity 
                                 eta_n, Vn,
                                 mf_visc_par_ylow,
                                 false) // No viscosity through target boundary
                           ;
 
       ddt(NVn) += viscosity_source;
-      ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
+      ddt(Pn)  += -(2.0/3.0) * Vn * viscosity_source;
 
     }
 
@@ -534,12 +565,12 @@ void NeutralMixed::finally(const Options& state) {
       //   // V2D(r.ind, mesh->yend + 1) = V2D(r.ind, mesh->yend);
       // }
 
-      ddt(Nn) += Div_a_Grad_perp_upwind (Nn * anomalous_D / floor(Ni,1e-10), Ni2D);
+      ddt(Nn) += Div_a_Grad_perp_upwind (Nn * anomalous_D / floor(Ni,density_floor), Ni2D);
 
-      ddt(Pn) += (5. / 3) * Div_a_Grad_perp_upwind ( Pn * anomalous_D / floor(Ni,1e-10), Ni2D);         
+      ddt(Pn) += (5. / 3) * Div_a_Grad_perp_upwind ( Pn * anomalous_D / floor(Ni,density_floor), Ni2D);         
 
       if (evolve_momentum) {
-        ddt(NVn) += Div_a_Grad_perp_upwind (NVn * anomalous_D / floor(Ni,1e-10), Ni2D);
+        ddt(NVn) += Div_a_Grad_perp_upwind (NVn * anomalous_D / floor(Ni,density_floor), Ni2D);
       }
 
     }

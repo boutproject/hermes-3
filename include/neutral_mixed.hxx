@@ -41,7 +41,7 @@ private:
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
-  Field3D Dnn; ///< Diffusion coefficient
+  Field3D Dnn;            ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnNVn;
 
   bool sheath_ydown, sheath_yup;
@@ -52,14 +52,17 @@ private:
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
-  bool neutral_viscosity; ///< include viscosity?
-  bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
 
-  BoutReal background_density; ///< Include a background source to prevent the 
-                              ///< neutral density from becoming to small? Same as in UEDGE
+  bool background_source; ///< Include a background source to prevent the 
+                               ///< neutral density from becoming to small? Same as in UEDGE
 
-  Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
+  BoutReal background_density; ///< Value of the background source density.     
+
+  bool neutral_viscosity; ///< include viscosity?
+  bool neutral_conduction; ///< Include heat conduction?
+                       
+  Field3D kappa_n, eta_n;                     ///< Neutral conduction and viscosity
 
   bool precondition {true}; ///< Enable preconditioner?
   bool lax_flux; ///< Use Lax flux for advection terms
