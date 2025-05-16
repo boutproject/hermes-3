@@ -1,12 +1,24 @@
+# Copyright 2013-2023 Lawrence Livermore National Security, LLC and other
+# Spack Project Developers. See the top-level COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (Apache-2.0 OR MIT)
+
 from spack import *
 
 
 class Hermes3(CMakePackage):
-    """Hermes3"""
+    """A multifluid magnetized plasma simulation model.
 
-    homepage = "https://github.com/bendudson/hermes-3"
+    Hermes-3 is built on the BOUT++ framework, and uses a system of reusable components
+    to build models at runtime based on input configuration, in 1D, 2D or 3D curvlinear
+    coordinates."""
 
-    git = "https://github.com/bendudson/hermes-3.git"
+    homepage = "https://hermes3.readthedocs.io/"
+    git = "https://github.com/boutproject/hermes-3.git"
+
+    maintainers("bendudson")
+
+    license("GPL-3.0-or-later")
     version("working", branch="master")
     version("master", branch="master")
 
