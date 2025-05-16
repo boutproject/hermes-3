@@ -19,8 +19,15 @@ class Hermes3(CMakePackage):
     maintainers("bendudson")
 
     license("GPL-3.0-or-later")
+
+    # A 'working' version for use with the develop option in spack envs
     version("working", branch="master")
-    version("master", branch="master")
+
+    version("master", branch="master", submodules=True, preferred=True)
+    version("1.3.1", tag="v1.3.1", submodules=True)
+    version("1.3.0", tag="v1.3.0", submodules=True)
+    version("1.2.1", tag="v1.2.1", submodules=True)
+    version("1.2.0", tag="v1.2.0", submodules=True)
 
     variant(
         "limiter",
