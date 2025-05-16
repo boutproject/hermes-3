@@ -15,6 +15,3 @@ spack:
     unify: true
   
   view: /opt/views/view
-
-  config:
-    install_tree: /opt/software

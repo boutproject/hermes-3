@@ -1,25 +1,8 @@
-# Dockerfile for building BOUT++ and Hermes-3
-# Build stage with Spack pre-installed and ready to be used
+# Build as "hermes-3"
+# with sudo docker build -f docker/hermes-3.dockerfile -t hermes-3 .
 
-# Use a spack image with a pinned SHA
-FROM spack/ubuntu-jammy@sha256:d9acf9ed998cbde8d12bd302c5921291086bfe6f70d2d0e26908fdc48c272324 AS builder
-
-# Install OS packages needed to build the software
-RUN apt-get -yqq update && apt-get -yqq upgrade \
- && apt-get -yqq install --no-install-recommends git build-essential vim cmake \
- && rm -rf /var/lib/apt/lists/*
-
-# What we want to install and how we want to install it
-# is specified in a manifest file (spack.yaml)
-RUN mkdir -p /opt/spack-environment
-COPY docker/image_ingredients/docker_spack.yaml /opt/spack-environment/spack.yaml
-
-# Install the software
-WORKDIR /opt/spack-environment
-RUN spack env activate . && spack install --fail-fast && spack gc -y
-
-# Make an 'entrypoint.sh' script which activates the spack environment
-RUN spack env activate --sh -d . > activate.sh
+ARG BUILDER_TAG=latest
+FROM ghcr.io/boutproject/hermes-3-builder:${BUILDER_TAG} AS builder
 
 # Bare OS image to run the installed executables
 FROM ubuntu:22.04
@@ -32,7 +15,8 @@ COPY --from=builder /opt/views /opt/views
 
 # Install useful tools you'll want in the container
 RUN apt-get -yqq update && apt-get -yqq upgrade \
- && apt-get -yqq install --no-install-recommends git build-essential vim cmake \
+ && apt-get -yqq install --no-install-recommends\
+ git vim ca-certificates cmake build-essential \
  && rm -rf /var/lib/apt/lists/*
 
 # Change into the /hermes_project, and define paths
@@ -57,6 +41,8 @@ ENV BOUTPP_CONFIG_OVERRIDE=/hermes_project/work/boutpp_config.cmake
 
 # Copy in required files for a minimal build of Hermes-3 and BOUT++
 COPY . ${HERMES_SRC_DIR}
+# Initialize the git submodules (needed for CI/CD build)
+RUN git -C ${HERMES_SRC_DIR} submodule update --init --recursive --depth 1 --single-branch
 
 COPY docker/image_ingredients/enable_c.patch ${BOUTPP_SRC_DIR}/enable_c.patch
 RUN git -C ${BOUTPP_SRC_DIR} apply ./enable_c.patch
@@ -71,7 +57,7 @@ RUN . /opt/spack-environment/activate.sh \
           -S ${BOUTPP_SRC_DIR} \
           -C ${BOUTPP_CONFIG} \
           -Wno-dev \
-&& cmake --build ${BOUTPP_BUILD_DIR} --parallel
+&& cmake --build ${BOUTPP_BUILD_DIR} --parallel 2
 
 # Configure and build Hermes
 RUN . /opt/spack-environment/activate.sh \
@@ -80,13 +66,16 @@ RUN . /opt/spack-environment/activate.sh \
           -C ${HERMES_CONFIG} \
           -DCMAKE_PREFIX_PATH=${BOUTPP_BUILD_DIR} \
           -Wno-dev \
-&& cmake --build ${HERMES_BUILD_DIR} --parallel
+&& cmake --build ${HERMES_BUILD_DIR} --parallel 2
 
 # Copy in some helpful commands which can be used in
 # the image. Make sure these can be executed when setting
 # --user=${UID}:${GID}
 COPY docker/image_ingredients/docker_image_commands.sh /bin/image
 RUN chmod u+x,o+x /bin/image
+
+# Prevent an issue where only one process can open a HDF file at a time
+ENV HDF5_USE_FILE_LOCKING=False
 
 # Copy in a script which runs before any instance is
 # launched
