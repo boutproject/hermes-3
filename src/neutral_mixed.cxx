@@ -12,7 +12,7 @@
 
 using bout::globals::mesh;
 
-using ParLimiter = FV::Upwind;
+using ParLimiter = hermes::Limiter;
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
     : name(name) {
@@ -61,7 +61,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e-8);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+
+  pressure_floor = density_floor * temperature_floor;
 
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
@@ -189,9 +192,6 @@ void NeutralMixed::transform(Options& state) {
   Tn = Pn / Nnlim;
   Tn.applyBoundary();
 
-  Tnlim = floor(Tn, 1e-5);
-  Tnlim.applyBoundary();
-
   Vn = NVn / (AA * Nnlim);
   Vnlim = Vn;
 
@@ -296,17 +296,21 @@ void NeutralMixed::finally(const Options& state) {
   // Calculate cross-field diffusion from collision frequency
   //
   //
-  BoutReal neutral_lmax = 0.01 / get<BoutReal>(state["units"]["meters"]); // Normalised length
+
+  Tnlim = softFloor(Tn, temperature_floor);
+
+  BoutReal neutral_lmax =
+    0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
   Field3D Rnn =
-    sqrt(2.0 * softFloor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+    sqrt(2.0 * Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
     // Dnn = Vth^2 / nue
-    // Dnn = (2.0 * Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
-    Dnn = (2.0 * Tn / AA) / (get<Field3D>(localstate["collision_frequency"]));
+    // Dnn = (2.0 * Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+    Dnn = (2.0 * Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]));
   } else {
-    Dnn = (2.0 * Tn / AA) / Rnn;
+    Dnn = (2.0 * Tnlim / AA) / Rnn;
   }
 
 
@@ -330,26 +334,22 @@ void NeutralMixed::finally(const Options& state) {
     // Thermal velocity of neutrals
     // Field3D Vnth = sqrt(Tnlim / AA); 
     // Field3D Vnth = sqrt(2.0 * Tnlim / AA); 
-    Field3D Vnth = 0.25 * sqrt(8.0 / PI * Tnlim / AA);
+    // Field3D Vnth = 0.25 * sqrt(8.0 / PI * Tnlim / AA);
 
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
-    // Field3D Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
-    // BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]); }
+    Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
+    }
 
     // Dnn = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
-
     // kappa_n = flux_limit * kappa_n / sqrt( 1.0 + SQ(kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
-
     // eta_n = flux_limit * eta_n / sqrt( 1.0 + SQ(eta_n * abs(Grad_perp(Vn)) / (Vnth * NVn)));
 
-
     // Harmonic average of the heat fluxes
-
-    Dnn = flux_limit * Dnn / ( 1.0 + (Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
-
-    kappa_n = flux_limit * kappa_n / ( 1.0 + (kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
-
+    // Dnn = flux_limit * Dnn / ( 1.0 + (Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
+    // kappa_n = flux_limit * kappa_n / ( 1.0 + (kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
     // eta_n = flux_limit * eta_n / ( 1.0 + (eta_n * abs(Grad_perp(Vn)) / (Vnth * abs(NVn))));
 
   }
@@ -358,7 +358,7 @@ void NeutralMixed::finally(const Options& state) {
   if (diffusion_limit > 0.0) {
     // Impose an upper limit on the diffusion coefficient
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = BOUTMIN(Dnn[i], diffusion_limit);
+      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
     }
   }
 
@@ -408,22 +408,23 @@ void NeutralMixed::finally(const Options& state) {
   // Sound speed appearing in Lax flux for advection terms
   sound_speed = 0;
   if (lax_flux) {
-    sound_speed = sqrt(Tn * (5. / 3) / AA);
+    if (state.isSet("fastest_wave")) {
+      sound_speed = get<Field3D>(state["fastest_wave"]);
+    } else {
+      sound_speed = sqrt(Tn * (5. / 3) / AA);
+    }
   }
 
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
 
-
   ddt(Nn) =
-    - FV::Div_par_mod<ParLimiter>(
-                  Nn, Vn, sound_speed, pf_adv_par_ylow) // Parallel advection
-                  
-    + Div_a_Grad_perp_flows(DnnNn, logPnlim,
+    - FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed, pf_adv_par_ylow); // Parallel advection
+
+  ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim,
                                    pf_adv_perp_xlow,
                                    pf_adv_perp_ylow);    // Perpendicular advection
-    ;
 
   Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
@@ -444,12 +445,10 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(               // Parallel advection
+  ddt(Pn) = - (5. / 3) * FV::Div_par_mod<ParLimiter>(       // Parallel advection
                     Pn, Vn, sound_speed, ef_adv_par_ylow)
-
-            - (2. / 3) * Pn * Div_par(Vn)                // Compression
-            + (5. / 3) * Div_a_Grad_perp_flows(          // Perpendicular advection
-
+            + (2. / 3) * Vn * Grad_par(Pn)                  // Work done
+            + (5. / 3) * Div_a_Grad_perp_flows(             // Perpendicular advection
                     DnnPn, logPnlim,
                     ef_adv_perp_xlow, ef_adv_perp_ylow)  
      ;
