@@ -4,7 +4,7 @@ from spack.package import *
 class PyBoututils(PythonPackage):
     """pip-package of what was previously found in BOUT-dev/tools/pylib/boututils"""
 
-    homepage = "https://www.example.com"
+    homepage = "https://github.com/boutproject/boututils/"
     pypi = "boututils/boututils-0.2.1.tar.gz"
 
     # maintainers("github_user1", "github_user2")
