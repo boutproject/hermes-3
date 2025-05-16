@@ -41,6 +41,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
 
+  damp_p_nt = options["damp_p_nt"]
+    .doc("Damp P - N*T? Active when P < 0 or N < density_floor")
+    .withDefault<bool>(false);
+
   if (evolve_log) {
     // Evolve logarithm of pressure
     solver->add(logP, std::string("logP") + name);
@@ -455,9 +459,11 @@ void EvolvePressure::finally(const Options& state) {
 #endif
   ddt(P) += Sp;
 
-  // Term to force evolved P towards N * T
-  // This is active when P < 0 or when N < density_floor
-  ddt(P) += N * T - P;
+  if (damp_p_nt) {
+    // Term to force evolved P towards N * T
+    // This is active when P < 0 or when N < density_floor
+    ddt(P) += N * T - P;
+  }
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
