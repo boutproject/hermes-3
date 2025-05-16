@@ -7,9 +7,10 @@ class PyBoutdata(PythonPackage):
     homepage = "https://github.com/boutproject/boutdata"
     pypi = "boutdata/boutdata-0.2.1.tar.gz"
 
+    # Set a maintainer if submitting this package to the spack repo
     # maintainers("github_user1", "github_user2")
 
-    # license("UNKNOWN", checked_by="github_user1")
+    license("LGPL-3.0")
 
     version(
         "0.2.1",

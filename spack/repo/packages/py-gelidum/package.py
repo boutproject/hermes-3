@@ -7,9 +7,10 @@ class PyGelidum(PythonPackage):
     homepage = "https://github.com/diegojromerolopez/gelidum"
     pypi = "gelidum/gelidum-0.8.2.tar.gz"
 
+    # Set a maintainer if submitting this package to the spack repo
     # maintainers("github_user1", "github_user2")
 
-    # license("UNKNOWN", checked_by="github_user1")
+    license("MIT")
 
     version(
         "0.8.2",

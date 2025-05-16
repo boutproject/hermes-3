@@ -2,14 +2,15 @@ from spack.package import *
 
 
 class PyAnimatplotNg(PythonPackage):
-    """A python package for making interactive as well as animated plots with matplotlib. Based on animatplot by r-makaro."""
+    """A python package for making interactive as well as animated plots with matplotlib. Based on animatplot by t-makaro."""
 
     homepage = "https://github.com/boutproject/animatplot-ng/"
     pypi = "animatplot-ng/animatplot-ng-0.4.4.tar.gz"
 
+    # Set a maintainer if submitting this package to the spack repo
     # maintainers("github_user1", "github_user2")
 
-    # license("UNKNOWN", checked_by="github_user1")
+    license("MIT")
 
     version(
         "0.4.4",

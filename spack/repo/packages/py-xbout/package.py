@@ -12,9 +12,10 @@ class PyXbout(PythonPackage):
     homepage = "https://github.com/boutproject/xBOUT"
     pypi = "xbout/xbout-0.3.7.tar.gz"
 
+    # Set a maintainer if submitting this package to the spack repo
     # maintainers("github_user1", "github_user2")
 
-    # license("UNKNOWN", checked_by="github_user1")
+    license("Apache-2.0")
 
     version(
         "0.3.7",
