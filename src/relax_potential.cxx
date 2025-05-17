@@ -1126,6 +1126,14 @@ void RelaxPotential::outputVars(Options& state) {
                       {"long_name", "Divergence of diamagnetic current"},
                       {"source", "relax_potential"}});
     }
+    if (collisional_friction) {
+      set_with_attrs(state["DivJcol"], DivJcol,
+                     {{"time_dimension", "t"},
+                      {"units", "A m^-3"},
+                      {"conversion", SI::qe * Nnorm * Omega_ci},
+                      {"long_name", "Divergence of collisional current"},
+                      {"source", "relax_potential"}});
+    }
   }
 
 }

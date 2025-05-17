@@ -45,6 +45,10 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
     calculate_rates(electron, atom, ion, reaction_rate, momentum_exchange,
                     energy_exchange, energy_loss, rate_multiplier, radiation_multiplier);
 
+    Field3D N1 = get<Field3D>(atom["density"]);
+    nuiz = reaction_rate/floor(N1,1e-8);
+    set<Field3D>(atom["K_iz"], nuiz);
+
     if (diagnose) {
       S = reaction_rate;
       F = momentum_exchange;
@@ -113,6 +117,8 @@ private:
   Field3D F;     ///< Momentum exchange
   Field3D E;     ///< Energy exchange
   Field3D R;     ///< Radiation loss
+
+  Field3D nuiz;     ///< Ionization collision frequency
 };
 
 namespace {

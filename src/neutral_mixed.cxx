@@ -94,7 +94,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   background_density = options["background_density"]
                           .doc("Value of the background density used if background source is true.")
-                          .withDefault(1e14) / Nnorm; // nb = 1e15 [#/m^3] is a typical value.
+                          .withDefault(1e15) / Nnorm; // nb = 1e15 [#/m^3] is a typical value.
 
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
@@ -343,6 +343,8 @@ void NeutralMixed::finally(const Options& state) {
     // eta_n = flux_limit * eta_n / sqrt( 1.0 + SQ(eta_n * abs(Grad_perp(Vn)) / (Vnth * NVn)));
 
 
+    // Harmonic average of the heat fluxes
+
     Dnn = flux_limit * Dnn / ( 1.0 + (Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
 
     kappa_n = flux_limit * kappa_n / ( 1.0 + (kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
@@ -430,12 +432,11 @@ void NeutralMixed::finally(const Options& state) {
 
 
   // Include a background source to prevent the neutral density from
-  // becoming to small? (UEDGE manual, p. 58, 2023). The only differecne with
-  // UEDGE is that it uses the ionization collision frequency and not the total collision frequency
+  // becoming to small (UEDGE manual, p. 58, 2023).
   // NOTE(malamast): Do we need to add a background source term in the momentum and energy equation?
   if (background_source) {
-    ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * (background_density / Nnlim)); 
-    // ddt(Nn) += get<Field3D>(localstate["collision_frequency"]) * background_density * (0.9 + 0.1 * SQ(background_density / Nnlim)); 
+    ddt(Nn) += get<Field3D>(localstate["K_iz"]) * background_density * (0.9 + 0.1 * (background_density / Nnlim)); 
+    // ddt(Nn) += get<Field3D>(localstate["K_iz"]) * background_density * (0.9 + 0.1 * SQ(background_density / Nnlim)); 
   }
 
   /////////////////////////////////////////////////////

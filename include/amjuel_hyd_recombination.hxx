@@ -47,6 +47,10 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
     calculate_rates(electron, atom, ion, reaction_rate, momentum_exchange,
                     energy_exchange, energy_loss, rate_multiplier, radiation_multiplier);
 
+    Field3D N1 = get<Field3D>(atom["density"]);
+    nurec = reaction_rate/floor(N1,1e-8);
+    set<Field3D>(atom["K_rec"], nurec);
+
     if (diagnose) {
       S = -reaction_rate;
       F = -momentum_exchange;
@@ -118,6 +122,8 @@ private:
   Field3D F;     ///< Momentum exchange
   Field3D E;     ///< Energy exchange
   Field3D R;     ///< Radiation loss
+
+  Field3D nurec;     ///< Ionization collision frequency
 };
 
 namespace {
