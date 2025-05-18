@@ -149,7 +149,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   Nn.setBoundary(std::string("N") + name);
 
   // All floored versions of variables get the same boundary as the original
-  Tnlim.setBoundary(std::string("T") + name);
   Pnlim.setBoundary(std::string("P") + name);
   logPnlim.setBoundary(std::string("P") + name);
   Nnlim.setBoundary(std::string("N") + name);
@@ -179,10 +178,7 @@ void NeutralMixed::transform(Options& state) {
   Tn.applyBoundary();
 
   Vn = NVn / (AA * Nnlim);
-  Vnlim = Vn;
-
   Vn.applyBoundary("neumann");
-  Vnlim.applyBoundary("neumann");
 
   Pnlim = softFloor(Pn, pressure_floor);
   Pnlim.applyBoundary();
@@ -217,7 +213,6 @@ void NeutralMixed::transform(Options& state) {
 
         // No flow into wall
         Vn(r.ind, mesh->ystart - 1, jz) = -Vn(r.ind, mesh->ystart, jz);
-        Vnlim(r.ind, mesh->ystart - 1, jz) = -Vnlim(r.ind, mesh->ystart, jz);
         NVn(r.ind, mesh->ystart - 1, jz) = -NVn(r.ind, mesh->ystart, jz);
       }
     }
@@ -245,7 +240,6 @@ void NeutralMixed::transform(Options& state) {
 
         // No flow into wall
         Vn(r.ind, mesh->yend + 1, jz) = -Vn(r.ind, mesh->yend, jz);
-        Vnlim(r.ind, mesh->yend + 1, jz) = -Vnlim(r.ind, mesh->yend, jz);
         NVn(r.ind, mesh->yend + 1, jz) = -NVn(r.ind, mesh->yend, jz);
       }
     }
@@ -811,7 +805,6 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   // ( I   E^-1U )
   // ( 0     I   )
 
-  // Note: Tnlim not set anywhere!
   ddt(Nn) -= gamma * FV::Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
 
   if (evolve_momentum) {
