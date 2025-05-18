@@ -97,8 +97,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
     inv->setInnerBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
     inv->setOuterBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
-
-    inv->setCoefA(1.0);
   }
 
   // Optionally output time derivatives
@@ -786,20 +784,37 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
     return;
   }
 
-  // Neutral gas diffusion
-  // Solve (1 - gamma*Dnn*Delp2)^{-1}
+  // First matrix
+  //   ( I   0)
+  //   (-LE  I)
 
-  Field3D coef = -gamma * Dnn;
+  ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(Dnn * Tn * ddt(Nn),
+                                                  logPnlim);
 
-  if (state.isSet("scale_timederivs")) {
-    coef *= get<Field3D>(state["scale_timederivs"]);
-  }
+  // Second matrix: Invert Pshur
+  //   (E^-1   0  )
+  //   ( 0    P^-1)
+  //
+  // d Laplace_perp(x) + a x + (1/c1)Grad(c2) dot Grad_perp(x) = b
+  inv->setCoefA(1 - gamma * FV::Div_a_Grad_perp(Dnn, logPnlim));
+  inv->setCoefC1(-1. / ((gamma * 5./3) * Dnn));
+  inv->setCoefC2(logPnlim);
+  inv->setCoefD((-gamma * 5./3) * Dnn);
 
-  inv->setCoefD(coef);
+  //inv->setInnerBoundaryFlags(INVERT_DC_GRAD);
+  //inv->setOuterBoundaryFlags(INVERT_DC_GRAD);
 
-  ddt(Nn) = inv->solve(ddt(Nn));
-  if (evolve_momentum) {
-    ddt(NVn) = inv->solve(ddt(NVn));
-  }
   ddt(Pn) = inv->solve(ddt(Pn));
+  mesh->communicate(ddt(Pn));
+
+  // Third matrix: update Nn and NVn equations
+  // ( I   E^-1U )
+  // ( 0     I   )
+
+  // Note: Tnlim not set anywhere!
+  ddt(Nn) -= gamma * FV::Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
+
+  if (evolve_momentum) {
+    ddt(NVn) -= gamma * FV::Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
+  }
 }
