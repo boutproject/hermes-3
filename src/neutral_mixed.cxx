@@ -68,7 +68,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
-                     .withDefault<bool>(true);
+                     .withDefault<bool>(false);
 
   lax_flux = options["lax_flux"]
                      .doc("Enable stabilising lax flux?")
@@ -782,7 +782,11 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   //   ( I   0)
   //   (-LE  I)
 
-  ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(Dnn * Tn * ddt(Nn),
+  Field3D DTdtN = Dnn * Tn * ddt(Nn);
+  mesh->communicate(DTdtN);
+  DTdtN.applyBoundary("dirichlet");
+
+  ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(DTdtN,
                                                   logPnlim);
 
   // Second matrix: Invert Pshur
@@ -800,6 +804,7 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
 
   ddt(Pn) = inv->solve(ddt(Pn));
   mesh->communicate(ddt(Pn));
+  ddt(Pn).applyBoundary("dirichlet");
 
   // Third matrix: update Nn and NVn equations
   // ( I   E^-1U )
@@ -810,4 +815,17 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   if (evolve_momentum) {
     ddt(NVn) -= gamma * FV::Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
   }
+
+  for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(Nn)[i])) {
+      throw BoutException("Precon ddt(N{}) non-finite at {}\n", name, i);
+    }
+    if (!std::isfinite(ddt(Pn)[i])) {
+      throw BoutException("Precon ddt(P{}) non-finite at {}\n", name, i);
+    }
+    if (!std::isfinite(ddt(NVn)[i])) {
+      throw BoutException("Precon ddt(NV{}) non-finite at {}\n", name, i);
+    }
+  }
+
 }
