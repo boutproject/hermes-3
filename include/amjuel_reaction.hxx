@@ -117,10 +117,6 @@ protected:
       }
     }
 
-    // Update collision frequency for the two colliding species in s^-1
-    add(from_ion["collision_frequency"], reaction_rate/floor(N1,1e-8));
-    add(electron["collision_frequency"], reaction_rate/floor(Ne,1e-8));
-
     // Momentum
     momentum_exchange = reaction_rate * AA * V1;
 

@@ -48,6 +48,8 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
     Field3D N1 = get<Field3D>(atom["density"]);
     nuiz = reaction_rate/floor(N1,1e-8);
     set<Field3D>(atom["K_iz"], nuiz);
+    // // Update collision frequency for the two colliding species in s^-1
+    // add(atom["collision_frequency"], nuiz);
 
     if (diagnose) {
       S = reaction_rate;
