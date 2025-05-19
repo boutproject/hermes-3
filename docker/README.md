@@ -134,3 +134,12 @@ The `Dockerfile` contains the instructions for building the Docker image layer b
 14. **Setting Entrypoint and Default Command (`ENTRYPOINT [ "/entrypoint.sh" ]`, `CMD [ "/bin/bash"]`)**:
     * The `ENTRYPOINT` instruction specifies the default executable to run when the container starts. Here, it's the `/entrypoint.sh` script.
     * The `CMD` instruction provides default arguments to the `ENTRYPOINT`. If no command is specified when running the container (e.g., `docker run <image>`), it will default to `/bin/bash`, providing an interactive shell within the container.
+
+## Help!!! I don't have permission to delete the `hermes-3-docker/work` folder
+
+One somewhat annoying problem with using this docker image is the possibility that you end up with files in the `hermes-3-docker/work` folder that you don't have permission to delete. If you still have the `docker-compose.yaml` and `.env` file available, you can run `docker compose run --rm fix-permissions` and then proceed with deleting the `hermes-3-docker/work` folder. However, if you've already deleted these files, run the following command
+```
+docker run --rm -v "${PWD}/hermes-3-docker/work:/hermes_project/work" -e "PUID=$(id -u)" -e "PGID=$(id -g)" ghcr.io/boutproject/hermes-3 image fix_permissions
+```
+to adjust the permissions of `./hermes-3-docker/work`. You should then be able to `rm -rf hermes-3-docker/work`.
+
