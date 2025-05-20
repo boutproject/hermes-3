@@ -193,14 +193,10 @@ void NeutralMixed::transform(Options& state) {
   Tn.applyBoundary();
 
   Vn = NVn / (AA * Nnlim);
-  Vnlim = Vn;
-
   Vn.applyBoundary("neumann");
-  Vnlim.applyBoundary("neumann");
 
   Pnlim = softFloor(Pn, pressure_floor);
   Pnlim.applyBoundary();
-
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
@@ -232,7 +228,6 @@ void NeutralMixed::transform(Options& state) {
 
         // No flow into wall
         Vn(r.ind, mesh->ystart - 1, jz) = -Vn(r.ind, mesh->ystart, jz);
-        Vnlim(r.ind, mesh->ystart - 1, jz) = -Vnlim(r.ind, mesh->ystart, jz);
         NVn(r.ind, mesh->ystart - 1, jz) = -NVn(r.ind, mesh->ystart, jz);
       }
     }
@@ -260,7 +255,6 @@ void NeutralMixed::transform(Options& state) {
 
         // No flow into wall
         Vn(r.ind, mesh->yend + 1, jz) = -Vn(r.ind, mesh->yend, jz);
-        Vnlim(r.ind, mesh->yend + 1, jz) = -Vnlim(r.ind, mesh->yend, jz);
         NVn(r.ind, mesh->yend + 1, jz) = -NVn(r.ind, mesh->yend, jz);
       }
     }
