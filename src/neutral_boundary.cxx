@@ -18,6 +18,10 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions, Solver* 
   sol = options["neutral_boundary_sol"].doc("Boundary on SOL?").withDefault<bool>(false);
   pfr = options["neutral_boundary_pfr"].doc("Boundary on PFR?").withDefault<bool>(false);
 
+  core = options["neutral_boundary_core"]
+                   .doc("Enable neutral loss boundary conditions at core?")
+                   .withDefault<bool>(false);
+
   target_energy_refl_factor =
         options["target_energy_refl_factor"]
             .doc("Fraction of energy retained by neutral particles after wall reflection at target")
@@ -76,6 +80,8 @@ void NeutralBoundary::transform(Options& state) {
   Coordinates* coord = mesh->getCoordinates();
   target_energy_source = 0;
   wall_energy_source = 0;
+
+  core_density_source = 0.0;
 
   // Targets
   if (lower_y) {
@@ -297,6 +303,53 @@ void NeutralBoundary::transform(Options& state) {
     }
   }
 
+  // Core edge
+  if (core) {
+    if ((mesh->firstX()) and (mesh->periodicY(mesh->xstart))) {  // do loop if inner edge and periodic (i.e. PFR)
+      for (int iy = 0; iy < mesh->LocalNy; iy++) {
+        for (int iz = 0; iz < mesh->LocalNz; iz++) {
+
+          auto i = indexAt(Nn, mesh->xstart, iy, iz);  // Final domain cell
+          auto ig = indexAt(Nn, mesh->xstart-1, iy, iz);  // Guard cell
+          
+          // Calculate midpoint values at core
+          const BoutReal nncore = 0.5 * (Nn[ig] + Nn[i]);
+          const BoutReal tncore = 0.5 * (Tn[ig] + Tn[i]);
+
+          // Thermal speed of static Maxwellian in one direction
+          // const BoutReal v_th = 0.25 * sqrt( 8*tncore / (PI*AA) );   // Stangeby p.69 eqns. 2.21, 2.24
+          const BoutReal local_sound_speed = sqrt(tncore * (5. / 3) / AA);
+
+          // Outgoing neutral particle flux [#/m^2/s]
+          // This is rearranged from Power for clarity - note definition of v_th. 
+          BoutReal gamma_n = nncore * local_sound_speed ;                                                       // Incident energy
+
+
+          // Multiply by radial cell area to get # of particles
+
+          // Converts dy to poloidal length: dl = dy / sqrt(g22) = dy * h_theta
+          BoutReal dpol = 0.5*(coord->dy[i] + coord->dy[ig]) *  1/( 0.5*(sqrt(coord->g22[i]) + sqrt(coord->g22[ig])) );
+
+          // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+          BoutReal dtor = 0.5*(coord->dz[i] + coord->dz[ig]) * 0.5*(sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+
+          BoutReal da = dpol * dtor;  // [m^2]
+
+          // Multiply by area to get energy flow (power)
+          BoutReal flow = gamma_n * da;  // [#/s]
+
+          // Divide by cell volume to get source [#/m^3/s]
+          BoutReal particle_source = -flow / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [#/m^3/s]
+
+          // Subtract from cell next to boundary
+          core_density_source[i] = particle_source;
+        }
+      }
+    }
+  }
+
+
+
   // Set density, pressure and temperature, now with boundary conditions
   setBoundary(species["density"], fromFieldAligned(Nn));
   setBoundary(species["temperature"], fromFieldAligned(Tn));
@@ -311,6 +364,8 @@ void NeutralBoundary::transform(Options& state) {
   // Set energy source (negative in cell next to sheath)
   // Note: energy_source includes any sources previously set in other components
   set(species["energy_source"], fromFieldAligned(energy_source));
+
+  add(species["density_source"], core_density_source);
 }
 
 void NeutralBoundary::outputVars(Options& state) {

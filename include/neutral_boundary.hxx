@@ -54,6 +54,7 @@ private:
   BoutReal target_fast_refl_fraction, sol_fast_refl_fraction, pfr_fast_refl_fraction; ///< Fraction of neutrals undergoing fast reflection
 
   Field3D target_energy_source, wall_energy_source; ///< Diagnostic for power loss
+  Field3D core_density_source;
 
   bool diagnose; ///> Save diagnostic variables?
 
@@ -61,6 +62,8 @@ private:
   bool upper_y; ///< Boundary condition at upper y?
   bool sol; ///< Boundary condition at sol?
   bool pfr; ///< Boundary condition at pfr?
+  bool core; ///< Boundary condition at core?
+
 };
 
 namespace {
