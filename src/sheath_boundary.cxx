@@ -103,6 +103,9 @@ SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) 
   floor_potential = options["floor_potential"]
                         .doc("Apply a floor to wall potential when calculating Ve?")
                         .withDefault<bool>(true);
+
+  temperature_floor = options["temperature_floor"].doc("Low temperature scale")
+    .withDefault<BoutReal>(0.1) / Tnorm;
 }
 
 void SheathBoundary::transform(Options &state) {
@@ -334,7 +337,7 @@ void SheathBoundary::transform(Options &state) {
 	        : 0.5 * (phi[im] + phi[i]);
 
         // Electron sheath heat transmission
-        const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
+        const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / softFloor(tesheath, temperature_floor), 0.0);
 
         // Electron velocity into sheath (< 0)
         const BoutReal vesheath = (tesheath < 1e-10) ?
@@ -400,7 +403,7 @@ void SheathBoundary::transform(Options &state) {
                                                    : 0.5 * (phi[ip] + phi[i]);
 
         // Electron sheath heat transmission
-        const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
+        const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / softFloor(tesheath, temperature_floor), 0.0);
 
         // Electron velocity into sheath (> 0)
         const BoutReal vesheath = (tesheath < 1e-10) ?
@@ -529,8 +532,8 @@ void SheathBoundary::transform(Options &state) {
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
-          const BoutReal tesheath = floor(0.5 * (Te[im] + Te[i]), 1e-5);  // electron temperature
-          const BoutReal tisheath = floor(0.5 * (Ti[im] + Ti[i]), 1e-5);  // ion temperature
+          const BoutReal tesheath = softFloor(0.5 * (Te[im] + Te[i]), temperature_floor);  // electron temperature
+          const BoutReal tisheath = softFloor(0.5 * (Ti[im] + Ti[i]), temperature_floor);  // ion temperature
 
           // Ion sheath heat transmission coefficient
           // Equation (22) in Tskhakaya 2005
@@ -540,7 +543,7 @@ void SheathBoundary::transform(Options &state) {
           // (from comparing C_i^2 in eq. 9 with eq. 20
           //
           //
-          BoutReal s_i = clip(nisheath / floor(nesheath, 1e-10), 0, 1); // Concentration
+          BoutReal s_i = clip(nisheath / softFloor(nesheath, 1e-10), 0, 1); // Concentration
           BoutReal grad_ne = Ne[i] - nesheath;
           BoutReal grad_ni = Ni[i] - nisheath;
 
@@ -608,13 +611,13 @@ void SheathBoundary::transform(Options &state) {
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[ip] + Ni[i]);
-          const BoutReal tesheath = floor(0.5 * (Te[ip] + Te[i]), 1e-5);  // electron temperature
-          const BoutReal tisheath = floor(0.5 * (Ti[ip] + Ti[i]), 1e-5);  // ion temperature
+          const BoutReal tesheath = softFloor(0.5 * (Te[ip] + Te[i]), temperature_floor);  // electron temperature
+          const BoutReal tisheath = softFloor(0.5 * (Ti[ip] + Ti[i]), temperature_floor);  // ion temperature
 
           // Ion sheath heat transmission coefficient
           //
           // 1 / (1 + ∂_{ln n_e} ln s_i = s_i * ∂n_e / (s_i * ∂n_e + ∂ n_i) 
-          BoutReal s_i = clip(nisheath / floor(nesheath, 1e-10), 0, 1); // Concentration
+          BoutReal s_i = clip(nisheath / softFloor(nesheath, 1e-10), 0, 1); // Concentration
           BoutReal grad_ne = Ne[i] - nesheath;
           BoutReal grad_ni = Ni[i] - nisheath;
 

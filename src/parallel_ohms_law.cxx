@@ -3,6 +3,7 @@
 
 #include "../include/parallel_ohms_law.hxx"
 #include <bout/constants.hxx>
+#include "../include/hermes_utils.hxx"
 
 using bout::globals::mesh;
 
@@ -67,7 +68,7 @@ void ParallelOhmsLaw::calculateResistivity(Options &electrons, Field3D &Ne_lim) 
 
   }
   
-  // eta = floor( resistivity_eta / eta_norm , resistivity_floor );
+  // eta = softFloor( resistivity_eta / eta_norm , resistivity_floor );
   eta = sqrt( SQ(resistivity_eta / eta_norm) + resistivity_floor*resistivity_floor ); // This mitigates discontinuities.
 
 }
@@ -95,7 +96,7 @@ void ParallelOhmsLaw::transform(Options &state) {
   const Field3D Ne = GET_VALUE(Field3D, electrons["density"]);
 
   // auto Ne = getNoBoundary<Field3D>(electrons["density"]);
-  Field3D Ne_lim = floor(Ne, 1e-7);
+  Field3D Ne_lim = softFloor(Ne, 1e-7);
 
   const BoutReal AA = get<BoutReal>(electrons["AA"]); // Atomic mass
   ASSERT1(get<BoutReal>(electrons["charge"]) == -1.0);

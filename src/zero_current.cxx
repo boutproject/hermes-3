@@ -3,6 +3,7 @@
 
 #include "../include/zero_current.hxx"
 #include <bout/constants.hxx>
+#include "../include/hermes_utils.hxx"
 
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : name(name) {
@@ -69,7 +70,7 @@ void ZeroCurrent::transform(Options &state) {
   }
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
-  velocity = current / (-charge * floor(N, 1e-5));
+  velocity = current / (-charge * softFloor(N, 1e-7));
   set(species["velocity"], velocity);
 
   // NOTE(malamast): Do we need to set the species momentum as well in the state?

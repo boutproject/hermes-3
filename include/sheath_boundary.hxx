@@ -88,6 +88,7 @@ private:
   Field3D wall_potential; ///< Voltage at the wall. Normalised units.
 
   bool floor_potential; ///< Apply floor to sheath potential?
+  BoutReal temperature_floor;
 };
 
 namespace {

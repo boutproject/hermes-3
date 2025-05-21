@@ -89,6 +89,7 @@ private:
   bool zero_current_sheath_boundary; ///< Set sheath boundary to j=0 (at the target)?
 
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
+  BoutReal temperature_floor;
 
   Field3D hflux_e;  // Electron heat flux through sheath
   Field3D phi; // Phi at sheath

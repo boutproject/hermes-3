@@ -121,6 +121,9 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   // Convert to field aligned coordinates
   wall_potential = toFieldAligned(wall_potential);
 
+  temperature_floor = options["temperature_floor"].doc("Low temperature scale")
+    .withDefault<BoutReal>(0.1) / Tnorm;
+
   no_flow = options["no_flow"]
     .doc("Set zero particle flow, keeping energy flow")
     .withDefault<bool>(false);
@@ -230,9 +233,9 @@ void SheathBoundarySimple::transform(Options& state) {
             // Calculate sheath values at half-way points (cell edge)
             const BoutReal nisheath = 0.5 * (Ni_im + Ni[i]);
             const BoutReal tesheath =
-                floor(0.5 * (Te_im + Te[i]), 1e-5); // electron temperature
+                softFloor(0.5 * (Te_im + Te[i]), temperature_floor); // electron temperature
             const BoutReal tisheath =
-                floor(0.5 * (Ti_im + Ti[i]), 1e-5); // ion temperature
+                softFloor(0.5 * (Ti_im + Ti[i]), temperature_floor); // ion temperature
 
             // Sound speed squared
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
@@ -262,9 +265,9 @@ void SheathBoundarySimple::transform(Options& state) {
             // Calculate sheath values at half-way points (cell edge)
             const BoutReal nisheath = 0.5 * (Ni_ip + Ni[i]);
             const BoutReal tesheath =
-                floor(0.5 * (Te_ip + Te[i]), 1e-5); // electron temperature
+                softFloor(0.5 * (Te_ip + Te[i]), temperature_floor); // electron temperature
             const BoutReal tisheath =
-                floor(0.5 * (Ti_ip + Ti[i]), 1e-5); // ion temperature
+                softFloor(0.5 * (Ti_ip + Ti[i]), temperature_floor); // ion temperature
 
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
@@ -292,7 +295,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne_im + Ne[i]);
-          const BoutReal tesheath = floor(0.5 * (Te_im + Te[i]), 1e-5);
+          const BoutReal tesheath = softFloor(0.5 * (Te_im + Te[i]), temperature_floor);
 
           phi[i] =
               tesheath
@@ -317,7 +320,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
           // Calculate sheath values at half-way points (cell edge)
           const BoutReal nesheath = 0.5 * (Ne_ip + Ne[i]);
-          const BoutReal tesheath = floor(0.5 * (Te_ip + Te[i]), 1e-5);
+          const BoutReal tesheath = softFloor(0.5 * (Te_ip + Te[i]), temperature_floor);
 
           phi[i] =
               tesheath
@@ -373,7 +376,7 @@ void SheathBoundarySimple::transform(Options& state) {
         // Equal to Bohm for single ions and no currents
         BoutReal vesheath =
 	          -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * 
-            exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
+            exp(-(phisheath - phi_wall) / softFloor(tesheath, temperature_floor));
 
         // Heat flux. Note: Here this is negative because vesheath < 0
         BoutReal q = gamma_e * tesheath * nesheath * vesheath;
@@ -437,7 +440,7 @@ void SheathBoundarySimple::transform(Options& state) {
         // Electron velocity into sheath (> 0)
         BoutReal vesheath =
 	          sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * 
-            exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
+            exp(-(phisheath - phi_wall) / softFloor(tesheath, temperature_floor));
 
         // Heat flux. Note: Here this is positive because vesheath > 0
         BoutReal q = gamma_e * tesheath * nesheath * vesheath;
@@ -574,9 +577,9 @@ void SheathBoundarySimple::transform(Options& state) {
           const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
           const BoutReal tesheath =
-              floor(0.5 * (Te[im] + Te[i]), 1e-5); // electron temperature
+              softFloor(0.5 * (Te[im] + Te[i]), temperature_floor); // electron temperature
           const BoutReal tisheath =
-              floor(0.5 * (Ti[im] + Ti[i]), 1e-5); // ion temperature
+              softFloor(0.5 * (Ti[im] + Ti[i]), temperature_floor); // ion temperature
 
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
@@ -643,9 +646,9 @@ void SheathBoundarySimple::transform(Options& state) {
           const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[ip] + Ni[i]);
           const BoutReal tesheath =
-              floor(0.5 * (Te[ip] + Te[i]), 1e-5); // electron temperature
+              softFloor(0.5 * (Te[ip] + Te[i]), temperature_floor); // electron temperature
           const BoutReal tisheath =
-              floor(0.5 * (Ti[ip] + Ti[i]), 1e-5); // ion temperature
+              softFloor(0.5 * (Ti[ip] + Ti[i]), temperature_floor); // ion temperature
 
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;

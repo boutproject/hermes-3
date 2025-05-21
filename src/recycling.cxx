@@ -172,8 +172,8 @@ void Recycling::transform(Options& state) {
     const Field3D Tn = get<Field3D>(species_to["temperature"]);
     const BoutReal AAn = get<BoutReal>(species_to["AA"]);
 
-    const Field3D Nnlim = floor(Nn, density_floor);
-    const Field3D Pnlim = floor(Pn, pressure_floor);
+    const Field3D Nnlim = softFloor(Nn, density_floor);
+    const Field3D Pnlim = softFloor(Pn, pressure_floor);
     const Field3D Tnlim = Pnlim / Nnlim;
 
     // Recycling particle and energy sources will be added to these global sources 

@@ -7,6 +7,7 @@
 
 #include <bout/constants.hxx>
 #include "../include/hermes_build_config.hxx"
+#include "hermes_utils.hxx"
 
 using bout::globals::mesh;
 
@@ -17,12 +18,6 @@ BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
     return min;
   if (value > max)
     return max;
-  return value;
-}
-
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
   return value;
 }
 
@@ -916,7 +911,7 @@ void RelaxPotential::finally(const Options& state) {
 
       const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
 
-      ddt(Vort) += Div_a_Grad_perp_upwind (Vort * anomalous_D / floor(N,1e-8), N2D) * AA / average_atomic_mass;
+      ddt(Vort) += Div_a_Grad_perp_upwind (Vort * anomalous_D / softFloor(N,1e-8), N2D) * AA / average_atomic_mass;
                                           // NOTE(malamast): Usually they add only ions. 
                                           // How do we generalize it to include the contribution from other species?
                                           // Do we need to divide by charge like in Pi_hat?

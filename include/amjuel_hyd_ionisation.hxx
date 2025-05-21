@@ -3,6 +3,7 @@
 #define AMJUEL_HYD_IONISATION_H
 
 #include <bout/constants.hxx>
+#include "hermes_utils.hxx"
 
 #include "amjuel_reaction.hxx"
 
@@ -46,7 +47,7 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIonisation {
                     energy_exchange, energy_loss, rate_multiplier, radiation_multiplier);
 
     Field3D N1 = get<Field3D>(atom["density"]);
-    nuiz = reaction_rate/floor(N1,1e-8);
+    nuiz = reaction_rate/softFloor(N1,1e-8);
     set<Field3D>(atom["K_iz"], nuiz);
     // // Update collision frequency for the two colliding species in s^-1
     // add(atom["collision_frequency"], nuiz);

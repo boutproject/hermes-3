@@ -5,6 +5,7 @@
 #include <bout/output_bout_types.hxx>
 #include <bout/invert_laplace.hxx>
 #include <bout/difops.hxx>
+#include "hermes_utils.hxx"
 
 using bout::globals::mesh;
 
@@ -42,7 +43,7 @@ PolarisationDrift::PolarisationDrift(std::string name,
   } else {
     average_atomic_mass = 1.0;
     // Use a density floor to prevent divide-by-zero errors
-    density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+    density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
   }
 
   advection = options["advection"]
@@ -154,7 +155,7 @@ void PolarisationDrift::transform(Options &state) {
     }
 
     // Apply a floor to prevent divide-by-zero errors
-    mass_density = floor(mass_density, density_floor);
+    mass_density = softFloor(mass_density, density_floor);
   }
   
   if (IS_SET(state["fields"]["DivJextra"])) {

@@ -2,6 +2,7 @@
 #include <bout/difops.hxx>
 
 #include "../include/electron_force_balance.hxx"
+#include "hermes_utils.hxx"
 
 using bout::globals::mesh;
 
@@ -31,7 +32,7 @@ void ElectronForceBalance::transform(Options &state) {
   }
   // Parallel electric field. Stored as a private member variable
   // and may be saved as an output diagnostic
-  Epar = force_density / floor(Ne, 1e-5);
+  Epar = force_density / softFloor(Ne, 1e-7);
 
   // Now calculate forces on other species
   Options& allspecies = state["species"];
