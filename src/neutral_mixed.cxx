@@ -148,7 +148,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   // The dirichlet on diffusivity ensures no radial flux.
   // NV and V are ignored as they are hardcoded in the parallel BC code.
   alloptions[std::string("Dnn") + name]["bndry_all"] =
-      alloptions[std::string("Dnn") + name]["bndry_all"].withDefault("dirichlet");
+      alloptions[std::string("Dnn") + name]["bndry_all"].withDefault("neumann");
   alloptions[std::string("T") + name]["bndry_all"] =
       alloptions[std::string("T") + name]["bndry_all"].withDefault("neumann");
   alloptions[std::string("P") + name]["bndry_all"] =
@@ -307,11 +307,42 @@ void NeutralMixed::finally(const Options& state) {
     Dnn = (2.0 * Tnlim / AA) / Rnn;
   }
 
-
   // Heat conductivity 
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
   //       where nu is the collision frequency used in Dnn
   kappa_n = (5. / 2) * Dnn * Nnlim;
+
+  if (flux_limit > 0.0) {
+
+    // Thermal velocity of neutrals
+    // Field3D Vnth = sqrt(Tnlim / AA); 
+    Field3D Vnth = sqrt(2.0 * Tnlim / AA); 
+    // Field3D Vnth = 0.25 * sqrt(8.0 / PI * Tnlim / AA);
+
+    // Apply flux limit to diffusion,
+    // using the local thermal speed and pressure gradient magnitude
+    Field3D Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
+    }
+
+    Field3D kappa_n_max = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_perp(Tn))/Tnlim + 1. / neutral_lmax);
+    BOUT_FOR(i, kappa_n.getRegion("RGN_NOBNDRY")) {
+      kappa_n[i] = kappa_n[i] * kappa_n_max[i] / (kappa_n[i] + kappa_n_max[i]);
+    }
+
+    // Harmonic average of the heat fluxes
+    // Dnn = flux_limit * Dnn / ( 1.0 + (Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
+    // kappa_n = flux_limit * kappa_n / ( 1.0 + (kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
+    // eta_n = flux_limit * eta_n / ( 1.0 + (eta_n * abs(Grad_perp(Vn)) / (Vnth * abs(NVn))));
+
+    // or 
+
+    // Dnn = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
+    // kappa_n = flux_limit * kappa_n / sqrt( 1.0 + SQ(kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
+    // eta_n = flux_limit * eta_n / sqrt( 1.0 + SQ(eta_n * abs(Grad_perp(Vn)) / (Vnth * NVn)));
+
+  }
 
   // Viscosity
   // Relationship between heat conduction and viscosity for neutral
@@ -320,34 +351,8 @@ void NeutralMixed::finally(const Options& state) {
   // Transport Processes in Gases", 1972
   // eta_n = (2. / 5) * m_n * kappa_n;
   //
+
   eta_n = AA * (2. / 5) * kappa_n;
-
-
-  if (flux_limit > 0.0) {
-
-    // Thermal velocity of neutrals
-    // Field3D Vnth = sqrt(Tnlim / AA); 
-    // Field3D Vnth = sqrt(2.0 * Tnlim / AA); 
-    // Field3D Vnth = 0.25 * sqrt(8.0 / PI * Tnlim / AA);
-
-    // Apply flux limit to diffusion,
-    // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
-    }
-
-    // Dnn = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
-    // kappa_n = flux_limit * kappa_n / sqrt( 1.0 + SQ(kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
-    // eta_n = flux_limit * eta_n / sqrt( 1.0 + SQ(eta_n * abs(Grad_perp(Vn)) / (Vnth * NVn)));
-
-    // Harmonic average of the heat fluxes
-    // Dnn = flux_limit * Dnn / ( 1.0 + (Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
-    // kappa_n = flux_limit * kappa_n / ( 1.0 + (kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
-    // eta_n = flux_limit * eta_n / ( 1.0 + (eta_n * abs(Grad_perp(Vn)) / (Vnth * abs(NVn))));
-
-  }
-
 
   if (diffusion_limit > 0.0) {
     // Impose an upper limit on the diffusion coefficient
@@ -360,13 +365,13 @@ void NeutralMixed::finally(const Options& state) {
   Dnn.clearParallelSlices();
   Dnn.applyBoundary();
 
-  //NOTE(malamast): Do we need to communicate kappa_n and eta_n?
   mesh->communicate(kappa_n);
-  mesh->communicate(eta_n);
-
+  kappa_n.clearParallelSlices();
   kappa_n.applyBoundary("neumann");
-  eta_n.applyBoundary("neumann");
 
+  mesh->communicate(eta_n);
+  eta_n.clearParallelSlices();
+  eta_n.applyBoundary("neumann");
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;

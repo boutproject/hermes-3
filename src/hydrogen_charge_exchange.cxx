@@ -1,3 +1,4 @@
+#include "../include/hermes_utils.hxx"
 #include "../include/hydrogen_charge_exchange.hxx"
 
 void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
@@ -44,8 +45,8 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   // Optionally multiply by arbitrary multiplier
   const Field3D sigmav = exp(ln_sigmav) * (1e-6 * Nnorm / FreqNorm) * rate_multiplier;
 
-  const Field3D Natom = floor(get<Field3D>(atom1["density"]), 1e-10);
-  const Field3D Nion = floor(get<Field3D>(ion1["density"]), 1e-10);
+  const Field3D Natom = softFloor(get<Field3D>(atom1["density"]), 1e-8);
+  const Field3D Nion = softFloor(get<Field3D>(ion1["density"]), 1e-7);
 
   R = Natom * Nion * sigmav; // Rate coefficient. This is an output parameter.
 
