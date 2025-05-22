@@ -338,14 +338,17 @@ void NeutralMixed::finally(const Options& state) {
     // Harmonic average of the heat fluxes
     // Dnn = flux_limit * Dnn / ( 1.0 + (Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
     // kappa_n = flux_limit * kappa_n / ( 1.0 + (kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
-    // eta_n = flux_limit * eta_n / ( 1.0 + (eta_n * abs(Grad_perp(Vn)) / (Vnth * abs(NVn))));
-
     // or 
-
     // Dnn = flux_limit * Dnn / sqrt( 1.0 + SQ(Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
     // kappa_n = flux_limit * kappa_n / sqrt( 1.0 + SQ(kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
-    // eta_n = flux_limit * eta_n / sqrt( 1.0 + SQ(eta_n * abs(Grad_perp(Vn)) / (Vnth * NVn)));
 
+  }
+
+  if (diffusion_limit > 0.0) {
+    // Impose an upper limit on the diffusion coefficient
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+    }
   }
 
   // Viscosity
@@ -358,10 +361,10 @@ void NeutralMixed::finally(const Options& state) {
 
   eta_n = AA * (2. / 5) * kappa_n;
 
-  if (diffusion_limit > 0.0) {
-    // Impose an upper limit on the diffusion coefficient
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+  if (flux_limit > 0.0) {
+    Field3D viscosity_factor = 1.0 / (1.0 + eta_n * abs(Grad_perp(Vn)) / (flux_limit * Pnlim)); 
+    BOUT_FOR(i, eta_n.getRegion("RGN_NOBNDRY")) {
+      eta_n[i] = eta_n[i] * viscosity_factor[i];
     }
   }
 
