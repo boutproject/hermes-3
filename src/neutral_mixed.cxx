@@ -625,17 +625,37 @@ void NeutralMixed::finally(const Options& state) {
 
   if (freeze_low_density) {
     // Apply a factor to time derivatives in low density regions.
+    // Keep the sources and sinks, so that temperature and flow
+    // equilibriates with the plasma through collisions.
+
+    Field3D Nn_s, Pn_s, NVn_s;
+    if (localstate.isSet("density_source")) {
+      Nn_s = get<Field3D>(localstate["density_source"]);
+    } else {
+      Nn_s = 0.0;
+    }
+    if (localstate.isSet("energy_source")) {
+      Pn_s = (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    } else {
+      Pn_s = 0.0;
+    }
+    if (localstate.isSet("momentum_source")) {
+      NVn_s = get<Field3D>(localstate["momentum_source"]);
+    } else {
+      NVn_s = 0.0;
+    }
+
     for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
       // Local average density.
       // The purpose is to turn on evolution when nearby cells contain significant density.
       const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
       const BoutReal factor = exp(- density_floor / Nn[i]);
-      ddt(Nn)[i] *= factor;
-      ddt(Pn)[i] *= factor;
-      ddt(NVn)[i] *= factor;
+      ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
+      ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
+      ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
     }
   }
-
+  
 #if CHECKLEVEL >= 1
   for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(Nn)[i])) {
