@@ -61,6 +61,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e-8);
 
+  freeze_low_density = options["freeze_low_density"]
+    .doc("Freeze evolution in low density regions?")
+    .withDefault<bool>(false);
+
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
     .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
 
@@ -614,6 +618,19 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Nn) *= scale_timederivs;
     ddt(Pn) *= scale_timederivs;
     ddt(NVn) *= scale_timederivs;
+  }
+
+  if (freeze_low_density) {
+    // Apply a factor to time derivatives in low density regions.
+    for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
+      // Local average density.
+      // The purpose is to turn on evolution when nearby cells contain significant density.
+      const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
+      const BoutReal factor = exp(- density_floor / Nn[i]);
+      ddt(Nn)[i] *= factor;
+      ddt(Pn)[i] *= factor;
+      ddt(NVn)[i] *= factor;
+    }
   }
 
 #if CHECKLEVEL >= 1
