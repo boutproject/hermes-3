@@ -77,10 +77,14 @@ void NeutralBoundary::transform(Options& state) {
           ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
           : zeroFrom(Nn);
 
+  Field3D density_source =
+      species.isSet("density_source")
+          ? toFieldAligned(getNonFinal<Field3D>(species["density_source"]))
+          : zeroFrom(Nn);
+
   Coordinates* coord = mesh->getCoordinates();
   target_energy_source = 0;
   wall_energy_source = 0;
-
   core_density_source = 0.0;
 
   // Targets
@@ -339,10 +343,11 @@ void NeutralBoundary::transform(Options& state) {
           BoutReal flow = gamma_n * da;  // [#/s]
 
           // Divide by cell volume to get source [#/m^3/s]
-          BoutReal particle_source = -flow / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [#/m^3/s]
+          BoutReal particle_source = flow / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]);   // [#/m^3/s]
 
           // Subtract from cell next to boundary
-          core_density_source[i] = particle_source;
+          density_source[i] -= particle_source;
+          core_density_source[i] -= particle_source;
         }
       }
     }
@@ -364,8 +369,7 @@ void NeutralBoundary::transform(Options& state) {
   // Set energy source (negative in cell next to sheath)
   // Note: energy_source includes any sources previously set in other components
   set(species["energy_source"], fromFieldAligned(energy_source));
-
-  add(species["density_source"], core_density_source);
+  set(species["density_source"], fromFieldAligned(density_source));
 }
 
 void NeutralBoundary::outputVars(Options& state) {
@@ -402,6 +406,15 @@ void NeutralBoundary::outputVars(Options& state) {
                       {"standard_name", "energy source"},
                       {"long_name", std::string("Wall reflection energy source of ") + name},
                       {"source", "neutral_boundary"}});
+
+      set_with_attrs(state[{std::string("S") + name + std::string("_core_loss")}], core_density_source,
+                      {{"time_dimension", "t"},
+                      {"units", "# m^-3"},
+                      {"conversion", Nnorm * Omega_ci},
+                      {"standard_name", "density source"},
+                      {"long_name", std::string("Core loss number density source of ") + name},
+                      {"source", "neutral_boundary"}});
+
   }
 }
 
