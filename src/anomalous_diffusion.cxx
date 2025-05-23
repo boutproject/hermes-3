@@ -55,21 +55,12 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
   diagnose = alloptions[name]["diagnose"]
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
-
-  // Set boundary condition defaults: Neumann
-  anomalous_D.setBoundary("neumann");
-  anomalous_chi.setBoundary("neumann");
-  anomalous_nu.setBoundary("neumann");
 }
 
 void AnomalousDiffusion::transform(Options& state) {
   AUTO_TRACE();
 
   Options& species = state["species"][name];
-
-  anomalous_D.applyBoundary();
-  anomalous_chi.applyBoundary();
-  anomalous_nu.applyBoundary();
 
   // Diffusion operates on 2D (axisymmetric) profiles
   // Note: Includes diffusion in Y, so set boundary fluxes
