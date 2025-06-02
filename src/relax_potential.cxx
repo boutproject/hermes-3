@@ -173,8 +173,8 @@ void RelaxPotential::transform(Options& state) {
     // Note: This term is central differencing so that it balances
     // the corresponding compression term in the species pressure equations
     if (phi.isFci()) {
-      mesh->communicate(Jdia);
       Jdia.applyBoundary("neumann");
+      mesh->communicate(Jdia);
       Jdia.y.applyParallelBoundary("parallel_neumann_o2");
     }
     Field3D DivJdia = Div(Jdia);
