@@ -177,6 +177,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnNn.setBoundary(std::string("Dnn") + name);
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnNVn.setBoundary(std::string("Dnn") + name);
+
+  kappa_n_perp = 0.0, eta_n_perp = 0.0;                   
+  kappa_n_par = 0.0, eta_n_par = 0.0; 
 }
 
 void NeutralMixed::transform(Options& state) {
@@ -330,9 +333,12 @@ void NeutralMixed::finally(const Options& state) {
       Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
     }
 
-    Field3D kappa_n_max = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_perp(Tn))/Tnlim + 1. / neutral_lmax);
+    Field3D kappa_n_max_perp = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_perp(Tn))/Tnlim + 1. / neutral_lmax);
+    Field3D kappa_n_max_par = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_par(Tn))/Tnlim + 1. / neutral_lmax);
+
     BOUT_FOR(i, kappa_n.getRegion("RGN_NOBNDRY")) {
-      kappa_n[i] = kappa_n[i] * kappa_n_max[i] / (kappa_n[i] + kappa_n_max[i]);
+      kappa_n_perp[i] = kappa_n[i] * kappa_n_max_perp[i] / (kappa_n[i] + kappa_n_max_perp[i]);
+      kappa_n_par[i] = kappa_n[i] * kappa_n_max_par[i] / (kappa_n[i] + kappa_n_max_par[i]);
     }
 
     // Harmonic average of the heat fluxes
@@ -360,11 +366,14 @@ void NeutralMixed::finally(const Options& state) {
   //
 
   eta_n = AA * (2. / 5) * kappa_n;
+  // eta_n = AA * (2. / 5) * kappa_n_perp;
 
   if (flux_limit > 0.0) {
-    Field3D viscosity_factor = 1.0 / (1.0 + eta_n * abs(Grad_perp(Vn)) / (flux_limit * Pnlim)); 
+    Field3D viscosity_factor_perp = 1.0 / (1.0 + eta_n * abs(Grad_perp(Vn)) / (flux_limit * Pnlim)); 
+    Field3D viscosity_factor_par = 1.0 / (1.0 + eta_n * abs(Grad_par(Vn)) / (flux_limit * Pnlim)); 
     BOUT_FOR(i, eta_n.getRegion("RGN_NOBNDRY")) {
-      eta_n[i] = eta_n[i] * viscosity_factor[i];
+      eta_n_perp[i] = eta_n[i] * viscosity_factor_perp[i];
+      eta_n_par[i] = eta_n[i] * viscosity_factor_par[i];
     }
   }
 
@@ -376,9 +385,26 @@ void NeutralMixed::finally(const Options& state) {
   kappa_n.clearParallelSlices();
   kappa_n.applyBoundary("neumann");
 
+  mesh->communicate(kappa_n_perp);
+  kappa_n_perp.clearParallelSlices();
+  kappa_n_perp.applyBoundary("neumann");
+
+  mesh->communicate(kappa_n_par);
+  kappa_n_par.clearParallelSlices();
+  kappa_n_par.applyBoundary("neumann");
+
   mesh->communicate(eta_n);
   eta_n.clearParallelSlices();
   eta_n.applyBoundary("neumann");
+
+  mesh->communicate(eta_n_perp);
+  eta_n_perp.clearParallelSlices();
+  eta_n_perp.applyBoundary("neumann");
+
+  mesh->communicate(eta_n_par);
+  eta_n_par.clearParallelSlices();
+  eta_n_par.applyBoundary("neumann");
+
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
@@ -466,10 +492,10 @@ void NeutralMixed::finally(const Options& state) {
 
   if (neutral_conduction) {
     ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(
-                    kappa_n, Tn,                            // Perpendicular conduction
+                    kappa_n_perp, Tn,                            // Perpendicular conduction
                     ef_cond_perp_xlow, ef_cond_perp_ylow)
 
-            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
+            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n_par, Tn,           // Parallel conduction 
                       ef_cond_par_ylow,        
                       false)  // No conduction through target boundary
       ;
@@ -516,12 +542,12 @@ void NeutralMixed::finally(const Options& state) {
 
       // NOTE(malamast): Here, we used to multiply the viscosity_source with AA but we have already counted for thin in eta_n.
       Field3D viscosity_source = Div_a_Grad_perp_flows(
-                                eta_n, Vn,              // Perpendicular viscosity
+                                eta_n_perp, Vn,              // Perpendicular viscosity
                                 mf_visc_perp_xlow,
                                 mf_visc_perp_ylow)    
                               
                               + Div_par_K_Grad_par_mod(               // Parallel viscosity 
-                                eta_n, Vn,
+                                eta_n_par, Vn,
                                 mf_visc_par_ylow,
                                 false) // No viscosity through target boundary
                           ;

@@ -50,7 +50,7 @@ private:
   BoutReal temperature_floor;
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
   bool freeze_low_density; ///< Freeze evolution in low density regions?
-  
+
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
@@ -65,6 +65,9 @@ private:
   bool neutral_conduction; ///< Include heat conduction?
                        
   Field3D kappa_n, eta_n;                     ///< Neutral conduction and viscosity
+  Field3D kappa_n_perp, eta_n_perp;                     ///< Neutral conduction and viscosity
+  Field3D kappa_n_par, eta_n_par;                     ///< Neutral conduction and viscosity
+
 
   bool precondition {true}; ///< Enable preconditioner?
   bool lax_flux; ///< Use Lax flux for advection terms
