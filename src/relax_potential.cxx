@@ -40,8 +40,8 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     .withDefault<Field3D>(0.0)
     / (Lnorm * Lnorm * Omega_ci);
 
-  mesh->communicate(viscosity);
   viscosity.applyBoundary("dirichlet");
+  mesh->communicate(viscosity);
   viscosity.applyParallelBoundary("parallel_dirichlet_o2");
 
   phi_dissipation = options["phi_dissipation"]
