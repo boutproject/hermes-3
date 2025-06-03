@@ -129,6 +129,7 @@ void RelaxPotential::transform(Options& state) {
 
   if (phi.isFci()){
     phi.applyParallelBoundary("parallel_neumann_o2");
+    Vort.applyParallelBoundary("parallel_neumann_o2");
   }
   auto& fields = state["fields"];
 
