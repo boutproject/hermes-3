@@ -66,6 +66,18 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
       pnt.ynext(Curlb_B.y) = -Curlb_B.y[pnt.ind()];
     }
   });
+
+  //FCI specific
+  
+  if (mesh().isFci()) {
+    const auto coord = mesh->getCoordinates();
+    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+  } else {
+    bracket_factor = 1.0;
+  }
+
+  
+  
 }
 
 void DiamagneticDrift::transform(Options& state) {
