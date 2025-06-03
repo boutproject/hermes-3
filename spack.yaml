@@ -23,4 +23,4 @@ spack:
   develop:
     hermes-3:
       path: .
-      spec: hermes-3@working
+      spec: hermes-3@develop
