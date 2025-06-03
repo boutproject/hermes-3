@@ -319,6 +319,18 @@ void NeutralMixed::finally(const Options& state) {
   //       where nu is the collision frequency used in Dnn
   kappa_n = (5. / 2) * Dnn * Nnlim;
 
+  // Viscosity
+  // Relationship between heat conduction and viscosity for neutral
+  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+  // Transport Processes in Gases", 1972
+  // eta_n = (2. / 5) * m_n * kappa_n;
+  //
+
+  eta_n = AA *  (2.0 * Tnlim / AA * Nnlim) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+  // eta_n = AA * (2. / 5) * kappa_n;
+  // eta_n = AA * (2. / 5) * kappa_n_perp;
+
   if (flux_limit > 0.0) {
 
     // Thermal velocity of neutrals
@@ -341,6 +353,13 @@ void NeutralMixed::finally(const Options& state) {
       kappa_n_par[i] = kappa_n[i] * kappa_n_max_par[i] / (kappa_n[i] + kappa_n_max_par[i]);
     }
 
+    Field3D viscosity_factor_perp = 1.0 / (1.0 + eta_n * abs(Grad_perp(Vn)) / (flux_limit * Pnlim)); 
+    Field3D viscosity_factor_par = 1.0 / (1.0 + eta_n * abs(Grad_par(Vn)) / (flux_limit * Pnlim)); 
+    BOUT_FOR(i, eta_n.getRegion("RGN_NOBNDRY")) {
+      eta_n_perp[i] = eta_n[i] * viscosity_factor_perp[i];
+      eta_n_par[i] = eta_n[i] * viscosity_factor_par[i];
+    }
+
     // Harmonic average of the heat fluxes
     // Dnn = flux_limit * Dnn / ( 1.0 + (Dnn * (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax) / Vnth ));
     // kappa_n = flux_limit * kappa_n / ( 1.0 + (kappa_n * abs(Grad_perp(Tn)) / (3.0 / 2.0 * Vnth * Nnlim * Tnlim)));
@@ -357,25 +376,7 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
-  // Viscosity
-  // Relationship between heat conduction and viscosity for neutral
-  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
-  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
-  // Transport Processes in Gases", 1972
-  // eta_n = (2. / 5) * m_n * kappa_n;
-  //
 
-  eta_n = AA * (2. / 5) * kappa_n;
-  // eta_n = AA * (2. / 5) * kappa_n_perp;
-
-  if (flux_limit > 0.0) {
-    Field3D viscosity_factor_perp = 1.0 / (1.0 + eta_n * abs(Grad_perp(Vn)) / (flux_limit * Pnlim)); 
-    Field3D viscosity_factor_par = 1.0 / (1.0 + eta_n * abs(Grad_par(Vn)) / (flux_limit * Pnlim)); 
-    BOUT_FOR(i, eta_n.getRegion("RGN_NOBNDRY")) {
-      eta_n_perp[i] = eta_n[i] * viscosity_factor_perp[i];
-      eta_n_par[i] = eta_n[i] * viscosity_factor_par[i];
-    }
-  }
 
   mesh->communicate(Dnn);
   Dnn.clearParallelSlices();
@@ -422,6 +423,12 @@ void NeutralMixed::finally(const Options& state) {
         DnnNn(r.ind, mesh->ystart - 1, jz) = -DnnNn(r.ind, mesh->ystart, jz);
         DnnPn(r.ind, mesh->ystart - 1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
         DnnNVn(r.ind, mesh->ystart - 1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
+  
+        // NOTE(malamast): Do we need that?
+        auto i = indexAt(kappa_n_par, r.ind, mesh->ystart, jz);
+        auto im = i.ym();
+        kappa_n_par[im] = kappa_n_par[i];
+        eta_n_par[im] = eta_n_par[i];
       }
     }
   }
@@ -433,6 +440,12 @@ void NeutralMixed::finally(const Options& state) {
         DnnNn(r.ind, mesh->yend + 1, jz) = -DnnNn(r.ind, mesh->yend, jz);
         DnnPn(r.ind, mesh->yend + 1, jz) = -DnnPn(r.ind, mesh->yend, jz);
         DnnNVn(r.ind, mesh->yend + 1, jz) = -DnnNVn(r.ind, mesh->yend, jz);
+
+        // NOTE(malamast): Do we need that?
+        auto i = indexAt(kappa_n_par, r.ind, mesh->yend, jz);
+        auto ip = i.yp();
+        kappa_n_par[ip] = kappa_n_par[i];
+        eta_n_par[ip] = eta_n_par[i];
       }
     }
   }
