@@ -604,18 +604,14 @@ void NeutralMixed::finally(const Options& state) {
       const Field3D Ni = get<Field3D>(species["density"]);
       Field2D Ni2D = DC(Ni);
 
-      // // Apply Neumann Y boundary condition, so no additional flux into boundary
-      // // Note: Not setting radial (X) boundaries since those set radial fluxes
-      // for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      //   N2D(r.ind, mesh->ystart - 1) = N2D(r.ind, mesh->ystart);
-      //   // T2D(r.ind, mesh->ystart - 1) = T2D(r.ind, mesh->ystart);
-      //   // V2D(r.ind, mesh->ystart - 1) = V2D(r.ind, mesh->ystart);
-      // }
-      // for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      //   N2D(r.ind, mesh->yend + 1) = N2D(r.ind, mesh->yend);
-      //   // T2D(r.ind, mesh->yend + 1) = T2D(r.ind, mesh->yend);
-      //   // V2D(r.ind, mesh->yend + 1) = V2D(r.ind, mesh->yend);
-      // }
+      // Apply Neumann Y boundary condition, so no additional flux into boundary
+      // Note: Not setting radial (X) boundaries since those set radial fluxes
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        Ni2D(r.ind, mesh->ystart - 1) = Ni2D(r.ind, mesh->ystart);
+      }
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
+      }
 
       ddt(Nn) += Div_a_Grad_perp_upwind (Nn * anomalous_D / softFloor(Ni,density_floor), Ni2D);
 
