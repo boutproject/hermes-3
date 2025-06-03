@@ -105,11 +105,12 @@ if ! command -v "$spacktivate_cmd" &> /dev/null
     return 1
 fi
 
-# Check that BOUT-Spack has been cloned
-repo_yaml="$REPO_ROOT/BOUT-Spack/repo.yaml"
+# Check that BOUT-spack has been cloned
+sm_name="BOUT-spack"
+repo_yaml="${REPO_ROOT}/${sm_name}/repo.yaml"
 if [ ! -f "$repo_yaml" ]
   then
-    echo "$repo_yaml doesn't exist. Has the BOUT-Spack git submodule been initialised?"
+    echo "$repo_yaml doesn't exist. Has the ${sm_name} git submodule been initialised?"
     echo "  (git submodule update --init)"
     return 
 fi
