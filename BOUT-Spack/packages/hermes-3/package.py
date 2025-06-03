@@ -48,12 +48,14 @@ class Hermes3(CMakePackage):
     depends_on("fftw", type=("build", "link", "run"))
     depends_on("mpi", type=("build", "link", "run"))
     depends_on("netcdf-cxx4", type=("build", "link", "run"))
+    # Needed for BOUT++ python bindings, should be able to move this when BOUT is split into a separate package
+    depends_on("py-numpy", type=("build", "link"))
 
     # Variant-controlled dependencies
     depends_on(
         "petsc+hypre+mpi~debug~fortran", when="+petsc", type=("build", "link", "run")
     )
-    depends_on("py-xhermes", when="+xhermes", type=("build", "link", "run"))
+    depends_on("py-xhermes", when="+xhermes", type=("run"))
     depends_on("sundials", when="+sundials", type=("build", "link", "run"))
 
     def cmake_args(self):
