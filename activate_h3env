@@ -1,0 +1,121 @@
+#!/bin/bash
+#
+# Wrapper around the spack environment that defines some useful commands.
+#
+# Activate the environment by sourcing this file with
+#     . activate_h3env
+# 
+# Run 'help_h3env' with the environment activated to see the available commands
+
+# Record top-level dir
+REPO_ROOT=$( cd -- "$(realpath $( dirname -- "${BASH_SOURCE[0]}" ))" &> /dev/null && pwd )
+
+#======================= Convenience aliases/functions ========================
+
+# Creates a link to the specified target (first argument) with the specified
+# name (second argument), unless a link with that target and name already
+# exists. It will overwrite links to different targets. Also print a message
+# saying what it is doing.
+_create-link() {
+    target="$1"
+    link="$2"
+    if ! [[ -L "$link" && $(readlink "$link") == "$target" ]]
+    then
+        echo "    Linking $(realpath -s --relative-to="$REPO_ROOT" "$link") => $target"
+        rm -f "$link" > /dev/null
+        ln -s "$target" "$link"
+    fi
+}
+
+# Remove convenience aliases/function definitions and deactivate the env
+deactivate_h3env() {
+    unset -f _create-link
+    unset -f deactivate_h3env
+    unset -f _get_installed_h3_hashes
+    unalias help_h3env
+    unset -f in_h3env
+    unset REPO_ROOT
+    unset -f update_build_links
+    unset -f usage_h3env
+    spack env deactivate
+}
+
+# Use 'spack find' to get the hashes of currently installed hermes-3 packages
+# Discard stderr to suppress errror message when no installs are found
+_get_installed_h3_hashes() {
+    local identifier_fmt="{hash:7}"
+    spack find --format "$identifier_fmt" "hermes-3" 2> /dev/null
+    return $?
+}
+
+# Run commands in the build environment
+h3spec="hermes-3%gcc"
+in_h3env() {
+  if [ $# -eq 0 ]; then
+    usage_h3env
+    return
+  fi
+  cmd="spack build-env ${h3spec} $@"
+  echo $cmd
+  eval $cmd
+}
+
+# Update the links at <REPO_ROOT>/builds/spack-* such that there's
+# exactly one link for every package returned by 'spack find hermes-3'
+update_build_links() {
+  local link_prefix="builds/spack-"
+  # Create any links for installed packages that don't exist already
+  for hash in $(_get_installed_h3_hashes); do
+    spack_build_dir=$(spack location -b "hermes-3/$hash")
+    _create-link "${spack_build_dir}" "${link_prefix}${hash}"
+  done
+
+  # Check whether existing links are still valid
+  # Could also just use find -xtype l ?
+  for l in ${REPO_ROOT}/${link_prefix}*; do
+    # Skip if l isn't a link (also guards against case where pattern has zero matches)
+    [ ! -L "$l" ] && break;
+    hash=$(echo $l|rev|cut -c -7|rev)
+    # Remove link if 'spack find' returns non-zero for this hash
+    spack find hermes-3/$hash &> /dev/null
+    if [ $? -ne 0 ]; then
+      echo "    Removing stale link at $l"
+      rm -f $l
+    fi
+  done
+}
+
+# Print help/usage info
+usage_h3env() {
+    echo " Activate the environment                             :  . activate_h3env"
+    echo " Deactivate the environment                           :  deactivate_h3env"
+    echo " Run a command in the build environment               :  in_h3env [args]"
+    echo '                                                           e.g. export h3_build="./builds/my_build" && in_h3env cmake -B "$h3_build" && in_h3env cmake --build "$h3_build" -j8'
+    echo " Update links to installed builds in ./builds/spack-* : update_build_links"
+}
+alias help_h3env=usage_h3env
+
+#============================== Run on activate ===============================
+
+# Check that spack has been set up
+spacktivate_cmd="spacktivate"
+if ! command -v "$spacktivate_cmd" &> /dev/null
+  then
+    echo "The $spacktivate_cmd alias doesn't seem to be defined. Have you installed spack and sourced \$SPACK_ROOT/share/spack/setup-env.sh?"
+    return 1
+fi
+
+# Check that BOUT-Spack has been cloned
+repo_yaml="$REPO_ROOT/BOUT-Spack/repo.yaml"
+if [ ! -f "$repo_yaml" ]
+  then
+    echo "$repo_yaml doesn't exist. Has the BOUT-Spack git submodule been initialised?"
+    echo "  (git submodule update --init)"
+    return 
+fi
+
+# Activate the environment
+spacktivate . -p
+
+# Update build links
+update_build_links
