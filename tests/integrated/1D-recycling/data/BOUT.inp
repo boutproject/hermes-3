@@ -30,6 +30,7 @@ dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be
 
 # Parallel grid spacing
 dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+J = 1  # Identity metric
 
 # Calculate where the source ends in grid index
 source = length_xpt / length
@@ -44,9 +45,6 @@ ixseps2 = -1
 components = (d+, d, e,
               sheath_boundary, collisions, recycling, reactions,
               electron_force_balance, neutral_parallel_diffusion)
-
-loadmetric = false        # Use Rxy, Bpxy etc?
-normalise_metric = true  # Normalise the input metric?
 
 Nnorm = 1e19
 Bnorm = 1

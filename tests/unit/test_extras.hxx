@@ -3,26 +3,27 @@
 
 #include "gtest/gtest.h"
 
-#include <numeric>
 #include <functional>
 #include <iostream>
+#include <numeric>
 #include <vector>
 
 #include "bout/boutcomm.hxx"
-#include "bout/field3d.hxx"
-#include "bout/unused.hxx"
 #include "bout/coordinates.hxx"
+#include "bout/field3d.hxx"
+#include "bout/griddata.hxx"
 #include "bout/mesh.hxx"
 #include "bout/mpi_wrapper.hxx"
 #include "bout/operatorstencil.hxx"
+#include "bout/unused.hxx"
 
 static constexpr BoutReal BoutRealTolerance{1e-15};
 // FFTs have a slightly looser tolerance than other functions
 static constexpr BoutReal FFTTolerance{1.e-12};
 
 /// Does \p str contain \p substring?
-::testing::AssertionResult IsSubString(const std::string &str,
-                                       const std::string &substring);
+::testing::AssertionResult IsSubString(const std::string& str,
+                                       const std::string& substring);
 
 void fillField(Field3D& f, std::vector<std::vector<std::vector<BoutReal>>> values);
 void fillField(Field2D& f, std::vector<std::vector<BoutReal>> values);
@@ -45,19 +46,19 @@ T makeField(const std::function<BoutReal(typename T::ind_type&)>& fill_function,
 }
 
 /// Teach googletest how to print SpecificInds
-template<IND_TYPE N>
-inline std::ostream& operator<< (std::ostream &out, const SpecificInd<N> &index) {
+template <IND_TYPE N>
+inline std::ostream& operator<<(std::ostream& out, const SpecificInd<N>& index) {
   return out << index.ind;
 }
 
 /// Helpers to get the type of a Field as a string
-auto inline getFieldType(MAYBE_UNUSED(const Field2D& field)) -> std::string {
+auto inline getFieldType([[maybe_unused]] const Field2D& field) -> std::string {
   return "Field2D";
 }
-auto inline getFieldType(MAYBE_UNUSED(const Field3D& field)) -> std::string {
+auto inline getFieldType([[maybe_unused]] const Field3D& field) -> std::string {
   return "Field3D";
 }
-auto inline getFieldType(MAYBE_UNUSED(const FieldPerp& field)) -> std::string {
+auto inline getFieldType([[maybe_unused]] const FieldPerp& field) -> std::string {
   return "FieldPerp";
 }
 
@@ -146,8 +147,8 @@ public:
     zstart = 0;
     zend = nz - 1;
 
-    StaggerGrids=false;
-    
+    StaggerGrids = false;
+
     // Unused variables
     periodicX = false;
     NXPE = 1;
@@ -160,13 +161,12 @@ public:
     mpi = bout::globals::mpi;
   }
 
-  void setCoordinates(std::shared_ptr<Coordinates> coords, CELL_LOC location = CELL_CENTRE) {
+  void setCoordinates(std::shared_ptr<Coordinates> coords,
+                      CELL_LOC location = CELL_CENTRE) {
     coords_map[location] = coords;
   }
 
-  void setGridDataSource(GridDataSource* source_in) {
-    source = source_in;
-  }
+  void setGridDataSource(GridDataSource* source_in) { source = source_in; }
 
   // Use this if the FakeMesh needs x- and y-boundaries
   void createBoundaries() {
@@ -181,8 +181,8 @@ public:
                     bool UNUSED(disable_corners) = false) override {
     return nullptr;
   }
-  comm_handle sendY(FieldGroup& UNUSED(g), comm_handle UNUSED(handle) = nullptr) override
-  {
+  comm_handle sendY(FieldGroup& UNUSED(g),
+                    comm_handle UNUSED(handle) = nullptr) override {
     return nullptr;
   }
   int wait(comm_handle UNUSED(handle)) override { return 0; }
@@ -233,8 +233,9 @@ public:
   RangeIterator iterateBndryUpperInnerY() const override { return RangeIterator(); }
   void addBoundary(BoundaryRegion* region) override { boundaries.push_back(region); }
   std::vector<BoundaryRegion*> getBoundaries() override { return boundaries; }
-  std::vector<BoundaryRegionPar*> getBoundariesPar() override {
-    return std::vector<BoundaryRegionPar*>();
+  std::vector<std::shared_ptr<BoundaryRegionPar>>
+  getBoundariesPar(BoundaryParType UNUSED(type) = BoundaryParType::all) override {
+    return std::vector<std::shared_ptr<BoundaryRegionPar>>();
   }
   BoutReal GlobalX(int jx) const override { return jx; }
   BoutReal GlobalY(int jy) const override { return jy; }
@@ -253,8 +254,8 @@ public:
   int getLocalZIndex(int) const override { return 0; }
   int getLocalZIndexNoBoundaries(int) const override { return 0; }
 
-  void initDerivs(Options * opt){
-    StaggerGrids=true;
+  void initDerivs(Options* opt) {
+    StaggerGrids = true;
     derivs_init(opt);
   }
 
@@ -322,7 +323,7 @@ public:
   using Mesh::msg_len;
 
 private:
-  std::vector<BoundaryRegion *> boundaries;
+  std::vector<BoundaryRegion*> boundaries;
 };
 
 /// FakeGridDataSource provides a non-null GridDataSource* source to use with FakeMesh, to
@@ -333,14 +334,14 @@ class FakeGridDataSource : public GridDataSource {
 public:
   FakeGridDataSource() {}
   /// Constructor setting values which can be fetched from this source
-  FakeGridDataSource(Options& values) : values(values) {}
+  FakeGridDataSource(Options& values) : values(values.copy()) {}
 
   /// Take an rvalue (e.g. initializer list), convert to lvalue and delegate constructor
   FakeGridDataSource(Options&& values) : FakeGridDataSource(values) {}
 
   bool hasVar(const std::string& UNUSED(name)) override { return false; }
 
-  bool get(MAYBE_UNUSED(Mesh* m), std::string& sval, const std::string& name,
+  bool get([[maybe_unused]] Mesh* m, std::string& sval, const std::string& name,
            const std::string& def = "") override {
     if (values[name].isSet()) {
       sval = values[name].as<std::string>();
@@ -349,7 +350,7 @@ public:
     sval = def;
     return false;
   }
-  bool get(MAYBE_UNUSED(Mesh* m), int& ival, const std::string& name,
+  bool get([[maybe_unused]] Mesh* m, int& ival, const std::string& name,
            int def = 0) override {
     if (values[name].isSet()) {
       ival = values[name].as<int>();
@@ -358,7 +359,7 @@ public:
     ival = def;
     return false;
   }
-  bool get(MAYBE_UNUSED(Mesh* m), BoutReal& rval, const std::string& name,
+  bool get([[maybe_unused]] Mesh* m, BoutReal& rval, const std::string& name,
            BoutReal def = 0.0) override {
     if (values[name].isSet()) {
       rval = values[name].as<BoutReal>();
@@ -395,15 +396,15 @@ public:
     return false;
   }
 
-  bool get(MAYBE_UNUSED(Mesh* m), MAYBE_UNUSED(std::vector<int>& var),
-           MAYBE_UNUSED(const std::string& name), MAYBE_UNUSED(int len),
-           MAYBE_UNUSED(int def) = 0, Direction = GridDataSource::X) override {
+  bool get([[maybe_unused]] Mesh* m, [[maybe_unused]] std::vector<int>& var,
+           [[maybe_unused]] const std::string& name, [[maybe_unused]] int len,
+           [[maybe_unused]] int def = 0, Direction = GridDataSource::X) override {
     throw BoutException("Not Implemented");
     return false;
   }
-  bool get(MAYBE_UNUSED(Mesh* m), MAYBE_UNUSED(std::vector<BoutReal>& var),
-           MAYBE_UNUSED(const std::string& name), MAYBE_UNUSED(int len),
-           MAYBE_UNUSED(int def) = 0,
+  bool get([[maybe_unused]] Mesh* m, [[maybe_unused]] std::vector<BoutReal>& var,
+           [[maybe_unused]] const std::string& name, [[maybe_unused]] int len,
+           [[maybe_unused]] int def = 0,
            Direction UNUSED(dir) = GridDataSource::X) override {
     throw BoutException("Not Implemented");
     return false;
@@ -412,6 +413,7 @@ public:
   bool hasXBoundaryGuards(Mesh* UNUSED(m)) override { return true; }
 
   bool hasYBoundaryGuards() override { return true; }
+
 private:
   Options values; ///< Store values to be returned by get()
 };
@@ -455,8 +457,8 @@ public:
 
     // No call to Coordinates::geometry() needed here
     static_cast<FakeMesh*>(bout::globals::mesh)->setCoordinates(test_coords);
-    static_cast<FakeMesh*>(bout::globals::mesh)->setGridDataSource(
-        new FakeGridDataSource());
+    static_cast<FakeMesh*>(bout::globals::mesh)
+        ->setGridDataSource(new FakeGridDataSource());
     // May need a ParallelTransform to create fields, because create3D calls
     // fromFieldAligned
     test_coords->setParallelTransform(

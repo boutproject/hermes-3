@@ -1,6 +1,6 @@
 /*
 
-    Copyright Hermes-3 contributors 2016-2023
+    Copyright Hermes-3 contributors, 2016-2025
               email: dudson2@llnl.gov
 
     This file is part of Hermes-3 (Hot ion, multifluid)
@@ -25,6 +25,7 @@
 
 #include "include/adas_carbon.hxx"
 #include "include/adas_neon.hxx"
+#include "include/adas_lithium.hxx"
 #include "include/amjuel_helium.hxx"
 #include "include/amjuel_hyd_ionisation.hxx"
 #include "include/amjuel_hyd_recombination.hxx"
@@ -72,14 +73,23 @@
 #include "include/thermal_force.hxx"
 #include "include/transform.hxx"
 #include "include/upstream_density_feedback.hxx"
+#include "include/temperature_feedback.hxx"
+#include "include/detachment_controller.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
+#include "include/simple_pump.hxx"
 #include <bout/constants.hxx>
 #include <bout/boundary_factory.hxx>
 #include <bout/boundary_op.hxx>
 #include <bout/field_factory.hxx>
 
-#include "include/loadmetric.hxx"
+#include "include/recalculate_metric.hxx"
+
+#if !BOUT_USE_METRIC_3D
+// For standard 2D metrics,
+// Hermes operators don't need parallel slices
+BOUT_OVERRIDE_DEFAULT_OPTION("mesh:calcParallelSlices_on_communicate", false);
+#endif
 
 class DecayLengthBoundary : public BoundaryOp {
 public:
@@ -185,7 +195,7 @@ int Hermes::init(bool restarting) {
 
   // Put into the options tree, so quantities can be normalised
   // when creating components
-  Options::root()["units"] = units;
+  Options::root()["units"] = units.copy();
   Options::root()["units"].setConditionallyUsed();
 
   // Add the decay length boundary condition to the boundary factory
@@ -198,36 +208,67 @@ int Hermes::init(bool restarting) {
   // field normalisations
   TRACE("Loading metric tensor");
 
-  if (options["loadmetric"]
-          .doc("Load Rxy, Bpxy etc. to create orthogonal metric?")
-          .withDefault(true)) {
-    LoadMetric(rho_s0, Bnorm);
-  } else if (options["normalise_metric"]
-                 .doc("Normalise input metric tensor? (assumes input is in SI units)")
-                 .withDefault<bool>(true)) {
-    Coordinates *coord = mesh->getCoordinates();
-    // To use non-orthogonal metric
-    // Normalise
-    coord->dx /= rho_s0 * rho_s0 * Bnorm;
-    coord->Bxy /= Bnorm;
-    // Metric is in grid file - just need to normalise
-    coord->g11 /= SQ(Bnorm * rho_s0);
-    coord->g22 *= SQ(rho_s0);
-    coord->g33 *= SQ(rho_s0);
-    coord->g12 /= Bnorm;
-    coord->g13 /= Bnorm;
-    coord->g23 *= SQ(rho_s0);
+  if (options.isSet("loadmetric")) {
+    throw BoutException("Error: The loadmetric option has been renamed to recalculate_metric.\n"
+                        "Note: The default (true/false) is inverted for the new option.\n"
+                        "Setting recalculate_metric=false (the default) uses the metric in the grid file.\n"
+                        "Setting recalculate_metric=true loads Rxy, Bpxy etc from the grid file.\n"
+                        "  This assumes an orthogonal coordinate system. See manual for details.");
+  }
 
-    coord->J *= Bnorm / rho_s0;
+  if (options["recalculate_metric"]
+          .doc("Load Rxy, Bpxy etc. to calculate an orthogonal metric?")
+          .withDefault(false)) {
+    recalculate_metric(rho_s0, Bnorm);
 
-    coord->g_11 *= SQ(Bnorm * rho_s0);
-    coord->g_22 /= SQ(rho_s0);
-    coord->g_33 /= SQ(rho_s0);
-    coord->g_12 *= Bnorm;
-    coord->g_13 *= Bnorm;
-    coord->g_23 /= SQ(rho_s0);
+  } else {
+    // Check that the grid file contains at least one metric tensor component
+    // Note: Older grid files did not, so would silently default to the identity metric
+    if (!(mesh->sourceHasVar("J") or
+          mesh->sourceHasVar("g11") or
+          mesh->sourceHasVar("g22") or
+          mesh->sourceHasVar("g33") or
+          mesh->sourceHasVar("g12") or
+          mesh->sourceHasVar("g23") or
+          mesh->sourceHasVar("g13") or
+          mesh->sourceHasVar("g_11") or
+          mesh->sourceHasVar("g_22") or
+          mesh->sourceHasVar("g_33") or
+          mesh->sourceHasVar("g_12") or
+          mesh->sourceHasVar("g_23") or
+          mesh->sourceHasVar("g_13"))) {
+      throw BoutException("Grid input does not contain any metric components (J, g11, g_22 etc).\n"
+                          "Set hermes:recalculate_metric=true to calculate from Rxy, Bpxy etc.\n"
+                          "If the default identity metric is intended then set e.g. mesh:J=1\n");
+    }
 
-    coord->geometry(); // Calculate other metrics
+    if (options["normalise_metric"]
+             .doc("Normalise input metric tensor? (assumes input is in SI units)")
+             .withDefault<bool>(true)) {
+      Coordinates *coord = mesh->getCoordinates();
+      // To use non-orthogonal metric
+      // Normalise
+      coord->dx /= rho_s0 * rho_s0 * Bnorm;
+      coord->Bxy /= Bnorm;
+      // Metric is in grid file - just need to normalise
+      coord->g11 /= SQ(Bnorm * rho_s0);
+      coord->g22 *= SQ(rho_s0);
+      coord->g33 *= SQ(rho_s0);
+      coord->g12 /= Bnorm;
+      coord->g13 /= Bnorm;
+      coord->g23 *= SQ(rho_s0);
+
+      coord->J *= Bnorm / rho_s0;
+
+      coord->g_11 *= SQ(Bnorm * rho_s0);
+      coord->g_22 /= SQ(rho_s0);
+      coord->g_33 /= SQ(rho_s0);
+      coord->g_12 *= Bnorm;
+      coord->g_13 *= Bnorm;
+      coord->g_23 /= SQ(rho_s0);
+
+      coord->geometry(); // Calculate other metrics
+    }
   }
 
   // Tell the components if they are restarting
@@ -254,7 +295,7 @@ int Hermes::rhs(BoutReal time) {
   state = Options();
   
   set(state["time"], time);
-  state["units"] = units; 
+  state["units"] = units.copy();
 
   // Call all the components
   scheduler->transform(state);

@@ -30,7 +30,7 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
                    .doc("Evolve the logarithm of energy?")
                    .withDefault<bool>(false);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
   if (evolve_log) {
     // Evolve logarithm of energy
     solver->add(logE, std::string("logE") + name);
@@ -144,7 +144,6 @@ void EvolveEnergy::transform(Options& state) {
       P[i] = 0.0;
     }
   }
-
   P.applyBoundary("neumann");
 
   if (neumann_boundary_average_z) {
@@ -200,6 +199,37 @@ void EvolveEnergy::finally(const Options& state) {
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
   const Field3D V = get<Field3D>(species["velocity"]);
+  const BoutReal AA = get<BoutReal>(species["AA"]);
+
+  // Update boundaries of E from boundaries of P and V
+  E = toFieldAligned(E);
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      auto i = indexAt(N, r.ind, mesh->ystart, jz);
+      auto im = i.ym();
+
+      const BoutReal psheath = 0.5 * (P[im] + P[i]);
+      const BoutReal nsheath = 0.5 * (N[im] + N[i]);
+      const BoutReal vsheath = 0.5 * (V[im] + V[i]);
+
+      const BoutReal Esheath = Cv * psheath + 0.5 * AA * nsheath * SQ(vsheath);
+      E[im] = 2 * Esheath - E[i];
+    }
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      auto i = indexAt(N, r.ind, mesh->yend, jz);
+      auto ip = i.yp();
+
+      const BoutReal psheath = 0.5 * (P[ip] + P[i]);
+      const BoutReal nsheath = 0.5 * (N[ip] + N[i]);
+      const BoutReal vsheath = 0.5 * (V[ip] + V[i]);
+
+      const BoutReal Esheath = Cv * psheath + 0.5 * AA * nsheath * SQ(vsheath);
+      E[ip] = 2 * Esheath - E[i];
+    }
+  }
+  E = fromFieldAligned(E);
 
   Field3D Pfloor = P;
 
@@ -226,7 +256,13 @@ void EvolveEnergy::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(E) -= FV::Div_par_mod<hermes::Limiter>(E + P, V, fastest_wave);
+    ddt(E) -= FV::Div_par_mod<hermes::Limiter>(E + P, V, fastest_wave, flow_ylow);
+
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+      // Magnetic flutter term
+      const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+      ddt(E) -= Div_n_g_bxGrad_f_B_XZ(E + P, V, -Apar_flutter);
+    }
   }
 
   if (species.isSet("low_n_coeff")) {
@@ -291,7 +327,23 @@ void EvolveEnergy::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    ddt(E) += FV::Div_par_K_Grad_par(kappa_par, T, false);
+    Field3D flow_ylow_conduction;
+    ddt(E) += Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    flow_ylow += flow_ylow_conduction;
+
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+      // Magnetic flutter term. The operator splits into 4 pieces:
+      // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))
+      //                    + Div(k db b0.Grad(T)) + Div(k db db.Grad(T))
+      // The first term is already calculated above.
+      // Here we add the terms containing db
+      const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
+      Field3D db_dot_T = bracket(T, Apar_flutter, BRACKET_ARAKAWA);
+      Field3D b0_dot_T = Grad_par(T);
+      mesh->communicate(db_dot_T, b0_dot_T);
+      ddt(E) += Div_par(kappa_par * db_dot_T)
+        - Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter);
+    }
   }
 
   if (hyper_z > 0.) {
@@ -306,7 +358,12 @@ void EvolveEnergy::finally(const Options& state) {
   if (species.isSet("energy_source")) {
     Se += get<Field3D>(species["energy_source"]); // For diagnostic output
   }
-  if (species.isSet("energy_source")) {
+#if CHECKLEVEL >= 1
+  if (species.isSet("pressure_source")) {
+    throw BoutException("Components must evolve `energy_source` rather then `pressure_source`");
+  }
+#endif
+  if (species.isSet("momentum_source")) {
     Se += V * get<Field3D>(species["momentum_source"]);
   }
   ddt(E) += Se;
@@ -335,7 +392,7 @@ void EvolveEnergy::finally(const Options& state) {
       flow_xlow = get<Field3D>(species["energy_flow_xlow"]);
     }
     if (species.isSet("energy_flow_ylow")) {
-      flow_ylow = get<Field3D>(species["energy_flow_ylow"]);
+      flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
   }
 }
@@ -418,7 +475,7 @@ void EvolveEnergy::outputVars(Options& state) {
                     {"source", "evolve_energy"}});
 
     if (flow_xlow.isAllocated()) {
-      set_with_attrs(state[std::string("EnergyFlow_") + name + std::string("_xlow")], flow_xlow,
+      set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
                    {{"time_dimension", "t"},
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
@@ -428,7 +485,7 @@ void EvolveEnergy::outputVars(Options& state) {
                     {"source", "evolve_energy"}});
     }
     if (flow_ylow.isAllocated()) {
-      set_with_attrs(state[std::string("EnergyFlow_") + name + std::string("_ylow")], flow_ylow,
+      set_with_attrs(state[fmt::format("ef{}_tot_ylow", name)], flow_ylow,
                    {{"time_dimension", "t"},
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},

@@ -6,7 +6,7 @@ else()
   cmake_policy(VERSION 3.12)
 endif()
 
-project(hermes-3 LANGUAGES CXX)
+project(hermes-3 LANGUAGES CXX C)
 
 # Extra CMake scripts in cmake/ subdirectory
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
@@ -43,7 +43,8 @@ message(STATUS "Git revision: ${HERMES_REVISION}")
 option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
   set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
-  add_subdirectory(external/BOUT-dev)
+  set(HERMES_BOUT_SRC "external/BOUT-dev" CACHE STRING "Directory of BOUT++ dir")
+  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev)
 else()
   find_package(bout++ REQUIRED)
 endif()
@@ -55,7 +56,6 @@ set(HERMES_SOURCES
     src/ionisation.cxx
     src/radiation.cxx
     src/div_ops.cxx
-    src/loadmetric.cxx
     src/neutral_mixed.cxx
     src/full_velocity.cxx
     src/electromagnetic.cxx
@@ -68,6 +68,7 @@ set(HERMES_SOURCES
     src/isothermal.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
+    src/recalculate_metric.cxx
     src/relax_potential.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
@@ -93,6 +94,8 @@ set(HERMES_SOURCES
     src/hydrogen_charge_exchange.cxx
     src/solkit_hydrogen_charge_exchange.cxx
     src/upstream_density_feedback.cxx
+    src/temperature_feedback.cxx
+    src/detachment_controller.cxx
     src/thermal_force.cxx
     src/ion_viscosity.cxx
     src/transform.cxx
@@ -129,7 +132,6 @@ set(HERMES_SOURCES
     include/integrate.hxx
     include/ion_viscosity.hxx
     include/ionisation.hxx
-    include/loadmetric.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
@@ -138,6 +140,7 @@ set(HERMES_SOURCES
     include/polarisation_drift.hxx
     include/quasineutral.hxx
     include/radiation.hxx
+    include/recalculate_metric.hxx
     include/recycling.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
@@ -149,10 +152,13 @@ set(HERMES_SOURCES
     include/sound_speed.hxx
     include/thermal_force.hxx
     include/upstream_density_feedback.hxx
+    include/temperature_feedback.hxx
+    include/detachment_controller.hxx
     include/vorticity.hxx
     include/zero_current.hxx
     include/transform.hxx
     include/fixed_fraction_radiation.hxx
+    include/simple_pump.hxx
     )
 
 # Compile Hermes sources into a library, which can be used for unit tests
@@ -186,17 +192,26 @@ configure_file(
   "${PROJECT_BINARY_DIR}/include/revision.hxx")
 
 # Once built, copy the data and test directories
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+option(HERMES_COPY_EXAMPLES_TO_BUILD "Copy the examples to the build directory" ON)
+if(HERMES_COPY_EXAMPLES_TO_BUILD)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+endif()
 
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+option(HERMES_COPY_JSON_DATABASE_TO_BUILD "Copy the json database to the build directory" ON)
+if(HERMES_COPY_JSON_DATABASE_TO_BUILD)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+endif()
 
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+option(HERMES_COPY_TESTS_TO_BUILD "Copy the tests to the build directory" ON)
+if(HERMES_COPY_TESTS_TO_BUILD)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+endif()
 
 # Tests
 option(HERMES_TESTS "Build the tests" ON)
@@ -219,6 +234,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave)
+  hermes_add_integrated_test(alfven-wave)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -258,3 +274,9 @@ endif()
 
 configure_file(include/hermes_build_config.hxx.in include/hermes_build_config.hxx)
 
+# Installation
+if (BUILD_SHARED_LIBS)
+  install(TARGETS hermes-3 hermes-3-lib)
+else()
+  install(TARGETS hermes-3)
+endif()

@@ -37,6 +37,8 @@ struct Vorticity : public Component {
   ///     Relax radial phi boundaries towards zero-gradient?
   ///   - phi_boundary_timescale: float, 1e-4
   ///     Timescale for phi boundary relaxation [seconds]
+  ///   - phi_core_averagey: bool, default false
+  ///     Average phi core boundary in Y? (if phi_boundary_relax)
   ///   - phi_dissipation: bool, default true
   ///     Parallel dissipation of potential (Recommended)
   ///   - poloidal_flows: bool, default true
@@ -128,7 +130,8 @@ private:
   bool phi_boundary_relax; ///< Relax boundary to zero-gradient
   BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
   BoutReal phi_boundary_last_update; ///< Time when last updated
-
+  bool phi_core_averagey; ///< Average phi core boundary in Y?
+  
   bool split_n0; // Split phi into n=0 and n!=0 components
   LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
 

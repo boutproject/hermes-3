@@ -6,3 +6,10 @@ BOUT.settings
 *.a
 *~
 .DS_Store
+/build*
+/docs/build/*
+/docs/doxygen/*
+/docs/sphinx/_breathe*
+
+# IDE config files
+.vscode
