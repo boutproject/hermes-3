@@ -9,7 +9,7 @@ manual: all
 pdf: sphinx-pdf
 html: sphinx-html
 man: sphinx-man
-sphinx: sphinx-pdf
+sphinx: sphinx-html
 
 .PHONY: breathe-autogen, doxygen-build, clean, html, man, manual, pdf, sphinx, sphinx-html, sphinx-man, sphinx-pdf
 
