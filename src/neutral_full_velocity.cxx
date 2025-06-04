@@ -2,51 +2,61 @@
 #include <bout/constants.hxx>
 #include <bout/output_bout_types.hxx>
 
-#include "../include/full_velocity.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/neutral_full_velocity.hxx"
 
 #include "bout/mesh.hxx"
 #include "bout/solver.hxx"
 
 using bout::globals::mesh;
 
-NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& alloptions, Solver *solver) : name(name) {
+NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& alloptions,
+                                         Solver* solver)
+    : name(name) {
   AUTO_TRACE();
 
   // This is used in both transform and finally functions
   coord = mesh->getCoordinates();
 
+  // Normalisations
+  const Options& units = alloptions["units"];
+  const BoutReal meters = units["meters"];
+  const BoutReal seconds = units["seconds"];
+  const BoutReal Bnorm = units["Tesla"];
+  const BoutReal Tnorm = units["eV"];
+
   auto& options = alloptions[name];
 
   AA = options["AA"].doc("Atomic mass number. Proton = 1").as<int>();
 
-  gamma_ratio =
-      options["gamma_ratio"].doc("Ratio of specific heats").withDefault(5. / 3);
+  gamma_ratio = options["gamma_ratio"].doc("Ratio of specific heats").withDefault(5. / 3);
 
-  neutral_viscosity = options["viscosity"]
-                          .doc("Normalised kinematic viscosity")
-                          .withDefault(1e-2);
+  neutral_viscosity =
+      options["viscosity"].doc("Kinematic viscosity [m^2/s]").withDefault(1.0)
+      / (meters * meters / seconds);
 
-  neutral_bulk =
-      options["bulk"].doc("Normalised bulk viscosity").withDefault(1e-2);
+  neutral_bulk = options["bulk"].doc("Bulk viscosity [m^2/s]").withDefault(1.0)
+                 / (meters * meters / seconds);
 
   neutral_conduction =
-      options["conduction"].doc("Normalised heat conduction").withDefault(1e-2);
+      options["conduction"].doc("Heat conduction [m^2/s]").withDefault(1.0)
+      / (meters * meters / seconds);
 
-  outflow_ydown = options["outflow_ydown"]
-                      .doc("Allow outflowing neutrals?")
-                      .withDefault<bool>(false);
+  outflow_ydown =
+      options["outflow_ydown"].doc("Allow outflowing neutrals?").withDefault<bool>(false);
 
   neutral_gamma = options["neutral_gamma"]
                       .doc("Surface heat transmission coefficient")
                       .withDefault(5. / 4);
 
-  // Get the normalisations
-  auto& units = Options::root()["units"];
-  BoutReal Lnorm = units["meters"];
-  BoutReal Bnorm = units["Tesla"];
-  Tnorm = units["eV"];
-  
+  density_floor = options["density_floor"]
+                      .doc("A minimum density used when dividing by density."
+                           "Normalised units.")
+                      .withDefault(1e-5);
+
+  diagnose =
+      options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+
   // Evolve 2D density, pressure, and velocity
   solver->add(Nn2D, "N" + name);
   solver->add(Pn2D, "P" + name);
@@ -78,9 +88,9 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   }
 
   // Normalise
-  Rxy /= Lnorm;
-  Zxy /= Lnorm;
-  hthe /= Lnorm;
+  Rxy /= meters;
+  Zxy /= meters;
+  hthe /= meters;
   Bpxy /= Bnorm;
 
   // Axisymmetric neutrals simplifies things considerably...
@@ -94,7 +104,7 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   Txz.allocate();
   Tyr.allocate();
   Tyz.allocate();
-  
+
   for (int i = 0; i < mesh->LocalNx; i++)
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       // Central differencing of coordinates
@@ -132,8 +142,7 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
 
       // Match to Bp, |Grad psi|. NOTE: this only works if
       // X and Y are orthogonal.
-      BoutReal dldpsi =
-          sqrt(SQ(dRdpsi) + SQ(dZdpsi)) * cosbeta(i, j); // ~ 1/(R*Bp)
+      BoutReal dldpsi = sqrt(SQ(dRdpsi) + SQ(dZdpsi)) * cosbeta(i, j); // ~ 1/(R*Bp)
       dRdpsi /= dldpsi * Bpxy(i, j) * Rxy(i, j);
       dZdpsi /= dldpsi * Bpxy(i, j) * Rxy(i, j);
 
@@ -163,7 +172,7 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
 }
 
 /// Modify the given simulation state
-void NeutralFullVelocity::transform(Options &state) {
+void NeutralFullVelocity::transform(Options& state) {
   AUTO_TRACE();
   mesh->communicate(Nn2D, Vn2D, Pn2D);
 
@@ -176,7 +185,7 @@ void NeutralFullVelocity::transform(Options &state) {
   Nn2D = floor(Nn2D, 0.0);
   Pn2D = floor(Pn2D, 0.0);
 
-  Field2D Nnlim = floor(Nn2D, 1e-5);
+  Field2D Nnlim = floor(Nn2D, density_floor);
 
   Tn2D = Pn2D / Nnlim;
   Tn2D.applyBoundary("neumann");
@@ -187,8 +196,7 @@ void NeutralFullVelocity::transform(Options &state) {
   // Evolves density Nn2D, velocity vector Vn2D and pressure Pn2D
   //
 
-  for (RangeIterator idwn = mesh->iterateBndryLowerY(); !idwn.isDone();
-       idwn.next()) {
+  for (RangeIterator idwn = mesh->iterateBndryLowerY(); !idwn.isDone(); idwn.next()) {
     // Diriclet conditions on Y
     Vn2D.y(idwn.ind, mesh->ystart - 1) = -Vn2D.y(idwn.ind, mesh->ystart);
 
@@ -201,8 +209,7 @@ void NeutralFullVelocity::transform(Options &state) {
     Pn2D(idwn.ind, mesh->ystart - 1) = Pn2D(idwn.ind, mesh->ystart);
   }
 
-  for (RangeIterator idwn = mesh->iterateBndryUpperY(); !idwn.isDone();
-       idwn.next()) {
+  for (RangeIterator idwn = mesh->iterateBndryUpperY(); !idwn.isDone(); idwn.next()) {
     // Diriclet conditions on Y
     Vn2D.y(idwn.ind, mesh->yend + 1) = -Vn2D.y(idwn.ind, mesh->yend);
 
@@ -220,7 +227,7 @@ void NeutralFullVelocity::transform(Options &state) {
   // Vn2D is covariant and b = e_y / (JB) to write:
   //
   // V_{||n} = b dot V_n = Vn2D.y / (JB)
-  Field2D Vnpar = Vn2D.y / (coord->J * coord->Bxy);
+  Vnpar = Vn2D.y / (coord->J * coord->Bxy);
 
   // Set values in the state
   auto& localstate = state["species"][name];
@@ -234,13 +241,13 @@ void NeutralFullVelocity::transform(Options &state) {
 
 /// Use the final simulation state to update internal state
 /// (e.g. time derivatives)
-void NeutralFullVelocity::finally(const Options &state) {
+void NeutralFullVelocity::finally(const Options& state) {
   AUTO_TRACE();
 
   // Density
   ddt(Nn2D) = -Div(Vn2D, Nn2D);
 
-  Field2D Nn2D_floor = floor(Nn2D, 1e-5);
+  Field2D Nn2D_floor = floor(Nn2D, density_floor);
 
   // Velocity
   ddt(Vn2D) = -Grad(Pn2D) / (AA * Nn2D_floor);
@@ -282,18 +289,20 @@ void NeutralFullVelocity::finally(const Options &state) {
 
   //////////////////////////////////////////////////////
   // Pressure
-  ddt(Pn2D) = -Div(Vn2D, Pn2D) -
-              (gamma_ratio - 1.) * Pn2D * DivV2D +
-              Laplace_FV(neutral_conduction, Tn2D);
+  ddt(Pn2D) = -Div(Vn2D, Pn2D) - (gamma_ratio - 1.) * Pn2D * DivV2D
+              + Laplace_FV(Nn2D * neutral_conduction, Tn2D);
 
+#if CHECKLEVEL >= 3
   Field2D a = -Div(Vn2D, Pn2D);
-  Field2D b = Laplace_FV(neutral_conduction, Tn2D);
+  Field2D b = Laplace_FV(Nn2D * neutral_conduction, Tn2D);
 
   for (auto& i : Pn2D.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(Pn2D)[i])) {
-      throw BoutException("1: ddt(P{}) non-finite at {}: {} {} {} {}\n", name, i, Pn2D[i], DivV2D[i], a[i], b[i]);
+      throw BoutException("1: ddt(P{}) non-finite at {}: {} {} {} {}\n", name, i, Pn2D[i],
+                          DivV2D[i], a[i], b[i]);
     }
   }
+#endif
 
   ///////////////////////////////////////////////////////////////////
   // Boundary condition on fluxes
@@ -306,13 +315,11 @@ void NeutralFullVelocity::finally(const Options &state) {
     //         q = neutral_gamma * n * T * cs
 
     // Density at the target
-    BoutReal Nnout =
-        0.5 * (Nn2D(r.ind, mesh->ystart) + Nn2D(r.ind, mesh->ystart - 1));
+    BoutReal Nnout = 0.5 * (Nn2D(r.ind, mesh->ystart) + Nn2D(r.ind, mesh->ystart - 1));
     if (Nnout < 0.0)
       Nnout = 0.0;
     // Temperature at the target
-    BoutReal Tnout =
-        0.5 * (Tn2D(r.ind, mesh->ystart) + Tn2D(r.ind, mesh->ystart - 1));
+    BoutReal Tnout = 0.5 * (Tn2D(r.ind, mesh->ystart) + Tn2D(r.ind, mesh->ystart - 1));
     if (Tnout < 0.0)
       Tnout = 0.0;
 
@@ -320,14 +327,14 @@ void NeutralFullVelocity::finally(const Options &state) {
     BoutReal q = neutral_gamma * Nnout * Tnout * sqrt(Tnout);
     // Multiply by cell area to get power
     BoutReal heatflux =
-        q * (coord->J(r.ind, mesh->ystart) + coord->J(r.ind, mesh->ystart - 1)) /
-        (sqrt(coord->g_22(r.ind, mesh->ystart)) +
-         sqrt(coord->g_22(r.ind, mesh->ystart - 1)));
+        q * (coord->J(r.ind, mesh->ystart) + coord->J(r.ind, mesh->ystart - 1))
+        / (sqrt(coord->g_22(r.ind, mesh->ystart))
+           + sqrt(coord->g_22(r.ind, mesh->ystart - 1)));
 
     // Divide by volume of cell, and multiply by 2/3 to get pressure
     ddt(Pn2D)(r.ind, mesh->ystart) -=
-        (2. / 3) * heatflux /
-        (coord->dy(r.ind, mesh->ystart) * coord->J(r.ind, mesh->ystart));
+        (2. / 3) * heatflux
+        / (coord->dy(r.ind, mesh->ystart) * coord->J(r.ind, mesh->ystart));
   }
 
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
@@ -338,39 +345,39 @@ void NeutralFullVelocity::finally(const Options &state) {
     //         q = neutral_gamma * n * T * cs
 
     // Density at the target
-    BoutReal Nnout =
-        0.5 * (Nn2D(r.ind, mesh->yend) + Nn2D(r.ind, mesh->yend + 1));
+    BoutReal Nnout = 0.5 * (Nn2D(r.ind, mesh->yend) + Nn2D(r.ind, mesh->yend + 1));
     if (Nnout < 0.0)
       Nnout = 0.0;
     // Temperature at the target
-    BoutReal Tnout =
-        0.5 * (Tn2D(r.ind, mesh->yend) + Tn2D(r.ind, mesh->yend + 1));
+    BoutReal Tnout = 0.5 * (Tn2D(r.ind, mesh->yend) + Tn2D(r.ind, mesh->yend + 1));
     if (Tnout < 0.0)
       Tnout = 0.0;
 
     // gamma * n * T * cs
     BoutReal q = neutral_gamma * Nnout * Tnout * sqrt(Tnout);
     // Multiply by cell area to get power
-    BoutReal heatflux =
-        q * (coord->J(r.ind, mesh->yend) + coord->J(r.ind, mesh->yend + 1)) /
-        (sqrt(coord->g_22(r.ind, mesh->yend)) +
-         sqrt(coord->g_22(r.ind, mesh->yend + 1)));
+    BoutReal heatflux = q
+                        * (coord->J(r.ind, mesh->yend) + coord->J(r.ind, mesh->yend + 1))
+                        / (sqrt(coord->g_22(r.ind, mesh->yend))
+                           + sqrt(coord->g_22(r.ind, mesh->yend + 1)));
 
     // Divide by volume of cell, and multiply by 2/3 to get pressure
     ddt(Pn2D)(r.ind, mesh->yend) -=
-        (2. / 3) * heatflux /
-        (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
+        (2. / 3) * heatflux
+        / (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
   }
 
+#if CHECKLEVEL >= 3
   for (auto& i : Pn2D.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(Pn2D)[i])) {
       throw BoutException("2: ddt(P{}) non-finite at {}\n", name, i);
     }
   }
+#endif
 
   /////////////////////////////////////////////////////
   // Atomic processes
-  
+
   auto& localstate = state["species"][name];
 
   // Particles
@@ -381,7 +388,7 @@ void NeutralFullVelocity::finally(const Options &state) {
   // Momentum. Note need to turn back into covariant form
   if (localstate.isSet("momentum_source")) {
     ddt(Vn2D).y += DC(get<Field3D>(localstate["momentum_source"]))
-      * (coord->J * coord->Bxy) / (AA * Nn2D_floor);
+                   * (coord->J * coord->Bxy) / (AA * Nn2D_floor);
   }
 
   // Energy
@@ -389,14 +396,7 @@ void NeutralFullVelocity::finally(const Options &state) {
     ddt(Pn2D) += (2. / 3) * DC(get<Field3D>(localstate["energy_source"]));
   }
 
-  // Density evolution
-  for (auto &i : Nn2D.getRegion("RGN_ALL")) {
-    if ((Nn2D[i] < 1e-8) && (ddt(Nn2D)[i] < 0.0)) {
-      ddt(Nn2D)[i] = 0.0;
-    }
-  }
-
-#if CHECKLEVEL >= 1
+#if CHECKLEVEL >= 2
   for (auto& i : Nn2D.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(Nn2D)[i])) {
       throw BoutException("ddt(N{}) non-finite at {}\n", name, i);
@@ -418,7 +418,7 @@ void NeutralFullVelocity::finally(const Options &state) {
 }
 
 /// Add extra fields for output, or set attributes e.g docstrings
-void NeutralFullVelocity::outputVars(Options &state) {
+void NeutralFullVelocity::outputVars(Options& state) {
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
@@ -432,7 +432,7 @@ void NeutralFullVelocity::outputVars(Options &state) {
                                                 {"standard_name", "density"},
                                                 {"long_name", name + " number density"},
                                                 {"species", name},
-                                                {"source", "full_velocity"}});
+                                                {"source", "neutral_full_velocity"}});
 
   state[std::string("P") + name].setAttributes({{"time_dimension", "t"},
                                                 {"units", "Pa"},
@@ -440,21 +440,40 @@ void NeutralFullVelocity::outputVars(Options &state) {
                                                 {"standard_name", "pressure"},
                                                 {"long_name", name + " pressure"},
                                                 {"species", name},
-                                                {"source", "full_velocity"}});
+                                                {"source", "neutral_full_velocity"}});
 
-  set_with_attrs(state["DivV2D_" + name], DivV2D, {
-      {"time_dimension", "t"},
-      {"units", "s^-1"},
-      {"conversion", Omega_ci}
-    });
+  set_with_attrs(state["DivV2D_" + name], DivV2D,
+                 {{"time_dimension", "t"},
+                  {"units", "s^-1"},
+                  {"conversion", Omega_ci},
+                  {"source", "neutral_full_velocity"}});
 
-  set_with_attrs(state["Urx"], Urx, {});
-  set_with_attrs(state["Ury"], Ury, {});
-  set_with_attrs(state["Uzx"], Uzx, {});
-  set_with_attrs(state["Uzy"], Uzy, {});
-  set_with_attrs(state["Txr"], Txr, {});
-  set_with_attrs(state["Txz"], Txz, {});
-  set_with_attrs(state["Tyr"], Tyr, {});
-  set_with_attrs(state["Tyz"], Tyz, {});
+  set_with_attrs(state["Urx"], Urx, {{"source", "neutral_full_velocity"}});
+  set_with_attrs(state["Ury"], Ury, {{"source", "neutral_full_velocity"}});
+  set_with_attrs(state["Uzx"], Uzx, {{"source", "neutral_full_velocity"}});
+  set_with_attrs(state["Uzy"], Uzy, {{"source", "neutral_full_velocity"}});
+  set_with_attrs(state["Txr"], Txr, {{"source", "neutral_full_velocity"}});
+  set_with_attrs(state["Txz"], Txz, {{"source", "neutral_full_velocity"}});
+  set_with_attrs(state["Tyr"], Tyr, {{"source", "neutral_full_velocity"}});
+  set_with_attrs(state["Tyz"], Tyz, {{"source", "neutral_full_velocity"}});
+
+  if (diagnose) {
+    set_with_attrs(state[std::string("T") + name], Tn2D,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"conversion", Tnorm},
+                    {"standard_name", "temperature"},
+                    {"long_name", name + " temperature"},
+                    {"species", name},
+                    {"source", "neutral_full_velocity"}});
+
+    set_with_attrs(state[std::string("V") + name], Vnpar,
+                   {{"time_dimension", "t"},
+                    {"units", "m / s"},
+                    {"conversion", Cs0},
+                    {"standard_name", "velocity"},
+                    {"long_name", name + " parallel velocity"},
+                    {"species", name},
+                    {"source", "neutral_full_velocity"}});
+  }
 }
-

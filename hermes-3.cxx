@@ -46,7 +46,7 @@
 #include "include/fixed_fraction_radiation.hxx"
 #include "include/fixed_temperature.hxx"
 #include "include/fixed_velocity.hxx"
-#include "include/full_velocity.hxx"
+#include "include/neutral_full_velocity.hxx"
 #include "include/hydrogen_charge_exchange.hxx"
 #include "include/ion_viscosity.hxx"
 #include "include/ionisation.hxx"
