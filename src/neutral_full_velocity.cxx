@@ -169,6 +169,10 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   Txz.applyBoundary("neumann");
   Tyr.applyBoundary("neumann");
   Tyz.applyBoundary("neumann");
+
+  // Ensure that guard cells are filled and consistent between processors
+  mesh->communicate(Urx, Ury, Uzx, Uzy);
+  mesh->communicate(Txr, Txz, Tyr, Tyz);
 }
 
 /// Modify the given simulation state
