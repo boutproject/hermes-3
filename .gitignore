@@ -11,5 +11,9 @@ BOUT.settings
 /docs/doxygen/*
 /docs/sphinx/_breathe*
 
+# Docs
+docs/html
+docs/hermes3.pdf
+
 # IDE config files
 .vscode
