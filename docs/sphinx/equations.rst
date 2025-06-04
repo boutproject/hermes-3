@@ -683,7 +683,7 @@ In an additional effort to limit the diffusivitiy to more physical values, a flu
 :math:`D_n` to :math:`D_{n,max}` defined as:
 
 .. math::
-   
+
    \begin{aligned}
    D_{n,max} =& f_l \frac{v_{th,n}}{abs(\nabla ln(P_n) + 1/l_{max}}
    \end{aligned}
@@ -693,6 +693,136 @@ to the maximum vessel mean free path :math:`l_{max}`. The flux limiter :math:`f_
 
 .. doxygenstruct:: NeutralMixed
    :members:
+
+2D/3D: neutral_full_velocity
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This model evolves the equations for a neutral fluid, assuming
+axisymmetry (constant in :math:`Z`), for the density :math:`n_n`,
+velocity :math:`\mathbf{v}_n` and pressure :math:`p_n`.
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{v}_n\right) \nonumber \\
+   \frac{\partial \mathbf{v}_n}{\partial t} =& - \mathbf{v}_n\cdot\nabla\mathbf{v}_n -\frac{1}{n_n}\nabla p_n + \frac{1}{n_n}\nabla\cdot\left(\mu \nabla\mathbf{v}\right) + \frac{1}{n_n}\nabla\left[ \left(\frac{1}{3}\mu + \zeta\right)\nabla\cdot\mathbf{v}_n\right] \\
+   \frac{\partial p_n}{\partial t} =& -\nabla\cdot\left(p_n\mathbf{v}_n\right) - \left(\gamma - 1\right)p_n\nabla\cdot\mathbf{v}_n + \nabla\cdot\left(n_n \chi_n \nabla T_n\right) \nonumber
+   \end{aligned}
+
+where the dissipation parameters :math:`\mu` (kinematic viscosity), :math:`\zeta` (bulk viscosity) and
+:math:`\chi` (thermal conduction) are constants set in the options:
+
+.. code-block:: ini
+
+   [d]
+   type = neutral_full_velocity
+
+   neutral_viscosity = 1.0   # Kinematic viscosity [m^2/s]
+   neutral_bulk = 1.0        # Bulk viscosity [m^2/s]
+   neutral_conduction = 1.0  # Heat conduction [m^2/s]
+
+The contravariant components of :math:`\mathbf{v}_n` are evolved in
+the same :math:`\left(x,y,z\right)` field-aligned coordinate system as
+the plasma.  To evaluate the nonlinear advection term, whilst avoiding
+the use of noisy Christoffel symbols coming from derivatives of basis
+vectors, these components are transformed into
+:math:`\left(R,Z,\phi\right)` cylindrical coordinates, advected, then
+transformed back. This is done using matrices which are calculated in
+the initialisation stage by finite differences of the input mesh:
+
+.. math::
+
+   \begin{aligned}
+   \left(\begin{array}{c}
+   \nabla R \\
+   \nabla Z\end{array}\right) =& \left(\begin{array}{cc}
+   \frac{\partial R}{\partial x} & \frac{\partial R}{\partial y} \\
+   \frac{\partial Z}{\partial x} & \frac{\partial Z}{\partial y}\end{array}\right)\left(\begin{array}{c}
+   \nabla x \\
+   \nabla y\end{array}\right) \\
+   =& \left(\begin{array}{cc}
+   \texttt{Urx} & \texttt{Ury} \\
+   \texttt{Uzx} & \texttt{Uzy} \end{array}\right)\left(\begin{array}{c}
+   \nabla x \\
+   \nabla y\end{array}\right)
+   \end{aligned}
+
+These components are calculated by finite differences of the `Rxy` and
+`Zxy` arrays in the input, then adjusted to match the given values of
+`hthe` and `Bpxy`:
+
+.. math::
+
+   \sqrt{\left(\frac{\partial R}{\partial y}\right)^2 + \left(\frac{\partial R}{\partial y}\right)^2} = h_\theta
+
+
+.. math::
+
+   \sqrt{\left(\frac{\partial R}{\partial x}\right)^2 + \left(\frac{\partial R}{\partial x}\right)^2} = 1 / \left(R B_\theta\right)
+
+
+(Note that this second equality only works if :math:`x` and :math:`y`
+are orthogonal).
+
+This matrix is then inverted, to give:
+
+.. math::
+
+   \begin{aligned}
+   \left(\begin{array}{c}
+   \nabla x \\
+   \nabla y\end{array}\right) =& \left(\begin{array}{cc}
+   \texttt{Txr} & \texttt{Tyr} \\
+   \texttt{Txz} & \texttt{Tyz} \end{array}\right)\left(\begin{array}{c}
+   \nabla R \\
+   \nabla Z\end{array}\right)
+   \end{aligned}
+
+The components of :math:`\mathbf{v}_n` are evolved in covariant form:
+
+.. math::
+
+   \mathbf{v}_n = v_x \nabla x + v_y \nabla y + v_z \nabla z
+
+which is then transformed to :math:`v_r` and :math:`v_Z`:
+
+.. math::
+
+   \begin{aligned}
+   v_r =& \mathbf{v}_n \cdot \nabla R = \frac{\partial x}{\partial R} v_x + \frac{\partial y}{\partial R} v_y \\
+   v_Z =& \mathbf{v}_n \cdot \nabla Z = \frac{\partial x}{\partial Z} v_x +  \frac{\partial y}{\partial Z} v_y
+   \end{aligned}
+
+which are implemented as
+
+.. code-block:: c++
+
+   Field2D vr = Txr * Vn2D.x + Tyr * Vn2D.y;
+   Field2D vz = Txz * Vn2D.x + Tyz * Vn2D.y;
+
+These components are then advected as scalars for the
+:math:`\mathbf{v}_n\cdot\nabla\mathbf{v}_n` term, and are diffused for
+the :math:`\nabla\cdot\left(\mu \nabla\mathbf{v}\right)` dynamic
+viscosity term. The quantity :math:`\left(\frac{1}{3}\mu +
+\zeta\right)\nabla\cdot\mathbf{v}_n` is treated as a pressure (with
+the same boundary conditions as :math:`p_n`), and calculated in
+field-aligned coordinates.
+
+At boundaries neutral thermal energy is lost at a rate controlled by
+the option
+
+.. code-block:: ini
+
+   neutral_gamma = 5./4
+
+This sets the flux of power to the wall to:
+
+.. math::
+
+   q = \gamma n_n T_n c_s
+
+Currently this is only done at target boundaries, not radial
+boundaries.
 
 Drifts and transport
 --------------------
