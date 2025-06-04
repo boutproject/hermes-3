@@ -100,4 +100,5 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   ion_rate = Natom * sigmav;
   add(atom1["collision_frequency"], atom_rate);
   add(ion1["collision_frequency"], ion_rate);
+  set<Field3D>(atom1["K_cx"], atom_rate);
 }

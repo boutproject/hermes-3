@@ -83,6 +83,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
           .withDefault(0.2);
 
+  neutral_lmax = options["neutral_lmax"].doc("Maximum length scale due to the present of walls.")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["meters"]); // Normalised length
+
   diffusion_limit = options["diffusion_limit"]
                         .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
                         .withDefault(-1.0)
@@ -309,9 +312,6 @@ void NeutralMixed::finally(const Options& state) {
 
   Tnlim = softFloor(Tn, temperature_floor);
 
-  BoutReal neutral_lmax =
-    0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
-
   Field3D Rnn =
     sqrt(2.0 * Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
@@ -319,6 +319,7 @@ void NeutralMixed::finally(const Options& state) {
     // Dnn = Vth^2 / nue
     // Dnn = (2.0 * Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
     Dnn = (2.0 * Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]));
+    // Dnn = (2.0 * Tnlim / AA) / (get<Field3D>(localstate["K_cx"]) + get<Field3D>(localstate["K_iz"]) );
   } else {
     Dnn = (2.0 * Tnlim / AA) / Rnn;
   }

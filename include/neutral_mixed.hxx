@@ -71,6 +71,7 @@ private:
   Field3D kappa_n_perp, eta_n_perp;                     ///< Neutral conduction and viscosity
   Field3D kappa_n_par, eta_n_par;                     ///< Neutral conduction and viscosity
 
+  BoutReal neutral_lmax;
 
   bool precondition {true}; ///< Enable preconditioner?
   bool lax_flux; ///< Use Lax flux for advection terms
