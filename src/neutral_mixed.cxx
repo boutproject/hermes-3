@@ -152,7 +152,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   // The dirichlet on diffusivity ensures no radial flux.
   // NV and V are ignored as they are hardcoded in the parallel BC code.
   alloptions[std::string("Dnn") + name]["bndry_all"] =
-      alloptions[std::string("Dnn") + name]["bndry_all"].withDefault("neumann");
+      alloptions[std::string("Dnn") + name]["bndry_all"].withDefault("dirichlet");
   alloptions[std::string("T") + name]["bndry_all"] =
       alloptions[std::string("T") + name]["bndry_all"].withDefault("neumann");
   alloptions[std::string("P") + name]["bndry_all"] =
@@ -165,6 +165,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   Tn.setBoundary(std::string("T") + name);
   Pn.setBoundary(std::string("P") + name);
   Nn.setBoundary(std::string("N") + name);
+  Vn.setBoundary(std::string("V") + name);
 
   // All floored versions of variables get the same boundary as the original
   Tnlim.setBoundary(std::string("T") + name);
@@ -200,7 +201,15 @@ void NeutralMixed::transform(Options& state) {
   Tn.applyBoundary();
 
   Vn = NVn / (AA * Nnlim);
-  Vn.applyBoundary("neumann");
+  // Vn.applyBoundary("neumann");
+  Vn.applyBoundary();
+
+  // NVn.applyBoundary();
+  NVn_solver = NVn; // Save the momentum as calculated by the solver
+  NVn = AA * Nn * Vn; // Re-calculate consistent with V and N
+  // Note: Now NV and NV_solver will differ when N < density_floor
+  NVn_err = NVn - NVn_solver; // This is used in the finally() function
+  NVn.applyBoundary();
 
   Pnlim = softFloor(Pn, pressure_floor);
   Pnlim.applyBoundary();
@@ -633,6 +642,11 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
+  // If N < density_floor then NV and NV_solver may differ
+  // -> Add term to force NV_solver towards NV
+  // Note: This correction is calculated in transform()
+  //       because NV may be modified by electromagnetic terms
+  ddt(NVn) += NVn_err;
 
   // Ste time derivatives to zero
   if (zero_timederivs) {
@@ -690,7 +704,13 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
     }
   }
-  
+
+  // Restore NV to the value returned by the solver
+  // so that restart files contain the correct values
+  // Note: Copy boundary condition so dump file has correct boundary.
+  NVn_solver.setBoundaryTo(NVn);
+  NVn = NVn_solver;
+
 #if CHECKLEVEL >= 1
   for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(Nn)[i])) {

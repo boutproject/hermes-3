@@ -39,6 +39,9 @@ private:
   Field3D Tn; ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim, Tnlim; // Limited in regions of low density
 
+  Field3D NVn_err;       ///< Difference from momentum as input from solver
+  Field3D NVn_solver;    ///< Momentum as calculated in the solver
+
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn;            ///< Diffusion coefficient
