@@ -705,21 +705,22 @@ velocity :math:`\mathbf{v}_n` and pressure :math:`p_n`.
 
    \begin{aligned}
    \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{v}_n\right) \nonumber \\
-   \frac{\partial \mathbf{v}_n}{\partial t} =& - \mathbf{v}_n\cdot\nabla\mathbf{v}_n -\frac{1}{n_n}\nabla p_n + \frac{1}{n_n}\nabla\cdot\left(\mu \nabla\mathbf{v}\right) + \frac{1}{n_n}\nabla\left[ \left(\frac{1}{3}\mu + \zeta\right)\nabla\cdot\mathbf{v}_n\right] \\
-   \frac{\partial p_n}{\partial t} =& -\nabla\cdot\left(p_n\mathbf{v}_n\right) - \left(\gamma - 1\right)p_n\nabla\cdot\mathbf{v}_n + \nabla\cdot\left(n_n \chi_n \nabla T_n\right) \nonumber
+   \frac{\partial \mathbf{v}_n}{\partial t} =& - \mathbf{v}_n\cdot\nabla\mathbf{v}_n -\frac{1}{n_n}\nabla p_n + \frac{1}{n_n}\nabla\cdot\left(\mu \nabla\mathbf{v}\right) + \nabla\cdot\left(\nu \nabla \mathbf{v}_n\right) \\
+   \frac{\partial p_n}{\partial t} =& -\gamma \nabla\cdot\left(p_n\mathbf{v}_n\right) + \left(\gamma - 1\right)\mathbf{v}_n\cdot\nabla p_n + \nabla\cdot\left(n_n \chi_n \nabla T_n\right) \nonumber
    \end{aligned}
 
-where the dissipation parameters :math:`\mu` (kinematic viscosity), :math:`\zeta` (bulk viscosity) and
-:math:`\chi` (thermal conduction) are constants set in the options:
+where the adiabatic index :math:`\gamma` and dissipation parameters
+:math:`\nu` (kinematic viscosity) and :math:`\chi` (thermal
+conduction) are constants set in the options:
 
 .. code-block:: ini
 
    [d]
    type = neutral_full_velocity
 
-   neutral_viscosity = 1.0   # Kinematic viscosity [m^2/s]
-   neutral_bulk = 1.0        # Bulk viscosity [m^2/s]
-   neutral_conduction = 1.0  # Heat conduction [m^2/s]
+   adiabatic_index = 5./3 # Ratio of specific heats
+   viscosity = 1.0   # Kinematic viscosity [m^2/s]
+   conduction = 1.0  # Heat conduction [m^2/s]
 
 The contravariant components of :math:`\mathbf{v}_n` are evolved in
 the same :math:`\left(x,y,z\right)` field-aligned coordinate system as
@@ -778,7 +779,14 @@ This matrix is then inverted, to give:
    \nabla Z\end{array}\right)
    \end{aligned}
 
-The components of :math:`\mathbf{v}_n` are evolved in covariant form:
+The components of :math:`\mathbf{v}_n` are evolved in contravariant form:
+
+.. math::
+
+   \mathbf{v}_n = v^x \mathbf{e}_x + v^y \mathbf{e}_y + v^z \mathbf{e}_z
+
+These components are stored in the output. In the RHS function the
+velocity is converted to covariant form:
 
 .. math::
 
@@ -807,11 +815,26 @@ These components are then advected as scalars for the
 the :math:`\nabla\cdot\left(\mu \nabla\mathbf{v}\right)` kinematic
 viscosity. 
 
-If `curved_torus` is `true` (the default), then toroidal momentum is
-also included. Neutrals travel in straight lines in real space, so
-toroidal flow leads to radial flow. This appears in the :math:`v_r`
-and :math:`v_\phi` equations due to a combination of the radial
-centrifugal force and conservation of toroidal angular momentum.
+The advection of momentum :math:`\mathbf{v}\cdot\nabla\mathbf{v}` is
+controlled by these settings:
+
+#. `momentum_advection` is `false` by default, disabling this
+   nonlinear advection term. This keeps the inertia in the time
+   derivative, but neglects the neutral dynamic pressure in the
+   momentum balance.
+   
+#. `toroidal_flow` is `true` by default, which includes the toroidal
+   (:math:`z`) component of the neutral flow. Importantly, this allows
+   the parallel and poloidal flows to evolve independently: The
+   parallel flow can follow the plasma towards the target, while the
+   poloidal flow can be away from the target.
+
+#. `curved_torus` is `true` by default, and is only active when both
+   `momentum_advection` and `toroidal_flow` are enabled. Neutrals
+   travel in straight lines in real space, so toroidal flow is
+   converted to radial flow. This appears in the :math:`v_r` and
+   :math:`v_\phi` equations due to a combination of the radial
+   centrifugal force and conservation of toroidal angular momentum.
 
 At boundaries neutral thermal energy is lost at a rate controlled by
 the option
