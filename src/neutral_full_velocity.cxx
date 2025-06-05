@@ -42,9 +42,6 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
       options["conduction"].doc("Heat conduction [m^2/s]").withDefault(1.0)
       / (meters * meters / seconds);
 
-  outflow_ydown =
-      options["outflow_ydown"].doc("Allow outflowing neutrals?").withDefault<bool>(false);
-
   neutral_gamma = options["neutral_gamma"]
                       .doc("Surface heat transmission coefficient")
                       .withDefault(5. / 4);
@@ -58,11 +55,19 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
   toroidal_flow =
-      options["toroidal_flow"].doc("Evolve toroidal flow?").withDefault<bool>(false);
+      options["toroidal_flow"].doc("Evolve toroidal flow?").withDefault<bool>(true);
+
+  momentum_advection = options["momentum_advection"]
+                           .doc("Include advection of momentum?")
+                           .withDefault<bool>(false);
 
   curved_torus = options["curved_torus"]
-                     .doc("Include curvature in momentum advection?")
+                     .doc("Include toroidal curvature in momentum advection?")
                      .withDefault<bool>(true);
+
+  // Note: We evolve v^x, v^y and v^z because these have magnitudes close to 1
+  //       whereas v_x, v_y and v_z are >> 1.
+  Vn2D.covariant = false; ///< Evolve contravariant components
 
   // Evolve 2D density, pressure, and velocity
   solver->add(Nn2D, "N" + name);
@@ -211,6 +216,7 @@ void NeutralFullVelocity::transform(Options& state) {
 
   for (RangeIterator idwn = mesh->iterateBndryLowerY(); !idwn.isDone(); idwn.next()) {
     // Diriclet conditions on Y
+    // Since Vn2D is contravariant, this is the poloidal flow
     Vn2D.y(idwn.ind, mesh->ystart - 1) = -Vn2D.y(idwn.ind, mesh->ystart);
 
     // Neumann boundary condition on X and Z components
@@ -235,6 +241,9 @@ void NeutralFullVelocity::transform(Options& state) {
     Pn2D(idwn.ind, mesh->yend + 1) = Pn2D(idwn.ind, mesh->yend);
   }
 
+  Vn2D_contravariant = Vn2D;
+  Vn2D.toCovariant(); // Convenient to work with covariant components
+
   // Exchange of parallel momentum. This could be done
   // in a couple of ways, but here we use the fact that
   // Vn2D is covariant and b = e_y / (JB) to write:
@@ -258,7 +267,7 @@ void NeutralFullVelocity::finally(const Options& state) {
   AUTO_TRACE();
 
   // Density
-  ddt(Nn2D) = -Div(Vn2D, Nn2D);
+  ddt(Nn2D) = -Div(Vn2D_contravariant, Nn2D);
 
   Field2D Nn2D_floor = floor(Nn2D, density_floor);
 
@@ -267,7 +276,8 @@ void NeutralFullVelocity::finally(const Options& state) {
   //       Vn2D.z is proportional to the toroidal angular momentum
   // Poloidal pressure gradients therefore change the parallel flow
   // without changing the toroidal flow.
-  ddt(Vn2D) = -Grad(Pn2D) / (AA * Nn2D_floor);
+  Vector2D GradPn2D = Grad(Pn2D);
+  ddt(Vn2D) = GradPn2D / (-AA * Nn2D_floor);
   ASSERT2(ddt(Vn2D).covariant);
 
   //////////////////////////////////////////////////////
@@ -281,8 +291,13 @@ void NeutralFullVelocity::finally(const Options& state) {
 
   // Advect as scalars (no Christoffel symbols needed)
   // X-Y advection
-  ddt(vr) = -V_dot_Grad(Vn2D, vr);
-  ddt(vz) = -V_dot_Grad(Vn2D, vz);
+  if (momentum_advection) {
+    ddt(vr) = -V_dot_Grad(Vn2D_contravariant, vr);
+    ddt(vz) = -V_dot_Grad(Vn2D_contravariant, vz);
+  } else {
+    ddt(vr) = 0.0;
+    ddt(vz) = 0.0;
+  }
 
   // Viscosity
   ddt(vr) += Laplace_FV(neutral_viscosity, vr);
@@ -294,12 +309,17 @@ void NeutralFullVelocity::finally(const Options& state) {
 
   if (toroidal_flow) {
     Field2D vphi = Vn2D.z / (sigma_Bp * Rxy); // Toroidal component
-    ddt(vphi) = -V_dot_Grad(Vn2D, vphi);
 
-    if (curved_torus) {
-      // Toroidal advection transforms toroidal flow into radial
-      ddt(vphi) -= vphi * vr / Rxy; // Conservation of angular momentum
-      ddt(vr) += vphi * vphi / Rxy; // Centrifugal force
+    if (momentum_advection) {
+      ddt(vphi) = -V_dot_Grad(Vn2D_contravariant, vphi);
+
+      if (curved_torus) {
+        // Toroidal advection transforms toroidal flow into radial
+        ddt(vphi) -= vphi * vr / Rxy; // Conservation of angular momentum
+        ddt(vr) += vphi * vphi / Rxy; // Centrifugal force
+      }
+    } else {
+      ddt(vphi) = 0.0;
     }
 
     // Viscosity
@@ -311,8 +331,9 @@ void NeutralFullVelocity::finally(const Options& state) {
 
   //////////////////////////////////////////////////////
   // Pressure
-  ddt(Pn2D) = -Div(Vn2D, Pn2D) - (adiabatic_index - 1.) * Pn2D * Div(Vn2D)
-              + Laplace_FV(Nn2D * neutral_conduction, Tn2D);
+  ddt(Pn2D) = -adiabatic_index * Div(Vn2D, Pn2D)
+              + (adiabatic_index - 1.) * (Vn2D_contravariant * GradPn2D)
+              + Laplace_FV(Nn2D_floor * neutral_conduction, Tn2D);
 
   ///////////////////////////////////////////////////////////////////
   // Boundary condition on fluxes
@@ -341,9 +362,10 @@ void NeutralFullVelocity::finally(const Options& state) {
         / (sqrt(coord->g_22(r.ind, mesh->ystart))
            + sqrt(coord->g_22(r.ind, mesh->ystart - 1)));
 
-    // Divide by volume of cell, and multiply by 2/3 to get pressure
+    // Divide by volume of cell, and multiply by 2/3 (for a monatomic ideal gas) to get
+    // pressure
     ddt(Pn2D)(r.ind, mesh->ystart) -=
-        (2. / 3) * heatflux
+        (adiabatic_index - 1.) * heatflux
         / (coord->dy(r.ind, mesh->ystart) * coord->J(r.ind, mesh->ystart));
   }
 
@@ -371,9 +393,10 @@ void NeutralFullVelocity::finally(const Options& state) {
                         / (sqrt(coord->g_22(r.ind, mesh->yend))
                            + sqrt(coord->g_22(r.ind, mesh->yend + 1)));
 
-    // Divide by volume of cell, and multiply by 2/3 to get pressure
+    // Divide by volume of cell, and multiply by 2/3 (for a monatomic ideal gas) to get
+    // pressure
     ddt(Pn2D)(r.ind, mesh->yend) -=
-        (2. / 3) * heatflux
+        (adiabatic_index - 1.) * heatflux
         / (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
   }
 
@@ -423,6 +446,9 @@ void NeutralFullVelocity::finally(const Options& state) {
     }
   }
 #endif
+
+  ddt(Vn2D).toContravariant();
+  Vn2D.toContravariant();
 }
 
 /// Add extra fields for output, or set attributes e.g docstrings

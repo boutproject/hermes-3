@@ -33,9 +33,10 @@ private:
 
   BoutReal density_floor; ///< Floor when dividing by density
 
-  Field2D Nn2D;  // Neutral gas density (evolving)
-  Field2D Pn2D;  // Neutral gas pressure (evolving)
-  Vector2D Vn2D; // Neutral gas velocity
+  Field2D Nn2D;                // Neutral gas density (evolving)
+  Field2D Pn2D;                // Neutral gas pressure (evolving)
+  Vector2D Vn2D;               // Neutral gas velocity
+  Vector2D Vn2D_contravariant; ///< Neutral gas velocity v^x, v^y, v^z
   Field2D Tn2D;
 
   // Transformation to cylindrical coordinates
@@ -57,12 +58,10 @@ private:
   BoutReal neutral_conduction; // Neutral gas thermal conduction
   BoutReal neutral_gamma;      // Heat transmission for neutrals
 
-  // Outflowing boundaries for neutrals
-  bool outflow_ydown; // Allow neutral outflows?
-
   // Toroidal advection
-  bool toroidal_flow; ///< Evolve toroidal flow?
-  bool curved_torus;  ///< Include curvature in momentum advection?
+  bool toroidal_flow;      ///< Evolve toroidal flow?
+  bool momentum_advection; ///< Include advection of momentum?
+  bool curved_torus;       ///< Include toroidal curvature in momentum advection?
 
   bool diagnose; ///< Output additional diagnostics?
   Field2D Vnpar; ///< Parallel flow velocity diagnostic
