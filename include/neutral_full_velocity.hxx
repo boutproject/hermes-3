@@ -37,9 +37,10 @@ private:
   Field2D Pn2D;  // Neutral gas pressure (evolving)
   Vector2D Vn2D; // Neutral gas velocity
   Field2D Tn2D;
-  Field2D DivV2D; // Divergence of gas velocity
 
   // Transformation to cylindrical coordinates
+  Field2D Rxy;
+  BoutReal sigma_Bp; // Sign of poloidal field
 
   // Grad x = Txr * Grad R + Txz * Grad Z
   // Grad y = Tyr * Grad R + Tyz * Grad Z
@@ -51,14 +52,17 @@ private:
   Field2D Urx, Ury;
   Field2D Uzx, Uzy;
 
-  BoutReal gamma_ratio;        // Ratio of specific heats
+  BoutReal adiabatic_index;    // Ratio of specific heats
   BoutReal neutral_viscosity;  // Neutral gas viscosity
-  BoutReal neutral_bulk;       // Neutral gas bulk viscosity
   BoutReal neutral_conduction; // Neutral gas thermal conduction
   BoutReal neutral_gamma;      // Heat transmission for neutrals
 
   // Outflowing boundaries for neutrals
   bool outflow_ydown; // Allow neutral outflows?
+
+  // Toroidal advection
+  bool toroidal_flow; ///< Evolve toroidal flow?
+  bool curved_torus;  ///< Include curvature in momentum advection?
 
   bool diagnose; ///< Output additional diagnostics?
   Field2D Vnpar; ///< Parallel flow velocity diagnostic

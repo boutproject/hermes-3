@@ -29,14 +29,14 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
 
   AA = options["AA"].doc("Atomic mass number. Proton = 1").as<int>();
 
-  gamma_ratio = options["gamma_ratio"].doc("Ratio of specific heats").withDefault(5. / 3);
+  adiabatic_index =
+      options["adiabatic_index"]
+          .doc("Ratio of specific heats γ = Cp/Cv [5/3 for monatomic ideal gas]")
+          .withDefault(5. / 3);
 
   neutral_viscosity =
       options["viscosity"].doc("Kinematic viscosity [m^2/s]").withDefault(1.0)
       / (meters * meters / seconds);
-
-  neutral_bulk = options["bulk"].doc("Bulk viscosity [m^2/s]").withDefault(1.0)
-                 / (meters * meters / seconds);
 
   neutral_conduction =
       options["conduction"].doc("Heat conduction [m^2/s]").withDefault(1.0)
@@ -57,12 +57,17 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
+  toroidal_flow =
+      options["toroidal_flow"].doc("Evolve toroidal flow?").withDefault<bool>(false);
+
+  curved_torus = options["curved_torus"]
+                     .doc("Include curvature in momentum advection?")
+                     .withDefault<bool>(true);
+
   // Evolve 2D density, pressure, and velocity
   solver->add(Nn2D, "N" + name);
   solver->add(Pn2D, "P" + name);
   solver->add(Vn2D, "V" + name);
-
-  DivV2D.setBoundary("P" + name); // Same boundary condition as Pn
 
   // Load necessary metrics for non-orth calculation
   Field2D etaxy, cosbeta;
@@ -72,7 +77,7 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   cosbeta = sqrt(1. - SQ(etaxy));
 
   // Calculate transformation to Cartesian coordinates
-  Field2D Rxy, Zxy, hthe, Bpxy;
+  Field2D Zxy, hthe, Bpxy;
 
   if (mesh->get(Rxy, "Rxy")) {
     throw BoutException("Fluid neutrals model requires Rxy");
@@ -92,6 +97,10 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   Zxy /= meters;
   hthe /= meters;
   Bpxy /= Bnorm;
+
+  // Sign of poloidal field
+  sigma_Bp = (Bpxy(mesh->xstart, mesh->ystart) > 0.0) ? 1.0 : -1.0;
+  output.write("\tsigma_Bp = {}\n", sigma_Bp);
 
   // Axisymmetric neutrals simplifies things considerably...
 
@@ -254,7 +263,12 @@ void NeutralFullVelocity::finally(const Options& state) {
   Field2D Nn2D_floor = floor(Nn2D, density_floor);
 
   // Velocity
+  // Note: Vn2D.y is proportional to the parallel flow
+  //       Vn2D.z is proportional to the toroidal angular momentum
+  // Poloidal pressure gradients therefore change the parallel flow
+  // without changing the toroidal flow.
   ddt(Vn2D) = -Grad(Pn2D) / (AA * Nn2D_floor);
+  ASSERT2(ddt(Vn2D).covariant);
 
   //////////////////////////////////////////////////////
   // Momentum advection
@@ -266,47 +280,39 @@ void NeutralFullVelocity::finally(const Options& state) {
   Field2D vz = Txz * Vn2D.x + Tyz * Vn2D.y; // Grad Z component
 
   // Advect as scalars (no Christoffel symbols needed)
+  // X-Y advection
   ddt(vr) = -V_dot_Grad(Vn2D, vr);
   ddt(vz) = -V_dot_Grad(Vn2D, vz);
+
+  // Viscosity
+  ddt(vr) += Laplace_FV(neutral_viscosity, vr);
+  ddt(vz) += Laplace_FV(neutral_viscosity, vz);
 
   // Convert back to field-aligned coordinates
   ddt(Vn2D).x += Urx * ddt(vr) + Uzx * ddt(vz);
   ddt(Vn2D).y += Ury * ddt(vr) + Uzy * ddt(vz);
 
-  //////////////////////////////////////////////////////
-  // Viscosity
-  // This includes dynamic ( neutral_viscosity)
-  // and bulk/volume viscosity ( neutral_bulk )
+  if (toroidal_flow) {
+    Field2D vphi = Vn2D.z / (sigma_Bp * Rxy); // Toroidal component
+    ddt(vphi) = -V_dot_Grad(Vn2D, vphi);
 
-  ddt(vr) = Laplace_FV(neutral_viscosity, vr);
-  ddt(vz) = Laplace_FV(neutral_viscosity, vz);
+    if (curved_torus) {
+      // Toroidal advection transforms toroidal flow into radial
+      ddt(vphi) -= vphi * vr / Rxy; // Conservation of angular momentum
+      ddt(vr) += vphi * vphi / Rxy; // Centrifugal force
+    }
 
-  ddt(Vn2D).x += Urx * ddt(vr) + Uzx * ddt(vz);
-  ddt(Vn2D).y += Ury * ddt(vr) + Uzy * ddt(vz);
+    // Viscosity
+    ddt(vphi) += Laplace_FV(neutral_viscosity, vphi);
 
-  DivV2D = Div(Vn2D);
-  DivV2D.applyBoundary("neumann");
-  mesh->communicate(DivV2D);
-
-  // ddt(Vn2D) += Grad( (neutral_viscosity/3. + neutral_bulk) * DivV2D ) /
-  //   Nn2D_floor;
+    // Convert back to field-aligned
+    ddt(Vn2D).z += ddt(vphi) * sigma_Bp * Rxy;
+  }
 
   //////////////////////////////////////////////////////
   // Pressure
-  ddt(Pn2D) = -Div(Vn2D, Pn2D) - (gamma_ratio - 1.) * Pn2D * DivV2D
+  ddt(Pn2D) = -Div(Vn2D, Pn2D) - (adiabatic_index - 1.) * Pn2D * Div(Vn2D)
               + Laplace_FV(Nn2D * neutral_conduction, Tn2D);
-
-#if CHECKLEVEL >= 3
-  Field2D a = -Div(Vn2D, Pn2D);
-  Field2D b = Laplace_FV(Nn2D * neutral_conduction, Tn2D);
-
-  for (auto& i : Pn2D.getRegion("RGN_NOBNDRY")) {
-    if (!std::isfinite(ddt(Pn2D)[i])) {
-      throw BoutException("1: ddt(P{}) non-finite at {}: {} {} {} {}\n", name, i, Pn2D[i],
-                          DivV2D[i], a[i], b[i]);
-    }
-  }
-#endif
 
   ///////////////////////////////////////////////////////////////////
   // Boundary condition on fluxes
@@ -371,14 +377,6 @@ void NeutralFullVelocity::finally(const Options& state) {
         / (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
   }
 
-#if CHECKLEVEL >= 3
-  for (auto& i : Pn2D.getRegion("RGN_NOBNDRY")) {
-    if (!std::isfinite(ddt(Pn2D)[i])) {
-      throw BoutException("2: ddt(P{}) non-finite at {}\n", name, i);
-    }
-  }
-#endif
-
   /////////////////////////////////////////////////////
   // Atomic processes
 
@@ -390,14 +388,20 @@ void NeutralFullVelocity::finally(const Options& state) {
   }
 
   // Momentum. Note need to turn back into covariant form
+  // The parallel and toroidal components partly cancel when converting
+  // velocity to contravariant form for advection in X-Y.
   if (localstate.isSet("momentum_source")) {
-    ddt(Vn2D).y += DC(get<Field3D>(localstate["momentum_source"]))
-                   * (coord->J * coord->Bxy) / (AA * Nn2D_floor);
+    Field2D Fpar_mN = DC(get<Field3D>(localstate["momentum_source"])) / (AA * Nn2D_floor);
+    ddt(Vn2D).y += Fpar_mN * (coord->J * coord->Bxy); // Parallel flow
+
+    if (toroidal_flow) {
+      ddt(Vn2D).z += Fpar_mN * coord->g_23 / (coord->J * coord->Bxy); // Toroidal flow
+    }
   }
 
   // Energy
   if (localstate.isSet("energy_source")) {
-    ddt(Pn2D) += (2. / 3) * DC(get<Field3D>(localstate["energy_source"]));
+    ddt(Pn2D) += (adiabatic_index - 1) * DC(get<Field3D>(localstate["energy_source"]));
   }
 
 #if CHECKLEVEL >= 2
@@ -445,12 +449,6 @@ void NeutralFullVelocity::outputVars(Options& state) {
                                                 {"long_name", name + " pressure"},
                                                 {"species", name},
                                                 {"source", "neutral_full_velocity"}});
-
-  set_with_attrs(state["DivV2D_" + name], DivV2D,
-                 {{"time_dimension", "t"},
-                  {"units", "s^-1"},
-                  {"conversion", Omega_ci},
-                  {"source", "neutral_full_velocity"}});
 
   set_with_attrs(state["Urx"], Urx, {{"source", "neutral_full_velocity"}});
   set_with_attrs(state["Ury"], Ury, {{"source", "neutral_full_velocity"}});

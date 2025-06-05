@@ -784,13 +784,14 @@ The components of :math:`\mathbf{v}_n` are evolved in covariant form:
 
    \mathbf{v}_n = v_x \nabla x + v_y \nabla y + v_z \nabla z
 
-which is then transformed to :math:`v_r` and :math:`v_Z`:
+which is then transformed to :math:`v_r`, :math:`v_Z` and :math:`v_\phi`:
 
 .. math::
 
    \begin{aligned}
    v_r =& \mathbf{v}_n \cdot \nabla R = \frac{\partial x}{\partial R} v_x + \frac{\partial y}{\partial R} v_y \\
-   v_Z =& \mathbf{v}_n \cdot \nabla Z = \frac{\partial x}{\partial Z} v_x +  \frac{\partial y}{\partial Z} v_y
+   v_Z =& \mathbf{v}_n \cdot \nabla Z = \frac{\partial x}{\partial Z} v_x +  \frac{\partial y}{\partial Z} v_y \\
+   v_\phi =& \mathbf{v}_n \cdot \hat{\phi} = v_z / \left(\sigma_{Bpol} R\right)
    \end{aligned}
 
 which are implemented as
@@ -799,14 +800,18 @@ which are implemented as
 
    Field2D vr = Txr * Vn2D.x + Tyr * Vn2D.y;
    Field2D vz = Txz * Vn2D.x + Tyz * Vn2D.y;
+   Field2D vphi = Vn2D.z / (sigma_Bp * Rxy);
 
 These components are then advected as scalars for the
 :math:`\mathbf{v}_n\cdot\nabla\mathbf{v}_n` term, and are diffused for
-the :math:`\nabla\cdot\left(\mu \nabla\mathbf{v}\right)` dynamic
-viscosity term. The quantity :math:`\left(\frac{1}{3}\mu +
-\zeta\right)\nabla\cdot\mathbf{v}_n` is treated as a pressure (with
-the same boundary conditions as :math:`p_n`), and calculated in
-field-aligned coordinates.
+the :math:`\nabla\cdot\left(\mu \nabla\mathbf{v}\right)` kinematic
+viscosity. 
+
+If `curved_torus` is `true` (the default), then toroidal momentum is
+also included. Neutrals travel in straight lines in real space, so
+toroidal flow leads to radial flow. This appears in the :math:`v_r`
+and :math:`v_\phi` equations due to a combination of the radial
+centrifugal force and conservation of toroidal angular momentum.
 
 At boundaries neutral thermal energy is lost at a rate controlled by
 the option
