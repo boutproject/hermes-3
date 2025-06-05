@@ -7,4 +7,4 @@
 	branch = next
 [submodule "BOUT-spack"]
 	path = BOUT-spack
-	url = https://github.com/oparry-ukaea/BOUT-spack.git
+	url = https://github.com/boutproject/BOUT-spack.git
