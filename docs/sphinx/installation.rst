@@ -424,6 +424,11 @@ then reconcretize, and (re-)install packages as necessary:
    Note that the ``-f`` flag is crucial here. Without it, spack won't overwrite the existing spec
    (stored in spack.lock) and nothing will be updated.
 
+.. important::
+   If you're installing hermes-3 with CMake (i.e. using ``spack install --only dependencies``), this procedure will update the installed 
+   dependencies according to the spec in spack.yaml, but **you'll still need to supply the appropriate configuration options to CMake**.
+   If you're installing hermes-3 with spack directly, the correct configuration options will be set automatically.
+
 Useful spack commands
 ~~~~~~~~~~~~~~~~~~~~~
 
