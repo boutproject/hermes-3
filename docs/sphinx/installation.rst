@@ -287,174 +287,160 @@ workaround is to compile with the CMake flag `-DBOUT_IGNORE_CONDA_ENV=ON`.
 
 
 Using Spack
-----------
+-----------
 
-In these docs we describe how to install Hermes-3 with the assistance of Spack
-to manage the installation of standard modules to the local environment.
-More complicated modules like PETSc, SUNDIALS,
-and BOUT++ that require configuration are installed by Hermes-3 automatically.
-PETSc and SUNDIALS are available through
-Spack, but further effort is required to understand
-how to configure them correctly for Hermes-3
-using the Spack interface. Theses installation instructions were tested on a
-fresh Ubuntu 22.04 LTS.
+In this section we describe how to build Hermes-3 using `spack <https://spack.io/>`_ to manage the
+installation of standard packages to your local environment. By default, dependencies like NetCDF4,
+PETSc and SUNDIALS will be installed by spack, but note that it's also possible to `use your own
+versions of packages <https://spack.readthedocs.io/en/latest/packages_yaml.html#external-packages>`_
+(either system-installed or locally-built).
+
+These instructions were last tested using Ubuntu 22.04.1 and spack version 0.23.1.
+The default environment configuration assumes you have gcc installed.
 
 Install Spack
-~~~~~~~~~~
+~~~~~~~~~~~~~
 
-See the ``spack`` docs here https://spack.readthedocs.io/en/latest/getting_started.html#installation.
-First, get the required basic modules on your linux distribution. According to the Spack docs, these are as follows.
+Instructions for installing spack on a variety of operating systems can be found in the `spack docs <https://spack.readthedocs.io/en/latest/getting_started.html#installation>`_.
+The commands below should work for most Debian-based Linux distributions.
+First, install some prerequisites, e.g for Ubuntu:
 
 .. code-block:: bash
 
-   sudo apt-get update
-   sudo apt-get install build-essential ca-certificates coreutils curl environment-modules gfortran git gpg lsb-release python3 python3-distutils python3-venv unzip zip
+   sudo apt update
+   sudo apt install -y build-essential ca-certificates coreutils curl environment-modules gfortran git gpg lsb-release python3 python3-distutils python3-venv unzip zip
 
-Now, clone ``spack``.
+Now, clone spack (the command below checks out version 0.23.1).
 
 .. code-block:: bash
    
-   git clone -c feature.manyFiles=true --depth=2 https://github.com/spack/spack.git
+   git clone -c feature.manyFiles=true --depth=2 https://github.com/spack/spack.git -b releases/v0.23
 
-Get the Spack functions onto the command line
+Initialise spack. Add this command to your .bashrc or similar to make spack available in all new shells:
 
 .. code-block:: bash
   
    . spack/share/spack/setup-env.sh
 
-Now you can use the ``spack`` function to manage your local environment. See https://spack.readthedocs.io/en/latest/basic_usage.html#installing-and-uninstalling.
-
-Install required modules
-~~~~~~~~~~
-
-Install the required modules
+The ``spack`` command should now be available; e.g.
 
 .. code-block:: bash
-   
-   spack install cmake
-   spack install fftw
-   spack install openmpi
-   spack install netcdf-c
-   spack install netcdf-cxx4
-   spack install python
 
-Then load the modules (you may require to supply specific version numbers and hashes)
+   spack --version
+    > 0.23.1 (2bfcc69fa870d3c6919be87593f22647981b648a)
 
-.. code-block:: bash
-   
-   spack load cmake
-   spack load fftw
-   spack load openmpi
-   spack load netcdf-c
-   spack load netcdf-cxx4
-   spack load python
+Install Dependencies
+~~~~~~~~~~~~~~~~~~~~
 
-Check which modules are loaded with
+First, ensure you have the correct version of the `BOUT-spack` git submodule checked out:
 
 .. code-block:: bash
-  
-   spack find --loaded
 
+   git submodule update --init BOUT-spack
 
-In a recent successful installation, the following modules were loaded.
-
-.. code-block:: bash
-  
-   spack find --loaded
-   -- linux-ubuntu22.04-skylake / gcc@11.4.0 ~~~~~~~~~~---
-   cmake@3.30.5  fftw@3.3.10  netcdf-c@4.9.2  netcdf-cxx4@4.3.1  openmpi@5.0.5  python@3.13.0
-   ==> 6 loaded packages
-
-Check paths to installation for lib, bin, and include files with
+At this point, standard spack commands can be used to activate the environment described in
+``spack.yaml``. Alternatively, a wrapper script is provided that both activates the environment and
+provides some useful bash functions and aliases. To use it, source the file with:
 
 .. code-block:: bash
-  
-   spack find --paths module-of-interest
 
-Make a virtual python environment with 
+   . activate_h3env
 
-.. code-block:: bash
-  
-   python3 -m venv your-python-venv
-   source /path/to/your-python-env/bin/activate
+You should see your prompt change to `[hermes-3]`, indicating that the spack environment is active.
 
-To install the required python libraries later.
-You should install ``xhermes`` https://github.com/boutproject/xhermes with
+To install all dependencies:
 
 .. code-block:: bash
-  
-   git clone https://github.com/boutproject/xhermes.git
-   cd xhermes
-   python3 -m pip install -e .
 
-Install PETSc
-~~~~~~~~~~
+   spack install --only dependencies -j 8
 
-Download the latest PETSc, and configure it.
+where the ``-j`` argument controls the number of parallel processes used to build packages.
 
-.. code-block:: bash
-  
-   wget https://web.cels.anl.gov/projects/petsc/download/release-snapshots/petsc-3.22.1.tar.gz
-   tar -xf petsc-3.22.1.tar.gz
-   cd petsc-3.22.1/ 
-   ./configure --with-mpi=yes --download-hypre --download-make --with-fortran-bindings=0 --with-debugging=0 --download-fblaslapack=1
+This initial install takes some time to complete, because spack builds a large number of low-level
+packages. It's possible to speed things up by defining a `packages.yaml
+<https://spack.readthedocs.io/en/latest/packages_yaml.html>`_  that points to 'external' (system)
+package versions, but unless storage space is a big concern, letting spack build its own versions is
+usually the most trouble-free approach. This step rarely need to be repeated in its entirety unless
+moving to another version of the same compiler, or switching to a different version of spack itself.
 
-PETSc `configure` will now prompt you to make a command like
+.. tip::
+   Note that it's also possible to install hermes-3 itself as a package (remove ``--only
+   dependencies`` from the above). This is the easiest approach if you just want to run the code,
+   but re-installing it each time as part of a development workflow tends to be very slow. See below
+   for an alternative.
 
-.. code-block:: bash
-  
-   make PETSC_DIR=/path/to/petsc-3.22.1/petsc-3.22.1 PETSC_ARCH=your-arch all
+Build Hermes-3 in the Spack environment
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Check the install with
-
-.. code-block:: bash
-  
-   make PETSC_DIR=/path/to/petsc-3.22.1/petsc-3.22.1 PETSC_ARCH=your-arch check
-
-Export the appropriate environment variables
+A convenient way to build Hermes-3 in development is to use the dependencies installed via the
+instructions above and then call ``cmake`` directly to configure and compile Hermes-3. The wrapper
+script provides a bash function ``in_h3env`` that runs commands in the hermes-3 *build* environment,
+setting all of the necessary paths and variables automatically. To build hermes-3 with CMake, run
+(e.g.):
 
 .. code-block:: bash
-   
-   export PETSC_DIR=/path/to/petsc-3.22.1/petsc-3.22.1
-   export PETSC_ARCH=your-arch
 
-Install Hermes-3
-~~~~~~~~~~
+   export h3_build="./builds/my_build" && in_h3env cmake -B "$h3_build" && in_h3env cmake --build "$h3_build" -j8
 
-Now we are ready to install Hermes-3. First use 
+The tests can then be run in the usual way with:
 
 .. code-block:: bash
-  
-   git clone https://github.com/bendudson/hermes-3.git
-   cd hermes-3
 
-Now run
+   cd ./builds/my_build
+   ctest -j 3
+
+If hermes-3 was installed with the +xhermes variant (as it is by default), the tests should pass
+without having to modify any paths.
+
+Configuration options
+~~~~~~~~~~~~~~~~~~~~~
+
+To see which `variants` of hermes-3 are available, run
 
 .. code-block:: bash
-  
-   cmake . -B build -DBOUT_DOWNLOAD_SUNDIALS=ON -DBOUT_USE_PETSC=ON
 
-You will then be prompted to run
+   spack info --no-dependencies --no-versions hermes-3
+
+By default, the top-level *spec* in the environment is `hermes-3%gcc+petsc`, which tells spack to
+configure hermes-3 with PETSc support and build with gcc. To change this, first modify spack.yaml
+(e.g.):
+
+.. code-block:: yaml
+
+   spack:
+      specs:
+         - hermes-3%gcc~petsc~xhermes
+   ...
+
+then reconcretize, and (re-)install packages as necessary:
+
+.. code-block:: bash
+
+   spack concretize -f
+   spack install --only dependencies -j 8
+
+.. warning:: 
+
+   Note that the ``-f`` flag is crucial here. Without it, spack won't overwrite the existing spec
+   (stored in spack.lock) and nothing will be updated.
+
+Useful spack commands
+~~~~~~~~~~~~~~~~~~~~~
+
+See all dependencies required by the current spec:
 
 .. code-block:: bash
   
-   cmake --build /home/mrhardman/hermes-3-work/hermes-3-spack/build
+   spack spec
 
-Test the install by 
-
-.. code-block:: bash
-   
-   cd build
-   ctest
-
-Export a line like the following to your python path to make sure that 
-python functions are available for post processing
+Check paths to installation for lib, bin, and include files:
 
 .. code-block:: bash
- 
-   export PYTHONPATH=/path/to/hermes-3/build/external/BOUT-dev/tools/pylib:/path/to/hermes-3/external/BOUT-dev/tools/pylib:$PYTHONPATH
-
-You are now ready to try running the example runs in the ``build/examples/`` folder. See https://hermes3.readthedocs.io/en/latest/examples.html.
+  
+   spack find --paths [package_name]
 
 
+Next Steps
+----------
 
+You are now ready to try running the examples in the ``build/examples/`` folder. See https://hermes3.readthedocs.io/en/latest/examples.html.
