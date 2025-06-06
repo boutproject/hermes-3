@@ -3,6 +3,7 @@
 #include <bout/output_bout_types.hxx>
 
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
 #include "../include/neutral_full_velocity.hxx"
 
 #include "bout/mesh.hxx"
@@ -203,7 +204,8 @@ void NeutralFullVelocity::transform(Options& state) {
   Nn2D = floor(Nn2D, 0.0);
   Pn2D = floor(Pn2D, 0.0);
 
-  Field2D Nnlim = floor(Nn2D, density_floor);
+  // Non-zero floor can use a differentiable soft floor
+  Field2D Nnlim = softFloor(Nn2D, density_floor);
 
   Tn2D = Pn2D / Nnlim;
   Tn2D.applyBoundary("neumann");
@@ -269,7 +271,7 @@ void NeutralFullVelocity::finally(const Options& state) {
   // Density
   ddt(Nn2D) = -Div(Vn2D_contravariant, Nn2D);
 
-  Field2D Nn2D_floor = floor(Nn2D, density_floor);
+  Field2D Nn2D_floor = softFloor(Nn2D, density_floor);
 
   // Velocity
   // Note: Vn2D.y is proportional to the parallel flow
