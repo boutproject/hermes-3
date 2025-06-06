@@ -13,3 +13,6 @@ BOUT.settings
 
 # IDE config files
 .vscode
+
+# Directory used by scripts/run_eg.sh
+runs
