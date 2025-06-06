@@ -447,8 +447,16 @@ void NeutralFullVelocity::finally(const Options& state) {
   }
 #endif
 
+  // Convert back to contravariant components v^x, v^y, v^z
   ddt(Vn2D).toContravariant();
   Vn2D.toContravariant();
+
+  if (localstate.isSet("collision_frequency")) {
+    // Damp flow perpendicular to B due to collisions
+    Field2D collision_freq = DC(get<Field3D>(localstate["collision_frequency"]));
+    ddt(Vn2D).x -= Vn2D.x * collision_freq;
+    //ddt(Vn2D).z -= Vn2D.z * collision_freq;
+  }
 }
 
 /// Add extra fields for output, or set attributes e.g docstrings
