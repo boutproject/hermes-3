@@ -130,8 +130,8 @@ if [ ! -f "$repo_yaml" ]
     return 
 fi
 
-# Activate the environment
-spacktivate . -p
+# Activate the environment and load the view
+spacktivate . -p -v gcc
 
 # Update build links
 cleanup_h3env

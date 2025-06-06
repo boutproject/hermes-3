@@ -348,6 +348,11 @@ provides some useful bash functions and aliases. To use it, source the file with
 
 You should see your prompt change to `[hermes-3]`, indicating that the spack environment is active.
 
+.. note::
+
+   The wrapper script runs ``spacktivate . -p -v gcc`` to load a 'view' when activating the
+   environment. If you choose not to use the wrapper, you'll need to run a similar command in order
+   for the instructions below to work.
 
 .. note:: 
 
@@ -393,10 +398,11 @@ In the above example, PETSc support is turned on at the configuration stage, whi
 result of installing hermes-3 directly with the default ``spec`` listed in spack.yaml
 (``hermes-3%gcc+petsc``).
 
-The tests can then be run in the usual way with:
+In order to run the tests, load the cmake package to make ``ctest`` available, then run as normal:
 
 .. code-block:: bash
 
+   spack load cmake
    cd ./builds/my_build
    ctest -j 3
 
