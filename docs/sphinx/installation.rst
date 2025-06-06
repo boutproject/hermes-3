@@ -348,6 +348,13 @@ provides some useful bash functions and aliases. To use it, source the file with
 
 You should see your prompt change to `[hermes-3]`, indicating that the spack environment is active.
 
+
+.. note:: 
+
+   If you've run ``spack install`` in this environment before, it's advisable to run ``spack
+   concretize -f`` at this point to ensure the concretized 'spec' is up to date. See the `spack docs
+   <https://spack.readthedocs.io/en/latest/environments.html>`_ for more details.
+
 To install all dependencies:
 
 .. code-block:: bash
@@ -375,12 +382,16 @@ Build Hermes-3 in the Spack environment
 A convenient way to build Hermes-3 in development is to use the dependencies installed via the
 instructions above and then call ``cmake`` directly to configure and compile Hermes-3. The wrapper
 script provides a bash function ``in_h3env`` that runs commands in the hermes-3 *build* environment,
-setting all of the necessary paths and variables automatically. To build hermes-3 with CMake, run
-(e.g.):
+setting all of the necessary paths to find headers, link libraries etc. To build
+hermes-3 with CMake, run (e.g.):
 
 .. code-block:: bash
 
-   export h3_build="./builds/my_build" && in_h3env cmake -B "$h3_build" && in_h3env cmake --build "$h3_build" -j8
+   export h3_build="./builds/my_build" && in_h3env cmake -DBOUT_USE_PETSC=ON -B "$h3_build" && in_h3env cmake --build "$h3_build" -j8
+
+In the above example, PETSc support is turned on at the configuration stage, which emulates the
+result of installing hermes-3 directly with the default ``spec`` listed in spack.yaml
+(``hermes-3%gcc+petsc``).
 
 The tests can then be run in the usual way with:
 
