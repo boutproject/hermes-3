@@ -37,7 +37,7 @@ private:
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
-  Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
+  Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
@@ -47,7 +47,9 @@ private:
   bool sheath_ydown, sheath_yup;
 
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
+  BoutReal temperature_floor;
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
+  bool freeze_low_density; ///< Freeze evolution in low density regions?
 
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
@@ -59,6 +61,7 @@ private:
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
   bool precondition {true}; ///< Enable preconditioner?
+  bool precon_laplacexy {false}; ///< Use LaplaceXY?
   bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 

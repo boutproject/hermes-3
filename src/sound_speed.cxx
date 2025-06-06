@@ -1,15 +1,7 @@
 
 #include "../include/sound_speed.hxx"
-
+#include "../include/hermes_utils.hxx"
 #include <bout/mesh.hxx>
-
-namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
-} // namespace
 
 void SoundSpeed::transform(Options &state) {
   Field3D total_pressure = 0.0;
@@ -39,14 +31,14 @@ void SoundSpeed::transform(Options &state) {
       if (species.isSet("temperature")) {
         auto T = GET_NOBOUNDARY(Field3D, species["temperature"]);
         for (auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
-          BoutReal sound_speed = sqrt(floor(T[i], temperature_floor) / AA);
+          BoutReal sound_speed = sqrt(softFloor(T[i], temperature_floor) / AA);
           fastest_wave[i] = BOUTMAX(fastest_wave[i], sound_speed);
         }
       }
     }
   }
 
-  total_density = floor(total_density, 1e-10);
+  total_density = softFloor(total_density, 1e-10);
   Field3D sound_speed = sqrt(total_pressure / total_density);
   for (auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
     fastest_wave[i] = BOUTMAX(fastest_wave[i], sound_speed[i]);

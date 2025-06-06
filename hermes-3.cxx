@@ -290,12 +290,13 @@ int Hermes::init(bool restarting) {
   return 0;
 }
 
-int Hermes::rhs(BoutReal time) {
+int Hermes::rhs(BoutReal time, bool linear) {
   // Need to reset the state, since fields may be modified in transform steps
   state = Options();
   
   set(state["time"], time);
   state["units"] = units.copy();
+  set(state["linear"], linear);
 
   // Call all the components
   scheduler->transform(state);
