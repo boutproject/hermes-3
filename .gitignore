@@ -7,13 +7,13 @@ BOUT.settings
 *~
 .DS_Store
 /build*
-/docs/build/*
-/docs/doxygen/*
-/docs/sphinx/_breathe*
 
 # Docs
+docs/build
+docs/doxygen
 docs/html
 docs/hermes3.pdf
+docs/sphinx/_breathe*
 
 # IDE config files
 .vscode
