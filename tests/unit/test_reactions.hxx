@@ -113,7 +113,7 @@ protected:
 
           ASSERT_TRUE(IsFieldEqual(test_field, ref_field, "RGN_ALL", tolerance))
               << "'" << this->lbl << "' [" << sp_name << "/" << fld_name << "]"
-              << " differs from reference data ";
+              << " differs from reference data (tolerance is " << tolerance << ") ";
         }
       }
     }
