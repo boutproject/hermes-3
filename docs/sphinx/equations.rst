@@ -836,6 +836,20 @@ controlled by these settings:
    :math:`v_\phi` equations due to a combination of the radial
    centrifugal force and conservation of toroidal angular momentum.
 
+Flow perpendicular to the magnetic field is damped by collisions
+e.g. CX reactions with the plasma. The steady-state flow is therefore
+a balance between the pressure gradient (including dynamic pressure if `momentum_advection` is enabled),
+and this friction. The neutral velocity perpendicular to the magnetic field is:
+
+.. math::
+
+   \begin{aligned}
+   \mathbf{v}_{n\perp} =& \mathbf{v}_{n} - \mathbf{b}\mathbf{b}\cdot\mathbf{v}_{n} \\
+   =& \mathbf{v}_{n} - \mathbf{e}_y\frac{v_{ny}}{g_{yy}} \\
+   =& \mathbf{v}_{n} - \left(\nabla y + \frac{g_{yz}}{g_{yy}}\nabla z\right)v_{ny} \\
+   =& v_{nx}\nabla x + \left(v_{nz} - \frac{g_{yz}}{g_{yy}}v_{ny}\right)\nabla z
+   \end{aligned}
+
 At boundaries neutral thermal energy is lost at a rate controlled by
 the option
 

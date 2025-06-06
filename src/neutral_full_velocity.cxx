@@ -422,6 +422,15 @@ void NeutralFullVelocity::finally(const Options& state) {
     }
   }
 
+  if (localstate.isSet("collision_frequency")) {
+    // Damp flow perpendicular to B due to collisions
+    Field2D collision_freq = DC(get<Field3D>(localstate["collision_frequency"]));
+    // Radial flow
+    ddt(Vn2D).x -= Vn2D.x * collision_freq;
+    // Binormal flow
+    ddt(Vn2D).z -= (Vn2D.z - (coord->g_23 / coord->g_22) * Vn2D.y) * collision_freq;
+  }
+
   // Energy
   if (localstate.isSet("energy_source")) {
     ddt(Pn2D) += (adiabatic_index - 1) * DC(get<Field3D>(localstate["energy_source"]));
@@ -450,13 +459,6 @@ void NeutralFullVelocity::finally(const Options& state) {
   // Convert back to contravariant components v^x, v^y, v^z
   ddt(Vn2D).toContravariant();
   Vn2D.toContravariant();
-
-  if (localstate.isSet("collision_frequency")) {
-    // Damp flow perpendicular to B due to collisions
-    Field2D collision_freq = DC(get<Field3D>(localstate["collision_frequency"]));
-    ddt(Vn2D).x -= Vn2D.x * collision_freq;
-    //ddt(Vn2D).z -= Vn2D.z * collision_freq;
-  }
 }
 
 /// Add extra fields for output, or set attributes e.g docstrings
