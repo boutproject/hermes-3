@@ -13,20 +13,13 @@
 ///
 
 #include "../include/adas_reaction.hxx"
+#include "../include/hermes_utils.hxx"
 #include "../include/integrate.hxx"
 
 #include "../external/json.hxx"
 
 #include <fstream>
 #include <iterator>
-
-namespace {
-  BoutReal floor(BoutReal value, BoutReal min) {
-    if (value < min)
-      return min;
-    return value;
-  }
-}
 
 OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename, int level) {
   AUTO_TRACE();

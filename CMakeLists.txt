@@ -57,7 +57,7 @@ set(HERMES_SOURCES
     src/radiation.cxx
     src/div_ops.cxx
     src/neutral_mixed.cxx
-    src/full_velocity.cxx
+    src/neutral_full_velocity.cxx
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
     src/electron_viscosity.cxx
@@ -125,7 +125,7 @@ set(HERMES_SOURCES
     include/fixed_density.hxx
     include/fixed_fraction_ions.hxx
     include/fixed_velocity.hxx
-    include/full_velocity.hxx
+    include/neutral_full_velocity.hxx
     include/hermes_utils.hxx
     include/hydrogen_charge_exchange.hxx
     include/solkit_hydrogen_charge_exchange.hxx
