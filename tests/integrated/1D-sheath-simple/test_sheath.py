@@ -85,9 +85,9 @@ def collect_all():
         ################################################################################
         # Linear-free boundary
         pytest.param(
-            "sheath_boundary_simple:density_boundary_mode=2 "
-            "sheath_boundary_simple:pressure_boundary_mode=2 "
-            "sheath_boundary_simple:temperature_boundary_mode=2",
+            "sheath_boundary_simple:density_boundary_mode=linear "
+            "sheath_boundary_simple:pressure_boundary_mode=linear "
+            "sheath_boundary_simple:temperature_boundary_mode=linear",
             id="Linear_free boundary mode",
         ),
     ],

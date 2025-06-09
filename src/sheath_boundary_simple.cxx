@@ -18,12 +18,8 @@ namespace {
 ///         ^ boundary
 ///
 /// exp( 2*log(fc) - log(fm) )
-/// Mode 0: default (exponential extrapolation if decreases, Neumann if increases)
-/// Mode 1: always exponential extrapolation
-/// Mode 2: always linear extrapolation
-
-BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
-  if ((fm < fc) && (mode == 0)) {
+BoutReal limitFree(BoutReal fm, BoutReal fc, hermes::SheathLimitMode mode) {
+  if ((fm < fc) && (mode == hermes::SheathLimitMode::limit)) {
     return fc; // Neumann rather than increasing into boundary
   }
   if (fm < 1e-10) {
@@ -31,15 +27,15 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
   }
 
   BoutReal fp = 0;
-  if ((mode == 0) || (mode == 1)) {
-    fp = SQ(fc) / fm; // Exponential
-  } else if (mode == 2) {
-    fp = 2.0 * fc - fm; // Linear
-  } else {
-    throw BoutException("Unknown boundary mode");
+  switch (mode) {
+  case hermes::SheathLimitMode::limit:
+  case hermes::SheathLimitMode::exponential:
+    fp = SQ(fc) / fm;
+    break;
+  case hermes::SheathLimitMode::linear:
+    fp = (2.0 * fc) - fm;
+    break;
   }
-
-  return fp; // Extrapolation
 
 #if CHECKLEVEL >= 2
   if (!std::isfinite(fp)) {
@@ -124,18 +120,18 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
 
   density_boundary_mode =
       options["density_boundary_mode"]
-          .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-          .withDefault<BoutReal>(1);
+          .doc("BC mode: limit, exponential, linear")
+          .withDefault<hermes::SheathLimitMode>(hermes::SheathLimitMode::exponential);
 
   pressure_boundary_mode =
       options["pressure_boundary_mode"]
-          .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-          .withDefault<BoutReal>(1);
+          .doc("BC mode: limit, exponential, linear")
+          .withDefault<hermes::SheathLimitMode>(hermes::SheathLimitMode::exponential);
 
   temperature_boundary_mode =
       options["temperature_boundary_mode"]
-          .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-          .withDefault<BoutReal>(1);
+          .doc("BC mode: limit, exponential, linear")
+          .withDefault<hermes::SheathLimitMode>(hermes::SheathLimitMode::exponential);
 
   diagnose = options["diagnose"]
                  .doc("Save additional output diagnostics")
