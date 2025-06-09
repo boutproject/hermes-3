@@ -61,7 +61,8 @@ in_h3env() {
 # Update the links at <REPO_ROOT>/builds/spack-* such that there's
 # exactly one link for every package returned by 'spack find hermes-3'
 updatelinks_h3env() {
-  local link_prefix="builds/spack-"
+  local links_dir="${REPO_ROOT}/builds"
+  local link_prefix="spack-"
   
   # Use 'spack find' to get the hashes of currently installed hermes-3 packages
   # Discard stderr to suppress error message when no installs are found
@@ -69,21 +70,22 @@ updatelinks_h3env() {
   installed_hashes=$(spack find --format "$identifier_fmt" "hermes-3" 2> /dev/null)
 
   # Create any links for installed packages that don't exist already
+  mkdir -p "${links_dir}"
   for hash in $installed_hashes; do
     spack_build_dir=$(spack location -b "hermes-3/$hash")
-    _create-link "${spack_build_dir}" "${link_prefix}${hash}"
+    _create-link "${spack_build_dir}" "${links_dir}/${link_prefix}${hash}"
   done
 
   # Check whether existing links are still valid (Could also just use find -xtype l ?)
   for l in ${REPO_ROOT}/${link_prefix}*; do
     # Skip if l isn't a link (also guards against case where pattern has zero matches)
     [ ! -L "$l" ] && break;
-    hash=$(echo $l|rev|cut -c -7|rev)
+    hash=$(echo "$l"|rev|cut -c -7|rev)
     # Remove link if 'spack find' returns non-zero for this hash
-    spack find hermes-3/$hash &> /dev/null
+    spack find "hermes-3/$hash" &> /dev/null
     if [ $? -ne 0 ]; then
       echo "    Removing stale link at $l"
-      rm -f $l
+      rm -f "$l"
     fi
   done
 
