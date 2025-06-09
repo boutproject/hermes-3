@@ -35,6 +35,7 @@ private:
 
   Field2D Nn2D;                // Neutral gas density (evolving)
   Field2D Pn2D;                // Neutral gas pressure (evolving)
+  Field2D Pn2D_solver;         // Pn2D from the solver
   Vector2D Vn2D;               // Neutral gas velocity
   Vector2D Vn2D_contravariant; ///< Neutral gas velocity v^x, v^y, v^z
   Field2D Tn2D;
