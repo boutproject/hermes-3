@@ -6,6 +6,7 @@ spack:
   # add package specs to the `specs` list
   specs:
     - hermes-3%gcc+petsc
+    - nec_reactions.reactions~nvcxx+enable_tests ^nec_reactions.neso-particles~nvcxx+build_tests ^openblas ^nec_reactions.adaptivecpp ^hdf5
     - cmake
   view:
     gcc:
@@ -16,6 +17,8 @@ spack:
     unify: when_possible
   repos:
     - ./external/BOUT-spack
+    - ./Reactions/Reactions-repo
+    - ./Reactions/NESO-Spack
     - $spack/var/spack/repos/builtin
   packages:
     all:
@@ -25,3 +28,9 @@ spack:
     hermes-3:
       path: .
       spec: hermes-3@develop
+    reactions:
+      path: ./Reactions
+      spec: reactions@working
+    neso-particles:
+      path: ./Reactions/neso-particles
+      spec: neso-particles@working
