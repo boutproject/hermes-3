@@ -1,0 +1,22 @@
+# Exclude files not needed for the Docker image
+
+# Exclude folders not needed for the build
+.github/*
+docs
+external/googletest
+performance
+scripts
+examples
+
+external/BOUT-dev/.docker
+external/BOUT-dev/.github
+external/BOUT-dev/.gitlab
+external/BOUT-dev/build-aux
+external/BOUT-dev/examples
+external/BOUT-dev/externalpackages/googletest
+external/BOUT-dev/externalpackages/boutdata
+external/BOUT-dev/manual
+external/BOUT-dev/tests
+
+*.png
+*.gif
