@@ -4,6 +4,10 @@
 
 #include "component.hxx"
 
+#include <bout/bout_enum_class.hxx>
+
+BOUT_ENUM_CLASS(SheathLimitMode, limit_free, exponential_free, linear_free);
+
 /// Boundary condition at the wall in Y
 ///
 /// This is a collective component, because it couples all charged species
@@ -98,7 +102,9 @@ private:
 
   bool no_flow; ///< No flow speed, only remove energy
 
-  BoutReal density_boundary_mode, pressure_boundary_mode, temperature_boundary_mode; ///< BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree
+  SheathLimitMode density_boundary_mode;     ///< BC for density
+  SheathLimitMode pressure_boundary_mode;    ///< BC for pressure
+  SheathLimitMode temperature_boundary_mode; ///< BC for temperature
 };
 
 namespace {
