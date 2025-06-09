@@ -5,6 +5,8 @@
 #include <bout/field.hxx>
 #include <bout/mesh.hxx>
 
+#include <algorithm>
+
 using bout::globals::mesh;
 
 namespace {
@@ -44,8 +46,8 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, SheathLimitMode mode) {
 
 } // namespace
 
-SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions,
-                                           Solver*) {
+SheathBoundarySimple::SheathBoundarySimple(const std::string& name, Options& alloptions,
+                                           [[maybe_unused]] Solver* solver) {
   AUTO_TRACE();
 
   Options& options = alloptions[name];
@@ -166,7 +168,7 @@ void SheathBoundarySimple::transform(Options& state) {
     ion_sum = 0.0;
 
     // Iterate through charged ion species
-    for (auto& kv : allspecies.getChildren()) {
+    for (const auto& kv : allspecies.getChildren()) {
       const Options& species = kv.second;
 
       if ((kv.first == "e") or !species.isSet("charge")
@@ -209,9 +211,7 @@ void SheathBoundarySimple::transform(Options& state) {
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
             BoutReal visheath = -sqrt(C_i_sq);
-            if (Vi[i] < visheath) {
-              visheath = Vi[i];
-            }
+            visheath = std::min(Vi[i], visheath);
 
             ion_sum[i] -= Zi * nisheath * visheath;
           }
@@ -240,9 +240,7 @@ void SheathBoundarySimple::transform(Options& state) {
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
             BoutReal visheath = sqrt(C_i_sq);
-            if (Vi[i] > visheath) {
-              visheath = Vi[i];
-            }
+            visheath = std::max(Vi[i], visheath);
 
             ion_sum[i] += Zi * nisheath * visheath;
           }
@@ -480,7 +478,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
   //////////////////////////////////////////////////////////////////
   // Iterate through all ions
-  for (auto& kv : allspecies.getChildren()) {
+  for (const auto& kv : allspecies.getChildren()) {
     if (kv.first == "e") {
       continue; // Skip electrons
     }
@@ -554,9 +552,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
           BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
 
-          if (Vi[i] < visheath) {
-            visheath = Vi[i];
-          }
+          visheath = std::min(Vi[i], visheath);
 
           // Note: Here this is negative because visheath < 0
           BoutReal q = gamma_i * tisheath * nisheath * visheath;
@@ -623,9 +619,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
           BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
 
-          if (Vi[i] > visheath) {
-            visheath = Vi[i];
-          }
+          visheath = std::max(Vi[i], visheath);
 
           BoutReal q = gamma_i * tisheath * nisheath * visheath;
 

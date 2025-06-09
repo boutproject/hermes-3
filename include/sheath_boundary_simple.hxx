@@ -31,7 +31,7 @@ struct SheathBoundarySimple : public Component {
   ///   - secondary_electron_coef  Effective secondary electron emission coefficient
   ///   - sin_alpha                Sine of the angle between magnetic field line and wall surface (0 to 1)
   ///   - always_set_phi           Always set phi field? Default is to only modify if already set
-  SheathBoundarySimple(std::string name, Options &options, Solver *);
+  SheathBoundarySimple(const std::string& name, Options &options, [[maybe_unused]] Solver* solver);
 
   ///
   /// # Inputs
