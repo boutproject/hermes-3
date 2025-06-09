@@ -419,13 +419,13 @@ To see which `variants` of hermes-3 are available, run
 
 By default, the top-level *spec* in the environment is `hermes-3%gcc+petsc`, which tells spack to
 configure hermes-3 with PETSc support and build with gcc. To change this, first modify spack.yaml
-(e.g.):
+(e.g. to configure without PETSc support):
 
 .. code-block:: yaml
 
    spack:
       specs:
-         - hermes-3%gcc~petsc~xhermes
+         - hermes-3%gcc~petsc
    ...
 
 then reconcretize, and (re-)install packages as necessary:
