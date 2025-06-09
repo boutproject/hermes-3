@@ -9,28 +9,30 @@ manual: all
 pdf: sphinx-pdf
 html: sphinx-html
 man: sphinx-man
-sphinx: sphinx-pdf
+sphinx: sphinx-html
 
-sphinx-pdf: doxygen
+.PHONY: breathe-autogen, doxygen-build, clean, html, man, manual, pdf, sphinx, sphinx-html, sphinx-man, sphinx-pdf
+
+sphinx-pdf: doxygen-build
 	$(sphinx-build) -b latex sphinx/ build/
 	cd build && latexmk -pdf hermes3
 	test -e hermes3.pdf || ln -s build/hermes3.pdf .
 	@echo "Documentation is available in `pwd`/hermes3.pdf"
 
-sphinx-html: doxygen
+sphinx-html: doxygen-build
 	$(sphinx-build) -b html sphinx/ html/
 	@echo "Documentation available in file://`pwd`/html/index.html"
 
-sphinx-man: doxygen
+sphinx-man: doxygen-build
 	$(sphinx-build) -b man sphinx/ man/
 	@echo "Documentation available in `pwd`/man/hermes3.1"
 
 # Run doxygen, ignore if it fails (leading '-')
-doxygen:
+doxygen-build:
 	-cd doxygen && doxygen Doxyfile
 
 # Run breathe-apidoc, ignore if it fails (leading '-')
-breathe-autogen: doxygen
+breathe-autogen: doxygen-build
 	-breathe-apidoc -f -o sphinx/_breathe_autogen doxygen/hermes3/xml
 
 clean:
