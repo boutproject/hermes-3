@@ -6,8 +6,8 @@
 #include <bout/output_bout_types.hxx>
 
 #include "../include/div_ops.hxx"
-#include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
+#include "../include/hermes_utils.hxx"
 #include "../include/neutral_mixed.hxx"
 
 using bout::globals::mesh;
@@ -57,16 +57,18 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                    .withDefault<bool>(true);
 
   density_floor = options["density_floor"]
-                 .doc("A minimum density used when dividing NVn by Nn. "
-                      "Normalised units.")
-                 .withDefault(1e-8);
+                      .doc("A minimum density used when dividing NVn by Nn. "
+                           "Normalised units.")
+                      .withDefault(1e-8);
 
   freeze_low_density = options["freeze_low_density"]
-    .doc("Freeze evolution in low density regions?")
-    .withDefault<bool>(false);
+                           .doc("Freeze evolution in low density regions?")
+                           .withDefault<bool>(false);
 
-  temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
-    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+  temperature_floor = options["temperature_floor"]
+                          .doc("Low temperature scale for low_T_diffuse_perp")
+                          .withDefault<BoutReal>(0.1)
+                      / get<BoutReal>(alloptions["units"]["eV"]);
 
   pressure_floor = density_floor * temperature_floor;
 
@@ -74,9 +76,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                      .doc("Enable preconditioning in neutral model?")
                      .withDefault<bool>(false);
 
-  lax_flux = options["lax_flux"]
-                     .doc("Enable stabilising lax flux?")
-                     .withDefault<bool>(true);
+  lax_flux =
+      options["lax_flux"].doc("Enable stabilising lax flux?").withDefault<bool>(true);
 
   flux_limit =
       options["flux_limit"]
@@ -93,8 +94,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .withDefault<bool>(true);
 
   neutral_conduction = options["neutral_conduction"]
-                          .doc("Include neutral gas heat conduction?")
-                          .withDefault<bool>(true);
+                           .doc("Include neutral gas heat conduction?")
+                           .withDefault<bool>(true);
 
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
@@ -176,10 +177,20 @@ void NeutralMixed::transform(Options& state) {
   Nn = floor(Nn, 0.0);
   Pn = floor(Pn, 0.0);
 
-  // Nnlim Used where division by neutral density is needed
+  // Nnlim is used where division by neutral density is needed
+  // The equation of state is modified at low density:
+  //
+  // e = Cv T Nlim / N    <- Specific internal energy
+  // p = N T
+  //
+  // The internal energy evolution of (N * e) is therefore
+  // evolving Pn_solver = Nlim * Tn
+  // rather than pressure Pn = Nn * Tn
   Nnlim = softFloor(Nn, density_floor);
-  Tn = Pn / Nnlim;
+  Tn = Pn / Nnlim; // Internal energy
   Tn.applyBoundary();
+  Pn_solver = Pn; // Save solver variable to restore later
+  Pn = Tn * Nn;   // Equation of state, so Pn is now pressure
 
   Vn = NVn / (AA * Nnlim);
   Vn.applyBoundary("neumann");
@@ -282,10 +293,10 @@ void NeutralMixed::finally(const Options& state) {
   Field3D Tnlim = softFloor(Tn, temperature_floor);
 
   BoutReal neutral_lmax =
-    0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
+      0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
-  Field3D Rnn =
-    sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+  Field3D Rnn = sqrt(Tnlim / AA)
+                / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
     // Dnn = Vth^2 / sigma
@@ -297,7 +308,8 @@ void NeutralMixed::finally(const Options& state) {
   if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    Field3D Dmax =
+        flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
       Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
     }
@@ -355,7 +367,7 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
-  // Heat conductivity 
+  // Heat conductivity
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
   //       where nu is the collision frequency used in Dnn
   kappa_n = (5. / 2) * DnnNn;
@@ -373,12 +385,11 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral density
   TRACE("Neutral density");
 
-  ddt(Nn) =
-    - FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed, pf_adv_par_ylow); // Parallel advection
+  ddt(Nn) = -FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed,
+                                         pf_adv_par_ylow); // Parallel advection
 
-  ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim,
-                                   pf_adv_perp_xlow,
-                                   pf_adv_perp_ylow);    // Perpendicular advection
+  ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow,
+                                   pf_adv_perp_ylow); // Perpendicular advection
 
   Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
@@ -390,32 +401,36 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = - (5. / 3) * FV::Div_par_mod<ParLimiter>(       // Parallel advection
-                    Pn, Vn, sound_speed, ef_adv_par_ylow)
-            + (2. / 3) * Vn * Grad_par(Pn)                  // Work done
-            + (5. / 3) * Div_a_Grad_perp_flows(             // Perpendicular advection
-                    DnnPn, logPnlim,
-                    ef_adv_perp_xlow, ef_adv_perp_ylow)  
-     ;
+  // The equation of state is modified by the density floor,
+  // so the advection of internal energy and work done are combined as:
+  Field3D e_plus_p = Nnlim * Tn + (2. / 3) * Pn;
+
+  ddt(Pn) = -FV::Div_par_mod<ParLimiter>( // Parallel advection
+                e_plus_p, Vn, sound_speed, ef_adv_par_ylow)
+            + (2. / 3) * Vn * Grad_par(Pn) // Work done
+            + Div_a_Grad_perp_flows(       // Perpendicular advection
+                Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
-  ef_adv_par_ylow  *= 5/2;
-  ef_adv_perp_xlow *= 5/2; 
-  ef_adv_perp_ylow *= 5/2;
+  ef_adv_par_ylow *= 5 / 2;
+  ef_adv_perp_xlow *= 5 / 2;
+  ef_adv_perp_ylow *= 5 / 2;
 
   if (neutral_conduction) {
-    ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(
-                    kappa_n, Tn,                            // Perpendicular conduction
-                    ef_cond_perp_xlow, ef_cond_perp_ylow)
+    ddt(Pn) +=
+        (2. / 3)
+            * Div_a_Grad_perp_flows(kappa_n, Tn, // Perpendicular conduction
+                                    ef_cond_perp_xlow, ef_cond_perp_ylow)
 
-            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
-                      ef_cond_par_ylow,        
-                      false)  // No conduction through target boundary
-      ;
+        + (2. / 3)
+              * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction
+                                       ef_cond_par_ylow,
+                                       false) // No conduction through target boundary
+        ;
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-    ef_cond_perp_xlow *= 3/2;
-    ef_cond_perp_ylow *= 3/2;
-    ef_cond_par_ylow *= 3/2;
+    ef_cond_perp_xlow *= 3 / 2;
+    ef_cond_perp_ylow *= 3 / 2;
+    ef_cond_par_ylow *= 3 / 2;
   }
 
   Sp = pressure_source;
@@ -430,16 +445,15 @@ void NeutralMixed::finally(const Options& state) {
     // Neutral momentum
     TRACE("Neutral momentum");
 
-    ddt(NVn) =
-        -AA * FV::Div_par_fvv<ParLimiter>(             // Momentum flow
-              Nnlim, Vn, sound_speed)                  
+    ddt(NVn) = -AA
+                   * FV::Div_par_fvv<ParLimiter>( // Momentum flow
+                       Nnlim, Vn, sound_speed)
 
-        - Grad_par(Pn)                                 // Pressure gradient
-        
-        + Div_a_Grad_perp_flows(DnnNVn, logPnlim,
-                                     mf_adv_perp_xlow,
-                                     mf_adv_perp_ylow) // Perpendicular advection
-      ;
+               - Grad_par(Pn) // Pressure gradient
+
+               + Div_a_Grad_perp_flows(DnnNVn, logPnlim, mf_adv_perp_xlow,
+                                       mf_adv_perp_ylow) // Perpendicular advection
+        ;
 
     if (neutral_viscosity) {
       // NOTE: The following viscosity terms are not (yet) balanced
@@ -451,19 +465,20 @@ void NeutralMixed::finally(const Options& state) {
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = AA * Div_a_Grad_perp_flows(
-                                eta_n, Vn,              // Perpendicular viscosity
-                                mf_visc_perp_xlow,
-                                mf_visc_perp_ylow)    
-                              
-                              + AA * Div_par_K_Grad_par_mod(               // Parallel viscosity 
-                                eta_n, Vn,
-                                mf_visc_par_ylow,
-                                false) // No viscosity through target boundary
-                          ;
+      Field3D viscosity_source =
+          AA
+              * Div_a_Grad_perp_flows(eta_n, Vn, // Perpendicular viscosity
+                                      mf_visc_perp_xlow,
+                                      mf_visc_perp_ylow)
+
+          + AA
+                * Div_par_K_Grad_par_mod( // Parallel viscosity
+                    eta_n, Vn, mf_visc_par_ylow,
+                    false) // No viscosity through target boundary
+          ;
 
       ddt(NVn) += viscosity_source;
-      ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
+      ddt(Pn) += -(2. / 3) * Vn * viscosity_source;
     }
 
     if (localstate.isSet("momentum_source")) {
@@ -510,9 +525,11 @@ void NeutralMixed::finally(const Options& state) {
 
     for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
       // Local average density.
-      // The purpose is to turn on evolution when nearby cells contain significant density.
-      const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
-      const BoutReal factor = exp(- density_floor / meanNn);
+      // The purpose is to turn on evolution when nearby cells contain significant
+      // density.
+      const BoutReal meanNn =
+          (1. / 6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
+      const BoutReal factor = exp(-density_floor / meanNn);
       ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
       ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
       ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
@@ -532,6 +549,9 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 #endif
+
+  // Restore solver Pn
+  Pn = Pn_solver;
 }
 
 void NeutralMixed::outputVars(Options& state) {
@@ -645,56 +665,62 @@ void NeutralMixed::outputVars(Options& state) {
 
     // Particle flows due to advection
     if (pf_adv_perp_xlow.isAllocated()) {
-      set_with_attrs(state[fmt::format("pf{}_adv_perp_xlow", name)], pf_adv_perp_xlow,
-                   {{"time_dimension", "t"},
-                    {"units", "s^-1"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
-                    {"standard_name", "particle flow"},
-                    {"long_name", name + " radial component of perpendicular advection flow."},
-                    {"species", name},
-                    {"source", "neutral_mixed"}});
+      set_with_attrs(
+          state[fmt::format("pf{}_adv_perp_xlow", name)], pf_adv_perp_xlow,
+          {{"time_dimension", "t"},
+           {"units", "s^-1"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+           {"standard_name", "particle flow"},
+           {"long_name", name + " radial component of perpendicular advection flow."},
+           {"species", name},
+           {"source", "neutral_mixed"}});
     }
     if (pf_adv_perp_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("pf{}_adv_perp_ylow", name)], pf_adv_perp_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "s^-1"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
-                    {"standard_name", "particle flow"},
-                    {"long_name", name + " poloidal component of perpendicular advection flow."},
-                    {"species", name},
-                    {"source", "evolve_density"}});
+      set_with_attrs(
+          state[fmt::format("pf{}_adv_perp_ylow", name)], pf_adv_perp_ylow,
+          {{"time_dimension", "t"},
+           {"units", "s^-1"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+           {"standard_name", "particle flow"},
+           {"long_name", name + " poloidal component of perpendicular advection flow."},
+           {"species", name},
+           {"source", "evolve_density"}});
     }
     if (pf_adv_par_ylow.isAllocated()) {
       set_with_attrs(state[fmt::format("pf{}_adv_par_ylow", name)], pf_adv_par_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "s^-1"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
-                    {"standard_name", "particle flow"},
-                    {"long_name", name + " parallel advection flow."},
-                    {"species", name},
-                    {"source", "evolve_density"}});
+                     {{"time_dimension", "t"},
+                      {"units", "s^-1"},
+                      {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+                      {"standard_name", "particle flow"},
+                      {"long_name", name + " parallel advection flow."},
+                      {"species", name},
+                      {"source", "evolve_density"}});
     }
 
     // Momentum flows due to advection
     if (mf_adv_perp_xlow.isAllocated()) {
-      set_with_attrs(state[fmt::format("mf{}_adv_perp_xlow", name)], mf_adv_perp_xlow,
-                   {{"time_dimension", "t"},
-                    {"units", "N"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum flow"},
-                    {"long_name", name + " radial component of perpendicular momentum advection flow."},
-                    {"species", name},
-                    {"source", "evolve_momentum"}});
+      set_with_attrs(
+          state[fmt::format("mf{}_adv_perp_xlow", name)], mf_adv_perp_xlow,
+          {{"time_dimension", "t"},
+           {"units", "N"},
+           {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+           {"standard_name", "momentum flow"},
+           {"long_name",
+            name + " radial component of perpendicular momentum advection flow."},
+           {"species", name},
+           {"source", "evolve_momentum"}});
     }
     if (mf_adv_perp_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("mf{}_adv_perp_ylow", name)], mf_adv_perp_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "N"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum flow"},
-                    {"long_name", name + " poloidal component of perpendicular momentum advection flow."},
-                    {"species", name},
-                    {"source", "evolve_momentum"}});
+      set_with_attrs(
+          state[fmt::format("mf{}_adv_perp_ylow", name)], mf_adv_perp_ylow,
+          {{"time_dimension", "t"},
+           {"units", "N"},
+           {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+           {"standard_name", "momentum flow"},
+           {"long_name",
+            name + " poloidal component of perpendicular momentum advection flow."},
+           {"species", name},
+           {"source", "evolve_momentum"}});
     }
     // This one is awaiting flow implementation into Div_par_fvv
 
@@ -702,109 +728,116 @@ void NeutralMixed::outputVars(Options& state) {
     //   set_with_attrs(state[fmt::format("mf{}_adv_par_ylow", name)], mf_adv_par_ylow,
     //                {{"time_dimension", "t"},
     //                 {"units", "N"},
-    //                 {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+    //                 {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 *
+    //                 Omega_ci},
     //                 {"standard_name", "momentum flow"},
-    //                 {"long_name", name + " parallel momentum advection flow. Note: May be incomplete."},
+    //                 {"long_name", name + " parallel momentum advection flow. Note: May
+    //                 be incomplete."},
     //                 {"species", name},
     //                 {"source", "evolve_momentum"}});
     // }
 
-
     // Momentum flows due to viscosity
     if (mf_visc_perp_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("mf{}_visc_perp_ylow", name)], mf_visc_perp_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "N"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum flow"},
-                    {"long_name", name + " poloidal component of perpendicular viscosity."},
-                    {"species", name},
-                    {"source", "evolve_momentum"}});
+      set_with_attrs(
+          state[fmt::format("mf{}_visc_perp_ylow", name)], mf_visc_perp_ylow,
+          {{"time_dimension", "t"},
+           {"units", "N"},
+           {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+           {"standard_name", "momentum flow"},
+           {"long_name", name + " poloidal component of perpendicular viscosity."},
+           {"species", name},
+           {"source", "evolve_momentum"}});
     }
     if (mf_visc_perp_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("mf{}_visc_perp_ylow", name)], mf_visc_perp_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "N"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum flow"},
-                    {"long_name", name + " poloidal component of perpendicular viscosity."},
-                    {"species", name},
-                    {"source", "evolve_momentum"}});
+      set_with_attrs(
+          state[fmt::format("mf{}_visc_perp_ylow", name)], mf_visc_perp_ylow,
+          {{"time_dimension", "t"},
+           {"units", "N"},
+           {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+           {"standard_name", "momentum flow"},
+           {"long_name", name + " poloidal component of perpendicular viscosity."},
+           {"species", name},
+           {"source", "evolve_momentum"}});
     }
     if (mf_visc_par_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("mf{}_visc_par_ylow", name)], mf_visc_par_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "N"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum flow"},
-                    {"long_name", name + " parallel viscosity."},
-                    {"species", name},
-                    {"source", "evolve_momentum"}});
+      set_with_attrs(
+          state[fmt::format("mf{}_visc_par_ylow", name)], mf_visc_par_ylow,
+          {{"time_dimension", "t"},
+           {"units", "N"},
+           {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+           {"standard_name", "momentum flow"},
+           {"long_name", name + " parallel viscosity."},
+           {"species", name},
+           {"source", "evolve_momentum"}});
     }
-
 
     // Energy flows due to advection
     if (ef_adv_perp_xlow.isAllocated()) {
-      set_with_attrs(state[fmt::format("ef{}_adv_perp_xlow", name)], ef_adv_perp_xlow,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " radial component of perpendicular energy advection."},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+      set_with_attrs(
+          state[fmt::format("ef{}_adv_perp_xlow", name)], ef_adv_perp_xlow,
+          {{"time_dimension", "t"},
+           {"units", "W"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+           {"standard_name", "power"},
+           {"long_name", name + " radial component of perpendicular energy advection."},
+           {"species", name},
+           {"source", "evolve_pressure"}});
     }
     if (ef_adv_perp_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("ef{}_adv_perp_ylow", name)], ef_adv_perp_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " poloidal component of perpendicular energy advection."},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+      set_with_attrs(
+          state[fmt::format("ef{}_adv_perp_ylow", name)], ef_adv_perp_ylow,
+          {{"time_dimension", "t"},
+           {"units", "W"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+           {"standard_name", "power"},
+           {"long_name", name + " poloidal component of perpendicular energy advection."},
+           {"species", name},
+           {"source", "evolve_pressure"}});
     }
     if (ef_adv_par_ylow.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_adv_par_ylow", name)], ef_adv_par_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " parallel energy advection."},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+                     {{"time_dimension", "t"},
+                      {"units", "W"},
+                      {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                      {"standard_name", "power"},
+                      {"long_name", name + " parallel energy advection."},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
     }
 
     // Energy flows due to conduction
     if (ef_cond_perp_xlow.isAllocated()) {
-      set_with_attrs(state[fmt::format("ef{}_cond_perp_xlow", name)], ef_cond_perp_xlow,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " radial component of perpendicular conduction."},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+      set_with_attrs(
+          state[fmt::format("ef{}_cond_perp_xlow", name)], ef_cond_perp_xlow,
+          {{"time_dimension", "t"},
+           {"units", "W"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+           {"standard_name", "power"},
+           {"long_name", name + " radial component of perpendicular conduction."},
+           {"species", name},
+           {"source", "evolve_pressure"}});
     }
     if (ef_cond_perp_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("ef{}_cond_perp_ylow", name)], ef_cond_perp_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " poloidal component of perpendicular conduction."},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+      set_with_attrs(
+          state[fmt::format("ef{}_cond_perp_ylow", name)], ef_cond_perp_ylow,
+          {{"time_dimension", "t"},
+           {"units", "W"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+           {"standard_name", "power"},
+           {"long_name", name + " poloidal component of perpendicular conduction."},
+           {"species", name},
+           {"source", "evolve_pressure"}});
     }
     if (ef_cond_par_ylow.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_cond_par_ylow", name)], ef_cond_par_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " parallel conduction."},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+                     {{"time_dimension", "t"},
+                      {"units", "W"},
+                      {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                      {"standard_name", "power"},
+                      {"long_name", name + " parallel conduction."},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
     }
   }
 }
@@ -822,8 +855,7 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   mesh->communicate(DTdtN);
   DTdtN.applyBoundary("dirichlet");
 
-  ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(DTdtN,
-                                                  logPnlim);
+  ddt(Pn) -= (gamma * 5. / 3) * FV::Div_a_Grad_perp(DTdtN, logPnlim);
 
   // Second matrix: Invert Pshur
   //   (E^-1   0  )
@@ -831,12 +863,12 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   //
   // d Laplace_perp(x) + a x + (1/c1)Grad(c2) dot Grad_perp(x) = b
   inv->setCoefA(1 - gamma * FV::Div_a_Grad_perp(Dnn, logPnlim));
-  inv->setCoefC1(-1. / ((gamma * 5./3) * Dnn));
+  inv->setCoefC1(-1. / ((gamma * 5. / 3) * Dnn));
   inv->setCoefC2(logPnlim);
-  inv->setCoefD((-gamma * 5./3) * Dnn);
+  inv->setCoefD((-gamma * 5. / 3) * Dnn);
 
-  //inv->setInnerBoundaryFlags(INVERT_DC_GRAD);
-  //inv->setOuterBoundaryFlags(INVERT_DC_GRAD);
+  // inv->setInnerBoundaryFlags(INVERT_DC_GRAD);
+  // inv->setOuterBoundaryFlags(INVERT_DC_GRAD);
 
   ddt(Pn) = inv->solve(ddt(Pn));
   mesh->communicate(ddt(Pn));
@@ -863,5 +895,4 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
       throw BoutException("Precon ddt(NV{}) non-finite at {}\n", name, i);
     }
   }
-
 }

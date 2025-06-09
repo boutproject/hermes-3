@@ -17,26 +17,28 @@ struct NeutralMixed : public Component {
   /// @param name     The name of the species e.g. "h"
   /// @param options  Top-level options. Settings will be taken from options[name]
   /// @param solver   Time-integration solver to be used
-  NeutralMixed(const std::string& name, Options& options, Solver *solver);
-  
+  NeutralMixed(const std::string& name, Options& options, Solver* solver);
+
   /// Modify the given simulation state
-  void transform(Options &state) override;
-  
+  void transform(Options& state) override;
+
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
-  void finally(const Options &state) override;
+  void finally(const Options& state) override;
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
 
   /// Preconditioner
-  void precon(const Options &state, BoutReal gamma) override;
+  void precon(const Options& state, BoutReal gamma) override;
+
 private:
-  std::string name;  ///< Species name
-  
-  Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
-  Field3D Vn; ///< Neutral parallel velocity
-  Field3D Tn; ///< Neutral temperature
+  std::string name; ///< Species name
+
+  Field3D Nn, Pn, NVn;            // Density, pressure and parallel momentum
+  Field3D Pn_solver;              // Saved to restore in finally
+  Field3D Vn;                     ///< Neutral parallel velocity
+  Field3D Tn;                     ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
@@ -51,26 +53,26 @@ private:
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
   bool freeze_low_density; ///< Freeze evolution in low density regions?
 
-  BoutReal flux_limit; ///< Diffusive flux limit
-  BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
+  BoutReal flux_limit;      ///< Diffusive flux limit
+  BoutReal diffusion_limit; ///< Maximum diffusion coefficient
 
-  bool neutral_viscosity; ///< include viscosity?
+  bool neutral_viscosity;  ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
-  bool evolve_momentum; ///< Evolve parallel momentum?
-  
+  bool evolve_momentum;    ///< Evolve parallel momentum?
+
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
-  bool precondition {true}; ///< Enable preconditioner?
-  bool precon_laplacexy {false}; ///< Use LaplaceXY?
-  bool lax_flux; ///< Use Lax flux for advection terms
+  bool precondition{true};        ///< Enable preconditioner?
+  bool precon_laplacexy{false};   ///< Use LaplaceXY?
+  bool lax_flux;                  ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
   Field3D density_source, pressure_source; ///< External input source
-  Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
-  Field3D sound_speed; ///< Sound speed for use with Lax flux
+  Field3D Sn, Sp, Snv;                     ///< Particle, pressure and momentum source
+  Field3D sound_speed;                     ///< Sound speed for use with Lax flux
 
   bool output_ddt; ///< Save time derivatives?
-  bool diagnose; ///< Save additional diagnostics?
+  bool diagnose;   ///< Save additional diagnostics?
 
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
