@@ -10,6 +10,9 @@
 # Record top-level dir
 REPO_ROOT=$( cd -- "$(realpath $( dirname -- "${BASH_SOURCE[0]}" ))" &> /dev/null && pwd )
 
+# Save shell options
+OLD_SHOPTS="$(set +o)"
+
 #======================= Convenience aliases/functions ========================
 
 # Creates a link to the specified target (first argument) with the specified
@@ -27,6 +30,33 @@ _create-link() {
     fi
 }
 
+# Remove the DEBUG trap and restore original shell options
+_disable_link_updates_hook() {
+  trap - DEBUG
+  set +vx; eval "${OLD_SHOPTS}"
+}
+
+# Activate temporary DEBUG trap to update build links 
+_enable_link_updates_hook() {
+  shopt -s extdebug
+  trap _update_links_on_spack_install DEBUG
+}
+
+# Intercept all simple commands and, if spack (un)install is executing, update build links afterwards
+# N.B. the simple command itself runs AFTER this function iff it runs zero
+function _update_links_on_spack_install ()
+{
+    if [[ $BASH_COMMAND == "spack "*"install"* ]]; then
+        $BASH_COMMAND 
+        updatelinks_h3env
+        # (We've already run the command explicitly, return non-zero so that it doesn't run again.)
+        return 1
+    else
+        # (Just run the command as usual after this function returns)
+        return 0
+    fi
+}
+
 # Perform cleanup tasks
 cleanup_h3env() {
   # Just update build links for now
@@ -35,14 +65,21 @@ cleanup_h3env() {
 
 # Remove convenience aliases/function definitions and deactivate the env
 deactivate_h3env() {
+
+    _disable_link_updates_hook
+
     unset -f _create-link
     unset -f cleanup_h3env
     unset -f deactivate_h3env
+    unset -f _disable_link_updates_hook
+    unset -f _enable_link_updates_hook
     unalias help_h3env
     unset -f in_h3env
     unset REPO_ROOT
+    unset -f _update_links_on_spack_install
     unset -f updatelinks_h3env
     unset -f usage_h3env
+
     spack env deactivate
 }
 
@@ -137,3 +174,5 @@ spacktivate . -p -v gcc
 
 # Update build links
 cleanup_h3env
+
+_enable_link_updates_hook
