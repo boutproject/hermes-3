@@ -488,8 +488,7 @@ void EvolvePressure::finally(const Options& state) {
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
     flow_ylow_conduction;
-    conduction_div = (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
-    ddt(P) += conduction_div;
+    ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
     flow_ylow += flow_ylow_conduction;
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -612,14 +611,6 @@ void EvolvePressure::outputVars(Options& state) {
                       {"units", "s^-1"},
                       {"conversion", Omega_ci},
                       {"long_name", "collision frequency for conduction"},
-                      {"species", name},
-                      {"source", "evolve_pressure"}});
-
-      set_with_attrs(state[std::string("div_cond_par_") + name], conduction_div * 3/2,
-                     {{"time_dimension", "t"},
-                      {"units", "W m^-3"},
-                      {"conversion", Pnorm * Omega_ci},
-                      {"long_name", name + " parallel energy flow divergence due to heat conduction"},
                       {"species", name},
                       {"source", "evolve_pressure"}});
 
