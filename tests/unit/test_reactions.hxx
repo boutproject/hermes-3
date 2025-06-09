@@ -37,9 +37,8 @@ class ReactionTest : public FakeMeshFixture {
 
 protected:
   ReactionTest(std::string lbl, std::string reaction_str)
-      : lbl(lbl), reaction_str(reaction_str), component("test", default_opts, nullptr){};
+      : lbl(lbl), reaction_str(reaction_str){};
   std::string lbl;
-  RTYPE component;
 
   virtual Options generate_state() = 0;
 
@@ -97,6 +96,7 @@ protected:
     Options test_state = generate_state();
 
     // Run reaction
+    RTYPE component = RTYPE("test" + lbl, test_state, nullptr);
     component.transform(test_state);
 
     // Loop over all ref_state fields checking that the corresponding test_state field
@@ -124,6 +124,7 @@ protected:
     Options state = generate_state();
 
     // Run reaction
+    RTYPE component = RTYPE("test" + lbl, state, nullptr);
     component.transform(state);
 
     // Write output state

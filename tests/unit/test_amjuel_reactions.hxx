@@ -32,7 +32,8 @@ protected:
     const BoutReal atom_charge = 0.0;
     const BoutReal ion_charge = 1.0;
 
-    Options state{{"species",
+    Options state{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  {"species",
                    {{"e",
                      {{"AA", sp_masses.at("e")},
                       {"density", 1.0},
