@@ -398,11 +398,10 @@ In the above example, PETSc support is turned on at the configuration stage, whi
 result of installing hermes-3 directly with the default ``spec`` listed in spack.yaml
 (``hermes-3%gcc+petsc``).
 
-In order to run the tests, load the cmake package to make ``ctest`` available, then run as normal:
+The tests can then be run in the usual way with:
 
 .. code-block:: bash
 
-   spack load cmake
    cd ./builds/my_build
    ctest -j 3
 
