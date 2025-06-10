@@ -187,6 +187,12 @@ By default parallel thermal conduction is included, which requires a collision
 time. If collisions are not calculated, then thermal conduction should be turned off
 by setting `thermal_conduction = false` in the input options.
 
+The choice of collision frequency used for conduction is set by the flag `conduction_collisions_mode`: 
+`multispecies` uses all available collision frequencies involving the chosen species, while `braginskii` uses only
+self-collisions .The default is `multispecies` and it is recommended for use if solving more than one ion.
+If you are solving for a single ion and want to recover Braginskii, use the `braginskii` mode.
+
+
 If the component option ``diagnose = true`` then additional fields
 will be saved to the dump files: The species temperature ``T + name``
 (e.g. ``Td+`` or ``Te``), the time derivative ``ddt(P + name)``
@@ -374,6 +380,8 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
+.. _electron_viscosity:
+
 electron_viscosity
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -401,6 +409,8 @@ and all other species therefore need to be calculated before this component is r
 .. doxygenstruct:: ElectronViscosity
    :members:
 
+.. _ion_viscosity:
+
 ion_viscosity
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -425,6 +435,13 @@ The ion parallel viscosity is
 .. math::
 
    \eta_i = \frac{4}{3} 0.96 p_i \tau_i
+
+The choice of collision frequency is set by the flag `viscosity_collisions_mode`: `multispecies` uses
+all available collision frequencies involving the chosen species, while `braginskii` uses only
+ii collisions. The default is `multispecies` and it is recommended when solving
+more than one ion. If you are solving for a single ion and want to recover Braginskii, 
+use the `braginskii` mode.
+
 
 If the `perpendicular` option is set:
 
@@ -611,6 +628,8 @@ it is recommended to set `dneut` according to the field line pitch at the target
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
 
+.. _neutral_mixed:
+
 2D/3D: neutral_mixed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -662,7 +681,12 @@ The perpendicular velocity is calculated as:
    \end{aligned}
 
 Where in the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`ln(P_n)`, which helps
-preserve pressure positivity.
+preserve pressure positivity. 
+
+The choice of collision frequency is set by the flag `diffusion_collisions_mode`: `multispecies` uses
+all available collision frequencies involving the chosen species, while `afn` uses only
+CX and IZ rates. The default is `afn` and corresponds to the choice in UEDGE and 
+the SOLPS-ITER AFN (Advanced Fluid Neutral) model. 
 
 The diffusion coefficients are defined as:
 

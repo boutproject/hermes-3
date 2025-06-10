@@ -3,26 +3,132 @@
 Closure
 ==========
 
-Hermes-3 currently uses a closure similar to that in UEDGE. It uses
-the standard Braginskii equations, but with additional collision frequencies
-added due to additional species. For example, Braginskii ion conduction 
-would enable collisions from any enabled processes and with any species,
-e.g. electron-ion collisions, ion-ion collisions with any other species,
-as well as charge exchange and ionisation. The ``[collisions]`` component 
-detailed in this section controls which collisional processes are enabled.
+Hermes-3 currently uses the standard Braginskii closure, but with a selection of 
+collision frequencies that can be used: the formulas use all solved collisions
+by default in order to have some accounting of multiple ion species, which 
+are not considered in standard Braginskii. See the next section for how this can be
+changed to reproduce the exact Braginskii closure.
 
-This method allows the closure to account for all of the species present
-in the simulation, but it is a very simple implementation as Braginskii
-was derived for a single main ion species. Work on improved closure
-is ongoing.
+The different parts of the closures are currently implemented in different components,
+which are described in the :ref:`sec-equations` section. They all use collision frequencies
+calculated in the ``Collisions`` component.
 
-The closures for conduction and viscosity are located in the equation components
-``evolve_pressure`` / ``evolve_energy`` and ``evolve_momentum``. Please
-see the Equations section for more details.
+**Conduction:** 
+Parallel conduction for any species is in the :ref:`evolve_pressure` and 
+:ref:`evolve_energy` species-level components.
+
+**Viscosity:**
+Parallel and perpendicular viscosity for ions is in the 
+:ref:`ion_viscosity` top-level component. The parallel viscosity for 
+electrons is in :ref:`electron_viscosity`.
+
+**Thermal force:**
+Thermal force is implemented here: :ref:`thermal_force`.
+
+**Frictional and thermal equilibration:**
+both are calculated in the top-level
+``collisions`` component described in section :ref:`sec-collisions`.
+
+**Neutral diffusion:**
+The parallel projection of diffusion from the wall in 1D
+is captured in the :ref:`neutral_parallel_diffusion` top-level component, while 
+both parallel Braginskii transport and perpendicular pressure-diffusion for 2D/3D 
+are captured in the :ref:`neutral_mixed` species-level component. 
+   
 
 
-Collisions
+Collision frequency selection
 ~~~~~~~~~~
+
+When configured in ``multispecies``
+mode (default), all collision frequencies for solved collisions of a particular 
+species are counted, e.g. electron conduction would include ``ee``, ``ei`` and ``en``
+collisions, and ion conduction would include ``ii``, ``ie``, ``in`` and ``CX``.
+In this way, the closure is similar to that used in UEDGE and has
+a way to account for multiple ion species.
+Note that any of the collisions can be disabled (see next section).
+
+For code comparison purposes, it can be useful to reproduce exact Braginskii 
+closure, e.g. featuring only self-collisions for conduction and viscosity.
+This is enabled by changing the mode to ``braginskii``. Note that this will be invalid
+for simulations with multiple ion species.
+
+The collision frequency choice for conduction is done under the species header, e.g.:
+
+.. code-block:: ini
+
+   [d+]  # Deuterium ions
+   type = (evolve_density, evolve_pressure, evolve_momentum,
+         noflow_boundary, upstream_density_feedback)
+
+   conduction_collisions_mode = braginskii
+
+The choice for viscosity is done under the ``[ion_viscosity]`` header due to it
+being a top level component, e.g.:
+
+.. code-block:: ini
+
+   [ion_viscosity]
+   viscosity_collisions_mode = braginskii
+
+In addition to the parallel closure, there is also a collision frequency choice
+for neutral diffusion, which is present both in ``neutral_parallel_diffusion`` (1D) 
+and ``neutral_mixed`` (2D). In this case, there are again two choices:
+``multispecies`` features all enabled collisions, while ``afn`` selects
+only ionisation and charge exchange, consistent with the AFN (Advanced Fluid Neutral)
+work in `N. Horsten Nucl. Fusion 57 (11) 116043 (2017) <https://doi.org/10.1088/1741-4326/AA8009>`_.
+
+``neutral_mixed`` is a species level component and should be set under the species header:
+
+.. code-block:: ini
+
+   [d]
+   type = neutral_mixed
+   diffusion_collisions_mode = afn
+
+While ``neutral_parallel_diffusion`` is a top level component and must be set under its own 
+header, e.g.:
+
+.. code-block:: ini
+
+   [neutral_parallel_diffusion]
+   diffusion_collisions_mode = afn
+
+
+
+.. _sec-collisions:
+
+Collisions component
+~~~~~~~~~~
+
+Inputs and ouputs
+----------
+
+This top-level component calculates the collision frequencies of all collisional processes
+in Hermes-3. These frequencies are then used to calculate the closure terms.
+By default, the following collisions are enabled:
+
+.. code-block:: ini
+
+   [collisions]
+   electron_ion = true
+   electron_electron = true
+   electron_neutral = false
+   ion_ion = true
+   ion_neutral = false
+   neutral_neutral = true
+
+``electon_neutral`` collisions are disabled as they are are typically
+a very minor contributor, while ``ion_neutral`` collisions are disabled as 
+they are already accounted for by charge exchange which is enabled by default.
+
+All of the collision frequencies are added to the state in ``species["collision_frequencies"]``.
+They are also available as diagnostics, e.g. ``Kd+e_coll`` is the ion-electron collision
+frequency. 
+
+Theory
+----------
+
 
 For collisions between charged particles. In the following all
 quantities are in SI units except the temperatures: :math:`T` is in
