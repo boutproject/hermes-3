@@ -380,6 +380,8 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
+.. _electron_viscosity:
+
 electron_viscosity
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -406,6 +408,8 @@ and all other species therefore need to be calculated before this component is r
 
 .. doxygenstruct:: ElectronViscosity
    :members:
+
+.. _ion_viscosity:
 
 ion_viscosity
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -623,6 +627,8 @@ it is recommended to set `dneut` according to the field line pitch at the target
 
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
+
+.. _neutral_mixed:
 
 2D/3D: neutral_mixed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
