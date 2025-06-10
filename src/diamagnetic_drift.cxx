@@ -21,6 +21,14 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
     .doc("Form of diamagnetic drift: 0 = gradient; 1 = divergence")
     .withDefault(Coordinates::FieldMetric(1.0));
 
+
+  // from https://iopscience.iop.org/article/10.1088/1361-6587/aaed7d/pdf
+  // Appendix A8
+  bracket_form = options["bracket_form"]
+    .doc("Use form of the diamagnetic drift that uses the poisson brackets?")
+    .withDefault<bool>(true);
+
+  
   // Read curvature vector
   Curlb_B.covariant = false; // Contravariant
   if (mesh->get(Curlb_B, "bxcv")) {
@@ -69,9 +77,15 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
 
   //FCI specific
   
-  if (mesh().isFci()) {
+  if (mesh->isFci()) {
     const auto coord = mesh->getCoordinates();
     bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+
+    logB = log(coord->Bxy);
+    logB.applyBoundary("neumann_o2");
+    mesh->communicate(logB);
+    logB.applyParallelBoundary("parallel_neumann_o2");
+    
   } else {
     bracket_factor = 1.0;
   }
@@ -102,28 +116,43 @@ void DiamagneticDrift::transform(Options& state) {
 
     if (IS_SET(species["density"])) {
       auto N = GET_VALUE(Field3D, species["density"]);
-
-      // Divergence form: Div(n v_D)
-      Field3D div_form = FV::Div_f_v(N, vD, bndry_flux);
-      // Gradient form: Curlb_B dot Grad(N T / q)
-      Field3D grad_form = Curlb_B * Grad(N * T / q);
-
-      subtract(species["density_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
+      
+      if (bracket_form){
+	Field3D jdia_bracket = 2 * bracket(logB, T*N/q, BRACKET_ARAKAWA) * bracket_factor;
+	subtract(species["density_source"], jdia_bracket);
+      } else {  
+	// Divergence form: Div(n v_D)
+	Field3D div_form = FV::Div_f_v(N, vD, bndry_flux);
+	// Gradient form: Curlb_B dot Grad(N T / q)
+	Field3D grad_form = Curlb_B * Grad(N * T / q);
+	subtract(species["density_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
+      }
+      
     }
 
     if (IS_SET(species["pressure"])) {
       auto P = get<Field3D>(species["pressure"]);
-
-      Field3D div_form = FV::Div_f_v(P, vD, bndry_flux);
-      Field3D grad_form = Curlb_B * Grad(P * T / q);
-      subtract(species["energy_source"], (5. / 2) * (diamag_form * div_form + (1. - diamag_form) * grad_form));
+      if (bracket_form){
+	Field3D jdia_bracket = 2 * bracket(logB, T*P/q, BRACKET_ARAKAWA) * bracket_factor;
+	subtract(species["energy_source"], (5. / 2) * jdia_bracket);
+      } else {
+	Field3D div_form = FV::Div_f_v(P, vD, bndry_flux);
+	Field3D grad_form = Curlb_B * Grad(P * T / q);
+	subtract(species["energy_source"], (5. / 2) * (diamag_form * div_form + (1. - diamag_form) * grad_form));
+      }
     }
 
     if (IS_SET(species["momentum"])) {
       auto NV = get<Field3D>(species["momentum"]);
-      Field3D div_form = FV::Div_f_v(NV, vD, bndry_flux);
-      Field3D grad_form = Curlb_B * Grad(NV * T / q);
-      subtract(species["momentum_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
+
+      if (bracket_form){
+	Field3D jdia_bracket = 2 * bracket(logB, T*NV/q, BRACKET_ARAKAWA) * bracket_factor;
+	subtract(species["momentum_source"], jdia_bracket);
+      } else {		   
+	Field3D div_form = FV::Div_f_v(NV, vD, bndry_flux);
+	Field3D grad_form = Curlb_B * Grad(NV * T / q);
+	subtract(species["momentum_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
+      }
     }
   }
 }

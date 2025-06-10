@@ -27,7 +27,8 @@ private:
   bool bndry_flux;
   Coordinates::FieldMetric diamag_form;
   YBoundary yboundary;
-
+  bool bracket_form;
+  Field3D logB;
   Coordinates::FieldMetric bracket_factor;
   
 };
