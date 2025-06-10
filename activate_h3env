@@ -114,7 +114,7 @@ updatelinks_h3env() {
   done
 
   # Check whether existing links are still valid (Could also just use find -xtype l ?)
-  for l in ${REPO_ROOT}/${link_prefix}*; do
+  for l in "${links_dir}/${link_prefix}"*; do
     # Skip if l isn't a link (also guards against case where pattern has zero matches)
     [ ! -L "$l" ] && break;
     hash=$(echo "$l"|rev|cut -c -7|rev)
