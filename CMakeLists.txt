@@ -97,6 +97,7 @@ set(HERMES_SOURCES
     src/temperature_feedback.cxx
     src/detachment_controller.cxx
     src/thermal_force.cxx
+    src/tokamak_core.cxx
     src/ion_viscosity.cxx
     src/transform.cxx
     src/vorticity.cxx
@@ -151,6 +152,7 @@ set(HERMES_SOURCES
     include/sheath_closure.hxx
     include/sound_speed.hxx
     include/thermal_force.hxx
+    include/tokamak_core.hxx
     include/upstream_density_feedback.hxx
     include/temperature_feedback.hxx
     include/detachment_controller.hxx
