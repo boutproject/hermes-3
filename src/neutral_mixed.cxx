@@ -699,7 +699,7 @@ void NeutralMixed::finally(const Options& state) {
       // Local average density.
       // The purpose is to turn on evolution when nearby cells contain significant density.
       const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
-      const BoutReal factor = exp(- density_floor / Nn[i]);
+      const BoutReal factor = exp(- density_floor / meanNn);
       ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
       ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
       ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
