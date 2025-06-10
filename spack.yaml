@@ -12,6 +12,14 @@ spack:
       root: ./views/gcc
       select: ["%gcc"]
       link_type: symlink
+    # A view which does not include hermes-3 itself
+    # Use this if you want to use dependencies from the environment, but are building hermes-3 yourself with cmake
+    #  (guards against accidentally linking to a spack-installed version of libhermes-3.so!)
+    gcc-deps-only:
+      exclude: ["hermes-3"]
+      root: ./views/gcc-deps-only
+      select: ["%gcc"]
+      link_type: symlink
   concretizer:
     unify: when_possible
   repos:
