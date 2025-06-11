@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+from boututils.run_wrapper import shell, launch_safe
+from boutdata.collect import collect
+
+from numpy import isclose
+
+import os
+
+shell("rm -f data/BOUT.dmp.0.nc")
+
+hermes_bin = os.environ.get("HERMES_BIN", "../../../hermes-3")
+
+success = True
+path = "data"
+
+s, out = launch_safe(f"{hermes_bin} -d {path}", nproc=1, pipe=True)
+
+rtol = 1e-2
+atol = 1e-2
+
+# Save output to log file
+with open("run.log", "w") as f:
+    f.write(out)
+
+Pe = collect("Pe", tind=-1, path=path, info=False)
+Ne = collect("Ne", tind=-1, path=path, info=False)
+Tnorm = collect("Tnorm", path=path, info=False)
+
+Te = (Pe / Ne) * Tnorm
+Te_up = Te[-1, 0, 0, 0]
+expected_Te_up = 100
+Te_down = Te[-1, 0, -1, 0]
+expected_Te_down = 92.2
+
+if not isclose(Te_up, expected_Te_up, rtol=rtol, atol=atol):
+    success = False
+    print(
+        f"Upstream electron temperature failed: {Te_up}eV. Expecting about {expected_Te_up}eV"
+    )
+
+if not isclose(Te_down, expected_Te_down, rtol=rtol, atol=atol):
+    success = False
+    print(
+        f"Downstream electron temperature failed: {Te_down}eV. Expecting about {expected_Te_down}eV"
+    )
+
+Ti = collect("Ti", tind=-1, path=path, info=False) * Tnorm
+Ti_up = Ti[-1, 0, 0, 0]
+expected_Ti_up = 100
+Ti_down = Ti[-1, 0, -1, 0]
+expected_Ti_down = 93.8
+
+if not isclose(Ti_up, expected_Ti_up, rtol=rtol, atol=atol):
+    success = False
+    print(
+        f"Upstream ion temperature failed: {Ti_up}eV. Expecting about {expected_Ti_up}eV"
+    )
+
+if not isclose(Ti_down, expected_Ti_down, rtol=rtol, atol=atol):
+    success = False
+    print(
+        f"Downstream ion temperature failed: {Ti_down}eV. Expecting about {expected_Ti_down}eV"
+    )
+
+
+Ve = collect("Ve", tind=-1, path=path, info=False)
+Ve_norm = Ve.attributes["conversion"]
+Ve_up = Ve[-1, 0, 0, 0] * Ve_norm
+expected_Ve_up = 0.0
+Ve_down = Ve[-1, 0, -1, 0] * Ve_norm
+expected_Ve_down = 24090
+
+if not isclose(Ve_up, expected_Ve_up, rtol=rtol, atol=atol):
+    success = False
+    print(
+        f"Upstream electron velocity failed: {Ve_up}eV. Expecting about {expected_Ve_up}eV"
+    )
+
+if not isclose(Ve_down, expected_Ve_down, rtol=rtol, atol=atol):
+    success = False
+    print(
+        f"Downstream electron velocity failed: {Ve_down}eV. Expecting about {expected_Ve_down}eV"
+    )
+
+Vi = collect("Vi", tind=-1, path=path, info=False)
+Vi_norm = Vi.attributes["conversion"]
+Vi_up = Vi[-1, 0, 0, 0] * Vi_norm
+expected_Vi_up = 0.0
+Vi_down = Vi[-1, 0, -1, 0] * Vi_norm
+expected_Vi_down = 24090
+
+if not isclose(Vi_up, expected_Vi_up, rtol=rtol, atol=atol):
+    success = False
+    print(
+        f"Upstream ion velocity failed: {Vi_up}eV. Expecting about {expected_Vi_up}eV"
+    )
+
+if not isclose(Vi_down, expected_Vi_down, rtol=rtol, atol=atol):
+    success = False
+    print(
+        f"Downstream ion velocity failed: {Vi_down}eV. Expecting about {expected_Vi_down}eV"
+    )
+
+if success:
+    print(" => Test passed")
+    exit(0)
+else:
+    print(" => Test failed")
+    exit(1)
