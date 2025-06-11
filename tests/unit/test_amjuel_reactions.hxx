@@ -67,12 +67,16 @@ protected:
     constexpr BoutReal logn_min = 14, logn_max = 22;
     constexpr BoutReal logT_min = -1, logT_max = 4;
 
+    constexpr BoutReal xmin = 0, xmax = 2;
+    constexpr BoutReal ymin = 0, ymax = 25.1327412287;
+    constexpr BoutReal zmin = 0, zmax = 5.38558740615;
+
     state["species"][ion]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logn_min, logn_max, "x", this->nx), &state, mesh);
+        this->gen_lin_field_str(logn_min, logn_max, "x", xmin, xmax), &state, mesh);
     state["species"]["e"]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logn_min, logn_max, "y", this->ny), &state, mesh);
+        this->gen_lin_field_str(logn_min, logn_max, "y", ymin, ymax), &state, mesh);
     state["species"]["e"]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logT_min, logT_max, "z", this->nz), &state, mesh);
+        this->gen_lin_field_str(logT_min, logT_max, "z", zmin, zmax), &state, mesh);
 
     return state;
   }

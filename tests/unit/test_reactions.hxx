@@ -54,9 +54,8 @@ protected:
    * @return std::string
    */
   std::string gen_lin_field_str(BoutReal v_min, BoutReal v_max, std::string axis_str,
-                                int axis_ngrid) {
+                                BoutReal axis_min, BoutReal axis_max) {
 
-    BoutReal axis_min = 0.0, axis_max(axis_ngrid);
     BoutReal axis_range = axis_max - axis_min;
     BoutReal v_range = v_max - v_min;
     std::stringstream expression;
