@@ -111,12 +111,13 @@ void IonViscosity::transform(Options &state) {
     if ((eta_limit_alpha > 0.) || eta.isFci()) {
       eta.applyBoundary("neumann");
       eta.getMesh()->communicate(eta);
+      eta.applyParallelBoundary("parallel_neumann_o2");
     }
     
     // This term is the parallel flow part of
     // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
     Field3D dummy;
-    const Field3D div_Pi_cipar = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy);
+    const Field3D div_Pi_cipar = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy, false);
 
     add(species["momentum_source"], div_Pi_cipar);
     subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
