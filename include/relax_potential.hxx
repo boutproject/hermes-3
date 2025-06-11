@@ -87,6 +87,8 @@ private:
   }
 
   Field3D viscosity; /// Kinematic viscosity
+  Field3D viscosity_par;
+  Field3D flow_ylow_pardiffusion;
   bool phi_dissipation; /// Parallel dissipation of potential
 
   Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
