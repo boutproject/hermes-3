@@ -37,9 +37,9 @@ Te = Pe / Ne
 Te_up = Te[-1,0,0,0] * Tnorm
 
 # Upstream electron temperature should be about 60eV
-if Te_up < 50 or Te_up > 70:
+if Te_up < 60 or Te_up > 80:
   success = False
-  print("Electron temperature failed: {}eV. Expecting about 60eV".format(Te_up))
+  print("Electron temperature failed: {}eV. Expecting about 70eV".format(Te_up))
 
 Ti = collect("Td+", tind=-1, path=path)
 Ti_up = Ti[-1,0,0,0] * Tnorm

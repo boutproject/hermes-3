@@ -23,7 +23,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
@@ -35,11 +35,15 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   low_T_diffuse_perp = options["low_T_diffuse_perp"].doc("Add cross-field diffusion at low temperature?")
     .withDefault<bool>(false);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pressure_floor = density_floor * temperature_floor;
 
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
+
+  damp_p_nt = options["damp_p_nt"]
+    .doc("Damp P - N*T? Active when P < 0 or N < density_floor")
+    .withDefault<bool>(false);
 
   if (evolve_log) {
     // Evolve logarithm of pressure
@@ -68,17 +72,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  thermal_conduction = options["thermal_conduction"]
-                           .doc("Include parallel heat conduction?")
-                           .withDefault<bool>(true);
-
-  kappa_coefficient = options["kappa_coefficient"]
-    .doc("Numerical coefficient in parallel heat conduction. Default is 3.16 for electrons, 3.9 otherwise")
-    .withDefault((name == "e") ? 3.16 : 3.9);
-
-  kappa_limit_alpha = options["kappa_limit_alpha"]
-    .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
-    .withDefault(-1.0);
+  
 
   p_div_v = options["p_div_v"]
                 .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
@@ -158,6 +152,36 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       .doc("Fix Y boundary momentum flux to boundary midpoint value?")
       .withDefault<bool>(false);
   }
+
+  thermal_conduction = options["thermal_conduction"]
+                           .doc("Include parallel heat conduction?")
+                           .withDefault<bool>(true);
+
+
+  BoutReal default_kappa; // default conductivity, changes depending on species
+  switch(identifySpeciesType(name)) {
+  case SpeciesType::ion:
+    default_kappa = 3.9;
+    break;
+  case SpeciesType::electron:
+    // Hermes-3 electron collision time is in Fitzpatrick form (3.187 in https://farside.ph.utexas.edu/teaching/plasma/Plasma/node41.html)
+    // This means that the Braginskii prefactor of 3.16 needs to be divided by sqrt(2) to be consistent. 
+    default_kappa = 3.16/sqrt(2);
+    break;
+  case SpeciesType::neutral:
+    default_kappa = 2.5;
+    break;
+  default:
+    throw BoutException("Unhandled species type in default_kappa switch");
+  }
+
+  kappa_coefficient = options["kappa_coefficient"]
+    .doc("Numerical coefficient in parallel heat conduction. Default is 3.16/sqrt(2) for electrons, 2.5 for neutrals and 3.9 otherwise")
+    .withDefault(default_kappa);
+
+  kappa_limit_alpha = options["kappa_limit_alpha"]
+    .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
+    .withDefault(-1.0);
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -211,7 +235,7 @@ void EvolvePressure::transform(Options& state) {
   N = getNoBoundary<Field3D>(species["density"]);
 
   Field3D Pfloor = floor(P, 0.0);
-  T = Pfloor / floor(N, density_floor);
+  T = Pfloor / softFloor(N, density_floor);
   Pfloor = N * T; // Ensure consistency
 
   set(species["pressure"], Pfloor);
@@ -301,7 +325,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (numerical_viscous_heating || diagnose) {
       // Viscous heating coming from numerical viscosity
-      Field3D Nlim = floor(N, density_floor);
+      Field3D Nlim = softFloor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
       Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
       flow_ylow_kinetic *= AA;
@@ -325,7 +349,7 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_n_diffuse_perp) {
-    Field3D rhs = Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), P, true);
+    Field3D rhs = Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P, true);
     ddt(P) += rhs;
     if (diagnose) {
       // Numerical energy channel
@@ -334,7 +358,7 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_T_diffuse_perp) {
-    Field3D rhs = 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / floor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
+    Field3D rhs = 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
                                            T, false);
     ddt(P) += rhs;
     if (diagnose) {
@@ -344,7 +368,7 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_p_diffuse_perp) {
-    Field3D Plim = floor(P, 1e-3 * pressure_floor);
+    Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
     Field3D rhs = Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
     ddt(P) += rhs;
     if (diagnose) {
@@ -357,7 +381,7 @@ void EvolvePressure::finally(const Options& state) {
   if (thermal_conduction) {
 
     // Calculate ion collision times
-    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau = 1. / softFloor(get<Field3D>(species["collision_frequency"]), 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -385,7 +409,7 @@ void EvolvePressure::finally(const Options& state) {
       Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
 
       // This results in a harmonic average of the heat fluxes
-      kappa_par = kappa_par / (1. + abs(q_SH / floor(q_fl, 1e-10)));
+      kappa_par = kappa_par / (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
       mesh->communicate(kappa_par);
@@ -476,12 +500,14 @@ void EvolvePressure::finally(const Options& state) {
 #endif
   ddt(P) += Sp;
 
-  // Term to force evolved P towards N * T
-  // This is active when P < 0 or when N < density_floor
-  ddt(P) += N * T - P;
-  if (diagnose) {
-    // Numerical energy channel
-    add(channels["E_numerical_P_" + name], (3./2) * (N * T - P));
+  if (damp_p_nt) {
+    // Term to force evolved P towards N * T
+    // This is active when P < 0 or when N < density_floor
+    ddt(P) += N * T - P;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * (N * T - P));
+    }
   }
 
   // Scale time derivatives
@@ -603,7 +629,9 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " power through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
-                    
+    }
+            
+    if (flow_ylow_conduction.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
                    {{"time_dimension", "t"},
                     {"units", "W"},
@@ -612,7 +640,9 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " conduction through Y cell face. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
+    }
 
+    if (flow_ylow_kinetic.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_kin_ylow", name)], flow_ylow_kinetic,
                    {{"time_dimension", "t"},
                     {"units", "W"},
@@ -661,7 +691,7 @@ void EvolvePressure::precon(const Options &state, BoutReal gamma) {
   const Field3D N = get<Field3D>(species["density"]);
 
   // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coef = -(2. / 3) * gamma * kappa_par / floor(N, density_floor);
+  Field3D coef = -(2. / 3) * gamma * kappa_par / softFloor(N, density_floor);
 
   if (state.isSet("scale_timederivs")) {
     coef *= get<Field3D>(state["scale_timederivs"]);

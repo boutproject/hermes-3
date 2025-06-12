@@ -42,6 +42,9 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                          .doc("Name of the species to recycle into")
                          .as<std::string>();
 
+    density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
+    pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+
     diagnose =
       from_options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
 
@@ -168,6 +171,10 @@ void Recycling::transform(Options& state) {
     const Field3D Pn = get<Field3D>(species_to["pressure"]);
     const Field3D Tn = get<Field3D>(species_to["temperature"]);
     const BoutReal AAn = get<BoutReal>(species_to["AA"]);
+
+    const Field3D Nnlim = floor(Nn, density_floor);
+    const Field3D Pnlim = floor(Pn, pressure_floor);
+    const Field3D Tnlim = Pnlim / Nnlim;
 
     // Recycling particle and energy sources will be added to these global sources 
     // which are then passed to the density and pressure equations
@@ -353,9 +360,9 @@ void Recycling::transform(Options& state) {
               // These are NOT communicated back into state and will exist only in this component
               // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
               // While enabling us to still calculate radial wall fluxes separately here
-              BoutReal nnguard = SQ(Nn[i]) / Nn[is];
-              BoutReal pnguard = SQ(Pn[i]) / Pn[is];
-              BoutReal tnguard = SQ(Tn[i]) / Tn[is];
+              BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
+              BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
+              BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
               // Calculate wall conditions
               BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
@@ -453,9 +460,9 @@ void Recycling::transform(Options& state) {
                 // These are NOT communicated back into state and will exist only in this component
                 // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
                 // While enabling us to still calculate radial wall fluxes separately here
-                BoutReal nnguard = SQ(Nn[i]) / Nn[is];
-                BoutReal pnguard = SQ(Pn[i]) / Pn[is];
-                BoutReal tnguard = SQ(Tn[i]) / Tn[is];
+                BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
+                BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
+                BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
                 // Calculate wall conditions
                 BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
@@ -572,23 +579,31 @@ void Recycling::outputVars(Options& state) {
 
       // Neutral pump
       if (neutral_pump) {
-        set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump")}],
-                       channel.pump_density_source,
-                       {{"time_dimension", "t"},
-                        {"units", "m^-3 s^-1"},
-                        {"conversion", Nnorm * Omega_ci},
-                        {"standard_name", "particle source"},
-                        {"long_name", std::string("Pump recycling particle source of ") + channel.to},
-                        {"source", "recycling"}});
 
-        set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump")}],
-                       channel.pump_energy_source,
-                       {{"time_dimension", "t"},
-                        {"units", "W m^-3"},
-                        {"conversion", Pnorm * Omega_ci},
-                        {"standard_name", "energy source"},
-                        {"long_name", std::string("Pump recycling energy source of ") + channel.to},
-                        {"source", "recycling"}});
+        if (channel.pump_density_source.isAllocated()) { 
+          set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump")}],
+                        channel.pump_density_source,
+                        {{"time_dimension", "t"},
+                          {"units", "m^-3 s^-1"},
+                          {"conversion", Nnorm * Omega_ci},
+                          {"standard_name", "particle source"},
+                          {"long_name", std::string("Pump recycling particle source of ") + channel.to},
+                          {"source", "recycling"}});
+
+          set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump")}],
+                        channel.pump_energy_source,
+                        {{"time_dimension", "t"},
+                          {"units", "W m^-3"},
+                          {"conversion", Pnorm * Omega_ci},
+                          {"standard_name", "energy source"},
+                          {"long_name", std::string("Pump recycling energy source of ") + channel.to},
+                          {"source", "recycling"}});
+        } else {
+          throw BoutException("Error: neutral pump sources unallocated, likely because recycling " 
+            "on the relevant surface is disabled. Check that all boundaries with a neutral pump " 
+            "have recycling enabled!");
+        }
+
       }
 
     }

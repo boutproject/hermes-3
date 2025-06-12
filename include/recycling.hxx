@@ -63,6 +63,8 @@ private:
   bool target_recycle, sol_recycle, pfr_recycle, neutral_pump;  ///< Flags for enabling recycling in different regions
   bool diagnose; ///< Save additional post-processing variables?
 
+  BoutReal density_floor, pressure_floor; ///< minimum values for Nn, Pn to avoid divide by zero
+
   Field3D density_source, energy_source; ///< Recycling particle and energy sources for all locations
   Field3D energy_flow_ylow, energy_flow_xlow; ///< Cell edge fluxes used for calculating fast recycling energy source
   Field3D particle_flow_xlow; ///< Radial wall particle fluxes for recycling calc. No need to get poloidal from here, it's calculated from sheath velocity

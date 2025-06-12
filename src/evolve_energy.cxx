@@ -30,7 +30,7 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
                    .doc("Evolve the logarithm of energy?")
                    .withDefault<bool>(false);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
   if (evolve_log) {
     // Evolve logarithm of energy
     solver->add(logE, std::string("logE") + name);
@@ -181,7 +181,7 @@ void EvolveEnergy::transform(Options& state) {
   }
 
   // Calculate temperature
-  T = P / floor(N, density_floor);
+  T = P / softFloor(N, density_floor);
   P = N * T; // Ensure consistency
 
   set(species["pressure"], P);
@@ -276,7 +276,7 @@ void EvolveEnergy::finally(const Options& state) {
   if (thermal_conduction) {
 
     // Calculate ion collision times
-    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau = 1. / softFloor(get<Field3D>(species["collision_frequency"]), 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -304,7 +304,7 @@ void EvolveEnergy::finally(const Options& state) {
       Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
 
       // This results in a harmonic average of the heat fluxes
-      kappa_par = kappa_par / (1. + abs(q_SH / floor(q_fl, 1e-10)));
+      kappa_par = kappa_par / (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
       mesh->communicate(kappa_par);
@@ -512,7 +512,7 @@ void EvolveEnergy::precon(const Options& state, BoutReal gamma) {
   const Field3D N = get<Field3D>(species["density"]);
 
   // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coef = -gamma * kappa_par / floor(N, density_floor);
+  Field3D coef = -gamma * kappa_par / softFloor(N, density_floor);
 
   if (state.isSet("scale_timederivs")) {
     coef *= get<Field3D>(state["scale_timederivs"]);

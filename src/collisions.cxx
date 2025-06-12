@@ -3,15 +3,8 @@
 #include <bout/constants.hxx>
 #include <bout/output_bout_types.hxx>
 
+#include "../include/hermes_utils.hxx"
 #include "../include/collisions.hxx"
-
-namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
-} // namespace
 
 Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
   AUTO_TRACE();
@@ -85,7 +78,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
     const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]);
 
     const Field3D nu = filledFrom(nu_12, [&](auto& i) {
-      return nu_12[i] * (A1 / A2) * density1[i] / floor(density2[i], 1e-5);
+      return nu_12[i] * (A1 / A2) * density1[i] / softFloor(density2[i], 1e-5);
     });
 
     add(species2["collision_frequency"], nu);
@@ -182,8 +175,8 @@ void Collisions::transform(Options& state) {
           continue;
 
         const Field3D nu_ee = filledFrom(Ne, [&](auto& i) {
-          const BoutReal Telim = floor(Te[i], 0.1);
-          const BoutReal Nelim = floor(Ne[i], 1e10);
+          const BoutReal Telim = softFloor(Te[i], 0.1);
+          const BoutReal Nelim = softFloor(Ne[i], 1e10);
           const BoutReal logTe = log(Telim);
           // From NRL formulary 2019, page 34
           // Coefficient 30.4 from converting cm^-3 to m^-3
@@ -194,7 +187,7 @@ void Collisions::transform(Options& state) {
           const BoutReal v1sq = 2 * Telim * SI::qe / SI::Me;
 
           // Collision frequency
-          const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne[i], 0.0) * floor(coulomb_log, 1.0)
+          const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne[i], 0.0) * softFloor(coulomb_log, 1.0)
                               * 2 / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
 
           ASSERT2(std::isfinite(nu));
@@ -234,12 +227,12 @@ void Collisions::transform(Options& state) {
                   : 31.0 - 0.5 * log(Ne[i]) + log(Te[i]);
 
           // Calculate v_a^2, v_b^2
-          const BoutReal vesq = 2 * floor(Te[i], 0.1) * SI::qe / SI::Me;
-          const BoutReal visq = 2 * floor(Ti[i], 0.1) * SI::qe / (SI::Mp * Ai);
+          const BoutReal vesq = 2 * softFloor(Te[i], 0.1) * SI::qe / SI::Me;
+          const BoutReal visq = 2 * softFloor(Ti[i], 0.1) * SI::qe / (SI::Mp * Ai);
 
           // Collision frequency
           const BoutReal nu = SQ(SQ(SI::qe) * Zi) * floor(Ni[i], 0.0)
-                              * floor(coulomb_log, 1.0) * (1. + me_mi)
+                              * softFloor(coulomb_log, 1.0) * (1. + me_mi)
                               / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me))
                               * ei_multiplier;
 #if CHECK >= 2
@@ -364,11 +357,11 @@ void Collisions::transform(Options& state) {
 
           // Ion-ion collisions
           Field3D nu_12 = filledFrom(density1, [&](auto& i) {
-            const BoutReal Tlim1 = floor(temperature1[i], 0.1);
-            const BoutReal Tlim2 = floor(temperature2[i], 0.1);
+            const BoutReal Tlim1 = softFloor(temperature1[i], 0.1);
+            const BoutReal Tlim2 = softFloor(temperature2[i], 0.1);
 
-            const BoutReal Nlim1 = floor(density1[i], 1e10);
-            const BoutReal Nlim2 = floor(density2[i], 1e10);
+            const BoutReal Nlim1 = softFloor(density1[i], 1e10);
+            const BoutReal Nlim2 = softFloor(density2[i], 1e10);
 
             // Coulomb logarithm
             BoutReal coulomb_log =
@@ -381,7 +374,7 @@ void Collisions::transform(Options& state) {
             const BoutReal v2sq = 2 * Tlim2 * SI::qe / mass2;
 
             // Collision frequency
-            const BoutReal nu = SQ(charge1 * charge2) * Nlim2 * floor(coulomb_log, 1.0)
+            const BoutReal nu = SQ(charge1 * charge2) * Nlim2 * softFloor(coulomb_log, 1.0)
                                 * (1. + mass1 / mass2)
                                 / (3 * pow(PI * (v1sq + v2sq), 1.5) * SQ(SI::e0 * mass1));
             ASSERT2(std::isfinite(nu));
