@@ -8,20 +8,6 @@
 using bout::globals::mesh;
 
 namespace {
-BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
-  if (value < min)
-    return min;
-  if (value > max)
-    return max;
-  return value;
-}
-
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  int ny = f.getNy();
-  int nz = f.getNz();
-  return Ind3D{(x * ny + y) * nz + z, ny, nz};
-}
-
 /// Limited free gradient of log of a quantity
 /// This ensures that the guard cell values remain positive
 /// while also ensuring that the quantity never increases
