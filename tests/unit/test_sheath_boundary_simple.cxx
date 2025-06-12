@@ -7,22 +7,15 @@
 #include "test_extras.hxx" // FakeMesh
 
 #include <bout/bout_types.hxx>
+#include <bout/constants.hxx>
+#include <bout/field_factory.hxx> // For generating functions
 #include <bout/output.hxx>
+#include <bout/sys/range.hxx>
 
 #include "../../include/sheath_boundary_simple.hxx"
 
-/// Global mesh
-namespace bout {
-namespace globals {
-extern Mesh* mesh;
-} // namespace globals
-} // namespace bout
-
 // The unit tests use the global mesh
 using namespace bout::globals;
-
-#include <bout/constants.hxx>
-#include <bout/field_factory.hxx> // For generating functions
 
 // Reuse the "standard" fixture for FakeMesh
 using SheathBoundarySimpleTest = FakeMeshFixture;
@@ -200,6 +193,47 @@ TEST_F(SheathBoundarySimpleTest, PotentialChangeSymmetricOnYBoundaries) {
       const BoutReal dphi_lower = phi1(ix, mesh->ystart, kz) - phi0(ix, mesh->ystart, kz);
       const BoutReal dphi_upper = phi1(ix, mesh->yend, kz) - phi0(ix, mesh->yend, kz);
       ASSERT_NEAR(dphi_lower, dphi_upper, 1e-10);
+    }
+  }
+}
+
+TEST_F(SheathBoundarySimpleTest, CalculatePotential) {
+  const WithQuietOutput quiet{output_info};
+  Options options{{"test", {{"always_set_phi", true}}}};
+  options["units"]["eV"] = 1.0; // Voltage normalisation
+
+  SheathBoundarySimple component("test", options, nullptr);
+  component.declareAllSpecies({"e", "h+"});
+
+  Field3D N = FieldFactory::get()->create3D("1 + y", &options, mesh);
+  BoutReal Te = 2.0;
+  BoutReal Ti = 3.0;
+  BoutReal Zi = 1.1;
+  const BoutReal si = 0.5;
+
+  Options state{{"species",
+                 {// Electrons
+                  {"e", {{"density", N}, {"temperature", Te}, {"velocity", 0.0}}},
+                  // Ion species
+                  {"h+",
+                   {{"density", si * N},
+                    {"temperature", Ti},
+                    {"AA", 1.0},
+                    {"charge", Zi},
+                    {"velocity", 0.0}}}}}};
+
+  component.transform(state);
+
+  ASSERT_TRUE(state["fields"].isSet("phi"));
+
+  // Golden answer
+  const BoutReal phi_ref = 5.9177;
+
+  Field3D phi = state["fields"]["phi"];
+
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      ASSERT_NEAR(phi_ref, phi(r.ind, mesh->yend, jz), 1e-3);
     }
   }
 }
