@@ -421,7 +421,9 @@ Hermes-3 with CMake, run (e.g.):
 
 .. code-block:: bash
 
-   export h3_build="./builds/my_build" && in_h3env cmake -DBOUT_USE_PETSC=ON -B "$h3_build" && in_h3env cmake --build "$h3_build" -j8
+   export h3_build="./builds/my_build"
+   in_h3env cmake -DBOUT_USE_PETSC=ON -B "$h3_build"
+   in_h3env cmake --build "$h3_build" -j8
 
 In the above example, PETSc support is turned on at the configuration stage, which emulates the
 result of installing Hermes-3 directly with the default ``spec`` listed in spack.yaml
