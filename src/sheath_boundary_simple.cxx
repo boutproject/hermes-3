@@ -3,8 +3,10 @@
 #include "../include/hermes_utils.hxx"
 #include "../include/sheath_boundary_simple.hxx"
 
-#include "bout/constants.hxx"
-#include "bout/mesh.hxx"
+#include <bout/constants.hxx>
+#include <bout/field.hxx>
+#include <bout/mesh.hxx>
+
 using bout::globals::mesh;
 
 namespace {
@@ -278,8 +280,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
       }
     }
 
-    phi.allocate();
-    phi.setDirectionY(YDirectionType::Aligned);
+    phi = emptyFrom(Ne);
 
     // ion_sum now contains the ion current, sum Z_i n_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
