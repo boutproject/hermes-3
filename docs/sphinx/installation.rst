@@ -356,11 +356,15 @@ and edit it to include
 Install Dependencies
 ~~~~~~~~~~~~~~~~~~~~
 
-First, ensure you have the correct version of the `BOUT-spack` git submodule checked out:
+The following instructions assume you have already git-cloned Hermes-3 and are in the root directory
+of the repository.
+
+First, update the git submodules to ensure that you have the correct version of the ``BOUT-spack``
+repository checked out:
 
 .. code-block:: bash
 
-   git submodule update --init BOUT-spack
+   git submodule update --init
 
 At this point, standard spack commands can be used to activate the environment described in
 ``spack.yaml``. Alternatively, a wrapper script is provided that both activates the environment and
