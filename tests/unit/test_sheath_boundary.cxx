@@ -1,20 +1,14 @@
-
 #include "gtest/gtest.h"
+#include <cmath>
 
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
 
 #include <bout/bout_types.hxx>
 #include <bout/output.hxx>
+#include <bout/region.hxx>
 
 #include "../../include/sheath_boundary.hxx"
-
-/// Global mesh
-namespace bout {
-namespace globals {
-extern Mesh* mesh;
-} // namespace globals
-} // namespace bout
 
 // The unit tests use the global mesh
 using namespace bout::globals;
