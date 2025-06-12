@@ -380,7 +380,8 @@ You should see your prompt change to ``[hermes-3]``, indicating that the spack e
 
    The wrapper script runs ``spacktivate . -p -v gcc`` to load a 'view' when activating the
    environment. If you choose not to use the wrapper, you'll need to run a similar command in order
-   for the instructions below to work.
+   for the instructions below to work. For more info on views, see the `spack documentation
+   <https://spack.readthedocs.io/en/latest/environments.html#environment-views>`_.
 
 .. note:: 
 
