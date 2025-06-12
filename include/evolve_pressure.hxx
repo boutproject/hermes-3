@@ -93,6 +93,7 @@ private:
   bool low_T_diffuse_perp; ///< Add cross-field diffusion at low temperature?
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
+  bool damp_p_nt; ///< Damp P - N*T. Active when P < 0 or N < density_floor
 
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 
