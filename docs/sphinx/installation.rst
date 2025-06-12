@@ -374,7 +374,7 @@ provides some useful bash functions and aliases. To use it, source the file with
 
    . activate_h3env
 
-You should see your prompt change to `[hermes-3]`, indicating that the spack environment is active.
+You should see your prompt change to ``[hermes-3]``, indicating that the spack environment is active.
 
 .. note::
 
@@ -404,7 +404,7 @@ usually the most trouble-free approach. This step rarely need to be repeated in 
 moving to another version of the same compiler, or switching to a different version of spack itself.
 
 .. tip::
-   Note that it's also possible to install hermes-3 itself as a package (remove ``--only
+   Note that it's also possible to install Hermes-3 itself as a package (remove ``--only
    dependencies`` from the above). This is the easiest approach if you just want to run the code,
    but re-installing it each time as part of a development workflow tends to be very slow. See below
    for an alternative.
@@ -416,14 +416,14 @@ A convenient way to build Hermes-3 in development is to use the dependencies ins
 instructions above and then call ``cmake`` directly to configure and compile Hermes-3. The wrapper
 script provides a bash function ``in_h3env`` that runs commands in the hermes-3 *build* environment,
 setting all of the necessary paths to find headers, link libraries etc. To build
-hermes-3 with CMake, run (e.g.):
+Hermes-3 with CMake, run (e.g.):
 
 .. code-block:: bash
 
    export h3_build="./builds/my_build" && in_h3env cmake -DBOUT_USE_PETSC=ON -B "$h3_build" && in_h3env cmake --build "$h3_build" -j8
 
 In the above example, PETSc support is turned on at the configuration stage, which emulates the
-result of installing hermes-3 directly with the default ``spec`` listed in spack.yaml
+result of installing Hermes-3 directly with the default ``spec`` listed in spack.yaml
 (``hermes-3%gcc+petsc``).
 
 The tests can then be run in the usual way with:
@@ -433,20 +433,20 @@ The tests can then be run in the usual way with:
    cd ./builds/my_build
    ctest -j 3
 
-If hermes-3 was installed with the +xhermes variant (as it is by default), the tests should pass
+If Hermes-3 was installed with the +xhermes variant (as it is by default), the tests should pass
 without having to modify any paths.
 
 Configuration options
 ~~~~~~~~~~~~~~~~~~~~~
 
-To see which `variants` of hermes-3 are available, run
+To see which `variants` of Hermes-3 are available, run
 
 .. code-block:: bash
 
    spack info --no-dependencies --no-versions hermes-3
 
-By default, the top-level *spec* in the environment is `hermes-3%gcc+petsc`, which tells spack to
-configure hermes-3 with PETSc support and build with gcc. To change this, first modify spack.yaml
+By default, the top-level 'spec' in the environment is ``hermes-3%gcc+petsc``, which tells spack to
+configure Hermes-3 with PETSc support and build with gcc. To change this, first modify spack.yaml
 (e.g. to configure without PETSc support):
 
 .. code-block:: yaml
@@ -469,9 +469,9 @@ then reconcretize, and (re-)install packages as necessary:
    (stored in spack.lock) and nothing will be updated.
 
 .. important::
-   If you're installing hermes-3 with CMake (i.e. using ``spack install --only dependencies``), this procedure will update the installed 
+   If you're installing Hermes-3 with CMake (i.e. using ``spack install --only dependencies``), this procedure will update the installed 
    dependencies according to the spec in spack.yaml, but **you'll still need to supply the appropriate configuration options to CMake**.
-   If you're installing hermes-3 with spack directly, the correct configuration options will be set automatically.
+   If you're installing Hermes-3 with spack directly, the correct configuration options will be set automatically.
 
 Useful spack commands/tips
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -488,7 +488,7 @@ Check paths to installation for lib, bin, and include files:
   
    spack find --paths [package_name]
 
-To change the build type of hermes-3 when spack-installing the package directly, add a build_type variant in spack.yaml.
+To change the build type of Hermes-3 when spack-installing the package directly, add a build_type variant in spack.yaml.
 e.g. to build in Debug:
 
 .. code-block:: yaml
