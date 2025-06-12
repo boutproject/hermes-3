@@ -65,6 +65,7 @@ private:
 
   /// Save more diagnostics?
   bool diagnose;
+  Options channels; ///< Energy transfer diagnostics
 
   /// Update collision frequencies, momentum and energy exchange
   /// nu_12    normalised frequency

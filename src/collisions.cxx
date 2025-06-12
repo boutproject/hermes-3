@@ -123,8 +123,15 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
         //  1) This term is always positive: Collisions don't lead to cooling
         //  2) In the limit that m_2 << m_1 (e.g. electron-ion collisions),
         //     the lighter species is heated more than the heavy species.
-        add(species1["energy_source"], (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12);
-        add(species2["energy_source"], (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12);
+        Field3D friction1 = (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12;
+        Field3D friction2 = (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12;
+        add(species1["energy_source"], friction1);
+        add(species2["energy_source"], friction2);
+
+        if (diagnose) {
+          set(channels["E_friction_" + species1.name() + "_" + species2.name()], friction1);
+          set(channels["E_friction_" + species2.name() + "_" + species1.name()], friction2);
+        }
       }
     }
 
@@ -140,6 +147,8 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 
       add(species1["energy_source"], Q12);
       subtract(species2["energy_source"], Q12);
+
+      set(channels["E_W_" + species1.name() + "_" + species2.name()], Q12);
     }
   }
 }
@@ -483,7 +492,10 @@ void Collisions::outputVars(Options& state) {
   }
 
   // Normalisations
-  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  const auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  const auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+  const auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
   /// Iterate through the first species in each collision pair
   const std::map<std::string, Options>& level1 = collision_rates.getChildren();
@@ -506,5 +518,14 @@ void Collisions::outputVars(Options& state) {
                       {"species", name},
                       {"source", "collisions"}});
     }
+  }
+
+  for (const auto& kv : channels.getChildren()) {
+    set_with_attrs(state[kv.first], getNonFinal<Field3D>(kv.second),
+                   {{"time_dimension", "t"},
+                    {"units", "W m^-3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", "Energy transfer channel"},
+                    {"source", "collisions"}});
   }
 }
