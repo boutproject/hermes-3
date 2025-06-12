@@ -291,9 +291,13 @@ Using Spack
 
 In this section we describe how to build Hermes-3 using `spack <https://spack.io/>`_ to manage the
 installation of standard packages to your local environment. By default, dependencies like NetCDF4,
-PETSc and SUNDIALS will be installed by spack, but note that it's also possible to `use your own
-versions of packages <https://spack.readthedocs.io/en/latest/packages_yaml.html#external-packages>`_
-(either system-installed or locally-built).
+PETSc and SUNDIALS will be installed automatically, as required, but note that it's also possible to
+`use your own versions of packages
+<https://spack.readthedocs.io/en/latest/packages_yaml.html#external-packages>`_ (either
+system-installed or locally-built). While spack *can* be used to build Hermes-3 at a particular
+version, the instructions below also allow you to compile BOUT++ and Hermes-3 as part of a
+development workflow, i.e. using any changes you have made to the code in the working tree of your
+local repository.
 
 These instructions were last tested using Ubuntu 22.04.1 and spack version 0.23.1.
 The default environment configuration assumes you have gcc installed.
