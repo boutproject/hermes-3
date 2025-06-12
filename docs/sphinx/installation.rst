@@ -473,8 +473,8 @@ then reconcretize, and (re-)install packages as necessary:
    dependencies according to the spec in spack.yaml, but **you'll still need to supply the appropriate configuration options to CMake**.
    If you're installing hermes-3 with spack directly, the correct configuration options will be set automatically.
 
-Useful spack commands
-~~~~~~~~~~~~~~~~~~~~~
+Useful spack commands/tips
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 See all dependencies required by the current spec:
 
@@ -488,6 +488,14 @@ Check paths to installation for lib, bin, and include files:
   
    spack find --paths [package_name]
 
+To change the build type of hermes-3 when spack-installing the package directly, add a build_type variant in spack.yaml.
+e.g. to build in Debug:
+
+.. code-block:: yaml
+  
+   spack:
+      specs:
+         - hermes-3%gcc+petsc build_type=Debug
 
 Next Steps
 ----------
