@@ -329,6 +329,26 @@ The ``spack`` command should now be available; e.g.
    spack --version
     > 0.23.1 (2bfcc69fa870d3c6919be87593f22647981b648a)
 
+Libraries and executables associated with spack packages are installed to ``$SPACK_ROOT/opt/spack``
+by default (``$SPACK_ROOT`` is wherever you cloned spack to). Build files, however, are placed in
+``$tmpdir``, which usually resolves to ``/tmp/$USER`` on Linux systems. Since ``/tmp`` is typically
+cleaned when you reboot your machine, this can be a problem if you need access to a build at some
+later time. To change this behaviour, create a config.yml file:
+
+.. code-block:: bash
+
+   touch $HOME/.spack/config.yaml
+
+and edit it to include
+
+.. code-block:: yaml
+
+   config:
+      # Put builds in $SPACK_ROOT rather than $tmpdir
+      build_stage:
+         - $spack/var/spack/stage
+         - $user_cache_path/stage
+
 Install Dependencies
 ~~~~~~~~~~~~~~~~~~~~
 
