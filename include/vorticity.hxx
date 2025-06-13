@@ -144,6 +144,7 @@ private:
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
   bool diagnose; ///< Output additional diagnostics?
+  Options channels; ///< Energy transfer channel diagnostics
 };
 
 namespace {

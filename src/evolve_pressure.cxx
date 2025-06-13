@@ -262,6 +262,11 @@ void EvolvePressure::finally(const Options& state) {
   /// Get the section containing this species
   const auto& species = state["species"][name];
 
+  if (diagnose) {
+    // Numerical energy channel
+    set(channels["E_numerical_P_" + name], zeroFrom(P));
+  }
+
   // Get updated pressure and temperature with boundary conditions
   P = get<Field3D>(species["pressure"]);
   T = get<Field3D>(species["temperature"]);
@@ -275,8 +280,12 @@ void EvolvePressure::finally(const Options& state) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
+    Field3D advection = Div_n_bxGrad_f_B_XPPM(Pint, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) = -advection;
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(Pint, phi, bndry_flux, poloidal_flows, true);
+    if (diagnose) {
+      set(channels["E_Div_VExB_32P_" + name], (3./2) * advection);
+    }
   } else {
     ddt(P) = 0.0;
   }
@@ -296,18 +305,26 @@ void EvolvePressure::finally(const Options& state) {
     // Use V * Grad(P) form
     //
     // The internal energy term Pint = Nlim * T
-    ddt(P) -=
-        FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave, flow_ylow);
-
-    ddt(P) += (2. / 3) * V * Grad_par(P);
-
+    Field3D advection = FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave, flow_ylow);
     flow_ylow *= 5. / 2; // Energy flow
+
+    Field3D channel = advection - V * Grad_par(P);
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       ddt(P) -= Div_n_g_bxGrad_f_B_XZ(Pint + (2. / 3) * P, V, -Apar_flutter);
       ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+    }
+
+    ddt(P) -= advection;
+    ddt(P) -= (2. / 3) * channel;
+
+    if (diagnose) {
+      // Advection
+      set(channels["E_Div_Vpar_32P_" + name], (3. / 2) * advection);
+      // Energy transfer channel
+      set(channels["E_P_Divpar_V_" + name], channel);
     }
 
     if (numerical_viscous_heating || diagnose) {
@@ -328,26 +345,42 @@ void EvolvePressure::finally(const Options& state) {
   if (species.isSet("low_n_coeff")) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
-    ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N)
-              + FV::Div_par_K_Grad_par(low_n_coeff, P);
+    Field3D rhs = FV::Div_par_K_Grad_par(low_n_coeff * T, N) + FV::Div_par_K_Grad_par(low_n_coeff, P);
+    ddt(P) += rhs;
+
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   if (low_n_diffuse_perp) {
-    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P,
-                                    true);
+    Field3D rhs = Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P, true);
+    ddt(P) += rhs;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) +=
-        1e-4
-        * Div_Perp_Lap_FV_Index(
-            floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
-            T, false);
+    Field3D rhs = 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
+                                           T, false);
+    ddt(P) += rhs;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   if (low_p_diffuse_perp) {
     Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
-    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
+    Field3D rhs = Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
+    ddt(P) += rhs;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   // Parallel heat conduction
@@ -407,8 +440,7 @@ void EvolvePressure::finally(const Options& state) {
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
     flow_ylow_conduction;
-    ddt(P) +=
-        (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    Field3D conduction = Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
     flow_ylow += flow_ylow_conduction;
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -423,18 +455,33 @@ void EvolvePressure::finally(const Options& state) {
       mesh->communicate(db_dot_T, b0_dot_T);
       db_dot_T.applyBoundary("neumann");
       b0_dot_T.applyBoundary("neumann");
-      ddt(P) += (2. / 3)
-                * (Div_par(kappa_par * db_dot_T)
-                   - Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter));
+      conduction += Div_par(kappa_par * db_dot_T) -
+        Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter);
+    }
+    ddt(P) += (2. / 3) * conduction;
+
+    if (diagnose) {
+      // Energy conduction channel
+      set(channels["E_conduction_" + name], conduction);
     }
   }
 
   if (hyper_z > 0.) {
-    ddt(P) -= hyper_z * D4DZ4_Index(P);
+    Field3D rhs = - hyper_z * D4DZ4_Index(P);
+    ddt(P) += rhs;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   if (hyper_z_T > 0.) {
-    ddt(P) -= hyper_z_T * D4DZ4_Index(T);
+    Field3D rhs = - hyper_z_T * D4DZ4_Index(T);
+    ddt(P) += rhs;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * rhs);
+    }
   }
 
   //////////////////////
@@ -468,6 +515,10 @@ void EvolvePressure::finally(const Options& state) {
     // Term to force evolved P towards N * T
     // This is active when P < 0 or when N < density_floor
     ddt(P) += N * T - P;
+    if (diagnose) {
+      // Numerical energy channel
+      add(channels["E_numerical_P_" + name], (3./2) * (N * T - P));
+    }
   }
 
   // Scale time derivatives
@@ -562,14 +613,18 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    set_with_attrs(state[std::string("P") + name + std::string("_src")], final_source,
-                   {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
+    Options& final_source_output = state[std::string("P") + name + std::string("_src")];
+    set_with_attrs(final_source_output, final_source,
+                   {{"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
                     {"standard_name", "pressure source"},
                     {"long_name", name + " pressure source"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
+    if (source_time_dependent) {
+      // Pressure source changes in time, so add a time dimension
+      final_source_output.attributes["time_dimension"] = "t";
+    }
 
     if (flow_xlow.isAllocated()) {
       set_with_attrs(
@@ -630,6 +685,16 @@ void EvolvePressure::outputVars(Options& state) {
            {"long_name", name + " energy source from numerical viscous heating"},
            {"species", name},
            {"source", "evolve_pressure"}});
+    }
+
+    // Energy transfer channels
+    for (const auto& kv : channels.getChildren()) {
+      set_with_attrs(state[kv.first], getNonFinal<Field3D>(kv.second),
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", "Energy transfer channel"},
+                      {"source", "evolve_pressure"}});
     }
   }
 }
