@@ -72,6 +72,7 @@ set(HERMES_SOURCES
     src/relax_potential.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
+    src/sheath_boundary_penalty.cxx
     src/sheath_boundary_simple.cxx
     src/sheath_boundary_insulating.cxx
     src/snb_conduction.cxx
@@ -144,6 +145,7 @@ set(HERMES_SOURCES
     include/recycling.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
+    include/sheath_boundary_penalty.hxx
     include/sheath_boundary_simple.hxx
     include/sheath_boundary_insulating.hxx
     include/simple_conduction.hxx
@@ -165,6 +167,9 @@ set(HERMES_SOURCES
 add_library(hermes-3-lib ${HERMES_SOURCES})
 
 target_link_libraries(hermes-3-lib PRIVATE bout++::bout++)
+
+target_compile_features(hermes-3-lib PUBLIC cxx_std_17)
+set_target_properties(hermes-3-lib PROPERTIES CXX_EXTENSIONS OFF)
 
 target_include_directories(hermes-3-lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -242,7 +247,6 @@ if(HERMES_TESTS)
     if(NOT PACKAGE_TESTS)
       # Not running BOUT++ tests
       # Since BOUT++ includes googletest, adding it again causes errors
-      set(CMAKE_CXX_STANDARD 14) # Needed to compile GoogleTest on Darwin
       add_subdirectory(external/googletest)
     endif()
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)

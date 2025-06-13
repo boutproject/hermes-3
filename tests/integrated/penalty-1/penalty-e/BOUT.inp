@@ -1,0 +1,104 @@
+# 1D system 
+#
+
+nout = 20
+timestep = 1e4
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 44   # Resolution along field-line
+nz = 1
+
+length = 11           # Length of the domain in meters
+length_xpt = 10   # Length from midplane to X-point [m]
+
+# Parallel grid spacing
+dy = length / ny
+
+# Calculate where the source ends in grid index
+y_xpt = 2pi * length_xpt / length
+
+penalty_mask = H(y - y_xpt)
+
+ixseps1 = -1
+ixseps2 = -1
+
+[hermes]
+# Notes:
+#  - electrons after other species, so the density can be set by quasineutrality
+#    and velocity from zero-current condition
+#  - electron_force_balance after collisions, so the electric field includes forces
+#    on the electrons
+components = (d+, e,
+              collisions,
+              sheath_boundary_penalty,
+              electron_force_balance)
+
+loadmetric = false        # Use Rxy, Bpxy etc?
+normalise_metric = true  # Normalise the input metric?
+
+Nnorm = 1e19
+Bnorm = 1
+Tnorm = 10
+
+[sheath_boundary_penalty]
+gamma_e = 5/2
+gamma_i = 5/2
+
+[solver]
+type = cvode
+
+mxstep = 1e5
+
+####################################
+
+[d+]  # Deuterium ions
+type = (evolve_density, evolve_momentum, evolve_energy,
+        noflow_boundary)
+
+charge = 1
+AA = 2
+
+thermal_conduction = false  # in evolve_pressure
+
+diagnose = true   # Output diagnostics for these components?
+
+[Nd+]
+
+function = 1
+
+flux = 1e23  # Particle flux in particles / m^2
+
+source = H(mesh:y_xpt - y) * flux / mesh:length_xpt
+
+[Ed+]
+function = 1
+
+powerflux = 1e6  # Input power flux in W/m^2
+
+source = (powerflux / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
+[NVd+]
+
+function = 0
+
+####################################
+
+[e] # Electrons
+type = quasineutral, zero_current, evolve_energy, noflow_boundary
+
+charge = -1
+AA = 1/1836
+
+thermal_conduction = false  # in evolve_pressure
+
+diagnose = true
+
+[Ee]
+
+function = `Ed+:function`  # Same as ion pressure initially
+
+source = `Ed+:source`  # Same as ion pressure source
+
