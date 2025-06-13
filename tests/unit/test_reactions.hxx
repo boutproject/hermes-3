@@ -59,7 +59,7 @@ protected:
     BoutReal axis_range = axis_max - axis_min;
     BoutReal v_range = v_max - v_min;
     std::stringstream expression;
-    expression << "10^(" << v_min << " + (" << axis_str << "-" << axis_min << ")/"
+    expression << "exp(" << v_min << " + (" << axis_str << "-" << axis_min << ")/"
                << axis_range << "*" << v_range << ")";
     return expression.str();
   }

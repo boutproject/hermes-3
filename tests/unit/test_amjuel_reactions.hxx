@@ -64,8 +64,8 @@ protected:
     // Overwrite n_e, n_T, n_ion with functions that vary linearly along one axis
 
     // Density and Temperature ranges (log vals)
-    constexpr BoutReal logn_min = 14, logn_max = 22;
-    constexpr BoutReal logT_min = -1, logT_max = 4;
+    const BoutReal logn_min = std::log(1e14), logn_max = std::log(1e22);
+    const BoutReal logT_min = std::log(0.1), logT_max = std::log(2e4);
 
     constexpr BoutReal xmin = 0, xmax = 2;
     constexpr BoutReal ymin = 0, ymax = 25.1327412287;
