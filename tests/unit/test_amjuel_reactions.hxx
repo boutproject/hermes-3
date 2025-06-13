@@ -18,14 +18,15 @@ class AmjuelReactionTest : public ReactionTest<RTYPE> {
                 "Template arg to AmjuelReactionTest must derive from AmjuelReaction");
 
 public:
-  AmjuelReactionTest(std::string lbl, std::string reaction_str, std::string isotope)
-      : ReactionTest<RTYPE>(lbl, reaction_str), isotope(isotope) {}
+  AmjuelReactionTest(std::string lbl, std::string reaction_str, std::string sp_in)
+      : ReactionTest<RTYPE>(lbl, reaction_str), sp_in(sp_in) {}
 
 protected:
-  std::string isotope;
+  std::string sp_in;
 
   Options generate_state() override {
-    std::string ion = isotope + "+";
+    std::string atom = this->sp_in.substr(0, 1);
+    std::string ion = atom + "+";
 
     const std::map<std::string, BoutReal> sp_masses = {
         {"h", 1.0}, {"d", 2.0}, {"t", 3.0}, {"e", 1. / 1836}};
@@ -42,8 +43,8 @@ protected:
                       {"density_source", 0.0},
                       {"momentum_source", 0.0},
                       {"energy_source", 0.0}}},
-                    {isotope,
-                     {{"AA", sp_masses.at(isotope)},
+                    {atom,
+                     {{"AA", sp_masses.at(atom)},
                       {"charge", atom_charge},
                       {"density", 1.0},
                       {"temperature", 1.0},
@@ -52,7 +53,7 @@ protected:
                       {"momentum_source", 0.0},
                       {"energy_source", 0.0}}},
                     {ion,
-                     {{"AA", sp_masses.at(isotope)},
+                     {{"AA", sp_masses.at(atom)},
                       {"charge", ion_charge},
                       {"density", 1.0},
                       {"temperature", 1.0},
@@ -71,7 +72,8 @@ protected:
     constexpr BoutReal ymin = 0, ymax = 25.1327412287;
     constexpr BoutReal zmin = 0, zmax = 5.38558740615;
 
-    state["species"][ion]["density"] = FieldFactory::get()->create3D(
+    // Linear functions for input atom/ion density, e density, e temperature
+    state["species"][sp_in]["density"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(logn_min, logn_max, "x", xmin, xmax), &state, mesh);
     state["species"]["e"]["density"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(logn_min, logn_max, "y", ymin, ymax), &state, mesh);
@@ -86,21 +88,21 @@ class AmjuelHRecTest : public AmjuelReactionTest<AmjuelHydRecombinationIsotope<'
 public:
   AmjuelHRecTest()
       : AmjuelReactionTest<AmjuelHydRecombinationIsotope<'h'>>("Hrec", "h+ + e -> h",
-                                                               "h") {}
+                                                               "h+") {}
 };
 
 class AmjuelDRecTest : public AmjuelReactionTest<AmjuelHydRecombinationIsotope<'d'>> {
 public:
   AmjuelDRecTest()
       : AmjuelReactionTest<AmjuelHydRecombinationIsotope<'d'>>("Drec", "d+ + e -> d",
-                                                               "d") {}
+                                                               "d+") {}
 };
 
 class AmjuelTRecTest : public AmjuelReactionTest<AmjuelHydRecombinationIsotope<'t'>> {
 public:
   AmjuelTRecTest()
       : AmjuelReactionTest<AmjuelHydRecombinationIsotope<'t'>>("Trec", "t+ + e -> t",
-                                                               "t") {}
+                                                               "t+") {}
 };
 
 class AmjuelHIznTest : public AmjuelReactionTest<AmjuelHydIonisationIsotope<'h'>> {
