@@ -8,102 +8,162 @@ from numpy import isclose
 
 import os
 
-shell("rm -f data/BOUT.dmp.0.nc")
-
-hermes_bin = os.environ.get("HERMES_BIN", "../../../hermes-3")
-
-success = True
-path = "data"
-
-s, out = launch_safe(f"{hermes_bin} -d {path}", nproc=1, pipe=True)
 
 rtol = 1e-2
 atol = 1e-2
 
-# Save output to log file
-with open("run.log", "w") as f:
+
+def check(result, expected, name, units):
+    if isclose(result, expected, rtol=rtol, atol=atol):
+        return True
+
+    abs_diff = expected - result
+    rel_diff = (abs_diff / expected) * 100
+    print(
+        f"Failed: {name} ({result:6.3f}{units}), expected about {expected:6.3f}{units} (diff: {abs_diff:.3f}, {rel_diff:.3f}%)"
+    )
+    return False
+
+
+def collect_all():
+    Pe = collect("Pe", tind=-1, path=path, info=False)
+    Ne = collect("Ne", tind=-1, path=path, info=False)
+    Tnorm = collect("Tnorm", path=path, info=False)
+    Ti = collect("Ti", tind=-1, path=path, info=False) * Tnorm
+
+    Te = (Pe / Ne) * Tnorm
+
+    Ve = collect("Ve", tind=-1, path=path, info=False)
+    Ve_norm = Ve.attributes["conversion"]
+    Vi = collect("Vi", tind=-1, path=path, info=False)
+    Vi_norm = Vi.attributes["conversion"]
+
+    return Te, Ti, Ve * Ve_norm, Vi * Vi_norm
+
+
+def test_success(name, success):
+    print(f"{name} => Test {'passed' if success else 'failed'}")
+
+
+shell("rm -f data/BOUT.dmp.0.nc")
+
+hermes_bin = os.environ.get("HERMES_BIN", "../../../hermes-3")
+
+path = "data"
+
+s, out = launch_safe(f"{hermes_bin} -d {path}", nproc=1, pipe=True)
+
+with open("base.log", "w") as f:
     f.write(out)
 
-Pe = collect("Pe", tind=-1, path=path, info=False)
-Ne = collect("Ne", tind=-1, path=path, info=False)
-Tnorm = collect("Tnorm", path=path, info=False)
+upstream = (-1, 0, 0, 0)
+downstream = (-1, 0, -1, 0)
 
-Te = (Pe / Ne) * Tnorm
-Te_up = Te[-1, 0, 0, 0]
-expected_Te_up = 100
-Te_down = Te[-1, 0, -1, 0]
-expected_Te_down = 92.2
+Te, Ti, Ve, Vi = collect_all()
 
-if not isclose(Te_up, expected_Te_up, rtol=rtol, atol=atol):
-    success = False
-    print(
-        f"Upstream electron temperature failed: {Te_up}eV. Expecting about {expected_Te_up}eV"
-    )
+base_success = True
 
-if not isclose(Te_down, expected_Te_down, rtol=rtol, atol=atol):
-    success = False
-    print(
-        f"Downstream electron temperature failed: {Te_down}eV. Expecting about {expected_Te_down}eV"
-    )
+base_success &= check(Te[upstream], 100, "upstream electron temperature", "eV")
+base_success &= check(Te[downstream], 92.2, "downstream electron temperature", "eV")
 
-Ti = collect("Ti", tind=-1, path=path, info=False) * Tnorm
-Ti_up = Ti[-1, 0, 0, 0]
-expected_Ti_up = 100
-Ti_down = Ti[-1, 0, -1, 0]
-expected_Ti_down = 93.8
+base_success &= check(Ti[upstream], 100, "upstream ion temperature", "eV")
+base_success &= check(Ti[downstream], 93.8, "downstream ion temperature", "eV")
 
-if not isclose(Ti_up, expected_Ti_up, rtol=rtol, atol=atol):
-    success = False
-    print(
-        f"Upstream ion temperature failed: {Ti_up}eV. Expecting about {expected_Ti_up}eV"
-    )
+base_success &= check(Ve[upstream], 0.0, "upstream electron velocity", "m/s")
+base_success &= check(Ve[downstream], 24090, "downstream electron velocity", "m/s")
 
-if not isclose(Ti_down, expected_Ti_down, rtol=rtol, atol=atol):
-    success = False
-    print(
-        f"Downstream ion temperature failed: {Ti_down}eV. Expecting about {expected_Ti_down}eV"
-    )
+base_success &= check(Vi[upstream], 0.0, "upstream ion velocity", "m/s")
+base_success &= check(Vi[downstream], 24090, "downstream ion velocity", "m/s")
 
+test_success("Sheath base case", base_success)
 
-Ve = collect("Ve", tind=-1, path=path, info=False)
-Ve_norm = Ve.attributes["conversion"]
-Ve_up = Ve[-1, 0, 0, 0] * Ve_norm
-expected_Ve_up = 0.0
-Ve_down = Ve[-1, 0, -1, 0] * Ve_norm
-expected_Ve_down = 24090
+################################################################################
+# Re-run with higher electron heat transmission.
+# Should give lower electron temperature and lower velocity.
 
-if not isclose(Ve_up, expected_Ve_up, rtol=rtol, atol=atol):
-    success = False
-    print(
-        f"Upstream electron velocity failed: {Ve_up}eV. Expecting about {expected_Ve_up}eV"
-    )
+heatflux = "sheath_boundary_simple:gamma_e=35"
 
-if not isclose(Ve_down, expected_Ve_down, rtol=rtol, atol=atol):
-    success = False
-    print(
-        f"Downstream electron velocity failed: {Ve_down}eV. Expecting about {expected_Ve_down}eV"
-    )
+s, out = launch_safe(f"{hermes_bin} -d {path} {heatflux}", nproc=1, pipe=True)
 
-Vi = collect("Vi", tind=-1, path=path, info=False)
-Vi_norm = Vi.attributes["conversion"]
-Vi_up = Vi[-1, 0, 0, 0] * Vi_norm
-expected_Vi_up = 0.0
-Vi_down = Vi[-1, 0, -1, 0] * Vi_norm
-expected_Vi_down = 24090
+with open("higher_e_transmission.log", "w") as f:
+    f.write(out)
 
-if not isclose(Vi_up, expected_Vi_up, rtol=rtol, atol=atol):
-    success = False
-    print(
-        f"Upstream ion velocity failed: {Vi_up}eV. Expecting about {expected_Vi_up}eV"
-    )
+Te, Ti, Ve, Vi = collect_all()
 
-if not isclose(Vi_down, expected_Vi_down, rtol=rtol, atol=atol):
-    success = False
-    print(
-        f"Downstream ion velocity failed: {Vi_down}eV. Expecting about {expected_Vi_down}eV"
-    )
+case2_success = True
+case2_success &= check(Te[upstream], 100, "upstream electron temperature", "eV")
+case2_success &= check(Te[downstream], 39.27, "downstream electron temperature", "eV")
 
-if success:
+case2_success &= check(Ti[upstream], 100, "upstream ion temperature", "eV")
+case2_success &= check(Ti[downstream], 93.34, "downstream ion temperature", "eV")
+
+case2_success &= check(Ve[upstream], 0.0, "upstream electron velocity", "m/s")
+case2_success &= check(Ve[downstream], 17778, "downstream electron velocity", "m/s")
+
+case2_success &= check(Vi[upstream], 0.0, "upstream ion velocity", "m/s")
+case2_success &= check(Vi[downstream], 17778, "downstream ion velocity", "m/s")
+
+test_success("Sheath higher gamma_e", case2_success)
+
+################################################################################
+# Re-run with lower ion heat transmission.
+# Should give higher ion temperature and higher velocity.
+
+heatflux = "sheath_boundary_simple:gamma_i=0.35"
+
+s, out = launch_safe(f"{hermes_bin} -d {path} {heatflux}", nproc=1, pipe=True)
+
+with open("lower_i_transmission.log", "w") as f:
+    f.write(out)
+
+Te, Ti, Ve, Vi = collect_all()
+
+case3_success = True
+case3_success &= check(Te[upstream], 100, "upstream electron temperature", "eV")
+case3_success &= check(Te[downstream], 91.67, "downstream electron temperature", "eV")
+
+case3_success &= check(Ti[upstream], 100, "upstream ion temperature", "eV")
+case3_success &= check(Ti[downstream], 116.5, "downstream ion temperature", "eV")
+
+case3_success &= check(Ve[upstream], 0.0, "upstream electron velocity", "m/s")
+case3_success &= check(Ve[downstream], 24815, "downstream electron velocity", "m/s")
+
+case3_success &= check(Vi[upstream], 0.0, "upstream ion velocity", "m/s")
+case3_success &= check(Vi[downstream], 24815, "downstream ion velocity", "m/s")
+
+test_success("Sheath lower gamma_i", case3_success)
+
+################################################################################
+# Re-run with higher secondary electron emission.
+# Should give higher electron temperature and higher velocity.
+
+heatflux = "sheath_boundary_simple:secondary_electron_coef=0.99"
+
+s, out = launch_safe(f"{hermes_bin} -d {path} {heatflux}", nproc=1, pipe=True)
+
+with open("higher_Ge.log", "w") as f:
+    f.write(out)
+
+Te, Ti, Ve, Vi = collect_all()
+
+case4_success = True
+case4_success &= check(Te[upstream], 100, "upstream electron temperature", "eV")
+case4_success &= check(Te[downstream], 110, "downstream electron temperature", "eV")
+
+case4_success &= check(Ti[upstream], 100, "upstream ion temperature", "eV")
+case4_success &= check(Ti[downstream], 93.8, "downstream ion temperature", "eV")
+
+case4_success &= check(Ve[upstream], 0.0, "upstream electron velocity", "m/s")
+case4_success &= check(Ve[downstream], 25278, "downstream electron velocity", "m/s")
+
+case4_success &= check(Vi[upstream], 0.0, "upstream ion velocity", "m/s")
+case4_success &= check(Vi[downstream], 25278, "downstream ion velocity", "m/s")
+
+test_success("Sheath higher Ge", case4_success)
+
+################################################################################
+
+if base_success and case2_success and case3_success and case4_success:
     print(" => Test passed")
     exit(0)
 else:
