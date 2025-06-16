@@ -35,12 +35,21 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
           .doc("Ratio of specific heats γ = Cp/Cv [5/3 for monatomic ideal gas]")
           .withDefault(5. / 3);
 
+  dynamic_coefficients = options["dynamic_coefficients"]
+    .doc("Recalculate conduction coeffient?")
+    .withDefault<bool>(false);
+
+  if (!dynamic_coefficients) {
+    // Fixed conduction coefficient
+
+    neutral_conduction =
+      options["conduction"].doc("Heat conduction [m^2/s]").withDefault(1.0)
+      / (meters * meters / seconds);
+    neutral_conduction.applyBoundary("dirichlet");
+  }
+
   neutral_viscosity =
       options["viscosity"].doc("Kinematic viscosity [m^2/s]").withDefault(1.0)
-      / (meters * meters / seconds);
-
-  neutral_conduction =
-      options["conduction"].doc("Heat conduction [m^2/s]").withDefault(1.0)
       / (meters * meters / seconds);
 
   neutral_gamma = options["neutral_gamma"]
@@ -51,6 +60,22 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
                       .doc("A minimum density used when dividing by density."
                            "Normalised units.")
                       .withDefault(1e-5);
+
+  temperature_floor = options["temperature_floor"]
+                          .doc("Low temperature scale")
+                          .withDefault<BoutReal>(0.1)
+                      / get<BoutReal>(alloptions["units"]["eV"]);
+
+  precondition = options["precondition"]
+                     .doc("Enable preconditioning in neutral model?")
+                     .withDefault<bool>(false);
+
+  if (precondition) {
+    laplacian = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
+
+    laplacian->setInnerBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
+    laplacian->setOuterBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
+  }
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
@@ -279,10 +304,36 @@ void NeutralFullVelocity::transform(Options& state) {
 void NeutralFullVelocity::finally(const Options& state) {
   AUTO_TRACE();
 
-  // Density
-  ddt(Nn2D) = -Div(Vn2D_contravariant, Nn2D);
+  auto& localstate = state["species"][name];
 
   Field2D Nn2D_floor = softFloor(Nn2D, density_floor);
+  Field2D Tn2D_floor = softFloor(Tn2D, temperature_floor);
+  Field2D Pn2D_floor = Nn2D_floor * Tn2D_floor;
+
+  if (dynamic_coefficients) {
+    if (!localstate.isSet("collision_frequency")) {
+      throw BoutException("dynamic_coefficients requires collision_frequency");
+    }
+    Field2D collision_freq = DC(get<Field3D>(localstate["collision_frequency"]));
+
+    // Temperature diffusion
+    // Note: This is chi_n = (5/2) * Tn / (m * nu)
+    //       where nu is the collision frequency
+    neutral_conduction = (5. / 2) * Tn2D / (AA * collision_freq);
+
+    // Set to zero at the boundaries
+    neutral_conduction.applyBoundary("dirichlet");
+
+    // Kinematic viscosity
+    // Relationship between heat conduction and viscosity for neutral
+    // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+    // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+    // Transport Processes in Gases", 1972
+    //neutral_viscosity = (2. / 5) * neutral_conduction;
+  }
+
+  // Density
+  ddt(Nn2D) = -Div(Vn2D_contravariant, Nn2D);
 
   // Velocity
   // Note: Vn2D.y is proportional to the parallel flow
@@ -301,6 +352,8 @@ void NeutralFullVelocity::finally(const Options& state) {
   // terms in curvilinear geometry
   Field2D vr = Txr * Vn2D.x + Tyr * Vn2D.y; // Grad R component
   Field2D vz = Txz * Vn2D.x + Tyz * Vn2D.y; // Grad Z component
+  // vr.applyBoundary("dirichlet");
+  // vz.applyBoundary("dirichlet");
 
   // Advect as scalars (no Christoffel symbols needed)
   // X-Y advection
@@ -313,8 +366,13 @@ void NeutralFullVelocity::finally(const Options& state) {
   }
 
   // Viscosity
-  ddt(vr) += Laplace_FV(neutral_viscosity, vr);
-  ddt(vz) += Laplace_FV(neutral_viscosity, vz);
+  Field2D mass_density = AA * Nn2D_floor;
+  Field2D dynamic_viscosity = AA * Nn2D * neutral_viscosity;
+  dynamic_viscosity.applyBoundary("neumann");
+  Field2D momentum_flux_limit = Pn2D_floor;
+
+  ddt(vr) += Laplace_FV(dynamic_viscosity, vr, momentum_flux_limit) / mass_density;
+  ddt(vz) += Laplace_FV(dynamic_viscosity, vz, momentum_flux_limit) / mass_density;
 
   // Convert back to field-aligned coordinates
   ddt(Vn2D).x += Urx * ddt(vr) + Uzx * ddt(vz);
@@ -322,6 +380,7 @@ void NeutralFullVelocity::finally(const Options& state) {
 
   if (toroidal_flow) {
     Field2D vphi = Vn2D.z / (sigma_Bp * Rxy); // Toroidal component
+    vphi.applyBoundary("neumann");
 
     if (momentum_advection) {
       ddt(vphi) = -V_dot_Grad(Vn2D_contravariant, vphi);
@@ -336,7 +395,7 @@ void NeutralFullVelocity::finally(const Options& state) {
     }
 
     // Viscosity
-    ddt(vphi) += Laplace_FV(neutral_viscosity, vphi);
+    ddt(vphi) += Laplace_FV(dynamic_viscosity, vphi, momentum_flux_limit) / mass_density;
 
     // Convert back to field-aligned
     ddt(Vn2D).z += ddt(vphi) * sigma_Bp * Rxy;
@@ -346,10 +405,13 @@ void NeutralFullVelocity::finally(const Options& state) {
   // Pressure
   // Note that the equation of state is modified by density floor
   //
+
+  Field2D heat_flux_limit = Pn2D_floor * sqrt(Tn2D_floor * (2 / (PI * AA)));
+
   ddt(Pn2D) =
       -Div(Vn2D, Nn2D_floor * Tn2D + (adiabatic_index - 1.) * Pn2D)
       + (adiabatic_index - 1.) * (Vn2D_contravariant * GradPn2D)
-      + (adiabatic_index - 1.) * Laplace_FV(Nn2D_floor * neutral_conduction, Tn2D);
+    + (adiabatic_index - 1.) * Laplace_FV(Nn2D * neutral_conduction, Tn2D, heat_flux_limit);
 
   ///////////////////////////////////////////////////////////////////
   // Boundary condition on fluxes
@@ -418,8 +480,6 @@ void NeutralFullVelocity::finally(const Options& state) {
 
   /////////////////////////////////////////////////////
   // Atomic processes
-
-  auto& localstate = state["species"][name];
 
   // Particles
   if (localstate.isSet("density_source")) {
@@ -532,5 +592,59 @@ void NeutralFullVelocity::outputVars(Options& state) {
                     {"long_name", name + " parallel velocity"},
                     {"species", name},
                     {"source", "neutral_full_velocity"}});
+
+    if (dynamic_coefficients) {
+      set_with_attrs(state[std::string("chi_") + name], neutral_conduction,
+                     {{"time_dimension", "t"},
+                      {"units", "m^2/s"},
+                      {"conversion", Cs0 * Cs0 / Omega_ci},
+                      {"standard_name", "conduction coefficient"},
+                      {"long_name", name + " heat conduction coefficient"},
+                      {"source", "neutral_full_velocity"}});
+    } else {
+      set_with_attrs(state[std::string("chi_") + name], neutral_conduction,
+                     {{"units", "m^2/s"},
+                      {"conversion", Cs0 * Cs0 / Omega_ci},
+                      {"standard_name", "conduction coefficient"},
+                      {"long_name", name + " heat conduction coefficient"},
+                      {"source", "neutral_full_velocity"}});
+    }
   }
+}
+
+void NeutralFullVelocity::precon(const Options& state, BoutReal gamma) {
+  if (!precondition) {
+    return;
+  }
+
+  Field2D Nn2D_floor = softFloor(Nn2D, density_floor);
+  Field2D kappa = Nn2D * neutral_conduction;
+  Tn2D.applyBoundary("neumann");
+
+  // Solve cross-field heat diffusion
+  //
+  // dP/dt = (g - 1) Div(kappa Grad(P/N))
+  //
+  // The preconditioner inverts an operator:
+  //
+  // (I - dt J) = x - dt (g - 1)Div(kappa Grad(x / N))
+  //
+  // To remove the inner N we rearrange this to
+  //
+  // (N x' - dt (g - 1) Div(kappa Grad(x')))
+  //
+  // where x' = x / N
+  //
+  // The coefficients in the solver are:
+  //
+  //   d Laplace_perp(x) + a x + (1/c1)Grad(c2) dot Grad_perp(x) = b
+  //
+  Field2D logTn = log(Tn2D);
+  laplacian->setCoefA(Nn2D_floor - gamma * (adiabatic_index - 1.) * FV::Div_a_Grad_perp(kappa, logTn));
+  laplacian->setCoefC1(-1. / (gamma * (adiabatic_index - 1.)));
+  laplacian->setCoefC2(kappa * logTn);
+  laplacian->setCoefD((-gamma * (adiabatic_index - 1.)) * kappa);
+
+  // This factor of N converts from x' to x
+  ddt(Pn2D) = laplacian->solve(ddt(Pn2D)) * Nn2D_floor;
 }

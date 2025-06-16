@@ -7,6 +7,7 @@
 
 #include "component.hxx"
 
+#include <bout/invert_laplace.hxx>
 #include <bout/vector2d.hxx>
 
 /// Neutral gas model, evolving three components of velocity as axisymmetric fields
@@ -25,6 +26,8 @@ struct NeutralFullVelocity : public Component {
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options& state) override;
 
+  /// Preconditioner
+  void precon(const Options& state, BoutReal gamma);
 private:
   Coordinates* coord; // Coordinate system
 
@@ -32,6 +35,7 @@ private:
   BoutReal AA;      // Atomic mass
 
   BoutReal density_floor; ///< Floor when dividing by density
+  BoutReal temperature_floor; ///< Used in flux limiters
 
   Field2D Nn2D;                // Neutral gas density (evolving)
   Field2D Pn2D;                // Neutral gas pressure (evolving)
@@ -55,8 +59,9 @@ private:
   Field2D Uzx, Uzy;
 
   BoutReal adiabatic_index;    // Ratio of specific heats
-  BoutReal neutral_viscosity;  // Neutral gas viscosity
-  BoutReal neutral_conduction; // Neutral gas thermal conduction
+  bool dynamic_coefficients;   // Recalculate conduction & viscosity?
+  Field2D neutral_viscosity;   // Neutral gas viscosity
+  Field2D neutral_conduction;  // Neutral gas thermal conduction
   BoutReal neutral_gamma;      // Heat transmission for neutrals
 
   // Toroidal advection
@@ -66,6 +71,9 @@ private:
 
   bool diagnose; ///< Output additional diagnostics?
   Field2D Vnpar; ///< Parallel flow velocity diagnostic
+
+  bool precondition{true};        ///< Enable preconditioner?
+  std::unique_ptr<Laplacian> laplacian; ///< Laplacian inversion used for preconditioning
 };
 
 namespace {
