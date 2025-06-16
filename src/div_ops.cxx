@@ -737,7 +737,7 @@ const Field3D D4DZ4_Index(const Field3D& f) {
  * we would need the corner cell values to take Y derivatives along X edges
  *
  */
-const Field2D Laplace_FV(const Field2D &k, const Field2D &f) {
+const Field2D Laplace_FV(const Field2D &k, const Field2D &f, const Field2D &limit) {
   Field2D result;
   result.allocate();
 
@@ -745,49 +745,67 @@ const Field2D Laplace_FV(const Field2D &k, const Field2D &f) {
   
   for (int i = mesh->xstart; i <= mesh->xend; i++)
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
+      // Calculate fluxes through cell faces
 
-      // Calculate gradients on cell faces
+      // Flow right
+      {
+        const BoutReal grad_x_R = sqrt(0.5 * (coord->g11(i, j) + coord->g11(i + 1, j)));
 
-      BoutReal gR = (coord->g11(i, j) + coord->g11(i + 1, j)) *
-                    (f(i + 1, j) - f(i, j)) /
-                    (coord->dx(i + 1, j) + coord->dx(i, j));
+        BoutReal flux_R = (k(i + 1, j) + k(i, j)) * grad_x_R *
+          (f(i + 1, j) - f(i, j)) /
+          (coord->dx(i + 1, j) + coord->dx(i, j));
 
-      BoutReal gL = (coord->g11(i - 1, j) + coord->g11(i, j)) *
-                    (f(i, j) - f(i - 1, j)) /
-                    (coord->dx(i - 1, j) + coord->dx(i, j));
+        const BoutReal limit_R = 0.5 * (limit(i + 1, j) + limit(i, j));
 
-      BoutReal gU = (coord->g22(i, j) + coord->g22(i, j + 1)) *
-                    (f(i, j + 1) - f(i, j)) /
-                    (coord->dy(i, j + 1) + coord->dy(i, j));
+        flux_R = flux_R * limit_R / (abs(flux_R) + limit_R); // Harmonic average, keeping sign of flux_R and assuming limit_R > 0
 
-      BoutReal gD = (coord->g22(i, j - 1) + coord->g22(i, j)) *
+        result(i, j) = flux_R * 0.5 * (coord->J(i + 1, j) + coord->J(i, j)) * grad_x_R / (coord->dx(i, j) * coord->J(i, j));
+      }
+
+      // Flow left
+      {
+        const BoutReal grad_x_L = sqrt(0.5 * (coord->g11(i, j) + coord->g11(i - 1, j)));
+
+        BoutReal flux_L = (k(i - 1, j) + k(i, j)) * grad_x_L *
+          (f(i, j) - f(i - 1, j)) /
+          (coord->dx(i - 1, j) + coord->dx(i, j));
+
+        const BoutReal limit_L = 0.5 * (limit(i - 1, j) + limit(i, j));
+
+        flux_L = flux_L * limit_L / (abs(flux_L) + limit_L);
+
+        result(i, j) -= flux_L * 0.5 * (coord->J(i - 1, j) + coord->J(i, j)) * grad_x_L / (coord->dx(i, j) * coord->J(i, j));
+      }
+
+      // Flow up
+      {
+        const BoutReal grad_y_U = sqrt(0.5 * (coord->g22(i, j) + coord->g22(i, j + 1)));
+
+        BoutReal flux_U =  (k(i, j + 1) + k(i, j)) * grad_y_U *
+          (f(i, j + 1) - f(i, j)) /
+          (coord->dy(i, j + 1) + coord->dy(i, j));
+
+        const BoutReal limit_U = 0.5 * (limit(i, j + 1) + limit(i, j));
+
+        flux_U = flux_U * limit_U / (abs(flux_U) + limit_U);
+
+        result(i, j) += flux_U * 0.5 * (coord->J(i, j + 1) + coord->J(i, j)) * grad_y_U / (coord->dy(i, j) * coord->J(i, j));
+      }
+
+      // Flow down
+      {
+        const BoutReal grad_y_D = sqrt(0.5 * (coord->g22(i, j) + coord->g22(i, j - 1)));
+
+        BoutReal flux_D = (k(i, j - 1) + k(i, j)) * grad_y_D *
                     (f(i, j) - f(i, j - 1)) /
                     (coord->dy(i, j) + coord->dy(i, j - 1));
 
-      // Flow right
+        const BoutReal limit_D = 0.5 * (limit(i, j - 1) + limit(i, j));
 
-      BoutReal flux = gR * 0.25 * (coord->J(i + 1, j) + coord->J(i, j)) *
-                      (k(i + 1, j) + k(i, j));
+        flux_D = flux_D * limit_D / (abs(flux_D) + limit_D);
 
-      result(i, j) = flux / (coord->dx(i, j) * coord->J(i, j));
-
-      // Flow left
-
-      flux = gL * 0.25 * (coord->J(i - 1, j) + coord->J(i, j)) *
-             (k(i - 1, j) + k(i, j));
-      result(i, j) -= flux / (coord->dx(i, j) * coord->J(i, j));
-
-      // Flow up
-
-      flux = gU * 0.25 * (coord->J(i, j + 1) + coord->J(i, j)) *
-             (k(i, j + 1) + k(i, j));
-      result(i, j) += flux / (coord->dy(i, j) * coord->J(i, j));
-
-      // Flow down
-
-      flux = gD * 0.25 * (coord->J(i, j - 1) + coord->J(i, j)) *
-             (k(i, j - 1) + k(i, j));
-      result(i, j) -= flux / (coord->dy(i, j) * coord->J(i, j));
+        result(i, j) -= flux_D * 0.5 * (coord->J(i, j - 1) + coord->J(i, j)) * grad_y_D / (coord->dy(i, j) * coord->J(i, j));
+      }
     }
   return result;
 }

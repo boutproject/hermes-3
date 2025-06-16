@@ -57,8 +57,14 @@ const Field3D Div_Z_FV_Index(const Field3D& a, const Field3D& f);
 const Field3D D4DX4_FV_Index(const Field3D& f, bool bndry_flux = false);
 const Field3D D4DZ4_Index(const Field3D& f);
 
-// Div ( k * Grad(f) )
-const Field2D Laplace_FV(const Field2D& k, const Field2D& f);
+/// Diffusion in 2D (X-Y)
+///
+/// Div ( k * Grad(f) )
+///
+/// # Parameters
+///   k       Diffusion coefficient
+///   limit   Flux limit applied at cell edges
+const Field2D Laplace_FV(const Field2D& k, const Field2D& f, const Field2D& limit);
 
 /// Perpendicular diffusion including X and Y directions
 /// Takes Div_a_Grad_perp from BOUT++ and adds flows
