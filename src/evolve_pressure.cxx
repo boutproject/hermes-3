@@ -39,7 +39,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   low_T_diffuse_perp = options["low_T_diffuse_perp"].doc("Add cross-field diffusion at low temperature?")
     .withDefault<bool>(false);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pressure_floor = density_floor * temperature_floor;
 
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
@@ -248,7 +248,7 @@ void EvolvePressure::transform(Options& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
 
-  Field3D Pfloor = floor(P, 0.0);
+  Field3D Pfloor = floor(P, pressure_floor);
   T = Pfloor / floor(N, density_floor);
   Pfloor = N * T; // Ensure consistency
 
@@ -268,7 +268,7 @@ void EvolvePressure::finally(const Options& state) {
     P.clearParallelSlices();
   }
   P.setBoundaryTo(get<Field3D>(species["pressure"]));
-  Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
+  Field3D Pfloor = floor(P, pressure_floor); // Restricted to never go below zero
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
