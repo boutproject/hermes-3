@@ -52,7 +52,7 @@ other. Ions recycle into neutrals, which charge exchange and are
 ionised.  A difference is that separate ion and electron temperatures
 are evolved here.
 
-.. figure:: figs/1d_threshold.gif
+.. figure:: figs/1d_threshold.*
    :name: 1d_threshold_fig
    :alt:
    :width: 60%
