@@ -14,6 +14,7 @@ struct AmjuelHydRecombination : public AmjuelReaction {
       : AmjuelReaction(name, alloptions, solver) {}
 
   void calculate_rates(Options& electron, Options& atom, Options& ion,
+                       Field3D &heavy_particle_frequency, Field3D &electron_frequency,
                        Field3D& reaction_rate, Field3D& momentum_exchange,
                        Field3D& energy_exchange, Field3D& energy_loss, BoutReal& rate_multiplier, BoutReal& radiation_multiplier);
 };
@@ -42,9 +43,9 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydRecombination {
     Options& electron = state["species"]["e"];
     Options& atom = state["species"][{Isotope}];     // e.g. "h"
     Options& ion = state["species"][{Isotope, '+'}]; // e.g. "h+"
-    Field3D reaction_rate, momentum_exchange, energy_exchange, energy_loss;
+    Field3D heavy_particle_frequency, electron_frequency, reaction_rate, momentum_exchange, energy_exchange, energy_loss;
 
-    calculate_rates(electron, atom, ion, reaction_rate, momentum_exchange,
+    calculate_rates(electron, atom, ion, heavy_particle_frequency, electron_frequency, reaction_rate, momentum_exchange,
                     energy_exchange, energy_loss, rate_multiplier, radiation_multiplier);
 
     if (diagnose) {

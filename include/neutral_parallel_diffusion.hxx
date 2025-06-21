@@ -33,16 +33,20 @@ struct NeutralParallelDiffusion : public Component {
       .doc("Output additional diagnostics?")
       .withDefault<bool>(false);
 
+    diffusion_collisions_mode = options["diffusion_collisions_mode"]
+      .doc("Can be afn: CX and IZ, or multispecies: CX and nn, ni, ne (if enabled)")
+      .withDefault<std::string>("afn");
+      
     equation_fix = options["equation_fix"]
       .doc("Fix correcting pressure advection and conductivity factors?")
       .withDefault<bool>(true);
 
-    thermal_conduction = options["thermal_conducton"]
-      .doc("Enable conduction?")
+    perpendicular_conduction = options["perpendicular_conduction"]
+      .doc("Enable parallel projection of perpendicular conduction?")
       .withDefault<bool>(true);
 
-    viscosity = options["viscosity"]
-      .doc("Enable viscosity?")
+    perpendicular_viscosity = options["perpendicular_viscosity"]
+      .doc("Enable parallel projection of perpendicular viscosity?")
       .withDefault<bool>(true);
   }
 
@@ -72,9 +76,12 @@ private:
   BoutReal dneut; ///< cross-field diffusion projection (B  / Bpol)^2
 
   bool diagnose; ///< Output diagnostics?
+  std::vector<std::string> collision_names; ///< Collisions used for collisionality
+  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or multispecies
+  Field3D nu;   ///< Collision frequency for conduction
   bool equation_fix;  ///< Fix incorrect 3/2 factor in pressure advection?
-  bool thermal_conduction; ///< Enable conduction?
-  bool viscosity; ///< Enable viscosity?
+  bool perpendicular_conduction; ///< Enable conduction?
+  bool perpendicular_viscosity; ///< Enable viscosity?
 
   /// Per-species diagnostics
   struct Diagnostics {
