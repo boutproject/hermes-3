@@ -131,3 +131,6 @@ for more complicated cases.
   by impurity in tokamak edge
   plasmas](https://doi.org/10.1016/j.nme.2025.101913) Nucl. Mat. Energy 2025 101913
   doi:[10.1016/j.nme.2025.101913](https://doi.org/10.1016/j.nme.2025.101913)
+* B. D. Dudson, M. Kryjak, H. Muhammed, J. Omotani [Validation of Hermes-3 turbulence simulations against
+  the TCV-X21 diverted L-mode reference case](https://arxiv.org/abs/2506.12180) 2025
+  Preprint: [arXiv:2506.12180](https://arxiv.org/abs/2506.12180).
