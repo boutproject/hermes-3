@@ -175,6 +175,9 @@ target_include_directories(hermes-3-lib PUBLIC
   $<INSTALL_INTERFACE:include>
   )
 
+# Have hermes-3-lib look for dynamic libs in ./ before searching elsewhere
+set_target_properties(hermes-3-lib PROPERTIES BUILD_RPATH "$ORIGIN")
+
 # The main executable target
 add_executable(hermes-3
                hermes-3.cxx
@@ -187,6 +190,9 @@ target_include_directories(hermes-3 PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   $<INSTALL_INTERFACE:include>
   )
+
+# Have hermes-3 look for dynamic libs in ./ before searching elsewhere
+set_target_properties(hermes-3 PROPERTIES BUILD_RPATH "$ORIGIN")
 
 # Build the file containing just the commit hash
 # This will be rebuilt on every commit!
@@ -255,6 +261,8 @@ if(HERMES_TESTS)
 
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
+    # Have hermes_unit_tests look for dynamic libs in ./ before searching elsewhere
+    set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
   endif()
 endif()
 
