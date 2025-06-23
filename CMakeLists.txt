@@ -93,6 +93,7 @@ set(HERMES_SOURCES
     src/upstream_density_feedback.cxx
     src/temperature_feedback.cxx
     src/detachment_controller.cxx
+    src/reaction.cxx
     src/thermal_force.cxx
     src/ion_viscosity.cxx
     src/transform.cxx
@@ -136,6 +137,7 @@ set(HERMES_SOURCES
     include/polarisation_drift.hxx
     include/quasineutral.hxx
     include/radiation.hxx
+    include/reaction.hxx
     include/recalculate_metric.hxx
     include/recycling.hxx
     include/relax_potential.hxx

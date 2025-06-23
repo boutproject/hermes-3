@@ -5,6 +5,7 @@
 #include "../external/json.hxx"
 #include "component.hxx"
 #include "integrate.hxx"
+#include "reaction.hxx"
 #include <filesystem>
 #include <string>
 
@@ -48,21 +49,12 @@ struct AmjuelData {
   // BoutReal nmin, nmax; ///< Range of density [m^-3]
 };
 
-struct AmjuelReaction : public Component {
+struct AmjuelReaction : public Reaction {
   AmjuelReaction(std::string name, std::string amjuel_label, std::string from_species,
-                 std::string to_species, Options& alloptions, Solver*)
-      : amjuel_data(amjuel_label), amjuel_src(std::string("amjuel_") + amjuel_label),
-        from_species(from_species), to_species(to_species) {
-    // Get the units
-    const auto& units = alloptions["units"];
-    Tnorm = get<BoutReal>(units["eV"]);
-    Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
-    FreqNorm = 1. / get<BoutReal>(units["seconds"]);
-
-    diagnose = alloptions[name]["diagnose"]
-                   .doc("Output additional diagnostics?")
-                   .withDefault<bool>(false);
-  }
+                 std::string to_species, Options& alloptions)
+      : Reaction(name, alloptions), amjuel_data(amjuel_label),
+        amjuel_src(std::string("amjuel_") + amjuel_label), from_species(from_species),
+        to_species(to_species) {}
 
   void transform(Options& state) override {
     Options& electron = state["species"]["e"];
@@ -83,19 +75,16 @@ struct AmjuelReaction : public Component {
 
 protected:
   const AmjuelData amjuel_data;
-  BoutReal Tnorm, Nnorm, FreqNorm; // Normalisations
 
   const std::string amjuel_src;
   const std::string from_species;
   const std::string to_species;
 
   // For diagnostics
-  bool diagnose;                                  ///< Outputting diagnostics?
-  BoutReal rate_multiplier, radiation_multiplier; ///< Scaling factor on reaction rate
-  Field3D S;                                      ///< Particle exchange
-  Field3D F;                                      ///< Momentum exchange
-  Field3D E;                                      ///< Energy exchange
-  Field3D R;                                      ///< Radiation loss
+  Field3D S; ///< Particle exchange
+  Field3D F; ///< Momentum exchange
+  Field3D E; ///< Energy exchange
+  Field3D R; ///< Radiation loss
 
   const BoutReal get_electron_heating() const { return amjuel_data.electron_heating; }
   const std::vector<std::vector<BoutReal>>& get_rad_coeffs() const {
@@ -104,9 +93,6 @@ protected:
   const std::vector<std::vector<BoutReal>>& get_rate_coeffs() const {
     return amjuel_data.rate_coeffs;
   }
-
-  virtual void set_diagnostic_fields(Field3D& reaction_rate, Field3D& momentum_exchange,
-                                     Field3D& energy_exchange, Field3D& energy_loss){};
 
   BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
     if (value < min)

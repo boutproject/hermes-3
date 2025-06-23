@@ -17,16 +17,14 @@ template <char Isotope>
 struct AmjuelHydIsotopeReaction : public AmjuelReaction {
   AmjuelHydIsotopeReaction(std::string name, std::string reaction_type,
                            std::string from_species, std::string to_species,
-                           Options& alloptions, Solver* solver)
+                           Options& alloptions)
       : AmjuelReaction(name, std::string("hyd_") + reaction_type, from_species,
-                       to_species, alloptions, solver),
+                       to_species, alloptions),
         reaction_type(reaction_type) {}
 
   void outputVars(Options& state) override {
     AUTO_TRACE();
     // Normalisations
-    auto Nnorm = get<BoutReal>(state["Nnorm"]);
-    auto Tnorm = get<BoutReal>(state["Tnorm"]);
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
     auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
     auto Cs0 = get<BoutReal>(state["Cs0"]);
@@ -90,9 +88,9 @@ protected:
  */
 template <char Isotope>
 struct AmjuelHydRecombinationIsotope : public AmjuelHydIsotopeReaction<Isotope> {
-  AmjuelHydRecombinationIsotope(std::string name, Options& alloptions, Solver* solver)
+  AmjuelHydRecombinationIsotope(std::string name, Options& alloptions, Solver*)
       : AmjuelHydIsotopeReaction<Isotope>(name, "recombination", {Isotope, '+'},
-                                          {Isotope}, alloptions, solver) {
+                                          {Isotope}, alloptions) {
 
     this->reaction_suffix = std::string({Isotope}) + "+_rec";
     this->radiation_suffix = std::string({Isotope}) + "+_rec";
@@ -124,9 +122,9 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydIsotopeReaction<Isotope> 
  */
 template <char Isotope>
 struct AmjuelHydIonisationIsotope : public AmjuelHydIsotopeReaction<Isotope> {
-  AmjuelHydIonisationIsotope(std::string name, Options& alloptions, Solver* solver)
+  AmjuelHydIonisationIsotope(std::string name, Options& alloptions, Solver*)
       : AmjuelHydIsotopeReaction<Isotope>(name, "ionisation", {Isotope}, {Isotope, '+'},
-                                          alloptions, solver) {
+                                          alloptions) {
 
     this->reaction_suffix = std::string({Isotope}) + "+_iz";
     this->radiation_suffix = std::string({Isotope}) + "+_ex";
