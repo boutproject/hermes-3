@@ -55,15 +55,17 @@ void Reaction::transform(Options& state) {
 
   Field3D n_r1 = get<Field3D>(r1["density"]);
   Field3D n_r2 = get<Field3D>(r2["density"]);
+
+  Field3D n_e = get<Field3D>(electron["density"]);
   Field3D T_e = get<Field3D>(electron["temperature"]);
 
-  // Amjuel-specific for now
+  // Calculate reaction rate using cell averaging. Optionally scale by multiplier
   Field3D reaction_rate = cellAverage(
-      [&](BoutReal ne, BoutReal n1, BoutReal te) {
-        return ne * n1 * eval_reaction_rate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
+      [&](BoutReal n1, BoutReal n2, BoutReal ne, BoutReal te) {
+        return n1 * n2 * eval_reaction_rate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
                * rate_multiplier;
       },
-      n_r1.getRegion("RGN_NOBNDRY"))(n_r1, n_r2, T_e);
+      n_e.getRegion("RGN_NOBNDRY"))(n_r1, n_r2, n_e, T_e);
 
   // Use the Stoichiometry 'matrix' (vector) to set density sources for each species
   for (auto el : parser->get_stoich()) {
