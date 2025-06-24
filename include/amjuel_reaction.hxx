@@ -103,16 +103,16 @@ protected:
   }
 
   /**
-   * @brief
+   * @brief Evaluate an Amjuel rate, given a table of polynomial fit coefficients
    *
    *
-   * @param T
-   * @param n
-   * @return BoutReal
+   * @param T temperature
+   * @param n number density
+   * @param coeff_table a table of polynomial fit coefficients
+   * @return BoutReal the rate
    */
-  BoutReal evaluate(const std::vector<std::vector<BoutReal>>& coefs, BoutReal T,
-                    BoutReal n) {
-
+  BoutReal eval_rate(BoutReal T, BoutReal n,
+                     const std::vector<std::vector<BoutReal>>& coeff_table) {
     // Enforce range of validity
     n = clip(n, 1e14, 1e22); // 1e8 - 1e16 cm^-3
     T = clip(T, 0.1, 1e4);
@@ -122,15 +122,37 @@ protected:
     BoutReal result = 0.0;
 
     BoutReal logT_n = 1.0; // log(T) ** n
-    for (size_t n = 0; n < coefs.size(); ++n) {
+    for (size_t n = 0; n < coeff_table.size(); ++n) {
       BoutReal logn_m = 1.0; // log(ntilde) ** m
-      for (size_t m = 0; m < coefs[n].size(); ++m) {
-        result += coefs[n][m] * logn_m * logT_n;
+      for (size_t m = 0; m < coeff_table[n].size(); ++m) {
+        result += coeff_table[n][m] * logn_m * logT_n;
         logn_m *= logntilde;
       }
       logT_n *= logT;
     }
     return exp(result) * 1e-6; // Note: convert cm^3 to m^3
+  }
+
+  /**
+   * @brief Evaluate electron energy loss rate as a function of temperature and density.
+   *
+   * @param T temperature
+   * @param n number density
+   * @return BoutReal the electron energy loss rate
+   */
+  virtual BoutReal eval_radiation_rate(BoutReal T, BoutReal n) override final {
+    return eval_rate(T, n, get_rad_coeffs());
+  }
+
+  /**
+   * @brief Evaluate reaction rate as a function of temperature and density.
+   *
+   * @param T temperature
+   * @param n number density
+   * @return BoutReal the reaction rate
+   */
+  virtual BoutReal eval_reaction_rate(BoutReal T, BoutReal n) override final {
+    return eval_rate(T, n, get_rate_coeffs());
   }
 
   /**

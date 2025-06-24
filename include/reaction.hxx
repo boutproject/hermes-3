@@ -29,8 +29,13 @@ protected:
   //   Field3D E;                                      ///< Energy exchange
   //   Field3D R;                                      ///< Radiation loss
 
-  // Reaction rate coefficients evaluation delegated to subclasses
-  virtual BoutReal eval_rate_coeff(BoutReal T, BoutReal n) = 0;
+  // Evaluate electron energy loss rate coefficients at a particular density and
+  // temperature (delegated to subclasses)
+  virtual BoutReal eval_radiation_rate(BoutReal T, BoutReal n) = 0;
+
+  // Evaluate reaction rate coefficients at a particular density and temperature
+  // (delegated to subclasses)
+  virtual BoutReal eval_reaction_rate(BoutReal T, BoutReal n) = 0;
 
   virtual void set_diagnostic_fields(Field3D& reaction_rate, Field3D& momentum_exchange,
                                      Field3D& energy_exchange, Field3D& energy_loss){};
