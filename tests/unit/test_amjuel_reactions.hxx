@@ -32,8 +32,9 @@ protected:
         {"h", 1.0}, {"d", 2.0}, {"t", 3.0}, {"e", 1. / 1836}};
     const BoutReal atom_charge = 0.0;
     const BoutReal ion_charge = 1.0;
-
-    Options state{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+    std::string comp_name("test" + this->lbl);
+    Options state{{comp_name, {{"type", this->reaction_str}}},
+                  {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
                   {"species",
                    {{"e",
                      {{"AA", sp_masses.at("e")},

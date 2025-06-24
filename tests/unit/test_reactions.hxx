@@ -38,7 +38,9 @@ class ReactionTest : public FakeMeshFixture {
 protected:
   ReactionTest(std::string lbl, std::string reaction_str)
       : lbl(lbl), reaction_str(reaction_str){};
+
   std::string lbl;
+  std::string reaction_str;
 
   virtual Options generate_state() = 0;
 
@@ -134,9 +136,6 @@ protected:
     std::filesystem::remove(outpath);
     bout::OptionsIO::create(std::string(outpath))->write(state);
   }
-
-private:
-  std::string reaction_str;
 };
 
 #endif
