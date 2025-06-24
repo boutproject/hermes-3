@@ -33,6 +33,12 @@ Reaction::Reaction(std::string name, Options& alloptions) : name(name) {
   this->parser = std::make_unique<ReactionParser>(reaction_str);
 }
 
+/**
+ * @brief Use the stoichiometry matrix to compute density, momentum and energy sources.
+ * ASSUMES 2 REACTANTS for now.
+ *
+ * @param state
+ */
 void Reaction::transform(Options& state) {
 
   Field3D momentum_exchange, energy_exchange, energy_loss;
@@ -44,28 +50,68 @@ void Reaction::transform(Options& state) {
   Options& r1 = state["species"][reactant_species[0]];
   Options& r2 = state["species"][reactant_species[1]];
 
+  // Electron (may be the same as r1 or r2)
+  Options& electron = state["species"]["e"];
+
   Field3D n_r1 = get<Field3D>(r1["density"]);
   Field3D n_r2 = get<Field3D>(r2["density"]);
-  Field3D Te = get<Field3D>(state["species"]["e"]["temperature"]);
+  Field3D T_e = get<Field3D>(electron["temperature"]);
 
+  // Amjuel-specific for now
   Field3D reaction_rate = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
-        return ne * n1 * eval_rate_coeff(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
+        return ne * n1 * eval_reaction_rate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
                * rate_multiplier;
       },
-      n_r1.getRegion("RGN_NOBNDRY"))(n_r1, n_r2, Te);
+      n_r1.getRegion("RGN_NOBNDRY"))(n_r1, n_r2, T_e);
 
   // Use the Stoichiometry 'matrix' (vector) to set density sources for each species
   for (auto el : parser->get_stoich()) {
     std::string sp_name = el.first;
-    int weight = el.second;
-    if (weight != 0) {
+    int pop_change = el.second;
+    if (pop_change != 0) {
       // Density sources
-      add(state["species"][sp_name]["density_source"], weight * reaction_rate);
+      add(state["species"][sp_name]["density_source"], pop_change * reaction_rate);
     }
   }
 
-  if (this->diagnose) {
-    set_diagnostic_fields(reaction_rate, momentum_exchange, energy_exchange, energy_loss);
-  }
+  // Get heavy reactant species name(s)
+  std::vector<std::string> heavy_reactant_species;
+  std::copy_if(reactant_species.begin(), reactant_species.end(),
+               std::back_inserter(heavy_reactant_species),
+               [](std::string sp_name) { return sp_name != "e"; });
+
+  // Get the mass and velocity of the heavy reactant
+  Options& rh = state["species"][heavy_reactant_species[0]];
+  Field3D v_rh = get<Field3D>(rh["velocity"]);
+  BoutReal AA_rh = get<BoutReal>(rh["AA"]);
+  Field3D T_rh = get<Field3D>(rh["temperature"]);
+
+  // Get heavy product species name(s)
+  std::vector<std::string> product_species = parser->get_reactant_species();
+  std::vector<std::string> heavy_product_species;
+  std::copy_if(product_species.begin(), product_species.end(),
+               std::back_inserter(heavy_product_species),
+               [](std::string sp_name) { return sp_name != "e"; });
+  // Get the velocity of the heavy product
+  Options& ph = state["species"][heavy_product_species[0]];
+  Field3D v_ph = get<Field3D>(rh["velocity"]);
+
+  // Momentum
+  momentum_exchange = reaction_rate * AA_rh * v_rh;
+
+  subtract(rh["momentum_source"], momentum_exchange);
+  add(ph["momentum_source"], momentum_exchange);
+
+  // Energy
+  add(ph["energy_source"], 0.5 * AA_rh * reaction_rate * SQ(v_rh - v_ph));
+
+  // Ion thermal energy transfer
+  energy_exchange = reaction_rate * (3. / 2) * T_rh;
+  subtract(rh["energy_source"], energy_exchange);
+  add(ph["energy_source"], energy_exchange);
+
+  // Subclasses perform any additional transform tasks
+  transform_additional(state, reaction_rate, momentum_exchange, energy_exchange,
+                       energy_loss);
 }

@@ -15,6 +15,9 @@ struct Reaction : public Component {
   void transform(Options& state) override final;
 
 protected:
+  // Reaction string parser
+  std::unique_ptr<ReactionParser> parser;
+
   /// Normalisations
   BoutReal Tnorm, Nnorm, FreqNorm;
 
@@ -40,8 +43,12 @@ protected:
   virtual void set_diagnostic_fields(Field3D& reaction_rate, Field3D& momentum_exchange,
                                      Field3D& energy_exchange, Field3D& energy_loss){};
 
+  // Give subclasses a hook to perform additional transform tasks if necessary
+  virtual void transform_additional(Options& state, Field3D& reaction_rate,
+                                    Field3D& momentum_exchange, Field3D& energy_exchange,
+                                    Field3D& energy_loss) {}
+
 private:
   const std::string name;
-  std::unique_ptr<ReactionParser> parser;
 };
 #endif
