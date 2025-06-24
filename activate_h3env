@@ -161,7 +161,7 @@ fi
 
 # Check that BOUT-spack has been cloned
 sm_name="BOUT-spack"
-repo_yaml="${REPO_ROOT}/${sm_name}/repo.yaml"
+repo_yaml="${REPO_ROOT}/external/${sm_name}/repo.yaml"
 if [ ! -f "$repo_yaml" ]
   then
     echo "$repo_yaml doesn't exist. Has the ${sm_name} git submodule been initialised?"
