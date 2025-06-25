@@ -2,7 +2,8 @@
 
 # Python script to run and analyse MMS test
 from boututils.run_wrapper import shell, launch_safe
-from boutdata.collect import collect, BoutArray
+from boutdata.collect import BoutArray
+from boutdata.data import BoutOutputs
 
 from numpy import isclose
 
@@ -33,30 +34,25 @@ def norm(var: BoutArray) -> BoutArray:
 
 
 def collect_all():
-    Pe = collect("Pe", tind=-1, path=path, info=False)
-    Ne = collect("Ne", tind=-1, path=path, info=False)
-    Tnorm = collect("Tnorm", path=path, info=False)
-    Ti = collect("Ti", tind=-1, path=path, info=False) * Tnorm
+    out = BoutOutputs(path, tind=-1, caching=True)
+
+    Pe = out["Pe"]
+    Ne = out["Ne"]
+    Tnorm = out["Tnorm"]
+    Ti = out["Ti"] * Tnorm
 
     Te = (Pe / Ne) * Tnorm
     Te.attributes["long_name"] = "e temperature"
     Te.attributes["units"] = "eV"
 
-    Ve = norm(collect("Ve", tind=-1, path=path, info=False))
-    Vi = norm(collect("Vi", tind=-1, path=path, info=False))
-
-    Ee_sheath = norm(collect("Ee_sheath", tind=-1, path=path, info=False))
-    Ei_sheath = norm(collect("Ei_sheath", tind=-1, path=path, info=False))
-    Si_sheath = norm(collect("Si_sheath", tind=-1, path=path, info=False))
-
     return {
         "Te": Te,
         "Ti": Ti,
-        "Ve": Ve,
-        "Vi": Vi,
-        "Ee_sheath": Ee_sheath,
-        "Ei_sheath": Ei_sheath,
-        "Si_sheath": Si_sheath,
+        "Ve": norm(out["Ve"]),
+        "Vi": norm(out["Vi"]),
+        "Ee_sheath": norm(out["Ee_sheath"]),
+        "Ei_sheath": norm(out["Ei_sheath"]),
+        "Si_sheath": norm(out["Si_sheath"]),
     }
 
 
