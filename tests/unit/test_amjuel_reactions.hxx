@@ -40,28 +40,19 @@ protected:
                      {{"AA", sp_masses.at("e")},
                       {"density", 1.0},
                       {"temperature", 1.0},
-                      {"velocity", 1.0},
-                      {"density_source", 0.0},
-                      {"momentum_source", 0.0},
-                      {"energy_source", 0.0}}},
+                      {"velocity", 1.0}}},
                     {atom,
                      {{"AA", sp_masses.at(atom)},
                       {"charge", atom_charge},
                       {"density", 1.0},
                       {"temperature", 1.0},
-                      {"velocity", 1.0},
-                      {"density_source", 0.0},
-                      {"momentum_source", 0.0},
-                      {"energy_source", 0.0}}},
+                      {"velocity", 1.0}}},
                     {ion,
                      {{"AA", sp_masses.at(atom)},
                       {"charge", ion_charge},
                       {"density", 1.0},
                       {"temperature", 1.0},
-                      {"velocity", 1.0},
-                      {"density_source", 0.0},
-                      {"momentum_source", 0.0},
-                      {"energy_source", 0.0}}}}}};
+                      {"velocity", 1.0}}}}}};
 
     // Overwrite n_e, n_T, n_ion with functions that vary linearly along one axis
 

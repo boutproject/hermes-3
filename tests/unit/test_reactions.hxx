@@ -95,9 +95,6 @@ protected:
 
     // Generate input state for test
     Options test_state = generate_state();
-    // Fudge to force load - there must be a better way...
-    auto force_load_ref = ref_state["species"]["e"]["density_source"].as<Field3D>();
-    auto force_load_test = test_state["species"]["e"]["density_source"].as<Field3D>();
 
     // Run reaction
     RTYPE component = RTYPE("test" + lbl, test_state, nullptr);
