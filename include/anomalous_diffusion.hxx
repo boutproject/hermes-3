@@ -45,16 +45,18 @@ struct AnomalousDiffusion : public Component {
 private:
   std::string name; ///< Species name
 
-  bool diagnose; ///< Outputting diagnostics?
   bool include_D, include_chi, include_nu; ///< Which terms should be included?
   Field2D anomalous_D; ///< Anomalous density diffusion coefficient
   Field2D anomalous_chi; ///< Anomalous thermal diffusion coefficient
   Field2D anomalous_nu; ///< Anomalous momentum diffusion coefficient
 
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
+
+  // Diagnostics
+  bool diagnose; ///< Outputting diagnostics?
+  Field3D energy_source_D;
+  Field3D energy_source_chi;
 };
-
-
 
 namespace {
 RegisterComponent<AnomalousDiffusion> registercomponentanomalousdiffusion("anomalous_diffusion");
