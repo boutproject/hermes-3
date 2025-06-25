@@ -85,6 +85,8 @@
 
 #include "include/recalculate_metric.hxx"
 
+#include "include/particle_pusher_include.hxx"
+
 #if !BOUT_USE_METRIC_3D
 // For standard 2D metrics,
 // Hermes operators don't need parallel slices
