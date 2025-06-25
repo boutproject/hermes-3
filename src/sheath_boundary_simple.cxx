@@ -441,8 +441,6 @@ void SheathBoundarySimple::transform(Options& state) {
     setBoundary(state["fields"]["phi"], fromFieldAligned(phi));
   }
 
-  
-
   //////////////////////////////////////////////////////////////////
   // Iterate through all ions
   for (const auto& kv : allspecies.getChildren()) {
@@ -484,136 +482,89 @@ void SheathBoundarySimple::transform(Options& state) {
       ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
       : zeroFrom(Ni);
 
-    // Initialise sheath ion heat flux. This will be created for each species 
+    // Initialise sheath ion heat flux. This will be created for each species
     // saved in diagnostics struct and then destroyed and re-created for next species
     Field3D hflux_i = zeroFrom(energy_source);
     Field3D particle_source = zeroFrom(energy_source);
     // Field to capture total sheath heat flux for diagnostics
     Field3D ion_sheath_power_ylow = zeroFrom(Ne);
 
+    const auto set_ion_boundary = [&](const auto& r, int jz, bool lower) {
+      const auto y = lower ? mesh->ystart : mesh->yend;
+      auto i = indexAt(Ne, r.ind, y, jz);
+      auto ip = lower ? i.yp() : i.ym();
+      auto im = lower ? i.ym() : i.yp();
+
+      // Free gradient of log electron density and temperature
+      // This ensures that the guard cell values remain positive
+      // exp( 2*log(N[i]) - log(N[ip]) )
+
+      Ni[im] = limitFree(Ni[ip], Ni[i], density_boundary_mode);
+      Ti[im] = limitFree(Ti[ip], Ti[i], temperature_boundary_mode);
+      Pi[im] = limitFree(Pi[ip], Pi[i], pressure_boundary_mode);
+
+      // Calculate sheath values at half-way points (cell edge)
+      const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
+      const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
+      // electron temperature
+      const BoutReal tesheath = floor(0.5 * (Te[im] + Te[i]), 1e-5);
+      // ion temperature
+      const BoutReal tisheath = floor(0.5 * (Ti[im] + Ti[i]), 1e-5);
+
+      // Ion speed into sheath
+      BoutReal C_i = sqrt((sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi);
+
+      // Negative -> into sheath
+      const BoutReal visheath = lower ? std::min(Vi[i], -C_i) : std::max(Vi[i], C_i);
+      const BoutReal visheath_flow = no_flow ? 0.0 : visheath;
+
+      // Note: Here this is negative because visheath < 0
+      const BoutReal q =
+          (gamma_i * tisheath * nisheath * visheath)
+          // Take into account the flow of energy due to fluid flow
+          // This is additional energy flux through the sheath
+          - ((2.5 * tisheath + 0.5 * Mi * SQ(visheath_flow)) * nisheath * visheath_flow);
+
+      // Set boundary conditions on flows
+      Vi[im] = 2. * visheath_flow - Vi[i];
+      NVi[im] = 2. * Mi * nisheath * visheath_flow - NVi[i];
+
+      // Cross-sectional area in XZ plane and cell volume
+      const auto& da = (lower ? da_m : da_p)[i];
+      const auto& da_dv = (lower ? da_dv_m : da_dv_p)[i];
+
+      // Get power and energy source
+      const BoutReal heatflow = q * da;        // [W]
+      const BoutReal power = heatflow / dv[i]; // [Wm^-3]
+      ASSERT2(std::isfinite(power));
+      const auto power_sign = lower ? +1 : -1;
+      energy_source[i] += power_sign * power;
+      // Diagnostics only
+      particle_source[i] -= nisheath * visheath_flow * da_dv; // [m^-3s^-1]
+
+      // Total heat flux for diagnostic purposes
+      const BoutReal q_no_flow = gamma_i * tisheath * nisheath * visheath_flow; // [Wm^-2]
+      hflux_i[i] += power_sign * q_no_flow * da_dv;                             // [Wm^-3]
+      // lower Y: sheath boundary power placed in final domain cell
+      // upper Y: sheath boundary power placed in ylow side of inner guard cell
+      const auto i_power = lower ? i : i.yp();
+      ion_sheath_power_ylow[i_power] += heatflow;
+    };
+
     if (lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(Ne, r.ind, mesh->ystart, jz);
-          auto ip = i.yp();
-          auto im = i.ym();
-
-          // Free gradient of log electron density and temperature
-          // This ensures that the guard cell values remain positive
-          // exp( 2*log(N[i]) - log(N[ip]) )
-
-          Ni[im] = limitFree(Ni[ip], Ni[i], density_boundary_mode);
-          Ti[im] = limitFree(Ti[ip], Ti[i], temperature_boundary_mode);
-          Pi[im] = limitFree(Pi[ip], Pi[i], pressure_boundary_mode);
-
-          // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
-          const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
-          const BoutReal tesheath =
-              floor(0.5 * (Te[im] + Te[i]), 1e-5); // electron temperature
-          const BoutReal tisheath =
-              floor(0.5 * (Ti[im] + Ti[i]), 1e-5); // ion temperature
-
-          // Ion speed into sheath
-          BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
-
-          BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
-
-          visheath = std::min(Vi[i], visheath);
-
-          // Note: Here this is negative because visheath < 0
-          BoutReal q = gamma_i * tisheath * nisheath * visheath;
-
-          if (no_flow) {
-            visheath = 0.0;
-          }
-
-          // Set boundary conditions on flows
-          Vi[im] = 2. * visheath - Vi[i];
-          NVi[im] = 2. * Mi * nisheath * visheath - NVi[i];
-
-          // Take into account the flow of energy due to fluid flow
-          // This is additional energy flux through the sheath
-          q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
-
-          // Get power and energy source
-          BoutReal heatflow = q * da_m[i];   // [W]
-          BoutReal power = heatflow / dv[i];  // [Wm^-3]
-          ASSERT2(std::isfinite(power));
-          energy_source[i] += power; // Note: Sign negative because power > 0
-          particle_source[i] -= nisheath * visheath * da_dv_m[i]; // [m^-3s^-1] Diagnostics only
-
-          // Total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath;   // [Wm^-2]
-          hflux_i[i] += q * da_dv_m[i];   // [Wm^-3]
-          ion_sheath_power_ylow[i] += heatflow;      // [W] lower Y, so power placed in final domain cell
+          set_ion_boundary(r, jz, true);
         }
       }
     }
     if (upper_y) {
-      // Note: This is essentially the same as the lower boundary,
-      // but with directions reversed e.g. ystart -> yend, ip <-> im
-      //
       for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(Ne, r.ind, mesh->yend, jz);
-          auto ip = i.yp();
-          auto im = i.ym();
-
-          // Free gradient of log electron density and temperature
-          // This ensures that the guard cell values remain positive
-          // exp( 2*log(N[i]) - log(N[ip]) )
-
-          Ni[ip] = limitFree(Ni[im], Ni[i], density_boundary_mode);
-          Ti[ip] = limitFree(Ti[im], Ti[i], temperature_boundary_mode);
-          Pi[ip] = limitFree(Pi[im], Pi[i], pressure_boundary_mode);
-
-          // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
-          const BoutReal nisheath = 0.5 * (Ni[ip] + Ni[i]);
-          const BoutReal tesheath =
-              floor(0.5 * (Te[ip] + Te[i]), 1e-5); // electron temperature
-          const BoutReal tisheath =
-              floor(0.5 * (Ti[ip] + Ti[i]), 1e-5); // ion temperature
-
-          // Ion speed into sheath
-          BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
-
-          BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
-
-          visheath = std::max(Vi[i], visheath);
-
-          BoutReal q = gamma_i * tisheath * nisheath * visheath;
-
-          if (no_flow) {
-            visheath = 0.0;
-          }
-
-          // Set boundary conditions on flows
-          Vi[ip] = 2. * visheath - Vi[i];
-          NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
-
-          // Take into account the flow of energy due to fluid flow
-          // This is additional energy flux through the sheath
-          // Note: Here this is positive because visheath > 0
-          q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
-
-          // Get power and energy source
-          BoutReal heatflow = q * da_p[i];   // [W]
-          BoutReal power = heatflow / dv[i];  // [Wm^-3]
-          ASSERT2(std::isfinite(power));
-          energy_source[i] -= power; // Note: Sign negative because power > 0
-          particle_source[i] -= nisheath * visheath * da_dv_p[i]; // [m^-3s^-1] Diagnostics only
-
-          // Total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath;   // [Wm^-2]
-          hflux_i[i] -= q * da_dv_p[i];   // [Wm^-3]
-          ion_sheath_power_ylow[ip] += heatflow;  // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
-
+          set_ion_boundary(r, jz, false);
         }
       }
     }
-
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
