@@ -1,21 +1,14 @@
 #include "../include/sheath_boundary.hxx"
 #include "../include/hermes_utils.hxx"
 
+#include <bout/constants.hxx>
+#include <bout/mesh.hxx>
 #include <bout/output_bout_types.hxx>
 
-#include "bout/constants.hxx"
-#include "bout/mesh.hxx"
+#include <algorithm>
 using bout::globals::mesh;
 
 namespace {
-BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
-  if (value < min)
-    return min;
-  if (value > max)
-    return max;
-  return value;
-}
-
 Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int ny = f.getNy();
   int nz = f.getNz();
@@ -48,7 +41,7 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
   return fp;
 }
 
-}
+} // namespace
 
 SheathBoundary::SheathBoundary(std::string name, Options &alloptions, Solver *) {
   AUTO_TRACE();
@@ -177,10 +170,11 @@ void SheathBoundary::transform(Options &state) {
           for (int jz = 0; jz < mesh->LocalNz; jz++) {
             auto i = indexAt(Ni, r.ind, mesh->ystart, jz);
             auto ip = i.yp();
-            
+
             // Free boundary extrapolate ion concentration
-            BoutReal s_i = clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[ip] / Ne[ip]),
-                                      0.0, 1.0); // Limit range to [0,1]
+            // Limit range to [0,1]
+            BoutReal s_i =
+                std::clamp(0.5 * (3. * Ni[i] / Ne[i] - Ni[ip] / Ne[ip]), 0.0, 1.0);
 
             if (!std::isfinite(s_i)) {
               s_i = 1.0;
@@ -200,10 +194,9 @@ void SheathBoundary::transform(Options &state) {
                 grad_ni = grad_ne = 2e-3;  // Remove kinetic correction term
             }
 
-            BoutReal C_i_sq = clip(
-                (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
-                    / Mi,
-                0, 100); // Limit for e.g. Ni zero gradient
+            // Limit for e.g. Ni zero gradient
+            BoutReal C_i_sq = std::clamp(
+                (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0., 100.);
 
             // Note: Vzi = C_i * sin(α)
             ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
@@ -220,7 +213,7 @@ void SheathBoundary::transform(Options &state) {
             auto im = i.ym();
 
             BoutReal s_i =
-                clip(0.5 * (3. * Ni[i] / Ne[i] - Ni[im] / Ne[im]), 0.0, 1.0);
+                std::clamp(0.5 * (3. * Ni[i] / Ne[i] - Ni[im] / Ne[im]), 0.0, 1.0);
 
             if (!std::isfinite(s_i)) {
               s_i = 1.0;
@@ -238,10 +231,9 @@ void SheathBoundary::transform(Options &state) {
                 grad_ni = grad_ne = 2e-3; // Remove kinetic correction term
             }
 
-            BoutReal C_i_sq = clip(
-                (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni)
-                    / Mi,
-                0, 100); // Limit for e.g. Ni zero gradient
+            // Limit for e.g. Ni zero gradient
+            BoutReal C_i_sq = std::clamp(
+                (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0., 100.);
 
             ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
           }
@@ -527,13 +519,13 @@ void SheathBoundary::transform(Options &state) {
 
           // Ion sheath heat transmission coefficient
           // Equation (22) in Tskhakaya 2005
-          // with 
+          // with
           //
           // 1 / (1 + ∂_{ln n_e} ln s_i = s_i ∂_z n_e / ∂_z n_i
           // (from comparing C_i^2 in eq. 9 with eq. 20
           //
-          //
-          BoutReal s_i = clip(nisheath / floor(nesheath, 1e-10), 0, 1); // Concentration
+          // Concentration
+          BoutReal s_i = std::clamp(nisheath / floor(nesheath, 1e-10), 0., 1.);
           BoutReal grad_ne = Ne[i] - nesheath;
           BoutReal grad_ni = Ni[i] - nisheath;
 
@@ -544,9 +536,10 @@ void SheathBoundary::transform(Options &state) {
           // Ion speed into sheath
           // Equation (9) in Tskhakaya 2005
           //
-          BoutReal C_i_sq =
-              clip((adiabatic * tisheath + Zi * s_i * tesheath * grad_ne / grad_ni) / Mi,
-                   0, 100); // Limit for e.g. Ni zero gradient
+          // Limit for e.g. Ni zero gradient
+          BoutReal C_i_sq = std::clamp(
+              (adiabatic * tisheath + Zi * s_i * tesheath * grad_ne / grad_ni) / Mi, 0.,
+              100.);
 
           // Ion sheath heat transmission coefficient
           const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath;
@@ -606,8 +599,9 @@ void SheathBoundary::transform(Options &state) {
 
           // Ion sheath heat transmission coefficient
           //
-          // 1 / (1 + ∂_{ln n_e} ln s_i = s_i * ∂n_e / (s_i * ∂n_e + ∂ n_i) 
-          BoutReal s_i = clip(nisheath / floor(nesheath, 1e-10), 0, 1); // Concentration
+          // 1 / (1 + ∂_{ln n_e} ln s_i = s_i * ∂n_e / (s_i * ∂n_e + ∂ n_i)
+          // Concentration
+          BoutReal s_i = std::clamp(nisheath / floor(nesheath, 1e-10), 0., 1.);
           BoutReal grad_ne = Ne[i] - nesheath;
           BoutReal grad_ni = Ni[i] - nisheath;
 
@@ -618,9 +612,10 @@ void SheathBoundary::transform(Options &state) {
           // Ion speed into sheath
           // Equation (9) in Tskhakaya 2005
           //
-          BoutReal C_i_sq =
-              clip((adiabatic * tisheath + Zi * s_i * tesheath * grad_ne / grad_ni) / Mi,
-                   0, 100); // Limit for e.g. Ni zero gradient
+          // Limit for e.g. Ni zero gradient
+          BoutReal C_i_sq = std::clamp(
+              (adiabatic * tisheath + Zi * s_i * tesheath * grad_ne / grad_ni) / Mi, 0.,
+              100.);
 
           const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath; // + Δγ 
 
