@@ -19,9 +19,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iterator>
-#include <map>
 #include <string>
+
+#include <fmt/format.h>
 
 using bout::globals::mesh;
 
@@ -629,16 +629,12 @@ void SheathBoundarySimple::outputVars(Options& state) {
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   if (diagnose) {
     /// Iterate through the first species in each collision pair
-    const std::map<std::string, Options>& level1 = diagnostics.getChildren();
-    for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
-      auto species_name = s1->first;
-      const Options& section = diagnostics[species_name];
-
-      set_with_attrs(state[{"E" + species_name + "_sheath"}],
+    for (const auto& [species_name, section] : diagnostics.getChildren()) {
+      set_with_attrs(state[fmt::format("E{}_sheath", species_name)],
                      getNonFinal<Field3D>(section["energy_source"]),
                      {{"time_dimension", "t"},
                       {"units", "W / m^3"},
@@ -648,7 +644,7 @@ void SheathBoundarySimple::outputVars(Options& state) {
                       {"source", "sheath_boundary_simple"}});
 
       if (species_name != "e") {
-        set_with_attrs(state[{"S" + species_name + "_sheath"}],
+        set_with_attrs(state[fmt::format("S{}_sheath", species_name)],
                        getNonFinal<Field3D>(section["particle_source"]),
                        {{"time_dimension", "t"},
                         {"units", "m^-3 s^-1"},
