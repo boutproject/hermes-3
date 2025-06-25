@@ -1,0 +1,178 @@
+#!/bin/bash
+#
+# Wrapper around the spack environment that defines some useful commands.
+#
+# Activate the environment by sourcing this file with
+#     . activate_h3env
+# 
+# Run 'help_h3env' with the environment activated to see the available commands
+
+# Record top-level dir
+REPO_ROOT=$( cd -- "$(realpath $( dirname -- "${BASH_SOURCE[0]}" ))" &> /dev/null && pwd )
+
+# Save shell options
+OLD_SHOPTS="$(set +o)"
+
+#======================= Convenience aliases/functions ========================
+
+# Creates a link to the specified target (first argument) with the specified
+# name (second argument), unless a link with that target and name already
+# exists. It will overwrite links to different targets. Also print a message
+# saying what it is doing.
+_create-link() {
+    target="$1"
+    link="$2"
+    if ! [[ -L "$link" && $(readlink "$link") == "$target" ]]
+    then
+        echo "    Linking $(realpath -s --relative-to="$REPO_ROOT" "$link") => $target"
+        rm -f "$link" > /dev/null
+        ln -s "$target" "$link"
+    fi
+}
+
+# Remove the DEBUG trap and restore original shell options
+_disable_link_updates_hook() {
+  trap - DEBUG
+  set +vx; eval "${OLD_SHOPTS}"
+}
+
+# Activate temporary DEBUG trap to update build links 
+_enable_link_updates_hook() {
+  shopt -s extdebug
+  trap _update_links_on_spack_install DEBUG
+}
+
+# Intercept all simple commands and, if spack (un)install is executing, update build links afterwards
+# N.B. the simple command itself runs AFTER this function iff it runs zero
+function _update_links_on_spack_install ()
+{
+    if [[ $BASH_COMMAND == "spack "*"install"* ]]; then
+        $BASH_COMMAND 
+        updatelinks_h3env
+        # (We've already run the command explicitly, return non-zero so that it doesn't run again.)
+        return 1
+    else
+        # (Just run the command as usual after this function returns)
+        return 0
+    fi
+}
+
+# Perform cleanup tasks
+cleanup_h3env() {
+  # Just update build links for now
+  updatelinks_h3env
+}
+
+# Remove convenience aliases/function definitions and deactivate the env
+deactivate_h3env() {
+
+    _disable_link_updates_hook
+
+    unset -f _create-link
+    unset -f cleanup_h3env
+    unset -f deactivate_h3env
+    unset -f _disable_link_updates_hook
+    unset -f _enable_link_updates_hook
+    unalias help_h3env
+    unset -f in_h3env
+    unset REPO_ROOT
+    unset -f _update_links_on_spack_install
+    unset -f updatelinks_h3env
+    unset -f usage_h3env
+
+    spack env deactivate
+}
+
+# Run commands in the build environment
+h3spec="hermes-3%gcc"
+in_h3env() {
+  if [ $# -eq 0 ]; then
+    usage_h3env
+    return
+  fi
+  cmd="spack build-env ${h3spec} $@"
+  echo $cmd
+  eval $cmd
+}
+
+# Update the links at <REPO_ROOT>/builds/spack-* such that there's
+# exactly one link for every package returned by 'spack find hermes-3'
+updatelinks_h3env() {
+  local links_dir="${REPO_ROOT}/builds"
+  local link_prefix="spack-"
+  
+  # Use 'spack find' to get the hashes of currently installed hermes-3 packages
+  # Discard stderr to suppress error message when no installs are found
+  local identifier_fmt="{hash:7}"
+  installed_hashes=$(spack find --format "$identifier_fmt" "hermes-3" 2> /dev/null)
+
+  # Create any links for installed packages that don't exist already
+  mkdir -p "${links_dir}"
+  for hash in $installed_hashes; do
+    spack_build_dir=$(spack location -b "hermes-3/$hash")
+    _create-link "${spack_build_dir}" "${links_dir}/${link_prefix}${hash}"
+  done
+
+  # Check whether existing links are still valid (Could also just use find -xtype l ?)
+  for l in "${links_dir}/${link_prefix}"*; do
+    # Skip if l isn't a link (also guards against case where pattern has zero matches)
+    [ ! -L "$l" ] && break;
+    hash=$(echo "$l"|rev|cut -c -7|rev)
+    # Remove link if 'spack find' returns non-zero for this hash
+    spack find "hermes-3/$hash" &> /dev/null
+    if [ $? -ne 0 ]; then
+      echo "    Removing stale link at $l"
+      rm -f "$l"
+    fi
+  done
+
+  # Also clean up top-level build links created by spack install
+  spack_link_paths=$(find "$REPO_ROOT" -type l -regextype posix-egrep -regex "${REPO_ROOT}/build-.*-[a-z0-9]{7}$")
+  for link_path in $spack_link_paths; do
+      local hash="${link_path:(-7)}"
+      if ! [[ " ${installed_hashes[*]} " =~ " ${hash} " ]]
+      then
+          echo "    Removing stale spack link at ${link_path}"
+          rm -Rf "$link_path" > /dev/null
+      fi
+  done
+}
+
+# Print help/usage info
+usage_h3env() {
+    echo " . activate_h3env  : Activate the environment"
+    echo " cleanup_h3env     : Perform cleanup tasks (includes updatelinks_h3env)"
+    echo " deactivate_h3env  : Deactivate the environment"
+    echo " help_h3env        : Show this message"
+    echo ' in_h3env [args]   : Run a command in the build environment: (e.g. export h3_build="./builds/my_build" && in_h3env cmake -B "$h3_build" && in_h3env cmake --build "$h3_build" -j8)'
+    echo " updatelinks_h3env : Update all build links (Remove stale links and add new ones in ./builds/spack-* where necessary)"
+}
+alias help_h3env=usage_h3env
+
+#============================== Run on activate ===============================
+
+# Check that spack has been set up
+spacktivate_cmd="spacktivate"
+if ! command -v "$spacktivate_cmd" &> /dev/null
+  then
+    echo "The $spacktivate_cmd alias doesn't seem to be defined. Have you installed spack and sourced \$SPACK_ROOT/share/spack/setup-env.sh?"
+    return 1
+fi
+
+# Check that BOUT-spack has been cloned
+sm_name="BOUT-spack"
+repo_yaml="${REPO_ROOT}/external/${sm_name}/repo.yaml"
+if [ ! -f "$repo_yaml" ]
+  then
+    echo "$repo_yaml doesn't exist. Has the ${sm_name} git submodule been initialised?"
+    echo "  (git submodule update --init)"
+    return 
+fi
+
+# Activate the environment and load the view
+spacktivate . -p -v gcc
+
+# Update build links
+cleanup_h3env
+
+_enable_link_updates_hook
