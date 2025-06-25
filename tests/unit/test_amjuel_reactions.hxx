@@ -55,6 +55,7 @@ protected:
     // Density and Temperature ranges (log vals)
     const BoutReal logn_min = std::log(1e14), logn_max = std::log(1e22);
     const BoutReal logT_min = std::log(0.1), logT_max = std::log(2e4);
+    const BoutReal logv_min = std::log(1), logv_max = std::log(100);
 
     constexpr BoutReal xmin = 0, xmax = 2;
     constexpr BoutReal ymin = 0, ymax = 25.1327412287;
@@ -67,9 +68,12 @@ protected:
         this->gen_lin_field_str(logn_min, logn_max, "y", ymin, ymax), &state, mesh);
     state["species"]["e"]["temperature"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(logT_min, logT_max, "z", zmin, zmax), &state, mesh);
+    state["species"][atom]["velocity"] = FieldFactory::get()->create3D(
+        this->gen_lin_field_str(logv_min, logv_max, "x", xmin, xmax), &state, mesh);
     state["species"][sp_in]["temperature"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(logT_min, logT_max, "y", ymin, ymax), &state, mesh);
-
+    state["species"][ion]["velocity"] = FieldFactory::get()->create3D(
+        this->gen_lin_field_str(logv_min, logv_max, "z", zmin, zmax), &state, mesh);
     return state;
   }
 };
