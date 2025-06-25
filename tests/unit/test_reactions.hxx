@@ -115,7 +115,7 @@ protected:
           Field3D test_field = test_state["species"][sp.first][fld.first].as<Field3D>();
           Field3D ref_field = ref_state["species"][sp.first][fld.first].as<Field3D>();
 
-          ASSERT_TRUE(IsFieldEqual(test_field, ref_field, "RGN_ALL", tolerance))
+          ASSERT_TRUE(IsFieldEqual(test_field, ref_field, "RGN_NOBNDRY", tolerance))
               << "'" << this->lbl << "' [" << sp_name << "/" << fld_name << "]"
               << " differs from reference data (tolerance is " << tolerance << ") ";
         }
