@@ -64,10 +64,12 @@ struct OpenADAS : public Component {
 
   /// Perform the calculation of rates, and transfer of particles/momentum/energy
   ///
-  /// @param electron  The electron species e.g. state["species"]["e"]
-  /// @param from_ion  The ion on the left of the reaction
-  /// @param to_ion    The ion on the right of the reaction
-  void calculate_rates(Options& electron, Options& from_ion, Options& to_ion);
+  /// @param electron      The electron species e.g. state["species"]["e"]
+  /// @param from_ion      The ion on the left of the reaction
+  /// @param to_ion        The ion on the right of the reaction
+  /// @param energy_loss   Radiation energy source in W/m3
+  void calculate_rates(Options& electron, Options& from_ion, Options& to_ion,
+                       Field3D& energy_loss);
 private:
   OpenADASRateCoefficient rate_coef;      ///< Reaction rate coefficient
   OpenADASRateCoefficient radiation_coef; ///< Energy loss (radiation) coefficient
