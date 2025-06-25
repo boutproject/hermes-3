@@ -2,6 +2,7 @@
 #include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
+#include <bout/coordinates.hxx>
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
 #include <bout/mesh.hxx>
@@ -295,6 +296,42 @@ void SheathBoundarySimple::transform(Options& state) {
 
   hflux_e = zeroFrom(electron_energy_source); // sheath heat flux for diagnostics
 
+  // Cross-sectional area in XZ plane and cell volume.
+  // Would be nice to cache these
+  auto da_m = emptyFrom(coord->J);    // [m^2]
+  auto da_p = emptyFrom(coord->J);    // [m^2]
+  auto dv = emptyFrom(coord->J);      // [m^3]
+  auto da_dv_m = emptyFrom(coord->J); // [m^-1]
+  auto da_dv_p = emptyFrom(coord->J); // [m^-1]
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      auto i = indexAt(Ne, r.ind, mesh->ystart, jz);
+      auto im = i.ym();
+      da_m[i] = (coord->J[i] + coord->J[im])
+                / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im])) * 0.5
+                * (coord->dx[i] + coord->dx[im]) * 0.5 * (coord->dz[i] + coord->dz[im]);
+
+      dv[i] = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
+
+      da_dv_m[i] = da_m[i] / dv[i];
+    }
+  }
+
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      auto i = indexAt(Ne, r.ind, mesh->yend, jz);
+      auto ip = i.yp();
+      da_p[i] = (coord->J[i] + coord->J[ip])
+                / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])) * 0.5
+                * (coord->dx[i] + coord->dx[ip]) * 0.5
+                * (coord->dz[i] + coord->dz[ip]); // [m^2]
+
+      dv[i] = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
+
+      da_dv_p[i] = da_p[i] / dv[i];
+    }
+  }
+
   const auto set_electron_boundaries = [&](const auto& r, int jz, bool lower) {
     const auto y = lower ? mesh->ystart : mesh->yend;
     auto i = indexAt(Ne, r.ind, y, jz);
@@ -340,22 +377,18 @@ void SheathBoundarySimple::transform(Options& state) {
     q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
 
     // Cross-sectional area in XZ plane and cell volume
-    const BoutReal da = (coord->J[i] + coord->J[im])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im])) * 0.5
-                        * (coord->dx[i] + coord->dx[im]) * 0.5
-                        * (coord->dz[i] + coord->dz[im]); // [m^2]
-    const BoutReal dv =
-        (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]); // [m^3]
+    const auto& da = (lower ? da_m : da_p)[i];
+    const auto& da_dv = (lower ? da_dv_m : da_dv_p)[i];
 
     // Get power and energy source
-    const BoutReal heatflow = q * da;     // [W]
-    const BoutReal power = heatflow / dv; // [Wm^-3]
+    const BoutReal heatflow = q * da;        // [W]
+    const BoutReal power = heatflow / dv[i]; // [Wm^-3]
     const auto power_sign = lower ? +1 : -1;
     electron_energy_source[i] += power_sign * power;
 
     // Total heat flux for diagnostic purposes
     q = gamma_e * tesheath * nesheath * vesheath; // [Wm^-2]
-    hflux_e[i] += power_sign * q * da / dv;       // [Wm^-3]
+    hflux_e[i] += power_sign * q * da_dv;         // [Wm^-3]
     // lower Y: sheath boundary power placed in final domain cell
     // upper Y: sheath boundary power placed in ylow side of inner guard cell
     const auto i_power = lower ? i : i.yp();
@@ -505,21 +538,16 @@ void SheathBoundarySimple::transform(Options& state) {
           // This is additional energy flux through the sheath
           q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
 
-          // Cross-sectional area in XZ plane and cell volume
-          BoutReal da = (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
-                        * 0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]);   // [m^2]
-          BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
-
           // Get power and energy source
-          BoutReal heatflow = q * da;   // [W]
-          BoutReal power = heatflow / dv;  // [Wm^-3]
+          BoutReal heatflow = q * da_m[i];   // [W]
+          BoutReal power = heatflow / dv[i];  // [Wm^-3]
           ASSERT2(std::isfinite(power));
           energy_source[i] += power; // Note: Sign negative because power > 0
-          particle_source[i] -= nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
+          particle_source[i] -= nisheath * visheath * da_dv_m[i]; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
           q = gamma_i * tisheath * nisheath * visheath;   // [Wm^-2]
-          hflux_i[i] += q * da / dv;   // [Wm^-3]
+          hflux_i[i] += q * da_dv_m[i];   // [Wm^-3]
           ion_sheath_power_ylow[i] += heatflow;      // [W] lower Y, so power placed in final domain cell
         }
       }
@@ -572,21 +600,16 @@ void SheathBoundarySimple::transform(Options& state) {
           // Note: Here this is positive because visheath > 0
           q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
 
-          // Cross-sectional area in XZ plane and cell volume
-          BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
-                        * 0.5*(coord->dx[i] + coord->dx[ip]) * 0.5*(coord->dz[i] + coord->dz[ip]);   // [m^2]
-          BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
-
           // Get power and energy source
-          BoutReal heatflow = q * da;   // [W]
-          BoutReal power = heatflow / dv;  // [Wm^-3]
+          BoutReal heatflow = q * da_p[i];   // [W]
+          BoutReal power = heatflow / dv[i];  // [Wm^-3]
           ASSERT2(std::isfinite(power));
           energy_source[i] -= power; // Note: Sign negative because power > 0
-          particle_source[i] -= nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
+          particle_source[i] -= nisheath * visheath * da_dv_p[i]; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
           q = gamma_i * tisheath * nisheath * visheath;   // [Wm^-2]
-          hflux_i[i] -= q * da / dv;   // [Wm^-3]
+          hflux_i[i] -= q * da_dv_p[i];   // [Wm^-3]
           ion_sheath_power_ylow[ip] += heatflow;  // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
 
         }
