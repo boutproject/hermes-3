@@ -7,6 +7,7 @@
 #include "../../include/sheath_boundary.hxx"
 #include "../../include/sheath_boundary_simple.hxx"
 #include <bout/bout_types.hxx>
+#include <bout/field3d.hxx>
 #include <bout/output.hxx>
 #include <bout/region.hxx>
 
@@ -125,6 +126,7 @@ TEST_F(SheathBoundarySimpleTest, DontSetPotential) {
   options["units"]["eV"] = 1.0; // Voltage normalisation
   options["test"]["lower_y"] = false;
   options["test"]["upper_y"] = true;
+  options["test"]["diagnose"] = true;
 
   SheathBoundarySimple component("test", options, nullptr);
 
@@ -209,6 +211,23 @@ TEST_F(SheathBoundarySimpleTest, DontSetPotential) {
   // but not at other end
   EXPECT_DOUBLE_EQ(Qe[lower], 0.0);
   EXPECT_DOUBLE_EQ(Qi[lower], 0.0);
+
+  state["Nnorm"] = 1.0;
+  state["rho_s0"] = 1.0;
+  state["Omega_ci"] = 1.0;
+  state["Tnorm"] = 1.0;
+
+  component.outputVars(state);
+  ASSERT_TRUE(state.isSet("Ee_sheath"));
+  ASSERT_TRUE(state.isSet("Eh_sheath"));
+  ASSERT_TRUE(state.isSet("Sh_sheath"));
+
+  ASSERT_FALSE(state.isSet("Se_sheath"));
+
+  const Field3D nothing = Field3D{}.setDirectionY(YDirectionType::Aligned);
+  EXPECT_NEAR(state["Ee_sheath"].as<Field3D>(nothing)[upper], -8.577, 1e-3);
+  EXPECT_NEAR(state["Eh_sheath"].as<Field3D>(nothing)[upper], -11.696, 1e-3);
+  EXPECT_NEAR(state["Sh_sheath"].as<Field3D>(nothing)[upper], -1.1139, 1e-3);
 }
 
 TEST_F(SheathBoundarySimpleTest, CalculatePotential) {

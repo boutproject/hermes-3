@@ -45,6 +45,8 @@ mxstep = 10000
 lower_y = false
 upper_y = true
 
+diagnose = true
+
 ####################################
 
 [i]  # Ions
