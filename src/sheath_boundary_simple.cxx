@@ -288,134 +288,91 @@ void SheathBoundarySimple::transform(Options& state) {
   //////////////////////////////////////////////////////////////////
   // Electrons
 
-  Field3D electron_energy_source = electrons.isSet("energy_source")
-    ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
-    : zeroFrom(Ne);
+  Field3D electron_energy_source =
+      electrons.isSet("energy_source")
+          ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
+          : zeroFrom(Ne);
 
   hflux_e = zeroFrom(electron_energy_source); // sheath heat flux for diagnostics
+
+  const auto set_electron_boundaries = [&](const auto& r, int jz, bool lower) {
+    const auto y = lower ? mesh->ystart : mesh->yend;
+    auto i = indexAt(Ne, r.ind, y, jz);
+    auto ip = lower ? i.yp() : i.ym();
+    auto im = lower ? i.ym() : i.yp();
+
+    // Free gradient of log electron density and temperature
+    // Limited so that the values don't increase into the sheath
+    // This ensures that the guard cell values remain positive
+    // exp( 2*log(N[i]) - log(N[ip]) )
+
+    Ne[im] = limitFree(Ne[ip], Ne[i], density_boundary_mode);
+    Te[im] = limitFree(Te[ip], Te[i], temperature_boundary_mode);
+    Pe[im] = limitFree(Pe[ip], Pe[i], pressure_boundary_mode);
+
+    // Free boundary potential linearly extrapolated
+    phi[im] = 2 * phi[i] - phi[ip];
+
+    const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
+    const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
+    const BoutReal phi_wall = wall_potential[i];
+    // Electron saturation at phi = phi_wall
+    const BoutReal phisheath = floor(0.5 * (phi[im] + phi[i]), phi_wall);
+
+    // Electron velocity into sheath (< 0)
+    // Equal to Bohm for single ions and no currents
+    const auto sheath_sign = lower ? -1 : +1;
+    BoutReal vesheath = sheath_sign * sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
+                        * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
+
+    // Heat flux. Note: Here this is negative because vesheath < 0
+    BoutReal q = gamma_e * tesheath * nesheath * vesheath;
+
+    if (no_flow) {
+      vesheath = 0.0;
+    }
+
+    Ve[im] = 2 * vesheath - Ve[i];
+    NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
+
+    // Take into account the flow of energy due to fluid flow
+    // This is additional energy flux through the sheath
+    q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
+
+    // Cross-sectional area in XZ plane and cell volume
+    const BoutReal da = (coord->J[i] + coord->J[im])
+                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im])) * 0.5
+                        * (coord->dx[i] + coord->dx[im]) * 0.5
+                        * (coord->dz[i] + coord->dz[im]); // [m^2]
+    const BoutReal dv =
+        (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]); // [m^3]
+
+    // Get power and energy source
+    const BoutReal heatflow = q * da;     // [W]
+    const BoutReal power = heatflow / dv; // [Wm^-3]
+    const auto power_sign = lower ? +1 : -1;
+    electron_energy_source[i] += power_sign * power;
+
+    // Total heat flux for diagnostic purposes
+    q = gamma_e * tesheath * nesheath * vesheath; // [Wm^-2]
+    hflux_e[i] += power_sign * q * da / dv;       // [Wm^-3]
+    // lower Y: sheath boundary power placed in final domain cell
+    // upper Y: sheath boundary power placed in ylow side of inner guard cell
+    const auto i_power = lower ? i : i.yp();
+    electron_sheath_power_ylow[i_power] += heatflow; // [W]
+  };
 
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(Ne, r.ind, mesh->ystart, jz);
-        auto ip = i.yp();
-        auto im = i.ym();
-
-        // Free gradient of log electron density and temperature
-        // Limited so that the values don't increase into the sheath
-        // This ensures that the guard cell values remain positive
-        // exp( 2*log(N[i]) - log(N[ip]) )
-
-        Ne[im] = limitFree(Ne[ip], Ne[i], density_boundary_mode);
-        Te[im] = limitFree(Te[ip], Te[i], temperature_boundary_mode);
-        Pe[im] = limitFree(Pe[ip], Pe[i], pressure_boundary_mode);
-
-        // Free boundary potential linearly extrapolated
-        phi[im] = 2 * phi[i] - phi[ip];
-
-        const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
-        const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
-        const BoutReal phi_wall = wall_potential[i];
-        const BoutReal phisheath =
-            floor(0.5 * (phi[im] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
-
-        // Electron velocity into sheath (< 0)
-        // Equal to Bohm for single ions and no currents
-        BoutReal vesheath =
-	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
-
-        // Heat flux. Note: Here this is negative because vesheath < 0
-        BoutReal q = gamma_e * tesheath * nesheath * vesheath;
-
-        if (no_flow) {
-          vesheath = 0.0;
-        }
-
-        Ve[im] = 2 * vesheath - Ve[i];
-        NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
-
-        // Take into account the flow of energy due to fluid flow
-        // This is additional energy flux through the sheath
-        q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
-
-        // Cross-sectional area in XZ plane and cell volume
-        BoutReal da = (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
-                        * 0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]);   // [m^2]
-        BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
-
-        // Get power and energy source
-        BoutReal heatflow = q * da;   // [W]
-        BoutReal power = heatflow / dv;  // [Wm^-3]
-        electron_energy_source[i] += power;
-
-        // Total heat flux for diagnostic purposes
-        q = gamma_e * tesheath * nesheath * vesheath;   // [Wm^-2]
-        hflux_e[i] += q * da / dv;   // [Wm^-3]
-        electron_sheath_power_ylow[i] += heatflow;       // [W], lower Y, so sheath boundary power placed in final domain cell 
-                      
+        set_electron_boundaries(r, jz, true);
       }
     }
   }
   if (upper_y) {
-    // This is essentially the same as at the lower y boundary
-    // except ystart -> yend, ip <-> im
-    //
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(Ne, r.ind, mesh->yend, jz);
-        auto ip = i.yp();
-        auto im = i.ym();
-
-        // Free gradient of log electron density and temperature
-        // This ensures that the guard cell values remain positive
-        // exp( 2*log(N[i]) - log(N[ip]) )
-
-        Ne[ip] = limitFree(Ne[im], Ne[i], density_boundary_mode);
-        Te[ip] = limitFree(Te[im], Te[i], temperature_boundary_mode);
-        Pe[ip] = limitFree(Pe[im], Pe[i], pressure_boundary_mode);
-
-        // Free boundary potential linearly extrapolated.
-        phi[ip] = 2 * phi[i] - phi[im];
-
-        const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
-        const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]); // electron temperature
-        const BoutReal phi_wall = wall_potential[i];
-        const BoutReal phisheath =
-            floor(0.5 * (phi[ip] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
-
-        // Electron velocity into sheath (> 0)
-        BoutReal vesheath =
-          sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
-
-        // Heat flux. Note: Here this is positive because vesheath > 0
-        BoutReal q = gamma_e * tesheath * nesheath * vesheath;
-
-        if (no_flow) {
-          vesheath = 0.0;
-        }
-
-        Ve[ip] = 2 * vesheath - Ve[i];
-        NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
-        
-        // Take into account the flow of energy due to fluid flow
-        // This is additional energy flux through the sheath
-        q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
-
-        // Cross-sectional area in XZ plane and cell volume
-        BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
-                        * 0.5*(coord->dx[i] + coord->dx[ip]) * 0.5*(coord->dz[i] + coord->dz[ip]);   // [m^2]
-        BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
-
-        // Get power and energy source
-        BoutReal heatflow = q * da;   // [W]
-        BoutReal power = heatflow / dv;  // [Wm^-3]
-        electron_energy_source[i] -= power;
-
-        // Total heat flux for diagnostic purposes
-        q = gamma_e * tesheath * nesheath * vesheath;   // [Wm^-2]
-        hflux_e[i] -= q * da / dv;   // [Wm^-3]
-        electron_sheath_power_ylow[ip] += heatflow;    // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
-
+        set_electron_boundaries(r, jz, false);
       }
     }
   }
