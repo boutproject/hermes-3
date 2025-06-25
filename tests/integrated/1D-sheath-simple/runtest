@@ -9,14 +9,18 @@ from numpy import isclose
 
 import os
 
+HERMES_BIN = os.environ.get("HERMES_BIN", "../../../hermes-3")
+PATH = "data"
 
-rtol = 1e-2
-atol = 1e-2
+# Loose tolerance due to low-res runs
+RTOL = 1e-2
+ATOL = 1e-2
 
 
 def check(result: BoutArray, index: int, expected: float, sense: str) -> bool:
+    """Check an individual variable is the expected value, pretty print a failure message if not"""
     result_slice = result[index]
-    if isclose(result_slice, expected, rtol=rtol, atol=atol):
+    if isclose(result_slice, expected, rtol=RTOL, atol=ATOL):
         return True
 
     abs_diff = expected - result_slice
@@ -30,11 +34,13 @@ def check(result: BoutArray, index: int, expected: float, sense: str) -> bool:
 
 
 def norm(var: BoutArray) -> BoutArray:
+    """Normalise a variable by its conversion factor"""
     return var * var.attributes["conversion"]
 
 
 def collect_all():
-    out = BoutOutputs(path, tind=-1, caching=True)
+    """Collect all relevant variables from an output file"""
+    out = BoutOutputs(PATH, tind=-1, caching=True)
 
     Pe = out["Pe"]
     Ne = out["Ne"]
@@ -59,7 +65,8 @@ def collect_all():
 def check_case(
     case_name: str, expected: dict[str, dict[str, float]], extra_args=""
 ) -> bool:
-    s, out = launch_safe(f"{hermes_bin} -d {path} {extra_args}", nproc=1, pipe=True)
+    """Run and check a whole test case"""
+    s, out = launch_safe(f"{HERMES_BIN} -d {PATH} {extra_args}", nproc=1, pipe=True)
 
     filename = case_name.replace(" ", "_")
     with open(f"{filename}.log", "w") as f:
@@ -76,15 +83,13 @@ def check_case(
     return success
 
 
+# Clean up any previous runs
 shell("rm -f data/BOUT.dmp.0.nc")
-
-hermes_bin = os.environ.get("HERMES_BIN", "../../../hermes-3")
-
-path = "data"
 
 # Slices for upstream and downstream boundaries (interior points)
 senses = {"upstream": (-1, 0, 0, 0), "downstream": (-1, 0, -1, 0)}
 
+# Save some duplication in expected dicts later
 base_upstream = {
     "Te": 100,
     "Ti": 100,
