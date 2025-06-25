@@ -575,6 +575,12 @@ void Vorticity::transform(Options& state) {
       subtract(species["energy_source"], Jdia_species * Grad(phi));
 
       Jdia += Jdia_species; // Collect total diamagnetic current
+
+      if (diagnose) {
+        // Add energy channel diagnostics
+        set(channels["E_Jdia_Grad_phi_" + kv.first], Jdia_species * Grad(phi));
+        set(channels["E_phi_Div_Jdia_" + kv.first], phi * Div(Jdia_species));
+      }
     }
 
     // Note: This term is central differencing so that it balances
@@ -621,6 +627,10 @@ void Vorticity::transform(Options& state) {
 
     ddt(Vort) += DivJcol;
     set(fields["DivJcol"], DivJcol);
+
+    if (diagnose) {
+      set(channels["E_phi+Pi_DivJcol"], (phi + Pi_hat) * DivJcol);
+    }
   }
 
   set(fields["vorticity"], Vort);
@@ -693,6 +703,10 @@ void Vorticity::finally(const Options& state) {
     // Note: Using NV rather than N*V so that the cell boundary flux is correct
     const Field3D jpar = (Z / A) * NV;
     ddt(Vort) += Div_par(jpar);
+
+    if (diagnose) {
+      set(channels["E_phi_Div_jpar_" + kv.first], phi * Div_par(jpar));
+    }
 
     if (state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -770,9 +784,10 @@ void Vorticity::finally(const Options& state) {
 void Vorticity::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
-  auto Nnorm = get<BoutReal>(state["Nnorm"]);
-  auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  const auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  const auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+  const auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
   state["Vort"].setAttributes({{"time_dimension", "t"},
                                {"units", "C m^-3"},
@@ -810,6 +825,15 @@ void Vorticity::outputVars(Options& state) {
                       {"units", "A m^-3"},
                       {"conversion", SI::qe * Nnorm * Omega_ci},
                       {"long_name", "Divergence of collisional current"},
+                      {"source", "vorticity"}});
+    }
+
+    for (const auto& kv : channels.getChildren()) {
+      set_with_attrs(state[kv.first], getNonFinal<Field3D>(kv.second),
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", "Energy transfer channel"},
                       {"source", "vorticity"}});
     }
   }
