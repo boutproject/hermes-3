@@ -90,7 +90,7 @@ void Reaction::transform(Options& state) {
   Field3D T_rh = get<Field3D>(rh["temperature"]);
 
   // Get heavy product species name(s)
-  std::vector<std::string> product_species = parser->get_reactant_species();
+  std::vector<std::string> product_species = parser->get_product_species();
   std::vector<std::string> heavy_product_species;
   std::copy_if(product_species.begin(), product_species.end(),
                std::back_inserter(heavy_product_species),
