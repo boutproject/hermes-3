@@ -8,9 +8,7 @@
 #include "bout/bout_enum_class.hxx"
 
 inline BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
+  return std::max(value, min);
 }
 
 /// Apply a smoothly varying "soft" floor to the value
