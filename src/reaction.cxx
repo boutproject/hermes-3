@@ -35,7 +35,7 @@ Reaction::Reaction(std::string name, Options& alloptions) : name(name) {
 
 /**
  * @brief Use the stoichiometry matrix to compute density, momentum and energy sources.
- * ASSUMES 2 REACTANTS for now.
+ * ASSUMES EXACTLY 2 REACTANTS AND 2 PRODUCTS for now.
  *
  * @param state
  */
