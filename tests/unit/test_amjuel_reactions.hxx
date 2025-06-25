@@ -67,6 +67,8 @@ protected:
         this->gen_lin_field_str(logn_min, logn_max, "y", ymin, ymax), &state, mesh);
     state["species"]["e"]["temperature"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(logT_min, logT_max, "z", zmin, zmax), &state, mesh);
+    state["species"][sp_in]["temperature"] = FieldFactory::get()->create3D(
+        this->gen_lin_field_str(logT_min, logT_max, "y", ymin, ymax), &state, mesh);
 
     return state;
   }
