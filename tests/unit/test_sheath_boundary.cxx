@@ -143,17 +143,16 @@ TEST_F(SheathBoundarySimpleTest, DontSetPotential) {
   constexpr BoutReal Zi_in = 1.1;
   constexpr BoutReal si_in = 0.5;
 
-  Options state {{"species",
-                  {// Electrons
-                   {"e", {{"density", N_in},
-                          {"temperature", Te_in},
-                          {"velocity", 0.0}}},
-                   // Ion species
-                   {"h", {{"density", si_in*N_in},
-                          {"temperature", Ti_in},
-                          {"AA", 1.0},
-                          {"charge", Zi_in},
-                          {"velocity", 0.0}}}}}};
+  Options state{{"species",
+                 {// Electrons
+                  {"e", {{"density", N_in}, {"temperature", Te_in}, {"velocity", 0.0}}},
+                  // Ion species
+                  {"h",
+                   {{"density", si_in * N_in},
+                    {"temperature", Ti_in},
+                    {"AA", 1.0},
+                    {"charge", Zi_in},
+                    {"velocity", 0.0}}}}}};
 
   component.transform(state);
 
@@ -170,7 +169,7 @@ TEST_F(SheathBoundarySimpleTest, DontSetPotential) {
   ASSERT_TRUE(ions.isSet("velocity"));
   ASSERT_TRUE(ions.isSet("density"));
   ASSERT_TRUE(ions.isSet("temperature"));
-  
+
   const auto& Ve = electrons["velocity"].as<Field3D>();
   const auto& Ne = electrons["density"].as<Field3D>();
   const auto& Te = electrons["temperature"].as<Field3D>();

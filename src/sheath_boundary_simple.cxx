@@ -192,16 +192,15 @@ SheathBoundarySimple::SheathBoundarySimple(const std::string& name, Options& all
   }
 
   gamma_e = options["gamma_e"]
-    .doc("Electron sheath heat transmission coefficient")
-    .withDefault(3.5);
+                .doc("Electron sheath heat transmission coefficient")
+                .withDefault(3.5);
 
-  gamma_i = options["gamma_i"]
-    .doc("Ion sheath heat transmission coefficient")
-    .withDefault(3.5);
+  gamma_i =
+      options["gamma_i"].doc("Ion sheath heat transmission coefficient").withDefault(3.5);
 
   sheath_ion_polytropic = options["sheath_ion_polytropic"]
-         .doc("Ion polytropic coefficient in Bohm sound speed")
-         .withDefault(1.0);
+                              .doc("Ion polytropic coefficient in Bohm sound speed")
+                              .withDefault(1.0);
 
   lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
   upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
@@ -223,25 +222,25 @@ SheathBoundarySimple::SheathBoundarySimple(const std::string& name, Options& all
   wall_potential = toFieldAligned(wall_potential);
 
   no_flow = options["no_flow"]
-    .doc("Set zero particle flow, keeping energy flow")
-    .withDefault<bool>(false);
+                .doc("Set zero particle flow, keeping energy flow")
+                .withDefault<bool>(false);
 
   density_boundary_mode = options["density_boundary_mode"]
-    .doc("BC mode: limit_free, exponential_free, linear_free")
-    .withDefault<SheathLimitMode>(SheathLimitMode::limit_free);
+                              .doc("BC mode: limit_free, exponential_free, linear_free")
+                              .withDefault<SheathLimitMode>(SheathLimitMode::limit_free);
 
   pressure_boundary_mode = options["pressure_boundary_mode"]
-    .doc("BC mode: limit_free, exponential_free, linear_free")
-    .withDefault<SheathLimitMode>(SheathLimitMode::limit_free);
+                               .doc("BC mode: limit_free, exponential_free, linear_free")
+                               .withDefault<SheathLimitMode>(SheathLimitMode::limit_free);
 
-  temperature_boundary_mode = options["temperature_boundary_mode"]
-    .doc("BC mode: limit_free, exponential_free, linear_free")
-    .withDefault<SheathLimitMode>(SheathLimitMode::limit_free);
+  temperature_boundary_mode =
+      options["temperature_boundary_mode"]
+          .doc("BC mode: limit_free, exponential_free, linear_free")
+          .withDefault<SheathLimitMode>(SheathLimitMode::limit_free);
 
   diagnose = options["diagnose"]
-    .doc("Save additional output diagnostics")
-    .withDefault<bool>(false);
-  
+                 .doc("Save additional output diagnostics")
+                 .withDefault<bool>(false);
 }
 
 void SheathBoundarySimple::transform(Options& state) {
@@ -255,8 +254,8 @@ void SheathBoundarySimple::transform(Options& state) {
   Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
   Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
   Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
-    ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
-    : Te * Ne;
+                   ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
+                   : Te * Ne;
 
   // Mass, normalised to proton mass
   const BoutReal Me =
@@ -264,12 +263,12 @@ void SheathBoundarySimple::transform(Options& state) {
 
   // This is for applying boundary conditions
   Field3D Ve = IS_SET_NOBOUNDARY(electrons["velocity"])
-    ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
-    : zeroFrom(Ne);
+                   ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
+                   : zeroFrom(Ne);
 
   Field3D NVe = IS_SET_NOBOUNDARY(electrons["momentum"])
-    ? toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]))
-    : zeroFrom(Ne);
+                    ? toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]))
+                    : zeroFrom(Ne);
 
   Coordinates* coord = mesh->getCoordinates();
 
@@ -285,7 +284,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
   // Field to capture total sheath heat flux for diagnostics
   Field3D electron_sheath_power_ylow = zeroFrom(Ne);
-  
+
   //////////////////////////////////////////////////////////////////
   // Electrons
 
@@ -464,23 +463,24 @@ void SheathBoundarySimple::transform(Options& state) {
     Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
     Field3D Pi = species.isSet("pressure")
-      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
-      : Ni * Ti;
+                     ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
+                     : Ni * Ti;
 
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
     Field3D Vi = species.isSet("velocity")
-      ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
-      : zeroFrom(Ni);
+                     ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
+                     : zeroFrom(Ni);
     Field3D NVi = species.isSet("momentum")
-      ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
-      : Mi * Ni * Vi;
+                      ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
+                      : Mi * Ni * Vi;
 
     // Energy source will be modified in the domain
-    Field3D energy_source = species.isSet("energy_source")
-      ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
-      : zeroFrom(Ni);
+    Field3D energy_source =
+        species.isSet("energy_source")
+            ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
+            : zeroFrom(Ni);
 
     // Initialise sheath ion heat flux. This will be created for each species
     // saved in diagnostics struct and then destroyed and re-created for next species
@@ -595,7 +595,6 @@ void SheathBoundarySimple::transform(Options& state) {
 
     set(diagnostics[species.name()]["energy_source"], hflux_i);
     set(diagnostics[species.name()]["particle_source"], particle_source);
-
   }
 }
 
@@ -615,25 +614,25 @@ void SheathBoundarySimple::outputVars(Options& state) {
       auto species_name = s1->first;
       const Options& section = diagnostics[species_name];
 
-      set_with_attrs(state[{"E" + species_name + "_sheath"}], getNonFinal<Field3D>(section["energy_source"]),
-                            {{"time_dimension", "t"},
-                            {"units", "W / m^3"},
-                            {"conversion", Pnorm * Omega_ci},
-                            {"standard_name", "energy source"},
-                            {"long_name", species_name + " sheath energy source"},
-                            {"source", "sheath_boundary_simple"}});
+      set_with_attrs(state[{"E" + species_name + "_sheath"}],
+                     getNonFinal<Field3D>(section["energy_source"]),
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy source"},
+                      {"long_name", species_name + " sheath energy source"},
+                      {"source", "sheath_boundary_simple"}});
 
       if (species_name != "e") {
-        set_with_attrs(state[{"S" + species_name + "_sheath"}], getNonFinal<Field3D>(section["particle_source"]),
-                              {{"time_dimension", "t"},
-                              {"units", "m^-3 s^-1"},
-                              {"conversion", Nnorm * Omega_ci},
-                              {"standard_name", "energy source"},
-                              {"long_name", species_name + " sheath energy source"},
-                              {"source", "sheath_boundary_simple"}});
+        set_with_attrs(state[{"S" + species_name + "_sheath"}],
+                       getNonFinal<Field3D>(section["particle_source"]),
+                       {{"time_dimension", "t"},
+                        {"units", "m^-3 s^-1"},
+                        {"conversion", Nnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", species_name + " sheath energy source"},
+                        {"source", "sheath_boundary_simple"}});
       }
-
     }
   }
-
-  }
+}
