@@ -9,6 +9,7 @@
 #include <bout/output_bout_types.hxx>
 
 #include <algorithm>
+
 using bout::globals::mesh;
 
 namespace {
@@ -303,9 +304,7 @@ void SheathBoundaryInsulating::transform(Options &state) {
           BoutReal q =
               ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * Mi * C_i_sq)
               * nisheath * visheath;
-          if (q > 0.0) {
-            q = 0.0;
-          }
+          q = std::min(q, 0.0);
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->J[i] + coord->J[im])
@@ -382,9 +381,7 @@ void SheathBoundaryInsulating::transform(Options &state) {
               ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * C_i_sq * Mi)
               * nisheath * visheath;
 
-          if (q < 0.0) {
-            q = 0.0;
-          }
+          q = std::max(q, 0.0);
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->J[i] + coord->J[ip])

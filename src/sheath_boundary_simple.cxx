@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "../include/sheath_boundary_simple.hxx"
 #include "../include/hermes_utils.hxx"
 
@@ -219,10 +221,7 @@ void SheathBoundarySimple::transform(Options& state) {
             // Sound speed squared
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-            BoutReal visheath = -sqrt(C_i_sq);
-            if (Vi[i] < visheath) {
-              visheath = Vi[i];
-            }
+            const BoutReal visheath = std::min(Vi[i], -sqrt(C_i_sq));
 
             ion_sum[i] -= Zi * nisheath * visheath;
           }
@@ -250,10 +249,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-            BoutReal visheath = sqrt(C_i_sq);
-            if (Vi[i] > visheath) {
-              visheath = Vi[i];
-            }
+            const BoutReal visheath = std::max(Vi[i], sqrt(C_i_sq));
 
             ion_sum[i] += Zi * nisheath * visheath;
           }
@@ -563,11 +559,8 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
-
-          if (Vi[i] < visheath) {
-            visheath = Vi[i];
-          }
+          // Negative -> into sheath
+          BoutReal visheath = std::min(Vi[i], -sqrt(C_i_sq));
 
           // Note: Here this is negative because visheath < 0
           BoutReal q = gamma_i * tisheath * nisheath * visheath;
@@ -632,11 +625,8 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
-
-          if (Vi[i] > visheath) {
-            visheath = Vi[i];
-          }
+          // Positive -> into sheath
+          BoutReal visheath = std::max(Vi[i], sqrt(C_i_sq));
 
           BoutReal q = gamma_i * tisheath * nisheath * visheath;
 
