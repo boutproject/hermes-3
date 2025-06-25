@@ -359,22 +359,20 @@ void SheathBoundarySimple::transform(Options& state) {
     // Electron velocity into sheath (< 0)
     // Equal to Bohm for single ions and no currents
     const auto sheath_sign = lower ? -1 : +1;
-    BoutReal vesheath = sheath_sign * sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
-                        * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
+    const BoutReal vesheath = sheath_sign * sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
+                              * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
+
+    const BoutReal vesheath_flow = no_flow ? 0.0 : vesheath;
 
     // Heat flux. Note: Here this is negative because vesheath < 0
-    BoutReal q = gamma_e * tesheath * nesheath * vesheath;
+    const BoutReal q =
+        (gamma_e * tesheath * nesheath * vesheath)
+        // Take into account the flow of energy due to fluid flow
+        // This is additional energy flux through the sheath
+        - ((2.5 * tesheath + 0.5 * Me * SQ(vesheath_flow)) * nesheath * vesheath_flow);
 
-    if (no_flow) {
-      vesheath = 0.0;
-    }
-
-    Ve[im] = 2 * vesheath - Ve[i];
-    NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
-
-    // Take into account the flow of energy due to fluid flow
-    // This is additional energy flux through the sheath
-    q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
+    Ve[im] = 2 * vesheath_flow - Ve[i];
+    NVe[im] = 2 * Me * nesheath * vesheath_flow - NVe[i];
 
     // Cross-sectional area in XZ plane and cell volume
     const auto& da = (lower ? da_m : da_p)[i];
@@ -387,8 +385,8 @@ void SheathBoundarySimple::transform(Options& state) {
     electron_energy_source[i] += power_sign * power;
 
     // Total heat flux for diagnostic purposes
-    q = gamma_e * tesheath * nesheath * vesheath; // [Wm^-2]
-    hflux_e[i] += power_sign * q * da_dv;         // [Wm^-3]
+    const BoutReal q_no_flow = gamma_e * tesheath * nesheath * vesheath_flow; // [Wm^-2]
+    hflux_e[i] += power_sign * q_no_flow * da_dv;                             // [Wm^-3]
     // lower Y: sheath boundary power placed in final domain cell
     // upper Y: sheath boundary power placed in ylow side of inner guard cell
     const auto i_power = lower ? i : i.yp();
