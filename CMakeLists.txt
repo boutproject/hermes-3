@@ -48,6 +48,9 @@ if(HERMES_BUILD_BOUT)
 else()
   find_package(bout++ REQUIRED)
 endif()
+find_package(Reactions REQUIRED)
+#find_package(NESO-Particles REQUIRED)
+
 
 set(HERMES_SOURCES
     src/classical_diffusion.cxx
