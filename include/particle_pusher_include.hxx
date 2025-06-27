@@ -20,11 +20,6 @@
 #ifdef NESO_PARTICLES_HDF5
 #include <hdf5.h>
 #endif
-#include "finite_volume_projection.hpp"
-#include "h5part_io.hpp"
-#include "recombination_reaction.hpp"
-#include "test_particle_group.hpp"
-#include "utils.hpp"
 
 using namespace NESO::Particles;
 using namespace Reactions;
