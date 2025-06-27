@@ -7,14 +7,13 @@ spack:
   specs:
     - hermes-3%gcc+petsc+reactions ^py-numpy@1.26.4 ^nec_reactions.reactions~nvcxx+enable_tests ^nec_reactions.neso-particles~nvcxx+build_tests ^openblas ^nec_reactions.adaptivecpp ^hdf5
     - cmake@3.30.5
-  view: false
-  #  gcc:
-  #    root: ./views/gcc
-  #    select: ["%gcc"]
-  #    link_type: symlink
+  view:
+    gcc:
+      root: ./views/gcc
+      select: ["%gcc"]
+      link_type: symlink
   concretizer:
- #   unify: when_possible
-    unify: false
+    unify: when_possible
   repos:
     - ./external/BOUT-spack
     - ./Reactions/Reactions-repo
