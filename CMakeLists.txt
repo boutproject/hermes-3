@@ -169,7 +169,7 @@ set(HERMES_SOURCES
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
 
-target_link_libraries(hermes-3-lib PRIVATE bout++::bout++)
+target_link_libraries(hermes-3-lib PUBLIC bout++::bout++ Reactions::Reactions)
 
 target_compile_features(hermes-3-lib PUBLIC cxx_std_17)
 set_target_properties(hermes-3-lib PROPERTIES CXX_EXTENSIONS OFF)
@@ -182,13 +182,15 @@ target_include_directories(hermes-3-lib PUBLIC
 
 # Have hermes-3-lib look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3-lib PROPERTIES BUILD_RPATH "$ORIGIN")
+add_sycl_to_target(TARGET hermes-3-lib SOURCES ${HERMES_SOURCES})
 
 # The main executable target
 add_executable(hermes-3
                hermes-3.cxx
                ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
 
-target_link_libraries(hermes-3 PRIVATE bout++::bout++ hermes-3-lib)
+add_sycl_to_target(TARGET hermes-3 SOURCES hermes-3.cxx)
+target_link_libraries(hermes-3 PRIVATE hermes-3-lib)
 
 target_include_directories(hermes-3 PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
