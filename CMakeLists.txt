@@ -254,8 +254,9 @@ if(HERMES_TESTS)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
+  option(SPACK_GTEST "Use spack-installed googletest for unit tests" ON)
   if(HERMES_UNIT_TESTS)
-    if(NOT PACKAGE_TESTS)
+    if(NOT PACKAGE_TESTS AND NOT SPACK_GTEST)
       # Not running BOUT++ tests
       # Since BOUT++ includes googletest, adding it again causes errors
       add_subdirectory(external/googletest)
