@@ -75,13 +75,15 @@ protected:
    * source fields stored in committed reference data files. Subclasses must override
    * generate_state() in order to setup the input to the transform.
    *
-   * @param tolerance Max absolute (pointwise) difference between reference data and test
-   * data fields.
    * @param check_input_fields Whether to check that the input fields to the transform (in
    * addition to the output source fields) match the reference data.
+   *
+   * @param ignore_last_n_sigfigs The reference and test fields must be equal at each
+   * point, but the last \p ignore_last_n_sigfigs significant digits are ignored in the
+   * comparison.
    */
-  void sources_regression_test(const BoutReal tolerance = 1e-12,
-                               bool check_input_fields = true) {
+  void sources_regression_test(bool check_input_fields = true,
+                               const int ignore_last_n_sigfigs = 3) {
 
     // Read reference state
     Options ref_state = bout::OptionsIO::create(ref_data_path())->read();
@@ -112,9 +114,11 @@ protected:
           Field3D test_field = test_state["species"][sp.first][fld.first].as<Field3D>();
           Field3D ref_field = ref_state["species"][sp.first][fld.first].as<Field3D>();
 
-          ASSERT_TRUE(IsFieldEqual(test_field, ref_field, "RGN_NOBNDRY", tolerance))
+          ASSERT_TRUE(IsFieldEqualSigFigs(test_field, ref_field, "RGN_NOBNDRY",
+                                          ignore_last_n_sigfigs))
               << "'" << this->lbl << "' [" << sp_name << "/" << fld_name << "]"
-              << " differs from reference data (tolerance is " << tolerance << ") ";
+              << " differs from reference data (despite ignoring last "
+              << ignore_last_n_sigfigs << "significant digits!)";
         }
       }
     }
