@@ -1,7 +1,7 @@
+#include "integrate.hxx"
+#include <iomanip>
 #include <memory>
 #include <regex>
-
-#include "integrate.hxx"
 
 #include "reaction.hxx"
 
@@ -68,7 +68,8 @@ void Reaction::transform(Options& state) {
       n_e.getRegion("RGN_NOBNDRY"))(n_r1, n_r2, n_e, T_e);
 
   // Use the Stoichiometry 'matrix' (vector) to set density sources for each species
-  for (auto el : parser->get_stoich()) {
+  auto stoich = parser->get_stoich();
+  for (auto el : stoich) {
     std::string sp_name = el.first;
     int pop_change = el.second;
     if (pop_change != 0) {
@@ -102,8 +103,33 @@ void Reaction::transform(Options& state) {
   // Momentum
   momentum_exchange = reaction_rate * AA_rh * v_rh;
 
-  subtract(rh["momentum_source"], momentum_exchange);
-  add(ph["momentum_source"], momentum_exchange);
+  // Momentum sources
+  for (auto el : stoich) {
+    std::string sp_name = el.first;
+    // Skip electron momentum
+    if (sp_name.compare("e") == 0) {
+      continue;
+    }
+    int pop_change = el.second;
+    auto Gs = state["species"][sp_name]["AA"].as<BoutReal>()
+              * state["species"][sp_name]["velocity"].as<Field3D>();
+    if (pop_change < 0) {
+      momentum_exchange = pop_change * reaction_rate * Gs;
+    } else if (pop_change > 0) {
+      momentum_exchange = 0;
+      for (auto& rsp_name : heavy_reactant_species) {
+        int rpop_change = stoich[rsp_name];
+        if (rpop_change < 0) {
+          auto Gr = state["species"][rsp_name]["AA"].as<BoutReal>()
+                    * state["species"][rsp_name]["velocity"].as<Field3D>();
+          momentum_exchange = reaction_rate * Gr;
+        }
+      }
+    } else {
+      continue;
+    }
+    add(state["species"][sp_name]["momentum_source"], momentum_exchange);
+  }
 
   // Energy
   add(ph["energy_source"], 0.5 * AA_rh * reaction_rate * SQ(v_rh - v_ph));
