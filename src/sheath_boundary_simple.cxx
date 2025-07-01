@@ -1,39 +1,28 @@
 #include "../include/sheath_boundary_simple.hxx"
 #include "../include/hermes_utils.hxx"
 
-#include "bout/constants.hxx"
-#include "bout/mesh.hxx"
+#include <bout/constants.hxx>
+#include <bout/coordinates.hxx>
+#include <bout/field.hxx>
+#include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
+
+#include <algorithm>
+#include <fmt/core.h>
+
 using bout::globals::mesh;
 
 namespace {
-BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
-  if (value < min)
-    return min;
-  if (value > max)
-    return max;
-  return value;
-}
-
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  int ny = f.getNy();
-  int nz = f.getNz();
-  return Ind3D{(x * ny + y) * nz + z, ny, nz};
-}
-
 /// Limited free gradient of log of a quantity
 /// This ensures that the guard cell values remain positive
 /// while also ensuring that the quantity never increases
 ///
 ///  fm  fc | fp
 ///         ^ boundary
-/// 
+///
 /// exp( 2*log(fc) - log(fm) )
-/// Mode 0: default (exponential extrapolation if decreases, Neumann if increases)
-/// Mode 1: always exponential extrapolation
-/// Mode 2: always linear extrapolation
-
-BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
-  if ((fm < fc) && (mode == 0)) {
+BoutReal limitFree(BoutReal fm, BoutReal fc, SheathLimitMode mode) {
+  if ((fm < fc) && (mode == SheathLimitMode::limit_free)) {
     return fc; // Neumann rather than increasing into boundary
   }
   if (fm < 1e-10) {
@@ -41,16 +30,13 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
   }
 
   BoutReal fp = 0;
-  if ((mode == 0) || (mode == 1)) {
-    fp = SQ(fc) / fm;     // Exponential
-  } else if (mode == 2) {
-    fp = 2.0 * fc - fm;   // Linear
-  } else {
-    throw BoutException("Unknown boundary mode");
+  switch (mode) {
+  case SheathLimitMode::limit_free:
+  case SheathLimitMode::exponential_free:
+    fp = SQ(fc) / fm; // Exponential
+  case SheathLimitMode::linear_free:
+    fp = 2.0 * fc - fm; // Linear
   }
-
-  return fp;  // Extrapolation
-
 
 #if CHECKLEVEL >= 2
   if (!std::isfinite(fp)) {
@@ -61,10 +47,130 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
   return fp;
 }
 
+/// Calculate potential phi assuming zero current
+Field3D calculate_phi(Options& allspecies, bool lower_y, bool upper_y, const Field3D& Ne,
+                      const Field3D& Te, BoutReal Me, BoutReal Ge,
+                      const Field3D& wall_potential,
+                      SheathLimitMode density_boundary_mode,
+                      SheathLimitMode temperature_boundary_mode,
+                      BoutReal sheath_ion_polytropic) {
+
+  // Need to sum  n_i Z_i C_i over all ion species
+  //
+  // To avoid looking up species for every grid point, this
+  // loops over the boundaries once per species.
+  Field3D ion_sum = 0.0;
+
+  // Iterate through charged ion species
+  for (const auto& kv : allspecies.getChildren()) {
+    const Options& species = kv.second;
+
+    if ((kv.first == "e") or !species.isSet("charge")
+        or (get<BoutReal>(species["charge"]) == 0.0)) {
+      continue; // Skip electrons and non-charged ions
+    }
+
+    const Field3D Ni = getNoBoundary<Field3D>(species["density"]);
+    const Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
+    const BoutReal Mi = getNoBoundary<BoutReal>(species["AA"]);
+    const BoutReal Zi = getNoBoundary<BoutReal>(species["charge"]);
+    Field3D Vi = species.isSet("velocity")
+                     ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
+                     : zeroFrom(Ni);
+
+    const auto set_ion_sum_boundary = [&](const auto& r, int jz, bool lower) {
+      const auto y = lower ? mesh->ystart : mesh->yend;
+      auto i = indexAt(Ni, r.ind, y, jz);
+      auto ip = lower ? i.yp() : i.ym();
+
+      // Free gradient of log density and temperature
+      // This ensures that the guard cell values remain positive
+      // exp( 2*log(N[i]) - log(N[ip]) )
+
+      const BoutReal Ni_im = limitFree(Ni[ip], Ni[i], density_boundary_mode);
+      const BoutReal Ti_im = limitFree(Ti[ip], Ti[i], temperature_boundary_mode);
+      const BoutReal Te_im = limitFree(Te[ip], Te[i], temperature_boundary_mode);
+
+      // Calculate sheath values at half-way points (cell edge)
+      const BoutReal nisheath = 0.5 * (Ni_im + Ni[i]);
+      // electron temperature
+      const BoutReal tesheath = floor(0.5 * (Te_im + Te[i]), 1e-5);
+      // ion temperature
+      const BoutReal tisheath = floor(0.5 * (Ti_im + Ti[i]), 1e-5);
+
+      // Sound speed
+      BoutReal C_i = sqrt((sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi);
+      BoutReal visheath = lower ? std::min(Vi[i], -C_i) : std::max(Vi[i], C_i);
+
+      const auto sign = lower ? -1 : +1;
+      ion_sum[i] += sign * Zi * nisheath * visheath;
+    };
+
+    if (lower_y) {
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          set_ion_sum_boundary(r, jz, true);
+        }
+      }
+    }
+
+    if (upper_y) {
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          set_ion_sum_boundary(r, jz, false);
+        }
+      }
+    }
+  }
+
+  Field3D phi = emptyFrom(Ne);
+
+  const auto set_phi_boundary = [&](const auto& r, int jz, bool lower) {
+    const auto y = lower ? mesh->ystart : mesh->yend;
+    auto i = indexAt(phi, r.ind, y, jz);
+    auto ip = lower ? i.yp() : i.ym();
+
+    const BoutReal Ne_im = limitFree(Ne[ip], Ne[i], density_boundary_mode);
+    const BoutReal Te_im = limitFree(Te[ip], Te[i], temperature_boundary_mode);
+
+    // Calculate sheath values at half-way points (cell edge)
+    const BoutReal nesheath = 0.5 * (Ne_im + Ne[i]);
+    const BoutReal tesheath = floor(0.5 * (Te_im + Te[i]), 1e-5);
+
+    phi[i] =
+        tesheath * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
+
+    // Add bias potential
+    phi[i] += wall_potential[i];
+    // Constant into sheath
+    phi[i.yp()] = phi[i.ym()] = phi[i];
+  };
+
+  // ion_sum now contains the ion current, sum Z_i n_i C_i over all ion species
+  // at mesh->ystart and mesh->yend indices
+  if (lower_y) {
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        set_phi_boundary(r, jz, true);
+      }
+    }
+  }
+
+  if (upper_y) {
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        set_phi_boundary(r, jz, false);
+      }
+    }
+  }
+
+  return phi;
+}
+
 } // namespace
 
-SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions,
-                                           Solver*) {
+SheathBoundarySimple::SheathBoundarySimple(const std::string& name, Options& alloptions,
+                                           [[maybe_unused]] Solver* solver) {
   AUTO_TRACE();
 
   Options& options = alloptions[name];
@@ -87,16 +193,15 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   }
 
   gamma_e = options["gamma_e"]
-    .doc("Electron sheath heat transmission coefficient")
-    .withDefault(3.5);
+                .doc("Electron sheath heat transmission coefficient")
+                .withDefault(3.5);
 
-  gamma_i = options["gamma_i"]
-    .doc("Ion sheath heat transmission coefficient")
-    .withDefault(3.5);
+  gamma_i =
+      options["gamma_i"].doc("Ion sheath heat transmission coefficient").withDefault(3.5);
 
   sheath_ion_polytropic = options["sheath_ion_polytropic"]
-         .doc("Ion polytropic coefficient in Bohm sound speed")
-         .withDefault(1.0);
+                              .doc("Ion polytropic coefficient in Bohm sound speed")
+                              .withDefault(1.0);
 
   lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
   upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
@@ -118,25 +223,25 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   wall_potential = toFieldAligned(wall_potential);
 
   no_flow = options["no_flow"]
-    .doc("Set zero particle flow, keeping energy flow")
-    .withDefault<bool>(false);
+                .doc("Set zero particle flow, keeping energy flow")
+                .withDefault<bool>(false);
 
   density_boundary_mode = options["density_boundary_mode"]
-    .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-    .withDefault<BoutReal>(1);
+                              .doc("BC mode: limit_free, exponential_free, linear_free")
+                              .withDefault<SheathLimitMode>(SheathLimitMode::limit_free);
 
   pressure_boundary_mode = options["pressure_boundary_mode"]
-    .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-    .withDefault<BoutReal>(1);
+                               .doc("BC mode: limit_free, exponential_free, linear_free")
+                               .withDefault<SheathLimitMode>(SheathLimitMode::limit_free);
 
-  temperature_boundary_mode = options["temperature_boundary_mode"]
-    .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-    .withDefault<BoutReal>(1);
+  temperature_boundary_mode =
+      options["temperature_boundary_mode"]
+          .doc("BC mode: limit_free, exponential_free, linear_free")
+          .withDefault<SheathLimitMode>(SheathLimitMode::limit_free);
 
   diagnose = options["diagnose"]
-    .doc("Save additional output diagnostics")
-    .withDefault<bool>(false);
-  
+                 .doc("Save additional output diagnostics")
+                 .withDefault<bool>(false);
 }
 
 void SheathBoundarySimple::transform(Options& state) {
@@ -150,8 +255,8 @@ void SheathBoundarySimple::transform(Options& state) {
   Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
   Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
   Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
-    ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
-    : Te * Ne;
+                   ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
+                   : Te * Ne;
 
   // Mass, normalised to proton mass
   const BoutReal Me =
@@ -159,12 +264,12 @@ void SheathBoundarySimple::transform(Options& state) {
 
   // This is for applying boundary conditions
   Field3D Ve = IS_SET_NOBOUNDARY(electrons["velocity"])
-    ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
-    : zeroFrom(Ne);
+                   ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
+                   : zeroFrom(Ne);
 
   Field3D NVe = IS_SET_NOBOUNDARY(electrons["momentum"])
-    ? toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]))
-    : zeroFrom(Ne);
+                    ? toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]))
+                    : zeroFrom(Ne);
 
   Coordinates* coord = mesh->getCoordinates();
 
@@ -172,292 +277,133 @@ void SheathBoundarySimple::transform(Options& state) {
   // Electrostatic potential
   // If phi is set, use free boundary condition
   // If phi not set, calculate assuming zero current
-  Field3D phi;
-  if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
-    phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
-  } else {
-    // Calculate potential phi assuming zero current
+  Field3D phi = IS_SET_NOBOUNDARY(state["fields"]["phi"])
+                    ? toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]))
+                    : calculate_phi(allspecies, lower_y, upper_y, Ne, Te, Me, Ge,
+                                    wall_potential, density_boundary_mode,
+                                    temperature_boundary_mode, sheath_ion_polytropic);
 
-    // Need to sum  n_i Z_i C_i over all ion species
-    //
-    // To avoid looking up species for every grid point, this
-    // loops over the boundaries once per species.
-    ion_sum = 0.0;
-
-    // Iterate through charged ion species
-    for (auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
-
-      if ((kv.first == "e") or !species.isSet("charge")
-          or (get<BoutReal>(species["charge"]) == 0.0)) {
-        continue; // Skip electrons and non-charged ions
-      }
-
-      const Field3D Ni = getNoBoundary<Field3D>(species["density"]);
-      const Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
-      const BoutReal Mi = getNoBoundary<BoutReal>(species["AA"]);
-      const BoutReal Zi = getNoBoundary<BoutReal>(species["charge"]);
-      Field3D Vi = species.isSet("velocity")
-        ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
-        : zeroFrom(Ni);
-
-      if (lower_y) {
-        // Sum values, put result in mesh->ystart
-
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            auto i = indexAt(Ni, r.ind, mesh->ystart, jz);
-            auto ip = i.yp();
-
-            // Free gradient of log density and temperature
-            // This ensures that the guard cell values remain positive
-            // exp( 2*log(N[i]) - log(N[ip]) )
-
-            const BoutReal Ni_im = limitFree(Ni[ip], Ni[i], density_boundary_mode);
-            const BoutReal Ti_im = limitFree(Ti[ip], Ti[i], temperature_boundary_mode);
-            const BoutReal Te_im = limitFree(Te[ip], Te[i], temperature_boundary_mode);
-
-            // Calculate sheath values at half-way points (cell edge)
-            const BoutReal nisheath = 0.5 * (Ni_im + Ni[i]);
-            const BoutReal tesheath =
-                floor(0.5 * (Te_im + Te[i]), 1e-5); // electron temperature
-            const BoutReal tisheath =
-                floor(0.5 * (Ti_im + Ti[i]), 1e-5); // ion temperature
-
-            // Sound speed squared
-            BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
-
-            BoutReal visheath = -sqrt(C_i_sq);
-            if (Vi[i] < visheath) {
-              visheath = Vi[i];
-            }
-
-            ion_sum[i] -= Zi * nisheath * visheath;
-          }
-        }
-      }
-
-      if (upper_y) {
-        // Sum values, put results in mesh->yend
-
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            auto i = indexAt(Ni, r.ind, mesh->yend, jz);
-            auto im = i.ym();
-
-            const BoutReal Ni_ip = limitFree(Ni[im], Ni[i], density_boundary_mode);
-            const BoutReal Ti_ip = limitFree(Ti[im], Ti[i], temperature_boundary_mode);
-            const BoutReal Te_ip = limitFree(Te[im], Te[i], temperature_boundary_mode);
-
-            // Calculate sheath values at half-way points (cell edge)
-            const BoutReal nisheath = 0.5 * (Ni_ip + Ni[i]);
-            const BoutReal tesheath =
-                floor(0.5 * (Te_ip + Te[i]), 1e-5); // electron temperature
-            const BoutReal tisheath =
-                floor(0.5 * (Ti_ip + Ti[i]), 1e-5); // ion temperature
-
-            BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
-
-            BoutReal visheath = sqrt(C_i_sq);
-            if (Vi[i] > visheath) {
-              visheath = Vi[i];
-            }
-
-            ion_sum[i] += Zi * nisheath * visheath;
-          }
-        }
-      }
-    }
-
-    phi.allocate();
-
-    // ion_sum now contains the ion current, sum Z_i n_i C_i over all ion species
-    // at mesh->ystart and mesh->yend indices
-    if (lower_y) {
-      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-        for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(phi, r.ind, mesh->ystart, jz);
-          auto ip = i.yp();
-
-          const BoutReal Ne_im = limitFree(Ne[ip], Ne[i], density_boundary_mode);
-          const BoutReal Te_im = limitFree(Te[ip], Te[i], temperature_boundary_mode);
-
-          // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne_im + Ne[i]);
-          const BoutReal tesheath = floor(0.5 * (Te_im + Te[i]), 1e-5);
-
-          phi[i] =
-              tesheath
-              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
-
-          const BoutReal phi_wall = wall_potential[i];
-          phi[i] += phi_wall; // Add bias potential
-
-          phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
-        }
-      }
-    }
-
-    if (upper_y) {
-      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-        for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(phi, r.ind, mesh->yend, jz);
-          auto im = i.ym();
-
-          const BoutReal Ne_ip = limitFree(Ne[im], Ne[i], density_boundary_mode);
-          const BoutReal Te_ip = limitFree(Te[im], Te[i], temperature_boundary_mode);
-
-          // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne_ip + Ne[i]);
-          const BoutReal tesheath = floor(0.5 * (Te_ip + Te[i]), 1e-5);
-
-          phi[i] =
-              tesheath
-              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
-
-          const BoutReal phi_wall = wall_potential[i];
-          phi[i] += phi_wall; // Add bias potential
-
-          phi[i.yp()] = phi[i.ym()] = phi[i];
-        }
-      }
-    }
-  }
-  
   // Field to capture total sheath heat flux for diagnostics
   Field3D electron_sheath_power_ylow = zeroFrom(Ne);
-  
+
   //////////////////////////////////////////////////////////////////
   // Electrons
 
-  Field3D electron_energy_source = electrons.isSet("energy_source")
-    ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
-    : zeroFrom(Ne);
+  Field3D electron_energy_source =
+      electrons.isSet("energy_source")
+          ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
+          : zeroFrom(Ne);
 
   hflux_e = zeroFrom(electron_energy_source); // sheath heat flux for diagnostics
+
+  // Cross-sectional area in XZ plane and cell volume.
+  // Would be nice to cache these
+  auto da_m = emptyFrom(coord->J);    // [m^2]
+  auto da_p = emptyFrom(coord->J);    // [m^2]
+  auto dv = emptyFrom(coord->J);      // [m^3]
+  auto da_dv_m = emptyFrom(coord->J); // [m^-1]
+  auto da_dv_p = emptyFrom(coord->J); // [m^-1]
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      auto i = indexAt(Ne, r.ind, mesh->ystart, jz);
+      auto im = i.ym();
+      da_m[i] = (coord->J[i] + coord->J[im])
+                / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im])) * 0.5
+                * (coord->dx[i] + coord->dx[im]) * 0.5 * (coord->dz[i] + coord->dz[im]);
+
+      dv[i] = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
+
+      da_dv_m[i] = da_m[i] / dv[i];
+    }
+  }
+
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      auto i = indexAt(Ne, r.ind, mesh->yend, jz);
+      auto ip = i.yp();
+      da_p[i] = (coord->J[i] + coord->J[ip])
+                / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])) * 0.5
+                * (coord->dx[i] + coord->dx[ip]) * 0.5
+                * (coord->dz[i] + coord->dz[ip]); // [m^2]
+
+      dv[i] = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
+
+      da_dv_p[i] = da_p[i] / dv[i];
+    }
+  }
+
+  const auto set_electron_boundaries = [&](const auto& r, int jz, bool lower) {
+    const auto y = lower ? mesh->ystart : mesh->yend;
+    auto i = indexAt(Ne, r.ind, y, jz);
+    auto ip = lower ? i.yp() : i.ym();
+    auto im = lower ? i.ym() : i.yp();
+
+    // Free gradient of log electron density and temperature
+    // Limited so that the values don't increase into the sheath
+    // This ensures that the guard cell values remain positive
+    // exp( 2*log(N[i]) - log(N[ip]) )
+
+    Ne[im] = limitFree(Ne[ip], Ne[i], density_boundary_mode);
+    Te[im] = limitFree(Te[ip], Te[i], temperature_boundary_mode);
+    Pe[im] = limitFree(Pe[ip], Pe[i], pressure_boundary_mode);
+
+    // Free boundary potential linearly extrapolated
+    phi[im] = 2 * phi[i] - phi[ip];
+
+    const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
+    const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
+    const BoutReal phi_wall = wall_potential[i];
+    // Electron saturation at phi = phi_wall
+    const BoutReal phisheath = floor(0.5 * (phi[im] + phi[i]), phi_wall);
+
+    // Electron velocity into sheath (< 0)
+    // Equal to Bohm for single ions and no currents
+    const auto sheath_sign = lower ? -1 : +1;
+    const BoutReal vesheath = sheath_sign * sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
+                              * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
+
+    const BoutReal vesheath_flow = no_flow ? 0.0 : vesheath;
+
+    // Heat flux. Note: Here this is negative because vesheath < 0
+    const BoutReal q =
+        (gamma_e * tesheath * nesheath * vesheath)
+        // Take into account the flow of energy due to fluid flow
+        // This is additional energy flux through the sheath
+        - ((2.5 * tesheath + 0.5 * Me * SQ(vesheath_flow)) * nesheath * vesheath_flow);
+
+    Ve[im] = 2 * vesheath_flow - Ve[i];
+    NVe[im] = 2 * Me * nesheath * vesheath_flow - NVe[i];
+
+    // Cross-sectional area in XZ plane and cell volume
+    const auto& da = (lower ? da_m : da_p)[i];
+    const auto& da_dv = (lower ? da_dv_m : da_dv_p)[i];
+
+    // Get power and energy source
+    const BoutReal heatflow = q * da;        // [W]
+    const BoutReal power = heatflow / dv[i]; // [Wm^-3]
+    const auto power_sign = lower ? +1 : -1;
+    electron_energy_source[i] += power_sign * power;
+
+    // Total heat flux for diagnostic purposes
+    const BoutReal q_no_flow = gamma_e * tesheath * nesheath * vesheath_flow; // [Wm^-2]
+    hflux_e[i] += power_sign * q_no_flow * da_dv;                             // [Wm^-3]
+    // lower Y: sheath boundary power placed in final domain cell
+    // upper Y: sheath boundary power placed in ylow side of inner guard cell
+    const auto i_power = lower ? i : i.yp();
+    electron_sheath_power_ylow[i_power] += heatflow; // [W]
+  };
 
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(Ne, r.ind, mesh->ystart, jz);
-        auto ip = i.yp();
-        auto im = i.ym();
-
-        // Free gradient of log electron density and temperature
-        // Limited so that the values don't increase into the sheath
-        // This ensures that the guard cell values remain positive
-        // exp( 2*log(N[i]) - log(N[ip]) )
-
-        Ne[im] = limitFree(Ne[ip], Ne[i], density_boundary_mode);
-        Te[im] = limitFree(Te[ip], Te[i], temperature_boundary_mode);
-        Pe[im] = limitFree(Pe[ip], Pe[i], pressure_boundary_mode);
-
-        // Free boundary potential linearly extrapolated
-        phi[im] = 2 * phi[i] - phi[ip];
-
-        const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
-        const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
-        const BoutReal phi_wall = wall_potential[i];
-        const BoutReal phisheath =
-            floor(0.5 * (phi[im] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
-
-        // Electron velocity into sheath (< 0)
-        // Equal to Bohm for single ions and no currents
-        BoutReal vesheath =
-	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
-
-        // Heat flux. Note: Here this is negative because vesheath < 0
-        BoutReal q = gamma_e * tesheath * nesheath * vesheath;
-
-        if (no_flow) {
-          vesheath = 0.0;
-        }
-
-        Ve[im] = 2 * vesheath - Ve[i];
-        NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
-
-        // Take into account the flow of energy due to fluid flow
-        // This is additional energy flux through the sheath
-        q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
-
-        // Cross-sectional area in XZ plane and cell volume
-        BoutReal da = (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
-                        * 0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]);   // [m^2]
-        BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
-
-        // Get power and energy source
-        BoutReal heatflow = q * da;   // [W]
-        BoutReal power = heatflow / dv;  // [Wm^-3]
-        electron_energy_source[i] += power;
-
-        // Total heat flux for diagnostic purposes
-        q = gamma_e * tesheath * nesheath * vesheath;   // [Wm^-2]
-        hflux_e[i] += q * da / dv;   // [Wm^-3]
-        electron_sheath_power_ylow[i] += heatflow;       // [W], lower Y, so sheath boundary power placed in final domain cell 
-                      
+        set_electron_boundaries(r, jz, true);
       }
     }
   }
   if (upper_y) {
-    // This is essentially the same as at the lower y boundary
-    // except ystart -> yend, ip <-> im
-    //
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(Ne, r.ind, mesh->yend, jz);
-        auto ip = i.yp();
-        auto im = i.ym();
-
-        // Free gradient of log electron density and temperature
-        // This ensures that the guard cell values remain positive
-        // exp( 2*log(N[i]) - log(N[ip]) )
-
-        Ne[ip] = limitFree(Ne[im], Ne[i], density_boundary_mode);
-        Te[ip] = limitFree(Te[im], Te[i], temperature_boundary_mode);
-        Pe[ip] = limitFree(Pe[im], Pe[i], pressure_boundary_mode);
-
-        // Free boundary potential linearly extrapolated.
-        phi[ip] = 2 * phi[i] - phi[im];
-
-        const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
-        const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]); // electron temperature
-        const BoutReal phi_wall = wall_potential[i];
-        const BoutReal phisheath =
-            floor(0.5 * (phi[ip] + phi[i]), phi_wall); // Electron saturation at phi = phi_wall
-
-        // Electron velocity into sheath (> 0)
-        BoutReal vesheath =
-          sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
-
-        // Heat flux. Note: Here this is positive because vesheath > 0
-        BoutReal q = gamma_e * tesheath * nesheath * vesheath;
-
-        if (no_flow) {
-          vesheath = 0.0;
-        }
-
-        Ve[ip] = 2 * vesheath - Ve[i];
-        NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
-        
-        // Take into account the flow of energy due to fluid flow
-        // This is additional energy flux through the sheath
-        q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
-
-        // Cross-sectional area in XZ plane and cell volume
-        BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
-                        * 0.5*(coord->dx[i] + coord->dx[ip]) * 0.5*(coord->dz[i] + coord->dz[ip]);   // [m^2]
-        BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
-
-        // Get power and energy source
-        BoutReal heatflow = q * da;   // [W]
-        BoutReal power = heatflow / dv;  // [Wm^-3]
-        electron_energy_source[i] -= power;
-
-        // Total heat flux for diagnostic purposes
-        q = gamma_e * tesheath * nesheath * vesheath;   // [Wm^-2]
-        hflux_e[i] -= q * da / dv;   // [Wm^-3]
-        electron_sheath_power_ylow[ip] += heatflow;    // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
-
+        set_electron_boundaries(r, jz, false);
       }
     }
   }
@@ -495,11 +441,9 @@ void SheathBoundarySimple::transform(Options& state) {
     setBoundary(state["fields"]["phi"], fromFieldAligned(phi));
   }
 
-  
-
   //////////////////////////////////////////////////////////////////
   // Iterate through all ions
-  for (auto& kv : allspecies.getChildren()) {
+  for (const auto& kv : allspecies.getChildren()) {
     if (kv.first == "e") {
       continue; // Skip electrons
     }
@@ -520,168 +464,108 @@ void SheathBoundarySimple::transform(Options& state) {
     Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
     Field3D Pi = species.isSet("pressure")
-      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
-      : Ni * Ti;
+                     ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
+                     : Ni * Ti;
 
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
     Field3D Vi = species.isSet("velocity")
-      ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
-      : zeroFrom(Ni);
+                     ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
+                     : zeroFrom(Ni);
     Field3D NVi = species.isSet("momentum")
-      ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
-      : Mi * Ni * Vi;
+                      ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
+                      : Mi * Ni * Vi;
 
     // Energy source will be modified in the domain
-    Field3D energy_source = species.isSet("energy_source")
-      ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
-      : zeroFrom(Ni);
+    Field3D energy_source =
+        species.isSet("energy_source")
+            ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
+            : zeroFrom(Ni);
 
-    // Initialise sheath ion heat flux. This will be created for each species 
+    // Initialise sheath ion heat flux. This will be created for each species
     // saved in diagnostics struct and then destroyed and re-created for next species
     Field3D hflux_i = zeroFrom(energy_source);
     Field3D particle_source = zeroFrom(energy_source);
     // Field to capture total sheath heat flux for diagnostics
     Field3D ion_sheath_power_ylow = zeroFrom(Ne);
 
+    const auto set_ion_boundary = [&](const auto& r, int jz, bool lower) {
+      const auto y = lower ? mesh->ystart : mesh->yend;
+      auto i = indexAt(Ne, r.ind, y, jz);
+      auto ip = lower ? i.yp() : i.ym();
+      auto im = lower ? i.ym() : i.yp();
+
+      // Free gradient of log electron density and temperature
+      // This ensures that the guard cell values remain positive
+      // exp( 2*log(N[i]) - log(N[ip]) )
+
+      Ni[im] = limitFree(Ni[ip], Ni[i], density_boundary_mode);
+      Ti[im] = limitFree(Ti[ip], Ti[i], temperature_boundary_mode);
+      Pi[im] = limitFree(Pi[ip], Pi[i], pressure_boundary_mode);
+
+      // Calculate sheath values at half-way points (cell edge)
+      const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
+      const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
+      // electron temperature
+      const BoutReal tesheath = floor(0.5 * (Te[im] + Te[i]), 1e-5);
+      // ion temperature
+      const BoutReal tisheath = floor(0.5 * (Ti[im] + Ti[i]), 1e-5);
+
+      // Ion speed into sheath
+      BoutReal C_i = sqrt((sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi);
+
+      // Negative -> into sheath
+      const BoutReal visheath = lower ? std::min(Vi[i], -C_i) : std::max(Vi[i], C_i);
+      const BoutReal visheath_flow = no_flow ? 0.0 : visheath;
+
+      // Note: Here this is negative because visheath < 0
+      const BoutReal q =
+          (gamma_i * tisheath * nisheath * visheath)
+          // Take into account the flow of energy due to fluid flow
+          // This is additional energy flux through the sheath
+          - ((2.5 * tisheath + 0.5 * Mi * SQ(visheath_flow)) * nisheath * visheath_flow);
+
+      // Set boundary conditions on flows
+      Vi[im] = 2. * visheath_flow - Vi[i];
+      NVi[im] = 2. * Mi * nisheath * visheath_flow - NVi[i];
+
+      // Cross-sectional area in XZ plane and cell volume
+      const auto& da = (lower ? da_m : da_p)[i];
+      const auto& da_dv = (lower ? da_dv_m : da_dv_p)[i];
+
+      // Get power and energy source
+      const BoutReal heatflow = q * da;        // [W]
+      const BoutReal power = heatflow / dv[i]; // [Wm^-3]
+      ASSERT2(std::isfinite(power));
+      const auto power_sign = lower ? +1 : -1;
+      energy_source[i] += power_sign * power;
+      // Diagnostics only
+      particle_source[i] -= nisheath * visheath_flow * da_dv; // [m^-3s^-1]
+
+      // Total heat flux for diagnostic purposes
+      const BoutReal q_no_flow = gamma_i * tisheath * nisheath * visheath_flow; // [Wm^-2]
+      hflux_i[i] += power_sign * q_no_flow * da_dv;                             // [Wm^-3]
+      // lower Y: sheath boundary power placed in final domain cell
+      // upper Y: sheath boundary power placed in ylow side of inner guard cell
+      const auto i_power = lower ? i : i.yp();
+      ion_sheath_power_ylow[i_power] += heatflow;
+    };
+
     if (lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(Ne, r.ind, mesh->ystart, jz);
-          auto ip = i.yp();
-          auto im = i.ym();
-
-          // Free gradient of log electron density and temperature
-          // This ensures that the guard cell values remain positive
-          // exp( 2*log(N[i]) - log(N[ip]) )
-
-          Ni[im] = limitFree(Ni[ip], Ni[i], density_boundary_mode);
-          Ti[im] = limitFree(Ti[ip], Ti[i], temperature_boundary_mode);
-          Pi[im] = limitFree(Pi[ip], Pi[i], pressure_boundary_mode);
-
-          // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
-          const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
-          const BoutReal tesheath =
-              floor(0.5 * (Te[im] + Te[i]), 1e-5); // electron temperature
-          const BoutReal tisheath =
-              floor(0.5 * (Ti[im] + Ti[i]), 1e-5); // ion temperature
-
-          // Ion speed into sheath
-          BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
-
-          BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
-
-          if (Vi[i] < visheath) {
-            visheath = Vi[i];
-          }
-
-          // Note: Here this is negative because visheath < 0
-          BoutReal q = gamma_i * tisheath * nisheath * visheath;
-
-          if (no_flow) {
-            visheath = 0.0;
-          }
-
-          // Set boundary conditions on flows
-          Vi[im] = 2. * visheath - Vi[i];
-          NVi[im] = 2. * Mi * nisheath * visheath - NVi[i];
-
-          // Take into account the flow of energy due to fluid flow
-          // This is additional energy flux through the sheath
-          q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
-
-          // Cross-sectional area in XZ plane and cell volume
-          BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
-                        * 0.5*(coord->dx[i] + coord->dx[ip]) * 0.5*(coord->dz[i] + coord->dz[ip]);   // [m^2]
-          BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
-
-          // Get power and energy source
-          BoutReal heatflow = q * da;   // [W]
-          BoutReal power = heatflow / dv;  // [Wm^-3]
-          ASSERT2(std::isfinite(power));
-          energy_source[i] += power; // Note: Sign negative because power > 0
-          particle_source[i] -= nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
-
-          // Total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath;   // [Wm^-2]
-          hflux_i[i] += q * da / dv;   // [Wm^-3]
-          ion_sheath_power_ylow[i] += heatflow;      // [W] lower Y, so power placed in final domain cell
+          set_ion_boundary(r, jz, true);
         }
       }
     }
     if (upper_y) {
-      // Note: This is essentially the same as the lower boundary,
-      // but with directions reversed e.g. ystart -> yend, ip <-> im
-      //
       for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(Ne, r.ind, mesh->yend, jz);
-          auto ip = i.yp();
-          auto im = i.ym();
-
-          // Free gradient of log electron density and temperature
-          // This ensures that the guard cell values remain positive
-          // exp( 2*log(N[i]) - log(N[ip]) )
-
-          Ni[ip] = limitFree(Ni[im], Ni[i], density_boundary_mode);
-          Ti[ip] = limitFree(Ti[im], Ti[i], temperature_boundary_mode);
-          Pi[ip] = limitFree(Pi[im], Pi[i], pressure_boundary_mode);
-
-          // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
-          const BoutReal nisheath = 0.5 * (Ni[ip] + Ni[i]);
-          const BoutReal tesheath =
-              floor(0.5 * (Te[ip] + Te[i]), 1e-5); // electron temperature
-          const BoutReal tisheath =
-              floor(0.5 * (Ti[ip] + Ti[i]), 1e-5); // ion temperature
-
-          // Ion speed into sheath
-          BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
-
-          BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
-
-          if (Vi[i] > visheath) {
-            visheath = Vi[i];
-          }
-
-          BoutReal q = gamma_i * tisheath * nisheath * visheath;
-
-          if (no_flow) {
-            visheath = 0.0;
-          }
-
-          // Set boundary conditions on flows
-          Vi[ip] = 2. * visheath - Vi[i];
-          NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
-
-          // Take into account the flow of energy due to fluid flow
-          // This is additional energy flux through the sheath
-          // Note: Here this is positive because visheath > 0
-          q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
-
-          // Cross-sectional area in XZ plane and cell volume
-          BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))
-                        * 0.5*(coord->dx[i] + coord->dx[ip]) * 0.5*(coord->dz[i] + coord->dz[ip]);   // [m^2]
-          BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
-
-          // Get power and energy source
-          BoutReal heatflow = q * da;   // [W]
-          BoutReal power = heatflow / dv;  // [Wm^-3]
-          ASSERT2(std::isfinite(power));
-          energy_source[i] -= power; // Note: Sign negative because power > 0
-          particle_source[i] -= nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
-
-          // Total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath;   // [Wm^-2]
-          hflux_i[i] -= q * da / dv;   // [Wm^-3]
-          ion_sheath_power_ylow[ip] += heatflow;  // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
-
+          set_ion_boundary(r, jz, false);
         }
       }
     }
-
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
@@ -712,7 +596,6 @@ void SheathBoundarySimple::transform(Options& state) {
 
     set(diagnostics[species.name()]["energy_source"], hflux_i);
     set(diagnostics[species.name()]["particle_source"], particle_source);
-
   }
 }
 
@@ -728,29 +611,26 @@ void SheathBoundarySimple::outputVars(Options& state) {
   if (diagnose) {
     /// Iterate through the first species in each collision pair
     const std::map<std::string, Options>& level1 = diagnostics.getChildren();
-    for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
-      auto species_name = s1->first;
-      const Options& section = diagnostics[species_name];
-
-      set_with_attrs(state[{"E" + species_name + "_sheath"}], getNonFinal<Field3D>(section["energy_source"]),
-                            {{"time_dimension", "t"},
-                            {"units", "W / m^3"},
-                            {"conversion", Pnorm * Omega_ci},
-                            {"standard_name", "energy source"},
-                            {"long_name", species_name + " sheath energy source"},
-                            {"source", "sheath_boundary_simple"}});
+    for (const auto& [species_name, section] : level1) {
+      set_with_attrs(state[fmt::format("E{}_sheath", species_name)],
+                     getNonFinal<Field3D>(section["energy_source"]),
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy source"},
+                      {"long_name", species_name + " sheath energy source"},
+                      {"source", "sheath_boundary_simple"}});
 
       if (species_name != "e") {
-        set_with_attrs(state[{"S" + species_name + "_sheath"}], getNonFinal<Field3D>(section["particle_source"]),
-                              {{"time_dimension", "t"},
-                              {"units", "m^-3 s^-1"},
-                              {"conversion", Nnorm * Omega_ci},
-                              {"standard_name", "energy source"},
-                              {"long_name", species_name + " sheath energy source"},
-                              {"source", "sheath_boundary_simple"}});
+        set_with_attrs(state[fmt::format("S{}_sheath", species_name)],
+                       getNonFinal<Field3D>(section["particle_source"]),
+                       {{"time_dimension", "t"},
+                        {"units", "m^-3 s^-1"},
+                        {"conversion", Nnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", species_name + " sheath energy source"},
+                        {"source", "sheath_boundary_simple"}});
       }
-
     }
   }
-
-  }
+}
