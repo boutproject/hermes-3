@@ -98,7 +98,7 @@ void Reaction::transform(Options& state) {
                [](std::string sp_name) { return sp_name != "e"; });
   // Get the velocity of the heavy product
   Options& ph = state["species"][heavy_product_species[0]];
-  Field3D v_ph = get<Field3D>(rh["velocity"]);
+  Field3D v_ph = get<Field3D>(ph["velocity"]);
 
   // Momentum
   momentum_exchange = reaction_rate * AA_rh * v_rh;
