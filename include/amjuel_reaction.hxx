@@ -155,6 +155,23 @@ protected:
     Field3D n_r1 = get<Field3D>(r1["density"]);
     Field3D n_r2 = get<Field3D>(r2["density"]);
 
+    // Get heavy reactant species
+    std::vector<std::string> heavy_reactant_species;
+    std::copy_if(reactant_species.begin(), reactant_species.end(),
+                 std::back_inserter(heavy_reactant_species),
+                 [](std::string sp_name) { return sp_name != "e"; });
+    Options& rh = state["species"][heavy_reactant_species[0]];
+    Field3D n_rh = get<Field3D>(rh["density"]);
+
+    // Get heavy product species
+    std::vector<std::string> product_species = parser->get_product_species();
+    std::vector<std::string> heavy_product_species;
+    std::copy_if(product_species.begin(), product_species.end(),
+                 std::back_inserter(heavy_product_species),
+                 [](std::string sp_name) { return sp_name != "e"; });
+    // Get the velocity of the heavy product
+    Options& ph = state["species"][heavy_product_species[0]];
+
     // Energy source for electrons (Does this need to be separate?)
     const int e_pop_change = this->parser->get_stoich().at("e");
     if (e_pop_change != 0) {
@@ -178,6 +195,43 @@ protected:
         (get_electron_heating() / Tnorm) * reaction_rate * radiation_multiplier;
 
     subtract(electron["energy_source"], energy_loss);
+
+    // Collision frequencies
+
+    // Same as reaction_rate but without the n1 factor: returns atom/ion collisionality in
+    // [s^-1]
+    Field3D heavy_particle_frequency = cellAverage(
+        [&](BoutReal ne, BoutReal te) {
+          return ne * eval_reaction_rate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
+                 * rate_multiplier;
+        },
+        n_e.getRegion("RGN_NOBNDRY"))(n_e, T_e);
+
+    // Same as reaction_rate but without the ne factor: returns electron collisionality in
+    // [s^-1]
+    Field3D electron_frequency = cellAverage(
+        [&](BoutReal ne, BoutReal n1, BoutReal te) {
+          return n1 * eval_reaction_rate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
+                 * rate_multiplier;
+        },
+        n_e.getRegion("RGN_NOBNDRY"))(n_e, n_rh, T_e);
+
+    // Add individual reaction collision frequency to each species
+    std::string reaction_type;
+    if (rh.name().find("+") != std::string::npos) {
+      reaction_type = "rec";
+    } else {
+      reaction_type = "iz";
+    }
+    if (reaction_type == "iz") {
+      set(rh["collision_frequencies"]
+            [rh.name() + std::string("_") + ph.name() + std::string("_iz")],
+          heavy_particle_frequency);
+    } else if (reaction_type == "rec") {
+      set(ph["collision_frequencies"]
+            [rh.name() + std::string("_") + ph.name() + std::string("_rec")],
+          heavy_particle_frequency);
+    }
   }
 };
 

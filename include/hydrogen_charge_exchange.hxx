@@ -214,8 +214,8 @@ struct HydrogenIsotopeChargeExchange : public HydrogenChargeExchange {
                       {"units", "s^-1"},
                       {"conversion", Omega_ci},
                       {"standard_name", "collision frequency"},
-                      {"long_name", (std::string("CX collision frequency between") + atom1
-                                     + " and " + ion1 + " producing" + ion2 + " and"
+                      {"long_name", (std::string("Collision frequency of CX of ") + atom1
+                                     + " and " + ion1 + " producing " + ion2 + " and "
                                      + atom2 + ". Note Kab != Kba")},
                       {"source", "hydrogen_charge_exchange"}});
 
