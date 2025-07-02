@@ -2,6 +2,7 @@
 #define TEST_REACTIONS_H__
 
 #include "gtest/gtest.h"
+#include <filesystem>
 #include <sstream>
 
 #include "component.hxx"
@@ -10,8 +11,7 @@
 #include <bout/constants.hxx>
 #include <bout/field_factory.hxx> // For generating functions
 
-#include "bout/options_io.hxx"
-#include <filesystem>
+#include "fake_mesh_fixture.hxx" // IWYU pragma: export
 
 /// Global mesh
 namespace bout::globals {
