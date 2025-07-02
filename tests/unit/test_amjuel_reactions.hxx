@@ -3,6 +3,7 @@
 
 #include "test_reactions.hxx"
 
+#include "../../include/amjuel_helium.hxx"
 #include "../../include/amjuel_hyd_ionisation.hxx"
 #include "../../include/amjuel_hyd_recombination.hxx"
 
@@ -25,11 +26,12 @@ protected:
   std::string sp_in;
 
   Options generate_state() override {
-    std::string atom = this->sp_in.substr(0, 1);
+    std::string atom(sp_in);
+    atom.erase(std::remove(atom.begin(), atom.end(), '+'), atom.end());
     std::string ion = atom + "+";
 
     const std::map<std::string, BoutReal> sp_masses = {
-        {"h", 1.0}, {"d", 2.0}, {"t", 3.0}, {"e", 1. / 1836}};
+        {"h", 1.0}, {"he", 4.0}, {"d", 2.0}, {"t", 3.0}, {"e", 1. / 1836}};
     const BoutReal atom_charge = 0.0;
     const BoutReal ion_charge = 1.0;
     std::string comp_name("test" + this->lbl);
@@ -118,6 +120,18 @@ public:
   AmjuelTIznTest()
       : AmjuelReactionTest<AmjuelHydIonisationIsotope<'t'>>("Tizn", "t + e -> t+ + 2e",
                                                             "t") {}
+};
+
+class AmjuelHeIzn01Test : public AmjuelReactionTest<AmjuelHeIonisation01> {
+public:
+  AmjuelHeIzn01Test()
+      : AmjuelReactionTest<AmjuelHeIonisation01>("HeIzn01", "he + e -> he+ + 2e", "he") {}
+};
+
+class AmjuelHeRec10Test : public AmjuelReactionTest<AmjuelHeRecombination10> {
+public:
+  AmjuelHeRec10Test()
+      : AmjuelReactionTest<AmjuelHeRecombination10>("HeRec10", "he+ + e -> he", "he+") {}
 };
 
 #endif
