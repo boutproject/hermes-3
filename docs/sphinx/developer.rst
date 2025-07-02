@@ -426,6 +426,7 @@ objects (Options objects). At the start of each iteration (rhs call) a
 new state is created and contains:
 
 * `time`   BoutReal, the current simulation time
+* `linear` bool. True if the time integrator expects a linear response.
 * `units`
   
   * `seconds`   Multiply by this to get units of seconds

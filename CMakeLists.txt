@@ -57,7 +57,7 @@ set(HERMES_SOURCES
     src/radiation.cxx
     src/div_ops.cxx
     src/neutral_mixed.cxx
-    src/full_velocity.cxx
+    src/neutral_full_velocity.cxx
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
     src/electron_viscosity.cxx
@@ -125,7 +125,7 @@ set(HERMES_SOURCES
     include/fixed_density.hxx
     include/fixed_fraction_ions.hxx
     include/fixed_velocity.hxx
-    include/full_velocity.hxx
+    include/neutral_full_velocity.hxx
     include/hermes_utils.hxx
     include/hydrogen_charge_exchange.hxx
     include/solkit_hydrogen_charge_exchange.hxx
@@ -166,11 +166,17 @@ add_library(hermes-3-lib ${HERMES_SOURCES})
 
 target_link_libraries(hermes-3-lib PRIVATE bout++::bout++)
 
+target_compile_features(hermes-3-lib PUBLIC cxx_std_17)
+set_target_properties(hermes-3-lib PROPERTIES CXX_EXTENSIONS OFF)
+
 target_include_directories(hermes-3-lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   $<INSTALL_INTERFACE:include>
   )
+
+# Have hermes-3-lib look for dynamic libs in ./ before searching elsewhere
+set_target_properties(hermes-3-lib PROPERTIES BUILD_RPATH "$ORIGIN")
 
 # The main executable target
 add_executable(hermes-3
@@ -184,6 +190,9 @@ target_include_directories(hermes-3 PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   $<INSTALL_INTERFACE:include>
   )
+
+# Have hermes-3 look for dynamic libs in ./ before searching elsewhere
+set_target_properties(hermes-3 PROPERTIES BUILD_RPATH "$ORIGIN")
 
 # Build the file containing just the commit hash
 # This will be rebuilt on every commit!
@@ -242,7 +251,6 @@ if(HERMES_TESTS)
     if(NOT PACKAGE_TESTS)
       # Not running BOUT++ tests
       # Since BOUT++ includes googletest, adding it again causes errors
-      set(CMAKE_CXX_STANDARD 14) # Needed to compile GoogleTest on Darwin
       add_subdirectory(external/googletest)
     endif()
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
@@ -253,6 +261,8 @@ if(HERMES_TESTS)
 
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
+    # Have hermes_unit_tests look for dynamic libs in ./ before searching elsewhere
+    set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
   endif()
 endif()
 

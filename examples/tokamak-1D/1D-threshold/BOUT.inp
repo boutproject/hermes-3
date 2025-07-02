@@ -83,6 +83,8 @@ lag_jacobian = 500               # How long to wait before Jacobian recalculatio
 atol = 1e-7                      # Absolute tolerance (controls small numbers)
 rtol = 1e-5                      # Relative tolerance (primary convergence control)
 
+matrix_free_operator = true
+
 [sheath_boundary_simple]
 # Sheath boundary at target end
 lower_y = false
@@ -160,7 +162,7 @@ AA = 2
 
 thermal_conduction = true
 diagnose = true
-density_floor = 1e-7
+density_floor = 1e-5
 
 [Nd]
 function = 0.001
