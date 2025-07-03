@@ -124,7 +124,7 @@ protected:
    * @param n number density
    * @return BoutReal the electron energy loss rate
    */
-  virtual BoutReal eval_radiation_rate(BoutReal T, BoutReal n) override final {
+  virtual BoutReal eval_electron_energy_loss_rate(BoutReal T, BoutReal n) override final {
     return eval_rate(T, n, get_rad_coeffs());
   }
 
@@ -146,7 +146,8 @@ protected:
     Options& electron = state["species"]["e"];
     Field3D T_e = get<Field3D>(electron["temperature"]);
 
-    std::vector<std::string> reactant_species = parser->get_reactant_species();
+    std::vector<std::string> reactant_species =
+        parser->get_species(species_filter::reactants);
 
     // Restrict to 2 reactants for now;
     ASSERT1(reactant_species.size() == 2);
@@ -164,11 +165,9 @@ protected:
     Field3D n_rh = get<Field3D>(rh["density"]);
 
     // Get heavy product species
-    std::vector<std::string> product_species = parser->get_product_species();
-    std::vector<std::string> heavy_product_species;
-    std::copy_if(product_species.begin(), product_species.end(),
-                 std::back_inserter(heavy_product_species),
-                 [](std::string sp_name) { return sp_name != "e"; });
+    std::vector<std::string> heavy_product_species =
+        parser->get_species(species_filter::heavy, species_filter::products);
+
     // Get the velocity of the heavy product
     Options& ph = state["species"][heavy_product_species[0]];
 
@@ -185,8 +184,8 @@ protected:
     Field3D n_e = get<Field3D>(electron["density"]);
     energy_loss = cellAverage(
         [&](BoutReal nr1, BoutReal nr2, BoutReal ne, BoutReal te) {
-          return nr1 * nr2 * eval_radiation_rate(te * Tnorm, ne * Nnorm) * Nnorm
-                 / (Tnorm * FreqNorm) * radiation_multiplier;
+          return nr1 * nr2 * eval_electron_energy_loss_rate(te * Tnorm, ne * Nnorm)
+                 * Nnorm / (Tnorm * FreqNorm) * radiation_multiplier;
         },
         n_e.getRegion("RGN_NOBNDRY"))(n_r1, n_r2, n_e, T_e);
 

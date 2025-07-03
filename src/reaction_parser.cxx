@@ -1,0 +1,63 @@
+#include <algorithm>
+
+#include "reaction_parser.hxx"
+
+ReactionParser::ReactionParser(const std::string& reaction_str)
+    : reaction_str(reaction_str) {
+  // Assume reactants, products are separated by '->'
+  const std::string rp_sep{"->"};
+  const std::size_t sep_len = rp_sep.length();
+  ASSERT1(reaction_str.length() >= sep_len + 2);
+  auto sep_idx = reaction_str.find(rp_sep);
+  ASSERT1(sep_idx > sep_len);
+  std::string R = trim(reaction_str.substr(0, sep_idx));
+  std::string P = trim(reaction_str.substr(sep_idx + sep_len));
+
+  // Count species in reactants, products
+  this->reactants = count_species(R);
+  this->products = count_species(P);
+
+  diff_reactants_products(this->reactants, this->products);
+}
+
+std::vector<std::string> ReactionParser::get_species() const {
+  return get_str_keys(this->stoich);
+}
+
+std::vector<std::string> ReactionParser::get_species(species_filter filter) const {
+  return get_species(get_species(), filter);
+}
+
+std::vector<std::string>
+ReactionParser::get_species(std::vector<std::string> species_names,
+                            species_filter filter) const {
+
+  std::vector<std::string> filtered_species_names;
+  switch (filter) {
+  case species_filter::heavy:
+    // Filter out electrons ('e')
+    std::copy_if(species_names.begin(), species_names.end(),
+                 std::back_inserter(filtered_species_names),
+                 [](std::string sp_name) { return sp_name != "e"; });
+    break;
+
+  case species_filter::products: {
+    std::vector<std::string> product_species = get_str_keys(this->products);
+    std::sort(product_species.begin(), product_species.end());
+    std::sort(species_names.begin(), species_names.end());
+    std::set_intersection(species_names.begin(), species_names.end(), product_species.begin(),
+                     product_species.end(), std::back_inserter(filtered_species_names));
+    break;
+  }
+
+  case species_filter::reactants: {
+    std::vector<std::string> reactant_species = get_str_keys(this->reactants);
+    std::sort(reactant_species.begin(), reactant_species.end());
+    std::sort(species_names.begin(), species_names.end());
+    std::set_intersection(species_names.begin(), species_names.end(), reactant_species.begin(),
+                     reactant_species.end(), std::back_inserter(filtered_species_names));
+    break;
+  }
+  }
+  return filtered_species_names;
+}

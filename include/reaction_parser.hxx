@@ -7,6 +7,9 @@
 
 #include "bout/utils.hxx"
 
+/// An enum class with which to identify various useful species subsets
+enum class species_filter { reactants, products, heavy };
+
 static inline std::map<std::string, int> count_species(std::string expr) {
   // std::regex_iterator instead?
   std::map<std::string, int> counts;
@@ -30,6 +33,13 @@ static inline std::map<std::string, int> count_species(std::string expr) {
   return counts;
 }
 
+/**
+ * @brief Util function to get the keys of a std::string => T map
+ *
+ * @tparam T the type of the map values
+ * @param map the map
+ * @return std::vector<std::string> vector of keys
+ */
 template <typename T>
 static inline std::vector<std::string> get_str_keys(const std::map<std::string, T>& map) {
   std::vector<std::string> keys;
@@ -38,38 +48,97 @@ static inline std::vector<std::string> get_str_keys(const std::map<std::string, 
   return keys;
 }
 
+/**
+ * @brief A class to parse reaction strings and extract the stoichiometric vector (net
+ * population changes for each species). Also used to retrieve the names of species in
+ * various useful subsets (reactants, products, non-electron species, etc.)
+ *
+ */
 class ReactionParser {
 public:
-  ReactionParser(const std::string& reaction_str) : reaction_str(reaction_str) {
-    // Assume reactants, products are separated by '->'
-    const std::string rp_sep{"->"};
-    const std::size_t sep_len = rp_sep.length();
-    ASSERT1(reaction_str.length() >= sep_len + 2);
-    auto sep_idx = reaction_str.find(rp_sep);
-    ASSERT1(sep_idx > sep_len);
-    std::string R = trim(reaction_str.substr(0, sep_idx));
-    std::string P = trim(reaction_str.substr(sep_idx + sep_len));
+  ReactionParser(const std::string& reaction_str);
 
-    // Count species in reactants, products
-    this->reactants = count_species(R);
-    this->products = count_species(P);
-
-    diff_reactants_products(this->reactants, this->products);
-  }
-
+  /// Get the stoichiometric vector for this reaction (as a species_name=>pop_change map)
   const std::map<std::string, int>& get_stoich() { return this->stoich; }
 
-  std::vector<std::string> get_product_species() { return get_str_keys(this->products); }
-  std::vector<std::string> get_reactant_species() {
-    return get_str_keys(this->reactants);
+  /**
+   * @brief Get the names of all species identified by the parser
+   *
+   * @return std::vector<std::string> the list of species names
+   */
+  std::vector<std::string> get_species() const;
+
+  /**
+   * @brief Apply a filter to the list of species identified by the parser.
+   *
+   * @param filter the filter to apply
+   * @return std::vector<std::string> the filterered list of species names
+   */
+  std::vector<std::string> get_species(species_filter filter) const;
+
+  /**
+   * @brief Apply a filter to a list of species names.
+   *
+   * @param species_names the list of species names to filter
+   * @param filter the filter to apply
+   * @return std::vector<std::string> the filtered list of names
+   */
+  std::vector<std::string> get_species(std::vector<std::string> species_names,
+                                       species_filter filter) const;
+
+  /**
+   * @brief Apply multiple filters to a list of species names.
+   *
+   * @details Variadic so that it can be applied recursively.
+   *
+   * @tparam FilterTypes
+   * @param species_names the list of species names to filter
+   * @param first_filter the first filter
+   * @param other_filters other filters
+   * @return std::vector<std::string> the filtered list of names
+   */
+  template <typename... FilterTypes>
+  std::vector<std::string> get_species(std::vector<std::string> species_names,
+                                       species_filter first_filter,
+                                       FilterTypes... other_filters) const {
+    std::vector<std::string> first_filter_applied =
+        get_species(species_names, first_filter);
+    return get_species(first_filter_applied, other_filters...);
+  };
+
+  /**
+   * @brief Apply multiple filters to the list of species identified by the parser
+   *
+   * @details Variadic so that it can be applied recursively.
+   *
+   * @tparam FilterTypes
+   * @param species_names the list of species names to filter
+   * @param first_filter the first filter
+   * @param other_filters other filters
+   * @return std::vector<std::string> the filtered list of names
+   */
+  template <typename... FilterTypes>
+  std::vector<std::string> get_species(FilterTypes... filters) const {
+    return get_species(get_species(), filters...);
   }
 
 private:
+  /// The reaction string
   const std::string reaction_str;
+  /// Map of species name => population change for reactants
   std::map<std::string, int> reactants;
+  /// Map of species name => population change for products
   std::map<std::string, int> products;
+  /// Stoichiometric 'vector' (map of species name => population change)
   std::map<std::string, int> stoich;
 
+  /**
+   * @brief Util function to compute the stoichiometric 'vector' (map) by taking the
+   * difference between the reactant and product population changes.
+   *
+   * @param R the reactant population changes
+   * @param P the product population changes
+   */
   void diff_reactants_products(const std::map<std::string, int>& R,
                                const std::map<std::string, int>& P) {
     this->stoich = std::map<std::string, int>(P);

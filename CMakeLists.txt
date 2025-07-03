@@ -94,6 +94,7 @@ set(HERMES_SOURCES
     src/temperature_feedback.cxx
     src/detachment_controller.cxx
     src/reaction.cxx
+    src/reaction_parser.cxx
     src/thermal_force.cxx
     src/ion_viscosity.cxx
     src/transform.cxx
@@ -102,7 +103,7 @@ set(HERMES_SOURCES
     include/adas_carbon.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
-    include/amjuel_hyd.hxx
+    include/amjuel_hydrogen.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
     include/classical_diffusion.hxx
