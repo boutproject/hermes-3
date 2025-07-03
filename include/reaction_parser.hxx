@@ -58,6 +58,9 @@ class ReactionParser {
 public:
   ReactionParser(const std::string& reaction_str);
 
+  /// Public getter for underlying reaction string
+  const std::string get_reaction_str() const { return this->reaction_str; }
+
   /// Get the stoichiometric vector for this reaction (as a species_name=>pop_change map)
   const std::map<std::string, int>& get_stoich() { return this->stoich; }
 
