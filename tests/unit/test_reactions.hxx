@@ -5,11 +5,12 @@
 #include <filesystem>
 #include <sstream>
 
-#include "component.hxx"
-#include "test_extras.hxx" // FakeMesh
-#include "bout/options_io.hxx"
 #include <bout/constants.hxx>
 #include <bout/field_factory.hxx> // For generating functions
+#include <bout/options_io.hxx>
+
+#include "component.hxx"
+#include "test_extras.hxx" // FakeMesh
 
 #include "fake_mesh_fixture.hxx" // IWYU pragma: export
 
@@ -21,13 +22,12 @@ extern Mesh* mesh;
 // The unit tests use the global mesh
 using namespace bout::globals;
 
-static Options default_opts =
-    Options({{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}});
-
 /**
  * @brief Base fixture for Reaction tests.
  *
  * @tparam RTYPE The reaction class; must derive from Component.
+ *
+ * @todo Change static_assert to require 'Reaction' base later.
  */
 template <typename RTYPE>
 class ReactionTest : public FakeMeshFixture {

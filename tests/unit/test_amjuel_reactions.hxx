@@ -19,18 +19,25 @@ class AmjuelReactionTest : public ReactionTest<RTYPE> {
                 "Template arg to AmjuelReactionTest must derive from AmjuelReaction");
 
 public:
-  AmjuelReactionTest(std::string lbl, std::string reaction_str, std::string sp_in)
-      : ReactionTest<RTYPE>(lbl, reaction_str), sp_in(sp_in) {}
+  AmjuelReactionTest(std::string lbl, std::string reaction_str,
+                     std::string heavy_reactant)
+      : ReactionTest<RTYPE>(lbl, reaction_str), heavy_reactant(heavy_reactant) {}
 
 protected:
-  std::string sp_in;
+  /// Name of the ion/atom reactant
+  std::string heavy_reactant;
 
+  /**
+   * Set up test state for tests of Amjuel-based reactions
+   *
+   */
   Options generate_state() override {
-    std::string atom(sp_in);
+    // Clunky way to record the ion and neutral species names
+    std::string atom(heavy_reactant);
     atom.erase(std::remove(atom.begin(), atom.end(), '+'), atom.end());
     std::string ion = atom + "+";
 
-    const std::map<std::string, BoutReal> sp_masses = {
+    const std::map<std::string, BoutReal> heavy_reactant_masses = {
         {"h", 1.0}, {"he", 4.0}, {"d", 2.0}, {"t", 3.0}, {"e", 1. / 1836}};
     const BoutReal atom_charge = 0.0;
     const BoutReal ion_charge = 1.0;
@@ -38,15 +45,15 @@ protected:
     Options state{{comp_name, {{"type", this->reaction_str}}},
                   {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
                   {"species",
-                   {{"e", {{"AA", sp_masses.at("e")}, {"velocity", 1.0}}},
+                   {{"e", {{"AA", heavy_reactant_masses.at("e")}, {"velocity", 1.0}}},
                     {atom,
-                     {{"AA", sp_masses.at(atom)},
+                     {{"AA", heavy_reactant_masses.at(atom)},
                       {"charge", atom_charge},
                       {"density", 1.0},
                       {"temperature", 1.0},
                       {"velocity", 1.0}}},
                     {ion,
-                     {{"AA", sp_masses.at(atom)},
+                     {{"AA", heavy_reactant_masses.at(atom)},
                       {"charge", ion_charge},
                       {"density", 1.0},
                       {"temperature", 1.0},
@@ -59,12 +66,13 @@ protected:
     const BoutReal logT_min = std::log(0.1), logT_max = std::log(2e4);
     const BoutReal logv_min = std::log(1), logv_max = std::log(100);
 
+    // Coordinate ranges
     constexpr BoutReal xmin = 0, xmax = 2;
     constexpr BoutReal ymin = 0, ymax = 25.1327412287;
     constexpr BoutReal zmin = 0, zmax = 5.38558740615;
 
-    // Linear functions for input atom/ion density, e density, e temperature
-    state["species"][sp_in]["density"] = FieldFactory::get()->create3D(
+    // Linear functions for various fields that are inputs to the reaction transforms
+    state["species"][heavy_reactant]["density"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(logn_min, logn_max, "x", xmin, xmax), &state, mesh);
     state["species"]["e"]["density"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(logn_min, logn_max, "y", ymin, ymax), &state, mesh);
@@ -72,7 +80,7 @@ protected:
         this->gen_lin_field_str(logT_min, logT_max, "z", zmin, zmax), &state, mesh);
     state["species"][atom]["velocity"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(logv_min, logv_max, "x", xmin, xmax), &state, mesh);
-    state["species"][sp_in]["temperature"] = FieldFactory::get()->create3D(
+    state["species"][heavy_reactant]["temperature"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(logT_min, logT_max, "y", ymin, ymax), &state, mesh);
     state["species"][ion]["velocity"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(logv_min, logv_max, "z", zmin, zmax), &state, mesh);
