@@ -4,7 +4,7 @@
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
 
-#include "../../include/amjuel_hyd.hxx"
+#include "../../include/amjuel_hydrogen.hxx"
 
 /// Global mesh
 namespace bout {
