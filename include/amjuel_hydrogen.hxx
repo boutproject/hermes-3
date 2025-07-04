@@ -6,6 +6,9 @@
 
 #include "amjuel_reaction.hxx"
 
+static std::map<std::string, std::string> long_reaction_types_map = {
+    {"cx", "charge exchange"}, {"iz", "ionisation"}, {"rec", "recombination"}};
+
 /**
  * @brief Base class for ionisation and recombination reaction Components for Hydrogen
  * Isotopes.
@@ -15,12 +18,12 @@
  */
 template <char Isotope>
 struct AmjuelHydIsotopeReaction : public AmjuelReaction {
-  AmjuelHydIsotopeReaction(std::string name, std::string reaction_type,
-                           std::string from_species, std::string to_species,
-                           Options& alloptions)
-      : AmjuelReaction(name, std::string("hyd_") + reaction_type, from_species,
-                       to_species, alloptions),
-        reaction_type(reaction_type) {}
+  AmjuelHydIsotopeReaction(std::string name, std::string short_reaction_type,
+                           std::string amjuel_label, std::string from_species,
+                           std::string to_species, Options& alloptions)
+      : AmjuelReaction(name, short_reaction_type, amjuel_label, from_species, to_species,
+                       alloptions),
+        long_reaction_type(long_reaction_types_map.at(short_reaction_type)) {}
 
   void outputVars(Options& state) override {
     AUTO_TRACE();
@@ -37,29 +40,29 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
            {"units", "m^-3 s^-1"},
            {"conversion", Nnorm * Omega_ci},
            {"standard_name", "particle source"},
-           {"long_name", std::string("Particle source due to ") + this->reaction_type
+           {"long_name", std::string("Particle source due to ") + this->long_reaction_type
                              + " of " + this->from_species + " to " + this->to_species},
            {"source", this->amjuel_src}});
 
-      set_with_attrs(
-          state[std::string("F") + this->reaction_suffix], this->F,
-          {{"time_dimension", "t"},
-           {"units", "kg m^-2 s^-2"},
-           {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-           {"standard_name", "momentum transfer"},
-           {"long_name", (std::string("Momentum transfer due to ") + this->reaction_type
-                          + " of " + this->from_species + " to " + this->to_species)},
-           {"source", this->amjuel_src}});
+      set_with_attrs(state[std::string("F") + this->reaction_suffix], this->F,
+                     {{"time_dimension", "t"},
+                      {"units", "kg m^-2 s^-2"},
+                      {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                      {"standard_name", "momentum transfer"},
+                      {"long_name", (std::string("Momentum transfer due to ")
+                                     + this->long_reaction_type + " of "
+                                     + this->from_species + " to " + this->to_species)},
+                      {"source", this->amjuel_src}});
 
-      set_with_attrs(
-          state[std::string("E") + this->reaction_suffix], this->E,
-          {{"time_dimension", "t"},
-           {"units", "W / m^3"},
-           {"conversion", Pnorm * Omega_ci},
-           {"standard_name", "energy transfer"},
-           {"long_name", (std::string("Energy transfer due to ") + this->reaction_type
-                          + " of " + this->from_species + " to " + this->to_species)},
-           {"source", this->amjuel_src}});
+      set_with_attrs(state[std::string("E") + this->reaction_suffix], this->E,
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy transfer"},
+                      {"long_name",
+                       (std::string("Energy transfer due to ") + this->long_reaction_type
+                        + " of " + this->from_species + " to " + this->to_species)},
+                      {"source", this->amjuel_src}});
 
       set_with_attrs(
           state[std::string("R") + this->radiation_suffix], this->R,
@@ -67,7 +70,7 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
            {"units", "W / m^3"},
            {"conversion", Pnorm * Omega_ci},
            {"standard_name", "radiation loss"},
-           {"long_name", (std::string("Radiation loss due to ") + this->reaction_type
+           {"long_name", (std::string("Radiation loss due to ") + this->long_reaction_type
                           + " of " + this->from_species + " to " + this->to_species)},
            {"source", this->amjuel_src}});
     }
@@ -75,7 +78,7 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
 
 protected:
   // Strings used in outputVars to avoid duplicating code for ionisation/recombination
-  const std::string reaction_type;
+  const std::string long_reaction_type;
   std::string reaction_suffix;
   std::string radiation_suffix;
 };
@@ -89,7 +92,7 @@ protected:
 template <char Isotope>
 struct AmjuelHydRecombinationIsotope : public AmjuelHydIsotopeReaction<Isotope> {
   AmjuelHydRecombinationIsotope(std::string name, Options& alloptions, Solver*)
-      : AmjuelHydIsotopeReaction<Isotope>(name, "recombination", {Isotope, '+'},
+      : AmjuelHydIsotopeReaction<Isotope>(name, "rec", "H.x_2.1.8", {Isotope, '+'},
                                           {Isotope}, alloptions) {
 
     this->reaction_suffix = std::string({Isotope}) + "+_rec";
@@ -123,8 +126,8 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydIsotopeReaction<Isotope> 
 template <char Isotope>
 struct AmjuelHydIonisationIsotope : public AmjuelHydIsotopeReaction<Isotope> {
   AmjuelHydIonisationIsotope(std::string name, Options& alloptions, Solver*)
-      : AmjuelHydIsotopeReaction<Isotope>(name, "ionisation", {Isotope}, {Isotope, '+'},
-                                          alloptions) {
+      : AmjuelHydIsotopeReaction<Isotope>(name, "iz", "H.x_2.1.5", {Isotope},
+                                          {Isotope, '+'}, alloptions) {
 
     this->reaction_suffix = std::string({Isotope}) + "+_iz";
     this->radiation_suffix = std::string({Isotope}) + "+_ex";

@@ -11,7 +11,7 @@
  */
 struct AmjuelHeIonisation01 : public AmjuelReaction {
   AmjuelHeIonisation01(std::string name, Options& alloptions, Solver*)
-      : AmjuelReaction(name, "he_ionisation01", "he", "he+", alloptions) {
+      : AmjuelReaction(name, "iz", "H.x_2.3.9a", "he", "he+", alloptions) {
 
     rate_multiplier = alloptions[std::string("he")]["ionisation_rate_multiplier"]
                           .doc("Scale the ionisation rate by this factor")
@@ -32,7 +32,7 @@ struct AmjuelHeIonisation01 : public AmjuelReaction {
  */
 struct AmjuelHeRecombination10 : public AmjuelReaction {
   AmjuelHeRecombination10(std::string name, Options& alloptions, Solver*)
-      : AmjuelReaction(name, "he_recombination10", "he+", "he", alloptions) {
+      : AmjuelReaction(name, "rec", "H.x_2.3.13a", "he+", "he", alloptions) {
 
     rate_multiplier = alloptions[name]["recombination_rate_multiplier"]
                           .doc("Scale the recombination rate by this factor")
@@ -52,7 +52,7 @@ struct AmjuelHeRecombination10 : public AmjuelReaction {
 //  */
 // struct AmjuelHeIonisation12 : public AmjuelReaction {
 //   AmjuelHeIonisation12(std::string name, Options& alloptions, Solver*)
-//       : AmjuelReaction(name, <filename>, "he+", "he+2", alloptions) {}
+//       : AmjuelReaction(name, "iz", "H.x_2.2C", "he+", "he+2", alloptions) {}
 // };
 
 namespace {

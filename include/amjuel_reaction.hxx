@@ -18,12 +18,12 @@ struct AmjuelData {
   friend class AmjuelReaction;
 
 private:
-  AmjuelData(const std::string& amjuel_label) {
+  AmjuelData(const std::string& short_reaction_type, const std::string& data_label) {
     AUTO_TRACE();
 
     std::filesystem::path file_path =
         std::filesystem::path(__FILE__).parent_path().parent_path() / "json_database"
-        / (std::string(amjuel_label) + ".json");
+        / (short_reaction_type + "_AMJUEL_" + data_label + ".json");
 
     // Read the data file
     std::ifstream json_file(file_path);
@@ -55,15 +55,17 @@ private:
 };
 
 struct AmjuelReaction : public Reaction {
-  AmjuelReaction(std::string name, std::string amjuel_label, std::string from_species,
-                 std::string to_species, Options& alloptions)
-      : Reaction(name, alloptions), amjuel_data(amjuel_label),
-        amjuel_src(std::string("amjuel_") + amjuel_label), from_species(from_species),
-        to_species(to_species) {}
+  AmjuelReaction(std::string name, std::string short_reaction_type,
+                 std::string amjuel_lbl, std::string from_species, std::string to_species,
+                 Options& alloptions)
+      : Reaction(name, alloptions), amjuel_data(short_reaction_type, amjuel_lbl),
+        amjuel_src(std::string("Amjuel ") + amjuel_lbl), from_species(from_species),
+        short_reaction_type(short_reaction_type), to_species(to_species) {}
 
 protected:
   // Store some strings for use in attribute docstrings
   const std::string amjuel_src;
+  const std::string short_reaction_type;
   const std::string from_species;
   const std::string to_species;
 

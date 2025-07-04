@@ -144,19 +144,7 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
       n_e.getRegion("RGN_NOBNDRY"))(n_e, n_rh, T_e);
 
   // Add individual reaction collision frequency to each species
-  std::string reaction_type;
-  if (rh.name().find("+") != std::string::npos) {
-    reaction_type = "rec";
-  } else {
-    reaction_type = "iz";
-  }
-  if (reaction_type == "iz") {
-    set(rh["collision_frequencies"]
-          [rh.name() + std::string("_") + ph.name() + std::string("_iz")],
-        heavy_particle_frequency);
-  } else if (reaction_type == "rec") {
-    set(ph["collision_frequencies"]
-          [rh.name() + std::string("_") + ph.name() + std::string("_rec")],
-        heavy_particle_frequency);
-  }
+  set(rh["collision_frequencies"]
+        [rh.name() + "_" + ph.name() + "_" + this->short_reaction_type],
+      heavy_particle_frequency);
 }
