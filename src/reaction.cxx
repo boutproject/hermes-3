@@ -1,7 +1,8 @@
-#include "integrate.hxx"
 #include <iomanip>
 #include <memory>
 #include <regex>
+
+#include "integrate.hxx"
 
 #include "reaction.hxx"
 
@@ -17,7 +18,8 @@ Reaction::Reaction(std::string name, Options& options) : name(name) {
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
 
-  /*Awful hack to extract the correct reaction expression from the params; depends on
+  /*
+   * Awful hack to extract the correct reaction expression from the params; depends on
    * instantiation order matching the order reactions are listed in the input file. There
    * must be a better way...
    */

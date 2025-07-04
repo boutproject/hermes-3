@@ -50,6 +50,7 @@ else()
 endif()
 
 set(HERMES_SOURCES
+    src/amjuel_reaction.cxx
     src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
