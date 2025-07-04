@@ -1,6 +1,6 @@
 #pragma once
-#ifndef AMJUEL_HYD_RECOMBINATION_H
-#define AMJUEL_HYD_RECOMBINATION_H
+#ifndef AMJUEL_HYDROGEN_H
+#define AMJUEL_HYDROGEN_H
 
 #include <bout/constants.hxx>
 

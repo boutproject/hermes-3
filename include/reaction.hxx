@@ -23,12 +23,8 @@ protected:
   // Multipliers, extracted from input options
   BoutReal rate_multiplier, radiation_multiplier; ///< Scaling factor on reaction rate
 
-  // For diagnostics
-  bool diagnose; ///< Outputting diagnostics?
-  //   Field3D S;                                      ///< Particle exchange
-  //   Field3D F;                                      ///< Momentum exchange
-  //   Field3D E;                                      ///< Energy exchange
-  //   Field3D R;                                      ///< Radiation loss
+  // Output diagnostics?
+  bool diagnose;
 
   /**
    * @brief Evaluates electron energy loss rate coefficients at a particular density and
