@@ -110,4 +110,26 @@ auto IsFieldEqual(const T& field, BoutReal reference,
   return ::testing::AssertionSuccess();
 }
 
+/**
+ * Is \p field equal to \p reference (if the last \p ignore_last_n_sigfigs significant
+ * digits are ignored)? Adapted from https://stackoverflow.com/a/17382806
+ */
+template <class T, class U, typename = EnableIfField<T, U>>
+auto IsFieldEqualSigFigs(const T& field, const U& reference,
+                         const std::string& region = "RGN_ALL",
+                         int ignore_last_n_sigfigs = 3) -> ::testing::AssertionResult {
+  for (auto i : field.getRegion(region)) {
+    auto diff = fabs(field[i] - reference[i]);
+    auto max_val = std::max(fabs(field[i]), fabs(reference[i]));
+    auto eps = std::numeric_limits<BoutReal>::epsilon();
+    auto sig_figs_fac = pow(10.0, ignore_last_n_sigfigs);
+    if (diff > sig_figs_fac * eps * max_val) {
+      return ::testing::AssertionFailure()
+             << getFieldType(field) << "(" << getIndexXYZ(i) << ") == " << field[i]
+             << "; Expected: " << reference[i];
+    }
+  }
+  return ::testing::AssertionSuccess();
+}
+
 #endif //  TEST_EXTRAS_H__
