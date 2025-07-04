@@ -7,13 +7,12 @@
 
 Reaction::Reaction(std::string name, Options& options) : name(name) {
 
-  // Extract common units to member vars
+  // Extract some relevant options, units to member vars for readability
   const auto& units = options["units"];
   Tnorm = get<BoutReal>(units["eV"]);
   Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
   FreqNorm = 1. / get<BoutReal>(units["seconds"]);
 
-  // Define and extract common options
   diagnose = options[name]["diagnose"]
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
@@ -72,7 +71,7 @@ void Reaction::transform(Options& state) {
       },
       n_e.getRegion("RGN_NOBNDRY"))(n_r1, n_r2, n_e, T_e);
 
-  // Use the stoichiometric 'matrix' to set density sources for all species
+  // Use the stoichiometric values to set density sources for all species
   auto pop_changes = parser->get_stoich();
   for (auto el : pop_changes) {
     std::string sp_name = el.first;

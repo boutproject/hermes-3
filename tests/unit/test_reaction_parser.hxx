@@ -1,5 +1,5 @@
-#ifndef TEST_REACTION_PARSER_H__
-#define TEST_REACTION_PARSER_H__
+#ifndef TEST_REACTION_PARSER_H
+#define TEST_REACTION_PARSER_H
 
 #include <algorithm>
 

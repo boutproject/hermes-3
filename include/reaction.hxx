@@ -17,15 +17,14 @@ protected:
   // Reaction string parser
   std::unique_ptr<ReactionParser> parser;
 
-  /// Normalisations
+  /// Normalisations, extracted from input options
   BoutReal Tnorm, Nnorm, FreqNorm;
 
-  // Stoichiometric table (species_name -> population_change)
-  std::map<std::string, int> S;
+  // Multipliers, extracted from input options
+  BoutReal rate_multiplier, radiation_multiplier; ///< Scaling factor on reaction rate
 
   // For diagnostics
-  bool diagnose;                                  ///< Outputting diagnostics?
-  BoutReal rate_multiplier, radiation_multiplier; ///< Scaling factor on reaction rate
+  bool diagnose; ///< Outputting diagnostics?
   //   Field3D S;                                      ///< Particle exchange
   //   Field3D F;                                      ///< Momentum exchange
   //   Field3D E;                                      ///< Energy exchange
@@ -33,7 +32,8 @@ protected:
 
   /**
    * @brief Evaluates electron energy loss rate coefficients at a particular density and
-   * temperature (Subclasses MUST define)
+   * temperature.
+   * (Subclasses MUST define)
    *
    * @param T a temperature
    * @param n a density
@@ -54,7 +54,8 @@ protected:
   virtual BoutReal eval_reaction_rate(BoutReal T, BoutReal n) = 0;
 
   /**
-   * @brief Set the diagnostic fields object (Subclasses MAY define)
+   * @brief Set the diagnostic fields object.
+   * (Subclasses MAY define)
    *
    * @param reaction_rate
    * @param momentum_exchange
@@ -66,7 +67,8 @@ protected:
 
   /**
    * @brief A hook with with subclasses can perform additional transform tasks, if
-   * necessary. (Subclasses MAY define)
+   * necessary.
+   * (Subclasses MAY define)
    *
    * @param state
    * @param reaction_rate
