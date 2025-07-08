@@ -72,16 +72,16 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
                                           Field3D& energy_exchange,
                                           Field3D& energy_loss) {
 
-  // Amjuel-based reactions are assumed to have 2 reactants, for now;
+  // Amjuel-based reactions are assumed to have exactly 2 reactants, for now.
   std::vector<std::string> reactant_species =
       parser->get_species(species_filter::reactants);
   ASSERT1(reactant_species.size() == 2);
 
   // Extract heavy reactant properties
-  std::vector<std::string> heavy_reactant_species;
-  std::copy_if(reactant_species.begin(), reactant_species.end(),
-               std::back_inserter(heavy_reactant_species),
-               [](std::string sp_name) { return sp_name != "e"; });
+  std::vector<std::string> heavy_reactant_species =
+      parser->get_species(reactant_species, species_filter::heavy);
+  // Amjuel-based reactions are assumed to have exactly 1 heavy reactant, for now.
+  ASSERT1(heavy_reactant_species.size() == 1);
   Options& rh = state["species"][heavy_reactant_species[0]];
   BoutReal AA_rh = get<BoutReal>(rh["AA"]);
   Field3D n_rh = get<Field3D>(rh["density"]);
@@ -90,6 +90,8 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   // Extract heavy product properties
   std::vector<std::string> heavy_product_species =
       parser->get_species(species_filter::heavy, species_filter::products);
+  // Amjuel-based reactions are assumed to have exactly 1 heavy product, for now.
+  ASSERT1(heavy_product_species.size() == 1);
   Options& ph = state["species"][heavy_product_species[0]];
   Field3D v_ph = get<Field3D>(ph["velocity"]);
 
