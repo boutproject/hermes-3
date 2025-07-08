@@ -82,47 +82,42 @@ void Reaction::transform(Options& state) {
     }
   }
 
-  // Get heavy reactant species name(s)
+  // Get the species name(s) of heavy reactant, products
   std::vector<std::string> heavy_reactant_species =
       parser->get_species(reactant_names, species_filter::heavy);
-
-  // Get the mass and velocity of the heavy reactant
-  Options& rh = state["species"][heavy_reactant_species[0]];
-  Field3D v_rh = get<Field3D>(rh["velocity"]);
-  BoutReal AA_rh = get<BoutReal>(rh["AA"]);
-  Field3D T_rh = get<Field3D>(rh["temperature"]);
-
-  // Get heavy product species name(s)
   std::vector<std::string> heavy_product_species =
       parser->get_species(species_filter::heavy, species_filter::products);
 
-  // Get the velocity of the heavy product
-  Options& ph = state["species"][heavy_product_species[0]];
-  Field3D v_ph = get<Field3D>(ph["velocity"]);
-
-  // Momentum sources
+  // Momentum and energy sources
   for (auto el : pop_changes) {
     std::string sp_name = el.first;
-    // No momentum source for electrons, currently
+    // No momentum, energy source for electrons due to pop change
     if (sp_name.compare("e") == 0) {
       continue;
     }
     int pop_change = el.second;
+    // Species momentum
     auto Gs = state["species"][sp_name]["AA"].as<BoutReal>()
               * state["species"][sp_name]["velocity"].as<Field3D>();
+    // Species energy
+    auto Ws = (3. / 2) * state["species"][sp_name]["temperature"].as<Field3D>();
+
     if (pop_change < 0) {
-      // For species with net loss, source follows directly from pop change
+      // For species with net loss, sources follows directly from pop change
       momentum_exchange = pop_change * reaction_rate * Gs;
+      energy_exchange = pop_change * reaction_rate * Ws;
     } else if (pop_change > 0) {
-      // Species with net gain receive a proportion of the momentum lost by consumed
-      // reactants
-      momentum_exchange = 0;
+      // Species with net gain receive a proportion of the momentum and energy lost by
+      // consumed reactants
+      momentum_exchange = energy_exchange = 0;
       for (auto& rsp_name : heavy_reactant_species) {
-        // Reactants with net loss contribute momentum
+        // Reactants with net loss contribute
         if (pop_changes[rsp_name] < 0) {
           auto Gr = state["species"][rsp_name]["AA"].as<BoutReal>()
                     * state["species"][rsp_name]["velocity"].as<Field3D>();
           momentum_exchange += reaction_rate * Gr;
+          auto Wr = (3. / 2) * state["species"][rsp_name]["temperature"].as<Field3D>();
+          energy_exchange += reaction_rate * Wr;
         }
       }
     } else {
@@ -130,17 +125,10 @@ void Reaction::transform(Options& state) {
       continue;
     }
 
-    // Update momentum source
+    // Update sources
     add(state["species"][sp_name]["momentum_source"], momentum_exchange);
+    add(state["species"][sp_name]["energy_source"], energy_exchange);
   }
-
-  // Energy
-  add(ph["energy_source"], 0.5 * AA_rh * reaction_rate * SQ(v_rh - v_ph));
-
-  // Ion thermal energy transfer
-  energy_exchange = reaction_rate * (3. / 2) * T_rh;
-  subtract(rh["energy_source"], energy_exchange);
-  add(ph["energy_source"], energy_exchange);
 
   // Subclasses perform any additional transform tasks
   transform_additional(state, reaction_rate, momentum_exchange, energy_exchange,

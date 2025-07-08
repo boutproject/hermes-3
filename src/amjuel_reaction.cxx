@@ -72,35 +72,33 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
                                           Field3D& energy_exchange,
                                           Field3D& energy_loss) {
 
-  Options& electron = state["species"]["e"];
-  Field3D T_e = get<Field3D>(electron["temperature"]);
-
+  // Amjuel-based reactions are assumed to have 2 reactants, for now;
   std::vector<std::string> reactant_species =
       parser->get_species(species_filter::reactants);
-
-  // Restrict to 2 reactants for now;
   ASSERT1(reactant_species.size() == 2);
-  Options& r1 = state["species"][reactant_species[0]];
-  Options& r2 = state["species"][reactant_species[1]];
-  Field3D n_r1 = get<Field3D>(r1["density"]);
-  Field3D n_r2 = get<Field3D>(r2["density"]);
 
-  // Get heavy reactant species
+  // Extract heavy reactant properties
   std::vector<std::string> heavy_reactant_species;
   std::copy_if(reactant_species.begin(), reactant_species.end(),
                std::back_inserter(heavy_reactant_species),
                [](std::string sp_name) { return sp_name != "e"; });
   Options& rh = state["species"][heavy_reactant_species[0]];
+  BoutReal AA_rh = get<BoutReal>(rh["AA"]);
   Field3D n_rh = get<Field3D>(rh["density"]);
+  Field3D v_rh = get<Field3D>(rh["velocity"]);
 
-  // Get heavy product species
+  // Extract heavy product properties
   std::vector<std::string> heavy_product_species =
       parser->get_species(species_filter::heavy, species_filter::products);
-
-  // Get the velocity of the heavy product
   Options& ph = state["species"][heavy_product_species[0]];
+  Field3D v_ph = get<Field3D>(ph["velocity"]);
 
-  // Energy source for electrons (Does this need to be separate?)
+  // Energy source for heavy product
+  add(ph["energy_source"], 0.5 * AA_rh * reaction_rate * SQ(v_rh - v_ph));
+
+  // Energy source for electrons due to pop change
+  Options& electron = state["species"]["e"];
+  Field3D T_e = get<Field3D>(electron["temperature"]);
   const int e_pop_change = this->parser->get_stoich().at("e");
   if (e_pop_change != 0) {
     ASSERT1(electron.isSet("velocity"));
@@ -112,11 +110,11 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   // Electron energy loss (radiation, ionisation potential)
   Field3D n_e = get<Field3D>(electron["density"]);
   energy_loss = cellAverage(
-      [&](BoutReal nr1, BoutReal nr2, BoutReal ne, BoutReal te) {
-        return nr1 * nr2 * eval_electron_energy_loss_rate(te * Tnorm, ne * Nnorm) * Nnorm
+      [&](BoutReal nrh, BoutReal ne, BoutReal te) {
+        return nrh * ne * eval_electron_energy_loss_rate(te * Tnorm, ne * Nnorm) * Nnorm
                / (Tnorm * FreqNorm) * radiation_multiplier;
       },
-      n_e.getRegion("RGN_NOBNDRY"))(n_r1, n_r2, n_e, T_e);
+      n_e.getRegion("RGN_NOBNDRY"))(n_rh, n_e, T_e);
 
   // Loss is reduced by heating
   energy_loss -= (get_electron_heating() / Tnorm) * reaction_rate * radiation_multiplier;
