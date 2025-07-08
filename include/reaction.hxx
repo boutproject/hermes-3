@@ -4,6 +4,7 @@
 
 #include "component.hxx"
 #include "reaction_parser.hxx"
+
 struct Reaction : public Component {
   Reaction(std::string name, Options& alloptions);
 
@@ -79,5 +80,35 @@ protected:
 private:
   /// Label to use for this reaction in a state / Options object
   const std::string name;
+};
+
+/**
+ * @brief Struct to simplify cell-averaging of the reaction rate, particularly the
+ * calculation of the mass action factor.
+ *
+ */
+typedef std::function<BoutReal(BoutReal, BoutReal, BoutReal)> RateFunctionType;
+template <typename LimiterType = hermes::Limiter, typename RegionType = Region<Ind3D>>
+struct RateHelper {
+  RateHelper(const Options& state, const std::vector<std::string>& reactant_species,
+             RateFunctionType rate_calc_func, const RegionType region);
+
+  Field3D calc_rate();
+
+private:
+  const RegionType region;
+  /// Function to calculate reaction rate as a function of n_e, T_e
+  RateFunctionType rate_calc_func;
+  /// Electron density and temperature 
+  Field3D n_e;
+  Field3D T_e;
+  // Reactant densities
+  std::vector<Field3D> n_reactants;
+
+  BoutReal mass_action(Ind3D i);
+
+  BoutReal mass_action_left(Ind3D i, Ind3D ym, Ind3D yp);
+
+  BoutReal mass_action_right(Ind3D i, Ind3D ym, Ind3D yp);
 };
 #endif

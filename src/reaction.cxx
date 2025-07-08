@@ -48,30 +48,28 @@ void Reaction::transform(Options& state) {
 
   Field3D momentum_exchange, energy_exchange, energy_loss;
 
-  std::vector<std::string> reactant_species =
+  std::vector<std::string> reactant_names =
       parser->get_species(species_filter::reactants);
 
   // Restrict to 2 reactants for now;
-  ASSERT1(reactant_species.size() == 2);
-  Options& r1 = state["species"][reactant_species[0]];
-  Options& r2 = state["species"][reactant_species[1]];
+  ASSERT1(reactant_names.size() == 2);
 
-  // Electron (will point to the same data as either r1 or r2)
+  // Extract electron properties
   Options& electron = state["species"]["e"];
-
-  Field3D n_r1 = get<Field3D>(r1["density"]);
-  Field3D n_r2 = get<Field3D>(r2["density"]);
-
   Field3D n_e = get<Field3D>(electron["density"]);
   Field3D T_e = get<Field3D>(electron["temperature"]);
 
-  // Calculate reaction rate using cell averaging. Optionally scale by multiplier.
-  Field3D reaction_rate = cellAverage(
-      [&](BoutReal n1, BoutReal n2, BoutReal ne, BoutReal te) {
-        return n1 * n2 * eval_reaction_rate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
-               * rate_multiplier;
-      },
-      n_e.getRegion("RGN_NOBNDRY"))(n_r1, n_r2, n_e, T_e);
+  // Function passed to RateHelper to calculate reaction rate. Optionally scales by
+  // multiplier.
+  RateFunctionType calc_rate = [&](BoutReal mass_action, BoutReal ne, BoutReal te) {
+    BoutReal result = mass_action * eval_reaction_rate(te * Tnorm, ne * Nnorm) * Nnorm
+                      / FreqNorm * rate_multiplier;
+    return result;
+  };
+
+  RateHelper rate_helper =
+      RateHelper(state, reactant_names, calc_rate, n_e.getRegion("RGN_NOBNDRY"));
+  Field3D reaction_rate = rate_helper.calc_rate();
 
   // Use the stoichiometric values to set density sources for all species
   auto pop_changes = parser->get_stoich();
@@ -86,7 +84,7 @@ void Reaction::transform(Options& state) {
 
   // Get heavy reactant species name(s)
   std::vector<std::string> heavy_reactant_species =
-      parser->get_species(reactant_species, species_filter::heavy);
+      parser->get_species(reactant_names, species_filter::heavy);
 
   // Get the mass and velocity of the heavy reactant
   Options& rh = state["species"][heavy_reactant_species[0]];
@@ -147,4 +145,93 @@ void Reaction::transform(Options& state) {
   // Subclasses perform any additional transform tasks
   transform_additional(state, reaction_rate, momentum_exchange, energy_exchange,
                        energy_loss);
+}
+
+/**
+ * @brief Construct a new RateHelper.
+ *
+ * @tparam LimiterType
+ * @tparam RegionType
+ * @param state
+ * @param reactant_names
+ * @param rate_calc_func
+ * @param region
+ */
+template <typename LimiterType, typename RegionType>
+RateHelper<LimiterType, RegionType>::RateHelper(
+    const Options& state, const std::vector<std::string>& reactant_names,
+    RateFunctionType rate_calc_func, const RegionType region)
+    : rate_calc_func(rate_calc_func), region(region) {
+
+  // Extract electron properties from state
+  const Options& electron = state["species"]["e"];
+  n_e = get<Field3D>(electron["density"]);
+  T_e = get<Field3D>(electron["temperature"]);
+
+  // Extract and store reactant densities
+  std::transform(reactant_names.begin(), reactant_names.end(),
+                 std::back_inserter(n_reactants), [&](const std::string& reactant_name) {
+                   return get<Field3D>(state["species"][reactant_name]["density"]);
+                 });
+}
+
+/**
+ * @brief Compute the cell-averaged reaction rate, accounting for the mass action factor
+ * (product of reactant densities)
+ *
+ * @tparam LimiterType
+ * @tparam RegionType
+ * @return Field3D the cell-averaged reaction rate
+ */
+template <typename LimiterType, typename RegionType>
+Field3D RateHelper<LimiterType, RegionType>::calc_rate() {
+  Field3D reaction_rate{emptyFrom(n_e)};
+  auto J = reaction_rate.getCoordinates()->J;
+  BOUT_FOR(i, region) {
+
+    auto yp = i.yp();
+    auto ym = i.ym();
+    auto Ji = J[i];
+
+    reaction_rate[i] =
+        4. / 6 * rate_calc_func(mass_action(i), n_e[i], T_e[i])
+        + (Ji + J[ym]) / (12. * Ji)
+              * rate_calc_func(mass_action_left(i, ym, yp),
+                               cellLeft<LimiterType>(n_e[i], n_e[ym], n_e[yp]),
+                               cellLeft<LimiterType>(T_e[i], T_e[ym], T_e[yp]))
+        + (Ji + J[yp]) / (12. * Ji)
+              * rate_calc_func(mass_action_right(i, ym, yp),
+                               cellRight<LimiterType>(n_e[i], n_e[ym], n_e[yp]),
+                               cellRight<LimiterType>(T_e[i], T_e[ym], T_e[yp]));
+  }
+  return reaction_rate;
+}
+
+template <typename LimiterType, typename RegionType>
+BoutReal RateHelper<LimiterType, RegionType>::mass_action(Ind3D i) {
+  BoutReal result = 1;
+  for (const auto& n : n_reactants) {
+    result *= n[i];
+  }
+  return result;
+}
+
+template <typename LimiterType, typename RegionType>
+BoutReal RateHelper<LimiterType, RegionType>::mass_action_left(Ind3D i, Ind3D ym,
+                                                               Ind3D yp) {
+  BoutReal result = 1;
+  for (const auto& n : n_reactants) {
+    result *= cellLeft<LimiterType>(n[i], n[ym], n[yp]);
+  }
+  return result;
+}
+
+template <typename LimiterType, typename RegionType>
+BoutReal RateHelper<LimiterType, RegionType>::mass_action_right(Ind3D i, Ind3D ym,
+                                                                Ind3D yp) {
+  BoutReal result = 1;
+  for (const auto& n : n_reactants) {
+    result *= cellRight<LimiterType>(n[i], n[ym], n[yp]);
+  }
+  return result;
 }
