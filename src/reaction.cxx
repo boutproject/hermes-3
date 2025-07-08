@@ -35,6 +35,39 @@ Reaction::Reaction(std::string name, Options& options) : name(name) {
 
   // Parse the reaction string
   this->parser = std::make_unique<ReactionParser>(reaction_str);
+
+  // Participation factors. All set to unity for now; could make configurable in future.
+  for (const std::string& sp : this->parser->get_species()) {
+    this->pfactors[sp] = 1;
+  }
+
+  // Initialise weight sums with dummy values. Real values are set on first call to
+  // transform().
+  this->momentum_weightsum = -1;
+  this->energy_weightsum = -1;
+}
+
+/**
+ * @brief Compute weight sums, if it hasn't been done already.
+ *          Energy   : sum of (+ve pop change) participation factors
+ *          Momentum : sum of (+ve pop change) participation factors, weighted by mass
+ *
+ * @param state current simulation state
+ */
+void Reaction::calc_weightsums(Options& state) {
+  if (this->energy_weightsum < 0 || this->momentum_weightsum < 0) {
+    this->momentum_weightsum = 0;
+    this->energy_weightsum = 0;
+    std::map<std::string, int> pop_changes = this->parser->get_stoich();
+    for (const std::string& sp :
+         this->parser->get_species(species_filter::heavy, species_filter::produced)) {
+      int num_produced = pop_changes.at(sp);
+      BoutReal pfac = pfactors.at(sp);
+      this->momentum_weightsum +=
+          num_produced * pfac * get<BoutReal>(state["species"][sp]["AA"]);
+      this->energy_weightsum += num_produced * pfac;
+    }
+  }
 }
 
 /**
@@ -89,6 +122,7 @@ void Reaction::transform(Options& state) {
       parser->get_species(species_filter::heavy, species_filter::products);
 
   // Momentum and energy sources
+  calc_weightsums(state);
   for (auto el : pop_changes) {
     std::string sp_name = el.first;
     // No momentum, energy source for electrons due to pop change
@@ -111,13 +145,19 @@ void Reaction::transform(Options& state) {
       // consumed reactants
       momentum_exchange = energy_exchange = 0;
       for (auto& rsp_name : heavy_reactant_species) {
-        // Reactants with net loss contribute
+        // All consumed (net loss) reactants contribute
         if (pop_changes[rsp_name] < 0) {
           auto Gr = state["species"][rsp_name]["AA"].as<BoutReal>()
                     * state["species"][rsp_name]["velocity"].as<Field3D>();
-          momentum_exchange += reaction_rate * Gr;
+          BoutReal momentum_split = this->pfactors.at(sp_name)
+                                    * state["species"][sp_name]["AA"].as<BoutReal>()
+                                    / this->momentum_weightsum;
+          momentum_exchange +=
+              pfactors.at(rsp_name) * momentum_split * reaction_rate * Gr;
+
+          BoutReal energy_split = this->pfactors.at(sp_name) / this->energy_weightsum;
           auto Wr = (3. / 2) * state["species"][rsp_name]["temperature"].as<Field3D>();
-          energy_exchange += reaction_rate * Wr;
+          energy_exchange += pfactors.at(rsp_name) * energy_split * reaction_rate * Wr;
         }
       }
     } else {

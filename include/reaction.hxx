@@ -21,11 +21,20 @@ protected:
   /// Normalisations, extracted from input options
   BoutReal Tnorm, Nnorm, FreqNorm;
 
-  // Multipliers, extracted from input options
-  BoutReal rate_multiplier, radiation_multiplier; ///< Scaling factor on reaction rate
+  // Rate multipliers, extracted from input options
+  BoutReal rate_multiplier, radiation_multiplier;
 
   // Output diagnostics?
   bool diagnose;
+
+  /**
+   * @brief Calculate weightsums used in transform(). Can't be done at construction
+   * because the species masses may not be set.
+   *
+   *
+   * @param state Current sim state
+   */
+  void calc_weightsums(Options& state);
 
   /**
    * @brief Evaluates electron energy loss rate coefficients at a particular density and
@@ -80,6 +89,14 @@ protected:
 private:
   /// Label to use for this reaction in a state / Options object
   const std::string name;
+
+  /// Participation factors of all species
+  std::map<std::string, BoutReal> pfactors;
+
+  /// Sum of weights to use when calculating energy source due to population change
+  BoutReal energy_weightsum;
+  /// Sum of weights to use when calculating momentum source due to population change
+  BoutReal momentum_weightsum;
 };
 
 /**
@@ -99,7 +116,7 @@ private:
   const RegionType region;
   /// Function to calculate reaction rate as a function of n_e, T_e
   RateFunctionType rate_calc_func;
-  /// Electron density and temperature 
+  /// Electron density and temperature
   Field3D n_e;
   Field3D T_e;
   // Reactant densities
