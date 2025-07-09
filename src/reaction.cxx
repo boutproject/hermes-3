@@ -72,8 +72,6 @@ void Reaction::calc_weightsums(Options& state) {
 
 /**
  * @brief Use the stoichiometry matrix to compute density, momentum and energy sources.
- * ASSUMES EXACTLY 2 REACTANTS (electron(s) + 1 ion/neutral) AND 2 PRODUCTS (electron(s) +
- * 1 ion/neutral) for now.
  *
  * @param state
  */
