@@ -105,15 +105,15 @@ private:
  *
  */
 typedef std::function<BoutReal(BoutReal, BoutReal, BoutReal)> RateFunctionType;
-template <typename LimiterType = hermes::Limiter, typename RegionType = Region<Ind3D>>
+template <typename LimiterType = hermes::Limiter, typename IdxType = Ind3D>
 struct RateHelper {
   RateHelper(const Options& state, const std::vector<std::string>& reactant_species,
-             RateFunctionType rate_calc_func, const RegionType region);
+             RateFunctionType rate_calc_func, const Region<IdxType> region);
 
   Field3D calc_rate();
 
 private:
-  const RegionType region;
+  const Region<IdxType> region;
   /// Function to calculate reaction rate as a function of n_e, T_e
   RateFunctionType rate_calc_func;
   /// Electron density and temperature
@@ -122,10 +122,10 @@ private:
   // Reactant densities
   std::vector<Field3D> n_reactants;
 
-  BoutReal mass_action(Ind3D i);
+  BoutReal mass_action(IdxType i);
 
-  BoutReal mass_action_left(Ind3D i, Ind3D ym, Ind3D yp);
+  BoutReal mass_action_left(IdxType i, IdxType ym, IdxType yp);
 
-  BoutReal mass_action_right(Ind3D i, Ind3D ym, Ind3D yp);
+  BoutReal mass_action_right(IdxType i, IdxType ym, IdxType yp);
 };
 #endif

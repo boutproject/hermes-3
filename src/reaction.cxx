@@ -187,10 +187,10 @@ void Reaction::transform(Options& state) {
  * @param rate_calc_func
  * @param region
  */
-template <typename LimiterType, typename RegionType>
-RateHelper<LimiterType, RegionType>::RateHelper(
+template <typename LimiterType, typename IdxType>
+RateHelper<LimiterType, IdxType>::RateHelper(
     const Options& state, const std::vector<std::string>& reactant_names,
-    RateFunctionType rate_calc_func, const RegionType region)
+    RateFunctionType rate_calc_func, const Region<IdxType> region)
     : rate_calc_func(rate_calc_func), region(region) {
 
   // Extract electron properties from state
@@ -210,11 +210,11 @@ RateHelper<LimiterType, RegionType>::RateHelper(
  * (product of reactant densities)
  *
  * @tparam LimiterType
- * @tparam RegionType
+ * @tparam IdxType
  * @return Field3D the cell-averaged reaction rate
  */
-template <typename LimiterType, typename RegionType>
-Field3D RateHelper<LimiterType, RegionType>::calc_rate() {
+template <typename LimiterType, typename IdxType>
+Field3D RateHelper<LimiterType, IdxType>::calc_rate() {
   Field3D reaction_rate{emptyFrom(n_e)};
   auto J = reaction_rate.getCoordinates()->J;
   BOUT_FOR(i, region) {
@@ -237,8 +237,8 @@ Field3D RateHelper<LimiterType, RegionType>::calc_rate() {
   return reaction_rate;
 }
 
-template <typename LimiterType, typename RegionType>
-BoutReal RateHelper<LimiterType, RegionType>::mass_action(Ind3D i) {
+template <typename LimiterType, typename IdxType>
+BoutReal RateHelper<LimiterType, IdxType>::mass_action(IdxType i) {
   BoutReal result = 1;
   for (const auto& n : n_reactants) {
     result *= n[i];
@@ -246,9 +246,9 @@ BoutReal RateHelper<LimiterType, RegionType>::mass_action(Ind3D i) {
   return result;
 }
 
-template <typename LimiterType, typename RegionType>
-BoutReal RateHelper<LimiterType, RegionType>::mass_action_left(Ind3D i, Ind3D ym,
-                                                               Ind3D yp) {
+template <typename LimiterType, typename IdxType>
+BoutReal RateHelper<LimiterType, IdxType>::mass_action_left(IdxType i, IdxType ym,
+                                                            IdxType yp) {
   BoutReal result = 1;
   for (const auto& n : n_reactants) {
     result *= cellLeft<LimiterType>(n[i], n[ym], n[yp]);
@@ -256,9 +256,9 @@ BoutReal RateHelper<LimiterType, RegionType>::mass_action_left(Ind3D i, Ind3D ym
   return result;
 }
 
-template <typename LimiterType, typename RegionType>
-BoutReal RateHelper<LimiterType, RegionType>::mass_action_right(Ind3D i, Ind3D ym,
-                                                                Ind3D yp) {
+template <typename LimiterType, typename IdxType>
+BoutReal RateHelper<LimiterType, IdxType>::mass_action_right(IdxType i, IdxType ym,
+                                                             IdxType yp) {
   BoutReal result = 1;
   for (const auto& n : n_reactants) {
     result *= cellRight<LimiterType>(n[i], n[ym], n[yp]);
