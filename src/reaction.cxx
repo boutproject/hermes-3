@@ -173,6 +173,8 @@ void Reaction::transform(Options& state) {
   // Subclasses perform any additional transform tasks
   transform_additional(state, reaction_rate, momentum_exchange, energy_exchange,
                        energy_loss);
+
+  set_diagnostic_fields(reaction_rate, momentum_exchange, energy_exchange, energy_loss);
 }
 
 /**
