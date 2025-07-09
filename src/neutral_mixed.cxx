@@ -5,13 +5,15 @@
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
 
+#include "../include/hermes_utils.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/neutral_mixed.hxx"
 
 using bout::globals::mesh;
 
-using ParLimiter = FV::Upwind;
+using ParLimiter = hermes::Limiter;
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
     : name(name) {
@@ -60,11 +62,18 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e-8);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  freeze_low_density = options["freeze_low_density"]
+    .doc("Freeze evolution in low density regions?")
+    .withDefault<bool>(false);
+
+  temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+
+  pressure_floor = density_floor * temperature_floor;
 
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
-                     .withDefault<bool>(true);
+                     .withDefault<bool>(false);
 
   lax_flux = options["lax_flux"]
                      .doc("Enable stabilising lax flux?")
@@ -88,13 +97,15 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(true);
 
+  diffusion_collisions_mode = options["diffusion_collisions_mode"]
+      .doc("Can be multispecies: all enabled collisions excl. IZ, or afn: CX, IZ and NN collisions")
+      .withDefault<std::string>("multispecies");
+
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
 
     inv->setInnerBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
     inv->setOuterBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
-
-    inv->setCoefA(1.0);
   }
 
   // Optionally output time derivatives
@@ -147,7 +158,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   Nn.setBoundary(std::string("N") + name);
 
   // All floored versions of variables get the same boundary as the original
-  Tnlim.setBoundary(std::string("T") + name);
   Pnlim.setBoundary(std::string("P") + name);
   logPnlim.setBoundary(std::string("P") + name);
   Nnlim.setBoundary(std::string("N") + name);
@@ -172,17 +182,14 @@ void NeutralMixed::transform(Options& state) {
   Pn = floor(Pn, 0.0);
 
   // Nnlim Used where division by neutral density is needed
-  Nnlim = floor(Nn, density_floor);
+  Nnlim = softFloor(Nn, density_floor);
   Tn = Pn / Nnlim;
   Tn.applyBoundary();
 
   Vn = NVn / (AA * Nnlim);
-  Vnlim = Vn;
-
   Vn.applyBoundary("neumann");
-  Vnlim.applyBoundary("neumann");
 
-  Pnlim = floor(Pn, pressure_floor);
+  Pnlim = softFloor(Pn, pressure_floor);
   Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
@@ -215,7 +222,6 @@ void NeutralMixed::transform(Options& state) {
 
         // No flow into wall
         Vn(r.ind, mesh->ystart - 1, jz) = -Vn(r.ind, mesh->ystart, jz);
-        Vnlim(r.ind, mesh->ystart - 1, jz) = -Vnlim(r.ind, mesh->ystart, jz);
         NVn(r.ind, mesh->ystart - 1, jz) = -NVn(r.ind, mesh->ystart, jz);
       }
     }
@@ -243,7 +249,6 @@ void NeutralMixed::transform(Options& state) {
 
         // No flow into wall
         Vn(r.ind, mesh->yend + 1, jz) = -Vn(r.ind, mesh->yend, jz);
-        Vnlim(r.ind, mesh->yend + 1, jz) = -Vnlim(r.ind, mesh->yend, jz);
         NVn(r.ind, mesh->yend + 1, jz) = -NVn(r.ind, mesh->yend, jz);
       }
     }
@@ -278,30 +283,97 @@ void NeutralMixed::finally(const Options& state) {
   // Calculate cross-field diffusion from collision frequency
   //
   //
+
+  Field3D Tnlim = softFloor(Tn, temperature_floor);
+
   BoutReal neutral_lmax =
-      0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
+    0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
   Field3D Rnn =
-    sqrt(floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+    sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
+
+    // Collisionality
+    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+
+      if (diffusion_collisions_mode == "afn") {
+        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, name, "+", "cx", "partial")) or
+              /// Ionisation
+              (collisionSpeciesMatch(    
+                collision_name, name, "+", "iz", "partial")) or
+              /// Neutral-neutral collisions
+              (collisionSpeciesMatch(    
+                collision_name, name, name, "coll", "exact"))) {
+                  collision_names.push_back(collision_name);
+                }
+        }
+      // Multispecies mode: all collisions and CX are included
+      } else if (diffusion_collisions_mode == "multispecies") {
+        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, name, "", "cx", "partial")) or
+              /// Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(    
+                collision_name, name, "", "coll", "partial"))) {
+                  collision_names.push_back(collision_name);
+                }
+        }
+        
+      } else {
+        throw BoutException("\ndiffusion_collisions_mode for {:s} must be either multispecies or braginskii", name);
+      }
+
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in neutral_mixed for selected collisions mode", name);
+      }
+
+      /// Write chosen collisions to log file
+      output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ",
+                      name, diffusion_collisions_mode);
+      for (const auto& collision : collision_names) {        
+        output_info.write("{:s} ", collision);
+      }
+      output_info.write("\n");
+      }
+
+    /// Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
+    }
+
+
     // Dnn = Vth^2 / sigma
-    Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+    Dnn = (Tnlim / AA) / (nu + Rnn);
   } else {
-    Dnn = (Tn / AA) / Rnn;
+    Dnn = (Tnlim / AA) / Rnn;
   }
 
   if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax = flux_limit * sqrt(Tn / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
-    BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]); }
+    Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
+    }
   }
 
   if (diffusion_limit > 0.0) {
     // Impose an upper limit on the diffusion coefficient
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = BOUTMIN(Dnn[i], diffusion_limit);
+      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
     }
   }
 
@@ -343,7 +415,11 @@ void NeutralMixed::finally(const Options& state) {
   // Sound speed appearing in Lax flux for advection terms
   sound_speed = 0;
   if (lax_flux) {
-    sound_speed = sqrt(Tn * (5. / 3) / AA);
+    if (state.isSet("fastest_wave")) {
+      sound_speed = get<Field3D>(state["fastest_wave"]);
+    } else {
+      sound_speed = sqrt(Tn * (5. / 3) / AA);
+    }
   }
 
   // Heat conductivity 
@@ -364,15 +440,12 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral density
   TRACE("Neutral density");
 
-
   ddt(Nn) =
-    - FV::Div_par_mod<ParLimiter>(
-                  Nn, Vn, sound_speed, pf_adv_par_ylow) // Parallel advection
-                  
-    + Div_a_Grad_perp_flows(DnnNn, logPnlim,
+    - FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed, pf_adv_par_ylow); // Parallel advection
+
+  ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim,
                                    pf_adv_perp_xlow,
                                    pf_adv_perp_ylow);    // Perpendicular advection
-    ;
 
   Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
@@ -384,12 +457,10 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(               // Parallel advection
+  ddt(Pn) = - (5. / 3) * FV::Div_par_mod<ParLimiter>(       // Parallel advection
                     Pn, Vn, sound_speed, ef_adv_par_ylow)
-
-            - (2. / 3) * Pn * Div_par(Vn)                // Compression
-            + (5. / 3) * Div_a_Grad_perp_flows(          // Perpendicular advection
-
+            + (2. / 3) * Vn * Grad_par(Pn)                  // Work done
+            + (5. / 3) * Div_a_Grad_perp_flows(             // Perpendicular advection
                     DnnPn, logPnlim,
                     ef_adv_perp_xlow, ef_adv_perp_ylow)  
      ;
@@ -408,13 +479,12 @@ void NeutralMixed::finally(const Options& state) {
                       ef_cond_par_ylow,        
                       false)  // No conduction through target boundary
       ;
+    // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
+    ef_cond_perp_xlow *= 3/2;
+    ef_cond_perp_ylow *= 3/2;
+    ef_cond_par_ylow *= 3/2;
   }
 
-  // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-  ef_cond_perp_xlow *= 3/2;
-  ef_cond_perp_ylow *= 3/2;
-  ef_cond_par_ylow *= 3/2;
-  
   Sp = pressure_source;
   if (localstate.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
@@ -475,22 +545,45 @@ void NeutralMixed::finally(const Options& state) {
     Snv = 0;
   }
 
-
-  BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
-    if ((Pn[i] < pressure_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
-      ddt(Pn)[i] = 0.0;
-    }
-    if ((Nn[i] < density_floor * 1e-2) && (ddt(Nn)[i] < 0.0)) {
-      ddt(Nn)[i] = 0.0;
-    }
-  }
-
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
     ddt(Nn) *= scale_timederivs;
     ddt(Pn) *= scale_timederivs;
     ddt(NVn) *= scale_timederivs;
+  }
+
+  if (freeze_low_density) {
+    // Apply a factor to time derivatives in low density regions.
+    // Keep the sources and sinks, so that temperature and flow
+    // equilibriates with the plasma through collisions.
+
+    Field3D Nn_s, Pn_s, NVn_s;
+    if (localstate.isSet("density_source")) {
+      Nn_s = get<Field3D>(localstate["density_source"]);
+    } else {
+      Nn_s = 0.0;
+    }
+    if (localstate.isSet("energy_source")) {
+      Pn_s = (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    } else {
+      Pn_s = 0.0;
+    }
+    if (localstate.isSet("momentum_source")) {
+      NVn_s = get<Field3D>(localstate["momentum_source"]);
+    } else {
+      NVn_s = 0.0;
+    }
+
+    for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
+      // Local average density.
+      // The purpose is to turn on evolution when nearby cells contain significant density.
+      const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
+      const BoutReal factor = exp(- density_floor / meanNn);
+      ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
+      ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
+      ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
+    }
   }
 
 #if CHECKLEVEL >= 1
@@ -788,20 +881,54 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
     return;
   }
 
-  // Neutral gas diffusion
-  // Solve (1 - gamma*Dnn*Delp2)^{-1}
+  // First matrix
+  //   ( I   0)
+  //   (-LE  I)
 
-  Field3D coef = -gamma * Dnn;
+  Field3D DTdtN = Dnn * Tn * ddt(Nn);
+  mesh->communicate(DTdtN);
+  DTdtN.applyBoundary("dirichlet");
 
-  if (state.isSet("scale_timederivs")) {
-    coef *= get<Field3D>(state["scale_timederivs"]);
-  }
+  ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(DTdtN,
+                                                  logPnlim);
 
-  inv->setCoefD(coef);
+  // Second matrix: Invert Pshur
+  //   (E^-1   0  )
+  //   ( 0    P^-1)
+  //
+  // d Laplace_perp(x) + a x + (1/c1)Grad(c2) dot Grad_perp(x) = b
+  inv->setCoefA(1 - gamma * FV::Div_a_Grad_perp(Dnn, logPnlim));
+  inv->setCoefC1(-1. / ((gamma * 5./3) * Dnn));
+  inv->setCoefC2(logPnlim);
+  inv->setCoefD((-gamma * 5./3) * Dnn);
 
-  ddt(Nn) = inv->solve(ddt(Nn));
-  if (evolve_momentum) {
-    ddt(NVn) = inv->solve(ddt(NVn));
-  }
+  //inv->setInnerBoundaryFlags(INVERT_DC_GRAD);
+  //inv->setOuterBoundaryFlags(INVERT_DC_GRAD);
+
   ddt(Pn) = inv->solve(ddt(Pn));
+  mesh->communicate(ddt(Pn));
+  ddt(Pn).applyBoundary("dirichlet");
+
+  // Third matrix: update Nn and NVn equations
+  // ( I   E^-1U )
+  // ( 0     I   )
+
+  ddt(Nn) -= gamma * FV::Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
+
+  if (evolve_momentum) {
+    ddt(NVn) -= gamma * FV::Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
+  }
+
+  for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(Nn)[i])) {
+      throw BoutException("Precon ddt(N{}) non-finite at {}\n", name, i);
+    }
+    if (!std::isfinite(ddt(Pn)[i])) {
+      throw BoutException("Precon ddt(P{}) non-finite at {}\n", name, i);
+    }
+    if (!std::isfinite(ddt(NVn)[i])) {
+      throw BoutException("Precon ddt(NV{}) non-finite at {}\n", name, i);
+    }
+  }
+
 }
