@@ -145,12 +145,12 @@ private:
   void diff_reactants_products(const std::map<std::string, int>& R,
                                const std::map<std::string, int>& P) {
     this->stoich = std::map<std::string, int>(P);
-    for (auto R_el : R) {
-      auto it = P.find(R_el.first);
+    for (const auto& [sp_name, pop_change] : R) {
+      auto it = P.find(sp_name);
       if (it == P.end()) {
-        stoich[R_el.first] = -R_el.second;
+        stoich[sp_name] = -pop_change;
       } else {
-        stoich[R_el.first] -= R_el.second;
+        stoich[sp_name] -= pop_change;
       }
     }
   }

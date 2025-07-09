@@ -84,9 +84,6 @@ void Reaction::transform(Options& state) {
   std::vector<std::string> reactant_names =
       parser->get_species(species_filter::reactants);
 
-  // Restrict to 2 reactants for now;
-  ASSERT1(reactant_names.size() == 2);
-
   // Extract electron properties
   Options& electron = state["species"]["e"];
   Field3D n_e = get<Field3D>(electron["density"]);
@@ -106,9 +103,7 @@ void Reaction::transform(Options& state) {
 
   // Use the stoichiometric values to set density sources for all species
   auto pop_changes = parser->get_stoich();
-  for (auto el : pop_changes) {
-    std::string sp_name = el.first;
-    int pop_change = el.second;
+  for (const auto& [sp_name, pop_change] : pop_changes) {
     if (pop_change != 0) {
       // Density sources
       add(state["species"][sp_name]["density_source"], pop_change * reaction_rate);
@@ -123,13 +118,11 @@ void Reaction::transform(Options& state) {
 
   // Momentum and energy sources
   calc_weightsums(state);
-  for (auto el : pop_changes) {
-    std::string sp_name = el.first;
+  for (const auto& [sp_name, pop_change] : pop_changes) {
     // No momentum, energy source for electrons due to pop change
     if (sp_name.compare("e") == 0) {
       continue;
     }
-    int pop_change = el.second;
     // Species momentum
     auto Gs = get<BoutReal>(state["species"][sp_name]["AA"])
               * get<Field3D>(state["species"][sp_name]["velocity"]);
