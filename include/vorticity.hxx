@@ -131,7 +131,11 @@ private:
   BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
   BoutReal phi_boundary_last_update; ///< Time when last updated
   bool phi_core_averagey; ///< Average phi core boundary in Y?
-  
+
+  bool phi_boundary_set; ///< Set inner and outer phi boundary
+  BoutReal phi_boundary_inner; ///< Phi set on inner boundary
+  BoutReal phi_boundary_outer; ///< Phi set on outer boundary
+
   bool split_n0; // Split phi into n=0 and n!=0 components
   LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
 

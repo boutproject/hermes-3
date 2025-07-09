@@ -50,6 +50,7 @@ else()
 endif()
 
 set(HERMES_SOURCES
+    src/centrifugal_drift.cxx
     src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
@@ -108,6 +109,7 @@ set(HERMES_SOURCES
     include/amjuel_hyd_recombination.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
+    include/centrifugal_drift.hxx
     include/classical_diffusion.hxx
     include/binormal_stpm.hxx
     include/collisions.hxx
