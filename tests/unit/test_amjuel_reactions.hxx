@@ -67,9 +67,15 @@ protected:
     const BoutReal logv_min = std::log(1), logv_max = std::log(100);
 
     // Coordinate ranges
-    constexpr BoutReal xmin = 0, xmax = 2;
-    constexpr BoutReal ymin = 0, ymax = 25.1327412287;
-    constexpr BoutReal zmin = 0, zmax = 5.38558740615;
+    constexpr BoutReal xmin = 0;
+    constexpr BoutReal ymin = 0;
+    constexpr BoutReal zmin = 0;
+    const BoutReal xmax = mesh->GlobalX(mesh->LocalNx - 1);
+    const BoutReal ymax = TWOPI * mesh->GlobalY(mesh->LocalNy - 1);
+    const BoutReal zmax =
+        TWOPI * (mesh->LocalNz - 1) / static_cast<BoutReal>(mesh->LocalNz);
+
+    // Use xstart, xend, ystart, yend, zstart, zend to exclude guard cells
 
     // Linear functions for various fields that are inputs to the reaction transforms
     state["species"][heavy_reactant]["density"] = FieldFactory::get()->create3D(
