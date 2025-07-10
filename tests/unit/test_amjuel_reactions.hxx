@@ -67,13 +67,12 @@ protected:
     const BoutReal logv_min = std::log(1), logv_max = std::log(100);
 
     // Coordinate ranges
-    constexpr BoutReal xmin = 0;
-    constexpr BoutReal ymin = 0;
-    constexpr BoutReal zmin = 0;
-    const BoutReal xmax = mesh->GlobalX(mesh->LocalNx - 1);
-    const BoutReal ymax = TWOPI * mesh->GlobalY(mesh->LocalNy - 1);
-    const BoutReal zmax =
-        TWOPI * (mesh->LocalNz - 1) / static_cast<BoutReal>(mesh->LocalNz);
+    const BoutReal xmin = mesh->GlobalX(mesh->xstart);
+    const BoutReal ymin = TWOPI * mesh->GlobalY(mesh->ystart);
+    const BoutReal zmin = TWOPI * (mesh->zstart) / static_cast<BoutReal>(mesh->LocalNz);
+    const BoutReal xmax = mesh->GlobalX(mesh->xend);
+    const BoutReal ymax = TWOPI * mesh->GlobalY(mesh->yend);
+    const BoutReal zmax = TWOPI * (mesh->zend) / static_cast<BoutReal>(mesh->LocalNz);
 
     // Use xstart, xend, ystart, yend, zstart, zend to exclude guard cells
 

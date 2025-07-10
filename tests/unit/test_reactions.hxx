@@ -30,7 +30,7 @@ using namespace bout::globals;
  * @todo Change static_assert to require 'Reaction' base later.
  */
 template <typename RTYPE>
-class ReactionTest : public FakeMeshFixture {
+class ReactionTest : public FakeMeshFixture_tmpl<8, 8, 8> {
 
   static_assert(std::is_base_of<Component, RTYPE>(),
                 "Template arg to ReactionTest must derive from Component");
