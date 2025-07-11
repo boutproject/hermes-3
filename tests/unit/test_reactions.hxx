@@ -3,6 +3,7 @@
 
 #include "gtest/gtest.h"
 #include <filesystem>
+#include <regex>
 #include <sstream>
 
 #include <bout/constants.hxx>
