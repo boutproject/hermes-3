@@ -14,6 +14,8 @@
 
 #include "fake_mesh_fixture.hxx" // IWYU pragma: export
 
+enum class linfunc_axis { x, y, z };
+
 /// Global mesh
 namespace bout::globals {
 extern Mesh* mesh;
@@ -52,11 +54,29 @@ protected:
    * @param v_min
    * @param v_max
    * @param axis_str
-   * @param axis_ngrid
    * @return std::string
    */
-  std::string gen_lin_field_str(BoutReal v_min, BoutReal v_max, std::string axis_str,
-                                BoutReal axis_min, BoutReal axis_max) {
+  std::string gen_lin_field_str(BoutReal v_min, BoutReal v_max, linfunc_axis axis) {
+    // Set coordinate ranges (Use *start and *end indices to exclude guard cells)
+    BoutReal axis_min, axis_max;
+    std::string axis_str;
+    switch (axis) {
+    case linfunc_axis::x:
+      axis_str = "x";
+      axis_min = mesh->GlobalX(mesh->xstart);
+      axis_max = mesh->GlobalX(mesh->xend);
+      break;
+    case linfunc_axis::y:
+      axis_str = "y";
+      axis_min = TWOPI * mesh->GlobalY(mesh->ystart);
+      axis_max = TWOPI * mesh->GlobalY(mesh->yend);
+      break;
+    case linfunc_axis::z:
+      axis_str = "z";
+      axis_min = TWOPI * (mesh->zstart) / static_cast<BoutReal>(mesh->LocalNz);
+      axis_max = TWOPI * (mesh->zend) / static_cast<BoutReal>(mesh->LocalNz);
+      break;
+    }
 
     BoutReal axis_range = axis_max - axis_min;
     BoutReal v_range = v_max - v_min;

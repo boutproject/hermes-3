@@ -66,29 +66,19 @@ protected:
     const BoutReal logT_min = std::log(0.1), logT_max = std::log(2e4);
     const BoutReal logv_min = std::log(1), logv_max = std::log(100);
 
-    // Coordinate ranges
-    const BoutReal xmin = mesh->GlobalX(mesh->xstart);
-    const BoutReal ymin = TWOPI * mesh->GlobalY(mesh->ystart);
-    const BoutReal zmin = TWOPI * (mesh->zstart) / static_cast<BoutReal>(mesh->LocalNz);
-    const BoutReal xmax = mesh->GlobalX(mesh->xend);
-    const BoutReal ymax = TWOPI * mesh->GlobalY(mesh->yend);
-    const BoutReal zmax = TWOPI * (mesh->zend) / static_cast<BoutReal>(mesh->LocalNz);
-
-    // Use xstart, xend, ystart, yend, zstart, zend to exclude guard cells
-
     // Linear functions for various fields that are inputs to the reaction transforms
     state["species"][heavy_reactant]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logn_min, logn_max, "x", xmin, xmax), &state, mesh);
+        this->gen_lin_field_str(logn_min, logn_max, linfunc_axis::x), &state, mesh);
     state["species"]["e"]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logn_min, logn_max, "y", ymin, ymax), &state, mesh);
+        this->gen_lin_field_str(logn_min, logn_max, linfunc_axis::y), &state, mesh);
     state["species"]["e"]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logT_min, logT_max, "z", zmin, zmax), &state, mesh);
+        this->gen_lin_field_str(logT_min, logT_max, linfunc_axis::z), &state, mesh);
     state["species"][atom]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logv_min, logv_max, "x", xmin, xmax), &state, mesh);
+        this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::x), &state, mesh);
     state["species"][heavy_reactant]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logT_min, logT_max, "y", ymin, ymax), &state, mesh);
+        this->gen_lin_field_str(logT_min, logT_max, linfunc_axis::y), &state, mesh);
     state["species"][ion]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logv_min, logv_max, "z", zmin, zmax), &state, mesh);
+        this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::z), &state, mesh);
     return state;
   }
 };
