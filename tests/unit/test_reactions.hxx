@@ -39,12 +39,56 @@ class ReactionTest : public FakeMeshFixture_tmpl<8, 8, 8> {
 
 protected:
   ReactionTest(std::string lbl, std::string reaction_str)
-      : lbl(lbl), reaction_str(reaction_str){};
+      : lbl(lbl), reaction_str(reaction_str) {
+    parse_reaction_str(reaction_str);
+  };
 
   std::string lbl;
+  std::string heavy_reactant;
+  std::string heavy_product;
   std::string reaction_str;
+  std::map<std::string, int> heavy_sp_charges;
 
-  virtual Options generate_state() = 0;
+  virtual Options generate_state() {
+    // N.B. No attempt to set the correct masses for heavy species; always set to 1
+    std::string comp_name("test" + this->lbl);
+    Options state{{comp_name, {{"type", this->reaction_str}}},
+                  {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  {"species",
+                   {{"e", {{"AA", 1. / 1836}, {"velocity", 1.0}}},
+                    {this->heavy_reactant,
+                     {{"AA", 1.0},
+                      {"charge", this->heavy_sp_charges.at(this->heavy_reactant)},
+                      {"density", 1.0},
+                      {"temperature", 1.0},
+                      {"velocity", 1.0}}},
+                    {this->heavy_product,
+                     {{"AA", 1.0},
+                      {"charge", this->heavy_sp_charges.at(this->heavy_product)},
+                      {"density", 1.0},
+                      {"temperature", 1.0},
+                      {"velocity", 1.0}}}}}};
+
+    // Density and Temperature ranges (log vals)
+    const BoutReal logn_min = std::log(1e14), logn_max = std::log(1e22);
+    const BoutReal logT_min = std::log(0.1), logT_max = std::log(2e4);
+    const BoutReal logv_min = std::log(1), logv_max = std::log(100);
+
+    // Linear functions for various fields that are inputs to the reaction transforms
+    state["species"]["e"]["density"] = FieldFactory::get()->create3D(
+        this->gen_lin_field_str(logn_min, logn_max, linfunc_axis::y), &state, mesh);
+    state["species"]["e"]["temperature"] = FieldFactory::get()->create3D(
+        this->gen_lin_field_str(logT_min, logT_max, linfunc_axis::z), &state, mesh);
+    state["species"][this->heavy_reactant]["density"] = FieldFactory::get()->create3D(
+        this->gen_lin_field_str(logn_min, logn_max, linfunc_axis::x), &state, mesh);
+    state["species"][this->heavy_reactant]["temperature"] = FieldFactory::get()->create3D(
+        this->gen_lin_field_str(logT_min, logT_max, linfunc_axis::y), &state, mesh);
+    state["species"][this->heavy_reactant]["velocity"] = FieldFactory::get()->create3D(
+        this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::x), &state, mesh);
+    state["species"][this->heavy_product]["velocity"] = FieldFactory::get()->create3D(
+        this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::z), &state, mesh);
+    return state;
+  }
 
   /**
    * @brief Util to generate an appropriate string to initialise a field with values that
@@ -84,6 +128,47 @@ protected:
     expression << "exp(" << v_min << " + (" << axis_str << "-" << axis_min << ")/"
                << axis_range << "*" << v_range << ")";
     return expression.str();
+  }
+
+  /// Very clunky way to extract the heavy species names in the absence of a
+  /// more robust parser
+  void parse_reaction_str(const std::string& reaction_str) {
+    std::stringstream ss(reaction_str);
+    std::string word;
+    bool is_reactant = true;
+    int max_charge_state = std::numeric_limits<int>::min();
+    while (ss >> word) {
+      if (word.compare("+") == 0) {
+        continue;
+      }
+      if (word.compare("->") == 0) {
+        is_reactant = false;
+        continue;
+      }
+
+      std::regex pattern("([0-9]*)([a-zA-Z]*)(\\+?\\-?)([0-9]*)");
+      std::smatch matches;
+      bool has_matches = std::regex_search(word, matches, pattern);
+      ASSERT_TRUE(has_matches) << "Unable to parse reaction term " << word << std::endl;
+      std::string sp = matches[2].str() + matches[3].str() + matches[4].str();
+      if (sp.compare("e") == 0) {
+        continue;
+      }
+      heavy_sp_charges[sp] =
+          (matches[4].length() == 0) ? matches[3].length() : stringToInt(matches[4]);
+
+      if (is_reactant) {
+        this->heavy_reactant = sp;
+      } else {
+        this->heavy_product = sp;
+      }
+    }
+    auto nsp = heavy_sp_charges.size();
+    if (nsp != 2) {
+      FAIL() << "ReactionTest currently assumes exactly two heavy species per reaction; "
+                "found "
+             << nsp << " in the reaction string!";
+    }
   }
 
   std::filesystem::path ref_data_path() {
