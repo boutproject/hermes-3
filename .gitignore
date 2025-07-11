@@ -10,9 +10,16 @@ BOUT.settings
 /docs/build/*
 /docs/doxygen/*
 /docs/sphinx/_breathe*
+__pycache__
 
 # IDE config files
 .vscode
 
 # Directory used by scripts/run_eg.sh
 runs
+
+# spack-related
+spack-build*
+spack.lock
+.spack-env
+views

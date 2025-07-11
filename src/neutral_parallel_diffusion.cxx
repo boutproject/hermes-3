@@ -1,4 +1,5 @@
 #include "../include/neutral_parallel_diffusion.hxx"
+#include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
@@ -19,13 +20,74 @@ void NeutralParallelDiffusion::transform(Options& state) {
       continue;
     }
 
-    auto nu = GET_VALUE(Field3D, species["collision_frequency"]);
     const BoutReal AA = GET_VALUE(BoutReal, species["AA"]); // Atomic mass
     const Field3D Nn = GET_VALUE(Field3D, species["density"]);
     const Field3D Tn = GET_VALUE(Field3D, species["temperature"]);
     const Field3D Pn = IS_SET(species["pressure"]) ?
       GET_VALUE(Field3D, species["pressure"]) : Nn * Tn;
 
+    // Collisionality
+    // Multispecies mode: in, en, nn, cx
+    // New mode: cx, iz (in line with SOLPS AFN, Horsten 2017)
+    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+
+      if (diffusion_collisions_mode == "afn") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "+", "cx", "partial")) or
+              /// Ionisation
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "+", "iz", "partial"))) {
+                  
+                  collision_names.push_back(collision_name);
+                }
+        }
+      // Multispecies mode: all collisions and CX are included
+      } else if (diffusion_collisions_mode == "multispecies") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "cx", "partial")) or
+              /// Any collision (ne, ni, nn)
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "coll", "partial"))) {
+                  
+                  collision_names.push_back(collision_name);
+                }
+        }
+
+      } else {
+        throw BoutException("\tdiffusion_collisions_mode for {:s} must be either multispecies or afn", species.name());
+      }
+
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in neutral_parallel_diffusion for selected collisions mode", species.name());
+      }
+
+      /// Write chosen collisions to log file
+      output_info.write("\t{:s} neutral diffusion collisionality mode: '{:s}' using ",
+                      species.name(), diffusion_collisions_mode);
+      for (const auto& collision : collision_names) {        
+        output_info.write("{:s} ", collision);
+      }
+      output_info.write("\n");
+
+    }
+
+    /// Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
+    }
+
+    // Diffusion coefficient
     BoutReal advection_factor = 0;
     BoutReal kappa_factor = 0;
 
@@ -57,13 +119,13 @@ void NeutralParallelDiffusion::transform(Options& state) {
     // Heat transfer
     Field3D E = + FV::Div_par_K_Grad_par(
       Dn * advection_factor * Pn, logPn);        // Pressure advection
-    if (thermal_conduction) {
+    if (perpendicular_conduction) {
       E += FV::Div_par_K_Grad_par(kappa_n, Tn);   // Conduction
     }
     add(species["energy_source"], E);
 
     Field3D F = 0.0;
-    if (IS_SET(species["velocity"]) and viscosity) {
+    if (IS_SET(species["velocity"]) and perpendicular_viscosity) {
       // Relationship between heat conduction and viscosity for neutral
       // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
       // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of

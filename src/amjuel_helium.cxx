@@ -67,6 +67,7 @@ static constexpr const BoutReal he01_radiation_coefs[9][9] = {
      -1.713225271579e-14}};
 
 void AmjuelHeIonisation01::calculate_rates(Options& state, 
+                                          Field3D &heavy_particle_frequency, Field3D &electron_frequency,
                                           Field3D &reaction_rate, Field3D &momentum_exchange,
                                           Field3D &energy_exchange, Field3D &energy_loss, BoutReal &rate_multiplier, BoutReal &radiation_multiplier) {
   electron_reaction(state["species"]["e"],
@@ -74,7 +75,7 @@ void AmjuelHeIonisation01::calculate_rates(Options& state,
                     state["species"]["he+"], // To helium ions
                     he01_rate_coefs, he01_radiation_coefs,
                     0.0, // Note: Ionisation potential included in radiation_coefs,
-                    reaction_rate, momentum_exchange, energy_exchange, energy_loss, rate_multiplier, radiation_multiplier
+                    heavy_particle_frequency, electron_frequency, reaction_rate, momentum_exchange, energy_exchange, energy_loss, rate_multiplier, radiation_multiplier
 
   );
 }
@@ -146,6 +147,7 @@ static constexpr const BoutReal he10_radiation_coefs[9][9] = {
      -1.678705755876e-14}};
 
 void AmjuelHeRecombination10::calculate_rates(Options& state, 
+                                              Field3D &heavy_particle_frequency, Field3D &electron_frequency,
                                               Field3D &reaction_rate, Field3D &momentum_exchange,
                                               Field3D &energy_exchange, Field3D &energy_loss, BoutReal &rate_multiplier, BoutReal &radiation_multiplier) {
   electron_reaction(state["species"]["e"],
@@ -153,6 +155,6 @@ void AmjuelHeRecombination10::calculate_rates(Options& state,
                     state["species"]["he"],  // To helium atoms
                     he10_rate_coefs, he10_radiation_coefs,
                     24.586, // Ionisation potential heating of electrons
-                    reaction_rate, momentum_exchange, energy_exchange, energy_loss, rate_multiplier, radiation_multiplier
+                    heavy_particle_frequency, electron_frequency, reaction_rate, momentum_exchange, energy_exchange, energy_loss, rate_multiplier, radiation_multiplier
   );
 }

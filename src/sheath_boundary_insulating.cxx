@@ -2,6 +2,7 @@
 /// to the wall. Potential (if set) is linearly extrapolated into the boundary.
 
 #include "../include/sheath_boundary_insulating.hxx"
+#include "hermes_utils.hxx"
 
 #include <bout/output_bout_types.hxx>
 
@@ -15,12 +16,6 @@ BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
     return min;
   if (value > max)
     return max;
-  return value;
-}
-
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
   return value;
 }
 
