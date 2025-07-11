@@ -135,18 +135,20 @@ void Reaction::transform(Options& state) {
       // Species with net gain receive a proportion of the momentum and energy lost by
       // consumed reactants
       momentum_exchange = energy_exchange = 0;
+      // Splitting factors - fraction of the total momentum/energy lost by consumed
+      // species that will go to this product
+      BoutReal momentum_split = this->pfactors.at(sp_name)
+                                * get<BoutReal>(state["species"][sp_name]["AA"])
+                                / this->momentum_weightsum;
+      BoutReal energy_split = this->pfactors.at(sp_name) / this->energy_weightsum;
       for (auto& rsp_name : heavy_reactant_species) {
-        // All consumed (net loss) reactants contribute
+        // All consumed (net loss) reactants contribute momentum/energy
         if (pop_changes[rsp_name] < 0) {
           auto Gr = get<BoutReal>(state["species"][rsp_name]["AA"])
                     * get<Field3D>(state["species"][rsp_name]["velocity"]);
-          BoutReal momentum_split = this->pfactors.at(sp_name)
-                                    * get<BoutReal>(state["species"][sp_name]["AA"])
-                                    / this->momentum_weightsum;
           momentum_exchange +=
               pfactors.at(rsp_name) * momentum_split * reaction_rate * Gr;
 
-          BoutReal energy_split = this->pfactors.at(sp_name) / this->energy_weightsum;
           auto Wr = (3. / 2) * get<Field3D>(state["species"][rsp_name]["temperature"]);
           energy_exchange += pfactors.at(rsp_name) * energy_split * reaction_rate * Wr;
         }
