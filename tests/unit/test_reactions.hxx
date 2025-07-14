@@ -53,22 +53,18 @@ protected:
   virtual Options generate_state() {
     // N.B. No attempt to set the correct masses for heavy species; always set to 1
     std::string comp_name("test" + this->lbl);
-    Options state{{comp_name, {{"type", this->reaction_str}}},
-                  {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
-                  {"species",
-                   {{"e", {{"AA", 1. / 1836}, {"velocity", 1.0}}},
-                    {this->heavy_reactant,
-                     {{"AA", 1.0},
-                      {"charge", this->heavy_sp_charges.at(this->heavy_reactant)},
-                      {"density", 1.0},
-                      {"temperature", 1.0},
-                      {"velocity", 1.0}}},
-                    {this->heavy_product,
-                     {{"AA", 1.0},
-                      {"charge", this->heavy_sp_charges.at(this->heavy_product)},
-                      {"density", 1.0},
-                      {"temperature", 1.0},
-                      {"velocity", 1.0}}}}}};
+    Options state{
+        {comp_name, {{"type", this->reaction_str}}},
+        {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+        {"species",
+         {{"e", {{"AA", 1. / 1836}, {"velocity", 1.0}}},
+          {this->heavy_reactant,
+           {{"AA", 1.0}, {"charge", this->heavy_sp_charges.at(this->heavy_reactant)}}},
+          {this->heavy_product,
+           {{"AA", 1.0},
+            {"charge", this->heavy_sp_charges.at(this->heavy_product)},
+            {"density", 1.0},
+            {"temperature", 1.0}}}}}};
 
     // Density and Temperature ranges (log vals)
     const BoutReal logn_min = std::log(1e14), logn_max = std::log(1e22);
@@ -93,13 +89,12 @@ protected:
 
   /**
    * @brief Util to generate an appropriate string to initialise a field with values that
-   * increase linearly along axis \p axis_str (which has \p axis_ngrid elements) between
-   * \p v_min and \p v_max.
+   * increase linearly along axis \p axis_str between \p v_min and \p v_max.
    *
    * @param v_min
    * @param v_max
    * @param axis_str
-   * @return std::string
+   * @return std::string field definition suitable for passing to FieldFactory::create3D
    */
   std::string gen_lin_field_str(BoutReal v_min, BoutReal v_max, linfunc_axis axis) {
     // Set coordinate ranges (Use *start and *end indices to exclude guard cells)
