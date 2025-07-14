@@ -26,40 +26,37 @@ public:
 class AmjuelHRecTest : public AmjuelReactionTest<AmjuelHydRecombinationIsotope<'h'>> {
 public:
   AmjuelHRecTest()
-      : AmjuelReactionTest<AmjuelHydRecombinationIsotope<'h'>>("Hrec", "h+ + e -> h" ) {}
+      : AmjuelReactionTest<AmjuelHydRecombinationIsotope<'h'>>("HRec", "h+ + e -> h") {}
 };
 
 class AmjuelDRecTest : public AmjuelReactionTest<AmjuelHydRecombinationIsotope<'d'>> {
 public:
   AmjuelDRecTest()
-      : AmjuelReactionTest<AmjuelHydRecombinationIsotope<'d'>>("Drec", "d+ + e -> d" ) {}
+      : AmjuelReactionTest<AmjuelHydRecombinationIsotope<'d'>>("DRec", "d+ + e -> d") {}
 };
 
 class AmjuelTRecTest : public AmjuelReactionTest<AmjuelHydRecombinationIsotope<'t'>> {
 public:
   AmjuelTRecTest()
-      : AmjuelReactionTest<AmjuelHydRecombinationIsotope<'t'>>("Trec", "t+ + e -> t" ) {}
+      : AmjuelReactionTest<AmjuelHydRecombinationIsotope<'t'>>("TRec", "t+ + e -> t") {}
 };
 
 class AmjuelHIznTest : public AmjuelReactionTest<AmjuelHydIonisationIsotope<'h'>> {
 public:
   AmjuelHIznTest()
-      : AmjuelReactionTest<AmjuelHydIonisationIsotope<'h'>>("Hizn",
-                                                            "h + e -> h+ + 2e" ) {}
+      : AmjuelReactionTest<AmjuelHydIonisationIsotope<'h'>>("HIzn", "h + e -> h+ + 2e") {}
 };
 
 class AmjuelDIznTest : public AmjuelReactionTest<AmjuelHydIonisationIsotope<'d'>> {
 public:
   AmjuelDIznTest()
-      : AmjuelReactionTest<AmjuelHydIonisationIsotope<'d'>>("Dizn",
-                                                            "d + e -> d+ + 2e" ) {}
+      : AmjuelReactionTest<AmjuelHydIonisationIsotope<'d'>>("DIzn", "d + e -> d+ + 2e") {}
 };
 
 class AmjuelTIznTest : public AmjuelReactionTest<AmjuelHydIonisationIsotope<'t'>> {
 public:
   AmjuelTIznTest()
-      : AmjuelReactionTest<AmjuelHydIonisationIsotope<'t'>>("Tizn",
-                                                            "t + e -> t+ + 2e" ) {}
+      : AmjuelReactionTest<AmjuelHydIonisationIsotope<'t'>>("TIzn", "t + e -> t+ + 2e") {}
 };
 
 class AmjuelHeIzn01Test : public AmjuelReactionTest<AmjuelHeIonisation01> {
