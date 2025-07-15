@@ -11,7 +11,7 @@ html: sphinx-html
 man: sphinx-man
 sphinx: sphinx-html
 
-.PHONY: breathe-autogen, doxygen-build, clean, html, man, manual, pdf, sphinx, sphinx-html, sphinx-man, sphinx-pdf
+.PHONY: breathe-autogen, doxygen, clean, html, man, manual, pdf, sphinx, sphinx-html, sphinx-man, sphinx-pdf
 
 sphinx-pdf: doxygen
 	$(sphinx-build) -b latex sphinx/ build/
