@@ -1,7 +1,6 @@
 #ifndef TEST_REACTIONS_H__
 #define TEST_REACTIONS_H__
 
-#include "gtest/gtest.h"
 #include <filesystem>
 #include <regex>
 #include <sstream>
@@ -9,6 +8,7 @@
 #include <bout/constants.hxx>
 #include <bout/field_factory.hxx> // For generating functions
 #include <bout/options_io.hxx>
+#include <gtest/gtest.h>
 
 #include "component.hxx"
 #include "test_extras.hxx" // FakeMesh
