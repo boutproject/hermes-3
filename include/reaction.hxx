@@ -72,9 +72,8 @@ protected:
                                      Field3D& energy_exchange, Field3D& energy_loss){};
 
   /**
-   * @brief A hook with with subclasses can perform additional transform tasks, if
-   * necessary.
-   * (Subclasses MAY define)
+   * @brief A hook with which subclasses can perform additional transform tasks, over and
+   * above those implemented in Reaction::transform. (Subclasses MAY define)
    *
    * @param state
    * @param reaction_rate
