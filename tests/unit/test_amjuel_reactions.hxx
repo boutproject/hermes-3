@@ -13,14 +13,14 @@
  * @tparam RTYPE The reaction class; must derive from AmjuelReaction.
  */
 template <typename RTYPE>
-class AmjuelReactionTest : public ReactionTest<RTYPE> {
+class AmjuelReactionTest : public IznRecReactionTest<RTYPE> {
 
   static_assert(std::is_base_of<AmjuelReaction, RTYPE>(),
                 "Template arg to AmjuelReactionTest must derive from AmjuelReaction");
 
 public:
   AmjuelReactionTest(std::string lbl, std::string reaction_str)
-      : ReactionTest<RTYPE>(lbl, reaction_str) {}
+      : IznRecReactionTest<RTYPE>(lbl, reaction_str) {}
 };
 
 class AmjuelHRecTest : public AmjuelReactionTest<AmjuelHydRecombinationIsotope<'h'>> {

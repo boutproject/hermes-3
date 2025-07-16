@@ -13,14 +13,14 @@
  * @tparam RTYPE The reaction class; must derive from OpenADAS.
  */
 template <typename RTYPE>
-class ADASReactionTest : public ReactionTest<RTYPE> {
+class ADASReactionTest : public IznRecReactionTest<RTYPE> {
 
   static_assert(std::is_base_of<OpenADAS, RTYPE>(),
                 "Template arg to ADASReactionTest must derive from OpenADAS");
 
 public:
   ADASReactionTest(std::string lbl, std::string reaction_str)
-      : ReactionTest<RTYPE>(lbl, reaction_str) {}
+      : IznRecReactionTest<RTYPE>(lbl, reaction_str) {}
 };
 
 class ADASCIznTest : public ADASReactionTest<ADASCarbonIonisation<0>> {
