@@ -255,6 +255,8 @@ void EvolveDensity::finally(const Options& state) {
       //       so that upwinding is handled correctly
       ddt(N) -= Div_n_g_bxGrad_f_B_XZ(N, V, -Apar_flutter);
     }
+  } else {
+    flow_ylow = 0.0;
   }
 
   if (low_n_diffuse) {
@@ -350,14 +352,18 @@ void EvolveDensity::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_density"}});
 
-    set_with_attrs(state[std::string("S") + name + std::string("_src")], final_source,
-                   {{"time_dimension", "t"},
-                    {"units", "m^-3 s^-1"},
+    Options& final_source_output = state[std::string("S") + name + std::string("_src")];
+    set_with_attrs(final_source_output, final_source,
+                   {{"units", "m^-3 s^-1"},
                     {"conversion", Nnorm * Omega_ci},
                     {"standard_name", "external density source"},
                     {"long_name", name + " external number density source"},
                     {"species", name},
                     {"source", "evolve_density"}});
+    if (source_time_dependent) {
+      // Particle source changes in time, so add a time dimension
+      final_source_output.attributes["time_dimension"] = "t";
+    }
 
     // If fluxes have been set then add them to the output
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);
@@ -368,7 +374,7 @@ void EvolveDensity::outputVars(Options& state) {
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
                     {"standard_name", "particle flow"},
-                    {"long_name", name + " particle flow in X. Note: May be incomplete."},
+                    {"long_name", name + " total particle flow in X."},
                     {"species", name},
                     {"source", "evolve_density"}});
     }
@@ -378,7 +384,7 @@ void EvolveDensity::outputVars(Options& state) {
                     {"units", "s^-1"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
                     {"standard_name", "particle flow"},
-                    {"long_name", name + " particle flow in Y. Note: May be incomplete."},
+                    {"long_name", name + " total particle flow in Y."},
                     {"species", name},
                     {"source", "evolve_density"}});
     }

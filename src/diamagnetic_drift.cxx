@@ -1,5 +1,6 @@
 #include <bout/fv_ops.hxx>
 #include <bout/vecops.hxx>
+#include <bout/constants.hxx>
 
 #include "../include/diamagnetic_drift.hxx"
 
@@ -55,6 +56,10 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
     Curlb_B.y(r.ind, mesh->yend + 1) = -Curlb_B.y(r.ind, mesh->yend);
   }
+
+  diagnose = options["diagnose"]
+    .doc("Output additional diagnostics?")
+    .withDefault<bool>(false);
 }
 
 void DiamagneticDrift::transform(Options& state) {
@@ -93,7 +98,13 @@ void DiamagneticDrift::transform(Options& state) {
 
       Field3D div_form = FV::Div_f_v(P, vD, bndry_flux);
       Field3D grad_form = Curlb_B * Grad(P * T / q);
-      subtract(species["energy_source"], (5. / 2) * (diamag_form * div_form + (1. - diamag_form) * grad_form));
+
+      Field3D source = (5. / 2) * (diamag_form * div_form + (1. - diamag_form) * grad_form);
+      subtract(species["energy_source"], source);
+
+      if (diagnose) {
+        set(channels["E_Div_Vdia_52P_" + kv.first], source);
+      }
     }
 
     if (IS_SET(species["momentum"])) {
@@ -102,5 +113,28 @@ void DiamagneticDrift::transform(Options& state) {
       Field3D grad_form = Curlb_B * Grad(NV * T / q);
       subtract(species["momentum_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
     }
+  }
+}
+
+void DiamagneticDrift::outputVars(Options &state) {
+  AUTO_TRACE();
+
+  if (!diagnose) {
+    return;
+  }
+
+  // Normalisations
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+
+  for (const auto& kv : channels.getChildren()) {
+    set_with_attrs(state[kv.first], getNonFinal<Field3D>(kv.second),
+                   {{"time_dimension", "t"},
+                    {"units", "W m^-3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", "Energy transfer channel"},
+                    {"source", "diamagnetic_drift"}});
   }
 }

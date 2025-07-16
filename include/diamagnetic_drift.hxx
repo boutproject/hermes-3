@@ -19,10 +19,15 @@ struct DiamagneticDrift : public Component {
   ///  - momentum_source
   void transform(Options &state) override;
 
+  /// Output diagnostics
+  void outputVars(Options &state) override;
 private:
   Vector2D Curlb_B;
   bool bndry_flux;
   Field2D diamag_form;
+
+  bool diagnose; ///< Output diagnostics?
+  Options channels; ///< Energy transfer channels
 };
 
 namespace {

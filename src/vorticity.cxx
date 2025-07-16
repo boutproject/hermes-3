@@ -575,6 +575,12 @@ void Vorticity::transform(Options& state) {
       subtract(species["energy_source"], Jdia_species * Grad(phi));
 
       Jdia += Jdia_species; // Collect total diamagnetic current
+
+      if (diagnose) {
+        // Add energy channel diagnostics
+        set(channels["E_Jdia_Grad_phi_" + kv.first], Jdia_species * Grad(phi));
+        set(channels["E_phi_Div_Jdia_" + kv.first], phi * Div(Jdia_species));
+      }
     }
 
     // Note: This term is central differencing so that it balances
@@ -621,6 +627,10 @@ void Vorticity::transform(Options& state) {
 
     ddt(Vort) += DivJcol;
     set(fields["DivJcol"], DivJcol);
+
+    if (diagnose) {
+      set(channels["E_phi+Pi_DivJcol"], (phi + Pi_hat) * DivJcol);
+    }
   }
 
   set(fields["vorticity"], Vort);
@@ -694,6 +704,10 @@ void Vorticity::finally(const Options& state) {
     const Field3D jpar = (Z / A) * NV;
     ddt(Vort) += Div_par(jpar);
 
+    if (diagnose) {
+      set(channels["E_phi_Div_jpar_" + kv.first], phi * Div_par(jpar));
+    }
+
     if (state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
@@ -708,23 +722,43 @@ void Vorticity::finally(const Options& state) {
   // Viscosity
   ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
 
+  if (diagnose) {
+    // Numerical energy channel
+    set(channels["E_numerical_Vort"], zeroFrom(Vort));
+  }
+  
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    ddt(Vort) -= FV::Div_par(Vort, 0.0, sound_speed);
+    Field3D rhs = rhs;
+    ddt(Vort) -= rhs;
+
+    if (diagnose) {
+      add(channels["E_numerical_Vort"], (phi + Pi_hat) * rhs);
+    }
   }
 
   if (phi_dissipation) {
     // Adds dissipation term like in other equations, but depending on gradient of
     // potential
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    ddt(Vort) -= FV::Div_par(-phi, 0.0, sound_speed);
+    Field3D rhs = FV::Div_par(-phi, 0.0, sound_speed);
+    ddt(Vort) -= rhs;
+
+    if (diagnose) {
+      add(channels["E_numerical_Vort"], (phi + Pi_hat) * rhs);
+    }
   }
 
   if (hyper_z > 0) {
     // Form of hyper-viscosity to suppress zig-zags in Z
     auto* coord = Vort.getCoordinates();
-    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+    Field3D rhs = hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+    ddt(Vort) -= rhs;
+
+    if (diagnose) {
+      add(channels["E_numerical_Vort"], (phi + Pi_hat) * rhs);
+    }
   }
 
   if (phi_sheath_dissipation) {
@@ -747,12 +781,19 @@ void Vorticity::finally(const Options& state) {
         dissipation[i] = -floor(-phisheath, 0.0);
       }
     }
-    ddt(Vort) += fromFieldAligned(dissipation);
+    dissipation = fromFieldAligned(dissipation);
+    ddt(Vort) += dissipation;
+
+    if (diagnose) {
+      subtract(channels["E_numerical_Vort"], (phi + Pi_hat) * dissipation);
+    }
   }
 
   if (damp_core_vorticity) {
     // Damp axisymmetric vorticity near core boundary
     if (mesh->firstX() and mesh->periodicY(mesh->xstart)) {
+      Field3D damping{zeroFrom(Vort)};
+
       for (int j = mesh->ystart; j <= mesh->yend; j++) {
         BoutReal vort_avg = 0.0; // Average Vort in Z
         for (int k = 0; k < mesh->LocalNz; k++) {
@@ -761,7 +802,12 @@ void Vorticity::finally(const Options& state) {
         vort_avg /= mesh->LocalNz;
         for (int k = 0; k < mesh->LocalNz; k++) {
           ddt(Vort)(mesh->xstart, j, k) -= 0.01 * vort_avg;
+          damping(mesh->xstart, j, k) = 0.01 * vort_avg;
         }
+      }
+
+      if (diagnose) {
+        add(channels["E_numerical_Vort"], (phi + Pi_hat) * damping);
       }
     }
   }
@@ -770,9 +816,10 @@ void Vorticity::finally(const Options& state) {
 void Vorticity::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
-  auto Nnorm = get<BoutReal>(state["Nnorm"]);
-  auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  const auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  const auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+  const auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
   state["Vort"].setAttributes({{"time_dimension", "t"},
                                {"units", "C m^-3"},
@@ -810,6 +857,15 @@ void Vorticity::outputVars(Options& state) {
                       {"units", "A m^-3"},
                       {"conversion", SI::qe * Nnorm * Omega_ci},
                       {"long_name", "Divergence of collisional current"},
+                      {"source", "vorticity"}});
+    }
+
+    for (const auto& kv : channels.getChildren()) {
+      set_with_attrs(state[kv.first], getNonFinal<Field3D>(kv.second),
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", "Energy transfer channel"},
                       {"source", "vorticity"}});
     }
   }
