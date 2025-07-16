@@ -11,6 +11,14 @@ TEST_F(AmjuelHRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(AmjuelDRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(AmjuelTRecTest, SourcesRegression) { sources_regression_test(); }
 
+// H isotopes CX (non-exhaustive)
+TEST_F(HHpCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(DDpCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(TTpCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(HDpCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(THpCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(DTpCXTest, SourcesRegression) { sources_regression_test(); }
+
 // He ionization
 TEST_F(AmjuelHeIzn01Test, SourcesRegression) { sources_regression_test(); }
 
