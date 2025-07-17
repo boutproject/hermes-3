@@ -27,6 +27,10 @@ void ThermalForce::transform(Options& state) {
       }
 
       const BoutReal Z = get<BoutReal>(species["charge"]);
+      if (fabs(Z) < 1e-5) {
+        continue; // Not charged
+      }
+
       // Don't need density boundary
       const Field3D nz = GET_NOBOUNDARY(Field3D, species["density"]);
 

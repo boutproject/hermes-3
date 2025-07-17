@@ -223,10 +223,13 @@ void ParallelOhmsLaw::transform(Options &state) {
       // If velocity is set, update the current
       // Note: Mark final so can't be set later
 
-
       const Field3D N = getNoBoundary<Field3D>(species["density"]);
       const BoutReal charge = get<BoutReal>(species["charge"]);
       const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
+
+      if (fabs(charge) < 1e-5) {
+        continue; // Not charged
+      }
 
       // if (!current.isAllocated()) {
         // Not yet allocated -> Set to the value
@@ -281,7 +284,6 @@ void ParallelOhmsLaw::transform(Options &state) {
         auto ip = i.yp();
         auto im = i.ym();
 
-
         const BoutReal nesheath = 0.5 * (Ne_fa[im] + Ne_fa[i]);
         const BoutReal tesheath = 0.5 * (Te_fa[im] + Te_fa[i]);  // electron temperature
         const BoutReal phi_wall = wall_potential[i];
@@ -289,7 +291,6 @@ void ParallelOhmsLaw::transform(Options &state) {
         const BoutReal phisheath = floor_potential ? floor(
             0.5 * (phi_fa[im] + phi_fa[i]), phi_wall) // Electron saturation at phi = phi_wall
 	        : 0.5 * (phi_fa[im] + phi_fa[i]);
-
 
         // Electron velocity into sheath (< 0)
         const BoutReal vesheath = (tesheath < 1e-10) ?

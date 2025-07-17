@@ -231,8 +231,42 @@ void Vorticity::transform(Options& state) {
   phi.name = "phi";
   auto& fields = state["fields"];
 
-  // Set the boundary of phi. Both 2D and 3D fields are kept, though the 3D field
+  // Set the boundary of Vort. Needed only if dissipation terms are included. 
+  Vort.applyBoundary("neumann");
+  // Vort.applyBoundary("dirichlet");
+
+  if (Vort.hasParallelSlices()) {
+    Field3D &Vort_ydown = Vort.ydown();
+    Field3D &Vort_yup = Vort.yup();
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        Vort_ydown(r.ind, mesh->ystart - 1, jz) = 2 * Vort(r.ind, mesh->ystart, jz) - Vort_yup(r.ind, mesh->ystart + 1, jz);
+      }
+    }
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        Vort_yup(r.ind, mesh->yend + 1, jz) = 2 * Vort(r.ind, mesh->yend, jz) - Vort_ydown(r.ind, mesh->yend - 1, jz);
+      }
+    }
+  } else {
+    Field3D Vort_fa = toFieldAligned(Vort);
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        Vort_fa(r.ind, mesh->ystart - 1, jz) = 2 * Vort_fa(r.ind, mesh->ystart, jz) - Vort_fa(r.ind, mesh->ystart + 1, jz);
+      }
+    }
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        Vort_fa(r.ind, mesh->yend + 1, jz) = 2 * Vort_fa(r.ind, mesh->yend, jz) - Vort_fa(r.ind, mesh->yend - 1, jz);
+      }
+    }
+    Vort = fromFieldAligned(Vort_fa);
+  }
+
+  // Set the boundary of phi. 
+  // Both 2D and 3D fields are kept, though the 3D field
   // is constant in Z. This is for efficiency, to reduce the number of conversions.
+
   // Note: For now the boundary values are all at the midpoint,
   //       and only phi is considered, not phi + Pi which is handled in Boussinesq solves
   Pi_hat = 0.0; // Contribution from ion pressure, weighted by atomic mass / charge
@@ -691,47 +725,47 @@ void Vorticity::finally(const Options& state) {
     ddt(Vort) += DivJextra;
   }
 
-  // Other sources/sinks from each species (i.e. anomalous transport)
-  for (auto& kv : allspecies.getChildren()) {
-    // Note: includes electrons (should it?)
+  // // Other sources/sinks from each species (i.e. anomalous transport)
+  // for (auto& kv : allspecies.getChildren()) {
+  //   // Note: includes electrons (should it?)
 
-    const Options& species = kv.second;
-    if (!species.isSet("charge")) {
-      continue; // Not charged
-    }
-    const BoutReal Z = get<BoutReal>(species["charge"]); // NOTE(malamast): Do we include non-charged species in the vorticity eq.?
-    if (fabs(Z) < 1e-5) {
-      continue; // Not charged
-    }
+  //   const Options& species = kv.second;
+  //   if (!species.isSet("charge")) {
+  //     continue; // Not charged
+  //   }
+  //   const BoutReal Z = get<BoutReal>(species["charge"]); // NOTE(malamast): Do we include non-charged species in the vorticity eq.?
+  //   if (fabs(Z) < 1e-5) {
+  //     continue; // Not charged
+  //   }
 
-    // sources/sinks due to anomalous transport
-    if (species.isSet("anomalous_D")) {
-      const Field3D N = get<Field3D>(species["density"]);
-      Field2D N2D = DC(N);
+  //   // sources/sinks due to anomalous transport
+  //   if (species.isSet("anomalous_D")) {
+  //     const Field3D N = get<Field3D>(species["density"]);
+  //     Field2D N2D = DC(N);
 
-      // Apply Neumann Y boundary condition, so no additional flux into boundary
-      // Note: Not setting radial (X) boundaries since those set radial fluxes
-      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-        N2D(r.ind, mesh->ystart - 1) = N2D(r.ind, mesh->ystart);
-        // T2D(r.ind, mesh->ystart - 1) = T2D(r.ind, mesh->ystart);
-        // V2D(r.ind, mesh->ystart - 1) = V2D(r.ind, mesh->ystart);
-      }
-      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-        N2D(r.ind, mesh->yend + 1) = N2D(r.ind, mesh->yend);
-        // T2D(r.ind, mesh->yend + 1) = T2D(r.ind, mesh->yend);
-        // V2D(r.ind, mesh->yend + 1) = V2D(r.ind, mesh->yend);
-      }
+  //     // Apply Neumann Y boundary condition, so no additional flux into boundary
+  //     // Note: Not setting radial (X) boundaries since those set radial fluxes
+  //     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+  //       N2D(r.ind, mesh->ystart - 1) = N2D(r.ind, mesh->ystart);
+  //       // T2D(r.ind, mesh->ystart - 1) = T2D(r.ind, mesh->ystart);
+  //       // V2D(r.ind, mesh->ystart - 1) = V2D(r.ind, mesh->ystart);
+  //     }
+  //     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+  //       N2D(r.ind, mesh->yend + 1) = N2D(r.ind, mesh->yend);
+  //       // T2D(r.ind, mesh->yend + 1) = T2D(r.ind, mesh->yend);
+  //       // V2D(r.ind, mesh->yend + 1) = V2D(r.ind, mesh->yend);
+  //     }
 
-      const BoutReal AA = get<BoutReal>(species["AA"]);
+  //     const BoutReal AA = get<BoutReal>(species["AA"]);
 
-      const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
+  //     const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
 
-      ddt(Vort) += Div_a_Grad_perp_upwind (Vort * anomalous_D / softFloor(N,1e-10), N2D) * AA / average_atomic_mass;
-                                          // NOTE(malamast): Usually they add only ions. 
-                                          // How do we generalize it to include the contribution from other species?
-                                          // Do we need to divide by charge like in Pi_hat?
-    }
-  }
+  //     ddt(Vort) += Div_a_Grad_perp_upwind (Vort * anomalous_D / softFloor(N,1e-10), N2D) * AA / average_atomic_mass;
+  //                                         // NOTE(malamast): Usually they add only ions. 
+  //                                         // How do we generalize it to include the contribution from other species?
+  //                                         // Do we need to divide by charge like in Pi_hat?
+  //   }
+  // }
 
   // Parallel current due to species parallel flow
   for (auto& kv : state["species"].getChildren()) {
