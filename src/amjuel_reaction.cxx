@@ -95,7 +95,31 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   Options& ph = state["species"][heavy_product_species[0]];
   Field3D v_ph = get<Field3D>(ph["velocity"]);
 
-  // Energy source for heavy product
+  // Kinetic energy transfer to thermal energy
+  //
+  // This is a combination of three terms in the pressure
+  // (thermal energy) equation:
+  //
+  // d/dt(3/2 p_1) = ... - F_12 v_1 + W_12 - (1/2) m R v_1^2 // From ion ('heavy
+  // reactant')
+  //
+  // d/dt(3/2 p_2) = ... - F_21 v_2 + W_21 + (1/2) m R v_2^2 // to_ion ('heavy product')
+  //
+  // where forces are F_21 = -F_12, energy transfer W_21 = -W_12,
+  // and masses are equal so m_1 = m_2 = m
+  //
+  // Here the force F_21 = m R v_1   i.e. momentum_exchange
+  //
+  // As p_1 -> 0 the sum of the p_1 terms must go to zero.
+  // Hence:
+  //
+  // W_12 = F_12 v_1 + (1/2) m R v_1^2
+  //      = -R m v_1^2 + (1/2) m R v_1^2
+  //      = - (1/2) m R v_1^2
+  //
+  // d/dt(3/2 p_2) = - m R v_1 v_2 + (1/2) m R v_1^2 + (1/2) m R v_2^2
+  //               = (1/2) m R (v_1 - v_2)^2
+  //
   add(ph["energy_source"], 0.5 * AA_rh * reaction_rate * SQ(v_rh - v_ph));
 
   // Energy source for electrons due to pop change
