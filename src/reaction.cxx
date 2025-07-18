@@ -104,7 +104,8 @@ void Reaction::transform(Options& state) {
   for (const auto& [sp_name, pop_change] : pop_changes) {
     if (pop_change != 0) {
       // Density sources
-      add(state["species"][sp_name]["density_source"], pop_change * reaction_rate);
+      add(state["species"][sp_name]["density_source"],
+          pfactors.at(sp_name) * pop_change * reaction_rate);
     }
   }
 
