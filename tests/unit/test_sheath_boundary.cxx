@@ -5,7 +5,6 @@
 #include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
 
-#include "../../include/sheath_boundary.hxx"
 #include "../../include/sheath_boundary_simple.hxx"
 #include <bout/bout_types.hxx>
 #include <bout/field3d.hxx>

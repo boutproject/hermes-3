@@ -6,35 +6,39 @@
 
 #include <bout/bout_enum_class.hxx>
 
+#include <cstdint>
+
 BOUT_ENUM_CLASS(SheathLimitMode, limit_free, exponential_free, linear_free);
 
-/// Boundary condition at the wall in Y
+namespace hermes {
+enum class SheathKind : std::uint8_t {
+  normal, // Uses a model for electron heat transmission
+  simple, // User-set value for electron heat transmission
+};
+}
+
+/// Generalised sheath boundary condition at the wall in Y
 ///
 /// This is a collective component, because it couples all charged species
 ///
-/// This implements a simple boundary condition, where each species
-/// goes to their own sound velocity at the sheath entrance.
 ///
-/// Notes:
-///   - It is recommended to use SheathBoundary rather than SheathBoundarySimple;
-///     this is here for comparison to that more complete model.
-///
-struct SheathBoundarySimple : public Component {
+struct SheathBoundaryBase : public Component {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary_simple"
   ///   - lower_y                  Boundary on lower y?
   ///   - upper_y                  Boundary on upper y?
   ///   - gamma_e                  Electron sheath heat transmission coefficient
   ///   - gamma_i                  Ion sheath heat transmission coefficient
-  ///   - sheath_ion_polytropic    Ion polytropic coefficient in Bohm sound speed. Default 1.
+  ///   - sheath_ion_polytropic    Ion polytropic coefficient in Bohm sound speed.
+  ///   Default 1.
   ///   - wall_potential           Voltage of the wall [Volts]
   ///   - secondary_electron_coef  Effective secondary electron emission coefficient
-  ///   - sin_alpha                Sine of the angle between magnetic field line and wall surface (0 to 1)
-  ///   - always_set_phi           Always set phi field? Default is to only modify if already set
-  SheathBoundarySimple(const std::string& name, Options& options,
-                       [[maybe_unused]] Solver* solver);
+  ///   - sin_alpha                Sine of the angle between magnetic field line and wall
+  ///   surface (0 to 1)
+  ///   - always_set_phi           Always set phi field? Default is to only modify if
+  ///   already set
+  SheathBoundaryBase(Options& options, BoutReal Tnorm, hermes::SheathKind kind);
 
-  ///
   /// # Inputs
   /// - species
   ///   - e
@@ -77,28 +81,32 @@ struct SheathBoundarySimple : public Component {
   /// Note that phi in the domain will not be set, so will be invalid data.
   ///
   ///
-  void transform(Options &state) override;
-  void outputVars(Options &state) override;
-private:
-  BoutReal Ge; // Secondary electron emission coefficient
-  BoutReal sin_alpha; // sin of angle between magnetic field and wall.
+  void transform(Options& state) override;
+  void outputVars(Options& state) override;
 
-  BoutReal gamma_e; ///< Electron sheath heat transmission
-  BoutReal gamma_i; ///< Ion sheath heat transmission
+private:
+  hermes::SheathKind kind; //< Kind of sheath boundary
+
+  BoutReal Ge;        //< Secondary electron emission coefficient
+  BoutReal sin_alpha; //< sin of angle between magnetic field and wall.
+
+  BoutReal gamma_e;               ///< Electron sheath heat transmission
+  BoutReal gamma_i;               ///< Ion sheath heat transmission
   BoutReal sheath_ion_polytropic; ///< Polytropic coefficient in sheat velocity
-  
+
   bool lower_y; // Boundary on lower y?
   bool upper_y; // Boundary on upper y?
 
   bool always_set_phi; ///< Set phi field?
 
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
+  bool floor_potential;   ///< Apply floor to sheath potential?
 
-  Field3D hflux_e;  // Electron heat flux through sheath
-  Field3D phi;      // Phi at sheath
+  Field3D hflux_e; // Electron heat flux through sheath
+  Field3D phi;     // Phi at sheath
 
-  bool diagnose; // Save diagnostic variables?
-  Options diagnostics;   // Options object to store diagnostic fields like a dict
+  bool diagnose;       // Save diagnostic variables?
+  Options diagnostics; // Options object to store diagnostic fields like a dict
 
   bool no_flow; ///< No flow speed, only remove energy
 
@@ -107,9 +115,76 @@ private:
   SheathLimitMode temperature_boundary_mode; ///< BC for temperature
 };
 
+/// Boundary condition at the wall in Y
+///
+/// This is a collective component, because it couples all charged species
+///
+/// This implements a simple boundary condition, where each species
+/// goes to their own sound velocity at the sheath entrance.
+///
+/// Notes:
+///   - It is recommended to use SheathBoundary rather than SheathBoundarySimple;
+///     this is here for comparison to that more complete model.
+///
+struct SheathBoundarySimple : public SheathBoundaryBase {
+  /// # Input options
+  /// - <name>  e.g. "sheath_boundary_simple"
+  ///   - lower_y                  Boundary on lower y?
+  ///   - upper_y                  Boundary on upper y?
+  ///   - gamma_e                  Electron sheath heat transmission coefficient
+  ///   - gamma_i                  Ion sheath heat transmission coefficient
+  ///   - sheath_ion_polytropic    Ion polytropic coefficient in Bohm sound speed.
+  ///   Default 1.
+  ///   - wall_potential           Voltage of the wall [Volts]
+  ///   - secondary_electron_coef  Effective secondary electron emission coefficient
+  ///   - sin_alpha                Sine of the angle between magnetic field line and wall
+  ///   surface (0 to 1)
+  ///   - always_set_phi           Always set phi field? Default is to only modify if
+  ///   already set
+  SheathBoundarySimple(const std::string& name, Options& options,
+                       [[maybe_unused]] Solver* solver)
+      : SheathBoundaryBase(options[name], options["units"]["eV"],
+                           hermes::SheathKind::simple) {}
+};
+
+/// Boundary condition at the wall in Y
+///
+/// This is a collective component, because it couples all charged species
+///
+/// These are based on
+/// "Boundary conditions for the multi-ion magnetized plasma-wall transition"
+///  by D.Tskhakaya, S.Kuhn. JNM 337-339 (2005), 405-409
+///
+/// Notes:
+///   - The approximation used here is for ions having similar
+///     gyro-orbit sizes
+///   - No boundary condition is applied to neutral species
+///   - Boundary conditions are applied to field-aligned fields
+///     using to/fromFieldAligned
+struct SheathBoundary : public SheathBoundaryBase {
+  /// # Input options
+  /// - <name>  e.g. "sheath_boundary_simple"
+  ///   - lower_y                  Boundary on lower y?
+  ///   - upper_y                  Boundary on upper y?
+  ///   - gamma_e                  Electron sheath heat transmission coefficient
+  ///   - wall_potential           Voltage of the wall [Volts]
+  ///   - floor_potential          Apply floor to sheath potential?
+  ///   - secondary_electron_coef  Effective secondary electron emission coefficient
+  ///   - sin_alpha                Sine of the angle between magnetic field line and wall
+  ///   surface (0 to 1)
+  ///   - always_set_phi           Always set phi field? Default is to only modify if
+  ///   already set
+  SheathBoundary(const std::string& name, Options& options,
+                 [[maybe_unused]] Solver* solver)
+      : SheathBoundaryBase(options[name], options["units"]["eV"],
+                           hermes::SheathKind::normal) {}
+};
+
 namespace {
-RegisterComponent<SheathBoundarySimple>
+const RegisterComponent<SheathBoundarySimple>
     registercomponentsheathboundarysimple("sheath_boundary_simple");
-}
+const RegisterComponent<SheathBoundary>
+    registercomponentsheathboundary("sheath_boundary");
+} // namespace
 
 #endif // SHEATH_BOUNDARY_SIMPLE_H

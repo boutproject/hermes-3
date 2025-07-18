@@ -1,7 +1,7 @@
 #include <algorithm>
 
-#include "../include/sheath_boundary_simple.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/sheath_boundary_simple.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
@@ -12,6 +12,15 @@
 
 #include <algorithm>
 #include <fmt/core.h>
+
+#if __cpp_lib_unreachable >= 202202L
+// C++23
+#include <utility>
+#define HERMES_UNREACHABLE std::unreachable()
+#else
+#include <stdexcept>
+#define HERMES_UNREACHABLE throw std::logic_error("unreachable")
+#endif
 
 using bout::globals::mesh;
 
@@ -92,12 +101,12 @@ void loop_boundary(const Mesh& mesh, Func func) {
 }
 
 /// Calculate potential phi assuming zero current
-Field3D calculate_phi(Options& allspecies, bool lower_y, bool upper_y, const Field3D& Ne,
-                      const Field3D& Te, BoutReal Me, BoutReal Ge,
-                      const Field3D& wall_potential,
-                      SheathLimitMode density_boundary_mode,
-                      SheathLimitMode temperature_boundary_mode,
-                      BoutReal sheath_ion_polytropic) {
+Field3D calculate_phi_simple(Options& allspecies, bool lower_y, bool upper_y,
+                             const Field3D& Ne, const Field3D& Te, BoutReal Me,
+                             BoutReal Ge, const Field3D& wall_potential,
+                             SheathLimitMode density_boundary_mode,
+                             SheathLimitMode temperature_boundary_mode,
+                             BoutReal sheath_ion_polytropic) {
 
   // Need to sum  n_i Z_i C_i over all ion species
   //
@@ -190,13 +199,139 @@ Field3D calculate_phi(Options& allspecies, bool lower_y, bool upper_y, const Fie
   return phi;
 }
 
+/// Calculate potential phi assuming zero current.
+/// Note: This is equation (22) in Tskhakaya 2005, with I = 0
+Field3D calculate_phi_Tskhakaya(Options& allspecies, bool lower_y, bool upper_y,
+                                const Field3D& Ne, const Field3D& Te, BoutReal Me,
+                                BoutReal Ge, const Field3D& wall_potential,
+                                BoutReal sin_alpha) {
+
+  // Need to sum  s_i Z_i C_i over all ion species
+  //
+  // To avoid looking up species for every grid point, this
+  // loops over the boundaries once per species.
+  Field3D ion_sum{zeroFrom(Ne)};
+
+  // Iterate through charged ion species
+  for (const auto& kv : allspecies.getChildren()) {
+    Options& species = allspecies[kv.first];
+
+    if ((kv.first == "e") or !IS_SET(species["charge"])
+        or (get<BoutReal>(species["charge"]) == 0.0)) {
+      continue; // Skip electrons and non-charged ions
+    }
+
+    const Field3D Ni =
+        toFieldAligned(floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0));
+    const Field3D Ti = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
+    const BoutReal Mi = GET_NOBOUNDARY(BoutReal, species["AA"]);
+    const BoutReal Zi = GET_NOBOUNDARY(BoutReal, species["charge"]);
+
+    const BoutReal adiabatic = IS_SET(species["adiabatic"])
+                                   ? get<BoutReal>(species["adiabatic"])
+                                   : 5. / 3; // Ratio of specific heats (ideal gas)
+
+    const auto set_ion_sum_boundary = [&](const YBoundary& bdry) {
+      const auto i = bdry.i;
+      const auto ip = bdry.ip;
+
+      // Free boundary extrapolate ion concentration
+      // Limit range to [0,1]
+      BoutReal s_i = std::clamp(0.5 * (3. * Ni[i] / Ne[i] - Ni[ip] / Ne[ip]), 0.0, 1.0);
+
+      if (!std::isfinite(s_i)) {
+        s_i = 1.0;
+      }
+      const BoutReal te = Te[i];
+      const BoutReal ti = Ti[i];
+
+      // Equation (9) in Tskhakaya 2005
+      BoutReal grad_ne = -bdry.toward * (Ne[ip] - Ne[i]);
+      BoutReal grad_ni = -bdry.toward * (Ni[ip] - Ni[i]);
+
+      // Note: Needed to get past initial conditions, perhaps transients
+      // but this shouldn't happen in steady state
+      // Note: Factor of 2 to be consistent with later calculation
+      if (std::abs(grad_ni) < 2e-3) {
+        grad_ni = grad_ne = 2e-3; // Remove kinetic correction term
+      }
+
+      // Limit for e.g. Ni zero gradient
+      const BoutReal C_i_sq =
+          std::clamp((adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0., 100.);
+
+      // Note: Vzi = C_i * sin(α)
+      ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+    };
+
+    if (lower_y) {
+      loop_boundary<YBoundarySide::lower>(*mesh, set_ion_sum_boundary);
+    }
+
+    if (upper_y) {
+      loop_boundary<YBoundarySide::upper>(*mesh, set_ion_sum_boundary);
+    }
+  }
+
+  Field3D phi = emptyFrom(Ne); // So phi is field aligned
+
+  const auto set_phi_boundary = [&](const YBoundary& bdry) {
+    const auto i = bdry.i;
+    if (Te[i] <= 0.0) {
+      phi[i] = 0.0;
+    } else {
+      phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+    }
+
+    phi[i] += wall_potential[i];        // Add bias potential
+    phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
+  };
+
+  // ion_sum now contains  sum  s_i Z_i C_i over all ion species
+  // at mesh->ystart and mesh->yend indices
+  if (lower_y) {
+    loop_boundary<YBoundarySide::lower>(*phi.getMesh(), set_phi_boundary);
+  }
+
+  if (upper_y) {
+    loop_boundary<YBoundarySide::upper>(*phi.getMesh(), set_phi_boundary);
+  }
+  return phi;
+}
+
+/// If phi is set, use free boundary condition;
+/// If phi not set, calculate assuming zero current, according to sheath kind
+Field3D init_phi(Options& state, hermes::SheathKind kind, Options& allspecies,
+                 bool lower_y, bool upper_y, const Field3D& Ne, const Field3D& Te,
+                 BoutReal Me, BoutReal Ge, const Field3D& wall_potential,
+                 BoutReal sin_alpha, SheathLimitMode density_boundary_mode,
+                 SheathLimitMode temperature_boundary_mode,
+                 BoutReal sheath_ion_polytropic) {
+
+  if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
+    return toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
+  }
+
+  switch (kind) {
+  case hermes::SheathKind::normal:
+    return calculate_phi_Tskhakaya(allspecies, lower_y, upper_y, Ne, Te, Me, Ge,
+                                   wall_potential, sin_alpha);
+  case hermes::SheathKind::simple:
+    return calculate_phi_simple(allspecies, lower_y, upper_y, Ne, Te, Me, Ge,
+                                wall_potential, density_boundary_mode,
+                                temperature_boundary_mode, sheath_ion_polytropic);
+  };
+
+  // Shouldn't reach here!
+  HERMES_UNREACHABLE;
+}
+
 } // namespace
 
-SheathBoundarySimple::SheathBoundarySimple(const std::string& name, Options& alloptions,
-                                           [[maybe_unused]] Solver* solver) {
+SheathBoundaryBase::SheathBoundaryBase(Options& options, BoutReal Tnorm,
+                                       hermes::SheathKind kind)
+    : kind(kind) {
   AUTO_TRACE();
-
-  Options& options = alloptions[name];
 
   Ge = options["secondary_electron_coef"]
            .doc("Effective secondary electron emission coefficient")
@@ -234,9 +369,6 @@ SheathBoundarySimple::SheathBoundarySimple(const std::string& name, Options& all
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
 
-  const Options& units = alloptions["units"];
-  const BoutReal Tnorm = units["eV"];
-
   // Read wall voltage, convert to normalised units
   wall_potential = options["wall_potential"]
                        .doc("Voltage of the wall [Volts]")
@@ -244,6 +376,14 @@ SheathBoundarySimple::SheathBoundarySimple(const std::string& name, Options& all
                    / Tnorm;
   // Convert to field aligned coordinates
   wall_potential = toFieldAligned(wall_potential);
+  // Note: wall potential at the last cell before the boundary is used,
+  // not the value at the boundary half-way between cells. This is due
+  // to how twist-shift boundary conditions and non-aligned inputs are
+  // treated; using the cell boundary gives incorrect results.
+
+  floor_potential = options["floor_potential"]
+                        .doc("Apply a floor to wall potential when calculating Ve?")
+                        .withDefault<bool>(true);
 
   no_flow = options["no_flow"]
                 .doc("Set zero particle flow, keeping energy flow")
@@ -267,7 +407,7 @@ SheathBoundarySimple::SheathBoundarySimple(const std::string& name, Options& all
                  .withDefault<bool>(false);
 }
 
-void SheathBoundarySimple::transform(Options& state) {
+void SheathBoundaryBase::transform(Options& state) {
   AUTO_TRACE();
 
   Options& allspecies = state["species"];
@@ -280,6 +420,12 @@ void SheathBoundarySimple::transform(Options& state) {
   Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
                    ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
                    : Te * Ne;
+
+  // Ratio of specific heats
+  const BoutReal electron_adiabatic =
+      (kind == hermes::SheathKind::normal and IS_SET(electrons["adiabatic"]))
+          ? get<BoutReal>(electrons["adiabatic"])
+          : 5. / 3;
 
   // Mass, normalised to proton mass
   const BoutReal Me =
@@ -298,13 +444,9 @@ void SheathBoundarySimple::transform(Options& state) {
 
   //////////////////////////////////////////////////////////////////
   // Electrostatic potential
-  // If phi is set, use free boundary condition
-  // If phi not set, calculate assuming zero current
-  Field3D phi = IS_SET_NOBOUNDARY(state["fields"]["phi"])
-                    ? toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]))
-                    : calculate_phi(allspecies, lower_y, upper_y, Ne, Te, Me, Ge,
-                                    wall_potential, density_boundary_mode,
-                                    temperature_boundary_mode, sheath_ion_polytropic);
+  Field3D phi = init_phi(state, kind, allspecies, lower_y, upper_y, Ne, Te, Me, Ge,
+                         wall_potential, sin_alpha, density_boundary_mode,
+                         temperature_boundary_mode, sheath_ion_polytropic);
 
   // Field to capture total sheath heat flux for diagnostics
   Field3D electron_sheath_power_ylow = zeroFrom(Ne);
@@ -373,8 +515,10 @@ void SheathBoundarySimple::transform(Options& state) {
     const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
     const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
     const BoutReal phi_wall = wall_potential[i];
+
     // Electron saturation at phi = phi_wall
-    const BoutReal phisheath = floor(0.5 * (phi[im] + phi[i]), phi_wall);
+    const BoutReal _potential = 0.5 * (phi[im] + phi[i]);
+    const BoutReal phisheath = floor_potential ? floor(_potential, phi_wall) : _potential;
 
     // Electron velocity into sheath (< 0)
     // Equal to Bohm for single ions and no currents
@@ -383,12 +527,28 @@ void SheathBoundarySimple::transform(Options& state) {
 
     const BoutReal vesheath_flow = no_flow ? 0.0 : vesheath;
 
+    // Electron sheath heat transmission: either user-set or from model
+    const BoutReal _gamma_e = [&]() {
+      switch (kind) {
+      case hermes::SheathKind::simple:
+        return gamma_e;
+      case hermes::SheathKind::normal:
+        return floor((2 / (1. - Ge)) + ((phisheath - phi_wall) / floor(tesheath, 1e-5)),
+                     0.0);
+      }
+      HERMES_UNREACHABLE;
+    }();
+
+    const BoutReal adiabatic = -1 - (1 / (electron_adiabatic - 1));
+
     // Heat flux. Note: Here this is negative because vesheath < 0
-    const BoutReal q =
-        (gamma_e * tesheath * nesheath * vesheath)
-        // Take into account the flow of energy due to fluid flow
-        // This is additional energy flux through the sheath
-        - ((2.5 * tesheath + 0.5 * Me * SQ(vesheath_flow)) * nesheath * vesheath_flow);
+    const BoutReal _q = (_gamma_e * tesheath * nesheath * vesheath)
+                        // Take into account the flow of energy due to fluid flow
+                        // This is additional energy flux through the sheath
+                        + ((adiabatic * tesheath - 0.5 * Me * SQ(vesheath_flow))
+                           * nesheath * vesheath_flow);
+
+    const BoutReal q = bdry.is_lower() ? std::min(_q, 0.0) : std::max(_q, 0.0);
 
     Ve[im] = 2 * vesheath_flow - Ve[i];
     NVe[im] = 2 * Me * nesheath * vesheath_flow - NVe[i];
@@ -403,8 +563,8 @@ void SheathBoundarySimple::transform(Options& state) {
     electron_energy_source[i] -= bdry.toward * power;
 
     // Total heat flux for diagnostic purposes
-    const BoutReal q_no_flow = gamma_e * tesheath * nesheath * vesheath_flow; // [Wm^-2]
-    hflux_e[i] -= bdry.toward * q_no_flow * da_dv;                            // [Wm^-3]
+    const BoutReal q_no_flow = _gamma_e * tesheath * nesheath * vesheath_flow; // [Wm^-2]
+    hflux_e[i] -= bdry.toward * q_no_flow * da_dv;                             // [Wm^-3]
     // lower Y: sheath boundary power placed in final domain cell
     // upper Y: sheath boundary power placed in ylow side of inner guard cell
     const auto i_power = bdry.is_lower() ? i : i.yp();
@@ -469,6 +629,9 @@ void SheathBoundarySimple::transform(Options& state) {
 
     // Characteristics of this species
     const BoutReal Mi = get<BoutReal>(species["AA"]);
+    // Ratio of specific heats (ideal gas)
+    const BoutReal adiabatic =
+        IS_SET(species["adiabatic"]) ? get<BoutReal>(species["adiabatic"]) : 5. / 3;
 
     // Density and temperature boundary conditions will be imposed (free)
     Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
@@ -507,8 +670,6 @@ void SheathBoundarySimple::transform(Options& state) {
 
       // Free gradient of log electron density and temperature
       // This ensures that the guard cell values remain positive
-      // exp( 2*log(N[i]) - log(N[ip]) )
-
       Ni[im] = limitFree(Ni[ip], Ni[i], density_boundary_mode);
       Ti[im] = limitFree(Ti[ip], Ti[i], temperature_boundary_mode);
       Pi[im] = limitFree(Pi[ip], Pi[i], pressure_boundary_mode);
@@ -521,20 +682,61 @@ void SheathBoundarySimple::transform(Options& state) {
       // ion temperature
       const BoutReal tisheath = floor(0.5 * (Ti[im] + Ti[i]), 1e-5);
 
+      // Ion sheath heat transmission coefficient
+      // Equation (22) in Tskhakaya 2005
+      // with
+      //
+      // 1 / (1 + ∂_{ln n_e} ln s_i = s_i ∂_z n_e / ∂_z n_i
+      // (from comparing C_i^2 in eq. 9 with eq. 20
+      // Concentration
+      const BoutReal s_i = std::clamp(nisheath / floor(nesheath, 1e-10), 0., 1.);
+      BoutReal grad_ne = Ne[i] - nesheath;
+      BoutReal grad_ni = Ni[i] - nisheath;
+
+      if (std::abs(grad_ni) < 1.e-3) {
+        grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
+      }
+
       // Ion speed into sheath
-      BoutReal C_i = sqrt((sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi);
+      const BoutReal C_i_sq = [&]() {
+        switch (kind) {
+        case hermes::SheathKind::normal:
+          return ((adiabatic * tisheath) + (Zi * s_i * tesheath) * (grad_ne / grad_ni))
+                 / Mi;
+        case hermes::SheathKind::simple:
+          return ((sheath_ion_polytropic * tisheath) + (Zi * tesheath)) / Mi;
+        }
+        // Shouldn't reach here!
+        HERMES_UNREACHABLE;
+      }();
 
       // Negative -> into sheath
-      const BoutReal visheath =
-          bdry.is_lower() ? std::min(Vi[i], -C_i) : std::max(Vi[i], C_i);
+      const BoutReal visheath = bdry.is_lower() ? std::min(Vi[i], -sqrt(C_i_sq))
+                                                : std::max(Vi[i], sqrt(C_i_sq));
       const BoutReal visheath_flow = no_flow ? 0.0 : visheath;
 
       // Note: Here this is negative because visheath < 0
-      const BoutReal q =
-          (gamma_i * tisheath * nisheath * visheath)
-          // Take into account the flow of energy due to fluid flow
-          // This is additional energy flux through the sheath
-          - ((2.5 * tisheath + 0.5 * Mi * SQ(visheath_flow)) * nisheath * visheath_flow);
+      const BoutReal q = [&]() {
+        switch (kind) {
+        case hermes::SheathKind::normal: {
+          // Ion sheath heat transmission coefficient
+          // TODO(peter): Should this 2.5 be `-1 - 1/(adiabatic - 1)`?
+          const BoutReal _gamma_i = 2.5 + (0.5 * Mi * C_i_sq / tisheath);
+
+          const auto _q =
+              ((_gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * Mi * C_i_sq)
+              * nisheath * visheath;
+          return bdry.is_lower() ? std::min(_q, 0.0) : std::max(_q, 0.0);
+        }
+        case hermes::SheathKind::simple:
+          return (gamma_i * tisheath * nisheath * visheath)
+                 // Take into account the flow of energy due to fluid flow
+                 // This is additional energy flux through the sheath
+                 - ((2.5 * tisheath + 0.5 * Mi * SQ(visheath_flow)) * nisheath
+                    * visheath_flow);
+        };
+        HERMES_UNREACHABLE;
+      }();
 
       // Set boundary conditions on flows
       Vi[im] = 2. * visheath_flow - Vi[i];
@@ -600,7 +802,7 @@ void SheathBoundarySimple::transform(Options& state) {
   }
 }
 
-void SheathBoundarySimple::outputVars(Options& state) {
+void SheathBoundaryBase::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);

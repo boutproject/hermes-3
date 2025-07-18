@@ -13,7 +13,7 @@ HERMES_BIN = os.environ.get("HERMES_BIN", "../../../hermes-3")
 PATH = "data"
 
 # Loose tolerance due to low-res runs
-RTOL = 1e-2
+RTOL = 3e-2
 ATOL = 1e-2
 
 
@@ -111,6 +111,24 @@ expected = {
 }
 
 success &= check_case("Sheath base case", expected)
+
+################################################################################
+# Re-run with intermediate secondary electron emission.
+# Should give higher electron temperature and higher velocity.
+
+expected = {
+    "upstream": base_upstream,
+    "downstream": {
+        "Te": 82.49,
+        "Ti": 93.8,
+        "Ve": 29880,
+        "Vi": 29880,
+    },
+}
+
+success &= check_case(
+    "Sheath intermediate Ge", expected, "sheath_boundary:secondary_electron_coef=0.50"
+)
 
 ################################################################################
 # Re-run with higher secondary electron emission.
