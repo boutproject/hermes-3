@@ -5,6 +5,14 @@
 #include "bout/traits.hxx"
 #include "bout/bout_enum_class.hxx"
 
+ inline BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
+    if (value < min)
+      return min;
+    if (value > max)
+      return max;
+    return value;
+  }
+
 inline BoutReal floor(BoutReal value, BoutReal min) {
   if (value < min)
     return min;
