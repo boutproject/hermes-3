@@ -99,6 +99,15 @@ base_upstream = {
     "Ei_sheath": 0.0,
     "Si_sheath": 0.0,
 }
+base_downstream = {
+    "Te": 92.2,
+    "Ti": 93.8,
+    "Ve": 24090,
+    "Vi": 24090,
+    "Ee_sheath": -4.52e8,
+    "Ei_sheath": -4.55e8,
+    "Si_sheath": -8.957e24,
+}
 
 success = True
 
@@ -107,15 +116,7 @@ success = True
 
 expected = {
     "upstream": base_upstream,
-    "downstream": {
-        "Te": 92.2,
-        "Ti": 93.8,
-        "Ve": 24090,
-        "Vi": 24090,
-        "Ee_sheath": -4.52e8,
-        "Ei_sheath": -4.55e8,
-        "Si_sheath": -8.957e24,
-    },
+    "downstream": base_downstream,
 }
 
 success &= check_case("Sheath base case", expected)
@@ -186,33 +187,17 @@ success &= check_case(
 ################################################################################
 # Re-run with flipped direction. Should be mirror of base case
 
+flipped_upstream = base_downstream
+flipped_upstream["Ve"] = -flipped_upstream["Ve"]
+flipped_upstream["Vi"] = -flipped_upstream["Vi"]
+flipped_upstream["Si_sheath"] = -flipped_upstream["Si_sheath"]
+
 expected = {
-    "upstream": {
-        "Te": 92.2,
-        "Ti": 93.8,
-        "Ve": -24090,
-        "Vi": -24090,
-        "Ee_sheath": -4.52e8,
-        "Ei_sheath": -4.55e8,
-        "Si_sheath": 8.957e24,
-    },
-    "downstream": {
-        "Te": 100,
-        "Ti": 100,
-        # Not entirely symmetrical!
-        "Ve": 3837,
-        "Vi": 3837,
-        "Ee_sheath": 0.0,
-        "Ei_sheath": 0.0,
-        "Si_sheath": 0.0,
-    },
+    "upstream": flipped_upstream,
+    "downstream": base_upstream,
 }
 
-success &= check_case(
-    "Mirrored BCs",
-    expected,
-    "sheath_boundary_simple:lower_y=true sheath_boundary_simple:upper_y=false",
-)
+success &= check_case("Mirrored BCs", expected, "lower_sheath=true")
 
 ################################################################################
 

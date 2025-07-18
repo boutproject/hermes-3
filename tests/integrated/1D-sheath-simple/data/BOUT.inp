@@ -10,6 +10,10 @@ timestep = 10
 
 MXG = 0  # No guard cells in X
 
+# Ensures sheath and noflow boundaries are at opposite ends
+lower_sheath = false
+upper_sheath = !lower_sheath
+
 [mesh]
 nx = 1
 ny = 8   # Resolution along field-line
@@ -42,8 +46,8 @@ mxstep = 10000
 
 [sheath_boundary_simple]
 
-lower_y = false
-upper_y = true
+lower_y = lower_sheath
+upper_y = upper_sheath
 
 diagnose = true
 
@@ -52,8 +56,8 @@ diagnose = true
 [i]  # Ions
 type = evolve_density, evolve_pressure, evolve_momentum, noflow_boundary
 
-noflow_lower_y = true
-noflow_upper_y = false  # Sheath boundary at upper y
+noflow_lower_y = !lower_sheath
+noflow_upper_y = !upper_sheath
 
 charge = 1
 AA = 1.0
@@ -85,7 +89,8 @@ function = 0
 [e] # Electrons
 type = quasineutral, evolve_pressure, zero_current, noflow_boundary
 
-noflow_upper_y = false
+noflow_lower_y = !lower_sheath
+noflow_upper_y = !upper_sheath
 
 charge = -1
 AA = 1/1836
