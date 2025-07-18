@@ -9,21 +9,21 @@
  * @return BoutReal the electron energy loss rate
  */
 BoutReal AmjuelReaction::eval_electron_energy_loss_rate(BoutReal T, BoutReal n) {
-  return eval_rate(T, n, get_rad_coeffs());
+  return eval_amjuel_fit(T, n, get_rad_coeffs());
 }
 
 /**
- * @brief Evaluate an Amjuel rate, given a table of polynomial fit coefficients
+ * @brief Evaluate an Amjuel double polynomial fit in n and T, given a table of
+ * coefficients (see page 20 of amjuel.pdf).
  *
- *
- * @param T temperature
- * @param n number density
- * @param coeff_table a table of polynomial fit coefficients
- * @return BoutReal the rate
+ * @param T temperature in eV
+ * @param n number density in m^-3
+ * @param coeff_table a table of polynomial fit coefficients (coefs[T][n])
+ * @return BoutReal the fit in SI, units m^3/s, or eV m^3/s for energy loss
  */
 BoutReal
-AmjuelReaction::eval_rate(BoutReal T, BoutReal n,
-                          const std::vector<std::vector<BoutReal>>& coeff_table) {
+AmjuelReaction::eval_amjuel_fit(BoutReal T, BoutReal n,
+                                const std::vector<std::vector<BoutReal>>& coeff_table) {
   // Enforce range of validity
   n = clip(n, 1e14, 1e22); // 1e8 - 1e16 cm^-3
   T = clip(T, 0.1, 1e4);
@@ -52,7 +52,7 @@ AmjuelReaction::eval_rate(BoutReal T, BoutReal n,
  * @return BoutReal the reaction rate
  */
 BoutReal AmjuelReaction::eval_reaction_rate(BoutReal T, BoutReal n) {
-  return eval_rate(T, n, get_rate_coeffs());
+  return eval_amjuel_fit(T, n, get_rate_coeffs());
 }
 
 const BoutReal AmjuelReaction::get_electron_heating() const {

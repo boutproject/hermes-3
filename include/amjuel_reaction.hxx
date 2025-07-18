@@ -76,9 +76,9 @@ protected:
   Field3D R; ///< Radiation loss
 
   /// Functions to calculate Amjuel rates from underlying tables
+  BoutReal eval_amjuel_fit(BoutReal T, BoutReal n,
+                           const std::vector<std::vector<BoutReal>>& coeff_table);
   virtual BoutReal eval_electron_energy_loss_rate(BoutReal T, BoutReal n) override final;
-  BoutReal eval_rate(BoutReal T, BoutReal n,
-                     const std::vector<std::vector<BoutReal>>& coeff_table);
   virtual BoutReal eval_reaction_rate(BoutReal T, BoutReal n) override final;
 
   // Getter functions so that data object can be private
