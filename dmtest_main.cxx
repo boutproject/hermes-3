@@ -1,3 +1,5 @@
+// #include "bout/mpi_wrapper.hxx"
+#include "bout/petsclib.hxx"
 #include <petscdmplex.h>
 #include <petscsys.h>
 #include <petscviewer.h>
