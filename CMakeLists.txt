@@ -274,6 +274,16 @@ if(HERMES_TESTS)
   endif()
 endif()
 
+# WIP script for testing ideas for making a DMPlex
+add_executable(dmplex_test dmtest_main.cxx)
+target_link_libraries(dmplex_test PRIVATE bout++::bout++ hermes-3-lib)
+target_include_directories(dmplex_test PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  )
+set_target_properties(dmplex_test PROPERTIES BUILD_RPATH "$ORIGIN")
+
 # Compile-time options
 
 set(SLOPE_LIMITERS MinMod MC Upwind Superbee)
