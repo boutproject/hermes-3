@@ -99,6 +99,10 @@ void Reaction::transform(Options& state) {
       RateHelper(state, reactant_names, calc_rate, n_e.getRegion("RGN_NOBNDRY"));
   Field3D reaction_rate = rate_helper.calc_rate();
 
+  // Subclasses perform any additional transform tasks
+  transform_additional(state, reaction_rate, momentum_exchange, energy_exchange,
+                       energy_loss);
+
   // Use the stoichiometric values to set density sources for all species
   auto pop_changes = parser->get_stoich();
   for (const auto& [sp_name, pop_change] : pop_changes) {
@@ -172,10 +176,6 @@ void Reaction::transform(Options& state) {
     add(state["species"][sp_name]["momentum_source"], momentum_source);
     add(state["species"][sp_name]["energy_source"], energy_source);
   }
-
-  // Subclasses perform any additional transform tasks
-  transform_additional(state, reaction_rate, momentum_exchange, energy_exchange,
-                       energy_loss);
 
   if (this->diagnose) {
     set_diagnostic_fields(reaction_rate, momentum_exchange, energy_exchange, energy_loss);
