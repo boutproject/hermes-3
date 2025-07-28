@@ -82,7 +82,7 @@ documentation](https://bout-dev.readthedocs.io/en/latest/user_docs/installing.ht
 for examples of using `cmake` arguments, or edit the compile options
 interactively before building:
 
-    $ ccmake . -B build
+    $ cmake . -B build
 
 If you have already installed BOUT++ and want to use that rather than
 configure and build BOUT++ again, set `HERMES_BUILD_BOUT` to `OFF` and pass
