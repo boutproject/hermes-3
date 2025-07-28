@@ -363,6 +363,9 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
       cmd = "../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt"
       # Launch using MPI
       s, out = launch(cmd, nproc=1, mthread=1, pipe=True)
+      print("====== Return code", s)
+      print(out)
+      print("---------------------")
 
    # now analyse the results of the test
    # this slice avoids including guard cells in the test
