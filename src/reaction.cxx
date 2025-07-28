@@ -117,6 +117,8 @@ void Reaction::transform(Options& state) {
 
   // Momentum and energy sources
   calc_weightsums(state);
+  momentum_exchange = 0.0;
+  energy_exchange = 0.0;
   for (const auto& [sp_name, pop_change_s] : pop_changes) {
     // No momentum, energy source for electrons due to pop change
     if (sp_name.compare("e") == 0) {
@@ -128,10 +130,12 @@ void Reaction::transform(Options& state) {
     // Species energy
     auto Ws = (3. / 2) * get<Field3D>(state["species"][sp_name]["temperature"]);
 
+    Field3D momentum_source = 0.0;
+    Field3D energy_source = 0.0;
     if (pop_change_s < 0) {
       // For species with net loss, sources follows directly from pop change
-      momentum_exchange = pop_change_s * this->pfactors.at(sp_name) * reaction_rate * Gs;
-      energy_exchange = pop_change_s * this->pfactors.at(sp_name) * reaction_rate * Ws;
+      momentum_source = pop_change_s * reaction_rate * Gs;
+      energy_source = pop_change_s * reaction_rate * Ws;
     } else if (pop_change_s > 0) {
       // Species with net gain receive a proportion of the momentum and energy lost by
       // consumed reactants
@@ -149,22 +153,24 @@ void Reaction::transform(Options& state) {
         if (pop_change_r < 0) {
           auto Gr = get<BoutReal>(state["species"][rsp_name]["AA"])
                     * get<Field3D>(state["species"][rsp_name]["velocity"]);
-          momentum_exchange +=
+          momentum_source +=
               -pop_change_r * pfactors.at(rsp_name) * momentum_split * reaction_rate * Gr;
 
           auto Wr = (3. / 2) * get<Field3D>(state["species"][rsp_name]["temperature"]);
-          energy_exchange +=
+          energy_source +=
               -pop_change_r * pfactors.at(rsp_name) * energy_split * reaction_rate * Wr;
         }
       }
+      momentum_exchange += momentum_source;
+      energy_exchange += energy_source;
     } else {
       // No pop change
       continue;
     }
 
     // Update sources
-    add(state["species"][sp_name]["momentum_source"], momentum_exchange);
-    add(state["species"][sp_name]["energy_source"], energy_exchange);
+    add(state["species"][sp_name]["momentum_source"], momentum_source);
+    add(state["species"][sp_name]["energy_source"], energy_source);
   }
 
   // Subclasses perform any additional transform tasks
