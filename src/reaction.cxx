@@ -124,18 +124,15 @@ void Reaction::transform(Options& state) {
     if (sp_name.compare("e") == 0) {
       continue;
     }
-    // Species momentum
-    auto Gs = get<BoutReal>(state["species"][sp_name]["AA"])
-              * get<Field3D>(state["species"][sp_name]["velocity"]);
-    // Species energy
-    auto Ws = (3. / 2) * get<Field3D>(state["species"][sp_name]["temperature"]);
-
     Field3D momentum_source = 0.0;
     Field3D energy_source = 0.0;
     if (pop_change_s < 0) {
       // For species with net loss, sources follows directly from pop change
-      momentum_source = pop_change_s * reaction_rate * Gs;
-      energy_source = pop_change_s * reaction_rate * Ws;
+      momentum_source = pop_change_s * reaction_rate
+                        * get<BoutReal>(state["species"][sp_name]["AA"])
+                        * get<Field3D>(state["species"][sp_name]["velocity"]);
+      energy_source = pop_change_s * reaction_rate * (3. / 2)
+                      * get<Field3D>(state["species"][sp_name]["temperature"]);
     } else if (pop_change_s > 0) {
       // Species with net gain receive a proportion of the momentum and energy lost by
       // consumed reactants
@@ -148,17 +145,20 @@ void Reaction::transform(Options& state) {
       BoutReal energy_split =
           pop_change_s * this->pfactors.at(sp_name) / this->energy_weightsum;
       for (auto& rsp_name : heavy_reactant_species) {
-        // All consumed (net loss) reactants contribute momentum/energy
-        const int pop_change_r = pop_changes[rsp_name];
+        // All consumed (net loss) reactants contribute
+        int pop_change_r = pop_changes.at(rsp_name);
         if (pop_change_r < 0) {
-          auto Gr = get<BoutReal>(state["species"][rsp_name]["AA"])
-                    * get<Field3D>(state["species"][rsp_name]["velocity"]);
-          momentum_source +=
-              -pop_change_r * pfactors.at(rsp_name) * momentum_split * reaction_rate * Gr;
-
-          auto Wr = (3. / 2) * get<Field3D>(state["species"][rsp_name]["temperature"]);
-          energy_source +=
-              -pop_change_r * pfactors.at(rsp_name) * energy_split * reaction_rate * Wr;
+          BoutReal momentum_split = this->pfactors.at(sp_name)
+                                    * get<BoutReal>(state["species"][sp_name]["AA"])
+                                    / this->momentum_weightsum;
+          momentum_source += -pop_change_r * pfactors.at(rsp_name) * momentum_split
+                             * reaction_rate
+                             * get<BoutReal>(state["species"][rsp_name]["AA"])
+                             * get<Field3D>(state["species"][rsp_name]["velocity"]);
+          BoutReal energy_split = this->pfactors.at(sp_name) / this->energy_weightsum;
+          energy_source += -pop_change_r * pfactors.at(rsp_name) * energy_split
+                           * reaction_rate * (3. / 2)
+                           * get<Field3D>(state["species"][rsp_name]["temperature"]);
         }
       }
       momentum_exchange += momentum_source;
