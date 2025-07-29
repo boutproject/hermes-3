@@ -81,65 +81,11 @@ public:
  */
 template <char Isotope1, char Isotope2>
 class AmjuelCXTest
-    : public ReactionTest<HydrogenChargeExchangeIsotope<Isotope1, Isotope2>> {
-protected:
-  virtual Options generate_state() override final {
-    std::string neutral_sp_in{Isotope1};
-    std::string ion_sp_in{Isotope2, '+'};
-    std::string neutral_sp_out{Isotope2};
-    std::string ion_sp_out{Isotope1, '+'};
-
-    // N.B. No attempt to set the correct masses for heavy species; always set to 1
-    // Assume neutral
-    std::string comp_name = "test" + this->lbl;
-    Options state{{comp_name, {{"type", this->reaction_str}}},
-                  {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
-                  {"species",
-                   {{neutral_sp_in, {{"AA", 1.0}, {"charge", 0.0}}},
-                    {ion_sp_in, {{"AA", 1.0}, {"charge", 1.0}}}}}};
-
-    // Density and Temperature ranges (log vals)
-    const BoutReal logn_min = std::log(1e14), logn_max = std::log(1e22);
-    const BoutReal logT_min = std::log(0.1), logT_max = std::log(2e4);
-    const BoutReal logv_min = std::log(1), logv_max = std::log(100);
-
-    // Linear functions for various fields that are inputs to the reaction transforms
-    state["species"][neutral_sp_in]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logn_min, logn_max, linfunc_axis::x), &state, mesh);
-    state["species"][ion_sp_in]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logn_min, logn_max, linfunc_axis::y), &state, mesh);
-    state["species"][neutral_sp_in]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logT_min, logT_max, linfunc_axis::z), &state, mesh);
-    state["species"][ion_sp_in]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logT_min, logT_max, linfunc_axis::x), &state, mesh);
-    state["species"][neutral_sp_in]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::y), &state, mesh);
-    state["species"][ion_sp_in]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::z), &state, mesh);
-
-    // For non-symmetric CX, add charges, masses, velocities for product species
-    if (neutral_sp_out.compare(neutral_sp_in) != 0) {
-      state["species"][neutral_sp_out]["AA"] = 1.0;
-      state["species"][neutral_sp_out]["charge"] = 0.0;
-      state["species"][neutral_sp_out]["velocity"] = FieldFactory::get()->create3D(
-          this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::y), &state, mesh);
-      ;
-    }
-    if (ion_sp_out.compare(ion_sp_in) != 0) {
-      state["species"][ion_sp_out]["AA"] = 1.0;
-      state["species"][ion_sp_out]["charge"] = 1.0;
-      state["species"][ion_sp_out]["velocity"] = FieldFactory::get()->create3D(
-          this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::z), &state, mesh);
-      ;
-    }
-
-    return state;
-  }
-
+    : public CXReactionTest<HydrogenChargeExchangeIsotope<Isotope1, Isotope2>> {
 public:
   AmjuelCXTest(std::string lbl, std::string reaction_str)
-      : ReactionTest<HydrogenChargeExchangeIsotope<Isotope1, Isotope2>>(lbl,
-                                                                        reaction_str) {}
+      : CXReactionTest<HydrogenChargeExchangeIsotope<Isotope1, Isotope2>>(
+          lbl, reaction_str, {Isotope1}, {Isotope2, '+'}, {Isotope2}, {Isotope1, '+'}) {}
 };
 
 class HHpCXTest : public AmjuelCXTest<'h', 'h'> {
