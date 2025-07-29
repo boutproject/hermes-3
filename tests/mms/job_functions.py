@@ -360,12 +360,13 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
       # run job on this input
       print("mpirun -n 1 ../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt")
       # Command to run
-      cmd = "../.././hermes-3 -d "+workdir#+" > "+workdir+"/output.txt"
+      cmd = "../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt"
       # Launch using MPI
       s, out = launch(cmd, nproc=1, mthread=1, pipe=True)
-      print("====== Return code", s)
-      print(out)
-      print("---------------------")
+      if s != 0:
+          print(f"Command exited with status {s}. STDOUT printed below:")
+          with open(workdir + "/output.txt") as f:
+              print(f.read())
 
    # now analyse the results of the test
    # this slice avoids including guard cells in the test
