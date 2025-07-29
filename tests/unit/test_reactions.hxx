@@ -92,18 +92,59 @@ protected:
   }
 
   /**
+   * @brief Compare the values of child nodes in a section of reference data with those in
+   * a section of test data. If child nodes are sections themselves, recurse. Node names
+   * are assumed to be the same in the two datasets.
+   *
+   * @param ref_section a section of reference data
+   * @param test_section a section of test data
+   *
+   * @param compare_all_values See \ref sources_regression_test(bool, const int)
+   * "sources_regression_test"
+   * @param ignore_last_n_sigfigs See \ref sources_regression_test(bool, const int)
+   * "sources_regression_test" "sources_regression_test"
+   */
+  void compare_child_values(const Options& ref_section, const Options& test_section,
+                            const bool compare_all_values,
+                            const int ignore_last_n_sigfigs) {
+    for (auto ref_node : ref_section.getChildren()) {
+      std::string ref_node_name = ref_node.first;
+      // Using ref_node.second causes the 'as<Field3D>' cast to fail in some case!?
+      const Options& ref_node_data = ref_section[ref_node_name];
+      const Options& test_node_data = test_section[ref_node_name];
+
+      if (ref_node_data.isValue()) {
+        // If node is a value, compare ref, test
+        if (compare_all_values || IsSubString(ref_node_name, "_source")) {
+          Field3D test_field = test_node_data.as<Field3D>();
+          Field3D ref_field = ref_node_data.as<Field3D>();
+          ASSERT_TRUE(IsFieldEqualSigFigs(test_field, ref_field, "RGN_NOBNDRY",
+                                          ignore_last_n_sigfigs))
+              << "'" << this->lbl << "' [" << ref_node_data.str() << "]"
+              << " differs from reference data (despite ignoring last "
+              << ignore_last_n_sigfigs << "significant digits!)";
+        }
+      } else {
+        // else recurse
+        compare_child_values(ref_node_data, test_node_data, compare_all_values,
+                             ignore_last_n_sigfigs);
+      }
+    }
+  }
+
+  /**
    * @brief Tests whether calling transform() on a reaction component reproduces the
    * source fields stored in committed reference data files. Subclasses must override
    * generate_state() in order to setup the input to the transform.
    *
-   * @param check_input_fields Whether to check that the input fields to the transform (in
-   * addition to the output source fields) match the reference data.
+   * @param compare_all_values If true, compare all fields in the reference/test states,
+   * else just compare the *_source fields.
    *
    * @param ignore_last_n_sigfigs The reference and test fields must be equal at each
    * point, but the last \p ignore_last_n_sigfigs significant digits are ignored in the
    * comparison.
    */
-  void sources_regression_test(bool check_input_fields = true,
+  void sources_regression_test(bool compare_all_values = true,
                                const int ignore_last_n_sigfigs = 3) {
 
     // Read reference state
@@ -123,33 +164,14 @@ protected:
     RTYPE component = RTYPE("test" + lbl, test_state, nullptr);
     component.transform(test_state);
 
-    // Loop over all ref_state fields checking that the corresponding test_state field
-    // matches
-    for (auto sp : ref_state["species"].getChildren()) {
-      for (auto fld : sp.second.getChildren()) {
-
-        std::string sp_name = sp.first;
-        std::string fld_name = fld.first;
-
-        // Collision frequencies are more complicated; skip them for now.
-        if (fld_name.compare("collision_frequencies") == 0) {
-          continue;
-        }
-
-        if (check_input_fields || IsSubString(fld_name, "_source")) {
-          Field3D test_field = test_state["species"][sp.first][fld.first].as<Field3D>();
-          Field3D ref_field = ref_state["species"][sp.first][fld.first].as<Field3D>();
-
-          ASSERT_TRUE(IsFieldEqualSigFigs(test_field, ref_field, "RGN_NOBNDRY",
-                                          ignore_last_n_sigfigs))
-              << "'" << this->lbl << "' [" << sp_name << "/" << fld_name << "]"
-              << " differs from reference data (despite ignoring last "
-              << ignore_last_n_sigfigs << "significant digits!)";
-        }
-      }
-    }
+    compare_child_values(ref_state["species"], test_state["species"], compare_all_values,
+                         ignore_last_n_sigfigs);
   }
 
+  /**
+   * @brief Generate test data by calling generate_state(), then running the reaction
+   * transform.
+   */
   void generate_data() {
     // Generate input state
     Options state = generate_state();
