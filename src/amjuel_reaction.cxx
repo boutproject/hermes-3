@@ -167,8 +167,11 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
       },
       n_e.getRegion("RGN_NOBNDRY"))(n_e, n_rh, T_e);
 
-  // Add individual reaction collision frequency to each species
-  set(rh["collision_frequencies"]
-        [rh.name() + "_" + ph.name() + "_" + this->short_reaction_type],
+  // Set collision frequency on the neutral species (should be exactly 1 of them for
+  // Amjuel reactions)
+  std::vector<std::string> neutral_species = parser->get_species(species_filter::neutral);
+  ASSERT1(neutral_species.size() == 1);
+  set(state["species"][neutral_species[0]]["collision_frequencies"]
+           [rh.name() + "_" + ph.name() + "_" + this->short_reaction_type],
       heavy_particle_frequency);
 }
