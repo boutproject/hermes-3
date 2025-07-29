@@ -96,7 +96,11 @@ def run_manufactured_solutions_test(test_input):
 
       # run job on this input
       print("../.././hermes_mms_tests -d "+workdir+" > "+workdir+"/output.txt")
-      os.system("../.././hermes_mms_tests -d "+workdir+" > "+workdir+"/output.txt")
+      s = os.system("../.././hermes_mms_tests -d "+workdir+" > "+workdir+"/output.txt")
+      if s != 0:
+          print(f"Command exited with status {s}. STDOUT printed below:")
+          with open(workdir + "/output.txt") as f:
+              print(f.read())
 
    # now analyse the results of the test
    # this slice avoids including guard cells in the test
