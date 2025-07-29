@@ -8,7 +8,16 @@
 #include "bout/utils.hxx"
 
 /// An enum class with which to identify various useful species subsets
-enum class species_filter { consumed, reactants, produced, products, heavy };
+enum class species_filter {
+  consumed,
+  electron,
+  ion,
+  neutral,
+  reactants,
+  produced,
+  products,
+  heavy
+};
 
 static inline std::map<std::string, int> count_species(std::string expr) {
   // std::regex_iterator instead?
