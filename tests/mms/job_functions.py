@@ -360,7 +360,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
       # run job on this input
       print("mpirun -n 1 ../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt")
       # Command to run
-      cmd = "../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt"
+      cmd = "../.././hermes-3 -d "+workdir#+" > "+workdir+"/output.txt"
       # Launch using MPI
       s, out = launch(cmd, nproc=1, mthread=1, pipe=True)
       print("====== Return code", s)
