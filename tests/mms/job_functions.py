@@ -393,29 +393,36 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    for workdir in workdirs:
       boutmeshpath = workdir+"/"+f'BOUT.dmp.0.nc'
       boutinppath = workdir+"/"+'BOUT.inp'
+      print("=========================== 0 =======================")
       datasets.append(open_boutdataset(boutmeshpath, inputfilepath=boutinppath, keep_yboundaries=False))
    #for dataset in datasets:
    #   keys = dataset.keys()
    #   for key in keys:
    #      print(key)     
    # make a easy scan over the two operators, generalisation to N operators possible
+   print("================= 1 =====================")
    function_list = ["ddt(Nd)", "ddt(Pd)"]
    if evolve_momentum and not conservation_test:
        function_list.append("ddt(NVd)")
+   print("================= 2 =====================")
 
    for varstring in function_list:
+      print("================= 3 =====================")
       expected_slope = expected_convergence_order
       l2norm = []
       nylist = []
       dylist = []
+      print("================= 4 =====================")
       for m in range(0,ntest):
          if varstring == "ddt(Pd)" and evolve_momentum and conservation_test:
+            print("===================== 5 ===================")
             NVd = collectvar(datasets, "NVd", m)
             Nd = collectvar(datasets, "Nd", m)
             Vd = NVd/(Nd*mass)
             numerical = (3.0/2.0)*collectvar(datasets, "ddt(Pd)", m) + Vd*collectvar(datasets, "ddt(NVd)", m)
             label = "ddt(Ed) = 3/2 ddt(Pd) + Vd * ddt(NVd)"
          else:
+            print("================= 6 =====================")
             label = varstring
             numerical = collectvar(datasets, varstring, m)
          normvar = (collectvar(datasets, varstring[4:-1], m))[s]
@@ -424,6 +431,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
          dz = (collectvar(datasets, "dz", m))[sxy]
          J = (collectvar(datasets, "J", m))[sxy]
          error_values = (numerical)[s]
+         print("================= 7 =====================")
          
          if conservation_test:
             thisl2 = np.abs(volume_integral(error_values,dx,dy,dz,J)/
@@ -436,15 +444,19 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
          nylist.append(numerical.shape[1])
          # proxy for grid spacing
          dylist.append(1.0/numerical.shape[1])
-               
+         print("================= 8 =====================")
+
       # cast lists as numpy arrays for further manipulation
+      print("================= 9 =====================")
       print(varstring)
+      print("================= 10 =====================")
       l2norm = np.array(l2norm)
       print("test error: ",l2norm)
       nylist = np.array(nylist)
       dylist = np.array(dylist)
       print("dylist: ",dylist)
-      
+      print("================= 11 =====================")
+
       # find linear fit coefficients to test convergence rate
       # and construct fit function for plotting
       try:
