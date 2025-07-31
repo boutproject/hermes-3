@@ -35,6 +35,11 @@ TEST_F(ADASCRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASCpRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASC5pRecTest, SourcesRegression) { sources_regression_test(); }
 
+// C ions CX  (non-exhaustive)
+TEST_F(ADASCpHCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(ADASCp3DCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(ADASCp5TCXTest, SourcesRegression) { sources_regression_test(); }
+
 // Li ions ionization
 TEST_F(ADASLiIznTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASLipIznTest, SourcesRegression) { sources_regression_test(); }
@@ -45,6 +50,11 @@ TEST_F(ADASLiRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASLipRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASLi2pRecTest, SourcesRegression) { sources_regression_test(); }
 
+// Li ions CX (non-exhaustive)
+TEST_F(ADASLipHCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(ADASLip2DCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(ADASLip3TCXTest, SourcesRegression) { sources_regression_test(); }
+
 // Ne ions ionization (non-exhaustive)
 TEST_F(ADASNeIznTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNepIznTest, SourcesRegression) { sources_regression_test(); }
@@ -54,3 +64,8 @@ TEST_F(ADASNe9pIznTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNeRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNepRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNe9pRecTest, SourcesRegression) { sources_regression_test(); }
+
+// Ne ions CX  (non-exhaustive)
+TEST_F(ADASNepHCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(ADASNep5DCXTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(ADASNep9TCXTest, SourcesRegression) { sources_regression_test(); }

@@ -315,7 +315,7 @@ protected:
   const std::string neutral_sp_out;
   const std::string ion_sp_out;
 
-  virtual Options generate_state() override final {
+  virtual Options generate_state() override {
     // N.B. No attempt to set the correct masses for heavy species; always set to 1
     // Assume neutral
     std::string comp_name = "test" + this->lbl;
