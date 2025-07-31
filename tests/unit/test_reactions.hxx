@@ -46,8 +46,8 @@ protected:
   std::string reaction_str;
 
   // Ranges to use for input functions
-  const BoutReal logn_min = std::log(1e14), logn_max = std::log(1e22);
-  const BoutReal logT_min = std::log(0.1), logT_max = std::log(2e4);
+  const BoutReal logn_min = std::log(5e13), logn_max = std::log(2e22);
+  const BoutReal logT_min = std::log(0.05), logT_max = std::log(4e4);
   const BoutReal logv_min = std::log(1), logv_max = std::log(100);
 
   // Subclasses must define a function to generate the test input state
