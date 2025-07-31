@@ -8,7 +8,7 @@ def isapprox(a,b,tol=1.0e-12):
         else:
             return False
 
-def unique_points(corners_Rxy,corners_Zxy):
+def unique_points_2D(corners_Rxy,corners_Zxy):
     Nx, Ny = corners_Rxy.shape
     unique=True
     for ix in range(0,Nx):
@@ -24,6 +24,37 @@ def unique_points(corners_Rxy,corners_Zxy):
     print("unique points =",unique)
     return None
 
+def unique_points_1D(corners_Rxy,corners_Zxy):
+    Nc, = corners_Rxy.shape
+    unique=True
+    for ic in range(0,Nc):
+        for icp in range(0,Nc):
+            if ic == icp:
+                continue
+            if (isapprox(corners_Rxy[ic],corners_Rxy[icp]) and isapprox(corners_Zxy[ic],corners_Zxy[icp])):
+                print("non-unique point:",ix,iy,ic)
+                unique = False
+    print("unique points =",unique)
+    return None
+
+def remove_nonunique_points(corners_Rxy,corners_Zxy):
+    Nc, = corners_Rxy.shape
+    duplicate_indices = []
+    for ic in range(0,Nc):
+        for icp in range(0,Nc):
+            if ic == icp:
+                continue
+            if (isapprox(corners_Rxy[ic],corners_Rxy[icp]) and isapprox(corners_Zxy[ic],corners_Zxy[icp])):
+                print("non-unique point:",icp)
+                # store the duplicate index, if we have not already stored the index for this point
+                if (ic not in duplicate_indices) and (icp not in duplicate_indices):
+                    duplicate_indices.append(icp)
+    print(duplicate_indices)
+    if len(duplicate_indices) > 0:
+        corners_Rxy = np.delete(corners_Rxy,duplicate_indices)
+        corners_Zxy = np.delete(corners_Zxy,duplicate_indices)
+    return corners_Rxy, corners_Zxy
+
 file_path = 'dmtest_data/expected_nonorthogonal.grd.nc'
 #file_path = 'dmtest_data/expected_orthogonal.grd.nc'
 dataset = nc.Dataset(file_path)
@@ -38,10 +69,10 @@ data_Rxy_ul = dataset.variables['Rxy_upper_left_corners'][:]
 data_Zxy_ul = dataset.variables['Zxy_upper_left_corners'][:]
 
 # check that the points are indeed unique
-unique_points(data_Rxy,data_Zxy)
-unique_points(data_Rxy_lr,data_Zxy_lr)
-unique_points(data_Rxy_ur,data_Zxy_ur)
-unique_points(data_Rxy_ul,data_Zxy_ul)
+unique_points_2D(data_Rxy,data_Zxy)
+unique_points_2D(data_Rxy_lr,data_Zxy_lr)
+unique_points_2D(data_Rxy_ur,data_Zxy_ur)
+unique_points_2D(data_Rxy_ul,data_Zxy_ul)
 # construct array with unique set of vertices covering the
 # Hypnotoad grid.
 Nx, Ny = data_Rxy.shape
@@ -70,7 +101,7 @@ corners_Zxy[0:Nx,Ny+1] = data_Zxy_ul[0:Nx,Ny-1]
 corners_Zxy[Nx,Ny+1] = data_Zxy_ur[Nx-1,Ny-1]
 
 # check that the points are indeed unique
-unique_points(corners_Rxy,corners_Zxy)
+unique_points_2D(corners_Rxy,corners_Zxy)
 
 # Visualise points with scatter plots
 # Get 1D lists of points for the scatter plot
@@ -86,7 +117,9 @@ Zpoints_ul = np.reshape(data_Zxy_ul, (Npoint,))
 Npoint_full = (Nx+1)*(Ny+2)
 Rpoints_full = np.reshape(corners_Rxy, (Npoint_full,))
 Zpoints_full = np.reshape(corners_Zxy, (Npoint_full,))
-
+# remove any duplicate points
+Rpoints_full, Zpoints_full = remove_nonunique_points(Rpoints_full,Zpoints_full)
+unique_points_1D(Rpoints_full,Zpoints_full)
 x = Rpoints
 y = Zpoints
 # Make a scatter plot to show the mesh corners
@@ -101,6 +134,7 @@ scatter = plt.scatter(Rpoints_full, Zpoints_full, c='m',marker='x')
 #    plt.text(x[ic],y[ic],str(ic))
 #    plt.text(Rpoints_ul[ic],Zpoints_ul[ic],str(ic))
 # uncomment for labels on aggregated array of points
+Npoint_full = len(Rpoints_full)
 for ic in range(0,Npoint_full):
     plt.text(Rpoints_full[ic],Zpoints_full[ic],str(ic))
 plt.title('Meshpoints')
