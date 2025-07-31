@@ -395,6 +395,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
       boutinppath = workdir+"/"+'BOUT.inp'
       print("=========================== 0 =======================")
       datasets.append(open_boutdataset(boutmeshpath, inputfilepath=boutinppath, keep_yboundaries=False))
+      print("=========================== 0.5 =========================")
    #for dataset in datasets:
    #   keys = dataset.keys()
    #   for key in keys:
