@@ -127,10 +127,12 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   Field3D T_e = get<Field3D>(electron["temperature"]);
   const int e_pop_change = this->parser->get_stoich().at("e");
   if (e_pop_change != 0) {
-    ASSERT1(electron.isSet("velocity"));
-    auto v_e = get<Field3D>(electron["velocity"]);
-    auto m_e = get<BoutReal>(electron["AA"]);
-    add(electron["energy_source"], 0.5 * m_e * e_pop_change * reaction_rate * SQ(v_e));
+    if (electron.isSet("velocity")) {
+      // Transfer of electron kinetic to thermal energy due to density source
+      auto v_e = get<Field3D>(electron["velocity"]);
+      auto m_e = get<BoutReal>(electron["AA"]);
+      add(electron["energy_source"], 0.5 * m_e * e_pop_change * reaction_rate * SQ(v_e));
+    }
   }
 
   // Electron energy loss (radiation, ionisation potential)
