@@ -45,6 +45,11 @@ protected:
   std::string lbl;
   std::string reaction_str;
 
+  // Ranges to use for input functions
+  const BoutReal logn_min = std::log(1e14), logn_max = std::log(1e22);
+  const BoutReal logT_min = std::log(0.1), logT_max = std::log(2e4);
+  const BoutReal logv_min = std::log(1), logv_max = std::log(100);
+
   // Subclasses must define a function to generate the test input state
   virtual Options generate_state() = 0;
 
@@ -233,24 +238,25 @@ protected:
             {"density", 1.0},
             {"temperature", 1.0}}}}}};
 
-    // Density and Temperature ranges (log vals)
-    const BoutReal logn_min = std::log(1e14), logn_max = std::log(1e22);
-    const BoutReal logT_min = std::log(0.1), logT_max = std::log(2e4);
-    const BoutReal logv_min = std::log(1), logv_max = std::log(100);
-
     // Linear functions for various fields that are inputs to the reaction transforms
     state["species"]["e"]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logn_min, logn_max, linfunc_axis::y), &state, mesh);
+        this->gen_lin_field_str(this->logn_min, this->logn_max, linfunc_axis::y), &state,
+        mesh);
     state["species"]["e"]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logT_min, logT_max, linfunc_axis::z), &state, mesh);
+        this->gen_lin_field_str(this->logT_min, this->logT_max, linfunc_axis::z), &state,
+        mesh);
     state["species"][this->heavy_reactant]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logn_min, logn_max, linfunc_axis::x), &state, mesh);
+        this->gen_lin_field_str(this->logn_min, this->logn_max, linfunc_axis::x), &state,
+        mesh);
     state["species"][this->heavy_reactant]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logT_min, logT_max, linfunc_axis::y), &state, mesh);
+        this->gen_lin_field_str(this->logT_min, this->logT_max, linfunc_axis::y), &state,
+        mesh);
     state["species"][this->heavy_reactant]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::x), &state, mesh);
+        this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::x), &state,
+        mesh);
     state["species"][this->heavy_product]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::z), &state, mesh);
+        this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::z), &state,
+        mesh);
     return state;
   }
 
@@ -319,37 +325,40 @@ protected:
                    {{neutral_sp_in, {{"AA", 1.0}, {"charge", 0.0}}},
                     {ion_sp_in, {{"AA", 1.0}, {"charge", 1.0}}}}}};
 
-    // Density and Temperature ranges (log vals)
-    const BoutReal logn_min = std::log(1e14), logn_max = std::log(1e22);
-    const BoutReal logT_min = std::log(0.1), logT_max = std::log(2e4);
-    const BoutReal logv_min = std::log(1), logv_max = std::log(100);
-
     // Linear functions for various fields that are inputs to the reaction transforms
     state["species"][neutral_sp_in]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logn_min, logn_max, linfunc_axis::x), &state, mesh);
+        this->gen_lin_field_str(this->logn_min, this->logn_max, linfunc_axis::x), &state,
+        mesh);
     state["species"][ion_sp_in]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logn_min, logn_max, linfunc_axis::y), &state, mesh);
+        this->gen_lin_field_str(this->logn_min, this->logn_max, linfunc_axis::y), &state,
+        mesh);
     state["species"][neutral_sp_in]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logT_min, logT_max, linfunc_axis::z), &state, mesh);
+        this->gen_lin_field_str(this->logT_min, this->logT_max, linfunc_axis::z), &state,
+        mesh);
     state["species"][ion_sp_in]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logT_min, logT_max, linfunc_axis::x), &state, mesh);
+        this->gen_lin_field_str(this->logT_min, this->logT_max, linfunc_axis::x), &state,
+        mesh);
     state["species"][neutral_sp_in]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::y), &state, mesh);
+        this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::y), &state,
+        mesh);
     state["species"][ion_sp_in]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::z), &state, mesh);
+        this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::z), &state,
+        mesh);
 
     // For non-symmetric CX, add charges, masses, velocities for product species
     if (neutral_sp_out.compare(neutral_sp_in) != 0) {
       state["species"][neutral_sp_out]["AA"] = 1.0;
       state["species"][neutral_sp_out]["charge"] = 0.0;
       state["species"][neutral_sp_out]["velocity"] = FieldFactory::get()->create3D(
-          this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::y), &state, mesh);
+          this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::y),
+          &state, mesh);
     }
     if (ion_sp_out.compare(ion_sp_in) != 0) {
       state["species"][ion_sp_out]["AA"] = 1.0;
       state["species"][ion_sp_out]["charge"] = 1.0;
       state["species"][ion_sp_out]["velocity"] = FieldFactory::get()->create3D(
-          this->gen_lin_field_str(logv_min, logv_max, linfunc_axis::z), &state, mesh);
+          this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::z),
+          &state, mesh);
     }
 
     return state;

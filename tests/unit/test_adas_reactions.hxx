@@ -23,6 +23,30 @@ public:
       : IznRecReactionTest<RTYPE>(lbl, reaction_str) {}
 };
 
+template <int level, char Hisotope>
+class ADASCXLiReactionTest : public CXReactionTest<ADASLithiumCX<level, Hisotope>> {
+public:
+  ADASCXLiReactionTest(std::string lbl, std::string reaction_str)
+      : CXReactionTest<ADASLithiumCX<level, Hisotope>>(
+          lbl, reaction_str, {lithium_species_name<level + 1>}, {Hisotope},
+          {lithium_species_name<level>}, {Hisotope, '+'}) {}
+};
+
+class ADASLipHCXTest : public ADASCXLiReactionTest<0, 'h'> {
+public:
+  ADASLipHCXTest() : ADASCXLiReactionTest<0, 'h'>("LipHCX", "li+ + h -> li + h+") {}
+};
+
+class ADASLip2DCXTest : public ADASCXLiReactionTest<1, 'd'> {
+public:
+  ADASLip2DCXTest() : ADASCXLiReactionTest<1, 'd'>("Lip2DCX", "li+2 + d -> li+ + d+") {}
+};
+
+class ADASLip3TCXTest : public ADASCXLiReactionTest<2, 't'> {
+public:
+  ADASLip3TCXTest() : ADASCXLiReactionTest<2, 't'>("Lip3TCX", "li+3 + t -> li+2 + t+") {}
+};
+
 class ADASCIznTest : public ADASIznRecReactionTest<ADASCarbonIonisation<0>> {
 public:
   ADASCIznTest()
