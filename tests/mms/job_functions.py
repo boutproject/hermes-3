@@ -394,6 +394,10 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
       boutmeshpath = workdir+"/"+f'BOUT.dmp.0.nc'
       boutinppath = workdir+"/"+'BOUT.inp'
       datasets.append(open_boutdataset(boutmeshpath, inputfilepath=boutinppath, keep_yboundaries=False))
+      # By default xarray loads NetCDF files lazily. For some reason
+      # this causes the CI to fail (and not even in the same way each
+      # time!). Therefore, we load it eagerly here.
+      datasets[-1].load()
    #for dataset in datasets:
    #   keys = dataset.keys()
    #   for key in keys:
