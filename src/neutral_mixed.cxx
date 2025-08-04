@@ -147,11 +147,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                     / pressure_norm;
   // Try to read the momentum source from the mesh
   momentum_source = 0.0;
-  mesh->get(momentum_source, std::string("NV") + name + "_src");
+  mesh->get(momentum_source, fmt::format("NV{}_src", name));
    // Allow the user to override the source
-  momentum_source = alloptions[std::string("NV") + name]["source"]
-                        .doc(std::string("Source term in ddt(NV") + name
-                             + std::string("). Units [kg m^-2 s^-2]"))
+  momentum_source = alloptions[fmt::format("NV{}", name)]["source"]
+                        .doc(fmt::format("Source term in ddt(NV{}). Units [kg m^-2 s^-2]", name))
                         .withDefault(momentum_source)
                     / momentum_norm;
   // need some normalisation convention here
