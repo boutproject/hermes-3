@@ -144,10 +144,8 @@ int main(int argc, char** argv) {
   Field3D flow_xlow{mesh};
   Field3D flow_ylow{mesh};
   // auxiliary variables
-  Field3D ones{mesh};
-  ones = 1.0;
-  Field3D zeros{mesh};
-  zeros = 0.0;
+  Field3D ones{1.0, mesh};
+  Field3D zeros{0.0, mesh};
 
   for (int i = 0; i < n_operators; i++){
       std::string inputname = "differential_operator_name_"+std::to_string(i);
