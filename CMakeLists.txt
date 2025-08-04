@@ -260,6 +260,9 @@ if(HERMES_TESTS)
     add_test(NAME differential_operators_mms_nonorthogonal
            WORKING_DIRECTORY tests/mms/
            COMMAND python3 nonorthogonal_test.py)
+    add_test(NAME rhs_mms_neutral_mixed
+           WORKING_DIRECTORY tests/mms/
+           COMMAND python3 neutral_mixed_ddt_test.py)
   endif()
 endif()
 

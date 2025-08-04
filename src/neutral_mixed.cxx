@@ -24,6 +24,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Cs0 = sqrt(SI::qe * Tnorm / SI::Mp);
 
   // Need to take derivatives in X for cross-field diffusion terms
   ASSERT0(mesh->xstart > 0);
@@ -88,6 +89,14 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(true);
 
+  rnn_override = options["rnn_override"]
+                    .doc("Paramter for overriding the neutral collision frequency in Dn for testing")
+                    .withDefault(-1.0);
+
+  normalise_sources = options["normalise_sources"]
+                          .doc("Normalise input sources?")
+                          .withDefault<bool>(true);
+
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
 
@@ -106,6 +115,15 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(1.0);
 
+  if (normalise_sources) {
+    density_norm = Nnorm * Omega_ci;
+    pressure_norm = SI::qe * Nnorm * Tnorm * Omega_ci;
+    momentum_norm = SI::Mp * Nnorm * Cs0 * Omega_ci;
+  } else {
+    density_norm = 1.0;
+    pressure_norm = 1.0;
+    momentum_norm = 1.0;
+  }
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
   density_source = 0.0;
@@ -115,7 +133,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
       alloptions[std::string("N") + name]["source"]
           .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
           .withDefault(density_source)
-      / (Nnorm * Omega_ci);
+      / density_norm;
 
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
@@ -126,7 +144,16 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                         .doc(std::string("Source term in ddt(P") + name
                              + std::string("). Units [N/m^2/s]"))
                         .withDefault(pressure_source)
-                    / (SI::qe * Nnorm * Tnorm * Omega_ci);
+                    / pressure_norm;
+  // Try to read the momentum source from the mesh
+  momentum_source = 0.0;
+  mesh->get(momentum_source, fmt::format("NV{}_src", name));
+   // Allow the user to override the source
+  momentum_source = alloptions[fmt::format("NV{}", name)]["source"]
+                        .doc(fmt::format("Source term in ddt(NV{}). Units [kg m^-2 s^-2]", name))
+                        .withDefault(momentum_source)
+                    / momentum_norm;
+  // need some normalisation convention here
 
   // Set boundary condition defaults: Neumann for all but the diffusivity.
   // The dirichlet on diffusivity ensures no radial flux.
@@ -283,14 +310,17 @@ void NeutralMixed::finally(const Options& state) {
 
   Field3D Rnn =
     sqrt(floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
-
-  if (localstate.isSet("collision_frequency")) {
-    // Dnn = Vth^2 / sigma
-    Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+  if (rnn_override > 0.0) { 
+    // user has set an override for collision frequency
+    Dnn = (Tn / AA) / rnn_override;
   } else {
-    Dnn = (Tn / AA) / Rnn;
+    if (localstate.isSet("collision_frequency")) {
+      // Dnn = Vth^2 / sigma
+      Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+    } else {
+      Dnn = (Tn / AA) / Rnn;
+    }
   }
-
   if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
@@ -389,7 +419,7 @@ void NeutralMixed::finally(const Options& state) {
 
             - (2. / 3) * Pn * Div_par(Vn)                // Compression
 
-            + (5. / 3) * Div_a_Grad_perp_nonorthog(DnnNn, logPnlim,
+            + (5. / 3) * Div_a_Grad_perp_nonorthog(DnnPn, logPnlim,
                            ef_adv_perp_xlow, ef_adv_perp_ylow) // Perpendicular diffusion
             //+ (5. / 3) * Div_a_Grad_perp_flows(          // Perpendicular advection
             //        DnnPn, logPnlim,
@@ -470,13 +500,11 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn) += viscosity_source;
       ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
     }
-
+    Snv = momentum_source;
     if (localstate.isSet("momentum_source")) {
-      Snv = get<Field3D>(localstate["momentum_source"]);
-      ddt(NVn) += Snv;
-    } else {
-      Snv = 0;
+      Snv += get<Field3D>(localstate["momentum_source"]);
     }
+    ddt(NVn) += Snv;
 
   } else {
     ddt(NVn) = 0;

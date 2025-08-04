@@ -51,18 +51,22 @@ private:
 
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
+  BoutReal rnn_override; ///< Rnn input for testing
+  BoutReal density_norm, pressure_norm; ///< Normalisations
+  BoutReal momentum_norm; ///< Normalisations
 
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
-  
+  bool normalise_sources; ///< Normalise input sources?
+
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
   bool precondition {true}; ///< Enable preconditioner?
   bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
-  Field3D density_source, pressure_source; ///< External input source
+  Field3D density_source, pressure_source, momentum_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
 
