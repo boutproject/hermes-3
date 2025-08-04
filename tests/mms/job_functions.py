@@ -170,6 +170,10 @@ def run_manufactured_solutions_test(test_input):
       #label = "FV::Div_a_Grad_perp(a, f)"
       plot_data[label] = [dylist, l2norm, fitfunc, slope, offset, expected_slope]
 
+   # close the datasets
+   for dataset in datasets:
+      dataset.close()
+
    # plot the results
    try:
       import matplotlib.pyplot as plt
@@ -470,6 +474,10 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
       #label = attrs["operator"] + " : f = " + attrs["inp"]
       #label = "FV::Div_a_Grad_perp(a, f)"
       plot_data[label] = [dylist, l2norm, fitfunc, slope, offset, expected_slope]
+
+   # close the datasets
+   for dataset in datasets:
+      dataset.close()
 
    # plot the results
    try:
