@@ -127,7 +127,7 @@ protected:
                                           ignore_last_n_sigfigs))
               << "'" << this->lbl << "' [" << ref_node_data.str() << "]"
               << " differs from reference data (despite ignoring last "
-              << ignore_last_n_sigfigs << "significant digits!)";
+              << ignore_last_n_sigfigs << " significant digits!)";
         }
       } else {
         // else recurse
