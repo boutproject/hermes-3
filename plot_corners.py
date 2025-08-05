@@ -50,7 +50,7 @@ def create_and_visualize_mesh(Nx,Ny,cell_list,vertex_list):
     dm.view(viewer)
     viewer.destroy()
 
-    dmtest = PETSc.DMPlex()
+    dmtest = PETSc.DMPlex().create(comm=comm)
     print("1")
     viewer = PETSc.ViewerHDF5().create('mesh.h5', mode=PETSc.Viewer.Mode.READ, comm=comm)
     print("2")
