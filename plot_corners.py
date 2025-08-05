@@ -43,6 +43,20 @@ def create_and_visualize_mesh(Nx,Ny,cell_list,vertex_list):
     # Write the mesh to a VTK file
     viewer = PETSc.Viewer().createVTK("mesh.vtk", mode=PETSc.Viewer.Mode.WRITE, comm=comm)
     dm.view(viewer)
+    viewer.destroy()
+    # Write the mesh to a .h5 file
+    #viewer = PETSc.Viewer().createHDF5('mesh.h5', mode=PETSc.Viewer.Mode.WRITE, comm=comm)
+    viewer = PETSc.ViewerHDF5().create('mesh.h5', mode=PETSc.Viewer.Mode.WRITE, comm=comm)
+    dm.view(viewer)
+    viewer.destroy()
+
+    dmtest = PETSc.DMPlex()
+    print("1")
+    viewer = PETSc.ViewerHDF5().create('mesh.h5', mode=PETSc.Viewer.Mode.READ, comm=comm)
+    print("2")
+    dmtest.load(viewer)
+    print("3")
+    viewer.destroy()
     return None
 
 
@@ -256,5 +270,6 @@ plt.title('Meshpoints')
 plt.xlabel('R')
 plt.ylabel('Z')
 plt.show()
+plt.savefig("mesh_plot.pdf")
 
 create_and_visualize_mesh(Nx,Ny,cell_vertices,vertex_list)
