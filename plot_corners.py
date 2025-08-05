@@ -1,6 +1,50 @@
 import netCDF4 as nc
 import numpy as np
 import matplotlib.pyplot as plt
+from petsc4py import PETSc
+
+def create_and_visualize_mesh(Nx,Ny,cell_list,vertex_list):
+    # Initialize PETSc
+    comm = PETSc.COMM_WORLD
+    # Create a DMPlex object
+    dm = PETSc.DMPlex().create(comm=comm)
+    # Define mesh parameters
+    # for a rectangle with 2 cells and 6 vertices
+    dim = 2  # 2D mesh
+    num_cells = Nx*Ny
+    # integers defining the cells
+    #cells = [[0, 1, 3, 4], [1, 2, 4, 5]]
+    cells = cell_list.astype('int32')
+    print("cells")
+    print(cells)
+    # global list of vertices, in correct order
+    # vertex_coords = [[0.0, 0.0],
+    #                  [0.0, 1.0],
+    #                  [1.0, 0.0],
+    #                  [1.0, 1.0],
+    #                  [2.0, 0.0],
+    #                  [2.0, 1.0],
+    #                 ]
+    # this is the incorrect order to supply the vertices
+    # vertex_coords = [[0.0, 0.0],
+    #                  [1.0, 0.0],
+    #                  [2.0, 0.0],
+    #                  [0.0, 1.0],
+    #                  [1.0, 1.0],
+    #                  [2.0, 1.0],
+    #                 ]
+    vertex_coords = vertex_list
+    print("vertex_coords")
+    print(vertex_coords)
+    # Create the mesh from the cell list
+    dm.createFromCellList(dim, cells, vertex_coords, comm=comm)
+    # Distribute the mesh (optional, useful for parallel runs)
+    #dm = dm.distribute()
+    # Write the mesh to a VTK file
+    viewer = PETSc.Viewer().createVTK("mesh.vtk", mode=PETSc.Viewer.Mode.WRITE, comm=comm)
+    dm.view(viewer)
+    return None
+
 
 def isapprox(a,b,tol=1.0e-12):
         if abs(a - b) < tol:
@@ -103,7 +147,13 @@ def get_cell_vertex_list(Rxy_ll, Zxy_ll,
             cell_vertices_RZ[icell,1,:] = [R_lr,Z_lr]
             cell_vertices_RZ[icell,2,:] = [R_ur,Z_ur]
             cell_vertices_RZ[icell,3,:] = [R_ul,Z_ul]
-    return cell_vertices, cell_vertices_RZ
+    # get a global list of vertices
+    Nc, = np.shape(R_vertices)
+    vertex_list = np.zeros((Nc,2),dtype=float)
+    for ic in range(0,Nc):
+        vertex_list[ic,0] = R_vertices[ic]
+        vertex_list[ic,1] = Z_vertices[ic]
+    return cell_vertices, cell_vertices_RZ, vertex_list
 
 
 file_path = 'dmtest_data/expected_nonorthogonal.grd.nc'
@@ -176,7 +226,7 @@ unique_points_1D(Rpoints_full,Zpoints_full)
 # labelled by the global index defined implicitly by Rpoints_full, Zpoints_full
 # store this in `cell_vertices`, and store the RZ values of each vertex
 # cell_vertices[icell,ivertex] in R, Z = cell_vertices_RZ[icell,ivertex,:]
-cell_vertices, cell_vertices_RZ = get_cell_vertex_list(data_Rxy, data_Zxy,
+cell_vertices, cell_vertices_RZ, vertex_list = get_cell_vertex_list(data_Rxy, data_Zxy,
         data_Rxy_lr, data_Zxy_lr, data_Rxy_ur, data_Zxy_ur,
         data_Rxy_ul, data_Zxy_ul, Rpoints_full, Zpoints_full)
 ncells, nvertices = np.shape(cell_vertices)
@@ -206,3 +256,5 @@ plt.title('Meshpoints')
 plt.xlabel('R')
 plt.ylabel('Z')
 plt.show()
+
+create_and_visualize_mesh(Nx,Ny,cell_vertices,vertex_list)
