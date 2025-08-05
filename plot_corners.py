@@ -49,13 +49,14 @@ def create_and_visualize_mesh(Nx,Ny,cell_list,vertex_list):
     viewer = PETSc.ViewerHDF5().create('mesh.h5', mode=PETSc.Viewer.Mode.WRITE, comm=comm)
     dm.view(viewer)
     viewer.destroy()
-
+    # Read the mesh from .h5
     dmtest = PETSc.DMPlex().create(comm=comm)
-    print("1")
     viewer = PETSc.ViewerHDF5().create('mesh.h5', mode=PETSc.Viewer.Mode.READ, comm=comm)
-    print("2")
     dmtest.load(viewer)
-    print("3")
+    viewer.destroy()
+    # Write the reloaded mesh to a VTK file
+    viewer = PETSc.Viewer().createVTK("mesh_h5_to_vtk.vtk", mode=PETSc.Viewer.Mode.WRITE, comm=comm)
+    dmtest.view(viewer)
     viewer.destroy()
     return None
 
