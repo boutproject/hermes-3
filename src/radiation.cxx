@@ -6,6 +6,7 @@
 
 #include "../include/radiation.hxx"
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -66,12 +67,9 @@ InterpRadiatedPower::InterpRadiatedPower(const std::string &filename) {
 // Collision rate coefficient <sigma*v> [m3/s]
 BoutReal HydrogenRadiatedPower::ionisation(BoutReal T) {
   double fION; // collision rate coefficient <sigma*v> [m3/s]
-  double TT, X, S;
+  double X, S;
 
-  TT = T;
-
-  if (TT < 1.0)
-    TT = 1.0;
+  const double TT = std::max(T, 1.0);
   X = log10(TT);
 
   if (TT >= 20.0)
@@ -145,11 +143,9 @@ BoutReal HydrogenRadiatedPower::recombination(BoutReal n, BoutReal T) {
   RTE = T;
 
   DNE = RDNE;
-  TT = RTE;
   E = DNE * 1.0E-14;
 
-  if (TT < 1.0)
-    TT = 1.0;
+  TT = std::max(RTE, 1.0);
 
   RN = log(E);
   RT = log(TT);
@@ -177,12 +173,9 @@ BoutReal HydrogenRadiatedPower::recombination(BoutReal n, BoutReal T) {
 // <sigma*v> [m3/s]
 BoutReal HydrogenRadiatedPower::chargeExchange(BoutReal Te) {
   double fCX; //<sigma*v> [m3/s]
-  double TT, S;
+  double S;
 
-  TT = Te;
-
-  if (TT < 1.0)
-    TT = 1.0;
+  const double TT = std::max(Te, 1.0);
   S = -14.0 + log10(TT) / 3.0;
 
   fCX = pow(10.0, S);
@@ -193,12 +186,9 @@ BoutReal HydrogenRadiatedPower::chargeExchange(BoutReal Te) {
 // <sigma*v> [m3/s]
 BoutReal HydrogenRadiatedPower::excitation(BoutReal Te) {
   double fEXC; //<sigma*v> [m3/s]
-  double TT, Y;
+  double Y;
 
-  TT = Te;
-
-  if (TT < 1.0)
-    TT = 1.0;
+  const double TT = std::max(Te, 1.0);
   Y = 10.2 / TT;
 
   fEXC = 49.0E-14 / (0.28 + Y) * exp(-Y) * sqrt(Y * (1.0 + Y));
@@ -396,12 +386,9 @@ BoutReal UpdatedRadiatedPower::chargeExchange(BoutReal T) {
 // <sigma*v> [m3/s]
 BoutReal UpdatedRadiatedPower::excitation(BoutReal Te) {
   double fEXC; //<sigma*v> [m3/s]
-  double TT, Y;
+  double Y;
 
-  TT = Te;
-
-  if (TT < 1.0)
-    TT = 1.0;
+  const double TT = std::max(Te, 1.0);
   Y = 10.2 / TT;
 
   fEXC = 49.0E-14 / (0.28 + Y) * exp(-Y) * sqrt(Y * (1.0 + Y));
