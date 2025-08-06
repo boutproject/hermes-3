@@ -82,6 +82,10 @@ protected:
       axis_min = TWOPI * (mesh->zstart) / static_cast<BoutReal>(mesh->LocalNz);
       axis_max = TWOPI * (mesh->zend) / static_cast<BoutReal>(mesh->LocalNz);
       break;
+    default:
+      axis_min = axis_max = 0;
+      throw BoutException("gen_lin_field_str: no such axis type");
+      break;
     }
 
     BoutReal axis_range = axis_max - axis_min;
@@ -266,7 +270,6 @@ protected:
     std::stringstream ss(reaction_str);
     std::string word;
     bool is_reactant = true;
-    int max_charge_state = std::numeric_limits<int>::min();
     while (ss >> word) {
       if (word.compare("+") == 0) {
         continue;
