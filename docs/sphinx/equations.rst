@@ -302,6 +302,17 @@ component also calculates the momentum.
 
 Saves the temperature once as a non-evolving variable.
 
+The velocity may be set in the mesh file as an array (2D or 3D), or in
+the options as an expression. The options value overrides the value in
+the mesh. If neither mesh array nor option are set then an exception
+will be thrown. Both mesh array and option should be specified in
+units of meters per second.
+
+The name of the array in the mesh file is ``V<name>0`` where
+``<name>`` is the name of the species e.g. for species ``e``
+(electrons), ``fixed_velocity`` will try to read ``Ve0`` from the mesh
+file, and then the ``velocity`` option in the ``[e]`` section:
+
 .. code-block:: ini
 
    [e]
