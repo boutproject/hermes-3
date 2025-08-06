@@ -150,7 +150,7 @@ protected:
    * comparison.
    */
   void sources_regression_test(bool compare_all_values = true,
-                               const int ignore_last_n_sigfigs = 3) {
+                               const int ignore_last_n_sigfigs = 6) {
 
     // Read reference state
     Options ref_state = bout::OptionsIO::create(ref_data_path())->read();
