@@ -292,7 +292,8 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
 
       // Work done. This balances energetically a term in the momentum equation
-      ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
+      E_PdivV = -Pfloor * Div_par(V);
+      ddt(P) += (2. / 3) * E_PdivV;
 
     } else {
       // Use V * Grad(P) form
@@ -301,7 +302,8 @@ void EvolvePressure::finally(const Options& state) {
       //       Caused heating of charged species near sheath like p_div_v
       ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
 
-      ddt(P) += (2. / 3) * V * Grad_par(P);
+      E_VgradP =  V * Grad_par(P);
+      ddt(P) += (2. / 3) * E_VgradP;
     }
     flow_ylow_advection *= 5. / 2; // Energy flow
     flow_ylow = flow_ylow_advection;
@@ -650,6 +652,30 @@ void EvolvePressure::outputVars(Options& state) {
                     {"long_name", name + " pressure source"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
+
+    if (p_div_v) {
+
+      set_with_attrs(state["E" + name + "_PdivV"], E_PdivV,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^-3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "energy source"},
+                    {"long_name", name + " energy source due to pressure gradient"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+    } else {
+
+      set_with_attrs(state["E" + name + "_VgradP"], E_VgradP,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^-3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "energy source"},
+                    {"long_name", name + " energy source due to pressure gradient"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    }
+                  
 
     if (flow_xlow.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
