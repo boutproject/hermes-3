@@ -121,8 +121,13 @@ void PolarisationDrift::transform(Options &state) {
       const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
       const auto AA = get<BoutReal>(species["AA"]);
 
-      add(species["energy_source"],
-          P * (AA / average_atomic_mass / charge) * DivJ);
+      Field3D source = P * (AA / average_atomic_mass / charge) * DivJ;
+
+      add(species["energy_source"], source);
+
+      if (diagnose) {
+        set(channels["E_P_Div_J_" + kv.first], source);
+      }
     }
   }
 
@@ -206,7 +211,11 @@ void PolarisationDrift::transform(Options &state) {
 
     if (IS_SET(species["pressure"])) {
       auto P = GET_VALUE(Field3D, species["pressure"]);
-      add(species["energy_source"], (5. / 2) * FV::Div_a_Grad_perp(P * coef, phi_pol));
+      Field3D source = (5. / 2) * FV::Div_a_Grad_perp(P * coef, phi_pol);
+      add(species["energy_source"], source);
+      if (diagnose) {
+        set(channels["E_Div_Vpol_52P_" + kv.first], source);
+      }
     }
 
     if (IS_SET(species["momentum"])) {
@@ -218,25 +227,40 @@ void PolarisationDrift::transform(Options &state) {
 
 void PolarisationDrift::outputVars(Options &state) {
   AUTO_TRACE();
+
+  if (!diagnose) {
+    return;
+  }
+  
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
 
-  if (diagnose) {
-    set_with_attrs(state["DivJpol"], -DivJ,
-                   {{"time_dimension", "t"},
-                    {"units", "A m^-3"},
-                    {"conversion", SI::qe * Nnorm * Omega_ci},
-                    {"long_name", "Divergence of polarisation current"},
-                    {"source", "polarisation_drift"}});
+  set_with_attrs(state["DivJpol"], -DivJ,
+                 {{"time_dimension", "t"},
+                  {"units", "A m^-3"},
+                  {"conversion", SI::qe * Nnorm * Omega_ci},
+                  {"long_name", "Divergence of polarisation current"},
+                  {"source", "polarisation_drift"}});
 
+  if (advection) {
     set_with_attrs(state["phi_pol"], phi_pol,
                    {{"time_dimension", "t"},
                     {"units", "V / s"},
                     {"conversion", Tnorm * Omega_ci},
                     {"standard_name", "flow potential"},
                     {"long_name", "polarisation flow potential"},
+                    {"source", "polarisation_drift"}});
+  }
+
+  for (const auto& kv : channels.getChildren()) {
+    set_with_attrs(state[kv.first], getNonFinal<Field3D>(kv.second),
+                   {{"time_dimension", "t"},
+                    {"units", "W m^-3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", "Energy transfer channel"},
                     {"source", "polarisation_drift"}});
   }
 }
