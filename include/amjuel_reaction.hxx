@@ -146,6 +146,13 @@ protected:
       add(electron["density_source"], (to_charge - from_charge) * reaction_rate);
       if (electron.isSet("velocity")) {
         // Transfer of electron kinetic to thermal energy due to density source
+        // For ionisation:
+        // Electrons with zero average velocity are created, diluting the kinetic energy.
+        // Total energy conservation requires a corresponding internal energy source.
+        //
+        // For recombination:
+        // Electrons with some velocity are incorporated into a neutral species with their kinetic
+        // energy converted to an internal energy source of that species.
         auto Ve = get<Field3D>(electron["velocity"]);
         auto Ae = get<BoutReal>(electron["AA"]);
         add(electron["energy_source"], 0.5 * Ae * (to_charge - from_charge) * reaction_rate * SQ(Ve));
@@ -182,6 +189,11 @@ protected:
     // d/dt(3/2 p_2) = - m R v_1 v_2 + (1/2) m R v_1^2 + (1/2) m R v_2^2
     //               = (1/2) m R (v_1 - v_2)^2
     //
+    // This term accounts for the broadening of the species velocity
+    // distribution when combining the two underlying distributions. 
+    // The greater the difference in velocities of the underlying species,
+    // the wider the resultant distribution, which corresponds to an
+    // increase in temperature and therefore internal energy.
 
     add(to_ion["energy_source"], 0.5 * AA * reaction_rate * SQ(V1 - V2));
 
