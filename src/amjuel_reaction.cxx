@@ -25,8 +25,8 @@ BoutReal
 AmjuelReaction::eval_amjuel_fit(BoutReal T, BoutReal n,
                                 const std::vector<std::vector<BoutReal>>& coeff_table) {
   // Enforce range of validity
-  n = clip(n, 1e14, 1e22); // 1e8 - 1e16 cm^-3
-  T = clip(T, 0.1, 1e4);
+  n = std::clamp(n, 1e14, 1e22); // 1e8 - 1e16 cm^-3
+  T = std::clamp(T, 0.1, 1e4);
 
   BoutReal logntilde = log(n / 1e14); // Note: 1e8 cm^-3
   BoutReal logT = log(T);

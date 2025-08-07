@@ -2,10 +2,12 @@
 #ifndef AMJUEL_REACTION_H
 #define AMJUEL_REACTION_H
 
+#include <algorithm>
 #include <filesystem>
 #include <string>
 
 #include "../external/json.hxx"
+
 #include "component.hxx"
 #include "integrate.hxx"
 #include "reaction.hxx"

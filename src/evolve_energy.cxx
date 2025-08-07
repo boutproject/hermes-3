@@ -1,16 +1,18 @@
 
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/invert_pardiv.hxx>
-#include <bout/output_bout_types.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/fv_ops.hxx>
 #include <bout/initialprofiles.hxx>
+#include <bout/invert_pardiv.hxx>
+#include <bout/output_bout_types.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_energy.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
+
+#include <algorithm>
 
 using bout::globals::mesh;
 
@@ -144,10 +146,7 @@ void EvolveEnergy::transform(Options& state) {
   // E = Cv * P + (1/2) m n v^2
   P.allocate();
   BOUT_FOR(i, P.getRegion("RGN_ALL")) {
-    P[i] = (E[i] - 0.5 * AA * N[i] * SQ(V[i])) / Cv;
-    if (P[i] < 0.0) {
-      P[i] = 0.0;
-    }
+    P[i] = std::max((E[i] - 0.5 * AA * N[i] * SQ(V[i])) / Cv, 0.0);
   }
   P.applyBoundary("neumann");
 

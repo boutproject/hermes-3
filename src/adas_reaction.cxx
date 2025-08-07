@@ -18,6 +18,7 @@
 
 #include "../external/json.hxx"
 
+#include <algorithm>
 #include <fstream>
 #include <iterator>
 
@@ -75,8 +76,8 @@ BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
   AUTO_TRACE();
 
   // Ensure that the inputs are in range
-  BoutReal log10T = log10(clip(T, Tmin, Tmax));
-  BoutReal log10n = log10(clip(n, nmin, nmax));
+  BoutReal log10T = log10(std::clamp(T, Tmin, Tmax));
+  BoutReal log10n = log10(std::clamp(n, nmin, nmax));
 
   // Get the upper index. Between 1 and size-1 inclusive
   int high_T_index = get_high_index(log_temperature, log10T);
