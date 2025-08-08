@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def isapprox(a,b,tol=1.0e-12):
+def isapprox(a,b,tol=1.0e-8):
         if abs(a - b) < tol:
             return True
         else:
@@ -115,16 +115,15 @@ def get_cell_vertex_list(Rxy_ll, Zxy_ll,
 
 def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to_screen_output=False):
     dataset = nc.Dataset(file_path)
-
-    data_Rxy = dataset.variables['Rxy_corners'][:]
-    data_Zxy = dataset.variables['Zxy_corners'][:]
-    data_Rxy_lr = dataset.variables['Rxy_lower_right_corners'][:]
-    data_Zxy_lr = dataset.variables['Zxy_lower_right_corners'][:]
-    data_Rxy_ur = dataset.variables['Rxy_upper_right_corners'][:]
-    data_Zxy_ur = dataset.variables['Zxy_upper_right_corners'][:]
-    data_Rxy_ul = dataset.variables['Rxy_upper_left_corners'][:]
-    data_Zxy_ul = dataset.variables['Zxy_upper_left_corners'][:]
-
+    data_Rxy = np.copy(dataset.variables['Rxy_corners'][:])
+    data_Zxy = np.copy(dataset.variables['Zxy_corners'][:])
+    data_Rxy_lr = np.copy(dataset.variables['Rxy_lower_right_corners'][:])
+    data_Zxy_lr = np.copy(dataset.variables['Zxy_lower_right_corners'][:])
+    data_Rxy_ur = np.copy(dataset.variables['Rxy_upper_right_corners'][:])
+    data_Zxy_ur = np.copy(dataset.variables['Zxy_upper_right_corners'][:])
+    data_Rxy_ul = np.copy(dataset.variables['Rxy_upper_left_corners'][:])
+    data_Zxy_ul = np.copy(dataset.variables['Zxy_upper_left_corners'][:])
+    dataset.close()
     # check that the points are indeed unique
     unique_points_2D(data_Rxy,data_Zxy)
     unique_points_2D(data_Rxy_lr,data_Zxy_lr)
