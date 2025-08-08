@@ -3,6 +3,7 @@
 #define REACTION_H
 
 #include "component.hxx"
+#include "hermes_build_config.hxx"
 #include "reaction_parser.hxx"
 
 struct Reaction : public Component {

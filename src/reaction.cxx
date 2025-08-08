@@ -1,10 +1,10 @@
+#include "reaction.hxx"
+
 #include <iomanip>
 #include <memory>
 #include <regex>
 
 #include "integrate.hxx"
-
-#include "reaction.hxx"
 
 Reaction::Reaction(std::string name, Options& options) : name(name) {
 
