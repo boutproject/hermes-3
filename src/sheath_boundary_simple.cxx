@@ -8,9 +8,19 @@
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
 #include <bout/mesh.hxx>
+#include <bout/output_bout_types.hxx>
 #include <bout/region.hxx>
 
 #include <fmt/core.h>
+
+#if __cpp_lib_unreachable >= 202202L
+// C++23
+#include <utility>
+#define HERMES_UNREACHABLE std::unreachable()
+#else
+#include <stdexcept>
+#define HERMES_UNREACHABLE throw std::logic_error("unreachable")
+#endif
 
 using bout::globals::mesh;
 
@@ -310,6 +320,10 @@ Field3D init_phi(Options& state, Options& allspecies, bool lower_y, bool upper_y
     return calculate_phi_simple(allspecies, lower_y, upper_y, Ne, Te, Me, Ge,
                                 wall_potential, density_boundary_mode,
                                 temperature_boundary_mode, sheath_ion_polytropic);
+  } else if constexpr (kind == hermes::SheathKind::insulating) {
+    // No model for potential for this case, but return something to
+    // avoid duplicated checks later
+    return 0.0;
   } else {
     static_assert(false, "Unhandled sheath kind");
   }
@@ -501,6 +515,14 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
     // Free boundary potential linearly extrapolated
     phi[im] = 2 * phi[i] - phi[ip];
 
+    if constexpr (is_insulating()) {
+      // Set zero flow through boundary
+      // This will be modified when iterating over the ions
+      Ve[bdry.im] = -Ve[bdry.i];
+      NVe[bdry.im] = -NVe[bdry.i];
+      return;
+    }
+
     const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
     const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
     const BoutReal phi_wall = wall_potential[i];
@@ -523,9 +545,13 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
       } else if constexpr (kind == hermes::SheathKind::normal) {
         return floor((2 / (1. - Ge)) + ((phisheath - phi_wall) / floor(tesheath, 1e-5)),
                      0.0);
+      } else if constexpr (kind == hermes::SheathKind::insulating) {
+        HERMES_UNREACHABLE;
       } else {
         static_assert(false, "Unhandled sheath kind");
       }
+      HERMES_UNREACHABLE;
+      return 0.0;
     }();
 
     const BoutReal adiabatic = -1 - (1 / (electron_adiabatic - 1));
@@ -567,8 +593,6 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
     loop_boundary<YBoundarySide::upper>(*mesh, set_electron_boundaries);
   }
 
-  set(diagnostics["e"]["energy_source"], hflux_e);
-
   // Set electron density and temperature, now with boundary conditions
   // Note: Clear parallel slices because they do not contain boundary conditions.
   Ne.clearParallelSlices();
@@ -578,20 +602,26 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
   setBoundary(electrons["temperature"], fromFieldAligned(Te));
   setBoundary(electrons["pressure"], fromFieldAligned(Pe));
 
-  // Set energy source (negative in cell next to sheath)
-  // Note: electron_energy_source includes any sources previously set in other components
-  set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
+  // Insulating BCs set these _after_ calculating ion flows
+  if (not is_insulating()) {
+    set(diagnostics["e"]["energy_source"], hflux_e);
 
-  // Add the total sheath power flux to the tracker of y power flows
-  add(electrons["energy_flow_ylow"], fromFieldAligned(electron_sheath_power_ylow));
+    // Set energy source (negative in cell next to sheath)
+    // Note: electron_energy_source includes any sources previously set in other
+    // components
+    set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
 
-  if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
-    Ve.clearParallelSlices();
-    setBoundary(electrons["velocity"], fromFieldAligned(Ve));
-  }
-  if (IS_SET_NOBOUNDARY(electrons["momentum"])) {
-    NVe.clearParallelSlices();
-    setBoundary(electrons["momentum"], fromFieldAligned(NVe));
+    // Add the total sheath power flux to the tracker of y power flows
+    add(electrons["energy_flow_ylow"], fromFieldAligned(electron_sheath_power_ylow));
+
+    if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
+      Ve.clearParallelSlices();
+      setBoundary(electrons["velocity"], fromFieldAligned(Ve));
+    }
+    if (IS_SET_NOBOUNDARY(electrons["momentum"])) {
+      NVe.clearParallelSlices();
+      setBoundary(electrons["momentum"], fromFieldAligned(NVe));
+    }
   }
 
   if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
@@ -688,7 +718,8 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
 
       // Ion speed into sheath
       const BoutReal C_i_sq = [&]() {
-        if constexpr (kind == hermes::SheathKind::normal) {
+        if constexpr (kind == hermes::SheathKind::normal
+                      or kind == hermes::SheathKind::insulating) {
           return ((adiabatic * tisheath) + (Zi * s_i * tesheath) * (grad_ne / grad_ni))
                  / Mi;
         } else if constexpr (kind == hermes::SheathKind::simple) {
@@ -705,7 +736,8 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
 
       // Note: Here this is negative because visheath < 0
       const BoutReal q = [&]() {
-        if constexpr (kind == hermes::SheathKind::normal) {
+        if constexpr (kind == hermes::SheathKind::normal
+                      or kind == hermes::SheathKind::insulating) {
           // Ion sheath heat transmission coefficient
           // TODO(peter): Should this 2.5 be `-1 - 1/(adiabatic - 1)`?
           const BoutReal _gamma_i = 2.5 + (0.5 * Mi * C_i_sq / tisheath);
@@ -729,12 +761,20 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
       Vi[im] = 2. * visheath_flow - Vi[i];
       NVi[im] = 2. * Mi * nisheath * visheath_flow - NVi[i];
 
+      if constexpr (is_insulating()) {
+        // Add electron flow to balance current
+        Ve[im] += 2. * visheath * Zi;
+        NVe[im] += 2. * Me * nisheath * visheath;
+      }
+
       // Cross-sectional area in XZ plane and cell volume
       const auto& da = (bdry.is_lower() ? da_m : da_p)[i];
       const auto& da_dv = (bdry.is_lower() ? da_dv_m : da_dv_p)[i];
 
       // Get power and energy source
-      const BoutReal heatflow = q * da;        // [W]
+      // Multiply by cell area to get power
+      const BoutReal heatflow = q * da; // [W]
+      // Divide by cell volume to get energy loss rate
       const BoutReal power = heatflow / dv[i]; // [Wm^-3]
       ASSERT2(std::isfinite(power));
       energy_source[i] -= bdry.toward * power;
@@ -786,6 +826,83 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
 
     set(diagnostics[species.name()]["energy_source"], hflux_i);
     set(diagnostics[species.name()]["particle_source"], particle_source);
+  }
+
+  if (is_insulating()) {
+    //////////////////////////////////////////////////////////////////
+    // Electrons
+    // This time adding energy sink, having calculated flow
+
+    const auto set_electron_source = [&](const YBoundary& bdry) {
+      const auto i = bdry.i;
+      const auto ip = bdry.ip;
+      const auto im = bdry.im;
+
+      const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
+      const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
+      // Electron velocity into sheath (< 0). Calculated from ion flow
+      const BoutReal vesheath = 0.5 * (Ve[im] + Ve[i]);
+      const BoutReal vesheath_flow = no_flow ? 0.0 : vesheath;
+
+      // Take into account the flow of energy due to fluid flow
+      // This is additional energy flux through the sheath
+      // Note: Here this is negative because vesheath < 0
+      BoutReal q = ((gamma_e - 1 - 1 / (electron_adiabatic - 1)) * tesheath
+                    - 0.5 * Me * SQ(vesheath))
+                   * nesheath * vesheath;
+
+      // Cross-sectional area in XZ plane and cell volume
+      const auto& da = (bdry.is_lower() ? da_m : da_p)[i];
+      const auto& da_dv = (bdry.is_lower() ? da_dv_m : da_dv_p)[i];
+
+      // Get power and energy source
+      // Multiply by cell area to get power
+      const BoutReal heatflow = q * da; // [W]
+      // Divide by cell volume to get energy loss rate
+      const BoutReal power = heatflow / dv[i]; // [Wm^-3]
+
+#if CHECKLEVEL >= 1
+      if (!std::isfinite(power)) {
+        throw BoutException("Non-finite power at {} : Te {} Ne {} Ve {}", i, tesheath,
+                            nesheath, vesheath);
+      }
+#endif
+
+      electron_energy_source[i] -= bdry.toward * power;
+      // Total heat flux for diagnostic purposes
+      const BoutReal q_no_flow = gamma_e * tesheath * nesheath * vesheath_flow; // [Wm^-2]
+      hflux_e[i] -= bdry.toward * q_no_flow * da_dv;                            // [Wm^-3]
+      // lower Y: sheath boundary power placed in final domain cell
+      // upper Y: sheath boundary power placed in ylow side of inner guard cell
+      const auto i_power = bdry.is_lower() ? i : i.yp();
+      electron_sheath_power_ylow[i_power] += heatflow; // [W]
+    };
+
+    if (lower_y) {
+      loop_boundary<YBoundarySide::lower>(*Ne.getMesh(), set_electron_source);
+    }
+    if (upper_y) {
+      loop_boundary<YBoundarySide::upper>(*Ne.getMesh(), set_electron_source);
+    }
+
+    set(diagnostics["e"]["energy_source"], hflux_e);
+
+    // Set energy source (negative in cell next to sheath)
+    // Note: electron_energy_source includes any sources previously set in other
+    // components
+    set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
+
+    // Add the total sheath power flux to the tracker of y power flows
+    add(electrons["energy_flow_ylow"], fromFieldAligned(electron_sheath_power_ylow));
+
+    if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
+      Ve.clearParallelSlices();
+      setBoundary(electrons["velocity"], fromFieldAligned(Ve));
+    }
+    if (IS_SET_NOBOUNDARY(electrons["momentum"])) {
+      NVe.clearParallelSlices();
+      setBoundary(electrons["momentum"], fromFieldAligned(NVe));
+    }
   }
 }
 
