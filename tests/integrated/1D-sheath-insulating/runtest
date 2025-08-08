@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+from boututils.run_wrapper import shell, launch_safe
+from boutdata.collect import BoutArray
+from boutdata.data import BoutOutputs
+
+from numpy import isclose
+
+import os
+
+HERMES_BIN = os.environ.get("HERMES_BIN", "../../../hermes-3")
+PATH = "data"
+
+# Loose tolerance due to low-res runs
+RTOL = 3e-2
+ATOL = 1e-2
+
+
+def check(result: BoutArray, index: int, expected: float, sense: str) -> bool:
+    """Check an individual variable is the expected value, pretty print a failure message if not"""
+    result_slice = result[index]
+    if isclose(result_slice, expected, rtol=RTOL, atol=ATOL):
+        return True
+
+    abs_diff = expected - result_slice
+    rel_diff = abs_diff / expected
+    name = result.attributes["long_name"]
+    units = result.attributes["units"]
+    print(
+        f"Failed: {sense} {name} ({result_slice:.4g}{units}), expected about {expected:.4g}{units} (diff: {abs_diff:.4g}, {rel_diff:%}%)"
+    )
+    return False
+
+
+def norm(var: BoutArray) -> BoutArray:
+    """Normalise a variable by its conversion factor"""
+    return var * var.attributes["conversion"]
+
+
+def collect_all():
+    """Collect all relevant variables from an output file"""
+    out = BoutOutputs(PATH, tind=-1, caching=True)
+
+    Pe = out["Pe"]
+    Ne = out["Ne"]
+    Tnorm = out["Tnorm"]
+    Ti = out["Ti"] * Tnorm
+
+    Te = (Pe / Ne) * Tnorm
+    Te.attributes["long_name"] = "e temperature"
+    Te.attributes["units"] = "eV"
+
+    return {
+        "Te": Te,
+        "Ti": Ti,
+        "Ve": norm(out["Ve"]),
+        "Vi": norm(out["Vi"]),
+    }
+
+
+def check_case(
+    case_name: str, expected: dict[str, dict[str, float]], extra_args=""
+) -> bool:
+    """Run and check a whole test case"""
+    s, out = launch_safe(f"{HERMES_BIN} -d {PATH} {extra_args}", nproc=1, pipe=True)
+
+    filename = case_name.replace(" ", "_")
+    with open(f"{filename}.log", "w") as f:
+        f.write(out)
+
+    results = collect_all()
+
+    success = True
+    for sense, slice in senses.items():
+        for field, value in expected[sense].items():
+            success &= check(results[field], slice, value, sense)
+
+    print(f"{case_name} => Test {'passed' if success else 'failed'}")
+    return success
+
+
+# Clean up any previous runs
+shell("rm -f data/BOUT.dmp.0.nc")
+
+# Slices for upstream and downstream boundaries (interior points)
+senses = {"upstream": (-1, 0, 0, 0), "downstream": (-1, 0, -1, 0)}
+
+# Save some duplication in expected dicts later
+base_upstream = {
+    "Te": 100,
+    "Ti": 100,
+    "Ve": 0.0,
+    "Vi": 0.0,
+}
+base_downstream = {
+    "Te": 91.14,
+    "Ti": 93.8,
+    "Ve": 30350,
+    "Vi": 30350,
+}
+
+success = True
+
+################################################################################
+# Base case
+
+expected = {
+    "upstream": base_upstream,
+    "downstream": base_downstream,
+}
+
+success &= check_case("Sheath base case", expected)
+
+################################################################################
+# Re-run with intermediate secondary electron emission.
+# Should give higher electron temperature and higher velocity.
+
+expected = {
+    "upstream": base_upstream,
+    "downstream": {
+        "Te": 91.14,
+        "Ti": 93.8,
+        "Ve": 31080,
+        "Vi": 31080,
+    },
+}
+
+success &= check_case(
+    "Sheath intermediate Ge", expected, "sheath_boundary_insulating:secondary_electron_coef=0.50"
+)
+
+################################################################################
+# Re-run with higher secondary electron emission.
+# Should give higher electron temperature and higher velocity.
+
+expected = {
+    "upstream": base_upstream,
+    "downstream": {
+        "Te": 91.14,
+        "Ti": 93.8,
+        "Ve": 31080,
+        "Vi": 31080,
+    },
+}
+
+success &= check_case(
+    "Sheath higher Ge", expected, "sheath_boundary_insulating:secondary_electron_coef=0.99"
+)
+
+################################################################################
+# Re-run with flipped direction. Should be mirror of base case
+
+flipped_upstream = base_downstream
+flipped_upstream["Ve"] = -flipped_upstream["Ve"]
+flipped_upstream["Vi"] = -flipped_upstream["Vi"]
+
+expected = {
+    "upstream": flipped_upstream,
+    "downstream": base_upstream,
+}
+
+success &= check_case("Mirrored BCs", expected, "lower_sheath=true")
+
+################################################################################
+
+if success:
+    print(" => Test passed")
+    exit(0)
+else:
+    print(" => Test failed")
+    exit(1)
