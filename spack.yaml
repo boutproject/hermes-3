@@ -5,20 +5,23 @@
 spack:
   # add package specs to the `specs` list
   specs:
-    - hermes-3%gcc+petsc+reactions ^py-numpy@1.26.4 ^nec_reactions.reactions~nvcxx+enable_tests ^neso.neso-particles~nvcxx+petsc+build_tests ^openblas ^neso.adaptivecpp ^hdf5
-    - cmake@3.30.5
+  - hermes-3%gcc+petsc+reactions ^py-numpy@1.26.4 ^nec_reactions.reactions~nvcxx+enable_tests
+    ^neso.neso-particles~nvcxx+petsc+build_tests ^openblas ^neso.adaptivecpp ^hdf5
+  - cmake@3.30.5
+  - py-meshio
+  - py-petsc4py
   view:
     gcc:
       root: ./views/gcc
-      select: ["%gcc"]
+      select: ['%gcc']
       link_type: symlink
   concretizer:
     unify: when_possible
   repos:
-    - ./external/BOUT-spack
-    - ./external/Reactions/Reactions-repo
-    - ./external/Reactions/NESO-Spack
-    - $spack/var/spack/repos/builtin
+  - ./external/BOUT-spack
+  - ./external/Reactions/Reactions-repo
+  - ./external/Reactions/NESO-Spack
+  - $spack/var/spack/repos/builtin
   packages:
     all:
       providers:
