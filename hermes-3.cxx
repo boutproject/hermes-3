@@ -61,7 +61,7 @@
 #include "include/relax_potential.hxx"
 #include "include/scale_timederivs.hxx"
 #include "include/set_temperature.hxx"
-#include "include/sheath_boundary_simple.hxx"
+#include "include/sheath_boundary.hxx"
 #include "include/sheath_closure.hxx"
 #include "include/simple_conduction.hxx"
 #include "include/snb_conduction.hxx"

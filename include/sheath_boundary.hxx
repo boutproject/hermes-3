@@ -1,6 +1,6 @@
 #pragma once
-#ifndef SHEATH_BOUNDARY_SIMPLE_H
-#define SHEATH_BOUNDARY_SIMPLE_H
+#ifndef HERMES_SHEATH_BOUNDARY_H
+#define HERMES_SHEATH_BOUNDARY_H
 
 #include "component.hxx"
 
@@ -219,4 +219,4 @@ const RegisterComponent<SheathBoundaryInsulating>
     registercomponentsheathboundaryinsulating("sheath_boundary_insulating");
 } // namespace
 
-#endif // SHEATH_BOUNDARY_SIMPLE_H
+#endif // HERMES_SHEATH_BOUNDARY_H

@@ -55,10 +55,10 @@ Top-level components are defined underneath the ``[hermes]`` section:
         noflow_boundary, upstream_density_feedback)
 
 A top-level component is either a component which requires to have information
-regarding all species (e.g. ``[sheath_boundary_simple]`` or ``[sound_speed]``), 
-or a species itself (e.g. ``[d+]``). Apart from species, each component name
-has a corresponding header and/or implementation file, e.g.
-``sheath_boundary_simple.hxx`` and ``sheath_boundary_simple.cxx``.
+regarding all species (e.g. ``[sheath_boundary_simple]`` or ``[sound_speed]``),
+or a species itself (e.g. ``[d+]``). Apart from species, each component name has
+a corresponding header and/or implementation file, e.g. ``sound_speed.hxx`` and
+``sound_speed.cxx``.
 
 Species-level components are instantiated individually for each species, and
 so are defined inside the top-level species component. Common species-level components

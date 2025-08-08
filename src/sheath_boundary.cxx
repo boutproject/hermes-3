@@ -1,7 +1,7 @@
 #include <algorithm>
 
 #include "../include/hermes_utils.hxx"
-#include "../include/sheath_boundary_simple.hxx"
+#include "../include/sheath_boundary.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
