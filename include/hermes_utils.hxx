@@ -2,13 +2,13 @@
 #ifndef HERMES_UTILS_H
 #define HERMES_UTILS_H
 
+#include <algorithm>
+
 #include "bout/traits.hxx"
 #include "bout/bout_enum_class.hxx"
 
 inline BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
+  return std::max(value, min);
 }
 
 /// Apply a smoothly varying "soft" floor to the value
@@ -16,8 +16,7 @@ inline BoutReal floor(BoutReal value, BoutReal min) {
 ///
 /// Note: This function cannot be used with min = 0!
 inline BoutReal softFloor(BoutReal value, BoutReal min) {
-  if (value < 0.0)
-    value = 0.0;
+  value = std::max(value, 0.0);
   return value + min * exp(-value / min);
 }
 

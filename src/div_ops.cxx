@@ -23,15 +23,15 @@
 
 #include "../include/div_ops.hxx"
 
-#include <bout/fv_ops.hxx>
-
 #include <bout/assert.hxx>
-#include <bout/mesh.hxx>
 #include <bout/derivs.hxx>
+#include <bout/fv_ops.hxx>
 #include <bout/globals.hxx>
+#include <bout/mesh.hxx>
 #include <bout/output.hxx>
 #include <bout/utils.hxx>
 
+#include <algorithm>
 #include <cmath>
 
 using bout::globals::mesh;
@@ -505,13 +505,11 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D &n, const Field3D &f,
           if (mesh->firstY(i) && !mesh->periodicY(i) &&
               (j == mesh->ystart - 1)) {
             // Lower y boundary. Allow flows out of the domain only
-            if (Vy > 0.0)
-              Vy = 0.0;
+            Vy = std::min(Vy, 0.0);
           }
           if (mesh->lastY(i) && !mesh->periodicY(i) && (j == mesh->yend)) {
             // Upper y boundary
-            if (Vy < 0.0)
-              Vy = 0.0;
+            Vy = std::max(Vy, 0.0);
           }
 
           // Fromm method

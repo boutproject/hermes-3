@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "../include/sheath_boundary_simple.hxx"
 #include "../include/hermes_utils.hxx"
 

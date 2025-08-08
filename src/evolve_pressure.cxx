@@ -323,6 +323,8 @@ void EvolvePressure::finally(const Options& state) {
         ddt(P) += Sp_nvh;
       }
     }
+  } else if (diagnose) {
+    flow_ylow = 0;
   }
 
   if (species.isSet("low_n_coeff")) {

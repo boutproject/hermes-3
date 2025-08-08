@@ -11,6 +11,8 @@
 #include "../include/hermes_build_config.hxx"
 #include "../include/neutral_mixed.hxx"
 
+#include <algorithm>
+
 using bout::globals::mesh;
 
 using ParLimiter = hermes::Limiter;
@@ -200,10 +202,9 @@ void NeutralMixed::transform(Options& state) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         // Free boundary (constant gradient) density
-        BoutReal nnwall =
-            0.5 * (3. * Nn(r.ind, mesh->ystart, jz) - Nn(r.ind, mesh->ystart + 1, jz));
-        if (nnwall < 0.0)
-          nnwall = 0.0;
+        const BoutReal nnwall = std::max(
+            0.5 * (3. * Nn(r.ind, mesh->ystart, jz) - Nn(r.ind, mesh->ystart + 1, jz)),
+            0.0);
 
         BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
 
@@ -231,10 +232,8 @@ void NeutralMixed::transform(Options& state) {
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         // Free boundary (constant gradient) density
-        BoutReal nnwall =
-            0.5 * (3. * Nn(r.ind, mesh->yend, jz) - Nn(r.ind, mesh->yend - 1, jz));
-        if (nnwall < 0.0)
-          nnwall = 0.0;
+        const BoutReal nnwall = std::max(
+            0.5 * (3. * Nn(r.ind, mesh->yend, jz) - Nn(r.ind, mesh->yend - 1, jz)), 0.0);
 
         BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
 

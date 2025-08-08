@@ -2,6 +2,8 @@
 #ifndef AMJUEL_REACTION_H
 #define AMJUEL_REACTION_H
 
+#include <algorithm>
+
 #include "component.hxx"
 #include "integrate.hxx"
 
@@ -17,14 +19,6 @@ struct AmjuelReaction : public Component {
 protected:
   BoutReal Tnorm, Nnorm, FreqNorm; // Normalisations
 
-  BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
-    if (value < min)
-      return min;
-    if (value > max)
-      return max;
-    return value;
-  }
-
   /// Evaluate a double polynomial fit in n and T
   /// (page 20 of amjuel.pdf)
   ///
@@ -38,8 +32,8 @@ protected:
   BoutReal evaluate(const BoutReal (&coefs)[rows][cols], BoutReal T, BoutReal n) {
 
     // Enforce range of validity
-    n = clip(n, 1e14, 1e22); // 1e8 - 1e16 cm^-3
-    T = clip(T, 0.1, 1e4);
+    n = std::clamp(n, 1e14, 1e22); // 1e8 - 1e16 cm^-3
+    T = std::clamp(T, 0.1, 1e4);
 
     BoutReal logntilde = log(n / 1e14); // Note: 1e8 cm^-3
     BoutReal logT = log(T);

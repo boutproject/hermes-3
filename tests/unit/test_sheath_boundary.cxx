@@ -3,6 +3,7 @@
 
 #include "hermes_utils.hxx"
 #include "test_extras.hxx" // FakeMesh
+#include "fake_mesh_fixture.hxx"
 
 #include "../../include/sheath_boundary.hxx"
 #include "../../include/sheath_boundary_simple.hxx"
