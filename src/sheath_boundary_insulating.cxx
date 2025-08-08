@@ -470,7 +470,7 @@ void SheathBoundaryInsulating::transform(Options &state) {
 
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]);  // electron temperature
-        const BoutReal vesheath = 0.5 * (Ve[im] + Ve[i]);  // From ion flow
+        const BoutReal vesheath = 0.5 * (Ve[ip] + Ve[i]);  // From ion flow
 
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
