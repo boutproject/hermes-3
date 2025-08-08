@@ -2,6 +2,7 @@ import netCDF4 as nc
 import numpy as np
 import matplotlib.pyplot as plt
 from petsc4py import PETSc
+import meshio
 
 def create_and_visualize_mesh(Nx,Ny,cell_list,vertex_list):
     # Initialize PETSc
@@ -58,6 +59,9 @@ def create_and_visualize_mesh(Nx,Ny,cell_list,vertex_list):
     viewer = PETSc.Viewer().createVTK("mesh_h5_to_vtk.vtk", mode=PETSc.Viewer.Mode.WRITE, comm=comm)
     dmtest.view(viewer)
     viewer.destroy()
+    # write mesh to gmsh format with ascii output, for use in NESO-particles tests
+    mesh = meshio.read("mesh.vtk")
+    mesh.write("mesh.msh",binary=False)
     return None
 
 
