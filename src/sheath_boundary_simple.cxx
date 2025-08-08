@@ -10,17 +10,7 @@
 #include <bout/mesh.hxx>
 #include <bout/region.hxx>
 
-#include <algorithm>
 #include <fmt/core.h>
-
-#if __cpp_lib_unreachable >= 202202L
-// C++23
-#include <utility>
-#define HERMES_UNREACHABLE std::unreachable()
-#else
-#include <stdexcept>
-#define HERMES_UNREACHABLE throw std::logic_error("unreachable")
-#endif
 
 using bout::globals::mesh;
 
@@ -301,10 +291,11 @@ Field3D calculate_phi_Tskhakaya(Options& allspecies, bool lower_y, bool upper_y,
 
 /// If phi is set, use free boundary condition;
 /// If phi not set, calculate assuming zero current, according to sheath kind
-Field3D init_phi(Options& state, hermes::SheathKind kind, Options& allspecies,
-                 bool lower_y, bool upper_y, const Field3D& Ne, const Field3D& Te,
-                 BoutReal Me, BoutReal Ge, const Field3D& wall_potential,
-                 BoutReal sin_alpha, SheathLimitMode density_boundary_mode,
+template <hermes::SheathKind kind>
+Field3D init_phi(Options& state, Options& allspecies, bool lower_y, bool upper_y,
+                 const Field3D& Ne, const Field3D& Te, BoutReal Me, BoutReal Ge,
+                 const Field3D& wall_potential, BoutReal sin_alpha,
+                 SheathLimitMode density_boundary_mode,
                  SheathLimitMode temperature_boundary_mode,
                  BoutReal sheath_ion_polytropic) {
 
@@ -312,25 +303,22 @@ Field3D init_phi(Options& state, hermes::SheathKind kind, Options& allspecies,
     return toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   }
 
-  switch (kind) {
-  case hermes::SheathKind::normal:
+  if constexpr (kind == hermes::SheathKind::normal) {
     return calculate_phi_Tskhakaya(allspecies, lower_y, upper_y, Ne, Te, Me, Ge,
                                    wall_potential, sin_alpha);
-  case hermes::SheathKind::simple:
+  } else if constexpr (kind == hermes::SheathKind::simple) {
     return calculate_phi_simple(allspecies, lower_y, upper_y, Ne, Te, Me, Ge,
                                 wall_potential, density_boundary_mode,
                                 temperature_boundary_mode, sheath_ion_polytropic);
-  };
-
-  // Shouldn't reach here!
-  HERMES_UNREACHABLE;
+  } else {
+    static_assert(false, "Unhandled sheath kind");
+  }
 }
 
 } // namespace
 
-SheathBoundaryBase::SheathBoundaryBase(Options& options, BoutReal Tnorm,
-                                       hermes::SheathKind kind)
-    : kind(kind) {
+template <hermes::SheathKind kind>
+SheathBoundaryBase<kind>::SheathBoundaryBase(Options& options, BoutReal Tnorm) {
   AUTO_TRACE();
 
   Ge = options["secondary_electron_coef"]
@@ -407,7 +395,8 @@ SheathBoundaryBase::SheathBoundaryBase(Options& options, BoutReal Tnorm,
                  .withDefault<bool>(false);
 }
 
-void SheathBoundaryBase::transform(Options& state) {
+template <hermes::SheathKind kind>
+void SheathBoundaryBase<kind>::transform(Options& state) {
   AUTO_TRACE();
 
   Options& allspecies = state["species"];
@@ -444,9 +433,9 @@ void SheathBoundaryBase::transform(Options& state) {
 
   //////////////////////////////////////////////////////////////////
   // Electrostatic potential
-  Field3D phi = init_phi(state, kind, allspecies, lower_y, upper_y, Ne, Te, Me, Ge,
-                         wall_potential, sin_alpha, density_boundary_mode,
-                         temperature_boundary_mode, sheath_ion_polytropic);
+  Field3D phi = init_phi<kind>(state, allspecies, lower_y, upper_y, Ne, Te, Me, Ge,
+                               wall_potential, sin_alpha, density_boundary_mode,
+                               temperature_boundary_mode, sheath_ion_polytropic);
 
   // Field to capture total sheath heat flux for diagnostics
   Field3D electron_sheath_power_ylow = zeroFrom(Ne);
@@ -529,14 +518,14 @@ void SheathBoundaryBase::transform(Options& state) {
 
     // Electron sheath heat transmission: either user-set or from model
     const BoutReal _gamma_e = [&]() {
-      switch (kind) {
-      case hermes::SheathKind::simple:
+      if constexpr (kind == hermes::SheathKind::simple) {
         return gamma_e;
-      case hermes::SheathKind::normal:
+      } else if constexpr (kind == hermes::SheathKind::normal) {
         return floor((2 / (1. - Ge)) + ((phisheath - phi_wall) / floor(tesheath, 1e-5)),
                      0.0);
+      } else {
+        static_assert(false, "Unhandled sheath kind");
       }
-      HERMES_UNREACHABLE;
     }();
 
     const BoutReal adiabatic = -1 - (1 / (electron_adiabatic - 1));
@@ -699,15 +688,14 @@ void SheathBoundaryBase::transform(Options& state) {
 
       // Ion speed into sheath
       const BoutReal C_i_sq = [&]() {
-        switch (kind) {
-        case hermes::SheathKind::normal:
+        if constexpr (kind == hermes::SheathKind::normal) {
           return ((adiabatic * tisheath) + (Zi * s_i * tesheath) * (grad_ne / grad_ni))
                  / Mi;
-        case hermes::SheathKind::simple:
+        } else if constexpr (kind == hermes::SheathKind::simple) {
           return ((sheath_ion_polytropic * tisheath) + (Zi * tesheath)) / Mi;
+        } else {
+          static_assert(false, "Unhandled sheath kind");
         }
-        // Shouldn't reach here!
-        HERMES_UNREACHABLE;
       }();
 
       // Negative -> into sheath
@@ -717,8 +705,7 @@ void SheathBoundaryBase::transform(Options& state) {
 
       // Note: Here this is negative because visheath < 0
       const BoutReal q = [&]() {
-        switch (kind) {
-        case hermes::SheathKind::normal: {
+        if constexpr (kind == hermes::SheathKind::normal) {
           // Ion sheath heat transmission coefficient
           // TODO(peter): Should this 2.5 be `-1 - 1/(adiabatic - 1)`?
           const BoutReal _gamma_i = 2.5 + (0.5 * Mi * C_i_sq / tisheath);
@@ -727,15 +714,15 @@ void SheathBoundaryBase::transform(Options& state) {
               ((_gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * Mi * C_i_sq)
               * nisheath * visheath;
           return bdry.is_lower() ? std::min(_q, 0.0) : std::max(_q, 0.0);
-        }
-        case hermes::SheathKind::simple:
+        } else if constexpr (kind == hermes::SheathKind::simple) {
           return (gamma_i * tisheath * nisheath * visheath)
                  // Take into account the flow of energy due to fluid flow
                  // This is additional energy flux through the sheath
                  - ((2.5 * tisheath + 0.5 * Mi * SQ(visheath_flow)) * nisheath
                     * visheath_flow);
-        };
-        HERMES_UNREACHABLE;
+        } else {
+          static_assert(false, "Unhandled sheath kind");
+        }
       }();
 
       // Set boundary conditions on flows
@@ -802,7 +789,8 @@ void SheathBoundaryBase::transform(Options& state) {
   }
 }
 
-void SheathBoundaryBase::outputVars(Options& state) {
+template <hermes::SheathKind kind>
+void SheathBoundaryBase<kind>::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);

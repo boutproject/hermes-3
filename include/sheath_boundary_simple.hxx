@@ -22,6 +22,7 @@ enum class SheathKind : std::uint8_t {
 /// This is a collective component, because it couples all charged species
 ///
 ///
+template <hermes::SheathKind kind>
 struct SheathBoundaryBase : public Component {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary_simple"
@@ -37,7 +38,7 @@ struct SheathBoundaryBase : public Component {
   ///   surface (0 to 1)
   ///   - always_set_phi           Always set phi field? Default is to only modify if
   ///   already set
-  SheathBoundaryBase(Options& options, BoutReal Tnorm, hermes::SheathKind kind);
+  SheathBoundaryBase(Options& options, BoutReal Tnorm);
 
   /// # Inputs
   /// - species
@@ -85,7 +86,7 @@ struct SheathBoundaryBase : public Component {
   void outputVars(Options& state) override;
 
 private:
-  hermes::SheathKind kind; //< Kind of sheath boundary
+  static constexpr hermes::SheathKind sheath_kind = kind;
 
   BoutReal Ge;        //< Secondary electron emission coefficient
   BoutReal sin_alpha; //< sin of angle between magnetic field and wall.
@@ -126,7 +127,7 @@ private:
 ///   - It is recommended to use SheathBoundary rather than SheathBoundarySimple;
 ///     this is here for comparison to that more complete model.
 ///
-struct SheathBoundarySimple : public SheathBoundaryBase {
+struct SheathBoundarySimple : public SheathBoundaryBase<hermes::SheathKind::simple> {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary_simple"
   ///   - lower_y                  Boundary on lower y?
@@ -143,8 +144,7 @@ struct SheathBoundarySimple : public SheathBoundaryBase {
   ///   already set
   SheathBoundarySimple(const std::string& name, Options& options,
                        [[maybe_unused]] Solver* solver)
-      : SheathBoundaryBase(options[name], options["units"]["eV"],
-                           hermes::SheathKind::simple) {}
+      : SheathBoundaryBase(options[name], options["units"]["eV"]) {}
 };
 
 /// Boundary condition at the wall in Y
@@ -161,7 +161,7 @@ struct SheathBoundarySimple : public SheathBoundaryBase {
 ///   - No boundary condition is applied to neutral species
 ///   - Boundary conditions are applied to field-aligned fields
 ///     using to/fromFieldAligned
-struct SheathBoundary : public SheathBoundaryBase {
+struct SheathBoundary : public SheathBoundaryBase<hermes::SheathKind::normal> {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary_simple"
   ///   - lower_y                  Boundary on lower y?
@@ -176,9 +176,11 @@ struct SheathBoundary : public SheathBoundaryBase {
   ///   already set
   SheathBoundary(const std::string& name, Options& options,
                  [[maybe_unused]] Solver* solver)
-      : SheathBoundaryBase(options[name], options["units"]["eV"],
-                           hermes::SheathKind::normal) {}
+      : SheathBoundaryBase(options[name], options["units"]["eV"]) {}
 };
+
+template class SheathBoundaryBase<hermes::SheathKind::normal>;
+template class SheathBoundaryBase<hermes::SheathKind::simple>;
 
 namespace {
 const RegisterComponent<SheathBoundarySimple>
