@@ -39,6 +39,22 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list):
     dm.createFromCellList(dim, cells, vertex_coords, comm=comm)
     # Distribute the mesh (optional, useful for parallel runs)
     #dm = dm.distribute()
+    label_name = "Face Sets"
+    dm.createLabel(label_name)
+    dm.markBoundaryFaces(label_name, value=100)
+
+    # # Print labeled boundary faces
+    # depth = dm.getDepth()
+    # face_start, face_end = dm.getDepthStratum(depth - 1)
+
+    # print(f"Boundary faces labeled with {label_name}:")
+    # for face in range(face_start, face_end):
+    #     value = dm.getLabelValue(label_name, face)
+    #     if value == 100:
+    #         print(f"Face {face} labeled with value {value}")
+
+
+
     mesh_name = file_path+".mesh"
     # Write the mesh to a VTK file
     viewer = PETSc.Viewer().createVTK(mesh_name+".vtk", mode=PETSc.Viewer.Mode.WRITE, comm=comm)
