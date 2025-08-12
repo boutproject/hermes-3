@@ -71,12 +71,6 @@ protected:
   const std::string from_species;
   const std::string to_species;
 
-  // For diagnostics
-  Field3D S; ///< Particle exchange
-  Field3D F; ///< Momentum exchange
-  Field3D E; ///< Energy exchange
-  Field3D R; ///< Radiation loss
-
   /// Functions to calculate Amjuel rates from underlying tables
   BoutReal eval_amjuel_fit(BoutReal T, BoutReal n,
                            const std::vector<std::vector<BoutReal>>& coeff_table);
@@ -88,9 +82,8 @@ protected:
   const std::vector<std::vector<BoutReal>>& get_rad_coeffs() const;
   const std::vector<std::vector<BoutReal>>& get_rate_coeffs() const;
 
-  virtual void transform_additional(Options& state, Field3D& reaction_rate,
-                                    Field3D& momentum_exchange, Field3D& energy_exchange,
-                                    Field3D& energy_loss) override final;
+  virtual void transform_additional(Options& state,
+                                    Field3D& reaction_rate) override final;
 
 private:
   const AmjuelData amjuel_data;

@@ -4,7 +4,10 @@
 
 #include "component.hxx"
 #include "hermes_build_config.hxx"
+#include "reaction_diagnostic.hxx"
 #include "reaction_parser.hxx"
+
+typedef Options& (*OPTYPE)(Options&, Field3D);
 
 struct Reaction : public Component {
   Reaction(std::string name, Options& alloptions);
@@ -14,6 +17,9 @@ struct Reaction : public Component {
     return instance_num++;
   }
   void transform(Options& state) override final;
+
+  void outputVars(Options& state) override;
+  // void outputVars(Options& state) override final;
 
 protected:
   // Reaction string parser
@@ -27,6 +33,31 @@ protected:
 
   // Output diagnostics?
   bool diagnose;
+
+  // map of (sp_name,src_type_name)->Diagnostic
+  // Probably src_type_name should be an enum
+  std::multimap<std::pair<std::string, std::string>, ReactionDiagnostic> diagnostics;
+
+  /**
+   * @brief Add a new entry in this Reaction's diagnostic (multi)map. The (non-unique) Key
+   * is < \p sp_name, \p type >
+   *
+   * @param sp_name name of the species with which to associate the diagnostic
+   * @param diag_name name of the diagnostic (also the key used when updating it in the
+   * state object)
+   * @param long_diag_name doc string to use as the diagnostic description
+   * @param type an enum that associates the diagnostic with density, momentum or energy
+   * sources
+   * @param data_source name of the associated data source (e.g. 'Amjuel H.x.y')
+   * @param transformer optional transformer function to call on field data when the
+   * diagnostic is updated
+   * @param standard_name optional 'standard_name' to use in the output file
+   */
+  void add_diagnostic(const std::string& sp_name, const std::string& diag_name,
+                      const std::string& long_diag_name, ReactionDiagnosticType type,
+                      const std::string& data_source,
+                      DiagnosticTransformerType transformer = negate,
+                      const std::string& standard_name = "");
 
   /**
    * @brief Calculate weightsums used in transform(). Can't be done at construction
@@ -48,8 +79,6 @@ protected:
    */
   virtual BoutReal eval_electron_energy_loss_rate(BoutReal T, BoutReal n) = 0;
 
-  //
-  //
   /**
    * @brief Evaluate reaction rate coefficients at a particular density and temperature
    * (Subclasses MUST define)
@@ -61,42 +90,56 @@ protected:
   virtual BoutReal eval_reaction_rate(BoutReal T, BoutReal n) = 0;
 
   /**
-   * @brief Set the diagnostic fields object.
-   * (Subclasses MAY define)
-   *
-   * @param reaction_rate
-   * @param momentum_exchange
-   * @param energy_exchange
-   * @param energy_loss
-   */
-  virtual void set_diagnostic_fields(Field3D& reaction_rate, Field3D& momentum_exchange,
-                                     Field3D& energy_exchange, Field3D& energy_loss){};
-
-  /**
    * @brief A hook with which subclasses can perform additional transform tasks, over and
    * above those implemented in Reaction::transform. (Subclasses MAY define)
    *
    * @param state
    * @param reaction_rate
-   * @param momentum_exchange
-   * @param energy_exchange
-   * @param energy_loss
    */
-  virtual void transform_additional(Options& state, Field3D& reaction_rate,
-                                    Field3D& momentum_exchange, Field3D& energy_exchange,
-                                    Field3D& energy_loss) {}
+  virtual void transform_additional(Options& state, Field3D& reaction_rate) {}
+
+  /**
+   * @brief Update both a species source term and the corresponding diagnostics (if any
+   * exist and if diagnostics are enabled)
+   *
+   * @tparam operation function to call on the state to update the source term and
+   * the diagnostic. Either Component::add, Component::subtract or Component::set
+   * @param state the state to update
+   * @param sp_name the species to update
+   * @param src_name the source field to update
+   * @param fld the field used in the update
+   */
+  template <OPTYPE operation>
+  void update_source(Options& state, const std::string& sp_name,
+                     const std::string& src_name, Field3D& fld) {
+    // Update species data
+    operation(state["species"][sp_name][src_name], fld);
+
+    if (this->diagnose) {
+      // Update corresponding diagnostic(s) (if any exist)
+      auto matches = this->diagnostics.equal_range(std::make_pair(sp_name, src_name));
+      for (auto match = matches.first; match != matches.second; match++) {
+        ReactionDiagnostic diag = match->second;
+        Field3D diag_src_fld = diag.transform(fld);
+        operation(state[diag.name], diag_src_fld);
+      }
+    }
+  }
 
 private:
+  /// Sum of weights to use when calculating energy source due to population change
+  BoutReal energy_weightsum;
+
+  /// Sum of weights to use when calculating momentum source due to population change
+  BoutReal momentum_weightsum;
+
   /// Label to use for this reaction in a state / Options object
   const std::string name;
 
   /// Participation factors of all species
   std::map<std::string, BoutReal> pfactors;
 
-  /// Sum of weights to use when calculating energy source due to population change
-  BoutReal energy_weightsum;
-  /// Sum of weights to use when calculating momentum source due to population change
-  BoutReal momentum_weightsum;
+  void zero_diagnostics(Options& state);
 };
 
 /**

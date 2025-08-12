@@ -3,6 +3,9 @@
 #include <iomanip>
 #include <memory>
 #include <regex>
+#include <utility>
+
+#include <bout/boutexception.hxx>
 
 #include "integrate.hxx"
 
@@ -14,9 +17,9 @@ Reaction::Reaction(std::string name, Options& options) : name(name) {
   Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
   FreqNorm = 1. / get<BoutReal>(units["seconds"]);
 
-  diagnose = options[name]["diagnose"]
-                 .doc("Output additional diagnostics?")
-                 .withDefault<bool>(false);
+  this->diagnose = options[name]["diagnose"]
+                       .doc("Output additional diagnostics?")
+                       .withDefault<bool>(false);
 
   /*
    * Awful hack to extract the correct reaction expression from the params; depends on
@@ -48,6 +51,35 @@ Reaction::Reaction(std::string name, Options& options) : name(name) {
 }
 
 /**
+ * @brief
+ *
+ * @param sp_name
+ * @param diag_name
+ * @param long_diag_name
+ * @param type
+ * @param data_source
+ *
+ * @todo just use ReactionDiagnosticType in key directly?
+ */
+void Reaction::add_diagnostic(const std::string& sp_name, const std::string& diag_name,
+                              const std::string& long_diag_name,
+                              ReactionDiagnosticType type, const std::string& data_source,
+                              DiagnosticTransformerType transformer,
+                              const std::string& standard_name) {
+  std::string source_name = toString(type) + "_source";
+  std::pair<std::string, std::string> diag_key = std::make_pair(sp_name, source_name);
+  if (standard_name.empty()) {
+    this->diagnostics.insert(
+        std::make_pair(diag_key, ReactionDiagnostic(diag_name, long_diag_name, type,
+                                                    data_source, transformer)));
+  } else {
+    this->diagnostics.insert(std::make_pair(
+        diag_key, ReactionDiagnostic(diag_name, long_diag_name, type, data_source,
+                                     standard_name, transformer)));
+  }
+}
+
+/**
  * @brief Compute weight sums, if it hasn't been done already.
  *          Energy   : sum of (+ve pop change) participation factors
  *          Momentum : sum of (+ve pop change) participation factors, weighted by mass
@@ -70,6 +102,15 @@ void Reaction::calc_weightsums(Options& state) {
   }
 }
 
+void Reaction::outputVars(Options& state) {
+  // This only needs to be done once; probably need a better place to put it
+  if (this->diagnose) {
+    for (auto& [key, diag] : diagnostics) {
+      diag.set_attrs(state);
+    }
+  }
+}
+
 /**
  * @brief Use the stoichiometry matrix to compute density, momentum and energy sources.
  *
@@ -78,6 +119,7 @@ void Reaction::calc_weightsums(Options& state) {
 void Reaction::transform(Options& state) {
 
   Field3D momentum_exchange, energy_exchange, energy_loss;
+  zero_diagnostics(state);
 
   std::vector<std::string> reactant_names =
       parser->get_species(species_filter::reactants);
@@ -100,8 +142,7 @@ void Reaction::transform(Options& state) {
   Field3D reaction_rate = rate_helper.calc_rate();
 
   // Subclasses perform any additional transform tasks
-  transform_additional(state, reaction_rate, momentum_exchange, energy_exchange,
-                       energy_loss);
+  transform_additional(state, reaction_rate);
 
   // Use the stoichiometric values to set density sources for all species
   auto pop_changes = parser->get_stoich();
@@ -173,12 +214,16 @@ void Reaction::transform(Options& state) {
     }
 
     // Update sources
-    add(state["species"][sp_name]["momentum_source"], momentum_source);
-    add(state["species"][sp_name]["energy_source"], energy_source);
+    update_source<add<Field3D>>(state, sp_name, "momentum_source", momentum_source);
+    update_source<add<Field3D>>(state, sp_name, "energy_source", energy_source);
   }
+}
 
+void Reaction::zero_diagnostics(Options& state) {
   if (this->diagnose) {
-    set_diagnostic_fields(reaction_rate, momentum_exchange, energy_exchange, energy_loss);
+    for (auto& [key, diag] : diagnostics) {
+      set<Field3D>(state[diag.name], 0.0);
+    }
   }
 }
 
@@ -211,8 +256,8 @@ RateHelper<LimiterType, IdxType>::RateHelper(
 }
 
 /**
- * @brief Compute the cell-averaged reaction rate, accounting for the mass action factor
- * (product of reactant densities)
+ * @brief Compute the cell-averaged reaction rate, accounting for the mass action
+ * factor (product of reactant densities)
  *
  * @tparam LimiterType
  * @tparam IdxType

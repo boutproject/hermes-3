@@ -22,65 +22,55 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
                            std::string amjuel_label, std::string from_species,
                            std::string to_species, Options& alloptions)
       : AmjuelReaction(name, short_reaction_type, amjuel_label, from_species, to_species,
-                       alloptions),
-        long_reaction_type(long_reaction_types_map.at(short_reaction_type)) {}
-
-  void outputVars(Options& state) override {
-    AUTO_TRACE();
-    // Normalisations
-    BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
-    auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
-    auto Cs0 = get<BoutReal>(state["Cs0"]);
-
+                       alloptions) {
     if (this->diagnose) {
-      // Save particle, momentum and energy channels
-      set_with_attrs(
-          state[std::string("S") + this->reaction_suffix], this->S,
-          {{"time_dimension", "t"},
-           {"units", "m^-3 s^-1"},
-           {"conversion", Nnorm * Omega_ci},
-           {"standard_name", "particle source"},
-           {"long_name", std::string("Particle source due to ") + this->long_reaction_type
-                             + " of " + this->from_species + " to " + this->to_species},
-           {"source", this->amjuel_src}});
+      // Set up diagnostics
 
-      set_with_attrs(state[std::string("F") + this->reaction_suffix], this->F,
-                     {{"time_dimension", "t"},
-                      {"units", "kg m^-2 s^-2"},
-                      {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-                      {"standard_name", "momentum transfer"},
-                      {"long_name", (std::string("Momentum transfer due to ")
-                                     + this->long_reaction_type + " of "
-                                     + this->from_species + " to " + this->to_species)},
-                      {"source", this->amjuel_src}});
+      // All Amjuel izn/rec diagnostics are named using the ion (and the sign changed
+      // accordingly)
+      std::string ion_sp = fmt::format("{:s}+", std::string({Isotope}));
+      std::string default_diag_suffix =
+          fmt::format("{:s}_{:s}", ion_sp, short_reaction_type);
+      std::string rad_diag_suffix = default_diag_suffix;
+      DiagnosticTransformerType default_transformer = negate;
+      DiagnosticTransformerType rad_transformer = negate;
 
-      set_with_attrs(state[std::string("E") + this->reaction_suffix], this->E,
-                     {{"time_dimension", "t"},
-                      {"units", "W / m^3"},
-                      {"conversion", Pnorm * Omega_ci},
-                      {"standard_name", "energy transfer"},
-                      {"long_name",
-                       (std::string("Energy transfer due to ") + this->long_reaction_type
-                        + " of " + this->from_species + " to " + this->to_species)},
-                      {"source", this->amjuel_src}});
+      // For izn, tweak R diagnostic name and reverse the signs of the S, F, E diagnostics
+      if (short_reaction_type == "iz") {
+        rad_diag_suffix = fmt::format("{:s}_ex", ion_sp);
+        default_transformer = identity;
+      }
 
-      set_with_attrs(
-          state[std::string("R") + this->radiation_suffix], this->R,
-          {{"time_dimension", "t"},
-           {"units", "W / m^3"},
-           {"conversion", Pnorm * Omega_ci},
-           {"standard_name", "radiation loss"},
-           {"long_name", (std::string("Radiation loss due to ") + this->long_reaction_type
-                          + " of " + this->from_species + " to " + this->to_species)},
-           {"source", this->amjuel_src}});
+      auto heavy_products =
+          this->parser->get_species(species_filter::heavy, species_filter::products);
+      ASSERT1(heavy_products.size() == 1);
+      std::string heavy_product = heavy_products[0];
+      std::string long_reaction_type = long_reaction_types_map.at(short_reaction_type);
+      add_diagnostic(
+          heavy_product, fmt::format("S{:s}", default_diag_suffix),
+          fmt::format("Particle source due to {:s} of {:s} to {:s}", long_reaction_type,
+                      this->from_species, this->to_species),
+          ReactionDiagnosticType::density, this->amjuel_src, default_transformer);
+
+      add_diagnostic(
+          heavy_product, fmt::format("F{:s}", default_diag_suffix),
+          fmt::format("Momentum transfer due to {:s} of {:s} to {:s}", long_reaction_type,
+                      this->from_species, this->to_species),
+          ReactionDiagnosticType::momentum, this->amjuel_src, default_transformer);
+
+      add_diagnostic(
+          heavy_product, fmt::format("E{:s}", default_diag_suffix),
+          fmt::format("Energy transfer due to {:s} of {:s} to {:s}", long_reaction_type,
+                      this->from_species, this->to_species),
+          ReactionDiagnosticType::energy, this->amjuel_src, default_transformer);
+
+      add_diagnostic(
+          "e", fmt::format("R{:s}", rad_diag_suffix),
+          fmt::format("Radiation loss due to {:s} of {:s} to {:s}", long_reaction_type,
+                      this->from_species, this->to_species),
+          ReactionDiagnosticType::energy, this->amjuel_src, rad_transformer, "");
     }
   }
-
-protected:
-  // Strings used in outputVars to avoid duplicating code for ionisation/recombination
-  const std::string long_reaction_type;
-  std::string reaction_suffix;
-  std::string radiation_suffix;
 };
 
 /**
@@ -95,9 +85,6 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydIsotopeReaction<Isotope> 
       : AmjuelHydIsotopeReaction<Isotope>(name, "rec", "H.x_2.1.8", {Isotope, '+'},
                                           {Isotope}, alloptions) {
 
-    this->reaction_suffix = std::string({Isotope}) + "+_rec";
-    this->radiation_suffix = std::string({Isotope}) + "+_rec";
-
     this->rate_multiplier = alloptions[{Isotope}]["K_rec_multiplier"]
                                 .doc("Scale the recombination rate by this factor")
                                 .withDefault<BoutReal>(1.0);
@@ -106,15 +93,6 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydIsotopeReaction<Isotope> 
         alloptions[{Isotope}]["R_rec_multiplier"]
             .doc("Scale the recombination radiation (incl. 3 body) rate by this factor")
             .withDefault<BoutReal>(1.0);
-  }
-
-  void set_diagnostic_fields(Field3D& reaction_rate, Field3D& momentum_exchange,
-                             Field3D& energy_exchange,
-                             Field3D& energy_loss) override final {
-    this->S = -reaction_rate;
-    this->F = -momentum_exchange;
-    this->E = -energy_exchange;
-    this->R = -energy_loss;
   }
 };
 
@@ -128,10 +106,6 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIsotopeReaction<Isotope> {
   AmjuelHydIonisationIsotope(std::string name, Options& alloptions, Solver*)
       : AmjuelHydIsotopeReaction<Isotope>(name, "iz", "H.x_2.1.5", {Isotope},
                                           {Isotope, '+'}, alloptions) {
-
-    this->reaction_suffix = std::string({Isotope}) + "+_iz";
-    this->radiation_suffix = std::string({Isotope}) + "+_ex";
-
     this->rate_multiplier = alloptions[{Isotope}]["K_iz_multiplier"]
                                 .doc("Scale the ionisation rate by this factor")
                                 .withDefault<BoutReal>(1.0);
@@ -140,15 +114,6 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIsotopeReaction<Isotope> {
                                      .doc("Scale the ionisation excitation/de-excitation "
                                           "radiation rate by this factor")
                                      .withDefault<BoutReal>(1.0);
-  }
-
-  void set_diagnostic_fields(Field3D& reaction_rate, Field3D& momentum_exchange,
-                             Field3D& energy_exchange,
-                             Field3D& energy_loss) override final {
-    this->S = reaction_rate;
-    this->F = momentum_exchange;
-    this->E = energy_exchange;
-    this->R = -energy_loss;
   }
 };
 

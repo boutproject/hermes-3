@@ -67,10 +67,7 @@ const std::vector<std::vector<BoutReal>>& AmjuelReaction::get_rate_coeffs() cons
   return amjuel_data.rate_coeffs;
 }
 
-void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate,
-                                          Field3D& momentum_exchange,
-                                          Field3D& energy_exchange,
-                                          Field3D& energy_loss) {
+void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate) {
 
   // Amjuel-based reactions are assumed to have exactly 2 reactants, for now.
   std::vector<std::string> reactant_species =
@@ -137,7 +134,7 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
 
   // Electron energy loss (radiation, ionisation potential)
   Field3D n_e = get<Field3D>(electron["density"]);
-  energy_loss = cellAverage(
+  Field3D energy_loss = cellAverage(
       [&](BoutReal nrh, BoutReal ne, BoutReal te) {
         return nrh * ne * eval_electron_energy_loss_rate(te * Tnorm, ne * Nnorm) * Nnorm
                / (Tnorm * FreqNorm) * radiation_multiplier;
@@ -147,7 +144,7 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   // Loss is reduced by heating
   energy_loss -= (get_electron_heating() / Tnorm) * reaction_rate * radiation_multiplier;
 
-  subtract(electron["energy_source"], energy_loss);
+  update_source<subtract<Field3D>>(state, "e", "energy_source", energy_loss);
 
   // Collision frequencies
 
