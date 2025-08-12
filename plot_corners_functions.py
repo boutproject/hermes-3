@@ -69,12 +69,34 @@ def convert_R_Z_to_vertex_index(R,Z,R_vertices,Z_vertices):
 def get_cell_vertex_list_inner(R_ll,Z_ll, R_lr, Z_lr,
                         R_ur, Z_ur, R_ul, Z_ul,
                         R_vertices, Z_vertices):
+    # R coords defining the vertcies
+    R_local_vertex_list = np.array([R_ll, R_lr, R_ur, R_ul])
+    # R location of cell centre
+    R_mid = np.mean(R_local_vertex_list)
+    # Z coords defining the vertices, in same order as R above
+    Z_local_vertex_list = np.array([Z_ll, Z_lr, Z_ur, Z_ul])
+    # Z location of cell centre
+    Z_mid = np.mean(Z_local_vertex_list)
+    # theta is the angle from the vertex to the
+    # midpoint of the cell, measured
+    # with respect to the major radial direction
+    theta_list = np.zeros(4)
+    for j in range(0,4):
+        R = R_local_vertex_list[j] - R_mid
+        Z = Z_local_vertex_list[j] - Z_mid
+        theta_list[j] = np.arctan2(Z,R)
+    # order theta in increasing order
+    # to get the order for anticlockwise
+    # specification of the vertices
+    sort_indices = np.argsort(theta_list)
+    R_local_vertex_sorted = R_local_vertex_list[sort_indices]
+    Z_local_vertex_sorted = Z_local_vertex_list[sort_indices]
     vertices = []
-    # go in anti-clockwise order
-    vertices.append(convert_R_Z_to_vertex_index(R_ll,Z_ll,R_vertices,Z_vertices))
-    vertices.append(convert_R_Z_to_vertex_index(R_lr,Z_lr,R_vertices,Z_vertices))
-    vertices.append(convert_R_Z_to_vertex_index(R_ur,Z_ur,R_vertices,Z_vertices))
-    vertices.append(convert_R_Z_to_vertex_index(R_ul,Z_ul,R_vertices,Z_vertices))
+    # append the vertices in anti-clockwise order
+    for j in range(0,4):
+        R = R_local_vertex_sorted[j]
+        Z = Z_local_vertex_sorted[j]
+        vertices.append(convert_R_Z_to_vertex_index(R,Z,R_vertices,Z_vertices))
     return vertices
 
 def get_cell_vertex_list(Rxy_ll, Zxy_ll,
