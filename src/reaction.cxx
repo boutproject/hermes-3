@@ -51,29 +51,30 @@ Reaction::Reaction(std::string name, Options& options) : name(name) {
 }
 
 /**
- * @brief
+ * @brief Add a new diagnostic.
  *
- * @param sp_name
- * @param diag_name
- * @param long_diag_name
- * @param type
- * @param data_source
- *
- * @todo just use ReactionDiagnosticType in key directly?
+ * @param sp_name Species with which the diagnostic will be associated
+ * @param diag_name Label used in the output (and to store it temporarily in the state)
+ * @param description Description to use as the "long_name" output attribute
+ * @param type enum identifying the diagnostic type, also used to determine source name
+ * @param data_source Name to use as the 'source' output attribute
+ * @param transformer Optional transformer function to use when modifying the diagnostic
+ * (default is 'negate', i.e. the diagnostic has the opposite sign to the source)
+ * @param standard_name Optional string to use as the 'standard_name' output attribute
  */
 void Reaction::add_diagnostic(const std::string& sp_name, const std::string& diag_name,
-                              const std::string& long_diag_name,
-                              ReactionDiagnosticType type, const std::string& data_source,
+                              const std::string& description, ReactionDiagnosticType type,
+                              const std::string& data_source,
                               DiagnosticTransformerType transformer,
                               const std::string& standard_name) {
   std::pair<std::string, ReactionDiagnosticType> diag_key = std::make_pair(sp_name, type);
   if (standard_name.empty()) {
     this->diagnostics.insert(
-        std::make_pair(diag_key, ReactionDiagnostic(diag_name, long_diag_name, type,
+        std::make_pair(diag_key, ReactionDiagnostic(diag_name, description, type,
                                                     data_source, transformer)));
   } else {
     this->diagnostics.insert(std::make_pair(
-        diag_key, ReactionDiagnostic(diag_name, long_diag_name, type, data_source,
+        diag_key, ReactionDiagnostic(diag_name, description, type, data_source,
                                      standard_name, transformer)));
   }
 }
@@ -216,7 +217,6 @@ void Reaction::transform(Options& state) {
       // No pop change
       continue;
     }
-
 
     // Update sources
     update_source<add<Field3D>>(state, sp_name, ReactionDiagnosticType::momentum_src,

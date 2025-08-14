@@ -52,10 +52,7 @@ struct ReactionDiagnostic {
     }
     return standard_name;
   }
-  /**
-   * @todo just use a default param for standard_name?
-   *
-   */
+
   ReactionDiagnostic(const std::string& name, const std::string& long_name,
                      ReactionDiagnosticType type, const std::string& source,
                      DiagnosticTransformerType transformer = identity)

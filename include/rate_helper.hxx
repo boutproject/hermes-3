@@ -1,6 +1,6 @@
 #pragma once
-#ifndef HERMES_RATE_HELPER_H
-#define HERMES_RATE_HELPER_H
+#ifndef RATE_HELPER_H
+#define RATE_HELPER_H
 
 #include <functional>
 
@@ -15,17 +15,17 @@ typedef std::function<BoutReal(BoutReal, BoutReal, BoutReal)> RateFunctionType;
 template <typename LimiterType = hermes::Limiter, typename IdxType = Ind3D>
 struct RateHelper {
   /**
-   * @brief Construct a new RateHelper, extracting and storing some field from the state
-   * for use later.
+   * @brief Construct a new RateHelper, extracting and storing some fields from the state
+   * for use later in the rate calculation.
    *
    * @tparam LimiterType
    * @tparam RegionType
    * @param state
-   * @param reactant_names
-   * @param rate_calc_func
-   * @param region
+   * @param reactant_names vector of reactant names
+   * @param rate_calc_func function with which to compute the rate from the mass action
+   * factor, n_e and T_e
+   * @param region the region in which to calculate the rate
    */
-  // template <typename LimiterType, typename IdxType>
   RateHelper(const Options& state, const std::vector<std::string>& reactant_names,
              RateFunctionType rate_calc_func, const Region<IdxType> region)
       : rate_calc_func(rate_calc_func), region(region) {
@@ -51,7 +51,6 @@ struct RateHelper {
    * @tparam IdxType
    * @return Field3D the cell-averaged reaction rate
    */
-  // template <typename LimiterType, typename IdxType>
   Field3D calc_rate() {
     Field3D reaction_rate{emptyFrom(n_e)};
     auto J = reaction_rate.getCoordinates()->J;
@@ -76,6 +75,7 @@ struct RateHelper {
   }
 
 private:
+  /// region in which to calculate the rate
   const Region<IdxType> region;
   /// Function to calculate reaction rate as a function of n_e, T_e
   RateFunctionType rate_calc_func;
@@ -85,7 +85,6 @@ private:
   /// Reactant densities
   std::vector<Field3D> n_reactants;
 
-  // template <typename LimiterType, typename IdxType>
   BoutReal mass_action(IdxType i) {
     BoutReal result = 1;
     for (const auto& n : n_reactants) {
@@ -94,7 +93,6 @@ private:
     return result;
   }
 
-  // template <typename LimiterType, typename IdxType>
   BoutReal mass_action_left(IdxType i, IdxType ym, IdxType yp) {
     BoutReal result = 1;
     for (const auto& n : n_reactants) {
@@ -103,7 +101,6 @@ private:
     return result;
   }
 
-  // template <typename LimiterType, typename IdxType>
   BoutReal mass_action_right(IdxType i, IdxType ym, IdxType yp) {
     BoutReal result = 1;
     for (const auto& n : n_reactants) {

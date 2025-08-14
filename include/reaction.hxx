@@ -9,6 +9,10 @@
 
 typedef Options& (*OPTYPE)(Options&, Field3D);
 
+/**
+ * @brief Struct intended to act as a base for all reactions.
+ *
+ */
 struct Reaction : public Component {
   Reaction(std::string name, Options& alloptions);
 
@@ -16,6 +20,7 @@ struct Reaction : public Component {
     static int instance_num{0};
     return instance_num++;
   }
+
   void transform(Options& state) override final;
 
   void outputVars(Options& state) override final;
@@ -30,10 +35,10 @@ protected:
   /// Rate multipliers, extracted from input options
   BoutReal rate_multiplier, radiation_multiplier;
 
-  // Output diagnostics?
+  /// Output diagnostics?
   bool diagnose;
 
-  /// map of (sp_name,diagnostic_type)->Diagnostic
+  /// map of (species_name,diagnostic_type)->diagnostic_object
   std::multimap<std::pair<std::string, ReactionDiagnosticType>, ReactionDiagnostic>
       diagnostics;
 
