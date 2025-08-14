@@ -3,7 +3,7 @@
 #define REACTION_H
 
 #include "component.hxx"
-#include "hermes_build_config.hxx"
+#include "rate_helper.hxx"
 #include "reaction_diagnostic.hxx"
 #include "reaction_parser.hxx"
 
@@ -139,35 +139,5 @@ private:
   std::map<std::string, BoutReal> pfactors;
 
   void zero_diagnostics(Options& state);
-};
-
-/**
- * @brief Struct to simplify cell-averaging of the reaction rate, particularly the
- * calculation of the mass action factor.
- *
- */
-typedef std::function<BoutReal(BoutReal, BoutReal, BoutReal)> RateFunctionType;
-template <typename LimiterType = hermes::Limiter, typename IdxType = Ind3D>
-struct RateHelper {
-  RateHelper(const Options& state, const std::vector<std::string>& reactant_species,
-             RateFunctionType rate_calc_func, const Region<IdxType> region);
-
-  Field3D calc_rate();
-
-private:
-  const Region<IdxType> region;
-  /// Function to calculate reaction rate as a function of n_e, T_e
-  RateFunctionType rate_calc_func;
-  /// Electron density and temperature
-  Field3D n_e;
-  Field3D T_e;
-  // Reactant densities
-  std::vector<Field3D> n_reactants;
-
-  BoutReal mass_action(IdxType i);
-
-  BoutReal mass_action_left(IdxType i, IdxType ym, IdxType yp);
-
-  BoutReal mass_action_right(IdxType i, IdxType ym, IdxType yp);
 };
 #endif
