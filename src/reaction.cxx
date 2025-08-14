@@ -66,8 +66,7 @@ void Reaction::add_diagnostic(const std::string& sp_name, const std::string& dia
                               ReactionDiagnosticType type, const std::string& data_source,
                               DiagnosticTransformerType transformer,
                               const std::string& standard_name) {
-  std::string source_name = toString(type) + "_source";
-  std::pair<std::string, std::string> diag_key = std::make_pair(sp_name, source_name);
+  std::pair<std::string, ReactionDiagnosticType> diag_key = std::make_pair(sp_name, type);
   if (standard_name.empty()) {
     this->diagnostics.insert(
         std::make_pair(diag_key, ReactionDiagnostic(diag_name, long_diag_name, type,
@@ -102,11 +101,15 @@ void Reaction::calc_weightsums(Options& state) {
   }
 }
 
+/**
+ * @brief Copy all diagnostics into the output
+ *
+ * @param state
+ */
 void Reaction::outputVars(Options& state) {
-  // This only needs to be done once; probably need a better place to put it
   if (this->diagnose) {
-    for (auto& [key, diag] : diagnostics) {
-      diag.set_attrs(state);
+    for (auto& [key, diag] : this->diagnostics) {
+      diag.add_to_state(state);
     }
   }
 }
@@ -149,8 +152,9 @@ void Reaction::transform(Options& state) {
   for (const auto& [sp_name, pop_change] : pop_changes) {
     if (pop_change != 0) {
       // Density sources
-      add(state["species"][sp_name]["density_source"],
-          pfactors.at(sp_name) * pop_change * reaction_rate);
+      Field3D density_source = pfactors.at(sp_name) * pop_change * reaction_rate;
+      update_source<add<Field3D>>(state, sp_name, ReactionDiagnosticType::density_src,
+                                  density_source);
     }
   }
 
@@ -213,12 +217,20 @@ void Reaction::transform(Options& state) {
       continue;
     }
 
+
     // Update sources
-    update_source<add<Field3D>>(state, sp_name, "momentum_source", momentum_source);
-    update_source<add<Field3D>>(state, sp_name, "energy_source", energy_source);
+    update_source<add<Field3D>>(state, sp_name, ReactionDiagnosticType::momentum_src,
+                                momentum_source);
+    update_source<add<Field3D>>(state, sp_name, ReactionDiagnosticType::energy_src,
+                                energy_source);
   }
 }
 
+/**
+ * @brief Reset the values of diagnostics stored in the state.
+ *
+ * @param state
+ */
 void Reaction::zero_diagnostics(Options& state) {
   if (this->diagnose) {
     for (auto& [key, diag] : diagnostics) {

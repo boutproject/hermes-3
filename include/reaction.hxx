@@ -18,25 +18,24 @@ struct Reaction : public Component {
   }
   void transform(Options& state) override final;
 
-  void outputVars(Options& state) override;
-  // void outputVars(Options& state) override final;
+  void outputVars(Options& state) override final;
 
 protected:
-  // Reaction string parser
+  /// Reaction string parser
   std::unique_ptr<ReactionParser> parser;
 
   /// Normalisations, extracted from input options
   BoutReal Tnorm, Nnorm, FreqNorm;
 
-  // Rate multipliers, extracted from input options
+  /// Rate multipliers, extracted from input options
   BoutReal rate_multiplier, radiation_multiplier;
 
   // Output diagnostics?
   bool diagnose;
 
-  // map of (sp_name,src_type_name)->Diagnostic
-  // Probably src_type_name should be an enum
-  std::multimap<std::pair<std::string, std::string>, ReactionDiagnostic> diagnostics;
+  /// map of (sp_name,diagnostic_type)->Diagnostic
+  std::multimap<std::pair<std::string, ReactionDiagnosticType>, ReactionDiagnostic>
+      diagnostics;
 
   /**
    * @brief Add a new entry in this Reaction's diagnostic (multi)map. The (non-unique) Key
@@ -106,22 +105,22 @@ protected:
    * the diagnostic. Either Component::add, Component::subtract or Component::set
    * @param state the state to update
    * @param sp_name the species to update
-   * @param src_name the source field to update
+   * @param type the type of source/diagnostic to update
    * @param fld the field used in the update
    */
   template <OPTYPE operation>
   void update_source(Options& state, const std::string& sp_name,
-                     const std::string& src_name, Field3D& fld) {
+                     ReactionDiagnosticType type, Field3D& fld) {
     // Update species data
-    operation(state["species"][sp_name][src_name], fld);
+    operation(state["species"][sp_name][state_labels.at(type)], fld);
 
     if (this->diagnose) {
       // Update corresponding diagnostic(s) (if any exist)
-      auto matches = this->diagnostics.equal_range(std::make_pair(sp_name, src_name));
+      auto matches = this->diagnostics.equal_range(std::make_pair(sp_name, type));
       for (auto match = matches.first; match != matches.second; match++) {
-        ReactionDiagnostic diag = match->second;
-        Field3D diag_src_fld = diag.transform(fld);
-        operation(state[diag.name], diag_src_fld);
+        Field3D diag_src_fld = match->second.transform(fld);
+        operation(state[match->second.name], diag_src_fld);
+        match->second.set_data(getNonFinal<Field3D>(state[match->second.name]));
       }
     }
   }

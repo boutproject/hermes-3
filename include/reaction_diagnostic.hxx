@@ -12,8 +12,17 @@
 
 #include "component.hxx"
 
-BOUT_ENUM_CLASS(ReactionDiagnosticType, density, momentum, energy);
+BOUT_ENUM_CLASS(ReactionDiagnosticType, collision_freq, density_src, energy_src,
+                energy_loss, momentum_src);
+
 std::string toString(ReactionDiagnosticType diag_type);
+
+static std::map<ReactionDiagnosticType, std::string> state_labels = {
+    {ReactionDiagnosticType::collision_freq, "collision_frequency"},
+    {ReactionDiagnosticType::density_src, "density_source"},
+    {ReactionDiagnosticType::energy_src, "energy_source"},
+    {ReactionDiagnosticType::energy_loss, "energy_source"},
+    {ReactionDiagnosticType::momentum_src, "momentum_source"}};
 
 typedef std::function<Field3D(const Field3D&)> DiagnosticTransformerType;
 
@@ -25,11 +34,17 @@ struct ReactionDiagnostic {
   static inline std::string default_std_name(ReactionDiagnosticType type) {
     std::string standard_name;
     switch (type) {
-    case ReactionDiagnosticType::density:
+    case ReactionDiagnosticType::collision_freq:
+      standard_name = "collision frequency";
+      break;
+    case ReactionDiagnosticType::density_src:
       standard_name = "particle source";
       break;
-    case ReactionDiagnosticType::momentum: // fall through
-    case ReactionDiagnosticType::energy:
+    case ReactionDiagnosticType::energy_loss:
+      standard_name = "radiation loss";
+      break;
+    case ReactionDiagnosticType::energy_src:
+    case ReactionDiagnosticType::momentum_src: // fall through
       standard_name = fmt::format("{:s} transfer", toString(type));
       break;
     default:
@@ -61,36 +76,53 @@ struct ReactionDiagnostic {
     const BoutReal Omega_ci = 1 / get<BoutReal>(options["units"]["seconds"]);
 
     switch (type) {
-    case ReactionDiagnosticType::density: {
+    case ReactionDiagnosticType::collision_freq: {
+      this->conversion = Omega_ci;
+      this->units = "s^-1";
+      break;
+    }
+    case ReactionDiagnosticType::density_src: {
       this->conversion = Nnorm * Omega_ci;
       this->units = "m^-3 s^-1";
       break;
     }
-    case ReactionDiagnosticType::momentum: {
-      const BoutReal Cs0 = std::sqrt(SI::qe * Tnorm / SI::Mp);
-      this->conversion = SI::Mp * Nnorm * Cs0 * Omega_ci;
-      this->units = "kg m^-2 s^-2";
-      break;
-    }
-    case ReactionDiagnosticType::energy: {
+    case ReactionDiagnosticType::energy_loss: // fall through
+    case ReactionDiagnosticType::energy_src: {
       const BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
       this->conversion = Pnorm * Omega_ci;
       this->units = "W / m^3";
       break;
     }
+    case ReactionDiagnosticType::momentum_src: {
+      const BoutReal Cs0 = std::sqrt(SI::qe * Tnorm / SI::Mp);
+      this->conversion = SI::Mp * Nnorm * Cs0 * Omega_ci;
+      this->units = "kg m^-2 s^-2";
+      break;
+    }
     default:
       throw BoutException("ReactionDiagnostic type not set up!");
     }
+    this->data.allocate();
   }
 
-  void set_attrs(Options& state) {
-    state[this->name].setAttributes({{"time_dimension", "t"},
-                                     {"units", this->units},
-                                     {"conversion", this->conversion},
-                                     {"standard_name", this->standard_name},
-                                     {"long_name", this->long_name},
-                                     {"source", this->source}});
+  // No copies
+  ReactionDiagnostic(const ReactionDiagnostic&) = delete;
+  // No copy-assignment
+  ReactionDiagnostic& operator=(const ReactionDiagnostic&) = delete;
+  // Allow moves (needed for std::map::insert)
+  ReactionDiagnostic(ReactionDiagnostic&&) = default;
+
+  void add_to_state(Options& state) {
+    set_with_attrs(state[this->name], this->data,
+                   {{"time_dimension", "t"},
+                    {"units", this->units},
+                    {"conversion", this->conversion},
+                    {"standard_name", this->standard_name},
+                    {"long_name", this->long_name},
+                    {"source", this->source}});
   }
+
+  void set_data(const Field3D& data) { this->data = data; }
 
   Field3D transform(Field3D src_fld) { return this->transformer(src_fld); }
 
@@ -101,7 +133,8 @@ struct ReactionDiagnostic {
   const ReactionDiagnosticType type;
 
 private:
-  std::string conversion;
+  BoutReal conversion;
+  Field3D data;
   const DiagnosticTransformerType transformer;
   std::string units;
 };

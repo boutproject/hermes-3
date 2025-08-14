@@ -144,7 +144,8 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   // Loss is reduced by heating
   energy_loss -= (get_electron_heating() / Tnorm) * reaction_rate * radiation_multiplier;
 
-  update_source<subtract<Field3D>>(state, "e", "energy_source", energy_loss);
+  update_source<subtract<Field3D>>(state, "e", ReactionDiagnosticType::energy_loss,
+                                   energy_loss);
 
   // Collision frequencies
 

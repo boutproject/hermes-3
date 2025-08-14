@@ -26,14 +26,14 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
     if (this->diagnose) {
       // Set up diagnostics
 
-      // All Amjuel izn/rec diagnostics are named using the ion (and the sign changed
-      // accordingly)
+      // N.B. The first three diagnostics are named using the ion for both izn and rec,
+      // but the sign is changed accordingly
       std::string ion_sp = fmt::format("{:s}+", std::string({Isotope}));
       std::string default_diag_suffix =
           fmt::format("{:s}_{:s}", ion_sp, short_reaction_type);
       std::string rad_diag_suffix = default_diag_suffix;
       DiagnosticTransformerType default_transformer = negate;
-      DiagnosticTransformerType rad_transformer = negate;
+      DiagnosticTransformerType rad_transformer = identity;
 
       // For izn, tweak R diagnostic name and reverse the signs of the S, F, E diagnostics
       if (short_reaction_type == "iz") {
@@ -50,25 +50,25 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
           heavy_product, fmt::format("S{:s}", default_diag_suffix),
           fmt::format("Particle source due to {:s} of {:s} to {:s}", long_reaction_type,
                       this->from_species, this->to_species),
-          ReactionDiagnosticType::density, this->amjuel_src, default_transformer);
+          ReactionDiagnosticType::density_src, this->amjuel_src, default_transformer);
 
       add_diagnostic(
           heavy_product, fmt::format("F{:s}", default_diag_suffix),
           fmt::format("Momentum transfer due to {:s} of {:s} to {:s}", long_reaction_type,
                       this->from_species, this->to_species),
-          ReactionDiagnosticType::momentum, this->amjuel_src, default_transformer);
+          ReactionDiagnosticType::momentum_src, this->amjuel_src, default_transformer);
 
       add_diagnostic(
           heavy_product, fmt::format("E{:s}", default_diag_suffix),
           fmt::format("Energy transfer due to {:s} of {:s} to {:s}", long_reaction_type,
                       this->from_species, this->to_species),
-          ReactionDiagnosticType::energy, this->amjuel_src, default_transformer);
+          ReactionDiagnosticType::energy_src, this->amjuel_src, default_transformer);
 
       add_diagnostic(
           "e", fmt::format("R{:s}", rad_diag_suffix),
           fmt::format("Radiation loss due to {:s} of {:s} to {:s}", long_reaction_type,
                       this->from_species, this->to_species),
-          ReactionDiagnosticType::energy, this->amjuel_src, rad_transformer, "");
+          ReactionDiagnosticType::energy_loss, this->amjuel_src, rad_transformer);
     }
   }
 };
