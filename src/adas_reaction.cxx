@@ -53,6 +53,7 @@ OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename, in
 }
 
 namespace {
+
 int get_high_index(const std::vector<BoutReal>& vec, BoutReal value) {
   ASSERT2(vec.size() > 1); // Need at least two elements
 
@@ -130,8 +131,8 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   Field3D reaction_rate = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
         // Note: densities can be (slightly) negative
-        return floor(ne, 0.0) * floor(n1, 0.0) *
-          rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
+        return floor(ne, 0.0) * floor(n1, 0.0)
+               * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
@@ -158,9 +159,9 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   // Electron energy loss (radiation, ionisation potential)
   Field3D energy_loss = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
-        return floor(ne, 0.0) * floor(n1, 0.0) *
-          radiation_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm
-          / (Tnorm * FreqNorm);
+        return floor(ne, 0.0) * floor(n1, 0.0)
+               * radiation_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm
+               / (Tnorm * FreqNorm);
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
@@ -191,7 +192,8 @@ void OpenADASChargeExchange::calculate_rates(Options& electron, Options& from_A,
 
   const Field3D reaction_rate = cellAverage(
       [&](BoutReal na, BoutReal nb, BoutReal ne, BoutReal te) {
-        return floor(na, 0.0) * floor(nb, 0.0) * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
+        return floor(na, 0.0) * floor(nb, 0.0)
+               * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
       },
       Ne.getRegion("RGN_NOBNDRY"))(Na, Nb, Ne, Te);
 
@@ -210,7 +212,7 @@ void OpenADASChargeExchange::calculate_rates(Options& electron, Options& from_A,
 
     // Energy
     const Field3D energy_exchange =
-      reaction_rate * (3. / 2) * GET_VALUE(Field3D, from_A["temperature"]);
+        reaction_rate * (3. / 2) * GET_VALUE(Field3D, from_A["temperature"]);
     subtract(from_A["energy_source"], energy_exchange);
     add(to_A["energy_source"], energy_exchange);
   }
@@ -221,15 +223,15 @@ void OpenADASChargeExchange::calculate_rates(Options& electron, Options& from_A,
     add(to_B["density_source"], reaction_rate);
 
     // Momentum
-    const Field3D momentum_exchange =
-      reaction_rate * get<BoutReal>(from_B["AA"]) * GET_VALUE(Field3D, from_B["velocity"]);
+    const Field3D momentum_exchange = reaction_rate * get<BoutReal>(from_B["AA"])
+                                      * GET_VALUE(Field3D, from_B["velocity"]);
 
     subtract(from_B["momentum_source"], momentum_exchange);
     add(to_B["momentum_source"], momentum_exchange);
 
     // Energy
     const Field3D energy_exchange =
-      reaction_rate * (3. / 2) * GET_VALUE(Field3D, from_B["temperature"]);
+        reaction_rate * (3. / 2) * GET_VALUE(Field3D, from_B["temperature"]);
     subtract(from_B["energy_source"], energy_exchange);
     add(to_B["energy_source"], energy_exchange);
   }
