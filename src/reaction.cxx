@@ -139,7 +139,7 @@ void Reaction::transform(Options& state) {
   // Function passed to RateHelper to calculate reaction rate. Optionally scales by
   // multiplier.
   RateFunctionType calc_rate = [&](BoutReal mass_action, BoutReal ne, BoutReal te) {
-    BoutReal result = mass_action * eval_reaction_rate(te * Tnorm, ne * Nnorm) * Nnorm
+    BoutReal result = mass_action * eval_sigma_v(te * Tnorm, ne * Nnorm) * Nnorm
                       / FreqNorm * rate_multiplier;
     return result;
   };

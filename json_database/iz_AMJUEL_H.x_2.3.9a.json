@@ -1,13 +1,13 @@
 {
     "info": {
-        "rate_coeffs_ref": "Amjuel H.4 2.3.9a, page 161",
+        "sigma_v_coeffs_ref": "Amjuel H.4 2.3.9a, page 161",
         "rad_coeffs_ref": "Amjuel H.10 2.3.9a, page 293",
         "reaction_lbl": "e + he -> he+ + 2e",
-        "rad_notes": "Eth=24.588 eV effective electron cooling rate due to ionization of Helium atoms. Fujimoto Formulation II (only ground level transported, no meta-stables kept explicit)",
-        "rates_notes": "Helium multi-step model, here ionization, Eth=24.56 eV. Fujimoto Formulation II, meta-stable unresolved, (only ground level transported, no metastables kept explicit)."
+        "sigma_v_E_notes": "Eth=24.588 eV effective electron cooling rate due to ionization of Helium atoms. Fujimoto Formulation II (only ground level transported, no meta-stables kept explicit)",
+        "sigma_v_notes": "Helium multi-step model, here ionization, Eth=24.56 eV. Fujimoto Formulation II, meta-stable unresolved, (only ground level transported, no metastables kept explicit)."
     },
     "electron_heating": 0.0,
-    "rate_coeffs": [
+    "sigma_v_coeffs": [
         [
             -42.27118452798,
             0.1294554451998,
@@ -108,7 +108,7 @@
             4.12404880445e-15
         ]
     ],
-    "radiation_coeffs": [
+    "sigma_v_E_coeffs": [
         [
             -35.35258393674,
             -0.03428249311738,

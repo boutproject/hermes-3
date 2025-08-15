@@ -73,25 +73,28 @@ protected:
   void calc_weightsums(Options& state);
 
   /**
-   * @brief Evaluates electron energy loss rate coefficients at a particular density and
-   * temperature.
-   * (Subclasses MUST define)
+   * @brief Evaluate <sigma . v . E> at a particular density and temperature
+   * (Subclasses MAY define)
    *
    * @param T a temperature
    * @param n a density
    * @return BoutReal the electron energy loss rate
    */
-  virtual BoutReal eval_electron_energy_loss_rate(BoutReal T, BoutReal n) = 0;
+  virtual BoutReal eval_sigma_v_E(BoutReal T, BoutReal n) {
+
+    throw BoutException("Not defined");
+    return -1;
+  };
 
   /**
-   * @brief Evaluate reaction rate coefficients at a particular density and temperature
+   * @brief Evaluate <sigma.v> at a particular density and temperature
    * (Subclasses MUST define)
    *
    * @param T a temperature
    * @param n a density
-   * @return BoutReal the reaction rate
+   * @return BoutReal <sigma.v>(n,T)
    */
-  virtual BoutReal eval_reaction_rate(BoutReal T, BoutReal n) = 0;
+  virtual BoutReal eval_sigma_v(BoutReal T, BoutReal n) = 0;
 
   /**
    * @brief A hook with which subclasses can perform additional transform tasks, over and

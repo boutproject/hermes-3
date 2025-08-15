@@ -39,10 +39,10 @@ private:
     json_file >> data;
 
     // Extract coeff tables into member vars
-    std::vector<std::vector<double>> rate_coeffs_tmp = data["rate_coeffs"];
-    this->rate_coeffs = rate_coeffs_tmp;
-    std::vector<std::vector<double>> rad_coeffs_tmp = data["radiation_coeffs"];
-    this->rad_coeffs = rad_coeffs_tmp;
+    std::vector<std::vector<double>> sigma_v_coeffs_tmp = data["sigma_v_coeffs"];
+    this->sigma_v_coeffs = sigma_v_coeffs_tmp;
+    std::vector<std::vector<double>> sigma_v_E_coeffs_tmp = data["sigma_v_E_coeffs"];
+    this->sigma_v_E_coeffs = sigma_v_E_coeffs_tmp;
 
     // Extract electron heating value into member var
     double electron_heating_tmp = data["electron_heating"];
@@ -50,8 +50,8 @@ private:
   }
 
   // N.B. E-index varies fastest, so coefficient indices are [T][n]
-  std::vector<std::vector<BoutReal>> rate_coeffs;
-  std::vector<std::vector<BoutReal>> rad_coeffs;
+  std::vector<std::vector<BoutReal>> sigma_v_coeffs;
+  std::vector<std::vector<BoutReal>> sigma_v_E_coeffs;
 
   BoutReal electron_heating;
 };
@@ -74,8 +74,8 @@ protected:
   /// Functions to calculate Amjuel rates from underlying tables
   BoutReal eval_amjuel_fit(BoutReal T, BoutReal n,
                            const std::vector<std::vector<BoutReal>>& coeff_table);
-  virtual BoutReal eval_electron_energy_loss_rate(BoutReal T, BoutReal n) override final;
-  virtual BoutReal eval_reaction_rate(BoutReal T, BoutReal n) override final;
+  virtual BoutReal eval_sigma_v_E(BoutReal T, BoutReal n) override final;
+  virtual BoutReal eval_sigma_v(BoutReal T, BoutReal n) override final;
 
   virtual void transform_additional(Options& state,
                                     Field3D& reaction_rate) override final;

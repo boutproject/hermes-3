@@ -2,17 +2,6 @@
 #include "hermes_utils.hxx"
 
 /**
- * @brief Evaluate electron energy loss rate as a function of temperature and density.
- *
- * @param T temperature
- * @param n number density
- * @return BoutReal the electron energy loss rate
- */
-BoutReal AmjuelReaction::eval_electron_energy_loss_rate(BoutReal T, BoutReal n) {
-  return eval_amjuel_fit(T, n, amjuel_data.rad_coeffs);
-}
-
-/**
  * @brief Evaluate an Amjuel double polynomial fit in n and T, given a table of
  * coefficients (see page 20 of amjuel.pdf).
  *
@@ -45,14 +34,27 @@ AmjuelReaction::eval_amjuel_fit(BoutReal T, BoutReal n,
 }
 
 /**
- * @brief Evaluate reaction rate as a function of temperature and density.
+ * @brief Evaluate <sigma . v . E> at a particular density and temperature by evaluating
+ * an Amjuel fit.
  *
  * @param T temperature
  * @param n number density
- * @return BoutReal the reaction rate
+ * @return BoutReal <sigma . v . E>(n, T)
  */
-BoutReal AmjuelReaction::eval_reaction_rate(BoutReal T, BoutReal n) {
-  return eval_amjuel_fit(T, n, amjuel_data.rate_coeffs);
+BoutReal AmjuelReaction::eval_sigma_v_E(BoutReal T, BoutReal n) {
+  return eval_amjuel_fit(T, n, amjuel_data.sigma_v_E_coeffs);
+}
+
+/**
+ * @brief Evaluate <sigma . v . E> at a particular density and temperature
+ * (Subclasses MAY define)
+ *
+ * @param T a temperature
+ * @param n a density
+ * @return BoutReal <sigma . v . E>(n, T)
+ */
+BoutReal AmjuelReaction::eval_sigma_v(BoutReal T, BoutReal n) {
+  return eval_amjuel_fit(T, n, amjuel_data.sigma_v_coeffs);
 }
 
 void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate) {
@@ -124,7 +126,7 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   Field3D n_e = get<Field3D>(electron["density"]);
   Field3D energy_loss = cellAverage(
       [&](BoutReal nrh, BoutReal ne, BoutReal te) {
-        return nrh * ne * eval_electron_energy_loss_rate(te * Tnorm, ne * Nnorm) * Nnorm
+        return nrh * ne * eval_sigma_v_E(te * Tnorm, ne * Nnorm) * Nnorm
                / (Tnorm * FreqNorm) * radiation_multiplier;
       },
       n_e.getRegion("RGN_NOBNDRY"))(n_rh, n_e, T_e);
@@ -142,7 +144,7 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   // [s^-1]
   Field3D heavy_particle_frequency = cellAverage(
       [&](BoutReal ne, BoutReal te) {
-        return ne * eval_reaction_rate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
+        return ne * eval_sigma_v(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
                * rate_multiplier;
       },
       n_e.getRegion("RGN_NOBNDRY"))(n_e, T_e);
@@ -151,7 +153,7 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   // [s^-1]
   Field3D electron_frequency = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
-        return n1 * eval_reaction_rate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
+        return n1 * eval_sigma_v(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
                * rate_multiplier;
       },
       n_e.getRegion("RGN_NOBNDRY"))(n_e, n_rh, T_e);
