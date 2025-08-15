@@ -55,7 +55,7 @@ Reaction::Reaction(std::string name, Options& options) : name(name) {
  *
  * @param sp_name Species with which the diagnostic will be associated
  * @param diag_name Label used in the output (and to store it temporarily in the state)
- * @param description Description to use as the "long_name" output attribute
+ * @param description Description to use as the 'long_name' output attribute
  * @param type enum identifying the diagnostic type, also used to determine source name
  * @param data_source Name to use as the 'source' output attribute
  * @param transformer Optional transformer function to use when modifying the diagnostic
@@ -103,7 +103,8 @@ void Reaction::calc_weightsums(Options& state) {
 }
 
 /**
- * @brief Copy all diagnostics into the output
+ * @brief Copy all diagnostics into the output, setting the appropriate metadata at the
+ * same time
  *
  * @param state
  */
@@ -116,7 +117,9 @@ void Reaction::outputVars(Options& state) {
 }
 
 /**
- * @brief Use the stoichiometry matrix to compute density, momentum and energy sources.
+ * @brief Add density, momentum and energy sources that apply to all reactions (e.g.
+ * those driven by species population changes), then call transform_additional() to allow
+ * subclasses to add other terms.
  *
  * @param state
  */
@@ -227,7 +230,7 @@ void Reaction::transform(Options& state) {
 }
 
 /**
- * @brief Reset the values of diagnostics stored in the state.
+ * @brief Reset the temporary values of the diagnostics stored in the state.
  *
  * @param state
  */

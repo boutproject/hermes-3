@@ -124,6 +124,8 @@ protected:
       auto matches = this->diagnostics.equal_range(std::make_pair(sp_name, type));
       for (auto match = matches.first; match != matches.second; match++) {
         Field3D diag_src_fld = match->second.transform(fld);
+        // Apply the update to the diagnostic field in the state, then copy it to the
+        // diagnostic
         operation(state[match->second.name], diag_src_fld);
         match->second.set_data(getNonFinal<Field3D>(state[match->second.name]));
       }
