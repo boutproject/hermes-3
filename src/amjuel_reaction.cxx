@@ -9,7 +9,7 @@
  * @return BoutReal the electron energy loss rate
  */
 BoutReal AmjuelReaction::eval_electron_energy_loss_rate(BoutReal T, BoutReal n) {
-  return eval_amjuel_fit(T, n, get_rad_coeffs());
+  return eval_amjuel_fit(T, n, amjuel_data.rad_coeffs);
 }
 
 /**
@@ -52,19 +52,7 @@ AmjuelReaction::eval_amjuel_fit(BoutReal T, BoutReal n,
  * @return BoutReal the reaction rate
  */
 BoutReal AmjuelReaction::eval_reaction_rate(BoutReal T, BoutReal n) {
-  return eval_amjuel_fit(T, n, get_rate_coeffs());
-}
-
-const BoutReal AmjuelReaction::get_electron_heating() const {
-  return amjuel_data.electron_heating;
-}
-
-const std::vector<std::vector<BoutReal>>& AmjuelReaction::get_rad_coeffs() const {
-  return amjuel_data.rad_coeffs;
-}
-
-const std::vector<std::vector<BoutReal>>& AmjuelReaction::get_rate_coeffs() const {
-  return amjuel_data.rate_coeffs;
+  return eval_amjuel_fit(T, n, amjuel_data.rate_coeffs);
 }
 
 void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate) {
@@ -142,7 +130,8 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
       n_e.getRegion("RGN_NOBNDRY"))(n_rh, n_e, T_e);
 
   // Loss is reduced by heating
-  energy_loss -= (get_electron_heating() / Tnorm) * reaction_rate * radiation_multiplier;
+  energy_loss -=
+      (amjuel_data.electron_heating / Tnorm) * reaction_rate * radiation_multiplier;
 
   update_source<subtract<Field3D>>(state, "e", ReactionDiagnosticType::energy_loss,
                                    energy_loss);

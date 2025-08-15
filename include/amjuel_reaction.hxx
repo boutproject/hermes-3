@@ -77,11 +77,6 @@ protected:
   virtual BoutReal eval_electron_energy_loss_rate(BoutReal T, BoutReal n) override final;
   virtual BoutReal eval_reaction_rate(BoutReal T, BoutReal n) override final;
 
-  // Getter functions so that data object can be private
-  const BoutReal get_electron_heating() const;
-  const std::vector<std::vector<BoutReal>>& get_rad_coeffs() const;
-  const std::vector<std::vector<BoutReal>>& get_rate_coeffs() const;
-
   virtual void transform_additional(Options& state,
                                     Field3D& reaction_rate) override final;
 
