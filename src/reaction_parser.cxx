@@ -9,15 +9,26 @@ ReactionParser::ReactionParser(const std::string& reaction_str)
   // Assume reactants, products are separated by '->'
   const std::string rp_sep{"->"};
   const std::size_t sep_len = rp_sep.length();
-  ASSERT1(reaction_str.length() >= sep_len + 2);
+  if (reaction_str.length() < sep_len + 2) {
+    throw BoutException("Reaction string not long enough to include at least on reactant "
+                        "and one product!");
+  }
   auto sep_idx = reaction_str.find(rp_sep);
-  ASSERT1(sep_idx > sep_len);
+  if (sep_idx == std::string::npos) {
+    throw BoutException("Failed to find '->' separator in the reaction string");
+  }
   std::string R = trim(reaction_str.substr(0, sep_idx));
   std::string P = trim(reaction_str.substr(sep_idx + sep_len));
 
   // Count species in reactants, products
   this->reactants = count_species(R);
+  if (this->reactants.size() < 1) {
+    throw BoutException("Failed to find any reactants in the reaction string");
+  }
   this->products = count_species(P);
+  if (this->products.size() < 1) {
+    throw BoutException("Failed to find any products in the reaction string");
+  }
 
   diff_reactants_products(this->reactants, this->products);
 }
