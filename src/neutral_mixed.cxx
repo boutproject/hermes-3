@@ -465,23 +465,23 @@ void NeutralMixed::finally(const Options& state) {
      ;
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
-  ef_adv_par_ylow  *= 5/2;
-  ef_adv_perp_xlow *= 5/2; 
-  ef_adv_perp_ylow *= 5/2;
+  ef_adv_par_ylow  *= 5./2;
+  ef_adv_perp_xlow *= 5./2; 
+  ef_adv_perp_ylow *= 5./2;
 
   if (neutral_conduction) {
     ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(
-                    kappa_n, Tn,                            // Perpendicular conduction
+                    kappa_n, Tn,                             // Perpendicular conduction
                     ef_cond_perp_xlow, ef_cond_perp_ylow)
 
-            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
+            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction 
                       ef_cond_par_ylow,        
                       false)  // No conduction through target boundary
       ;
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-    ef_cond_perp_xlow *= 3/2;
-    ef_cond_perp_ylow *= 3/2;
-    ef_cond_par_ylow *= 3/2;
+    ef_cond_perp_xlow *= 3./2;
+    ef_cond_perp_ylow *= 3./2;
+    ef_cond_par_ylow *= 3./2;
   }
 
   Sp = pressure_source;
