@@ -1,10 +1,11 @@
 {
     "info": {
         "sigma_v_coeffs_ref": "Amjuel H.4 2.3.13a, page 181",
-        "rad_coeffs_ref": "Amjuel H.10 2.3.13a, page 295",
+        "sigma_v_E_coeffs_ref": "Amjuel H.10 2.3.13a, page 295",
         "reaction_lbl": "e + he+ -> he",
         "sigma_v_E_notes": "Helium multi-step model, here recombination: radiative + threebody + dielectronic. Fujimoto Formulation II (only ground level transported, no meta-stables kept explicit). The quantity given here happens to be the radiation loss. The loss of potential energy still needs to be subtracted to make this a total electron energy loss (or gain) rate.",
-        "sigma_v_notes": "Helium multi-step model, here recombination: radiative + threebody + dielectronic. Fujimoto Formulation II (only ground level transported, no metastables kept explicit)."
+        "sigma_v_notes": "Helium multi-step model, here recombination: radiative + threebody + dielectronic. Fujimoto Formulation II (only ground level transported, no metastables kept explicit).",
+        "includes_sigma_v_e": true
     },
     "electron_heating": 24.586,
     "sigma_v_coeffs": [

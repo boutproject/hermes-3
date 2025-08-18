@@ -1,10 +1,11 @@
 {
     "info": {
         "sigma_v_coeffs_ref": "Amjuel H.4 2.1.8, page 141",
-        "rad_coeffs_ref": "Amjuel H.10 2.1.8, page 284",
+        "sigma_v_E_coeffs_ref": "Amjuel H.10 2.1.8, page 284",
         "reaction_lbl": "h+ + e -> h",
         "sigma_v_E_notes": "effective electron cooling rate due to rad.+three-b. recombination potential energy loss 13.6*(effrec.rate) still needs to be subtracted (may render the loss negative, i.e., turn it into a gain) Hence: the quantitity given here happens to be the radiation loss.",
-        "sigma_v_notes": "Effective hydrogenic recombination rate Data: K. Sawada, T.Fujimoto, radiative + three-body contribution"
+        "sigma_v_notes": "Effective hydrogenic recombination rate Data: K. Sawada, T.Fujimoto, radiative + three-body contribution",
+        "includes_sigma_v_e": true
     },
     "electron_heating": 13.6,
     "sigma_v_coeffs": [

@@ -41,7 +41,10 @@ struct AmjuelReaction : public Reaction {
       : Reaction(name, alloptions),
         amjuel_data(get_json_db_dir(alloptions), short_reaction_type, amjuel_lbl),
         amjuel_src(std::string("Amjuel ") + amjuel_lbl), from_species(from_species),
-        short_reaction_type(short_reaction_type), to_species(to_species) {}
+        short_reaction_type(short_reaction_type), to_species(to_species) {
+
+          this->includes_sigma_v_e = amjuel_data.includes_sigma_v_e;
+        }
 
 protected:
   // Store some strings for use in attribute docstrings

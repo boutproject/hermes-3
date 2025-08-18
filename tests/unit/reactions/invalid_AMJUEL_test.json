@@ -1,10 +1,11 @@
 {
     "info": {
         "sigma_v_coeffs_ref": "Dummy test data",
-        "rad_coeffs_ref": "Dummy test data",
+        "sigma_v_E_coeffs_ref": "Dummy test data",
         "reaction_lbl": "Dummy test data",
         "sigma_v_E_notes": "Dummy test data",
-        "sigma_v_notes": "Dummy test data."
+        "sigma_v_notes": "Dummy test data.",
+        "includes_sigma_v_e": true
     },
     "electron_heating": 0.0,
     "sigma_v_E_coeffs": [

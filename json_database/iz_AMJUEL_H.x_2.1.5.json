@@ -1,10 +1,11 @@
 {
     "info": {
         "sigma_v_coeffs_ref": "Amjuel H.4 2.1.5, page 135",
-        "rad_coeffs_ref": "Amjuel H.10 2.1.5, page 280",
+        "sigma_v_E_coeffs_ref": "Amjuel H.10 2.1.5, page 280",
         "reaction_lbl": "h + e -> h+ + 2e",
         "sigma_v_E_notes": "Electron energy loss weighted rate coefficient. Data: Sawada/Fujimoto",
-        "sigma_v_notes": "Effective hydrogenic ionization rate Data: K. Sawada/T. Fujimoto."
+        "sigma_v_notes": "Effective hydrogenic ionization rate Data: K. Sawada/T. Fujimoto.",
+        "includes_sigma_v_e": true
     },
     "electron_heating": 0.0,
     "sigma_v_coeffs": [

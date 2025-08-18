@@ -42,6 +42,10 @@ protected:
   std::multimap<std::pair<std::string, ReactionDiagnosticType>, ReactionDiagnostic>
       diagnostics;
 
+  /// Whether or not reaction data includes <sigma v E>
+  /// (Default to true as a reminder to override eval_sigma_v_E)
+  bool includes_sigma_v_e = true;
+
   /**
    * @brief Add a new entry in this Reaction's diagnostic (multi)map. The (non-unique) Key
    * is < \p sp_name, \p type >
@@ -81,8 +85,14 @@ protected:
    * @return BoutReal the electron energy loss rate
    */
   virtual BoutReal eval_sigma_v_E(BoutReal T, BoutReal n) {
-
-    throw BoutException("Not defined");
+    if (this->includes_sigma_v_e) {
+      throw BoutException(
+          "eval_sigma_v_E() needs to be implemented by Reaction instances "
+          "which set includes_sigma_v_e=true");
+    } else {
+      throw BoutException(
+          "eval_sigma_v_E() was called despite having set includes_sigma_v_e=false!");
+    }
     return -1;
   };
 
