@@ -30,7 +30,7 @@ struct FixedDensity : public Component {
     if (N.isFci()) {
       bout::globals::mesh->communicate(N);
       N.applyParallelBoundary("parallel_neumann_o2");
-    } 
+    }
   }
 
   /// Sets in the state the density, mass and charge of the species
