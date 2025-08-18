@@ -93,17 +93,17 @@ First, density, temperature and pressure are extrapolated into the target bounda
 The extrapolation method for each can be user set, e.g. `density_boundary_mode`. At the moment, 
 the available modes are:
 
-- 0: LimitFree
+- ``limit_free``
    An exponential extrapolation for decreasing quantities and a Neumann boundary for increasing
    quantities. It is inconsistent between increasing and decreasing values and is not recommended
    unless you have a reason to use it - it's legacy behaviour.
 
-- 1: ExponentialFree
-   An exponential extrapolation. It is more consistent than LimitFree and has the advantage of 
+- ``exponential_free``
+   An exponential extrapolation. It is more consistent than ``limit_free`` and has the advantage of 
    inherently preventing negative values at the target. This is the default and is recommended for most cases.
    It is defined as :math:`guard = (last)^2 / previous`
 
-- 2: LinearFree
+- ``linear_free``
    A linear extrapolation. It can lead to negative values at the target. However, it is the most 
    consistent (the linear extrapolation is what second order differencing reduces to at the wall) and has been shown to 
    reduce "zigzags" or "squiggles" near the target which are common in cell centered codes. Use only
