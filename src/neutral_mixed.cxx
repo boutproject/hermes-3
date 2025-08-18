@@ -634,6 +634,14 @@ void NeutralMixed::outputVars(Options& state) {
        {"species", name},
        {"source", "neutral_mixed"}});
 
+  set_with_attrs(state[std::string("V") + name], Vn,
+                   {{"time_dimension", "t"},
+                    {"units", "m / s"},
+                    {"conversion", Cs0},
+                    {"standard_name", "velocity"},
+                    {"long_name", name + " parallel velocity"},
+                    {"source", "neutral_mixed"}});
+
   if (output_ddt) {
     set_with_attrs(
         state[std::string("ddt(N") + name + std::string(")")], ddt(Nn),
@@ -787,13 +795,13 @@ void NeutralMixed::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
-    if (mf_visc_perp_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("mf{}_visc_perp_ylow", name)], mf_visc_perp_ylow,
+    if (mf_visc_perp_xlow.isAllocated()) {
+      set_with_attrs(state[fmt::format("mf{}_visc_perp_xlow", name)], mf_visc_perp_xlow,
                    {{"time_dimension", "t"},
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"standard_name", "momentum flow"},
-                    {"long_name", name + " poloidal component of perpendicular viscosity."},
+                    {"long_name", name + " radial component of perpendicular viscosity."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
