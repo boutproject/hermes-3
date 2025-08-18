@@ -12,6 +12,25 @@
 #include "reaction.hxx"
 
 /**
+ * @brief Extract the json database location from options, or fall back to a standard
+ * location in the repo (relative to this header).
+ *
+ * @param options Options object
+ * @return std::filesystem::path the path to be passed to AmjuelData
+ */
+static inline std::filesystem::path get_json_db_dir(Options& options) {
+  static std::filesystem::path default_json_db_dir =
+      std::filesystem::path(__FILE__).parent_path().parent_path() / "json_database";
+
+  std::filesystem::path json_db_dir =
+      options["json_database_dir"]
+          .doc("Path to directory containing reaction data json files.")
+          .withDefault<std::filesystem::path>(default_json_db_dir);
+
+  return json_db_dir;
+}
+
+/**
  * @brief 
  * 
  */
@@ -19,7 +38,8 @@ struct AmjuelReaction : public Reaction {
   AmjuelReaction(std::string name, std::string short_reaction_type,
                  std::string amjuel_lbl, std::string from_species, std::string to_species,
                  Options& alloptions)
-      : Reaction(name, alloptions), amjuel_data(short_reaction_type, amjuel_lbl),
+      : Reaction(name, alloptions),
+        amjuel_data(get_json_db_dir(alloptions), short_reaction_type, amjuel_lbl),
         amjuel_src(std::string("Amjuel ") + amjuel_lbl), from_species(from_species),
         short_reaction_type(short_reaction_type), to_species(to_species) {}
 
@@ -40,7 +60,11 @@ protected:
                                     Field3D& reaction_rate) override final;
 
 private:
+  /// Data object
   const AmjuelData amjuel_data;
+
+  /// Directory containing json data for this reaction
+  std::filesystem::path json_db_dir;
 };
 
 #endif // AMJUEL_REACTION_H

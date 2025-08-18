@@ -20,12 +20,16 @@ struct AmjuelData {
   friend class AmjuelReaction;
 
 private:
-  AmjuelData(const std::string& short_reaction_type, const std::string& data_label) {
+  AmjuelData(const std::filesystem::path& data_dir,
+             const std::string& short_reaction_type, const std::string& data_label) {
     AUTO_TRACE();
 
+    if (!std::filesystem::is_directory(data_dir)) {
+      throw BoutException(fmt::format("No json database found at ", data_dir.string()));
+    }
+
     std::filesystem::path file_path =
-        std::filesystem::path(__FILE__).parent_path().parent_path() / "json_database"
-        / (short_reaction_type + "_AMJUEL_" + data_label + ".json");
+        data_dir / (short_reaction_type + "_AMJUEL_" + data_label + ".json");
 
     // Read the data file
     std::ifstream json_file(file_path);
