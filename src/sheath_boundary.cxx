@@ -299,6 +299,10 @@ Field3D calculate_phi_Tskhakaya(Options& allspecies, bool lower_y, bool upper_y,
   return phi;
 }
 
+// This is a workaround before CWG2518/P2593R1, taken from cppreference.com
+template<hermes::SheathKind>
+constexpr bool dependent_false = false;
+
 /// If phi is set, use free boundary condition;
 /// If phi not set, calculate assuming zero current, according to sheath kind
 template <hermes::SheathKind kind>
@@ -325,7 +329,7 @@ Field3D init_phi(Options& state, Options& allspecies, bool lower_y, bool upper_y
     // avoid duplicated checks later
     return 0.0;
   } else {
-    static_assert(false, "Unhandled sheath kind");
+    static_assert(dependent_false<kind>, "Unhandled sheath kind");
   }
 }
 
@@ -548,7 +552,7 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
       } else if constexpr (kind == hermes::SheathKind::insulating) {
         HERMES_UNREACHABLE;
       } else {
-        static_assert(false, "Unhandled sheath kind");
+        static_assert(dependent_false<kind>, "Unhandled sheath kind");
       }
       HERMES_UNREACHABLE;
       return 0.0;
@@ -725,7 +729,7 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
         } else if constexpr (kind == hermes::SheathKind::simple) {
           return ((sheath_ion_polytropic * tisheath) + (Zi * tesheath)) / Mi;
         } else {
-          static_assert(false, "Unhandled sheath kind");
+          static_assert(dependent_false<kind>, "Unhandled sheath kind");
         }
       }();
 
@@ -753,7 +757,7 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
                  - ((2.5 * tisheath + 0.5 * Mi * SQ(visheath_flow)) * nisheath
                     * visheath_flow);
         } else {
-          static_assert(false, "Unhandled sheath kind");
+          static_assert(dependent_false<kind>, "Unhandled sheath kind");
         }
       }();
 
