@@ -149,6 +149,26 @@ def get_pfr_lower_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
     Zxy_pfr_lower.append(data_Zxy_ul[0,lim3-1])
     return ivertex_pfr_lower, Rxy_pfr_lower, Zxy_pfr_lower
 
+def get_pfr_upper_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
+                        ivertex_corners_ul,data_Rxy_ul,data_Zxy_ul,
+                        y_boundary_guards,jyseps1_2,jyseps2_1,jyseps2_2):
+    ivertex_pfr_upper = []
+    Rxy_pfr_upper = []
+    Zxy_pfr_upper = []
+    for j in range(jyseps1_2+1,jyseps2_2-1):
+        ivertex_pfr_upper.append(ivertex_corners[0,j])
+        Rxy_pfr_upper.append(data_Rxy[0,j])
+        Zxy_pfr_upper.append(data_Zxy[0,j])
+    for j in range(jyseps2_1+y_boundary_guards+1,jyseps1_2+1):
+        ivertex_pfr_upper.append(ivertex_corners[0,j])
+        Rxy_pfr_upper.append(data_Rxy[0,j])
+        Zxy_pfr_upper.append(data_Zxy[0,j])
+    j = jyseps1_2
+    ivertex_pfr_upper.append(ivertex_corners_ul[0,j])
+    Rxy_pfr_upper.append(data_Rxy_ul[0,j])
+    Zxy_pfr_upper.append(data_Zxy_ul[0,j])
+    return ivertex_pfr_upper, Rxy_pfr_upper, Zxy_pfr_upper
+
 def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to_screen_output=False):
     dataset = nc.Dataset(file_path)
 
@@ -256,6 +276,10 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     ivertex_pfr_lower, Rxy_pfr_lower, Zxy_pfr_lower = get_pfr_lower_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
                                                         ivertex_corners_ul,data_Rxy_ul,data_Zxy_ul,
                                                         y_boundary_guards,jyseps1_1,exclude_y_guard_cells=False)
+
+    ivertex_pfr_upper, Rxy_pfr_upper, Zxy_pfr_upper = get_pfr_upper_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
+                                                        ivertex_corners_ul,data_Rxy_ul,data_Zxy_ul,
+                                                        y_boundary_guards,jyseps1_2,jyseps2_1,jyseps2_2)
     # Make a scatter plot to show the mesh corners
     plt.figure(figsize=(10, 6))
     x = Rpoints
@@ -266,6 +290,7 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     #scatter = plt.scatter(Rpoints_ul, Zpoints_ul, c='k',marker='4')
     scatter = plt.scatter(Rpoints_full, Zpoints_full, c='m',marker='x')
     scatter = plt.scatter(Rxy_pfr_lower,Zxy_pfr_lower, c='g',marker='2')
+    scatter = plt.scatter(Rxy_pfr_upper,Zxy_pfr_upper, c='b',marker='3')
 
     # uncomment for labels on original data points
     #for ic in range(0,Npoint):
@@ -278,6 +303,9 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     Npfr_lower = len(Rxy_pfr_lower)
     for iy in range(0,Npfr_lower):
         plt.text(Rxy_pfr_lower[iy],Zxy_pfr_lower[iy],str(ivertex_pfr_lower[iy]))
+    Npfr_upper = len(Rxy_pfr_upper)
+    for iy in range(0,Npfr_upper):
+        plt.text(Rxy_pfr_upper[iy],Zxy_pfr_upper[iy],str(ivertex_pfr_upper[iy]))
 
     plt.title('Meshpoints')
     plt.xlabel('R')
