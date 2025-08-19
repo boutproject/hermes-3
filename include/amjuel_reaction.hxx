@@ -22,12 +22,12 @@ static inline std::filesystem::path get_json_db_dir(Options& options) {
   static std::filesystem::path default_json_db_dir =
       std::filesystem::path(__FILE__).parent_path().parent_path() / "json_database";
 
-  std::filesystem::path json_db_dir =
+  std::string json_db_dir =
       options["json_database_dir"]
           .doc("Path to directory containing reaction data json files.")
-          .withDefault<std::filesystem::path>(default_json_db_dir);
+          .withDefault(default_json_db_dir.string());
 
-  return json_db_dir;
+  return std::filesystem::path(json_db_dir);
 }
 
 /**
