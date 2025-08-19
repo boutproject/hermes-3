@@ -112,6 +112,15 @@ def get_cell_vertex_list(Rxy_ll, Zxy_ll,
         vertex_list[ic,1] = Z_vertices[ic]
     return cell_vertices, cell_vertices_RZ, vertex_list
 
+def get_boutxx_corner_index(Rxy_corners,Zxy_corners,R_vertices,Z_vertices):
+    Nx, Ny = Rxy_corners.shape
+    iglobal_corners = np.zeros((Nx,Ny),dtype=int)
+    for ix in range(0,Nx):
+        for iy in range(0,Ny):
+            # find the global index for this corner, and store
+            iglobal_corners[ix,iy] = convert_R_Z_to_vertex_index(Rxy_corners[ix,iy],Zxy_corners[ix,iy],
+                                                                R_vertices,Z_vertices)
+    return iglobal_corners
 
 def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to_screen_output=False):
     dataset = nc.Dataset(file_path)
@@ -190,6 +199,15 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
             print(cell_vertices[icell,:])
             print(cell_vertices_RZ[icell,:,:])
 
+    # test getting data for resaving to hypnotoad netcdf file
+    ivertex_corners = get_boutxx_corner_index(data_Rxy,data_Zxy,Rpoints_full,Zpoints_full)
+    ivertex_corners_lr = get_boutxx_corner_index(data_Rxy_lr,data_Zxy_lr,Rpoints_full,Zpoints_full)
+    ivertex_corners_ul = get_boutxx_corner_index(data_Rxy_ul,data_Zxy_ul,Rpoints_full,Zpoints_full)
+    ivertex_corners_ur = get_boutxx_corner_index(data_Rxy_ur,data_Zxy_ur,Rpoints_full,Zpoints_full)
+    #print("ivertex_corners",ivertex_corners)
+    #print("ivertex_corners_lr",ivertex_corners_lr)
+    #print("ivertex_corners_ul",ivertex_corners_ul)
+    #print("ivertex_corners_ur",ivertex_corners_ur)
 
     # Make a scatter plot to show the mesh corners
     plt.figure(figsize=(10, 6))
