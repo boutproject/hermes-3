@@ -122,6 +122,33 @@ def get_boutxx_corner_index(Rxy_corners,Zxy_corners,R_vertices,Z_vertices):
                                                                 R_vertices,Z_vertices)
     return iglobal_corners
 
+def get_pfr_lower_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
+                    ivertex_corners_ul,data_Rxy_ul,data_Zxy_ul,
+                    y_boundary_guards,jyseps1_1,exclude_y_guard_cells=False):
+    Nx, Ny = ivertex_corners.shape
+    ivertex_pfr_lower = []
+    Rxy_pfr_lower = []
+    Zxy_pfr_lower = []
+    lim1 = jyseps1_1+y_boundary_guards+1
+    if exclude_y_guard_cells:
+        jy_bndry = y_boundary_guards
+    else:
+        jy_bndry = 0
+    for j in range(jy_bndry,lim1):
+        ivertex_pfr_lower.append(ivertex_corners[0,j])
+        Rxy_pfr_lower.append(data_Rxy[0,j])
+        Zxy_pfr_lower.append(data_Zxy[0,j])
+    lim2 = Ny - y_boundary_guards - jyseps1_1 - 1
+    lim3 = Ny - jy_bndry
+    for j in range(lim2,lim3):
+        ivertex_pfr_lower.append(ivertex_corners[0,j])
+        Rxy_pfr_lower.append(data_Rxy[0,j])
+        Zxy_pfr_lower.append(data_Zxy[0,j])
+    ivertex_pfr_lower.append(ivertex_corners_ul[0,lim3-1])
+    Rxy_pfr_lower.append(data_Rxy_ul[0,lim3-1])
+    Zxy_pfr_lower.append(data_Zxy_ul[0,lim3-1])
+    return ivertex_pfr_lower, Rxy_pfr_lower, Zxy_pfr_lower
+
 def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to_screen_output=False):
     dataset = nc.Dataset(file_path)
 
@@ -226,23 +253,9 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     #print("ivertex_corners_lr",ivertex_corners_lr)
     #print("ivertex_corners_ul",ivertex_corners_ul)
     #print("ivertex_corners_ur",ivertex_corners_ur)
-    ivertex_pfr_lower = []
-    Rxy_pfr_lower = []
-    Zxy_pfr_lower = []
-    lim1 = jyseps1_1+y_boundary_guards+1
-    for j in range(0,lim1):
-        ivertex_pfr_lower.append(ivertex_corners[0,j])
-        Rxy_pfr_lower.append(data_Rxy[0,j])
-        Zxy_pfr_lower.append(data_Zxy[0,j])
-    lim2 = Ny - y_boundary_guards - jyseps1_1 - 1
-    for j in range(lim2,Ny):
-        ivertex_pfr_lower.append(ivertex_corners[0,j])
-        Rxy_pfr_lower.append(data_Rxy[0,j])
-        Zxy_pfr_lower.append(data_Zxy[0,j])
-    ivertex_pfr_lower.append(ivertex_corners_ul[0,Ny-1])
-    Rxy_pfr_lower.append(data_Rxy_ul[0,Ny-1])
-    Zxy_pfr_lower.append(data_Zxy_ul[0,Ny-1])
-
+    ivertex_pfr_lower, Rxy_pfr_lower, Zxy_pfr_lower = get_pfr_lower_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
+                                                        ivertex_corners_ul,data_Rxy_ul,data_Zxy_ul,
+                                                        y_boundary_guards,jyseps1_1,exclude_y_guard_cells=False)
     # Make a scatter plot to show the mesh corners
     plt.figure(figsize=(10, 6))
     x = Rpoints
