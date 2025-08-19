@@ -124,6 +124,24 @@ def get_boutxx_corner_index(Rxy_corners,Zxy_corners,R_vertices,Z_vertices):
 
 def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to_screen_output=False):
     dataset = nc.Dataset(file_path)
+
+    y_boundary_guards = np.copy(dataset.variables['y_boundary_guards'][...])
+    ixseps1 = np.copy(dataset.variables['ixseps1'][...])
+    ixseps2 = np.copy(dataset.variables['ixseps2'][...])
+    jyseps1_1 = np.copy(dataset.variables['jyseps1_1'][...])
+    jyseps2_1 = np.copy(dataset.variables['jyseps2_1'][...])
+    jyseps1_2 = np.copy(dataset.variables['jyseps1_2'][...])
+    jyseps2_2 = np.copy(dataset.variables['jyseps2_2'][...])
+    ny_inner = np.copy(dataset.variables['ny_inner'][...])
+    print("y_boundary_guards",y_boundary_guards)
+    print("ixseps1",ixseps1)
+    print("ixseps2",ixseps2)
+    print("jyseps1_1",jyseps1_1)
+    print("jyseps2_1",jyseps2_1)
+    print("jyseps1_2",jyseps1_2)
+    print("jyseps2_2",jyseps2_2)
+    print("ny_inner",ny_inner)
+
     data_Rxy = np.copy(dataset.variables['Rxy_corners'][:])
     data_Zxy = np.copy(dataset.variables['Zxy_corners'][:])
     data_Rxy_lr = np.copy(dataset.variables['Rxy_lower_right_corners'][:])
@@ -208,24 +226,46 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     #print("ivertex_corners_lr",ivertex_corners_lr)
     #print("ivertex_corners_ul",ivertex_corners_ul)
     #print("ivertex_corners_ur",ivertex_corners_ur)
+    ivertex_pfr_lower = []
+    Rxy_pfr_lower = []
+    Zxy_pfr_lower = []
+    lim1 = jyseps1_1+y_boundary_guards+1
+    for j in range(0,lim1):
+        ivertex_pfr_lower.append(ivertex_corners[0,j])
+        Rxy_pfr_lower.append(data_Rxy[0,j])
+        Zxy_pfr_lower.append(data_Zxy[0,j])
+    lim2 = Ny - y_boundary_guards - jyseps1_1 - 1
+    for j in range(lim2,Ny):
+        ivertex_pfr_lower.append(ivertex_corners[0,j])
+        Rxy_pfr_lower.append(data_Rxy[0,j])
+        Zxy_pfr_lower.append(data_Zxy[0,j])
+    ivertex_pfr_lower.append(ivertex_corners_ul[0,Ny-1])
+    Rxy_pfr_lower.append(data_Rxy_ul[0,Ny-1])
+    Zxy_pfr_lower.append(data_Zxy_ul[0,Ny-1])
 
     # Make a scatter plot to show the mesh corners
     plt.figure(figsize=(10, 6))
     x = Rpoints
     y = Zpoints
-    scatter = plt.scatter(x, y, c='b',marker='1')
-    scatter = plt.scatter(Rpoints_lr, Zpoints_lr, c='r',marker='2')
-    scatter = plt.scatter(Rpoints_ur, Zpoints_ur, c='g',marker='3')
-    scatter = plt.scatter(Rpoints_ul, Zpoints_ul, c='k',marker='4')
+    #scatter = plt.scatter(x, y, c='b',marker='1')
+    #scatter = plt.scatter(Rpoints_lr, Zpoints_lr, c='r',marker='2')
+    #scatter = plt.scatter(Rpoints_ur, Zpoints_ur, c='g',marker='3')
+    #scatter = plt.scatter(Rpoints_ul, Zpoints_ul, c='k',marker='4')
     scatter = plt.scatter(Rpoints_full, Zpoints_full, c='m',marker='x')
+    scatter = plt.scatter(Rxy_pfr_lower,Zxy_pfr_lower, c='g',marker='2')
+
     # uncomment for labels on original data points
     #for ic in range(0,Npoint):
     #    plt.text(x[ic],y[ic],str(ic))
     #    plt.text(Rpoints_ul[ic],Zpoints_ul[ic],str(ic))
     # uncomment for labels on aggregated array of points
-    Npoint_full = len(Rpoints_full)
-    for ic in range(0,Npoint_full):
-        plt.text(Rpoints_full[ic],Zpoints_full[ic],str(ic))
+    #Npoint_full = len(Rpoints_full)
+    #for ic in range(0,Npoint_full):
+    #    plt.text(Rpoints_full[ic],Zpoints_full[ic],str(ic))
+    Npfr_lower = len(Rxy_pfr_lower)
+    for iy in range(0,Npfr_lower):
+        plt.text(Rxy_pfr_lower[iy],Zxy_pfr_lower[iy],str(ivertex_pfr_lower[iy]))
+
     plt.title('Meshpoints')
     plt.xlabel('R')
     plt.ylabel('Z')
