@@ -381,6 +381,58 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
                                                                 jyseps1_1, jyseps2_1, jyseps1_2, jyseps2_2,
                                                                 y_boundary_guards, exclude_y_guard_cells=exclude_y_guard_cells)
     
+    ivertex_target_ll = []
+    Rxy_target_ll = []
+    Zxy_target_ll = []
+    j = 0
+    for i in range(0,Nx):
+        ivertex_target_ll.append(ivertex_corners[i,j])
+        Rxy_target_ll.append(data_Rxy[i,j])
+        Zxy_target_ll.append(data_Zxy[i,j])
+    i = Nx - 1
+    ivertex_target_ll.append(ivertex_corners_lr[i,j])
+    Rxy_target_ll.append(data_Rxy_lr[i,j])
+    Zxy_target_ll.append(data_Zxy_lr[i,j])
+
+    ivertex_target_ul = []
+    Rxy_target_ul = []
+    Zxy_target_ul = []
+    j = ny_inner - 1
+    for i in range(0,Nx):
+        ivertex_target_ul.append(ivertex_corners_ul[i,j])
+        Rxy_target_ul.append(data_Rxy_ul[i,j])
+        Zxy_target_ul.append(data_Zxy_ul[i,j])
+    i = Nx - 1
+    ivertex_target_ul.append(ivertex_corners_ur[i,j])
+    Rxy_target_ul.append(data_Rxy_ur[i,j])
+    Zxy_target_ul.append(data_Zxy_ur[i,j])
+
+    ivertex_target_ur = []
+    Rxy_target_ur = []
+    Zxy_target_ur = []
+    j = ny_inner
+    for i in range(0,Nx):
+        ivertex_target_ur.append(ivertex_corners[i,j])
+        Rxy_target_ur.append(data_Rxy[i,j])
+        Zxy_target_ur.append(data_Zxy[i,j])
+    i = Nx - 1
+    ivertex_target_ur.append(ivertex_corners_lr[i,j])
+    Rxy_target_ur.append(data_Rxy_lr[i,j])
+    Zxy_target_ur.append(data_Zxy_lr[i,j])
+
+    ivertex_target_lr = []
+    Rxy_target_lr = []
+    Zxy_target_lr = []
+    j = Ny - 1
+    for i in range(0,Nx):
+        ivertex_target_lr.append(ivertex_corners_ur[i,j])
+        Rxy_target_lr.append(data_Rxy_ur[i,j])
+        Zxy_target_lr.append(data_Zxy_ur[i,j])
+    i = 0
+    ivertex_target_lr.append(ivertex_corners_ul[i,j])
+    Rxy_target_lr.append(data_Rxy_ul[i,j])
+    Zxy_target_lr.append(data_Zxy_ul[i,j])
+
     # Make a scatter plot to show the mesh corners
     plt.figure(figsize=(10, 6))
     x = Rpoints
@@ -395,6 +447,10 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     scatter = plt.scatter(Rxy_sol_vac_right,Zxy_sol_vac_right, c='r',marker='4')
     scatter = plt.scatter(Rxy_sol_vac_left,Zxy_sol_vac_left, c='k',marker='1')
     scatter = plt.scatter(Rxy_core,Zxy_core, c='y',marker='1')
+    scatter = plt.scatter(Rxy_target_ll,Zxy_target_ll, c='y',marker='1')
+    scatter = plt.scatter(Rxy_target_ul,Zxy_target_ul, c='y',marker='1')
+    scatter = plt.scatter(Rxy_target_ur,Zxy_target_ur, c='y',marker='1')
+    scatter = plt.scatter(Rxy_target_lr,Zxy_target_lr, c='y',marker='1')
 
     # uncomment for labels on original data points
     #for ic in range(0,Npoint):
@@ -419,6 +475,18 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     Ncore = len(Rxy_core)
     for iy in range(0,Ncore):
         plt.text(Rxy_core[iy],Zxy_core[iy],str(ivertex_core[iy]))
+    Ntarget_ll = len(Rxy_target_ll)
+    for ix in range(0,Ntarget_ll):
+        plt.text(Rxy_target_ll[ix],Zxy_target_ll[ix],str(ivertex_target_ll[ix]))
+    Ntarget_ul = len(Rxy_target_ul)
+    for ix in range(0,Ntarget_ul):
+        plt.text(Rxy_target_ul[ix],Zxy_target_ul[ix],str(ivertex_target_ul[ix]))
+    Ntarget_ur = len(Rxy_target_ur)
+    for ix in range(0,Ntarget_ur):
+        plt.text(Rxy_target_ur[ix],Zxy_target_ur[ix],str(ivertex_target_ur[ix]))
+    Ntarget_lr = len(Rxy_target_lr)
+    for ix in range(0,Ntarget_lr):
+        plt.text(Rxy_target_lr[ix],Zxy_target_lr[ix],str(ivertex_target_lr[ix]))
 
     plt.title('Meshpoints')
     plt.xlabel('R')
