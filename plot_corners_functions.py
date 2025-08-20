@@ -464,7 +464,62 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
 
     ivertex_target_lr, Rxy_target_lr, Zxy_target_lr = get_target_lr_vertices(ivertex_corners_ur, data_Rxy_ur, data_Zxy_ur,
                                                                 ivertex_corners_ul, data_Rxy_ul, data_Zxy_ul)
-
+    boundary_vertex_info = {
+        "pfr_lower" : {"ivertex": ivertex_pfr_lower,
+                       "Rxy" : Rxy_pfr_lower,
+                       "Zxy" : Zxy_pfr_lower,
+                       "color" : "g",
+                       "marker" : "1",
+                       },
+        "pfr_upper" : {"ivertex": ivertex_pfr_upper,
+                       "Rxy" : Rxy_pfr_upper,
+                       "Zxy" : Zxy_pfr_upper,
+                       "color" : "b",
+                       "marker" : "2",
+                       },
+        "sol_vac_left" : {"ivertex": ivertex_sol_vac_left,
+                       "Rxy" : Rxy_sol_vac_left,
+                       "Zxy" : Zxy_sol_vac_left,
+                       "color" : "r",
+                       "marker" : "3",
+                       },
+        "sol_vac_right" : {"ivertex": ivertex_sol_vac_right,
+                       "Rxy" : Rxy_sol_vac_right,
+                       "Zxy" : Zxy_sol_vac_right,
+                       "color" : "r",
+                       "marker" : "3",
+                       },
+        "core" : {"ivertex": ivertex_core,
+                       "Rxy" : Rxy_core,
+                       "Zxy" : Zxy_core,
+                       "color" : "k",
+                       "marker" : "4",
+                       },
+        "target_ll" : {"ivertex": ivertex_target_ll,
+                       "Rxy" : Rxy_target_ll,
+                       "Zxy" : Zxy_target_ll,
+                       "color" : "y",
+                       "marker" : "3",
+                       },
+        "target_ul" : {"ivertex": ivertex_target_ul,
+                       "Rxy" : Rxy_target_ul,
+                       "Zxy" : Zxy_target_ul,
+                       "color" : "y",
+                       "marker" : "3",
+                       },
+        "target_ur" : {"ivertex": ivertex_target_ur,
+                       "Rxy" : Rxy_target_ur,
+                       "Zxy" : Zxy_target_ur,
+                       "color" : "y",
+                       "marker" : "3",
+                       },
+        "target_lr" : {"ivertex": ivertex_target_lr,
+                       "Rxy" : Rxy_target_lr,
+                       "Zxy" : Zxy_target_lr,
+                       "color" : "y",
+                       "marker" : "3",
+                       },
+    }
 
     # Make a scatter plot to show the mesh corners
     plt.figure(figsize=(10, 6))
@@ -475,16 +530,12 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     #scatter = plt.scatter(Rpoints_ur, Zpoints_ur, c='g',marker='3')
     #scatter = plt.scatter(Rpoints_ul, Zpoints_ul, c='k',marker='4')
     scatter = plt.scatter(Rpoints_full, Zpoints_full, c='m',marker='x')
-    scatter = plt.scatter(Rxy_pfr_lower,Zxy_pfr_lower, c='g',marker='2')
-    scatter = plt.scatter(Rxy_pfr_upper,Zxy_pfr_upper, c='b',marker='3')
-    scatter = plt.scatter(Rxy_sol_vac_right,Zxy_sol_vac_right, c='r',marker='4')
-    scatter = plt.scatter(Rxy_sol_vac_left,Zxy_sol_vac_left, c='k',marker='1')
-    scatter = plt.scatter(Rxy_core,Zxy_core, c='y',marker='1')
-    scatter = plt.scatter(Rxy_target_ll,Zxy_target_ll, c='y',marker='1')
-    scatter = plt.scatter(Rxy_target_ul,Zxy_target_ul, c='y',marker='1')
-    scatter = plt.scatter(Rxy_target_ur,Zxy_target_ur, c='y',marker='1')
-    scatter = plt.scatter(Rxy_target_lr,Zxy_target_lr, c='y',marker='1')
-
+    for key in boundary_vertex_info.keys():
+        Rxy = boundary_vertex_info[key]["Rxy"]
+        Zxy = boundary_vertex_info[key]["Zxy"]
+        color = boundary_vertex_info[key]["color"]
+        marker = boundary_vertex_info[key]["marker"]
+        scatter = plt.scatter(Rxy,Zxy, c=color,marker=marker)
     # uncomment for labels on original data points
     #for ic in range(0,Npoint):
     #    plt.text(x[ic],y[ic],str(ic))
@@ -493,33 +544,13 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     #Npoint_full = len(Rpoints_full)
     #for ic in range(0,Npoint_full):
     #    plt.text(Rpoints_full[ic],Zpoints_full[ic],str(ic))
-    Npfr_lower = len(Rxy_pfr_lower)
-    for iy in range(0,Npfr_lower):
-        plt.text(Rxy_pfr_lower[iy],Zxy_pfr_lower[iy],str(ivertex_pfr_lower[iy]))
-    Npfr_upper = len(Rxy_pfr_upper)
-    for iy in range(0,Npfr_upper):
-        plt.text(Rxy_pfr_upper[iy],Zxy_pfr_upper[iy],str(ivertex_pfr_upper[iy]))
-    Nsol_vac_right = len(Rxy_sol_vac_right)
-    for iy in range(0,Nsol_vac_right):
-        plt.text(Rxy_sol_vac_right[iy],Zxy_sol_vac_right[iy],str(ivertex_sol_vac_right[iy]))
-    Nsol_vac_left = len(Rxy_sol_vac_left)
-    for iy in range(0,Nsol_vac_left):
-        plt.text(Rxy_sol_vac_left[iy],Zxy_sol_vac_left[iy],str(ivertex_sol_vac_left[iy]))
-    Ncore = len(Rxy_core)
-    for iy in range(0,Ncore):
-        plt.text(Rxy_core[iy],Zxy_core[iy],str(ivertex_core[iy]))
-    Ntarget_ll = len(Rxy_target_ll)
-    for ix in range(0,Ntarget_ll):
-        plt.text(Rxy_target_ll[ix],Zxy_target_ll[ix],str(ivertex_target_ll[ix]))
-    Ntarget_ul = len(Rxy_target_ul)
-    for ix in range(0,Ntarget_ul):
-        plt.text(Rxy_target_ul[ix],Zxy_target_ul[ix],str(ivertex_target_ul[ix]))
-    Ntarget_ur = len(Rxy_target_ur)
-    for ix in range(0,Ntarget_ur):
-        plt.text(Rxy_target_ur[ix],Zxy_target_ur[ix],str(ivertex_target_ur[ix]))
-    Ntarget_lr = len(Rxy_target_lr)
-    for ix in range(0,Ntarget_lr):
-        plt.text(Rxy_target_lr[ix],Zxy_target_lr[ix],str(ivertex_target_lr[ix]))
+    for key in boundary_vertex_info.keys():
+        Rxy = boundary_vertex_info[key]["Rxy"]
+        Zxy = boundary_vertex_info[key]["Zxy"]
+        ivertex = boundary_vertex_info[key]["ivertex"]
+        Nvertex = len(ivertex)
+        for i in range(0,Nvertex):
+            plt.text(Rxy[i],Zxy[i],str(ivertex[i]))
 
     plt.title('Meshpoints')
     plt.xlabel('R')
