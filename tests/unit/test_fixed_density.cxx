@@ -2,6 +2,7 @@
 #include "gtest/gtest.h"
 
 #include "test_extras.hxx" // FakeMesh
+#include "fake_mesh_fixture.hxx"
 
 #include "../../include/fixed_density.hxx"
 
