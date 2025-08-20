@@ -252,6 +252,76 @@ def get_core_boundary_vertices(ivertex_corners, data_Rxy, data_Zxy,
         Zxy_core.append(data_Zxy[0,j])
     return ivertex_core, Rxy_core, Zxy_core
 
+def get_target_ll_vertices(ivertex_corners, data_Rxy, data_Zxy,
+                        ivertex_corners_lr, data_Rxy_lr, data_Zxy_lr):
+    ivertex_target_ll = []
+    Rxy_target_ll = []
+    Zxy_target_ll = []
+    Nx, Ny = ivertex_corners.shape
+    j = 0
+    for i in range(0,Nx):
+        ivertex_target_ll.append(ivertex_corners[i,j])
+        Rxy_target_ll.append(data_Rxy[i,j])
+        Zxy_target_ll.append(data_Zxy[i,j])
+    i = Nx - 1
+    ivertex_target_ll.append(ivertex_corners_lr[i,j])
+    Rxy_target_ll.append(data_Rxy_lr[i,j])
+    Zxy_target_ll.append(data_Zxy_lr[i,j])
+    return ivertex_target_ll, Rxy_target_ll, Zxy_target_ll
+
+def get_target_ul_vertices(ivertex_corners_ul, data_Rxy_ul, data_Zxy_ul,
+                        ivertex_corners_ur, data_Rxy_ur, data_Zxy_ur,
+                        ny_inner):
+    ivertex_target_ul = []
+    Rxy_target_ul = []
+    Zxy_target_ul = []
+    Nx, Ny = ivertex_corners_ul.shape
+    j = ny_inner - 1
+    for i in range(0,Nx):
+        ivertex_target_ul.append(ivertex_corners_ul[i,j])
+        Rxy_target_ul.append(data_Rxy_ul[i,j])
+        Zxy_target_ul.append(data_Zxy_ul[i,j])
+    i = Nx - 1
+    ivertex_target_ul.append(ivertex_corners_ur[i,j])
+    Rxy_target_ul.append(data_Rxy_ur[i,j])
+    Zxy_target_ul.append(data_Zxy_ur[i,j])
+    return ivertex_target_ul, Rxy_target_ul, Zxy_target_ul
+
+def get_target_ur_vertices(ivertex_corners, data_Rxy, data_Zxy,
+                    ivertex_corners_lr, data_Rxy_lr, data_Zxy_lr,
+                    ny_inner):
+    ivertex_target_ur = []
+    Rxy_target_ur = []
+    Zxy_target_ur = []
+    Nx, Ny = ivertex_corners.shape
+    j = ny_inner
+    for i in range(0,Nx):
+        ivertex_target_ur.append(ivertex_corners[i,j])
+        Rxy_target_ur.append(data_Rxy[i,j])
+        Zxy_target_ur.append(data_Zxy[i,j])
+    i = Nx - 1
+    ivertex_target_ur.append(ivertex_corners_lr[i,j])
+    Rxy_target_ur.append(data_Rxy_lr[i,j])
+    Zxy_target_ur.append(data_Zxy_lr[i,j])
+    return ivertex_target_ur, Rxy_target_ur, Zxy_target_ur
+
+def get_target_lr_vertices(ivertex_corners_ur, data_Rxy_ur, data_Zxy_ur,
+                        ivertex_corners_ul, data_Rxy_ul, data_Zxy_ul):
+    ivertex_target_lr = []
+    Rxy_target_lr = []
+    Zxy_target_lr = []
+    Nx, Ny = ivertex_corners_ur.shape
+    j = Ny - 1
+    for i in range(0,Nx):
+        ivertex_target_lr.append(ivertex_corners_ur[i,j])
+        Rxy_target_lr.append(data_Rxy_ur[i,j])
+        Zxy_target_lr.append(data_Zxy_ur[i,j])
+    i = 0
+    ivertex_target_lr.append(ivertex_corners_ul[i,j])
+    Rxy_target_lr.append(data_Rxy_ul[i,j])
+    Zxy_target_lr.append(data_Zxy_ul[i,j])
+    return ivertex_target_lr, Rxy_target_lr, Zxy_target_lr
+
 def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to_screen_output=False):
     dataset = nc.Dataset(file_path)
 
@@ -366,7 +436,7 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
 
     ivertex_pfr_upper, Rxy_pfr_upper, Zxy_pfr_upper = get_pfr_upper_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
                                                         ivertex_corners_ul,data_Rxy_ul,data_Zxy_ul,
-                                                        y_boundary_guards,jyseps1_2,jyseps2_1,jyseps2_2, 
+                                                        y_boundary_guards,jyseps1_2,jyseps2_1,jyseps2_2,
                                                         ny_inner, exclude_y_guard_cells=exclude_y_guard_cells)
 
     ivertex_sol_vac_left, Rxy_sol_vac_left, Zxy_sol_vac_left = get_vac_left_boundary_vertices(ivertex_corners_lr,data_Rxy_lr,data_Zxy_lr,
@@ -380,58 +450,21 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     ivertex_core, Rxy_core, Zxy_core = get_core_boundary_vertices(ivertex_corners, data_Rxy, data_Zxy,
                                                                 jyseps1_1, jyseps2_1, jyseps1_2, jyseps2_2,
                                                                 y_boundary_guards, exclude_y_guard_cells=exclude_y_guard_cells)
-    
-    ivertex_target_ll = []
-    Rxy_target_ll = []
-    Zxy_target_ll = []
-    j = 0
-    for i in range(0,Nx):
-        ivertex_target_ll.append(ivertex_corners[i,j])
-        Rxy_target_ll.append(data_Rxy[i,j])
-        Zxy_target_ll.append(data_Zxy[i,j])
-    i = Nx - 1
-    ivertex_target_ll.append(ivertex_corners_lr[i,j])
-    Rxy_target_ll.append(data_Rxy_lr[i,j])
-    Zxy_target_ll.append(data_Zxy_lr[i,j])
 
-    ivertex_target_ul = []
-    Rxy_target_ul = []
-    Zxy_target_ul = []
-    j = ny_inner - 1
-    for i in range(0,Nx):
-        ivertex_target_ul.append(ivertex_corners_ul[i,j])
-        Rxy_target_ul.append(data_Rxy_ul[i,j])
-        Zxy_target_ul.append(data_Zxy_ul[i,j])
-    i = Nx - 1
-    ivertex_target_ul.append(ivertex_corners_ur[i,j])
-    Rxy_target_ul.append(data_Rxy_ur[i,j])
-    Zxy_target_ul.append(data_Zxy_ur[i,j])
+    ivertex_target_ll, Rxy_target_ll, Zxy_target_ll = get_target_ll_vertices(ivertex_corners, data_Rxy, data_Zxy,
+                                                                ivertex_corners_lr, data_Rxy_lr, data_Zxy_lr)
 
-    ivertex_target_ur = []
-    Rxy_target_ur = []
-    Zxy_target_ur = []
-    j = ny_inner
-    for i in range(0,Nx):
-        ivertex_target_ur.append(ivertex_corners[i,j])
-        Rxy_target_ur.append(data_Rxy[i,j])
-        Zxy_target_ur.append(data_Zxy[i,j])
-    i = Nx - 1
-    ivertex_target_ur.append(ivertex_corners_lr[i,j])
-    Rxy_target_ur.append(data_Rxy_lr[i,j])
-    Zxy_target_ur.append(data_Zxy_lr[i,j])
+    ivertex_target_ul, Rxy_target_ul, Zxy_target_ul = get_target_ul_vertices(ivertex_corners_ul, data_Rxy_ul, data_Zxy_ul,
+                                                                ivertex_corners_ur, data_Rxy_ur, data_Zxy_ur,
+                                                                ny_inner)
 
-    ivertex_target_lr = []
-    Rxy_target_lr = []
-    Zxy_target_lr = []
-    j = Ny - 1
-    for i in range(0,Nx):
-        ivertex_target_lr.append(ivertex_corners_ur[i,j])
-        Rxy_target_lr.append(data_Rxy_ur[i,j])
-        Zxy_target_lr.append(data_Zxy_ur[i,j])
-    i = 0
-    ivertex_target_lr.append(ivertex_corners_ul[i,j])
-    Rxy_target_lr.append(data_Rxy_ul[i,j])
-    Zxy_target_lr.append(data_Zxy_ul[i,j])
+    ivertex_target_ur, Rxy_target_ur, Zxy_target_ur = get_target_ur_vertices(ivertex_corners, data_Rxy, data_Zxy,
+                                                                ivertex_corners_lr, data_Rxy_lr, data_Zxy_lr,
+                                                                ny_inner)
+
+    ivertex_target_lr, Rxy_target_lr, Zxy_target_lr = get_target_lr_vertices(ivertex_corners_ur, data_Rxy_ur, data_Zxy_ur,
+                                                                ivertex_corners_ul, data_Rxy_ul, data_Zxy_ul)
+
 
     # Make a scatter plot to show the mesh corners
     plt.figure(figsize=(10, 6))
