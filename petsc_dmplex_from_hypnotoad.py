@@ -2,7 +2,18 @@ from plot_corners_functions import plot_corners_get_dmplex_data
 from petsc4py import PETSc
 import meshio
 
-def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list):
+# function to check correctly assigned labels
+def check_label_value_coords(value,coords,boundary_vertex_info):
+    check = False
+    for key in boundary_vertex_info.keys():
+        if value == boundary_vertex_info[key]["DMFaceSetsLabel"]:
+            Rxy = boundary_vertex_info[key]["Rxy"]
+            Zxy = boundary_vertex_info[key]["Zxy"]
+            if coords[0] in Rxy and coords[1] in Zxy:
+                check = True
+                break
+    return check
+def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_vertex_info):
     # Initialize PETSc
     comm = PETSc.COMM_WORLD
     # Create a DMPlex object
@@ -41,20 +52,47 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list):
     #dm = dm.distribute()
     label_name = "Face Sets"
     dm.createLabel(label_name)
-    dm.markBoundaryFaces(label_name, value=100)
+    global_label = False
+    if global_label:
+        dm.markBoundaryFaces(label_name, value=100)
+    else:
+        # physical labels
+        # Get depth integer to permit extracting all faces (depth - 1)
+        depth = dm.getDepth()
+        # get min/max indices for faces
+        face_start, face_end = dm.getDepthStratum(depth - 1)
+        # get min/max indices for vertices
+        vertex_start, vertex_end = dm.getDepthStratum(depth - 2)
+        # loop over all boundary types
+        for key in boundary_vertex_info.keys():
+            label_value = boundary_vertex_info[key]["DMFaceSetsLabel"]
+            boundary_vertex_indices = boundary_vertex_info[key]["ivertex"]
+            print(key)
+            print(boundary_vertex_indices)
+            # loop over faces
+            for face in range(face_start, face_end):
+                # vertices supporting this face
+                cone = dm.getCone(face)
+                # n.b. need to subtract vertex_start
+                # to get back the input global index
+                # if all points in cone are in the boundary, this is a boundary face
+                if all( (v-vertex_start) in boundary_vertex_indices for v in cone):
+                    dm.setLabelValue("Face Sets", face, label_value)
 
-    # # Print labeled boundary faces
-    # depth = dm.getDepth()
-    # face_start, face_end = dm.getDepthStratum(depth - 1)
-
-    # print(f"Boundary faces labeled with {label_name}:")
-    # for face in range(face_start, face_end):
-    #     value = dm.getLabelValue(label_name, face)
-    #     if value == 100:
-    #         print(f"Face {face} labeled with value {value}")
-
-
-
+    # Print labeled boundary faces
+    depth = dm.getDepth()
+    face_start, face_end = dm.getDepthStratum(depth - 1)
+    vertex_start, vertex_end = dm.getDepthStratum(depth - 2)
+    print(f"Boundary faces labeled with {label_name}:")
+    for face in range(face_start, face_end):
+        value = dm.getLabelValue(label_name, face)
+        cone = dm.getCone(face)
+        coords = vertex_coords[cone - vertex_start]
+        if value in [100,200,300,400]:
+            print(f"Face {face} labeled with value {value}")
+            print(f"Face {face} coords {coords[0]}")
+            check = check_label_value_coords(value,coords[0],boundary_vertex_info)
+            print(f"Test passed: {check}")
     mesh_name = file_path+".mesh"
     # Write the mesh to a VTK file
     viewer = PETSc.Viewer().createVTK(mesh_name+".vtk", mode=PETSc.Viewer.Mode.WRITE, comm=comm)
@@ -84,5 +122,5 @@ file_path = 'dmtest_data/expected_nonorthogonal.grd.nc'
 #file_path = 'dmtest_data/expected_orthogonal.grd.nc'
 #file_path = 'dmtest_data/udn.bout.grd.nc'
 #file_path = 'dmtest_data/lsn.bout.grd.nc'
-Nx,Ny,cell_vertices,vertex_list = plot_corners_get_dmplex_data(file_path)
-create_and_visualize_mesh(file_path,Nx,Ny,cell_vertices,vertex_list)
+Nx,Ny,cell_vertices,vertex_list,boundary_vertex_info = plot_corners_get_dmplex_data(file_path)
+create_and_visualize_mesh(file_path,Nx,Ny,cell_vertices,vertex_list,boundary_vertex_info)
