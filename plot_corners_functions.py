@@ -151,16 +151,16 @@ def get_pfr_lower_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
     ivertex_pfr_lower = []
     Rxy_pfr_lower = []
     Zxy_pfr_lower = []
-    lim1 = jyseps1_1+y_boundary_guards+1
     if exclude_y_guard_cells:
-        jy_bndry = y_boundary_guards
-    else:
         jy_bndry = 0
+    else:
+        jy_bndry = y_boundary_guards
+    lim1 = jyseps1_1+jy_bndry+1
     for j in range(jy_bndry,lim1):
         ivertex_pfr_lower.append(ivertex_corners[0,j])
         Rxy_pfr_lower.append(data_Rxy[0,j])
         Zxy_pfr_lower.append(data_Zxy[0,j])
-    lim2 = Ny - y_boundary_guards - jyseps1_1 - 1
+    lim2 = Ny - jy_bndry - jyseps1_1 - 1
     lim3 = Ny - jy_bndry
     for j in range(lim2,lim3):
         ivertex_pfr_lower.append(ivertex_corners[0,j])
@@ -173,19 +173,24 @@ def get_pfr_lower_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
 
 def get_pfr_upper_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
                         ivertex_corners_ul,data_Rxy_ul,data_Zxy_ul,
-                        y_boundary_guards,jyseps1_2,jyseps2_1,jyseps2_2):
+                        y_boundary_guards,jyseps1_2,jyseps2_1,jyseps2_2,
+                        ny_inner, exclude_y_guard_cells=False):
     ivertex_pfr_upper = []
     Rxy_pfr_upper = []
     Zxy_pfr_upper = []
-    for j in range(jyseps1_2+1,jyseps2_2-1):
+    if exclude_y_guard_cells:
+        jyseps2_1g = jyseps2_1
+    else:
+        jyseps2_1g = jyseps2_1 + y_boundary_guards
+    for j in range(ny_inner,jyseps1_2+1):
         ivertex_pfr_upper.append(ivertex_corners[0,j])
         Rxy_pfr_upper.append(data_Rxy[0,j])
         Zxy_pfr_upper.append(data_Zxy[0,j])
-    for j in range(jyseps2_1+y_boundary_guards+1,jyseps1_2+1):
+    for j in range(jyseps2_1+1,ny_inner):
         ivertex_pfr_upper.append(ivertex_corners[0,j])
         Rxy_pfr_upper.append(data_Rxy[0,j])
         Zxy_pfr_upper.append(data_Zxy[0,j])
-    j = jyseps1_2
+    j = ny_inner-1
     ivertex_pfr_upper.append(ivertex_corners_ul[0,j])
     Rxy_pfr_upper.append(data_Rxy_ul[0,j])
     Zxy_pfr_upper.append(data_Zxy_ul[0,j])
@@ -243,15 +248,19 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     print("jyseps1_2",jyseps1_2)
     print("jyseps2_2",jyseps2_2)
     print("ny_inner",ny_inner)
-
-    data_Rxy = np.copy(dataset.variables['Rxy_corners'][:])
-    data_Zxy = np.copy(dataset.variables['Zxy_corners'][:])
-    data_Rxy_lr = np.copy(dataset.variables['Rxy_lower_right_corners'][:])
-    data_Zxy_lr = np.copy(dataset.variables['Zxy_lower_right_corners'][:])
-    data_Rxy_ur = np.copy(dataset.variables['Rxy_upper_right_corners'][:])
-    data_Zxy_ur = np.copy(dataset.variables['Zxy_upper_right_corners'][:])
-    data_Rxy_ul = np.copy(dataset.variables['Rxy_upper_left_corners'][:])
-    data_Zxy_ul = np.copy(dataset.variables['Zxy_upper_left_corners'][:])
+    exclude_y_guard_cells = True
+    if exclude_y_guard_cells:
+        s = slice(0,-1,1), list(range(y_boundary_guards,ny_inner+y_boundary_guards)) + list(range(ny_inner+3*y_boundary_guards,2*ny_inner+3*y_boundary_guards))
+    else:
+        s = slice(0,-1,1), slice(0,-1,1)
+    data_Rxy = np.copy(dataset.variables['Rxy_corners'][:])[s]
+    data_Zxy = np.copy(dataset.variables['Zxy_corners'][:])[s]
+    data_Rxy_lr = np.copy(dataset.variables['Rxy_lower_right_corners'][:])[s]
+    data_Zxy_lr = np.copy(dataset.variables['Zxy_lower_right_corners'][:])[s]
+    data_Rxy_ur = np.copy(dataset.variables['Rxy_upper_right_corners'][:])[s]
+    data_Zxy_ur = np.copy(dataset.variables['Zxy_upper_right_corners'][:])[s]
+    data_Rxy_ul = np.copy(dataset.variables['Rxy_upper_left_corners'][:])[s]
+    data_Zxy_ul = np.copy(dataset.variables['Zxy_upper_left_corners'][:])[s]
     dataset.close()
     # check that the points are indeed unique
     unique_points_2D(data_Rxy,data_Zxy)
@@ -330,11 +339,12 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     #print("ivertex_corners_ur",ivertex_corners_ur)
     ivertex_pfr_lower, Rxy_pfr_lower, Zxy_pfr_lower = get_pfr_lower_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
                                                         ivertex_corners_ul,data_Rxy_ul,data_Zxy_ul,
-                                                        y_boundary_guards,jyseps1_1,exclude_y_guard_cells=False)
+                                                        y_boundary_guards,jyseps1_1,exclude_y_guard_cells=exclude_y_guard_cells)
 
     ivertex_pfr_upper, Rxy_pfr_upper, Zxy_pfr_upper = get_pfr_upper_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
                                                         ivertex_corners_ul,data_Rxy_ul,data_Zxy_ul,
-                                                        y_boundary_guards,jyseps1_2,jyseps2_1,jyseps2_2)
+                                                        y_boundary_guards,jyseps1_2,jyseps2_1,jyseps2_2, 
+                                                        ny_inner, exclude_y_guard_cells=exclude_y_guard_cells)
 
     ivertex_sol_vac_left, Rxy_sol_vac_left, Zxy_sol_vac_left = get_vac_left_boundary_vertices(ivertex_corners_lr,data_Rxy_lr,data_Zxy_lr,
                                                                     ivertex_corners_ur,data_Rxy_ur,data_Zxy_ur,
@@ -343,6 +353,18 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     ivertex_sol_vac_right, Rxy_sol_vac_right, Zxy_sol_vac_right = get_vac_right_boundary_vertices(ivertex_corners_lr,data_Rxy_lr,data_Zxy_lr,
                                                                     ivertex_corners_ur,data_Rxy_ur,data_Zxy_ur,
                                                                     jyseps1_2)
+    
+    ivertex_core = []
+    Rxy_core = []
+    Zxy_core = []
+    for j in range(jyseps1_1+y_boundary_guards+1,jyseps2_1+y_boundary_guards+1):
+        ivertex_core.append(ivertex_corners[0,j])
+        Rxy_core.append(data_Rxy[0,j])
+        Zxy_core.append(data_Zxy[0,j])
+    for j in range(jyseps2_2-1,Ny):
+        ivertex_core.append(ivertex_corners[0,j])
+        Rxy_core.append(data_Rxy[0,j])
+        Zxy_core.append(data_Zxy[0,j])
     
     # Make a scatter plot to show the mesh corners
     plt.figure(figsize=(10, 6))
@@ -355,8 +377,9 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     scatter = plt.scatter(Rpoints_full, Zpoints_full, c='m',marker='x')
     scatter = plt.scatter(Rxy_pfr_lower,Zxy_pfr_lower, c='g',marker='2')
     scatter = plt.scatter(Rxy_pfr_upper,Zxy_pfr_upper, c='b',marker='3')
-    scatter = plt.scatter(Rxy_sol_vac_right,Zxy_sol_vac_right, c='r',marker='4')
-    scatter = plt.scatter(Rxy_sol_vac_left,Zxy_sol_vac_left, c='k',marker='1')
+    #scatter = plt.scatter(Rxy_sol_vac_right,Zxy_sol_vac_right, c='r',marker='4')
+    #scatter = plt.scatter(Rxy_sol_vac_left,Zxy_sol_vac_left, c='k',marker='1')
+    #scatter = plt.scatter(Rxy_core,Zxy_core, c='y',marker='1')
 
     # uncomment for labels on original data points
     #for ic in range(0,Npoint):
@@ -372,12 +395,15 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     Npfr_upper = len(Rxy_pfr_upper)
     for iy in range(0,Npfr_upper):
         plt.text(Rxy_pfr_upper[iy],Zxy_pfr_upper[iy],str(ivertex_pfr_upper[iy]))
-    Nsol_vac_right = len(Rxy_sol_vac_right)
-    for iy in range(0,Nsol_vac_right):
-        plt.text(Rxy_sol_vac_right[iy],Zxy_sol_vac_right[iy],str(ivertex_sol_vac_right[iy]))
-    Nsol_vac_left = len(Rxy_sol_vac_left)
-    for iy in range(0,Nsol_vac_left):
-        plt.text(Rxy_sol_vac_left[iy],Zxy_sol_vac_left[iy],str(ivertex_sol_vac_left[iy]))
+    # Nsol_vac_right = len(Rxy_sol_vac_right)
+    # for iy in range(0,Nsol_vac_right):
+    #     plt.text(Rxy_sol_vac_right[iy],Zxy_sol_vac_right[iy],str(ivertex_sol_vac_right[iy]))
+    # Nsol_vac_left = len(Rxy_sol_vac_left)
+    # for iy in range(0,Nsol_vac_left):
+    #     plt.text(Rxy_sol_vac_left[iy],Zxy_sol_vac_left[iy],str(ivertex_sol_vac_left[iy]))
+    # Ncore = len(Rxy_core)
+    # for iy in range(0,Ncore):
+    #     plt.text(Rxy_core[iy],Zxy_core[iy],str(ivertex_core[iy]))
 
     plt.title('Meshpoints')
     plt.xlabel('R')
