@@ -21,20 +21,21 @@ void Quasineutral::transform(Options &state) {
   Options &allspecies = state["species"];
 
   // Add charge density of other species
-  const Field3D rho = std::accumulate(
+  const auto rho = std::accumulate(
       // Iterate through species
       begin(allspecies.getChildren()), end(allspecies.getChildren()),
       // Start with no charge
-      Field3D(0.0),
-      [this](Field3D value,
-             const std::map<std::string, Options>::value_type &name_species) {
+      Field3DParallel(0.0),
+      [this](Field3DParallel value,
+             const std::map<std::string, Options>::value_type& name_species) {
         const Options &species = name_species.second;
         // Add other species which have density and charge
         if (name_species.first != name and species.isSet("charge") and
             species.isSet("density")) {
           // Note: Not assuming that the boundary has been set
-          return value + getNoBoundary<Field3D>(species["density"]) *
-                             get<BoutReal>(species["charge"]);
+          auto a = getNoBoundary<Field3D>(species["density"]).asField3DParallel();
+          auto b = a * get<BoutReal>(species["charge"]);
+          return value + b;
         }
         return value;
       });
