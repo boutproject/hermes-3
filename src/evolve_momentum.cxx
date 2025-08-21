@@ -73,8 +73,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices())
-      / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
   } else {
     // Clebsch coordinate system
     bracket_factor = 1.0;
