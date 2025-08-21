@@ -254,6 +254,11 @@ Options& set(Options& option, T value) {
   return option;
 }
 
+/// We do not want to preserve that it was a parallel field
+Options& set(Options& option, Field3DParallel value) {
+  return set(option, value.asField3D());
+}
+
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
 ///
