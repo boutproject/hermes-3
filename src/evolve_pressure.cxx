@@ -252,7 +252,7 @@ void EvolvePressure::transform(Options& state) {
   T = Pfloor / floor(N.asField3DParallel(), density_floor);
   Pfloor = N * T.asField3DParallel(); // Ensure consistency
 
-  set(species["pressure"], Pfloor.asField3D());
+  set(species["pressure"], Pfloor);
   set(species["temperature"], T);
 }
 
