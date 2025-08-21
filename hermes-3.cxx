@@ -257,25 +257,25 @@ int Hermes::init(bool restarting) {
       // To use non-orthogonal metric
       // Normalise
       if (mesh->isFci()) {
-	coord->Bxy /= Bnorm;
-	// Metric is in grid file - just need to normalise
-	coord->g11 *= SQ(rho_s0);
-	coord->g22 *= SQ(rho_s0);
-	coord->g33 *= SQ(rho_s0);
-	coord->g12 *= SQ(rho_s0);
-	coord->g13 *= SQ(rho_s0);
-	coord->g23 *= SQ(rho_s0);
+        coord->Bxy.asField3DParallel() /= Bnorm;
+        // Metric is in grid file - just need to normalise
+        coord->g11.asField3DParallel() *= SQ(rho_s0);
+        coord->g22.asField3DParallel() *= SQ(rho_s0);
+        coord->g33.asField3DParallel() *= SQ(rho_s0);
+        coord->g12.asField3DParallel() *= SQ(rho_s0);
+        coord->g13.asField3DParallel() *= SQ(rho_s0);
+        coord->g23.asField3DParallel() *= SQ(rho_s0);
 
         // dx,dy and dz are dimensionless,
         // so J has SI units of volume. Divide by volume to normalise.
-	coord->J /= rho_s0 * rho_s0 * rho_s0;
+        coord->J.asField3DParallel() /= rho_s0 * rho_s0 * rho_s0;
 
-	coord->g_11 /= SQ(rho_s0);
-	coord->g_22 /= SQ(rho_s0);
-	coord->g_33 /= SQ(rho_s0);
-	coord->g_12 /= SQ(rho_s0);
-	coord->g_13 /= SQ(rho_s0);
-	coord->g_23 /= SQ(rho_s0);
+        coord->g_11.asField3DParallel() /= SQ(rho_s0);
+        coord->g_22.asField3DParallel() /= SQ(rho_s0);
+        coord->g_33.asField3DParallel() /= SQ(rho_s0);
+        coord->g_12.asField3DParallel() /= SQ(rho_s0);
+        coord->g_13.asField3DParallel() /= SQ(rho_s0);
+        coord->g_23.asField3DParallel() /= SQ(rho_s0);
       } else {
 	coord->dx /= rho_s0 * rho_s0 * Bnorm;
 	coord->Bxy /= Bnorm;
