@@ -438,7 +438,7 @@ void EvolvePressure::finally(const Options& state) {
 
 
     // Calculate ion collision times
-    const Field3D tau = 1. / softFloor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau = 1. / softFloor(nu, 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
