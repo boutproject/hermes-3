@@ -255,7 +255,7 @@ Options& set(Options& option, T value) {
 }
 
 /// We do not want to preserve that it was a parallel field
-Options& set(Options& option, Field3DParallel value) {
+inline Options& set(Options& option, Field3DParallel value) {
   return set(option, value.asField3D());
 }
 
