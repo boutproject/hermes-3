@@ -106,7 +106,7 @@ void EvolveMomentum::transform(Options &state) {
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver
-  NV = AA * N * V; // Re-calculate consistent with V and N
+  NV = AA * N.asField3DParallel() * V; // Re-calculate consistent with V and N
 
   if (tracking) {
     saveParallel(*tracking, fmt::format("NV{}_initial", name), NV);
@@ -126,12 +126,12 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Get updated momentum with boundary conditions
   // Note: This momentum may be modified by electromagnetic terms
-  NV = get<Field3D>(species["momentum"]);
+  NV = get<Field3D>(species["momentum"]).asField3DParallel();
 
   // Get the species density
   Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  Field3D Nlim = floor(N, density_floor);
+  Field3D Nlim = floor(N.asField3DParallel(), density_floor);
 
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;

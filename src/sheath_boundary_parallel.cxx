@@ -70,7 +70,8 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
   // Read wall voltage, convert to normalised units
   wall_potential = options["wall_potential"]
                        .doc("Voltage of the wall [Volts]")
-                       .withDefault(Field3D(0.0))
+                       .withDefault(Field3DParallel(0.0).asField3D())
+                       .asField3DParallel()
                    / Tnorm;
 
   // init parallel bc iterator
@@ -93,11 +94,12 @@ void SheathBoundaryParallel::transform(Options &state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
-  Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
-  Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
-    ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
-    : Te * Ne;
+  Field3DParallel Ne = toFieldAligned(
+      floor(GET_NOBOUNDARY(Field3D, electrons["density"]).asField3DParallel(), 0.0));
+  Field3DParallel Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
+  Field3DParallel Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
+                           ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
+                           : Te * Ne;
 
   // Ratio of specific heats
   const BoutReal electron_adiabatic =
@@ -108,12 +110,12 @@ void SheathBoundaryParallel::transform(Options &state) {
       IS_SET(electrons["AA"]) ? get<BoutReal>(electrons["AA"]) : SI::Me / SI::Mp;
 
   // This is for applying boundary conditions
-  Field3D Ve = IS_SET_NOBOUNDARY(electrons["velocity"])
-    ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
-    : zeroFrom(Ne);
+  Field3DParallel Ve = IS_SET_NOBOUNDARY(electrons["velocity"])
+                           ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
+                           : zeroFrom(Ne);
 
   bool has_NVe = IS_SET_NOBOUNDARY(electrons["momentum"]);
-  Field3D NVe;
+  Field3DParallel NVe;
   if (has_NVe) {
     NVe = toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]));
   }
@@ -151,8 +153,10 @@ void SheathBoundaryParallel::transform(Options &state) {
         continue; // Skip electrons and non-charged ions
       }
 
-      const Field3D Ni = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0));
-      const Field3D Ti = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
+      const Field3DParallel Ni = toFieldAligned(
+          floor(GET_NOBOUNDARY(Field3D, species["density"]).asField3DParallel(), 0.0));
+      const Field3DParallel Ti =
+          toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
       const BoutReal Mi = GET_NOBOUNDARY(BoutReal, species["AA"]);
       const BoutReal Zi = GET_NOBOUNDARY(BoutReal, species["charge"]);
 
@@ -341,11 +345,12 @@ void SheathBoundaryParallel::transform(Options &state) {
                                    : 5. / 3; // Ratio of specific heats (ideal gas)
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
-    Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
-    Field3D Pi = species.isSet("pressure")
-      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
-      : Ni * Ti;
+    Field3DParallel Ni = toFieldAligned(
+        floor(getNoBoundary<Field3D>(species["density"]).asField3DParallel(), 0.0));
+    Field3DParallel Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
+    Field3DParallel Pi = species.isSet("pressure")
+                             ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
+                             : Ni * Ti;
 
     // Get the velocity and momentum
     // These will be modified at the boundaries

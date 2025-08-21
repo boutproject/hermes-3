@@ -17,8 +17,8 @@ void ZeroCurrent::transform(Options &state) {
   AUTO_TRACE();
 
   // Current due to other species
-  Field3D current;
-  
+  Field3DParallel current;
+
   // Now calculate forces on other species
   Options& allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
@@ -35,9 +35,9 @@ void ZeroCurrent::transform(Options &state) {
       // If velocity is set, update the current
       // Note: Mark final so can't be set later
 
-      const Field3D N = getNoBoundary<Field3D>(species["density"]);
+      const Field3DParallel N = getNoBoundary<Field3D>(species["density"]);
       const BoutReal charge = get<BoutReal>(species["charge"]);
-      const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
+      const Field3DParallel V = getNoBoundary<Field3D>(species["velocity"]);
 
       if (!current.isAllocated()) {
         // Not yet allocated -> Set to the value
@@ -59,7 +59,7 @@ void ZeroCurrent::transform(Options &state) {
   if (species["velocity"].isSet()) {
     throw BoutException("Cannot use zero_current in species {} if velocity already set\n", name);
   }
-  Field3D N = getNoBoundary<Field3D>(species["density"]);
+  Field3DParallel N = getNoBoundary<Field3D>(species["density"]);
 
   velocity = current / (-charge * floor(N, 1e-5));
   set(species["velocity"], velocity);
