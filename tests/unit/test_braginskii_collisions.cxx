@@ -17,9 +17,9 @@ extern Mesh *mesh;
 using namespace bout::globals;
 
 // Reuse the "standard" fixture for FakeMesh
-using CollisionsTest = FakeMeshFixture;
+using BraginskiiCollisionsTest = FakeMeshFixture;
 
-TEST_F(CollisionsTest, CreateComponent) {
+TEST_F(BraginskiiCollisionsTest, CreateComponent) {
   Options options;
   
   options["units"]["eV"] = 1.0;
@@ -29,7 +29,7 @@ TEST_F(CollisionsTest, CreateComponent) {
   Collisions component("test", options, nullptr);
 }
 
-TEST_F(CollisionsTest, OnlyElectrons) {
+TEST_F(BraginskiiCollisionsTest, OnlyElectrons) {
   Options options;
 
   options["units"]["eV"] = 1.0;
@@ -48,7 +48,7 @@ TEST_F(CollisionsTest, OnlyElectrons) {
   ASSERT_TRUE(state["species"]["e"].isSet("collision_frequency"));
 }
 
-TEST_F(CollisionsTest, OneOrTwoSpeciesCharged) {
+TEST_F(BraginskiiCollisionsTest, OneOrTwoSpeciesCharged) {
   Options options;
 
   options["units"]["eV"] = 1.0;
@@ -91,7 +91,7 @@ TEST_F(CollisionsTest, OneOrTwoSpeciesCharged) {
   }
 }
 
-TEST_F(CollisionsTest, TnormDependence) {
+TEST_F(BraginskiiCollisionsTest, TnormDependence) {
   // Calculate rates with normalisation factors 1
   Options options {{"units", {{"eV", 1.0},
                               {"meters", 1.0},
