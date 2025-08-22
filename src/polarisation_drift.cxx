@@ -231,12 +231,14 @@ void PolarisationDrift::outputVars(Options &state) {
                     {"long_name", "Divergence of polarisation current"},
                     {"source", "polarisation_drift"}});
 
-    set_with_attrs(state["phi_pol"], phi_pol,
-                   {{"time_dimension", "t"},
-                    {"units", "V / s"},
-                    {"conversion", Tnorm * Omega_ci},
-                    {"standard_name", "flow potential"},
-                    {"long_name", "polarisation flow potential"},
-                    {"source", "polarisation_drift"}});
+    if (advection) {
+      set_with_attrs(state["phi_pol"], phi_pol,
+                     {{"time_dimension", "t"},
+                      {"units", "V / s"},
+                      {"conversion", Tnorm * Omega_ci},
+                      {"standard_name", "flow potential"},
+                      {"long_name", "polarisation flow potential"},
+                      {"source", "polarisation_drift"}});
+    }
   }
 }

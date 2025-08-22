@@ -118,12 +118,20 @@ void EvolveMomentum::finally(const Options &state) {
 
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                       true); // ExB drift
+      Field3D advection = Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+                                                true); // ExB drift
+      ddt(NV) = -advection;
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
       ddt(NV) -= Z * N * Grad_par(phi);
+
+      if (diagnose) {
+        // Energy advection channel
+        set(channels["E_Div_VExB_KE_" + name], V * advection);
+        // Energy transfer channel
+        set(channels["E_j_Gradpar_phi_" + name], Z * N * V * Grad_par(phi));
+      }
 
       if (state["fields"].isSet("Apar")) {
         // Include a correction term for electromagnetic simulations
@@ -165,12 +173,23 @@ void EvolveMomentum::finally(const Options &state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
-  ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
-  
+  Field3D advection = AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
+  ddt(NV) -= advection;
+
+  if (diagnose) {
+    // Energy transfer channel
+    set(channels["E_Div_Vpar_KE_" + name], V * advection);
+  }
+
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
     Field3D P = get<Field3D>(species["pressure"]);
     ddt(NV) -= Grad_par(P);
+
+    if (diagnose) {
+      // Energy transfer channel
+      set(channels["E_V_Gradpar_P_" + name], V * Grad_par(P));
+    }
   }
 
   if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -250,7 +269,6 @@ void EvolveMomentum::outputVars(Options &state) {
   AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
-  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   state[std::string("NV") + name].setAttributes(
@@ -263,6 +281,12 @@ void EvolveMomentum::outputVars(Options &state) {
        {"source", "evolve_momentum"}});
 
   if (diagnose) {
+    // Additional normalisations
+    auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+    auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+    auto Tnorm = get<BoutReal>(state["Tnorm"]);
+    BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+
     set_with_attrs(state[std::string("V") + name], V,
                    {{"time_dimension", "t"},
                     {"units", "m / s"},
@@ -290,8 +314,6 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"source", "evolve_momentum"}});
 
     // If fluxes have been set then add them to the output
-    auto rho_s0 = get<BoutReal>(state["rho_s0"]);
-
     if (flow_xlow.isAllocated()) {
       set_with_attrs(state[fmt::format("mf{}_tot_xlow", name)], flow_xlow,
                    {{"time_dimension", "t"},
@@ -311,6 +333,15 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"long_name", name + " momentum flow in Y. Note: May be incomplete."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
+    }
+    // Energy transfer channels
+    for (const auto& kv : channels.getChildren()) {
+      set_with_attrs(state[kv.first], getNonFinal<Field3D>(kv.second),
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", "Energy transfer channel"},
+                      {"source", "evolve_momentum"}});
     }
   }
 }
