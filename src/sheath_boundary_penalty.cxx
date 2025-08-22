@@ -91,16 +91,23 @@ void SheathBoundaryPenalty::transform(Options& state) {
                                 ? getNonFinal<Field3D>(electrons["energy_source"])
                                 : zeroFrom(Ne);
 
+    // Save the sources as diagnostics and for recycling
+    Field3D density_penalty {zeroFrom(Ne)};
+    Field3D momentum_penalty {zeroFrom(Ne)};
+    Field3D energy_penalty {zeroFrom(Ne)};
+
     BOUT_FOR(i, penalty_region) {
       BoutReal mask = penalty_mask[i]; // 1 in boundary
 
       BoutReal nfloor = BOUTMAX(Ne[i], 1e-5);
-      density_source[i] = (1 - mask) * density_source[i]
-                          - mask * BOUTMAX(Ne[i] - 1e-5, 0.0) / penalty_timescale;
-      momentum_source[i] = (1 - mask) * momentum_source[i]
-                           - mask * Me * nfloor * Ve[i] / penalty_timescale;
-      energy_source[i] = (1 - mask) * energy_source[i]
-                         - mask * gamma_e * nfloor * Te[i] / penalty_timescale;
+      density_source[i] = (1 - mask) * density_source[i];
+      density_penalty[i] = - mask * BOUTMAX(Ne[i] - 1e-5, 0.0) / penalty_timescale;
+
+      momentum_source[i] = (1 - mask) * momentum_source[i];
+      momentum_penalty[i] = density_penalty[i] * Me * Ve[i];
+
+      energy_source[i] = (1 - mask) * energy_source[i];
+      energy_penalty[i] = density_penalty[i] * gamma_e * Te[i];
 
       if (has_phi) {
         // Surface penalty terms, to impose sheath current
@@ -115,7 +122,7 @@ void SheathBoundaryPenalty::transform(Options& state) {
           const BoutReal Cse =
               sqrt(tesheath / (TWOPI * Me)) * exp(-phisheath / BOUTMAX(tesheath, 1e-5));
 
-          momentum_source[i] += mask * std::fabs(dmask_yup) * Me * nfloor
+          momentum_penalty[i] += mask * std::fabs(dmask_yup) * Me * nfloor
                                 * (SIGN(dmask_yup) * Cse - vesheath) / penalty_timescale;
         }
 
@@ -129,16 +136,30 @@ void SheathBoundaryPenalty::transform(Options& state) {
           const BoutReal Cse =
               sqrt(tesheath / (TWOPI * Me)) * exp(-phisheath / BOUTMAX(tesheath, 1e-5));
 
-          momentum_source[i] += mask * std::fabs(dmask_ydown) * Me * nfloor
+          momentum_penalty[i] += mask * std::fabs(dmask_ydown) * Me * nfloor
                                 * (SIGN(dmask_ydown) * Cse - vesheath)
                                 / penalty_timescale;
         }
       }
     }
 
+    density_source += density_penalty;
+    momentum_source += momentum_penalty;
+    energy_source += energy_penalty;
+
     set(electrons["density_source"], density_source);
     set(electrons["momentum_source"], momentum_source);
     set(electrons["energy_source"], energy_source);
+
+    if (diagnose) {
+      auto& diagnostic_species = diagnostics["e"];
+      density_penalty.allocate();
+      momentum_penalty.allocate();
+      energy_penalty.allocate();
+      set(diagnostic_species["density_penalty"], density_penalty);
+      set(diagnostic_species["momentum_penalty"], momentum_penalty);
+      set(diagnostic_species["energy_penalty"], energy_penalty);
+    }
   }
 
   for (auto& kv : allspecies.getChildren()) {
@@ -196,15 +217,16 @@ void SheathBoundaryPenalty::transform(Options& state) {
 
       // Volumetric penalty terms
       BoutReal nfloor = BOUTMAX(Ni[i], 1e-5);
-      density_penalty[i] = - mask * density_source[i]
-                           - mask * BOUTMAX(Ni[i] - 1e-5, 0.0) / penalty_timescale;
+      density_source[i] = (1 - mask) * density_source[i];
+      density_penalty[i] = - mask * BOUTMAX(Ni[i] - 1e-5, 0.0) / penalty_timescale;
 
-      momentum_penalty[i] = - mask * momentum_source[i]
-                            - mask * Mi * nfloor * Vi[i] / penalty_timescale;
+      momentum_source[i] = (1 - mask) * momentum_source[i];
+      momentum_penalty[i] = density_penalty[i] * Mi * Vi[i];
 
-      energy_penalty[i] = - mask * energy_source[i]
-                          - mask * gamma_i * nfloor * Ti[i] / penalty_timescale;
+      energy_source[i] = (1 - mask) * energy_source[i];
+      energy_penalty[i] = density_penalty[i] * gamma_i * Ti[i];
 
+      /*
       // Surface penalty terms.
       // The gradient of the mask gives the direction
       BoutReal dmask_yup = penalty_mask[i.yp()] - mask;
@@ -232,11 +254,16 @@ void SheathBoundaryPenalty::transform(Options& state) {
         momentum_penalty[i] += mask * std::fabs(dmask_ydown) * Mi * nfloor
                               * (SIGN(dmask_ydown) * Cs - visheath) / penalty_timescale;
       }
+      */
     }
 
-    add(species["density_source"], density_penalty);
-    add(species["momentum_source"], momentum_penalty);
-    add(species["energy_source"], energy_penalty);
+    density_source += density_penalty;
+    momentum_source += momentum_penalty;
+    energy_source += energy_penalty;
+
+    set(species["density_source"], density_source);
+    set(species["momentum_source"], momentum_source);
+    set(species["energy_source"], energy_source);
 
     set(species["density_penalty"], density_penalty);
     set(species["momentum_penalty"], momentum_penalty);
@@ -245,6 +272,9 @@ void SheathBoundaryPenalty::transform(Options& state) {
     if (diagnose) {
       // Store penalty term diagnostics to used in outputVars
       auto& diagnostic_species = diagnostics[kv.first];
+      density_penalty.allocate();
+      momentum_penalty.allocate();
+      energy_penalty.allocate();
       set(diagnostic_species["density_penalty"], density_penalty);
       set(diagnostic_species["momentum_penalty"], momentum_penalty);
       set(diagnostic_species["energy_penalty"], energy_penalty);

@@ -295,6 +295,10 @@ void SheathBoundarySimple::transform(Options& state) {
               tesheath
               * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
 
+          if (nesheath < 1e-10) {
+            phi[i] = 0.0;
+          }
+          
           const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
 
@@ -319,6 +323,10 @@ void SheathBoundarySimple::transform(Options& state) {
           phi[i] =
               tesheath
               * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
+
+          if (nesheath < 1e-10) {
+            phi[i] = 0.0;
+          }
 
           const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
@@ -371,6 +379,10 @@ void SheathBoundarySimple::transform(Options& state) {
         BoutReal vesheath =
 	  -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
+        if (nesheath < 1e-10) {
+          vesheath = 0.0;
+        }
+
         // Heat flux. Note: Here this is negative because vesheath < 0
         BoutReal q = gamma_e * tesheath * nesheath * vesheath;
 
@@ -385,6 +397,11 @@ void SheathBoundarySimple::transform(Options& state) {
         // This is additional energy flux through the sheath
         q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
 
+        if (!std::isfinite(q)) {
+          throw BoutException("q non finite: {}, N {} T {} V {} phi {}",
+                              q, nesheath, tesheath, vesheath, phisheath);
+        }
+        
         // Cross-sectional area in XZ plane and cell volume
         BoutReal da = (coord->J[i] + coord->J[im]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]))
                         * 0.5*(coord->dx[i] + coord->dx[im]) * 0.5*(coord->dz[i] + coord->dz[im]);   // [m^2]
@@ -434,9 +451,13 @@ void SheathBoundarySimple::transform(Options& state) {
         BoutReal vesheath =
           sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
+        if (nesheath < 1e-10) {
+          vesheath = 0.0;
+        }
+
         // Heat flux. Note: Here this is positive because vesheath > 0
         BoutReal q = gamma_e * tesheath * nesheath * vesheath;
-
+        
         if (no_flow) {
           vesheath = 0.0;
         }
@@ -447,6 +468,11 @@ void SheathBoundarySimple::transform(Options& state) {
         // Take into account the flow of energy due to fluid flow
         // This is additional energy flux through the sheath
         q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
+
+        if (!std::isfinite(q)) {
+          throw BoutException("q non finite: {}, N {} T {} V {} phi {}",
+                              q, nesheath, tesheath, vesheath, phisheath);
+        }
 
         // Cross-sectional area in XZ plane and cell volume
         BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]))

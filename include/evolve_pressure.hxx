@@ -82,6 +82,7 @@ private:
 
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
+  bool apply_t_boundary; ///< Apply boundary to T?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux

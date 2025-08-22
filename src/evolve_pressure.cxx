@@ -144,6 +144,12 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                                    .doc("Apply neumann boundary with Z average?")
                                    .withDefault<bool>(false);
 
+  apply_t_boundary = options["apply_t_boundary"].doc("Apply boundary to T?")
+    .withDefault<bool>(false);
+  if (apply_t_boundary) {
+    T.setBoundary(std::string("T") + name);
+  }
+
   numerical_viscous_heating = options["numerical_viscous_heating"]
                                   .doc("Include heating due to numerical viscosity?")
                                   .withDefault<bool>(false);
@@ -249,6 +255,11 @@ void EvolvePressure::transform(Options& state) {
   // evolving P_solver = Nlim * T
   // rather than pressure P = N * T
   T = floor(P, 0.0) / softFloor(N, density_floor);
+
+  if (apply_t_boundary) {
+    T.applyBoundary();
+  }
+
   P_solver = P; // Save solver variable to restore later
   P = N * T;    // Equation of state
 
@@ -553,6 +564,13 @@ void EvolvePressure::finally(const Options& state) {
   // Keep boundary conditions for post-processing.
   P_solver.setBoundaryTo(P);
   P = P_solver;
+
+  // Force P back to zero
+  for (const auto& i : P.getRegion("RGN_NOBNDRY")) {
+    if (P[i] < 0.0) {
+      ddt(P)[i] -= P[i];
+    }
+  }
 }
 
 void EvolvePressure::outputVars(Options& state) {
