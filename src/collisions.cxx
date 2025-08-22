@@ -438,7 +438,7 @@ void Collisions::transform(Options& state) {
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
 
-        if (species2.isSet("charge")) {
+        if (species2.isSet("charge") and (get<BoutReal>(species2["charge"]) != 0.0)) {
           // species1 neutral, species2 charged
 
           if (!ion_neutral)
