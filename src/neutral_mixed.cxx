@@ -465,23 +465,23 @@ void NeutralMixed::finally(const Options& state) {
      ;
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
-  ef_adv_par_ylow  *= 5/2;
-  ef_adv_perp_xlow *= 5/2; 
-  ef_adv_perp_ylow *= 5/2;
+  ef_adv_par_ylow  *= 5./2;
+  ef_adv_perp_xlow *= 5./2; 
+  ef_adv_perp_ylow *= 5./2;
 
   if (neutral_conduction) {
     ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(
-                    kappa_n, Tn,                            // Perpendicular conduction
+                    kappa_n, Tn,                             // Perpendicular conduction
                     ef_cond_perp_xlow, ef_cond_perp_ylow)
 
-            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
+            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction 
                       ef_cond_par_ylow,        
                       false)  // No conduction through target boundary
       ;
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-    ef_cond_perp_xlow *= 3/2;
-    ef_cond_perp_ylow *= 3/2;
-    ef_cond_par_ylow *= 3/2;
+    ef_cond_perp_xlow *= 3./2;
+    ef_cond_perp_ylow *= 3./2;
+    ef_cond_par_ylow *= 3./2;
   }
 
   Sp = pressure_source;
@@ -517,12 +517,12 @@ void NeutralMixed::finally(const Options& state) {
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = AA * Div_a_Grad_perp_flows(
-                                eta_n, Vn,              // Perpendicular viscosity
+      Field3D viscosity_source = Div_a_Grad_perp_flows(
+                                eta_n, Vn,               // Perpendicular viscosity
                                 mf_visc_perp_xlow,
                                 mf_visc_perp_ylow)    
                               
-                              + AA * Div_par_K_Grad_par_mod(               // Parallel viscosity 
+                              + Div_par_K_Grad_par_mod(  // Parallel viscosity 
                                 eta_n, Vn,
                                 mf_visc_par_ylow,
                                 false) // No viscosity through target boundary
@@ -633,6 +633,14 @@ void NeutralMixed::outputVars(Options& state) {
        {"long_name", name + " parallel momentum"},
        {"species", name},
        {"source", "neutral_mixed"}});
+
+  set_with_attrs(state[std::string("V") + name], Vn,
+                   {{"time_dimension", "t"},
+                    {"units", "m / s"},
+                    {"conversion", Cs0},
+                    {"standard_name", "velocity"},
+                    {"long_name", name + " parallel velocity"},
+                    {"source", "neutral_mixed"}});
 
   if (output_ddt) {
     set_with_attrs(
@@ -787,13 +795,13 @@ void NeutralMixed::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
-    if (mf_visc_perp_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("mf{}_visc_perp_ylow", name)], mf_visc_perp_ylow,
+    if (mf_visc_perp_xlow.isAllocated()) {
+      set_with_attrs(state[fmt::format("mf{}_visc_perp_xlow", name)], mf_visc_perp_xlow,
                    {{"time_dimension", "t"},
                     {"units", "N"},
                     {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"standard_name", "momentum flow"},
-                    {"long_name", name + " poloidal component of perpendicular viscosity."},
+                    {"long_name", name + " radial component of perpendicular viscosity."},
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
