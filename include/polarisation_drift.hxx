@@ -72,6 +72,7 @@ private:
   BoutReal density_floor; // Minimum mass density if boussinesq=false
   bool advection; // Advect fluids by an approximate polarisation velocity?
   bool diamagnetic_polarisation; // Calculate compression terms?
+  Options channels; ///< Energy transfer channel diagnostics
 };
 
 namespace {

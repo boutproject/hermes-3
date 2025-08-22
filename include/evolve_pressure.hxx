@@ -117,6 +117,7 @@ private:
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
   Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
   Field3D flow_ylow_kinetic;    ///< Parallel flow of kinetic energy
+  Options channels;             ///< Energy transfer diagnostics
 
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
