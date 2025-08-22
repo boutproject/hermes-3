@@ -2,6 +2,7 @@
 #ifndef ADAS_NEON_H
 #define ADAS_NEON_H
 
+#include <bout/constants.hxx>
 #include "adas_reaction.hxx"
 
 #include <array>
@@ -41,15 +42,45 @@ template <int level>
 struct ADASNeonIonisation : public OpenADAS {
   ADASNeonIonisation(std::string, Options& alloptions, Solver*)
       : OpenADAS(alloptions["units"], "scd96_ne.json", "plt96_ne.json", level,
-                 -neon_ionisation_energy[level]) {}
+                 -neon_ionisation_energy[level]) {
+                  
+                    diagnose = alloptions[std::string(neon_species_name<0>)]["diagnose"]
+                                  .doc("Output additional diagnostics?")
+                                  .withDefault<bool>(false);
+
+                 }
+
+  Field3D energy_loss; ///< Energy loss due to radiation
+  bool diagnose;
+  std::string from_name = std::string(neon_species_name<level>);
+  std::string to_name = std::string(neon_species_name<level + 1>);
 
   void transform(Options& state) override {
     calculate_rates(
-        state["species"]["e"],                         // Electrons
-        state["species"][neon_species_name<level>],    // From this ionisation state
-        state["species"][neon_species_name<level + 1>] // To this state
+        state["species"]["e"],           // Electrons
+        state["species"][from_name],     // From this ionisation state
+        state["species"][to_name],       // To this state
+        energy_loss                      // Radiation energy loss
     );
   }
+
+  void outputVars(Options& state) override {
+      AUTO_TRACE();
+
+      auto Nnorm = get<BoutReal>(state["Nnorm"]);
+      auto Tnorm = get<BoutReal>(state["Tnorm"]);
+      BoutReal Pnorm = SI::qe * Tnorm * Nnorm; 
+      auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+
+      if (diagnose) {
+        set_with_attrs(state["R" + from_name + "_ex"], energy_loss*-1,  // Negative = loss from domain
+                      {{"time_dimension", "t"},
+                        {"units", "W / m^3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"long_name", "Radiation loss due to ionisation from " + from_name + " to " + to_name},
+                        {"source", "adas_neon"}});
+      }
+    }
 };
 
 /////////////////////////////////////////////////
@@ -62,15 +93,45 @@ struct ADASNeonRecombination : public OpenADAS {
   /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
   ADASNeonRecombination(std::string, Options& alloptions, Solver*)
       : OpenADAS(alloptions["units"], "acd96_ne.json", "prb96_ne.json", level,
-                 neon_ionisation_energy[level]) {}
+                 neon_ionisation_energy[level]) {
+                  
+                    diagnose = alloptions[std::string(neon_species_name<0>)]["diagnose"]
+                                  .doc("Output additional diagnostics?")
+                                  .withDefault<bool>(false);
+
+                 }
+
+  Field3D energy_loss; ///< Energy loss due to radiation
+  bool diagnose;
+  std::string from_name = std::string(neon_species_name<level + 1>);
+  std::string to_name = std::string(neon_species_name<level>);
 
   void transform(Options& state) override {
     calculate_rates(
-        state["species"]["e"],                          // Electrons
-        state["species"][neon_species_name<level + 1>], // From this ionisation state
-        state["species"][neon_species_name<level>]      // To this state
+        state["species"]["e"],           // Electrons
+        state["species"][from_name],     // From this ionisation state
+        state["species"][to_name],       // To this state
+        energy_loss                      // Radiation energy loss
     );
   }
+
+  void outputVars(Options& state) override {
+      AUTO_TRACE();
+
+      auto Nnorm = get<BoutReal>(state["Nnorm"]);
+      auto Tnorm = get<BoutReal>(state["Tnorm"]);
+      BoutReal Pnorm = SI::qe * Tnorm * Nnorm; 
+      auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+
+      if (diagnose) {
+        set_with_attrs(state["R" + from_name + "_rec"], energy_loss*-1,  // Negative = loss from domain
+                      {{"time_dimension", "t"},
+                        {"units", "W / m^3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"long_name", "Radiation loss due to recombination from " + from_name + " to " + to_name},
+                        {"source", "adas_neon"}});
+      }
+    }
 };
 
 /// @tparam level     The ionisation level of the ion on the right of the reaction
