@@ -218,7 +218,6 @@ void NeutralMixed::transform(Options& state) {
     
     // No flow into wall
     pnt.dirichlet_o2(Vn,0.0); 
-    pnt.dirichlet_o2(Vnlim,0.0);
     pnt.dirichlet_o2(NVn,0.0);
     
   }); // end yboundary.iter_pnts()
