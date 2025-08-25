@@ -39,6 +39,23 @@ inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_ALL")
   return result;
 }
 
+inline Field3DParallel softFloor(const Field3DParallel& var, BoutReal f,
+                                 const std::string& rgn = "RGN_ALL") {
+  auto result = softFloor(var.asField3D(), f, var.hasParallelSlices() ? "RGN_NOY" : rgn);
+
+  if (var.hasParallelSlices()) {
+    result.splitParallelSlices();
+    for (size_t i{0}; i < var.numberParallelSlices(); ++i) {
+      result.yup(i) = softFloor(var.yup(i), f,
+                                fmt::format("RGN_YPAR_{:+d}", static_cast<int>(i) + 1));
+      result.ydown(i) = softFloor(
+          var.ydown(i), f, fmt::format("RGN_YPAR_{:+d}", -(static_cast<int>(i) + 1)));
+    }
+  }
+
+  return result.asField3DParallel();
+}
+
 template<typename T, typename = bout::utils::EnableIfField<T>>
 inline T clamp(const T& var, BoutReal lo, BoutReal hi, const std::string& rgn = "RGN_ALL") {
   checkData(var);
