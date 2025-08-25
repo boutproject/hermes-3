@@ -67,9 +67,11 @@ private:
   Field2D Vnpar; ///< Parallel flow velocity diagnostic
 };
 
+#if not BOUT_USE_METRIC_3D
 namespace {
 RegisterComponent<NeutralFullVelocity>
     registersolverneutralfullvelocity("neutral_full_velocity");
 }
+#endif
 
 #endif // NEUTRAL_FULL_VELOCITY_H
