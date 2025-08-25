@@ -13,20 +13,14 @@
 ///
 
 #include "../include/adas_reaction.hxx"
+#include "../include/hermes_utils.hxx"
 #include "../include/integrate.hxx"
 
 #include "../external/json.hxx"
 
+#include <algorithm>
 #include <fstream>
 #include <iterator>
-
-namespace {
-  BoutReal floor(BoutReal value, BoutReal min) {
-    if (value < min)
-      return min;
-    return value;
-  }
-}
 
 OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename, int level) {
   AUTO_TRACE();
@@ -59,14 +53,6 @@ OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename, in
 }
 
 namespace {
-BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
-  if (value < min)
-    return min;
-  if (value > max)
-    return max;
-  return value;
-}
-
 int get_high_index(const std::vector<BoutReal>& vec, BoutReal value) {
   ASSERT2(vec.size() > 1); // Need at least two elements
 
@@ -89,8 +75,8 @@ BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
   AUTO_TRACE();
 
   // Ensure that the inputs are in range
-  BoutReal log10T = log10(clip(T, Tmin, Tmax));
-  BoutReal log10n = log10(clip(n, nmin, nmax));
+  BoutReal log10T = log10(std::clamp(T, Tmin, Tmax));
+  BoutReal log10n = log10(std::clamp(n, nmin, nmax));
 
   // Get the upper index. Between 1 and size-1 inclusive
   int high_T_index = get_high_index(log_temperature, log10T);

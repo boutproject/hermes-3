@@ -4,6 +4,7 @@
 #include "../../include/integrate.hxx"
 
 #include "test_extras.hxx" // FakeMesh
+#include "fake_mesh_fixture.hxx"
 
 /// Global mesh
 namespace bout{

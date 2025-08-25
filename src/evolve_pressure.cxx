@@ -27,7 +27,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
@@ -39,11 +39,19 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   low_T_diffuse_perp = options["low_T_diffuse_perp"].doc("Add cross-field diffusion at low temperature?")
     .withDefault<bool>(false);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pressure_floor = density_floor * temperature_floor;
 
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
+
+  damp_p_nt = options["damp_p_nt"]
+    .doc("Damp P - N*T? Active when P < 0 or N < density_floor")
+    .withDefault<bool>(false);
+
+  conduction_collisions_mode = options["conduction_collisions_mode"]
+      .doc("Can be multispecies: all collisions, or braginskii: self collisions and ie")
+      .withDefault<std::string>("multispecies");
 
   if (evolve_log) {
     // Evolve logarithm of pressure
@@ -128,6 +136,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       source_prefactor_function = FieldFactory::get()->parse(str, &p_options);
   }
 
+
   if (p_options["source_only_in_core"]
       .doc("Zero the source outside the closed field-line region?")
       .withDefault<bool>(false)) {
@@ -163,7 +172,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
 
   BoutReal default_kappa; // default conductivity, changes depending on species
-  switch(identifySpeciesType(name)) {
+  switch(identifySpeciesTypeEnum(name)) {
   case SpeciesType::ion:
     default_kappa = 3.9;
     break;
@@ -249,7 +258,7 @@ void EvolvePressure::transform(Options& state) {
   N = getNoBoundary<Field3D>(species["density"]);
 
   Field3DParallel Pfloor = floor(P.asField3DParallel(), 0.0);
-  T = Pfloor / floor(N.asField3DParallel(), density_floor);
+  T = Pfloor / softFloor(N.asField3DParallel(), density_floor);
   Pfloor = N * T.asField3DParallel(); // Ensure consistency
 
   set(species["pressure"], Pfloor);
@@ -272,6 +281,8 @@ void EvolvePressure::finally(const Options& state) {
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
+  
+  Coordinates* coord = mesh->getCoordinates();
 
   if (exb_advection and species.isSet("charge") and
       (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
@@ -326,7 +337,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (numerical_viscous_heating || diagnose) {
       // Viscous heating coming from numerical viscosity
-      Field3D Nlim = floor(N, density_floor);
+      Field3D Nlim = softFloor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
       // skip if only for diagnostic with FCI, as not yet implemented
       if (numerical_viscous_heating || (!Nlim.isFci())) {
@@ -338,6 +349,8 @@ void EvolvePressure::finally(const Options& state) {
         ddt(P) += Sp_nvh;
       }
     }
+  } else if (diagnose) {
+    flow_ylow = 0;
   }
 
   if (species.isSet("low_n_coeff")) {
@@ -347,24 +360,111 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_n_diffuse_perp) {
-    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), P, true);
+    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P, true);
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) += 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / floor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
+    ddt(P) += 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
                                            T, false);
   }
 
   if (low_p_diffuse_perp) {
-    Field3D Plim = floor(P, 1e-3 * pressure_floor);
+    Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
     ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
   }
 
   // Parallel heat conduction
   if (thermal_conduction) {
 
+    // Collisionality
+    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+
+      if (conduction_collisions_mode == "braginskii") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (identifySpeciesType(species.name()) == "neutral") {
+            throw BoutException("\tBraginskii conduction collisions mode not available for neutrals, choose multispecies or afn");
+          } else if (identifySpeciesType(species.name()) == "electron") {
+            if (/// Electron-electron collisions
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "e", "coll", "exact"))) {
+                    collision_names.push_back(collision_name);
+                  }
+
+          } else if (identifySpeciesType(species.name()) == "ion") {
+            if (/// Self-collisions
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), species.name(), "coll", "exact"))) {
+                    collision_names.push_back(collision_name);
+                  }
+          }
+        }
+          
+      // Multispecies mode: all collisions and CX are included
+      } else if (conduction_collisions_mode == "multispecies") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "cx", "partial")) or
+              /// Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "coll", "partial"))) {
+                  collision_names.push_back(collision_name);
+                }
+        }
+        
+      } else if (conduction_collisions_mode == "afn") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (identifySpeciesType(species.name()) != "neutral") {
+                throw BoutException("\tAFN conduction collisions mode not available for ions or electrons, choose braginskii or multispecies");
+              }
+          if (/// Charge exchange
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "+", "cx", "partial")) or
+                /// Ionisation
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "+", "iz", "partial"))) {
+                    collision_names.push_back(collision_name);
+                  }
+        }
+
+      } else {
+        throw BoutException("\tConduction_collisions_mode incorrect", species.name());
+      }
+
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in evolve_pressure for selected collisions mode", species.name());
+      }
+
+      /// Write chosen collisions to log file
+      output_info.write("\t{:s} conduction collisionality mode: '{:s}' using ",
+                      species.name(), conduction_collisions_mode);
+      for (const auto& collision : collision_names) {        
+        output_info.write("{:s} ", collision);
+      }
+
+      output_info.write("\n");
+
+      }
+
+    /// Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
+    }
+
+
     // Calculate ion collision times
-    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau = 1. / softFloor(nu, 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -392,7 +492,7 @@ void EvolvePressure::finally(const Options& state) {
       Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
 
       // This results in a harmonic average of the heat fluxes
-      kappa_par = kappa_par / (1. + abs(q_SH / floor(q_fl, 1e-10)));
+      kappa_par = kappa_par / (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
       mesh->communicate(kappa_par);
@@ -469,9 +569,11 @@ void EvolvePressure::finally(const Options& state) {
 #endif
   ddt(P) += Sp;
 
-  // Term to force evolved P towards N * T
-  // This is active when P < 0 or when N < density_floor
-  ddt(P) += N * T - P;
+  if (damp_p_nt) {
+    // Term to force evolved P towards N * T
+    // This is active when P < 0 or when N < density_floor
+    ddt(P) += N * T - P;
+  }
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
@@ -533,6 +635,15 @@ void EvolvePressure::outputVars(Options& state) {
                       {"long_name", name + " heat conduction coefficient"},
                       {"species", name},
                       {"source", "evolve_pressure"}});
+                      
+      set_with_attrs(state[std::string("K") + name + std::string("_cond")], nu,
+                     {{"time_dimension", "t"},
+                      {"units", "s^-1"},
+                      {"conversion", Omega_ci},
+                      {"long_name", "collision frequency for conduction"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+
     }
     set_with_attrs(state[std::string("T") + name], T,
                    {{"time_dimension", "t"},
@@ -589,6 +700,7 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
+            
     if (flow_ylow_conduction.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
                    {{"time_dimension", "t"},
@@ -599,6 +711,7 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
+
     if (flow_ylow_kinetic.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_kin_ylow", name)], flow_ylow_kinetic,
                    {{"time_dimension", "t"},
@@ -638,7 +751,7 @@ void EvolvePressure::precon(const Options &state, BoutReal gamma) {
   const Field3D N = get<Field3D>(species["density"]);
 
   // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coef = -(2. / 3) * gamma * kappa_par / floor(N, density_floor);
+  Field3D coef = -(2. / 3) * gamma * kappa_par / softFloor(N, density_floor);
 
   if (state.isSet("scale_timederivs")) {
     coef *= get<Field3D>(state["scale_timederivs"]);

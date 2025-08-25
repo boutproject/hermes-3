@@ -31,8 +31,11 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
+  BoutReal temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+  
   low_n_diffuse = options["low_n_diffuse"]
                       .doc("Parallel diffusion at low density")
                       .withDefault<bool>(false);
@@ -41,7 +44,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pressure_floor = density_floor * temperature_floor;
 
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")

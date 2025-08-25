@@ -46,6 +46,7 @@
 #include "include/fixed_fraction_radiation.hxx"
 #include "include/fixed_temperature.hxx"
 #include "include/fixed_velocity.hxx"
+#include "include/neutral_full_velocity.hxx"
 #include "include/hydrogen_charge_exchange.hxx"
 #include "include/ion_viscosity.hxx"
 #include "include/ionisation.hxx"
@@ -319,7 +320,7 @@ int Hermes::init(bool restarting) {
   return 0;
 }
 
-int Hermes::rhs(BoutReal time) {
+int Hermes::rhs(BoutReal time, bool linear) {
   if (show_timesteps) {
     fprintf(stderr, "TIME = %e\r", time);
   }
@@ -329,6 +330,7 @@ int Hermes::rhs(BoutReal time) {
   
   set(state["time"], time);
   state["units"] = units.copy();
+  set(state["linear"], linear);
 
   // Call all the components
   scheduler->transform(state);
