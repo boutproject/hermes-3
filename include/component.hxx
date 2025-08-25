@@ -202,6 +202,7 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
 
 /// Check whether value is valid, returning true
 /// if invalid i.e contains non-finite values
+#warning TODO: this is buggy
 template<typename T>
 bool hermesDataInvalid(const T& value) {
   return false; // Default
@@ -219,6 +220,25 @@ inline bool hermesDataInvalid(const Field3D& value) {
   return false;
 }
 
+/// Check Field2D values.
+/// Doesn't check boundary cells
+template<>
+inline bool hermesDataInvalid(const Field2D& value) {
+  for (auto& i : value.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(value[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Set values in an option. This could be optimised, but
+/// currently the is_value private variable would need to be modified.
+///
+/// If the value has been used then raise an exception (if CHECK >= 1)
+/// This is to prevent values being modified after use.
+///
+/// @tparam T The type of the value to set. Usually this is inferred
 template<typename T>
 void setCheck(Options& option, T value) {
 #if CHECKLEVEL >= 1

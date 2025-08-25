@@ -1,16 +1,18 @@
 
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/invert_pardiv.hxx>
-#include <bout/output_bout_types.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/fv_ops.hxx>
 #include <bout/initialprofiles.hxx>
+#include <bout/invert_pardiv.hxx>
+#include <bout/output_bout_types.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_energy.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
+
+#include <algorithm>
 
 using bout::globals::mesh;
 
@@ -30,7 +32,12 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
                    .doc("Evolve the logarithm of energy?")
                    .withDefault<bool>(false);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
+
+  conduction_collisions_mode = options["conduction_collisions_mode"]
+      .doc("Can be multispecies: all collisions, or braginskii: self collisions and ie")
+      .withDefault<std::string>("multispecies");
+
   if (evolve_log) {
     // Evolve logarithm of energy
     solver->add(logE, std::string("logE") + name);
@@ -151,10 +158,7 @@ void EvolveEnergy::transform(Options& state) {
   // E = Cv * P + (1/2) m n v^2
   P.allocate();
   BOUT_FOR(i, P.getRegion("RGN_ALL")) {
-    P[i] = (E[i] - 0.5 * AA * N[i] * SQ(V[i])) / Cv;
-    if (P[i] < 0.0) {
-      P[i] = 0.0;
-    }
+    P[i] = std::max((E[i] - 0.5 * AA * N[i] * SQ(V[i])) / Cv, 0.0);
   }
   P.applyBoundary("neumann");
 
@@ -193,7 +197,7 @@ void EvolveEnergy::transform(Options& state) {
   }
 
   // Calculate temperature
-  T = P / floor(N, density_floor);
+  T = P / softFloor(N, density_floor);
   P = N * T; // Ensure consistency
   mesh->communicate(E);
 
@@ -289,8 +293,84 @@ void EvolveEnergy::finally(const Options& state) {
   // Parallel heat conduction
   if (thermal_conduction) {
 
+    // Collisionality
+    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+
+      if (conduction_collisions_mode == "braginskii") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (identifySpeciesType(species.name()) == "neutral") {
+            if (/// Charge exchange
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "+", "cx", "partial")) or
+                /// Ionisation
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "+", "iz", "partial"))) {
+                    collision_names.push_back(collision_name);
+                  }
+
+          } else if (identifySpeciesType(species.name()) == "electron") {
+            if (/// Electron-electron collisions
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), "e", "coll", "exact"))) {
+                    collision_names.push_back(collision_name);
+                  }
+
+          } else if (identifySpeciesType(species.name()) == "ion") {
+            if (/// Self-collisions
+                (collisionSpeciesMatch(    
+                  collision_name, species.name(), species.name(), "coll", "exact"))) {
+                    collision_names.push_back(collision_name);
+                  }
+          }
+          
+        }
+      // Multispecies mode: all collisions and CX are included
+      } else if (conduction_collisions_mode == "multispecies") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (/// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "cx", "partial")) or
+              /// Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "coll", "partial"))) {
+                  collision_names.push_back(collision_name);
+                }
+        }
+        
+      } else {
+        throw BoutException("\tconduction_collisions_mode for {:s} must be either multispecies or braginskii", species.name());
+      }
+
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in evolve_pressure for selected collisions mode", species.name());
+      }
+
+      /// Write chosen collisions to log file
+      output_info.write("\t{:s} conduction collisionality mode: '{:s}' using ",
+                      species.name(), conduction_collisions_mode);
+      for (const auto& collision : collision_names) {        
+        output_info.write("{:s} ", collision);
+      }
+
+      output_info.write("\n");
+
+      }
+
+    /// Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
+    }
+
     // Calculate ion collision times
-    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau = 1. / softFloor(get<Field3D>(species["collision_frequency"]), 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -318,7 +398,7 @@ void EvolveEnergy::finally(const Options& state) {
       Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
 
       // This results in a harmonic average of the heat fluxes
-      kappa_par = kappa_par / (1. + abs(q_SH / floor(q_fl, 1e-10)));
+      kappa_par = kappa_par / (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
       mesh->communicate(kappa_par);
@@ -526,7 +606,7 @@ void EvolveEnergy::precon(const Options& state, BoutReal gamma) {
   const Field3D N = get<Field3D>(species["density"]);
 
   // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coef = -gamma * kappa_par / floor(N, density_floor);
+  Field3D coef = -gamma * kappa_par / softFloor(N, density_floor);
 
   if (state.isSet("scale_timederivs")) {
     coef *= get<Field3D>(state["scale_timederivs"]);

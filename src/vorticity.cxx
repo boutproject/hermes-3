@@ -1,6 +1,7 @@
 
 #include "../include/vorticity.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
@@ -14,12 +15,6 @@
 using bout::globals::mesh;
 
 namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
-
 Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int ny = f.getNy();
   int nz = f.getNz();
