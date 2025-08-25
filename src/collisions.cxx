@@ -158,8 +158,8 @@ void Collisions::transform(Options& state) {
 
   if (allspecies.isSection("e")) {
     Options& electrons = allspecies["e"];
-    const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]) * Tnorm; // eV
-    const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]) * Nnorm;     // In m^-3
+    const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]).asField3DParallel() * Tnorm; // eV
+    Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]).asField3DParallel() * Nnorm;     // In m^-3
     
     for (auto& kv : allspecies.getChildren()) {
       if (kv.first == "e") {
@@ -169,21 +169,21 @@ void Collisions::transform(Options& state) {
         if (!electron_electron)
           continue;
 
-        const Field3D nu_ee = filledFrom(Ne, [&](auto& i) {
-          const BoutReal Telim = softFloor(Te[i], 0.1);
-          const BoutReal Nelim = softFloor(Ne[i], 1e10);
+        const Field3D nu_ee = filledFrom(Ne.asField3DParallel(), [&](auto yo, Ind3D i) -> BoutReal {
+          const BoutReal Telim = softFloor(Te.ynext(yo)[i], 0.1);
+          const BoutReal Nelim = softFloor(Ne.ynext(yo)[i], 1e10);
           const BoutReal logTe = log(Telim);
           // From NRL formulary 2019, page 34
           // Coefficient 30.4 from converting cm^-3 to m^-3
           // Note that this breaks when coulomb_log falls below 1
           const BoutReal coulomb_log = 30.4 - 0.5 * log(Nelim) + (5. / 4) * logTe
                                        - sqrt(1e-5 + SQ(logTe - 2) / 16.);
-
           const BoutReal v1sq = 2 * Telim * SI::qe / SI::Me;
 
           // Collision frequency
-          const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne[i], 0.0) * softFloor(coulomb_log, 1.0)
-                              * 2 / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
+          const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne.ynext(yo)[i], 0.0)
+                              * softFloor(coulomb_log, 1.0) * 2
+                              / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
 
           ASSERT2(std::isfinite(nu));
           return nu;
@@ -202,38 +202,38 @@ void Collisions::transform(Options& state) {
         if (!electron_ion)
           continue;
 
-        const Field3D Ti = GET_NOBOUNDARY(Field3D, species["temperature"]) * Tnorm; // eV
-        const Field3D Ni = GET_NOBOUNDARY(Field3D, species["density"]) * Nnorm;     // In m^-3
+        const Field3D Ti = GET_NOBOUNDARY(Field3D, species["temperature"]).asField3DParallel() * Tnorm; // eV
+        const Field3D Ni = GET_NOBOUNDARY(Field3D, species["density"]).asField3DParallel() * Nnorm;     // In m^-3
 
         const BoutReal Zi = get<BoutReal>(species["charge"]);
         const BoutReal Ai = get<BoutReal>(species["AA"]);
         const BoutReal me_mi = SI::Me / (SI::Mp * Ai); // m_e / m_i
 
-        const Field3D nu_ei = filledFrom(Ne, [&](auto& i) {
+        const Field3D nu_ei = filledFrom(Ne.asField3DParallel(), [&](int yo, Ind3D i) {
           // NRL formulary 2019, page 34
           const BoutReal coulomb_log =
-              ((Te[i] < 0.1) || (Ni[i] < 1e10) || (Ne[i] < 1e10)) ? 10
-              : (Te[i] < Ti[i] * me_mi)
-                  ? 23 - 0.5 * log(Ni[i]) + 1.5 * log(Ti[i]) - log(SQ(Zi) * Ai)
-              : (Te[i] < exp(2) * SQ(Zi)) // Fix to ei coulomb log from S.Mijin ReMKiT1D
+              ((Te.ynext(yo)[i] < 0.1) || (Ni.ynext(yo)[i] < 1e10) || (Ne.ynext(yo)[i] < 1e10)) ? 10
+              : (Te.ynext(yo)[i] < Ti.ynext(yo)[i] * me_mi)
+                  ? 23 - 0.5 * log(Ni.ynext(yo)[i]) + 1.5 * log(Ti.ynext(yo)[i]) - log(SQ(Zi) * Ai)
+              : (Te.ynext(yo)[i] < exp(2) * SQ(Zi)) // Fix to ei coulomb log from S.Mijin ReMKiT1D
                   // Ti m_e/m_i < Te < 10 Z^2
-                  ? 30.0 - 0.5 * log(Ne[i]) - log(Zi) + 1.5 * log(Te[i])
+                  ? 30.0 - 0.5 * log(Ne.ynext(yo)[i]) - log(Zi) + 1.5 * log(Te.ynext(yo)[i])
                   // Ti m_e/m_i < 10 Z^2 < Te
-                  : 31.0 - 0.5 * log(Ne[i]) + log(Te[i]);
+                  : 31.0 - 0.5 * log(Ne.ynext(yo)[i]) + log(Te.ynext(yo)[i]);
 
           // Calculate v_a^2, v_b^2
-          const BoutReal vesq = 2 * softFloor(Te[i], 0.1) * SI::qe / SI::Me;
-          const BoutReal visq = 2 * softFloor(Ti[i], 0.1) * SI::qe / (SI::Mp * Ai);
+          const BoutReal vesq = 2 * softFloor(Te.ynext(yo)[i], 0.1) * SI::qe / SI::Me;
+          const BoutReal visq = 2 * softFloor(Ti.ynext(yo)[i], 0.1) * SI::qe / (SI::Mp * Ai);
 
           // Collision frequency
-          const BoutReal nu = SQ(SQ(SI::qe) * Zi) * floor(Ni[i], 0.0)
+          const BoutReal nu = SQ(SQ(SI::qe) * Zi) * floor(Ni.ynext(yo)[i], 0.0)
                               * softFloor(coulomb_log, 1.0) * (1. + me_mi)
                               / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me))
                               * ei_multiplier;
 #if CHECK >= 2
 	  if (!std::isfinite(nu)) {
 	    throw BoutException("Collisions 195 {}: {} at {}: Ni {}, Ne {}, Clog {}, vesq {}, visq {}, Te {}, Ti {}\n",
-                                kv.first, nu, i, Ni[i], Ne[i], coulomb_log, vesq, visq, Te[i], Ti[i]);
+                                kv.first, nu, i, Ni.ynext(yo)[i], Ne.ynext(yo)[i], coulomb_log, vesq, visq, Te.ynext(yo)[i], Ti.ynext(yo)[i]);
 	  }
 #endif
           return nu;
@@ -270,12 +270,12 @@ void Collisions::transform(Options& state) {
 
         BoutReal a0 = 5e-19; // Cross-section [m^2]
 
-        const Field3D nu_en = filledFrom(Ne, [&](auto& i) {
+        const Field3D nu_en = filledFrom(Ne.asField3DParallel(), [&](int yo, auto i) {
           // Electron thermal speed (normalised)
-          const BoutReal vth_e = sqrt((SI::Mp / SI::Me) * Te[i] / Tnorm);
+          const BoutReal vth_e = sqrt((SI::Mp / SI::Me) * Te.ynext(yo).ynext(yo)[i] / Tnorm);
 
           // Electron-neutral collision rate
-          return vth_e * Nnorm * Nn[i] * a0 * rho_s0;
+          return vth_e * Nnorm * Nn.ynext(yo)[i] * a0 * rho_s0;
         });
 
         collide(electrons, species, nu_en, 1.0);
@@ -303,12 +303,12 @@ void Collisions::transform(Options& state) {
     Options& species1 = allspecies[kv1->first];
 
     // If temperature isn't set, assume zero. in eV
-    const Field3D temperature1 =
+    const Field3DParallel temperature1 =
         species1.isSet("temperature")
-            ? GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm
+            ? GET_NOBOUNDARY(Field3D, species1["temperature"]).asField3DParallel() * Tnorm
             : 0.0;
 
-    const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]) * Nnorm;
+    const Field3DParallel density1 = GET_NOBOUNDARY(Field3D, species1["density"]).asField3DParallel() * Nnorm;
 
     const BoutReal AA1 = get<BoutReal>(species1["AA"]);
     const BoutReal mass1 = AA1 * SI::Mp; // in Kg
@@ -330,12 +330,12 @@ void Collisions::transform(Options& state) {
         // Note: Here species1 could be equal to species2
 
         // If temperature isn't set, assume zero. in eV
-        const Field3D temperature2 =
+        const Field3DParallel temperature2 =
             species2.isSet("temperature")
-                ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
+                ? GET_NOBOUNDARY(Field3D, species2["temperature"]).asField3DParallel() * Tnorm
                 : 0.0;
 
-        const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
+        const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]).asField3DParallel() * Nnorm;
 
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const BoutReal mass2 = AA2 * SI::Mp; // in Kg
@@ -351,12 +351,12 @@ void Collisions::transform(Options& state) {
           const BoutReal charge2 = Z2 * SI::qe; // in Coulombs
 
           // Ion-ion collisions
-          Field3D nu_12 = filledFrom(density1, [&](auto& i) {
-            const BoutReal Tlim1 = softFloor(temperature1[i], 0.1);
-            const BoutReal Tlim2 = softFloor(temperature2[i], 0.1);
+          Field3D nu_12 = filledFrom(density1, [&](auto yo, auto i) {
+            const BoutReal Tlim1 = softFloor(temperature1.ynext(yo)[i], 0.1);
+            const BoutReal Tlim2 = softFloor(temperature2.ynext(yo)[i], 0.1);
 
-            const BoutReal Nlim1 = softFloor(density1[i], 1e10);
-            const BoutReal Nlim2 = softFloor(density2[i], 1e10);
+            const BoutReal Nlim1 = softFloor(density1.ynext(yo)[i], 1e10);
+            const BoutReal Nlim2 = softFloor(density2.ynext(yo)[i], 1e10);
 
             // Coulomb logarithm
             BoutReal coulomb_log =
@@ -378,7 +378,6 @@ void Collisions::transform(Options& state) {
 
           // Update the species collision rates, momentum & energy exchange
           collide(species1, species2, nu_12 / Omega_ci, 1.0);
-
         } else {
           // species1 charged, species2 neutral
 
