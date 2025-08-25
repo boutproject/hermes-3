@@ -10,6 +10,8 @@
 
 #include <algorithm>
 
+#if not BOUT_USE_METRIC_3D
+
 using bout::globals::mesh;
 
 NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& alloptions,
@@ -514,3 +516,5 @@ void NeutralFullVelocity::outputVars(Options& state) {
                     {"source", "neutral_full_velocity"}});
   }
 }
+
+#endif
