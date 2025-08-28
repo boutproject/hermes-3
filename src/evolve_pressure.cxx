@@ -498,14 +498,16 @@ void EvolvePressure::finally(const Options& state) {
       kappa_par = kappa_par / (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
-      mesh->communicate(kappa_par);
+      if (!kappa_par.isFci()) {
+      	mesh->communicate(kappa_par);
+      }
     }
-
     if (kappa_par.isFci()) {
       kappa_par.applyBoundary("neumann");
       mesh->communicate(kappa_par);
       kappa_par.applyParallelBoundary("parallel_dirichlet_o2");
     }
+
 
     yboundary.iter([&](auto& region) {
       for (auto& pnt : region) {
