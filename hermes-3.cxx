@@ -207,6 +207,14 @@ int Hermes::init(bool restarting) {
   show_timesteps = options["show_timesteps"]
                        .doc("Print the current simulation time to stdout?")
                        .withDefault(show_timesteps);
+  show_timesteps_extra =
+      options["show_timesteps_extra"]
+          .doc("Print extra information about the current simulation to stdout?")
+
+          .withDefault(show_timesteps_extra);
+
+  show_timesteps_extra &= show_timesteps;
+
   if (BoutComm::rank() != 0) {
     show_timesteps = false;
   }
@@ -229,7 +237,6 @@ int Hermes::init(bool restarting) {
           .withDefault(false)) {
     ASSERT0(! mesh->isFci());
     recalculate_metric(rho_s0, Bnorm);
-
   } else {
     // Check that the grid file contains at least one metric tensor component
     // Note: Older grid files did not, so would silently default to the identity metric
@@ -321,10 +328,9 @@ int Hermes::init(bool restarting) {
 }
 
 int Hermes::rhs(BoutReal time, bool linear) {
-  if (show_timesteps) {
+  if (show_timesteps && !show_timesteps_extra) {
     fprintf(stderr, "TIME = %e\r", time);
   }
-
   // Need to reset the state, since fields may be modified in transform steps
   state = Options();
   
@@ -334,6 +340,28 @@ int Hermes::rhs(BoutReal time, bool linear) {
 
   // Call all the components
   scheduler->transform(state);
+
+  BoutReal NeMean;
+  BoutReal TeMean;
+  BoutReal NiMean;
+  BoutReal TiMean;
+  if (show_timesteps_extra) {
+    Options& allspecies = state["species"];
+    Options& electrons = allspecies["e"];
+    const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]);
+    const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]);
+    Options& ions = allspecies["h+"];
+    const Field3D Ti = GET_NOBOUNDARY(Field3D, electrons["temperature"]);
+    const Field3D Ni = GET_NOBOUNDARY(Field3D, electrons["density"]);
+    NeMean = mean(Ne, true);
+    TeMean = mean(Te, true);
+    NiMean = mean(Ni, true);
+    TiMean = mean(Ti, true);
+  }
+  if (show_timesteps && show_timesteps_extra) {
+    fprintf(stderr, "TIME = %e <Ne> = %e <Te> = %e <Nh+> = %e <Th+> = %e\r", time, NeMean,
+            TeMean, NiMean, TiMean);
+  }
 
   return 0;
 }

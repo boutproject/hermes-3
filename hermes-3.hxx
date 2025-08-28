@@ -59,6 +59,7 @@ private:
   BoutReal Cs0, Omega_ci, rho_s0;
 
   bool show_timesteps{false};
+  bool show_timesteps_extra{false};
 };
 
 extern Options* tracking;
