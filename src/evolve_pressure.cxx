@@ -14,6 +14,7 @@
 #include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
 
+#define SETNAME(term) setName(term, #term)
 
 using bout::globals::mesh;
 
@@ -291,7 +292,7 @@ void EvolvePressure::finally(const Options& state) {
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
+    ddt(P) = setName(-Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true) * bracket_factor, "bracket");
   } else {
     ddt(P) = 0.0;
   }
@@ -310,7 +311,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
+      ddt(P) -= setName(FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow), "Div_par_mod(P, V)");
 
       // Work done. This balances energetically a term in the momentum equation
       ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
@@ -320,9 +321,9 @@ void EvolvePressure::finally(const Options& state) {
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
+      ddt(P) -= setName((5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow), "5/3 Div_par_mod(P, V)");
 
-      ddt(P) += (2. / 3) * V * Grad_par(P);
+      ddt(P) += setName((2. / 3) * V * Grad_par(P), "2/3 V Grad_par(P)");
     }
     if (flow_ylow.isAllocated()) {
       flow_ylow *= 5. / 2; // Energy flow
@@ -331,8 +332,8 @@ void EvolvePressure::finally(const Options& state) {
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
-      ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
-      ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(P) -= SETNAME((5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter));
+      ddt(P) += SETNAME((2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA));
     }
 
     if (numerical_viscous_heating || diagnose) {
@@ -346,6 +347,7 @@ void EvolvePressure::finally(const Options& state) {
 	flow_ylow += flow_ylow_kinetic;
       }
       if (numerical_viscous_heating) {
+	SETNAME(Sp_nvh);
         ddt(P) += Sp_nvh;
       }
     }
@@ -454,7 +456,7 @@ void EvolvePressure::finally(const Options& state) {
 
       output_info.write("\n");
 
-      }
+    }
 
     /// Collect the collisionalities based on list of names
     nu = 0;
@@ -514,7 +516,7 @@ void EvolvePressure::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    ddt(P) += setName((2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false), "2/3 Div_par_K_Grad_par_mod(kappa_par, T)");
     if (    flow_ylow_conduction.isAllocated()) {
       if (flow_ylow.isAllocated()) {
 	flow_ylow += flow_ylow_conduction;
@@ -535,8 +537,8 @@ void EvolvePressure::finally(const Options& state) {
       mesh->communicate(db_dot_T, b0_dot_T);
       db_dot_T.applyBoundary("neumann");
       b0_dot_T.applyBoundary("neumann");
-      ddt(P) += (2. / 3) * (Div_par(kappa_par * db_dot_T) -
-                            Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter));
+      ddt(P) += setName((2. / 3) * (Div_par(kappa_par * db_dot_T) -
+				    Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter)), "Magnetic flutter");
     }
   }
 
@@ -569,6 +571,7 @@ void EvolvePressure::finally(const Options& state) {
     throw BoutException("Components must evolve `energy_source` rather then `pressure_source`");
   }
 #endif
+  Sp.name = "other components";
   ddt(P) += Sp;
 
   if (damp_p_nt) {
