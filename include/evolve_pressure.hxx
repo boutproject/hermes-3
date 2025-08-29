@@ -127,6 +127,7 @@ private:
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
+  BoutReal parallel_slow_down{-1}; ///< slow down the parallel dynamics
 
   Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
   Field3D E_PdivV, E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)

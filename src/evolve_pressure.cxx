@@ -171,6 +171,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
 
+  parallel_slow_down = options["parallel_slow_down"]
+                           .doc("Slow down the parallel heat conduction by a factor (>0)")
+                           .withDefault(parallel_slow_down);
+
 
   BoutReal default_kappa; // default conductivity, changes depending on species
   switch(identifySpeciesTypeEnum(name)) {
@@ -507,19 +511,22 @@ void EvolvePressure::finally(const Options& state) {
     if (kappa_par.isFci()) {
       kappa_par.applyBoundary("neumann");
       mesh->communicate(kappa_par);
-      kappa_par.applyParallelBoundary("parallel_dirichlet_o2");
+      kappa_par.applyParallelBoundary("parallel_neumann_o1");
+    } else {
+      yboundary.iter([&](auto& region) {
+	for (auto& pnt : region) {
+	  pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
+	}
+      });
     }
-
-
-    yboundary.iter([&](auto& region) {
-      for (auto& pnt : region) {
-	pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
-      }
-    });
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    ddt(P) += setName((2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false), "2/3 Div_par_K_Grad_par_mod(kappa_par, T)");
+    auto parallel_conduction = setName((2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false), "2/3 Div_par_K_Grad_par_mod(kappa_par, T)");
+    if (parallel_slow_down > 0 && parallel_slow_down != 1) {
+      parallel_conduction /= parallel_slow_down;
+    }
+    ddt(P) += parallel_conduction;
     if (    flow_ylow_conduction.isAllocated()) {
       if (flow_ylow.isAllocated()) {
 	flow_ylow += flow_ylow_conduction;
