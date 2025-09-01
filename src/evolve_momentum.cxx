@@ -14,6 +14,8 @@ using bout::globals::mesh;
 
 Options * tracking{nullptr};
 
+#define SETNAME(term) setName(term, #term)
+
 EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) :
   name(name), Vname(fmt::format("V{}", name)) {
   AUTO_TRACE();
@@ -160,7 +162,7 @@ void EvolveMomentum::finally(const Options &state) {
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
-      ddt(NV) -= Z * N * Grad_par(phi);
+      ddt(NV) -= SETNAME(Z * N * Grad_par(phi));
 
       if (state["fields"].isSet("Apar")) {
         // Include a correction term for electromagnetic simulations
@@ -206,7 +208,7 @@ void EvolveMomentum::finally(const Options &state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
-  ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
+  ddt(NV) -= SETNAME(AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux));
   
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
