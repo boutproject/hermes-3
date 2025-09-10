@@ -41,6 +41,7 @@
 #include "include/evolve_energy.hxx"
 #include "include/evolve_momentum.hxx"
 #include "include/evolve_pressure.hxx"
+#include "include/external_apar.hxx"
 #include "include/fixed_density.hxx"
 #include "include/fixed_fraction_ions.hxx"
 #include "include/fixed_fraction_radiation.hxx"
