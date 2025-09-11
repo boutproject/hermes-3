@@ -107,6 +107,12 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   // d/dt(3/2 p_2) = - m R v_1 v_2 + (1/2) m R v_1^2 + (1/2) m R v_2^2
   //               = (1/2) m R (v_1 - v_2)^2
   //
+  //
+  // This term accounts for the broadening of the species velocity
+  // distribution when combining the two underlying distributions.
+  // The greater the difference in velocities of the underlying species,
+  // the wider the resultant distribution, which corresponds to an
+  // increase in temperature and therefore internal energy.
   add(ph["energy_source"], 0.5 * AA_rh * reaction_rate * SQ(v_rh - v_ph));
 
   // Energy source for electrons due to pop change
@@ -116,6 +122,13 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   if (e_pop_change != 0) {
     if (electron.isSet("velocity")) {
       // Transfer of electron kinetic to thermal energy due to density source
+      // For ionisation:
+      // Electrons with zero average velocity are created, diluting the kinetic energy.
+      // Total energy conservation requires a corresponding internal energy source.
+      //
+      // For recombination:
+      // Electrons with some velocity are incorporated into a neutral species with their
+      // kinetic energy converted to an internal energy source of that species.
       auto v_e = get<Field3D>(electron["velocity"]);
       auto m_e = get<BoutReal>(electron["AA"]);
       add(electron["energy_source"], 0.5 * m_e * e_pop_change * reaction_rate * SQ(v_e));
