@@ -82,6 +82,7 @@ set(HERMES_SOURCES
     src/anomalous_diffusion.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
+    src/reservoir.cxx
     src/amjuel_hyd_ionisation.cxx
     src/amjuel_hyd_recombination.cxx
     src/amjuel_helium.cxx
@@ -142,6 +143,7 @@ set(HERMES_SOURCES
     include/radiation.hxx
     include/recalculate_metric.hxx
     include/recycling.hxx
+    include/reservoir.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
     include/sheath_boundary_simple.hxx
