@@ -1,0 +1,19 @@
+{
+    "info": {
+        "sigma_v_coeffs_ref": "Dummy test data",
+        "sigma_v_E_coeffs_ref": "Dummy test data",
+        "reaction_lbl": "Dummy test data",
+        "sigma_v_notes": "Dummy test data.",
+        "includes_sigma_v_e": false
+    },
+    "sigma_v_coeffs": [
+        [
+            -32.4802533034,
+            -0.05440669186583
+        ],
+        [
+            14.2533239151,
+            -0.0359434716076
+        ]
+    ]
+}
