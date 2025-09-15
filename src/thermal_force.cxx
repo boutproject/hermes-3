@@ -22,7 +22,7 @@ void ThermalForce::transform(Options& state) {
       }
       Options& species = allspecies[kv.first];
 
-      if (!species.isSet("charge")) {
+      if (!species.isSet("charge") or species["charge"] == 0) {
         continue; // Only considering charged particle interactions
       }
 
@@ -54,7 +54,7 @@ void ThermalForce::transform(Options& state) {
     for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
       Options& species1 = allspecies[kv1->first];
 
-      if (kv1->first == "e" or !species1.isSet("charge")) {
+      if (kv1->first == "e" or !species1.isSet("charge") or species1["charge"] == 0) {
         continue; // Only considering charged particle interactions
       }
 
@@ -64,7 +64,7 @@ void ThermalForce::transform(Options& state) {
            kv2 != std::end(children); ++kv2) {
         Options& species2 = allspecies[kv2->first];
 
-        if (kv2->first == "e" or !species2.isSet("charge")) {
+        if (kv2->first == "e" or !species2.isSet("charge") or species2["charge"] == 0) {
           continue; // Only considering charged particle interactions
         }
 
