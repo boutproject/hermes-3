@@ -153,8 +153,6 @@ TEST_F(BraginskiiHeatExchangeTest, DoubleTemperatureDiff) {
 
   const BoutReal factor = 2. * 2. / sqrt(3.);
   BOUT_FOR_SERIAL(i, es11.getRegion("RGN_ALL")) {
-    // The temperature difference in the second state is double that in the
-    // first, so the heat exchange should be double too.
     ASSERT_DOUBLE_EQ(factor * es11[i], es21[i]);
   }
 }
