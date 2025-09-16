@@ -34,14 +34,14 @@ public:
         output_base({{"Nnorm", 1e19}, {"Tnorm", 1.}, {"Omega_ci", 1.}, {"rho_s0", 1.}}),
         state_base({{"fastest_wave", 0.}, {"species", {{"test+", {{"velocity", 0.}, {"density", 1.}, {"pressure", 1.}, { "AA", 2. }}}}}}) {
     Options::root()["Ptest+"]["function"] = "1.0";
-    temp1 = quadraticGradient(1., 0., 0., 1., 1., 0., 0.);
-    temp2 = quadraticGradient(0., 0., 0., 1., 2., 0., 0.);
-    temp_perp_variation = quadraticGradient(0., 1., 2., 0., 0., 0., 0.);
+    temp1 = linearGradient(1., 0., 0., 1., 1., 0., 0.);
+    temp2 = linearGradient(0., 0., 0., 1., 2., 0., 0.);
+    temp_perp_variation = linearGradient(0., 1., 2., 0., 0., 0., 0.);
   }
   Options options, output_base, state_base;
   Field3D temp1, temp2, temp_perp_variation;
 
-  static Field3D quadraticGradient(BoutReal a, BoutReal b1_x, BoutReal b2_x, BoutReal b1_y,
+  static Field3D linearGradient(BoutReal a, BoutReal b1_x, BoutReal b2_x, BoutReal b1_y,
                                  BoutReal b2_y, BoutReal b1_z, BoutReal b2_z) {
     Field3D result(a);
     BOUT_FOR_SERIAL(i, result.getRegion("RGN_ALL")) {

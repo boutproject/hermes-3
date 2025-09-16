@@ -27,15 +27,15 @@ public:
                                       {"seconds", 1.0},
                                       {"inv_meters_cubed", 1e19}}}}),
         component("test", options, nullptr) {
-    grad1 = linearGradient(1., 0., 1., 0.);
-    grad2 = linearGradient(0., 0., 2., 0.);
-    grad_perp = linearGradient(0., 1., 0., 0.);
+    grad1 = constantGradient(1., 0., 1., 0.);
+    grad2 = constantGradient(0., 0., 2., 0.);
+    grad_perp = constantGradient(0., 1., 0., 0.);
   }
   Options options;
   ThermalForce component;
   Field3D grad1, grad2, grad_perp;
 
-  static Field3D linearGradient(BoutReal a, BoutReal b_x, BoutReal b_y, BoutReal b_z) {
+  static Field3D constantGradient(BoutReal a, BoutReal b_x, BoutReal b_y, BoutReal b_z) {
     Field3D result(a);
     BOUT_FOR_SERIAL(i, result.getRegion("RGN_ALL")) {
       result[i] += b_x * i.x() + b_y * i.y() + b_z * i.z();
@@ -115,7 +115,7 @@ TEST_F(BraginskiiThermalForceTest, NoNetForce) {
   state["species"]["c"]["charge"] = 1;
   state["species"]["c"]["AA"] = 12.;
   state["species"]["ar"]["density"] = 0.01;
-  state["species"]["ar"]["temperature"] = grad2;//linearGradient(0., 0., 2., 0.);
+  state["species"]["ar"]["temperature"] = grad2;
   state["species"]["ar"]["charge"] = 1;
   state["species"]["ar"]["AA"] = 40.;
   state["species"]["d"]["density"] = 1;
@@ -123,11 +123,11 @@ TEST_F(BraginskiiThermalForceTest, NoNetForce) {
   state["species"]["d"]["charge"] = 0;
   state["species"]["d"]["AA"] = 2.;
   state["species"]["d+"]["density"] = 1;
-  state["species"]["d+"]["temperature"] = grad1;//linearGradient(0., 0., 1., 0.);
+  state["species"]["d+"]["temperature"] = grad1;
   state["species"]["d+"]["charge"] = 1;
   state["species"]["d+"]["AA"] = 2.;
   state["species"]["e"]["density"] = 1;
-  state["species"]["e"]["temperature"] = grad2;//linearGradient(0., 0., 2., 0.);
+  state["species"]["e"]["temperature"] = grad2;
   state["species"]["e"]["charge"] = -1;
   state["species"]["e"]["AA"] = 1./1836;
 
