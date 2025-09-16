@@ -230,7 +230,7 @@ BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
   }
 }
 
-TEST_F(BraginskiiThermalForceTest, IonIonForceTemperatureGradeScaling) {
+TEST_F(BraginskiiThermalForceTest, IonIonForceTemperatureGradScaling) {
   Options state1, state2;
   state1["species"]["c1"]["density"] = 0.01;
   state1["species"]["c1"]["temperature"] = grad1;
