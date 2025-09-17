@@ -10,16 +10,27 @@
 typedef Options& (*OPTYPE)(Options&, Field3D);
 
 /**
- * @brief Struct intended to act as a base for all reactions.
- *
+ * @brief Temporary struct to use as a base class for all reactions components. Ensures
+ * reaction strings are paired up correctly with component classes. Can be removed when
+ * all reaction classes have been refactored to inherit from Reaction.
  */
-struct Reaction : public Component {
-  Reaction(std::string name, Options& alloptions);
-
+struct ReactionBase : public Component {
+  ReactionBase() : inst_num(get_instance_num() + 1) {}
   static int get_instance_num() {
     static int instance_num{0};
     return instance_num++;
   }
+
+protected:
+  int inst_num;
+};
+
+/**
+ * @brief Struct intended to act as a base for all reactions.
+ *
+ */
+struct Reaction : public ReactionBase {
+  Reaction(std::string name, Options& alloptions);
 
   void transform(Options& state) override final;
 

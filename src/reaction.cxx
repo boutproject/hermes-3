@@ -31,8 +31,7 @@ Reaction::Reaction(std::string name, Options& options) : name(name) {
   reaction_grp_str = std::regex_replace(reaction_grp_str, match_parentheses, "");
   std::string reaction_str;
   std::stringstream ss(reaction_grp_str);
-  int inst_num = get_instance_num() + 1;
-  for (auto ii = 0; ii < inst_num; ii++) {
+  for (auto ii = 0; ii < this->inst_num; ii++) {
     std::getline(ss, reaction_str, ',');
   }
 

@@ -5,7 +5,7 @@
 #include <bout/constants.hxx>
 
 #include "component.hxx"
-
+#include "reaction.hxx"
 /// Hydrogen charge exchange total rate coefficient
 ///
 ///   p + H(1s) -> H(1s) + p
@@ -22,7 +22,7 @@
 ///            should probably be disabled in the `collisions` component,
 ///            to avoid double-counting.
 ///
-struct HydrogenChargeExchange : public Component {
+struct HydrogenChargeExchange : public ReactionBase {
   ///
   /// @param alloptions Settings, which should include:
   ///        - units
