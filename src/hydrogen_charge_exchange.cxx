@@ -9,45 +9,54 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
                                              BoutReal &rate_multiplier,
                                              bool &no_neutral_cx_mom_gain) {
 
-  // Temperatures and masses of initial atom and ion
+
+std::vector<std::string> ion_species =
+      this->parser->get_species(species_filter::ion);
+      ASSERT1(ion_species.size() == 1);
+
+std::vector<std::string> neutral_species =
+      this->parser->get_species(species_filter::neutral);
+      ASSERT1(neutral_species.size() == 1);
+                                              
+  // // Temperatures and masses of initial atom and ion
   const Field3D Tatom = get<Field3D>(atom1["temperature"]);
   const BoutReal Aatom = get<BoutReal>(atom1["AA"]);
-  ASSERT1(get<BoutReal>(ion2["AA"]) == Aatom); // Check that the mass is consistent
+  // ASSERT1(get<BoutReal>(ion2["AA"]) == Aatom); // Check that the mass is consistent
 
   const Field3D Tion = get<Field3D>(ion1["temperature"]);
   const BoutReal Aion = get<BoutReal>(ion1["AA"]);
-  ASSERT1(get<BoutReal>(atom2["AA"]) == Aion); // Check that the mass is consistent
+  // ASSERT1(get<BoutReal>(atom2["AA"]) == Aion); // Check that the mass is consistent
 
-  // Calculate effective temperature in eV
-  Field3D Teff = (Tatom / Aatom + Tion / Aion) * Tnorm;
-  for (auto& i : Teff.getRegion("RGN_NOBNDRY")) {
-    if (Teff[i] < 0.01) {
-      Teff[i] = 0.01;
-    } else if (Teff[i] > 10000) {
-      Teff[i] = 10000;
-    }
-  }
-  const Field3D lnT = log(Teff);
+  // // Calculate effective temperature in eV
+  // Field3D Teff = (Tatom / Aatom + Tion / Aion) * Tnorm;
+  // for (auto& i : Teff.getRegion("RGN_NOBNDRY")) {
+  //   if (Teff[i] < 0.01) {
+  //     Teff[i] = 0.01;
+  //   } else if (Teff[i] > 10000) {
+  //     Teff[i] = 10000;
+  //   }
+  // }
+  // const Field3D lnT = log(Teff);
 
-  Field3D ln_sigmav = -18.5028;
-  Field3D lnT_n = lnT; // (lnT)^n
-  // b0 -1.850280000000E+01 b1 3.708409000000E-01 b2 7.949876000000E-03
-  // b3 -6.143769000000E-04 b4 -4.698969000000E-04 b5 -4.096807000000E-04
-  // b6 1.440382000000E-04 b7 -1.514243000000E-05 b8 5.122435000000E-07
-  for (BoutReal b : {0.3708409, 7.949876e-3, -6.143769e-4, -4.698969e-4, -4.096807e-4,
-                     1.440382e-4, -1.514243e-5, 5.122435e-7}) {
-    ln_sigmav += b * lnT_n;
-    lnT_n *= lnT;
-  }
+  // Field3D ln_sigmav = -18.5028;
+  // Field3D lnT_n = lnT; // (lnT)^n
+  // // b0 -1.850280000000E+01 b1 3.708409000000E-01 b2 7.949876000000E-03
+  // // b3 -6.143769000000E-04 b4 -4.698969000000E-04 b5 -4.096807000000E-04
+  // // b6 1.440382000000E-04 b7 -1.514243000000E-05 b8 5.122435000000E-07
+  // for (BoutReal b : {0.3708409, 7.949876e-3, -6.143769e-4, -4.698969e-4, -4.096807e-4,
+  //                    1.440382e-4, -1.514243e-5, 5.122435e-7}) {
+  //   ln_sigmav += b * lnT_n;
+  //   lnT_n *= lnT;
+  // }
 
-  // Get rate coefficient, convert cm^3/s to m^3/s then normalise
-  // Optionally multiply by arbitrary multiplier
-  const Field3D sigmav = exp(ln_sigmav) * (1e-6 * Nnorm / FreqNorm) * rate_multiplier;
+  // // Get rate coefficient, convert cm^3/s to m^3/s then normalise
+  // // Optionally multiply by arbitrary multiplier
+  // const Field3D sigmav = exp(ln_sigmav) * (1e-6 * Nnorm / FreqNorm) * rate_multiplier;
 
-  const Field3D Natom = floor(get<Field3D>(atom1["density"]), 1e-5);
+  // const Field3D Natom = floor(get<Field3D>(atom1["density"]), 1e-5);
   const Field3D Nion = floor(get<Field3D>(ion1["density"]), 1e-5);
 
-  R = Natom * Nion * sigmav; // Rate coefficient in [m^-3 s^-1]
+  // R = Natom * Nion * sigmav; // Rate coefficient in [m^-3 s^-1]
 
   if ((&atom1 != &atom2) or (&ion1 != &ion2)) {
     // Transfer particles atom1 -> ion2, ion1 -> atom2
@@ -64,7 +73,7 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   // Transfer fom atom1 to ion2
   atom_mom = R * Aatom * atom1_velocity;
   subtract(atom1["momentum_source"], atom_mom);
-  if (no_neutral_cx_mom_gain == false) {
+  if (this->no_neutral_cx_mom_gain == false) {
     add(ion2["momentum_source"], atom_mom);
   }
 

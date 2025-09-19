@@ -42,6 +42,10 @@ private:
     nlohmann::json data;
     json_file >> data;
 
+    // Extract fit type (rate params)
+    std::string fit_type = data["info"]["fit_type"];
+    this->fit_type = fit_type;
+
     try {
       includes_sigma_v_e = data["info"]["includes_sigma_v_e"];
     } catch (nlohmann::json::type_error e) {
@@ -69,6 +73,8 @@ private:
                                       file_path.string(), e.what()));
     }
   }
+
+  std::string fit_type;
 
   // N.B. E-index varies fastest, so coefficient indices are [T][n]
   std::vector<std::vector<BoutReal>> sigma_v_coeffs;

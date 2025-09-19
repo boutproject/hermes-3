@@ -44,8 +44,10 @@ struct ReactionDiagnostic {
       standard_name = "radiation loss";
       break;
     case ReactionDiagnosticType::energy_src:
-    case ReactionDiagnosticType::momentum_src: // fall through
-      standard_name = fmt::format("{:s} transfer", toString(type));
+      standard_name = "energy transfer";
+      break;
+    case ReactionDiagnosticType::momentum_src:
+      standard_name = "momentum transfer";
       break;
     default:
       throw BoutException("ReactionDiagnostic type not set up!");

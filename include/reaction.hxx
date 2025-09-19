@@ -54,8 +54,17 @@ protected:
       diagnostics;
 
   /// Whether or not reaction data includes <sigma v E>
-  /// (Default to true as a reminder to override eval_sigma_v_E)
+  /// (Default to true as a reminder to override eval_sigma_vE_nT)
   bool includes_sigma_v_e = true;
+
+  /**
+   * @brief Get the type of parameters expected by the rate calculation.
+   * @details Allow the rate parameter types to be provided after construction
+   * (e.g. after subclasses have read that information from file) by forcing subclasses to
+   * implement this function, rather than storing the types as a Reaction member variable.
+   * @return RateParamsTypes the rate params type
+   */
+  virtual RateParamsTypes get_rate_params_type() const = 0;
 
   /**
    * @brief Add a new entry in this Reaction's diagnostic (multi)map. The (non-unique) Key
@@ -78,6 +87,9 @@ protected:
                       DiagnosticTransformerType transformer = negate,
                       const std::string& standard_name = "");
 
+  void calc_Teff(const Options& state,
+                 const std::vector<std::string>& heavy_reactant_species, Field3D& Teff);
+
   /**
    * @brief Calculate weightsums used in transform(). Can't be done at construction
    * because the species masses may not be set.
@@ -85,7 +97,7 @@ protected:
    *
    * @param state Current sim state
    */
-  void calc_weightsums(Options& state);
+  void init_channel_weights(Options& state);
 
   /**
    * @brief Evaluate <sigma . v . E> at a particular density and temperature
@@ -95,27 +107,57 @@ protected:
    * @param n a density
    * @return BoutReal the electron energy loss rate
    */
-  virtual BoutReal eval_sigma_v_E(BoutReal T, BoutReal n) {
+  virtual BoutReal eval_sigma_vE_nT(BoutReal T, BoutReal n) {
     if (this->includes_sigma_v_e) {
       throw BoutException(
-          "eval_sigma_v_E() needs to be implemented by Reaction instances "
+          "eval_sigma_vE_nT() needs to be implemented by Reaction instances "
           "which set includes_sigma_v_e=true");
     } else {
       throw BoutException(
-          "eval_sigma_v_E() was called despite having set includes_sigma_v_e=false!");
+          "eval_sigma_vE_nT() was called despite having set includes_sigma_v_e=false!");
     }
     return -1;
   };
 
   /**
-   * @brief Evaluate <sigma.v> at a particular density and temperature
-   * (Subclasses MUST define)
+   * @brief Evaluate <sigma.v> at a particular energy and temperature. Rate args are only
+   * known at runtime, so need to provide a default implementation that throws and let
+   * subclasses decide whether to override.
+   *
+   * @param E a density
+   * @param T a temperature
+   * @return BoutReal <sigma.v>(E,T)
+   */
+  virtual BoutReal eval_sigma_v_ET(BoutReal E, BoutReal T) {
+    throw BoutException("Trying to call eval_sigma_v_nT but the Reaction subclass hasn't "
+                        "implemented it!");
+  }
+  /**
+   * @brief Evaluate <sigma.v> at a particular density and temperature. Rate args are only
+   * known at runtime, so need to provide a default implementation that throws and let
+   * subclasses decide whether to override.
+   *
+   * @param T a temperature
+   * @return BoutReal <sigma.v>(T)
+   */
+  virtual BoutReal eval_sigma_v_T(BoutReal T) {
+    throw BoutException("Trying to call eval_sigma_v_T but the Reaction subclass hasn't "
+                        "implemented it!");
+  }
+
+  /**
+   * @brief Evaluate <sigma.v> at a particular density and temperature. Rate args are only
+   * known at runtime, so need to provide a default implementation that throws and let
+   * subclasses decide whether to override.
    *
    * @param T a temperature
    * @param n a density
    * @return BoutReal <sigma.v>(n,T)
    */
-  virtual BoutReal eval_sigma_v(BoutReal T, BoutReal n) = 0;
+  virtual BoutReal eval_sigma_v_nT(BoutReal T, BoutReal n) {
+    throw BoutException("Trying to call eval_sigma_v_nT but the Reaction subclass hasn't "
+                        "implemented it!");
+  }
 
   /**
    * @brief A hook with which subclasses can perform additional transform tasks, over and
@@ -156,12 +198,32 @@ protected:
     }
   }
 
-private:
-  /// Sum of weights to use when calculating energy source due to population change
-  BoutReal energy_weightsum;
+  /**
+   * @brief Specify what fraction of a reactant's energy is transferred to a particular
+   * product.
+   *
+   * @param reactant_name Name of the reactant species.
+   * @param product_name Name of the product species.
+   * @param weight Fraction of the energy to transfer.
+   */
+  void set_energy_channel_weight(const std::string& reactant_name,
+                                 const std::string& product_name, BoutReal weight);
 
-  /// Sum of weights to use when calculating momentum source due to population change
-  BoutReal momentum_weightsum;
+  /**
+   * @brief Specify what fraction of a reactant's momentum is transferred to a particular
+   * product.
+   *
+   * @param reactant_name Name of the reactant species.
+   * @param product_name Name of the product species.
+   * @param weight Fraction of the momentum to transfer.
+   */
+  void set_momentum_channel_weight(const std::string& reactant_name,
+                                   const std::string& product_name, BoutReal weight);
+
+private:
+  // Channels to determine how momentum and energy are distributed to product species
+  std::map<std::string, std::map<std::string, BoutReal>> energy_channels;
+  std::map<std::string, std::map<std::string, BoutReal>> momentum_channels;
 
   /// Label to use for this reaction in a state / Options object
   const std::string name;
