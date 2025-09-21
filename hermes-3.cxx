@@ -62,6 +62,7 @@
 #include "include/set_temperature.hxx"
 #include "include/sheath_boundary.hxx"
 #include "include/sheath_boundary_insulating.hxx"
+#include "include/sheath_boundary_penalty.hxx"
 #include "include/sheath_boundary_simple.hxx"
 #include "include/sheath_closure.hxx"
 #include "include/simple_conduction.hxx"
