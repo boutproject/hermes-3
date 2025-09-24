@@ -7,12 +7,12 @@
 #include <bout/mesh.hxx>
 #include "../include/hermes_utils.hxx"
 
-#include "../include/ion_viscosity.hxx"
+#include "../include/braginskii_ion_viscosity.hxx"
 #include "../include/div_ops.hxx"
 
 using bout::globals::mesh;
 
-IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
+BraginskiiIonViscosity::BraginskiiIonViscosity(std::string name, Options& alloptions, Solver*) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]
@@ -91,7 +91,7 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
 
 }
 
-void IonViscosity::transform(Options &state) {
+void BraginskiiIonViscosity::transform(Options &state) {
   AUTO_TRACE();
 
   Options& allspecies = state["species"];
@@ -342,7 +342,7 @@ void IonViscosity::transform(Options &state) {
   }
 }
 
-void IonViscosity::outputVars(Options &state) {
+void BraginskiiIonViscosity::outputVars(Options &state) {
   AUTO_TRACE();
 
   if (diagnose) {

@@ -7,14 +7,14 @@
 #include "component.hxx"
 
 /// Calculates the collision rate of each species
-/// with all other species
+/// with all other species, using the Braginskii equation.
 /// 
 /// Important: Be careful when including both ion_neutral collisions
 ///            and reactions such as charge exchange, since that may
 ///            result in double counting. Similarly for
 ///            electron_neutral collisions and ionization reactions.
 ///
-struct Collisions : public Component {
+struct BraginskiiCollisions : public Component {
   ///
   /// @param alloptions Settings, which should include:
   ///    - units
@@ -37,7 +37,7 @@ struct Collisions : public Component {
   ///
   ///   - frictional_heating    Include R dot v heating term as energy source? (includes Ohmic heating)
   ///
-  Collisions(std::string name, Options& alloptions, Solver*);
+  BraginskiiCollisions(std::string name, Options& alloptions, Solver*);
 
   void transform(Options &state) override;
 
@@ -74,7 +74,7 @@ private:
 };
 
 namespace {
-RegisterComponent<Collisions> registercomponentcollisions("collisions");
+RegisterComponent<BraginskiiCollisions> registercomponentcollisions("collisions");
 }
 
 #endif // COLLISIONS_H

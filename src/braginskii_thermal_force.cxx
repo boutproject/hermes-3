@@ -1,9 +1,9 @@
 
 #include <bout/difops.hxx>
 
-#include "../include/thermal_force.hxx"
+#include "../include/braginskii_thermal_force.hxx"
 
-void ThermalForce::transform(Options& state) {
+void BraginskiiThermalForce::transform(Options& state) {
   AUTO_TRACE();
 
   Options& allspecies = state["species"];
