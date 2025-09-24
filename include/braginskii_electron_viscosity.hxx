@@ -15,14 +15,14 @@
 /// References
 ///  - https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html
 ///
-struct ElectronViscosity : public Component {
+struct BraginskiiElectronViscosity : public Component {
   /// Inputs
   /// - <name>
   ///   - diagnose: bool, default false
   ///     Output diagnostic SNVe_viscosity?
   ///   - eta_limit_alpha: float, default -1.0
   ///     Flux limiter coefficient. < 0 means no limiter
-  ElectronViscosity(std::string name, Options& alloptions, Solver*);
+  BraginskiiElectronViscosity(std::string name, Options& alloptions, Solver*);
 
   /// Inputs
   /// - species
@@ -46,7 +46,7 @@ private:
 };
 
 namespace {
-RegisterComponent<ElectronViscosity> registercomponentelectronviscosity("electron_viscosity");
+RegisterComponent<BraginskiiElectronViscosity> registercomponentelectronviscosity("electron_viscosity");
 }
 
 #endif
