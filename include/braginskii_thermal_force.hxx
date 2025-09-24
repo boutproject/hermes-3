@@ -4,7 +4,7 @@
 
 #include "component.hxx"
 
-/// Simple calculation of the thermal force
+/// Simple calculation of the thermal force for the Braginskii closure
 ///
 /// Important: This implements a quite crude approximation,
 /// which is intended for initial development and testing.
@@ -21,8 +21,8 @@
 ///   - electron_ion  : bool   Include electron-ion collisions?
 ///   - ion_ion       : bool   Include ion-ion elastic collisions?
 /// 
-struct ThermalForce : public Component {
-  ThermalForce(std::string name, Options& alloptions, Solver*) {
+struct BraginskiiThermalForce : public Component {
+  BraginskiiThermalForce(std::string name, Options& alloptions, Solver*) {
     Options& options = alloptions[name];
     electron_ion = options["electron_ion"]
                        .doc("Include electron-ion collisions?")
@@ -61,7 +61,7 @@ private:
 };
 
 namespace {
-RegisterComponent<ThermalForce> registercomponentthermalforce("thermal_force");
+RegisterComponent<BraginskiiThermalForce> registercomponentthermalforce("thermal_force");
 }
 
 #endif // THERMAL_FORCE_H
