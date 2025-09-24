@@ -4,7 +4,7 @@
 #include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
 
-#include "../../include/collisions.hxx"
+#include "../../include/braginskii_collisions.hxx"
 
 /// Global mesh
 namespace bout{
@@ -26,7 +26,7 @@ TEST_F(BraginskiiCollisionsTest, CreateComponent) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1e19;
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 }
 
 TEST_F(BraginskiiCollisionsTest, OnlyElectrons) {
@@ -37,7 +37,7 @@ TEST_F(BraginskiiCollisionsTest, OnlyElectrons) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 
   Options state;
   state["species"]["e"]["density"] = 1e19;
@@ -56,7 +56,7 @@ TEST_F(BraginskiiCollisionsTest, OneOrTwoSpeciesCharged) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 
   Options state1;
   state1["species"]["s1"]["density"] = 1e19;
@@ -103,7 +103,7 @@ TEST_F(BraginskiiCollisionsTest, TnormDependence) {
                              {"ion_ion", true},
                              {"neutral_neutral", true}}}};
 
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 
   Options state {{"species", {{"e", {{"density", 1e19},
                                      {"temperature", 10},
@@ -141,7 +141,7 @@ TEST_F(BraginskiiCollisionsTest, TnormDependence) {
                               {"ion_ion", true},
                               {"neutral_neutral", true}}}};
 
-  Collisions component2("test", options2, nullptr);
+  BraginskiiCollisions component2("test", options2, nullptr);
 
   Options state2 {{"species", {{"e", {{"density", 1e19},
                                       {"temperature", 10 / Tnorm},

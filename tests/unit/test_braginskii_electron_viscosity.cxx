@@ -4,7 +4,7 @@
 #include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
 
-#include "../../include/electron_viscosity.hxx"
+#include "../../include/braginskii_electron_viscosity.hxx"
 
 /// Global mesh
 namespace bout{
@@ -29,7 +29,7 @@ public:
         component("test", options, nullptr) {
   }
   Options options;
-  ElectronViscosity component;
+  BraginskiiElectronViscosity component;
 
   static Field3D constantGradient(BoutReal a, BoutReal b_x, BoutReal b_y, BoutReal b_z) {
     Field3D result(a);

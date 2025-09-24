@@ -23,7 +23,7 @@
 /// is solved as a parallel diffusion, so is treated separately
 /// All other terms are added to Pi_ciperp, even if they are
 /// not really parallel parts
-struct IonViscosity : public Component {
+struct BraginskiiIonViscosity : public Component {
   /// Inputs
   /// - <name>
   ///   - eta_limit_alpha: float, default -1
@@ -32,7 +32,7 @@ struct IonViscosity : public Component {
   ///         Include perpendicular flows?
   ///         Requires curvature vector and phi potential
   ///
-  IonViscosity(std::string name, Options& alloptions, Solver*);
+  BraginskiiIonViscosity(std::string name, Options& alloptions, Solver*);
 
   /// Inputs
   /// - species
@@ -77,7 +77,7 @@ private:
 };
 
 namespace {
-RegisterComponent<IonViscosity> registercomponentionviscosity("ion_viscosity");
+RegisterComponent<BraginskiiIonViscosity> registercomponentionviscosity("ion_viscosity");
 }
 
 #endif

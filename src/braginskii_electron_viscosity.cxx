@@ -5,9 +5,9 @@
 #include <bout/difops.hxx>
 #include <bout/constants.hxx>
 
-#include "../include/electron_viscosity.hxx"
+#include "../include/braginskii_electron_viscosity.hxx"
 
-ElectronViscosity::ElectronViscosity(std::string name, Options& alloptions, Solver*) {
+BraginskiiElectronViscosity::BraginskiiElectronViscosity(std::string name, Options& alloptions, Solver*) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]
@@ -17,7 +17,7 @@ ElectronViscosity::ElectronViscosity(std::string name, Options& alloptions, Solv
   diagnose = options["diagnose"].doc("Output diagnostics?").withDefault<bool>(false);
 }
 
-void ElectronViscosity::transform(Options& state) {
+void BraginskiiElectronViscosity::transform(Options& state) {
   AUTO_TRACE();
 
   Options& species = state["species"]["e"];
@@ -59,7 +59,7 @@ void ElectronViscosity::transform(Options& state) {
   add(species["momentum_source"], viscosity);
 }
 
-void ElectronViscosity::outputVars(Options& state) {
+void BraginskiiElectronViscosity::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);

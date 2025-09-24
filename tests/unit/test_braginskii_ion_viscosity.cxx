@@ -4,7 +4,7 @@
 #include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
 
-#include "../../include/ion_viscosity.hxx"
+#include "../../include/braginskii_ion_viscosity.hxx"
 
 /// Global mesh
 namespace bout{
@@ -29,7 +29,7 @@ public:
         component("test", options, nullptr) {
   }
   Options options;
-  IonViscosity component;
+  BraginskiiIonViscosity component;
 
   static Field3D constantGradient(BoutReal a, BoutReal b_x, BoutReal b_y, BoutReal b_z) {
     Field3D result(a);
@@ -148,7 +148,7 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityCollisionMode) {
 
   Options options2 = options.copy();
   options2["test2"]["viscosity_collisions_mode"] = "braginskii";
-  IonViscosity component2("test2", options2, nullptr);
+  BraginskiiIonViscosity component2("test2", options2, nullptr);
   
   component.transform(state1);
   component2.transform(state2);

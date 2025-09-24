@@ -4,9 +4,9 @@
 #include <bout/output_bout_types.hxx>
 
 #include "../include/hermes_utils.hxx"
-#include "../include/collisions.hxx"
+#include "../include/braginskii_collisions.hxx"
 
-Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
+BraginskiiCollisions::BraginskiiCollisions(std::string name, Options& alloptions, Solver*) {
   AUTO_TRACE();
   const Options& units = alloptions["units"];
 
@@ -61,7 +61,7 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
 ///
 /// Note: A* variables are used for atomic mass numbers;
 ///       mass* variables are species masses in kg
-void Collisions::collide(Options& species1, Options& species2, const Field3D& nu_12, BoutReal momentum_coefficient) {
+void BraginskiiCollisions::collide(Options& species1, Options& species2, const Field3D& nu_12, BoutReal momentum_coefficient) {
   AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12);                           // Total collision frequency
@@ -163,7 +163,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
   }
 }
 
-void Collisions::transform(Options& state) {
+void BraginskiiCollisions::transform(Options& state) {
   AUTO_TRACE();
 
   Options& allspecies = state["species"];
@@ -494,7 +494,7 @@ void Collisions::transform(Options& state) {
   }
 }
 
-void Collisions::outputVars(Options& state) {
+void BraginskiiCollisions::outputVars(Options& state) {
   AUTO_TRACE();
 
   if (!diagnose) {

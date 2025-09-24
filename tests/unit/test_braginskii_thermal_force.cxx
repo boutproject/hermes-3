@@ -4,7 +4,7 @@
 #include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
 
-#include "../../include/thermal_force.hxx"
+#include "../../include/braginskii_thermal_force.hxx"
 
 /// Global mesh
 namespace bout{
@@ -32,7 +32,7 @@ public:
     grad_perp = constantGradient(0., 1., 0., 0.);
   }
   Options options;
-  ThermalForce component;
+  BraginskiiThermalForce component;
   Field3D grad1, grad2, grad_perp;
 
   static Field3D constantGradient(BoutReal a, BoutReal b_x, BoutReal b_y, BoutReal b_z) {

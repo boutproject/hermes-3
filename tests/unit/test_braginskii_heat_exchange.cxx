@@ -4,7 +4,7 @@
 #include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
 
-#include "../../include/collisions.hxx"
+#include "../../include/braginskii_collisions.hxx"
 
 /// Global mesh
 namespace bout{
@@ -28,7 +28,7 @@ TEST_F(BraginskiiHeatExchangeTest, OnlyElectrons) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 
   Options state;
   state["species"]["e"]["density"] = 1e19;
@@ -51,7 +51,7 @@ TEST_F(BraginskiiHeatExchangeTest, TwoEqualTempSpeciesCharged) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 
   // State with two species, both the same but half the density
   Options state;
@@ -93,7 +93,7 @@ TEST_F(BraginskiiHeatExchangeTest, TwoSpeciesCharged) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 
   // State with two species, both the same but half the density
   Options state;
@@ -127,7 +127,7 @@ TEST_F(BraginskiiHeatExchangeTest, DoubleTemperatureDiff) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 
   // State with two species, both the same but half the density
   Options state1, state2;
