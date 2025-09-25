@@ -24,7 +24,7 @@ cvode_max_order = 3
 
 [hermes]
 components = (e, d+, sound_speed, vorticity,
-              sheath_boundary, collisions,
+              sheath_boundary, braginskii_collisions,
               diamagnetic_drift, classical_diffusion,
               polarisation_drift
               )

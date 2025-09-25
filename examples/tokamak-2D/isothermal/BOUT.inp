@@ -22,7 +22,7 @@ mxstep = 10000
 
 [hermes]
 components = (e, i, sound_speed, vorticity,
-              sheath_boundary, collisions,
+              sheath_boundary, braginskii_collisions,
               diamagnetic_drift
               )
 
