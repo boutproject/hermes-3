@@ -44,7 +44,7 @@ ixseps2 = -1
 #  - electron_force_balance after collisions, so the electric field includes forces
 #    on the electrons
 components = (d+, d, e, equilibriate,
-              sheath_boundary_simple, collisions, recycling, reactions,
+              sheath_boundary_simple, braginskii_collisions, recycling, reactions,
               electron_force_balance, solkit_neutral_parallel_diffusion)
 
 normalise_metric = true  # Normalise the input metric?
@@ -63,7 +63,7 @@ diagnose = false
 atol = 1e-7
 rtol = 1e-5
 
-[collisions]
+[braginskii_collisions]
 
 electron_electron = false
 electron_ion = true

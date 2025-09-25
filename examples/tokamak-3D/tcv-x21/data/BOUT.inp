@@ -24,8 +24,8 @@ cvode_max_order = 3
 
 [hermes]
 components = (e, i, sound_speed, vorticity,
-              sheath_boundary, collisions,
-              diamagnetic_drift, classical_diffusion, ion_viscosity,
+              sheath_boundary, braginskii_collisions,
+              diamagnetic_drift, classical_diffusion, braginskii_ion_viscosity,
               polarisation_drift
               )
 
@@ -40,7 +40,7 @@ advection = false
 diamagnetic_polarisation = true
 average_atomic_mass = vorticity:average_atomic_mass
 
-[ion_viscosity]
+[braginskii_ion_viscosity]
 perpendicular = true
 diagnose = true
 
