@@ -28,7 +28,7 @@ predictor = false
 
 [hermes]
 components = (d+, d, t+, t, he+, he, e,
-              sheath_boundary, braginskii_collisions, braginskii_friction,
+              sheath_boundary, braginskii_collisions, braginskii_friction, braginskii_heat_exchange,
               braginskii_thermal_force, recycling, reactions, electron_force_balance,
               braginskii_ion_viscosity)
 

@@ -17,7 +17,8 @@ J = 1  # Identity metric
 mxstep = 10000
 
 [hermes]
-components = d, he, d+, braginskii_collisions, braginskii_friction, neutral_parallel_diffusion
+components = (d, he, d+, braginskii_collisions, braginskii_friction,
+              braginskii_heat_exchange, neutral_parallel_diffusion)
 
 normalise_metric = false  # Normalise the input metric?
 
