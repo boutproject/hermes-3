@@ -58,7 +58,6 @@ TEST_F(BraginskiiFrictionTest, TwoComovingSpeciesCharged) {
   
   BraginskiiFriction component("test", options, nullptr);
 
-  // State with two species, both the same but half the density
   Options state;
   state["species"]["s1"]["density"] = 5e18; // Half density
   state["species"]["s1"]["temperature"] = 10;
@@ -105,7 +104,6 @@ TEST_F(BraginskiiFrictionTest, TwoSpeciesCharged) {
   
   BraginskiiFriction component("test", options, nullptr);
 
-  // State with two species, both the same but half the density
   Options state;
   state["species"]["s1"]["density"] = 5e18; // Half density
   state["species"]["s1"]["temperature"] = 10;
@@ -150,7 +148,6 @@ TEST_F(BraginskiiFrictionTest, DoubleRelativeVelocities) {
   
   BraginskiiFriction component("test", options, nullptr);
 
-  // State with two species, both the same but half the density
   Options state1, state2;
   state1["species"]["s1"]["density"] = 5e18; // Half density
   state1["species"]["s1"]["temperature"] = 10;
@@ -202,7 +199,6 @@ TEST_F(BraginskiiFrictionTest, TwoSpeciesNoHeating) {
   
   BraginskiiFriction component("test", options, nullptr);
 
-  // State with two species, both the same but half the density
   Options state;
   state["species"]["s1"]["density"] = 5e18; // Half density
   state["species"]["s1"]["temperature"] = 10;
@@ -237,7 +233,6 @@ TEST_F(BraginskiiFrictionTest, DoubleCollisionRate) {
   
   BraginskiiFriction component("test", options, nullptr);
 
-  // State with two species, both the same but half the density
   Options state1, state2;
   state1["species"]["s1"]["density"] = 5e18; // Half density
   state1["species"]["s1"]["temperature"] = 10;

@@ -10,29 +10,37 @@
 /// 
 struct BraginskiiFriction : public Component {
   ///
-  /// @param alloptions Settings, which should include:
-  ///    - units
-  ///      - eV
-  ///      - inv_meters_cubed
-  ///      - meters
-  ///      - seconds
-  ///
-  /// There are switches for other terms:
+  /// @param alloptions Settings, which has switches for additional terms:
   ///
   ///   - frictional_heating    Include R dot v heating term as energy source? (includes Ohmic heating)
   ///
   BraginskiiFriction(std::string name, Options& alloptions, Solver*);
 
+
+  /// Calculate transfer of momentum and energy between species due to
+  /// friction arising from collisions.
+  ///
+  /// Uses
+  ///   - species
+  ///     - <name>
+  ///       - AA
+  ///       - charge
+  ///       - collision_frequencies
+  ///       - density
+  ///       - velocity
+  ///
+  /// Modifies
+  ///   - species
+  ///     - <name>
+  ///       - momentum_source   if species1 or species2 velocity is set
+  ///       - energy_source     if velocity is set and frictional_heating
+  ///
   void transform(Options &state) override;
 
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options &state) override;
 
 private:
-  BoutReal Tnorm; // Temperature normalisation [eV]
-  BoutReal Nnorm; // Density normalisation [m^-3]
-  BoutReal rho_s0;  // Length normalisation [m]
-  BoutReal Omega_ci; // Frequency normalisation [s^-1]
 
   /// Include frictional heating term?
   bool frictional_heating;
