@@ -1,6 +1,6 @@
 #pragma once
-#ifndef ELECTRON_VISCOSITY_H
-#define ELECTRON_VISCOSITY_H
+#ifndef BRAGINSKII_ELECTRON_VISCOSITY_H
+#define BRAGINSKII_ELECTRON_VISCOSITY_H
 
 #include "component.hxx"
 
@@ -46,7 +46,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiElectronViscosity> registercomponentelectronviscosity("electron_viscosity");
+RegisterComponent<BraginskiiElectronViscosity> registercomponentelectronviscosity("braginskii_electron_viscosity");
 }
 
 #endif

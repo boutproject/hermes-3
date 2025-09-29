@@ -1,6 +1,6 @@
 #pragma once
-#ifndef THERMAL_FORCE_H
-#define THERMAL_FORCE_H
+#ifndef BRAGINSKII_THERMAL_FORCE_H
+#define BRAGINSKII_THERMAL_FORCE_H
 
 #include "component.hxx"
 
@@ -64,4 +64,4 @@ namespace {
 RegisterComponent<BraginskiiThermalForce> registercomponentthermalforce("thermal_force");
 }
 
-#endif // THERMAL_FORCE_H
+#endif // BRAGINSKII_THERMAL_FORCE_H
