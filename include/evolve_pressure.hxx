@@ -121,13 +121,15 @@ private:
 
   YBoundary yboundary;
   Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
-  Field3D flow_ylow_kinetic;    ///< Parallel flow of kinetic energy
+  Field3D flow_ylow_advection;    ///< Advection energy flow diagnostics
+  Field3D flow_ylow_viscous_heating; ///< Flow of kinetic energy due to numerical viscosity
 
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
 
   Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
+  Field3D E_PdivV, E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
 };
 
 namespace {
