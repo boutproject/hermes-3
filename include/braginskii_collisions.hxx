@@ -61,16 +61,14 @@ private:
 
   /// Calculated collision rates saved for post-processing and use by other components
   /// Saved in options, the BOUT++ dictionary-like object
-  Options collision_rates, energy_channels, friction_energy_channels, momentum_channels;
+  Options collision_rates;
 
   /// Save more diagnostics?
   bool diagnose;
 
-  /// Update collision frequencies, momentum and energy exchange
+  /// Update collision frequencies
   /// nu_12    normalised frequency
-  /// momentum_coefficient   Leading coefficient on parallel friction
-  ///                        e.g 0.51 for electron-ion with Zi=1
-  void collide(Options &species1, Options &species2, const Field3D &nu_12, BoutReal momentum_coefficient);
+  void collide(Options &species1, Options &species2, const Field3D &nu_12);
 };
 
 namespace {

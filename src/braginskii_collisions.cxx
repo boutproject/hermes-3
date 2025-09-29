@@ -49,19 +49,16 @@ BraginskiiCollisions::BraginskiiCollisions(std::string name, Options& alloptions
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 }
 
-/// Calculate transfer of momentum and energy between species1 and species2
+/// Calculate apply collision data for the two species.
 /// nu_12    normalised frequency
 ///
 /// Modifies
 ///   species1 and species2
 ///     - collision_frequency
-///     - momentum_source   if species1 or species2 velocity is set
-///     - energy_source     if species1 or species2 temperature is set
-///                         or velocity is set and frictional_heating
 ///
 /// Note: A* variables are used for atomic mass numbers;
 ///       mass* variables are species masses in kg
-void BraginskiiCollisions::collide(Options& species1, Options& species2, const Field3D& nu_12, BoutReal momentum_coefficient) {
+void BraginskiiCollisions::collide(Options& species1, Options& species2, const Field3D& nu_12) {
   AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12);                           // Total collision frequency
@@ -87,25 +84,6 @@ void BraginskiiCollisions::collide(Options& species1, Options& species2, const F
     std::string coll_name =  species2.name() + std::string("_") + species1.name() + std::string("_coll");    
     set(species2["collision_frequencies"][coll_name], nu);                // Collision frequency for individual reaction
     set(collision_rates[species2.name()][species1.name()], nu);           // Individual collision frequency used for diagnostics
-
-
-    // Energy exchange
-    if (species1.isSet("temperature") or species2.isSet("temperature")) {
-      // Q12 is heat transferred to species2 (normalised)
-
-      const Field3D temperature1 = GET_NOBOUNDARY(Field3D, species1["temperature"]);
-      const Field3D temperature2 = GET_NOBOUNDARY(Field3D, species2["temperature"]);
-
-      const Field3D Q12 =
-          nu_12 * 3. * density1 * (A1 / (A1 + A2)) * (temperature2 - temperature1);
-
-      add(species1["energy_source"], Q12);
-      subtract(species2["energy_source"], Q12);
-
-      // Diagnostics
-      set(energy_channels[species1.name()][species2.name()], Q12);
-      set(energy_channels[species2.name()][species1.name()], -Q12);
-    }
   }
 }
 
@@ -150,7 +128,7 @@ void BraginskiiCollisions::transform(Options& state) {
           return nu;
         });
 
-        collide(electrons, electrons, nu_ee / Omega_ci, 1.0);
+        collide(electrons, electrons, nu_ee / Omega_ci);
         continue;
       }
 
@@ -200,15 +178,7 @@ void BraginskiiCollisions::transform(Options& state) {
           return nu;
         });
 
-        // Coefficient in front of parallel momentum exchange
-        // This table is from Braginskii 1965
-        BoutReal mom_coeff =
-          Zi == 1 ? 0.51 :
-          Zi == 2 ? 0.44 :
-          Zi == 3 ? 0.40 :
-          0.38; // Note: 0.38 is for Zi=4; tends to 0.29 for Zi->infty
-
-        collide(electrons, species, nu_ei / Omega_ci, mom_coeff);
+        collide(electrons, species, nu_ei / Omega_ci);
 
       } else if (species.isSet("charge") and (get<BoutReal>(species["charge"]) < 0.0)) {
         ////////////////////////////////////
@@ -239,7 +209,7 @@ void BraginskiiCollisions::transform(Options& state) {
           return vth_e * Nnorm * Nn[i] * a0 * rho_s0;
         });
 
-        collide(electrons, species, nu_en, 1.0);
+        collide(electrons, species, nu_en);
       }
     }
   }
@@ -338,7 +308,7 @@ void BraginskiiCollisions::transform(Options& state) {
           });
 
           // Update the species collision rates, momentum & energy exchange
-          collide(species1, species2, nu_12 / Omega_ci, 1.0);
+          collide(species1, species2, nu_12 / Omega_ci);
 
         } else {
           // species1 charged, species2 neutral
@@ -359,7 +329,7 @@ void BraginskiiCollisions::transform(Options& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1, species2, nu_12, 1.0);
+          collide(species1, species2, nu_12);
         }
       }
     } else {
@@ -405,7 +375,7 @@ void BraginskiiCollisions::transform(Options& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1, species2, nu_12, 1.0);
+          collide(species1, species2, nu_12);
 
         } else {
           // Both species neutral
@@ -433,7 +403,7 @@ void BraginskiiCollisions::transform(Options& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1, species2, nu_12, 1.0);
+          collide(species1, species2, nu_12);
         }
       }
     }
@@ -462,7 +432,6 @@ void BraginskiiCollisions::outputVars(Options& state) {
     // Iterate through the second species in each collision pair
     const std::map<std::string, Options>& level2 = section.getChildren();
     for (auto s2 = std::begin(level2); s2 != std::end(level2); ++s2) {
-
       std::string A = s1->first;
       std::string B = s2->first;
       std::string AB = A + B;
@@ -478,22 +447,7 @@ void BraginskiiCollisions::outputVars(Options& state) {
                       {"species", A},
                       {"source", "collisions"}});
 
-      // Collisional energy transfer channels (i.e. thermal equilibration)
-      if ((energy_channels.isSection(A)) and (energy_channels[A].isSet(B))) {
-
-        set_with_attrs(state[std::string("E") + AB + std::string("_coll")],
-                     getNonFinal<Field3D>(energy_channels[A][B]),
-                     {{"time_dimension", "t"},
-                      {"units", "W / m^3"},
-                      {"conversion", Pnorm * Omega_ci},
-                      {"standard_name", AB + "collisional energy transfer source"},
-                      {"long_name", AB + "collisional energy transfer source"},
-                      {"species", A},
-                      {"source", "collisions"}});
-      }
-
     }
   }
-
 
 }
