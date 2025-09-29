@@ -51,8 +51,8 @@ J = 1 # Identity metric
 # the components that they depend on.
 # If this is wrong, you'll get a runtime error (about non-existant variables)
 components = (d+, d, e, fixed_fraction_nitrogen, detachment_controller,
-              sheath_boundary, braginskii_collisions, braginskii_friction, recycling, reactions,
-              electron_force_balance, neutral_parallel_diffusion)
+              sheath_boundary, braginskii_collisions, braginskii_friction, braginskii_heat_exchange,
+              recycling, reactions, electron_force_balance, neutral_parallel_diffusion)
 
 normalise_metric = true  # Normalise the input metric?
 

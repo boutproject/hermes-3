@@ -45,8 +45,8 @@ ixseps2 = -1
 #  - electron_force_balance after collisions, so the electric field includes forces
 #    on the electrons
 components = (d+, d, e, equilibriate,
-              sheath_boundary, braginskii_collisions, braginskii_friction, recycling,
-              reactions, electron_force_balance, neutral_parallel_diffusion,
+              sheath_boundary, braginskii_collisions, braginskii_friction, braginskii_heat_exchange,
+              recycling, reactions, electron_force_balance, neutral_parallel_diffusion,
               braginskii_ion_viscosity)
 
 normalise_metric = true  # Normalise the input metric?

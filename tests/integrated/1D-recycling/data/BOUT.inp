@@ -44,7 +44,7 @@ ixseps2 = -1
 # to electron pressure by using electron force balance.
 components = (d+, d, e,
               sheath_boundary, braginskii_collisions, braginskii_friction,
-              recycling, reactions, electron_force_balance,
+              braginskii_heat_exchange, recycling, reactions, electron_force_balance,
               neutral_parallel_diffusion)
 
 Nnorm = 1e19
