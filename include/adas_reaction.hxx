@@ -3,6 +3,7 @@
 #define ADAS_REACTION_H
 
 #include "component.hxx"
+#include "reaction.hxx"
 #include <vector>
 
 /// Represent a 2D rate coefficient table (T,n)
@@ -34,7 +35,7 @@ struct OpenADASRateCoefficient {
 ///
 /// Uses the JSON files produced by:
 ///   https://github.com/TBody/OpenADAS_to_JSON
-struct OpenADAS : public Component {
+struct OpenADAS : public ReactionBase {
   ///
   /// Inputs
   /// ------
@@ -77,7 +78,7 @@ private:
   BoutReal Tnorm, Nnorm, FreqNorm; ///< Normalisations
 };
 
-struct OpenADASChargeExchange : public Component {
+struct OpenADASChargeExchange : public ReactionBase {
   OpenADASChargeExchange(const Options& units, const std::string& rate_file, int level)
       : rate_coef(std::string("json_database/") + rate_file, level) {
     // Get the units

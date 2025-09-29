@@ -50,6 +50,7 @@ else()
 endif()
 
 set(HERMES_SOURCES
+    src/amjuel_reaction.cxx
     src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
@@ -84,9 +85,6 @@ set(HERMES_SOURCES
     src/anomalous_diffusion_3d.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
-    src/amjuel_hyd_ionisation.cxx
-    src/amjuel_hyd_recombination.cxx
-    src/amjuel_helium.cxx
     src/adas_reaction.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
@@ -98,6 +96,8 @@ set(HERMES_SOURCES
     src/upstream_density_feedback.cxx
     src/temperature_feedback.cxx
     src/detachment_controller.cxx
+    src/reaction.cxx
+    src/reaction_parser.cxx
     src/thermal_force.cxx
     src/ion_viscosity.cxx
     src/transform.cxx
@@ -107,8 +107,7 @@ set(HERMES_SOURCES
     include/adas_carbon.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
-    include/amjuel_hyd_ionisation.hxx
-    include/amjuel_hyd_recombination.hxx
+    include/amjuel_hydrogen.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
     include/anomalous_diffusion_3d.hxx
@@ -144,6 +143,7 @@ set(HERMES_SOURCES
     include/polarisation_drift.hxx
     include/quasineutral.hxx
     include/radiation.hxx
+    include/reaction.hxx
     include/recalculate_metric.hxx
     include/recycling.hxx
     include/relax_potential.hxx
