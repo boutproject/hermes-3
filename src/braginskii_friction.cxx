@@ -32,13 +32,6 @@ BoutReal momentumCoefficient(std::string name1, BoutReal Z1, std::string name2,
   }
 }
 
-/// Calculate transfer of momentum and energy between species1 and species2
-///
-/// Modifies
-///   species1 and species2
-///     - momentum_source   if species1 or species2 velocity is set
-///     - energy_source     if velocity is set and frictional_heating
-///
 void BraginskiiFriction::transform(Options& state) {
   AUTO_TRACE();
 
@@ -66,7 +59,7 @@ void BraginskiiFriction::transform(Options& state) {
       velocity1 = species1.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species1["velocity"]) : 0.0;;
 
     const BoutReal A1 = GET_VALUE(BoutReal, species1["AA"]), Z1 = species1.isSet("charge") ? GET_VALUE(BoutReal, species1["charge"]) : 0;
-;
+
     // Copy the iterator, so we don't iterate over the
     // lower half of the matrix, but start at the diagonal
     for (std::map<std::string, Options>::const_iterator kv2 = kv1;
@@ -80,7 +73,6 @@ void BraginskiiFriction::transform(Options& state) {
       if (!(isSetFinalNoBoundary(species1["velocity"]) or
             isSetFinalNoBoundary(species2["velocity"]))) continue;
       
-      const BoutReal AA2 = GET_VALUE(BoutReal, species2["AA"]);
       const std::string coll_name = kv1->first + std::string("_") + kv2->first + std::string("_coll");
       // If collisions were not calculated between these two species, skip
       if (not species1["collision_frequencies"].isSet(coll_name)) continue;
