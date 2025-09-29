@@ -7,12 +7,12 @@
 #include <bout/mesh.hxx>
 #include "../include/hermes_utils.hxx"
 
-#include "../include/ion_viscosity.hxx"
+#include "../include/braginskii_ion_viscosity.hxx"
 #include "../include/div_ops.hxx"
 
 using bout::globals::mesh;
 
-IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
+BraginskiiIonViscosity::BraginskiiIonViscosity(std::string name, Options& alloptions, Solver*) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]
@@ -91,7 +91,7 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
 
 }
 
-void IonViscosity::transform(Options &state) {
+void BraginskiiIonViscosity::transform(Options &state) {
   AUTO_TRACE();
 
   Options& allspecies = state["species"];
@@ -131,11 +131,7 @@ void IonViscosity::transform(Options &state) {
 
           if (/// Self-collisions
               (collisionSpeciesMatch(    
-                collision_name, species.name(), species.name(), "coll", "exact")) or
-              /// Ion-electron collisions
-              (collisionSpeciesMatch(    
-                collision_name, species.name(), "+", "coll", "partial"))) {
-                  
+                collision_name, species.name(), species.name(), "coll", "exact"))) {
                   collision_names.push_back(collision_name);
                 }
         }
@@ -223,6 +219,7 @@ void IonViscosity::transform(Options &state) {
     // This term is the parallel flow part of
     // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
     const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+    //BOUT_FOR_SERIAL(i, div_Pi_cipar.getRegion("RGN_NOBNDRY")) {std::cout << " " << div_Pi_cipar[i] << std::endl;}
 
     add(species["momentum_source"], div_Pi_cipar);
     subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
@@ -361,7 +358,7 @@ void IonViscosity::transform(Options &state) {
   }
 }
 
-void IonViscosity::outputVars(Options &state) {
+void BraginskiiIonViscosity::outputVars(Options &state) {
   AUTO_TRACE();
 
   if (diagnose) {

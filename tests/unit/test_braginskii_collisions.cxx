@@ -4,7 +4,7 @@
 #include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
 
-#include "../../include/collisions.hxx"
+#include "../../include/braginskii_collisions.hxx"
 
 /// Global mesh
 namespace bout{
@@ -17,19 +17,19 @@ extern Mesh *mesh;
 using namespace bout::globals;
 
 // Reuse the "standard" fixture for FakeMesh
-using CollisionsTest = FakeMeshFixture;
+using BraginskiiCollisionsTest = FakeMeshFixture;
 
-TEST_F(CollisionsTest, CreateComponent) {
+TEST_F(BraginskiiCollisionsTest, CreateComponent) {
   Options options;
   
   options["units"]["eV"] = 1.0;
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1e19;
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 }
 
-TEST_F(CollisionsTest, OnlyElectrons) {
+TEST_F(BraginskiiCollisionsTest, OnlyElectrons) {
   Options options;
 
   options["units"]["eV"] = 1.0;
@@ -37,7 +37,7 @@ TEST_F(CollisionsTest, OnlyElectrons) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 
   Options state;
   state["species"]["e"]["density"] = 1e19;
@@ -48,7 +48,7 @@ TEST_F(CollisionsTest, OnlyElectrons) {
   ASSERT_TRUE(state["species"]["e"].isSet("collision_frequency"));
 }
 
-TEST_F(CollisionsTest, OneOrTwoSpeciesCharged) {
+TEST_F(BraginskiiCollisionsTest, OneOrTwoSpeciesCharged) {
   Options options;
 
   options["units"]["eV"] = 1.0;
@@ -56,7 +56,7 @@ TEST_F(CollisionsTest, OneOrTwoSpeciesCharged) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 
   Options state1;
   state1["species"]["s1"]["density"] = 1e19;
@@ -91,7 +91,7 @@ TEST_F(CollisionsTest, OneOrTwoSpeciesCharged) {
   }
 }
 
-TEST_F(CollisionsTest, TnormDependence) {
+TEST_F(BraginskiiCollisionsTest, TnormDependence) {
   // Calculate rates with normalisation factors 1
   Options options {{"units", {{"eV", 1.0},
                               {"meters", 1.0},
@@ -103,7 +103,7 @@ TEST_F(CollisionsTest, TnormDependence) {
                              {"ion_ion", true},
                              {"neutral_neutral", true}}}};
 
-  Collisions component("test", options, nullptr);
+  BraginskiiCollisions component("test", options, nullptr);
 
   Options state {{"species", {{"e", {{"density", 1e19},
                                      {"temperature", 10},
@@ -141,7 +141,7 @@ TEST_F(CollisionsTest, TnormDependence) {
                               {"ion_ion", true},
                               {"neutral_neutral", true}}}};
 
-  Collisions component2("test", options2, nullptr);
+  BraginskiiCollisions component2("test", options2, nullptr);
 
   Options state2 {{"species", {{"e", {{"density", 1e19},
                                       {"temperature", 10 / Tnorm},

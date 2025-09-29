@@ -7,14 +7,14 @@
 #include "component.hxx"
 
 /// Calculates the collision rate of each species
-/// with all other species
+/// with all other species, using the Braginskii equation.
 /// 
 /// Important: Be careful when including both ion_neutral collisions
 ///            and reactions such as charge exchange, since that may
 ///            result in double counting. Similarly for
 ///            electron_neutral collisions and ionization reactions.
 ///
-struct Collisions : public Component {
+struct BraginskiiCollisions : public Component {
   ///
   /// @param alloptions Settings, which should include:
   ///    - units
@@ -37,7 +37,7 @@ struct Collisions : public Component {
   ///
   ///   - frictional_heating    Include R dot v heating term as energy source? (includes Ohmic heating)
   ///
-  Collisions(std::string name, Options& alloptions, Solver*);
+  BraginskiiCollisions(std::string name, Options& alloptions, Solver*);
 
   void transform(Options &state) override;
 
@@ -61,20 +61,18 @@ private:
 
   /// Calculated collision rates saved for post-processing and use by other components
   /// Saved in options, the BOUT++ dictionary-like object
-  Options collision_rates, energy_channels, friction_energy_channels, momentum_channels;
+  Options collision_rates;
 
   /// Save more diagnostics?
   bool diagnose;
 
-  /// Update collision frequencies, momentum and energy exchange
+  /// Update collision frequencies
   /// nu_12    normalised frequency
-  /// momentum_coefficient   Leading coefficient on parallel friction
-  ///                        e.g 0.51 for electron-ion with Zi=1
-  void collide(Options &species1, Options &species2, const Field3D &nu_12, BoutReal momentum_coefficient);
+  void collide(Options &species1, Options &species2, const Field3D &nu_12);
 };
 
 namespace {
-RegisterComponent<Collisions> registercomponentcollisions("collisions");
+RegisterComponent<BraginskiiCollisions> registercomponentcollisions("braginskii_collisions");
 }
 
 #endif // COLLISIONS_H
