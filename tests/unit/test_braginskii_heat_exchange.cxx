@@ -4,7 +4,7 @@
 #include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
 
-#include "../../include/braginskii_collisions.hxx"
+#include "../../include/braginskii_heat_exchange.hxx"
 
 /// Global mesh
 namespace bout{
@@ -28,12 +28,14 @@ TEST_F(BraginskiiHeatExchangeTest, OnlyElectrons) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  BraginskiiCollisions component("test", options, nullptr);
+  BraginskiiHeatExchange component("test", options, nullptr);
 
   Options state;
   state["species"]["e"]["density"] = 1e19;
   state["species"]["e"]["temperature"] = 10.;
   state["species"]["e"]["velocity"] = 1.;
+  state["species"]["e"]["AA"] = 1./1836;
+  state["species"]["e"]["collision_frequencies"]["e_e_coll"] = 1.;
 
   component.transform(state);
 
@@ -51,9 +53,8 @@ TEST_F(BraginskiiHeatExchangeTest, TwoEqualTempSpeciesCharged) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  BraginskiiCollisions component("test", options, nullptr);
+  BraginskiiHeatExchange component("test", options, nullptr);
 
-  // State with two species, both the same but half the density
   Options state;
   state["species"]["s1"]["density"] = 5e18; // Half density
   state["species"]["s1"]["temperature"] = 10;
@@ -62,6 +63,10 @@ TEST_F(BraginskiiHeatExchangeTest, TwoEqualTempSpeciesCharged) {
   state["species"]["s1"]["velocity"] = 1;
 
   state["species"]["s2"] = state["species"]["s1"].copy();
+  state["species"]["s1"]["collision_frequencies"]["s1_s1_coll"] = 1.;
+  state["species"]["s1"]["collision_frequencies"]["s1_s2_coll"] = 0.5;
+  state["species"]["s2"]["collision_frequencies"]["s2_s2_coll"] = 0.5;
+  state["species"]["s2"]["collision_frequencies"]["s2_s1_coll"] = 0.25;
 
   // Run calculations
   component.transform(state);
@@ -72,7 +77,7 @@ TEST_F(BraginskiiHeatExchangeTest, TwoEqualTempSpeciesCharged) {
   Field3D es2 = get<Field3D>(state["species"]["s2"]["energy_source"]);
   
   BOUT_FOR_SERIAL(i, es1.getRegion("RGN_ALL")) {
-    // If the species have the same velocities, there should be no friction
+    // If the species have the same temperature, there should be no heat exchange
     ASSERT_DOUBLE_EQ(es1[i], 0.);
     ASSERT_DOUBLE_EQ(es2[i], 0.);
   }
@@ -87,9 +92,8 @@ TEST_F(BraginskiiHeatExchangeTest, TwoSpeciesCharged) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  BraginskiiCollisions component("test", options, nullptr);
+  BraginskiiHeatExchange component("test", options, nullptr);
 
-  // State with two species, both the same but half the density
   Options state;
   state["species"]["s1"]["density"] = 5e18; // Half density
   state["species"]["s1"]["charge"] = 1;
@@ -97,6 +101,10 @@ TEST_F(BraginskiiHeatExchangeTest, TwoSpeciesCharged) {
   state["species"]["s1"]["velocity"] = 1;
 
   state["species"]["s2"] = state["species"]["s1"].copy();
+  state["species"]["s1"]["collision_frequencies"]["s1_s1_coll"] = 1.;
+  state["species"]["s1"]["collision_frequencies"]["s1_s2_coll"] = 0.5;
+  state["species"]["s2"]["collision_frequencies"]["s2_s2_coll"] = 0.5;
+  state["species"]["s2"]["collision_frequencies"]["s2_s1_coll"] = 0.25;
 
   state["species"]["s1"]["temperature"] = 10;
   state["species"]["s2"]["temperature"] = 20;
@@ -108,12 +116,13 @@ TEST_F(BraginskiiHeatExchangeTest, TwoSpeciesCharged) {
   Field3D es2 = get<Field3D>(state["species"]["s2"]["energy_source"]);
 
   BOUT_FOR_SERIAL(i, es1.getRegion("RGN_ALL")) {
+    ASSERT_NE(es1[i], 0.);
     // The species should have opposite heat exchange
     ASSERT_DOUBLE_EQ(es1[i], -es2[i]);
   }
 }
 
-TEST_F(BraginskiiHeatExchangeTest, DoubleTemperatureDiff) {
+TEST_F(BraginskiiHeatExchangeTest, DoubleCollisionRates) {
   Options options;
 
   options["units"]["eV"] = 1.0;
@@ -121,22 +130,24 @@ TEST_F(BraginskiiHeatExchangeTest, DoubleTemperatureDiff) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   
-  BraginskiiCollisions component("test", options, nullptr);
+  BraginskiiHeatExchange component("test", options, nullptr);
 
-  // State with two species, both the same but half the density
   Options state1, state2;
   state1["species"]["s1"]["density"] = 5e18; // Half density
   state1["species"]["s1"]["charge"] = 0;
   state1["species"]["s1"]["AA"] = 2;
   state1["species"]["s1"]["velocity"] = 1;
-
   state1["species"]["s2"] = state1["species"]["s1"].copy();
-  state2 = state1.copy();
-
   state1["species"]["s1"]["temperature"] = 10;
   state1["species"]["s2"]["temperature"] = 20;
-  state2["species"]["s1"]["temperature"] = 10;
-  state2["species"]["s2"]["temperature"] = 30;
+  state1["species"]["s1"]["collision_frequencies"]["s1_s1_coll"] = 1.;
+  state1["species"]["s2"]["collision_frequencies"]["s2_s2_coll"] = 0.25;
+
+  state2 = state1.copy();
+  state1["species"]["s1"]["collision_frequencies"]["s1_s2_coll"] = 0.5;
+  state1["species"]["s2"]["collision_frequencies"]["s2_s1_coll"] = 0.5;
+  state2["species"]["s1"]["collision_frequencies"]["s1_s2_coll"] = 1.0;
+  state2["species"]["s2"]["collision_frequencies"]["s2_s1_coll"] = 1.0;
 
   // Run calculations
   component.transform(state1);
@@ -147,6 +158,7 @@ TEST_F(BraginskiiHeatExchangeTest, DoubleTemperatureDiff) {
 
   const BoutReal factor = 2. * 2. / sqrt(3.);
   BOUT_FOR_SERIAL(i, es11.getRegion("RGN_ALL")) {
-    ASSERT_DOUBLE_EQ(factor * es11[i], es21[i]);
+    ASSERT_NE(es11[i], 0.);
+    ASSERT_DOUBLE_EQ(2 * es11[i], es21[i]);
   }
 }
