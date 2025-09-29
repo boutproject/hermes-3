@@ -38,7 +38,7 @@ TEST_F(BraginskiiHeatExchangeTest, OnlyElectrons) {
   component.transform(state);
 
   // A species can't exchange heat with itself
-  if (state["species"]["e"]["momentum_source"].isSet()) {
+  if (state["species"]["e"]["energy_source"].isSet()) {
     ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["e"]["energy_source"])(0,0,0), 0.);
   }
 }
@@ -65,20 +65,14 @@ TEST_F(BraginskiiHeatExchangeTest, TwoEqualTempSpeciesCharged) {
 
   // Run calculations
   component.transform(state);
-  ASSERT_TRUE(state["species"]["s1"].isSet("momentum_source"));
-  ASSERT_TRUE(state["species"]["s2"].isSet("momentum_source"));
   ASSERT_TRUE(state["species"]["s1"].isSet("energy_source"));
   ASSERT_TRUE(state["species"]["s2"].isSet("energy_source"));
 
-  Field3D ms1 = get<Field3D>(state["species"]["s1"]["momentum_source"]);
-  Field3D ms2 = get<Field3D>(state["species"]["s2"]["momentum_source"]);
   Field3D es1 = get<Field3D>(state["species"]["s1"]["energy_source"]);
   Field3D es2 = get<Field3D>(state["species"]["s2"]["energy_source"]);
   
-  BOUT_FOR_SERIAL(i, ms1.getRegion("RGN_ALL")) {
+  BOUT_FOR_SERIAL(i, es1.getRegion("RGN_ALL")) {
     // If the species have the same velocities, there should be no friction
-    ASSERT_DOUBLE_EQ(ms1[i], 0.);
-    ASSERT_DOUBLE_EQ(ms2[i], 0.);
     ASSERT_DOUBLE_EQ(es1[i], 0.);
     ASSERT_DOUBLE_EQ(es2[i], 0.);
   }

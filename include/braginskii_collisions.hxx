@@ -74,7 +74,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiCollisions> registercomponentcollisions("collisions");
+RegisterComponent<BraginskiiCollisions> registercomponentcollisions("braginskii_collisions");
 }
 
 #endif // COLLISIONS_H

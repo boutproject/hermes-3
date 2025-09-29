@@ -29,7 +29,8 @@ rtol = 1e-5
 
 [hermes]
 components = (d+, d, e,
-              braginskii_collisions, sheath_boundary_simple, recycling, 
+              braginskii_collisions, braginskii_friction,
+              sheath_boundary_simple, recycling, 
               sound_speed,
               reactions,
               electron_force_balance)

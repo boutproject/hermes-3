@@ -43,8 +43,9 @@ ixseps2 = -1
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
 # to electron pressure by using electron force balance.
 components = (d+, d, e,
-              sheath_boundary, braginskii_collisions, recycling, reactions,
-              electron_force_balance, neutral_parallel_diffusion)
+              sheath_boundary, braginskii_collisions, braginskii_friction,
+              recycling, reactions, electron_force_balance,
+              neutral_parallel_diffusion)
 
 Nnorm = 1e19
 Bnorm = 1
