@@ -229,6 +229,13 @@ if(HERMES_COPY_TESTS_TO_BUILD)
                     ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
 endif()
 
+# Test of bout+neso
+add_executable(bout-particle-push
+               bout-particle-push.cxx
+               ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
+add_sycl_to_target(TARGET bout-particle-push SOURCES bout-particle-push.cxx)
+target_link_libraries(bout-particle-push PUBLIC bout++::bout++ Reactions::Reactions)
+
 # Tests
 option(HERMES_TESTS "Build the tests" ON)
 if(HERMES_TESTS)
@@ -318,3 +325,5 @@ if (BUILD_SHARED_LIBS)
 else()
   install(TARGETS hermes-3)
 endif()
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
