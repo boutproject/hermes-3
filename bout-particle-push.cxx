@@ -1,5 +1,7 @@
+#include "bout/petsclib.hxx"
 #include <neso_particles.hpp>
 #include <neso_particles/external_interfaces/petsc/petsc_interface.hpp>
+#include "bout/bout.hxx"
 
 #ifndef NESO_PARTICLES_PETSC
 static_assert(false, "NESO-Particles was installed without PETSc support.");
@@ -14,8 +16,15 @@ inline void ASSERT_EQ(T t, U u){
 using namespace NESO::Particles;
 
 int main(int argc, char **argv) {
-  initialise_mpi(&argc, &argv);
-
+  // initialise_mpi(&argc, &argv);
+  // attempt to call BOUT to
+  // get information from a BOUT
+  // mesh object
+  // N.B. Comment the next three lines
+  // to permit compilation as is
+  BoutInitialise(argc, argv);
+  Mesh* mesh = Mesh::create(&Options::root()["mesh"]);
+  mesh->load();
   PETSCCHK(PetscInitializeNoArguments());
   auto sycl_target = std::make_shared<SYCLTarget>(0, PETSC_COMM_WORLD);
   const int mpi_size = sycl_target->comm_pair.size_parent;
@@ -243,9 +252,9 @@ int main(int argc, char **argv) {
    */
   {
     const int ndim = 2;
-    const int npart_per_cell = 20;
+    const int npart_per_cell = 1;
     const REAL dt = 0.1;
-    const int nsteps = 100;
+    const int nsteps = 3;
 
     // Create a mesh interface from the DM
     auto mesh = std::make_shared<PetscInterface::DMPlexInterface>(
