@@ -1,7 +1,44 @@
 import netCDF4 as nc
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
+def save_ivertex_indices_to_netcdf(source_file,destination_file,Rpoints_full,Zpoints_full):
+    # copy source file to destination
+    os.system(f"cp {source_file} {destination_file}")
+    # open destination file
+    dataset = nc.Dataset(destination_file, mode="a")
+
+    # get data including y guards
+    # but note that Rpoints_full,Zpoints_full created
+    # without y guards as the DMPlex should not have guards
+    data_Rxy = np.copy(dataset.variables['Rxy_corners'][:])
+    data_Zxy = np.copy(dataset.variables['Zxy_corners'][:])
+    data_Rxy_lr = np.copy(dataset.variables['Rxy_lower_right_corners'][:])
+    data_Zxy_lr = np.copy(dataset.variables['Zxy_lower_right_corners'][:])
+    data_Rxy_ur = np.copy(dataset.variables['Rxy_upper_right_corners'][:])
+    data_Zxy_ur = np.copy(dataset.variables['Zxy_upper_right_corners'][:])
+    data_Rxy_ul = np.copy(dataset.variables['Rxy_upper_left_corners'][:])
+    data_Zxy_ul = np.copy(dataset.variables['Zxy_upper_left_corners'][:])
+
+    ivertex_corners = get_boutxx_corner_index(data_Rxy,data_Zxy,Rpoints_full,Zpoints_full)
+    ivertex_corners_lr = get_boutxx_corner_index(data_Rxy_lr,data_Zxy_lr,Rpoints_full,Zpoints_full)
+    ivertex_corners_ul = get_boutxx_corner_index(data_Rxy_ul,data_Zxy_ul,Rpoints_full,Zpoints_full)
+    ivertex_corners_ur = get_boutxx_corner_index(data_Rxy_ur,data_Zxy_ur,Rpoints_full,Zpoints_full)
+
+    ptr = dataset.createVariable("ivertex_lower_left_corners","i4",("x", "y"))
+    ptr.setncattr('bout_type','Field2D')
+    ptr[:] = ivertex_corners
+    ptr = dataset.createVariable("ivertex_lower_right_corners","i4",("x", "y"))
+    ptr.setncattr('bout_type','Field2D')
+    ptr[:] = ivertex_corners_lr
+    ptr = dataset.createVariable("ivertex_upper_right_corners","i4",("x", "y"))
+    ptr.setncattr('bout_type','Field2D')
+    ptr[:] = ivertex_corners_ur
+    ptr = dataset.createVariable("ivertex_upper_left_corners","i4",("x", "y"))
+    ptr.setncattr('bout_type','Field2D')
+    ptr[:] = ivertex_corners_ul
+    return None
 
 def isapprox(a,b,tol=1.0e-8):
         if abs(a - b) < tol:
@@ -57,14 +94,14 @@ def remove_nonunique_points(corners_Rxy,corners_Zxy):
     return corners_Rxy, corners_Zxy
 
 # identify which vertex an (R,Z) pair, or print error message
-def convert_R_Z_to_vertex_index(R,Z,R_vertices,Z_vertices):
+def convert_R_Z_to_vertex_index(R,Z,R_vertices,Z_vertices,failure=None):
     Nc = len(R_vertices)
     for ic in range(0,Nc):
         if isapprox(R,R_vertices[ic]) and isapprox(Z,Z_vertices[ic]):
             ic_vertex = ic
             return ic_vertex
     print("Failed to find (R,Z) index")
-    return None
+    return failure
 
 def get_cell_vertex_list_inner(R_ll,Z_ll, R_lr, Z_lr,
                         R_ur, Z_ur, R_ul, Z_ul,
@@ -137,11 +174,15 @@ def get_cell_vertex_list(Rxy_ll, Zxy_ll,
 def get_boutxx_corner_index(Rxy_corners,Zxy_corners,R_vertices,Z_vertices):
     Nx, Ny = Rxy_corners.shape
     iglobal_corners = np.zeros((Nx,Ny),dtype=int)
+    if Nx*Ny > len(R_vertices):
+        failure_return = -1
+    else:
+        failure_return = None
     for ix in range(0,Nx):
         for iy in range(0,Ny):
             # find the global index for this corner, and store
             iglobal_corners[ix,iy] = convert_R_Z_to_vertex_index(Rxy_corners[ix,iy],Zxy_corners[ix,iy],
-                                                                R_vertices,Z_vertices)
+                                                                R_vertices,Z_vertices,failure=failure_return)
     return iglobal_corners
 
 def get_pfr_lower_boundary_vertices(ivertex_corners,data_Rxy,data_Zxy,
@@ -407,6 +448,8 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     # remove any duplicate points
     Rpoints_full, Zpoints_full = remove_nonunique_points(Rpoints_full,Zpoints_full)
     unique_points_1D(Rpoints_full,Zpoints_full)
+
+    save_ivertex_indices_to_netcdf(file_path,"test.nc",Rpoints_full,Zpoints_full)
 
     # get an array containing, for each cell, the list of vertices,
     # labelled by the global index defined implicitly by Rpoints_full, Zpoints_full
