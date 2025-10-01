@@ -25,19 +25,20 @@ def save_ivertex_indices_to_netcdf(source_file,destination_file,Rpoints_full,Zpo
     ivertex_corners_lr = get_boutxx_corner_index(data_Rxy_lr,data_Zxy_lr,Rpoints_full,Zpoints_full)
     ivertex_corners_ul = get_boutxx_corner_index(data_Rxy_ul,data_Zxy_ul,Rpoints_full,Zpoints_full)
     ivertex_corners_ur = get_boutxx_corner_index(data_Rxy_ur,data_Zxy_ur,Rpoints_full,Zpoints_full)
-
-    ptr = dataset.createVariable("ivertex_lower_left_corners","i4",("x", "y"))
+    # index saved as double as BOUT++ can only handle double Field2D
+    ptr = dataset.createVariable("ivertex_lower_left_corners","f8",("x", "y"))
     ptr.setncattr('bout_type','Field2D')
     ptr[:] = ivertex_corners
-    ptr = dataset.createVariable("ivertex_lower_right_corners","i4",("x", "y"))
+    ptr = dataset.createVariable("ivertex_lower_right_corners","f8",("x", "y"))
     ptr.setncattr('bout_type','Field2D')
     ptr[:] = ivertex_corners_lr
-    ptr = dataset.createVariable("ivertex_upper_right_corners","i4",("x", "y"))
+    ptr = dataset.createVariable("ivertex_upper_right_corners","f8",("x", "y"))
     ptr.setncattr('bout_type','Field2D')
     ptr[:] = ivertex_corners_ur
-    ptr = dataset.createVariable("ivertex_upper_left_corners","i4",("x", "y"))
+    ptr = dataset.createVariable("ivertex_upper_left_corners","f8",("x", "y"))
     ptr.setncattr('bout_type','Field2D')
     ptr[:] = ivertex_corners_ul
+    dataset.close()
     return None
 
 def isapprox(a,b,tol=1.0e-8):

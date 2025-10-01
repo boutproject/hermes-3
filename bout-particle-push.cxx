@@ -1,7 +1,9 @@
+#include "bout/field2d.hxx"
 #include "bout/petsclib.hxx"
 #include <neso_particles.hpp>
 #include <neso_particles/external_interfaces/petsc/petsc_interface.hpp>
 #include "bout/bout.hxx"
+#include <bout/field_factory.hxx>
 
 #ifndef NESO_PARTICLES_PETSC
 static_assert(false, "NESO-Particles was installed without PETSc support.");
@@ -25,6 +27,41 @@ int main(int argc, char **argv) {
   BoutInitialise(argc, argv);
   Mesh* mesh = Mesh::create(&Options::root()["mesh"]);
   mesh->load();
+  Field2D Rxy_corners;
+  Field2D Rxy_lower_right_corners;
+  Field2D Rxy_upper_right_corners;
+  Field2D Rxy_upper_left_corners;
+  Field2D Zxy_corners;
+  Field2D Zxy_lower_right_corners;
+  Field2D Zxy_upper_right_corners;
+  Field2D Zxy_upper_left_corners;
+  Field2D ivertex_lower_left_corners;
+  Field2D ivertex_lower_right_corners;
+  Field2D ivertex_upper_right_corners;
+  Field2D ivertex_upper_left_corners;
+  //mesh->get(ivertex, "ivertex_lower_left_corners");
+  mesh->get(Rxy_corners, "Rxy_corners");
+  mesh->get(Rxy_lower_right_corners, "Rxy_lower_right_corners");
+  mesh->get(Rxy_upper_right_corners, "Rxy_upper_right_corners");
+  mesh->get(Rxy_upper_left_corners, "Rxy_upper_left_corners");
+  mesh->get(Zxy_corners, "Zxy_corners");
+  mesh->get(Zxy_lower_right_corners, "Zxy_lower_right_corners");
+  mesh->get(Zxy_upper_right_corners, "Zxy_upper_right_corners");
+  mesh->get(Zxy_upper_left_corners, "Zxy_upper_left_corners");
+  mesh->get(ivertex_lower_left_corners, "ivertex_lower_left_corners");
+  mesh->get(ivertex_lower_right_corners, "ivertex_lower_right_corners");
+  mesh->get(ivertex_upper_right_corners, "ivertex_upper_right_corners");
+  mesh->get(ivertex_upper_left_corners, "ivertex_upper_left_corners");
+  for(int ix=0; ix < mesh->LocalNx ; ix++){
+   for(int iy=0; iy < mesh->LocalNy ; iy++){
+       //for(int iz=0; iz < mesh->LocalNz; iz++){
+
+         std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
+         output << string_count + std::string(": ") + std::to_string(static_cast<int>(ivertex_lower_left_corners(ix,iy))) + std::string("; ");
+       //}
+   }
+  output << "\n";
+  }
   PETSCCHK(PetscInitializeNoArguments());
   auto sycl_target = std::make_shared<SYCLTarget>(0, PETSC_COMM_WORLD);
   const int mpi_size = sycl_target->comm_pair.size_parent;
@@ -377,8 +414,8 @@ int main(int argc, char **argv) {
     };
 
     // uncomment to write a trajectory
-    // H5Part h5part("traj_reflection_dmplex_example.h5part", A, Sym<REAL>("P"),
-    // Sym<REAL>("V"));
+    H5Part h5part("traj_reflection_dmplex_example.h5part", A, Sym<REAL>("P"),
+    Sym<REAL>("V"));
     for (int stepx = 0; stepx < nsteps; stepx++) {
       nprint("step:", stepx);
       lambda_apply_timestep(static_particle_sub_group(A));
@@ -386,11 +423,11 @@ int main(int argc, char **argv) {
       A->cell_move();
 
       // uncomment to write a trajectory
-      // h5part.write();
+      h5part.write();
     }
 
     // uncomment to write a trajectory
-    // h5part.close();
+    h5part.close();
 
     // Boundary interaction objects require a free call.
     b2d->free();
