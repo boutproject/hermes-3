@@ -1,7 +1,10 @@
 #include "bout/field2d.hxx"
+#include "bout/output.hxx"
 #include "bout/petsclib.hxx"
 #include <neso_particles.hpp>
 #include <neso_particles/external_interfaces/petsc/petsc_interface.hpp>
+#include <petscsystypes.h>
+#include <string>
 #include "bout/bout.hxx"
 #include <bout/field_factory.hxx>
 
@@ -27,11 +30,11 @@ int main(int argc, char **argv) {
   BoutInitialise(argc, argv);
   Mesh* mesh = Mesh::create(&Options::root()["mesh"]);
   mesh->load();
-  Field2D Rxy_corners;
+  Field2D Rxy_lower_left_corners;
   Field2D Rxy_lower_right_corners;
   Field2D Rxy_upper_right_corners;
   Field2D Rxy_upper_left_corners;
-  Field2D Zxy_corners;
+  Field2D Zxy_lower_left_corners;
   Field2D Zxy_lower_right_corners;
   Field2D Zxy_upper_right_corners;
   Field2D Zxy_upper_left_corners;
@@ -40,11 +43,11 @@ int main(int argc, char **argv) {
   Field2D ivertex_upper_right_corners;
   Field2D ivertex_upper_left_corners;
   //mesh->get(ivertex, "ivertex_lower_left_corners");
-  mesh->get(Rxy_corners, "Rxy_corners");
+  mesh->get(Rxy_lower_left_corners, "Rxy_corners");
   mesh->get(Rxy_lower_right_corners, "Rxy_lower_right_corners");
   mesh->get(Rxy_upper_right_corners, "Rxy_upper_right_corners");
   mesh->get(Rxy_upper_left_corners, "Rxy_upper_left_corners");
-  mesh->get(Zxy_corners, "Zxy_corners");
+  mesh->get(Zxy_lower_left_corners, "Zxy_corners");
   mesh->get(Zxy_lower_right_corners, "Zxy_lower_right_corners");
   mesh->get(Zxy_upper_right_corners, "Zxy_upper_right_corners");
   mesh->get(Zxy_upper_left_corners, "Zxy_upper_left_corners");
@@ -52,8 +55,8 @@ int main(int argc, char **argv) {
   mesh->get(ivertex_lower_right_corners, "ivertex_lower_right_corners");
   mesh->get(ivertex_upper_right_corners, "ivertex_upper_right_corners");
   mesh->get(ivertex_upper_left_corners, "ivertex_upper_left_corners");
-  for(int ix=0; ix < mesh->LocalNx ; ix++){
-   for(int iy=0; iy < mesh->LocalNy ; iy++){
+  for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
+   for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
        //for(int iz=0; iz < mesh->LocalNz; iz++){
 
          std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
@@ -62,41 +65,109 @@ int main(int argc, char **argv) {
    }
   output << "\n";
   }
+  // local number of x cells, excluding guards
+  int Nx = mesh->xend - mesh->xstart + 1;
+  // local number of y cells, excluding guards
+  int Ny = mesh->yend - mesh->ystart + 1;
+  // output << "Nx " + std::to_string(Nx) + "Ny " + std::to_string(Ny) << "\n";
+  output << "Got here -1 \n";
+
   PETSCCHK(PetscInitializeNoArguments());
   auto sycl_target = std::make_shared<SYCLTarget>(0, PETSC_COMM_WORLD);
   const int mpi_size = sycl_target->comm_pair.size_parent;
   const int mpi_rank = sycl_target->comm_pair.rank_parent;
+  output << "Got here 0 \n";
 
   // First we setup the topology of the mesh.
-  PetscInt num_cells_owned = mpi_size;
-
+  std::vector<PetscReal> Z_vertices(4);
+  std::vector<PetscReal> R_vertices(4);
+  std::vector<PetscReal> theta_vertices(4);
+  std::vector<PetscInt> i_vertices(4);
+  std::vector<PetscInt> sort_indices(4);
+  PetscReal ZZ;
+  PetscReal ZZmid;
+  PetscReal RR;
+  PetscReal RRmid;
+  PetscInt num_cells_owned = Nx*Ny;
   std::vector<PetscInt> cells;
   cells.reserve(num_cells_owned * 4);
-
+  output << "Got here 1 \n";
   // We are careful to list the vertices in counter clock-wise order, this might
   // matter.
-  for (PetscInt cx = 0; cx < num_cells_owned; cx++) {
-    // These are global indices not local indices.
-    PetscInt vertex_sw = cx + mpi_rank * (mpi_size + 1);
-    PetscInt vertex_se = vertex_sw + 1;
-    PetscInt vertex_ne = vertex_se + mpi_size + 1;
-    PetscInt vertex_nw = vertex_ne - 1;
-    cells.push_back(vertex_sw);
-    cells.push_back(vertex_se);
-    cells.push_back(vertex_ne);
-    cells.push_back(vertex_nw);
-  }
+  for (PetscInt ix = mesh->xstart; ix<= mesh->xend; ix++) {
+    for (PetscInt iy = mesh->ystart; iy <= mesh->yend; iy++) {
+      // collect data from Hypnotoad arrays
+      i_vertices[0] =  static_cast<int>(ivertex_lower_left_corners(ix,iy));
+      i_vertices[1] =  static_cast<int>(ivertex_lower_right_corners(ix,iy));
+      i_vertices[2] =  static_cast<int>(ivertex_upper_right_corners(ix,iy));
+      i_vertices[3] =  static_cast<int>(ivertex_upper_left_corners(ix,iy));
 
+      R_vertices[0] =  Rxy_lower_left_corners(ix,iy);
+      R_vertices[1] =  Rxy_lower_right_corners(ix,iy);
+      R_vertices[2] =  Rxy_upper_right_corners(ix,iy);
+      R_vertices[3] =  Rxy_upper_left_corners(ix,iy);
+
+      Z_vertices[0] =  Zxy_lower_left_corners(ix,iy);
+      Z_vertices[1] =  Zxy_lower_right_corners(ix,iy);
+      Z_vertices[2] =  Zxy_upper_right_corners(ix,iy);
+      Z_vertices[3] =  Zxy_upper_left_corners(ix,iy);
+      // get the mean values of R, Z
+      RRmid = 0.0;
+      ZZmid = 0.0;
+      for (PetscInt iv = 0; iv < 4; iv++) {
+        RRmid += R_vertices[iv];
+        ZZmid += Z_vertices[iv];
+      }
+      RRmid /= 4.0;
+      ZZmid /= 4.0;
+      // get the angle subtended from the centre of the cell to each vertex
+      for (PetscInt iv = 0; iv < 4; iv++) {
+        RR = R_vertices[iv] - RRmid;
+        ZZ = Z_vertices[iv] - ZZmid;
+        theta_vertices[iv] = std::atan2(ZZ,RR);
+      }
+      // get the indices that sort the vertices in ascending order of theta
+      for (PetscInt iv = 0; iv < 4; ++iv) {
+        sort_indices[iv] = iv;
+      }
+      output << "Before sort \n";
+      for (PetscInt iv = 0; iv < 4; ++iv) {
+        output << std::to_string(i_vertices[iv]) << " " << std::to_string(theta_vertices[iv]) << " " << std::to_string(R_vertices[iv]) << " " << std::to_string(Z_vertices[iv]) << "\n";
+      }
+      std::sort(sort_indices.begin(), sort_indices.end(),
+                [&theta_vertices](int i, int j)
+                  {
+                      return theta_vertices[i] < theta_vertices[j];
+                  });
+      output << "After sort \n";
+      for (PetscInt iv = 0; iv < 4; ++iv) {
+        output << std::to_string(i_vertices[sort_indices[iv]]) << " " << std::to_string(theta_vertices[sort_indices[iv]]) << "\n";
+      }
+      // fill cells using the sorted indices
+      for (PetscInt iv = 0; iv < 4; ++iv) {
+        cells.push_back(i_vertices[sort_indices[iv]]);
+      }
+      // // These are global indices not local indices.
+      // PetscInt vertex_sw = cx + mpi_rank * (mpi_size + 1);
+      // PetscInt vertex_se = vertex_sw + 1;
+      // PetscInt vertex_ne = vertex_se + mpi_size + 1;
+      // PetscInt vertex_nw = vertex_ne - 1;
+      // cells.push_back(vertex_sw);
+      // cells.push_back(vertex_se);
+      // cells.push_back(vertex_ne);
+      // cells.push_back(vertex_nw);
+    }
+  }
   /*
    * Each rank owns a contiguous block of global indices. We label our indices
    * lexicographically (row-wise). Sorting out the global vertex indexing is
    * probably one of the more tedious parts.
    */
-  PetscInt num_vertices_owned = mpi_size + 1;
-  if (mpi_rank == mpi_size - 1) {
-    // Make the last rank own the top edge.
-    num_vertices_owned += mpi_size + 1;
-  }
+  PetscInt num_vertices_owned = (Nx + 1)*(Ny + 1);
+  // if (mpi_rank == mpi_size - 1) {
+  //   // Make the last rank own the top edge.
+  //   num_vertices_owned += mpi_size + 1;
+  // }
 
   /*
    * Create the coordinates for the block of vertices we pass to petsc. For an
@@ -105,18 +176,61 @@ int main(int argc, char **argv) {
    * them to PETSc.
    */
   std::vector<PetscScalar> vertex_coords(num_vertices_owned * 2);
-  for (int px = 0; px < mpi_size + 1; px++) {
-    // our cell extent is 1.0
-    vertex_coords.at(px * 2 + 0) = px;
-    vertex_coords.at(px * 2 + 1) = mpi_rank;
-  }
-  if (mpi_rank == mpi_size - 1) {
-    for (int px = 0; px < mpi_size + 1; px++) {
-      // our cell extent is 1.0
-      vertex_coords.at((mpi_size + 1 + px) * 2 + 0) = px;
-      vertex_coords.at((mpi_size + 1 + px) * 2 + 1) = mpi_rank + 1;
+  int ic;
+  // the minimum of the global ivertex
+  // initial assignment to a value actually in the mesh
+  int iv_min=static_cast<int>(ivertex_lower_left_corners(mesh->xstart,mesh->ystart));
+  for (int ix = mesh->xstart; ix <= mesh->xend; ix++) {
+    for (int iy = mesh->ystart; iy <= mesh->yend; iy++) {
+      if (iv_min > static_cast<int>(ivertex_lower_left_corners(ix,iy))){
+        iv_min = static_cast<int>(ivertex_lower_left_corners(ix,iy));
+      }
+      if (iv_min > static_cast<int>(ivertex_lower_right_corners(ix,iy))){
+        iv_min = static_cast<int>(ivertex_lower_right_corners(ix,iy));
+      }
+      if (iv_min > static_cast<int>(ivertex_upper_right_corners(ix,iy))){
+        iv_min = static_cast<int>(ivertex_upper_right_corners(ix,iy));
+      }
+      if (iv_min > static_cast<int>(ivertex_upper_left_corners(ix,iy))){
+        iv_min = static_cast<int>(ivertex_upper_left_corners(ix,iy));
+      }
     }
   }
+  if (iv_min==-1){
+    output << "Failure! iv_min = -1 \n";
+  }
+  for (int ix = mesh->xstart; ix <= mesh->xend; ix++) {
+    for (int iy = mesh->ystart; iy <= mesh->yend; iy++) {
+      // go through all the ivertex arrays to catch all the
+      // vertices on this rank, duplicate assignments will be made
+      // lower left
+      // compound index
+      ic = static_cast<int>(ivertex_lower_left_corners(ix,iy)) - iv_min;
+      // assign coordinate locations
+      vertex_coords.at(ic * 2 + 0) = Rxy_lower_left_corners(ix,iy);
+      vertex_coords.at(ic * 2 + 1) = Zxy_lower_left_corners(ix,iy);
+      // do this for the other three arrays
+      // lower right
+      ic = static_cast<int>(ivertex_lower_right_corners(ix,iy)) - iv_min;
+      vertex_coords.at(ic * 2 + 0) = Rxy_lower_right_corners(ix,iy);
+      vertex_coords.at(ic * 2 + 1) = Zxy_lower_right_corners(ix,iy);
+      // upper right
+      ic = static_cast<int>(ivertex_upper_right_corners(ix,iy)) - iv_min;
+      vertex_coords.at(ic * 2 + 0) = Rxy_upper_right_corners(ix,iy);
+      vertex_coords.at(ic * 2 + 1) = Zxy_upper_right_corners(ix,iy);
+      // upper left
+      ic = static_cast<int>(ivertex_upper_left_corners(ix,iy)) - iv_min;
+      vertex_coords.at(ic * 2 + 0) = Rxy_upper_left_corners(ix,iy);
+      vertex_coords.at(ic * 2 + 1) = Zxy_upper_left_corners(ix,iy);
+    }
+  }
+  // if (mpi_rank == mpi_size - 1) {
+  //   for (int px = 0; px < mpi_size + 1; px++) {
+  //     // our cell extent is 1.0
+  //     vertex_coords.at((mpi_size + 1 + px) * 2 + 0) = px;
+  //     vertex_coords.at((mpi_size + 1 + px) * 2 + 1) = mpi_rank + 1;
+  //   }
+  // }
 
   // This DM will contain the DMPlex after we call the creation routine.
   DM dm;
@@ -130,148 +244,148 @@ int main(int argc, char **argv) {
   PetscInterface::label_all_dmplex_boundaries(
       dm, PetscInterface::face_sets_label, 100);
 
-  // Label subsections of the boundary by specifing pairs of vertices and using
-  // the label_dmplex_edges helper function.
-  std::vector<PetscInt> vertex_starts, vertex_ends, edge_labels;
+  // // Label subsections of the boundary by specifing pairs of vertices and using
+  // // the label_dmplex_edges helper function.
+  // std::vector<PetscInt> vertex_starts, vertex_ends, edge_labels;
 
-  if (mpi_rank == mpi_size - 1) {
-    // Top edge
-    for (int px = 0; px < mpi_size; px++) {
-      const PetscInt tx = (mpi_size + 1) * mpi_size + px;
-      vertex_starts.push_back(tx);
-      vertex_ends.push_back(tx + 1);
-      // Label the top edge with label 200
-      edge_labels.push_back(200);
-    }
-  }
+  // if (mpi_rank == mpi_size - 1) {
+  //   // Top edge
+  //   for (int px = 0; px < mpi_size; px++) {
+  //     const PetscInt tx = (mpi_size + 1) * mpi_size + px;
+  //     vertex_starts.push_back(tx);
+  //     vertex_ends.push_back(tx + 1);
+  //     // Label the top edge with label 200
+  //     edge_labels.push_back(200);
+  //   }
+  // }
 
-  PetscInterface::label_dmplex_edges(dm, PetscInterface::face_sets_label,
-                                     vertex_starts, vertex_ends, edge_labels);
+  // PetscInterface::label_dmplex_edges(dm, PetscInterface::face_sets_label,
+  //                                    vertex_starts, vertex_ends, edge_labels);
 
-  /*
-   *
-   *
-   *
-   *
-   *
-   * Below here is testing of the DMPlex
-   *
-   *
-   *
-   *
-   *
-   *
-   */
+  // /*
+  //  *
+  //  *
+  //  *
+  //  *
+  //  *
+  //  * Below here is testing of the DMPlex
+  //  *
+  //  *
+  //  *
+  //  *
+  //  *
+  //  *
+  //  */
 
-  // Create the map from local point numbering to global point numbering.
-  IS global_point_numbers;
-  PETSCCHK(DMPlexCreatePointNumbering(dm, &global_point_numbers));
+  // // Create the map from local point numbering to global point numbering.
+  // IS global_point_numbers;
+  // PETSCCHK(DMPlexCreatePointNumbering(dm, &global_point_numbers));
 
-  // Get the DMPlex point start/end for the cells this process owns in the
-  // DMPlex
-  PetscInt cell_local_start, cell_local_end;
-  PETSCCHK(DMPlexGetDepthStratum(dm, 2, &cell_local_start, &cell_local_end));
-  // Map the local cell indices to global indices
-  PetscInt point_start, point_end;
-  PETSCCHK(DMPlexGetChart(dm, &point_start, &point_end));
-  const PetscInt *ptr;
-  PETSCCHK(ISGetIndices(global_point_numbers, &ptr));
-  PetscInt local_index = 0;
-  PetscInt correct_cell_index_start = mpi_rank * mpi_size;
-  for (PetscInt point = cell_local_start; point < cell_local_end; point++) {
-    PetscInt cell_index = ptr[point - point_start];
-    ASSERT_EQ(correct_cell_index_start + local_index, cell_index);
-    local_index++;
-  }
-  PETSCCHK(ISRestoreIndices(global_point_numbers, &ptr));
+  // // Get the DMPlex point start/end for the cells this process owns in the
+  // // DMPlex
+  // PetscInt cell_local_start, cell_local_end;
+  // PETSCCHK(DMPlexGetDepthStratum(dm, 2, &cell_local_start, &cell_local_end));
+  // // Map the local cell indices to global indices
+  // PetscInt point_start, point_end;
+  // PETSCCHK(DMPlexGetChart(dm, &point_start, &point_end));
+  // const PetscInt *ptr;
+  // PETSCCHK(ISGetIndices(global_point_numbers, &ptr));
+  // PetscInt local_index = 0;
+  // PetscInt correct_cell_index_start = mpi_rank * mpi_size;
+  // for (PetscInt point = cell_local_start; point < cell_local_end; point++) {
+  //   PetscInt cell_index = ptr[point - point_start];
+  //   ASSERT_EQ(correct_cell_index_start + local_index, cell_index);
+  //   local_index++;
+  // }
+  // PETSCCHK(ISRestoreIndices(global_point_numbers, &ptr));
 
-  // Check the vertices of the local cells are the vertices we expect.
-  // This also checks that the ordering and parallel decomposition is what we
-  // expect
-  PetscInterface::DMPlexHelper dmh(PETSC_COMM_WORLD, dm);
-  std::vector<std::vector<REAL>> vertices;
-  std::set<std::vector<REAL>> vertices_to_test;
-  std::set<std::vector<REAL>> vertices_correct;
+  // // Check the vertices of the local cells are the vertices we expect.
+  // // This also checks that the ordering and parallel decomposition is what we
+  // // expect
+  // PetscInterface::DMPlexHelper dmh(PETSC_COMM_WORLD, dm);
+  // std::vector<std::vector<REAL>> vertices;
+  // std::set<std::vector<REAL>> vertices_to_test;
+  // std::set<std::vector<REAL>> vertices_correct;
 
-  for (int cx = 0; cx < mpi_size; cx++) {
-    dmh.get_cell_vertices(cx, vertices);
-    vertices_to_test.clear();
-    vertices_correct.clear();
+  // for (int cx = 0; cx < mpi_size; cx++) {
+  //   dmh.get_cell_vertices(cx, vertices);
+  //   vertices_to_test.clear();
+  //   vertices_correct.clear();
 
-    for (auto vx : vertices) {
-      vertices_to_test.insert(vx);
-    }
+  //   for (auto vx : vertices) {
+  //     vertices_to_test.insert(vx);
+  //   }
 
-    vertices_correct.insert(
-        {static_cast<REAL>(cx), static_cast<REAL>(mpi_rank)});
-    vertices_correct.insert(
-        {static_cast<REAL>(cx + 1), static_cast<REAL>(mpi_rank)});
-    vertices_correct.insert(
-        {static_cast<REAL>(cx), static_cast<REAL>(mpi_rank + 1)});
-    vertices_correct.insert(
-        {static_cast<REAL>(cx + 1), static_cast<REAL>(mpi_rank + 1)});
-    ASSERT_EQ(vertices_correct, vertices_to_test);
-  }
+  //   vertices_correct.insert(
+  //       {static_cast<REAL>(cx), static_cast<REAL>(mpi_rank)});
+  //   vertices_correct.insert(
+  //       {static_cast<REAL>(cx + 1), static_cast<REAL>(mpi_rank)});
+  //   vertices_correct.insert(
+  //       {static_cast<REAL>(cx), static_cast<REAL>(mpi_rank + 1)});
+  //   vertices_correct.insert(
+  //       {static_cast<REAL>(cx + 1), static_cast<REAL>(mpi_rank + 1)});
+  //   ASSERT_EQ(vertices_correct, vertices_to_test);
+  // }
 
-  // Check the edges are labelled correctly
-  {
-    auto lambda_is_on_boundary = [&](auto coords) -> bool {
-      auto lambda_check_coord = [&](auto coord) -> bool {
-        if (std::abs(coord[0]) < 1.0e-14) {
-          return true;
-        }
-        if (std::abs(coord[0] - (mpi_size)) < 1.0e-14) {
-          return true;
-        }
-        if (std::abs(coord[1]) < 1.0e-14) {
-          return true;
-        }
-        if (std::abs(coord[1] - (mpi_size)) < 1.0e-14) {
-          return true;
-        }
-        return false;
-      };
-      return lambda_check_coord(coords) && lambda_check_coord(coords + 2);
-    };
+  // // Check the edges are labelled correctly
+  // {
+  //   auto lambda_is_on_boundary = [&](auto coords) -> bool {
+  //     auto lambda_check_coord = [&](auto coord) -> bool {
+  //       if (std::abs(coord[0]) < 1.0e-14) {
+  //         return true;
+  //       }
+  //       if (std::abs(coord[0] - (mpi_size)) < 1.0e-14) {
+  //         return true;
+  //       }
+  //       if (std::abs(coord[1]) < 1.0e-14) {
+  //         return true;
+  //       }
+  //       if (std::abs(coord[1] - (mpi_size)) < 1.0e-14) {
+  //         return true;
+  //       }
+  //       return false;
+  //     };
+  //     return lambda_check_coord(coords) && lambda_check_coord(coords + 2);
+  //   };
 
-    PetscInt edge_start, edge_end;
-    PETSCCHK(DMPlexGetDepthStratum(dm, 1, &edge_start, &edge_end));
-    DMLabel label;
-    PETSCCHK(DMGetLabel(dm, PetscInterface::face_sets_label, &label));
-    for (PetscInt edge = edge_start; edge < edge_end; edge++) {
-      PetscInt size;
-      PETSCCHK(DMPlexGetConeSize(dm, edge, &size));
-      ASSERT_EQ(size, 2);
+  //   PetscInt edge_start, edge_end;
+  //   PETSCCHK(DMPlexGetDepthStratum(dm, 1, &edge_start, &edge_end));
+  //   DMLabel label;
+  //   PETSCCHK(DMGetLabel(dm, PetscInterface::face_sets_label, &label));
+  //   for (PetscInt edge = edge_start; edge < edge_end; edge++) {
+  //     PetscInt size;
+  //     PETSCCHK(DMPlexGetConeSize(dm, edge, &size));
+  //     ASSERT_EQ(size, 2);
 
-      PetscBool is_dg;
-      PetscInt num_coords;
-      const PetscScalar *array;
-      PetscScalar *coords;
-      PETSCCHK(DMPlexGetCellCoordinates(dm, edge, &is_dg, &num_coords, &array,
-                                        &coords));
+  //     PetscBool is_dg;
+  //     PetscInt num_coords;
+  //     const PetscScalar *array;
+  //     PetscScalar *coords;
+  //     PETSCCHK(DMPlexGetCellCoordinates(dm, edge, &is_dg, &num_coords, &array,
+  //                                       &coords));
 
-      if (lambda_is_on_boundary(coords)) {
-        PetscInt value;
-        PETSCCHK(DMLabelGetValue(label, edge, &value));
-        // is this a top edge, we labelled all the top edges 200
-        if ((std::abs(coords[0] - mpi_size) < 1.0e-14) &&
-            (std::abs(coords[1] - mpi_size) < 1.0e-14) &&
-            (std::abs(coords[2] - mpi_size) < 1.0e-14) &&
-            (std::abs(coords[3] - mpi_size) < 1.0e-14)) {
-          ASSERT_EQ(value, 200);
-        } else {
-          ASSERT_EQ(value, 100);
-        }
-      }
+  //     if (lambda_is_on_boundary(coords)) {
+  //       PetscInt value;
+  //       PETSCCHK(DMLabelGetValue(label, edge, &value));
+  //       // is this a top edge, we labelled all the top edges 200
+  //       if ((std::abs(coords[0] - mpi_size) < 1.0e-14) &&
+  //           (std::abs(coords[1] - mpi_size) < 1.0e-14) &&
+  //           (std::abs(coords[2] - mpi_size) < 1.0e-14) &&
+  //           (std::abs(coords[3] - mpi_size) < 1.0e-14)) {
+  //         ASSERT_EQ(value, 200);
+  //       } else {
+  //         ASSERT_EQ(value, 100);
+  //       }
+  //     }
 
-      PETSCCHK(DMPlexRestoreCellCoordinates(dm, edge, &is_dg, &num_coords,
-                                            &array, &coords));
-    }
-  }
+  //     PETSCCHK(DMPlexRestoreCellCoordinates(dm, edge, &is_dg, &num_coords,
+  //                                           &array, &coords));
+  //   }
+  // }
 
-  dmh.free();
+  // dmh.free();
 
-  PETSCCHK(ISDestroy(&global_point_numbers));
+  // PETSCCHK(ISDestroy(&global_point_numbers));
 
   /*
    *
