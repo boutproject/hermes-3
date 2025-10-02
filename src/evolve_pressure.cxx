@@ -289,21 +289,24 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
+      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
 
       // Work done. This balances energetically a term in the momentum equation
-      ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
+      E_PdivV = -Pfloor * Div_par(V);
+      ddt(P) += (2. / 3) * E_PdivV;
 
     } else {
       // Use V * Grad(P) form
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
+      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
 
-      ddt(P) += (2. / 3) * V * Grad_par(P);
+      E_VgradP =  V * Grad_par(P);
+      ddt(P) += (2. / 3) * E_VgradP;
     }
-    flow_ylow *= 5. / 2; // Energy flow
+    flow_ylow_advection *= 5. / 2; // Energy flow
+    flow_ylow = flow_ylow_advection;
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -313,12 +316,12 @@ void EvolvePressure::finally(const Options& state) {
     }
 
     if (numerical_viscous_heating || diagnose) {
-      // Viscous heating coming from numerical viscosity
+      // Viscous heating coming from numerical viscosity from the Lax flux
       Field3D Nlim = softFloor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-      Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
-      flow_ylow_kinetic *= AA;
-      flow_ylow += flow_ylow_kinetic;
+      Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_viscous_heating, fix_momentum_boundary_flux);
+      flow_ylow_viscous_heating *= AA;
+      flow_ylow += flow_ylow_viscous_heating;
       if (numerical_viscous_heating) {
         ddt(P) += Sp_nvh;
       }
@@ -438,7 +441,7 @@ void EvolvePressure::finally(const Options& state) {
 
 
     // Calculate ion collision times
-    const Field3D tau = 1. / softFloor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau = 1. / softFloor(nu, 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -652,6 +655,30 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
+    if (p_div_v) {
+
+      set_with_attrs(state["E" + name + "_PdivV"], E_PdivV,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^-3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "energy source"},
+                    {"long_name", name + " energy source due to pressure gradient"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+    } else {
+
+      set_with_attrs(state["E" + name + "_VgradP"], E_VgradP,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^-3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "energy source"},
+                    {"long_name", name + " energy source due to pressure gradient"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    }
+                  
+
     if (flow_xlow.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
                    {{"time_dimension", "t"},
@@ -679,21 +706,33 @@ void EvolvePressure::outputVars(Options& state) {
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " conduction through Y cell face. Note: May be incomplete."},
+                    {"long_name", name + " conduction through Y cell face."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
 
-    if (flow_ylow_kinetic.isAllocated()) {
-      set_with_attrs(state[fmt::format("ef{}_kin_ylow", name)], flow_ylow_kinetic,
+    if (flow_ylow_advection.isAllocated()) {
+      set_with_attrs(state[fmt::format("ef{}_adv_ylow", name)], flow_ylow_advection,
                    {{"time_dimension", "t"},
                     {"units", "W"},
                     {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
                     {"standard_name", "power"},
-                    {"long_name", name + " kinetic energy flow through Y cell face. Note: May be incomplete."},
+                    {"long_name", name + " advected energy flow through Y cell face."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
     }
+
+    if (flow_ylow_viscous_heating.isAllocated()) {
+      set_with_attrs(state[fmt::format("ef{}_visc_heat_ylow", name)], flow_ylow_viscous_heating,
+                   {{"time_dimension", "t"},
+                    {"units", "W"},
+                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                    {"standard_name", "power"},
+                    {"long_name", name + " energy flow due to Lax flux numerical viscosity through Y cell face"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+    }
+
 
     if (numerical_viscous_heating) {
       set_with_attrs(state[std::string("E") + name + std::string("_nvh")], Sp_nvh * 3/.2,

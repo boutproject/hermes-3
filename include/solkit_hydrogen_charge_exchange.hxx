@@ -3,10 +3,10 @@
 #define SOLKIT_HYDROGEN_CHARGE_EXCHANGE_H
 
 #include "component.hxx"
-
+#include "reaction.hxx"
 /// SOL-KiT Hydrogen charge exchange total rate coefficient
 ///
-struct SOLKITHydrogenChargeExchange : public Component {
+struct SOLKITHydrogenChargeExchange : public ReactionBase {
   ///
   /// @param alloptions Settings, which should include:
   ///        - units

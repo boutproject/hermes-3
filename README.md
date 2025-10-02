@@ -134,3 +134,8 @@ for more complicated cases.
 * B. D. Dudson, M. Kryjak, H. Muhammed, J. Omotani [Validation of Hermes-3 turbulence simulations against
   the TCV-X21 diverted L-mode reference case](https://arxiv.org/abs/2506.12180) 2025
   Preprint: [arXiv:2506.12180](https://arxiv.org/abs/2506.12180).
+* M. V. Umansky, B. D. Dudson, T. G. Jenkins, J. R. Myra, D. N. Smithe
+  [Modeling of convective cells, turbulence, and transport induced by
+  a radio-frequency antenna in the tokamak boundary
+  plasma](https://doi.org/10.48550/arXiv.2509.08178) 2025 Preprint:
+  [arXiv:2509.08178](https://arxiv.org/abs/2509.08178)

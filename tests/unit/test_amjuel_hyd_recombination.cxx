@@ -1,10 +1,10 @@
 
 #include "gtest/gtest.h"
 
-#include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
+#include "test_extras.hxx" // FakeMesh
 
-#include "../../include/amjuel_hyd_recombination.hxx"
+#include "../../include/amjuel_hydrogen.hxx"
 
 /// Global mesh
 namespace bout {
@@ -23,32 +23,30 @@ using namespace bout::globals;
 using HydrogenRCTest = FakeMeshFixture;
 
 TEST_F(HydrogenRCTest, CreateComponent) {
-  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  {"test", {{"type", "h+ + e -> h"}}}};
 
   AmjuelHydRecombinationIsotope<'h'> component("test", options, nullptr);
 }
 
 // Check that recombination is a sink of ions, source of neutrals
 TEST_F(HydrogenRCTest, DensitySourceSigns) {
-  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  {"test", {{"type", "h+ + e -> h"}}}};
 
   AmjuelHydRecombinationIsotope<'h'> component("test", options, nullptr);
 
-  Options state{{"species",
-                 {{"e",
-                   {{"density", 1.0},
-                    {"temperature", 1.0}}},
-                  {"h",
-                   {{"AA", 1.0},
-                    {"density", 1.0},
-                    {"temperature", 1.0},
-                    {"velocity", 1.0}}},
-                  {"h+",
-                   {{"AA", 1.0},
-                    {"charge", 1.0},
-                    {"density", 1.0},
-                    {"temperature", 1.0},
-                    {"velocity", 1.0}}}}}};
+  Options state{
+      {"species",
+       {{"e", {{"AA", 1.0}, {"density", 1.0}, {"temperature", 1.0}, {"velocity", 1.0}}},
+        {"h", {{"AA", 1.0}, {"density", 1.0}, {"temperature", 1.0}, {"velocity", 1.0}}},
+        {"h+",
+         {{"AA", 1.0},
+          {"charge", 1.0},
+          {"density", 1.0},
+          {"temperature", 1.0},
+          {"velocity", 1.0}}}}},
+      {"test", {{"type", "h+ + e -> h"}}}};
 
   component.transform(state);
 
