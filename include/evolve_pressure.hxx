@@ -123,6 +123,37 @@ private:
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
   Field3D E_PdivV, E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
+
+  ////// Diagnostics for pressure equation terms
+
+  bool diagnose_terms;
+
+  // Physics terms
+  Field3D ddtP_ExB;
+  Field3D ddtP_advection;
+  Field3D ddtP_PdivV;
+  Field3D ddtP_VgradP;
+  Field3D ddtP_flutter1, ddtP_flutter2, ddtP_flutter3;
+  Field3D ddtP_viscousheat;
+  Field3D ddtP_cond;
+
+  // Diffusion in low density/pressure/temperature regions
+  Field3D ddtP_low_N_diff;
+  Field3D ddtP_low_N_diff_perp;
+  Field3D ddtP_low_T_diff_perp;
+  Field3D ddtP_low_P_diff_perp;
+
+  // Hyperdiffusion
+  Field3D ddtP_hyperz;
+  Field3D ddtP_T_hyperz;
+
+  // Term to enforce P = N*T
+  Field3D ddtP_damp_NT;
+
+  // User source and source from elsewhere in code (e.g. reactions)
+  Field3D ddtP_user_source;
+  Field3D ddtP_component_source;
+
 };
 
 namespace {
