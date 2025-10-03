@@ -161,10 +161,10 @@ int main(int argc, char **argv) {
       // cells.push_back(vertex_nw);
     }
   }
-
+  // output << "Got here 2 \n";
   // read data from netcdf for global vertices in mesh
   // Open the NetCDF file in read-only mode
-  const std::string filename = "particle-push-data/expected_nonorthogonal.grd.vertex.nc";
+  const std::string filename = Options::root()["mesh"]["global_vertex_file"];
   netCDF::NcFile dataFile(filename, netCDF::NcFile::read);
 
   // Get the variable
@@ -191,14 +191,13 @@ int main(int argc, char **argv) {
   // Read the data into a vector
   std::vector<double> global_vertex_list_Z(nvertices);
   dataVar.getVar(global_vertex_list_Z.data());
-
+  dataFile.close();
   // // Print the data
   // std::cout << "Data from variable '" << varName << "':" << std::endl;
   // for (size_t i = 0; i < length; ++i) {
   //     std::cout << data[i] << " ";
   // }
   // std::cout << std::endl;
-  // std::cout << "nvertices " << std::to_string(nvertices) << std::endl;
   // number of vertices to keep per process
   int nvertex_per_process = std::floor(nvertices/mpi_size);
   int nvertex_remainder = nvertices - mpi_size*nvertex_per_process;
@@ -224,7 +223,6 @@ int main(int argc, char **argv) {
    * them to PETSc.
    */
   std::vector<PetscScalar> vertex_coords(num_vertices_owned * 2);
-  // output << "Got here 2 \n";
   // shift due to differing rank
   int ishift;
   for (int iv = 0; iv < nvertex_this_process; iv++) {
@@ -232,7 +230,9 @@ int main(int argc, char **argv) {
     vertex_coords.at(iv * 2 + 0) = global_vertex_list_R[iv + ishift];
     vertex_coords.at(iv * 2 + 1) = global_vertex_list_Z[iv + ishift];
   }
-
+  // output << "Got here 3 \n";
+  // std::cout << std::to_string(mpi_rank) << ": nvertices " << std::to_string(nvertices) << std::endl;
+  // std::cout << std::to_string(mpi_rank) << ": nvertex_this_process " << std::to_string(nvertex_this_process) << std::endl;
   // This DM will contain the DMPlex after we call the creation routine.
   DM dm;
   // Create the DMPlex from the cells and coordinates.
@@ -294,8 +294,8 @@ int main(int argc, char **argv) {
   {
     const int ndim = 2;
     const int npart_per_cell = 1;
-    const REAL dt = 0.1;
-    const int nsteps = 3;
+    const REAL dt = 0.01;
+    const int nsteps = 20;
 
     // Create a mesh interface from the DM
     auto neso_mesh = std::make_shared<PetscInterface::DMPlexInterface>(
@@ -353,7 +353,8 @@ int main(int argc, char **argv) {
 
     // Create the boundary interaction objects
     std::map<PetscInt, std::vector<PetscInt>> boundary_groups;
-    boundary_groups[1] = {100, 200};
+    // boundary_groups[1] = {100, 200};
+    boundary_groups[1] = {100};
 
     auto b2d = std::make_shared<PetscInterface::BoundaryInteraction2D>(
         sycl_target, neso_mesh, boundary_groups);
