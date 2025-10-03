@@ -9,6 +9,7 @@
 #include <bout/field_factory.hxx>
 #include <netcdf>
 #include <iostream>
+#include <petscviewerhdf5.h>
 
 #ifndef NESO_PARTICLES_PETSC
 static_assert(false, "NESO-Particles was installed without PETSc support.");
@@ -262,130 +263,18 @@ int main(int argc, char **argv) {
   // PetscInterface::label_dmplex_edges(dm, PetscInterface::face_sets_label,
   //                                    vertex_starts, vertex_ends, edge_labels);
 
-  // /*
-  //  *
-  //  *
-  //  *
-  //  *
-  //  *
-  //  * Below here is testing of the DMPlex
-  //  *
-  //  *
-  //  *
-  //  *
-  //  *
-  //  *
-  //  */
-
-  // // Create the map from local point numbering to global point numbering.
-  // IS global_point_numbers;
-  // PETSCCHK(DMPlexCreatePointNumbering(dm, &global_point_numbers));
-
-  // // Get the DMPlex point start/end for the cells this process owns in the
-  // // DMPlex
-  // PetscInt cell_local_start, cell_local_end;
-  // PETSCCHK(DMPlexGetDepthStratum(dm, 2, &cell_local_start, &cell_local_end));
-  // // Map the local cell indices to global indices
-  // PetscInt point_start, point_end;
-  // PETSCCHK(DMPlexGetChart(dm, &point_start, &point_end));
-  // const PetscInt *ptr;
-  // PETSCCHK(ISGetIndices(global_point_numbers, &ptr));
-  // PetscInt local_index = 0;
-  // PetscInt correct_cell_index_start = mpi_rank * mpi_size;
-  // for (PetscInt point = cell_local_start; point < cell_local_end; point++) {
-  //   PetscInt cell_index = ptr[point - point_start];
-  //   ASSERT_EQ(correct_cell_index_start + local_index, cell_index);
-  //   local_index++;
-  // }
-  // PETSCCHK(ISRestoreIndices(global_point_numbers, &ptr));
-
-  // // Check the vertices of the local cells are the vertices we expect.
-  // // This also checks that the ordering and parallel decomposition is what we
-  // // expect
-  // PetscInterface::DMPlexHelper dmh(PETSC_COMM_WORLD, dm);
-  // std::vector<std::vector<REAL>> vertices;
-  // std::set<std::vector<REAL>> vertices_to_test;
-  // std::set<std::vector<REAL>> vertices_correct;
-
-  // for (int cx = 0; cx < mpi_size; cx++) {
-  //   dmh.get_cell_vertices(cx, vertices);
-  //   vertices_to_test.clear();
-  //   vertices_correct.clear();
-
-  //   for (auto vx : vertices) {
-  //     vertices_to_test.insert(vx);
-  //   }
-
-  //   vertices_correct.insert(
-  //       {static_cast<REAL>(cx), static_cast<REAL>(mpi_rank)});
-  //   vertices_correct.insert(
-  //       {static_cast<REAL>(cx + 1), static_cast<REAL>(mpi_rank)});
-  //   vertices_correct.insert(
-  //       {static_cast<REAL>(cx), static_cast<REAL>(mpi_rank + 1)});
-  //   vertices_correct.insert(
-  //       {static_cast<REAL>(cx + 1), static_cast<REAL>(mpi_rank + 1)});
-  //   ASSERT_EQ(vertices_correct, vertices_to_test);
-  // }
-
-  // // Check the edges are labelled correctly
-  // {
-  //   auto lambda_is_on_boundary = [&](auto coords) -> bool {
-  //     auto lambda_check_coord = [&](auto coord) -> bool {
-  //       if (std::abs(coord[0]) < 1.0e-14) {
-  //         return true;
-  //       }
-  //       if (std::abs(coord[0] - (mpi_size)) < 1.0e-14) {
-  //         return true;
-  //       }
-  //       if (std::abs(coord[1]) < 1.0e-14) {
-  //         return true;
-  //       }
-  //       if (std::abs(coord[1] - (mpi_size)) < 1.0e-14) {
-  //         return true;
-  //       }
-  //       return false;
-  //     };
-  //     return lambda_check_coord(coords) && lambda_check_coord(coords + 2);
-  //   };
-
-  //   PetscInt edge_start, edge_end;
-  //   PETSCCHK(DMPlexGetDepthStratum(dm, 1, &edge_start, &edge_end));
-  //   DMLabel label;
-  //   PETSCCHK(DMGetLabel(dm, PetscInterface::face_sets_label, &label));
-  //   for (PetscInt edge = edge_start; edge < edge_end; edge++) {
-  //     PetscInt size;
-  //     PETSCCHK(DMPlexGetConeSize(dm, edge, &size));
-  //     ASSERT_EQ(size, 2);
-
-  //     PetscBool is_dg;
-  //     PetscInt num_coords;
-  //     const PetscScalar *array;
-  //     PetscScalar *coords;
-  //     PETSCCHK(DMPlexGetCellCoordinates(dm, edge, &is_dg, &num_coords, &array,
-  //                                       &coords));
-
-  //     if (lambda_is_on_boundary(coords)) {
-  //       PetscInt value;
-  //       PETSCCHK(DMLabelGetValue(label, edge, &value));
-  //       // is this a top edge, we labelled all the top edges 200
-  //       if ((std::abs(coords[0] - mpi_size) < 1.0e-14) &&
-  //           (std::abs(coords[1] - mpi_size) < 1.0e-14) &&
-  //           (std::abs(coords[2] - mpi_size) < 1.0e-14) &&
-  //           (std::abs(coords[3] - mpi_size) < 1.0e-14)) {
-  //         ASSERT_EQ(value, 200);
-  //       } else {
-  //         ASSERT_EQ(value, 100);
-  //       }
-  //     }
-
-  //     PETSCCHK(DMPlexRestoreCellCoordinates(dm, edge, &is_dg, &num_coords,
-  //                                           &array, &coords));
-  //   }
-  // }
-
-  // dmh.free();
-
-  // PETSCCHK(ISDestroy(&global_point_numbers));
+  // save a HDF5 file containing the DM for diagnostics
+  PetscViewer viewer;
+  // Set a name for the DMPlex object (important for HDF5)
+  PetscObjectSetName((PetscObject)dm, "hypnotoad_dmplex_mesh");
+  // Create an HDF5 viewer
+  PetscViewerHDF5Open(PETSC_COMM_WORLD, "hypnotoad_dmplex_mesh_output.h5", FILE_MODE_WRITE, &viewer);
+  // Set viewer format to PETSC_VIEWER_HDF5_PETSC for compatibility
+  PetscViewerPushFormat(viewer, PETSC_VIEWER_HDF5_PETSC);
+  // Save the DMPlex to the HDF5 file
+  DMView(dm, viewer);
+  // Clean up
+  PetscViewerDestroy(&viewer);
 
   /*
    *
