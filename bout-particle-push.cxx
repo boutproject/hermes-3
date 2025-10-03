@@ -7,6 +7,8 @@
 #include <string>
 #include "bout/bout.hxx"
 #include <bout/field_factory.hxx>
+#include <netcdf>
+#include <iostream>
 
 #ifndef NESO_PARTICLES_PETSC
 static_assert(false, "NESO-Particles was installed without PETSc support.");
@@ -130,19 +132,19 @@ int main(int argc, char **argv) {
       for (PetscInt iv = 0; iv < 4; ++iv) {
         sort_indices[iv] = iv;
       }
-      output << "Before sort \n";
-      for (PetscInt iv = 0; iv < 4; ++iv) {
-        output << std::to_string(i_vertices[iv]) << " " << std::to_string(theta_vertices[iv]) << " " << std::to_string(R_vertices[iv]) << " " << std::to_string(Z_vertices[iv]) << "\n";
-      }
+      // output << "Before sort \n";
+      // for (PetscInt iv = 0; iv < 4; ++iv) {
+      //   output << std::to_string(i_vertices[iv]) << " " << std::to_string(theta_vertices[iv]) << " " << std::to_string(R_vertices[iv]) << " " << std::to_string(Z_vertices[iv]) << "\n";
+      // }
       std::sort(sort_indices.begin(), sort_indices.end(),
                 [&theta_vertices](int i, int j)
                   {
                       return theta_vertices[i] < theta_vertices[j];
                   });
-      output << "After sort \n";
-      for (PetscInt iv = 0; iv < 4; ++iv) {
-        output << std::to_string(i_vertices[sort_indices[iv]]) << " " << std::to_string(theta_vertices[sort_indices[iv]]) << "\n";
-      }
+      // output << "After sort \n";
+      // for (PetscInt iv = 0; iv < 4; ++iv) {
+      //   output << std::to_string(i_vertices[sort_indices[iv]]) << " " << std::to_string(theta_vertices[sort_indices[iv]]) << "\n";
+      // }
       // fill cells using the sorted indices
       for (PetscInt iv = 0; iv < 4; ++iv) {
         cells.push_back(i_vertices[sort_indices[iv]]);
@@ -158,16 +160,61 @@ int main(int argc, char **argv) {
       // cells.push_back(vertex_nw);
     }
   }
+
+  // read data from netcdf for global vertices in mesh
+  // Open the NetCDF file in read-only mode
+  const std::string filename = "particle-push-data/expected_nonorthogonal.grd.vertex.nc";
+  netCDF::NcFile dataFile(filename, netCDF::NcFile::read);
+
+  // Get the variable
+  std::string varName = "global_vertex_list_R";
+  netCDF::NcVar dataVar = dataFile.getVar(varName);
+  if (dataVar.isNull()) {
+      std::cerr << "Variable '" << varName << "' not found in file." << std::endl;
+      return -1;
+  }
+  std::vector<netCDF::NcDim> dims = dataVar.getDims();
+  size_t nvertices = dims[0].getSize();
+
+  // Read the data into a vector
+  std::vector<double> global_vertex_list_R(nvertices);
+  dataVar.getVar(global_vertex_list_R.data());
+
+  // Get the variable
+  varName = "global_vertex_list_Z";
+  dataVar = dataFile.getVar(varName);
+  if (dataVar.isNull()) {
+      std::cerr << "Variable '" << varName << "' not found in file." << std::endl;
+      return -1;
+  }
+  // Read the data into a vector
+  std::vector<double> global_vertex_list_Z(nvertices);
+  dataVar.getVar(global_vertex_list_Z.data());
+
+  // // Print the data
+  // std::cout << "Data from variable '" << varName << "':" << std::endl;
+  // for (size_t i = 0; i < length; ++i) {
+  //     std::cout << data[i] << " ";
+  // }
+  // std::cout << std::endl;
+  std::cout << "nvertices " << std::to_string(nvertices) << std::endl;
+  // number of vertices to keep per process
+  int nvertex_per_process = std::floor(nvertices/mpi_size);
+  int nvertex_remainder = nvertices - mpi_size*nvertex_per_process;
+  int nvertex_this_process = nvertex_per_process;
+  // include the remaining vertices on the last rank
+  if (mpi_rank == mpi_size - 1) {
+    nvertex_this_process += nvertex_remainder;
+  }
+  // starting vertex index
+  int ivertex_minimum = mpi_rank*nvertex_per_process;
+  int ivertex_maximum = mpi_rank*nvertex_per_process + nvertex_this_process - 1;
   /*
    * Each rank owns a contiguous block of global indices. We label our indices
    * lexicographically (row-wise). Sorting out the global vertex indexing is
    * probably one of the more tedious parts.
    */
-  PetscInt num_vertices_owned = (Nx + 1)*(Ny + 1);
-  // if (mpi_rank == mpi_size - 1) {
-  //   // Make the last rank own the top edge.
-  //   num_vertices_owned += mpi_size + 1;
-  // }
+  PetscInt num_vertices_owned = nvertex_this_process;
 
   /*
    * Create the coordinates for the block of vertices we pass to petsc. For an
@@ -176,61 +223,14 @@ int main(int argc, char **argv) {
    * them to PETSc.
    */
   std::vector<PetscScalar> vertex_coords(num_vertices_owned * 2);
-  int ic;
-  // the minimum of the global ivertex
-  // initial assignment to a value actually in the mesh
-  int iv_min=static_cast<int>(ivertex_lower_left_corners(mesh->xstart,mesh->ystart));
-  for (int ix = mesh->xstart; ix <= mesh->xend; ix++) {
-    for (int iy = mesh->ystart; iy <= mesh->yend; iy++) {
-      if (iv_min > static_cast<int>(ivertex_lower_left_corners(ix,iy))){
-        iv_min = static_cast<int>(ivertex_lower_left_corners(ix,iy));
-      }
-      if (iv_min > static_cast<int>(ivertex_lower_right_corners(ix,iy))){
-        iv_min = static_cast<int>(ivertex_lower_right_corners(ix,iy));
-      }
-      if (iv_min > static_cast<int>(ivertex_upper_right_corners(ix,iy))){
-        iv_min = static_cast<int>(ivertex_upper_right_corners(ix,iy));
-      }
-      if (iv_min > static_cast<int>(ivertex_upper_left_corners(ix,iy))){
-        iv_min = static_cast<int>(ivertex_upper_left_corners(ix,iy));
-      }
-    }
+  output << "Got here 2 \n";
+  // shift due to differing rank
+  int ishift;
+  for (int iv = 0; iv < nvertex_this_process; iv++) {
+    ishift = mpi_rank*nvertex_per_process;
+    vertex_coords.at(iv * 2 + 0) = global_vertex_list_R[iv + ishift];
+    vertex_coords.at(iv * 2 + 1) = global_vertex_list_Z[iv + ishift];
   }
-  if (iv_min==-1){
-    output << "Failure! iv_min = -1 \n";
-  }
-  for (int ix = mesh->xstart; ix <= mesh->xend; ix++) {
-    for (int iy = mesh->ystart; iy <= mesh->yend; iy++) {
-      // go through all the ivertex arrays to catch all the
-      // vertices on this rank, duplicate assignments will be made
-      // lower left
-      // compound index
-      ic = static_cast<int>(ivertex_lower_left_corners(ix,iy)) - iv_min;
-      // assign coordinate locations
-      vertex_coords.at(ic * 2 + 0) = Rxy_lower_left_corners(ix,iy);
-      vertex_coords.at(ic * 2 + 1) = Zxy_lower_left_corners(ix,iy);
-      // do this for the other three arrays
-      // lower right
-      ic = static_cast<int>(ivertex_lower_right_corners(ix,iy)) - iv_min;
-      vertex_coords.at(ic * 2 + 0) = Rxy_lower_right_corners(ix,iy);
-      vertex_coords.at(ic * 2 + 1) = Zxy_lower_right_corners(ix,iy);
-      // upper right
-      ic = static_cast<int>(ivertex_upper_right_corners(ix,iy)) - iv_min;
-      vertex_coords.at(ic * 2 + 0) = Rxy_upper_right_corners(ix,iy);
-      vertex_coords.at(ic * 2 + 1) = Zxy_upper_right_corners(ix,iy);
-      // upper left
-      ic = static_cast<int>(ivertex_upper_left_corners(ix,iy)) - iv_min;
-      vertex_coords.at(ic * 2 + 0) = Rxy_upper_left_corners(ix,iy);
-      vertex_coords.at(ic * 2 + 1) = Zxy_upper_left_corners(ix,iy);
-    }
-  }
-  // if (mpi_rank == mpi_size - 1) {
-  //   for (int px = 0; px < mpi_size + 1; px++) {
-  //     // our cell extent is 1.0
-  //     vertex_coords.at((mpi_size + 1 + px) * 2 + 0) = px;
-  //     vertex_coords.at((mpi_size + 1 + px) * 2 + 1) = mpi_rank + 1;
-  //   }
-  // }
 
   // This DM will contain the DMPlex after we call the creation routine.
   DM dm;
@@ -408,13 +408,13 @@ int main(int argc, char **argv) {
     const int nsteps = 3;
 
     // Create a mesh interface from the DM
-    auto mesh = std::make_shared<PetscInterface::DMPlexInterface>(
+    auto neso_mesh = std::make_shared<PetscInterface::DMPlexInterface>(
         dm, 0, MPI_COMM_WORLD);
     // Create a mapper for mapping particles into cells.
     auto mapper =
-        std::make_shared<PetscInterface::DMPlexLocalMapper>(sycl_target, mesh);
-    // Create a domain from the mesh and the mapper.
-    auto domain = std::make_shared<Domain>(mesh, mapper);
+        std::make_shared<PetscInterface::DMPlexLocalMapper>(sycl_target, neso_mesh);
+    // Create a domain from the neso_mesh and the mapper.
+    auto domain = std::make_shared<Domain>(neso_mesh, mapper);
 
     // Create the particle properties (note that if you are using the Reactions
     // project it has its owne particle spec builder).
@@ -435,7 +435,7 @@ int main(int argc, char **argv) {
     std::vector<std::vector<double>> positions;
     std::vector<int> cells;
 
-    uniform_within_dmplex_cells(mesh, npart_per_cell, positions, cells,
+    uniform_within_dmplex_cells(neso_mesh, npart_per_cell, positions, cells,
                                 &rng_pos);
 
     const int N_actual = cells.size();
@@ -466,7 +466,7 @@ int main(int argc, char **argv) {
     boundary_groups[1] = {100, 200};
 
     auto b2d = std::make_shared<PetscInterface::BoundaryInteraction2D>(
-        sycl_target, mesh, boundary_groups);
+        sycl_target, neso_mesh, boundary_groups);
     auto reflection = std::make_shared<BoundaryReflection>(ndim, 1.0e-10);
 
     auto lambda_apply_boundary_conditions = [&](auto aa) {
@@ -545,8 +545,8 @@ int main(int argc, char **argv) {
 
     // Boundary interaction objects require a free call.
     b2d->free();
-    // NESO-Particles mesh objects must have free called on them.
-    mesh->free();
+    // NESO-Particles neso_mesh objects must have free called on them.
+    neso_mesh->free();
   }
   PETSCCHK(DMDestroy(&dm));
   PETSCCHK(PetscFinalize());

@@ -39,6 +39,23 @@ def save_ivertex_indices_to_netcdf(source_file,destination_file,Rpoints_full,Zpo
     ptr.setncattr('bout_type','Field2D')
     ptr[:] = ivertex_corners_ul
     dataset.close()
+
+    # create a new netcdf file for data that is not in BOUT-compatible format
+    # open destination file
+    vertex_file = source_file[:-3] + ".vertex.nc"
+    dataset = nc.Dataset(vertex_file, mode="w")
+    dataset.createDimension('nvertices', len(Rpoints_full))
+    ptr = dataset.createVariable("global_vertex_list_R","f8",("nvertices",))
+    ptr[:] = Rpoints_full
+    ptr.units = "length"
+    ptr.description = "global list of R points of vertices in a hypnotoad mesh"
+    ptr.source = "generated in python external to hypnotoad"
+    ptr = dataset.createVariable("global_vertex_list_Z","f8",("nvertices",))
+    ptr.units = "length"
+    ptr.description = "global list of Z points of vertices in a hypnotoad mesh"
+    ptr.source = "generated in python external to hypnotoad"
+    ptr[:] = Zpoints_full
+    dataset.close()
     return None
 
 def isapprox(a,b,tol=1.0e-8):
@@ -450,7 +467,7 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     Rpoints_full, Zpoints_full = remove_nonunique_points(Rpoints_full,Zpoints_full)
     unique_points_1D(Rpoints_full,Zpoints_full)
 
-    save_ivertex_indices_to_netcdf(file_path,"test.nc",Rpoints_full,Zpoints_full)
+    save_ivertex_indices_to_netcdf(file_path, file_path[:-3]+".corners.nc",Rpoints_full,Zpoints_full)
 
     # get an array containing, for each cell, the list of vertices,
     # labelled by the global index defined implicitly by Rpoints_full, Zpoints_full
