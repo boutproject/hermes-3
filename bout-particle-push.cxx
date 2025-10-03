@@ -293,9 +293,9 @@ int main(int argc, char **argv) {
    */
   {
     const int ndim = 2;
-    const int npart_per_cell = 1;
-    const REAL dt = 0.01;
-    const int nsteps = 20;
+    const int npart_per_cell = Options::root()["neso_particles"]["npart_per_cell"].withDefault(1);
+    const REAL dt = Options::root()["neso_particles"]["dt"].withDefault(0.01);
+    const int nsteps = Options::root()["neso_particles"]["nsteps"].withDefault(10);
 
     // Create a mesh interface from the DM
     auto neso_mesh = std::make_shared<PetscInterface::DMPlexInterface>(
@@ -422,7 +422,8 @@ int main(int argc, char **argv) {
     H5Part h5part("traj_reflection_dmplex_example.h5part", A, Sym<REAL>("P"),
     Sym<REAL>("V"));
     for (int stepx = 0; stepx < nsteps; stepx++) {
-      nprint("step:", stepx);
+      // nprint("step:", stepx);
+      output << "step:" << std::to_string(stepx) << std::endl;
       lambda_apply_timestep(static_particle_sub_group(A));
       A->hybrid_move();
       A->cell_move();
