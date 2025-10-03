@@ -777,7 +777,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " ExB pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -788,7 +788,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " advection pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -799,7 +799,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " PdivV pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -810,7 +810,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " VgradP pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -821,7 +821,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " flutter pressure term 1"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -832,7 +832,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " flutter pressure term 2"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -843,7 +843,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " flutter pressure term 3"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -854,7 +854,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " viscous heat pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -865,7 +865,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " conduction pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -876,7 +876,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " low N diffusion pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -887,7 +887,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " low N perpendicular diffusion pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -898,7 +898,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " low T diffusion pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -909,7 +909,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " low P perpendicular diffusion pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -920,7 +920,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " Pressure Z hyper-diffusion pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -931,7 +931,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " Temperature Z hyper-diffusion pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
@@ -942,7 +942,7 @@ void EvolvePressure::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "divergence of pressure"},
+                    {"standard_name", "pressure term"},
                     {"long_name", name + " NT damping pressure term"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
