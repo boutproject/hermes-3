@@ -56,6 +56,8 @@ def save_ivertex_indices_to_netcdf(source_file,destination_file,Rpoints_full,Zpo
     ptr.source = "generated in python external to hypnotoad"
     ptr[:] = Zpoints_full
     dataset.close()
+    print(f"Saving modified Hypnotoad mesh file to {destination_file}")
+    print(f"Saving global vertex information to {vertex_file}")
     return None
 
 def isapprox(a,b,tol=1.0e-8):

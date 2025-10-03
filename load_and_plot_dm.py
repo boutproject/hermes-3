@@ -1,6 +1,6 @@
 from petsc4py import PETSc
 import argparse
-parser = argparse.ArgumentParser(description="Process a string input.")
+parser = argparse.ArgumentParser(description="Plot the edges of a DMPlex mesh.")
 parser.add_argument("dmplex_h5_file_path", type=str, help="The path to the HDF5 file representing the DMPlex data")
 
 args = parser.parse_args()
