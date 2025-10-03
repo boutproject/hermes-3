@@ -58,28 +58,28 @@ int main(int argc, char **argv) {
   mesh->get(ivertex_lower_right_corners, "ivertex_lower_right_corners");
   mesh->get(ivertex_upper_right_corners, "ivertex_upper_right_corners");
   mesh->get(ivertex_upper_left_corners, "ivertex_upper_left_corners");
-  for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
-   for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
-       //for(int iz=0; iz < mesh->LocalNz; iz++){
+  // for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
+  //  for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
+  //      //for(int iz=0; iz < mesh->LocalNz; iz++){
 
-         std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
-         output << string_count + std::string(": ") + std::to_string(static_cast<int>(ivertex_lower_left_corners(ix,iy))) + std::string("; ");
-       //}
-   }
-  output << "\n";
-  }
+  //        std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
+  //        output << string_count + std::string(": ") + std::to_string(static_cast<int>(ivertex_lower_left_corners(ix,iy))) + std::string("; ");
+  //      //}
+  //  }
+  // output << "\n";
+  // }
   // local number of x cells, excluding guards
   int Nx = mesh->xend - mesh->xstart + 1;
   // local number of y cells, excluding guards
   int Ny = mesh->yend - mesh->ystart + 1;
   // output << "Nx " + std::to_string(Nx) + "Ny " + std::to_string(Ny) << "\n";
-  output << "Got here -1 \n";
+  // output << "Got here -1 \n";
 
   PETSCCHK(PetscInitializeNoArguments());
   auto sycl_target = std::make_shared<SYCLTarget>(0, PETSC_COMM_WORLD);
   const int mpi_size = sycl_target->comm_pair.size_parent;
   const int mpi_rank = sycl_target->comm_pair.rank_parent;
-  output << "Got here 0 \n";
+  // output << "Got here 0 \n";
 
   // First we setup the topology of the mesh.
   std::vector<PetscReal> Z_vertices(4);
@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
   PetscInt num_cells_owned = Nx*Ny;
   std::vector<PetscInt> cells;
   cells.reserve(num_cells_owned * 4);
-  output << "Got here 1 \n";
+  // output << "Got here 1 \n";
   // We are careful to list the vertices in counter clock-wise order, this might
   // matter.
   for (PetscInt ix = mesh->xstart; ix<= mesh->xend; ix++) {
@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
   //     std::cout << data[i] << " ";
   // }
   // std::cout << std::endl;
-  std::cout << "nvertices " << std::to_string(nvertices) << std::endl;
+  // std::cout << "nvertices " << std::to_string(nvertices) << std::endl;
   // number of vertices to keep per process
   int nvertex_per_process = std::floor(nvertices/mpi_size);
   int nvertex_remainder = nvertices - mpi_size*nvertex_per_process;
@@ -224,7 +224,7 @@ int main(int argc, char **argv) {
    * them to PETSc.
    */
   std::vector<PetscScalar> vertex_coords(num_vertices_owned * 2);
-  output << "Got here 2 \n";
+  // output << "Got here 2 \n";
   // shift due to differing rank
   int ishift;
   for (int iv = 0; iv < nvertex_this_process; iv++) {
@@ -275,7 +275,8 @@ int main(int argc, char **argv) {
   DMView(dm, viewer);
   // Clean up
   PetscViewerDestroy(&viewer);
-
+  output << "Finished DMPlex creation and diagnostic \n";
+  output << "Begin particle push \n";
   /*
    *
    *
