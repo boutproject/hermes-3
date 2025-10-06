@@ -21,8 +21,8 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
   AmjuelHydIsotopeReaction(std::string name, std::string short_reaction_type,
                            std::string amjuel_label, std::string from_species,
                            std::string to_species, Options& alloptions)
-      : AmjuelReaction(name, short_reaction_type, amjuel_label, from_species, to_species,
-                       alloptions) {
+      : AmjuelReaction(name, short_reaction_type, amjuel_label, alloptions),
+        from_species(from_species), to_species(to_species) {
     if (this->diagnose) {
       // Set up diagnostics
 
@@ -71,6 +71,15 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
           ReactionDiagnosticType::energy_loss, this->amjuel_src, rad_transformer);
     }
   }
+
+protected:
+  const std::string& get_from_species() const { return this->from_species; }
+  const std::string& get_to_species() const { return this->to_species; }
+
+private:
+  // Store some strings for use in attribute docstrings
+  std::string from_species;
+  std::string to_species;
 };
 
 /**

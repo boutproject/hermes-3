@@ -55,6 +55,21 @@ inline T clamp(const T& var, BoutReal lo, BoutReal hi, const std::string& rgn = 
   return result;
 }
 
+/**
+ * @brief Util function to get the keys of a std::string => T map
+ *
+ * @tparam T the type of the map values
+ * @param map the map
+ * @return std::vector<std::string> vector of keys
+ */
+template <typename T>
+static inline std::vector<std::string> str_keys(const std::map<std::string, T>& map) {
+  std::vector<std::string> keys;
+  std::transform(map.begin(), map.end(), std::back_inserter(keys),
+                 [](const std::pair<std::string, T>& pair) { return pair.first; });
+  return keys;
+}
+
 // TODO: Replace the later SpeciesType with this one. This one
 // doesn't work in elec
 

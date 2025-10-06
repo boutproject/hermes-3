@@ -214,17 +214,14 @@ protected:
   std::string heavy_product;
   std::map<std::string, int> heavy_sp_charges;
 
-  virtual Options generate_state() override final {
-    // Default state assumes one heavy reactant, one heavy product. Bail out if that's not
-    // the case.
+  Options generate_state() final {
+    // Assume 1 heavy reactant, 1 heavy product for izn/rec. Bail out otherwise.
     std::size_t nsp = heavy_sp_charges.size();
     if (nsp != 2) {
-      std::stringstream ss;
-      ss << "ReactionTest::generate_state assumes exactly one heavy reactant and one "
-            "heavy product per reaction;"
-         << " found " << nsp << " heavy species."
-         << " Override generate_state() in your test class.";
-      throw BoutException(ss.str());
+      throw BoutException(fmt::format(
+          "IznRecReactionTest::generate_state assumes exactly one heavy reactant "
+          "and one heavy product per reaction; found {:d} heavy species.",
+          nsp));
     }
 
     // N.B. No attempt to set the correct masses for heavy species; always set to 1
@@ -318,7 +315,7 @@ protected:
   const std::string neutral_sp_out;
   const std::string ion_sp_out;
 
-  virtual Options generate_state() override {
+  Options generate_state() override {
     // N.B. No attempt to set the correct masses for heavy species; always set to 1
     // Assume neutral
     std::string comp_name = "test" + this->lbl;
