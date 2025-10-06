@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
   //      //for(int iz=0; iz < mesh->LocalNz; iz++){
 
   //        std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
-  //        output << string_count + std::string(": ") + std::to_string(static_cast<int>(ivertex_lower_left_corners(ix,iy))) + std::string("; ");
+        //  output << string_count + std::string(": ") + std::to_string(static_cast<int>(std::lround(ivertex_lower_left_corners(ix,iy)))) + std::string("; ");
   //      //}
   //  }
   // output << "\n";
@@ -100,10 +100,10 @@ int main(int argc, char **argv) {
   for (PetscInt ix = mesh->xstart; ix<= mesh->xend; ix++) {
     for (PetscInt iy = mesh->ystart; iy <= mesh->yend; iy++) {
       // collect data from Hypnotoad arrays
-      i_vertices[0] =  static_cast<int>(ivertex_lower_left_corners(ix,iy));
-      i_vertices[1] =  static_cast<int>(ivertex_lower_right_corners(ix,iy));
-      i_vertices[2] =  static_cast<int>(ivertex_upper_right_corners(ix,iy));
-      i_vertices[3] =  static_cast<int>(ivertex_upper_left_corners(ix,iy));
+      i_vertices[0] =  static_cast<int>(std::lround(ivertex_lower_left_corners(ix,iy)));
+      i_vertices[1] =  static_cast<int>(std::lround(ivertex_lower_right_corners(ix,iy)));
+      i_vertices[2] =  static_cast<int>(std::lround(ivertex_upper_right_corners(ix,iy)));
+      i_vertices[3] =  static_cast<int>(std::lround(ivertex_upper_left_corners(ix,iy)));
 
       R_vertices[0] =  Rxy_lower_left_corners(ix,iy);
       R_vertices[1] =  Rxy_lower_right_corners(ix,iy);
