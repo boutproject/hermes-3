@@ -18,7 +18,7 @@ components = (d+, he+, he, d, e,
 
 
 [solver]
-type = cvode           
+type = pvode           
 
 
 [sheath_boundary_simple]
