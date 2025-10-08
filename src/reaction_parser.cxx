@@ -58,28 +58,28 @@ ReactionParser::get_species(std::vector<std::string> species_names,
     // Filter out electrons ('e')
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesTypeEnum(sp_name) == SpeciesType::electron;
+                   return identifySpeciesType(sp_name) == SpeciesType::electron;
                  });
     break;
   case species_filter::heavy:
     // Filter out electrons ('e')
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesTypeEnum(sp_name) != SpeciesType::electron;
+                   return identifySpeciesType(sp_name) != SpeciesType::electron;
                  });
     break;
   case species_filter::ion:
     // Filter out electrons ('e')
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesTypeEnum(sp_name) == SpeciesType::ion;
+                   return identifySpeciesType(sp_name) == SpeciesType::ion;
                  });
     break;
   case species_filter::neutral:
     // Filter out electrons ('e')
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesTypeEnum(sp_name) == SpeciesType::neutral;
+                   return identifySpeciesType(sp_name) == SpeciesType::neutral;
                  });
     break;
   case species_filter::produced: {

@@ -59,7 +59,7 @@ inline T clamp(const T& var, BoutReal lo, BoutReal hi, const std::string& rgn = 
 BOUT_ENUM_CLASS(SpeciesType, electron, ion, neutral);
 
 /// Identify species name string as electron, ion or neutral
-inline SpeciesType identifySpeciesTypeEnum(const std::string& species) {
+inline SpeciesType identifySpeciesType(const std::string& species) {
   if (species == "e") {
     return SpeciesType::electron;
   } else if ((species == "i") or

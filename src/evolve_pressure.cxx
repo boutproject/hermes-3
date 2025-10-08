@@ -164,7 +164,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
 
   BoutReal default_kappa; // default conductivity, changes depending on species
-  switch(identifySpeciesTypeEnum(name)) {
+  switch(identifySpeciesType(name)) {
   case SpeciesType::ion:
     default_kappa = 3.9;
     break;
@@ -362,16 +362,16 @@ void EvolvePressure::finally(const Options& state) {
 
           std::string collision_name = collision.second.name();
 
-          if (identifySpeciesTypeEnum(species.name()) == SpeciesType::neutral) {
+          if (identifySpeciesType(species.name()) == SpeciesType::neutral) {
             throw BoutException("\tBraginskii conduction collisions mode not available for neutrals, choose multispecies or afn");
-          } else if (identifySpeciesTypeEnum(species.name()) == SpeciesType::electron) {
+          } else if (identifySpeciesType(species.name()) == SpeciesType::electron) {
             if (/// Electron-electron collisions
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), "e", "coll", "exact"))) {
                     collision_names.push_back(collision_name);
                   }
 
-          } else if (identifySpeciesTypeEnum(species.name()) == SpeciesType::ion) {
+          } else if (identifySpeciesType(species.name()) == SpeciesType::ion) {
             if (/// Self-collisions
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), species.name(), "coll", "exact"))) {
@@ -401,7 +401,7 @@ void EvolvePressure::finally(const Options& state) {
 
           std::string collision_name = collision.second.name();
 
-          if (identifySpeciesTypeEnum(species.name()) != SpeciesType::neutral) {
+          if (identifySpeciesType(species.name()) != SpeciesType::neutral) {
                 throw BoutException("\tAFN conduction collisions mode not available for ions or electrons, choose braginskii or multispecies");
               }
           if (/// Charge exchange
