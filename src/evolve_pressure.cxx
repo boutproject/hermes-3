@@ -362,16 +362,16 @@ void EvolvePressure::finally(const Options& state) {
 
           std::string collision_name = collision.second.name();
 
-          if (identifySpeciesType(species.name()) == "neutral") {
+          if (identifySpeciesTypeEnum(species.name()) == SpeciesType::neutral) {
             throw BoutException("\tBraginskii conduction collisions mode not available for neutrals, choose multispecies or afn");
-          } else if (identifySpeciesType(species.name()) == "electron") {
+          } else if (identifySpeciesTypeEnum(species.name()) == SpeciesType::electron) {
             if (/// Electron-electron collisions
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), "e", "coll", "exact"))) {
                     collision_names.push_back(collision_name);
                   }
 
-          } else if (identifySpeciesType(species.name()) == "ion") {
+          } else if (identifySpeciesTypeEnum(species.name()) == SpeciesType::ion) {
             if (/// Self-collisions
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), species.name(), "coll", "exact"))) {
@@ -401,7 +401,7 @@ void EvolvePressure::finally(const Options& state) {
 
           std::string collision_name = collision.second.name();
 
-          if (identifySpeciesType(species.name()) != "neutral") {
+          if (identifySpeciesTypeEnum(species.name()) != SpeciesType::neutral) {
                 throw BoutException("\tAFN conduction collisions mode not available for ions or electrons, choose braginskii or multispecies");
               }
           if (/// Charge exchange
