@@ -1,4 +1,4 @@
-/// Ion viscosity model
+// Ion viscosity model
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
@@ -127,7 +127,7 @@ void IonViscosity::transform(Options &state) {
       collision_names[species_name] = {};  // Initialise with empty vector
     }
 
-    if (collision_names[species_name].empty()) {     /// Calculate only once - at the beginning
+    if (collision_names[species_name].empty()) {     // Calculate only once - at the beginning
 
 
       if (viscosity_collisions_mode == "braginskii") {
@@ -135,10 +135,10 @@ void IonViscosity::transform(Options &state) {
 
           std::string collision_name = collision.second.name();
 
-          if (/// Self-collisions
+          if (// Self-collisions
               (collisionSpeciesMatch(    
                 collision_name, species.name(), species.name(), "coll", "exact")) or
-              /// Ion-electron collisions
+              // Ion-electron collisions
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "+", "coll", "partial"))) {
                   
@@ -151,10 +151,10 @@ void IonViscosity::transform(Options &state) {
 
           std::string collision_name = collision.second.name();
 
-          if (/// Charge exchange
+          if (// Charge exchange
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "", "cx", "partial")) or
-              /// Any collision (en, in, ee, ii, nn)
+              // Any collision (en, in, ee, ii, nn)
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "", "coll", "partial"))) {
                   
@@ -169,7 +169,7 @@ void IonViscosity::transform(Options &state) {
         throw BoutException("\tNo collisions found for {:s} in ion_viscosity for selected collisions mode", species.name());
       }
 
-      /// Write chosen collisions to log file
+      // Write chosen collisions to log file
       output_info.write("\t{:s} viscosity collisionality mode: '{:s}' using ",
                       species.name(), viscosity_collisions_mode);
       for (const auto& collision : collision_names[species_name]) {        
@@ -180,7 +180,7 @@ void IonViscosity::transform(Options &state) {
 
       }
 
-    /// Collect the collisionalities based on list of names
+    // Collect the collisionalities based on list of names
     nu = 0;
     for (const auto& collision_name : collision_names[species_name]) {
       nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);

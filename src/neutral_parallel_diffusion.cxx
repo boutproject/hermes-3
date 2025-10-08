@@ -33,17 +33,17 @@ void NeutralParallelDiffusion::transform(Options& state) {
     // Collisionality
     // Multispecies mode: in, en, nn, cx
     // New mode: cx, iz (in line with SOLPS AFN, Horsten 2017)
-    if (collision_names[species_name].empty()) {     /// Calculate only once - at the beginning
+    if (collision_names[species_name].empty()) {     // Calculate only once - at the beginning
 
       if (diffusion_collisions_mode == "afn") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
 
-          if (/// Charge exchange
+          if (// Charge exchange
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "+", "cx", "partial")) or
-              /// Ionisation
+              // Ionisation
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "+", "iz", "partial"))) {
                   
@@ -56,10 +56,10 @@ void NeutralParallelDiffusion::transform(Options& state) {
 
           std::string collision_name = collision.second.name();
 
-          if (/// Charge exchange
+          if (// Charge exchange
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "", "cx", "partial")) or
-              /// Any collision (ne, ni, nn)
+              // Any collision (ne, ni, nn)
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "", "coll", "partial"))) {
                   
@@ -75,7 +75,7 @@ void NeutralParallelDiffusion::transform(Options& state) {
         throw BoutException("\tNo collisions found for {:s} in neutral_parallel_diffusion for selected collisions mode", species.name());
       }
 
-      /// Write chosen collisions to log file
+      // Write chosen collisions to log file
       output_info.write("\t{:s} neutral diffusion collisionality mode: '{:s}' using ",
                       species.name(), diffusion_collisions_mode);
       for (const auto& collision : collision_names[species_name]) {        
@@ -85,7 +85,7 @@ void NeutralParallelDiffusion::transform(Options& state) {
 
     }
 
-    /// Collect the collisionalities based on list of names
+    // Collect the collisionalities based on list of names
     nu = 0;
     for (const auto& collision_name : collision_names[species_name]) {
       nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);

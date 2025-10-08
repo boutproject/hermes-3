@@ -195,7 +195,7 @@ void EvolveEnergy::transform(Options& state) {
 void EvolveEnergy::finally(const Options& state) {
   AUTO_TRACE();
 
-  /// Get the section containing this species
+  // Get the section containing this species
   const auto& species = state["species"][name];
 
   // Get updated pressure and temperature with boundary conditions
@@ -281,7 +281,7 @@ void EvolveEnergy::finally(const Options& state) {
 
     // Collisionality
     // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
-    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+    if (collision_names.empty()) {     // Calculate only once - at the beginning
 
       if (conduction_collisions_mode == "braginskii") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
@@ -291,14 +291,14 @@ void EvolveEnergy::finally(const Options& state) {
           if (identifySpeciesType(species.name()) == SpeciesType::neutral) {
             throw BoutException("\tBraginskii conduction collisions mode not available for neutrals, choose multispecies or afn");
           } else if (identifySpeciesType(species.name()) == SpeciesType::electron) {
-            if (/// Electron-electron collisions
+            if (// Electron-electron collisions
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), "e", "coll", "exact"))) {
                     collision_names.push_back(collision_name);
                   }
 
           } else if (identifySpeciesType(species.name()) == SpeciesType::ion) {
-            if (/// Self-collisions
+            if (// Self-collisions
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), species.name(), "coll", "exact"))) {
                     collision_names.push_back(collision_name);
@@ -312,10 +312,10 @@ void EvolveEnergy::finally(const Options& state) {
 
           std::string collision_name = collision.second.name();
 
-          if (/// Charge exchange
+          if (// Charge exchange
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "", "cx", "partial")) or
-              /// Any collision (en, in, ee, ii, nn)
+              // Any collision (en, in, ee, ii, nn)
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "", "coll", "partial"))) {
                   collision_names.push_back(collision_name);
@@ -330,10 +330,10 @@ void EvolveEnergy::finally(const Options& state) {
           if (identifySpeciesType(species.name()) != SpeciesType::neutral) {
                 throw BoutException("\tAFN conduction collisions mode not available for ions or electrons, choose braginskii or multispecies");
               }
-          if (/// Charge exchange
+          if (// Charge exchange
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), "+", "cx", "partial")) or
-                /// Ionisation
+                // Ionisation
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), "+", "iz", "partial"))) {
                     collision_names.push_back(collision_name);
@@ -348,7 +348,7 @@ void EvolveEnergy::finally(const Options& state) {
         throw BoutException("\tNo collisions found for {:s} in evolve_pressure for selected collisions mode", species.name());
       }
 
-      /// Write chosen collisions to log file
+      // Write chosen collisions to log file
       output_info.write("\t{:s} conduction collisionality mode: '{:s}' using ",
                       species.name(), conduction_collisions_mode);
       for (const auto& collision : collision_names) {        
@@ -359,7 +359,7 @@ void EvolveEnergy::finally(const Options& state) {
 
       }
 
-    /// Collect the collisionalities based on list of names
+    // Collect the collisionalities based on list of names
     nu = 0;
     for (const auto& collision_name : collision_names) {
       nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
