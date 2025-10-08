@@ -131,63 +131,47 @@ Field3D calculate_phi_simple(Options& allspecies, bool lower_y, bool upper_y,
                      ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
                      : zeroFrom(Ni);
 
-    const auto set_ion_sum_boundary = [&](const YBoundary& bdry) {
-      const auto i = bdry.i;
-      const auto ip = bdry.ip;
+    iter_pnts([](auto& pnt) {
       // Free gradient of log density and temperature
       // This ensures that the guard cell values remain positive
-      const BoutReal Ni_im = limitFree(Ni[ip], Ni[i], density_boundary_mode);
-      const BoutReal Ti_im = limitFree(Ti[ip], Ti[i], temperature_boundary_mode);
-      const BoutReal Te_im = limitFree(Te[ip], Te[i], temperature_boundary_mode);
 
       // Calculate sheath values at half-way points (cell edge)
-      const BoutReal nisheath = 0.5 * (Ni_im + Ni[i]);
+      const BoutReal nisheath = pnt.extrapolate_sheath_free(Ni, density_boundary_mode);
       // electron temperature
-      const BoutReal tesheath = floor(0.5 * (Te_im + Te[i]), 1e-5);
+      const BoutReal tesheath = floor(pnt.extrapolate_sheath_free(Te, temperature_boundary_mode), 1e-5);
       // ion temperature
-      const BoutReal tisheath = floor(0.5 * (Ti_im + Ti[i]), 1e-5);
+      const BoutReal tisheath = floor(pnt.extrapolate_sheath_free(Ti, temperature_boundary_mode), 1e-5);
 
       // Sound speed
       const BoutReal C_i = sqrt((sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi);
       const BoutReal visheath =
-          bdry.is_lower() ? std::min(Vi[i], -C_i) : std::max(Vi[i], C_i);
+	bdry.dir < 0 ? std::min(pnt.ythis(Vi), -C_i) : std::max(pnt.ythis(Vi), C_i);
 
-      ion_sum[i] += bdry.toward * Zi * nisheath * visheath;
-    };
-
-    if (lower_y) {
-      loop_boundary<YBoundarySide::lower>(*Ni.getMesh(), set_ion_sum_boundary);
-    }
-
-    if (upper_y) {
-      loop_boundary<YBoundarySide::upper>(*Ni.getMesh(), set_ion_sum_boundary);
-    }
+      if (pnt.abs_offset() == 1) {
+	pnt.ythis(ion_sum) += bdry.dir * Zi * nisheath * visheath;
+      }
+    });
   }
 
   Field3D phi = emptyFrom(Ne);
 
-  const auto set_phi_boundary = [&](const YBoundary& bdry) {
-    const auto i = bdry.i;
-    const auto ip = bdry.ip;
-
-    const BoutReal Ne_im = limitFree(Ne[ip], Ne[i], density_boundary_mode);
-    const BoutReal Te_im = limitFree(Te[ip], Te[i], temperature_boundary_mode);
-
-    // Calculate sheath values at half-way points (cell edge)
-    const BoutReal nesheath = 0.5 * (Ne_im + Ne[i]);
-    const BoutReal tesheath = floor(0.5 * (Te_im + Te[i]), 1e-5);
-
-    phi[i] =
+  iter_pnts([](auto& pnt) {
+    if (pnt.abs_offset() == 1) {
+      auto i = pnt.ind();
+      // Calculate sheath values at cell edge
+      const BoutReal nisheath = pnt.extrapolate_sheath_free(Ne, density_boundary_mode);
+      const BoutReal tesheath = floor(pnt.extrapolate_sheath_free(Te, temperature_boundary_mode), 1e-5);
+      
+      phi[i] =
         tesheath * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
 
-    // Add bias potential
-    phi[i] += wall_potential[i];
-    // Constant into sheath
-    phi[i.yp()] = phi[i.ym()] = phi[i];
-  };
+      // Add bias potential
+      phi[i] += wall_potential[i];
+      // Constant into sheath
+      pnt.neumann_o1(phi, 0);
+    }
+  });
 
-  // ion_sum now contains the ion current, sum Z_i n_i C_i over all ion species
-  // at mesh->ystart and mesh->yend indices
   if (lower_y) {
     loop_boundary<YBoundarySide::lower>(*phi.getMesh(), set_phi_boundary);
   }
@@ -231,71 +215,58 @@ Field3D calculate_phi_Tskhakaya(Options& allspecies, bool lower_y, bool upper_y,
                                    ? get<BoutReal>(species["adiabatic"])
                                    : 5. / 3; // Ratio of specific heats (ideal gas)
 
-    const auto set_ion_sum_boundary = [&](const YBoundary& bdry) {
-      const auto i = bdry.i;
-      const auto ip = bdry.ip;
+    iter_pnts([&](auto& pnt) {
+      if (pnt.abs_offset() == 1) {
+	// Free boundary extrapolate ion concentration
+	// Limit range to [0,1]
+	BoutReal s_i =
+	  clip(pnt.extrapolate_sheath_o2([&, Ni, Ne](int yoffset, Ind3D ind) {
+	    return Ni.ynext(yoffset)[ind] / Ne.ynext(yoffset)[ind];
+	  }),
+	    0.0, 1.0);
 
-      // Free boundary extrapolate ion concentration
-      // Limit range to [0,1]
-      BoutReal s_i = std::clamp(0.5 * (3. * Ni[i] / Ne[i] - Ni[ip] / Ne[ip]), 0.0, 1.0);
+	if (!std::isfinite(s_i)) {
+	  s_i = 1.0;
+	}
+	const BoutReal te = pnt.ythis(Te);
+	const BoutReal ti = pnt.ythis(Ti);
 
-      if (!std::isfinite(s_i)) {
-        s_i = 1.0;
-      }
-      const BoutReal te = Te[i];
-      const BoutReal ti = Ti[i];
+	// Equation (9) in Tskhakaya 2005
+	BoutReal grad_ne = -pnt.extrapolate_grad_o2(Ne);
+	BoutReal grad_ni = -pnt.extrapolate_grad_o2(Ni);
 
-      // Equation (9) in Tskhakaya 2005
-      BoutReal grad_ne = -bdry.toward * (Ne[ip] - Ne[i]);
-      BoutReal grad_ni = -bdry.toward * (Ni[ip] - Ni[i]);
+	// Note: Needed to get past initial conditions, perhaps transients
+	// but this shouldn't happen in steady state
+	// Note: Factor of 2 to be consistent with later calculation
+	if (std::abs(grad_ni) < 2e-3) {
+	  grad_ni = grad_ne = 2e-3; // Remove kinetic correction term
+	}
 
-      // Note: Needed to get past initial conditions, perhaps transients
-      // but this shouldn't happen in steady state
-      // Note: Factor of 2 to be consistent with later calculation
-      if (std::abs(grad_ni) < 2e-3) {
-        grad_ni = grad_ne = 2e-3; // Remove kinetic correction term
-      }
-
-      // Limit for e.g. Ni zero gradient
-      const BoutReal C_i_sq =
+	// Limit for e.g. Ni zero gradient
+	const BoutReal C_i_sq =
           std::clamp((adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0., 100.);
 
-      // Note: Vzi = C_i * sin(α)
-      ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
-    };
-
-    if (lower_y) {
-      loop_boundary<YBoundarySide::lower>(*mesh, set_ion_sum_boundary);
-    }
-
-    if (upper_y) {
-      loop_boundary<YBoundarySide::upper>(*mesh, set_ion_sum_boundary);
-    }
+	// Note: Vzi = C_i * sin(α)
+	ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+      }
+    });
   }
 
-  Field3D phi = emptyFrom(Ne); // So phi is field aligned
+  Field3D phi = emptyFrom(Ne.asField3DParallel()); // So phi is field aligned
 
-  const auto set_phi_boundary = [&](const YBoundary& bdry) {
-    const auto i = bdry.i;
-    if (Te[i] <= 0.0) {
-      phi[i] = 0.0;
-    } else {
-      phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+  iter_pnts([&](auto& pnt) {
+    if (pnt.abs_offset() == 1) {
+      const auto i = pnt.ind();
+      if (Te[i] <= 0.0) {
+	phi[i] = 0.0;
+      } else {
+	phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+      }
+      phi[i] += wall_potential[i];        // Add bias potential
+      pnt.setAll(phi, phi[i]);            // Constant into sheath
     }
-
-    phi[i] += wall_potential[i];        // Add bias potential
-    phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
   };
 
-  // ion_sum now contains  sum  s_i Z_i C_i over all ion species
-  // at mesh->ystart and mesh->yend indices
-  if (lower_y) {
-    loop_boundary<YBoundarySide::lower>(*phi.getMesh(), set_phi_boundary);
-  }
-
-  if (upper_y) {
-    loop_boundary<YBoundarySide::upper>(*phi.getMesh(), set_phi_boundary);
-  }
   return phi;
 }
 
@@ -367,8 +338,8 @@ SheathBoundaryBase<kind>::SheathBoundaryBase(Options& options, BoutReal Tnorm) {
                               .doc("Ion polytropic coefficient in Bohm sound speed")
                               .withDefault(1.0);
 
-  lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
-  upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
+  // init parallel bc iterator
+  yboundary.init(options);
 
   always_set_phi =
       options["always_set_phi"]
@@ -441,11 +412,11 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
   // This is for applying boundary conditions
   Field3D Ve = IS_SET_NOBOUNDARY(electrons["velocity"])
                    ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
-                   : zeroFrom(Ne);
+                   : zeroFrom(Ne.asField3DParallel());
 
   Field3D NVe = IS_SET_NOBOUNDARY(electrons["momentum"])
                     ? toFieldAligned(getNoBoundary<Field3D>(electrons["momentum"]))
-                    : zeroFrom(Ne);
+                    : zeroFrom(Ne.asField3DParallel());
 
   Coordinates* coord = mesh->getCoordinates();
 
@@ -475,69 +446,56 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
   auto dv = emptyFrom(coord->J);      // [m^3]
   auto da_dv_m = emptyFrom(coord->J); // [m^-1]
   auto da_dv_p = emptyFrom(coord->J); // [m^-1]
-  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-    for (int jz = 0; jz < mesh->LocalNz; jz++) {
-      auto i = indexAt(Ne, r.ind, mesh->ystart, jz);
-      auto im = i.ym();
-      da_m[i] = (coord->J[i] + coord->J[im])
-                / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im])) * 0.5
-                * (coord->dx[i] + coord->dx[im]) * 0.5 * (coord->dz[i] + coord->dz[im]);
 
-      dv[i] = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
-
-      da_dv_m[i] = da_m[i] / dv[i];
+  iter_pnts([&](auto& pnt) {
+    if (pnt.abs_offset() != 1) {
+      continue;
     }
-  }
+    auto i = pnt.ind();
+    auto da_c = pnt.dir == 1 ? da_p : da_m;
+    da_c[i] = pnt.interpolate_sheath_o1(coord->J)
+      / pnt.interpolate_sheath_o1([&, Ni, Ne](int yoffset, Ind3D i) {
+	return sqrt(coord->g_22.ynext(yoffset)[i]) ;
+      })
+      * pnt.interpolate_sheath_o1(coord->dx)
+      * pnt.interpolate_sheath_o1(coord->dz);  // [m^2]
 
-  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-    for (int jz = 0; jz < mesh->LocalNz; jz++) {
-      auto i = indexAt(Ne, r.ind, mesh->yend, jz);
-      auto ip = i.yp();
-      da_p[i] = (coord->J[i] + coord->J[ip])
-                / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])) * 0.5
-                * (coord->dx[i] + coord->dx[ip]) * 0.5
-                * (coord->dz[i] + coord->dz[ip]); // [m^2]
+    dv[i] = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
 
-      dv[i] = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
+    (pnt.dir == 1 ? da_dv_p : da_dv_m)[i] = da_c[i] / dv[i];
+  });
 
-      da_dv_p[i] = da_p[i] / dv[i];
-    }
-  }
-
-  const auto set_electron_boundaries = [&](const YBoundary& bdry) {
-    const auto i = bdry.i;
-    const auto im = bdry.im;
-    const auto ip = bdry.ip;
+  iter_pnts([&](auto& pnt) {
 
     // Free gradient of log electron density and temperature
     // Limited so that the values don't increase into the sheath
     // This ensures that the guard cell values remain positive
-    Ne[im] = limitFree(Ne[ip], Ne[i], density_boundary_mode);
-    Te[im] = limitFree(Te[ip], Te[i], temperature_boundary_mode);
-    Pe[im] = limitFree(Pe[ip], Pe[i], pressure_boundary_mode);
+    pnt.set_free(Ne, density_boundary_mode);
+    pnt.set_free(Te, temperature_boundary_mode);
+    pnt.set_free(Pe, pressure_boundary_mode);
 
     // Free boundary potential linearly extrapolated
-    phi[im] = 2 * phi[i] - phi[ip];
+    pnt.set_free(phi, SheathLimitMode::linear_free);
 
     if constexpr (is_insulating()) {
       // Set zero flow through boundary
       // This will be modified when iterating over the ions
-      Ve[bdry.im] = -Ve[bdry.i];
-      NVe[bdry.im] = -NVe[bdry.i];
+      pnt.dirichlet_o2(Ve, 0);
+      pnt.dirichlet_p2(NVe, 0);
       return;
     }
 
-    const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
-    const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
-    const BoutReal phi_wall = wall_potential[i];
+    const BoutReal nesheath = pnt.interpolate_sheath_o2(Ne);
+    const BoutReal tesheath = pnt.interpolate_sheath_o2(Te); // electron temperature
+    const BoutReal phi_wall = pnt.ythis(wall_potential);
 
     // Electron saturation at phi = phi_wall
-    const BoutReal _potential = 0.5 * (phi[im] + phi[i]);
+    const BoutReal _potential = pnt.interpolate_sheath_o2(phi);
     const BoutReal phisheath = floor_potential ? floor(_potential, phi_wall) : _potential;
 
     // Electron velocity into sheath (< 0)
     // Equal to Bohm for single ions and no currents
-    const BoutReal vesheath = bdry.toward * sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
+    const BoutReal vesheath = bdry.dir * sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
                               * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
     const BoutReal vesheath_flow = no_flow ? 0.0 : vesheath;
@@ -567,7 +525,7 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
                         + ((adiabatic * tesheath - 0.5 * Me * SQ(vesheath_flow))
                            * nesheath * vesheath_flow);
 
-    const BoutReal q = bdry.is_lower() ? std::min(_q, 0.0) : std::max(_q, 0.0);
+    const BoutReal q = pnt.dir == -1 ? std::min(_q, 0.0) : std::max(_q, 0.0);
 
     Ve[im] = 2 * vesheath_flow - Ve[i];
     NVe[im] = 2 * Me * nesheath * vesheath_flow - NVe[i];
