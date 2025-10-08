@@ -283,29 +283,31 @@ void EvolveEnergy::finally(const Options& state) {
     // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
     if (collision_names.empty()) {     // Calculate only once - at the beginning
 
+      const auto species_type = identifySpeciesType(name);
+
       if (conduction_collisions_mode == "braginskii") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
 
-          if (identifySpeciesType(species.name()) == SpeciesType::neutral) {
+          if (species_type == SpeciesType::neutral) {
             throw BoutException("\tBraginskii conduction collisions mode not available for neutrals, choose multispecies or afn");
-          } else if (identifySpeciesType(species.name()) == SpeciesType::electron) {
+          } else if (species_type == SpeciesType::electron) {
             if (// Electron-electron collisions
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), "e", "coll", "exact"))) {
                     collision_names.push_back(collision_name);
                   }
 
-          } else if (identifySpeciesType(species.name()) == SpeciesType::ion) {
+          } else if (species_type == SpeciesType::ion) {
             if (// Self-collisions
                 (collisionSpeciesMatch(    
                   collision_name, species.name(), species.name(), "coll", "exact"))) {
                     collision_names.push_back(collision_name);
                   }
           }
-
         }
+          
       // Multispecies mode: all collisions and CX are included
       } else if (conduction_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
@@ -327,7 +329,7 @@ void EvolveEnergy::finally(const Options& state) {
 
           std::string collision_name = collision.second.name();
 
-          if (identifySpeciesType(species.name()) != SpeciesType::neutral) {
+          if (species_type != SpeciesType::neutral) {
                 throw BoutException("\tAFN conduction collisions mode not available for ions or electrons, choose braginskii or multispecies");
               }
           if (// Charge exchange
