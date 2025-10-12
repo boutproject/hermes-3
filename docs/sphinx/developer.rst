@@ -882,3 +882,12 @@ When collisions are neglected, we obtain the result
    :name: alfven-wave
    :alt: Alfven wave speed, as function of parallel and perpendicular wavenumbers
    :width: 60%
+
+Collision frequency selection
+~~~~~~~~~~~~~~
+
+There are two simple integrated tests to make sure that the collision frequency selection is correct
+across `neutral_mixed`, `evolve_pressure`, `ion_viscosity` and `neutral_parallel_diffusion`.
+A minimal 3D geometry is run for one RHS evaluation, and the test checks the log file
+to make sure the correct collisionalities were selected. One of the tests is for the `multispecies`
+mode across all components, while the other is for `braginskii` for plasma and `afn` for neutrals.
