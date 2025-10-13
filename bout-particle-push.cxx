@@ -33,6 +33,7 @@ int main(int argc, char **argv) {
   BoutInitialise(argc, argv);
   Mesh* mesh = Mesh::create(&Options::root()["mesh"]);
   mesh->load();
+  Coordinates *coord = mesh->getCoordinates();
   Field2D Rxy_lower_left_corners;
   Field2D Rxy_lower_right_corners;
   Field2D Rxy_upper_right_corners;
@@ -296,6 +297,9 @@ int main(int argc, char **argv) {
     const int npart_per_cell = Options::root()["neso_particles"]["npart_per_cell"].withDefault(1);
     const REAL dt = Options::root()["neso_particles"]["dt"].withDefault(0.01);
     const int nsteps = Options::root()["neso_particles"]["nsteps"].withDefault(10);
+    Field2D density{mesh};
+    mesh->get(density, "density", 0.0, false);
+    mesh->communicate(density);
 
     // Create a mesh interface from the DM
     auto neso_mesh = std::make_shared<PetscInterface::DMPlexInterface>(
@@ -310,6 +314,7 @@ int main(int argc, char **argv) {
     // project it has its owne particle spec builder).
     ParticleSpec particle_spec{ParticleProp(Sym<REAL>("P"), ndim, true),
                                ParticleProp(Sym<REAL>("V"), ndim),
+                               ParticleProp(Sym<REAL>("Q"), 1),
                                ParticleProp(Sym<REAL>("TSP"), 2),
                                ParticleProp(Sym<INT>("CELL_ID"), 1, true),
                                ParticleProp(Sym<INT>("ID"), 1)};
@@ -346,6 +351,7 @@ int main(int argc, char **argv) {
       }
       initial_distribution[Sym<INT>("CELL_ID")][px][0] = cells.at(px);
       initial_distribution[Sym<INT>("ID")][px][0] = px + id_offset;
+      initial_distribution[Sym<REAL>("Q")][px][0] = 1.0;
     }
 
     // Add the new particles to the particle group
@@ -417,10 +423,44 @@ int main(int argc, char **argv) {
         aa = lambda_find_partial_moves(aa);
       }
     };
+    for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
+      for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
+          //for(int iz=0; iz < mesh->LocalNz; iz++){
 
+            std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
+            output << string_count + std::string(": ") + std::to_string(density(ix,iy)) + std::string("; ");
+          //}
+      }
+      output << "\n";
+    }
     // uncomment to write a trajectory
     H5Part h5part("traj_reflection_dmplex_example.h5part", A, Sym<REAL>("P"),
     Sym<REAL>("V"));
+
+    auto dg0 = std::make_shared<PetscInterface::DMPlexProjectEvaluateDG>(
+      neso_mesh, sycl_target, "DG", 0);
+    dg0->project(A, Sym<REAL>("Q"));
+    std::vector<REAL> h_project1;
+    dg0->get_dofs(1, h_project1);
+    PetscInt ic=0;
+    for (PetscInt ix = mesh->xstart; ix<= mesh->xend; ix++) {
+      for (PetscInt iy = mesh->ystart; iy <= mesh->yend; iy++) {
+        density(ix,iy) = h_project1.at(ic);
+        ic++;
+      }
+    }
+    // BOUT would need to do something with Field2D guards cells
+    // Halo-exchange? Constant extrapolation? etc
+    for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
+      for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
+          //for(int iz=0; iz < mesh->LocalNz; iz++){
+            std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
+            output << string_count + std::string(": ") + std::to_string(density(ix,iy)) + std::string("; ") + std::to_string(1.0/(coord->J(ix,iy)*coord->dx(ix,iy)*coord->dy(ix,iy)*coord->dz(ix,iy)));
+          //}
+      }
+      output << "\n";
+    }
+
     for (int stepx = 0; stepx < nsteps; stepx++) {
       // nprint("step:", stepx);
       output << "step:" << std::to_string(stepx) << std::endl;
