@@ -14,7 +14,8 @@ nz = 1
 J = 1 # Identity metric
 
 [hermes]
-components = d+, e, braginskii_collisions, braginskii_friction, braginskii_heat_exchange
+components = (d+, e, braginskii_collisions, braginskii_conduction,
+              braginskii_friction, braginskii_heat_exchange)
 
 Nnorm = 1e19
 Bnorm = 1

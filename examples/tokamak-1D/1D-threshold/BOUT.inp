@@ -50,8 +50,8 @@ J = 1
 # to electron pressure by using electron force balance.
 # Component order matters - please refer to the documentation.
 components = (d+, d, e,
-              sheath_boundary_simple, braginskii_collisions, recycling, reactions,
-              electron_force_balance, neutral_parallel_diffusion)
+              sheath_boundary_simple, braginskii_collisions, braginskii_friction, recycling, reactions,
+              braginskii_conduction, electron_force_balance, neutral_parallel_diffusion)
 
 normalise_metric = true  # Normalise the input metric?
 
