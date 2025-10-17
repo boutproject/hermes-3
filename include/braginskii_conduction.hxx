@@ -66,7 +66,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiConduction> registercomponentconduction("braginskii_conduction");
+RegisterComponent<BraginskiiConduction> registercomponentbraginskiiconduction("braginskii_conduction");
 }
 
 #endif // BRAGINSKII_CONDUCTION_H

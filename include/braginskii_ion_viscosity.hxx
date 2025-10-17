@@ -77,7 +77,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiIonViscosity> registercomponentionviscosity("ion_viscosity");
+RegisterComponent<BraginskiiIonViscosity> registercomponentionbraginskiiviscosity("ion_viscosity");
 }
 
 #endif
