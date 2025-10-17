@@ -37,10 +37,6 @@ BraginskiiCollisions::BraginskiiCollisions(std::string name, Options& alloptions
                         .doc("Include neutral-neutral elastic collisions?")
                         .withDefault<bool>(true);
 
-  frictional_heating = options["frictional_heating"]
-    .doc("Include R dot v heating term as energy source?")
-    .withDefault<bool>(true);
-
   ei_multiplier = options["ei_multiplier"]
                       .doc("User-set arbitrary multiplier on electron-ion collision rate")
                       .withDefault<BoutReal>(1.0);
