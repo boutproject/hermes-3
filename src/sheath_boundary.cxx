@@ -320,7 +320,7 @@ SheathBoundaryBase<kind>::SheathBoundaryBase(Options& options, BoutReal Tnorm) {
 
   sin_alpha = options["sin_alpha"]
                   .doc("Sin of the angle between magnetic field line and wall surface. "
-                       "Should be between 0 and 1")
+                       "Must be between 0 and 1")
                   .withDefault(1.0);
 
   if ((sin_alpha < 0.0) or (sin_alpha > 1.0)) {
