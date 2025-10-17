@@ -32,7 +32,8 @@ ixseps2 = -1
 [hermes]
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
 # to electron pressure by using electron force balance.
-components = (d+, e, sheath_boundary, braginskii_collisions, braginskii_friction, braginskii_heat_exchange)
+components = (d+, e, sheath_boundary, braginskii_collisions, braginskii_conduction,
+              braginskii_friction, braginskii_heat_exchange)
 
 normalise_metric = true  # Normalise the input metric?
 
