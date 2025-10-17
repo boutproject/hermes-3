@@ -46,7 +46,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiElectronViscosity> registercomponentelectronviscosity("braginskii_electron_viscosity");
+RegisterComponent<BraginskiiElectronViscosity> registercomponentbraginskiielectronviscosity("braginskii_electron_viscosity");
 }
 
 #endif
