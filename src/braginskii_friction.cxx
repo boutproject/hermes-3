@@ -51,7 +51,7 @@ void BraginskiiFriction::transform(Options& state) {
   //
   const std::map<std::string, Options>& children = allspecies.getChildren();
   for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
-    Options& species1 = allspecies[kv1->first];
+    Options& species1 = kv1->second;
     // If collisions were not calculated for this species, skip it.
     if (not species1.isSection("collision_frequencies")) continue;
 
@@ -62,18 +62,17 @@ void BraginskiiFriction::transform(Options& state) {
 
     // Copy the iterator, so we don't iterate over the
     // lower half of the matrix, but start at the diagonal
-    for (std::map<std::string, Options>::const_iterator kv2 = kv1;
-         kv2 != std::end(children); ++kv2) {
+    for (const auto kv2 = kv1; kv2 != std::end(children); ++kv2) {
       // Can't have friction with oneself
       if (kv1->first == kv2->first) continue;
 
-      Options& species2 = allspecies[kv2->first];
+      Options& species2 = kv2->second;
 
       // At least one of the species must have a velocity for there to be friction.
       if (!(isSetFinalNoBoundary(species1["velocity"]) or
             isSetFinalNoBoundary(species2["velocity"]))) continue;
       
-      const std::string coll_name = kv1->first + std::string("_") + kv2->first + std::string("_coll");
+      const std::string coll_name = fmt::format("{}_{}_coll", kv1->first, kv2->first);
       // If collisions were not calculated between these two species, skip
       if (not species1["collision_frequencies"].isSet(coll_name)) continue;
 
@@ -142,17 +141,9 @@ void BraginskiiFriction::outputVars(Options& state) {
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   /// Iterate through the first species in each collision pair
-  const std::map<std::string, Options>& level1 = momentum_channels.getChildren();
-  for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
-    const Options& section = momentum_channels[s1->first];
-
-    /// Iterate through the second species in each collision pair
-    const std::map<std::string, Options>& level2 = section.getChildren();
-    for (auto s2 = std::begin(level2); s2 != std::end(level2); ++s2) {
-
-      std::string A = s1->first;
-      std::string B = s2->first;
-      std::string AB = A + B;
+  for (const auto& [A, section] : momentum_channels.getChildren()) {
+    for (const auto& [B, child] : section.getChildren()) {
+      const std::string AB = A + B;
 
       // Frictional energy sources (both species heat through friction)
       if ((friction_energy_channels.isSection(A)) and (friction_energy_channels[A].isSet(B))) {
