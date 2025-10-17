@@ -21,7 +21,7 @@ BraginskiiConduction::BraginskiiConduction(std::string name, Options& alloptions
   for (auto & kv : alloptions.getChildren()){
     auto & options = alloptions[kv.first];
     // Check if the component is a species which undergoes energy/pressure evolution
-    if (!options["type"].isValue() || (options["type"].as<std::string>().find("evolve_pressure") == std::string::npos && options["type"].as<std::string>().find("evolve_energy") == std::string::npos)) continue;
+    if (options.isValue() || !options["type"].isValue() || (options["type"].as<std::string>().find("evolve_pressure") == std::string::npos && options["type"].as<std::string>().find("evolve_energy") == std::string::npos)) continue;
     if (!options["thermal_conduction"]
         .doc("Include parallel heat conduction?")
         .withDefault<bool>(true)) continue; 
@@ -159,7 +159,7 @@ void BraginskiiConduction::transform(Options& state) {
     }
 
     const auto & collision_names = all_collision_names[name];
-    Field3D & nu = all_nu[name], kappa_par = all_kappa_par[name], flow_ylow_conduction = all_flow_ylow_conduction[name];
+    Field3D & nu = all_nu[name], & kappa_par = all_kappa_par[name], & flow_ylow_conduction = all_flow_ylow_conduction[name];
     const BoutReal kappa_coefficient = all_kappa_coefficient[name], kappa_limit_alpha= all_kappa_limit_alpha[name];
     
 
@@ -210,7 +210,7 @@ void BraginskiiConduction::transform(Options& state) {
       Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
 
       // This results in a harmonic average of the heat fluxes
-      kappa_par = kappa_par / (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
+      kappa_par /= (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
       mesh->communicate(kappa_par);
