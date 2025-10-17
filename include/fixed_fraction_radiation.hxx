@@ -420,6 +420,10 @@ struct FixedFractionRadiation : public Component {
 
     // Remove radiation from the electron energy source
     subtract(electrons["energy_source"], radiation);
+
+    if (diagnose) {
+      radiation.allocate(); // Make sure diagnostic is not shared
+    }
   }
 
   void outputVars(Options& state) override {

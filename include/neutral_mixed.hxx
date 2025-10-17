@@ -71,6 +71,9 @@ private:
   Field3D Sn, Sp, Snv;                     ///< Particle, pressure and momentum source
   Field3D sound_speed;                     ///< Sound speed for use with Lax flux
 
+  bool wall_pressure; ///< Include a pressure that increases into the wall?
+  Field3D wall_depth;
+
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
 

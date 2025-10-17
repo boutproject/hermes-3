@@ -124,6 +124,14 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .withDefault(density_source)
       / (Nnorm * Omega_ci);
 
+  wall_pressure = options["wall_pressure"].doc("Add pressure depending on wall_depth?")
+    .withDefault<bool>(false);
+  if (wall_pressure) {
+    if (mesh->get(wall_depth, "wall_depth") != 0) {
+      throw BoutException("wall_pressure needs a wall_depth field in the mesh");
+    }
+  }
+
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
   pressure_source = 0.0;
@@ -282,7 +290,11 @@ void NeutralMixed::finally(const Options& state) {
   // Field3D logNn = log(Nn);
   // Field3D logTn = log(Tn);
 
-  logPnlim = log(Pnlim);
+  if (wall_pressure) {
+    logPnlim = log(Pnlim * (1. + 100. * wall_depth));
+  } else {
+    logPnlim = log(Pnlim);
+  }
   logPnlim.applyBoundary();
 
   ///////////////////////////////////////////////////////
