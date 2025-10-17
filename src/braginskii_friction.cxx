@@ -51,7 +51,7 @@ void BraginskiiFriction::transform(Options& state) {
   //
   const std::map<std::string, Options>& children = allspecies.getChildren();
   for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
-    Options& species1 = kv1->second;
+    Options& species1 = allspecies[kv1->first];
     // If collisions were not calculated for this species, skip it.
     if (not species1.isSection("collision_frequencies")) continue;
 
@@ -62,11 +62,11 @@ void BraginskiiFriction::transform(Options& state) {
 
     // Copy the iterator, so we don't iterate over the
     // lower half of the matrix, but start at the diagonal
-    for (const auto kv2 = kv1; kv2 != std::end(children); ++kv2) {
+    for (auto kv2 = kv1; kv2 != std::end(children); ++kv2) {
       // Can't have friction with oneself
       if (kv1->first == kv2->first) continue;
 
-      Options& species2 = kv2->second;
+      Options& species2 = allspecies[kv2->first];
 
       // At least one of the species must have a velocity for there to be friction.
       if (!(isSetFinalNoBoundary(species1["velocity"]) or
