@@ -34,7 +34,7 @@ ixseps2 = -1          # Necessary to set boundary conditions in y
 
 components = (i, e, sheath_boundary, braginskii_collisions, braginskii_friction,
               braginskii_heat_exchange, braginskii_heat_exchange, binormal_stpm,
-              electron_force_balance)
+              braginskii_conduction, electron_force_balance)
 
 normalise_metric = true   # Normalise the input metric?
 
