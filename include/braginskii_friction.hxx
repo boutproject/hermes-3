@@ -54,7 +54,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiFriction> registercomponentcollisions("braginskii_friction");
+RegisterComponent<BraginskiiFriction> registercomponentbraginskiifriction("braginskii_friction");
 }
 
 #endif // BRAGINSKII_FRICTION_H

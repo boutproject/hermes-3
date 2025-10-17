@@ -61,7 +61,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiThermalForce> registercomponentthermalforce("thermal_force");
+RegisterComponent<BraginskiiThermalForce> registercomponentbraginskiithermalforce("thermal_force");
 }
 
 #endif // BRAGINSKII_THERMAL_FORCE_H

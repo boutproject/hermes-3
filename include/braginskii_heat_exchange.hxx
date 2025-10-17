@@ -48,7 +48,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiHeatExchange> registercomponentcollisions("braginskii_heat_exchange");
+RegisterComponent<BraginskiiHeatExchange> registercomponentbraginskiiheatexchange("braginskii_heat_exchange");
 }
 
 #endif // BRAGINSKII_HEAT_EXCHANGE_H
