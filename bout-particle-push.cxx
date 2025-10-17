@@ -278,6 +278,15 @@ int main(int argc, char **argv) {
   PetscViewerDestroy(&viewer);
   output << "Finished DMPlex creation and diagnostic \n";
   output << "Begin particle push \n";
+  // get data from BOUT for forces in particle push
+  Field2D phi{mesh};
+  Field2D ex{mesh};
+  Field2D ey{mesh};
+  auto& opt = Options::root();
+  phi = opt["mesh"]["phi"].as<Field2D>();
+  ex = opt["mesh"]["ex"].as<Field2D>();
+  ey = opt["mesh"]["ey"].as<Field2D>();
+
   /*
    *
    *
@@ -314,6 +323,7 @@ int main(int argc, char **argv) {
     // project it has its owne particle spec builder).
     ParticleSpec particle_spec{ParticleProp(Sym<REAL>("P"), ndim, true),
                                ParticleProp(Sym<REAL>("V"), ndim),
+                               ParticleProp(Sym<REAL>("F"), ndim),
                                ParticleProp(Sym<REAL>("Q"), 1),
                                ParticleProp(Sym<REAL>("TSP"), 2),
                                ParticleProp(Sym<INT>("CELL_ID"), 1, true),
@@ -349,6 +359,10 @@ int main(int argc, char **argv) {
         initial_distribution[Sym<REAL>("P")][px][dimx] = positions[dimx][px];
         initial_distribution[Sym<REAL>("V")][px][dimx] = velocities[dimx][px];
       }
+      // initial_distribution[Sym<REAL>("F")][px][0] = ex_cellorder(cells.at(px));
+      // initial_distribution[Sym<REAL>("F")][px][1] = ey_cellorder(cells.at(px));
+      initial_distribution[Sym<REAL>("F")][px][0] = 0.0;
+      initial_distribution[Sym<REAL>("F")][px][1] = 0.0;
       initial_distribution[Sym<INT>("CELL_ID")][px][0] = cells.at(px);
       initial_distribution[Sym<INT>("ID")][px][0] = px + id_offset;
       initial_distribution[Sym<REAL>("Q")][px][0] = 1.0;
@@ -356,6 +370,27 @@ int main(int argc, char **argv) {
 
     // Add the new particles to the particle group
     A->add_particles_local(initial_distribution);
+
+    // make pointer to projection object
+    auto dg0 = std::make_shared<PetscInterface::DMPlexProjectEvaluateDG>(
+      neso_mesh, sycl_target, "DG", 0);
+    // set F from a field from BOUT
+    std::vector<REAL> h_project2(num_cells_owned * 2);
+    // h_project2.reserve(num_cells_owned * 2);
+    // this call should allocate h_project2
+    // dg0->set_dofs(2, h_project2);
+    PetscInt ixy=0;
+    for (PetscInt ix = mesh->xstart; ix<= mesh->xend; ix++) {
+      for (PetscInt iy = mesh->ystart; iy <= mesh->yend; iy++) {
+        h_project2.at(2*ixy) = ex(ix,iy);
+        h_project2.at(2*ixy+1) = ey(ix,iy);
+        ixy++;
+      }
+    }
+    // now copy the data to internal variables
+    dg0->set_dofs(2, h_project2);
+    // set the data from internal variables into F
+    dg0->evaluate(A, Sym<REAL>("F"));
 
     // Create the boundary interaction objects
     std::map<PetscInt, std::vector<PetscInt>> boundary_groups;
@@ -387,16 +422,21 @@ int main(int argc, char **argv) {
         [=](ParticleSubGroupSharedPtr iteration_set) -> void {
       particle_loop(
           "euler_advection", iteration_set,
-          [=](auto V, auto P, auto TSP) {
+          [=](auto F, auto V, auto P, auto TSP) {
             const REAL dt_left = dt - TSP.at(0);
             if (dt_left > 0.0) {
               P.at(0) += dt_left * V.at(0);
               P.at(1) += dt_left * V.at(1);
+              // update V from fixed F
+              // n.b. a different advection scheme should be
+              // used for more than 1st order accuracy
+              V.at(0) += dt_left * F.at(0);
+              V.at(1) += dt_left * F.at(1);
               TSP.at(0) = dt;
               TSP.at(1) = dt_left;
             }
           },
-          Access::read(Sym<REAL>("V")), Access::write(Sym<REAL>("P")),
+          Access::read(Sym<REAL>("F")), Access::write(Sym<REAL>("V")), Access::write(Sym<REAL>("P")),
           Access::write(Sym<REAL>("TSP")))
           ->execute();
     };
@@ -426,9 +466,8 @@ int main(int argc, char **argv) {
     for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
       for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
           //for(int iz=0; iz < mesh->LocalNz; iz++){
-
             std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
-            output << string_count + std::string(": ") + std::to_string(density(ix,iy)) + std::string("; ");
+            output << string_count + std::string(": ") + std::to_string(phi(ix,iy)) + std::string("; ");
           //}
       }
       output << "\n";
@@ -437,8 +476,7 @@ int main(int argc, char **argv) {
     H5Part h5part("traj_reflection_dmplex_example.h5part", A, Sym<REAL>("P"),
     Sym<REAL>("V"));
 
-    auto dg0 = std::make_shared<PetscInterface::DMPlexProjectEvaluateDG>(
-      neso_mesh, sycl_target, "DG", 0);
+    // get a density by projecting the particle property Q to the mesh
     dg0->project(A, Sym<REAL>("Q"));
     std::vector<REAL> h_project1;
     dg0->get_dofs(1, h_project1);
@@ -449,8 +487,10 @@ int main(int argc, char **argv) {
         ic++;
       }
     }
-    // BOUT would need to do something with Field2D guards cells
-    // Halo-exchange? Constant extrapolation? etc
+    // BOUT++ may need to do something with density Field2D guards cells
+    // print density to screen to show non-trivial result
+    // compare to 1/J*dx*dy*dz -> at the initial time we have 1 particle per cell
+    // so the density is 1/Cell_volume
     for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
       for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
           //for(int iz=0; iz < mesh->LocalNz; iz++){
@@ -464,9 +504,10 @@ int main(int argc, char **argv) {
     for (int stepx = 0; stepx < nsteps; stepx++) {
       // nprint("step:", stepx);
       output << "step:" << std::to_string(stepx) << std::endl;
-      lambda_apply_timestep(static_particle_sub_group(A));
       A->hybrid_move();
       A->cell_move();
+      lambda_apply_timestep(static_particle_sub_group(A));
+
 
       // uncomment to write a trajectory
       h5part.write();
