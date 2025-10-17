@@ -33,6 +33,10 @@ struct BraginskiiCollisions : public Component {
   ///   - ion_neutral
   ///   - neutral_neutral
   ///
+  /// The user can also set
+  ///
+  ///   - ei_multiplier   arbitrary multiplier on electron-ion collision rate
+  ///
   BraginskiiCollisions(std::string name, Options& alloptions, Solver*);
 
   void transform(Options &state) override;
@@ -49,9 +53,6 @@ private:
   /// Which types of collisions to include?
   bool electron_electron, electron_ion, electron_neutral, ion_ion, ion_neutral,
       neutral_neutral;
-
-  /// Include frictional heating term?
-  bool frictional_heating;
 
   BoutReal ei_multiplier;  // Arbitrary user-set multiplier on electron-ion collisions
 
