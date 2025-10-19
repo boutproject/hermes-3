@@ -51,6 +51,7 @@ endif()
 
 set(HERMES_SOURCES
     src/amjuel_reaction.cxx
+    src/bootstrap_current.cxx
     src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
@@ -107,6 +108,7 @@ set(HERMES_SOURCES
     include/amjuel_hydrogen.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
+    include/bootstrap_current.hxx
     include/classical_diffusion.hxx
     include/binormal_stpm.hxx
     include/collisions.hxx
