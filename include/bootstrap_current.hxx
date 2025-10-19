@@ -51,7 +51,16 @@ struct BootstrapCurrent : public Component {
   BoutReal alpha(BoutReal f, BoutReal nu_i);
 
   /// Flux surface average
+  /// <f> = integral(f / Bp) / integral(1 / Bp)
   Field2D fluxSurfaceAverage(const Field3D& f);
+  Field2D fluxSurfaceAverage(const Field2D& f);
+
+  /// Calculate trapped fraction
+  /// Note: This could be a very slow calculation
+  Field2D trappedFraction();
+
+  /// Return maximum value on each flux surface
+  Field2D maxY(const Field2D& f);
 
 private:
   Mesh* mesh;
@@ -63,6 +72,9 @@ private:
 
   Field2D Bxy; ///< Magnetic field strength
   Field2D RBt; ///< I(psi) = R * Btor
+  Field2D J;   ///< Jacobian = hthe / Bpxy
+
+  Field2D averageJ; /// Used to calculate flux surface averages
 };
 
 namespace {

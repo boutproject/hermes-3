@@ -27,8 +27,11 @@ BootstrapCurrent::BootstrapCurrent(std::string name, Options& alloptions, Solver
   // Read Rxy and Btxy from the mesh file
   // Note: These are in SI units
   Field2D Rxy, Btxy;
-  GRID_LOAD(Bxy, Rxy, Btxy);
+  GRID_LOAD(Bxy, Rxy, Btxy, J);
   RBt = Rxy * Btxy;
+
+  // This is <1/Bp>, used in fluxSurfaceAverage
+  averageJ = averageY(J);
 }
 
 void BootstrapCurrent::transform(Options& state) {
@@ -223,4 +226,91 @@ BoutReal BootstrapCurrent::alpha(BoutReal f, BoutReal nu_i) {
          / (1. + 0.15 * SQ(nu_i) * f6);
 }
 
-Field2D BootstrapCurrent::fluxSurfaceAverage(const Field3D& f) { return averageY(DC(f)); }
+Field2D BootstrapCurrent::fluxSurfaceAverage(const Field3D& f) {
+  return fluxSurfaceAverage(DC(f));
+}
+
+Field2D BootstrapCurrent::fluxSurfaceAverage(const Field2D& f) {
+  return averageY(f * J) / averageJ;
+}
+
+Field2D BootstrapCurrent::trappedFraction() {
+  // Maximum magnetic field on each flux surface
+  const Field2D Bmax = maxY(Bxy);
+
+  // Integrate λ / < sqrt(1 - λ) >
+  // over 0 < λ < 1 / Bmax
+  //
+  // Transform x = 2λBmax - 1
+  // and integrate:
+  //
+  // (1/(Bmax^2 sqrt(2))) (1 + x)/sqrt(1 - x) sqrt(1 - x) / <sqrt(1 - x B/Bmax)>
+  //                      |------ w(x) -----|
+  // over the range -1 < x < 1
+  //
+  // The sqrt(1 - x) factor removes the singularity, moving it into
+  // the weight function w(x)
+  //
+  // Use Gauss-Jacobi rule with 5 points. alpha = -0.5, beta = 1
+  // Python:
+  //     from scipy.special import roots_jacobi
+  //     x, w = roots_jacobi(5, -0.5, 1.0)
+  //
+  const std::vector<std::pair<BoutReal, BoutReal>> quadrature = {
+      {-0.7856692692946651, 0.05558088292849234},
+      {-0.3424372137469275, 0.2938121661741237},
+      {0.19893554984718564, 0.7206376843619846},
+      {0.6807500544226858, 1.194533824278887},
+      {0.9627065930574353, 1.5066716085847658}};
+
+  Field2D integral = 0.0;
+  for (const auto& [x, w] : quadrature) {
+    integral += w * sqrt(1. - x) / fluxSurfaceAverage(sqrt(1. - x * Bxy / Bmax));
+  }
+
+  // Trapped fraction
+  return 1. - (3. / 4) * fluxSurfaceAverage(SQ(Bxy)) / (SQ(Bmax) * sqrt(2.)) * integral;
+}
+
+Field2D BootstrapCurrent::maxY(const Field2D& f) {
+  TRACE("maxY(Field2D)");
+
+  Mesh* mesh = f.getMesh();
+  int ngx = mesh->LocalNx;
+  int ngy = mesh->LocalNy;
+
+  Array<BoutReal> input(ngx), result(ngx);
+
+  // Maximum on this processor
+  for (int x = 0; x < ngx; x++) {
+    input[x] = f(x, mesh->ystart);
+    // Maximum value, not including boundaries
+    for (int y = mesh->ystart; y <= mesh->yend; y++) {
+      input[x] = std::max(input[x], f(x, y));
+    }
+  }
+
+  Field2D r{emptyFrom(f)};
+
+  /// NOTE: This only works if there are no branch-cuts
+  MPI_Comm comm_inner = mesh->getYcomm(0);
+
+  int np;
+  MPI_Comm_size(comm_inner, &np);
+
+  if (np == 1) {
+    for (int x = 0; x < ngx; x++) {
+      for (int y = 0; y < ngy; y++) {
+        r(x, y) = input[x];
+      }
+    }
+  } else {
+    MPI_Allreduce(input.begin(), result.begin(), ngx, MPI_DOUBLE, MPI_MAX, comm_inner);
+    for (int x = 0; x < ngx; x++) {
+      for (int y = 0; y < ngy; y++) {
+        r(x, y) = result[x];
+      }
+    }
+  }
+  return r;
+}
