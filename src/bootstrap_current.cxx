@@ -109,7 +109,7 @@ void BootstrapCurrent::transform(Options& state) {
     const BoutReal L31_ix = L31(Z, f, nu_e);
     const BoutReal L32_ix = L32(Z, f, nu_e);
     const BoutReal L34_ix = L34(Z, f, nu_e);
-    const BoutReal alpha_ix = alpha(Z, f, nu_e);
+    const BoutReal alpha_ix = alpha(f, nu_i);
 
     const BoutReal pe_ix = pe_av(ix, mesh->ystart);
     const BoutReal dp_dpsi_ix = dp_dpsi(ix, mesh->ystart);
@@ -209,15 +209,17 @@ BoutReal BootstrapCurrent::L34(BoutReal Z, BoutReal f, BoutReal nu_e) {
   return F31(f34_teff, Z);
 }
 
-BoutReal BootstrapCurrent::alpha(BoutReal Z, BoutReal f, BoutReal nu_i) {
+BoutReal BootstrapCurrent::alpha(BoutReal f, BoutReal nu_i) {
   // Equation 17a
   const BoutReal f2 = SQ(f);
   const BoutReal alpha_0 = -1.17 * (1. - f) / (1. - 0.22 * f - 0.19 * f2);
 
   // Equation 17b
+  // Note: The sign of the 0.315 coefficient is corrected in the
+  // O.Sauter Erratum DOI: 10.1063/1.1517052
   const BoutReal f6 = SQ(f2 * f);
   return ((alpha_0 + 0.25 * (1. - f2) * sqrt(nu_i)) / (1. + 0.5 * sqrt(nu_i))
-          - 0.315 * SQ(nu_i) * f6)
+          + 0.315 * SQ(nu_i) * f6)
          / (1. + 0.15 * SQ(nu_i) * f6);
 }
 

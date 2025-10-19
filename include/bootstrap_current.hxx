@@ -48,7 +48,7 @@ struct BootstrapCurrent : public Component {
   BoutReal L34(BoutReal Z, BoutReal f, BoutReal nu_e);
 
   // Equation 17b
-  BoutReal alpha(BoutReal Z, BoutReal f, BoutReal nu_i);
+  BoutReal alpha(BoutReal f, BoutReal nu_i);
 
   /// Flux surface average
   Field2D fluxSurfaceAverage(const Field3D& f);
