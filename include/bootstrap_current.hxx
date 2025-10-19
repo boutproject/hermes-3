@@ -57,7 +57,7 @@ struct BootstrapCurrent : public Component {
 
   /// Calculate trapped fraction
   /// Note: This could be a very slow calculation
-  Field2D trappedFraction();
+  Field2D trappedFraction(const Field2D& Bxy);
 
   /// Return maximum value on each flux surface
   Field2D maxY(const Field2D& f);
@@ -75,6 +75,8 @@ private:
   Field2D J;   ///< Jacobian = hthe / Bpxy
 
   Field2D averageJ; /// Used to calculate flux surface averages
+
+  Field2D trapped_fraction; ///< f_t, constant on each flux surface
 };
 
 namespace {

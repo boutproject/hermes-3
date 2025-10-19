@@ -32,6 +32,9 @@ BootstrapCurrent::BootstrapCurrent(std::string name, Options& alloptions, Solver
 
   // This is <1/Bp>, used in fluxSurfaceAverage
   averageJ = averageY(J);
+
+  // Calculate trapped fraction to re-use later
+  trapped_fraction = trappedFraction(Bxy);
 }
 
 void BootstrapCurrent::transform(Options& state) {
@@ -89,9 +92,6 @@ void BootstrapCurrent::transform(Options& state) {
   Field2D nu_estar = 0.01;
   Field2D nu_istar = 0.1;
 
-  // Trapped fraction f_t
-  Field2D f_t = 0.5;
-
   // Effective ion charge
   Field2D Zeff = 1.0;
 
@@ -103,7 +103,7 @@ void BootstrapCurrent::transform(Options& state) {
     }
     // Periodic Y i.e. in the core
 
-    const BoutReal f = f_t(ix, mesh->ystart);
+    const BoutReal f = trapped_fraction(ix, mesh->ystart); // Calculated in constructor
     const BoutReal Z = Zeff(ix, mesh->ystart);
     const BoutReal nu_e = nu_estar(ix, mesh->ystart);
     const BoutReal nu_i = nu_istar(ix, mesh->ystart);
@@ -154,6 +154,11 @@ void BootstrapCurrent::outputVars(Options& state) {
                   {"conversion", SI::qe * Cs0 * Nnorm * Bnorm},
                   {"standard_name", "<J||B>"},
                   {"long_name", "Flux surface average <J dot B>"},
+                  {"source", "bootstrap_current"}});
+
+  set_with_attrs(state["trapped_fraction"], trapped_fraction,
+                 {{"standard_name", "f_t"},
+                  {"long_name", "Trapped fraction"},
                   {"source", "bootstrap_current"}});
 }
 
@@ -234,18 +239,18 @@ Field2D BootstrapCurrent::fluxSurfaceAverage(const Field2D& f) {
   return averageY(f * J) / averageJ;
 }
 
-Field2D BootstrapCurrent::trappedFraction() {
+Field2D BootstrapCurrent::trappedFraction(const Field2D& Bxy) {
   // Maximum magnetic field on each flux surface
   const Field2D Bmax = maxY(Bxy);
 
-  // Integrate λ / < sqrt(1 - λ) >
+  // Integrate λ dλ / < sqrt(1 - λ) >
   // over 0 < λ < 1 / Bmax
   //
   // Transform x = 2λBmax - 1
   // and integrate:
   //
-  // (1/(Bmax^2 sqrt(2))) (1 + x)/sqrt(1 - x) sqrt(1 - x) / <sqrt(1 - x B/Bmax)>
-  //                      |------ w(x) -----|
+  // (1/(Bmax^2 2 sqrt(2))) (1 + x)/sqrt(1 - x) sqrt(1 - x) dx / <sqrt(1 - x B/Bmax)>
+  //                        |------ w(x) -----|
   // over the range -1 < x < 1
   //
   // The sqrt(1 - x) factor removes the singularity, moving it into
@@ -269,7 +274,8 @@ Field2D BootstrapCurrent::trappedFraction() {
   }
 
   // Trapped fraction
-  return 1. - (3. / 4) * fluxSurfaceAverage(SQ(Bxy)) / (SQ(Bmax) * sqrt(2.)) * integral;
+  return 1.
+         - (3. / 4) * fluxSurfaceAverage(SQ(Bxy)) / (SQ(Bmax) * 2. * sqrt(2.)) * integral;
 }
 
 Field2D BootstrapCurrent::maxY(const Field2D& f) {
