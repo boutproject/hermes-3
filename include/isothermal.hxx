@@ -7,7 +7,7 @@
 /// Set temperature to a fixed value
 ///
 struct Isothermal : public Component {
-  Isothermal(std::string name, Options &options, Solver *);
+  Isothermal(std::string name, Options& options, Solver*);
 
   /// Inputs
   /// - species
@@ -21,13 +21,14 @@ struct Isothermal : public Component {
   ///     - temperature
   ///     - pressure (if density is set)
   ///
-  void transform(Options &state) override;
+  void transform(Options& state) override;
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
 private:
   std::string name; // Species name
 
-  BoutReal T; ///< The normalised temperature
+  Field3D T; ///< The normalised temperature
   Field3D P; ///< The normalised pressure
 
   bool diagnose; ///< Output additional diagnostics?

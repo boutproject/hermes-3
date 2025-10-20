@@ -1,5 +1,6 @@
 
 #include <bout/constants.hxx>
+#include <bout/mesh.hxx>
 
 #include "../include/isothermal.hxx"
 
@@ -13,7 +14,7 @@ Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(sol
       / Tnorm; // Normalise
 
   if (T.isFci()) {
-    buot::globals::mesh->communicate(T);
+    bout::globals::mesh->communicate(T);
     T.applyParallelBoundary("parallel_neumann_o2");
   }
 
