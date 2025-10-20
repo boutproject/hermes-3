@@ -53,7 +53,7 @@ components = (d+, d, ne, ne+, ne+2, ne+3, ne+4, ne+5, ne+6, ne+7, ne+8, ne+9, ne
               sheath_boundary,  braginskii_collisions, braginskii_thermal_force,
               braginskii_friction, braginskii_heat_exchange, recycling, reactions,
               electron_force_balance, neutral_parallel_diffusion,
-              braginskii_conduction, braginskii_ion_viscosity)
+              braginskii_ion_viscosity, braginskii_conduction)
 
 normalise_metric = true  # Normalise the input metric?
 
