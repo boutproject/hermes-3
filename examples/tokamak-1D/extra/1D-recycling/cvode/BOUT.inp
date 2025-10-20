@@ -46,7 +46,7 @@ J = 1
 components = (d+, d, e,
               sheath_boundary, braginskii_collisions, braginskii_friction,
               braginskii_heat_exchange, recycling, reactions, electron_force_balance,
-              neutral_parallel_diffusion, braginskii_conduction, braginskii_ion_viscosity)
+              neutral_parallel_diffusion, braginskii_ion_viscosity, braginskii_conduction)
 
 normalise_metric = true  # Normalise the input metric?
 

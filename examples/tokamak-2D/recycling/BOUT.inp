@@ -30,10 +30,8 @@ rtol = 1e-5
 [hermes]
 components = (d+, d, e,
               braginskii_collisions, braginskii_friction, braginskii_heat_exchange,
-              braginskii_conduction, sheath_boundary_simple, recycling, 
-              sound_speed,
-              reactions,
-              electron_force_balance)
+              sheath_boundary_simple, recycling, sound_speed, reactions,
+              electron_force_balance, braginskii_conduction)
 
 Nnorm = 1e19  # Reference density [m^-3]
 Bnorm = 1   # Reference magnetic field [T]

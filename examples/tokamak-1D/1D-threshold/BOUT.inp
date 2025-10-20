@@ -51,7 +51,7 @@ J = 1
 # Component order matters - please refer to the documentation.
 components = (d+, d, e,
               sheath_boundary_simple, braginskii_collisions, braginskii_friction, recycling, reactions,
-              braginskii_conduction, electron_force_balance, neutral_parallel_diffusion)
+              electron_force_balance, neutral_parallel_diffusion, braginskii_conduction)
 
 normalise_metric = true  # Normalise the input metric?
 

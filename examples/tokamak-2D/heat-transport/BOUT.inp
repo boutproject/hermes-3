@@ -24,8 +24,8 @@ mxstep = 10000
 [hermes]
 # Note: collisions are needed to calculate parallel heat conduction
 components = (e, h+,
-              braginskii_collisions, braginskii_friction, braginskii_conduction,
-              braginskii_heat_exchange, sheath_boundary_simple)
+              braginskii_collisions, braginskii_friction, braginskii_heat_exchange,
+              sheath_boundary_simple, braginskii_conduction)
 
 Nnorm = 1e18  # Reference density [m^-3]
 Bnorm = 1   # Reference magnetic field [T]
