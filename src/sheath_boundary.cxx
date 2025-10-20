@@ -320,7 +320,7 @@ SheathBoundaryBase<kind>::SheathBoundaryBase(Options& options, BoutReal Tnorm) {
 
   sin_alpha = options["sin_alpha"]
                   .doc("Sin of the angle between magnetic field line and wall surface. "
-                       "Must be between 0 and 1")
+                       "Should be between 0 and 1")
                   .withDefault(1.0);
 
   if ((sin_alpha < 0.0) or (sin_alpha > 1.0)) {
@@ -527,43 +527,41 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
 
     const BoutReal q = pnt.dir == -1 ? std::min(_q, 0.0) : std::max(_q, 0.0);
 
-    Ve[im] = 2 * vesheath_flow - Ve[i];
-    NVe[im] = 2 * Me * nesheath * vesheath_flow - NVe[i];
+    pnt.dirichlet_o2(Ve, vesheath_flow);
+    pnt.dirichlet_o2(NVe, Me * nesheath * vesheath_flow);
 
-    // Cross-sectional area in XZ plane and cell volume
-    const auto& da = (bdry.is_lower() ? da_m : da_p)[i];
-    const auto& da_dv = (bdry.is_lower() ? da_dv_m : da_dv_p)[i];
+    if (pnt.abs_offset() == 1) {
+      // Cross-sectional area in XZ plane and cell volume
+      const auto& da = (pnt.is_lower() ? da_m : da_p)[i];
+      const auto& da_dv = (pnt.is_lower() ? da_dv_m : da_dv_p)[i];
 
-    // Get power and energy source
-    const BoutReal heatflow = q * da;        // [W]
-    const BoutReal power = heatflow / dv[i]; // [Wm^-3]
-    electron_energy_source[i] -= bdry.toward * power;
+      // Get power and energy source
+      const BoutReal heatflow = q * da;        // [W]
+      const BoutReal power = heatflow / dv[i]; // [Wm^-3]
+      electron_energy_source[i] -= bdry.toward * power;
 
-    // Total heat flux for diagnostic purposes
-    const BoutReal q_no_flow = _gamma_e * tesheath * nesheath * vesheath_flow; // [Wm^-2]
-    hflux_e[i] -= bdry.toward * q_no_flow * da_dv;                             // [Wm^-3]
-    // lower Y: sheath boundary power placed in final domain cell
-    // upper Y: sheath boundary power placed in ylow side of inner guard cell
-    const auto i_power = bdry.is_lower() ? i : i.yp();
-    electron_sheath_power_ylow[i_power] += heatflow; // [W]
-  };
-
-  if (lower_y) {
-    loop_boundary<YBoundarySide::lower>(*mesh, set_electron_boundaries);
-  }
-  if (upper_y) {
-    loop_boundary<YBoundarySide::upper>(*mesh, set_electron_boundaries);
-  }
+      // Total heat flux for diagnostic purposes
+      const BoutReal q_no_flow = _gamma_e * tesheath * nesheath * vesheath_flow; // [Wm^-2]
+      hflux_e[i] -= bdry.toward * q_no_flow * da_dv;                             // [Wm^-3]
+      // TODO: Fix for FCI
+      // lower Y: sheath boundary power placed in final domain cell
+      // upper Y: sheath boundary power placed in ylow side of inner guard cell
+      const auto i_power = bdry.is_lower() ? i : i.yp();
+      electron_sheath_power_ylow[i_power] += heatflow; // [W]
+    }
+  });
 
   // Set electron density and temperature, now with boundary conditions
   // Note: Clear parallel slices because they do not contain boundary conditions.
-  Ne.clearParallelSlices();
-  Te.clearParallelSlices();
-  Pe.clearParallelSlices();
+  if (! Ne.isFci()) {
+    Ne.clearParallelSlices();
+    Te.clearParallelSlices();
+    Pe.clearParallelSlices();
+  }
   setBoundary(electrons["density"], fromFieldAligned(Ne));
   setBoundary(electrons["temperature"], fromFieldAligned(Te));
   setBoundary(electrons["pressure"], fromFieldAligned(Pe));
-
+  
   // Insulating BCs set these _after_ calculating ion flows
   if (not is_insulating()) {
     set(diagnostics["e"]["energy_source"], hflux_e);
@@ -577,18 +575,24 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
     add(electrons["energy_flow_ylow"], fromFieldAligned(electron_sheath_power_ylow));
 
     if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
-      Ve.clearParallelSlices();
+      if (! Ve.isFci()) {
+	Ve.clearParallelSlices();
+      }
       setBoundary(electrons["velocity"], fromFieldAligned(Ve));
     }
     if (IS_SET_NOBOUNDARY(electrons["momentum"])) {
-      NVe.clearParallelSlices();
+      if (! NVe.isFci()) {
+	NVe.clearParallelSlices();
+      }
       setBoundary(electrons["momentum"], fromFieldAligned(NVe));
     }
   }
 
   if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
     // Set the potential, including boundary conditions
-    phi.clearParallelSlices();
+    if (! phi.isFci()) {
+      phi.clearParallelSlices();
+    }
     setBoundary(state["fields"]["phi"], fromFieldAligned(phi));
   }
 
@@ -615,27 +619,27 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
         IS_SET(species["adiabatic"]) ? get<BoutReal>(species["adiabatic"]) : 5. / 3;
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
+    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]).asField3DParallel(), 0.0));
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
     Field3D Pi = species.isSet("pressure")
                      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
-                     : Ni * Ti;
+      : Ni * Ti.asField3DParallel();
 
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
     Field3D Vi = species.isSet("velocity")
                      ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
-                     : zeroFrom(Ni);
+      : zeroFrom(Ni.asField3DParallel());
     Field3D NVi = species.isSet("momentum")
                       ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
-                      : Mi * Ni * Vi;
+      : Mi * Ni * Vi.asField3DParallel();
 
     // Energy source will be modified in the domain
     Field3D energy_source =
         species.isSet("energy_source")
             ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
-            : zeroFrom(Ni);
+            : zeroFrom(Ni.asField3DParallel());
 
     // Initialise sheath ion heat flux. This will be created for each species
     // saved in diagnostics struct and then destroyed and re-created for next species
@@ -644,24 +648,20 @@ void SheathBoundaryBase<kind>::transform(Options& state) {
     // Field to capture total sheath heat flux for diagnostics
     Field3D ion_sheath_power_ylow = zeroFrom(Ne);
 
-    const auto set_ion_boundary = [&](const YBoundary& bdry) {
-      const auto i = bdry.i;
-      const auto ip = bdry.ip;
-      const auto im = bdry.im;
-
+    iter_pnts([&](auto& pnt) {
       // Free gradient of log electron density and temperature
       // This ensures that the guard cell values remain positive
-      Ni[im] = limitFree(Ni[ip], Ni[i], density_boundary_mode);
-      Ti[im] = limitFree(Ti[ip], Ti[i], temperature_boundary_mode);
-      Pi[im] = limitFree(Pi[ip], Pi[i], pressure_boundary_mode);
+      pnt.set_free(Ni, density_boundary_mode);
+      pnt.set_free(Ti, temperature_boundary_mode);
+      pnt.set_free(Pi, pressure_boundary_mode);
 
       // Calculate sheath values at half-way points (cell edge)
-      const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
-      const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
+      const BoutReal nesheath = pnt.interpolate_sheath_o2(Ne);
+      const BoutReal nisheath = pnt.interpolate_sheath_o2(Ni);
       // electron temperature
-      const BoutReal tesheath = floor(0.5 * (Te[im] + Te[i]), 1e-5);
+      const BoutReal tesheath = floor(pnt.interpolate_sheath_o2(Te), 1e-5);
       // ion temperature
-      const BoutReal tisheath = floor(0.5 * (Ti[im] + Ti[i]), 1e-5);
+      const BoutReal tisheath = floor(pnt.interpolate_sheath_o2(Ti), 1e-5);
 
       // Ion sheath heat transmission coefficient
       // Equation (22) in Tskhakaya 2005
