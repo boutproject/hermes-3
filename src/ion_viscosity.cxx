@@ -248,7 +248,7 @@ void IonViscosity::transform(Options &state) {
         auto search = diagnostics.find(species_name);
         if (search == diagnostics.end()) {
           // First time, create diagnostic
-          diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor});
+          diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star});
         } else {
           // Update diagnostic values
           auto& d = search->second;
@@ -256,6 +256,7 @@ void IonViscosity::transform(Options &state) {
           d.Pi_cipar = Pi_cipar;
           d.DivJ = DivJ;
           d.bounce_factor = bounce_factor;
+          d.nu_star = nu_star;
         }
       }
       continue; // Skip perpendicular flow parts below
