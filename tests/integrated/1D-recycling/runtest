@@ -98,4 +98,29 @@ Ti = ds_last["Td+"]
 Ti_up = Ti.values[0] * ds.metadata["Tnorm"]
 success &= check_value("Ion temperature", Ti_up, 150, tol=10)
 
+# fmt: off
+# Check the values of various diagnostics
+pos_idx = -1    # 1D position index to check (excluding guards)
+rel_tol = 1e-4  # Relative tolerance (should be high enough to accommodate compiler optimisation differences)
+diags_ref = {   # Diagnostic names and reference values (generated with -O2)
+    "Sd+_iz": 0.0012500877296552468,
+    "Fd+_iz": 5.027449522167903e-05,
+    "Ed+_iz": 0.0008867627959864742,
+    "Rd+_ex": -0.0002980827888026677,
+    "Sd+_rec": -3.479788534373128e-09,
+    "Fd+_rec": -1.0525255255905655e-09,
+    "Ed+_rec": -4.289581450623666e-09,
+    "Rd+_rec": -7.859435290992585e-10,
+    "Kdd+_cx": 0.006218829645880973,
+    "Fdd+_cx": 0.00035836480520026217,
+    "Edd+_cx": 0.000715157957576078,
+}
+# fmt: on
+
+# Do the diagnostic checks
+ds_diags = ds_last.isel(pos=slice(2, -2))
+for name, target in diags_ref.items():
+    val = ds_diags[name].values[pos_idx]
+    success &= check_value(name, val, target, tol=rel_tol * abs(val))
+
 end_test(success)
