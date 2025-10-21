@@ -190,6 +190,8 @@ TYPED_TEST(BraginskiiConductionTest, ConductionCollisionsMode) {
   BOUT_FOR_SERIAL(i, conduction_brag.getRegion("RGN_NOBNDRY")) {
     // Conduction is inversely proportional to the collision frequency
     EXPECT_NE(conduction_brag[i], 0.);
-    EXPECT_FLOAT_EQ(conduction_brag[i], 2*conduction_multi[i]);
+    EXPECT_FLOAT_EQ(conduction_brag[i], 2 * conduction_multi[i]);
   }
 }
+
+// TODO: Add tests for more types of collisions (e.g., electron-ion, charge-exchante, ion neutral...)

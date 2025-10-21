@@ -141,7 +141,6 @@ void IonViscosity::transform(Options &state) {
               // Ion-electron collisions
               (collisionSpeciesMatch(    
                 collision_name, species.name(), "+", "coll", "partial"))) {
-                  
                   collision_names[species_name].push_back(collision_name);
                 }
         }
@@ -229,6 +228,7 @@ void IonViscosity::transform(Options &state) {
     // This term is the parallel flow part of
     // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
     const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+    //BOUT_FOR_SERIAL(i, div_Pi_cipar.getRegion("RGN_NOBNDRY")) {std::cout << " " << div_Pi_cipar[i] << std::endl;}
 
     add(species["momentum_source"], div_Pi_cipar);
     subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
