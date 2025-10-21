@@ -6,8 +6,8 @@
 #include <functional>
 
 #include <bout/bout_types.hxx>
-#include <bout/field3d.hxx>
 #include <bout/coordinates.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
 
 #include "../include/hermes_build_config.hxx"

@@ -80,7 +80,8 @@ void DetachmentController::transform(Options& state) {
             // Make sure that the linear interpolation returns a point between the two sample
             // points
             ASSERT2(((x1 < distance_from_upstream) && (distance_from_upstream < x2)));
-            ASSERT2(((0.0 < distance_from_upstream) && (distance_from_upstream < connection_length)));
+            ASSERT2(((0.0 < distance_from_upstream)
+                     && (distance_from_upstream < connection_length)));
             break;
         }
     }

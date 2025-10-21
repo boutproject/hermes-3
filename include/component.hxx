@@ -202,7 +202,7 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
 
 /// Check whether value is valid, returning true
 /// if invalid i.e contains non-finite values
-template<typename T>
+template <typename T>
 bool hermesDataInvalid([[maybe_unused]] const T& value) {
   return false; // Default
 }

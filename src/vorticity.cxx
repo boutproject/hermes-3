@@ -38,7 +38,7 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 
   return fp;
 }
-}
+} // namespace
 
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   AUTO_TRACE();

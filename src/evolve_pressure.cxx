@@ -261,7 +261,7 @@ void EvolvePressure::finally(const Options& state) {
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
-  
+
   if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
       state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set and species is charged -> include ExB flow
@@ -335,12 +335,16 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_n_diffuse_perp) {
-    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P);
+    ddt(P) +=
+        Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P);
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) += 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
-                                           T);
+    ddt(P) +=
+        1e-4
+        * Div_Perp_Lap_FV_Index(
+            floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
+            T);
   }
 
   if (low_p_diffuse_perp) {

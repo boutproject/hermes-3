@@ -937,5 +937,4 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
       throw BoutException("Precon ddt(NV{}) non-finite at {}\n", name, i);
     }
   }
-
 }
