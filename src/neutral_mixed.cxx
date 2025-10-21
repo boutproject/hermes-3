@@ -883,7 +883,7 @@ void NeutralMixed::outputVars(Options& state) {
   }
 }
 
-void NeutralMixed::precon(const Options& state, BoutReal gamma) {
+void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma) {
   if (!precondition) {
     return;
   }

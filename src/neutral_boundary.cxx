@@ -5,7 +5,7 @@ using bout::globals::mesh;
 
 #include "../include/neutral_boundary.hxx"
 
-NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions, Solver* solver)
+NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions, [[maybe_unused]] Solver* solver)
     : name(name) {
   AUTO_TRACE();
 

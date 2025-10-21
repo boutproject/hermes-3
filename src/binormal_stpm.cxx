@@ -7,7 +7,7 @@
 
 using bout::globals::mesh;
 
-BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions, Solver* solver)
+BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions, [[maybe_unused]] Solver* solver)
   : name(name) {
   AUTO_TRACE();
   auto& options = alloptions[name];

@@ -157,7 +157,7 @@ public:
     }
   }
 
-  void apply(Field2D& f) override {
+  void apply([[maybe_unused]] Field2D& f) override {
     throw BoutException("DecayLengthBoundary not implemented for Field2D");
   }
 private:
