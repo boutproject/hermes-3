@@ -5,6 +5,7 @@
 
 #include <functional>
 
+#include <bout/bout_types.hxx>
 #include <bout/field3d.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/fv_ops.hxx>
@@ -17,12 +18,17 @@ auto firstArg(const Head &head, Tail... ) {
   return head;
 }
 
+inline auto threePointStencil(BoutReal c, BoutReal m, BoutReal p) {
+  return FV::Stencil1D{
+      .c = c, .m = m, .p = p, .mm = BoutNaN, .pp = BoutNaN, .L = BoutNaN, .R = BoutNaN};
+}
+
 /// Return the value at the left of a cell,
 /// given cell centre values at this cell and two neighbours
 template <typename CellEdges>
 BoutReal cellLeft(BoutReal c, BoutReal m, BoutReal p) {
   CellEdges cellboundary;
-  FV::Stencil1D s {.c = c, .m = m, .p = p};
+  FV::Stencil1D s = threePointStencil(c, m, p);
   cellboundary(s);
   return s.L;
 }
@@ -32,7 +38,7 @@ BoutReal cellLeft(BoutReal c, BoutReal m, BoutReal p) {
 template <typename CellEdges>
 BoutReal cellRight(BoutReal c, BoutReal m, BoutReal p) {
   CellEdges cellboundary;
-  FV::Stencil1D s {.c = c, .m = m, .p = p};
+  FV::Stencil1D s = threePointStencil(c, m, p);
   cellboundary(s);
   return s.R;
 }
