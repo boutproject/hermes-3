@@ -229,9 +229,24 @@ if(HERMES_TESTS)
 
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
-    add_test(NAME ${TESTNAME}
-           WORKING_DIRECTORY tests/integrated/${TESTNAME}
-           COMMAND runtest)
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+      set(INT_TEST_OUTPUT
+          ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
+      # Update the test's build dir if anything in the test source changed
+      file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS ${INT_TEST_SRC}/*)
+      add_custom_target(${TESTNAME} ALL DEPENDS ${TEST_FILES})
+      add_custom_command(
+        TARGET ${TESTNAME} COMMAND ${CMAKE_COMMAND} -E copy_directory
+                                   ${INT_TEST_SRC} ${INT_TEST_OUTPUT})
+    else()
+      set(INT_TEST_OUTPUT
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+    endif()
+    add_test(
+      NAME ${TESTNAME}
+      WORKING_DIRECTORY ${INT_TEST_OUTPUT}
+      COMMAND runtest)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
