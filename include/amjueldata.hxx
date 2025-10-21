@@ -17,7 +17,7 @@
  *
  */
 struct AmjuelData {
-  friend class AmjuelReaction;
+  friend struct AmjuelReaction;
 
 private:
   AmjuelData(const std::filesystem::path& data_dir,
