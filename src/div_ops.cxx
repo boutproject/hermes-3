@@ -487,8 +487,6 @@ const Field3D Div_Z_FV_Index(const Field3D &as, const Field3D &fs) {
 
   Field3D result = 0.0;
 
-  Coordinates *coord = mesh->getCoordinates();
-  
   for (int i = mesh->xstart; i <= mesh->xend; i++)
     for (int j = mesh->ystart; j <= mesh->yend; j++)
       for (int k = 0; k < mesh->LocalNz; k++) {

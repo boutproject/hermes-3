@@ -262,8 +262,6 @@ void EvolvePressure::finally(const Options& state) {
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
   
-  Coordinates* coord = mesh->getCoordinates();
-
   if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
       state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set and species is charged -> include ExB flow
@@ -494,7 +492,6 @@ void EvolvePressure::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    flow_ylow_conduction;
     ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
     flow_ylow += flow_ylow_conduction;
 

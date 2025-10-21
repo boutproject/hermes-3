@@ -40,8 +40,6 @@ void DetachmentController::transform(Options& state) {
 
     // Set the initial value so that if no point has Nn > Ne, the detachment front is
     // at the target.
-
-    bool detachment_front_found = false;
     BoutReal distance_from_upstream = -(coord->dy(0, mesh->ystart - 1, 0) + coord->dy(0, mesh->ystart, 0)) / 4.0;
     // Looking at https://github.com/boutproject/xhermes/blob/main/xhermes/accessors.py#L58
     // dy from the first two cells cancels out
@@ -83,8 +81,6 @@ void DetachmentController::transform(Options& state) {
             // points
             ASSERT2(((x1 < distance_from_upstream) && (distance_from_upstream < x2)));
             ASSERT2(((0.0 < distance_from_upstream) && (distance_from_upstream < connection_length)));
-
-            detachment_front_found = true;
             break;
         }
     }

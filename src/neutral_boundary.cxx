@@ -84,7 +84,6 @@ void NeutralBoundary::transform(Options& state) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         auto i = indexAt(Nn, r.ind, mesh->ystart, jz);
         auto im = i.ym();
-        auto ip = i.yp();
 
         // Free boundary condition on Nn, Pn, Tn
         // This is problematic when Nn, Pn or Tn are zero
@@ -144,7 +143,6 @@ void NeutralBoundary::transform(Options& state) {
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         auto i = indexAt(Nn, r.ind, mesh->yend, jz);
-        auto im = i.ym();
         auto ip = i.yp();
 
         // Free boundary condition on Nn, Pn, Tn

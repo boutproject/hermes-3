@@ -191,11 +191,6 @@ void Reaction::transform(Options& state) {
       momentum_exchange = energy_exchange = 0;
       // Splitting factors - fraction of the total momentum/energy lost by consumed
       // species that will go to this product
-      BoutReal momentum_split = pop_change_s * this->pfactors.at(sp_name)
-                                * get<BoutReal>(state["species"][sp_name]["AA"])
-                                / this->momentum_weightsum;
-      BoutReal energy_split =
-          pop_change_s * this->pfactors.at(sp_name) / this->energy_weightsum;
       for (auto& rsp_name : heavy_reactant_species) {
         // All consumed (net loss) reactants contribute
         int pop_change_r = pop_changes.at(rsp_name);

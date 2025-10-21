@@ -437,7 +437,6 @@ void SheathBoundaryInsulating::transform(Options& state) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         auto i = indexAt(Ne, r.ind, mesh->ystart, jz);
-        auto ip = i.yp();
         auto im = i.ym();
 
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
