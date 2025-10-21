@@ -1,56 +1,101 @@
 #!/usr/bin/env python3
 
-# Python script to run and analyse MMS test
+# Test that a 1D-recyling example produces expected results
 
 from __future__ import division
 from __future__ import print_function
 
-try:
-  from builtins import str
-except:
-  pass
+from boututils.run_wrapper import launch
+import os.path
+import xhermes
 
-from boututils.run_wrapper import shell, launch, getmpirun
-from boutdata.collect import collect
+this_dir = os.path.dirname(__file__)
+data_dir = os.path.join(this_dir, "data")
+hermes_exec = os.path.normpath(os.path.join(this_dir, "..", "..", "..", "hermes-3"))
+output_path = os.path.join(data_dir, "BOUT.dmp.0.nc")
 
-from numpy import sqrt, max, abs, mean, array, log, concatenate
 
-shell("rm data/BOUT.dmp.0.nc")
+# ============================= Helper functions ==============================
+def check_exec_exists():
+    exec_exists = os.path.isfile(hermes_exec)
+    if not exec_exists:
+        print(f"No executable found at {hermes_exec}")
+        fail_test()
 
-# Link to the executable
-shell("ln -s ../../../hermes-3 hermes-3")
+
+def check_output_exists():
+    output_exists = os.path.isfile(output_path)
+    if not output_exists:
+        print(f"No data at {output_path}")
+        fail_test()
+
+
+def check_value(name, val, target, tol=None, min=None, max=None):
+    if min is None:
+        if tol is None:
+            print("Trying to compare test data with no tolerance or minimum value set.")
+            fail_test()
+        else:
+            min = target - tol
+    if max is None:
+        if tol is None:
+            print("Trying to compare test data with no tolerance or maximum value set.")
+            fail_test()
+        else:
+            max = target + tol
+    success = val > min and val < max
+    if not success:
+        print(f"{name}: Expected {min} < [{name}] < {max}, but result was {val}")
+    return success
+
+
+def end_test(success):
+    if success:
+        print(" => Test passed")
+        exit(0)
+    else:
+        print(" => Test failed")
+        exit(1)
+
+
+def fail_test():
+    end_test(False)
+
+
+# =============================================================================
+
 
 success = True
 
-path = "data"
+# Make sure the executable is where it should be
+check_exec_exists()
 
-s, out = launch("./hermes-3 -d " + path, nproc=1, pipe=True)
+# Remove existing output
+if os.path.exists(output_path):
+    os.remove(output_path)
+
+# Use Bout wrapper to run exec
+s, out = launch(f"{hermes_exec} -d {data_dir}", nproc=1, pipe=True)
 
 # Save output to log file
 with open("run.log", "w") as f:
-  f.write(out)
+    f.write(out)
 
-Pe = collect("Pe", tind=-1, path=path)
-Ne = collect("Ne", tind=-1, path=path)
-Tnorm = collect("Tnorm", path=path)
-Te = Pe / Ne
-Te_up = Te[-1,0,0,0] * Tnorm
+# Check that the run produced output
+check_output_exists()
 
-# Upstream electron temperature should be about 60eV
-if Te_up < 60 or Te_up > 80:
-  success = False
-  print("Electron temperature failed: {}eV. Expecting about 70eV".format(Te_up))
+# Examine last output
+ds = xhermes.open(data_dir, unnormalise=False).hermes.extract_1d_tokamak_geometry()
+ds_last = ds.isel(t=-1)
 
-Ti = collect("Td+", tind=-1, path=path)
-Ti_up = Ti[-1,0,0,0] * Tnorm
+# Upstream electron temperature should be about 70eV
+Te = ds_last["Pe"] / ds_last["Ne"]
+Te_up = Te.values[0] * ds.metadata["Tnorm"]
+success = check_value("Electron temperature [eV]", Te_up, 70, tol=10)
+
 # Upstream ion temperature should be about 140eV
-if Ti_up < 140 or Ti_up > 160:
-  success = False
-  print("Ion temperature failed: {}eV. Expecting about 150eV".format(Ti_up))
+Ti = ds_last["Td+"]
+Ti_up = Ti.values[0] * ds.metadata["Tnorm"]
+success &= check_value("Ion temperature", Ti_up, 150, tol=10)
 
-if success:
-  print(" => Test passed")
-  exit(0)
-else:
-  print(" => Test failed")
-  exit(1)
+end_test(success)
