@@ -91,7 +91,7 @@ BoutReal minmod(BoutReal a, BoutReal b, BoutReal c) {
 }
 
 // Monotonized Central limiter (Van-Leer)
-void MC(Stencil1D &n, const BoutReal h) {
+void MC(Stencil1D &n) {
   BoutReal slope =
       minmod(2. * (n.p - n.c), 0.5 * (n.p - n.m), 2. * (n.c - n.m));
   n.L = n.c - 0.5 * slope;
@@ -168,7 +168,7 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D &n, const Field3D &f,
         s.p = n(i + 1, j, k);
         s.pp = n(i + 2, j, k);
 
-        MC(s, coord->dx(i, j));
+        MC(s);
 
         // Right side
         if ((i == mesh->xend) && (mesh->lastX())) {
@@ -241,7 +241,7 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D &n, const Field3D &f,
         s.p = n(i, j, kp);
         s.pp = n(i, j, kpp);
 
-        MC(s, coord->dz(i, j));
+        MC(s);
 
         if (vU > 0.0) {
           BoutReal flux = vU * s.R / (coord->J(i, j) * coord->dz(i, j));
@@ -1314,7 +1314,7 @@ const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Fi
         s.p = n(i + 1, j, k);
         s.pp = n(i + 2, j, k);
 
-        MC(s, coord->dx(i, j));
+        MC(s);
         
         // Right side
         if ((i == mesh->xend) && (mesh->lastX())) {
@@ -1384,7 +1384,7 @@ const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Fi
         s.p = n(i, j, kp);
         s.pp = n(i, j, kpp);
 
-        MC(s, coord->dz(i, j));
+        MC(s);
 
         if (vU > 0.0) {
           BoutReal flux = vU * s.R * gU/ (coord->J(i, j) * coord->dz(i, j));
