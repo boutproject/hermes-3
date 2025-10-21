@@ -7,11 +7,13 @@
 #include <bout/output_bout_types.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
+
 
 using bout::globals::mesh;
 
@@ -20,6 +22,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   AUTO_TRACE();
 
   auto& options = alloptions[name];
+
+  yboundary.init(options);
 
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
@@ -71,6 +75,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   bndry_flux = options["bndry_flux"]
                    .doc("Allow flows through radial boundaries")
+                   .withDefault<bool>(true);
+
+  exb_advection = options["exb_advection"]
+                   .doc("Include ExB advection?")
                    .withDefault<bool>(true);
 
   poloidal_flows =
@@ -187,6 +195,16 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   kappa_limit_alpha = options["kappa_limit_alpha"]
     .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
     .withDefault(-1.0);
+
+  if (mesh->isFci()) {
+    const auto coord = mesh->getCoordinates();
+    // Note: This is 1 for a Clebsch coordinate system
+    //       Remove parallel slices before operations
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
+  } else {
+    // Clebsch coordinate system
+    bracket_factor = 1.0;
+  }
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -239,9 +257,9 @@ void EvolvePressure::transform(Options& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
 
-  Field3D Pfloor = floor(P, 0.0);
-  T = Pfloor / softFloor(N, density_floor);
-  Pfloor = N * T; // Ensure consistency
+  Field3DParallel Pfloor = floor(P.asField3DParallel(), 0.0);
+  T = Pfloor / softFloor(N.asField3DParallel(), density_floor);
+  Pfloor = N * T.asField3DParallel(); // Ensure consistency
 
   set(species["pressure"], Pfloor);
   set(species["temperature"], T);
@@ -255,7 +273,9 @@ void EvolvePressure::finally(const Options& state) {
 
   // Get updated pressure and temperature with boundary conditions
   // Note: Retain pressures which fall below zero
-  P.clearParallelSlices();
+  if (!P.isFci()) {
+    P.clearParallelSlices();
+  }
   P.setBoundaryTo(get<Field3D>(species["pressure"]));
   Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
 
@@ -264,13 +284,14 @@ void EvolvePressure::finally(const Options& state) {
   
   Coordinates* coord = mesh->getCoordinates();
 
-  if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
+  if (exb_advection and species.isSet("charge") and
+      (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
       state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
   } else {
     ddt(P) = 0.0;
   }
@@ -305,8 +326,10 @@ void EvolvePressure::finally(const Options& state) {
       E_VgradP =  V * Grad_par(P);
       ddt(P) += (2. / 3) * E_VgradP;
     }
-    flow_ylow_advection *= 5. / 2; // Energy flow
-    flow_ylow = flow_ylow_advection;
+    if (flow_ylow_advection.isAllocated()) {
+      flow_ylow_advection *= 5. / 2; // Energy flow
+      flow_ylow = flow_ylow_advection;
+    }
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -319,11 +342,14 @@ void EvolvePressure::finally(const Options& state) {
       // Viscous heating coming from numerical viscosity from the Lax flux
       Field3D Nlim = softFloor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-      Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_viscous_heating, fix_momentum_boundary_flux);
-      flow_ylow_viscous_heating *= AA;
-      flow_ylow += flow_ylow_viscous_heating;
-      if (numerical_viscous_heating) {
-        ddt(P) += Sp_nvh;
+      // skip if only for diagnostic with FCI, as not yet implemented
+      if (numerical_viscous_heating || (!Nlim.isFci())) {
+	Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_viscous_heating, fix_momentum_boundary_flux);
+	flow_ylow_viscous_heating *= AA;
+	flow_ylow += flow_ylow_viscous_heating;
+	if (numerical_viscous_heating) {
+	  ddt(P) += Sp_nvh;
+	}
       }
     }
   } else if (diagnose) {
@@ -472,29 +498,33 @@ void EvolvePressure::finally(const Options& state) {
       kappa_par = kappa_par / (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
+      if (!kappa_par.isFci()) {
+      	mesh->communicate(kappa_par);
+      }
+    }
+    if (kappa_par.isFci()) {
+      kappa_par.applyBoundary("neumann");
       mesh->communicate(kappa_par);
+      kappa_par.applyParallelBoundary("parallel_dirichlet_o2");
     }
 
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(kappa_par, r.ind, mesh->ystart, jz);
-        auto im = i.ym();
-        kappa_par[im] = kappa_par[i];
+
+    yboundary.iter([&](auto& region) {
+      for (auto& pnt : region) {
+	pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
       }
-    }
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(kappa_par, r.ind, mesh->yend, jz);
-        auto ip = i.yp();
-        kappa_par[ip] = kappa_par[i];
-      }
-    }
+    });
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    flow_ylow_conduction;
     ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
-    flow_ylow += flow_ylow_conduction;
+    if (    flow_ylow_conduction.isAllocated()) {
+      if (flow_ylow.isAllocated()) {
+	flow_ylow += flow_ylow_conduction;
+      } else {
+	flow_ylow = flow_ylow_conduction;
+      }
+    }
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term. The operator splits into 4 pieces:

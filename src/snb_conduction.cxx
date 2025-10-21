@@ -18,7 +18,7 @@ void SNBConduction::transform(Options& state) {
 
   // SNB non-local heat flux. Also returns the Spitzer-Harm value for comparison
   // Note: Te in eV, Ne in Nnorm
-  Field2D dy_orig = mesh->getCoordinates()->dy;
+  Coordinates::FieldMetric dy_orig = mesh->getCoordinates()->dy;
   mesh->getCoordinates()->dy *= rho_s0; // Convert distances to m
 
   // Inputs in eV and m^-3

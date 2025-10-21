@@ -3,6 +3,7 @@
 #define CLASSICAL_DIFFUSION_H
 
 #include "component.hxx"
+#include <bout/vectormetric.hxx>
 
 struct ClassicalDiffusion : public Component {
   ClassicalDiffusion(std::string name, Options& alloptions, Solver*);
@@ -11,7 +12,7 @@ struct ClassicalDiffusion : public Component {
 
   void outputVars(Options &state) override;
 private:
-  Field2D Bsq; // Magnetic field squared
+  Field3D Bsq; // Magnetic field squared
 
   bool diagnose; ///< Output additional diagnostics?
   Field3D Dn; ///< Particle diffusion coefficient

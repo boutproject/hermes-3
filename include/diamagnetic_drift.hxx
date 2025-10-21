@@ -2,6 +2,9 @@
 #ifndef DIAMAGNETIC_DRIFT_H
 #define DIAMAGNETIC_DRIFT_H
 
+#include <bout/vectormetric.hxx>
+#include <bout/yboundary_regions.hxx>
+
 #include "component.hxx"
 
 /// Calculate diamagnetic flows
@@ -20,9 +23,10 @@ struct DiamagneticDrift : public Component {
   void transform(Options &state) override;
 
 private:
-  Vector2D Curlb_B;
+  VectorMetric Curlb_B;
   bool bndry_flux;
-  Field2D diamag_form;
+  Coordinates::FieldMetric diamag_form;
+  YBoundary yboundary;
 };
 
 namespace {

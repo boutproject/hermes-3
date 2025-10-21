@@ -20,7 +20,7 @@ struct ScaleTimeDerivs : public Component {
   void transform(Options &state) override {
 
     auto* coord = bout::globals::mesh->getCoordinates();
-    Field2D dl2 = coord->g_22 * SQ(coord->dy);
+    Coordinates::FieldMetric dl2 = coord->g_22 * SQ(coord->dy);
 
     // Scale by parallel heat conduction CFL timescale
     auto Te = get<Field3D>(state["species"]["e"]["temperature"]);

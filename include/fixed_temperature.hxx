@@ -23,6 +23,10 @@ struct FixedTemperature : public Component {
     T = options["temperature"].doc("Constant temperature [eV]").as<Field3D>()
         / Tnorm; // Normalise
 
+    if (T.isFci()) {
+      bout::globals::mesh->communicate(T); // Calculate yup/down fields
+    }
+
     diagnose = options["diagnose"]
       .doc("Save additional output diagnostics")
       .withDefault<bool>(false);
@@ -52,6 +56,9 @@ struct FixedTemperature : public Component {
       // Note: The boundary of N may not be set yet
       auto N = GET_NOBOUNDARY(Field3D, species["density"]);
       P = N * T;
+      if (P.isFci()) {
+        bout::globals::mesh->communicate(P);
+      }
       set(species["pressure"], P);
     }
   }

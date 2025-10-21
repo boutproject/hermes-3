@@ -2,7 +2,7 @@
 #ifndef RELAX_POTENTIAL_H
 #define RELAX_POTENTIAL_H
 
-#include <bout/vector2d.hxx>
+#include <bout/vectormetric.hxx>
 
 #include "component.hxx"
 
@@ -56,6 +56,8 @@ struct RelaxPotential : public Component {
 
   void outputVars(Options& state) override;
 private:
+  std::shared_ptr<FCI::dagp_fv> dagp;
+
   Field3D Vort; // Evolving vorticity
 
   Field3D phi1; // Scaled electrostatic potential, evolving in time ϕ_1 = λ_2 ϕ
@@ -72,10 +74,22 @@ private:
 
   bool sheath_boundary; ///< Set outer boundary to j=0?
 
-  Field2D Bsq;      ///< SQ(coord->Bxy)
-  Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
+  Coordinates::FieldMetric Bsq;      ///< SQ(coord->Bxy)
+  VectorMetric Curlb_B; ///< Curvature vector Curl(b/B)
 
   BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
+
+  Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
+    if (a.isFci()) {
+      return (*dagp)(a, b, false);
+    }
+    return FV::Div_a_Grad_perp(a, b);
+  }
+
+  Field3D viscosity; /// Kinematic viscosity
+  bool phi_dissipation; /// Parallel dissipation of potential
+
+  Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 
 namespace {

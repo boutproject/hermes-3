@@ -7,6 +7,8 @@ BOUT.settings
 *~
 .DS_Store
 /build*
+.#*
+.ipynb_checkpoints/
 __pycache__
 
 # Docs

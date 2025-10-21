@@ -60,7 +60,7 @@ struct PolarisationDrift : public Component {
 private:
   std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
 
-  Field2D Bsq; // Cached SQ(coord->Bxy)
+  Field3D Bsq; // Cached SQ(coord->Bxy)
   
   // Diagnostic outputs
   bool diagnose; ///< Save diagnostic outputs?

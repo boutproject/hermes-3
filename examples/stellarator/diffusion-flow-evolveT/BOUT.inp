@@ -1,0 +1,75 @@
+# Stellarator diffusion and parallel flow example
+
+nout = 50
+timestep = 50
+
+[mesh]
+
+file = "W7X.nc"
+
+[mesh:paralleltransform]
+type = fci
+
+[mesh:diff]
+first = C4
+second = C4
+
+[solver]
+mxstep = 10000
+type = pvode
+debug_on_failure = True
+
+[hermes]
+components = h+, e, sound_speed, vorticity, sheath_boundary_parallel
+
+Nnorm = 2e18  # Reference density [m^-3]
+Bnorm = 1   # Reference magnetic field [T]
+Tnorm = 5   # Reference temperature [eV]
+
+[h+]
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion_3d
+
+AA = 1
+charge = 1
+anomalous_D = .2    # Density diffusion [m^2/s]
+anomalous_chi = .4
+#anomalous_nu = 0
+
+thermal_conduction = false  # No collision rate calculated
+
+[e]
+type = quasineutral, evolve_pressure, zero_current, anomalous_diffusion_3d
+
+AA = 1
+charge = 1
+anomalous_D = .2    # Density diffusion [m^2/s]
+anomalous_chi = .4
+
+thermal_conduction = false  # No collision rate calculated
+
+[Nh+]
+
+function = 1
+
+bndry_core = dirichlet(1.0)  # Core boundary high density
+bndry_all = dirichlet(0.1)   # All other boundaries low density
+
+[NVh+]
+# Momentum
+
+function = 0
+bndry_all = neumann
+
+[Ph+]
+function = 1
+bndry_core = dirichlet(1.0)  # Core boundary high density 
+bndry_all = dirichlet(0.01)   # All other boundaries low density
+
+[Vh+]
+
+bndry_all = neumann
+
+[vorticity:laplacian]
+type = petsc
+direct = 1
+all_terms = false

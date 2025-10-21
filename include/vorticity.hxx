@@ -2,9 +2,11 @@
 #ifndef VORTICITY_H
 #define VORTICITY_H
 
-#include <bout/vector2d.hxx>
+#include <bout/vectormetric.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include "component.hxx"
+#include "div_ops.hxx"
 
 class LaplaceXY;
 class Laplacian;
@@ -108,6 +110,7 @@ private:
   Field3D phi; // Electrostatic potential
   std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
 
+  std::shared_ptr<FCI::dagp_fv> dagp;
   Field3D Pi_hat; ///< Contribution from ion pressure, weighted by atomic mass / charge
 
   bool exb_advection; // Include nonlinear ExB advection?
@@ -135,15 +138,38 @@ private:
   bool split_n0; // Split phi into n=0 and n!=0 components
   LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
 
-  Field2D Bsq; // SQ(coord->Bxy)
-  Vector2D Curlb_B; // Curvature vector Curl(b/B)
+  Field3D Bsq; // SQ(coord->Bxy)
+  VectorMetric Curlb_B; // Curvature vector Curl(b/B)
   BoutReal hyper_z; ///< Hyper-viscosity in Z
-  Field2D viscosity; ///< Kinematic viscosity
+  Field3D viscosity; ///< Kinematic viscosity
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
   bool diagnose; ///< Output additional diagnostics?
+
+  YBoundary yboundary;
+
+  Field3D fromFieldAligned(const Field3D& f) {
+    if (f.isFci()) {
+      return f;
+    }
+    return ::fromFieldAligned(f);
+  }
+  Field3D toFieldAligned(const Field3D& f) {
+    if (f.isFci()) {
+      return f;
+    }
+    return ::toFieldAligned(f);
+  }
+  Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
+    if (Vort.isFci()) {
+      return (*dagp)(a, b, false);
+    }
+    return FV::Div_a_Grad_perp(a, b);
+  }
+
+  Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 
 namespace {

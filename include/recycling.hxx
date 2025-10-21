@@ -3,6 +3,9 @@
 #define RECYCLING_H
 
 #include "component.hxx"
+#include <bout/yboundary_regions.hxx>
+
+extern YBoundary yboundary;
 
 /// Convert fluxes of species at boundaries
 ///

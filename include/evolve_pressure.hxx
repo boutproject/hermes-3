@@ -3,6 +3,8 @@
 #define EVOLVE_PRESSURE_H
 
 #include <bout/field3d.hxx>
+#include <bout/yboundary_regions.hxx>
+
 #include "../include/hermes_utils.hxx"
 #include "component.hxx"
 
@@ -77,6 +79,7 @@ private:
 
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
+  bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
@@ -115,6 +118,8 @@ private:
   BoutReal time_normalisation; ///< Normalisation factor [s]
   bool source_time_dependent; ///< Is the input source time dependent?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
+
+  YBoundary yboundary;
   Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
   Field3D flow_ylow_advection;    ///< Advection energy flow diagnostics
   Field3D flow_ylow_viscous_heating; ///< Flow of kinetic energy due to numerical viscosity
@@ -122,6 +127,8 @@ private:
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
+
+  Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
   Field3D E_PdivV, E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
 };
 

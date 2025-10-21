@@ -79,6 +79,7 @@ set(HERMES_SOURCES
     src/zero_current.cxx
     src/collisions.cxx
     src/anomalous_diffusion.cxx
+    src/anomalous_diffusion_3d.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
     src/adas_reaction.cxx
@@ -98,6 +99,7 @@ set(HERMES_SOURCES
     src/ion_viscosity.cxx
     src/transform.cxx
     src/vorticity.cxx
+    src/yboundary_regions.cxx
     include/adas_reaction.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
@@ -105,6 +107,7 @@ set(HERMES_SOURCES
     include/amjuel_hydrogen.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
+    include/anomalous_diffusion_3d.hxx
     include/classical_diffusion.hxx
     include/binormal_stpm.hxx
     include/collisions.hxx
@@ -253,6 +256,7 @@ if(HERMES_TESTS)
       add_subdirectory(external/googletest)
     endif()
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
+
 
     add_executable(hermes_unit_tests
                    tests/unit/main.cxx

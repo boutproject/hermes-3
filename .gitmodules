@@ -4,7 +4,7 @@
 [submodule "external/BOUT-dev"]
 	path = external/BOUT-dev
 	url = https://github.com/boutproject/BOUT-dev.git
-	branch = next
+	branch = fci-auto-with-debug
 [submodule "BOUT-spack"]
 	path = external/BOUT-spack
 	url = https://github.com/boutproject/BOUT-spack.git

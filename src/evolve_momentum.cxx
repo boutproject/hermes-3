@@ -12,7 +12,10 @@
 
 using bout::globals::mesh;
 
-EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) : name(name) {
+Options * tracking{nullptr};
+
+EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) :
+  name(name), Vname(fmt::format("V{}", name)) {
   AUTO_TRACE();
   
   // Evolve the momentum in time
@@ -39,6 +42,10 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                       .doc("Allow flows through radial boundaries")
                       .withDefault<bool>(true);
 
+  exb_advection = options["exb_advection"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(true);
+
   poloidal_flows = options["poloidal_flows"]
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
@@ -57,27 +64,53 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   // Set to zero so set for output
   momentum_source = 0.0;
+
+  if (mesh->isFci()) {
+    const auto coord = mesh->getCoordinates();
+    // Note: This is 1 for a Clebsch coordinate system
+    //       Remove parallel slices before operations
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
+  } else {
+    // Clebsch coordinate system
+    bracket_factor = 1.0;
+  }
 }
 
 void EvolveMomentum::transform(Options &state) {
   AUTO_TRACE();
-  mesh->communicate(NV);
 
+  tracking = ddt(NV).getTracking();
   auto& species = state["species"][name];
+  if (tracking) {
+    saveParallel(*tracking, fmt::format("NV{}_initial0", name), NV);
+    species["momentum_source"] = zeroFrom(ddt(NV));
+    auto src = mpark::get_if<Field3D>(&species["momentum_source"].value);
+    src->enableTracking(fmt::format("ddt_NV{}_momentum", name), *tracking);
+    setName(*src, "NV{}_momentum", name);
+  }
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
   Field3D Nlim = softFloor(N, density_floor);
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
+  NV.applyBoundary();
   V = NV / (AA * Nlim);
-  V.applyBoundary();
+  V.name = Vname;
+  mesh->communicate(V);
+  V.applyParallelBoundary();
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver
-  NV = AA * N * V; // Re-calculate consistent with V and N
+  NV = AA * N.asField3DParallel() * V; // Re-calculate consistent with V and N
+
+  if (tracking) {
+    saveParallel(*tracking, fmt::format("NV{}_initial", name), NV);
+    saveParallel(*tracking, fmt::format("N{}_initial",name), N);
+    saveParallel(*tracking, fmt::format("V{}_initial", name), V);
+  }
   // Note: Now NV and NV_solver will differ when N < density_floor
-  NV_err = NV - NV_solver; // This is used in the finally() function
+  NV_err = setName(NV - NV_solver, "correction(NV - NV_solver)"); // This is used in the finally() function
   set(species["momentum"], NV);
 }
 
@@ -89,12 +122,12 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Get updated momentum with boundary conditions
   // Note: This momentum may be modified by electromagnetic terms
-  NV = get<Field3D>(species["momentum"]);
+  NV = get<Field3D>(species["momentum"]).asField3DParallel();
 
   // Get the species density
   Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  Field3D Nlim = softFloor(N, density_floor);
+  Field3D Nlim = softFloor(N.asField3DParallel(), density_floor);
 
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
@@ -118,8 +151,12 @@ void EvolveMomentum::finally(const Options &state) {
 
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                       true); // ExB drift
+      if (exb_advection) {
+        ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+                                         true) * bracket_factor; // ExB drift
+      } else {
+        ddt(NV) = 0.0;
+      }
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
@@ -138,8 +175,12 @@ void EvolveMomentum::finally(const Options &state) {
         // This is Z * Apar * dn/dt, keeping just leading order terms
         Field3D dndt = density_source
           - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, dummy)
-          - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true)
           ;
+
+        if (exb_advection) {
+          dndt -= Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
+        }
+
         if (low_n_diffuse_perp) {
           dndt += Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), N,
                                         bndry_flux);
@@ -152,7 +193,7 @@ void EvolveMomentum::finally(const Options &state) {
 
         // Using the approximation for small delta-B/B
         // b dot Grad(phi) = Grad_par(phi) + [phi, Apar]
-        ddt(NV) -= Z * N * bracket(phi, Apar_flutter, BRACKET_ARAKAWA);
+        ddt(NV) -= Z * N * bracket(phi, Apar_flutter, BRACKET_ARAKAWA) * bracket_factor;
       }
     } else {
       ddt(NV) = 0.0;
@@ -206,8 +247,7 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Other sources/sinks
   if (species.isSet("momentum_source")) {
-    momentum_source = get<Field3D>(species["momentum_source"]);
-    ddt(NV) += momentum_source;
+    ddt(NV) += setName(get<Field3D>(species["momentum_source"]), "momentum_source {}", momentum_source.name);
   }
 
   // If N < density_floor then NV and NV_solver may differ
@@ -242,7 +282,7 @@ void EvolveMomentum::finally(const Options &state) {
   // Restore NV to the value returned by the solver
   // so that restart files contain the correct values
   // Note: Copy boundary condition so dump file has correct boundary.
-  NV_solver.setBoundaryTo(NV);
+  NV_solver.setBoundaryTo(NV, true);
   NV = NV_solver;
 }
 
@@ -280,14 +320,16 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
 
-    set_with_attrs(state[std::string("SNV") + name], momentum_source,
-                   {{"time_dimension", "t"},
-                    {"units", "kg m^-2 s^-2"},
-                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum source"},
-                    {"long_name", name + " momentum source"},
-                    {"species", name},
-                    {"source", "evolve_momentum"}});
+    if (momentum_source.isAllocated()) {
+      set_with_attrs(state[std::string("SNV") + name], momentum_source,
+                     {{"time_dimension", "t"},
+                      {"units", "kg m^-2 s^-2"},
+                      {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                      {"standard_name", "momentum source"},
+                      {"long_name", name + " momentum source"},
+                      {"species", name},
+                      {"source", "evolve_momentum"}});
+    }
 
     // If fluxes have been set then add them to the output
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);

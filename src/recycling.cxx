@@ -6,6 +6,7 @@
 #include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
 #include <bout/utils.hxx> // for trim, strsplit
+#include <bout/yboundary_regions.hxx>
 
 #include <algorithm>
 
@@ -19,6 +20,9 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
 
   Options& options = alloptions[name];
 
+  // init parallel bc iterator
+  yboundary.init(options);
+ 
   auto species_list = strsplit(options["species"]
                                    .doc("Comma-separated list of species to recycle")
                                    .as<std::string>(),
@@ -146,6 +150,35 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                    .doc("Neutral pump enabled? Note, need location in grid file")
                    .withDefault<bool>(false);                 
   }
+
+
+  // Get metric tensor components
+  Coordinates* coord = mesh->getCoordinates();
+
+  // set parallel slices of grid spacing (assumed uniform)
+  // FCI needs the yup/down fields for grid spacing.
+  auto& dx = coord->dx;
+  auto& dy = coord->dy;
+  auto& dz = coord->dz;
+  if (dx.isFci()){
+    dx.splitParallelSlices();
+    dy.splitParallelSlices();
+    dz.splitParallelSlices();
+    for (int i=0;i<mesh->ystart ; ++i){
+      dx.yup(i) = dx;
+      dx.ydown(i) = dx;
+      dy.yup(i) = dy;
+      dy.ydown(i) = dy;
+      dz.yup(i) = dz;
+      dz.ydown(i) = dz;
+      dx.yup(i).clearParallelSlices();
+      dx.ydown(i).clearParallelSlices();
+      dy.yup(i).clearParallelSlices();
+      dy.ydown(i).clearParallelSlices();
+      dz.yup(i).clearParallelSlices();
+      dz.ydown(i).clearParallelSlices();
+    }
+  }
 }
 
 void Recycling::transform(Options& state) {
@@ -153,12 +186,13 @@ void Recycling::transform(Options& state) {
 
   // Get metric tensor components
   Coordinates* coord = mesh->getCoordinates();
-  const Field2D& J = coord->J;
-  const Field2D& dy = coord->dy;
-  const Field2D& dx = coord->dx;
-  const Field2D& dz = coord->dz;
-  const Field2D& g_22 = coord->g_22;
-  const Field2D& g11 = coord->g11;
+
+  const Coordinates::FieldMetric& J = coord->J;
+  const Coordinates::FieldMetric& dy = coord->dy;
+  const Coordinates::FieldMetric& dx = coord->dx;
+  const Coordinates::FieldMetric& dz = coord->dz;
+  const Coordinates::FieldMetric& g_22 = coord->g_22;
+  const Coordinates::FieldMetric& g11 = coord->g11;
 
   for (auto& channel : channels) {
     const Options& species_from = state["species"][channel.from];
@@ -190,7 +224,8 @@ void Recycling::transform(Options& state) {
     if (target_recycle) {
 
       // Fast recycling needs to know how much energy the "from" species is losing to the boundary
-      if (species_from.isSet("energy_flow_ylow")) {
+      const bool eflow_is_set = species_from.isSet("energy_flow_ylow");
+      if (eflow_is_set) {
         energy_flow_ylow = get<Field3D>(species_from["energy_flow_ylow"]);
       } else {
         energy_flow_ylow = 0;
@@ -201,86 +236,46 @@ void Recycling::transform(Options& state) {
 
       channel.target_recycle_density_source = 0;
       channel.target_recycle_energy_source = 0;
+      
+      // Y boundaries
+      yboundary.iter_pnts([&](auto& pnt) {
+	BoutReal flux = pnt.dir * pnt.interpolate_sheath_o1(N) * pnt.interpolate_sheath_o1(V);
+	flux = std::max(flux, 0.0);
+	
+	BoutReal flow = channel.target_multiplier * flux * pnt.interpolate_sheath_o1(J) / pnt.interpolate_sheath_o1(g_22) * pnt.interpolate_sheath_o1(dx) * pnt.interpolate_sheath_o1(dz);
 
-      // Lower Y boundary
+	BoutReal volume  = pnt.ythis(J) * pnt.ythis(dx) * pnt.ythis(dy) * pnt.ythis(dz);
 
-      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-        for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          // Calculate flux through surface [normalised m^-2 s^-1],
-          // should be positive since V < 0.0
-          BoutReal flux =
-              -0.5 * (N(r.ind, mesh->ystart, jz) + N(r.ind, mesh->ystart - 1, jz)) * 0.5
-              * (V(r.ind, mesh->ystart, jz) + V(r.ind, mesh->ystart - 1, jz));
+	// Calculate sources in the final cell [m^-3 s^-1]
+	if (pnt.abs_offset() == 1){
+	  pnt.ythis(channel.target_recycle_density_source) += flow / volume;    // For diagnostic
+	  pnt.ythis(density_source) += flow / volume;         // For use in solver
+	}
+	
+	// Energy of recycled particles
+	BoutReal ion_energy_flow = 0.0;
+	if (eflow_is_set) {
+	  if (pnt.dir < 0.) {
+	    ion_energy_flow = pnt.ythis(energy_flow_ylow) * pnt.dir;   // This is ylow end so take first domain cell and flip sign
+	  } else {
+	    ion_energy_flow = pnt.ynext(energy_flow_ylow); // Ion heat flow to wall in [W]. This is yup end so take guard cell
+	  }
+	}
+	
+	// Blend fast (ion energy) and thermal (constant energy) recycling 
+	// Calculate returning neutral heat flow in [W]
+	BoutReal recycle_energy_flow = 
+	  ion_energy_flow * channel.target_multiplier * channel.target_fast_recycle_energy_factor * channel.target_fast_recycle_fraction   // Fast recycling part
+	  + flow * (1 - channel.target_fast_recycle_fraction) * channel.target_energy;   // Thermal recycling par
+	
 
-          flux = std::max(flux, 0.0);
-
-          // Flow of recycled neutrals into domain [s-1]
-          BoutReal flow =
-              channel.target_multiplier * flux
-              * (J(r.ind, mesh->ystart) + J(r.ind, mesh->ystart - 1)) / (sqrt(g_22(r.ind, mesh->ystart)) + sqrt(g_22(r.ind, mesh->ystart - 1)))
-              * 0.5*(dx(r.ind, mesh->ystart) + dx(r.ind, mesh->ystart - 1)) * 0.5*(dz(r.ind, mesh->ystart) + dz(r.ind, mesh->ystart - 1));  
-
-          BoutReal volume  = J(r.ind, mesh->ystart) * dx(r.ind, mesh->ystart) * dy(r.ind, mesh->ystart) * dz(r.ind, mesh->ystart);
-
-          // Calculate sources in the final cell [m^-3 s^-1]
-          channel.target_recycle_density_source(r.ind, mesh->ystart, jz) += flow / volume;    // For diagnostic
-          density_source(r.ind, mesh->ystart, jz) += flow / volume;         // For use in solver
-
-          // Energy of recycled particles
-          BoutReal ion_energy_flow = energy_flow_ylow(r.ind, mesh->ystart, jz) * -1;   // This is ylow end so take first domain cell and flip sign
-
-          // Blend fast (ion energy) and thermal (constant energy) recycling 
-          // Calculate returning neutral heat flow in [W]
-          BoutReal recycle_energy_flow = 
-            ion_energy_flow * channel.target_multiplier * channel.target_fast_recycle_energy_factor * channel.target_fast_recycle_fraction   // Fast recycling part
-            + flow * (1 - channel.target_fast_recycle_fraction) * channel.target_energy;   // Thermal recycling part
-
-          // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
-          channel.target_recycle_energy_source(r.ind, mesh->ystart, jz) += recycle_energy_flow / volume;
-          energy_source(r.ind, mesh->ystart, jz) += recycle_energy_flow / volume;
-        }
-      }
-
-      // Upper Y boundary
-
-      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-        // Calculate flux of ions into target from Ne and Vi boundary
-        // This calculation is supposed to be consistent with the flow
-        // of plasma from FV::Div_par(N, V)
-        for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          // Flux through surface [normalised m^-2 s^-1], should be positive
-          BoutReal flux = 0.5 * (N(r.ind, mesh->yend, jz) + N(r.ind, mesh->yend + 1, jz))
-                          * 0.5 * (V(r.ind, mesh->yend, jz) + V(r.ind, mesh->yend + 1, jz));
-
-          flux = std::max(flux, 0.0);
-
-          // Flow of recycled neutrals into domain [s-1]
-          BoutReal flow =
-              channel.target_multiplier * flux 
-              * (J(r.ind, mesh->yend) + J(r.ind, mesh->yend + 1)) / (sqrt(g_22(r.ind, mesh->yend)) + sqrt(g_22(r.ind, mesh->yend + 1)))
-              * 0.5*(dx(r.ind, mesh->yend) + dx(r.ind, mesh->yend + 1)) * 0.5*(dz(r.ind, mesh->yend) + dz(r.ind, mesh->yend + 1)); 
-
-          BoutReal volume  = J(r.ind, mesh->yend) * dx(r.ind, mesh->yend) * dy(r.ind, mesh->yend) * dz(r.ind, mesh->yend);
-
-          // Calculate sources in the final cell [m^-3 s^-1]
-          channel.target_recycle_density_source(r.ind, mesh->yend, jz) += flow / volume;    // For diagnostic
-          density_source(r.ind, mesh->yend, jz) += flow / volume;         // For use in solver
-
-          // Energy of recycled particles
-          BoutReal ion_energy_flow = energy_flow_ylow(r.ind, mesh->yend + 1, jz);   // Ion heat flow to wall in [W]. This is yup end so take guard cell
-
-          // Blend fast (ion energy) and thermal (constant energy) recycling 
-          // Calculate returning neutral heat flow in [W]
-          BoutReal recycle_energy_flow = 
-            ion_energy_flow * channel.target_multiplier * channel.target_fast_recycle_energy_factor * channel.target_fast_recycle_fraction   // Fast recycling part
-            + flow * (1 - channel.target_fast_recycle_fraction) * channel.target_energy;   // Thermal recycling part
-
-
-          // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
-          channel.target_recycle_energy_source(r.ind, mesh->yend, jz) += recycle_energy_flow / volume;
-          energy_source(r.ind, mesh->yend, jz) += recycle_energy_flow / volume;
-        }
-      }
+	// Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
+	if (pnt.abs_offset() == 1) {
+	  pnt.ythis(channel.target_recycle_energy_source) += recycle_energy_flow / volume;
+	  pnt.ythis(energy_source) += recycle_energy_flow / volume;
+	}
+	  
+      }); // end yboundary.iter_pnts()
     }
 
     // Get edge particle and heat for the species being recycled
@@ -317,8 +312,8 @@ void Recycling::transform(Options& state) {
           for (int iz=0; iz < mesh->LocalNz; iz++) {
 
             // Volume of cell adjacent to wall which will receive source
-            BoutReal volume = J(mesh->xend, iy) * dx(mesh->xend, iy)
-                 * dy(mesh->xend, iy) * dz(mesh->xend, iy);
+            BoutReal volume = J(mesh->xend, iy, iz) * dx(mesh->xend, iy, iz)
+	      * dy(mesh->xend, iy, iz) * dz(mesh->xend, iy, iz);
 
             // If cell is a pump, overwrite multiplier with pump multiplier
             BoutReal multiplier = channel.sol_multiplier;
@@ -416,8 +411,8 @@ void Recycling::transform(Options& state) {
             for(int iz=0; iz < mesh->LocalNz; iz++){
             
               // Volume of cell adjacent to wall which will receive source
-              BoutReal volume = J(mesh->xstart, iy) * dx(mesh->xstart, iy)
-                  * dy(mesh->xstart, iy) * dz(mesh->xstart, iy);
+              BoutReal volume = J(mesh->xstart, iy, iz) * dx(mesh->xstart, iy, iz)
+		* dy(mesh->xstart, iy, iz) * dz(mesh->xstart, iy, iz);
 
               // If cell is a pump, overwrite multiplier with pump multiplier
               BoutReal multiplier = channel.pfr_multiplier;

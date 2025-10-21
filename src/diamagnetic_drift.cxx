@@ -1,5 +1,6 @@
 #include <bout/fv_ops.hxx>
 #include <bout/vecops.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include "../include/diamagnetic_drift.hxx"
 
@@ -11,17 +12,19 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   // Get options for this component
   auto& options = alloptions[name];
 
+  yboundary.init(options);
+
   bndry_flux =
       options["bndry_flux"].doc("Allow fluxes through boundary?").withDefault<bool>(true);
 
   diamag_form = options["diamag_form"]
     .doc("Form of diamagnetic drift: 0 = gradient; 1 = divergence")
-    .withDefault(Field2D(1.0));
+    .withDefault(Coordinates::FieldMetric(1.0));
 
   // Read curvature vector
   Curlb_B.covariant = false; // Contravariant
   if (mesh->get(Curlb_B, "bxcv")) {
-    Curlb_B.x = Curlb_B.y = Curlb_B.z = 0.0;
+    throw BoutException("Curvature vector not found in input");
   }
 
   Options& paralleltransform = Options::root()["mesh"]["paralleltransform"];
@@ -41,20 +44,28 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   BoutReal Bnorm = get<BoutReal>(units["Tesla"]);
   BoutReal Lnorm = get<BoutReal>(units["meters"]);
 
-  Curlb_B.x /= Bnorm;
+  if (mesh->isFci()) {
+    // All coordinates (x,y,z) are dimensionless
+    // -> e_x has dimensions of length
+    Curlb_B.x *= SQ(Lnorm);
+  } else {
+    // Field-aligned (Clebsch) coordinates
+    Curlb_B.x /= Bnorm;
+  }
   Curlb_B.y *= SQ(Lnorm);
   Curlb_B.z *= SQ(Lnorm);
 
   Curlb_B *= 2. / mesh->getCoordinates()->Bxy;
 
+  mesh->communicate(Curlb_B.y);
+
   // Set drift to zero through sheath boundaries.
   // Flux through those cell faces should be set by sheath.
-  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-    Curlb_B.y(r.ind, mesh->ystart - 1) = -Curlb_B.y(r.ind, mesh->ystart);
-  }
-  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-    Curlb_B.y(r.ind, mesh->yend + 1) = -Curlb_B.y(r.ind, mesh->yend);
-  }
+  yboundary.iter_regions([&](auto& region) {
+    for (auto& pnt : region) {
+      pnt.ynext(Curlb_B.y) = -Curlb_B.y[pnt.ind()];
+    }
+  });
 }
 
 void DiamagneticDrift::transform(Options& state) {

@@ -4,11 +4,13 @@
 #include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/invert/laplacexy.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/fv_ops.hxx>
+#include <bout/invert/laplacexy.hxx>
 #include <bout/invert_laplace.hxx>
+#include <bout/version.hxx>
+#include <bout/yboundary_regions.hxx>
 
 using bout::globals::mesh;
 
@@ -18,32 +20,6 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int nz = f.getNz();
   return Ind3D{(x * ny + y) * nz + z, ny, nz};
 }
-
-/// Limited free gradient of log of a quantity
-/// This ensures that the guard cell values remain positive
-/// while also ensuring that the quantity never increases
-///
-///  fm  fc | fp
-///         ^ boundary
-///
-/// exp( 2*log(fc) - log(fm) )
-///
-BoutReal limitFree(BoutReal fm, BoutReal fc) {
-  if (fm < fc) {
-    return fc; // Neumann rather than increasing into boundary
-  }
-  if (fm < 1e-10) {
-    return fc; // Low / no density condition
-  }
-  BoutReal fp = SQ(fc) / fm;
-#if CHECKLEVEL >= 2
-  if (!std::isfinite(fp)) {
-    throw BoutException("SheathBoundary limitFree: {}, {} -> {}", fm, fc, fp);
-  }
-#endif
-
-  return fp;
-}
 }
 
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
@@ -52,6 +28,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   solver->add(Vort, "Vort");
 
   auto& options = alloptions[name];
+  yboundary.init(options);
   // Normalisations
   const Options& units = alloptions["units"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
@@ -145,7 +122,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     // Create an XY solver for n=0 component
     laplacexy = new LaplaceXY(mesh);
     // Set coefficients for Boussinesq solve
-    laplacexy->setCoefs(average_atomic_mass / SQ(coord->Bxy), 0.0);
+    if (bout::build::use_metric_3d) {
+      throw BoutException("split_n0 not useable with 3d metrics");
+    }
+    laplacexy->setCoefs(average_atomic_mass / SQ(DC(coord->Bxy)), 0.0);
   }
   phiSolver = Laplacian::create(&options["laplacian"]);
   // Set coefficients for Boussinesq solve
@@ -200,7 +180,14 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     Curlb_B.z += I * Curlb_B.x;
   }
 
-  Curlb_B.x /= Bnorm;
+  if (mesh->isFci()) {
+    // All coordinates (x,y,z) are dimensionless
+    // -> e_x has dimensions of length
+    Curlb_B.x *= SQ(Lnorm);
+  } else {
+    // Field-aligned (Clebsch) coordinates
+    Curlb_B.x /= Bnorm;
+  }
   Curlb_B.y *= SQ(Lnorm);
   Curlb_B.z *= SQ(Lnorm);
 
@@ -211,6 +198,17 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
+
+  if (Vort.isFci()) {
+    dagp = FCI::getDagp_fv(alloptions, mesh);
+
+    const auto coord = mesh->getCoordinates();
+    // Note: This is 1 for a Clebsch coordinate system
+    //       Remove parallel slices before operations
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
+  } else {
+    bracket_factor = 1.0;
+  }
 }
 
 void Vorticity::transform(Options& state) {
@@ -403,6 +401,7 @@ void Vorticity::transform(Options& state) {
       }
     }
   }
+  phi.name = "phi";
 
   // Update boundary conditions. Two issues:
   // 1) Solving here for phi + Pi, and then subtracting Pi from the result
@@ -450,7 +449,31 @@ void Vorticity::transform(Options& state) {
           - Pi_hat;
 
   } else {
-    phi = phiSolver->solve(Vort * (Bsq / average_atomic_mass), phi_plus_pi) - Pi_hat;
+    const auto tosolve = Vort * (Bsq / average_atomic_mass);
+    checkData(tosolve);
+    checkData(phi_plus_pi);
+    //output.write("WE ARE SOLVING!!!!\n");
+    try {
+      phi = phiSolver->solve(tosolve, phi_plus_pi) - Pi_hat;
+    } catch (const BoutException& e) {
+      output.write("WE ARE DEBUGGING!!!!\n");
+      Options debug;
+      debug["tosolve"] = tosolve;
+      debug["guess"] = phi_plus_pi;
+      debug["Vort"] = Vort;
+      debug["Bsq"] = Bsq;
+      debug["Pi_hat"] = Pi_hat;
+      mesh->outputVars(debug);
+      //debug["BOUT_VERSION"].force(bout::version::as_double);
+      const std::string outname =
+        fmt::format("{}/BOUT.debug_vorticity.{}.nc",
+                    Options::root()["datadir"].withDefault<std::string>("data"),
+                    BoutComm::rank());
+
+      bout::OptionsIO::create(outname)->write(debug);
+      MPI_Barrier(BoutComm::get());
+      throw e;
+    }
   }
 
   // Ensure that potential is set in the communication guard cells
@@ -508,63 +531,35 @@ void Vorticity::transform(Options& state) {
 
       // Note: We need boundary conditions on P, so apply the same
       //       free boundary condition as sheath_boundary.
-      if (P.hasParallelSlices()) {
-        Field3D &P_ydown = P.ydown();
-        Field3D &P_yup = P.yup();
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            P_ydown(r.ind, mesh->ystart - 1, jz) = 2 * P(r.ind, mesh->ystart, jz) - P_yup(r.ind, mesh->ystart + 1, jz);
-          }
+      auto P_fa_tmp = P.isFci() ? P : toFieldAligned(P);
+      auto& P_fa = P.isFci() ? P : P_fa_tmp;
+
+      if (P.isFci() && !P.hasParallelSlices()) {
+        P.calcParallelSlices();
+      }
+      yboundary.iter([&](auto& region) {
+        for (auto& pnt : region) {
+          // const auto& i = pnt.ind();
+          pnt.limitFree(P_fa);
+          // P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) -
+          // P_ydown(r.ind, mesh->yend - 1, jz);
         }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
-          }
-        }
-      } else {
-        Field3D P_fa = toFieldAligned(P);
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            auto i = indexAt(P_fa, r.ind, mesh->ystart, jz);
-            P_fa[i.ym()] = limitFree(P_fa[i.yp()], P_fa[i]);
-          }
-        }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            auto i = indexAt(P_fa, r.ind, mesh->yend, jz);
-            P_fa[i.yp()] = limitFree(P_fa[i.ym()], P_fa[i]);
-          }
-        }
+      });
+      if (!P.isFci()) {
         P = fromFieldAligned(P_fa);
       }
 
       // Note: This calculation requires phi derivatives at the Y boundaries
       //       Setting to free boundaries
-      if (phi.hasParallelSlices()) {
-        Field3D &phi_ydown = phi.ydown();
-        Field3D &phi_yup = phi.yup();
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_ydown(r.ind, mesh->ystart - 1, jz) = 2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
-          }
+      auto phi_fa_tmp = phi.isFci() ? phi : toFieldAligned(phi);
+      auto& phi_fa = phi.isFci() ? phi : phi_fa_tmp;
+      yboundary.iter([&](auto& region) {
+        for (auto& pnt : region) {
+          const auto grad = pnt.extrapolate_grad_o2(phi_fa);
+          pnt.neumann_o2(phi_fa, grad);
         }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_yup(r.ind, mesh->yend + 1, jz) = 2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
-          }
-        }
-      } else {
-        Field3D phi_fa = toFieldAligned(phi);
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_fa(r.ind, mesh->ystart - 1, jz) = 2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
-          }
-        }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            phi_fa(r.ind, mesh->yend + 1, jz) = 2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
-          }
-        }
+      });
+      if (!phi.isFci()) {
         phi = fromFieldAligned(phi_fa);
       }
 
@@ -616,7 +611,7 @@ void Vorticity::transform(Options& state) {
     Field3D weighted_collision_frequency = sum_A_nu_n / sum_A_n;
     weighted_collision_frequency.applyBoundary("neumann");
 
-    DivJcol = -FV::Div_a_Grad_perp(
+    DivJcol = -Div_a_Grad_perp(
         weighted_collision_frequency * average_atomic_mass / Bsq, phi + Pi_hat);
 
     ddt(Vort) += DivJcol;
@@ -638,7 +633,7 @@ void Vorticity::finally(const Options& state) {
 
     if (exb_advection_simplified) {
       // By default this is a simplified nonlinear term
-      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows);
+      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
 
     } else {
       // If diamagnetic_polarisation = false and B is constant, then
@@ -648,10 +643,10 @@ void Vorticity::finally(const Options& state) {
       // of an operation, we need to communicate and the resulting stencil is
       // wider than the simple form.
       ddt(Vort) -=
-        Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows);
+        Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
 
       // V_ExB dot Grad(Pi)
-      Field3D vEdotGradPi = bracket(phi, Pi_hat, BRACKET_ARAKAWA);
+      Field3D vEdotGradPi = bracket(phi, Pi_hat, BRACKET_ARAKAWA) * bracket_factor;
       vEdotGradPi.applyBoundary("free_o2");
 
       // delp2(phi) term
@@ -660,9 +655,9 @@ void Vorticity::finally(const Options& state) {
 
       mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
-      ddt(Vort) -= FV::Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
+      ddt(Vort) -= Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
       ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux,
-                                         poloidal_flows);
+                                         poloidal_flows) * bracket_factor;
     }
   }
 
@@ -706,7 +701,7 @@ void Vorticity::finally(const Options& state) {
   }
 
   // Viscosity
-  ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
+  ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
 
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
