@@ -58,7 +58,7 @@ Editing documentation is much easier if you can compile it locally using the fol
    .. code-block:: bash
 
       cd hermes-3/docs/doxygen
-      Doxygen doxyfile
+      doxygen Doxyfile
 
 5. **Run Sphinx** - this will parse the RST files and generate the
    documentation. ``sphinx`` and ``build`` are the source and build

@@ -1,7 +1,7 @@
 .. _sec-closure:
 
 Closure
-==========
+=======
 
 Hermes-3 currently uses the standard Braginskii closure, but with a selection of 
 collision frequencies that can be used: the formulas use all solved collisions
@@ -9,25 +9,30 @@ by default in order to have some accounting of multiple ion species, which
 are not considered in standard Braginskii. See the next section for how this can be
 changed to reproduce the exact Braginskii closure.
 
-The different parts of the closures are currently implemented in different components,
-which are described in the :ref:`sec-equations` section. They all use collision frequencies
+The different parts of the closures are currently implemented in
+different components, which are described in the :ref:`sec-equations`
+section and on this page. They all use collision frequencies
 calculated in the ``Collisions`` component.
 
 **Conduction:** 
-Parallel conduction for any species is in the :ref:`evolve_pressure` and 
-:ref:`evolve_energy` species-level components.
+Parallel conduction for all species is implemented in the
+:ref:`braginskii_conduction` component.
 
 **Viscosity:**
 Parallel and perpendicular viscosity for ions is in the 
-:ref:`ion_viscosity` top-level component. The parallel viscosity for 
-electrons is in :ref:`electron_viscosity`.
+:ref:`braginskii_ion_viscosity` top-level component. The parallel viscosity for 
+electrons is in :ref:`braginskii_electron_viscosity`.
 
 **Thermal force:**
-Thermal force is implemented here: :ref:`thermal_force`.
+Thermal force is implemented here: :ref:`braginskii_thermal_force`.
 
-**Frictional and thermal equilibration:**
-both are calculated in the top-level
-``collisions`` component described in section :ref:`sec-collisions`.
+**Friction force/heating:**
+The frictional momentum and energy sources are calculated in the top-level
+:ref:`braginskii_friction` component.
+
+**Thermal equilibration:**
+Thermal transfers are calculated in the
+:ref:`braginskii_heat_exchange` top-level component.
 
 **Neutral diffusion:**
 The parallel projection of diffusion from the wall in 1D
@@ -38,7 +43,7 @@ are captured in the :ref:`neutral_mixed` species-level component.
 
 
 Collision frequency selection
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When configured in ``multispecies``
 mode (default), all collision frequencies for solved collisions of a particular 
@@ -63,12 +68,12 @@ The collision frequency choice for conduction is done under the species header, 
 
    conduction_collisions_mode = braginskii
 
-The choice for viscosity is done under the ``[ion_viscosity]`` header due to it
+The choice for viscosity is done under the ``[braginskii_ion_viscosity]`` header due to it
 being a top level component, e.g.:
 
 .. code-block:: ini
 
-   [ion_viscosity]
+   [braginskii_ion_viscosity]
    viscosity_collisions_mode = braginskii
 
 In addition to the parallel closure, there is also a collision frequency choice
@@ -98,11 +103,11 @@ header, e.g.:
 
 .. _sec-collisions:
 
-Collisions component
-~~~~~~~~~~
+Braginskii Collisions component
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Inputs and ouputs
-----------
+-----------------
 
 This top-level component calculates the collision frequencies of all collisional processes
 in Hermes-3. These frequencies are then used to calculate the closure terms.
@@ -110,7 +115,7 @@ By default, the following collisions are enabled:
 
 .. code-block:: ini
 
-   [collisions]
+   [braginskii_collisions]
    electron_ion = true
    electron_electron = true
    electron_neutral = false
@@ -206,6 +211,65 @@ related by:
 
    m_a n_a \nu_{ab} = m_b n_b \nu_{ba}
 
+- Ion-neutral and electron-neutral collisions
+
+  *Note*: These are disabled by default. If enabled, care is needed to
+  avoid double-counting collisions in atomic reactions e.g charge-exchange
+  reactions.
+  
+  The cross-section for elastic collisions between charged and neutral
+  particles can vary significantly. Here for simplicity we just take
+  a value of :math:`5\times 10^{-19}m^2` from the NRL formulary.
+
+- Neutral-neutral collisions
+
+  *Note* This is enabled by default.
+  
+  The cross-section is given by
+
+.. math::
+     
+   \sigma = \pi \left(\frac{d_1 + d_2}{2}\right)^2
+
+where :math:`d_1` and :math:`d_2` are the kinetic diameters of the two
+species. Typical values are [Wikipedia] for H2 2.89e-10m, He
+2.60e-10m, Ne 2.75e-10m.
+
+The mean relative velocity of the two species is
+
+.. math::
+
+   v_{rel} = \sqrt{\frac{eT_1}{m_1} + \frac{eT_2}{m_2}}
+
+and so the collision rate of species 1 on species 2 is:
+
+.. math::
+
+   \nu_{12} = v_{rel} n_2 \sigma
+
+The implementation is in `BraginskiiCollisions`:
+
+.. doxygenstruct:: BraginskiiCollisions
+   :members:
+
+
+.. _braginskii_friction:
+
+Braginskii Friction
+~~~~~~~~~~~~~~~~~~~
+Input
+-----
+
+This top-level component calculates the frictional forces between each
+pair of species for which collisional frequencies have been calculated
+(see :ref:`Braginskii Collisions`). As such, it must be run after
+`braginskii_collisions`. If the option `frictional_heating` is
+enabled then it will also calculate the energy source arising from
+friction.
+
+Theory
+------
+
 Momentum exchange, force on species `a` due to collisions with species `b`:
 
 .. math::
@@ -219,7 +283,7 @@ and 0.38 is used for :math:`Z_i \ge 4`. Note that this coefficient should declin
 increasing ion charge, tending to 0.29 as :math:`Z_i \rightarrow \infty`.
 
 Frictional heating is included by default, but can be disabled by
-setting the `frictional_heating` option to `false`. When enabled it
+setting the `frictional_heating` option to ``false``. When enabled it
 adds a source of thermal energy corresponding to the resistive heating
 term:
 
@@ -268,7 +332,26 @@ is
 
 which is not Galilean invariant but when combined with the :math:`- F_{ab} u_a`
 term gives a change in pressure that is invariant, as required.
-   
+
+The implementation is in `BraginskiiFriction`:
+
+.. doxygenstruct:: BraginskiiFriction
+   :members:
+
+
+.. _braginskii_heat_exchange:
+
+Braginskii Heat Exchange
+~~~~~~~~~~~~~~~~~~~~~~~~
+Input
+-----
+This top-level component calculates the heat exchange between species
+due to collisions (see :ref:`Braginskii Collisions`). As such, it must be run after
+`braginskii_collisions`. There are no configurations for this component.
+
+Theory
+------
+
 Thermal energy exchange, heat transferred to species :math:`a` from
 species :math:`b` due to temperature differences, is given by:
 
@@ -276,43 +359,7 @@ species :math:`b` due to temperature differences, is given by:
 
    Q_{ab,T} = \nu_{ab}\frac{3n_a m_a\left(T_b - T_a\right)}{m_a + m_b}
 
-- Ion-neutral and electron-neutral collisions
+The implementation is in `BraginskiiHeatExchange`:
 
-  *Note*: These are disabled by default. If enabled, care is needed to
-  avoid double-counting collisions in atomic reactions e.g charge-exchange
-  reactions.
-  
-  The cross-section for elastic collisions between charged and neutral
-  particles can vary significantly. Here for simplicity we just take
-  a value of :math:`5\times 10^{-19}m^2` from the NRL formulary.
-
-- Neutral-neutral collisions
-
-  *Note* This is enabled by default.
-  
-  The cross-section is given by
-
-.. math::
-     
-   \sigma = \pi \left(\frac{d_1 + d_2}{2}\right)^2
-
-where :math:`d_1` and :math:`d_2` are the kinetic diameters of the two
-species. Typical values are [Wikipedia] for H2 2.89e-10m, He
-2.60e-10m, Ne 2.75e-10m.
-
-The mean relative velocity of the two species is
-
-.. math::
-
-   v_{rel} = \sqrt{\frac{eT_1}{m_1} + \frac{eT_2}{m_2}}
-
-and so the collision rate of species 1 on species 2 is:
-
-.. math::
-
-   \nu_{12} = v_{rel} n_2 \sigma
-
-The implementation is in `Collisions`:
-
-.. doxygenstruct:: Collisions
+.. doxygenstruct:: BraginskiiHeatExchange
    :members:
