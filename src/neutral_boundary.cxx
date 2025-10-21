@@ -1,3 +1,4 @@
+#include "hermes_utils.hxx"
 #include "bout/mesh.hxx"
 #include <bout/constants.hxx>
 using bout::globals::mesh;
