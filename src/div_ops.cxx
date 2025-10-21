@@ -419,9 +419,7 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D &n, const Field3D &f,
   return result;
 }
 
-/// *** USED ***
-const Field3D Div_Perp_Lap_FV_Index(const Field3D &as, const Field3D &fs,
-                                    bool xflux) {
+const Field3D Div_Perp_Lap_FV_Index(const Field3D &as, const Field3D &fs) {
 
   Field3D result = 0.0;
 
@@ -1248,7 +1246,7 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 }
 
 const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Field3D &f, 
-                                    bool bndry_flux, bool positive) {
+                                    bool bndry_flux) {
   Field3D result{0.0};
 
   Coordinates *coord = mesh->getCoordinates();
