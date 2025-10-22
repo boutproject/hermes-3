@@ -5,6 +5,8 @@
 #include "component.hxx"
 #include <bout/constants.hxx>
 
+#include <fmt/format.h>
+
 struct SimplePump : public Component {
 
   SimplePump(std::string name, Options& alloptions, Solver*) : name(name) {
@@ -45,13 +47,11 @@ struct SimplePump : public Component {
     AUTO_TRACE();
     if (diagnose) {
 
-      set_with_attrs(
-          state[std::string("simple_pump_src_shape_" + name)], sink_shape,
+      set_with_attrs(state[fmt::format("simple_pump_src_shape_{}", name)], sink_shape,
           {{"long_name", "simple pump source shape"},
            {"source", "simple_pump"}});
     
-      set_with_attrs(
-          state[std::string("simple_pump_sink_" + name)], pumping_sink,
+      set_with_attrs(state[fmt::format("simple_pump_sink_{}", name)], pumping_sink,
           {{"time_dimension", "t"},
            {"units", "m^-3 / s"},
            {"conversion", Nnorm * Omega_ci},
