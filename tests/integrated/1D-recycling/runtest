@@ -6,6 +6,7 @@ from __future__ import division
 from __future__ import print_function
 
 from boututils.run_wrapper import launch
+import numpy
 import pathlib
 import xhermes
 
@@ -16,22 +17,18 @@ output_path = data_dir / "BOUT.dmp.0.nc"
 
 
 # ============================= Helper functions ==============================
-def check_value(name, val, target, tol=None, min=None, max=None):
-    if min is None:
-        if tol is None:
-            print("Trying to compare test data with no tolerance or minimum value set.")
-            fail_test()
-        else:
-            min = target - tol
-    if max is None:
-        if tol is None:
-            print("Trying to compare test data with no tolerance or maximum value set.")
-            fail_test()
-        else:
-            max = target + tol
-    success = val > min and val < max
+def check_value(name, val, target, **kws):
+    # override default tolerances to get desired behaviour
+    kws["atol"] = kws.pop("atol", 0.0)
+    kws["rtol"] = kws.pop("rtol", 0.0)
+
+    success = numpy.isclose(val, target, **kws)
     if not success:
-        print(f"{name}: Expected {min} < [{name}] < {max}, but result was {val}")
+        # On failure, report the effective abs tolerance used by isclose
+        atol_eff = kws["atol"] + kws["rtol"] * abs(target)
+        print(
+            f"Expected\n {target-atol_eff} < {name} < {target+atol_eff}\nBut actual value was\n {val}"
+        )
     return success
 
 
@@ -88,12 +85,12 @@ ds_last = ds.isel(t=-1)
 # Upstream electron temperature should be about 70eV
 Te = ds_last["Pe"] / ds_last["Ne"]
 Te_up = Te.values[0] * ds.metadata["Tnorm"]
-success = check_value("Electron temperature [eV]", Te_up, 70, tol=10)
+success = check_value("Electron temperature [eV]", Te_up, 70, atol=10)
 
 # Upstream ion temperature should be about 140eV
 Ti = ds_last["Td+"]
 Ti_up = Ti.values[0] * ds.metadata["Tnorm"]
-success &= check_value("Ion temperature", Ti_up, 150, tol=10)
+success &= check_value("Ion temperature", Ti_up, 150, atol=10)
 
 # fmt: off
 # Check the values of various diagnostics
@@ -118,6 +115,6 @@ diags_ref = {   # Diagnostic names and reference values (generated with -O2)
 ds_diags = ds_last.isel(pos=slice(2, -2))
 for name, target in diags_ref.items():
     val = ds_diags[name].values[pos_idx]
-    success &= check_value(name, val, target, tol=rel_tol * abs(val))
+    success &= check_value(name, val, target, rtol=rel_tol)
 
 end_test(success)
