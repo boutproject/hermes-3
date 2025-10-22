@@ -63,8 +63,8 @@ struct ReactionDiagnostic {
                      ReactionDiagnosticType type, const std::string& source,
                      const std::string& standard_name,
                      DiagnosticTransformerType transformer)
-      : long_name(long_name), name(name), source(source), standard_name(standard_name),
-        transformer(transformer), type(type) {
+      : name(name), long_name(long_name), source(source), standard_name(standard_name),
+        type(type), transformer(transformer) {
 
     // Extract normalisation units from the root options
     Options& options = Options::root();

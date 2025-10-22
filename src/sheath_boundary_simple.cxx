@@ -549,7 +549,6 @@ void SheathBoundarySimple::transform(Options& state) {
           Pi[im] = limitFree(Pi[ip], Pi[i], pressure_boundary_mode);
 
           // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
           const BoutReal tesheath =
               floor(0.5 * (Te[im] + Te[i]), 1e-5); // electron temperature
@@ -615,7 +614,6 @@ void SheathBoundarySimple::transform(Options& state) {
           Pi[ip] = limitFree(Pi[im], Pi[i], pressure_boundary_mode);
 
           // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[ip] + Ni[i]);
           const BoutReal tesheath =
               floor(0.5 * (Te[ip] + Te[i]), 1e-5); // electron temperature
@@ -702,7 +700,6 @@ void SheathBoundarySimple::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
-  auto rho_s0 = get<BoutReal>(state["rho_s0"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation

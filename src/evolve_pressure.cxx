@@ -261,8 +261,6 @@ void EvolvePressure::finally(const Options& state) {
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
-  
-  Coordinates* coord = mesh->getCoordinates();
 
   if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
       state.isSection("fields") and state["fields"].isSet("phi")) {
@@ -337,17 +335,21 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_n_diffuse_perp) {
-    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P, true);
+    ddt(P) +=
+        Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P);
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) += 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
-                                           T, false);
+    ddt(P) +=
+        1e-4
+        * Div_Perp_Lap_FV_Index(
+            floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
+            T);
   }
 
   if (low_p_diffuse_perp) {
     Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
-    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
+    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P);
   }
 
   // Parallel heat conduction
@@ -494,7 +496,6 @@ void EvolvePressure::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    flow_ylow_conduction;
     ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
     flow_ylow += flow_ylow_conduction;
 

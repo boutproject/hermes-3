@@ -2,13 +2,10 @@
 #ifndef AMJUEL_REACTION_H
 #define AMJUEL_REACTION_H
 
-#include <algorithm>
 #include <filesystem>
 #include <string>
 
 #include "amjueldata.hxx"
-#include "component.hxx"
-#include "integrate.hxx"
 #include "reaction.hxx"
 
 /**
@@ -38,10 +35,10 @@ struct AmjuelReaction : public Reaction {
   AmjuelReaction(std::string name, std::string short_reaction_type,
                  std::string amjuel_lbl, std::string from_species, std::string to_species,
                  Options& alloptions)
-      : Reaction(name, alloptions),
-        amjuel_data(get_json_db_dir(alloptions), short_reaction_type, amjuel_lbl),
-        amjuel_src(std::string("Amjuel ") + amjuel_lbl), from_species(from_species),
-        short_reaction_type(short_reaction_type), to_species(to_species) {
+      : Reaction(name, alloptions), amjuel_src(std::string("Amjuel ") + amjuel_lbl),
+        short_reaction_type(short_reaction_type), from_species(from_species),
+        to_species(to_species),
+        amjuel_data(get_json_db_dir(alloptions), short_reaction_type, amjuel_lbl) {
 
     this->includes_sigma_v_e = amjuel_data.includes_sigma_v_e;
   }

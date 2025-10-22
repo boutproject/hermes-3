@@ -194,6 +194,23 @@ target_include_directories(hermes-3 PUBLIC
 # Have hermes-3 look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3 PROPERTIES BUILD_RPATH "$ORIGIN")
 
+option(HERMES_ENABLE_WARNINGS "Enable compiler warnings" ON)
+if (HERMES_ENABLE_WARNINGS)
+  target_compile_options(hermes-3 PRIVATE
+    $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:
+    $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
+      -Wall -Wextra > >
+    $<$<CXX_COMPILER_ID:MSVC>:
+      /W4 >
+    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Wall -Xcompiler=-Wextra >
+   )
+
+ include(EnableCXXWarningIfSupport)
+ target_enable_cxx_warning_if_supported(hermes-3
+   FLAGS -Wnull-dereference
+   )
+endif()
+
 # Build the file containing just the commit hash
 # This will be rebuilt on every commit!
 configure_file(

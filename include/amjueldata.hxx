@@ -17,7 +17,7 @@
  *
  */
 struct AmjuelData {
-  friend class AmjuelReaction;
+  friend struct AmjuelReaction;
 
 private:
   AmjuelData(const std::filesystem::path& data_dir,
@@ -44,7 +44,7 @@ private:
 
     try {
       includes_sigma_v_e = data["info"]["includes_sigma_v_e"];
-    } catch (nlohmann::json::type_error e) {
+    } catch (nlohmann::json::type_error& e) {
       throw BoutException(fmt::format("Amjuel json data at '{:s}' doesn't contain key "
                                       "'info/includes_sigma_v_e'. Error was {:s}",
                                       file_path.string(), e.what()));
@@ -63,7 +63,7 @@ private:
         double electron_heating_tmp = data["electron_heating"];
         this->electron_heating = electron_heating_tmp;
       }
-    } catch (nlohmann::json::type_error e) {
+    } catch (nlohmann::json::type_error& e) {
       throw BoutException(fmt::format("json file at '{:s}' doesn't contain valid Amjuel "
                                       "coefficient data. Error was {:s}",
                                       file_path.string(), e.what()));
