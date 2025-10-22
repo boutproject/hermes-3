@@ -285,7 +285,7 @@ int Hermes::init(bool restarting) {
   scheduler = ComponentScheduler::create(options, Options::root(), solver);
 
   // Preconditioner
-  setPrecon((preconfunc)&Hermes::precon);
+  setPrecon(&Hermes::precon);
 
   return 0;
 }
