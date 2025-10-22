@@ -19,8 +19,13 @@ auto firstArg(const Head &head, Tail... ) {
 }
 
 inline auto threePointStencil(BoutReal c, BoutReal m, BoutReal p) {
+  // TODO(peter): We can remove this #ifdef guard after switching to C++20
+#if __cpp_designated_initializers >= 201707L
   return FV::Stencil1D{
       .c = c, .m = m, .p = p, .mm = BoutNaN, .pp = BoutNaN, .L = BoutNaN, .R = BoutNaN};
+#else
+  return FV::Stencil1D{c, m, p, BoutNaN, BoutNaN, BoutNaN, BoutNaN};
+#endif
 }
 
 /// Return the value at the left of a cell,
