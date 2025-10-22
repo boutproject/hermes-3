@@ -27,7 +27,7 @@ jobs:
         config:
           - name: "CMake default options"
             os: ubuntu-22.04
-            configure_options: "-DPACKAGE_TESTS=OFF"
+            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON"
 
     steps:
       - name: Job information
