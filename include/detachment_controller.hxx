@@ -110,7 +110,7 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
 
     buffer_size = detachment_controller_options["buffer_size"]
                                .doc("Number of points to store for calculating derivatives.")
-                               .withDefault(10);
+                               .withDefault(std::size_t{10});
     
     species_list = strsplit(detachment_controller_options["species_list"]
                                   .doc("Comma-separated list of species to apply the PI-controlled source to")

@@ -287,8 +287,9 @@ protected:
       if (sp.compare("e") == 0) {
         continue;
       }
-      heavy_sp_charges[sp] =
-          (matches[4].length() == 0) ? matches[3].length() : stringToInt(matches[4]);
+      heavy_sp_charges[sp] = (matches[4].length() == 0)
+                                 ? static_cast<int>(matches[3].length())
+                                 : stringToInt(matches[4]);
 
       if (is_reactant) {
         this->heavy_reactant = sp;

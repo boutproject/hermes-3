@@ -5,14 +5,14 @@
 namespace {
 struct TestComponent : public Component {
   TestComponent(const std::string&, Options&, Solver *) {}
-  void transform(Options &state) { state["answer"] = 42; }
+  void transform(Options &state) override { state["answer"] = 42; }
 };
   
 
 struct TestMultiply : public Component {
   TestMultiply(const std::string&, Options&, Solver *) {}
   
-  void transform(Options &state) {
+  void transform(Options &state) override {
     // Note: Using set<>() and get<>() for quicker access, avoiding printing
     //       getNonFinal needs to be used because we set the value afterwards
     set(state["answer"],
