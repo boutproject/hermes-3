@@ -1,9 +1,6 @@
-
 #pragma once
 #ifndef INTEGRATE_H
 #define INTEGRATE_H
-
-#include <functional>
 
 #include <bout/bout_types.hxx>
 #include <bout/coordinates.hxx>
