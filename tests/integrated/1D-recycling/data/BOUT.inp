@@ -156,6 +156,7 @@ source = `Pd+:source`  # Same as ion pressure source
 species = d+
 
 [reactions]
+diagnose = true
 type = (
         d + e -> d+ + 2e,     # Deuterium ionisation
         d+ + e -> d,          # Deuterium recombination
