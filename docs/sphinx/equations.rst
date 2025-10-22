@@ -296,8 +296,10 @@ desired for a particular species then it can be turned off by setting
 
 This component requires a collision time to have been calculated
 (i.e., with the :ref:`Braginskii Collisions` component). It is
-recommended that this be the last component to run, to ensure density,
-pressure, and temperature have their final values.
+recommended that this be one of the last component to run, to ensure density,
+pressure, and temperature have their final values. However, it must be
+run before :ref:`Recycling`, as that component will need to use the
+`energy_flow_ylow` value, to which conduction contributes.
 
 The choice of collision frequency used for conduction is set by the
 flag `conduction_collisions_mode`: `multispecies` uses all available
