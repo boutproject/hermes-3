@@ -233,11 +233,9 @@ if(HERMES_TESTS)
       set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
-      # Link the input file and test exec
-      file(MAKE_DIRECTORY ${INT_TEST_DEST}/data)
-      file(CREATE_LINK ${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest)
-      file(CREATE_LINK ${INT_TEST_SRC}/data/BOUT.inp
-           ${INT_TEST_DEST}/data/BOUT.inp)
+      # Make copies of the test exec and input file in the build directory and keep them up to date
+      configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
+      configure_file(${INT_TEST_SRC}/data/BOUT.inp ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
     else()
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
