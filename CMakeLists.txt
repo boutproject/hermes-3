@@ -231,21 +231,20 @@ if(HERMES_TESTS)
   function(hermes_add_integrated_test TESTNAME)
     if(HERMES_COPY_TESTS_TO_BUILD)
       set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
-      set(INT_TEST_OUTPUT
+      set(INT_TEST_DEST
           ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
-      # Update the test's build dir if anything in the test source changed
-      file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS ${INT_TEST_SRC}/*)
-      add_custom_target(${TESTNAME} ALL DEPENDS ${TEST_FILES})
-      add_custom_command(
-        TARGET ${TESTNAME} COMMAND ${CMAKE_COMMAND} -E copy_directory
-                                   ${INT_TEST_SRC} ${INT_TEST_OUTPUT})
+      # Link the input file and test exec
+      file(MAKE_DIRECTORY ${INT_TEST_DEST}/data)
+      file(CREATE_LINK ${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest)
+      file(CREATE_LINK ${INT_TEST_SRC}/data/BOUT.inp
+           ${INT_TEST_DEST}/data/BOUT.inp)
     else()
-      set(INT_TEST_OUTPUT
+      set(INT_TEST_DEST
           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
     endif()
     add_test(
       NAME ${TESTNAME}
-      WORKING_DIRECTORY ${INT_TEST_OUTPUT}
+      WORKING_DIRECTORY ${INT_TEST_DEST}
       COMMAND runtest)
   endfunction()
 
