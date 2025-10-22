@@ -44,7 +44,7 @@ option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
   set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
   set(HERMES_BOUT_SRC "external/BOUT-dev" CACHE STRING "Directory of BOUT++ dir")
-  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev)
+  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev SYSTEM)
 else()
   find_package(bout++ REQUIRED)
 endif()
