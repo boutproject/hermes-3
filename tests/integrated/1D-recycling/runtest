@@ -6,30 +6,16 @@ from __future__ import division
 from __future__ import print_function
 
 from boututils.run_wrapper import launch
-import os.path
+import pathlib
 import xhermes
 
-this_dir = os.path.dirname(__file__)
-data_dir = os.path.join(this_dir, "data")
-hermes_exec = os.path.normpath(os.path.join(this_dir, "..", "..", "..", "hermes-3"))
-output_path = os.path.join(data_dir, "BOUT.dmp.0.nc")
+this_dir = pathlib.Path(__file__).parent
+data_dir = this_dir / "data"
+hermes_exec = this_dir.parent.parent.parent / "hermes-3"
+output_path = data_dir / "BOUT.dmp.0.nc"
 
 
 # ============================= Helper functions ==============================
-def check_exec_exists():
-    exec_exists = os.path.isfile(hermes_exec)
-    if not exec_exists:
-        print(f"No executable found at {hermes_exec}")
-        fail_test()
-
-
-def check_output_exists():
-    output_exists = os.path.isfile(output_path)
-    if not output_exists:
-        print(f"No data at {output_path}")
-        fail_test()
-
-
 def check_value(name, val, target, tol=None, min=None, max=None):
     if min is None:
         if tol is None:
@@ -58,6 +44,18 @@ def end_test(success):
         exit(1)
 
 
+def fail_on_missing_data():
+    if not output_path.is_file():
+        print(f"No data at {output_path}")
+        fail_test()
+
+
+def fail_on_missing_exec():
+    if not hermes_exec.is_file():
+        print(f"No executable found at {hermes_exec}")
+        fail_test()
+
+
 def fail_test():
     end_test(False)
 
@@ -68,11 +66,10 @@ def fail_test():
 success = True
 
 # Make sure the executable is where it should be
-check_exec_exists()
+fail_on_missing_exec()
 
 # Remove existing output
-if os.path.exists(output_path):
-    os.remove(output_path)
+output_path.unlink(missing_ok=True)
 
 # Use Bout wrapper to run exec
 s, out = launch(f"{hermes_exec} -d {data_dir}", nproc=1, pipe=True)
@@ -82,7 +79,7 @@ with open("run.log", "w") as f:
     f.write(out)
 
 # Check that the run produced output
-check_output_exists()
+fail_on_missing_data()
 
 # Examine last output
 ds = xhermes.open(data_dir, unnormalise=False).hermes.extract_1d_tokamak_geometry()
