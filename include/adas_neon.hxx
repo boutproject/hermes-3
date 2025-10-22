@@ -37,7 +37,7 @@ constexpr std::initializer_list<char> neon_species_name<0>{'n', 'e'};
 /// ADAS effective ionisation (ADF11)
 ///
 /// @tparam level  The ionisation level of the ion on the left of the reaction
-template <int level>
+template <std::size_t level>
 struct ADASNeonIonisation : public OpenADAS {
   ADASNeonIonisation(std::string, Options& alloptions, Solver*)
       : OpenADAS(alloptions["units"], "scd96_ne.json", "plt96_ne.json", level,
@@ -57,7 +57,7 @@ struct ADASNeonIonisation : public OpenADAS {
 /// ADAS effective recombination coefficients (ADF11)
 ///
 /// @tparam level  The ionisation level of the ion on the right of the reaction
-template <int level>
+template <std::size_t level>
 struct ADASNeonRecombination : public OpenADAS {
   /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
   ADASNeonRecombination(std::string, Options& alloptions, Solver*)
@@ -75,7 +75,7 @@ struct ADASNeonRecombination : public OpenADAS {
 
 /// @tparam level     The ionisation level of the ion on the right of the reaction
 /// @tparam Hisotope  The hydrogen isotope ('h', 'd' or 't')
-template <int level, char Hisotope>
+template <std::size_t level, char Hisotope>
 struct ADASNeonCX : public OpenADASChargeExchange {
   /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
   ADASNeonCX(std::string, Options& alloptions, Solver*)
