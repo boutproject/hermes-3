@@ -21,6 +21,7 @@ struct EvolveEnergy : public Component {
   ///   - bndry_flux           Allow flows through radial boundaries? Default is true
   ///   - density_floor        Minimum density floor. Default 1e-5 normalised units.
   ///   - diagnose             Output additional diagnostic fields?
+  ///   - vperp_kinetic_energy Include the Vperp^2 contribution to energy?
   ///   - evolve_log           Evolve logarithm of pressure? Default is false
   ///   - hyper_z              Hyper-diffusion in Z
   ///   - kappa_coefficient    Heat conduction constant. Default is 3.16 for
@@ -73,8 +74,13 @@ struct EvolveEnergy : public Component {
   ///
   void precon(const Options& UNUSED(state), BoutReal gamma) override;
 
+  /// Restart file read/write
+  /// This is used to save & restore vperp_ke
+  void restartVars(Options& state) override;
+
 private:
   std::string name; ///< Short name of the species e.g. h+
+  Options& options; ///< Options for this component. Used during initialization
 
   Field3D E;    ///< Energy (normalised): P + 1/2 m n v^2
   Field3D P;    ///< Pressure (normalised)
@@ -85,13 +91,17 @@ private:
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
-  bool thermal_conduction;    ///< Include thermal conduction?
+  bool thermal_conduction;                  ///< Include thermal conduction?
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
-  std::string conduction_collisions_mode;  ///< Collision selection, either multispecies or braginskii
-  Field3D nu;   ///< Collision frequency for conduction
+  std::string conduction_collisions_mode; ///< Collision selection, either multispecies or
+                                          ///< braginskii
+  Field3D nu;                             ///< Collision frequency for conduction
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
                               ///< calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
+
+  bool vperp_kinetic_energy; ///< Include perpendicular flow kinetic energy?
+  Field3D vperp_ke;          ///< The perpendicular flow energy density
 
   bool evolve_log; ///< Evolve logarithm of E?
   Field3D logE;    ///< Natural logarithm of E
@@ -104,9 +114,11 @@ private:
 
   BoutReal hyper_z; ///< Hyper-diffusion
 
-  bool diagnose;      ///< Output additional diagnostics?
-  bool enable_precon; ///< Enable preconditioner?
+  bool diagnose;                ///< Output additional diagnostics?
+  bool enable_precon;           ///< Enable preconditioner?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
+
+  bool restart_first_call{true}; ///< Indicates the first time restartVars is called
 };
 
 namespace {

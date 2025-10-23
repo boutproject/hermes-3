@@ -9,24 +9,24 @@
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_energy.hxx"
-#include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
+#include "../include/hermes_utils.hxx"
 
 #include <algorithm>
 
 using bout::globals::mesh;
 
 EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver)
-    : name(name) {
+    : name(name), options(alloptions[name]),
+      adiabatic_index(
+          options["adiabatic_index"]
+              .doc("Ratio of specific heats γ = Cp/Cv [5/3 for monatomic ideal gas]")
+              .withDefault(5. / 3)),
+      Cv(1. / (adiabatic_index - 1.)),
+      vperp_kinetic_energy(options["vperp_kinetic_energy"]
+                               .doc("Include perpendicular flow kinetic energy?")
+                               .withDefault<bool>(false)) {
   AUTO_TRACE();
-
-  auto& options = alloptions[name];
-
-  adiabatic_index =
-      options["adiabatic_index"]
-          .doc("Ratio of specific heats γ = Cp/Cv [5/3 for monatomic ideal gas]")
-          .withDefault(5. / 3);
-  Cv = 1. / (adiabatic_index - 1.);
 
   evolve_log = options["evolve_log"]
                    .doc("Evolve the logarithm of energy?")
@@ -35,8 +35,9 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   conduction_collisions_mode = options["conduction_collisions_mode"]
-      .doc("Can be multispecies: all collisions, or braginskii: self collisions and ie")
-      .withDefault<std::string>("multispecies");
+                                   .doc("Can be multispecies: all collisions, or "
+                                        "braginskii: self collisions and ie")
+                                   .withDefault<std::string>("multispecies");
 
   if (evolve_log) {
     // Evolve logarithm of energy
@@ -78,6 +79,10 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
                           .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 "
                                "for electrons, 1 for ions.")
                           .withDefault(-1.0);
+
+  if (vperp_kinetic_energy) {
+    vperp_ke = 0.0;
+  }
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
@@ -139,14 +144,32 @@ void EvolveEnergy::transform(Options& state) {
 
   auto& species = state["species"][name];
   N = getNoBoundary<Field3D>(species["density"]);
-  const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
+  const Field3D V = IS_SET_NOBOUNDARY(species["velocity"])
+                        ? GET_NOBOUNDARY(Field3D, species["velocity"])
+                        : 0.0;
   const BoutReal AA = get<BoutReal>(species["AA"]);
 
   // Calculate pressure
   // E = Cv * P + (1/2) m n v^2
+  //
+  // If vperp_kinetic_energy then v^2 = vpar^2 + vperp^2
+  // but vperp depends on ∇P (diamagnetic flow) and phi (ExB flow).
+  //
+  // We therefore calculate the perpendicular flow energy density in finally()
+  // and use it the next time transform() is called. This creates a circular
+  // dependency that is resolved by the linear iterations in an implicit solve.
+  //
   P.allocate();
-  BOUT_FOR(i, P.getRegion("RGN_ALL")) {
-    P[i] = std::max((E[i] - 0.5 * AA * N[i] * SQ(V[i])) / Cv, 0.0);
+  if (vperp_kinetic_energy) {
+    // Remove the perpendicular flow kinetic energy that was calculated
+    // the last time finally() was called.
+    BOUT_FOR(i, P.getRegion("RGN_ALL")) {
+      P[i] = std::max((E[i] - 0.5 * AA * N[i] * SQ(V[i]) - vperp_ke[i]) / Cv, 0.0);
+    }
+  } else {
+    BOUT_FOR(i, P.getRegion("RGN_ALL")) {
+      P[i] = std::max((E[i] - 0.5 * AA * N[i] * SQ(V[i])) / Cv, 0.0);
+    }
   }
   P.applyBoundary("neumann");
 
@@ -202,7 +225,7 @@ void EvolveEnergy::finally(const Options& state) {
   P = get<Field3D>(species["pressure"]);
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
-  const Field3D V = get<Field3D>(species["velocity"]);
+  const Field3D V = species["velocity"].isSet() ? get<Field3D>(species["velocity"]) : 0.0;
   const BoutReal AA = get<BoutReal>(species["AA"]);
 
   // Update boundaries of E from boundaries of P and V
@@ -237,13 +260,23 @@ void EvolveEnergy::finally(const Options& state) {
 
   Field3D Pfloor = P;
 
-  if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
-      state.isSection("fields") and state["fields"].isSet("phi")) {
+  if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5)
+      and state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(E) = -Div_n_bxGrad_f_B_XPPM(E, phi, bndry_flux, poloidal_flows, true);
+    if (vperp_kinetic_energy) {
+      // Including perpendicular kinetic energy density
+      ddt(E) = -Div_n_bxGrad_f_B_XPPM(E + P, phi, bndry_flux, poloidal_flows, true);
+
+      // Calculate vperp_ke, that will be used in transform() next time
+      // We do this by calculating the v_perp^2 at cell edges and averaging
+      // Note: Boussinesq approximation so n_0 = 1
+      vperp_ke = 0.5 * AA * Grad_perp_f_B_SQ(phi + P); // 1/2 A n_0 |∇⟂(phi + P) / B|^2
+    } else {
+      ddt(E) = -Div_n_bxGrad_f_B_XPPM(E, phi, bndry_flux, poloidal_flows, true);
+    }
   } else {
     ddt(E) = 0.0;
   }
@@ -281,7 +314,7 @@ void EvolveEnergy::finally(const Options& state) {
 
     // Collisionality
     // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
-    if (collision_names.empty()) {     // Calculate only once - at the beginning
+    if (collision_names.empty()) { // Calculate only once - at the beginning
 
       const auto species_type = identifySpeciesType(name);
 
@@ -291,55 +324,58 @@ void EvolveEnergy::finally(const Options& state) {
           std::string collision_name = collision.second.name();
 
           if (species_type == SpeciesType::neutral) {
-            throw BoutException("\tBraginskii conduction collisions mode not available for neutrals, choose multispecies or afn");
+            throw BoutException("\tBraginskii conduction collisions mode not available "
+                                "for neutrals, choose multispecies or afn");
           } else if (species_type == SpeciesType::electron) {
-            if (// Electron-electron collisions
-                (collisionSpeciesMatch(    
-                  collision_name, species.name(), "e", "coll", "exact"))) {
-                    collision_names.push_back(collision_name);
-                  }
+            if ( // Electron-electron collisions
+                (collisionSpeciesMatch(collision_name, species.name(), "e", "coll",
+                                       "exact"))) {
+              collision_names.push_back(collision_name);
+            }
 
           } else if (species_type == SpeciesType::ion) {
-            if (// Self-collisions
-                (collisionSpeciesMatch(    
-                  collision_name, species.name(), species.name(), "coll", "exact"))) {
-                    collision_names.push_back(collision_name);
-                  }
+            if ( // Self-collisions
+                (collisionSpeciesMatch(collision_name, species.name(), species.name(),
+                                       "coll", "exact"))) {
+              collision_names.push_back(collision_name);
+            }
           }
         }
-          
-      // Multispecies mode: all collisions and CX are included
+
+        // Multispecies mode: all collisions and CX are included
       } else if (conduction_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
 
-          if (// Charge exchange
-              (collisionSpeciesMatch(    
-                collision_name, species.name(), "", "cx", "partial")) or
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, species.name(), "", "cx", "partial"))
+              or
               // Any collision (en, in, ee, ii, nn)
-              (collisionSpeciesMatch(    
-                collision_name, species.name(), "", "coll", "partial"))) {
-                  collision_names.push_back(collision_name);
-                }
+              (collisionSpeciesMatch(collision_name, species.name(), "", "coll",
+                                     "partial"))) {
+            collision_names.push_back(collision_name);
+          }
         }
-        
+
       } else if (conduction_collisions_mode == "afn") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
 
           if (species_type != SpeciesType::neutral) {
-                throw BoutException("\tAFN conduction collisions mode not available for ions or electrons, choose braginskii or multispecies");
-              }
-          if (// Charge exchange
-                (collisionSpeciesMatch(    
-                  collision_name, species.name(), "+", "cx", "partial")) or
-                // Ionisation
-                (collisionSpeciesMatch(    
-                  collision_name, species.name(), "+", "iz", "partial"))) {
-                    collision_names.push_back(collision_name);
-                  }
+            throw BoutException("\tAFN conduction collisions mode not available for ions "
+                                "or electrons, choose braginskii or multispecies");
+          }
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, species.name(), "+", "cx",
+                                     "partial"))
+              or
+              // Ionisation
+              (collisionSpeciesMatch(collision_name, species.name(), "+", "iz",
+                                     "partial"))) {
+            collision_names.push_back(collision_name);
+          }
         }
 
       } else {
@@ -347,19 +383,20 @@ void EvolveEnergy::finally(const Options& state) {
       }
 
       if (collision_names.empty()) {
-        throw BoutException("\tNo collisions found for {:s} in evolve_pressure for selected collisions mode", species.name());
+        throw BoutException("\tNo collisions found for {:s} in evolve_pressure for "
+                            "selected collisions mode",
+                            species.name());
       }
 
       // Write chosen collisions to log file
       output_info.write("\t{:s} conduction collisionality mode: '{:s}' using ",
-                      species.name(), conduction_collisions_mode);
-      for (const auto& collision : collision_names) {        
+                        species.name(), conduction_collisions_mode);
+      for (const auto& collision : collision_names) {
         output_info.write("{:s} ", collision);
       }
 
       output_info.write("\n");
-
-      }
+    }
 
     // Collect the collisionalities based on list of names
     nu = 0;
@@ -368,7 +405,8 @@ void EvolveEnergy::finally(const Options& state) {
     }
 
     // Calculate ion collision times
-    const Field3D tau = 1. / softFloor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau =
+        1. / softFloor(get<Field3D>(species["collision_frequency"]), 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -434,7 +472,7 @@ void EvolveEnergy::finally(const Options& state) {
       Field3D b0_dot_T = Grad_par(T);
       mesh->communicate(db_dot_T, b0_dot_T);
       ddt(E) += Div_par(kappa_par * db_dot_T)
-        - Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter);
+                - Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter);
     }
   }
 
@@ -452,7 +490,8 @@ void EvolveEnergy::finally(const Options& state) {
   }
 #if CHECKLEVEL >= 1
   if (species.isSet("pressure_source")) {
-    throw BoutException("Components must evolve `energy_source` rather then `pressure_source`");
+    throw BoutException(
+        "Components must evolve `energy_source` rather then `pressure_source`");
   }
 #endif
   if (species.isSet("momentum_source")) {
@@ -567,24 +606,37 @@ void EvolveEnergy::outputVars(Options& state) {
                     {"source", "evolve_energy"}});
 
     if (flow_xlow.isAllocated()) {
-      set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " power through X cell face. Note: May be incomplete."},
-                    {"species", name},
-                    {"source", "evolve_energy"}});
+      set_with_attrs(
+          state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
+          {{"time_dimension", "t"},
+           {"units", "W"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+           {"standard_name", "power"},
+           {"long_name", name + " power through X cell face. Note: May be incomplete."},
+           {"species", name},
+           {"source", "evolve_energy"}});
     }
     if (flow_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("ef{}_tot_ylow", name)], flow_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " power through Y cell face. Note: May be incomplete."},
-                    {"species", name},
-                    {"source", "evolve_energy"}});
+      set_with_attrs(
+          state[fmt::format("ef{}_tot_ylow", name)], flow_ylow,
+          {{"time_dimension", "t"},
+           {"units", "W"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+           {"standard_name", "power"},
+           {"long_name", name + " power through Y cell face. Note: May be incomplete."},
+           {"species", name},
+           {"source", "evolve_energy"}});
+    }
+
+    if (vperp_kinetic_energy) {
+      set_with_attrs(state[fmt::format("E{}_vperp_ke", name)], vperp_ke,
+                     {{"time_dimension", "t"},
+                      {"units", "J m^-3"},
+                      {"conversion", Pnorm},
+                      {"standard_name", "energy density"},
+                      {"long_name", name + " perpendicular flow kinetic energy density"},
+                      {"species", name},
+                      {"source", "evolve_energy"}});
     }
   }
 }
@@ -614,4 +666,24 @@ void EvolveEnergy::precon(const Options& state, BoutReal gamma) {
   Field3D dT = ddt(P);
   dT.applyBoundary("neumann");
   ddt(P) = inv->solve(dT);
+}
+
+void EvolveEnergy::restartVars(Options& state) {
+  AUTO_TRACE();
+
+  if (vperp_kinetic_energy) {
+    Options& ke_state = state[fmt::format("E{}_vperp_ke", name)];
+    // NOTE: This is a hack because we know that the loaded restart file
+    //       is passed into restartVars in PhysicsModel::postInit
+    // The restart value should be used in init() rather than here
+    if (restart_first_call and ke_state.isSet()) {
+      vperp_ke = ke_state.as<BoutReal>();
+    }
+    restart_first_call = false;
+
+    // Save the perpendicular flow kinetic energy
+    set_with_attrs(ke_state, vperp_ke,
+                   {{"long_name", name + " perpendicular flow kinetic energy"},
+                    {"source", "evolve_energy"}});
+  }
 }
