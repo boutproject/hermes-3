@@ -2,6 +2,7 @@
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field_factory.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
@@ -105,13 +106,14 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
   source *= Cv;                                        // Convert to W/m^3
 
   // Allow the user to override the source
-  source = alloptions[std::string("E") + name]["source"]
+  Options& e_options = alloptions[std::string("E") + name];
+  source = e_options["source"]
                .doc(std::string("Source term in ddt(E") + name
                     + std::string("). Units [W/m^3]"))
                .withDefault(source)
            / (SI::qe * Nnorm * Tnorm * Omega_ci);
 
-  if (alloptions[std::string("E") + name]["source_only_in_core"]
+  if (e_options["source_only_in_core"]
           .doc("Zero the source outside the closed field-line region?")
           .withDefault<bool>(false)) {
     for (int x = mesh->xstart; x <= mesh->xend; x++) {
@@ -126,10 +128,22 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
     }
   }
 
-  neumann_boundary_average_z =
-      alloptions[std::string("E") + name]["neumann_boundary_average_z"]
-          .doc("Apply neumann boundary with Z average?")
-          .withDefault<bool>(false);
+  source_time_dependent = e_options["source_time_dependent"]
+                              .doc("Use a time-dependent source?")
+                              .withDefault<bool>(false);
+
+  // If time dependent, parse the function with respect to time from the input file
+  if (source_time_dependent) {
+    auto str = e_options["source_prefactor"]
+                   .doc("Time-dependent function of multiplier on ddt(E" + name
+                        + std::string(") source."))
+                   .as<std::string>();
+    source_prefactor_function = FieldFactory::get()->parse(str, &e_options);
+  }
+
+  neumann_boundary_average_z = e_options["neumann_boundary_average_z"]
+                                   .doc("Apply neumann boundary with Z average?")
+                                   .withDefault<bool>(false);
 }
 
 void EvolveEnergy::transform(Options& state) {
@@ -485,6 +499,15 @@ void EvolveEnergy::finally(const Options& state) {
   // Other sources
 
   Se = source;
+  if (source_time_dependent) {
+    // Evaluate the source_prefactor function at the current time in seconds and scale
+    // source with it
+    BoutReal time =
+        get<BoutReal>(state["time"]) / get<BoutReal>(state["units"]["seconds"]);
+    BoutReal source_prefactor =
+        source_prefactor_function->generate(bout::generator::Context().set("t", time));
+    Se *= source_prefactor;
+  }
   if (species.isSet("energy_source")) {
     Se += get<Field3D>(species["energy_source"]); // For diagnostic output
   }

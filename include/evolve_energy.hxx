@@ -109,8 +109,10 @@ private:
   BoutReal density_floor; ///< Minimum density for calculating T
   Field3D kappa_par;      ///< Parallel heat conduction coefficient
 
-  Field3D source; ///< External power source
-  Field3D Se;     ///< Total energy source
+  Field3D source;             ///< External power source
+  Field3D Se;                 ///< Total energy source
+  bool source_time_dependent; ///< Include time-dependent prefactor?
+  FieldGeneratorPtr source_prefactor_function;
 
   BoutReal hyper_z; ///< Hyper-diffusion
 
