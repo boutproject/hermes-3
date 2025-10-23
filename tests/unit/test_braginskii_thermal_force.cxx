@@ -1,15 +1,15 @@
 
 #include "gtest/gtest.h"
 
-#include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
+#include "test_extras.hxx" // FakeMesh
 
 #include "../../include/braginskii_thermal_force.hxx"
 
 /// Global mesh
-namespace bout{
-namespace globals{
-extern Mesh *mesh;
+namespace bout {
+namespace globals {
+extern Mesh* mesh;
 } // namespace globals
 } // namespace bout
 
@@ -17,8 +17,7 @@ extern Mesh *mesh;
 using namespace bout::globals;
 
 // Reuse the "standard" fixture for FakeMesh
-class BraginskiiThermalForceTest
-  : public FakeMeshFixture {
+class BraginskiiThermalForceTest : public FakeMeshFixture {
 public:
   BraginskiiThermalForceTest()
       : FakeMeshFixture(), options({{"units",
@@ -49,7 +48,7 @@ TEST_F(BraginskiiThermalForceTest, OnlyElectrons) {
   state["species"]["e"]["density"] = 1;
   state["species"]["e"]["temperature"] = grad1;
   state["species"]["e"]["charge"] = -1;
-  state["species"]["e"]["AA"] = 1./1836;
+  state["species"]["e"]["AA"] = 1. / 1836;
 
   component.transform(state);
   EXPECT_FALSE(state["species"]["e"]["momentum_source"].isSet());
@@ -71,14 +70,14 @@ TEST_F(BraginskiiThermalForceTest, ElectronIonBalance) {
   state["species"]["e"]["density"] = 1;
   state["species"]["e"]["temperature"] = grad1;
   state["species"]["e"]["charge"] = -1;
-  state["species"]["e"]["AA"] = 1./1836;
+  state["species"]["e"]["AA"] = 1. / 1836;
   state["species"]["d+"]["density"] = 1;
   state["species"]["d+"]["temperature"] = grad1;
   state["species"]["d+"]["charge"] = 1;
   state["species"]["d+"]["AA"] = 2.;
 
   component.transform(state);
-  
+
   Field3D mom_e = state["species"]["e"]["momentum_source"];
   Field3D mom_d = state["species"]["d+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom_e.getRegion("RGN_NOBNDRY")) {
@@ -99,7 +98,7 @@ TEST_F(BraginskiiThermalForceTest, IonIonBalance) {
   state["species"]["d+"]["AA"] = 2.;
 
   component.transform(state);
-  
+
   Field3D mom_c = state["species"]["c"]["momentum_source"];
   Field3D mom_d = state["species"]["d+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom_c.getRegion("RGN_NOBNDRY")) {
@@ -129,7 +128,7 @@ TEST_F(BraginskiiThermalForceTest, NoNetForce) {
   state["species"]["e"]["density"] = 1;
   state["species"]["e"]["temperature"] = grad2;
   state["species"]["e"]["charge"] = -1;
-  state["species"]["e"]["AA"] = 1./1836;
+  state["species"]["e"]["AA"] = 1. / 1836;
 
   component.transform(state);
   Field3D force(0.);
@@ -140,9 +139,7 @@ TEST_F(BraginskiiThermalForceTest, NoNetForce) {
   }
   // There is no external force on plasma, so all of the thermal
   // forces should balance out.
-  BOUT_FOR_SERIAL(i, force.getRegion("RGN_NOBNDRY")) {
-    ASSERT_FLOAT_EQ(force[i], 0.0);
-  }
+  BOUT_FOR_SERIAL(i, force.getRegion("RGN_NOBNDRY")) { ASSERT_FLOAT_EQ(force[i], 0.0); }
 }
 
 TEST_F(BraginskiiThermalForceTest, ElectronForceDensityScaling) {
@@ -158,14 +155,15 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceDensityScaling) {
   state["species"]["e"]["density"] = 1;
   state["species"]["e"]["temperature"] = grad1;
   state["species"]["e"]["charge"] = -1;
-  state["species"]["e"]["AA"] = 1./1836;
+  state["species"]["e"]["AA"] = 1. / 1836;
 
   component.transform(state);
-  Field3D mom1 = state["species"]["d1+"]["momentum_source"], mom2 = state["species"]["d2+"]["momentum_source"];
+  Field3D mom1 = state["species"]["d1+"]["momentum_source"],
+          mom2 = state["species"]["d2+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
     // Force is directly proportional to ion density
     ASSERT_NE(mom1[i], 0.);
-    ASSERT_FLOAT_EQ(2*mom1[i], mom2[i]);
+    ASSERT_FLOAT_EQ(2 * mom1[i], mom2[i]);
   }
 }
 
@@ -182,14 +180,15 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceChargeScaling) {
   state["species"]["e"]["density"] = 1;
   state["species"]["e"]["temperature"] = grad1;
   state["species"]["e"]["charge"] = -1;
-  state["species"]["e"]["AA"] = 1./1836;
+  state["species"]["e"]["AA"] = 1. / 1836;
 
   component.transform(state);
-  Field3D mom1 = state["species"]["d1+"]["momentum_source"], mom2 = state["species"]["d2+"]["momentum_source"];
+  Field3D mom1 = state["species"]["d1+"]["momentum_source"],
+          mom2 = state["species"]["d2+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
     // Force is proportional to square of ion density
     ASSERT_NE(mom1[i], 0.);
-    ASSERT_FLOAT_EQ(4*mom1[i], mom2[i]);
+    ASSERT_FLOAT_EQ(4 * mom1[i], mom2[i]);
   }
 }
 
@@ -201,7 +200,7 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceTemperatureGradScaling) {
   state1["species"]["d+"]["AA"] = 2.;
   state1["species"]["e"]["density"] = 1;
   state1["species"]["e"]["charge"] = -1;
-  state1["species"]["e"]["AA"] = 1./1836;
+  state1["species"]["e"]["AA"] = 1. / 1836;
 
   state0 = state1.copy();
   state2 = state1.copy();
@@ -213,20 +212,23 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceTemperatureGradScaling) {
   state1["species"]["d2+"]["density"] = 1;
   state1["species"]["d2+"]["temperature"] = grad1;
   state1["species"]["d2+"]["charge"] = 1;
-  state1["species"]["d2+"]["AA"] = 2.;  
+  state1["species"]["d2+"]["AA"] = 2.;
 
   component.transform(state0);
   component.transform(state1);
   component.transform(state2);
-  
-  Field3D mom0 = state0["species"]["d+"]["momentum_source"], mom1 = state1["species"]["d+"]["momentum_source"], mom2 = state2["species"]["d+"]["momentum_source"], mom1_prime = state1["species"]["d2+"]["momentum_source"];
-BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
+
+  Field3D mom0 = state0["species"]["d+"]["momentum_source"],
+          mom1 = state1["species"]["d+"]["momentum_source"],
+          mom2 = state2["species"]["d+"]["momentum_source"],
+          mom1_prime = state1["species"]["d2+"]["momentum_source"];
+  BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
     // Temperature gradient of the ion doesn't influence force
     ASSERT_FLOAT_EQ(mom1[i], mom1_prime[i]);
     // Force is proportional to the parallel electron temperature gradient
     ASSERT_NE(mom1[i], 0.);
     ASSERT_FLOAT_EQ(mom0[i], 0.);
-    ASSERT_FLOAT_EQ(mom2[i], 2*mom1[i]);
+    ASSERT_FLOAT_EQ(mom2[i], 2 * mom1[i]);
   }
 }
 
@@ -251,13 +253,16 @@ TEST_F(BraginskiiThermalForceTest, IonIonForceTemperatureGradScaling) {
   component.transform(state1);
   component.transform(state2);
 
-  Field3D mom1_1 = state1["species"]["c1"]["momentum_source"], mom1_2 = state1["species"]["c2"]["momentum_source"], mom2_1 = state2["species"]["c1"]["momentum_source"], mom2_2 = state2["species"]["c2"]["momentum_source"];
+  Field3D mom1_1 = state1["species"]["c1"]["momentum_source"],
+          mom1_2 = state1["species"]["c2"]["momentum_source"],
+          mom2_1 = state2["species"]["c1"]["momentum_source"],
+          mom2_2 = state2["species"]["c2"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom1_1.getRegion("RGN_NOBNDRY")) {
     // Changing temperature gradient of the heavy ion should not change the force
     EXPECT_FLOAT_EQ(mom1_1[i], mom1_2[i]);
     EXPECT_FLOAT_EQ(mom2_1[i], mom2_2[i]);
     // The force is proportional to the temperature gradient of the light ion
-    EXPECT_FLOAT_EQ(2*mom1_1[i], mom2_1[i]);
+    EXPECT_FLOAT_EQ(2 * mom1_1[i], mom2_1[i]);
   }
 }
 
@@ -287,5 +292,10 @@ TEST_P(BraginskiiThermalForceTest_MassRatio, CheckForIonMasses) {
   }
 }
 
-INSTANTIATE_TEST_SUITE_P(BraginskiiThermalIonMasses, BraginskiiThermalForceTest_MassRatio,
-                         testing::Values(std::make_tuple(1, 50, true), std::make_tuple(50, 1, true), std::make_tuple(3, 11, true), std::make_tuple(11, 3, true), std::make_tuple(4, 10, false), std::make_tuple(10, 4, false), std::make_tuple(5, 50, false), std::make_tuple(50, 5, false), std::make_tuple(1, 7, false), std::make_tuple(7, 1, false)));
+INSTANTIATE_TEST_SUITE_P(
+    BraginskiiThermalIonMasses, BraginskiiThermalForceTest_MassRatio,
+    testing::Values(std::make_tuple(1, 50, true), std::make_tuple(50, 1, true),
+                    std::make_tuple(3, 11, true), std::make_tuple(11, 3, true),
+                    std::make_tuple(4, 10, false), std::make_tuple(10, 4, false),
+                    std::make_tuple(5, 50, false), std::make_tuple(50, 5, false),
+                    std::make_tuple(1, 7, false), std::make_tuple(7, 1, false)));

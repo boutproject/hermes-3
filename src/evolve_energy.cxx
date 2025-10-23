@@ -419,7 +419,8 @@ void EvolveEnergy::precon(const Options& state, BoutReal gamma) {
   const Field3D N = get<Field3D>(species["density"]);
 
   // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coef = -gamma * get<Field3D>(species["kappa_par"]) / softFloor(N, density_floor);
+  Field3D coef =
+      -gamma * get<Field3D>(species["kappa_par"]) / softFloor(N, density_floor);
 
   if (state.isSet("scale_timederivs")) {
     coef *= get<Field3D>(state["scale_timederivs"]);

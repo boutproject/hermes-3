@@ -4,7 +4,7 @@
 
 #include "component.hxx"
 
-/// Electron viscosity 
+/// Electron viscosity
 ///
 /// Adds Braginskii parallel electron viscosity, with SOLPS-style
 /// viscosity flux limiter
@@ -36,17 +36,19 @@ struct BraginskiiElectronViscosity : public Component {
   ///   - e
   ///     - momentum_source
   ///
-  void transform(Options &state) override;
+  void transform(Options& state) override;
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
-  bool diagnose; ///< Output viscosity diagnostic?
-  Field3D viscosity; ///< The viscosity momentum source
+  bool diagnose;            ///< Output viscosity diagnostic?
+  Field3D viscosity;        ///< The viscosity momentum source
 };
 
 namespace {
-RegisterComponent<BraginskiiElectronViscosity> registercomponentbraginskiielectronviscosity("braginskii_electron_viscosity");
+RegisterComponent<BraginskiiElectronViscosity>
+    registercomponentbraginskiielectronviscosity("braginskii_electron_viscosity");
 }
 
 #endif

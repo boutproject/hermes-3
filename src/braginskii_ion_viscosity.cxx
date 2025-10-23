@@ -1,51 +1,56 @@
 // Ion viscosity model
 
-#include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/difops.hxx>
-#include <bout/output_bout_types.hxx>
-#include <bout/mesh.hxx>
 #include "../include/hermes_utils.hxx"
+#include <bout/constants.hxx>
+#include <bout/difops.hxx>
+#include <bout/fv_ops.hxx>
+#include <bout/mesh.hxx>
+#include <bout/output_bout_types.hxx>
 
 #include "../include/braginskii_ion_viscosity.hxx"
 #include "../include/div_ops.hxx"
 
 using bout::globals::mesh;
 
-BraginskiiIonViscosity::BraginskiiIonViscosity(std::string name, Options& alloptions, Solver*) {
+BraginskiiIonViscosity::BraginskiiIonViscosity(std::string name, Options& alloptions,
+                                               Solver*) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]
-    .doc("Viscosity flux limiter coefficient. <0 = turned off")
-    .withDefault(-1.0);
+                        .doc("Viscosity flux limiter coefficient. <0 = turned off")
+                        .withDefault(-1.0);
 
-  diagnose = options["diagnose"]
-      .doc("Output additional diagnostics?")
-      .withDefault<bool>(false);
+  diagnose =
+      options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
   perpendicular = options["perpendicular"]
-    .doc("Include perpendicular flow? (Requires phi)")
-    .withDefault<bool>(false);
+                      .doc("Include perpendicular flow? (Requires phi)")
+                      .withDefault<bool>(false);
 
-  viscosity_collisions_mode = options["viscosity_collisions_mode"]
-      .doc("Can be multispecies: all collisions, or braginskii: self collisions")
-      .withDefault<std::string>("multispecies");
+  viscosity_collisions_mode =
+      options["viscosity_collisions_mode"]
+          .doc("Can be multispecies: all collisions, or braginskii: self collisions")
+          .withDefault<std::string>("multispecies");
 
   bounce_frequency = options["bounce_frequency"]
-    .doc("Include neoclassical modification of the collision time?")
-    .withDefault<bool>(false);
+                         .doc("Include neoclassical modification of the collision time?")
+                         .withDefault<bool>(false);
 
   bounce_frequency_q95 = options["bounce_frequency_q95"]
-    .doc("Include input for q95 when using bounce frequency modification to viscosity")
-    .withDefault(4.0);
+                             .doc("Include input for q95 when using bounce frequency "
+                                  "modification to viscosity")
+                             .withDefault(4.0);
 
-  bounce_frequency_epsilon = options["bounce_frequency_epsilon"]
-    .doc("Include input for inverse aspect ratio epsilon when using bounce frequency modification to viscosity")
-    .withDefault(0.3);
+  bounce_frequency_epsilon =
+      options["bounce_frequency_epsilon"]
+          .doc("Include input for inverse aspect ratio epsilon when using bounce "
+               "frequency modification to viscosity")
+          .withDefault(0.3);
 
   bounce_frequency_R = options["bounce_frequency_R"]
-    .doc("Include input for major radius R when using bounce frequency modification to viscosity")
-    .withDefault(2.0);
+                           .doc("Include input for major radius R when using bounce "
+                                "frequency modification to viscosity")
+                           .withDefault(2.0);
 
   if (perpendicular) {
     // Read curvature vector
@@ -74,12 +79,10 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(std::string name, Options& allopt
 
     auto coord = mesh->getCoordinates();
 
-
-
     Curlb_B.x /= Bnorm;
     Curlb_B.y *= SQ(Lnorm);
     Curlb_B.z *= SQ(Lnorm);
-    
+
     Curlb_B *= 2. / coord->Bxy;
   }
   if (bounce_frequency) {
@@ -87,11 +90,9 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(std::string name, Options& allopt
     const BoutReal Lnorm = units["meters"];
     bounce_frequency_R /= Lnorm;
   }
-  
-
 }
 
-void BraginskiiIonViscosity::transform(Options &state) {
+void BraginskiiIonViscosity::transform(Options& state) {
   AUTO_TRACE();
 
   Options& allspecies = state["species"];
@@ -110,9 +111,9 @@ void BraginskiiIonViscosity::transform(Options &state) {
 
     Options& species = allspecies[species_name];
 
-    if (!(isSetFinal(species["pressure"], "ion_viscosity") and
-          isSetFinal(species["velocity"], "ion_viscosity") and
-          isSetFinal(species["charge"], "ion_viscosity"))) {
+    if (!(isSetFinal(species["pressure"], "ion_viscosity")
+          and isSetFinal(species["velocity"], "ion_viscosity")
+          and isSetFinal(species["charge"], "ion_viscosity"))) {
       // Species doesn't have a pressure, velocity and charge => Skip
       continue;
     }
@@ -124,60 +125,63 @@ void BraginskiiIonViscosity::transform(Options &state) {
 
     // Initialise collision_names for each species if not already done
     if (collision_names.find(species_name) == collision_names.end()) {
-      collision_names[species_name] = {};  // Initialise with empty vector
+      collision_names[species_name] = {}; // Initialise with empty vector
     }
 
-    if (collision_names[species_name].empty()) {     // Calculate only once - at the beginning
-
+    if (collision_names[species_name].empty()) { // Calculate only once - at the beginning
 
       if (viscosity_collisions_mode == "braginskii") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
 
-          if (// Self-collisions
-              (collisionSpeciesMatch(    
-                collision_name, species.name(), species.name(), "coll", "exact")) or
+          if ( // Self-collisions
+              (collisionSpeciesMatch(collision_name, species.name(), species.name(),
+                                     "coll", "exact"))
+              or
               // Ion-electron collisions
-              (collisionSpeciesMatch(    
-                collision_name, species.name(), "+", "coll", "partial"))) {
-                  collision_names[species_name].push_back(collision_name);
-                }
+              (collisionSpeciesMatch(collision_name, species.name(), "+", "coll",
+                                     "partial"))) {
+            collision_names[species_name].push_back(collision_name);
+          }
         }
-      // Multispecies mode: all collisions and CX are included
+        // Multispecies mode: all collisions and CX are included
       } else if (viscosity_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
 
-          if (// Charge exchange
-              (collisionSpeciesMatch(    
-                collision_name, species.name(), "", "cx", "partial")) or
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, species.name(), "", "cx", "partial"))
+              or
               // Any collision (en, in, ee, ii, nn)
-              (collisionSpeciesMatch(    
-                collision_name, species.name(), "", "coll", "partial"))) {
-                  
-                  collision_names[species_name].push_back(collision_name);
-                }
+              (collisionSpeciesMatch(collision_name, species.name(), "", "coll",
+                                     "partial"))) {
+
+            collision_names[species_name].push_back(collision_name);
+          }
         }
       } else {
-        throw BoutException("\tviscosity_collisions_mode for {:s} must be either multispecies or braginskii", species.name());
+        throw BoutException("\tviscosity_collisions_mode for {:s} must be either "
+                            "multispecies or braginskii",
+                            species.name());
       }
 
       if (collision_names[species_name].empty()) {
-        throw BoutException("\tNo collisions found for {:s} in ion_viscosity for selected collisions mode", species.name());
+        throw BoutException("\tNo collisions found for {:s} in ion_viscosity for "
+                            "selected collisions mode",
+                            species.name());
       }
 
       // Write chosen collisions to log file
       output_info.write("\t{:s} viscosity collisionality mode: '{:s}' using ",
-                      species.name(), viscosity_collisions_mode);
-      for (const auto& collision : collision_names[species_name]) {        
+                        species.name(), viscosity_collisions_mode);
+      for (const auto& collision : collision_names[species_name]) {
         output_info.write("{:s} ", collision);
       }
 
       output_info.write("\n");
-
-      }
+    }
 
     // Collect the collisionalities based on list of names
     nu = 0;
@@ -191,13 +195,16 @@ void BraginskiiIonViscosity::transform(Options &state) {
 
     // Parallel ion viscosity (4/3 * 0.96 coefficient)
     Field3D eta = 1.28 * P * tau;
-    
-    Field2D bounce_factor = 1.0; // if bounce_frequency = false, this factor does nothing to anything
+
+    Field2D bounce_factor =
+        1.0; // if bounce_frequency = false, this factor does nothing to anything
     Field2D nu_star = 1.0;
 
     if (bounce_frequency) {
-      // Need to collect the DC density and temperature, ion collision time and thermal velocity to calculate the bounce frequency, with the equation taken as in Rozhansky 2009. 
-      
+      // Need to collect the DC density and temperature, ion collision time and thermal
+      // velocity to calculate the bounce frequency, with the equation taken as in
+      // Rozhansky 2009.
+
       const Field2D N_av = DC(get<Field3D>(species["density"]));
       const Field2D T_av = DC(get<Field3D>(species["temperature"]));
       const Field2D tau_av = DC(tau);
@@ -206,12 +213,15 @@ void BraginskiiIonViscosity::transform(Options &state) {
       BoutReal mass = get<BoutReal>(species["AA"]);
       const Field2D v_thermal = sqrt(2.0 * T_av / mass);
 
-      nu_star *=  (bounce_frequency_R * bounce_frequency_q95) / ( tau_av * pow(bounce_frequency_epsilon, 1.5) * v_thermal);
+      nu_star *= (bounce_frequency_R * bounce_frequency_q95)
+                 / (tau_av * pow(bounce_frequency_epsilon, 1.5) * v_thermal);
 
-      bounce_factor *= (1 / (1 + (1./nu_star))) * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1./nu_star)));
+      bounce_factor *=
+          (1 / (1 + (1. / nu_star)))
+          * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1. / nu_star)));
       eta *= bounce_factor;
-    } 
-    
+    }
+
     if (eta_limit_alpha > 0.) {
       // SOLPS-style flux limiter
       // Values of alpha ~ 0.5 typically
@@ -224,11 +234,12 @@ void BraginskiiIonViscosity::transform(Options &state) {
       eta.getMesh()->communicate(eta);
       eta.applyBoundary("neumann");
     }
-    
+
     // This term is the parallel flow part of
     // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
     const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
-    //BOUT_FOR_SERIAL(i, div_Pi_cipar.getRegion("RGN_NOBNDRY")) {std::cout << " " << div_Pi_cipar[i] << std::endl;}
+    // BOUT_FOR_SERIAL(i, div_Pi_cipar.getRegion("RGN_NOBNDRY")) {std::cout << " " <<
+    // div_Pi_cipar[i] << std::endl;}
 
     add(species["momentum_source"], div_Pi_cipar);
     subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
@@ -239,12 +250,16 @@ void BraginskiiIonViscosity::transform(Options &state) {
         const Field2D tau_av = DC(tau);
         const Field2D V_av = DC(V);
 
-        // Parallel ion stress tensor component, calculated here because before it was only div_Pi_cipar
-        Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor *
-                          (2. * Grad_par(V_av) + V_av * Grad_par_logB);
-        Field2D Pi_ciperp = 0 * Pi_cipar; // Perpendicular components and divergence of current J equal to 0 for only parallel viscosity case
+        // Parallel ion stress tensor component, calculated here because before it was
+        // only div_Pi_cipar
+        Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor
+                           * (2. * Grad_par(V_av) + V_av * Grad_par_logB);
+        Field2D Pi_ciperp =
+            0 * Pi_cipar; // Perpendicular components and divergence of current J equal to
+                          // 0 for only parallel viscosity case
         Field2D DivJ = 0 * Pi_cipar;
-        diagnostics[species_name] = Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
+        diagnostics[species_name] =
+            Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
       }
       continue; // Skip perpendicular flow parts below
     }
@@ -262,16 +277,17 @@ void BraginskiiIonViscosity::transform(Options &state) {
     const Field2D V_av = DC(V);
 
     // Parallel ion stress tensor component
-    Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor *
-                          (2. * Grad_par(V_av) + V_av * Grad_par_logB);
+    Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor
+                       * (2. * Grad_par(V_av) + V_av * Grad_par_logB);
     // Could also be written as:
     // Pi_cipar = -0.96*Pi*tau*2.*Grad_par(sqrt(Bxy)*Vi)/sqrt(Bxy);
 
     // Perpendicular ion stress tensor
     // 0.96 P tau kappa * (V_E + V_di + 1.61 b x Grad(T)/B )
     // Note: Heat flux terms are neglected for now
-    Field2D Pi_ciperp = -0.5 * 0.96 * P_av * tau_av * bounce_factor * 
-      (Curlb_B * Grad(phi_av + 1.61 * T_av) - Curlb_B * Grad(P_av) / N_av);
+    Field2D Pi_ciperp =
+        -0.5 * 0.96 * P_av * tau_av * bounce_factor
+        * (Curlb_B * Grad(phi_av + 1.61 * T_av) - Curlb_B * Grad(P_av) / N_av);
 
     // Limit size of stress tensor components
     // If the off-diagonal components of the pressure tensor are large compared
@@ -304,8 +320,9 @@ void BraginskiiIonViscosity::transform(Options &state) {
 
     mesh->communicate(Pi_ciperp, Pi_cipar);
 
-    const Field3D div_Pi_ciperp = - (2. / 3) * Grad_par(Pi_ciperp) + Pi_ciperp * Grad_par_logB;
-    //const Field3D div_Pi_ciperp = - (2. / 3) * B32 * Grad_par(Pi_ciperp / B32);
+    const Field3D div_Pi_ciperp =
+        -(2. / 3) * Grad_par(Pi_ciperp) + Pi_ciperp * Grad_par_logB;
+    // const Field3D div_Pi_ciperp = - (2. / 3) * B32 * Grad_par(Pi_ciperp / B32);
 
     add(species["momentum_source"], div_Pi_ciperp);
     subtract(species["energy_source"], V_av * div_Pi_ciperp);
@@ -327,8 +344,8 @@ void BraginskiiIonViscosity::transform(Options &state) {
     Pi_ci.applyBoundary("neumann");
 
     // Divergence of current in vorticity equation
-    Field3D DivJ = Div(0.5 * Pi_ci * Curlb_B) -
-      Div_n_bxGrad_f_B_XPPM(1. / 3, Pi_ci, false, true);
+    Field3D DivJ =
+        Div(0.5 * Pi_ci * Curlb_B) - Div_n_bxGrad_f_B_XPPM(1. / 3, Pi_ci, false, true);
     add(state["fields"]["DivJextra"], DivJ);
 
     // Transfer of energy between ion internal energy and ExB flow
@@ -337,12 +354,13 @@ void BraginskiiIonViscosity::transform(Options &state) {
                      - (1 / 3) * bracket(Pi_ci, phi_av + P_av, BRACKET_STD)));
 
     if (diagnose) {
-      diagnostics[species_name] = Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
+      diagnostics[species_name] =
+          Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
     }
   }
 }
 
-void BraginskiiIonViscosity::outputVars(Options &state) {
+void BraginskiiIonViscosity::outputVars(Options& state) {
   AUTO_TRACE();
 
   if (diagnose) {
@@ -356,42 +374,47 @@ void BraginskiiIonViscosity::outputVars(Options &state) {
       const std::string& species_name = it.first;
       const auto& d = it.second;
 
-      set_with_attrs(state[std::string("P") + species_name + std::string("_ciperp")], d.Pi_ciperp,
-                     {{"time_dimension", "t"},
-                      {"units", "Pa"},
-                      {"conversion", Pnorm},
-                      {"standard_name", "Viscous pressure"},
-                      {"long_name", species_name + " perpendicular collisional viscous pressure"},
-                      {"species", species_name},
-                      {"source", "ion_viscosity"}});
+      set_with_attrs(
+          state[std::string("P") + species_name + std::string("_ciperp")], d.Pi_ciperp,
+          {{"time_dimension", "t"},
+           {"units", "Pa"},
+           {"conversion", Pnorm},
+           {"standard_name", "Viscous pressure"},
+           {"long_name", species_name + " perpendicular collisional viscous pressure"},
+           {"species", species_name},
+           {"source", "ion_viscosity"}});
 
-      set_with_attrs(state[std::string("P") + species_name + std::string("_cipar")], d.Pi_cipar,
-                     {{"time_dimension", "t"},
-                      {"units", "Pa"},
-                      {"conversion", Pnorm},
-                      {"standard_name", "Viscous pressure"},
-                      {"long_name", species_name + " parallel collisional viscous pressure"},
-                      {"species", species_name},
-                      {"source", "ion_viscosity"}});
+      set_with_attrs(
+          state[std::string("P") + species_name + std::string("_cipar")], d.Pi_cipar,
+          {{"time_dimension", "t"},
+           {"units", "Pa"},
+           {"conversion", Pnorm},
+           {"standard_name", "Viscous pressure"},
+           {"long_name", species_name + " parallel collisional viscous pressure"},
+           {"species", species_name},
+           {"source", "ion_viscosity"}});
 
-      set_with_attrs(state[std::string("DivJvis_") + species_name], d.DivJ,
-                     {{"time_dimension", "t"},
-                      {"units", "A m^-3"},
-                      {"conversion", SI::qe * Nnorm * Omega_ci},
-                      {"long_name", std::string("Divergence of viscous current due to species") + species_name},
-                      {"species", species_name},
-                      {"source", "ion_viscosity"}});
+      set_with_attrs(
+          state[std::string("DivJvis_") + species_name], d.DivJ,
+          {{"time_dimension", "t"},
+           {"units", "A m^-3"},
+           {"conversion", SI::qe * Nnorm * Omega_ci},
+           {"long_name",
+            std::string("Divergence of viscous current due to species") + species_name},
+           {"species", species_name},
+           {"source", "ion_viscosity"}});
 
       set_with_attrs(state[std::string("bounce_factor_") + species_name], d.bounce_factor,
                      {{"time_dimension", "t"},
                       {"units", "none"},
                       {"conversion", 1},
-                      {"long_name", std::string("Bounce factor for viscosity calculation") + species_name},
+                      {"long_name", std::string("Bounce factor for viscosity calculation")
+                                        + species_name},
                       {"species", species_name},
                       {"source", "ion_viscosity"}});
 
       set_with_attrs(state[std::string("nu_star_") + species_name], d.nu_star,
-                    {{"time_dimension", "t"},
+                     {{"time_dimension", "t"},
                       {"units", "none"},
                       {"conversion", 1},
                       {"long_name", std::string("nu star") + species_name},

@@ -1,15 +1,15 @@
 
 #include "gtest/gtest.h"
 
-#include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
+#include "test_extras.hxx" // FakeMesh
 
 #include "../../include/braginskii_heat_exchange.hxx"
 
 /// Global mesh
-namespace bout{
-namespace globals{
-extern Mesh *mesh;
+namespace bout {
+namespace globals {
+extern Mesh* mesh;
 } // namespace globals
 } // namespace bout
 
@@ -19,7 +19,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using BraginskiiHeatExchangeTest = FakeMeshFixture;
 
-
 TEST_F(BraginskiiHeatExchangeTest, OnlyElectrons) {
   Options options;
 
@@ -27,21 +26,21 @@ TEST_F(BraginskiiHeatExchangeTest, OnlyElectrons) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
-  
+
   BraginskiiHeatExchange component("test", options, nullptr);
 
   Options state;
   state["species"]["e"]["density"] = 1e19;
   state["species"]["e"]["temperature"] = 10.;
   state["species"]["e"]["velocity"] = 1.;
-  state["species"]["e"]["AA"] = 1./1836;
+  state["species"]["e"]["AA"] = 1. / 1836;
   state["species"]["e"]["collision_frequencies"]["e_e_coll"] = 1.;
 
   component.transform(state);
 
   // A species can't exchange heat with itself
   if (state["species"]["e"]["energy_source"].isSet()) {
-    ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["e"]["energy_source"])(0,0,0), 0.);
+    ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["e"]["energy_source"])(0, 0, 0), 0.);
   }
 }
 
@@ -52,7 +51,7 @@ TEST_F(BraginskiiHeatExchangeTest, TwoEqualTempSpeciesCharged) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
-  
+
   BraginskiiHeatExchange component("test", options, nullptr);
 
   Options state;
@@ -75,14 +74,13 @@ TEST_F(BraginskiiHeatExchangeTest, TwoEqualTempSpeciesCharged) {
 
   Field3D es1 = get<Field3D>(state["species"]["s1"]["energy_source"]);
   Field3D es2 = get<Field3D>(state["species"]["s2"]["energy_source"]);
-  
+
   BOUT_FOR_SERIAL(i, es1.getRegion("RGN_ALL")) {
     // If the species have the same temperature, there should be no heat exchange
     ASSERT_DOUBLE_EQ(es1[i], 0.);
     ASSERT_DOUBLE_EQ(es2[i], 0.);
   }
 }
-
 
 TEST_F(BraginskiiHeatExchangeTest, TwoSpeciesCharged) {
   Options options;
@@ -91,7 +89,7 @@ TEST_F(BraginskiiHeatExchangeTest, TwoSpeciesCharged) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
-  
+
   BraginskiiHeatExchange component("test", options, nullptr);
 
   Options state;
@@ -129,7 +127,7 @@ TEST_F(BraginskiiHeatExchangeTest, DoubleCollisionRates) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
-  
+
   BraginskiiHeatExchange component("test", options, nullptr);
 
   Options state1, state2;

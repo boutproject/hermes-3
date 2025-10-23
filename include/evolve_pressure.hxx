@@ -24,14 +24,16 @@ struct EvolvePressure : public Component {
   ///   - evolve_log           Evolve logarithm of pressure? Default is false
   ///   - hyper_z              Hyper-diffusion in Z
   ///   - poloidal_flows       Include poloidal ExB flows? Default is true
-  ///   - precon               Enable preconditioner? Note: solver may not use it even if enabled.
+  ///   - precon               Enable preconditioner? Note: solver may not use it even if
+  ///                          enabled.
   ///   - p_div_v              Use p * Div(v) form? Default is v * Grad(p) form
   ///   - thermal_conduction   Include parallel heat conduction? Default is true
   ///
   /// - P<name>  e.g. "Pe", "Pd+"
   ///   - source     Source of pressure [Pa / s].
   ///                NOTE: This overrides mesh input P<name>_src
-  ///   - source_only_in_core         Zero the source outside the closed field-line region?
+  ///   - source_only_in_core         Zero the source outside the closed field-line
+  ///                                 region?
   ///   - neumann_boundary_average_z  Apply Neumann boundaries with Z average?
   ///
   EvolvePressure(std::string name, Options& options, Solver* solver);
@@ -76,7 +78,7 @@ private:
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
-  bool thermal_conduction;    ///< Include thermal conduction?
+  bool thermal_conduction; ///< Include thermal conduction?
 
   bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
 
@@ -103,7 +105,7 @@ private:
   BoutReal source_normalisation; ///< Normalisation factor [Pa/s]
   BoutReal time_normalisation; ///< Normalisation factor [s]
   bool source_time_dependent; ///< Is the input source time dependent?
-  Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
+  Field3D flow_xlow, flow_ylow;   ///< Energy flow diagnostics
   Field3D flow_ylow_advection;    ///< Advection energy flow diagnostics
   Field3D flow_ylow_viscous_heating; ///< Flow of kinetic energy due to numerical viscosity
 
