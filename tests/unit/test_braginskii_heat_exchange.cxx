@@ -40,7 +40,7 @@ TEST_F(BraginskiiHeatExchangeTest, OnlyElectrons) {
 
   // A species can't exchange heat with itself
   if (state["species"]["e"]["energy_source"].isSet()) {
-    ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["e"]["energy_source"])(0, 0, 0), 0.);
+    ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["e"]["energy_source"])(0, 0, 0), 0.);
   }
 }
 
@@ -154,7 +154,6 @@ TEST_F(BraginskiiHeatExchangeTest, DoubleCollisionRates) {
   Field3D es11 = get<Field3D>(state1["species"]["s1"]["energy_source"]);
   Field3D es21 = get<Field3D>(state2["species"]["s1"]["energy_source"]);
 
-  const BoutReal factor = 2. * 2. / sqrt(3.);
   BOUT_FOR_SERIAL(i, es11.getRegion("RGN_ALL")) {
     ASSERT_NE(es11[i], 0.);
     ASSERT_DOUBLE_EQ(2 * es11[i], es21[i]);
