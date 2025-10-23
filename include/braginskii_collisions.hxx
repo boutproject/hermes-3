@@ -8,7 +8,7 @@
 
 /// Calculates the collision rate of each species
 /// with all other species, using the Braginskii equation.
-/// 
+///
 /// Important: Be careful when including both ion_neutral collisions
 ///            and reactions such as charge exchange, since that may
 ///            result in double counting. Similarly for
@@ -39,22 +39,22 @@ struct BraginskiiCollisions : public Component {
   ///
   BraginskiiCollisions(std::string name, Options& alloptions, Solver*);
 
-  void transform(Options &state) override;
+  void transform(Options& state) override;
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
 
 private:
-  BoutReal Tnorm; // Temperature normalisation [eV]
-  BoutReal Nnorm; // Density normalisation [m^-3]
-  BoutReal rho_s0;  // Length normalisation [m]
+  BoutReal Tnorm;    // Temperature normalisation [eV]
+  BoutReal Nnorm;    // Density normalisation [m^-3]
+  BoutReal rho_s0;   // Length normalisation [m]
   BoutReal Omega_ci; // Frequency normalisation [s^-1]
 
   /// Which types of collisions to include?
   bool electron_electron, electron_ion, electron_neutral, ion_ion, ion_neutral,
       neutral_neutral;
 
-  BoutReal ei_multiplier;  // Arbitrary user-set multiplier on electron-ion collisions
+  BoutReal ei_multiplier; // Arbitrary user-set multiplier on electron-ion collisions
 
   /// Calculated collision rates saved for post-processing and use by other components
   /// Saved in options, the BOUT++ dictionary-like object
@@ -65,11 +65,12 @@ private:
 
   /// Update collision frequencies
   /// nu_12    normalised frequency
-  void collide(Options &species1, Options &species2, const Field3D &nu_12);
+  void collide(Options& species1, Options& species2, const Field3D& nu_12);
 };
 
 namespace {
-RegisterComponent<BraginskiiCollisions> registercomponentbraginskiicollisions("braginskii_collisions");
+RegisterComponent<BraginskiiCollisions>
+    registercomponentbraginskiicollisions("braginskii_collisions");
 }
 
 #endif // COLLISIONS_H

@@ -82,7 +82,7 @@ private:
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
 
-  Field3D nu;   ///< Collision frequency for conduction
+  Field3D nu; ///< Collision frequency for conduction
 
   bool evolve_log; ///< Evolve logarithm of E?
   Field3D logE;    ///< Natural logarithm of E

@@ -1,15 +1,15 @@
 
 #include "gtest/gtest.h"
 
-#include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
+#include "test_extras.hxx" // FakeMesh
 
 #include "../../include/braginskii_friction.hxx"
 
 /// Global mesh
-namespace bout{
-namespace globals{
-extern Mesh *mesh;
+namespace bout {
+namespace globals {
+extern Mesh* mesh;
 } // namespace globals
 } // namespace bout
 
@@ -19,7 +19,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using BraginskiiFrictionTest = FakeMeshFixture;
 
-
 TEST_F(BraginskiiFrictionTest, OnlyElectrons) {
   Options options;
 
@@ -27,19 +26,20 @@ TEST_F(BraginskiiFrictionTest, OnlyElectrons) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
-  
+
   BraginskiiFriction component("test", options, nullptr);
 
   Options state;
   state["species"]["e"]["density"] = 1e19;
   state["species"]["e"]["temperature"] = 10.;
   state["species"]["e"]["velocity"] = 1.;
-  state["species"]["e"]["AA"] = 1./1836;
+  state["species"]["e"]["AA"] = 1. / 1836;
   state["species"]["e"]["collision_frequencies"]["e_e_coll"] = 1.;
 
   component.transform(state);
 
-  // A species can't exert friction on itself, so momentum and energy transfer won't be set or will be 0.
+  // A species can't exert friction on itself, so momentum and energy transfer won't be
+  // set or will be 0.
   if (state["species"]["e"]["momentum_source"].isSet()) {
     ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["e"]["momentum_source"])(0, 0, 0), 0.);
     ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["e"]["energy_source"])(0, 0, 0), 0.);
@@ -55,7 +55,7 @@ TEST_F(BraginskiiFrictionTest, TwoComovingSpeciesCharged) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
-  
+
   BraginskiiFriction component("test", options, nullptr);
 
   Options state;
@@ -83,7 +83,7 @@ TEST_F(BraginskiiFrictionTest, TwoComovingSpeciesCharged) {
   Field3D ms2 = get<Field3D>(state["species"]["s2"]["momentum_source"]);
   Field3D es1 = get<Field3D>(state["species"]["s1"]["energy_source"]);
   Field3D es2 = get<Field3D>(state["species"]["s2"]["energy_source"]);
-  
+
   BOUT_FOR_SERIAL(i, ms1.getRegion("RGN_ALL")) {
     // If the species have the same velocities, there should be no friction
     ASSERT_DOUBLE_EQ(ms1[i], 0.);
@@ -93,7 +93,6 @@ TEST_F(BraginskiiFrictionTest, TwoComovingSpeciesCharged) {
   }
 }
 
-
 TEST_F(BraginskiiFrictionTest, TwoSpeciesCharged) {
   Options options;
 
@@ -101,7 +100,7 @@ TEST_F(BraginskiiFrictionTest, TwoSpeciesCharged) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
-  
+
   BraginskiiFriction component("test", options, nullptr);
 
   Options state;
@@ -137,7 +136,6 @@ TEST_F(BraginskiiFrictionTest, TwoSpeciesCharged) {
   }
 }
 
-
 TEST_F(BraginskiiFrictionTest, DoubleRelativeVelocities) {
   Options options;
 
@@ -145,7 +143,7 @@ TEST_F(BraginskiiFrictionTest, DoubleRelativeVelocities) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
-  
+
   BraginskiiFriction component("test", options, nullptr);
 
   Options state1, state2;
@@ -174,7 +172,7 @@ TEST_F(BraginskiiFrictionTest, DoubleRelativeVelocities) {
   Field3D ms21 = get<Field3D>(state2["species"]["s1"]["momentum_source"]);
   Field3D es11 = get<Field3D>(state1["species"]["s1"]["energy_source"]);
   Field3D es21 = get<Field3D>(state2["species"]["s1"]["energy_source"]);
-  
+
   BOUT_FOR_SERIAL(i, ms11.getRegion("RGN_ALL")) {
     // The relative velocity in the second state is double that in the
     // first, so the friction should be double too.
@@ -196,7 +194,7 @@ TEST_F(BraginskiiFrictionTest, TwoSpeciesNoHeating) {
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
   options["test"]["frictional_heating"] = false;
-  
+
   BraginskiiFriction component("test", options, nullptr);
 
   Options state;
@@ -230,7 +228,7 @@ TEST_F(BraginskiiFrictionTest, DoubleCollisionRate) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
-  
+
   BraginskiiFriction component("test", options, nullptr);
 
   Options state1, state2;
@@ -258,7 +256,7 @@ TEST_F(BraginskiiFrictionTest, DoubleCollisionRate) {
   Field3D ms21 = get<Field3D>(state2["species"]["s1"]["momentum_source"]);
   Field3D es11 = get<Field3D>(state1["species"]["s1"]["energy_source"]);
   Field3D es21 = get<Field3D>(state2["species"]["s1"]["energy_source"]);
-  
+
   BOUT_FOR_SERIAL(i, ms11.getRegion("RGN_ALL")) {
     // The collision rate in the second state is double that in the
     // first, so the friction should be double too.

@@ -5,7 +5,7 @@
 #include "component.hxx"
 
 /// Calculates parallel heat conduction due to collisions
-/// 
+///
 /// NOTE: This is global as that is the only way to ensure it gets run
 /// after all collisions have been calculated. Logically this should
 /// really apply species-by-species, but we can't do that until we
@@ -29,7 +29,6 @@ struct BraginskiiConduction : public Component {
   ///
   BraginskiiConduction(std::string name, Options& alloptions, Solver*);
 
-
   /// Calculate conduction of energy for each species where this has been turned on.
   ///
   /// Uses
@@ -48,25 +47,32 @@ struct BraginskiiConduction : public Component {
   ///       - kappa_par         The parallel heat conduction coefficient
   ///       - energy_flow_ylow  Energy flow diagnostics.
   ///
-  void transform(Options &state) override;
+  void transform(Options& state) override;
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
 
 private:
-  std::map<std::string, Field3D> all_nu;   ///< Collision frequency for conduction
+  std::map<std::string, Field3D> all_nu;        ///< Collision frequency for conduction
   std::map<std::string, Field3D> all_kappa_par; ///< Parallel heat conduction coefficient
-  std::map<std::string, std::string> all_conduction_collisions_mode; ///< Collision selection, either multispecies or braginskii
-  std::map<std::string, std::vector<std::string>> all_collision_names; ///< Collisions used for collisionality
-  std::map<std::string, BoutReal> all_kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
+  std::map<std::string, std::string>
+      all_conduction_collisions_mode; ///< Collision selection, either multispecies or
+                                      ///< braginskii
+  std::map<std::string, std::vector<std::string>>
+      all_collision_names; ///< Collisions used for collisionality
+  std::map<std::string, BoutReal>
+      all_kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
+                             ///< calculation
   std::map<std::string, BoutReal> all_kappa_limit_alpha; ///< Flux limit if >0
-  std::map<std::string, Field3D> all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
+  std::map<std::string, Field3D>
+      all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
   /// Save more diagnostics?
   std::map<std::string, bool> all_diagnose;
 };
 
 namespace {
-RegisterComponent<BraginskiiConduction> registercomponentbraginskiiconduction("braginskii_conduction");
+RegisterComponent<BraginskiiConduction>
+    registercomponentbraginskiiconduction("braginskii_conduction");
 }
 
 #endif // BRAGINSKII_CONDUCTION_H

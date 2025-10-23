@@ -3,10 +3,11 @@
 #include <bout/constants.hxx>
 #include <bout/output_bout_types.hxx>
 
-#include "../include/hermes_utils.hxx"
 #include "../include/braginskii_collisions.hxx"
+#include "../include/hermes_utils.hxx"
 
-BraginskiiCollisions::BraginskiiCollisions(std::string name, Options& alloptions, Solver*) {
+BraginskiiCollisions::BraginskiiCollisions(std::string name, Options& alloptions,
+                                           Solver*) {
   AUTO_TRACE();
   const Options& units = alloptions["units"];
 
@@ -54,13 +55,17 @@ BraginskiiCollisions::BraginskiiCollisions(std::string name, Options& alloptions
 ///
 /// Note: A* variables are used for atomic mass numbers;
 ///       mass* variables are species masses in kg
-void BraginskiiCollisions::collide(Options& species1, Options& species2, const Field3D& nu_12) {
+void BraginskiiCollisions::collide(Options& species1, Options& species2,
+                                   const Field3D& nu_12) {
   AUTO_TRACE();
 
-  add(species1["collision_frequency"], nu_12);                           // Total collision frequency
-  std::string coll_name = species1.name() + std::string("_") + species2.name() + std::string("_coll");
-  set(species1["collision_frequencies"][coll_name], nu_12);              // Collision frequency for individual reaction
-  set(collision_rates[species1.name()][species2.name()], nu_12);         // Individual collision frequency used for diagnostics
+  add(species1["collision_frequency"], nu_12); // Total collision frequency
+  std::string coll_name =
+      species1.name() + std::string("_") + species2.name() + std::string("_coll");
+  set(species1["collision_frequencies"][coll_name],
+      nu_12); // Collision frequency for individual reaction
+  set(collision_rates[species1.name()][species2.name()],
+      nu_12); // Individual collision frequency used for diagnostics
 
   if (&species1 != &species2) {
     // For collisions between different species
@@ -76,10 +81,13 @@ void BraginskiiCollisions::collide(Options& species1, Options& species2, const F
       return nu_12[i] * (A1 / A2) * density1[i] / softFloor(density2[i], 1e-5);
     });
 
-    add(species2["collision_frequency"], nu);                             // Total collision frequency
-    std::string coll_name =  species2.name() + std::string("_") + species1.name() + std::string("_coll");    
-    set(species2["collision_frequencies"][coll_name], nu);                // Collision frequency for individual reaction
-    set(collision_rates[species2.name()][species1.name()], nu);           // Individual collision frequency used for diagnostics
+    add(species2["collision_frequency"], nu); // Total collision frequency
+    std::string coll_name =
+        species2.name() + std::string("_") + species1.name() + std::string("_coll");
+    set(species2["collision_frequencies"][coll_name],
+        nu); // Collision frequency for individual reaction
+    set(collision_rates[species2.name()][species1.name()],
+        nu); // Individual collision frequency used for diagnostics
   }
 }
 
@@ -94,8 +102,8 @@ void BraginskiiCollisions::transform(Options& state) {
   if (allspecies.isSection("e")) {
     Options& electrons = allspecies["e"];
     const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]) * Tnorm; // eV
-    const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]) * Nnorm;     // In m^-3
-    
+    const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]) * Nnorm; // In m^-3
+
     for (auto& kv : allspecies.getChildren()) {
       if (kv.first == "e") {
         ////////////////////////////////////
@@ -117,8 +125,9 @@ void BraginskiiCollisions::transform(Options& state) {
           const BoutReal v1sq = 2 * Telim * SI::qe / SI::Me;
 
           // Collision frequency
-          const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne[i], 0.0) * softFloor(coulomb_log, 1.0)
-                              * 2 / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
+          const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne[i], 0.0)
+                              * softFloor(coulomb_log, 1.0) * 2
+                              / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
 
           ASSERT2(std::isfinite(nu));
           return nu;
@@ -138,7 +147,7 @@ void BraginskiiCollisions::transform(Options& state) {
           continue;
 
         const Field3D Ti = GET_NOBOUNDARY(Field3D, species["temperature"]) * Tnorm; // eV
-        const Field3D Ni = GET_NOBOUNDARY(Field3D, species["density"]) * Nnorm;     // In m^-3
+        const Field3D Ni = GET_NOBOUNDARY(Field3D, species["density"]) * Nnorm; // In m^-3
 
         const BoutReal Zi = get<BoutReal>(species["charge"]);
         const BoutReal Ai = get<BoutReal>(species["AA"]);
@@ -151,7 +160,7 @@ void BraginskiiCollisions::transform(Options& state) {
               : (Te[i] < Ti[i] * me_mi)
                   ? 23 - 0.5 * log(Ni[i]) + 1.5 * log(Ti[i]) - log(SQ(Zi) * Ai)
               : (Te[i] < exp(2) * SQ(Zi)) // Fix to ei coulomb log from S.Mijin ReMKiT1D
-                  // Ti m_e/m_i < Te < 10 Z^2
+                                          // Ti m_e/m_i < Te < 10 Z^2
                   ? 30.0 - 0.5 * log(Ne[i]) - log(Zi) + 1.5 * log(Te[i])
                   // Ti m_e/m_i < 10 Z^2 < Te
                   : 31.0 - 0.5 * log(Ne[i]) + log(Te[i]);
@@ -166,10 +175,12 @@ void BraginskiiCollisions::transform(Options& state) {
                               / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me))
                               * ei_multiplier;
 #if CHECK >= 2
-	  if (!std::isfinite(nu)) {
-	    throw BoutException("Collisions 195 {}: {} at {}: Ni {}, Ne {}, Clog {}, vesq {}, visq {}, Te {}, Ti {}\n",
-                                kv.first, nu, i, Ni[i], Ne[i], coulomb_log, vesq, visq, Te[i], Ti[i]);
-	  }
+          if (!std::isfinite(nu)) {
+            throw BoutException("Collisions 195 {}: {} at {}: Ni {}, Ne {}, Clog {}, "
+                                "vesq {}, visq {}, Te {}, Ti {}\n",
+                                kv.first, nu, i, Ni[i], Ne[i], coulomb_log, vesq, visq,
+                                Te[i], Ti[i]);
+          }
 #endif
           return nu;
         });
@@ -296,8 +307,8 @@ void BraginskiiCollisions::transform(Options& state) {
             const BoutReal v2sq = 2 * Tlim2 * SI::qe / mass2;
 
             // Collision frequency
-            const BoutReal nu = SQ(charge1 * charge2) * Nlim2 * softFloor(coulomb_log, 1.0)
-                                * (1. + mass1 / mass2)
+            const BoutReal nu = SQ(charge1 * charge2) * Nlim2
+                                * softFloor(coulomb_log, 1.0) * (1. + mass1 / mass2)
                                 / (3 * pow(PI * (v1sq + v2sq), 1.5) * SQ(SI::e0 * mass1));
             ASSERT2(std::isfinite(nu));
             return nu;
@@ -442,8 +453,6 @@ void BraginskiiCollisions::outputVars(Options& state) {
                       {"long_name", AB + " collision frequency"},
                       {"species", A},
                       {"source", "collisions"}});
-
     }
   }
-
 }

@@ -46,23 +46,27 @@ struct BraginskiiIonViscosity : public Component {
   ///   - <name>
   ///     - momentum_source
   ///
-  void transform(Options &state) override;
+  void transform(Options& state) override;
 
   /// Save variables to the output
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
-  bool perpendicular; ///< Include perpendicular flow? (Requires phi)
-  std::map<std::string, std::vector<std::string>> collision_names; ///< Collisions used for collisionality
-  std::string viscosity_collisions_mode;  ///< Collision selection, either multispecies or braginskii
-  Field3D nu;   ///< Collision frequency for conduction
-  Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
-  bool bounce_frequency; ///< Modify the collision time with the bounce frequency?
+  bool perpendicular;       ///< Include perpendicular flow? (Requires phi)
+  std::map<std::string, std::vector<std::string>>
+      collision_names;                   ///< Collisions used for collisionality
+  std::string viscosity_collisions_mode; ///< Collision selection, either multispecies or
+                                         ///< braginskii
+  Field3D nu;                            ///< Collision frequency for conduction
+  Vector2D Curlb_B;                      ///< Curvature vector Curl(b/B)
+  bool bounce_frequency;         ///< Modify the collision time with the bounce frequency?
   BoutReal bounce_frequency_q95; ///< Input q95 for when including bounce frequency change
-  BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce frequency change
-  BoutReal bounce_frequency_R; ///< Input major radius
-  bool diagnose; ///< Output additional diagnostics?
-  
+  BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce
+                                     ///< frequency change
+  BoutReal bounce_frequency_R;       ///< Input major radius
+  bool diagnose;                     ///< Output additional diagnostics?
+
   /// Per-species diagnostics
   struct Diagnostics {
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar
@@ -77,7 +81,8 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiIonViscosity> registercomponentionbraginskiiviscosity("braginskii_ion_viscosity");
+RegisterComponent<BraginskiiIonViscosity>
+    registercomponentionbraginskiiviscosity("braginskii_ion_viscosity");
 }
 
 #endif

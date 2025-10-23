@@ -560,11 +560,14 @@ void EvolvePressure::precon(const Options& state, BoutReal gamma) {
   const auto& species = state["species"][name];
   const Field3D N = get<Field3D>(species["density"]);
 
-  // FIXME: LOOKS LIKE THE CONDUCTION TERM SHOULD EXPOSE KAPPA_PAR IN THE STATE. BUT THEN WOULD STILL BE HARDCODING FORM OF CONDUCTION, I GUESS?
-  // IS PRESSURE/TEMPERATURE IN STATE UP-TO-DATE ENOUGH FOR US TO USE? IF SO, COULD MOVE THIS LOGIC TO BRAGINSKII_CONDUCTION.
-  
+  // FIXME: LOOKS LIKE THE CONDUCTION TERM SHOULD EXPOSE KAPPA_PAR IN THE STATE. BUT THEN
+  // WOULD STILL BE HARDCODING FORM OF CONDUCTION, I GUESS? IS PRESSURE/TEMPERATURE IN
+  // STATE UP-TO-DATE ENOUGH FOR US TO USE? IF SO, COULD MOVE THIS LOGIC TO
+  // BRAGINSKII_CONDUCTION.
+
   // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coef = -(2. / 3) * gamma * get<Field3D>(species["kappa_par"]) / softFloor(N, density_floor);
+  Field3D coef = -(2. / 3) * gamma * get<Field3D>(species["kappa_par"])
+                 / softFloor(N, density_floor);
 
   if (state.isSet("scale_timederivs")) {
     coef *= get<Field3D>(state["scale_timederivs"]);

@@ -7,13 +7,12 @@
 #include "component.hxx"
 
 /// Calculates the heat exchange between species due to collisions
-/// 
+///
 struct BraginskiiHeatExchange : public Component {
   ///
   /// @param alloptions Settings. There is nothing to be configured.
   ///
   BraginskiiHeatExchange(std::string name, Options& alloptions, Solver*);
-
 
   /// Calculate thermal energy exchange between species due to collisions.
   ///
@@ -32,13 +31,12 @@ struct BraginskiiHeatExchange : public Component {
   ///       - momentum_source   if species1 or species2 velocity is set
   ///       - energy_source     if velocity is set and frictional_heating
   ///
-  void transform(Options &state) override;
+  void transform(Options& state) override;
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
 
 private:
-
   /// Calculated energy transfer for post-processing and use by other components
   /// Saved in options, the BOUT++ dictionary-like object
   Options energy_channels;
@@ -48,7 +46,8 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiHeatExchange> registercomponentbraginskiiheatexchange("braginskii_heat_exchange");
+RegisterComponent<BraginskiiHeatExchange>
+    registercomponentbraginskiiheatexchange("braginskii_heat_exchange");
 }
 
 #endif // BRAGINSKII_HEAT_EXCHANGE_H
