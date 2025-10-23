@@ -1428,7 +1428,7 @@ Field3D Grad_perp_f_B_SQ(const Field3D& f) {
         BoutReal v2D =
             (coord->g11(i, j) * SQ((fpm - fmm) / coord->dx(i, j))
              + coord->g33(i, j) * SQ((f(i, j, k) - f(i, j, km)) / coord->dz(i, j)))
-            / (coord->Bxy(i, j));
+            / SQ(coord->Bxy(i, j));
 
         BoutReal v2R = (0.5 * (coord->g33(i, j) + coord->g33(i + 1, j))
                             * SQ((fpp - fpm) / coord->dz(i, j))
