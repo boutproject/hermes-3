@@ -104,7 +104,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
       .withDefault<std::string>("multispecies");
 
   if (precondition) {
-    inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
+    inv = Laplacian::create(&options["precon_laplace"]);
 
     inv->setInnerBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
     inv->setOuterBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);

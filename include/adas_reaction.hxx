@@ -4,6 +4,8 @@
 
 #include "component.hxx"
 #include "reaction.hxx"
+
+#include <cstddef>
 #include <vector>
 
 /// Represent a 2D rate coefficient table (T,n)
@@ -13,7 +15,7 @@ struct OpenADASRateCoefficient {
   /// @param filename   The file to read. Path relative to run working directory
   /// @param level      The first index in the log coefficient array
   ///                   (ionisation level)
-  OpenADASRateCoefficient(const std::string& filename, int level);
+  OpenADASRateCoefficient(const std::string& filename, std::size_t level);
 
   std::vector<std::vector<BoutReal>> log_coeff;
   std::vector<BoutReal> log_temperature;
@@ -53,7 +55,7 @@ struct OpenADAS : public ReactionBase {
   ///  - The rate and radiation file names have "json_database/" prepended
   /// 
   OpenADAS(const Options& units, const std::string& rate_file,
-           const std::string& radiation_file, int level, BoutReal electron_heating)
+           const std::string& radiation_file, std::size_t level, BoutReal electron_heating)
       : rate_coef(std::string("json_database/") + rate_file, level),
         radiation_coef(std::string("json_database/") + radiation_file, level),
         electron_heating(electron_heating) {
@@ -79,7 +81,7 @@ private:
 };
 
 struct OpenADASChargeExchange : public ReactionBase {
-  OpenADASChargeExchange(const Options& units, const std::string& rate_file, int level)
+  OpenADASChargeExchange(const Options& units, const std::string& rate_file, std::size_t level)
       : rate_coef(std::string("json_database/") + rate_file, level) {
     // Get the units
     Tnorm = get<BoutReal>(units["eV"]);
