@@ -71,7 +71,7 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityPressureScaling) {
   BOUT_FOR_SERIAL(i, visc1.getRegion("RGN_NOBNDRY")) {
     // Viscosity is proportional to the pressure.
     ASSERT_NE(visc1[i], 0.);
-    ASSERT_FLOAT_EQ(2 * visc1[i], visc2[i]);
+    ASSERT_DOUBLE_EQ(2 * visc1[i], visc2[i]);
   }
 }
 
@@ -98,7 +98,7 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityCollisionScaling) {
   BOUT_FOR_SERIAL(i, visc1.getRegion("RGN_NOBNDRY")) {
     // Viscosity is inversely proportional to the collision frequency.
     ASSERT_NE(visc1[i], 0.);
-    ASSERT_FLOAT_EQ(visc1[i], 2 * visc2[i]);
+    ASSERT_DOUBLE_EQ(visc1[i], 2 * visc2[i]);
   }
 }
 
@@ -127,9 +127,9 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityVelocityScaling) {
           visc2 = state2["species"]["e"]["momentum_source"];
   BOUT_FOR_SERIAL(i, visc1.getRegion("RGN_NOBNDRY")) {
     // There will be no viscosity if there is no parallel velocity gradient.
-    ASSERT_FLOAT_EQ(visc0[i], 0.);
+    ASSERT_DOUBLE_EQ(visc0[i], 0.);
     // Viscosity is proportional to the parallel gradient of the velocity.
     ASSERT_NE(visc1[i], 0.);
-    ASSERT_FLOAT_EQ(2 * visc1[i], visc2[i]);
+    ASSERT_DOUBLE_EQ(2 * visc1[i], visc2[i]);
   }
 }
