@@ -93,8 +93,8 @@ TEST_F(BraginskiiConductionTest, ConductionGradientScaling) {
   BOUT_FOR_SERIAL(i, conduction1.getRegion("RGN_NOBNDRY")) {
     // Conduction is proportional to the parallel second derivative of temperature
     EXPECT_NE(conduction1[i], 0.);
-    EXPECT_FLOAT_EQ(conduction0[i], 0.);
-    EXPECT_FLOAT_EQ(conduction2[i], 2 * conduction1[i]);
+    EXPECT_DOUBLE_EQ(conduction0[i], 0.);
+    EXPECT_DOUBLE_EQ(conduction2[i], 2 * conduction1[i]);
   }
 }
 
@@ -115,7 +115,7 @@ TEST_F(BraginskiiConductionTest, ConductionKappaScaling) {
   BOUT_FOR_SERIAL(i, conduction1.getRegion("RGN_NOBNDRY")) {
     // Conduction is proportional to the parallel diffusivity
     EXPECT_NE(conduction1[i], 0.);
-    EXPECT_FLOAT_EQ(conduction2[i], 2 * conduction1[i]);
+    EXPECT_DOUBLE_EQ(conduction2[i], 2 * conduction1[i]);
   }
 }
 
@@ -147,8 +147,8 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionScaling) {
   BOUT_FOR_SERIAL(i, conduction1.getRegion("RGN_NOBNDRY")) {
     // Conduction is inversely proportional to the collision frequency
     EXPECT_NE(conduction1[i], 0.);
-    EXPECT_FLOAT_EQ(conduction0[i], 2 * conduction1[i]);
-    EXPECT_FLOAT_EQ(2 * conduction2[i], conduction1[i]);
+    EXPECT_DOUBLE_EQ(conduction0[i], 2 * conduction1[i]);
+    EXPECT_DOUBLE_EQ(2 * conduction2[i], conduction1[i]);
   }
 }
 
@@ -170,7 +170,7 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionsMode) {
           conduction_multi = this->getDeriv(state_multi);
   BOUT_FOR_SERIAL(i, conduction_brag.getRegion("RGN_NOBNDRY")) {
     EXPECT_NE(conduction_brag[i], 0.);
-    EXPECT_FLOAT_EQ(conduction_brag[i], 2 * conduction_multi[i]);
+    EXPECT_DOUBLE_EQ(conduction_brag[i], 2 * conduction_multi[i]);
   }
 }
 
