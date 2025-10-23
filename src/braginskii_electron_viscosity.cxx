@@ -1,13 +1,14 @@
 // Braginskii electron viscosity
 
+#include <bout/constants.hxx>
+#include <bout/difops.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/mesh.hxx>
-#include <bout/difops.hxx>
-#include <bout/constants.hxx>
 
 #include "../include/braginskii_electron_viscosity.hxx"
 
-BraginskiiElectronViscosity::BraginskiiElectronViscosity(std::string name, Options& alloptions, Solver*) {
+BraginskiiElectronViscosity::BraginskiiElectronViscosity(std::string name,
+                                                         Options& alloptions, Solver*) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]
@@ -77,5 +78,3 @@ void BraginskiiElectronViscosity::outputVars(Options& state) {
                     {"source", "electron_viscosity"}});
   }
 }
-
-
