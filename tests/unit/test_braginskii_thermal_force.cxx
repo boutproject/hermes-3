@@ -82,7 +82,7 @@ TEST_F(BraginskiiThermalForceTest, ElectronIonBalance) {
   Field3D mom_d = state["species"]["d+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom_e.getRegion("RGN_NOBNDRY")) {
     // Forces on the species should be equal and opposite
-    ASSERT_FLOAT_EQ(mom_e[i], -mom_d[i]);
+    ASSERT_DOUBLE_EQ(mom_e[i], -mom_d[i]);
   }
 }
 
@@ -103,7 +103,7 @@ TEST_F(BraginskiiThermalForceTest, IonIonBalance) {
   Field3D mom_d = state["species"]["d+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom_c.getRegion("RGN_NOBNDRY")) {
     // Forces on the species should be equal and opposite
-    ASSERT_FLOAT_EQ(mom_c[i], -mom_d[i]);
+    ASSERT_DOUBLE_EQ(mom_c[i], -mom_d[i]);
   }
 }
 
@@ -139,7 +139,7 @@ TEST_F(BraginskiiThermalForceTest, NoNetForce) {
   }
   // There is no external force on plasma, so all of the thermal
   // forces should balance out.
-  BOUT_FOR_SERIAL(i, force.getRegion("RGN_NOBNDRY")) { ASSERT_FLOAT_EQ(force[i], 0.0); }
+  BOUT_FOR_SERIAL(i, force.getRegion("RGN_NOBNDRY")) { ASSERT_DOUBLE_EQ(force[i], 0.0); }
 }
 
 TEST_F(BraginskiiThermalForceTest, ElectronForceDensityScaling) {
@@ -163,7 +163,7 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceDensityScaling) {
   BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
     // Force is directly proportional to ion density
     ASSERT_NE(mom1[i], 0.);
-    ASSERT_FLOAT_EQ(2 * mom1[i], mom2[i]);
+    ASSERT_DOUBLE_EQ(2 * mom1[i], mom2[i]);
   }
 }
 
@@ -188,7 +188,7 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceChargeScaling) {
   BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
     // Force is proportional to square of ion density
     ASSERT_NE(mom1[i], 0.);
-    ASSERT_FLOAT_EQ(4 * mom1[i], mom2[i]);
+    ASSERT_DOUBLE_EQ(4 * mom1[i], mom2[i]);
   }
 }
 
@@ -224,11 +224,11 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceTemperatureGradScaling) {
           mom1_prime = state1["species"]["d2+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
     // Temperature gradient of the ion doesn't influence force
-    ASSERT_FLOAT_EQ(mom1[i], mom1_prime[i]);
+    ASSERT_DOUBLE_EQ(mom1[i], mom1_prime[i]);
     // Force is proportional to the parallel electron temperature gradient
     ASSERT_NE(mom1[i], 0.);
-    ASSERT_FLOAT_EQ(mom0[i], 0.);
-    ASSERT_FLOAT_EQ(mom2[i], 2 * mom1[i]);
+    ASSERT_DOUBLE_EQ(mom0[i], 0.);
+    ASSERT_DOUBLE_EQ(mom2[i], 2 * mom1[i]);
   }
 }
 
@@ -259,10 +259,10 @@ TEST_F(BraginskiiThermalForceTest, IonIonForceTemperatureGradScaling) {
           mom2_2 = state2["species"]["c2"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom1_1.getRegion("RGN_NOBNDRY")) {
     // Changing temperature gradient of the heavy ion should not change the force
-    EXPECT_FLOAT_EQ(mom1_1[i], mom1_2[i]);
-    EXPECT_FLOAT_EQ(mom2_1[i], mom2_2[i]);
+    EXPECT_DOUBLE_EQ(mom1_1[i], mom1_2[i]);
+    EXPECT_DOUBLE_EQ(mom2_1[i], mom2_2[i]);
     // The force is proportional to the temperature gradient of the light ion
-    EXPECT_FLOAT_EQ(2 * mom1_1[i], mom2_1[i]);
+    EXPECT_DOUBLE_EQ(2 * mom1_1[i], mom2_1[i]);
   }
 }
 

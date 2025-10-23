@@ -41,8 +41,8 @@ TEST_F(BraginskiiFrictionTest, OnlyElectrons) {
   // A species can't exert friction on itself, so momentum and energy transfer won't be
   // set or will be 0.
   if (state["species"]["e"]["momentum_source"].isSet()) {
-    ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["e"]["momentum_source"])(0, 0, 0), 0.);
-    ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["e"]["energy_source"])(0, 0, 0), 0.);
+    ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["e"]["momentum_source"])(0, 0, 0), 0.);
+    ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["e"]["energy_source"])(0, 0, 0), 0.);
   } else {
     ASSERT_FALSE(state["species"]["e"]["energy_source"].isSet());
   }
