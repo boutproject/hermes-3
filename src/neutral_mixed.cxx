@@ -883,7 +883,7 @@ void NeutralMixed::outputVars(Options& state) {
   }
 }
 
-void NeutralMixed::precon(const Options& state, BoutReal gamma) {
+void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma) {
   if (!precondition) {
     return;
   }
@@ -937,5 +937,4 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
       throw BoutException("Precon ddt(NV{}) non-finite at {}\n", name, i);
     }
   }
-
 }

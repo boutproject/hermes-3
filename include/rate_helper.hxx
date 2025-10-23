@@ -28,7 +28,7 @@ struct RateHelper {
    */
   RateHelper(const Options& state, const std::vector<std::string>& reactant_names,
              RateFunctionType rate_calc_func, const Region<IdxType> region)
-      : rate_calc_func(rate_calc_func), region(region) {
+      : region(region), rate_calc_func(rate_calc_func) {
 
     // Extract electron properties from state
     const Options& electron = state["species"]["e"];

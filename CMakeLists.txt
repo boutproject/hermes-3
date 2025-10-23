@@ -44,7 +44,7 @@ option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
   set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
   set(HERMES_BOUT_SRC "external/BOUT-dev" CACHE STRING "Directory of BOUT++ dir")
-  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev)
+  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev SYSTEM)
 else()
   find_package(bout++ REQUIRED)
 endif()
@@ -194,6 +194,16 @@ target_include_directories(hermes-3 PUBLIC
 # Have hermes-3 look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3 PROPERTIES BUILD_RPATH "$ORIGIN")
 
+option(HERMES_ENABLE_WARNINGS "Enable compiler warnings" ${PROJECT_IS_TOP_LEVEL})
+option(HERMES_ERROR_ON_WARNINGS "Enable compiler warnings" OFF)
+include(CompilerWarnings)
+add_library(hermes_warnings INTERFACE)
+hermes_set_project_warnings(hermes_warnings ${HERMES_ERROR_ON_WARNINGS} "" "" "" "")
+
+if (HERMES_ENABLE_WARNINGS)
+  target_link_libraries(hermes-3 PRIVATE hermes_warnings)
+endif()
+
 # Build the file containing just the commit hash
 # This will be rebuilt on every commit!
 configure_file(
@@ -229,9 +239,21 @@ if(HERMES_TESTS)
 
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
-    add_test(NAME ${TESTNAME}
-           WORKING_DIRECTORY tests/integrated/${TESTNAME}
-           COMMAND runtest)
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+      set(INT_TEST_DEST
+          ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
+      # Make copies of the test exec and input file in the build directory and keep them up to date
+      configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
+      configure_file(${INT_TEST_SRC}/data/BOUT.inp ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+    else()
+      set(INT_TEST_DEST
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+    endif()
+    add_test(
+      NAME ${TESTNAME}
+      WORKING_DIRECTORY ${INT_TEST_DEST}
+      COMMAND runtest)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
@@ -260,6 +282,8 @@ if(HERMES_TESTS)
     add_executable(hermes_unit_tests
                    tests/unit/main.cxx
                    ${TEST_SOURCES})
+
+    target_link_libraries(hermes_unit_tests PRIVATE hermes_warnings)
 
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)

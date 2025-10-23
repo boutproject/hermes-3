@@ -244,19 +244,7 @@ void IonViscosity::transform(Options &state) {
                           (2. * Grad_par(V_av) + V_av * Grad_par_logB);
         Field2D Pi_ciperp = 0 * Pi_cipar; // Perpendicular components and divergence of current J equal to 0 for only parallel viscosity case
         Field2D DivJ = 0 * Pi_cipar;
-        // Find the diagnostics struct for this species
-        auto search = diagnostics.find(species_name);
-        if (search == diagnostics.end()) {
-          // First time, create diagnostic
-          diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor});
-        } else {
-          // Update diagnostic values
-          auto& d = search->second;
-          d.Pi_ciperp = Pi_ciperp;
-          d.Pi_cipar = Pi_cipar;
-          d.DivJ = DivJ;
-          d.bounce_factor = bounce_factor;
-        }
+        diagnostics[species_name] = Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
       }
       continue; // Skip perpendicular flow parts below
     }
@@ -349,20 +337,7 @@ void IonViscosity::transform(Options &state) {
                      - (1 / 3) * bracket(Pi_ci, phi_av + P_av, BRACKET_STD)));
 
     if (diagnose) {
-      // Find the diagnostics struct for this species
-      auto search = diagnostics.find(species_name);
-      if (search == diagnostics.end()) {
-        // First time, create diagnostic
-        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star});
-      } else {
-        // Update diagnostic values
-        auto& d = search->second;
-        d.Pi_ciperp = Pi_ciperp;
-        d.Pi_cipar = Pi_cipar;
-        d.DivJ = DivJ;
-        d.bounce_factor = bounce_factor;
-        d.nu_star = nu_star;
-      }
+      diagnostics[species_name] = Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
     }
   }
 }
