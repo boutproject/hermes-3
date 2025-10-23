@@ -137,11 +137,7 @@ void BraginskiiIonViscosity::transform(Options& state) {
 
           if ( // Self-collisions
               (collisionSpeciesMatch(collision_name, species.name(), species.name(),
-                                     "coll", "exact"))
-              or
-              // Ion-electron collisions
-              (collisionSpeciesMatch(collision_name, species.name(), "+", "coll",
-                                     "partial"))) {
+                                     "coll", "exact"))) {
             collision_names[species_name].push_back(collision_name);
           }
         }

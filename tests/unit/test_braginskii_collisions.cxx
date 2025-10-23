@@ -155,9 +155,9 @@ TEST_F(BraginskiiCollisionsTest, TnormDependence) {
 
   // Normalised frequencies should be unchanged
   ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["e"]["collision_frequency"])(0, 0, 0),
-                  get<Field3D>(state2["species"]["e"]["collision_frequency"])(0, 0, 0));
+                   get<Field3D>(state2["species"]["e"]["collision_frequency"])(0, 0, 0));
   ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["d"]["collision_frequency"])(0, 0, 0),
-                  get<Field3D>(state2["species"]["d"]["collision_frequency"])(0, 0, 0));
+                   get<Field3D>(state2["species"]["d"]["collision_frequency"])(0, 0, 0));
   ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["d+"]["collision_frequency"])(0, 0, 0),
-                  get<Field3D>(state2["species"]["d+"]["collision_frequency"])(0, 0, 0));
+                   get<Field3D>(state2["species"]["d+"]["collision_frequency"])(0, 0, 0));
 }
