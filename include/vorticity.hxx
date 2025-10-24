@@ -124,7 +124,6 @@ private:
   bool collisional_friction; ///< Damping of vorticity due to collisional friction
 
   bool sheath_boundary; ///< Set outer boundary to j=0?
-
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
   bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
@@ -137,7 +136,8 @@ private:
   
   bool split_n0; // Split phi into n=0 and n!=0 components
   LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
-
+  Field3D logB;
+  bool diamagnetic_bracketform;
   Field3D Bsq; // SQ(coord->Bxy)
   VectorMetric Curlb_B; // Curvature vector Curl(b/B)
   BoutReal hyper_z; ///< Hyper-viscosity in Z
