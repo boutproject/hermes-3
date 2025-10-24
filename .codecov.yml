@@ -1,0 +1,14 @@
+comment: false
+
+ignore:
+  - "tests"
+
+codecov:
+  branch: next
+
+coverage:
+  status:
+    project:
+      default:
+        target: 30%
+    patch: off
