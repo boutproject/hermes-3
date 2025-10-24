@@ -62,7 +62,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
 
   diamagnetic_bracketform = options["diamagnetic_bracketform"]
                         .doc("Include diamagnetic form that uses arakawa brackets? FCI version")
-                        .withDefault<bool>(false);
+                        .withDefault<bool>(mesh->isFci());
   
   collisional_friction =
       options["collisional_friction"]
