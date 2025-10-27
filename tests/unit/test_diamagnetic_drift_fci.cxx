@@ -192,3 +192,76 @@ TEST_F(DiamagneticDriftFCITest, NoGradientB) {
   }
   
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+TEST_F(DiamagneticDriftFCITest, TwoSpeciesDifferentCharge) {
+  Options options;
+  options["units"]["meters"] = 1.0;
+  options["units"]["seconds"] = 1.0;
+  options["units"]["Tesla"] = 1.0;
+
+
+  Field3D B = FieldFactory::get()->create3D("1 + x", &options, mesh);
+  mesh->getCoordinates()->Bxy = B;
+
+
+  DiamagneticDriftFCI component("h+", options, nullptr);
+
+  Field3D N = FieldFactory::get()->create3D("1 + y * (x - 0.5)", &options, mesh);
+  Field3D T = FieldFactory::get()->create3D("1 + 0.2 * x + sin(z)", &options, mesh);
+  Field3D V = FieldFactory::get()->create3D("1 + 1.3 * x + cos(2.0*z)", &options, mesh);
+  mesh->communicate(N,V,T);
+
+  Options state;
+  state["species"]["h+"]["density"] = N;
+  state["species"]["h+"]["temperature"] = T;
+  state["species"]["h+"]["pressure"] = N*T;
+  state["species"]["h+"]["charge"] = 1;
+  state["species"]["h+"]["velocity"] = V;
+  state["species"]["h+"]["momentum"] = N*V;
+
+
+  state["species"]["h++"]["density"] = N;
+  state["species"]["h++"]["temperature"] = T;
+  state["species"]["h++"]["pressure"] = N*T;
+  state["species"]["h++"]["charge"] = 2;
+  state["species"]["h++"]["velocity"] = V;
+  state["species"]["h++"]["momentum"] = N*V;
+
+
+  component.transform(state);
+
+  Field3D ds1 = get<Field3D>(state["species"]["h+"]["density_source"]);
+  Field3D ds2 = get<Field3D>(state["species"]["h++"]["density_source"]);
+
+  Field3D ms1 = get<Field3D>(state["species"]["h+"]["momentum_source"]);
+  Field3D ms2 = get<Field3D>(state["species"]["h++"]["momentum_source"]);
+
+  Field3D es1 = get<Field3D>(state["species"]["h+"]["energy_source"]);
+  Field3D es2 = get<Field3D>(state["species"]["h++"]["energy_source"]);
+
+
+
+  BOUT_FOR_SERIAL(i, ds1.getRegion("RGN_NOBNDRY")) {
+    ASSERT_DOUBLE_EQ(ds1[i],2.0*ds2[i]);
+    ASSERT_DOUBLE_EQ(ms1[i],2.0*ms2[i]);
+    ASSERT_DOUBLE_EQ(es1[i],2.0*es2[i]);
+  }
+}
