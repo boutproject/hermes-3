@@ -19,9 +19,9 @@ DiamagneticDriftFCI::DiamagneticDriftFCI(std::string name, Options& alloptions,
   BoutReal Bnorm = get<BoutReal>(units["Tesla"]);
   BoutReal Lnorm = get<BoutReal>(units["meters"]);
 
+  const auto coord = mesh->getCoordinates();
   if (mesh->isFci()) {
 
-    const auto coord = mesh->getCoordinates();
     bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
 
     logB = log(coord->Bxy);
@@ -31,6 +31,9 @@ DiamagneticDriftFCI::DiamagneticDriftFCI(std::string name, Options& alloptions,
 
   } else {
     bracket_factor = 1.0;
+    logB = log(coord->Bxy);
+    mesh->communicate(logB);
+    logB.applyBoundary("neumann_o2");
   } 
 }
 
