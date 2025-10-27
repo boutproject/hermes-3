@@ -89,6 +89,7 @@ set(HERMES_SOURCES
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
     src/neutral_boundary.cxx
+    src/permissions.cxx
     src/polarisation_drift.cxx
     src/solkit_neutral_parallel_diffusion.cxx
     src/hydrogen_charge_exchange.cxx
@@ -138,6 +139,7 @@ set(HERMES_SOURCES
     include/neutral_parallel_diffusion.hxx
     include/solkit_neutral_parallel_diffusion.hxx
     include/noflow_boundary.hxx
+    include/permissions.hxx
     include/polarisation_drift.hxx
     include/quasineutral.hxx
     include/radiation.hxx
