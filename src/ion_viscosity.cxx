@@ -111,7 +111,7 @@ void IonViscosity::transform(Options &state) {
     if ((eta_limit_alpha > 0.) || eta.isFci()) {
       eta.applyBoundary("neumann");
       eta.getMesh()->communicate(eta);
-      eta.applyParallelBoundary("parallel_neumann_o2");
+      eta.applyParallelBoundary("parallel_neumann_o1");
     }
     
     // This term is the parallel flow part of
