@@ -35,30 +35,36 @@ void Permissions::substitute(const std::string& label,
   }
 }
 
-Permissions::AccessRights Permissions::bestMatchRights(const std::string& variable) const {
+std::pair<std::string, Permissions::AccessRights> Permissions::bestMatchRights(const std::string& variable) const {
   Permissions::AccessRights best_candidate = {Permissions::Nowhere, Permissions::Nowhere, Permissions::Nowhere};
+  std::string best_candidate_name = "";
   int max_len = 0;
   for (const auto& [varname, rights] : variable_permissions) {
     if (varname == variable) {
-      return rights;
+      return {varname, rights};
     }
-    if (varname.back() == ':' and varname.size() > max_len
-        and variable.find(varname) == 0) {
+    if (varname.size() > max_len and variable.find(varname + ":") == 0) {
       max_len = varname.size();
       best_candidate = rights;
+      best_candidate_name = varname;
     }
   }
-  return best_candidate;
+  return {best_candidate_name, best_candidate};
 }
 
-bool Permissions::canAccess(const std::string& variable,
+std::pair<bool, std::string> Permissions::canAccess(const std::string& variable,
                             PermissionTypes permission, Regions region) const {
-  return (bestMatchRights(variable)[permission] & region) == region;
+  auto [match_name, match_rights] = bestMatchRights(variable);
+  if ((match_rights[permission] & region) == region) {
+    return {true, match_name};
+  } else {
+    return {false, ""};
+  }
 }
 
 Permissions::PermissionTypes Permissions::getHighestPermission(const std::string & variable, Permissions::Regions region) const {
   if (region == Nowhere) return None;
-  AccessRights rights = bestMatchRights(variable);
+  AccessRights rights = std::get<1>(bestMatchRights(variable));
   int i = Read;
   while (i < PERMISSION_TYPES_END and (rights[i] & region) == region) {
     i++;
@@ -66,20 +72,20 @@ Permissions::PermissionTypes Permissions::getHighestPermission(const std::string
   return static_cast<PermissionTypes>(i - 1);
 }
 
-std::vector<std::pair<std::string, Permissions::Regions>>
+std::map<std::string, Permissions::Regions>
 Permissions::getVariablesWithPermission(PermissionTypes permission,
                                         bool highestOnly) const {
-  std::vector<std::pair<std::string, Permissions::Regions>> result;
+  std::map<std::string, Permissions::Regions> result;
   if (highestOnly and permission < PERMISSION_TYPES_END - 1) {
     for (const auto& [varname, rights] : variable_permissions) {
       auto regions = rights[permission];
       auto perm_in_regions = static_cast<Regions>(rights[permission] & ~rights[permission+1]);
-      if (perm_in_regions != Nowhere) result.emplace_back(varname, perm_in_regions);
+      if (perm_in_regions != Nowhere) result.emplace(varname, perm_in_regions);
     }
   } else {
     for (const auto& [varname, rights] : variable_permissions) {
       auto regions = rights[permission];
-      if (regions != Nowhere) result.emplace_back(varname, regions);
+      if (regions != Nowhere) result.emplace(varname, regions);
     }
   }
   return result;
