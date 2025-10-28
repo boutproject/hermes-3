@@ -73,6 +73,7 @@ set(HERMES_SOURCES
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
+    src/guarded_options.cxx
     src/isothermal.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
@@ -134,6 +135,7 @@ set(HERMES_SOURCES
     include/fixed_density.hxx
     include/fixed_fraction_ions.hxx
     include/fixed_velocity.hxx
+    include/guarded_options.hxx
     include/neutral_full_velocity.hxx
     include/hermes_utils.hxx
     include/hydrogen_charge_exchange.hxx
