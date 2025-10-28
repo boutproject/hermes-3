@@ -1,33 +1,37 @@
 #include "../include/permissions.hxx"
 
-Permissions::Permissions(std::initializer_list<std::pair<std::string, AccessRights>> data) :
-    variable_permissions() {
+Permissions::Permissions(std::initializer_list<std::pair<std::string, AccessRights>> data)
+    : variable_permissions() {
   for (const auto& [varname, access] : data) {
     setAccess(varname, access);
   }
 }
 
 void Permissions::setAccess(const std::string& variable, const AccessRights& rights) {
-  
+
   variable_permissions[variable] = applyLowerPermissions(rights);
 }
 
-std::string replaceAll(const std::string& str, const std::string& from, const std::string& to) {
+std::string replaceAll(const std::string& str, const std::string& from,
+                       const std::string& to) {
   std::string result = str;
-  if(from.empty()) return result;
+  if (from.empty())
+    return result;
   size_t start_pos = 0;
-  while((start_pos = result.find(from, start_pos)) != std::string::npos) {
+  while ((start_pos = result.find(from, start_pos)) != std::string::npos) {
     result.replace(start_pos, from.length(), to);
-    start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
+    start_pos +=
+        to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
   }
-  return result;  
+  return result;
 }
 
 void Permissions::substitute(const std::string& label,
                              const std::vector<std::string>& substitutions) {
   for (const auto [varname, access] : variable_permissions) {
     const std::string pattern = "{" + label + "}";
-    if (varname.find(pattern)  == std::string::npos) continue;
+    if (varname.find(pattern) == std::string::npos)
+      continue;
     variable_permissions.erase(varname);
     for (const std::string& val : substitutions) {
       variable_permissions[replaceAll(varname, pattern, val)] = access;
@@ -35,8 +39,10 @@ void Permissions::substitute(const std::string& label,
   }
 }
 
-std::pair<std::string, Permissions::AccessRights> Permissions::bestMatchRights(const std::string& variable) const {
-  Permissions::AccessRights best_candidate = {Permissions::Nowhere, Permissions::Nowhere, Permissions::Nowhere};
+std::pair<std::string, Permissions::AccessRights>
+Permissions::bestMatchRights(const std::string& variable) const {
+  Permissions::AccessRights best_candidate = {Permissions::Nowhere, Permissions::Nowhere,
+                                              Permissions::Nowhere};
   std::string best_candidate_name = "";
   int max_len = 0;
   for (const auto& [varname, rights] : variable_permissions) {
@@ -53,7 +59,8 @@ std::pair<std::string, Permissions::AccessRights> Permissions::bestMatchRights(c
 }
 
 std::pair<bool, std::string> Permissions::canAccess(const std::string& variable,
-                            PermissionTypes permission, Regions region) const {
+                                                    PermissionTypes permission,
+                                                    Regions region) const {
   auto [match_name, match_rights] = bestMatchRights(variable);
   if ((match_rights[permission] & region) == region) {
     return {true, match_name};
@@ -62,8 +69,11 @@ std::pair<bool, std::string> Permissions::canAccess(const std::string& variable,
   }
 }
 
-Permissions::PermissionTypes Permissions::getHighestPermission(const std::string & variable, Permissions::Regions region) const {
-  if (region == Nowhere) return None;
+Permissions::PermissionTypes
+Permissions::getHighestPermission(const std::string& variable,
+                                  Permissions::Regions region) const {
+  if (region == Nowhere)
+    return None;
   AccessRights rights = std::get<1>(bestMatchRights(variable));
   int i = Read;
   while (i < PERMISSION_TYPES_END and (rights[i] & region) == region) {
@@ -79,13 +89,16 @@ Permissions::getVariablesWithPermission(PermissionTypes permission,
   if (highestOnly and permission < PERMISSION_TYPES_END - 1) {
     for (const auto& [varname, rights] : variable_permissions) {
       auto regions = rights[permission];
-      auto perm_in_regions = static_cast<Regions>(rights[permission] & ~rights[permission+1]);
-      if (perm_in_regions != Nowhere) result.emplace(varname, perm_in_regions);
+      auto perm_in_regions =
+          static_cast<Regions>(rights[permission] & ~rights[permission + 1]);
+      if (perm_in_regions != Nowhere)
+        result.emplace(varname, perm_in_regions);
     }
   } else {
     for (const auto& [varname, rights] : variable_permissions) {
       auto regions = rights[permission];
-      if (regions != Nowhere) result.emplace(varname, regions);
+      if (regions != Nowhere)
+        result.emplace(varname, regions);
     }
   }
   return result;
