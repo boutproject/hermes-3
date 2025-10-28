@@ -110,14 +110,17 @@ public:
   void substitute(const std::string& label, const std::vector<std::string>& substitutions);
 
   /// Check whether users are allowed to access this variable to the
-  /// given permission level, in the given region.
-  bool canAccess(const std::string& variable, PermissionTypes permission = Read, Regions region = AllRegions) const;
+  /// given permission level, in the given region. The secon item
+  /// returned indicates the name of the variable or section from
+  /// which the access rights are derived. If there is no matching
+  /// section then it will be an empty string.
+  std::pair<bool, std::string> canAccess(const std::string& variable, PermissionTypes permission = Read, Regions region = AllRegions) const;
 
   /// Get the highest permission level with which the given variable
   /// can be accessed in the given region.
   PermissionTypes getHighestPermission(const std::string& variable, Regions region = AllRegions) const;
 
-  /// Get a list of variables and regions for which there is the
+  /// Get a set of variables and regions for which there is the
   /// specified level of permission to access. If ``highestOnly`` is
   /// true then it will only include variables/regions for which this
   /// is the highest permission.
@@ -132,13 +135,16 @@ public:
   ///     
   /// The above code would write a line of output from the first
   /// for-loop, but not the second.
-  std::vector<std::pair<std::string, Regions>> getVariablesWithPermission(PermissionTypes permission, bool highestOnly = true) const;
+  std::map<std::string, Regions> getVariablesWithPermission(PermissionTypes permission, bool highestOnly = true) const;
 
 private:
   /// Returns the access rights for the most specific entry in this
   /// object which matches the variable name. If there are no matching
-  /// entries then the result will indicate no access rights.
-  AccessRights bestMatchRights(const std::string& variable) const;
+  /// entries then the result will indicate no access rights. The
+  /// string indicates the name of the variable from which the access
+  /// rights were derived. It will be empty if there are no matching
+  /// entries.
+  std::pair<std::string, AccessRights> bestMatchRights(const std::string& variable) const;
 
   /// Return a set of access rights where the lower permissions have
   /// been updated so that they reflect higher permissions (e.g., read
