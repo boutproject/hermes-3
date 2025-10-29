@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
   // output << "Got here 2 \n";
   // read data from netcdf for global vertices in mesh
   // Open the NetCDF file in read-only mode
-  const std::string filename = Options::root()["mesh"]["global_vertex_file"];
+  const std::string filename = Options::root()["mesh"]["file"];
   netCDF::NcFile dataFile(filename, netCDF::NcFile::read);
 
   // Get the variable
@@ -487,6 +487,11 @@ int main(int argc, char **argv) {
         ic++;
       }
     }
+    // this fills internal guards
+    mesh->communicate(density);
+    // apply boundary conditions to fill external guards
+    // density.applyBoundary();
+    // extrapolate -> Neumann
     // BOUT++ may need to do something with density Field2D guards cells
     // print density to screen to show non-trivial result
     // compare to 1/J*dx*dy*dz -> at the initial time we have 1 particle per cell

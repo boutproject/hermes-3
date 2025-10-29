@@ -38,13 +38,10 @@ def save_ivertex_indices_to_netcdf(source_file,destination_file,Rpoints_full,Zpo
     ptr = dataset.createVariable("ivertex_upper_left_corners","f8",("x", "y"))
     ptr.setncattr('bout_type','Field2D')
     ptr[:] = ivertex_corners_ul
-    dataset.close()
 
-    # create a new netcdf file for data that is not in BOUT-compatible format
-    # open destination file
-    vertex_file = source_file[:-3] + ".vertex.nc"
-    dataset = nc.Dataset(vertex_file, mode="w")
+    # add a new dimension to the Hypnotoad output file for the global vertex list
     dataset.createDimension('nvertices', len(Rpoints_full))
+    # add the global vertex lists
     ptr = dataset.createVariable("global_vertex_list_R","f8",("nvertices",))
     ptr[:] = Rpoints_full
     ptr.units = "length"
@@ -57,7 +54,6 @@ def save_ivertex_indices_to_netcdf(source_file,destination_file,Rpoints_full,Zpo
     ptr[:] = Zpoints_full
     dataset.close()
     print(f"Saving modified Hypnotoad mesh file to {destination_file}")
-    print(f"Saving global vertex information to {vertex_file}")
     return None
 
 def isapprox(a,b,tol=1.0e-8):
