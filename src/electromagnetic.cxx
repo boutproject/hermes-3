@@ -32,7 +32,10 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
   // Use the "Naulin" solver because we need to include toroidal
   // variations of the density (A coefficient)
   aparSolver = Laplacian::create(&options["laplacian"]);
-  aparSolver->savePerformance(*solver, "AparSolver");
+  if (solver != nullptr) {
+    // solver may be null in unit testing
+    aparSolver->savePerformance(*solver, "AparSolver");
+  }
 
   const_gradient = options["const_gradient"]
     .doc("Extrapolate gradient of Apar into all radial boundaries?")
