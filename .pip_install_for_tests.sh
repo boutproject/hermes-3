@@ -20,8 +20,4 @@ do
 done
 
 # Install Hermes-3
-git clone https://github.com/boutproject/xhermes.git
-cd xhermes
-pip3 install --user .
-cd ..
-
+pip install --user git+https://github.com/boutproject/xhermes
