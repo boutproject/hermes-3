@@ -2,6 +2,7 @@ import netCDF4 as nc
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import subprocess
 
 def save_ivertex_indices_to_netcdf(source_file,destination_file,Rpoints_full,Zpoints_full):
     # copy source file to destination
@@ -52,6 +53,10 @@ def save_ivertex_indices_to_netcdf(source_file,destination_file,Rpoints_full,Zpo
     ptr.description = "global list of Z points of vertices in a hypnotoad mesh"
     ptr.source = "generated in python external to hypnotoad"
     ptr[:] = Zpoints_full
+
+    # record version information
+    dataset.setncattr("vertices_calculation_version_git_hash", subprocess.check_output('git rev-parse HEAD',shell=True).decode('utf-8').strip())
+    dataset.setncattr("original_hypnotoad_file_name", os.path.basename(source_file))
     dataset.close()
     print(f"Saving modified Hypnotoad mesh file to {destination_file}")
     return None
