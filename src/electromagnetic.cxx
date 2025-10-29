@@ -112,7 +112,7 @@ void Electromagnetic::transform(Options &state) {
   for (auto& kv : allspecies.getChildren()) {
     const Options& species = kv.second;
 
-    if (!IS_SET(species["charge"]) or !species.isSet("momentum")) {
+    if (!species.isSet("charge") or !species.isSet("momentum")) {
       continue; // Not charged, or no parallel flow
     }
     const BoutReal Z = get<BoutReal>(species["charge"]);
