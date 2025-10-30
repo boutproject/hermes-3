@@ -66,10 +66,11 @@ jobs:
           # Add the pip install location to the runner's PATH
           echo ~/.local/bin >> $GITHUB_PATH
       - name: Build and run tests
-        run: cmake . -B build $BOUT_CONFIGURE_OPTIONS &&
-             cmake --build build &&
-             cd build &&
-             ctest --output-on-failure --timeout 300
+        run: |
+          cmake . -B build $BOUT_CONFIGURE_OPTIONS
+          cmake --build build -j 2
+          ctest --build-and-test . build/ --build-generator 'Unix Makefiles' --output-on-failure --timeout
+          cd build && ctest --output-on-failure --timeout 300
         env:
           LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
           BOUT_CONFIGURE_OPTIONS: ${{ matrix.config.configure_options }}
