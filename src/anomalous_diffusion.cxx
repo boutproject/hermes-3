@@ -63,13 +63,13 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
   Field2D N2D = DC(N);
 
-  const Field3D T = IS_SET(species["temperature"])
+  const Field3D T = species.isSet("temperature")
                         ? GET_NOBOUNDARY(Field3D, species["temperature"])
                         : 0.0;
   Field2D T2D = DC(T);
 
   const Field3D V =
-    IS_SET(species["velocity"]) ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
+    species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
   Field2D V2D = DC(V);
 
   if (!anomalous_sheath_flux) {

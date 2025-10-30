@@ -21,7 +21,7 @@ void NoFlowBoundary::transform_impl(GuardedOptions& state) {
 
   // Apply zero-gradient boundary conditions to state variables
   for (const std::string field : {"density", "temperature", "pressure"}) {
-    if (!IS_SET(species[field])) {
+    if (!species.isSet(field)) {
       continue; // Skip variables which are not set
     }
 
@@ -57,7 +57,7 @@ void NoFlowBoundary::transform_impl(GuardedOptions& state) {
 
   // Apply zero-value boundary conditions to flows
   for (const std::string field : {"velocity", "momentum"}) {
-    if (!IS_SET(species[field])) {
+    if (!species.isSet(field)) {
       continue; // Skip variables which are not set
     }
 

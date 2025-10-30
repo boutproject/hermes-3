@@ -30,8 +30,8 @@ void Quasineutral::transform_impl(GuardedOptions& state) {
              const std::map<std::string, GuardedOptions>::value_type &name_species) {
         const GuardedOptions species = name_species.second;
         // Add other species which have density and charge
-        if (name_species.first != name and IS_SET(species["charge"]) and
-            IS_SET(species["density"])) {
+        if (name_species.first != name and species.isSet("charge") and
+            species.isSet("density")) {
           // Note: Not assuming that the boundary has been set
           return value + getNoBoundary<Field3D>(species["density"]) *
                              get<BoutReal>(species["charge"]);

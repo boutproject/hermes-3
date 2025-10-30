@@ -15,7 +15,7 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
     // Get non-const reference
     auto species = allspecies[species_name];
 
-    if (IS_SET(species["charge"]) and (get<BoutReal>(species["charge"]) != 0.0)) {
+    if (species.isSet("charge") and (get<BoutReal>(species["charge"]) != 0.0)) {
       // Skip charged species
       continue;
     }
