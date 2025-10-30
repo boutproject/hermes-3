@@ -79,7 +79,7 @@ private:
 
   bool evolve_log; ///< Evolve logarithm of density?
   Field3D logN;    ///< Logarithm of density (if evolving)
-
+  bool isMMS;
   Field3D source, final_source; ///< External input source
   Field3D Sn; ///< Total density source
 

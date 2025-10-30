@@ -45,6 +45,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
 
+  isMMS = alloptions["solver"]["mms"].withDefault<bool>(false);
+  
   if (evolve_log) {
     // Evolve logarithm of pressure
     solver->add(logP, std::string("logP") + name);
@@ -253,6 +255,9 @@ void EvolvePressure::transform(Options& state) {
   Pfloor = N * T; // Ensure consistency
 
   set(species["pressure"], Pfloor);
+  T.applyBoundary("neumann");
+  mesh->communicate(T);
+  T.applyParallelBoundary("parallel_neumann_o1");
   set(species["temperature"], T);
 }
 
@@ -458,6 +463,12 @@ void EvolvePressure::finally(const Options& state) {
     final_source = source;
   }
 
+
+  if (isMMS) {
+    final_source = 0.0;
+  }
+
+  
   Sp = final_source;
   if (species.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(species["energy_source"]); // For diagnostic output
