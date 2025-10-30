@@ -208,6 +208,8 @@ inline bool hermesDataInvalid(bool value) {
   return false; // Default
 }
 
+inline bool hermesDataInvalid(int value) { return false; }
+
 /// Check Field values.
 /// Doesn't check boundary cells
 template <typename T>
