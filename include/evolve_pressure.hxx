@@ -89,7 +89,7 @@ private:
 
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
-
+  bool isMMS;
   BoutReal density_floor; ///< Minimum density for calculating T
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
   BoutReal temperature_floor; ///< Low temperature scale for low_T_diffuse_perp

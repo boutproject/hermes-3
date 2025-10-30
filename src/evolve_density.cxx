@@ -53,6 +53,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Evolve the logarithm of density?")
                    .withDefault<bool>(false);
 
+  isMMS = alloptions["solver"]["mms"].withDefault<bool>(false);
+  
   if (evolve_log) {
     // Evolve logarithm of density
     solver->add(logN, std::string("logN") + name);
@@ -141,6 +143,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     // Clebsch coordinate system
     bracket_factor = 1.0;
   }
+
+  
 }
 
 void EvolveDensity::transform(Options& state) {
@@ -217,6 +221,12 @@ void EvolveDensity::transform(Options& state) {
   } else {
     final_source = source;
   }
+
+  if (isMMS) {
+    final_source = 0.0;
+  }
+  
+  
   final_source.allocate(); // Ensure unique memory storage.
   add(species["density_source"], final_source);
 }
