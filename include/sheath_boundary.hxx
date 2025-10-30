@@ -5,10 +5,9 @@
 #include "component.hxx"
 
 #include <bout/bout_enum_class.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include <cstdint>
-
-BOUT_ENUM_CLASS(SheathLimitMode, limit_free, exponential_free, linear_free);
 
 namespace hermes {
 enum class SheathKind : std::uint8_t {
@@ -116,6 +115,23 @@ private:
   SheathLimitMode density_boundary_mode;     ///< BC for density
   SheathLimitMode pressure_boundary_mode;    ///< BC for pressure
   SheathLimitMode temperature_boundary_mode; ///< BC for temperature
+
+  YBoundary yboundary;
+
+  template <typename F>
+  F fromFieldAligned(const F& f) {
+    if (f.isFci()) {
+      return f;
+    }
+    return ::fromFieldAligned(f);
+  }
+  template <typename F>
+  F toFieldAligned(const F& f) {
+    if (f.isFci()) {
+      return f;
+    }
+    return ::toFieldAligned(f);
+  }
 };
 
 /// Boundary condition at the wall in Y

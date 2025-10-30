@@ -239,14 +239,17 @@ void Recycling::transform(Options& state) {
       
       // Y boundaries
       yboundary.iter_pnts([&](auto& pnt) {
-	BoutReal flux = pnt.dir * pnt.interpolate_sheath_o1(N) * pnt.interpolate_sheath_o1(V);
-	flux = std::max(flux, 0.0);
-	
-	BoutReal flow = channel.target_multiplier * flux * pnt.interpolate_sheath_o1(J) / pnt.interpolate_sheath_o1(g_22) * pnt.interpolate_sheath_o1(dx) * pnt.interpolate_sheath_o1(dz);
+        BoutReal flux =
+            pnt.dir * pnt.interpolate_sheath_o2(N) * pnt.interpolate_sheath_o2(V);
+        flux = std::max(flux, 0.0);
 
-	BoutReal volume  = pnt.ythis(J) * pnt.ythis(dx) * pnt.ythis(dy) * pnt.ythis(dz);
+        BoutReal flow = channel.target_multiplier * flux * pnt.interpolate_sheath_o2(J)
+                        / pnt.interpolate_sheath_o2(g_22) * pnt.interpolate_sheath_o2(dx)
+                        * pnt.interpolate_sheath_o2(dz);
 
-	// Calculate sources in the final cell [m^-3 s^-1]
+        BoutReal volume = pnt.ythis(J) * pnt.ythis(dx) * pnt.ythis(dy) * pnt.ythis(dz);
+
+        // Calculate sources in the final cell [m^-3 s^-1]
 	if (pnt.abs_offset() == 1){
 	  pnt.ythis(channel.target_recycle_density_source) += flow / volume;    // For diagnostic
 	  pnt.ythis(density_source) += flow / volume;         // For use in solver
@@ -273,8 +276,7 @@ void Recycling::transform(Options& state) {
 	if (pnt.abs_offset() == 1) {
 	  pnt.ythis(channel.target_recycle_energy_source) += recycle_energy_flow / volume;
 	  pnt.ythis(energy_source) += recycle_energy_flow / volume;
-	}
-	  
+        }
       }); // end yboundary.iter_pnts()
     }
 
