@@ -10,6 +10,7 @@
 #include <netcdf>
 #include <iostream>
 #include <petscviewerhdf5.h>
+#include <vector>
 
 #ifndef NESO_PARTICLES_PETSC
 static_assert(false, "NESO-Particles was installed without PETSc support.");
@@ -19,6 +20,37 @@ template<typename T, typename U>
 inline void ASSERT_EQ(T t, U u){
   NESOASSERT(t==u, "A check failed.");
 }
+
+
+void collect_unique_points(std::vector<double>& global_Z_vertices_buffer,
+                        std::vector<double>& global_R_vertices_buffer,
+                        int& N_unique, const double& zero,
+                      std::vector<double>& global_Z_hypnotoad_vertices,
+                      std::vector<double>& global_R_hypnotoad_vertices) {
+  bool unique;
+  int N_nonunique_vertices = global_Z_hypnotoad_vertices.size();
+  for (int iv = 0; iv < N_nonunique_vertices; iv++) {
+    // assume the point
+    // iv = (global_R_hypnotoad_vertices.at(iv),global_Z_hypnotoad_vertices.at(iv))
+    // is unique
+    unique = true;
+    // check if the point is unique, by comparing the the existing N_unique points
+    for (int iunique = 0; iunique < N_unique; iunique++ ) {
+      if (abs(global_Z_hypnotoad_vertices.at(iv) - global_Z_vertices_buffer.at(iunique)) < zero &&
+          abs(global_R_hypnotoad_vertices.at(iv) - global_R_vertices_buffer.at(iunique)) < zero ) {
+        unique = false;
+        // we have determined that the point is not unique
+      }
+    }
+    if (unique){
+      // add the point and increment N_unique
+      global_Z_vertices_buffer.at(N_unique) = global_Z_hypnotoad_vertices.at(iv);
+      global_R_vertices_buffer.at(N_unique) = global_R_hypnotoad_vertices.at(iv);
+      N_unique++;
+    }
+  }
+}
+
 
 
 using namespace NESO::Particles;
@@ -81,6 +113,124 @@ int main(int argc, char **argv) {
   const int mpi_size = sycl_target->comm_pair.size_parent;
   const int mpi_rank = sycl_target->comm_pair.rank_parent;
   // output << "Got here 0 \n";
+  // global number of physical nonunique vertices stored in hypnotoad datasets
+  const int N_nonunique_vertices = mpi_size*Nx*Ny;
+  // arrays to fill with local data
+  std::vector<double> local_Z_lower_left_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> local_R_lower_left_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> local_Z_lower_right_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> local_R_lower_right_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> local_Z_upper_right_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> local_R_upper_right_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> local_Z_upper_left_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> local_R_upper_left_vertices(N_nonunique_vertices, 0.0);
+  // arrays to receive the summed data across ranks
+  std::vector<double> global_Z_lower_left_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> global_R_lower_left_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> global_Z_lower_right_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> global_R_lower_right_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> global_Z_upper_right_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> global_R_upper_right_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> global_Z_upper_left_vertices(N_nonunique_vertices, 0.0);
+  std::vector<double> global_R_upper_left_vertices(N_nonunique_vertices, 0.0);
+  // fill these vectors with vertex values from the local rank
+  // at indices determined by the local rank
+  int icxy = Nx*Ny*mpi_rank;
+  for (int ix = mesh->xstart; ix<= mesh->xend; ix++) {
+    for (int iy = mesh->ystart; iy <= mesh->yend; iy++) {
+      local_R_lower_left_vertices.at(icxy) = Rxy_lower_left_corners(ix,iy);
+      local_Z_lower_left_vertices.at(icxy) = Zxy_lower_left_corners(ix,iy);
+      local_R_lower_right_vertices.at(icxy) = Rxy_lower_right_corners(ix,iy);
+      local_Z_lower_right_vertices.at(icxy) = Zxy_lower_right_corners(ix,iy);
+      local_R_upper_right_vertices.at(icxy) = Rxy_upper_right_corners(ix,iy);
+      local_Z_upper_right_vertices.at(icxy) = Zxy_upper_right_corners(ix,iy);
+      local_R_upper_left_vertices.at(icxy) = Rxy_upper_left_corners(ix,iy);
+      local_Z_upper_left_vertices.at(icxy) = Zxy_upper_left_corners(ix,iy);
+      icxy++;
+    }
+  }
+  // Perform Allreduce (sum) to get knowledge of vertices to all ranks
+  MPI_Allreduce(local_R_lower_left_vertices.data(), global_R_lower_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(local_Z_lower_left_vertices.data(), global_Z_lower_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(local_R_lower_right_vertices.data(), global_R_lower_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(local_Z_lower_right_vertices.data(), global_Z_lower_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(local_R_upper_right_vertices.data(), global_R_upper_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(local_Z_upper_right_vertices.data(), global_Z_upper_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(local_R_upper_left_vertices.data(), global_R_upper_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(local_Z_upper_left_vertices.data(), global_Z_upper_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  if (mpi_rank == 0) {
+      std::cout << "Result of Allreduce (sum): ";
+      for (double val : global_R_lower_left_vertices) {
+          std::cout << val << " ";
+      }
+      std::cout << std::endl;
+      std::cout << "N_nonunique_vertices=" << N_nonunique_vertices << std::endl;
+  }
+  // Now dynamically determine a list of unique vertex points
+  // constant to give us a vector that can definitely contain all points in the global lists
+  const int N_global_nonunique_vertices = 4*mpi_size*Nx*Ny;
+  std::vector<double> global_Z_vertices_buffer(N_global_nonunique_vertices, 0.0);
+  std::vector<double> global_R_vertices_buffer(N_global_nonunique_vertices, 0.0);
+  // fill the buffer vectors, checking each time if the point is unique
+  // first point, outside loop
+  global_Z_vertices_buffer.at(0) = global_Z_lower_left_vertices.at(0);
+  global_R_vertices_buffer.at(0) = global_R_lower_left_vertices.at(0);
+  int N_unique=1; // we have one unique point in the buffer
+  const double zero=1.0e-8;
+  // lower left vertices
+  // for (int iv = 0; iv < N_nonunique_vertices; iv++) {
+  //   // assume the point is unique
+  //   unique = true
+  //   for (int iunique = 0; iunique < N_unique; iunique++ ) {
+  //     if (abs(global_Z_lower_left_vertices.at(iv) - global_Z_vertices_buffer.at(iunique)) < zero &&
+  //         abs(global_R_lower_left_vertices.at(iv) - global_R_vertices_buffer.at(iunique)) < zero ) {
+  //       unique = false;
+  //       // we have determined that the point is not unique
+  //     }
+  //   }
+  //   if (unique){
+  //     // add the point and increment N_unique
+  //     global_Z_vertices_buffer.at(N_unique) = global_Z_lower_left_vertices.at(iv);
+  //     global_R_vertices_buffer.at(N_unique) = global_R_lower_left_vertices.at(iv);
+  //     N_unique++;
+  //   }
+  // }
+  collect_unique_points(global_Z_vertices_buffer,
+                        global_R_vertices_buffer,
+                        N_unique, zero,
+                        global_Z_lower_left_vertices,
+                        global_R_lower_left_vertices);
+  collect_unique_points(global_Z_vertices_buffer,
+                        global_R_vertices_buffer,
+                        N_unique, zero,
+                        global_Z_lower_right_vertices,
+                        global_R_lower_right_vertices);
+  collect_unique_points(global_Z_vertices_buffer,
+                        global_R_vertices_buffer,
+                        N_unique, zero,
+                        global_Z_upper_right_vertices,
+                        global_R_upper_right_vertices);
+  collect_unique_points(global_Z_vertices_buffer,
+                        global_R_vertices_buffer,
+                        N_unique, zero,
+                        global_Z_upper_left_vertices,
+                        global_R_upper_left_vertices);
+  // now make a vector of the size N_unique and fill from the buffer
+  std::vector<double> global_Z_vertices(N_unique, 0.0);
+  std::vector<double> global_R_vertices(N_unique, 0.0);
+  for (int iv=0; iv < N_unique; iv++){
+    global_Z_vertices.at(iv) = global_Z_vertices_buffer.at(iv);
+    global_R_vertices.at(iv) = global_R_vertices_buffer.at(iv);
+  }
+  if (mpi_rank == 0) {
+      std::cout << "Result of vertex collection: ";
+      for (int iv=0; iv<N_unique; iv++) {
+          std::cout << "(" << global_R_vertices.at(iv) << ", " << global_Z_vertices.at(iv) << ") ";
+      }
+      std::cout << std::endl;
+      std::cout << "N_unique=" << N_unique << std::endl;
+  }
+
 
   // First we setup the topology of the mesh.
   std::vector<PetscReal> Z_vertices(4);
