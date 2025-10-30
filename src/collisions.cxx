@@ -163,7 +163,7 @@ void Collisions::collide(Options & species1, Options & species2, const Field3D& 
   }
 }
 
-void Collisions::transform(GuardedOptions& state) {
+void Collisions::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];

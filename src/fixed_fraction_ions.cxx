@@ -28,7 +28,7 @@ FixedFractionIons::FixedFractionIons(std::string name, Options &alloptions,
   }
 }
 
-void FixedFractionIons::transform(GuardedOptions &state) {
+void FixedFractionIons::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Electron density

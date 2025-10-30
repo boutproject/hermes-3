@@ -47,7 +47,7 @@ private:
   ///   - <all except e>   if both density and charge are set
   ///     - momentum_source
   /// 
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

@@ -92,7 +92,7 @@ private:
   ///      - density_source
   ///      - energy_source
   ///      - momentum_source  [if velocity set]
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

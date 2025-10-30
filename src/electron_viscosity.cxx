@@ -17,7 +17,7 @@ ElectronViscosity::ElectronViscosity(std::string name, Options& alloptions, Solv
   diagnose = options["diagnose"].doc("Output diagnostics?").withDefault<bool>(false);
 }
 
-void ElectronViscosity::transform(GuardedOptions& state) {
+void ElectronViscosity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions species = state["species"]["e"];

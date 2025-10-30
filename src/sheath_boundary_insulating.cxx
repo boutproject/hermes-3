@@ -79,7 +79,7 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
                 .withDefault(3.5);
 }
 
-void SheathBoundaryInsulating::transform(GuardedOptions& state) {
+void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];

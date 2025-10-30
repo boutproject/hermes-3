@@ -3,7 +3,7 @@
 
 #include "../include/thermal_force.hxx"
 
-void ThermalForce::transform(GuardedOptions& state) {
+void ThermalForce::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];

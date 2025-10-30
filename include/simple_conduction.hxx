@@ -66,8 +66,8 @@ private:
 
   bool boundary_flux;   ///< Allow flux through sheath boundaries?
 
-  void transform(GuardedOptions& state) override {
-    auto& species = state["species"][name];
+  void transform_impl(GuardedOptions& state) override {
+    auto species = state["species"][name];
 
     // Species time-evolving temperature
     Field3D T = GET_NOBOUNDARY(Field3D, species["temperature"]);

@@ -79,9 +79,9 @@ private:
   ///   - <name>
   ///     - temperature
   ///     - pressure (if density is set)
-  void transform(GuardedOptions& state) override {
+  void transform_impl(GuardedOptions& state) override {
     AUTO_TRACE();
-    auto& species = state["species"][name];
+    auto species = state["species"][name];
 
     set(species["temperature"], T);
 

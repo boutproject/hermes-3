@@ -54,9 +54,9 @@ private:
   ///   - <name>
   ///     - velocity
   ///     - momentum
-  void transform(GuardedOptions& state) override {
+  void transform_impl(GuardedOptions& state) override {
     AUTO_TRACE();
-    auto& species = state["species"][name];
+    auto species = state["species"][name];
     set(species["velocity"], V);
 
     // If density is set, also set momentum

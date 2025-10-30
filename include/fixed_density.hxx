@@ -57,9 +57,9 @@ private:
   ///     - AA
   ///     - charge
   ///     - density
-  void transform(GuardedOptions& state) override {
+  void transform_impl(GuardedOptions& state) override {
     AUTO_TRACE();
-    auto& species = state["species"][name];
+    auto species = state["species"][name];
     if (charge != 0.0) { // Don't set charge for neutral species
       set(species["charge"], charge);
     }

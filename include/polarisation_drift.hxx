@@ -71,7 +71,7 @@ private:
   ///     - energy_source    (if pressure set)
   ///     - momentum_source  (if momentum set)
   /// 
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

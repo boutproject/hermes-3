@@ -64,7 +64,7 @@ private:
   /// Save more diagnostics?
   bool diagnose;
 
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 
   /// Update collision frequencies, momentum and energy exchange
   /// nu_12    normalised frequency

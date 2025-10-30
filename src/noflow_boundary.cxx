@@ -11,7 +11,7 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 }
 }
 
-void NoFlowBoundary::transform(GuardedOptions& state) {
+void NoFlowBoundary::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Make sure that the state has been set for this species

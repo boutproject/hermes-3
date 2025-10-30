@@ -3,7 +3,7 @@
 #include "../include/hermes_utils.hxx"
 #include <bout/mesh.hxx>
 
-void SoundSpeed::transform(GuardedOptions &state) {
+void SoundSpeed::transform_impl(GuardedOptions& state) {
   Field3D total_pressure = 0.0;
   Field3D total_density = 0.0;
 

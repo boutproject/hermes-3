@@ -91,7 +91,7 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
 
 }
 
-void IonViscosity::transform(GuardedOptions &state) {
+void IonViscosity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];
