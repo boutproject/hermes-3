@@ -66,6 +66,7 @@ set(HERMES_SOURCES
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
     src/isothermal.cxx
+    src/adhoc_potential.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
     src/diamagnetic_drift_fci.cxx
@@ -117,6 +118,7 @@ set(HERMES_SOURCES
     include/binormal_stpm.hxx
     include/collisions.hxx
     include/component.hxx
+    include/adhoc_potential.hxx
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/diamagnetic_drift_fci.hxx
