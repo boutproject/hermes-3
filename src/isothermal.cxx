@@ -1,14 +1,12 @@
 
 #include <bout/constants.hxx>
+#include <bout/mesh.hxx>
 
 #include <bout/mesh.hxx> 
 
 #include "../include/isothermal.hxx"
 
-using bout::globals::mesh;
-
-Isothermal::Isothermal(std::string name, Options &alloptions,
-                       Solver *UNUSED(solver))
+Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(solver))
     : name(name) {
   AUTO_TRACE();
   Options& options = alloptions[name];
@@ -17,13 +15,17 @@ Isothermal::Isothermal(std::string name, Options &alloptions,
   T = options["temperature"].doc("Constant temperature [eV]").as<BoutReal>()
       / Tnorm; // Normalise
 
-  diagnose = options["diagnose"]
-    .doc("Save additional output diagnostics")
-    .withDefault<bool>(false);
+  if (T.isFci()) {
+    bout::globals::mesh->communicate(T);
+    T.applyParallelBoundary("parallel_neumann_o2");
+  }
 
+  diagnose = options["diagnose"]
+                 .doc("Save additional output diagnostics")
+                 .withDefault<bool>(false);
 }
 
-void Isothermal::transform(Options &state) {
+void Isothermal::transform(Options& state) {
   AUTO_TRACE();
 
   Options& species = state["species"][name];
@@ -70,5 +72,5 @@ void Isothermal::outputVars(Options& state) {
                     {"standard_name", "pressure"},
                     {"species", name},
                     {"source", "isothermal"}});
-   }
+  }
 }
