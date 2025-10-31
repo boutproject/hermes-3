@@ -129,3 +129,33 @@ std::string Permissions::regionNames(const Regions regions) {
   }
   return result;
 }
+
+std::pair<std::string, Permissions::AccessRights> readIfSet(std::string varname) {
+  return {varname,
+          {Permissions::AllRegions, Permissions::Nowhere, Permissions::Nowhere,
+           Permissions::Nowhere}};
+}
+
+std::pair<std::string, Permissions::AccessRights> readOnly(std::string varname) {
+  return {varname,
+          {Permissions::Nowhere, Permissions::AllRegions, Permissions::Nowhere,
+           Permissions::Nowhere}};
+}
+
+std::pair<std::string, Permissions::AccessRights> readWrite(std::string varname) {
+  return {varname,
+          {Permissions::Nowhere, Permissions::Nowhere, Permissions::AllRegions,
+           Permissions::Nowhere}};
+}
+
+std::pair<std::string, Permissions::AccessRights> writeFinal(std::string varname) {
+  return {varname,
+          {Permissions::Nowhere, Permissions::Nowhere, Permissions::Nowhere,
+           Permissions::AllRegions}};
+}
+
+std::pair<std::string, Permissions::AccessRights> writeBoundary(std::string varname) {
+  return {varname,
+          {Permissions::Nowhere, Permissions::Interior, Permissions::Nowhere,
+           Permissions::Boundaries}};
+}
