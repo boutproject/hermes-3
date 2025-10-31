@@ -11,6 +11,8 @@ project(hermes-3 LANGUAGES CXX C)
 # Extra CMake scripts in cmake/ subdirectory
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
+option(HERMES_COVERAGE "Compile with coverage flags for testing purposes" OFF)
+
 option(HERMES_UPDATE_GIT_SUBMODULE "Check submodules are up-to-date during build" ON)
 # Adapted from https://cliutils.gitlab.io/modern-cmake/chapters/projects/submodule.html
 # Update submodules as needed
@@ -191,6 +193,12 @@ target_include_directories(hermes-3 PUBLIC
   $<INSTALL_INTERFACE:include>
   )
 
+if(HERMES_COVERAGE)
+  target_compile_options(hermes-3-lib PRIVATE --coverage)
+  target_compile_options(hermes-3 PRIVATE --coverage)
+  target_link_options(hermes-3-lib PRIVATE --coverage)
+  target_link_options(hermes-3 PRIVATE --coverage)
+endif()
 # Have hermes-3 look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3 PROPERTIES BUILD_RPATH "$ORIGIN")
 
@@ -254,6 +262,7 @@ if(HERMES_TESTS)
       NAME ${TESTNAME}
       WORKING_DIRECTORY ${INT_TEST_DEST}
       COMMAND runtest)
+    set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
@@ -286,6 +295,7 @@ if(HERMES_TESTS)
     target_link_libraries(hermes_unit_tests PRIVATE hermes_warnings)
 
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
+    set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
     # Have hermes_unit_tests look for dynamic libs in ./ before searching elsewhere
     set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
