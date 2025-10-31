@@ -12,18 +12,20 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
   custom_D = options["custom_D"].doc("Custom diffusion coefficient override. -1: Off, calculate D normally").withDefault<BoutReal>(-1);
 }
 
-void ClassicalDiffusion::transform(Options &state) {
+void ClassicalDiffusion::transform(GuardedOptions &state) {
   AUTO_TRACE();
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
   
   // Particle diffusion coefficient
   // The only term here comes from the resistive drift
 
   Field3D Ptotal = 0.0;
   for (auto& kv : allspecies.getChildren()) {
-    const auto& species = kv.second;
+    const auto species = kv.second;
 
-    if (!(species.isSet("charge") and IS_SET(species["pressure"]))) {
+    GuardedOptions x = species["charge"];
+
+    if (!(IS_SET(species["charge"]) and IS_SET(species["pressure"]))) {
       continue; // Skip, go to next species
     }
     auto q = get<BoutReal>(species["charge"]);
@@ -33,7 +35,7 @@ void ClassicalDiffusion::transform(Options &state) {
     Ptotal += GET_VALUE(Field3D, species["pressure"]);
   }
 
-  auto& electrons = allspecies["e"];
+  auto electrons = allspecies["e"];
   const auto me = get<BoutReal>(electrons["AA"]);
   const Field3D Ne = GET_VALUE(Field3D, electrons["density"]);
 
@@ -52,10 +54,10 @@ void ClassicalDiffusion::transform(Options &state) {
       Dn[i] = 0.0;
     }
 
-  for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+  for (auto kv : allspecies.getChildren()) {
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-    if (!(species.isSet("charge") and IS_SET(species["density"]))) {
+    if (!(IS_SET(species["charge"]) and IS_SET(species["density"]))) {
       continue; // Skip, go to next species
     }
     auto q = get<BoutReal>(species["charge"]);

@@ -11,7 +11,6 @@
 /// from and writing to the underlying data.
 class GuardedOptions {
 public:
-  GuardedOptions() = delete;
   /// Create a guarded options object which applies the specified
   /// permissions to the underlying options object. Note that the
   /// variable names used in the Permissions object must always be the
@@ -34,9 +33,17 @@ public:
   GuardedOptions operator[](const std::string& name);
   GuardedOptions operator[](const char* name) { return (*this)[std::string(name)]; }
 
+  const GuardedOptions operator[](const std::string& name) const;
+  const GuardedOptions operator[](const char* name) const { return (*this)[std::string(name)]; }
+
+  std::map<std::string, GuardedOptions> getChildren();
+  bool isSection(const std::string& name) const;
+  bool isSection(const char* name) const { return (*this).isSection(std::string(name));
+  }
+
   /// Get read-only access to the underlying Options object. Throws
   /// BoutException if there is not read-permission for this object.
-  const Options& get(Permissions::Regions region = Permissions::AllRegions);
+  const Options& get(Permissions::Regions region = Permissions::AllRegions) const;
   /// Get read-write access to the underlying Options object. Throws
   /// BoutException if there is not write-permission for this object.
   Options& getWritable(Permissions::Regions region = Permissions::AllRegions);
@@ -52,7 +59,7 @@ public:
 private:
   Options* options;
   Permissions* permissions;
-  std::shared_ptr<std::map<std::string, Permissions::Regions>> unread_variables,
+  mutable std::shared_ptr<std::map<std::string, Permissions::Regions>> unread_variables,
       unwritten_variables;
 
   GuardedOptions(

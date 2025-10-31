@@ -25,8 +25,8 @@ Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solve
   }
 }
 
-void Transform::transform(Options& state) {
+void Transform::transform(GuardedOptions& state) {
   for (const auto& lr : transforms) {
-    state[lr.first] = state[lr.second].copy();
+    state[lr.first].getWritable() = state[lr.second].get().copy();
   }
 }

@@ -13,21 +13,21 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
   ASSERT0(charge != 0.0);
 }
 
-void ZeroCurrent::transform(Options &state) {
+void ZeroCurrent::transform(GuardedOptions &state) {
   AUTO_TRACE();
 
   // Current due to other species
   Field3D current;
   
   // Now calculate forces on other species
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
     if (kv.first == name) {
       continue; // Skip self
     }
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
  
-    if (!(species.isSet("density") and species.isSet("charge"))) {
+    if (!(IS_SET(species["density"]) and IS_SET(species["charge"]))) {
       continue; // Needs both density and charge to contribute
     }
 
@@ -55,8 +55,8 @@ void ZeroCurrent::transform(Options &state) {
   }
 
   // Get the species density
-  Options& species = state["species"][name];
-  if (species["velocity"].isSet()) {
+  GuardedOptions species = state["species"][name];
+  if (IS_SET(species["velocity"])) {
     throw BoutException("Cannot use zero_current in species {} if velocity already set\n", name);
   }
   Field3D N = getNoBoundary<Field3D>(species["density"]);
