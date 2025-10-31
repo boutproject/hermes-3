@@ -1,26 +1,32 @@
 from __future__ import division
 from __future__ import print_function
 
-from boutdata.mms import Metric, sin, cos, Div_par, Grad_par, exprToStr, diff, y, t
+from boutdata.mms import Metric, sin, cos, Div_par, Grad_par, exprToStr, diff, y, t, DDY
 from math import pi
 
 # Length of the y domain
-Ly = 10.
+Ly = 2.0 * pi
 
 # Atomic mass number
-AA = 2.0
+AA = 1.0
 
 # metric tensor
 metric = Metric()  # Identity
 
 # Define solution in terms of input x,y,z
 
-n = 1 + 0.1*sin(2*y - t)
-p = 1 + 0.1*cos(3*y + t)
-mnv = AA * 0.1*sin(y + 2*t)
+omega = 1e-4
+
+n = 1 + 0.1*sin(2*y)# * sin(t*omega)
+p = 1 + 0.1*cos(3*y)# * sin(t*omega)
+mnv = AA * 0.1*sin(y)# * sin(2*t*omega)
 
 # Turn solution into real x and z coordinates
 replace = [ (y, metric.y*2*pi/Ly) ]
+#replace = [ (y, metric.y) ]
+#replace = [ (y, metric.y* Ly / (2.0 * pi)) ]
+
+rho_s = 0.00022847
 
 n = n.subs(replace)
 p = p.subs(replace)
@@ -34,13 +40,14 @@ v = nv / n
 gamma = 5./3
 
 # Density equation
-dndt = - Div_par(nv)
+dndt = - Div_par(nv) * rho_s
 
 # Pressure equation
-dpdt = - Div_par(p*v) - (gamma-1.0)*p*Div_par(v)
+dpdt = - Div_par(p*v) * rho_s - (gamma-1.0)*p*Div_par(v) * rho_s
 
 # Momentum equation
-dmnvdt = - Div_par(mnv*v) - Grad_par(p)
+dmnvdt = - Div_par(mnv*v) * rho_s - Grad_par(p) * rho_s
+
 
 #############################
 # Calculate sources
@@ -51,6 +58,8 @@ Smnv = diff(mnv, t) - dmnvdt
 
 # Substitute back to get input y coordinates
 replace = [ (metric.y, y*Ly/(2*pi) ) ]
+#replace = [ (metric.y, y ) ]
+#replace = [ (metric.y, y*(2*pi) / Ly ) ]
 
 n = n.subs(replace)
 p = p.subs(replace)
