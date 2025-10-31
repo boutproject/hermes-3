@@ -80,6 +80,43 @@ void RZ_to_ivertex_vector(Field2D& ivertex_corners,
   }
 }
 
+void load_vertex_information_from_netcdf(int& Nvertex,
+  std::vector<double>& global_vertex_R,
+  std::vector<double>& global_vertex_Z){
+  // read data from netcdf for global vertices in mesh
+  // Open the NetCDF file in read-only mode
+  const std::string filename = Options::root()["mesh"]["file"];
+  netCDF::NcFile dataFile(filename, netCDF::NcFile::read);
+
+  // Get the variable
+  std::string varName = "global_vertex_list_R";
+  netCDF::NcVar dataVar = dataFile.getVar(varName);
+  if (dataVar.isNull()) {
+      std::cerr << "Variable '" << varName << "' not found in file." << std::endl;
+  }
+  std::vector<netCDF::NcDim> dims = dataVar.getDims();
+  size_t nvertices = dims[0].getSize();
+
+  // Read the data into a vector
+  std::vector<double> global_vertex_list_R(nvertices);
+  dataVar.getVar(global_vertex_list_R.data());
+
+  // Get the variable
+  varName = "global_vertex_list_Z";
+  dataVar = dataFile.getVar(varName);
+  if (dataVar.isNull()) {
+      std::cerr << "Variable '" << varName << "' not found in file." << std::endl;
+  }
+  // Read the data into a vector
+  std::vector<double> global_vertex_list_Z(nvertices);
+  dataVar.getVar(global_vertex_list_Z.data());
+  dataFile.close();
+  // assign data to output variables
+  Nvertex = nvertices;
+  global_vertex_R = global_vertex_list_R;
+  global_vertex_Z = global_vertex_list_Z;
+}
+
 std::vector<PetscInt> cells_definition_from_RZ_ivertex(std::vector<PetscInt>& cells, Mesh*& bout_mesh,
   Field2D& Rxy_lower_left_corners,
   Field2D& Rxy_lower_right_corners,
@@ -191,6 +228,7 @@ int main(int argc, char **argv) {
   BoutInitialise(argc, argv);
   Mesh* mesh = Mesh::create(&Options::root()["mesh"]);
   bool use_cxx_ivertex = Options::root()["mesh"]["use_cxx_ivertex"].withDefault(false);
+  output << fmt::format("Using option use_cxx_ivertex = {}",use_cxx_ivertex) << std::endl;
   mesh->load();
   Coordinates *coord = mesh->getCoordinates();
   Field2D Rxy_lower_left_corners;
@@ -201,10 +239,6 @@ int main(int argc, char **argv) {
   Field2D Zxy_lower_right_corners;
   Field2D Zxy_upper_right_corners;
   Field2D Zxy_upper_left_corners;
-  Field2D ivertex_lower_left_corners;
-  Field2D ivertex_lower_right_corners;
-  Field2D ivertex_upper_right_corners;
-  Field2D ivertex_upper_left_corners;
   //mesh->get(ivertex, "ivertex_lower_left_corners");
   mesh->get(Rxy_lower_left_corners, "Rxy_corners");
   mesh->get(Rxy_lower_right_corners, "Rxy_lower_right_corners");
@@ -214,10 +248,16 @@ int main(int argc, char **argv) {
   mesh->get(Zxy_lower_right_corners, "Zxy_lower_right_corners");
   mesh->get(Zxy_upper_right_corners, "Zxy_upper_right_corners");
   mesh->get(Zxy_upper_left_corners, "Zxy_upper_left_corners");
-  mesh->get(ivertex_lower_left_corners, "ivertex_lower_left_corners");
-  mesh->get(ivertex_lower_right_corners, "ivertex_lower_right_corners");
-  mesh->get(ivertex_upper_right_corners, "ivertex_upper_right_corners");
-  mesh->get(ivertex_upper_left_corners, "ivertex_upper_left_corners");
+  Field2D ivertex_lower_left_corners;
+  Field2D ivertex_lower_right_corners;
+  Field2D ivertex_upper_right_corners;
+  Field2D ivertex_upper_left_corners;
+  if (!use_cxx_ivertex) {
+    mesh->get(ivertex_lower_left_corners, "ivertex_lower_left_corners");
+    mesh->get(ivertex_lower_right_corners, "ivertex_lower_right_corners");
+    mesh->get(ivertex_upper_right_corners, "ivertex_upper_right_corners");
+    mesh->get(ivertex_upper_left_corners, "ivertex_upper_left_corners");
+  }
   // for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
   //  for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
   //      //for(int iz=0; iz < mesh->LocalNz; iz++){
@@ -285,14 +325,14 @@ int main(int argc, char **argv) {
   MPI_Allreduce(local_Z_upper_right_vertices.data(), global_Z_upper_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(local_R_upper_left_vertices.data(), global_R_upper_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(local_Z_upper_left_vertices.data(), global_Z_upper_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  if (mpi_rank == 0) {
-      std::cout << "Result of Allreduce (sum): ";
-      for (double val : global_R_lower_left_vertices) {
-          std::cout << val << " ";
-      }
-      std::cout << std::endl;
-      std::cout << "N_nonunique_vertices=" << N_nonunique_vertices << std::endl;
-  }
+  // if (mpi_rank == 0) {
+  //     std::cout << "Result of Allreduce (sum): ";
+  //     for (double val : global_R_lower_left_vertices) {
+  //         std::cout << val << " ";
+  //     }
+  //     std::cout << std::endl;
+  //     std::cout << "N_nonunique_vertices=" << N_nonunique_vertices << std::endl;
+  // }
   // Now dynamically determine a list of unique vertex points
   // constant to give us a vector that can definitely contain all points in the global lists
   const int N_global_nonunique_vertices = 4*mpi_size*Nx*Ny;
@@ -351,10 +391,10 @@ int main(int argc, char **argv) {
   }
   if (mpi_rank == 0) {
       std::cout << "Result of vertex collection: ";
-      for (int iv=0; iv<N_unique; iv++) {
-          std::cout << "(" << global_R_vertices.at(iv) << ", " << global_Z_vertices.at(iv) << ") ";
-      }
-      std::cout << std::endl;
+      // for (int iv=0; iv<N_unique; iv++) {
+      //     std::cout << "(" << global_R_vertices.at(iv) << ", " << global_Z_vertices.at(iv) << ") ";
+      // }
+      // std::cout << std::endl;
       std::cout << "N_unique=" << N_unique << std::endl;
   }
   // ivertex arrays made in cxx, initialise with -1 index
@@ -410,36 +450,18 @@ int main(int argc, char **argv) {
     ivertex_upper_left_corners);
   }
   // output << "Got here 2 \n";
-  // read data from netcdf for global vertices in mesh
-  // Open the NetCDF file in read-only mode
-  const std::string filename = Options::root()["mesh"]["file"];
-  netCDF::NcFile dataFile(filename, netCDF::NcFile::read);
-
-  // Get the variable
-  std::string varName = "global_vertex_list_R";
-  netCDF::NcVar dataVar = dataFile.getVar(varName);
-  if (dataVar.isNull()) {
-      std::cerr << "Variable '" << varName << "' not found in file." << std::endl;
-      return -1;
+  // create nvertices, global_vertex_list_R, global_vertex_list_z variables
+  int nvertices;
+  std::vector<double> global_vertex_list_R;
+  std::vector<double> global_vertex_list_Z;
+  if (use_cxx_ivertex){
+    nvertices = N_unique;
+    global_vertex_list_R = global_R_vertices;
+    global_vertex_list_Z = global_Z_vertices;
+  } else {
+    load_vertex_information_from_netcdf(nvertices,
+  global_vertex_list_R, global_vertex_list_Z);
   }
-  std::vector<netCDF::NcDim> dims = dataVar.getDims();
-  size_t nvertices = dims[0].getSize();
-
-  // Read the data into a vector
-  std::vector<double> global_vertex_list_R(nvertices);
-  dataVar.getVar(global_vertex_list_R.data());
-
-  // Get the variable
-  varName = "global_vertex_list_Z";
-  dataVar = dataFile.getVar(varName);
-  if (dataVar.isNull()) {
-      std::cerr << "Variable '" << varName << "' not found in file." << std::endl;
-      return -1;
-  }
-  // Read the data into a vector
-  std::vector<double> global_vertex_list_Z(nvertices);
-  dataVar.getVar(global_vertex_list_Z.data());
-  dataFile.close();
   // // Print the data
   // std::cout << "Data from variable '" << varName << "':" << std::endl;
   // for (size_t i = 0; i < length; ++i) {
@@ -710,15 +732,15 @@ int main(int argc, char **argv) {
         aa = lambda_find_partial_moves(aa);
       }
     };
-    for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
-      for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
-          //for(int iz=0; iz < mesh->LocalNz; iz++){
-            std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
-            output << string_count + std::string(": ") + std::to_string(phi(ix,iy)) + std::string("; ");
-          //}
-      }
-      output << "\n";
-    }
+    // for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
+    //   for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
+    //       //for(int iz=0; iz < mesh->LocalNz; iz++){
+    //         std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
+    //         output << string_count + std::string(": ") + std::to_string(phi(ix,iy)) + std::string("; ");
+    //       //}
+    //   }
+    //   output << "\n";
+    // }
     // uncomment to write a trajectory
     H5Part h5part("traj_reflection_dmplex_example.h5part", A, Sym<REAL>("P"),
     Sym<REAL>("V"));
@@ -743,15 +765,15 @@ int main(int argc, char **argv) {
     // print density to screen to show non-trivial result
     // compare to 1/J*dx*dy*dz -> at the initial time we have 1 particle per cell
     // so the density is 1/Cell_volume
-    for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
-      for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
-          //for(int iz=0; iz < mesh->LocalNz; iz++){
-            std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
-            output << string_count + std::string(": ") + std::to_string(density(ix,iy)) + std::string("; ") + std::to_string(1.0/(coord->J(ix,iy)*coord->dx(ix,iy)*coord->dy(ix,iy)*coord->dz(ix,iy)));
-          //}
-      }
-      output << "\n";
-    }
+    // for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
+    //   for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
+    //       //for(int iz=0; iz < mesh->LocalNz; iz++){
+    //         std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
+    //         output << string_count + std::string(": ") + std::to_string(density(ix,iy)) + std::string("; ") + std::to_string(1.0/(coord->J(ix,iy)*coord->dx(ix,iy)*coord->dy(ix,iy)*coord->dz(ix,iy)));
+    //       //}
+    //   }
+    //   output << "\n";
+    // }
 
     for (int stepx = 0; stepx < nsteps; stepx++) {
       // nprint("step:", stepx);
