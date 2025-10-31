@@ -609,7 +609,7 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                                     fabs(v_in[i]),
                                     fabs(v_up[iyp]),
                                     fabs(v_down[iym]));
-
+      /*
       result[i] = (0.5 * (f_in[i] * (v_in[i] + amax) +
                           f_up[iyp] * (v_up[iyp] - amax))
                    * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
@@ -617,7 +617,14 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                    0.5 * (f_in[i] * (v_in[i] - amax) +
                           f_down[iym] * (v_down[iym] + amax))
                    * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
+		   / (coord->dy[i] * coord->J[i]);*/
+      result[i] = (0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp])
+                   * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
+                   -
+                    0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym])
+                   * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
         / (coord->dy[i] * coord->J[i]);
+	
     }
     return result;
   }
