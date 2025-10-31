@@ -29,23 +29,6 @@ struct FixedDensity : public Component {
     N = options["density"].as<Field3D>() / Nnorm;
   }
 
-  /// Sets in the state the density, mass and charge of the species
-  ///
-  /// - species
-  ///   - <name>
-  ///     - AA
-  ///     - charge
-  ///     - density
-  void transform(Options& state) override {
-    AUTO_TRACE();
-    auto& species = state["species"][name];
-    if (charge != 0.0) { // Don't set charge for neutral species
-      set(species["charge"], charge);
-    }
-    set(species["AA"], AA); // Atomic mass
-    set(species["density"], N);
-  }
-
   void outputVars(Options& state) override {
     AUTO_TRACE();
     auto Nnorm = get<BoutReal>(state["Nnorm"]);
@@ -66,6 +49,23 @@ private:
   BoutReal AA;     ///< Atomic mass e.g. proton = 1
 
   Field3D N; ///< Species density (normalised)
+
+  /// Sets in the state the density, mass and charge of the species
+  ///
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - charge
+  ///     - density
+  void transform(GuardedOptions& state) override {
+    AUTO_TRACE();
+    auto& species = state["species"][name];
+    if (charge != 0.0) { // Don't set charge for neutral species
+      set(species["charge"], charge);
+    }
+    set(species["AA"], AA); // Atomic mass
+    set(species["density"], N);
+  }
 };
 
 namespace {

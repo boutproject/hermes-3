@@ -4,14 +4,14 @@
 #include <bout/bout.hxx>
 using bout::globals::mesh;
 
-void SNBConduction::transform(Options& state) {
-  auto& units = state["units"];
+void SNBConduction::transform(GuardedOptions& state) {
+  auto units = state["units"];
   const auto rho_s0 = get<BoutReal>(units["meters"]);
   const auto Tnorm = get<BoutReal>(units["eV"]);
   const auto Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
   const auto Omega_ci = 1. / get<BoutReal>(units["seconds"]);
 
-  Options& electrons = state["species"]["e"];
+  GuardedOptions electrons = state["species"]["e"];
   // Note: Needs boundary conditions on temperature
   const Field3D Te = GET_VALUE(Field3D, electrons["temperature"]) * Tnorm; // eV
   const Field3D Ne = GET_VALUE(Field3D, electrons["density"]) * Nnorm;     // In m^-3

@@ -43,7 +43,8 @@ struct ADASLithiumIonisation : public OpenADAS {
       : OpenADAS(alloptions["units"], "scd96_li.json", "plt96_li.json", level,
                  -lithium_ionisation_energy[level]) {}
 
-  void transform(Options& state) override {
+private:
+  void transform(GuardedOptions& state) override {
     calculate_rates(
         state["species"]["e"],                         // Electrons
         state["species"][lithium_species_name<level>],    // From this ionisation state
@@ -64,7 +65,8 @@ struct ADASLithiumRecombination : public OpenADAS {
       : OpenADAS(alloptions["units"], "acd96_li.json", "prb96_li.json", level,
                  lithium_ionisation_energy[level]) {}
 
-  void transform(Options& state) override {
+private:
+  void transform(GuardedOptions& state) override {
     calculate_rates(
         state["species"]["e"],                          // Electrons
         state["species"][lithium_species_name<level + 1>], // From this ionisation state
@@ -81,7 +83,8 @@ struct ADASLithiumCX : public OpenADASChargeExchange {
   ADASLithiumCX(std::string, Options& alloptions, Solver*)
       : OpenADASChargeExchange(alloptions["units"], "ccd89_li.json", level) {}
 
-  void transform(Options& state) override {
+private:
+  void transform(GuardedOptions& state) override {
     Options& species = state["species"];
     calculate_rates(
         species["e"],                          // Electrons

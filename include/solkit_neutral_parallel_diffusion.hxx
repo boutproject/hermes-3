@@ -32,6 +32,10 @@ struct SOLKITNeutralParallelDiffusion : public Component {
     area_norm = 1. / (Nnorm * rho_s0);
   }
 
+private:
+  BoutReal neutral_temperature;  ///< Fixed neutral t
+  BoutReal area_norm; ///< Area normalisation [m^2]
+
   ///
   /// Inputs
   ///  - species
@@ -43,11 +47,7 @@ struct SOLKITNeutralParallelDiffusion : public Component {
   ///  - species
   ///    - <name>
   ///      - density_source
-  void transform(Options &state) override;
-
-private:
-  BoutReal neutral_temperature;  ///< Fixed neutral t
-  BoutReal area_norm; ///< Area normalisation [m^2]
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

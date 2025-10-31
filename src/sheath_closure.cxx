@@ -31,13 +31,13 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
   output.write("\tL_par = {:e} (normalised)\n", L_par);
 }
 
-void SheathClosure::transform(Options &state) {
+void SheathClosure::transform(GuardedOptions &state) {
   AUTO_TRACE();
   
   // Get electrostatic potential
   auto phi = get<Field3D>(state["fields"]["phi"]);
 
-  auto& electrons = state["species"]["e"];
+  auto electrons = state["species"]["e"];
   
   // Electron density
   auto n = get<Field3D>(electrons["density"]);
@@ -51,7 +51,7 @@ void SheathClosure::transform(Options &state) {
   add(electrons["density_source"], DivJsh);
 
   // Electron heat conduction
-  if (electrons.isSet("temperature")) {
+  if (IS_SET(electrons["temperature"])) {
     // Assume attached, sheath-limited regime
     // Sheath heat transmission gamma * n * T * cs
 
@@ -70,9 +70,9 @@ void SheathClosure::transform(Options &state) {
     // standard Bohm boundary conditions for a pure, hydrogenic plasma.]
     Field3D P_total = 0.0;
     Field3D rho_total = 0.0; // mass density
-    Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first];
+      GuardedOptions species = allspecies[kv.first];
 
       const BoutReal A = get<BoutReal>(species["AA"]);
       Field3D Ns = get<Field3D>(species["density"]);
@@ -85,7 +85,7 @@ void SheathClosure::transform(Options &state) {
     Field3D c_s = sqrt(P_total / rho_total);
 
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first];
+      GuardedOptions species = allspecies[kv.first];
       Field3D Ns = get<Field3D>(species["density"]);
 
       Field3D sheath_flux = floor(Ns * c_s, 0.0);

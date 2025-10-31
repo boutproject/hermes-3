@@ -38,19 +38,6 @@ struct EvolvePressure : public Component {
   ///
   EvolvePressure(std::string name, Options& options, Solver* solver);
 
-  /// Inputs
-  /// - species
-  ///   - <name>
-  ///     - density
-  ///
-  /// Sets
-  /// - species
-  ///   - <name>
-  ///     - pressure
-  ///     - temperature   Requires density
-  ///
-  void transform(Options& state) override;
-
   ///
   /// Optional inputs
   ///
@@ -113,6 +100,19 @@ private:
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
   Field3D E_PdivV, E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
+
+  /// Inputs
+  /// - species
+  ///   - <name>
+  ///     - density
+  ///
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - pressure
+  ///     - temperature   Requires density
+  ///
+  void transform(GuardedOptions& state) override;
 };
 
 namespace {

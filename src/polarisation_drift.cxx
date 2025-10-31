@@ -59,11 +59,11 @@ PolarisationDrift::PolarisationDrift(std::string name,
     .withDefault<bool>(false);
 }
 
-void PolarisationDrift::transform(Options &state) {
+void PolarisationDrift::transform(GuardedOptions &state) {
   AUTO_TRACE();
 
   // Iterate through all subsections
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   // Calculate divergence of all currents except the polarisation current
 
@@ -75,9 +75,9 @@ void PolarisationDrift::transform(Options &state) {
 
   // Parallel current due to species parallel flow
   for (auto& kv : allspecies.getChildren()) {
-    const Options& species = kv.second;
+    const GuardedOptions species = kv.second;
 
-    if (!species.isSet("charge") or !species.isSet("momentum")) {
+    if (!IS_SET(species["charge"]) or !IS_SET(species["momentum"])) {
       continue; // Not charged, or no parallel flow
     }
     const BoutReal Z = get<BoutReal>(species["charge"]);
@@ -103,10 +103,10 @@ void PolarisationDrift::transform(Options &state) {
     // Calculate energy exchange term nonlinear in pressure
     // (3 / 2) ddt(Pi) += (Pi / n0) * Div((Pe + Pi) * Curlb_B + Jpar);
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
+      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
-      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
-            and species.isSet("AA"))) {
+      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
+            and IS_SET(species["AA"]))) {
         // No pressure, charge or mass -> no polarisation current due to
         // diamagnetic flow
         continue;
@@ -139,9 +139,9 @@ void PolarisationDrift::transform(Options &state) {
   } else {
     mass_density = 0.0;
     for (auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
+      const GuardedOptions species = kv.second;
 
-      if (!(species.isSet("charge") and species.isSet("AA"))) {
+      if (!(IS_SET(species["charge"]) and IS_SET(species["AA"]))) {
         continue; // No charge or mass -> no current
       }
       if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
@@ -185,9 +185,9 @@ void PolarisationDrift::transform(Options &state) {
   // v_p = - (m_i / (Z_i * B^2)) * Grad(phi_pol)
   //
   for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
-    if (!(species.isSet("charge") and species.isSet("AA"))) {
+    if (!(IS_SET(species["charge"]) and IS_SET(species["AA"]))) {
       continue; // No charge or mass -> no current
     }
     const BoutReal Z = get<BoutReal>(species["charge"]);

@@ -1,7 +1,7 @@
 #include "../include/hydrogen_charge_exchange.hxx"
 
-void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
-                                             Options& atom2, Options& ion2,
+void HydrogenChargeExchange::calculate_rates(GuardedOptions atom1, GuardedOptions ion1,
+                                             GuardedOptions atom2, GuardedOptions ion2,
                                              Field3D &R,
                                              Field3D &atom_mom, Field3D &ion_mom,
                                              Field3D &atom_energy, Field3D &ion_energy,
@@ -103,6 +103,6 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   add(ion1["collision_frequency"], ion_rate);
 
   // Set individual collision frequencies
-  set(atom1["collision_frequencies"][atom1.name() + std::string("_") + ion1.name() + std::string("_cx")], atom_rate);
-  set(ion1["collision_frequencies"][ion1.name() + std::string("_") + atom1.name() + std::string("_cx")], ion_rate);
+  set(atom1["collision_frequencies"][atom1.get().name() + std::string("_") + ion1.get().name() + std::string("_cx")], atom_rate);
+  set(ion1["collision_frequencies"][ion1.get().name() + std::string("_") + atom1.get().name() + std::string("_cx")], ion_rate);
 }

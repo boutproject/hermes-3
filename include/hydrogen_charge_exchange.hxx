@@ -69,7 +69,7 @@ protected:
   ///  atom_energy  Energy removed from atom1, added to ion2
   ///  ion_energy   Energy removed from ion1, added to atom2
   ///
-  void calculate_rates(Options& atom1, Options& ion1, Options& atom2, Options& ion2,
+  void calculate_rates(GuardedOptions atom1, GuardedOptions ion1, GuardedOptions atom2, GuardedOptions ion2,
                        Field3D& R, Field3D& atom_mom, Field3D& ion_mom,
                        Field3D& atom_energy, Field3D& ion_energy, Field3D& atom_rate,
                        Field3D& ion_rate, BoutReal& rate_multiplier,
@@ -138,38 +138,6 @@ struct HydrogenIsotopeChargeExchange : public HydrogenChargeExchange {
     rate_multiplier = alloptions[{Isotope1}]["K_cx_multiplier"]
                           .doc("Scale the charge exchange rate by this factor")
                           .withDefault<BoutReal>(1.0);
-  }
-
-  void transform(Options& state) override {
-    Field3D R, atom_mom, ion_mom, atom_energy, ion_energy;
-
-    calculate_rates(state["species"][{Isotope1}],                  // e.g. "h"
-                    state["species"][{Isotope2, '+'}],             // e.g. "d+"
-                    state["species"][{Isotope2}],                  // e.g. "d"
-                    state["species"][{Isotope1, '+'}],             // e.g. "h+"
-                    R, atom_mom, ion_mom, atom_energy, ion_energy, // Transfer channels
-                    atom_rate, ion_rate,     // Collision rates in s^-1
-                    rate_multiplier,         // Arbitrary user set multiplier
-                    no_neutral_cx_mom_gain); // Make CX behave as in diffusive neutrals?
-
-    if (diagnose) {
-      // Calculate diagnostics to be written to dump file
-      if (Isotope1 == Isotope2) {
-        // Simpler case of same isotopes
-        //  - No net particle source/sink
-        //  - atoms lose atom_mom, gain ion_mom
-        //
-        F = ion_mom - atom_mom;       // Momentum transferred to atoms due to CX with ions
-        E = ion_energy - atom_energy; // Energy transferred to atoms
-      } else {
-        // Different isotopes
-        S = -R;           // Source of Isotope1 atoms
-        F = -atom_mom;    // Source of momentum for Isotope1 atoms
-        F2 = -ion_mom;    // Source of momentum for Isotope2 ions
-        E = -atom_energy; // Source of energy for Isotope1 atoms
-        E2 = -ion_energy; // Source of energy for Isotope2 ions
-      }
-    }
   }
 
   void outputVars(Options& state) override {
@@ -267,6 +235,38 @@ private:
   Field3D E, E2;               ///< Energy exchange
   Field3D atom_rate, ion_rate; ///< Collision rates in s^-1
   bool no_neutral_cx_mom_gain; ///< Make CX behave as in diffusive neutrals?
+
+  void transform(GuardedOptions& state) override {
+    Field3D R, atom_mom, ion_mom, atom_energy, ion_energy;
+
+    calculate_rates(state["species"][{Isotope1}],                  // e.g. "h"
+                    state["species"][{Isotope2, '+'}],             // e.g. "d+"
+                    state["species"][{Isotope2}],                  // e.g. "d"
+                    state["species"][{Isotope1, '+'}],             // e.g. "h+"
+                    R, atom_mom, ion_mom, atom_energy, ion_energy, // Transfer channels
+                    atom_rate, ion_rate,     // Collision rates in s^-1
+                    rate_multiplier,         // Arbitrary user set multiplier
+                    no_neutral_cx_mom_gain); // Make CX behave as in diffusive neutrals?
+
+    if (diagnose) {
+      // Calculate diagnostics to be written to dump file
+      if (Isotope1 == Isotope2) {
+        // Simpler case of same isotopes
+        //  - No net particle source/sink
+        //  - atoms lose atom_mom, gain ion_mom
+        //
+        F = ion_mom - atom_mom;       // Momentum transferred to atoms due to CX with ions
+        E = ion_energy - atom_energy; // Energy transferred to atoms
+      } else {
+        // Different isotopes
+        S = -R;           // Source of Isotope1 atoms
+        F = -atom_mom;    // Source of momentum for Isotope1 atoms
+        F2 = -ion_mom;    // Source of momentum for Isotope2 ions
+        E = -atom_energy; // Source of energy for Isotope1 atoms
+        E2 = -ion_energy; // Source of energy for Isotope2 ions
+      }
+    }
+  }
 };
 
 namespace {

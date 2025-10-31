@@ -50,26 +50,6 @@ struct NeutralParallelDiffusion : public Component {
       .withDefault<bool>(true);
   }
 
-  ///
-  /// Inputs
-  ///  - species
-  ///    - <all neutrals>    # Applies to all neutral species
-  ///      - AA
-  ///      - collision_frequency
-  ///      - density
-  ///      - temperature
-  ///      - pressure     [optional, or density * temperature]
-  ///      - velocity     [optional]
-  ///      - momentum     [if velocity set]
-  ///
-  /// Sets
-  ///  - species
-  ///    - <name>
-  ///      - density_source
-  ///      - energy_source
-  ///      - momentum_source  [if velocity set]
-  void transform(Options &state) override;
-
   /// Save variables to the output
   void outputVars(Options &state) override;
 private:
@@ -93,6 +73,26 @@ private:
 
   /// Store diagnostics for each species
   std::map<std::string, Diagnostics> diagnostics;
+
+  ///
+  /// Inputs
+  ///  - species
+  ///    - <all neutrals>    # Applies to all neutral species
+  ///      - AA
+  ///      - collision_frequency
+  ///      - density
+  ///      - temperature
+  ///      - pressure     [optional, or density * temperature]
+  ///      - velocity     [optional]
+  ///      - momentum     [if velocity set]
+  ///
+  /// Sets
+  ///  - species
+  ///    - <name>
+  ///      - density_source
+  ///      - energy_source
+  ///      - momentum_source  [if velocity set]
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

@@ -191,7 +191,7 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
 }
 
 /// Modify the given simulation state
-void NeutralFullVelocity::transform(Options& state) {
+void NeutralFullVelocity::transform(GuardedOptions& state) {
   AUTO_TRACE();
   mesh->communicate(Nn2D, Vn2D, Pn2D);
 
@@ -254,7 +254,7 @@ void NeutralFullVelocity::transform(Options& state) {
   Vnpar = Vn2D.y / (coord->J * coord->Bxy);
 
   // Set values in the state
-  auto& localstate = state["species"][name];
+  auto localstate = state["species"][name];
   set(localstate["density"], Nn2D);
   set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn2D);

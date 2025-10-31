@@ -27,6 +27,13 @@ struct ElectronForceBalance : public Component {
       .withDefault<bool>(false);
   }
 
+  /// Save output diagnostics
+  void outputVars(Options& state) override;
+private:
+  bool diagnose; ///< Output additional fields
+
+  Field3D Epar; ///< Parallel electric field
+
   /// Required inputs
   /// - species
   ///   - e
@@ -40,14 +47,7 @@ struct ElectronForceBalance : public Component {
   ///   - <all except e>   if both density and charge are set
   ///     - momentum_source
   /// 
-  void transform(Options &state) override;
-
-  /// Save output diagnostics
-  void outputVars(Options& state) override;
-private:
-  bool diagnose; ///< Output additional fields
-
-  Field3D Epar; ///< Parallel electric field
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

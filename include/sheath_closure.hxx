@@ -17,6 +17,17 @@ struct SheathClosure : public Component {
   ///
   SheathClosure(std::string name, Options &options, Solver *);
 
+private:
+  BoutReal L_par; // Normalised connection length
+
+  BoutReal sheath_gamma; // Sheath heat transmission coefficient
+
+  BoutReal sheath_gamma_ions; // Sheath heat transmission coefficient for ions
+
+  BoutReal offset; // Potential at which the sheath current is zero
+
+  bool sinks; // Include sinks of density and energy?
+
   /// Inputs
   /// - fields
   ///   - phi      Electrostatic potential
@@ -34,17 +45,7 @@ struct SheathClosure : public Component {
   /// - fields
   ///   - DivJdia     Divergence of current
   ///
-  void transform(Options &state) override;
-private:
-  BoutReal L_par; // Normalised connection length
-
-  BoutReal sheath_gamma; // Sheath heat transmission coefficient
-
-  BoutReal sheath_gamma_ions; // Sheath heat transmission coefficient for ions
-
-  BoutReal offset; // Potential at which the sheath current is zero
-
-  bool sinks; // Include sinks of density and energy?
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

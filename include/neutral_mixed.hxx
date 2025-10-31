@@ -19,9 +19,6 @@ struct NeutralMixed : public Component {
   /// @param solver   Time-integration solver to be used
   NeutralMixed(const std::string& name, Options& options, Solver *solver);
   
-  /// Modify the given simulation state
-  void transform(Options &state) override;
-  
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
   void finally(const Options &state) override;
@@ -82,6 +79,9 @@ private:
   Field3D mf_visc_perp_xlow, mf_visc_perp_ylow, mf_visc_par_ylow;
   Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
   Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
+
+  /// Modify the given simulation state
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

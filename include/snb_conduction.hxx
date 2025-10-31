@@ -55,6 +55,14 @@ struct SNBConduction : public Component {
       .withDefault<bool>(false);
   }
 
+  void outputVars(Options& state) override;
+private:
+  bout::HeatFluxSNB snb;
+
+  Field3D Div_Q_SH, Div_Q_SNB; ///< Divergence of heat fluxes
+
+  bool diagnose; ///< Output additional diagnostics?
+
   /// Inputs
   /// - species
   ///   - e
@@ -65,15 +73,7 @@ struct SNBConduction : public Component {
   /// - species
   ///   - e
   ///     - energy_source
-  void transform(Options& state) override;
-
-  void outputVars(Options& state) override;
-private:
-  bout::HeatFluxSNB snb;
-
-  Field3D Div_Q_SH, Div_Q_SNB; ///< Divergence of heat fluxes
-
-  bool diagnose; ///< Output additional diagnostics?
+  void transform(GuardedOptions& state) override;
 };
 
 namespace {

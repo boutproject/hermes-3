@@ -133,11 +133,11 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   
 }
 
-void SheathBoundarySimple::transform(Options& state) {
+void SheathBoundarySimple::transform(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
-  Options& electrons = allspecies["e"];
+  GuardedOptions allspecies = state["species"];
+  GuardedOptions electrons = allspecies["e"];
 
   // Need electron properties
   // Not const because boundary conditions will be set
@@ -180,9 +180,9 @@ void SheathBoundarySimple::transform(Options& state) {
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
+      const GuardedOptions species = kv.second;
 
-      if ((kv.first == "e") or !species.isSet("charge")
+      if ((kv.first == "e") or !IS_SET(species["charge"])
           or (get<BoutReal>(species["charge"]) == 0.0)) {
         continue; // Skip electrons and non-charged ions
       }
@@ -191,7 +191,7 @@ void SheathBoundarySimple::transform(Options& state) {
       const Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
       const BoutReal Mi = getNoBoundary<BoutReal>(species["AA"]);
       const BoutReal Zi = getNoBoundary<BoutReal>(species["charge"]);
-      Field3D Vi = species.isSet("velocity")
+      Field3D Vi = IS_SET(species["velocity"])
         ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
         : zeroFrom(Ni);
 
@@ -318,7 +318,7 @@ void SheathBoundarySimple::transform(Options& state) {
   //////////////////////////////////////////////////////////////////
   // Electrons
 
-  Field3D electron_energy_source = electrons.isSet("energy_source")
+  Field3D electron_energy_source = IS_SET(electrons["energy_source"])
     ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
     : zeroFrom(Ne);
 
@@ -477,7 +477,7 @@ void SheathBoundarySimple::transform(Options& state) {
     setBoundary(electrons["momentum"], fromFieldAligned(NVe));
   }
 
-  if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
+  if (always_set_phi or (state.isSection("fields") and IS_SET(state["fields"]["phi"]))) {
     // Set the potential, including boundary conditions
     phi.clearParallelSlices();
     setBoundary(state["fields"]["phi"], fromFieldAligned(phi));
@@ -492,10 +492,10 @@ void SheathBoundarySimple::transform(Options& state) {
       continue; // Skip electrons
     }
 
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
     // Ion charge
-    const BoutReal Zi = species.isSet("charge") ? get<BoutReal>(species["charge"]) : 0.0;
+    const BoutReal Zi = IS_SET(species["charge"]) ? get<BoutReal>(species["charge"]) : 0.0;
 
     if (Zi == 0.0) {
       continue; // Neutral -> skip
@@ -507,22 +507,22 @@ void SheathBoundarySimple::transform(Options& state) {
     // Density and temperature boundary conditions will be imposed (free)
     Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
-    Field3D Pi = species.isSet("pressure")
+    Field3D Pi = IS_SET(species["pressure"])
       ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
       : Ni * Ti;
 
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
-    Field3D Vi = species.isSet("velocity")
+    Field3D Vi = IS_SET(species["velocity"])
       ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
       : zeroFrom(Ni);
-    Field3D NVi = species.isSet("momentum")
+    Field3D NVi = IS_SET(species["momentum"])
       ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
       : Mi * Ni * Vi;
 
     // Energy source will be modified in the domain
-    Field3D energy_source = species.isSet("energy_source")
+    Field3D energy_source = IS_SET(species["energy_source"])
       ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
       : zeroFrom(Ni);
 
@@ -673,12 +673,12 @@ void SheathBoundarySimple::transform(Options& state) {
     setBoundary(species["temperature"], fromFieldAligned(Ti));
     setBoundary(species["pressure"], fromFieldAligned(Pi));
 
-    if (species.isSet("velocity")) {
+    if (IS_SET(species["velocity"])) {
       Vi.clearParallelSlices();
       setBoundary(species["velocity"], fromFieldAligned(Vi));
     }
 
-    if (species.isSet("momentum")) {
+    if (IS_SET(species["momentum"])) {
       NVi.clearParallelSlices();
       setBoundary(species["momentum"], fromFieldAligned(NVi));
     }
@@ -690,8 +690,8 @@ void SheathBoundarySimple::transform(Options& state) {
     // Add the total sheath power flux to the tracker of y power flows
     add(species["energy_flow_ylow"], fromFieldAligned(ion_sheath_power_ylow));
 
-    set(diagnostics[species.name()]["energy_source"], hflux_i);
-    set(diagnostics[species.name()]["particle_source"], particle_source);
+    set(diagnostics[kv.first]["energy_source"], hflux_i);
+    set(diagnostics[kv.first]["particle_source"], particle_source);
 
   }
 }

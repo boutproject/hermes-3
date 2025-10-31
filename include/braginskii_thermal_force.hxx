@@ -37,6 +37,12 @@ struct BraginskiiThermalForce : public Component {
                   .withDefault<bool>(true);
   }
 
+private:
+  bool electron_ion; ///< Include electron-ion collisions?
+  bool ion_ion; ///< Include ion-ion elastic collisions?
+
+  bool first_time{true}; ///< True the first time transform() is called
+
   /// Inputs
   /// - species
   ///   - e           [ if electron_ion true ]
@@ -55,13 +61,7 @@ struct BraginskiiThermalForce : public Component {
   ///   - <species>          [ if AA < 4 ("light") or AA > 10 ("heavy") ]
   ///     - momentum_source
   ///
-  void transform(Options& state) override;
-
-private:
-  bool electron_ion; ///< Include electron-ion collisions?
-  bool ion_ion;      ///< Include ion-ion elastic collisions?
-
-  bool first_time{true}; ///< True the first time transform() is called
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

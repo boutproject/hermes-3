@@ -156,8 +156,6 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
     
   };
 
-  void transform(Options& state) override;
-
   void outputVars(Options& state) override {
     AUTO_TRACE();
     if (diagnose) {
@@ -315,6 +313,8 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
     std::size_t buffer_size = 0;
     std::vector<BoutReal> time_buffer;
     std::vector<BoutReal> error_buffer;
+
+    void transform(GuardedOptions& state) override;
 
 };
 

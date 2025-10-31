@@ -85,7 +85,7 @@ void Reaction::add_diagnostic(const std::string& sp_name, const std::string& dia
  *
  * @param state current simulation state
  */
-void Reaction::calc_weightsums(Options& state) {
+void Reaction::calc_weightsums(GuardedOptions state) {
   if (this->energy_weightsum < 0 || this->momentum_weightsum < 0) {
     this->momentum_weightsum = 0;
     this->energy_weightsum = 0;
@@ -122,7 +122,7 @@ void Reaction::outputVars(Options& state) {
  *
  * @param state
  */
-void Reaction::transform(Options& state) {
+void Reaction::transform(GuardedOptions& state) {
 
   Field3D momentum_exchange, energy_exchange, energy_loss;
   zero_diagnostics(state);
@@ -131,7 +131,7 @@ void Reaction::transform(Options& state) {
       parser->get_species(species_filter::reactants);
 
   // Extract electron properties
-  Options& electron = state["species"]["e"];
+  GuardedOptions electron = state["species"]["e"];
   Field3D n_e = get<Field3D>(electron["density"]);
   Field3D T_e = get<Field3D>(electron["temperature"]);
 
@@ -228,7 +228,7 @@ void Reaction::transform(Options& state) {
  *
  * @param state
  */
-void Reaction::zero_diagnostics(Options& state) {
+void Reaction::zero_diagnostics(GuardedOptions state) {
   if (this->diagnose) {
     for (auto& [key, diag] : diagnostics) {
       set<Field3D>(state[diag.name], 0.0);

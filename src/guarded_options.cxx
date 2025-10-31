@@ -23,7 +23,7 @@ void updateAccessRecords(std::map<std::string, Permissions::Regions>& records,
   }
 }
 
-const Options& GuardedOptions::get(Permissions::Regions region) {
+const Options& GuardedOptions::get(Permissions::Regions region) const {
   if (options == nullptr)
     throw BoutException(
         "Trying to access GuardedOptions when underlying options are nullptr.");

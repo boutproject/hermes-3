@@ -30,25 +30,6 @@ struct FixedVelocity : public Component {
     V = options["velocity"].withDefault(V) / Cs0;
   }
 
-  /// This sets in the state
-  /// - species
-  ///   - <name>
-  ///     - velocity
-  ///     - momentum
-  void transform(Options& state) override {
-    AUTO_TRACE();
-    auto& species = state["species"][name];
-    set(species["velocity"], V);
-
-    // If density is set, also set momentum
-    if (isSetFinalNoBoundary(species["density"])) {
-      const Field3D N = getNoBoundary<Field3D>(species["density"]);
-      const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-
-      set(species["momentum"], AA * N * V);
-    }
-  }
-
   void outputVars(Options& state) override {
     AUTO_TRACE();
     auto Cs0 = get<BoutReal>(state["Cs0"]);
@@ -67,6 +48,25 @@ private:
   std::string name; ///< Short name of species e.g "e"
 
   Field3D V; ///< Species velocity (normalised)
+
+  /// This sets in the state
+  /// - species
+  ///   - <name>
+  ///     - velocity
+  ///     - momentum
+  void transform(GuardedOptions& state) override {
+    AUTO_TRACE();
+    auto& species = state["species"][name];
+    set(species["velocity"], V);
+
+    // If density is set, also set momentum
+    if (isSetFinalNoBoundary(species["density"])) {
+      const Field3D N = getNoBoundary<Field3D>(species["density"]);
+      const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
+
+      set(species["momentum"], AA * N * V);
+    }
+  }
 };
 
 namespace {

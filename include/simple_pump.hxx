@@ -33,16 +33,6 @@ struct SimplePump : public Component {
 
     };
 
-    void transform(Options& state) override {
-
-        Field3D species_density = getNoBoundary<Field3D>(state["species"][name]["density"]);
-
-        pumping_sink = (sink_shape * species_density) * (-1.0 / residence_time);
-
-        add(state["species"][name]["density_source"], pumping_sink);
-
-    };
-
     void outputVars(Options& state) override {
     AUTO_TRACE();
     if (diagnose) {
@@ -69,6 +59,15 @@ struct SimplePump : public Component {
     BoutReal residence_time;
     bool diagnose;
 
+    void transform(GuardedOptions& state) override {
+
+        Field3D species_density = getNoBoundary<Field3D>(state["species"][name]["density"]);
+
+        pumping_sink = (sink_shape * species_density) * (-1.0 / residence_time);
+
+        add(state["species"][name]["density_source"], pumping_sink);
+
+    };
 };
 
 namespace {

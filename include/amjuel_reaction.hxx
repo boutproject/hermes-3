@@ -56,7 +56,7 @@ protected:
   virtual BoutReal eval_sigma_v_E(BoutReal T, BoutReal n) override final;
   virtual BoutReal eval_sigma_v(BoutReal T, BoutReal n) override final;
 
-  virtual void transform_additional(Options& state,
+  virtual void transform_additional(GuardedOptions& state,
                                     Field3D& reaction_rate) override final;
 
 private:

@@ -60,11 +60,11 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   NV_err = 0.0;
 }
 
-void EvolveMomentum::transform(Options &state) {
+void EvolveMomentum::transform(GuardedOptions &state) {
   AUTO_TRACE();
   mesh->communicate(NV);
 
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);

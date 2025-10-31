@@ -78,7 +78,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   Bsq = SQ(coord->Bxy);
 }
 
-void RelaxPotential::transform(Options& state) {
+void RelaxPotential::transform(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Scale potential
@@ -86,7 +86,7 @@ void RelaxPotential::transform(Options& state) {
   phi.applyBoundary("neumann");
   Vort.applyBoundary("neumann");
 
-  auto& fields = state["fields"];
+  auto fields = state["fields"];
 
   ddt(Vort) = 0.0;
 
@@ -100,13 +100,13 @@ void RelaxPotential::transform(Options& state) {
     Jdia.z = 0.0;
     Jdia.covariant = Curlb_B.covariant;
 
-    Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
 
     // Pre-calculate this rather than calculate for each species
     Vector3D Grad_phi = Grad(phi);
 
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
+      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
       if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
             and (get<BoutReal>(species["charge"]) != 0.0))) {
@@ -135,7 +135,7 @@ void RelaxPotential::transform(Options& state) {
       // Calculate energy exchange term nonlinear in pressure
       // ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
       for (auto& kv : allspecies.getChildren()) {
-        Options& species = allspecies[kv.first]; // Note: need non-const
+        GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
         if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
               and IS_SET(species["AA"]))) {

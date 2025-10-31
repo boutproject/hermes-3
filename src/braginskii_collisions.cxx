@@ -69,8 +69,7 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
 ///
 /// Note: A* variables are used for atomic mass numbers;
 ///       mass* variables are species masses in kg
-void BraginskiiCollisions::collide(Options& species1, Options& species2,
-                                   const Field3D& nu_12) {
+void BraginskiiCollisions::collide(Options & species1, Options & species2, const Field3D& nu_12, BoutReal momentum_coefficient) {
   AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12); // Total collision frequency
@@ -105,16 +104,16 @@ void BraginskiiCollisions::collide(Options& species1, Options& species2,
   }
 }
 
-void BraginskiiCollisions::transform(Options& state) {
+void BraginskiiCollisions::transform(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   // Treat electron collisions specially
   // electron-ion and electron-neutral collisions
 
   if (allspecies.isSection("e")) {
-    Options& electrons = allspecies["e"];
+    GuardedOptions electrons = allspecies["e"];
     const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]) * Tnorm; // eV
     const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]) * Nnorm; // In m^-3
 
@@ -148,13 +147,13 @@ void BraginskiiCollisions::transform(Options& state) {
           return nu;
         });
 
-        collide(electrons, electrons, nu_ee / Omega_ci);
+        collide(electrons.getWritable(), electrons.getWritable(), nu_ee / Omega_ci, 1.0);
         continue;
       }
 
-      Options& species = allspecies[kv.first]; // Note: Need non-const
+      GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-      if (species.isSet("charge") and (get<BoutReal>(species["charge"]) > 0.0)) {
+      if (IS_SET(species["charge"]) and (get<BoutReal>(species["charge"]) > 0.0)) {
         ////////////////////////////////////
         // electron-positive ion collisions
 
@@ -201,9 +200,17 @@ void BraginskiiCollisions::transform(Options& state) {
           return nu;
         });
 
-        collide(electrons, species, nu_ei / Omega_ci);
+        // Coefficient in front of parallel momentum exchange
+        // This table is from Braginskii 1965
+        BoutReal mom_coeff =
+          Zi == 1 ? 0.51 :
+          Zi == 2 ? 0.44 :
+          Zi == 3 ? 0.40 :
+          0.38; // Note: 0.38 is for Zi=4; tends to 0.29 for Zi->infty
 
-      } else if (species.isSet("charge") and (get<BoutReal>(species["charge"]) < 0.0)) {
+        collide(electrons.getWritable(), species.getWritable(), nu_ei / Omega_ci, mom_coeff);
+
+      } else if (IS_SET(species["charge"]) and (get<BoutReal>(species["charge"]) < 0.0)) {
         ////////////////////////////////////
         // electron-negative ion collisions
 
@@ -233,7 +240,7 @@ void BraginskiiCollisions::transform(Options& state) {
           return vth_e * Nnorm * Nn[i] * a0 * rho_s0;
         });
 
-        collide(electrons, species, nu_en);
+        collide(electrons.getWritable(), species.getWritable(), nu_en, 1.0);
       }
     }
   }
@@ -250,17 +257,17 @@ void BraginskiiCollisions::transform(Options& state) {
   //  ||   species2               X         X
   //  \/   species3                         X
   //
-  const std::map<std::string, Options>& children = allspecies.getChildren();
+  const std::map<std::string, GuardedOptions> children = allspecies.getChildren();
   for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
     if (kv1->first == "e" or kv1->first == "ebeam") {
       continue; // Skip electrons
     }
 
-    Options& species1 = allspecies[kv1->first];
+    GuardedOptions species1 = allspecies[kv1->first];
 
     // If temperature isn't set, assume zero. in eV
     const Field3D temperature1 =
-        species1.isSet("temperature")
+      IS_SET(species1["temperature"])
             ? GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm
             : 0.0;
 
@@ -269,26 +276,26 @@ void BraginskiiCollisions::transform(Options& state) {
     const BoutReal AA1 = get<BoutReal>(species1["AA"]);
     const BoutReal mass1 = AA1 * SI::Mp; // in Kg
 
-    if (species1.isSet("charge") and (get<BoutReal>(species1["charge"]) != 0.0)) {
+    if (IS_SET(species1["charge"]) and (get<BoutReal>(species1["charge"]) != 0.0)) {
       // Charged species
       const BoutReal Z1 = get<BoutReal>(species1["charge"]);
       const BoutReal charge1 = Z1 * SI::qe; // in Coulombs
 
       // Copy the iterator, so we don't iterate over the
       // lower half of the matrix, but start at the diagonal
-      for (std::map<std::string, Options>::const_iterator kv2 = kv1;
+      for (std::map<std::string, GuardedOptions>::const_iterator kv2 = kv1;
            kv2 != std::end(children); ++kv2) {
         if (kv2->first == "e" or kv2->first == "ebeam") {
           continue; // Skip electrons
         }
 
-        Options& species2 = allspecies[kv2->first];
+        GuardedOptions species2 = allspecies[kv2->first];
 
         // Note: Here species1 could be equal to species2
 
         // If temperature isn't set, assume zero. in eV
         const Field3D temperature2 =
-            species2.isSet("temperature")
+            IS_SET(species2["temperature"])
                 ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
                 : 0.0;
 
@@ -297,7 +304,7 @@ void BraginskiiCollisions::transform(Options& state) {
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const BoutReal mass2 = AA2 * SI::Mp; // in Kg
 
-        if (species2.isSet("charge") and (get<BoutReal>(species2["charge"]) != 0.0)) {
+        if (IS_SET(species2["charge"]) and (get<BoutReal>(species2["charge"]) != 0.0)) {
           //////////////////////////////
           // Both charged species
 
@@ -335,7 +342,7 @@ void BraginskiiCollisions::transform(Options& state) {
           });
 
           // Update the species collision rates, momentum & energy exchange
-          collide(species1, species2, nu_12 / Omega_ci);
+          collide(species1.getWritable(), species2.getWritable(), nu_12 / Omega_ci, 1.0);
 
         } else {
           // species1 charged, species2 neutral
@@ -356,7 +363,7 @@ void BraginskiiCollisions::transform(Options& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1, species2, nu_12);
+          collide(species1.getWritable(), species2.getWritable(), nu_12, 1.0);
         }
       }
     } else {
@@ -364,19 +371,19 @@ void BraginskiiCollisions::transform(Options& state) {
 
       // Copy the iterator, so we don't iterate over the
       // lower half of the matrix, but start at the diagonal
-      for (std::map<std::string, Options>::const_iterator kv2 = kv1;
+      for (std::map<std::string, GuardedOptions>::const_iterator kv2 = kv1;
            kv2 != std::end(children); ++kv2) {
         if (kv2->first == "e") {
           continue; // Skip electrons
         }
 
-        Options& species2 = allspecies[kv2->first];
+        GuardedOptions species2 = allspecies[kv2->first];
 
         // Note: Here species1 could be equal to species2
 
         // If temperature isn't set, assume zero
         const Field3D temperature2 =
-            species2.isSet("temperature")
+            IS_SET(species2["temperature"])
                 ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
                 : 0.0;
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
@@ -404,7 +411,7 @@ void BraginskiiCollisions::transform(Options& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1, species2, nu_12);
+          collide(species1.getWritable(), species2.getWritable(), nu_12, 1.0);
 
         } else {
           // Both species neutral
@@ -433,7 +440,7 @@ void BraginskiiCollisions::transform(Options& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1, species2, nu_12);
+          collide(species1.getWritable(), species2.getWritable(), nu_12, 1.0);
         }
       }
     }

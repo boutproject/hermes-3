@@ -28,26 +28,6 @@ struct RelaxPotential : public Component {
   RelaxPotential(std::string name, Options& options, Solver* solver);
 
   /// Optional inputs
-  ///
-  /// - species
-  ///   - pressure and charge => Calculates diamagnetic terms [if diamagnetic=true]
-  ///   - pressure, charge and mass => Calculates polarisation current terms
-  ///     [if diamagnetic_polarisation=true]
-  ///
-  /// Sets in the state
-  /// - species
-  ///   - [if has pressure and charge]
-  ///     - energy_source
-  /// - fields
-  ///   - vorticity
-  ///   - phi         Electrostatic potential
-  ///   - DivJdia     Divergence of diamagnetic current [if diamagnetic=true]
-  ///
-  /// Note: Diamagnetic current calculated here, but could be moved
-  ///       to a component with the diamagnetic drift advection terms
-  void transform(Options& state) override;
-
-  /// Optional inputs
   /// - fields
   ///   - DivJextra    Divergence of current, including parallel current
   ///                  Not including diamagnetic or polarisation currents
@@ -76,6 +56,26 @@ private:
   Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
 
   BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
+
+  /// Optional inputs
+  ///
+  /// - species
+  ///   - pressure and charge => Calculates diamagnetic terms [if diamagnetic=true]
+  ///   - pressure, charge and mass => Calculates polarisation current terms
+  ///     [if diamagnetic_polarisation=true]
+  ///
+  /// Sets in the state
+  /// - species
+  ///   - [if has pressure and charge]
+  ///     - energy_source
+  /// - fields
+  ///   - vorticity
+  ///   - phi         Electrostatic potential
+  ///   - DivJdia     Divergence of diamagnetic current [if diamagnetic=true]
+  ///
+  /// Note: Diamagnetic current calculated here, but could be moved
+  ///       to a component with the diamagnetic drift advection terms
+  void transform(GuardedOptions& state) override;
 };
 
 namespace {
