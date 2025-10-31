@@ -1,3 +1,4 @@
+---
 name: Tests
 on:
   push:
@@ -5,7 +6,7 @@ on:
       - master
   pull_request:
     branches:
-      - '*' # This will trigger for PRs against any branch
+      - '*'  # This will trigger for PRs against any branch
 
 defaults:
   run:
@@ -53,7 +54,7 @@ jobs:
                  liblapack-dev
                  libparpack2-dev
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
@@ -73,14 +74,13 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          flags: unit-tests
+          flags: unit
       - name: Run integration tests
         run: cd build &&
-             # Remove coverage data from unit tests
              find -name "*.gcda" -exec rm {} \; &&
              ctest --output-on-failure --timeout 300 -L integration
       - name: Upload integration test coverage data
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          flags: integration-tests
+          flags: integration
