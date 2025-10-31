@@ -146,12 +146,14 @@ TEST(PermissionsTests, TestGetHighestPermission) {
             make_permission(Permissions::Read, "species:he:pressure"));
   EXPECT_EQ(example.getHighestPermission("species:he:collision_frequency"),
             make_permission(Permissions::Final, "species:he:collision_frequency"));
-  EXPECT_EQ(example.getHighestPermission("species:he:velocity"), no_permission);
-  EXPECT_EQ(example.getHighestPermission("species:d:pressure"), no_permission);
+  EXPECT_EQ(example.getHighestPermission("species:he:velocity"),
+            make_permission(Permissions::None, "species:he:velocity"));
+  EXPECT_EQ(example.getHighestPermission("species:d:pressure"),
+            make_permission(Permissions::None, "species:d:pressure"));
   EXPECT_EQ(example.getHighestPermission("species:d:velocity"),
             make_permission(Permissions::Read, "species:d"));
   EXPECT_EQ(example.getHighestPermission("species:d:collision_frequencies:d_d_coll"),
-            no_permission);
+            make_permission(Permissions::None, "species:d:collision_frequencies"));
   EXPECT_EQ(example.getHighestPermission("unset"), no_permission);
 
   // Get the highest permission on the boundaries
@@ -167,9 +169,9 @@ TEST(PermissionsTests, TestGetHighestPermission) {
   EXPECT_EQ(example.getHighestPermission("species:he:velocity", Permissions::Boundaries),
             make_permission(Permissions::Read, "species:he:velocity"));
   EXPECT_EQ(example.getHighestPermission("species:d:pressure", Permissions::Boundaries),
-            no_permission);
+            make_permission(Permissions::None, "species:d:pressure"));
   EXPECT_EQ(example.getHighestPermission("species:d:velocity", Permissions::Boundaries),
-            no_permission);
+            make_permission(Permissions::Read, "species:d"));
   EXPECT_EQ(example.getHighestPermission("species:d:collision_frequencies:d_d_coll",
                                          Permissions::Boundaries),
             make_permission(Permissions::Write, "species:d:collision_frequencies"));
@@ -187,14 +189,14 @@ TEST(PermissionsTests, TestGetHighestPermission) {
                                          Permissions::Interior),
             make_permission(Permissions::Final, "species:he:collision_frequency"));
   EXPECT_EQ(example.getHighestPermission("species:he:velocity", Permissions::Interior),
-            no_permission);
+            make_permission(Permissions::None, "species:he:velocity"));
   EXPECT_EQ(example.getHighestPermission("species:d:pressure", Permissions::Interior),
             make_permission(Permissions::Write, "species:d:pressure"));
   EXPECT_EQ(example.getHighestPermission("species:d:velocity", Permissions::Interior),
             make_permission(Permissions::Read, "species:d"));
   EXPECT_EQ(example.getHighestPermission("species:d:collision_frequencies:d_d_coll",
                                          Permissions::Interior),
-            no_permission);
+            make_permission(Permissions::None, "species:d:collision_frequencies"));
   EXPECT_EQ(example.getHighestPermission("unset", Permissions::Interior), no_permission);
 
   // Check the permission for the "Nowhere" region is always "None"
