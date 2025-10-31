@@ -192,3 +192,25 @@ private:
 
   std::map<std::string, AccessRights> variable_permissions;
 };
+
+/// Convenience function to return an object expressing that the
+/// variable should have ReadIfSet permissions on all regions.
+std::pair<std::string, Permissions::AccessRights> readIfSet(std::string varname);
+
+/// Convenience function to return an object expressing that the
+/// variable should have Read permissions on all regions.
+std::pair<std::string, Permissions::AccessRights> readOnly(std::string varname);
+
+/// Convenience function to return an object expressing that the
+/// variable should have Write permissions on all regions.
+std::pair<std::string, Permissions::AccessRights> readWrite(std::string varname);
+
+/// Convenience function to return an object expressing that the
+/// variable should have Final permissions on all regions.
+std::pair<std::string, Permissions::AccessRights> writeFinal(std::string varname);
+
+/// Convenience function to return an object expressing that the
+/// variable should have Write permissions on the boundaries. It will
+/// have Read permissions in the interior, as this is normally
+/// required to set the boundaries correctly.
+std::pair<std::string, Permissions::AccessRights> writeBoundary(std::string varname);
