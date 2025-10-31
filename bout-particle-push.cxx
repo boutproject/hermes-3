@@ -80,7 +80,104 @@ void RZ_to_ivertex_vector(Field2D& ivertex_corners,
   }
 }
 
+std::vector<PetscInt> cells_definition_from_RZ_ivertex(std::vector<PetscInt>& cells, Mesh*& bout_mesh,
+  Field2D& Rxy_lower_left_corners,
+  Field2D& Rxy_lower_right_corners,
+  Field2D& Rxy_upper_right_corners,
+  Field2D& Rxy_upper_left_corners,
+  Field2D& Zxy_lower_left_corners,
+  Field2D& Zxy_lower_right_corners,
+  Field2D& Zxy_upper_right_corners,
+  Field2D& Zxy_upper_left_corners,
+  Field2D& ivertex_lower_left_corners,
+  Field2D& ivertex_lower_right_corners,
+  Field2D& ivertex_upper_right_corners,
+  Field2D& ivertex_upper_left_corners){
+  std::vector<PetscReal> Z_vertices(4);
+  std::vector<PetscReal> R_vertices(4);
+  std::vector<PetscReal> theta_vertices(4);
+  std::vector<PetscInt> i_vertices(4);
+  std::vector<PetscInt> sort_indices(4);
+  PetscReal ZZ;
+  PetscReal ZZmid;
+  PetscReal RR;
+  PetscReal RRmid;
+  // local number of x cells, excluding guards
+  int Nx = bout_mesh->xend - bout_mesh->xstart + 1;
+  // local number of y cells, excluding guards
+  int Ny = bout_mesh->yend - bout_mesh->ystart + 1;
+  PetscInt num_cells_owned = Nx*Ny;
+  // std::vector<PetscInt> cells;
+  cells.reserve(num_cells_owned * 4);
+  // output << "Got here 1 \n";
+  // We are careful to list the vertices in counter clock-wise order, this might
+  // matter.
+  for (PetscInt ix = bout_mesh->xstart; ix<= bout_mesh->xend; ix++) {
+    for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
+      // collect data from Hypnotoad arrays
+      i_vertices[0] =  static_cast<int>(std::lround(ivertex_lower_left_corners(ix,iy)));
+      i_vertices[1] =  static_cast<int>(std::lround(ivertex_lower_right_corners(ix,iy)));
+      i_vertices[2] =  static_cast<int>(std::lround(ivertex_upper_right_corners(ix,iy)));
+      i_vertices[3] =  static_cast<int>(std::lround(ivertex_upper_left_corners(ix,iy)));
 
+      R_vertices[0] =  Rxy_lower_left_corners(ix,iy);
+      R_vertices[1] =  Rxy_lower_right_corners(ix,iy);
+      R_vertices[2] =  Rxy_upper_right_corners(ix,iy);
+      R_vertices[3] =  Rxy_upper_left_corners(ix,iy);
+
+      Z_vertices[0] =  Zxy_lower_left_corners(ix,iy);
+      Z_vertices[1] =  Zxy_lower_right_corners(ix,iy);
+      Z_vertices[2] =  Zxy_upper_right_corners(ix,iy);
+      Z_vertices[3] =  Zxy_upper_left_corners(ix,iy);
+      // get the mean values of R, Z
+      RRmid = 0.0;
+      ZZmid = 0.0;
+      for (PetscInt iv = 0; iv < 4; iv++) {
+        RRmid += R_vertices[iv];
+        ZZmid += Z_vertices[iv];
+      }
+      RRmid /= 4.0;
+      ZZmid /= 4.0;
+      // get the angle subtended from the centre of the cell to each vertex
+      for (PetscInt iv = 0; iv < 4; iv++) {
+        RR = R_vertices[iv] - RRmid;
+        ZZ = Z_vertices[iv] - ZZmid;
+        theta_vertices[iv] = std::atan2(ZZ,RR);
+      }
+      // get the indices that sort the vertices in ascending order of theta
+      for (PetscInt iv = 0; iv < 4; ++iv) {
+        sort_indices[iv] = iv;
+      }
+      // output << "Before sort \n";
+      // for (PetscInt iv = 0; iv < 4; ++iv) {
+      //   output << std::to_string(i_vertices[iv]) << " " << std::to_string(theta_vertices[iv]) << " " << std::to_string(R_vertices[iv]) << " " << std::to_string(Z_vertices[iv]) << "\n";
+      // }
+      std::sort(sort_indices.begin(), sort_indices.end(),
+                [&theta_vertices](int i, int j)
+                  {
+                      return theta_vertices[i] < theta_vertices[j];
+                  });
+      // output << "After sort \n";
+      // for (PetscInt iv = 0; iv < 4; ++iv) {
+      //   output << std::to_string(i_vertices[sort_indices[iv]]) << " " << std::to_string(theta_vertices[sort_indices[iv]]) << "\n";
+      // }
+      // fill cells using the sorted indices
+      for (PetscInt iv = 0; iv < 4; ++iv) {
+        cells.push_back(i_vertices[sort_indices[iv]]);
+      }
+      // // These are global indices not local indices.
+      // PetscInt vertex_sw = cx + mpi_rank * (mpi_size + 1);
+      // PetscInt vertex_se = vertex_sw + 1;
+      // PetscInt vertex_ne = vertex_se + mpi_size + 1;
+      // PetscInt vertex_nw = vertex_ne - 1;
+      // cells.push_back(vertex_sw);
+      // cells.push_back(vertex_se);
+      // cells.push_back(vertex_ne);
+      // cells.push_back(vertex_nw);
+    }
+  }
+  return cells;
+}
 
 using namespace NESO::Particles;
 
@@ -280,84 +377,37 @@ int main(int argc, char **argv) {
       mesh, Rxy_upper_left_corners, Zxy_upper_left_corners);
 
   // First we setup the topology of the mesh.
-  std::vector<PetscReal> Z_vertices(4);
-  std::vector<PetscReal> R_vertices(4);
-  std::vector<PetscReal> theta_vertices(4);
-  std::vector<PetscInt> i_vertices(4);
-  std::vector<PetscInt> sort_indices(4);
-  PetscReal ZZ;
-  PetscReal ZZmid;
-  PetscReal RR;
-  PetscReal RRmid;
   PetscInt num_cells_owned = Nx*Ny;
+  // std::vector<double> cells(4*num_cells_owned);
   std::vector<PetscInt> cells;
-  cells.reserve(num_cells_owned * 4);
-  // output << "Got here 1 \n";
-  // We are careful to list the vertices in counter clock-wise order, this might
-  // matter.
-  for (PetscInt ix = mesh->xstart; ix<= mesh->xend; ix++) {
-    for (PetscInt iy = mesh->ystart; iy <= mesh->yend; iy++) {
-      // collect data from Hypnotoad arrays
-      i_vertices[0] =  static_cast<int>(std::lround(ivertex_lower_left_corners(ix,iy)));
-      i_vertices[1] =  static_cast<int>(std::lround(ivertex_lower_right_corners(ix,iy)));
-      i_vertices[2] =  static_cast<int>(std::lround(ivertex_upper_right_corners(ix,iy)));
-      i_vertices[3] =  static_cast<int>(std::lround(ivertex_upper_left_corners(ix,iy)));
-
-      R_vertices[0] =  Rxy_lower_left_corners(ix,iy);
-      R_vertices[1] =  Rxy_lower_right_corners(ix,iy);
-      R_vertices[2] =  Rxy_upper_right_corners(ix,iy);
-      R_vertices[3] =  Rxy_upper_left_corners(ix,iy);
-
-      Z_vertices[0] =  Zxy_lower_left_corners(ix,iy);
-      Z_vertices[1] =  Zxy_lower_right_corners(ix,iy);
-      Z_vertices[2] =  Zxy_upper_right_corners(ix,iy);
-      Z_vertices[3] =  Zxy_upper_left_corners(ix,iy);
-      // get the mean values of R, Z
-      RRmid = 0.0;
-      ZZmid = 0.0;
-      for (PetscInt iv = 0; iv < 4; iv++) {
-        RRmid += R_vertices[iv];
-        ZZmid += Z_vertices[iv];
-      }
-      RRmid /= 4.0;
-      ZZmid /= 4.0;
-      // get the angle subtended from the centre of the cell to each vertex
-      for (PetscInt iv = 0; iv < 4; iv++) {
-        RR = R_vertices[iv] - RRmid;
-        ZZ = Z_vertices[iv] - ZZmid;
-        theta_vertices[iv] = std::atan2(ZZ,RR);
-      }
-      // get the indices that sort the vertices in ascending order of theta
-      for (PetscInt iv = 0; iv < 4; ++iv) {
-        sort_indices[iv] = iv;
-      }
-      // output << "Before sort \n";
-      // for (PetscInt iv = 0; iv < 4; ++iv) {
-      //   output << std::to_string(i_vertices[iv]) << " " << std::to_string(theta_vertices[iv]) << " " << std::to_string(R_vertices[iv]) << " " << std::to_string(Z_vertices[iv]) << "\n";
-      // }
-      std::sort(sort_indices.begin(), sort_indices.end(),
-                [&theta_vertices](int i, int j)
-                  {
-                      return theta_vertices[i] < theta_vertices[j];
-                  });
-      // output << "After sort \n";
-      // for (PetscInt iv = 0; iv < 4; ++iv) {
-      //   output << std::to_string(i_vertices[sort_indices[iv]]) << " " << std::to_string(theta_vertices[sort_indices[iv]]) << "\n";
-      // }
-      // fill cells using the sorted indices
-      for (PetscInt iv = 0; iv < 4; ++iv) {
-        cells.push_back(i_vertices[sort_indices[iv]]);
-      }
-      // // These are global indices not local indices.
-      // PetscInt vertex_sw = cx + mpi_rank * (mpi_size + 1);
-      // PetscInt vertex_se = vertex_sw + 1;
-      // PetscInt vertex_ne = vertex_se + mpi_size + 1;
-      // PetscInt vertex_nw = vertex_ne - 1;
-      // cells.push_back(vertex_sw);
-      // cells.push_back(vertex_se);
-      // cells.push_back(vertex_ne);
-      // cells.push_back(vertex_nw);
-    }
+  if (use_cxx_ivertex) {
+    cells_definition_from_RZ_ivertex(cells, mesh,
+    Rxy_lower_left_corners,
+    Rxy_lower_right_corners,
+    Rxy_upper_right_corners,
+    Rxy_upper_left_corners,
+    Zxy_lower_left_corners,
+    Zxy_lower_right_corners,
+    Zxy_upper_right_corners,
+    Zxy_upper_left_corners,
+    ivertex_lower_left_corners_cxx,
+    ivertex_lower_right_corners_cxx,
+    ivertex_upper_right_corners_cxx,
+    ivertex_upper_left_corners_cxx);
+  } else {
+    cells = cells_definition_from_RZ_ivertex(cells, mesh,
+    Rxy_lower_left_corners,
+    Rxy_lower_right_corners,
+    Rxy_upper_right_corners,
+    Rxy_upper_left_corners,
+    Zxy_lower_left_corners,
+    Zxy_lower_right_corners,
+    Zxy_upper_right_corners,
+    Zxy_upper_left_corners,
+    ivertex_lower_left_corners,
+    ivertex_lower_right_corners,
+    ivertex_upper_right_corners,
+    ivertex_upper_left_corners);
   }
   // output << "Got here 2 \n";
   // read data from netcdf for global vertices in mesh
