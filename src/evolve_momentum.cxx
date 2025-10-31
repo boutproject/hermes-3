@@ -79,6 +79,12 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
     // Clebsch coordinate system
     bracket_factor = 1.0;
   }
+
+  auto& nv_options = alloptions[std::string("NV") + name];
+
+  disable_ddt = nv_options["disable_ddt"]
+    .withDefault<bool>(false);
+
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -211,6 +217,7 @@ void EvolveMomentum::finally(const Options &state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
+  
   ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
   
   // Parallel pressure gradient
@@ -289,6 +296,11 @@ void EvolveMomentum::finally(const Options &state) {
   // Note: Copy boundary condition so dump file has correct boundary.
   NV_solver.setBoundaryTo(NV, true);
   NV = NV_solver;
+
+  if (disable_ddt){
+    ddt(NV) = 0.0;
+  }
+
 }
 
 void EvolveMomentum::outputVars(Options &state) {
@@ -359,5 +371,7 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
+
+    
   }
 }
