@@ -257,6 +257,7 @@ if(HERMES_TESTS)
       NAME ${TESTNAME}
       WORKING_DIRECTORY ${INT_TEST_DEST}
       COMMAND runtest)
+    set_tests_properties(${testname} PROPERTIES LABELS integration)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
