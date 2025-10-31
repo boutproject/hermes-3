@@ -78,9 +78,8 @@ jobs:
         #   LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
       - uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           flags: unit-tests
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - name: Run integration tests
         run: cd build &&
              ctest --output-on-failure --timeout 300 -L integration
