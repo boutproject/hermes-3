@@ -146,9 +146,7 @@ std::vector<PetscInt> cells_definition_from_RZ_ivertex(std::vector<PetscInt>& ce
   PetscInt num_cells_owned = Nx*Ny;
   // std::vector<PetscInt> cells;
   cells.reserve(num_cells_owned * 4);
-  // output << "Got here 1 \n";
-  // We are careful to list the vertices in counter clock-wise order, this might
-  // matter.
+  // We are careful to list the vertices in counter clock-wise order.
   for (PetscInt ix = bout_mesh->xstart; ix<= bout_mesh->xend; ix++) {
     for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
       // collect data from Hypnotoad arrays
@@ -185,32 +183,15 @@ std::vector<PetscInt> cells_definition_from_RZ_ivertex(std::vector<PetscInt>& ce
       for (PetscInt iv = 0; iv < 4; ++iv) {
         sort_indices[iv] = iv;
       }
-      // output << "Before sort \n";
-      // for (PetscInt iv = 0; iv < 4; ++iv) {
-      //   output << std::to_string(i_vertices[iv]) << " " << std::to_string(theta_vertices[iv]) << " " << std::to_string(R_vertices[iv]) << " " << std::to_string(Z_vertices[iv]) << "\n";
-      // }
       std::sort(sort_indices.begin(), sort_indices.end(),
                 [&theta_vertices](int i, int j)
                   {
                       return theta_vertices[i] < theta_vertices[j];
                   });
-      // output << "After sort \n";
-      // for (PetscInt iv = 0; iv < 4; ++iv) {
-      //   output << std::to_string(i_vertices[sort_indices[iv]]) << " " << std::to_string(theta_vertices[sort_indices[iv]]) << "\n";
-      // }
       // fill cells using the sorted indices
       for (PetscInt iv = 0; iv < 4; ++iv) {
         cells.push_back(i_vertices[sort_indices[iv]]);
       }
-      // // These are global indices not local indices.
-      // PetscInt vertex_sw = cx + mpi_rank * (mpi_size + 1);
-      // PetscInt vertex_se = vertex_sw + 1;
-      // PetscInt vertex_ne = vertex_se + mpi_size + 1;
-      // PetscInt vertex_nw = vertex_ne - 1;
-      // cells.push_back(vertex_sw);
-      // cells.push_back(vertex_se);
-      // cells.push_back(vertex_ne);
-      // cells.push_back(vertex_nw);
     }
   }
   return cells;
@@ -344,39 +325,25 @@ int main(int argc, char **argv) {
   global_R_vertices_buffer.at(0) = global_R_lower_left_vertices.at(0);
   int N_unique=1; // we have one unique point in the buffer
   const double zero=1.0e-8;
-  // lower left vertices
-  // for (int iv = 0; iv < N_nonunique_vertices; iv++) {
-  //   // assume the point is unique
-  //   unique = true
-  //   for (int iunique = 0; iunique < N_unique; iunique++ ) {
-  //     if (abs(global_Z_lower_left_vertices.at(iv) - global_Z_vertices_buffer.at(iunique)) < zero &&
-  //         abs(global_R_lower_left_vertices.at(iv) - global_R_vertices_buffer.at(iunique)) < zero ) {
-  //       unique = false;
-  //       // we have determined that the point is not unique
-  //     }
-  //   }
-  //   if (unique){
-  //     // add the point and increment N_unique
-  //     global_Z_vertices_buffer.at(N_unique) = global_Z_lower_left_vertices.at(iv);
-  //     global_R_vertices_buffer.at(N_unique) = global_R_lower_left_vertices.at(iv);
-  //     N_unique++;
-  //   }
-  // }
+  // loop over lower left vertices
   collect_unique_points(global_Z_vertices_buffer,
                         global_R_vertices_buffer,
                         N_unique, zero,
                         global_Z_lower_left_vertices,
                         global_R_lower_left_vertices);
+  // loop over lower right vertices
   collect_unique_points(global_Z_vertices_buffer,
                         global_R_vertices_buffer,
                         N_unique, zero,
                         global_Z_lower_right_vertices,
                         global_R_lower_right_vertices);
+  // loop over upper right vertices
   collect_unique_points(global_Z_vertices_buffer,
                         global_R_vertices_buffer,
                         N_unique, zero,
                         global_Z_upper_right_vertices,
                         global_R_upper_right_vertices);
+  // loop over upper left vertices
   collect_unique_points(global_Z_vertices_buffer,
                         global_R_vertices_buffer,
                         N_unique, zero,
@@ -449,7 +416,6 @@ int main(int argc, char **argv) {
     ivertex_upper_right_corners,
     ivertex_upper_left_corners);
   }
-  // output << "Got here 2 \n";
   // create nvertices, global_vertex_list_R, global_vertex_list_z variables
   int nvertices;
   std::vector<double> global_vertex_list_R;
@@ -462,13 +428,7 @@ int main(int argc, char **argv) {
     load_vertex_information_from_netcdf(nvertices,
   global_vertex_list_R, global_vertex_list_Z);
   }
-  // // Print the data
-  // std::cout << "Data from variable '" << varName << "':" << std::endl;
-  // for (size_t i = 0; i < length; ++i) {
-  //     std::cout << data[i] << " ";
-  // }
-  // std::cout << std::endl;
-  // number of vertices to keep per process
+  // number of vertices to keep per process for passing to DMPlexCreateFromCellListParallelPetsc
   int nvertex_per_process = std::floor(nvertices/mpi_size);
   int nvertex_remainder = nvertices - mpi_size*nvertex_per_process;
   int nvertex_this_process = nvertex_per_process;
@@ -500,9 +460,6 @@ int main(int argc, char **argv) {
     vertex_coords.at(iv * 2 + 0) = global_vertex_list_R[iv + ishift];
     vertex_coords.at(iv * 2 + 1) = global_vertex_list_Z[iv + ishift];
   }
-  // output << "Got here 3 \n";
-  // std::cout << std::to_string(mpi_rank) << ": nvertices " << std::to_string(nvertices) << std::endl;
-  // std::cout << std::to_string(mpi_rank) << ": nvertex_this_process " << std::to_string(nvertex_this_process) << std::endl;
   // This DM will contain the DMPlex after we call the creation routine.
   DM dm;
   // Create the DMPlex from the cells and coordinates.
