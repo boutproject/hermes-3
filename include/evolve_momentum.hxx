@@ -44,7 +44,7 @@ private:
   bool bndry_flux;      // Allow flows through boundaries?
   bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;  // Include ExB flow in Y direction?
-
+  bool isMMS;
   BoutReal density_floor;
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
   BoutReal pressure_floor;
