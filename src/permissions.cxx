@@ -72,17 +72,17 @@ std::pair<bool, std::string> Permissions::canAccess(const std::string& variable,
   }
 }
 
-Permissions::PermissionTypes
+std::pair<Permissions::PermissionTypes, std::string>
 Permissions::getHighestPermission(const std::string& variable,
                                   Permissions::Regions region) const {
   if (region == Nowhere)
-    return None;
-  AccessRights rights = std::get<1>(bestMatchRights(variable));
-  int i = Read;
+    return {None, ""};
+  auto [varname, rights] = bestMatchRights(variable);
+  int i = ReadIfSet;
   while (i < PERMISSION_TYPES_END and (rights[i] & region) == region) {
     i++;
   }
-  return static_cast<PermissionTypes>(i - 1);
+  return {static_cast<PermissionTypes>(i - 1), varname};
 }
 
 std::map<std::string, Permissions::Regions>
@@ -109,10 +109,10 @@ Permissions::getVariablesWithPermission(PermissionTypes permission,
 
 Permissions::AccessRights Permissions::applyLowerPermissions(const AccessRights& rights) {
   AccessRights result(rights);
-  for (int i = Read; i < PERMISSION_TYPES_END; i++) {
+  for (int i = ReadIfSet; i < PERMISSION_TYPES_END; i++) {
     result[i] = rights[i];
     // Higher permissions imply lower permissions
-    for (int j = Read; j < i; j++) {
+    for (int j = ReadIfSet; j < i; j++) {
       result[j] = static_cast<Regions>(result[j] | rights[i]);
     }
   }

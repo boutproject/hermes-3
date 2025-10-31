@@ -11,9 +11,12 @@
 class Permissions {
 public:
   /// Ways in which someone is allowed to access the variable, with
-  /// increasing levels of rights. "Final" refers to the last time
-  /// anyone is allowed to write to the variable.
-  enum PermissionTypes { None = -1, Read, Write, Final, PERMISSION_TYPES_END };
+  /// increasing levels of rights. "ReadIfSet" indicates that
+  /// variables should only be read if already set. "Final" refers to
+  /// the last time anyone is allowed to write to the variable. These
+  /// two concepts need to be captured to decide the order in which to
+  /// execute components.
+  enum PermissionTypes { None = -1, ReadIfSet, Read, Write, Final, PERMISSION_TYPES_END };
 
   /// The regions of the domain to which a particular permission
   /// apply. These are designed to be used as bit-flags.
@@ -29,9 +32,11 @@ public:
   /// Data type for storing the regions of a variable which have a
   /// particular level of permission. Some examples can be seen below:
   ///
-  ///     AccessRights read_only = { AllRegions, Nowhere, Nowhere },
-  ///                  write_boundaries = { Nowhere, Boundaries, Nowhere },
-  ///                  read_and_write_everywhere = { AllReginos, AllRegions, Nowhere
+  ///     AccessRights only_read_if_set = { AllRegions, Nowhere, Nowhere, Nowhere },
+  ///                  read_only = { Nowhere, AllRegions, Nowhere, Nowhere },
+  ///                  write_boundaries = { Nowhere, Nowhere, Boundaries, Nowhere },
+  ///                  read_and_write_everywhere = { Nowhere, AllReginos, AllRegions,
+  ///                  Nowhere
   ///                  }, final_write_boundaries_read_interior = { Interior, Nowhere,
   ///                      Boundaries };
   ///
@@ -51,18 +56,21 @@ public:
   /// the examples below.
   ///
   ///     Permissions example({
+  ///         // Permission to read charge only if it has been set
+  ///         {"species:he:charge", {Permissions::AllRegions, Permissions::Nowhere,
+  ///         Permissions::Nowhere,, Permissions::Nowhere}},
   ///         // Read permission for atomic mass
-  ///         {"species:he:AA", {Permissions::AllRegions, Permissions::Nowhere,
-  ///         Permissions::Nowhere}},
+  ///         {"species:he:AA", {Permissions::Nowhere, Permissions::AllRegions,
+  ///         Permissions::Nowhere, Permissions::Nowhere}},
   ///         // Read permissions for density
-  ///         {"species:he:density", {Permissions::AllRegions, Permissions::Nowhere,
-  ///         Permissions::Nowhere}},
+  ///         {"species:he:density", {Permissions::Nowhere, Permissions::AllRegions,
+  ///         Permissions::Nowhere, Permissions::Nowhere}},
   ///         // Read and write permissions for pressure in the interior region
-  ///         {"species:he:pressure", {Permissions::Nowhere, Permissions::Interior,
-  ///         Permissions::Nowhere}},
+  ///         {"species:he:pressure", {Permissions::Nowhere, Permissions::Nowhere,
+  ///         Permissions::Interior, Permissions::Nowhere}},
   ///         // Set the final value for collision frequency
   ///         {"species:he:collision_frequency", {Permissions::Nowhere,
-  ///         Permissions::Nowhere, Permissions::AllRegions}}
+  ///         Permissions::Nowhere, Permissions::Nowhere, Permissions::AllRegions}}
   ///     });
   ///
   /// If a variable is not included in the initialiser list then it is
@@ -80,8 +88,8 @@ public:
   /// frequency for every species you would write:
   ///
   ///     Permissions example2({
-  ///         {"species:{name}:collision_frequency", {Permissions::AllRegions,
-  ///         Permissions::Nowhere, Permissions::Nowhere}}
+  ///         {"species:{name}:collision_frequency", {Permissions::Nowhere,
+  ///         Permissions::AllRegions, Permissions::Nowhere, Permissions::Nowhere}}
   ///     });
   ///     example2.substitute("name", {"he+", "d+", "e", "d", "he"});
   ///
@@ -93,14 +101,14 @@ public:
   /// everywhere but only writeable in the interior, you would use
   ///
   ///     permissions.setAccess("species:he:density",
-  ///                           {Permissions::AllRegions, Permissions::Interior,
-  ///                           Permissions::Nowhere})
-  ///
+  ///                           {Permissions::Nowhere, Permissions::AllRegions,
+  ///                           Permissions::Interior, Permissions::Nowhere})
+  /// 0
   /// or, equivalently,
   ///
   ///     permissions.setAccess("species:he:density",
-  ///                           {Permissions::Boundary, Permissions::Interior,
-  ///                           Permissions::Nowhere});
+  ///                           {Permissions::Nowhere, Permissions::Boundary,
+  ///                           Permissions::Interior, Permissions::Nowhere});
   ///
   /// As in the constructor, if the variable name is just a section in
   /// an Options object then the permissions apply to all children of
@@ -114,10 +122,10 @@ public:
   /// for every species.
   ///
   ///     Permissions example({
-  ///         {"species:{name}:density", {Permissions::AllRegions, Permissions::Nowhere,
-  ///         Permissions::Nowhere}},
+  ///         {"species:{name}:density", {Permissions::Nowhere, Permissions::AllRegions,
+  ///         Permissions::Nowhere, Permissions::Nowhere}},
   ///         {"species:{name}:collision_frequency", {Permissions::Nowhere,
-  ///         Permissions::AllRegions, Permissions::Nowhere}},
+  ///         Permissions::Nowhere, Permissions::AllRegions, Permissions::Nowhere}},
   ///     });
   ///     example.substitute("name", {"d", "d+", "t", "t+", "he", "he+", "c", "c+", "e"});
   ///
@@ -125,7 +133,7 @@ public:
                   const std::vector<std::string>& substitutions);
 
   /// Check whether users are allowed to access this variable to the
-  /// given permission level, in the given region. The secon item
+  /// given permission level, in the given region. The second item
   /// returned indicates the name of the variable or section from
   /// which the access rights are derived. If there is no matching
   /// section then it will be an empty string.
@@ -134,17 +142,20 @@ public:
                                          Regions region = AllRegions) const;
 
   /// Get the highest permission level with which the given variable
-  /// can be accessed in the given region.
-  PermissionTypes getHighestPermission(const std::string& variable,
-                                       Regions region = AllRegions) const;
+  /// can be accessed in the given region. The second item
+  /// returned indicates the name of the variable or section from
+  /// which the access rights are derived. If there is no matching
+  /// section then it will be an empty string.
+  std::pair<PermissionTypes, std::string>
+  getHighestPermission(const std::string& variable, Regions region = AllRegions) const;
 
   /// Get a set of variables and regions for which there is the
   /// specified level of permission to access. If ``highestOnly`` is
   /// true then it will only include variables/regions for which this
   /// is the highest permission.
   ///
-  ///     Permissions example({"test", {Permissions::AllRegions, Permissions::AllRegions,
-  ///     Permissions:Nowhere}});
+  ///     Permissions example({"test", {Permissions::Nowhere, Permissions::AllRegions,
+  ///     Permissions::AllRegions, Permissions:Nowhere}});
   ///     // Print variables which can be read
   ///     for (const auto [varname, region] :
   ///     example.getVariablesWithPermission(Permissions::Read, false))
