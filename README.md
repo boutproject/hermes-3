@@ -2,6 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-GPL-blue.svg)](https://img.shields.io/badge/license-GPL-blue.svg)
 ![Build status](https://github.com/bendudson/hermes-3/workflows/Tests/badge.svg)
+[![codecov](https://codecov.io/gh/boutproject/hermes-3/graph/badge.svg?token=R8CCYL15GN&flag=unit)](https://codecov.io/gh/boutproject/hermes-3)
 
 Hermes-3 is a multifluid plasma simulation model for transport and
 turbulence in the edge of magnetically confined plasmas, such as
