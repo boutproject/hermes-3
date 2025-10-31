@@ -212,15 +212,35 @@ configure_file(
 #                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
 
 # Tests
+option(HERMES_COPY_TESTS_TO_BUILD "Copy the tests to the build directory" ON)
+if(HERMES_COPY_TESTS_TO_BUILD)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+endif()
+
+# Tests
 option(HERMES_TESTS "Build the tests" ON)
 if(HERMES_TESTS)
   enable_testing()
 
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
-    add_test(NAME ${TESTNAME}
-           WORKING_DIRECTORY tests/integrated/${TESTNAME}
-           COMMAND runtest)
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+      set(INT_TEST_DEST
+          ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
+      # Make copies of the test exec and input file in the build directory and keep them up to date
+      configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
+      configure_file(${INT_TEST_SRC}/data/BOUT.inp ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+    else()
+      set(INT_TEST_DEST
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+    endif()
+    add_test(
+      NAME ${TESTNAME}
+      WORKING_DIRECTORY ${INT_TEST_DEST}
+      COMMAND runtest)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
@@ -233,7 +253,9 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave)
   hermes_add_integrated_test(alfven-wave)
-
+  hermes_add_integrated_test(1D-density-fci)
+  hermes_add_integrated_test(1D-pressure-fci)
+    
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)
