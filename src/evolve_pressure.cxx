@@ -45,7 +45,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
 
-  isMMS = alloptions["solver"]["mms"].withDefault<bool>(false);
+  isMMS = options["mms"].withDefault<bool>(false);
   
   if (evolve_log) {
     // Evolve logarithm of pressure
@@ -106,6 +106,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   auto& p_options = alloptions[std::string("P") + name];
   source_normalisation = SI::qe * Nnorm * Tnorm * Omega_ci;   // [Pa/s] or [W/m^3] if converted to energy
   time_normalisation = 1./Omega_ci;   // [s]
+
+  
+  disable_ddt = p_options["disable_ddt"]
+    .withDefault<bool>(false);
   
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
@@ -305,7 +309,6 @@ void EvolvePressure::finally(const Options& state) {
     if (p_div_v) {
       // Use the P * Div(V) form
       ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
-
       // Work done. This balances energetically a term in the momentum equation
       ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
 
@@ -511,6 +514,12 @@ void EvolvePressure::finally(const Options& state) {
       flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
   }
+
+  if (disable_ddt){
+    ddt(P) = 0.0;
+  }
+
+  
 }
 
 void EvolvePressure::outputVars(Options& state) {
