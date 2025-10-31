@@ -14,7 +14,7 @@ defaults:
 
 jobs:
   cmake_tests:
-    name: ${{ matrix.config.name }}
+    name: ${{ matrix.config.name }}, ${{ matrix.build_type.test_type }} tests
     runs-on: ${{ matrix.config.os }}
     env:
       OMP_NUM_THREADS: ${{ matrix.config.omp_num_threads }}

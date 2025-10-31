@@ -234,6 +234,11 @@ if(HERMES_COPY_JSON_DATABASE_TO_BUILD)
 endif()
 
 option(HERMES_COPY_TESTS_TO_BUILD "Copy the tests to the build directory" ON)
+if(HERMES_COPY_TESTS_TO_BUILD)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+endif()
 
 # Tests
 option(HERMES_TESTS "Build the tests" ON)
