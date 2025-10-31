@@ -7,25 +7,10 @@ ignore:
 codecov:
   branch: master
 
-# coverage:
-#   status:
-#     project:
-#       default:
-#         target: auto
-
-# Only unit test coverage should be used to evaluate whether a branch
-# is suitable for merging
-flag_management:
-  default_rules:
-    statuses:
-      - type: project
+coverage:
+  status:
+    project:
+      default:
         target: auto
-        information: true
-  individual_flags:
-    - name: unit
-      statuses:
-        - type: project
-          # Once coverage gets high enough (e.g., over 90%) we probably
-          # want to change this and introduce some leniency with the
-          # "threshold" setting
-          target: auto
+        flags:
+          - unit

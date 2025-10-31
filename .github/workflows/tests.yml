@@ -23,6 +23,8 @@ jobs:
       MPIRUN: mpiexec -np
       LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
       BOUT_CONFIGURE_OPTIONS: ${{ matrix.config.configure_options }}
+      BUILD_TYPE: ${{ matrix.build_type.cmake_build_type }}
+      TEST_TYPE: ${{ matrix.build_type.test_type }}
     strategy:
       fail-fast: false
       matrix:
@@ -30,12 +32,19 @@ jobs:
           - name: "CMake default options"
             os: ubuntu-22.04
             configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DHERMES_COVERAGE=ON"
+        build_type:
+          - cmake_build_type: Debug
+            test_type: unit
+          - cmake_build_type: Release
+            test_type: integration
 
     steps:
       - name: Job information
         run: |
           echo Build: ${{ matrix.config.name }}, ${{ matrix.config.os }}
           echo Configure options: ${{ matrix.config.configure_options }}
+          echo Build type: ${{ matrix.build_type.cmake_build_type }}
+          echo Tests to run: ${{ matrix.build_type.test_type }}
 
       - name: Install dependencies
         run: sudo apt update &&
@@ -59,7 +68,7 @@ jobs:
           submodules: true
 
       - name: Build
-        run: cmake . -B build $BOUT_CONFIGURE_OPTIONS &&
+        run: cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE  $BOUT_CONFIGURE_OPTIONS &&
              cmake --build build -j4
 
       - name: Install pip packages
@@ -67,20 +76,11 @@ jobs:
           ./.pip_install_for_tests.sh 'netcdf4~=1.5' boutdata boututils
           # Add the pip install location to the runner's PATH
           echo ~/.local/bin >> $GITHUB_PATH
-      - name: Run unit tests
+      - name: Run tests
         run: cd build &&
-             ctest --output-on-failure --timeout 300 -L unit
-      - name: Upload unit test coverage data
+             ctest --output-on-failure --timeout 300 -L $TEST_TYPE
+      - name: Upload test coverage data
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          flags: unit
-      - name: Run integration tests
-        run: cd build &&
-             find -name "*.gcda" -exec rm {} \; &&
-             ctest --output-on-failure --timeout 300 -L integration
-      - name: Upload integration test coverage data
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          flags: integration
+          flags: ${{ matrix.build_type.test_type }}
