@@ -1,0 +1,40 @@
+# run a simulation with this file using
+# $ OMP_NUM_THREADS=1 mpirun -np 8 ./bout-particle-push -d particle-push-slab
+# postprocess with 
+# $ python3 path/to/the/particle_animater.py hypnotoad_dmplex_mesh_output.h5 traj_reflection_dmplex_example.h5part
+[mesh]
+
+# if using a Hypnotoad mesh, uncomment below
+# file = /path/to/hypnotoad/grid/nc/file
+
+# Uses the full cxx implementation of DMPlex
+# calculation to interface to NESO-Particles,
+# removing need for python preprocessing.
+# Needed for slab example to run.
+use_cxx_ivertex=true
+
+# if using a slab, uncomment and
+# modify nx, ny, below
+nx = 40  # X grid size
+ny = 36  # Y grid size
+
+dx = 1.0/(nx-4)  # X mesh spacing
+dy = 2*pi/ny  # Y mesh spacing
+
+Rxy_corners = x - 0.5*dx
+Rxy_lower_right_corners = x + 0.5*dx
+Rxy_upper_left_corners = x - 0.5*dx
+Rxy_upper_right_corners = x + 0.5*dx
+Zxy_corners = y - 0.5*dy
+Zxy_lower_right_corners = y - 0.5*dy
+Zxy_upper_left_corners = y + 0.5*dy
+Zxy_upper_right_corners = y + 0.5*dy
+
+phi = 0
+ex = 0
+ey = 0
+[neso_particles]
+
+npart_per_cell = 1
+dt = 0.005
+nsteps = 500
