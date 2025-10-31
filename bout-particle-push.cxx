@@ -298,14 +298,14 @@ int main(int argc, char **argv) {
     }
   }
   // Perform Allreduce (sum) to get knowledge of vertices to all ranks
-  MPI_Allreduce(local_R_lower_left_vertices.data(), global_R_lower_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(local_Z_lower_left_vertices.data(), global_Z_lower_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(local_R_lower_right_vertices.data(), global_R_lower_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(local_Z_lower_right_vertices.data(), global_Z_lower_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(local_R_upper_right_vertices.data(), global_R_upper_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(local_Z_upper_right_vertices.data(), global_Z_upper_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(local_R_upper_left_vertices.data(), global_R_upper_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(local_Z_upper_left_vertices.data(), global_Z_upper_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPICHK(MPI_Allreduce(local_R_lower_left_vertices.data(), global_R_lower_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
+  MPICHK(MPI_Allreduce(local_Z_lower_left_vertices.data(), global_Z_lower_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
+  MPICHK(MPI_Allreduce(local_R_lower_right_vertices.data(), global_R_lower_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
+  MPICHK(MPI_Allreduce(local_Z_lower_right_vertices.data(), global_Z_lower_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
+  MPICHK(MPI_Allreduce(local_R_upper_right_vertices.data(), global_R_upper_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
+  MPICHK(MPI_Allreduce(local_Z_upper_right_vertices.data(), global_Z_upper_right_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
+  MPICHK(MPI_Allreduce(local_R_upper_left_vertices.data(), global_R_upper_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
+  MPICHK(MPI_Allreduce(local_Z_upper_left_vertices.data(), global_Z_upper_left_vertices.data(), N_nonunique_vertices, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
   // if (mpi_rank == 0) {
   //     std::cout << "Result of Allreduce (sum): ";
   //     for (double val : global_R_lower_left_vertices) {
