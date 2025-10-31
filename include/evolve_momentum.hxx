@@ -40,7 +40,7 @@ private:
   Field3D V;            ///< Species parallel velocity
 
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
-
+  bool disable_ddt;
   bool bndry_flux;      // Allow flows through boundaries?
   bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;  // Include ExB flow in Y direction?
