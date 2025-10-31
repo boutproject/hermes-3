@@ -12,25 +12,13 @@
 class GuardedOptions {
 public:
   GuardedOptions() = default;
-  // GuardedOptions(GuardedOptions &other) = default;
-  // GuardedOptions(GuardedOptions &&other) = default;
-  
+
   /// Create a guarded options object which applies the specified
   /// permissions to the underlying options object. Note that the
   /// variable names used in the Permissions object must always be the
   /// full names, relative to the highest-level of the Options
   /// hierarchy.
-  GuardedOptions(Options* options, Permissions* permissions)
-      : options(options), permissions(permissions),
-        unread_variables(std::make_shared<std::map<std::string, Permissions::Regions>>()),
-        unwritten_variables(
-            std::make_shared<std::map<std::string, Permissions::Regions>>()) {
-    if (permissions != nullptr) {
-      *unread_variables = permissions->getVariablesWithPermission(Permissions::Read);
-      *unwritten_variables =
-          permissions->getVariablesWithPermission(Permissions::Write, false);
-    }
-  }
+  GuardedOptions(Options* options, Permissions* permissions);
 
   /// Get a subsection or value. The result will also be wrapped in a
   /// GuardedOptions object, with the same permissions as this one.

@@ -4,24 +4,40 @@
 class GuardedOptionsTests : public testing::Test {
 protected:
   GuardedOptionsTests()
-      : permissions(
-          {{"species:he:density",
-            {Permissions::AllRegions, Permissions::Nowhere, Permissions::Nowhere}},
-           {"species:he:pressure",
-            {Permissions::Nowhere, Permissions::Interior, Permissions::Nowhere}},
-           {"species:he:collision_frequency",
-            {Permissions::Nowhere, Permissions::Nowhere, Permissions::AllRegions}},
-           {"species:he:velocity",
-            {Permissions::Boundaries, Permissions::Nowhere, Permissions::Nowhere}},
-           {"species:d",
-            {Permissions::AllRegions, Permissions::Nowhere, Permissions::Nowhere}},
-           {"species:d:pressure",
-            {Permissions::Nowhere, Permissions::Interior, Permissions::Nowhere}},
-           {"species:d:collision_frequencies",
-            {Permissions::Nowhere, Permissions::Boundaries, Permissions::Nowhere}}}),
+      : permissions({{"species:he:AA",
+                      {Permissions::AllRegions, Permissions::Nowhere,
+                       Permissions::Nowhere, Permissions::Nowhere}},
+                     {"species:he:charge",
+                      {Permissions::AllRegions, Permissions::Nowhere,
+                       Permissions::Nowhere, Permissions::Nowhere}},
+                     {"species:he:density",
+                      {Permissions::Nowhere, Permissions::AllRegions,
+                       Permissions::Nowhere, Permissions::Nowhere}},
+                     {"species:he:pressure",
+                      {Permissions::Nowhere, Permissions::Nowhere, Permissions::Interior,
+                       Permissions::Nowhere}},
+                     {"species:he:collision_frequency",
+                      {Permissions::Nowhere, Permissions::Nowhere, Permissions::Nowhere,
+                       Permissions::AllRegions}},
+                     {"species:he:velocity",
+                      {Permissions::Nowhere, Permissions::Boundaries,
+                       Permissions::Nowhere, Permissions::Nowhere}},
+                     {"species:d",
+                      {Permissions::Nowhere, Permissions::AllRegions,
+                       Permissions::Nowhere, Permissions::Nowhere}},
+                     {"species:d:pressure",
+                      {Permissions::Nowhere, Permissions::Nowhere, Permissions::Interior,
+                       Permissions::Nowhere}},
+                     {"species:d:collision_frequencies",
+                      {Permissions::Nowhere, Permissions::Nowhere,
+                       Permissions::Boundaries, Permissions::Nowhere}}}),
         opts({{"species",
                {{"he",
-                 {{"temperature", 0}, {"density", 1}, {"pressure", 2}, {"velocity", 4}}},
+                 {{"charge", 0},
+                  {"temperature", 0},
+                  {"density", 1},
+                  {"pressure", 2},
+                  {"velocity", 4}}},
                 {"d",
                  {{"pressure", 5},
                   {"velocity", 6},
@@ -34,6 +50,7 @@ protected:
 };
 
 TEST_F(GuardedOptionsTests, TestGet) {
+  EXPECT_EQ(guarded_opts["species:he:charge"].get(), 0);
   EXPECT_EQ(guarded_opts["species:he:density"].get(), 1);
   EXPECT_EQ(guarded_opts["species:he:density"].get(Permissions::Boundaries), 1);
   EXPECT_EQ(guarded_opts["species:he:pressure"].get(Permissions::Interior), 2);
@@ -53,6 +70,7 @@ TEST_F(GuardedOptionsTests, TestGet) {
 }
 
 TEST_F(GuardedOptionsTests, TestGetException) {
+  EXPECT_THROW(guarded_opts["species:he:AA"].get(), BoutException);
   EXPECT_THROW(guarded_opts["species"]["he"]["temperature"].get(), BoutException);
   EXPECT_THROW(guarded_opts["species:he:pressure"].get(), BoutException);
   EXPECT_THROW(guarded_opts["species"]["he"]["velocity"].get(Permissions::Interior),
@@ -125,10 +143,12 @@ TEST_F(GuardedOptionsTests, TestGetWritableException) {
 
 TEST_F(GuardedOptionsTests, TestUnreadItems) {
   std::map<std::string, Permissions::Regions>
-      expected1 = {{"species:he:density", Permissions::AllRegions},
+      expected1 = {{"species:he:charge", Permissions::AllRegions},
+                   {"species:he:density", Permissions::AllRegions},
                    {"species:he:velocity", Permissions::Boundaries},
                    {"species:d", Permissions::AllRegions}},
-      expected2 = {{"species:he:density", Permissions::Boundaries},
+      expected2 = {{"species:he:charge", Permissions::AllRegions},
+                   {"species:he:density", Permissions::Boundaries},
                    {"species:he:velocity", Permissions::Boundaries},
                    {"species:d", Permissions::AllRegions}},
       expected3 = {{"species:d", Permissions::AllRegions}}, expected4;
@@ -141,6 +161,7 @@ TEST_F(GuardedOptionsTests, TestUnreadItems) {
       Permissions::Boundaries);
   EXPECT_EQ(guarded_opts.unreadItems(), expected2);
 
+  guarded_opts["species"]["he"]["charge"].get();
   guarded_opts["species"]["he"]["density"].get();
   guarded_opts["species:he:velocity"].get(Permissions::Boundaries);
   EXPECT_EQ(guarded_opts.unreadItems(), expected3);
