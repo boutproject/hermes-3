@@ -7,27 +7,19 @@ auto make_permission = std::make_pair<Permissions::PermissionTypes, std::string>
 
 TEST(PermissionsTests, TestCanAccess) {
   Permissions example({
-      {"species:he:charge",
-       {Permissions::AllRegions, Permissions::Nowhere, Permissions::Nowhere,
-        Permissions::Nowhere}},
-      {"species:he:density",
-       {Permissions::Nowhere, Permissions::AllRegions, Permissions::Nowhere,
-        Permissions::Nowhere}},
+      readIfSet("species:he:charge"),
+      readOnly("species:he:density"),
       // Read and write permissions for pressure in the interior region
       {"species:he:pressure",
        {Permissions::Nowhere, Permissions::Nowhere, Permissions::Interior,
         Permissions::Nowhere}},
       // Set the final value for collision frequency
-      {"species:he:collision_frequency",
-       {Permissions::Nowhere, Permissions::Nowhere, Permissions::Nowhere,
-        Permissions::AllRegions}},
+      writeFinal("species:he:collision_frequency"),
       // Only allow reading of boundary velocity
       {"species:he:velocity",
        {Permissions::Nowhere, Permissions::Boundaries, Permissions::Nowhere,
         Permissions::Nowhere}},
-      {"species:d",
-       {Permissions::Nowhere, Permissions::AllRegions, Permissions::Nowhere,
-        Permissions::Nowhere}},
+      readOnly("species:d"),
       {"species:d:pressure",
        {Permissions::Nowhere, Permissions::Nowhere, Permissions::Interior,
         Permissions::Nowhere}},
