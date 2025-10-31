@@ -11,6 +11,7 @@
 #include <iostream>
 #include <petscviewerhdf5.h>
 #include <vector>
+#include <fmt/core.h>
 
 #ifndef NESO_PARTICLES_PETSC
 static_assert(false, "NESO-Particles was installed without PETSc support.");
@@ -51,6 +52,34 @@ void collect_unique_points(std::vector<double>& global_Z_vertices_buffer,
   }
 }
 
+void RZ_to_ivertex_vector(Field2D& ivertex_corners,
+      std::vector<double>& global_Z_vertices,
+      std::vector<double>& global_R_vertices,
+      const double& zero,
+      Mesh*& bout_mesh,
+      Field2D& Rxy_corners,
+      Field2D& Zxy_corners) {
+  int Nvertex=global_Z_vertices.size();
+  bool index_found;
+  // loop over points that are not guard cells
+  for (int ix = bout_mesh->xstart; ix<= bout_mesh->xend; ix++) {
+    for (int iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
+      index_found = false;
+      for (int iv=0; iv<Nvertex; iv++) {
+        if (abs(global_Z_vertices.at(iv) - Zxy_corners(ix,iy)) < zero &&
+            abs(global_R_vertices.at(iv) - Rxy_corners(ix,iy)) < zero ) {
+          ivertex_corners(ix,iy) = iv;
+          index_found = true;
+          // we have determined that the point is not unique
+        }
+      }
+      if (!index_found) {
+        std::cout << fmt::format("ivertex not found for ix = {} iy = {}",ix,iy);
+      }
+    }
+  }
+}
+
 
 
 using namespace NESO::Particles;
@@ -64,6 +93,7 @@ int main(int argc, char **argv) {
   // to permit compilation as is
   BoutInitialise(argc, argv);
   Mesh* mesh = Mesh::create(&Options::root()["mesh"]);
+  bool use_cxx_ivertex = Options::root()["mesh"]["use_cxx_ivertex"].withDefault(false);
   mesh->load();
   Coordinates *coord = mesh->getCoordinates();
   Field2D Rxy_lower_left_corners;
@@ -230,7 +260,24 @@ int main(int argc, char **argv) {
       std::cout << std::endl;
       std::cout << "N_unique=" << N_unique << std::endl;
   }
-
+  // ivertex arrays made in cxx, initialise with -1 index
+  Field2D ivertex_lower_left_corners_cxx{-1,mesh};
+  Field2D ivertex_lower_right_corners_cxx{-1,mesh};
+  Field2D ivertex_upper_right_corners_cxx{-1,mesh};
+  Field2D ivertex_upper_left_corners_cxx{-1,mesh};
+  // now fill ivertex_corners arrays
+  RZ_to_ivertex_vector(ivertex_lower_left_corners_cxx,
+      global_Z_vertices, global_R_vertices, zero,
+      mesh, Rxy_lower_left_corners, Zxy_lower_left_corners);
+  RZ_to_ivertex_vector(ivertex_lower_right_corners_cxx,
+      global_Z_vertices, global_R_vertices, zero,
+      mesh, Rxy_lower_right_corners, Zxy_lower_right_corners);
+  RZ_to_ivertex_vector(ivertex_upper_right_corners_cxx,
+      global_Z_vertices, global_R_vertices, zero,
+      mesh, Rxy_upper_right_corners, Zxy_upper_right_corners);
+  RZ_to_ivertex_vector(ivertex_upper_left_corners_cxx,
+      global_Z_vertices, global_R_vertices, zero,
+      mesh, Rxy_upper_left_corners, Zxy_upper_left_corners);
 
   // First we setup the topology of the mesh.
   std::vector<PetscReal> Z_vertices(4);
