@@ -22,10 +22,10 @@ def gridname(ny):
 shell("ln -s ../../../build/hermes-3 hermes-3")
 
 # List of NY values to use
-nylist = [16, 32, 64, 128] #, 640, 1280, 2560, 5120]
+nylist = [32, 64, 128] #, 640, 1280, 2560, 5120]
 
-nout = 1
-timestep = 0.000001
+nout = 20
+timestep = 1e4/nout
 
 nproc = 1
 
@@ -56,7 +56,7 @@ for ny in nylist:
     # Collect data
     for var in varnames:
       E = collect("E_"+var, tind=[nout,nout], path="data", info=False)
-      E = E[0,0,:,0]
+      E = E[0,2:-2,2:-2,0]
 
       l2 = sqrt(mean(E**2))
       linf = max(abs(E))
