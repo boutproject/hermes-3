@@ -28,33 +28,6 @@ struct FixedTemperature : public Component {
       .withDefault<bool>(false);
   }
 
-  /// Sets in the state the temperature and pressure of the species
-  ///
-  /// Inputs
-  /// - species
-  ///   - <name>
-  ///     - density (optional)
-  ///
-  /// Sets in the state
-  ///
-  /// - species
-  ///   - <name>
-  ///     - temperature
-  ///     - pressure (if density is set)
-  void transform(Options& state) override {
-    AUTO_TRACE();
-    auto& species = state["species"][name];
-
-    set(species["temperature"], T);
-
-    // If density is set, also set pressure
-    if (isSetFinalNoBoundary(species["density"])) {
-      // Note: The boundary of N may not be set yet
-      auto N = GET_NOBOUNDARY(Field3D, species["density"]);
-      P = N * T;
-      set(species["pressure"], P);
-    }
-  }
 
   void outputVars(Options& state) override {
     AUTO_TRACE();
@@ -92,6 +65,34 @@ private:
   Field3D P; ///< Species pressure (normalised)
 
   bool diagnose; ///< Output additional fields
+
+  /// Sets in the state the temperature and pressure of the species
+  ///
+  /// Inputs
+  /// - species
+  ///   - <name>
+  ///     - density (optional)
+  ///
+  /// Sets in the state
+  ///
+  /// - species
+  ///   - <name>
+  ///     - temperature
+  ///     - pressure (if density is set)
+  void transform(GuardedOptions& state) override {
+    AUTO_TRACE();
+    auto& species = state["species"][name];
+
+    set(species["temperature"], T);
+
+    // If density is set, also set pressure
+    if (isSetFinalNoBoundary(species["density"])) {
+      // Note: The boundary of N may not be set yet
+      auto N = GET_NOBOUNDARY(Field3D, species["density"]);
+      P = N * T;
+      set(species["pressure"], P);
+    }
+  }
 };
 
 namespace {

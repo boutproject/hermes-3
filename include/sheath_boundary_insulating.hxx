@@ -13,6 +13,15 @@
 struct SheathBoundaryInsulating : public Component {
   SheathBoundaryInsulating(std::string name, Options &options, Solver *);
 
+private:
+  BoutReal Ge; // Secondary electron emission coefficient
+  BoutReal sin_alpha; // sin of angle between magnetic field and wall.
+  
+  bool lower_y; // Boundary on lower y?
+  bool upper_y; // Boundary on upper y?
+
+  BoutReal gamma_e; ///< Electron sheath heat transmission
+
   ///
   /// Inputs
   /// - species
@@ -56,15 +65,7 @@ struct SheathBoundaryInsulating : public Component {
   /// Note that phi in the domain will not be set, so will be invalid data.
   ///
   ///
-  void transform(Options &state) override;
-private:
-  BoutReal Ge; // Secondary electron emission coefficient
-  BoutReal sin_alpha; // sin of angle between magnetic field and wall.
-  
-  bool lower_y; // Boundary on lower y?
-  bool upper_y; // Boundary on upper y?
-
-  BoutReal gamma_e; ///< Electron sheath heat transmission
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

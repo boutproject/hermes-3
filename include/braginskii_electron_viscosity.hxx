@@ -24,6 +24,13 @@ struct BraginskiiElectronViscosity : public Component {
   ///     Flux limiter coefficient. < 0 means no limiter
   BraginskiiElectronViscosity(std::string name, Options& alloptions, Solver*);
 
+  void outputVars(Options &state) override;
+
+private:
+  BoutReal eta_limit_alpha; ///< Flux limit coefficient
+  bool diagnose;            ///< Output viscosity diagnostic?
+  Field3D viscosity;        ///< The viscosity momentum source
+
   /// Inputs
   /// - species
   ///   - e
@@ -36,14 +43,7 @@ struct BraginskiiElectronViscosity : public Component {
   ///   - e
   ///     - momentum_source
   ///
-  void transform(Options& state) override;
-
-  void outputVars(Options& state) override;
-
-private:
-  BoutReal eta_limit_alpha; ///< Flux limit coefficient
-  bool diagnose;            ///< Output viscosity diagnostic?
-  Field3D viscosity;        ///< The viscosity momentum source
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

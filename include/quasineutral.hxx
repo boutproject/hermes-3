@@ -25,15 +25,6 @@ struct Quasineutral : public Component {
   ///
   Quasineutral(std::string name, Options &alloptions, Solver *UNUSED(solver));
 
-  /// 
-  /// Sets in state
-  /// - species
-  ///   - <name>
-  ///     - density
-  ///     - charge
-  ///     - AA
-  void transform(Options &state) override;
-
   /// Get the final density for output
   /// including any boundary conditions applied
   void finally(const Options &state) override;
@@ -45,6 +36,15 @@ private:
   BoutReal AA;      ///< Atomic mass
 
   Field3D density;  ///< The density (for writing to output)
+
+  /// 
+  /// Sets in state
+  /// - species
+  ///   - <name>
+  ///     - density
+  ///     - charge
+  ///     - AA
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

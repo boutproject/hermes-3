@@ -47,23 +47,23 @@ BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions,
     .withDefault(false);
 }
 
-void BinormalSTPM::transform(Options& state) {
+void BinormalSTPM::transform(GuardedOptions& state) {
   AUTO_TRACE();
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
     const auto& species_name = kv.first;
 
-    Options& species = allspecies[species_name];
+    GuardedOptions species = allspecies[species_name];
     auto AA = get<BoutReal>(species["AA"]);
 
-    const Field3D N = species.isSet("density")
+    const Field3D N = IS_SET(species["density"])
       ? GET_NOBOUNDARY(Field3D, species["density"])
       : 0.0;
-    const Field3D T = species.isSet("temperature")
+    const Field3D T = IS_SET(species["temperature"])
       ? GET_NOBOUNDARY(Field3D, species["temperature"])
       : 0.0;
-    const Field3D NV = species.isSet("momentum")
+    const Field3D NV = IS_SET(species["momentum"])
       ? GET_NOBOUNDARY(Field3D, species["momentum"])
       : 0.0;
     

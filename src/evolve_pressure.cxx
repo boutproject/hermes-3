@@ -159,7 +159,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .withDefault<bool>(true);
 }
 
-void EvolvePressure::transform(Options& state) {
+void EvolvePressure::transform(GuardedOptions& state) {
   AUTO_TRACE();
 
   if (evolve_log) {
@@ -203,7 +203,7 @@ void EvolvePressure::transform(Options& state) {
     }
   }
 
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
 
   // Calculate temperature
   // Not using density boundary condition

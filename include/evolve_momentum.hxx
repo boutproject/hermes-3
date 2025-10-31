@@ -7,13 +7,6 @@
 /// Evolve parallel momentum
 struct EvolveMomentum : public Component {
   EvolveMomentum(std::string name, Options &options, Solver *solver);
-
-  /// This sets in the state
-  /// - species
-  ///   - <name>
-  ///     - momentum
-  ///     - velocity  if density is defined
-  void transform(Options &state) override;
   
   /// Calculate ddt(NV).
   ///
@@ -54,6 +47,13 @@ private:
   bool diagnose; ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D flow_xlow, flow_ylow; ///< Momentum flow diagnostics
+
+  /// This sets in the state
+  /// - species
+  ///   - <name>
+  ///     - momentum
+  ///     - velocity  if density is defined
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

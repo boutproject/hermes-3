@@ -10,6 +10,9 @@
 #include <string>
 #include <memory>
 
+#include "guarded_options.hxx"
+#include "permissions.hxx"
+
 class Solver; // Time integrator
 
 /// Interface for a component of a simulation model
@@ -20,9 +23,10 @@ class Solver; // Time integrator
 struct Component {
   virtual ~Component() {}
 
-  /// Modify the given simulation state
-  /// All components must implement this function
-  virtual void transform(Options &state) = 0;
+  /// Modify the given simulation state. This method will wrap the
+  /// state in a GuardedOptions object and pass that to the private
+  /// implementation of transform provided by each component.
+  void transform(Options &state);
   
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
@@ -47,6 +51,17 @@ struct Component {
                                            const std::string &name, // The species/name for this instance
                                            Options &options,  // Component settings: options[name] are specific to this component
                                            Solver *solver); // Time integration solver
+
+protected:
+  /// Information on which state variables the transform method will read and write
+  Permissions state_variable_access;
+
+private:
+  /// Modify the given simulation state. All components must
+  /// implement this function. It will only allow the reading
+  /// from/writing to state variables with the appropriate permissiosn
+  /// in `state_variable_access`.
+  virtual void transform(GuardedOptions &state) = 0;
 };
 
 ///////////////////////////////////////////////////////////////////
@@ -96,6 +111,10 @@ T getNonFinal(const Options& option) {
                         option.str(), typeid(T).name());
   }
 }
+template<typename T>
+T getNonFinal(const GuardedOptions option) {
+  return getNonFinal<T>(option.get());
+}
 
 #define TOSTRING_(x) #x
 #define TOSTRING(x) TOSTRING_(x)
@@ -120,11 +139,16 @@ T get(const Options& option, const std::string& location = "") {
 #endif
   return getNonFinal<T>(option);
 }
+template<typename T>
+T get(const GuardedOptions option, const std::string& location = "") {
+  return get<T>(option.get(), location);
+}
 
 /// Check if an option can be fetched
 /// Sets the final flag so setting the value
 /// afterwards will lead to an error
 bool isSetFinal(const Options& option, const std::string& location = "");
+bool isSetFinal(const GuardedOptions option, const std::string& location = "");
 
 #if CHECKLEVEL >= 1
 /// A wrapper around isSetFinal() which captures debugging information
@@ -142,6 +166,7 @@ bool isSetFinal(const Options& option, const std::string& location = "");
 /// Sets the final flag so setting the value in the domain
 /// afterwards will lead to an error
 bool isSetFinalNoBoundary(const Options& option, const std::string& location = "");
+bool isSetFinalNoBoundary(const GuardedOptions option, const std::string& location = "");
 
 #if CHECKLEVEL >= 1
 /// A wrapper around isSetFinalNoBoundary() which captures debugging information
@@ -186,6 +211,10 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
   const_cast<Options&>(option).attributes["final-domain"] = location;
 #endif
   return getNonFinal<T>(option);
+}
+template<typename T>
+T getNoBoundary(const GuardedOptions option, const std::string& location = "") {
+  return getNoBoundary<T>(option.get(Permissions::Interior), location);
 }
 
 #if CHECKLEVEL >= 1
@@ -260,6 +289,11 @@ Options& set(Options& option, T value) {
   option.force(std::move(value));
   return option;
 }
+template<typename T>
+GuardedOptions set(GuardedOptions option, T value) {
+  set(option.getWritable(), value);
+  return option;
+}
 
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
@@ -279,6 +313,11 @@ Options& setBoundary(Options& option, T value) {
   }
 #endif
   option.force(std::move(value));
+  return option;
+}
+template<typename T>
+GuardedOptions setBoundary(GuardedOptions option, T value) {
+  setBoundary(option.getWritable(Permissions::Boundaries), value);
   return option;
 }
 
@@ -304,6 +343,11 @@ Options& add(Options& option, T value) {
     }
   }
 }
+template<typename T>
+GuardedOptions add(GuardedOptions option, T value) {
+  add(option.getWritable(), value);
+  return option;
+}
 
 /// Add value to a given option. If not already set, treats
 /// as zero and sets the option to the value.
@@ -324,11 +368,20 @@ Options& subtract(Options& option, T value) {
     }
   }
 }
+template<typename T>
+GuardedOptions subtract(GuardedOptions option, T value) {
+  subtract(option.getWritable(), value);
+  return option;
+}
 
 template<typename T>
 void set_with_attrs(Options& option, T value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
   option.force(value);
   option.setAttributes(attrs);
+}
+template<typename T>
+void set_with_attrs(GuardedOptions option, T value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(option.getWritable(), value, attrs);
 }
 
 #if CHECKLEVEL >= 1
@@ -339,6 +392,10 @@ inline void set_with_attrs(Options& option, Field3D value, std::initializer_list
   }
   option.force(value);
   option.setAttributes(attrs);
+}
+template<>
+inline void set_with_attrs(GuardedOptions option, Field3D value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(option.getWritable(), value, attrs);
 }
 #endif
 

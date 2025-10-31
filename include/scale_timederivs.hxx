@@ -13,12 +13,6 @@
 struct ScaleTimeDerivs : public Component {
   ScaleTimeDerivs(std::string, Options&, Solver*) {}
 
-  /// Sets in the state
-  ///
-  /// - scale_timederivs
-  ///
-  void transform(Options &state) override {
-
     auto* coord = bout::globals::mesh->getCoordinates();
     Field2D dl2 = coord->g_22 * SQ(coord->dy);
 
@@ -39,6 +33,12 @@ struct ScaleTimeDerivs : public Component {
   }
 private:
   Field3D scaling; // The scaling factor applied to each cell
+
+  /// Sets in the state
+  ///
+  /// - scale_timederivs
+  ///
+  void transform(GuardedOptions &state) override {
 };
 
 namespace {

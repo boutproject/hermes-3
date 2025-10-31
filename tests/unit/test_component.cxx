@@ -8,7 +8,8 @@
 namespace {
 struct TestComponent : public Component {
   TestComponent(const std::string&, Options&, Solver *) {}
-  void transform(Options &state) override { state["answer"] = 42; }
+private:
+  void transform(GuardedOptions &state) override { state["answer"].getWritable() = 42; }
 };
 
 RegisterComponent<TestComponent> registertestcomponent("testcomponent");

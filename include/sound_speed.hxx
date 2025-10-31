@@ -41,6 +41,13 @@ struct SoundSpeed : public Component {
       temperature_floor /= get<BoutReal>(alloptions["units"]["eV"]);
     }
   }
+
+private:
+  bool electron_dynamics; ///< Include electron sound speed?
+  bool alfven_wave; ///< Include Alfven wave speed?
+  BoutReal beta_norm{0.0}; ///< Normalisation factor for Alfven speed
+  BoutReal temperature_floor; ///< Minimum temperature when calculating speed
+  BoutReal fastest_wave_factor; ///< Multiply the fastest wave by this factor
   
   /// This sets in the state
   /// - sound_speed     The collective sound speed, based on total pressure and total mass density
@@ -53,14 +60,7 @@ struct SoundSpeed : public Component {
   ///     - AA       // Atomic mass
   ///     - pressure
   ///
-  void transform(Options &state) override;
-
-private:
-  bool electron_dynamics; ///< Include electron sound speed?
-  bool alfven_wave; ///< Include Alfven wave speed?
-  BoutReal beta_norm{0.0}; ///< Normalisation factor for Alfven speed
-  BoutReal temperature_floor; ///< Minimum temperature when calculating speed
-  BoutReal fastest_wave_factor; ///< Multiply the fastest wave by this factor
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

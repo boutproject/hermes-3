@@ -36,20 +36,6 @@ struct EvolveEnergy : public Component {
   ///
   EvolveEnergy(std::string name, Options& options, Solver* solver);
 
-  /// Inputs
-  /// - species
-  ///   - <name>
-  ///     - density
-  ///     - velocity
-  ///
-  /// Sets
-  /// - species
-  ///   - <name>
-  ///     - pressure
-  ///     - temperature
-  ///
-  void transform(Options& state) override;
-
   ///
   /// Optional inputs
   ///
@@ -97,6 +83,20 @@ private:
   bool diagnose;      ///< Output additional diagnostics?
   bool enable_precon; ///< Enable preconditioner?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
+
+  /// Inputs
+  /// - species
+  ///   - <name>
+  ///     - density
+  ///     - velocity
+  ///
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - pressure
+  ///     - temperature
+  ///
+  void transform(GuardedOptions& state) override;
 };
 
 namespace {
