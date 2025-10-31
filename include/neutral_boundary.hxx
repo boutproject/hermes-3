@@ -23,18 +23,6 @@
 struct NeutralBoundary : public Component {
   NeutralBoundary(std::string name, Options& options, Solver*);
 
-  ///
-  /// state
-  ///  - species
-  ///    - <name>
-  ///      - density       Free boundary
-  ///      - temperature   Free boundary
-  ///      - pressure      Free boundary
-  ///      - velocity [if set] Zero boundary
-  ///      - momentum [if set] Zero boundary
-  ///      - energy_source  Adds wall losses
-  ///
-  void transform(Options& state) override;
   void outputVars(Options &state) override;
 
 private:
@@ -53,6 +41,19 @@ private:
   bool upper_y; ///< Boundary condition at upper y?
   bool sol; ///< Boundary condition at sol?
   bool pfr; ///< Boundary condition at pfr?
+
+  ///
+  /// state
+  ///  - species
+  ///    - <name>
+  ///      - density       Free boundary
+  ///      - temperature   Free boundary
+  ///      - pressure      Free boundary
+  ///      - velocity [if set] Zero boundary
+  ///      - momentum [if set] Zero boundary
+  ///      - energy_source  Adds wall losses
+  ///
+  void transform(GuardedOptions& state) override;
 };
 
 namespace {

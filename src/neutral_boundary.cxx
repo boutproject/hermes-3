@@ -51,9 +51,9 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
           .withDefault<BoutReal>(0.8);
 }
 
-void NeutralBoundary::transform(Options& state) {
+void NeutralBoundary::transform(GuardedOptions& state) {
   AUTO_TRACE();
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
   const BoutReal AA = get<BoutReal>(species["AA"]);
 
   Field3D Nn = toFieldAligned(GET_NOBOUNDARY(Field3D, species["density"]));
@@ -70,7 +70,7 @@ void NeutralBoundary::transform(Options& state) {
 
   // Get the energy source, or create if not set
   Field3D energy_source =
-      species.isSet("energy_source")
+      IS_SET(species["energy_source"])
           ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
           : zeroFrom(Nn);
 

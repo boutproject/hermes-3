@@ -1,5 +1,8 @@
 #include "../include/permissions.hxx"
 
+const std::map<Permissions::Regions, std::string> Permissions::fundamental_regions = {
+    {Permissions::Interior, "Interior"}, {Permissions::Boundaries, "Boundaries"}};
+
 Permissions::Permissions(std::initializer_list<std::pair<std::string, AccessRights>> data)
     : variable_permissions() {
   for (const auto& [varname, access] : data) {
@@ -111,6 +114,17 @@ Permissions::AccessRights Permissions::applyLowerPermissions(const AccessRights&
     // Higher permissions imply lower permissions
     for (int j = Read; j < i; j++) {
       result[j] = static_cast<Regions>(result[j] | rights[i]);
+    }
+  }
+  return result;
+}
+
+std::string Permissions::regionNames(const Regions regions) {
+  std::string result;
+  for (auto & [region, name] : fundamental_regions) {
+    if ((regions & region) == region) {
+      if (result.size() > 0) result += ", ";
+      result += name;
     }
   }
   return result;

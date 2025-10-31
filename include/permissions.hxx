@@ -24,13 +24,15 @@ public:
     AllRegions = Interior | Boundaries
   };
 
+  const static std::map<Regions, std::string> fundamental_regions;
+
   /// Data type for storing the regions of a variable which have a
   /// particular level of permission. Some examples can be seen below:
   ///
   ///     AccessRights read_only = { AllRegions, Nowhere, Nowhere },
   ///                  write_boundaries = { Nowhere, Boundaries, Nowhere },
-  ///                  read_and_write_everywhere = { AllReginos, AllRegions, Nowhere },
-  ///                  final_write_boundaries_read_interior = { Interior, Nowhere,
+  ///                  read_and_write_everywhere = { AllReginos, AllRegions, Nowhere
+  ///                  }, final_write_boundaries_read_interior = { Interior, Nowhere,
   ///                      Boundaries };
   ///
   using AccessRights = std::array<Regions, PERMISSION_TYPES_END>;
@@ -158,6 +160,9 @@ public:
   /// for-loop, but not the second.
   std::map<std::string, Regions>
   getVariablesWithPermission(PermissionTypes permission, bool highestOnly = true) const;
+
+  /// Return a string version of the region names
+  static std::string regionNames(const Regions regions);
 
 private:
   /// Returns the access rights for the most specific entry in this

@@ -5,7 +5,7 @@
 
 using bout::globals::mesh;
 
-void ElectronForceBalance::transform(Options &state) {
+void ElectronForceBalance::transform(GuardedOptions &state) {
   AUTO_TRACE();
 
   if (IS_SET(state["fields"]["phi"])) {
@@ -15,7 +15,7 @@ void ElectronForceBalance::transform(Options &state) {
   }
 
   // Get the electron pressure, with boundary condition applied
-  Options& electrons = state["species"]["e"];
+  GuardedOptions electrons = state["species"]["e"];
   Field3D Pe = GET_VALUE(Field3D, electrons["pressure"]);
   Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]);
 
@@ -34,12 +34,12 @@ void ElectronForceBalance::transform(Options &state) {
   Epar = force_density / floor(Ne, 1e-5);
 
   // Now calculate forces on other species
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
     if (kv.first == "e") {
       continue; // Skip electrons
     }
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
     if (!(IS_SET(species["density"]) and IS_SET(species["charge"]))) {
       continue; // Needs both density and charge to experience a force

@@ -56,7 +56,17 @@ struct SimpleConduction : public Component {
       .withDefault<bool>(false);
   }
 
-  void transform(Options& state) override {
+private:
+  std::string name;      ///< Name of the species e.g. "e"
+  BoutReal kappa0;       ///< Pre-calculated constant in heat conduction coefficient
+  BoutReal Nnorm, Tnorm; ///< Normalisation coefficients
+
+  BoutReal temperature; ///< Fix temperature if > 0
+  BoutReal density;     ///< Fix density if > 0
+
+  bool boundary_flux;   ///< Allow flux through sheath boundaries?
+
+  void transform(GuardedOptions& state) override {
     auto& species = state["species"][name];
 
     // Species time-evolving temperature
@@ -85,16 +95,6 @@ struct SimpleConduction : public Component {
 
     add(species["energy_source"], DivQ);
   }
-
-private:
-  std::string name;      ///< Name of the species e.g. "e"
-  BoutReal kappa0;       ///< Pre-calculated constant in heat conduction coefficient
-  BoutReal Nnorm, Tnorm; ///< Normalisation coefficients
-
-  BoutReal temperature; ///< Fix temperature if > 0
-  BoutReal density;     ///< Fix density if > 0
-
-  bool boundary_flux;   ///< Allow flux through sheath boundaries?
 };
 
 namespace {

@@ -39,8 +39,6 @@ struct Collisions : public Component {
   ///
   Collisions(std::string name, Options& alloptions, Solver*);
 
-  void transform(Options &state) override;
-
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options &state) override;
 
@@ -65,6 +63,8 @@ private:
 
   /// Save more diagnostics?
   bool diagnose;
+
+  void transform(GuardedOptions &state) override;
 
   /// Update collision frequencies, momentum and energy exchange
   /// nu_12    normalised frequency

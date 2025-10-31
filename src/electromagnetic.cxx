@@ -102,10 +102,10 @@ void Electromagnetic::restartVars(Options& state) {
                   {"source", "electromagnetic"}});
 }
 
-void Electromagnetic::transform(Options &state) {
+void Electromagnetic::transform(GuardedOptions &state) {
   AUTO_TRACE();
   
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   // Sum coefficients over species
   //
@@ -113,9 +113,9 @@ void Electromagnetic::transform(Options &state) {
   alpha_em = 0.0;
   Ajpar = 0.0;
   for (auto& kv : allspecies.getChildren()) {
-    const Options& species = kv.second;
+    const GuardedOptions species = kv.second;
 
-    if (!species.isSet("charge") or !species.isSet("momentum")) {
+    if (!IS_SET(species["charge"]) or !IS_SET(species["momentum"])) {
       continue; // Not charged, or no parallel flow
     }
     const BoutReal Z = get<BoutReal>(species["charge"]);
@@ -184,9 +184,9 @@ void Electromagnetic::transform(Options &state) {
 
   // Update momentum
   for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
-    if (!species.isSet("charge") or !species.isSet("momentum")) {
+    if (!IS_SET(species["charge"]) or !IS_SET(species["momentum"])) {
       continue; // Not charged, or no parallel flow
     }
     const BoutReal Z = get<BoutReal>(species["charge"]);

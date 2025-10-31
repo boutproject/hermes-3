@@ -34,20 +34,6 @@ struct IonViscosity : public Component {
   ///
   IonViscosity(std::string name, Options& alloptions, Solver*);
 
-  /// Inputs
-  /// - species
-  ///   - <name>   (skips "e")
-  ///     - pressure  (skips if not present)
-  ///     - velocity  (skips if not present)
-  ///     - collision_frequency
-  ///
-  /// Sets in the state
-  /// - species
-  ///   - <name>
-  ///     - momentum_source
-  ///
-  void transform(Options &state) override;
-
   /// Save variables to the output
   void outputVars(Options &state) override;
 private:
@@ -74,6 +60,20 @@ private:
 
   /// Store diagnostics for each species
   std::map<std::string, Diagnostics> diagnostics;
+
+  /// Inputs
+  /// - species
+  ///   - <name>   (skips "e")
+  ///     - pressure  (skips if not present)
+  ///     - velocity  (skips if not present)
+  ///     - collision_frequency
+  ///
+  /// Sets in the state
+  /// - species
+  ///   - <name>
+  ///     - momentum_source
+  ///
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

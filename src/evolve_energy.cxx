@@ -127,7 +127,7 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
           .withDefault<bool>(false);
 }
 
-void EvolveEnergy::transform(Options& state) {
+void EvolveEnergy::transform(GuardedOptions& state) {
   AUTO_TRACE();
 
   if (evolve_log) {
@@ -137,7 +137,7 @@ void EvolveEnergy::transform(Options& state) {
 
   mesh->communicate(E);
 
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
   N = getNoBoundary<Field3D>(species["density"]);
   const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
   const BoutReal AA = get<BoutReal>(species["AA"]);

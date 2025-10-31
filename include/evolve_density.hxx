@@ -32,14 +32,6 @@ struct EvolveDensity : public Component {
   ///
   EvolveDensity(std::string name, Options &options, Solver *solver);
 
-  /// This sets in the state
-  /// - species
-  ///   - <name>
-  ///     - AA
-  ///     - charge
-  ///     - density
-  void transform(Options &state) override;
-
   /// Calculate ddt(N).
   ///
   /// Requires state components
@@ -93,6 +85,14 @@ private:
 
   bool diagnose; ///< Output additional diagnostics?
   Field3D flow_xlow, flow_ylow; ///< Particle flow diagnostics
+
+  /// This sets in the state
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - charge
+  ///     - density
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

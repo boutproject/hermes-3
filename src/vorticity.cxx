@@ -207,11 +207,11 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     .withDefault<bool>(false);
 }
 
-void Vorticity::transform(Options& state) {
+void Vorticity::transform(GuardedOptions& state) {
   AUTO_TRACE();
 
   phi.name = "phi";
-  auto& fields = state["fields"];
+  auto fields = state["fields"];
 
   // Set the boundary of phi. Both 2D and 3D fields are kept, though the 3D field
   // is constant in Z. This is for efficiency, to reduce the number of conversions.
@@ -221,12 +221,12 @@ void Vorticity::transform(Options& state) {
   if (diamagnetic_polarisation) {
     // Diamagnetic term in vorticity. Note this is weighted by the mass
     // This includes all species, including electrons
-    Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
+      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
-      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
-            and species.isSet("AA"))) {
+      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
+            and IS_SET(species["AA"]))) {
         continue; // No pressure, charge or mass -> no polarisation current
       }
 
@@ -349,7 +349,7 @@ void Vorticity::transform(Options& state) {
     }
 
     Field3D Te; // Electron temperature, use for outer boundary conditions
-    if (state["species"]["e"].isSet("temperature")) {
+    if (IS_SET(state["species"]["e"]["temperature"])) {
       // Electron temperature set
       Te = GET_NOBOUNDARY(Field3D, state["species"]["e"]["temperature"]);
     } else {
@@ -482,10 +482,10 @@ void Vorticity::transform(Options& state) {
     Jdia.z = 0.0;
     Jdia.covariant = Curlb_B.covariant;
 
-    Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
 
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
+      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
       if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"]))) {
         continue; // No pressure or charge -> no diamagnetic current
@@ -587,11 +587,11 @@ void Vorticity::transform(Options& state) {
         zeroFrom(Vort); // Sum of atomic mass * collision frequency * density
     Field3D sum_A_n = zeroFrom(Vort); // Sum of atomic mass * density
 
-    const Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
     for (const auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
+      const GuardedOptions species = kv.second;
 
-      if (!(species.isSet("charge") and species.isSet("AA"))) {
+      if (!(IS_SET(species["charge"]) and IS_SET(species["AA"]))) {
         continue; // No charge or mass -> no current
       }
       if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {

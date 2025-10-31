@@ -91,10 +91,10 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
 
 }
 
-void IonViscosity::transform(Options &state) {
+void IonViscosity::transform(GuardedOptions &state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   auto coord = mesh->getCoordinates();
   const Field2D Bxy = coord->Bxy;
@@ -108,7 +108,7 @@ void IonViscosity::transform(Options &state) {
     }
     const auto& species_name = kv.first;
 
-    Options& species = allspecies[species_name];
+    GuardedOptions species = allspecies[species_name];
 
     if (!(isSetFinal(species["pressure"], "ion_viscosity") and
           isSetFinal(species["velocity"], "ion_viscosity") and
@@ -133,14 +133,14 @@ void IonViscosity::transform(Options &state) {
       if (viscosity_collisions_mode == "braginskii") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string collision_name = collision.second.name();
+          std::string collision_name = collision.first;
 
           if (// Self-collisions
               (collisionSpeciesMatch(    
-                collision_name, species.name(), species.name(), "coll", "exact")) or
+                collision_name, species_name, species_name, "coll", "exact")) or
               // Ion-electron collisions
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "+", "coll", "partial"))) {
+                collision_name, species_name, "+", "coll", "partial"))) {
                   
                   collision_names[species_name].push_back(collision_name);
                 }
@@ -149,29 +149,29 @@ void IonViscosity::transform(Options &state) {
       } else if (viscosity_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string collision_name = collision.second.name();
+          std::string collision_name = collision.first;
 
           if (// Charge exchange
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "", "cx", "partial")) or
+                collision_name, species_name, "", "cx", "partial")) or
               // Any collision (en, in, ee, ii, nn)
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "", "coll", "partial"))) {
+                collision_name, species_name, "", "coll", "partial"))) {
                   
                   collision_names[species_name].push_back(collision_name);
                 }
         }
       } else {
-        throw BoutException("\tviscosity_collisions_mode for {:s} must be either multispecies or braginskii", species.name());
+        throw BoutException("\tviscosity_collisions_mode for {:s} must be either multispecies or braginskii", species_name);
       }
 
       if (collision_names[species_name].empty()) {
-        throw BoutException("\tNo collisions found for {:s} in ion_viscosity for selected collisions mode", species.name());
+        throw BoutException("\tNo collisions found for {:s} in ion_viscosity for selected collisions mode", species_name);
       }
 
       // Write chosen collisions to log file
       output_info.write("\t{:s} viscosity collisionality mode: '{:s}' using ",
-                      species.name(), viscosity_collisions_mode);
+                      species_name, viscosity_collisions_mode);
       for (const auto& collision : collision_names[species_name]) {        
         output_info.write("{:s} ", collision);
       }
