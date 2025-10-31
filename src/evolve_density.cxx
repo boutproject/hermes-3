@@ -53,7 +53,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Evolve the logarithm of density?")
                    .withDefault<bool>(false);
 
-  isMMS = alloptions["solver"]["mms"].withDefault<bool>(false);
+  isMMS = options["mms"].withDefault<bool>(false);
   
   if (evolve_log) {
     // Evolve logarithm of density
@@ -108,6 +108,9 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     .withDefault(source)
     / source_normalisation;
 
+  disable_ddt = n_options["disable_ddt"]
+    .withDefault<bool>(false);
+  
   // If time dependent, parse the function with respect to time from the input file
   if (source_time_dependent) {
     auto str = n_options["source_prefactor"]
@@ -269,7 +272,7 @@ void EvolveDensity::finally(const Options& state) {
     }
 
     ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
-
+    //ddt(N) -= Div_par(N*V);
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
@@ -305,8 +308,10 @@ void EvolveDensity::finally(const Options& state) {
   // Collect the external source from above with all the sources from
   // elsewhere (collisions, reactions, etc) for diagnostics
   Sn = get<Field3D>(species["density_source"]);
+  
   ddt(N) += Sn;
-
+  
+  
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     ddt(N) *= get<Field3D>(state["scale_timederivs"]);
@@ -334,6 +339,11 @@ void EvolveDensity::finally(const Options& state) {
       flow_ylow += get<Field3D>(species["particle_flow_ylow"]);
     }
   }
+
+  if (disable_ddt){
+    ddt(N) = 0.0;
+  }
+  
 }
 
 void EvolveDensity::outputVars(Options& state) {
