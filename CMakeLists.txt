@@ -254,8 +254,10 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(drift-wave)
   hermes_add_integrated_test(alfven-wave)
   hermes_add_integrated_test(1D-density-fci)
+  hermes_add_integrated_test(1D-momentum-fci)
   hermes_add_integrated_test(1D-pressure-fci)
-    
+  hermes_add_integrated_test(1D-fluid-fci)
+
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)
