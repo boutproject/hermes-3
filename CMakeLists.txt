@@ -53,6 +53,13 @@ endif()
 
 set(HERMES_SOURCES
     src/amjuel_reaction.cxx
+    src/braginskii_collisions.cxx
+    src/braginskii_conduction.cxx
+    src/braginskii_electron_viscosity.cxx
+    src/braginskii_friction.cxx
+    src/braginskii_heat_exchange.cxx
+    src/braginskii_thermal_force.cxx
+    src/braginskii_ion_viscosity.cxx
     src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
@@ -63,7 +70,6 @@ set(HERMES_SOURCES
     src/neutral_full_velocity.cxx
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
-    src/electron_viscosity.cxx
     src/evolve_density.cxx
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
@@ -81,7 +87,6 @@ set(HERMES_SOURCES
     src/fixed_fraction_ions.cxx
     src/sound_speed.cxx
     src/zero_current.cxx
-    src/collisions.cxx
     src/anomalous_diffusion.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
@@ -98,8 +103,6 @@ set(HERMES_SOURCES
     src/detachment_controller.cxx
     src/reaction.cxx
     src/reaction_parser.cxx
-    src/thermal_force.cxx
-    src/ion_viscosity.cxx
     src/transform.cxx
     src/vorticity.cxx
     include/adas_reaction.hxx
@@ -111,14 +114,19 @@ set(HERMES_SOURCES
     include/anomalous_diffusion.hxx
     include/classical_diffusion.hxx
     include/binormal_stpm.hxx
-    include/collisions.hxx
+    include/braginskii_collisions.hxx
+    include/braginskii_conduction.hxx
+    include/braginskii_electron_viscosity.hxx
+    include/braginskii_friction.hxx
+    include/braginskii_heat_exchange.hxx
+    include/braginskii_ion_viscosity.hxx
+    include/braginskii_thermal_force.hxx
     include/component.hxx
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/div_ops.hxx
     include/electromagnetic.hxx
     include/electron_force_balance.hxx
-    include/electron_viscosity.hxx
     include/evolve_density.hxx
     include/evolve_energy.hxx
     include/evolve_momentum.hxx
@@ -131,7 +139,6 @@ set(HERMES_SOURCES
     include/hydrogen_charge_exchange.hxx
     include/solkit_hydrogen_charge_exchange.hxx
     include/integrate.hxx
-    include/ion_viscosity.hxx
     include/ionisation.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
@@ -152,7 +159,6 @@ set(HERMES_SOURCES
     include/snb_conduction.hxx
     include/sheath_closure.hxx
     include/sound_speed.hxx
-    include/thermal_force.hxx
     include/upstream_density_feedback.hxx
     include/temperature_feedback.hxx
     include/detachment_controller.hxx
