@@ -15,10 +15,10 @@ Quasineutral::Quasineutral(std::string name, Options &alloptions,
   ASSERT0(charge != 0.0);
 }
 
-void Quasineutral::transform(Options &state) {
+void Quasineutral::transform(GuardedOptions &state) {
   AUTO_TRACE();
   // Iterate through all subsections
-  Options &allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   // Add charge density of other species
   const Field3D rho = std::accumulate(
@@ -27,11 +27,11 @@ void Quasineutral::transform(Options &state) {
       // Start with no charge
       Field3D(0.0),
       [this](Field3D value,
-             const std::map<std::string, Options>::value_type &name_species) {
-        const Options &species = name_species.second;
+             const std::map<std::string, GuardedOptions>::value_type &name_species) {
+        const GuardedOptions species = name_species.second;
         // Add other species which have density and charge
-        if (name_species.first != name and species.isSet("charge") and
-            species.isSet("density")) {
+        if (name_species.first != name and IS_SET(species["charge"]) and
+            IS_SET(species["density"])) {
           // Note: Not assuming that the boundary has been set
           return value + getNoBoundary<Field3D>(species["density"]) *
                              get<BoutReal>(species["charge"]);
@@ -40,7 +40,7 @@ void Quasineutral::transform(Options &state) {
       });
 
   // Set quantites for this species
-  Options &species = allspecies[name];
+  GuardedOptions species = allspecies[name];
 
   // Calculate density required. Floor so that density is >= 0
   density = floor(rho / (-charge), 0.0);

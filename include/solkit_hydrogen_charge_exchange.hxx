@@ -31,7 +31,7 @@ struct SOLKITHydrogenChargeExchange : public ReactionBase {
   /// Sets in all species:
   ///   - momentum_source
   ///
-  void calculate_rates(Options& atom, Options& ion);
+  void calculate_rates(GuardedOptions atom, GuardedOptions ion);
 
 protected:
   BoutReal Nnorm, rho_s0; ///< Normalisations
@@ -46,7 +46,8 @@ struct SOLKITHydrogenChargeExchangeIsotope : public SOLKITHydrogenChargeExchange
   SOLKITHydrogenChargeExchangeIsotope(std::string name, Options& alloptions, Solver* solver)
       : SOLKITHydrogenChargeExchange(name, alloptions, solver) {}
 
-  void transform(Options& state) override {
+private:
+  void transform(GuardedOptions& state) override {
     calculate_rates(state["species"][{Isotope}],        // e.g. "h"
                     state["species"][{Isotope, '+'}]);  // e.g. "d+"
   }

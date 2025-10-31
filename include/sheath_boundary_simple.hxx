@@ -29,6 +29,34 @@ struct SheathBoundarySimple : public Component {
   ///   - always_set_phi           Always set phi field? Default is to only modify if already set
   SheathBoundarySimple(std::string name, Options &options, Solver *);
 
+  void outputVars(Options &state) override;
+
+private:
+  BoutReal Ge; // Secondary electron emission coefficient
+  BoutReal sin_alpha; // sin of angle between magnetic field and wall.
+
+  BoutReal gamma_e; ///< Electron sheath heat transmission
+  BoutReal gamma_i; ///< Ion sheath heat transmission
+  BoutReal sheath_ion_polytropic; ///< Polytropic coefficient in sheat velocity
+  
+  bool lower_y; // Boundary on lower y?
+  bool upper_y; // Boundary on upper y?
+
+  bool always_set_phi; ///< Set phi field?
+
+  Field3D wall_potential; ///< Voltage of the wall. Normalised units.
+
+  Field3D hflux_e;  // Electron heat flux through sheath
+  Field3D phi; // Phi at sheath
+  Field3D ion_sum; // Sum of ion current at sheath
+
+  bool diagnose; // Save diagnostic variables?
+  Options diagnostics;   // Options object to store diagnostic fields like a dict
+
+  bool no_flow; ///< No flow speed, only remove energy
+
+  BoutReal density_boundary_mode, pressure_boundary_mode, temperature_boundary_mode; ///< BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree
+
   ///
   /// # Inputs
   /// - species
@@ -72,33 +100,7 @@ struct SheathBoundarySimple : public Component {
   /// Note that phi in the domain will not be set, so will be invalid data.
   ///
   ///
-  void transform(Options &state) override;
-  void outputVars(Options &state) override;
-private:
-  BoutReal Ge; // Secondary electron emission coefficient
-  BoutReal sin_alpha; // sin of angle between magnetic field and wall.
-
-  BoutReal gamma_e; ///< Electron sheath heat transmission
-  BoutReal gamma_i; ///< Ion sheath heat transmission
-  BoutReal sheath_ion_polytropic; ///< Polytropic coefficient in sheat velocity
-  
-  bool lower_y; // Boundary on lower y?
-  bool upper_y; // Boundary on upper y?
-
-  bool always_set_phi; ///< Set phi field?
-
-  Field3D wall_potential; ///< Voltage of the wall. Normalised units.
-
-  Field3D hflux_e;  // Electron heat flux through sheath
-  Field3D phi; // Phi at sheath
-  Field3D ion_sum; // Sum of ion current at sheath
-
-  bool diagnose; // Save diagnostic variables?
-  Options diagnostics;   // Options object to store diagnostic fields like a dict
-
-  bool no_flow; ///< No flow speed, only remove energy
-
-  BoutReal density_boundary_mode, pressure_boundary_mode, temperature_boundary_mode; ///< BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree
+  void transform(GuardedOptions &state) override;
 };
 
 namespace {

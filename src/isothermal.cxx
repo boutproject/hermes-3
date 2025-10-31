@@ -18,10 +18,10 @@ Isothermal::Isothermal(std::string name, Options &alloptions,
     .withDefault<bool>(false);
 }
 
-void Isothermal::transform(Options &state) {
+void Isothermal::transform(GuardedOptions &state) {
   AUTO_TRACE();
 
-  Options& species = state["species"][name];
+  GuardedOptions species = state["species"][name];
 
   set(species["temperature"], T);
 

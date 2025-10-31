@@ -43,8 +43,6 @@ struct BraginskiiCollisions : public Component {
   ///
   BraginskiiCollisions(const std::string& name, Options& alloptions, Solver*);
 
-  void transform(Options& state) override;
-
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options& state) override;
 
@@ -67,9 +65,11 @@ private:
   /// Save more diagnostics?
   bool diagnose;
 
-  /// Update collision frequencies
+  void transform(GuardedOptions &state) override;
+
+  /// Update collision frequencies, momentum and energy exchange
   /// nu_12    normalised frequency
-  void collide(Options& species1, Options& species2, const Field3D& nu_12);
+  void collide(Options& species1, Options& species2, const Field3D& nu_12, BoutReal momentum_coefficient);
 };
 
 namespace {

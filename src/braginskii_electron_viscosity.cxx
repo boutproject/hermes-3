@@ -29,10 +29,10 @@ BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name
   diagnose = options["diagnose"].doc("Output diagnostics?").withDefault<bool>(false);
 }
 
-void BraginskiiElectronViscosity::transform(Options& state) {
+void BraginskiiElectronViscosity::transform(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& species = state["species"]["e"];
+  GuardedOptions species = state["species"]["e"];
 
   if (!isSetFinal(species["pressure"], "electron_viscosity")) {
     throw BoutException("No electron pressure => Can't calculate electron viscosity");

@@ -171,7 +171,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnNVn.setBoundary(std::string("Dnn") + name);
 }
 
-void NeutralMixed::transform(Options& state) {
+void NeutralMixed::transform(GuardedOptions& state) {
   AUTO_TRACE();
 
   mesh->communicate(Nn, Pn, NVn);
@@ -254,7 +254,7 @@ void NeutralMixed::transform(Options& state) {
   }
 
   // Set values in the state
-  auto& localstate = state["species"][name];
+  auto localstate = state["species"][name];
   set(localstate["density"], Nn);
   set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn);

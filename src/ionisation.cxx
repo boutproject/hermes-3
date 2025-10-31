@@ -38,19 +38,19 @@ Ionisation::Ionisation(std::string name, Options &alloptions, Solver *) {
   Eionize /= Tnorm;
 }
 
-void Ionisation::transform(Options &state) {
+void Ionisation::transform(GuardedOptions &state) {
   // Get neutral atom properties
-  Options& hydrogen = state["species"]["h"];
+  GuardedOptions hydrogen = state["species"]["h"];
   Field3D Nn = get<Field3D>(hydrogen["density"]);
   Field3D Tn = get<Field3D>(hydrogen["temperature"]);
   Field3D Vn = get<Field3D>(hydrogen["velocity"]);
   auto AA = get<BoutReal>(hydrogen["AA"]);
   
-  Options& electron = state["species"]["e"];
+  GuardedOptions electron = state["species"]["e"];
   Field3D Ne = get<Field3D>(electron["density"]);
   Field3D Te = get<Field3D>(electron["temperature"]);
 
-  Options& ion = state["species"]["h+"];
+  GuardedOptions ion = state["species"]["h+"];
   ASSERT1(AA == get<BoutReal>(ion["AA"]));
 
   Field3D reaction_rate = cellAverage(

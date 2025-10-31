@@ -6,16 +6,16 @@
 
 using bout::globals::mesh;
 
-void NeutralParallelDiffusion::transform(Options& state) {
+void NeutralParallelDiffusion::transform(GuardedOptions& state) {
   AUTO_TRACE();
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
     const auto& species_name = kv.first;
 
     // Get non-const reference
-    auto& species = allspecies[species_name];
+    auto species = allspecies[species_name];
 
-    if (species.isSet("charge") and (get<BoutReal>(species["charge"]) != 0.0)) {
+    if (IS_SET(species["charge"]) and (get<BoutReal>(species["charge"]) != 0.0)) {
       // Skip charged species
       continue;
     }
@@ -38,14 +38,14 @@ void NeutralParallelDiffusion::transform(Options& state) {
       if (diffusion_collisions_mode == "afn") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string collision_name = collision.second.name();
+          std::string collision_name = collision.first;
 
           if (// Charge exchange
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "+", "cx", "partial")) or
+                collision_name, species_name, "+", "cx", "partial")) or
               // Ionisation
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "+", "iz", "partial"))) {
+                collision_name, species_name, "+", "iz", "partial"))) {
                   
                   collision_names[species_name].push_back(collision_name);
                 }
@@ -54,30 +54,30 @@ void NeutralParallelDiffusion::transform(Options& state) {
       } else if (diffusion_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string collision_name = collision.second.name();
+          std::string collision_name = collision.first;
 
           if (// Charge exchange
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "", "cx", "partial")) or
+                collision_name, species_name, "", "cx", "partial")) or
               // Any collision (ne, ni, nn)
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "", "coll", "partial"))) {
+                collision_name, species_name, "", "coll", "partial"))) {
                   
                   collision_names[species_name].push_back(collision_name);
                 }
         }
 
       } else {
-        throw BoutException("\tdiffusion_collisions_mode for {:s} must be either multispecies or afn", species.name());
+        throw BoutException("\tdiffusion_collisions_mode for {:s} must be either multispecies or afn", species_name);
       }
 
       if (collision_names[species_name].empty()) {
-        throw BoutException("\tNo collisions found for {:s} in neutral_parallel_diffusion for selected collisions mode", species.name());
+        throw BoutException("\tNo collisions found for {:s} in neutral_parallel_diffusion for selected collisions mode", species_name);
       }
 
       // Write chosen collisions to log file
       output_info.write("\t{:s} neutral diffusion collisionality mode: '{:s}' using ",
-                      species.name(), diffusion_collisions_mode);
+                      species_name, diffusion_collisions_mode);
       for (const auto& collision : collision_names[species_name]) {        
         output_info.write("{:s} ", collision);
       }

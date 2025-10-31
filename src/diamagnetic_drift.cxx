@@ -57,14 +57,14 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   }
 }
 
-void DiamagneticDrift::transform(Options& state) {
+void DiamagneticDrift::transform(GuardedOptions& state) {
   // Iterate through all subsections
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-    if (!(species.isSet("charge") and species.isSet("temperature")))
+    if (!(IS_SET(species["charge"]) and IS_SET(species["temperature"])))
       continue; // Skip, go to next species
 
     // Calculate diamagnetic drift velocity for this species

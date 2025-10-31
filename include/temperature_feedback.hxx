@@ -84,17 +84,6 @@ struct TemperatureFeedback : public Component {
                    .withDefault<bool>(false);
   }
 
-  /// Inputs
-  ///  - <name>
-  ///    - temperature
-  ///
-  /// Outputs
-  ///
-  ///  - <name>
-  ///    - temperature_source
-  ///
-  void transform(Options& state) override;
-
   void outputVars(Options& state) override {
     AUTO_TRACE();
     if (diagnose) {
@@ -191,6 +180,17 @@ private:
   BoutReal proportional_term, integral_term; ///< Components of resulting source for diagnostics
 
   bool diagnose; ///< Output diagnostic information?
+
+  /// Inputs
+  ///  - <name>
+  ///    - temperature
+  ///
+  /// Outputs
+  ///
+  ///  - <name>
+  ///    - temperature_source
+  ///
+  void transform(GuardedOptions& state) override;
 };
 
 namespace {

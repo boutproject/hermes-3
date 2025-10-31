@@ -17,6 +17,11 @@ struct NoFlowBoundary : public Component {
                          .withDefault<bool>(true);
   }
 
+private:
+  std::string name;    ///<
+  bool noflow_lower_y; ///< No-flow boundary on lower y?
+  bool noflow_upper_y; ///< No-flow boundary on upper y?
+
   /// Inputs
   ///  - species
   ///    - <name>
@@ -25,12 +30,7 @@ struct NoFlowBoundary : public Component {
   ///      - pressure     [Optional]
   ///      - velocity     [Optional]
   ///      - momentum     [Optional]
-  void transform(Options& state) override;
-
-private:
-  std::string name;    ///<
-  bool noflow_lower_y; ///< No-flow boundary on lower y?
-  bool noflow_upper_y; ///< No-flow boundary on upper y?
+  void transform(GuardedOptions& state) override;
 };
 
 namespace {
