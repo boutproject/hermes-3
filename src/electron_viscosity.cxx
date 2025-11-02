@@ -4,6 +4,7 @@
 #include <bout/mesh.hxx>
 #include <bout/difops.hxx>
 #include <bout/constants.hxx>
+#include "../include/div_ops.hxx"
 
 #include "../include/electron_viscosity.hxx"
 
@@ -57,7 +58,9 @@ void ElectronViscosity::transform(Options& state) {
 
   
   // Save term for output diagnostic
-  viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+  // viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+  Field3D dummy;
+  viscosity = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy, false);
   add(species["momentum_source"], viscosity);
 }
 
