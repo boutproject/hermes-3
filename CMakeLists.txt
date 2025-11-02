@@ -258,6 +258,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-pressure-fci)
   hermes_add_integrated_test(1D-fluid-fci)
   hermes_add_integrated_test(1D-conduction-fci)
+  hermes_add_integrated_test(1D-electron-viscosity-fci)
 
   
   # Unit tests
