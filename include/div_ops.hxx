@@ -581,7 +581,7 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
 template <typename CellEdges = MC>
 Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in,
-                          Field3D &flow_ylow, bool fixflux = true) {
+		    Field3D &flow_ylow, bool fixflux = true, bool dissipative = false) {
 
   Coordinates* coord = f_in.getCoordinates();
 
@@ -610,7 +610,7 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                                     fabs(v_in[i]),
                                     fabs(v_up[iyp]),
                                     fabs(v_down[iym]));
-      /*
+      if (dissipative) {
       result[i] = (0.5 * (f_in[i] * (v_in[i] + amax) +
                           f_up[iyp] * (v_up[iyp] - amax))
                    * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
@@ -619,14 +619,15 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           f_down[iym] * (v_down[iym] + amax))
                    * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
 		   / (coord->dy[i] * coord->J[i]);
-      */
+      } else {
+      
       result[i] = (0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp])
                    * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
                    -
                     0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym])
                    * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
         / (coord->dy[i] * coord->J[i]);
-      
+      }
     }
     return result;
   }
