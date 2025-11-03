@@ -70,6 +70,7 @@ private:
   bool poloidal_flows;  ///< Include ExB flow in Y direction?
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool disable_ddt;
+  bool dissipative;
   BoutReal density_floor;
   bool low_n_diffuse;   ///< Parallel diffusion at low density
   bool low_n_diffuse_perp;  ///< Perpendicular diffusion at low density

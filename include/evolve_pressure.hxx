@@ -96,7 +96,7 @@ private:
   bool low_T_diffuse_perp; ///< Add cross-field diffusion at low temperature?
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
-
+  bool dissipative; ///< Use dissipative laxflux in parallel divergence
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 
   Field3D source, final_source; ///< External pressure source

@@ -54,6 +54,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .withDefault<bool>(false);
 
   isMMS = options["mms"].withDefault<bool>(false);
+
+  dissipative = options["dissipative"].doc("Use dissipative parallel flow with Lax flux").withDefault<bool>(false);
   
   if (evolve_log) {
     // Evolve logarithm of density
@@ -271,7 +273,7 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
     
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow, false, dissipative);
     
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
