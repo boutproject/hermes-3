@@ -178,14 +178,24 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                                     fabs(v_up[iyp]),
                                     fabs(v_down[iym]));
 
-      result[i] = B[i] * (
-                          (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
-                          - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
-                          // Penalty terms. This implementation is very dissipative.
-                          + amax * (f_in[i] * v_in[i] - f_up[iyp] * v_up[iyp]) / (B[i] + B_up[iyp])
-                          + amax * (f_in[i] * v_in[i] - f_down[iym] * v_down[iym]) / (B[i] + B_down[iym])
-                          )
-        / (2 * dy[i] * sqrt(g_22[i]));
+      BoutReal term = (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
+                      - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym]);
+      BoutReal penalty =
+          amax * (f_in[i] * v_in[i] - f_up[iyp] * v_up[iyp]) / (B[i] + B_up[iyp])
+          + amax * (f_in[i] * v_in[i] - f_down[iym] * v_down[iym]) / (B[i] + B_down[iym]);
+      if (fabs(penalty) > fabs(term) and penalty * v_in[i] > 0) {
+        if (term * penalty > 0) {
+          penalty = term;
+        } else {
+          penalty = -term;
+        }
+      }
+
+      result[i] = B[i]
+                  * (term
+                     // Penalty terms. This implementation is very dissipative.
+                     + penalty)
+                  / (2 * dy[i] * sqrt(g_22[i]));
 
       // result[i] = (0.5 * (f_in[i] * v_in[i] * (v_in[i] + amax) +
       //                     f_up[iyp] * v_up[iyp] * (v_up[iyp] - amax))
