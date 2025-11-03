@@ -177,6 +177,7 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                                           fabs(v_in[i]),
                                   fabs(v_up[iyp]),
                                   fabs(v_down[iym]));
+      /*
        result[i] = B[i] * (
                            (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
                            - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
@@ -185,7 +186,8 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                            + amax * (f_in[i] * v_in[i] - f_down[iym] * v_down[iym]) / (B[i] + B_down[iym])
                            )
          / (2 * dy[i] * sqrt(g_22[i]));
-      /*
+      */
+       
       result[i] = (0.5 * (f_in[i] * v_in[i] * (v_in[i] + amax) +
                           f_up[iyp] * v_up[iyp] * (v_up[iyp] - amax))
                    * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
@@ -194,8 +196,7 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                           f_down[iym] * v_down[iym] * (v_down[iym] + amax))
                    * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
         / (dy[i] * coord->J[i]);
-      */
-
+      
 #if CHECK > 0
       if(!std::isfinite(result[i])) {
         throw BoutException("Non-finite value in Div_par_fvv at {}\n"
@@ -617,14 +618,15 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                    0.5 * (f_in[i] * (v_in[i] - amax) +
                           f_down[iym] * (v_down[iym] + amax))
                    * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
-		   / (coord->dy[i] * coord->J[i]);*/
+		   / (coord->dy[i] * coord->J[i]);
+      */
       result[i] = (0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp])
                    * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
                    -
                     0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym])
                    * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
         / (coord->dy[i] * coord->J[i]);
-	
+      
     }
     return result;
   }

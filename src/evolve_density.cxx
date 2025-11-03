@@ -270,9 +270,9 @@ void EvolveDensity::finally(const Options& state) {
       BoutReal AA = get<BoutReal>(species["AA"]);
       fastest_wave = sqrt(T / AA);
     }
-
+    
     ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
-    //ddt(N) -= Div_par(N*V);
+    
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
