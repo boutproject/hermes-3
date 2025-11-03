@@ -167,6 +167,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
 
+  dissipative = options["dissipative"].doc("Use dissipative parallel flow with Lax flux").withDefault<bool>(false);
 
   BoutReal default_kappa; // default conductivity, changes depending on species
   switch(identifySpeciesType(name)) {
@@ -308,7 +309,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
+      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative);
       // Work done. This balances energetically a term in the momentum equation
       ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
 
@@ -317,7 +318,7 @@ void EvolvePressure::finally(const Options& state) {
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
+      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative);
 
       ddt(P) += (2. / 3) * V * Grad_par(P);
     }
@@ -372,7 +373,9 @@ void EvolvePressure::finally(const Options& state) {
   if (thermal_conduction) {
 
     // Calculate ion collision times
-    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    //const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency_self"]), 1e-10);                                                                                                                                                                                  
+
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
