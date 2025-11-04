@@ -31,11 +31,14 @@ std::string replaceAll(const std::string& str, const std::string& from,
 
 void Permissions::substitute(const std::string& label,
                              const std::vector<std::string>& substitutions) {
-  for (const auto [varname, access] : variable_permissions) {
+  for (auto it = variable_permissions.begin(); it != variable_permissions.end();) {
+    const auto [varname, access] = *it;
     const std::string pattern = "{" + label + "}";
-    if (varname.find(pattern) == std::string::npos)
+    if (varname.find(pattern) == std::string::npos) {
+      it++;
       continue;
-    variable_permissions.erase(varname);
+    }
+    it = variable_permissions.erase(it);
     for (const std::string& val : substitutions) {
       variable_permissions[replaceAll(varname, pattern, val)] = access;
     }

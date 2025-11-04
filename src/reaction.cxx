@@ -9,7 +9,10 @@
 
 #include "integrate.hxx"
 
-Reaction::Reaction(std::string name, Options& options) : name(name) {
+Reaction::Reaction(std::string name, Options& options)
+    : ReactionBase({readOnly("species:{sp}:{r_val}"), readOnly("species:e:{e_val}"),
+                    readWrite("species:{sp}:{w_val}")}),
+      name(name) {
 
   // Extract some relevant options, units to member vars for readability
   const auto& units = options["units"];
@@ -38,10 +41,17 @@ Reaction::Reaction(std::string name, Options& options) : name(name) {
   // Parse the reaction string
   this->parser = std::make_unique<ReactionParser>(reaction_str);
 
+  std::vector<std::string> species = this->parser->get_species();
   // Participation factors. All set to unity for now; could make configurable in future.
-  for (const std::string& sp : this->parser->get_species()) {
+  for (const std::string& sp : species) {
     this->pfactors[sp] = 1;
   }
+
+  state_variable_access.substitute("sp", species);
+  state_variable_access.substitute("r_val", {"AA", "density", "velocity", "temperature"});
+  state_variable_access.substitute("e_val", {"density", "temperature"});
+  state_variable_access.substitute(
+      "w_val", {"momentum_source", "energy_source", "density_source"});
 
   // Initialise weight sums with dummy values. Real values are set on first call to
   // transform().

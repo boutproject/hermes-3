@@ -115,6 +115,10 @@ public:
   /// that section. Placeholder names can also be used.
   void setAccess(const std::string& variable, const AccessRights& rights);
 
+  void setAccess(const std::pair<std::string, AccessRights>& info) {
+    setAccess(info.first, info.second);
+  }
+
   /// Replace a placeholder in the names of variables stored in this
   /// object. This is useful if you need to access the same variable
   /// for multiple species. For example, the following code gives

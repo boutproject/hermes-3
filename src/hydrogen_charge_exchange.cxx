@@ -49,7 +49,7 @@ void HydrogenChargeExchange::calculate_rates(GuardedOptions atom1, GuardedOption
 
   R = Natom * Nion * sigmav; // Rate coefficient in [m^-3 s^-1]
 
-  if ((&atom1 != &atom2) or (&ion1 != &ion2)) {
+  if ((atom1 != atom2) or (ion1 != ion2)) {
     // Transfer particles atom1 -> ion2, ion1 -> atom2
     subtract(atom1["density_source"], R);
     add(ion2["density_source"], R);
@@ -102,7 +102,14 @@ void HydrogenChargeExchange::calculate_rates(GuardedOptions atom1, GuardedOption
   add(atom1["collision_frequency"], atom_rate);
   add(ion1["collision_frequency"], ion_rate);
 
+  std::cout << 1;
   // Set individual collision frequencies
-  set(atom1["collision_frequencies"][atom1.get().name() + std::string("_") + ion1.get().name() + std::string("_cx")], atom_rate);
-  set(ion1["collision_frequencies"][ion1.get().name() + std::string("_") + atom1.get().name() + std::string("_cx")], ion_rate);
+  set(atom1["collision_frequencies"]
+           [atom1.name() + std::string("_") + ion1.name() + std::string("_cx")],
+      atom_rate);
+  set(ion1["collision_frequencies"]
+          [ion1.name() + std::string("_") + atom1.name() + std::string("_cx")],
+      ion_rate);
+  std::cout << 2;
+  std::cout << "\n";
 }

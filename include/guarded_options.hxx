@@ -35,6 +35,7 @@ public:
   bool isSet(const std::string& name) const { return options->isSet(name); }
   bool isSet(const char* name) const { return (*this).isSet((std::string(name))); }
   bool isSet() const { return options->isSet(); }
+  std::string name() const { return options->name(); }
 
   /// Get read-only access to the underlying Options object. Throws
   /// BoutException if there is not read-permission for this object.
@@ -50,6 +51,9 @@ public:
   /// Returns a list of variables with read-write permission but which
   /// have not been accessed using the `getWritable()` method.
   std::map<std::string, Permissions::Regions> unwrittenItems() const;
+
+  bool operator==(const GuardedOptions& other) const;
+  bool operator!=(const GuardedOptions& other) const;
 
 private:
   Options* options{nullptr};
