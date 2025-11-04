@@ -10,6 +10,8 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                     .doc("Components in order of execution")
                                     .as<std::string>();
 
+  std::vector<std::string> species;
+
   // For now split on ','. Something like "->" might be better
   for (const auto &name : strsplit(component_names, ',')) {
     // Ignore brackets, to allow these to be used to span lines.
@@ -19,6 +21,8 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
     if (name_trimmed.empty()) {
       continue;
     }
+
+    if (component_options[name_trimmed].isSet("AA")) species.push_back(name_trimmed);
 
     // For each component e.g. "e", several Component types can be created
     // but if types are not specified then the component name is used
@@ -37,6 +41,9 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                              component_options,
                                              solver));
     }
+  }
+  for (auto& component : components) {
+    component->declareAllSpecies(species);
   }
 }
 
