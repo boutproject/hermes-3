@@ -15,7 +15,8 @@ typedef GuardedOptions (*OPTYPE)(GuardedOptions, Field3D);
  * all reaction classes have been refactored to inherit from Reaction.
  */
 struct ReactionBase : public Component {
-  ReactionBase() : inst_num(get_instance_num() + 1) {}
+  ReactionBase(Permissions&& permissions)
+      : Component(std::move(permissions)), inst_num(get_instance_num() + 1) {}
   static int get_instance_num() {
     static int instance_num{0};
     return instance_num++;
