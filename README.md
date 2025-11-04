@@ -2,6 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-GPL-blue.svg)](https://img.shields.io/badge/license-GPL-blue.svg)
 ![Build status](https://github.com/bendudson/hermes-3/workflows/Tests/badge.svg)
+[![codecov](https://codecov.io/gh/boutproject/hermes-3/graph/badge.svg?token=R8CCYL15GN&flag=unit)](https://codecov.io/gh/boutproject/hermes-3)
 
 Hermes-3 is a multifluid plasma simulation model for transport and
 turbulence in the edge of magnetically confined plasmas, such as
@@ -131,3 +132,11 @@ for more complicated cases.
   by impurity in tokamak edge
   plasmas](https://doi.org/10.1016/j.nme.2025.101913) Nucl. Mat. Energy 2025 101913
   doi:[10.1016/j.nme.2025.101913](https://doi.org/10.1016/j.nme.2025.101913)
+* B. D. Dudson, M. Kryjak, H. Muhammed, J. Omotani [Validation of Hermes-3 turbulence simulations against
+  the TCV-X21 diverted L-mode reference case](https://arxiv.org/abs/2506.12180) 2025
+  Preprint: [arXiv:2506.12180](https://arxiv.org/abs/2506.12180).
+* M. V. Umansky, B. D. Dudson, T. G. Jenkins, J. R. Myra, D. N. Smithe
+  [Modeling of convective cells, turbulence, and transport induced by
+  a radio-frequency antenna in the tokamak boundary
+  plasma](https://doi.org/10.48550/arXiv.2509.08178) 2025 Preprint:
+  [arXiv:2509.08178](https://arxiv.org/abs/2509.08178)

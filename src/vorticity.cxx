@@ -1,6 +1,7 @@
 
 #include "../include/vorticity.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
@@ -25,7 +26,7 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int nz = f.getNz();
   return Ind3D{(x * ny + y) * nz + z, ny, nz};
 }
-}
+} // namespace
 
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   AUTO_TRACE();

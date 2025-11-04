@@ -3,15 +3,8 @@
 #include <bout/constants.hxx>
 #include <bout/output_bout_types.hxx>
 
+#include "../include/hermes_utils.hxx"
 #include "../include/collisions.hxx"
-
-namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
-} // namespace
 
 Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
   AUTO_TRACE();
@@ -71,8 +64,10 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
 void Collisions::collide(Options& species1, Options& species2, const Field3D& nu_12, BoutReal momentum_coefficient) {
   AUTO_TRACE();
 
-  add(species1["collision_frequency"], nu_12);
-  set(collision_rates[species1.name()][species2.name()], nu_12);
+  add(species1["collision_frequency"], nu_12);                           // Total collision frequency
+  std::string coll_name = species1.name() + std::string("_") + species2.name() + std::string("_coll");
+  set(species1["collision_frequencies"][coll_name], nu_12);              // Collision frequency for individual reaction
+  set(collision_rates[species1.name()][species2.name()], nu_12);         // Individual collision frequency used for diagnostics
 
   if (&species1 != &species2) {
     // For collisions between different species
@@ -85,11 +80,13 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
     const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]);
 
     const Field3D nu = filledFrom(nu_12, [&](auto& i) {
-      return nu_12[i] * (A1 / A2) * density1[i] / floor(density2[i], 1e-5);
+      return nu_12[i] * (A1 / A2) * density1[i] / softFloor(density2[i], 1e-5);
     });
 
-    add(species2["collision_frequency"], nu);
-    set(collision_rates[species2.name()][species1.name()], nu);
+    add(species2["collision_frequency"], nu);                             // Total collision frequency
+    std::string coll_name =  species2.name() + std::string("_") + species1.name() + std::string("_coll");    
+    set(species2["collision_frequencies"][coll_name], nu);                // Collision frequency for individual reaction
+    set(collision_rates[species2.name()][species1.name()], nu);           // Individual collision frequency used for diagnostics
 
     // Momentum exchange
     if (isSetFinalNoBoundary(species1["velocity"]) or
@@ -107,6 +104,10 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 
       add(species1["momentum_source"], F12);
       subtract(species2["momentum_source"], F12);
+      
+      // Diagnostics
+      set(momentum_channels[species1.name()][species2.name()], F12); 
+      set(momentum_channels[species2.name()][species1.name()], -F12);
 
       if (frictional_heating) {
         // Heating due to friction and energy transfer
@@ -130,8 +131,15 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
         //  1) This term is always positive: Collisions don't lead to cooling
         //  2) In the limit that m_2 << m_1 (e.g. electron-ion collisions),
         //     the lighter species is heated more than the heavy species.
-        add(species1["energy_source"], (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12);
-        add(species2["energy_source"], (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12);
+        Field3D species1_source = (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12;
+        Field3D species2_source = (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12;
+
+        add(species1["energy_source"], species1_source);
+        add(species2["energy_source"], species2_source);
+
+        // Diagnostics
+        set(friction_energy_channels[species1.name()][species2.name()], species1_source);
+        set(friction_energy_channels[species2.name()][species1.name()], species2_source);
       }
     }
 
@@ -147,6 +155,10 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 
       add(species1["energy_source"], Q12);
       subtract(species2["energy_source"], Q12);
+
+      // Diagnostics
+      set(energy_channels[species1.name()][species2.name()], Q12);
+      set(energy_channels[species2.name()][species1.name()], -Q12);
     }
   }
 }
@@ -173,8 +185,8 @@ void Collisions::transform(Options& state) {
           continue;
 
         const Field3D nu_ee = filledFrom(Ne, [&](auto& i) {
-          const BoutReal Telim = floor(Te[i], 0.1);
-          const BoutReal Nelim = floor(Ne[i], 1e10);
+          const BoutReal Telim = softFloor(Te[i], 0.1);
+          const BoutReal Nelim = softFloor(Ne[i], 1e10);
           const BoutReal logTe = log(Telim);
           // From NRL formulary 2019, page 34
           // Coefficient 30.4 from converting cm^-3 to m^-3
@@ -185,7 +197,7 @@ void Collisions::transform(Options& state) {
           const BoutReal v1sq = 2 * Telim * SI::qe / SI::Me;
 
           // Collision frequency
-          const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne[i], 0.0) * floor(coulomb_log, 1.0)
+          const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne[i], 0.0) * softFloor(coulomb_log, 1.0)
                               * 2 / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
 
           ASSERT2(std::isfinite(nu));
@@ -225,12 +237,12 @@ void Collisions::transform(Options& state) {
                   : 31.0 - 0.5 * log(Ne[i]) + log(Te[i]);
 
           // Calculate v_a^2, v_b^2
-          const BoutReal vesq = 2 * floor(Te[i], 0.1) * SI::qe / SI::Me;
-          const BoutReal visq = 2 * floor(Ti[i], 0.1) * SI::qe / (SI::Mp * Ai);
+          const BoutReal vesq = 2 * softFloor(Te[i], 0.1) * SI::qe / SI::Me;
+          const BoutReal visq = 2 * softFloor(Ti[i], 0.1) * SI::qe / (SI::Mp * Ai);
 
           // Collision frequency
           const BoutReal nu = SQ(SQ(SI::qe) * Zi) * floor(Ni[i], 0.0)
-                              * floor(coulomb_log, 1.0) * (1. + me_mi)
+                              * softFloor(coulomb_log, 1.0) * (1. + me_mi)
                               / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me))
                               * ei_multiplier;
 #if CHECK >= 2
@@ -355,11 +367,11 @@ void Collisions::transform(Options& state) {
 
           // Ion-ion collisions
           Field3D nu_12 = filledFrom(density1, [&](auto& i) {
-            const BoutReal Tlim1 = floor(temperature1[i], 0.1);
-            const BoutReal Tlim2 = floor(temperature2[i], 0.1);
+            const BoutReal Tlim1 = softFloor(temperature1[i], 0.1);
+            const BoutReal Tlim2 = softFloor(temperature2[i], 0.1);
 
-            const BoutReal Nlim1 = floor(density1[i], 1e10);
-            const BoutReal Nlim2 = floor(density2[i], 1e10);
+            const BoutReal Nlim1 = softFloor(density1[i], 1e10);
+            const BoutReal Nlim2 = softFloor(density2[i], 1e10);
 
             // Coulomb logarithm
             BoutReal coulomb_log =
@@ -372,7 +384,7 @@ void Collisions::transform(Options& state) {
             const BoutReal v2sq = 2 * Tlim2 * SI::qe / mass2;
 
             // Collision frequency
-            const BoutReal nu = SQ(charge1 * charge2) * Nlim2 * floor(coulomb_log, 1.0)
+            const BoutReal nu = SQ(charge1 * charge2) * Nlim2 * softFloor(coulomb_log, 1.0)
                                 * (1. + mass1 / mass2)
                                 / (3 * pow(PI * (v1sq + v2sq), 1.5) * SQ(SI::e0 * mass1));
             ASSERT2(std::isfinite(nu));
@@ -491,27 +503,79 @@ void Collisions::outputVars(Options& state) {
 
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
 
-  /// Iterate through the first species in each collision pair
+  // Iterate through the first species in each collision pair
   const std::map<std::string, Options>& level1 = collision_rates.getChildren();
   for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
     const Options& section = collision_rates[s1->first];
 
-    /// Iterate through the second species in each collision pair
+    // Iterate through the second species in each collision pair
     const std::map<std::string, Options>& level2 = section.getChildren();
     for (auto s2 = std::begin(level2); s2 != std::end(level2); ++s2) {
 
-      std::string name = s1->first + s2->first;
+      std::string A = s1->first;
+      std::string B = s2->first;
+      std::string AB = A + B;
 
-      set_with_attrs(state[std::string("K") + name + std::string("_coll")],
+      // Collision frequencies
+      set_with_attrs(state[std::string("K") + AB + std::string("_coll")],
                      getNonFinal<Field3D>(section[s2->first]),
                      {{"time_dimension", "t"},
                       {"units", "s-1"},
                       {"conversion", Omega_ci},
-                      {"standard_name", "collision frequency"},
-                      {"long_name", name + " collision frequency"},
-                      {"species", name},
+                      {"standard_name", AB + "collision frequency"},
+                      {"long_name", AB + " collision frequency"},
+                      {"species", A},
                       {"source", "collisions"}});
+
+      // Collisional energy transfer channels (i.e. thermal equilibration)
+      if ((energy_channels.isSection(A)) and (energy_channels[A].isSet(B))) {
+
+        set_with_attrs(state[std::string("E") + AB + std::string("_coll")],
+                     getNonFinal<Field3D>(energy_channels[A][B]),
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", AB + "collisional energy transfer source"},
+                      {"long_name", AB + "collisional energy transfer source"},
+                      {"species", A},
+                      {"source", "collisions"}});
+      }
+
+      // Frictional energy sources (both species heat through friction)
+      if ((friction_energy_channels.isSection(A)) and (friction_energy_channels[A].isSet(B))) {
+
+        set_with_attrs(state[std::string("E") + AB + std::string("_coll_friction")],
+                     getNonFinal<Field3D>(friction_energy_channels[A][B]),
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", AB + "frictional energy source"},
+                      {"long_name", AB + "frictional energy source"},
+                      {"species", A},
+                      {"source", "collisions"}});
+      }
+
+      // Momentum exchange channels
+      if ((momentum_channels.isSection(A)) and (momentum_channels[A].isSet(B))) {
+
+        set_with_attrs(state[std::string("F") + AB + std::string("_coll")],
+                     getNonFinal<Field3D>(friction_energy_channels[A][B]),
+                     {{"time_dimension", "t"},
+                      {"units", "kg m^-2 s^-2"},
+                      {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                      {"standard_name", AB + "collisional momentum transfer"},
+                      {"long_name", AB + "collisional momentum transfer"},
+                      {"species", A},
+                      {"source", "collisions"}});
+      }
+
     }
   }
+
+
 }

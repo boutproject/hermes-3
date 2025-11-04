@@ -1,0 +1,162 @@
+nout = 0
+timestep = 1
+
+
+[mesh]
+# 1D simulation, use "y" as the dimension along the fieldline
+nx = 10
+ny = 10   # Resolution along field-line
+nz = 10
+ixseps1 = 0
+J = 1  
+
+
+[hermes]
+components = (d+, he+, he, d, e,
+              sheath_boundary_simple, collisions, recycling, reactions,
+              electron_force_balance, neutral_parallel_diffusion, ion_viscosity)
+
+
+[solver]
+type = pvode           
+
+
+[sheath_boundary_simple]
+lower_y = false
+upper_y = true
+diagnose = true
+
+
+[neutral_parallel_diffusion]
+dneut = 10 
+diffusion_collisions_mode = multispecies
+
+
+[collisions]
+electron_ion = true
+electron_electron = true
+electron_neutral = true
+ion_ion = true
+ion_neutral = true
+neutral_neutral = true
+diagnose = true
+
+
+[ion_viscosity]
+viscosity_collisions_mode = multispecies
+
+[recycling]
+species = d+, he+
+
+
+####################################
+[d+]
+type = (evolve_density, evolve_pressure, evolve_momentum, 
+        noflow_boundary)
+
+charge = 1
+AA = 2 
+thermal_conduction = true
+conduction_collisions_mode = multispecies
+noflow_upper_y = false
+recycle_as = d
+target_recycle = true  
+diagnose = true
+
+[Nd+]
+function = 1
+
+[Pd+]
+function = 1
+
+[NVd+]
+function = 1 
+
+####################################
+[he+]  
+type = (evolve_density, evolve_pressure, evolve_momentum, 
+        noflow_boundary)
+        
+charge = 2
+AA = 4 
+thermal_conduction = true
+conduction_collisions_mode = multispecies
+noflow_upper_y = false
+recycle_as = he
+target_recycle = true  
+diagnose = true
+
+[Nhe+]
+function = 0.01
+
+[Phe+]
+function = 0.001
+
+[NVhe+]
+function = 0.001
+
+####################################
+[he]
+type = (neutral_mixed, noflow_boundary)
+
+AA = 4
+diffusion_collisions_mode = multispecies
+diagnose = true
+
+[Nhe]
+function = 0.001
+
+[Phe]
+function = 0.0001
+
+[NVhe]
+function = 0.0001
+
+####################################
+[d]
+type = (neutral_mixed, noflow_boundary)
+
+AA = 2
+diffusion_collisions_mode = multispecies
+diagnose = true
+
+[Nd]
+function = 0.001
+
+[Pd]
+function = 0.0001
+
+[NVd]
+function = 0.0001
+
+####################################
+[e] # Electrons
+type = (quasineutral, evolve_pressure, zero_current, 
+        noflow_boundary)
+
+noflow_upper_y = false
+
+charge = -1
+AA = 1/1836
+thermal_conduction = true  # in evolve_pressure
+conduction_collisions_mode = multispecies
+
+diagnose = true
+
+[Pe]
+
+function = `Pd+:function`  
+
+####################################
+
+
+[reactions]
+diagnose = true
+type = (
+        d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
+        d + d+ -> d+ + d,     # Charge exchange
+
+        he + e -> he+ + 2e,   # Helium ionisation
+        he+ + e -> he,        # Helium+ recombination
+       )

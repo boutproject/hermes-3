@@ -2,6 +2,7 @@
 #include "gtest/gtest.h"
 
 #include "test_extras.hxx" // FakeMesh
+#include "fake_mesh_fixture.hxx"
 
 #include "../../include/collisions.hxx"
 
@@ -157,10 +158,10 @@ TEST_F(CollisionsTest, TnormDependence) {
   component2.transform(state2);
 
   // Normalised frequencies should be unchanged
-  ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["e"]["collision_frequency"])(0,0,0),
-                  get<Field3D>(state2["species"]["e"]["collision_frequency"])(0,0,0));
-  ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["d"]["collision_frequency"])(0,0,0),
-                  get<Field3D>(state2["species"]["d"]["collision_frequency"])(0,0,0));
-  ASSERT_FLOAT_EQ(get<Field3D>(state["species"]["d+"]["collision_frequency"])(0,0,0),
-                  get<Field3D>(state2["species"]["d+"]["collision_frequency"])(0,0,0));
+  ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["e"]["collision_frequency"])(0,0,0),
+                   get<Field3D>(state2["species"]["e"]["collision_frequency"])(0,0,0));
+  ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["d"]["collision_frequency"])(0,0,0),
+                   get<Field3D>(state2["species"]["d"]["collision_frequency"])(0,0,0));
+  ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["d+"]["collision_frequency"])(0,0,0),
+                   get<Field3D>(state2["species"]["d+"]["collision_frequency"])(0,0,0));
 }
