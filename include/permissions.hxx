@@ -198,20 +198,24 @@ private:
 };
 
 /// Convenience function to return an object expressing that the
-/// variable should have ReadIfSet permissions on all regions.
-std::pair<std::string, Permissions::AccessRights> readIfSet(std::string varname);
+/// variable should have ReadIfSet permissions in the specified regions.
+std::pair<std::string, Permissions::AccessRights>
+readIfSet(std::string varname, Permissions::Regions region = Permissions::AllRegions);
 
 /// Convenience function to return an object expressing that the
-/// variable should have Read permissions on all regions.
-std::pair<std::string, Permissions::AccessRights> readOnly(std::string varname);
+/// variable should have Read permissions in the specified regions.
+std::pair<std::string, Permissions::AccessRights>
+readOnly(std::string varname, Permissions::Regions region = Permissions::AllRegions);
 
 /// Convenience function to return an object expressing that the
-/// variable should have Write permissions on all regions.
-std::pair<std::string, Permissions::AccessRights> readWrite(std::string varname);
+/// variable should have Write permissions in the specified regions.
+std::pair<std::string, Permissions::AccessRights>
+readWrite(std::string varname, Permissions::Regions region = Permissions::AllRegions);
 
 /// Convenience function to return an object expressing that the
-/// variable should have Final permissions on all regions.
-std::pair<std::string, Permissions::AccessRights> writeFinal(std::string varname);
+/// variable should have Final permissions in the specified regions.
+std::pair<std::string, Permissions::AccessRights>
+writeFinal(std::string varname, Permissions::Regions region = Permissions::AllRegions);
 
 /// Convenience function to return an object expressing that the
 /// variable should have Write permissions on the boundaries. It will
