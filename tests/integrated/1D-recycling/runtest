@@ -1,56 +1,120 @@
 #!/usr/bin/env python3
 
-# Python script to run and analyse MMS test
+# Test that a 1D-recyling example produces expected results
 
 from __future__ import division
 from __future__ import print_function
 
-try:
-  from builtins import str
-except:
-  pass
+from boututils.run_wrapper import launch
+import numpy
+import pathlib
+import xhermes
 
-from boututils.run_wrapper import shell, launch, getmpirun
-from boutdata.collect import collect
+this_dir = pathlib.Path(__file__).parent
+data_dir = this_dir / "data"
+hermes_exec = this_dir.parent.parent.parent / "hermes-3"
+output_path = data_dir / "BOUT.dmp.0.nc"
 
-from numpy import sqrt, max, abs, mean, array, log, concatenate
 
-shell("rm data/BOUT.dmp.0.nc")
+# ============================= Helper functions ==============================
+def check_value(name, val, target, **kws):
+    # override default tolerances to get desired behaviour
+    kws["atol"] = kws.pop("atol", 0.0)
+    kws["rtol"] = kws.pop("rtol", 0.0)
 
-# Link to the executable
-shell("ln -s ../../../hermes-3 hermes-3")
+    success = numpy.isclose(val, target, **kws)
+    if not success:
+        # On failure, report the effective abs tolerance used by isclose
+        atol_eff = kws["atol"] + kws["rtol"] * abs(target)
+        print(
+            f"Expected\n {target-atol_eff} < {name} < {target+atol_eff}\nBut actual value was\n {val}"
+        )
+    return success
+
+
+def end_test(success):
+    if success:
+        print(" => Test passed")
+        exit(0)
+    else:
+        print(" => Test failed")
+        exit(1)
+
+
+def fail_on_missing_data():
+    if not output_path.is_file():
+        print(f"No data at {output_path}")
+        fail_test()
+
+
+def fail_on_missing_exec():
+    if not hermes_exec.is_file():
+        print(f"No executable found at {hermes_exec}")
+        fail_test()
+
+
+def fail_test():
+    end_test(False)
+
+
+# =============================================================================
+
 
 success = True
 
-path = "data"
+# Make sure the executable is where it should be
+fail_on_missing_exec()
 
-s, out = launch("./hermes-3 -d " + path, nproc=1, pipe=True)
+# Remove existing output
+output_path.unlink(missing_ok=True)
+
+# Use Bout wrapper to run exec
+s, out = launch(f"{hermes_exec} -d {data_dir}", nproc=1, pipe=True)
 
 # Save output to log file
 with open("run.log", "w") as f:
-  f.write(out)
+    f.write(out)
 
-Pe = collect("Pe", tind=-1, path=path)
-Ne = collect("Ne", tind=-1, path=path)
-Tnorm = collect("Tnorm", path=path)
-Te = Pe / Ne
-Te_up = Te[-1,0,0,0] * Tnorm
+# Check that the run produced output
+fail_on_missing_data()
 
-# Upstream electron temperature should be about 60eV
-if Te_up < 60 or Te_up > 80:
-  success = False
-  print("Electron temperature failed: {}eV. Expecting about 70eV".format(Te_up))
+# Examine last output
+ds = xhermes.open(data_dir, unnormalise=False).hermes.extract_1d_tokamak_geometry()
+ds_last = ds.isel(t=-1)
 
-Ti = collect("Td+", tind=-1, path=path)
-Ti_up = Ti[-1,0,0,0] * Tnorm
+# Upstream electron temperature should be about 70eV
+Te = ds_last["Pe"] / ds_last["Ne"]
+Te_up = Te.values[0] * ds.metadata["Tnorm"]
+success = check_value("Electron temperature [eV]", Te_up, 70, atol=10)
+
 # Upstream ion temperature should be about 140eV
-if Ti_up < 140 or Ti_up > 160:
-  success = False
-  print("Ion temperature failed: {}eV. Expecting about 150eV".format(Ti_up))
+Ti = ds_last["Td+"]
+Ti_up = Ti.values[0] * ds.metadata["Tnorm"]
+success &= check_value("Ion temperature", Ti_up, 150, atol=10)
 
-if success:
-  print(" => Test passed")
-  exit(0)
-else:
-  print(" => Test failed")
-  exit(1)
+# fmt: off
+# Check the values of various diagnostics
+pos_idx = -1    # 1D position index to check (excluding guards)
+rel_tol = 1e-4  # Relative tolerance (should be high enough to accommodate compiler optimisation differences)
+diags_ref = {   # Diagnostic names and reference values (generated with -O2)
+    "Sd+_iz": 0.0012500877296552468,
+    "Fd+_iz": 5.027449522167903e-05,
+    "Ed+_iz": 0.0008867627959864742,
+    "Rd+_ex": -0.0002980827888026677,
+    "Sd+_rec": -3.479788534373128e-09,
+    "Fd+_rec": -1.0525255255905655e-09,
+    "Ed+_rec": -4.289581450623666e-09,
+    "Rd+_rec": -7.859435290992585e-10,
+    "Kdd+_cx": 0.006218829645880973,
+    "Fdd+_cx": 0.00035836480520026217,
+    "Edd+_cx": 0.000715157957576078,
+}
+# fmt: on
+
+# Do the diagnostic checks
+ds_diags = ds_last.isel(pos=slice(2, -2))
+for name, target in diags_ref.items():
+    val = ds_diags[name].values[pos_idx]
+    success &= check_value(name, val, target, rtol=rel_tol)
+
+end_test(success)

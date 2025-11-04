@@ -64,14 +64,14 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   // Transfer fom atom1 to ion2
   atom_mom = R * Aatom * atom1_velocity;
   subtract(atom1["momentum_source"], atom_mom);
-  if (no_neutral_cx_mom_gain == false) {
-    add(ion2["momentum_source"], atom_mom);
-  }
+  add(ion2["momentum_source"], atom_mom);
 
   // Transfer from ion1 to atom2
   ion_mom = R * Aion * ion1_velocity;
   subtract(ion1["momentum_source"], ion_mom);
-  add(atom2["momentum_source"], ion_mom);
+  if (no_neutral_cx_mom_gain == false) {
+    add(atom2["momentum_source"], ion_mom);
+  }
 
   // Frictional heating: Friction force between ions and atoms
   // converts kinetic energy to thermal energy

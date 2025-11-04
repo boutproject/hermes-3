@@ -29,7 +29,8 @@ struct HydrogenChargeExchange : public ReactionBase {
   ///          - eV
   ///          - inv_meters_cubed
   ///          - seconds
-  HydrogenChargeExchange(std::string name, Options& alloptions, Solver*) {
+  HydrogenChargeExchange([[maybe_unused]] std::string name, Options& alloptions,
+                         Solver*) {
     // Get the units
     const auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);

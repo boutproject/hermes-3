@@ -192,7 +192,6 @@ void Recycling::transform(Options& state) {
   const Coordinates::FieldMetric& dx = coord->dx;
   const Coordinates::FieldMetric& dz = coord->dz;
   const Coordinates::FieldMetric& g_22 = coord->g_22;
-  const Coordinates::FieldMetric& g11 = coord->g11;
 
   for (auto& channel : channels) {
     const Options& species_from = state["species"][channel.from];
@@ -353,7 +352,6 @@ void Recycling::transform(Options& state) {
               // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
               // While enabling us to still calculate radial wall fluxes separately here
               BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
-              BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
               BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
               // Calculate wall conditions
@@ -453,7 +451,6 @@ void Recycling::transform(Options& state) {
                 // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
                 // While enabling us to still calculate radial wall fluxes separately here
                 BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
-                BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
                 BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
                 // Calculate wall conditions

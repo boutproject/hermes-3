@@ -4,14 +4,6 @@
 
 #include "component.hxx"
 
-namespace {
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  int ny = f.getNy();
-  int nz = f.getNz();
-  return Ind3D{(x * ny + y) * nz + z, ny, nz};
-}
-}; // namespace
-
 /// Per-species boundary condition for neutral particles at
 /// sheath (Y) boundaries.
 ///

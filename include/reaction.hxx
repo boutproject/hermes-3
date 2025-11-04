@@ -95,7 +95,8 @@ protected:
    * @param n a density
    * @return BoutReal the electron energy loss rate
    */
-  virtual BoutReal eval_sigma_v_E(BoutReal T, BoutReal n) {
+  virtual BoutReal eval_sigma_v_E([[maybe_unused]] BoutReal T,
+                                  [[maybe_unused]] BoutReal n) {
     if (this->includes_sigma_v_e) {
       throw BoutException(
           "eval_sigma_v_E() needs to be implemented by Reaction instances "
@@ -124,7 +125,8 @@ protected:
    * @param state
    * @param reaction_rate
    */
-  virtual void transform_additional(Options& state, Field3D& reaction_rate) {}
+  virtual void transform_additional([[maybe_unused]] Options& state,
+                                    [[maybe_unused]] Field3D& reaction_rate) {}
 
   /**
    * @brief Update both a species source term and the corresponding diagnostics (if any

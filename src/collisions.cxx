@@ -507,12 +507,12 @@ void Collisions::outputVars(Options& state) {
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
-  /// Iterate through the first species in each collision pair
+  // Iterate through the first species in each collision pair
   const std::map<std::string, Options>& level1 = collision_rates.getChildren();
   for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
     const Options& section = collision_rates[s1->first];
 
-    /// Iterate through the second species in each collision pair
+    // Iterate through the second species in each collision pair
     const std::map<std::string, Options>& level2 = section.getChildren();
     for (auto s2 = std::begin(level2); s2 != std::end(level2); ++s2) {
 

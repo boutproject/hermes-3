@@ -116,7 +116,7 @@ public:
     std::vector<std::string> first_filter_applied =
         get_species(species_names, first_filter);
     return get_species(first_filter_applied, other_filters...);
-  };
+  }
 
   /**
    * @brief Apply multiple filters to the list of species identified by the parser

@@ -1,3 +1,4 @@
+---
 name: Tests
 on:
   push:
@@ -5,8 +6,7 @@ on:
       - master
   pull_request:
     branches:
-      - '*' # This will trigger for PRs against any branch
-      - master
+      - '*'  # This will trigger for PRs against any branch
 
 defaults:
   run:
@@ -14,20 +14,29 @@ defaults:
 
 jobs:
   cmake_tests:
-    name: ${{ matrix.config.name }}
+    name: ${{ matrix.config.name }}, ${{ matrix.build_type.test_type }} tests
     runs-on: ${{ matrix.config.os }}
     env:
       OMP_NUM_THREADS: ${{ matrix.config.omp_num_threads }}
       PYTHONPATH: ${{ github.workspace }}/tools/pylib
       OMPI_MCA_rmaps_base_oversubscribe: yes
       MPIRUN: mpiexec -np
+      LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
+      BOUT_CONFIGURE_OPTIONS: ${{ matrix.config.configure_options }}
+      BUILD_TYPE: ${{ matrix.build_type.cmake_build_type }}
+      TEST_TYPE: ${{ matrix.build_type.test_type }}
     strategy:
       fail-fast: false
       matrix:
         config:
           - name: "CMake default options"
             os: ubuntu-22.04
-            configure_options: "-DPACKAGE_TESTS=OFF"
+            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DHERMES_COVERAGE=ON"
+        build_type:
+          - cmake_build_type: Debug
+            test_type: unit
+          - cmake_build_type: Release
+            test_type: integration
 
           - name: "3D Metrics"
             os: ubuntu-latest
@@ -38,6 +47,8 @@ jobs:
         run: |
           echo Build: ${{ matrix.config.name }}, ${{ matrix.config.os }}
           echo Configure options: ${{ matrix.config.configure_options }}
+          echo Build type: ${{ matrix.build_type.cmake_build_type }}
+          echo Tests to run: ${{ matrix.build_type.test_type }}
 
       - name: Install dependencies
         run: sudo apt update &&
@@ -56,20 +67,24 @@ jobs:
                  liblapack-dev
                  libparpack2-dev
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
         with:
           submodules: true
+
+      - name: Build
+        run: cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE  $BOUT_CONFIGURE_OPTIONS &&
+             cmake --build build -j4
 
       - name: Install pip packages
         run: |
           ./.pip_install_for_tests.sh 'netcdf4~=1.5' boutdata boututils
           # Add the pip install location to the runner's PATH
           echo ~/.local/bin >> $GITHUB_PATH
-      - name: Build and run tests
-        run: cmake . -B build $BOUT_CONFIGURE_OPTIONS &&
-             cmake --build build &&
-             cd build &&
-             ctest --output-on-failure --timeout 300
-        env:
-          LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
-          BOUT_CONFIGURE_OPTIONS: ${{ matrix.config.configure_options }}
+      - name: Run tests
+        run: cd build &&
+             ctest --output-on-failure --timeout 300 -L $TEST_TYPE
+      - name: Upload test coverage data
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: ${{ matrix.build_type.test_type }}
