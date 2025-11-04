@@ -1,0 +1,16 @@
+comment: false
+
+ignore:
+  - "tests"
+  - "external"
+
+codecov:
+  branch: master
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        flags:
+          - unit

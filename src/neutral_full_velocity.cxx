@@ -27,7 +27,6 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   const BoutReal meters = units["meters"];
   const BoutReal seconds = units["seconds"];
   const BoutReal Bnorm = units["Tesla"];
-  const BoutReal Tnorm = units["eV"];
 
   auto& options = alloptions[name];
 
@@ -467,7 +466,6 @@ void NeutralFullVelocity::outputVars(Options& state) {
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
 

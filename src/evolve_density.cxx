@@ -282,13 +282,12 @@ void EvolveDensity::finally(const Options& state) {
   }
 
   if (low_n_diffuse_perp) {
-    ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
-                                    bndry_flux);
+    ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N);
   }
 
   if (low_p_diffuse_perp) {
     Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
-    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N, true);
+    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N);
   }
 
   if (hyper_z > 0.) {

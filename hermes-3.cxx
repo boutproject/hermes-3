@@ -158,9 +158,10 @@ public:
     }
   }
 
-  void apply(Field2D& f) override {
+  void apply([[maybe_unused]] Field2D& f) override {
     throw BoutException("DecayLengthBoundary not implemented for Field2D");
   }
+
 private:
   std::shared_ptr<FieldGenerator> gen; // Generator
 };
@@ -314,7 +315,7 @@ int Hermes::init(bool restarting) {
   scheduler = ComponentScheduler::create(options, Options::root(), solver);
 
   // Preconditioner
-  setPrecon((preconfunc)&Hermes::precon);
+  setPrecon(&Hermes::precon);
 
   return 0;
 }

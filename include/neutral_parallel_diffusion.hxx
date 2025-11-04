@@ -76,7 +76,7 @@ private:
   BoutReal dneut; ///< cross-field diffusion projection (B  / Bpol)^2
 
   bool diagnose; ///< Output diagnostics?
-  std::vector<std::string> collision_names; ///< Collisions used for collisionality
+  std::map<std::string, std::vector<std::string>> collision_names; ///< Collisions used for collisionality
   std::string diffusion_collisions_mode;  ///< Collision selection, either afn or multispecies
   Field3D nu;   ///< Collision frequency for conduction
   bool equation_fix;  ///< Fix incorrect 3/2 factor in pressure advection?

@@ -264,20 +264,20 @@ void NeutralMixed::finally(const Options& state) {
 
     // Collisionality
     // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
-    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+    if (collision_names.empty()) {     // Calculate only once - at the beginning
 
       if (diffusion_collisions_mode == "afn") {
         for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
 
-          if (/// Charge exchange
+          if (// Charge exchange
               (collisionSpeciesMatch(    
                 collision_name, name, "+", "cx", "partial")) or
-              /// Ionisation
+              // Ionisation
               (collisionSpeciesMatch(    
                 collision_name, name, "+", "iz", "partial")) or
-              /// Neutral-neutral collisions
+              // Neutral-neutral collisions
               (collisionSpeciesMatch(    
                 collision_name, name, name, "coll", "exact"))) {
                   collision_names.push_back(collision_name);
@@ -289,10 +289,10 @@ void NeutralMixed::finally(const Options& state) {
 
           std::string collision_name = collision.second.name();
 
-          if (/// Charge exchange
+          if (// Charge exchange
               (collisionSpeciesMatch(    
                 collision_name, name, "", "cx", "partial")) or
-              /// Any collision (en, in, ee, ii, nn)
+              // Any collision (en, in, ee, ii, nn)
               (collisionSpeciesMatch(    
                 collision_name, name, "", "coll", "partial"))) {
                   collision_names.push_back(collision_name);
@@ -307,7 +307,7 @@ void NeutralMixed::finally(const Options& state) {
         throw BoutException("\tNo collisions found for {:s} in neutral_mixed for selected collisions mode", name);
       }
 
-      /// Write chosen collisions to log file
+      // Write chosen collisions to log file
       output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ",
                       name, diffusion_collisions_mode);
       for (const auto& collision : collision_names) {        
@@ -316,7 +316,7 @@ void NeutralMixed::finally(const Options& state) {
       output_info.write("\n");
       }
 
-    /// Collect the collisionalities based on list of names
+    // Collect the collisionalities based on list of names
     nu = 0;
     for (const auto& collision_name : collision_names) {
       nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
@@ -844,7 +844,7 @@ void NeutralMixed::outputVars(Options& state) {
   }
 }
 
-void NeutralMixed::precon(const Options& state, BoutReal gamma) {
+void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma) {
   if (!precondition) {
     return;
   }
@@ -898,5 +898,4 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
       throw BoutException("Precon ddt(NV{}) non-finite at {}\n", name, i);
     }
   }
-
 }

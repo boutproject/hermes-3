@@ -10,6 +10,8 @@
 
 class RadiatedPower {
 public:
+  virtual ~RadiatedPower() = default;
+
   const Field3D power(const Field3D &Te, const Field3D &Ne, const Field3D &Ni);
   
   virtual BoutReal power(BoutReal Te, BoutReal ne, BoutReal ni) = 0;
@@ -21,7 +23,7 @@ class InterpRadiatedPower : public RadiatedPower {
 public:
   InterpRadiatedPower(const std::string &file);
   
-  BoutReal power(BoutReal, BoutReal, BoutReal) {return 0.0;}
+  BoutReal power(BoutReal, BoutReal, BoutReal) override {return 0.0;}
   
 private:
   std::vector<BoutReal> te_array;  // Te in eV
@@ -32,7 +34,7 @@ private:
 /// Rates supplied by Eva Havlicova
 class HydrogenRadiatedPower : public RadiatedPower {
 public:
-  BoutReal power(BoutReal, BoutReal, BoutReal) {return 0.0;}
+  BoutReal power(BoutReal, BoutReal, BoutReal) override {return 0.0;}
   
   // Collision rate coefficient <sigma*v> [m3/s]
   BoutReal ionisation(BoutReal Te);
@@ -56,7 +58,7 @@ private:
  */
 class UpdatedRadiatedPower : public RadiatedPower {
 public:
-  BoutReal power(BoutReal, BoutReal, BoutReal) {return 0.0;}
+  BoutReal power(BoutReal, BoutReal, BoutReal) override {return 0.0;}
 
   // Ionisation rate coefficient <sigma*v> [m3/s]
   BoutReal ionisation(BoutReal T); 
@@ -76,7 +78,7 @@ private:
 /// Carbon in coronal equilibrium 
 /// From I.H.Hutchinson Nucl. Fusion 34 (10) 1337 - 1348 (1994)
 class HutchinsonCarbonRadiation : public RadiatedPower {
-  BoutReal power(BoutReal Te, BoutReal ne, BoutReal ni) {
+  BoutReal power(BoutReal Te, BoutReal ne, BoutReal ni) override {
     if((Te < 0.0) || (ne < 0.0) || (ni < 0.0))
        return 0.0;
     return ne * ni * 2e-31*pow(Te/10., 3) / (1. + pow(Te/10., 4.5));

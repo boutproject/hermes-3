@@ -72,14 +72,11 @@ inline T clamp(const T& var, BoutReal lo, BoutReal hi, const std::string& rgn = 
   return result;
 }
 
-// TODO: Replace the later SpeciesType with this one. This one
-// doesn't work in elec
-
 /// Enum that identifies the type of a species: electron, ion, neutral
 BOUT_ENUM_CLASS(SpeciesType, electron, ion, neutral);
 
 /// Identify species name string as electron, ion or neutral
-inline SpeciesType identifySpeciesTypeEnum(const std::string& species) {
+inline SpeciesType identifySpeciesType(const std::string& species) {
   if (species == "e") {
     return SpeciesType::electron;
   } else if ((species == "i") or
@@ -109,21 +106,6 @@ inline bool containsAnySubstring(const std::string& mainString, const std::vecto
   return false;  // None of the substrings found
 }
 
-/// Identify species name string as electron, ion or neutral
-inline std::string identifySpeciesType(const std::string& species) {
-
-  std::string type = "";
-
-  if (species == "e") {
-    type = "electron";
-  } else if (species.find(std::string("+")) != std::string::npos) {
-    type = "ion";
-  } else {
-    type = "neutral";
-  }
-
-  return type;
-}
 
 
 /// Takes a string representing a collision, e.g. d+_e_coll
