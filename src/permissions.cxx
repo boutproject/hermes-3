@@ -133,28 +133,28 @@ std::string Permissions::regionNames(const Regions regions) {
   return result;
 }
 
-std::pair<std::string, Permissions::AccessRights> readIfSet(std::string varname) {
+std::pair<std::string, Permissions::AccessRights> readIfSet(std::string varname,
+                                                            Permissions::Regions region) {
   return {varname,
-          {Permissions::AllRegions, Permissions::Nowhere, Permissions::Nowhere,
-           Permissions::Nowhere}};
+          {region, Permissions::Nowhere, Permissions::Nowhere, Permissions::Nowhere}};
 }
 
-std::pair<std::string, Permissions::AccessRights> readOnly(std::string varname) {
+std::pair<std::string, Permissions::AccessRights> readOnly(std::string varname,
+                                                           Permissions::Regions region) {
   return {varname,
-          {Permissions::Nowhere, Permissions::AllRegions, Permissions::Nowhere,
-           Permissions::Nowhere}};
+          {Permissions::Nowhere, region, Permissions::Nowhere, Permissions::Nowhere}};
 }
 
-std::pair<std::string, Permissions::AccessRights> readWrite(std::string varname) {
+std::pair<std::string, Permissions::AccessRights> readWrite(std::string varname,
+                                                            Permissions::Regions region) {
   return {varname,
-          {Permissions::Nowhere, Permissions::Nowhere, Permissions::AllRegions,
-           Permissions::Nowhere}};
+          {Permissions::Nowhere, Permissions::Nowhere, region, Permissions::Nowhere}};
 }
 
-std::pair<std::string, Permissions::AccessRights> writeFinal(std::string varname) {
+std::pair<std::string, Permissions::AccessRights>
+writeFinal(std::string varname, Permissions::Regions region) {
   return {varname,
-          {Permissions::Nowhere, Permissions::Nowhere, Permissions::Nowhere,
-           Permissions::AllRegions}};
+          {Permissions::Nowhere, Permissions::Nowhere, Permissions::Nowhere, region}};
 }
 
 std::pair<std::string, Permissions::AccessRights> writeBoundary(std::string varname) {
