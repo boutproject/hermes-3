@@ -12,7 +12,10 @@ struct SOLKITHydrogenChargeExchange : public ReactionBase {
   ///        - units
   ///          - inv_meters_cubed
   ///          - seconds
-  SOLKITHydrogenChargeExchange(std::string, Options& alloptions, Solver*) {
+  SOLKITHydrogenChargeExchange(std::string, Options& alloptions, Solver*)
+      : ReactionBase({readIfSet("species:{sp}:velocity"),
+                      readOnly("species:{sp}:{readvals}"),
+                      readWrite("species:{sp}:momentum_source")}) {
     // Get the units
     const auto& units = alloptions["units"];
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
@@ -43,8 +46,12 @@ protected:
 /// @tparam Isotope   The isotope ('h', 'd' or 't') of the atom and ion
 template <char Isotope>
 struct SOLKITHydrogenChargeExchangeIsotope : public SOLKITHydrogenChargeExchange {
-  SOLKITHydrogenChargeExchangeIsotope(std::string name, Options& alloptions, Solver* solver)
-      : SOLKITHydrogenChargeExchange(name, alloptions, solver) {}
+  SOLKITHydrogenChargeExchangeIsotope(std::string name, Options& alloptions,
+                                      Solver* solver)
+      : SOLKITHydrogenChargeExchange(name, alloptions, solver) {
+    state_variable_access.substitute("sp", {{Isotope}, {Isotope, '+'}});
+    state_variable_access.substitute("readvals", {"AA", "density"});
+  }
 
 private:
   void transform_impl(GuardedOptions& state) override {

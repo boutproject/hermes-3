@@ -21,6 +21,13 @@ class Solver; // Time integrator
 ///   (std::string name, Options &options, Solver *solver)
 /// 
 struct Component {
+  Component() = default;
+  Component(Component& other) = default;
+  Component(Component&& other) = default;
+
+  Component(Permissions&& access_permissions)
+      : state_variable_access(access_permissions) {}
+
   virtual ~Component() {}
 
   /// Modify the given simulation state. This method will wrap the

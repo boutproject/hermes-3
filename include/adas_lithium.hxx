@@ -40,7 +40,8 @@ constexpr std::initializer_list<char> lithium_species_name<0>{'l', 'i'};
 template <int level>
 struct ADASLithiumIonisation : public OpenADAS {
   ADASLithiumIonisation(std::string, Options& alloptions, Solver*)
-      : OpenADAS(alloptions["units"], "scd96_li.json", "plt96_li.json", level,
+      : OpenADAS(alloptions["units"], "scd96_li.json", "plt96_li.json",
+                 lithium_species_name<level>, lithium_species_name<level + 1>, level,
                  -lithium_ionisation_energy[level]) {}
 
 private:
@@ -62,7 +63,8 @@ template <int level>
 struct ADASLithiumRecombination : public OpenADAS {
   /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
   ADASLithiumRecombination(std::string, Options& alloptions, Solver*)
-      : OpenADAS(alloptions["units"], "acd96_li.json", "prb96_li.json", level,
+      : OpenADAS(alloptions["units"], "acd96_li.json", "prb96_li.json",
+                 lithium_species_name<level + 1>, lithium_species_name<level>, level,
                  lithium_ionisation_energy[level]) {}
 
 private:
@@ -81,7 +83,9 @@ template <int level, char Hisotope>
 struct ADASLithiumCX : public OpenADASChargeExchange {
   /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
   ADASLithiumCX(std::string, Options& alloptions, Solver*)
-      : OpenADASChargeExchange(alloptions["units"], "ccd89_li.json", level) {}
+      : OpenADASChargeExchange(alloptions["units"], "ccd89_li.json",
+                               lithium_species_name<level + 1>, {Hisotope},
+                               lithium_species_name<level>, {Hisotope, '+'}, level) {}
 
 private:
   void transform_impl(GuardedOptions& state) override {

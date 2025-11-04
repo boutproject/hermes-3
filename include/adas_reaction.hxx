@@ -53,16 +53,31 @@ struct OpenADAS : public ReactionBase {
   ///
   /// Notes
   ///  - The rate and radiation file names have "json_database/" prepended
-  /// 
+  ///
   OpenADAS(const Options& units, const std::string& rate_file,
-           const std::string& radiation_file, std::size_t level, BoutReal electron_heating)
-      : rate_coef(std::string("json_database/") + rate_file, level),
+           const std::string& radiation_file, std::string from_ion, std::string to_ion,
+           std::size_t level, BoutReal electron_heating)
+      : ReactionBase({readIfSet("species:{sp}:charge"), readOnly("species:{sp}:AA"),
+                      readOnly("species:{from_ion}:{val}"), readOnly("species:e:{e_val}"),
+                      readWrite("species:{sp}:{w_val}"),
+                      readWrite("species:e:{ew_val}")}),
+        rate_coef(std::string("json_database/") + rate_file, level),
         radiation_coef(std::string("json_database/") + radiation_file, level),
         electron_heating(electron_heating) {
     // Get the units
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
+    state_variable_access.substitute("val", {"density", "temperature", "velocity"});
+    state_variable_access.substitute("e_val", {"density", "temperature"});
+    state_variable_access.substitute(
+        "w_val", {"density_source", "momentum_source", "energy_source"});
+    // FIXME: There are hypothetically circumstances in which species:e:density_source
+    // will not be written
+    state_variable_access.substitute(
+        "ew_val", {"density_source", "momentum_source", "energy_source"});
+    state_variable_access.substitute("sp", {from_ion, to_ion});
+    state_variable_access.substitute("from_ion", {from_ion});
   }
 
   /// Perform the calculation of rates, and transfer of particles/momentum/energy
@@ -81,12 +96,23 @@ private:
 };
 
 struct OpenADASChargeExchange : public ReactionBase {
-  OpenADASChargeExchange(const Options& units, const std::string& rate_file, std::size_t level)
-      : rate_coef(std::string("json_database/") + rate_file, level) {
+  OpenADASChargeExchange(const Options& units, const std::string& rate_file,
+                         std::string from_A, std::string from_B, std::string to_A,
+                         std::string to_B, std::size_t level)
+      : ReactionBase({readIfSet("species:{sp}:charge"), readOnly("species:{sp}:AA"),
+                      readOnly("species:{from_ion}:{val}"), readOnly("species:e:{e_val}"),
+                      readWrite("species:{sp}:{w_val}")}),
+        rate_coef(std::string("json_database/") + rate_file, level) {
     // Get the units
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
+    state_variable_access.substitute("val", {"density", "temperature", "velocity"});
+    state_variable_access.substitute("e_val", {"density", "temperature"});
+    state_variable_access.substitute(
+        "w_val", {"density_source", "momentum_source", "energy_source"});
+    state_variable_access.substitute("sp", {from_A, from_B, to_A, to_B});
+    state_variable_access.substitute("from_ion", {from_A, from_B});
   }
   /// Perform charge exchange
   ///

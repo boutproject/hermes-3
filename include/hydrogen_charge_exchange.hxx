@@ -29,8 +29,13 @@ struct HydrogenChargeExchange : public ReactionBase {
   ///          - eV
   ///          - inv_meters_cubed
   ///          - seconds
-  HydrogenChargeExchange([[maybe_unused]] std::string name, Options& alloptions,
-                         Solver*) {
+  HydrogenChargeExchange([[maybe_unused]] std::string name, Options& alloptions, Solver*)
+      : ReactionBase({readOnly("species:{reactant}:{react_vals}"),
+                      readOnly("species:{sp}:{read_vals}"),
+                      readWrite("species:{sp}:{writevals}"),
+                      readWrite("species:{reactant}:collision_frequency"),
+                      readWrite("species:{atom}:collision_frequencies:{atom}_{ion}_cx"),
+                      readWrite("species:{ion}:collision_frequencies:{ion}_{atom}_cx")}) {
     // Get the units
     const auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);
@@ -49,11 +54,11 @@ protected:
   ///
   /// atom1 -> ion2, ion1 -> atom2
   ///
-  /// Assumes that both atom1 and ion1 have:
-  ///   - AA
-  ///   - density
-  ///   - velocity
-  ///   - temperature
+  /// Assumes that species have:
+  ///   - AA (all)
+  ///   - density (atom1, ion1)
+  ///   - velocity (all)
+  ///   - temperature (atom2, ion2)
   ///
   /// Sets in all species:
   ///   - density_source     [If atom1 != atom2 or ion1 != ion2]
@@ -138,6 +143,19 @@ struct HydrogenIsotopeChargeExchange : public HydrogenChargeExchange {
     rate_multiplier = alloptions[{Isotope1}]["K_cx_multiplier"]
                           .doc("Scale the charge exchange rate by this factor")
                           .withDefault<BoutReal>(1.0);
+
+    std::vector<std::string> writevals = {"momentum_source", "energy_source"};
+    if constexpr (Isotope1 != Isotope2) {
+      writevals.push_back("density_source");
+    }
+    state_variable_access.substitute("reactant", {{Isotope1}, {Isotope2, '+'}});
+    state_variable_access.substitute("react_vals", {"density", "temperature"});
+    state_variable_access.substitute("read_vals", {"AA", "velocity"});
+    state_variable_access.substitute(
+        "sp", {{Isotope1}, {Isotope2, '+'}, {Isotope1, '+'}, {Isotope2}});
+    state_variable_access.substitute("writevals", writevals);
+    state_variable_access.substitute("atom", {{Isotope1}});
+    state_variable_access.substitute("ion", {{Isotope2, '+'}});
   }
 
   void outputVars(Options& state) override {
