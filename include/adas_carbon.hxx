@@ -37,7 +37,8 @@ constexpr std::initializer_list<char> carbon_species_name<0>{'c'};
 template <int level>
 struct ADASCarbonIonisation : public OpenADAS {
   ADASCarbonIonisation(std::string, Options& alloptions, Solver*)
-      : OpenADAS(alloptions["units"], "scd96_c.json", "plt96_c.json", level,
+      : OpenADAS(alloptions["units"], "scd96_c.json", "plt96_c.json",
+                 carbon_species_name<level>, carbon_species_name<level + 1>, level,
                  -carbon_ionisation_energy[level]) {}
 
 private:
@@ -59,9 +60,9 @@ template <int level>
 struct ADASCarbonRecombination : public OpenADAS {
   /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
   ADASCarbonRecombination(std::string, Options& alloptions, Solver*)
-      : OpenADAS(alloptions["units"], "acd96_c.json", "prb96_c.json", level,
+      : OpenADAS(alloptions["units"], "acd96_c.json", "prb96_c.json",
+                 carbon_species_name<level + 1>, carbon_species_name<level>, level,
                  carbon_ionisation_energy[level]) {}
-
 
 private:
   void transform_impl(GuardedOptions& state) override {
@@ -79,8 +80,9 @@ template <int level, char Hisotope>
 struct ADASCarbonCX : public OpenADASChargeExchange {
   /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
   ADASCarbonCX(std::string, Options& alloptions, Solver*)
-      : OpenADASChargeExchange(alloptions["units"], "ccd96_c.json", level) {}
-
+      : OpenADASChargeExchange(alloptions["units"], "ccd96_c.json",
+                               carbon_species_name<level + 1>, {Hisotope},
+                               carbon_species_name<level>, {Hisotope, '+'}, level) {}
 
 private:
   void transform_impl(GuardedOptions& state) override {

@@ -101,7 +101,7 @@ Options& GuardedOptions::getWritable(Permissions::Regions region) {
       return *options;
     }
   }
-  throw BoutException("Do not have read permission for {}.", options->str());
+  throw BoutException("Do not have write permission for {}.", options->str());
 }
 
 std::map<std::string, Permissions::Regions> GuardedOptions::unreadItems() const {
@@ -110,4 +110,14 @@ std::map<std::string, Permissions::Regions> GuardedOptions::unreadItems() const 
 
 std::map<std::string, Permissions::Regions> GuardedOptions::unwrittenItems() const {
   return *unwritten_variables;
+}
+
+bool GuardedOptions::operator==(const GuardedOptions& other) const {
+  return std::tie(options, permissions, unread_variables, unwritten_variables)
+         == std::tie(other.options, other.permissions, other.unread_variables,
+                     other.unwritten_variables);
+}
+
+bool GuardedOptions::operator!=(const GuardedOptions& other) const {
+  return !(*this == other);
 }

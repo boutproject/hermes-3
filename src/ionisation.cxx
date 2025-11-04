@@ -2,7 +2,15 @@
 #include "../include/ionisation.hxx"
 #include "../include/integrate.hxx"
 
-Ionisation::Ionisation(std::string name, Options &alloptions, Solver *) {
+Ionisation::Ionisation(std::string name, Options& alloptions, Solver*)
+    : Component(
+        {readOnly("species:h:density"), readOnly("species:h:temperature"),
+         readOnly("species:h:velocity"), readOnly("species:h:AA"),
+         readOnly("species:e:density"), readOnly("species:e:temperature"),
+         readOnly("species:h+:AA"), readWrite("species:h:density_source"),
+         readWrite("species:h+:density_source"), readWrite("species:h:momentum_source"),
+         readWrite("species:h+:momentum_source"), readWrite("species:h:energy_source"),
+         readWrite("species:h+:energy_source"), readWrite("species:e:energy_source")}) {
 
   // Get options for this component
   auto& options = alloptions[name];
