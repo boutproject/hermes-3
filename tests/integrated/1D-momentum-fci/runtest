@@ -15,14 +15,24 @@ from boutdata.collect import collect
 
 from numpy import sqrt, max, abs, mean, array, log, concatenate
 
+import tarfile
+
+gridpath = "../../../../grids/mms_slab_fci_y/"
+archive_path = "mms_slab_fci.tar.xz"
+try:
+  with tarfile.open(gridpath + archive_path, "r:xz") as tar:
+    tar.extractall(path=gridpath)
+except:
+  raise FileNotFoundError("Could not fine mms slab y file to extract")
+
 def gridname(ny):
-  return f"/u/toto/grids/slab/MMS_straight_slab_6_{ny}_4.fci.grid.nc"
+  return gridpath + f"MMS_straight_slab_6_{ny}_4.fci.grid.nc"
 
 # Link to the executable
 shell("ln -s ../../../build/hermes-3 hermes-3")
 
 # List of NY values to use
-nylist = [32, 64, 128, 256,512] #, 640, 1280, 2560, 5120]
+nylist = [16, 32, 64, 128] #, 640, 1280, 2560, 5120]
 
 nout = 20
 timestep = 1e4 / nout
