@@ -64,7 +64,7 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
   for (auto& kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-    if (!(IS_SET(species["charge"]) and IS_SET(species["temperature"])))
+    if (!(species.isSet("charge") and species.isSet("temperature")))
       continue; // Skip, go to next species
 
     // Calculate diamagnetic drift velocity for this species

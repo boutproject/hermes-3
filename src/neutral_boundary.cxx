@@ -70,7 +70,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
 
   // Get the energy source, or create if not set
   Field3D energy_source =
-      IS_SET(species["energy_source"])
+      species.isSet("energy_source")
           ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
           : zeroFrom(Nn);
 

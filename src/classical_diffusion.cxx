@@ -23,9 +23,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   for (auto& kv : allspecies.getChildren()) {
     const auto species = kv.second;
 
-    GuardedOptions x = species["charge"];
-
-    if (!(IS_SET(species["charge"]) and IS_SET(species["pressure"]))) {
+    if (!(species.isSet("charge") and species.isSet("pressure"))) {
       continue; // Skip, go to next species
     }
     auto q = get<BoutReal>(species["charge"]);
@@ -57,7 +55,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   for (auto kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-    if (!(IS_SET(species["charge"]) and IS_SET(species["density"]))) {
+    if (!(species.isSet("charge") and species.isSet("density"))) {
       continue; // Skip, go to next species
     }
     auto q = get<BoutReal>(species["charge"]);
