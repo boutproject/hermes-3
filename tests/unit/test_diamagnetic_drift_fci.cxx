@@ -1,3 +1,5 @@
+#if BOUT_USE_METRIC_3D
+
 #include "gtest/gtest.h"
 
 #include "test_extras.hxx" // FakeMesh                                                                                                                                                                     
@@ -329,3 +331,4 @@ TEST_F(DiamagneticDriftFCITest, DoubleGradient) {
   }
 }
 
+#endif // BOUT_USE_METRIC_3D
