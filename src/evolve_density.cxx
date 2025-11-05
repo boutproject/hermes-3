@@ -132,7 +132,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     .withDefault<bool>(false);
 }
 
-void EvolveDensity::transform(GuardedOptions& state) {
+void EvolveDensity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   if (evolve_log) {

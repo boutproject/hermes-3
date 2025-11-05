@@ -148,7 +148,7 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
   }
 }
 
-void Recycling::transform(GuardedOptions& state) {
+void Recycling::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Get metric tensor components

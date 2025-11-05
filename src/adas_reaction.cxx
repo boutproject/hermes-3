@@ -112,7 +112,7 @@ BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
   return pow(10., eval_log_coef);
 }
 
-void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to_ion) {
+void OpenADAS::calculate_rates(GuardedOptions electron, GuardedOptions from_ion, GuardedOptions to_ion) {
   AUTO_TRACE();
 
   Field3D Ne = GET_VALUE(Field3D, electron["density"]);
@@ -173,9 +173,9 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   subtract(electron["energy_source"], energy_loss);
 }
 
-void OpenADASChargeExchange::calculate_rates(Options& electron, Options& from_A,
-                                             Options& from_B, Options& to_A,
-                                             Options& to_B) {
+void OpenADASChargeExchange::calculate_rates(GuardedOptions electron, GuardedOptions from_A,
+                                             GuardedOptions from_B, GuardedOptions to_A,
+                                             GuardedOptions to_B) {
   AUTO_TRACE();
 
   // Check that the reaction conserves mass and charge

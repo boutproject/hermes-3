@@ -31,7 +31,7 @@ BoutReal calculateGradient(const std::vector<BoutReal>& x, const std::vector<Bou
     return numerator / denominator;
 }
 
-void DetachmentController::transform(GuardedOptions& state) {
+void DetachmentController::transform_impl(GuardedOptions& state) {
 
     std::cout << std::fixed << std::setprecision(15);
 

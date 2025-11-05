@@ -96,7 +96,7 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
                         .withDefault<bool>(true);
 }
 
-void SheathBoundary::transform(GuardedOptions& state) {
+void SheathBoundary::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];

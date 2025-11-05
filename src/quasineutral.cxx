@@ -15,7 +15,7 @@ Quasineutral::Quasineutral(std::string name, Options &alloptions,
   ASSERT0(charge != 0.0);
 }
 
-void Quasineutral::transform(GuardedOptions &state) {
+void Quasineutral::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   // Iterate through all subsections
   GuardedOptions allspecies = state["species"];

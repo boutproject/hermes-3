@@ -87,7 +87,7 @@ private:
   /// Note that phi in the domain will not be set, so will be invalid data.
   ///
   ///
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

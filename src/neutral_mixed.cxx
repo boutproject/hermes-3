@@ -171,7 +171,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnNVn.setBoundary(std::string("Dnn") + name);
 }
 
-void NeutralMixed::transform(GuardedOptions& state) {
+void NeutralMixed::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   mesh->communicate(Nn, Pn, NVn);

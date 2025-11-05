@@ -59,7 +59,7 @@ PolarisationDrift::PolarisationDrift(std::string name,
     .withDefault<bool>(false);
 }
 
-void PolarisationDrift::transform(GuardedOptions &state) {
+void PolarisationDrift::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Iterate through all subsections

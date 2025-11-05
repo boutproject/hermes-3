@@ -191,7 +191,7 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
 }
 
 /// Modify the given simulation state
-void NeutralFullVelocity::transform(GuardedOptions& state) {
+void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   mesh->communicate(Nn2D, Vn2D, Pn2D);
 

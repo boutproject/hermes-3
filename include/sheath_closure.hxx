@@ -45,7 +45,7 @@ private:
   /// - fields
   ///   - DivJdia     Divergence of current
   ///
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

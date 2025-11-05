@@ -64,7 +64,7 @@ private:
   Field2D Vnpar; ///< Parallel flow velocity diagnostic
 
   /// Modify the given simulation state
-  void transform(GuardedOptions& state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

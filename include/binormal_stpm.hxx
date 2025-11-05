@@ -40,7 +40,7 @@ private:
   ///     - momentum correction
   ///     - density correction
   ///
-  void transform(GuardedOptions& state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

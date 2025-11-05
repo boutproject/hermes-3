@@ -11,7 +11,7 @@ std::unique_ptr<Component> Component::create(const std::string &type,
 
 void Component::transform(Options& state) {
   GuardedOptions guarded(&state, &state_variable_access);
-  transform(guarded);
+  transform_impl(guarded);
   for (auto& [varname, region] : guarded.unreadItems()) {
     output_warn.write("Did not read from state variable {} in region(s) {}",
                       varname, Permissions::regionNames(region));

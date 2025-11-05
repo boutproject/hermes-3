@@ -73,14 +73,14 @@ private:
   ///     - temperature
   ///     - pressure (if density is set)
   ///
-  void transform(GuardedOptions& state) override {
+  void transform_impl(GuardedOptions& state) override {
     AUTO_TRACE();
 
     // Get the temperature
     T = GET_NOBOUNDARY(Field3D, state["species"][temperature_from]["temperature"]);
 
     // Set temperature
-    auto& species = state["species"][name];
+    auto species = state["species"][name];
     set(species["temperature"], T);
 
     if (isSetFinalNoBoundary(species["density"])) {

@@ -113,7 +113,7 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
                            .withDefault<bool>(true);
 }
 
-void EvolveEnergy::transform(GuardedOptions& state) {
+void EvolveEnergy::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   if (evolve_log) {

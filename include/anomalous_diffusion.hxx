@@ -52,7 +52,7 @@ private:
   ///     - momentum_source
   ///     - energy_source
   ///
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 
