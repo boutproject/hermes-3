@@ -18,7 +18,7 @@ BraginskiiElectronViscosity::BraginskiiElectronViscosity(std::string name,
   diagnose = options["diagnose"].doc("Output diagnostics?").withDefault<bool>(false);
 }
 
-void BraginskiiElectronViscosity::transform(GuardedOptions& state) {
+void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions species = state["species"]["e"];

@@ -102,7 +102,7 @@ void Electromagnetic::restartVars(Options& state) {
                   {"source", "electromagnetic"}});
 }
 
-void Electromagnetic::transform(GuardedOptions &state) {
+void Electromagnetic::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   
   GuardedOptions allspecies = state["species"];

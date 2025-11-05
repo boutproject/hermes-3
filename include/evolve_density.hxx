@@ -92,7 +92,7 @@ private:
   ///     - AA
   ///     - charge
   ///     - density
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

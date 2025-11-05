@@ -236,7 +236,7 @@ private:
   Field3D atom_rate, ion_rate; ///< Collision rates in s^-1
   bool no_neutral_cx_mom_gain; ///< Make CX behave as in diffusive neutrals?
 
-  void transform(GuardedOptions& state) override {
+  void transform_impl(GuardedOptions& state) override {
     Field3D R, atom_mom, ion_mom, atom_energy, ion_energy;
 
     calculate_rates(state["species"][{Isotope1}],                  // e.g. "h"

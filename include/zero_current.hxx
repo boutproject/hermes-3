@@ -48,7 +48,7 @@ private:
   ///   - <name>
   ///     - velocity
   /// 
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

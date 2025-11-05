@@ -6,7 +6,7 @@
 
 using bout::globals::mesh;
 
-void NeutralParallelDiffusion::transform(GuardedOptions& state) {
+void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   GuardedOptions allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {

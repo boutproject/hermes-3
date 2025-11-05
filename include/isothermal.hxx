@@ -30,7 +30,7 @@ private:
   ///     - temperature
   ///     - pressure (if density is set)
   ///
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

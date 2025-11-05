@@ -133,7 +133,7 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   
 }
 
-void SheathBoundarySimple::transform(GuardedOptions& state) {
+void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];

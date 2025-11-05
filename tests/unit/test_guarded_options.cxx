@@ -188,3 +188,46 @@ TEST_F(GuardedOptionsTests, TestNullPermissions) {
   EXPECT_THROW(sub_opt.get(Permissions::Interior), BoutException);
   EXPECT_THROW(sub_opt.getWritable(Permissions::Interior), BoutException);
 }
+
+TEST_F(GuardedOptionsTests, TestGetChildren) {
+  std::map<std::string, GuardedOptions> guarded_children = guarded_opts["species"].getChildren();
+  EXPECT_EQ(guarded_children.size(), 2);
+  EXPECT_EQ(guarded_children.count("he"), 1);
+  EXPECT_EQ(guarded_children.count("d"), 1);
+  EXPECT_EQ(&(guarded_children["d"].get()), &(opts["species"]["d"]));
+  // We do not have access to the whole "he" section
+  EXPECT_THROW(guarded_children["he"].get(), BoutException);
+}
+
+TEST_F(GuardedOptionsTests, TestIsThisSection) {
+  EXPECT_TRUE(guarded_opts.isSection());
+  EXPECT_TRUE(guarded_opts["species:d:collision_frequencies"].isSection());
+  EXPECT_FALSE(guarded_opts["species:he:temperature"].isSection());
+  EXPECT_TRUE(guarded_opts["species"]["he"]["collision_frequency"].isSection());
+}
+
+TEST_F(GuardedOptionsTests, TestIsChildSection) {
+  EXPECT_TRUE(guarded_opts.isSection(""));
+  // Unforunately Operator::isSection does not support full paths
+  EXPECT_FALSE(guarded_opts.isSection("species:he"));
+  EXPECT_FALSE(guarded_opts["species"]["he"].isSection("temperature"));
+  EXPECT_FALSE(guarded_opts["species:he"].isSection("pressure"));
+  EXPECT_TRUE(guarded_opts["species:d"].isSection("collision_frequencies"));
+}
+
+TEST_F(GuardedOptionsTests, TestIsThisSet) {
+  EXPECT_TRUE(guarded_opts["species"]["he"]["temperature"].isSet());
+  EXPECT_TRUE(guarded_opts["species:he:pressure"].isSet());
+  EXPECT_TRUE(guarded_opts["species"]["he"]["velocity"].isSet());
+  EXPECT_FALSE(guarded_opts["species"]["he"]["collision_frequency"].isSet());
+  EXPECT_FALSE(guarded_opts["unset"].isSet());
+}
+
+TEST_F(GuardedOptionsTests, TestIsChildSet) {
+  EXPECT_FALSE(guarded_opts["species:he:pressure"].isSet("test"));
+  EXPECT_FALSE(guarded_opts["species:he"].isSet("collision_frequency"));
+  EXPECT_TRUE(guarded_opts["species"]["he"].isSet("temperature"));
+  // Unforunately Operator::isSet does not support full paths
+  EXPECT_FALSE(guarded_opts.isSet("species:he:temperature"));
+  EXPECT_TRUE(guarded_opts["species"]["d"]["collision_frequencies"].isSet("d_d_coll"));
+}

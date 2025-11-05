@@ -171,6 +171,6 @@ private:
 
   void zero_diagnostics(GuardedOptions state);
 
-  void transform(GuardedOptions& state) override final;
+  void transform_impl(GuardedOptions& state) override final;
 };
 #endif

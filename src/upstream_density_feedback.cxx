@@ -3,7 +3,7 @@
 #include <bout/mesh.hxx>
 using bout::globals::mesh;
 
-void UpstreamDensityFeedback::transform(GuardedOptions& state) {
+void UpstreamDensityFeedback::transform_impl(GuardedOptions& state) {
   GuardedOptions species = state["species"][name];
 
   // Doesn't need all boundaries to be set
