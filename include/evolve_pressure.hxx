@@ -109,6 +109,8 @@ private:
   BoutReal hyper_z; ///< Hyper-diffusion
   BoutReal hyper_z_T; ///< 4th-order dissipation in T
 
+  bool freeze_profiles; ///< Subtract Z average from time derivatives?
+
   bool diagnose; ///< Output additional diagnostics?
   bool enable_precon; ///< Enable preconditioner?
   BoutReal source_normalisation; ///< Normalisation factor [Pa/s]

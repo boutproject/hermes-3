@@ -101,6 +101,8 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
 
   hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
 
+  freeze_profiles = options["freeze_profiles"].doc("Subtract Z average from time derivatives?").withDefault<bool>(false);
+
   // Numerical dissipation terms
   // These are required to suppress parallel zig-zags in
   // cell centred formulations. Essentially adds (hopefully small)
@@ -758,6 +760,10 @@ void Vorticity::finally(const Options& state) {
         }
       }
     }
+  }
+
+  if (freeze_profiles) {
+    ddt(Vort) -= DC(ddt(Vort)); // Remove the DC, i.e. Z-averaged, component.
   }
 }
 

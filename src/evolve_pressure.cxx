@@ -88,6 +88,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     .doc("4th-order dissipation of temperature")
     .withDefault<BoutReal>(-1.0);
 
+  freeze_profiles = options["freeze_profiles"].doc("Subtract Z average from time derivatives?").withDefault<bool>(false);
+
   diagnose = options["diagnose"]
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
@@ -556,6 +558,10 @@ void EvolvePressure::finally(const Options& state) {
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     ddt(P) *= get<Field3D>(state["scale_timederivs"]);
+  }
+
+  if (freeze_profiles) {
+    ddt(P) -= DC(ddt(P)); // Remove the DC, i.e. Z-averaged, component.
   }
 
   if (evolve_log) {

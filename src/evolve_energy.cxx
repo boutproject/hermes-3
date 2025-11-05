@@ -81,6 +81,8 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
+  freeze_profiles = options["freeze_profiles"].doc("Subtract Z average from time derivatives?").withDefault<bool>(false);
+
   diagnose = options["diagnose"]
                  .doc("Save additional output diagnostics")
                  .withDefault<bool>(false);
@@ -463,6 +465,10 @@ void EvolveEnergy::finally(const Options& state) {
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     ddt(E) *= get<Field3D>(state["scale_timederivs"]);
+  }
+
+  if (freeze_profiles) {
+    ddt(E) -= DC(ddt(E)); // Remove the DC, i.e. Z-averaged, component.
   }
 
   if (evolve_log) {
