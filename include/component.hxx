@@ -61,7 +61,7 @@ private:
   /// implement this function. It will only allow the reading
   /// from/writing to state variables with the appropriate permissiosn
   /// in `state_variable_access`.
-  virtual void transform(GuardedOptions &state) = 0;
+  virtual void transform_impl(GuardedOptions &state) = 0;
 };
 
 ///////////////////////////////////////////////////////////////////

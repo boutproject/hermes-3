@@ -53,7 +53,7 @@ private:
   ///      - momentum [if set] Zero boundary
   ///      - energy_source  Adds wall losses
   ///
-  void transform(GuardedOptions& state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

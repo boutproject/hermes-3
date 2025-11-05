@@ -14,7 +14,7 @@ private:
 
   BoutReal Tnorm, Nnorm, FreqNorm; // Normalisations
 
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

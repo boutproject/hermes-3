@@ -59,7 +59,7 @@ struct SimplePump : public Component {
     BoutReal residence_time;
     bool diagnose;
 
-    void transform(GuardedOptions& state) override {
+    void transform_impl(GuardedOptions& state) override {
 
         Field3D species_density = getNoBoundary<Field3D>(state["species"][name]["density"]);
 

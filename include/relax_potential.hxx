@@ -75,7 +75,7 @@ private:
   ///
   /// Note: Diamagnetic current calculated here, but could be moved
   ///       to a component with the diamagnetic drift advection terms
-  void transform(GuardedOptions& state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

@@ -92,7 +92,7 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(std::string name, Options& allopt
   }
 }
 
-void BraginskiiIonViscosity::transform(GuardedOptions &state) {
+void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];

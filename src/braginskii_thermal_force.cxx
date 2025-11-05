@@ -3,7 +3,7 @@
 
 #include "../include/braginskii_thermal_force.hxx"
 
-void BraginskiiThermalForce::transform(GuardedOptions& state) {
+void BraginskiiThermalForce::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];

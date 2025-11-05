@@ -112,7 +112,7 @@ private:
   ///     - pressure
   ///     - temperature   Requires density
   ///
-  void transform(GuardedOptions& state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

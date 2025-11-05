@@ -410,8 +410,8 @@ struct FixedFractionRadiation : public Component {
   ///   - e
   ///     - energy_source
   ///
-  void transform(GuardedOptions &state) override {
-    auto& electrons = state["species"]["e"];
+  void transform_impl(GuardedOptions& state) override {
+    auto electrons = state["species"]["e"];
     // Don't need boundary cells
     const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]);
     const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]);

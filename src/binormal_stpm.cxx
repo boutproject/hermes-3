@@ -47,7 +47,7 @@ BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions,
     .withDefault(false);
 }
 
-void BinormalSTPM::transform(GuardedOptions& state) {
+void BinormalSTPM::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   GuardedOptions allspecies = state["species"];
   // Loop through all species
