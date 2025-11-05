@@ -80,6 +80,10 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
   // to how twist-shift boundary conditions and non-aligned inputs are
   // treated; using the cell boundary gives incorrect results.
 
+  sheath_extrapolate = options["sheath_extrapolate"]
+                        .doc("Extrapolate values into the sheath? If not use neumann on all variables.")
+                        .withDefault<bool>(true);
+  
   floor_potential = options["floor_potential"]
                         .doc("Apply a floor to wall potential when calculating Ve?")
                         .withDefault<bool>(true);
@@ -163,11 +167,18 @@ void SheathBoundaryParallel::transform(Options &state) {
       iter_regions([&](auto& region) {
         for (auto& pnt : region) {
           const auto& i = pnt.ind();
-          BoutReal s_i =
+
+	  BoutReal s_i;
+	  if (sheath_extrapolate) {
+	    s_i =
               clip(pnt.extrapolate_sheath_o2([&, Ni, Ne](int yoffset, Ind3D ind) {
                 return Ni.ynext(yoffset)[ind] / Ne.ynext(yoffset)[ind];
               }),
                    0.0, 1.0);
+	  } else {
+	    s_i = pnt.ythis(Ni) / pnt.ythis(Ne);
+	  } 
+          
 
           if (!std::isfinite(s_i)) {
             s_i = 1.0;
@@ -176,9 +187,17 @@ void SheathBoundaryParallel::transform(Options &state) {
           BoutReal ti = Ti[i];
 
           // Equation (9) in Tskhakaya 2005
-          BoutReal grad_ne = pnt.extrapolate_grad_o2(Ne);
-          BoutReal grad_ni = pnt.extrapolate_grad_o2(Ni);
+	  BoutReal grad_ne;
+	  BoutReal grad_ni;
 
+	  if (sheath_extrapolate) {
+	    grad_ne = pnt.extrapolate_grad_o2(Ne);
+	    grad_ni = pnt.extrapolate_grad_o2(Ni);
+	  } else {
+	    grad_ne = 1.0;
+	    grad_ni = 1.0;
+	  }
+	  
           // Note: Needed to get past initial conditions, perhaps
           // transients but this shouldn't happen in steady state
           if (fabs(grad_ni) < 1e-3) {
@@ -238,10 +257,16 @@ void SheathBoundaryParallel::transform(Options &state) {
       // Limited so that the values don't increase into the sheath
       // This ensures that the guard cell values remain positive
       // exp( 2*log(N[i]) - log(N[ip]) )
-      pnt.limitFree(Ne);
-      pnt.limitFree(Te);
-      pnt.limitFree(Pe);
-
+      if (sheath_extrapolate) {
+	pnt.limitFree(Ne);
+	pnt.limitFree(Te);
+	pnt.limitFree(Pe);
+      } else {
+	pnt.ynext(Ne) = pnt.ythis(Ne);
+	pnt.ynext(Te) =	pnt.ythis(Te);
+	pnt.ynext(Pe) =	pnt.ythis(Pe);
+      }
+      
       // Free boundary potential linearly extrapolated
       const BoutReal phiGradient = pnt.extrapolate_grad_o2(phi);
       pnt.neumann_o1(phi, phiGradient);
@@ -370,10 +395,15 @@ void SheathBoundaryParallel::transform(Options &state) {
         // Free gradient of log electron density and temperature
         // This ensures that the guard cell values remain positive
         // exp( 2*log(N[i]) - log(N[ip]) )
-
-        pnt.limitFree(Ni);
-        pnt.limitFree(Ti);
-        pnt.limitFree(Pi);
+	if (sheath_extrapolate) {
+	  pnt.limitFree(Ni);
+	  pnt.limitFree(Ti);
+	  pnt.limitFree(Pi);
+	} else {
+	  pnt.ynext(Ni) = pnt.ythis(Ni);
+	  pnt.ynext(Ti) = pnt.ythis(Ti);
+	  pnt.ynext(Pi) = pnt.ythis(Pi);
+	}
 
         // Calculate sheath values at half-way points (cell edge)
         const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);
@@ -394,9 +424,17 @@ void SheathBoundaryParallel::transform(Options &state) {
 	  s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0;
 	}
 
-	BoutReal grad_ne = pnt.extrapolate_grad_o2(Ne);
-	BoutReal grad_ni = pnt.extrapolate_grad_o2(Ni);
-
+	BoutReal grad_ne;
+	BoutReal grad_ni;
+	
+	if (sheath_extrapolate) {
+	  grad_ne = pnt.extrapolate_grad_o2(Ne);
+	  grad_ni = pnt.extrapolate_grad_o2(Ni);
+	} else {
+	  grad_ni = 1.0;
+	  grad_ne = 1.0;
+	}
+	
 	if (fabs(grad_ni) < 1e-3) {
 	  grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
 	}
