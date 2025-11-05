@@ -279,6 +279,7 @@ if(HERMES_TESTS)
                    ${TEST_SOURCES})
 
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
+    set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
   endif()
 endif()
