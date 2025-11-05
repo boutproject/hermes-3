@@ -6,7 +6,9 @@
 using bout::globals::mesh;
 
 DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
-                                   Solver* UNUSED(solver)) {
+                                   Solver* UNUSED(solver))
+    : Component({readIfSet("species:{all_species}:{input}"),
+                 readWrite("species:{all_species}:{output}")}) {
 
   // Get options for this component
   auto& options = alloptions[name];
@@ -55,6 +57,17 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
     Curlb_B.y(r.ind, mesh->yend + 1) = -Curlb_B.y(r.ind, mesh->yend);
   }
+
+  // FIXME: density, pressure, and momentum will not be read even if
+  // they are defined if charge and temperature were not defined for
+  // that species.
+  state_variable_access.substitute(
+      "input", {"charge", "temperature", "density", "pressure", "momentum"});
+  // FIXME: These will actually only be written if density, pressure,
+  // and momentum are set, respectively. They also require charge and
+  // temperature to have been set.
+  state_variable_access.substitute(
+      "output", {"density_source", "energy_source", "momentum_source"});
 }
 
 void DiamagneticDrift::transform_impl(GuardedOptions& state) {

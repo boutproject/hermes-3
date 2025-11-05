@@ -7,7 +7,10 @@
 using bout::globals::mesh;
 
 AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, Solver*)
-    : name(name) {
+    : Component({readOnly("species:{name}:density", Permissions::Interior),
+                 readIfSet("species:{name}:{optional}", Permissions::Interior),
+                 readWrite("species:{name}:{output}")}),
+      name(name) {
   // Normalisations
   const Options& units = alloptions["units"];
   const BoutReal rho_s0 = units["meters"];
@@ -50,6 +53,27 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
   diagnose = alloptions[name]["diagnose"]
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
+
+  state_variable_access.substitute("name", {name});
+  state_variable_access.substitute("optional", {"temperature", "velocity"});
+  std::vector<std::string> output_vars;
+  if (include_D) {
+    output_vars.push_back("density_source");
+    output_vars.push_back("particle_flow_xlow");
+    output_vars.push_back("particle_flow_ylow");
+  }
+  if (include_D or include_chi) {
+    output_vars.push_back("energy_source");
+    output_vars.push_back("energy_flow_xlow");
+    output_vars.push_back("energy_flow_ylow");
+  }
+  if (include_D or include_nu) {
+    state_variable_access.setAccess(readOnly(fmt::format("species:{}:AA", name)));
+    output_vars.push_back("momentum_source");
+    output_vars.push_back("momentum_flow_xlow");
+    output_vars.push_back("momentum_flow_ylow");
+  }
+  state_variable_access.substitute("output", output_vars);
 }
 
 void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
@@ -168,4 +192,3 @@ void AnomalousDiffusion::outputVars(Options& state) {
                       {"source", "anomalous_diffusion"}});
   }
 }
-

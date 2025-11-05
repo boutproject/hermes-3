@@ -19,7 +19,16 @@
 ///       components which impose forces on electrons
 ///
 struct ElectronForceBalance : public Component {
-  ElectronForceBalance(std::string name, Options& alloptions, Solver*) {
+  ElectronForceBalance(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:e:pressure"),
+                   // FIXME: This is read unconditionally for electrons, only if set for
+                   // everything else
+                   readIfSet("species:{all_species}:density", Permissions::Interior),
+                   // FIXME: This is read unconditionally for electrons, only if set for
+                   // everything else
+                   readIfSet("species:{all_species}:charge"),
+                   // FIXME: Only written if density and charge have been set.
+                   readWrite("species:{all_species}:momentum_source")}) {
     AUTO_TRACE();
     auto& options = alloptions[name];
     diagnose = options["diagnose"]
