@@ -9,7 +9,12 @@ using bout::globals::mesh;
 
 BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions,
                            [[maybe_unused]] Solver* solver)
-    : name(name) {
+    : Component({
+        readIfSet("species:{all_species}:{input}", Permissions::Interior),
+        readOnly("species:{all_species}:AA"),
+        readWrite("species:{all_species}:{output}"),
+    }),
+      name(name) {
   AUTO_TRACE();
   auto& options = alloptions[name];
   const Options& units = alloptions["units"];
@@ -45,6 +50,10 @@ BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions,
   diagnose = options["diagnose"]
     .doc("Output diagnostics?")
     .withDefault(false);
+
+  state_variable_access.substitute("input", {"density", "temperature", "momentum"});
+  state_variable_access.substitute(
+      "output", {"energy_source", "momentum_source", "density_source"});
 }
 
 void BinormalSTPM::transform_impl(GuardedOptions& state) {
