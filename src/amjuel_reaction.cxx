@@ -120,7 +120,7 @@ void AmjuelReaction::transform_additional(GuardedOptions& state, Field3D& reacti
   Field3D T_e = get<Field3D>(electron["temperature"]);
   const int e_pop_change = this->parser->get_stoich().at("e");
   if (e_pop_change != 0) {
-    if (IS_SET(electron["velocity"])) {
+    if (electron.isSet("velocity")) {
       // Transfer of electron kinetic to thermal energy due to density source
       // For ionisation:
       // Electrons with zero average velocity are created, diluting the kinetic energy.

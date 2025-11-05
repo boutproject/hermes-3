@@ -223,23 +223,23 @@ void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
     // Density and temperature boundary conditions will be imposed (free)
     Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
-    Field3D Pi = IS_SET(species["pressure"])
+    Field3D Pi = species.isSet("pressure")
                      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
                      : Ni * Ti;
 
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
-    Field3D Vi = IS_SET(species["velocity"])
+    Field3D Vi = species.isSet("velocity")
                      ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
                      : zeroFrom(Ni);
-    Field3D NVi = IS_SET(species["momentum"])
+    Field3D NVi = species.isSet("momentum")
                       ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
                       : Mi * Ni * Vi;
 
     // Energy source will be modified in the domain
     Field3D energy_source =
-        IS_SET(species["energy_source"])
+        species.isSet("energy_source")
             ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
             : zeroFrom(Ni);
 
@@ -410,11 +410,11 @@ void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
     setBoundary(species["temperature"], fromFieldAligned(Ti));
     setBoundary(species["pressure"], fromFieldAligned(Pi));
 
-    if (IS_SET(species["velocity"])) {
+    if (species.isSet("velocity")) {
       setBoundary(species["velocity"], fromFieldAligned(Vi));
     }
 
-    if (IS_SET(species["momentum"])) {
+    if (species.isSet("momentum")) {
       setBoundary(species["momentum"], fromFieldAligned(NVi));
     }
 
@@ -429,7 +429,7 @@ void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
   //
 
   Field3D electron_energy_source =
-      IS_SET(electrons["energy_source"])
+      electrons.isSet("energy_source")
           ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
           : zeroFrom(Ne);
 

@@ -27,7 +27,7 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
     }
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
  
-    if (!(IS_SET(species["density"]) and IS_SET(species["charge"]))) {
+    if (!(species.isSet("density") and species.isSet("charge"))) {
       continue; // Needs both density and charge to contribute
     }
 
@@ -56,7 +56,7 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
 
   // Get the species density
   GuardedOptions species = state["species"][name];
-  if (IS_SET(species["velocity"])) {
+  if (species.isSet("velocity")) {
     throw BoutException("Cannot use zero_current in species {} if velocity already set\n", name);
   }
   Field3D N = getNoBoundary<Field3D>(species["density"]);

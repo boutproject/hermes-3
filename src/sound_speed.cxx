@@ -11,7 +11,7 @@ void SoundSpeed::transform_impl(GuardedOptions& state) {
   for (auto& kv : state["species"].getChildren()) {
     const GuardedOptions species = kv.second;
 
-    if (IS_SET(species["pressure"])) {
+    if (species.isSet("pressure")) {
       total_pressure += GET_NOBOUNDARY(Field3D, species["pressure"]);
     }
 
@@ -21,14 +21,14 @@ void SoundSpeed::transform_impl(GuardedOptions& state) {
       continue;
     }
 
-    if (IS_SET(species["AA"])) {
+    if (species.isSet("AA")) {
       auto AA = get<BoutReal>(species["AA"]); // Atomic mass number
 
-      if (IS_SET(species["density"])) {
+      if (species.isSet("density")) {
         total_density += GET_NOBOUNDARY(Field3D, species["density"]) * get<BoutReal>(species["AA"]);
       }
 
-      if (IS_SET(species["temperature"])) {
+      if (species.isSet("temperature")) {
         auto T = GET_NOBOUNDARY(Field3D, species["temperature"]);
         for (auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
           BoutReal sound_speed = sqrt(softFloor(T[i], temperature_floor) / AA);

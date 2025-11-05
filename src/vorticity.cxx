@@ -225,8 +225,8 @@ void Vorticity::transform_impl(GuardedOptions& state) {
     for (auto& kv : allspecies.getChildren()) {
       GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
-      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
-            and IS_SET(species["AA"]))) {
+      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
+            and species.isSet("AA"))) {
         continue; // No pressure, charge or mass -> no polarisation current
       }
 
@@ -349,7 +349,7 @@ void Vorticity::transform_impl(GuardedOptions& state) {
     }
 
     Field3D Te; // Electron temperature, use for outer boundary conditions
-    if (IS_SET(state["species"]["e"]["temperature"])) {
+    if (state["species"]["e"].isSet("temperature")) {
       // Electron temperature set
       Te = GET_NOBOUNDARY(Field3D, state["species"]["e"]["temperature"]);
     } else {
@@ -591,7 +591,7 @@ void Vorticity::transform_impl(GuardedOptions& state) {
     for (const auto& kv : allspecies.getChildren()) {
       const GuardedOptions species = kv.second;
 
-      if (!(IS_SET(species["charge"]) and IS_SET(species["AA"]))) {
+      if (!(species.isSet("charge") and species.isSet("AA"))) {
         continue; // No charge or mass -> no current
       }
       if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {

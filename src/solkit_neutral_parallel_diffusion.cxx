@@ -13,7 +13,7 @@ void SOLKITNeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
     // Get non-const reference
     auto species = allspecies[kv.first];
 
-    if (IS_SET(species["charge"]) and (get<BoutReal>(species["charge"]) != 0.0)) {
+    if (species.isSet("charge") and (get<BoutReal>(species["charge"]) != 0.0)) {
       // Skip charged species
       continue;
     }
@@ -31,7 +31,7 @@ void SOLKITNeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
           // Electrons
           const Field3D Ne = GET_VALUE(Field3D, species["density"]);
           return value + (8.8e-21 / area_norm) * Ne;
-        } else if (IS_SET(species["charge"]) and
+        } else if (species.isSet("charge") and
                    (get<BoutReal>(species["charge"]) != 0.0)) {
           // Charged ion species
           const Field3D Ni = GET_VALUE(Field3D, species["density"]);

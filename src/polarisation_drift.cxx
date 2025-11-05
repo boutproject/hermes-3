@@ -77,7 +77,7 @@ void PolarisationDrift::transform_impl(GuardedOptions& state) {
   for (auto& kv : allspecies.getChildren()) {
     const GuardedOptions species = kv.second;
 
-    if (!IS_SET(species["charge"]) or !IS_SET(species["momentum"])) {
+    if (!species.isSet("charge") or !species.isSet("momentum")) {
       continue; // Not charged, or no parallel flow
     }
     const BoutReal Z = get<BoutReal>(species["charge"]);
@@ -105,8 +105,8 @@ void PolarisationDrift::transform_impl(GuardedOptions& state) {
     for (auto& kv : allspecies.getChildren()) {
       GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
-      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
-            and IS_SET(species["AA"]))) {
+      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
+            and species.isSet("AA"))) {
         // No pressure, charge or mass -> no polarisation current due to
         // diamagnetic flow
         continue;
@@ -141,7 +141,7 @@ void PolarisationDrift::transform_impl(GuardedOptions& state) {
     for (auto& kv : allspecies.getChildren()) {
       const GuardedOptions species = kv.second;
 
-      if (!(IS_SET(species["charge"]) and IS_SET(species["AA"]))) {
+      if (!(species.isSet("charge") and species.isSet("AA"))) {
         continue; // No charge or mass -> no current
       }
       if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
@@ -187,7 +187,7 @@ void PolarisationDrift::transform_impl(GuardedOptions& state) {
   for (auto& kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
-    if (!(IS_SET(species["charge"]) and IS_SET(species["AA"]))) {
+    if (!(species.isSet("charge") and species.isSet("AA"))) {
       continue; // No charge or mass -> no current
     }
     const BoutReal Z = get<BoutReal>(species["charge"]);

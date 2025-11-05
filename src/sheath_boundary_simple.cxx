@@ -182,7 +182,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     for (auto& kv : allspecies.getChildren()) {
       const GuardedOptions species = kv.second;
 
-      if ((kv.first == "e") or !IS_SET(species["charge"])
+      if ((kv.first == "e") or !species.isSet("charge")
           or (get<BoutReal>(species["charge"]) == 0.0)) {
         continue; // Skip electrons and non-charged ions
       }
@@ -191,7 +191,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
       const Field3D Ti = getNoBoundary<Field3D>(species["temperature"]);
       const BoutReal Mi = getNoBoundary<BoutReal>(species["AA"]);
       const BoutReal Zi = getNoBoundary<BoutReal>(species["charge"]);
-      Field3D Vi = IS_SET(species["velocity"])
+      Field3D Vi = species.isSet("velocity")
         ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
         : zeroFrom(Ni);
 
@@ -318,7 +318,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
   //////////////////////////////////////////////////////////////////
   // Electrons
 
-  Field3D electron_energy_source = IS_SET(electrons["energy_source"])
+  Field3D electron_energy_source = electrons.isSet("energy_source")
     ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
     : zeroFrom(Ne);
 
@@ -477,7 +477,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     setBoundary(electrons["momentum"], fromFieldAligned(NVe));
   }
 
-  if (always_set_phi or (state.isSection("fields") and IS_SET(state["fields"]["phi"]))) {
+  if (always_set_phi or (state.isSection("fields") and state["fields"].isSet("phi"))) {
     // Set the potential, including boundary conditions
     phi.clearParallelSlices();
     setBoundary(state["fields"]["phi"], fromFieldAligned(phi));
@@ -495,7 +495,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
     // Ion charge
-    const BoutReal Zi = IS_SET(species["charge"]) ? get<BoutReal>(species["charge"]) : 0.0;
+    const BoutReal Zi = species.isSet("charge") ? get<BoutReal>(species["charge"]) : 0.0;
 
     if (Zi == 0.0) {
       continue; // Neutral -> skip
@@ -507,22 +507,22 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     // Density and temperature boundary conditions will be imposed (free)
     Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
-    Field3D Pi = IS_SET(species["pressure"])
+    Field3D Pi = species.isSet("pressure")
       ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
       : Ni * Ti;
 
     // Get the velocity and momentum
     // These will be modified at the boundaries
     // and then put back into the state
-    Field3D Vi = IS_SET(species["velocity"])
+    Field3D Vi = species.isSet("velocity")
       ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
       : zeroFrom(Ni);
-    Field3D NVi = IS_SET(species["momentum"])
+    Field3D NVi = species.isSet("momentum")
       ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
       : Mi * Ni * Vi;
 
     // Energy source will be modified in the domain
-    Field3D energy_source = IS_SET(species["energy_source"])
+    Field3D energy_source = species.isSet("energy_source")
       ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
       : zeroFrom(Ni);
 
@@ -673,12 +673,12 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     setBoundary(species["temperature"], fromFieldAligned(Ti));
     setBoundary(species["pressure"], fromFieldAligned(Pi));
 
-    if (IS_SET(species["velocity"])) {
+    if (species.isSet("velocity")) {
       Vi.clearParallelSlices();
       setBoundary(species["velocity"], fromFieldAligned(Vi));
     }
 
-    if (IS_SET(species["momentum"])) {
+    if (species.isSet("momentum")) {
       NVi.clearParallelSlices();
       setBoundary(species["momentum"], fromFieldAligned(NVi));
     }
