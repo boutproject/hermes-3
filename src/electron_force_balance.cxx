@@ -8,7 +8,7 @@ using bout::globals::mesh;
 void ElectronForceBalance::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  if (IS_SET(state["fields"]["phi"])) {
+  if (state["fields"].isSet("phi")) {
     // Here we use electron force balance to calculate the parallel electric field
     // rather than the electrostatic potential
     throw BoutException("Cannot calculate potential and use electron force balance\n");
@@ -41,7 +41,7 @@ void ElectronForceBalance::transform_impl(GuardedOptions& state) {
     }
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-    if (!(IS_SET(species["density"]) and IS_SET(species["charge"]))) {
+    if (!(species.isSet("density") and species.isSet("charge"))) {
       continue; // Needs both density and charge to experience a force
     }
 

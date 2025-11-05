@@ -4,14 +4,19 @@
 
 namespace {
 struct TestComponent : public Component {
-  TestComponent(const std::string&, Options&, Solver *) {}
+  TestComponent(const std::string&, Options&, Solver*)
+      : Component({readWrite("answer")}) {}
+
 private:
-  void transform_impl(GuardedOptions& state) override { state["answer"].getWritable() = 42; }
+  void transform_impl(GuardedOptions& state) override {
+    state["answer"].getWritable() = 42;
+  }
 };
   
 
 struct TestMultiply : public Component {
-  TestMultiply(const std::string&, Options&, Solver *) {}
+  TestMultiply(const std::string&, Options&, Solver*)
+      : Component({writeFinal("answer")}) {}
 
 private:
   void transform_impl(GuardedOptions& state) override {
