@@ -53,7 +53,7 @@ private:
   ///   - <name>
   ///     - momentum
   ///     - velocity  if density is defined
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

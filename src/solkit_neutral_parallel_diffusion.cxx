@@ -6,7 +6,7 @@
 
 using bout::globals::mesh;
 
-void SOLKITNeutralParallelDiffusion::transform(GuardedOptions& state) {
+void SOLKITNeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   GuardedOptions allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {

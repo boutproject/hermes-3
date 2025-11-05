@@ -31,7 +31,7 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
   output.write("\tL_par = {:e} (normalised)\n", L_par);
 }
 
-void SheathClosure::transform(GuardedOptions &state) {
+void SheathClosure::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   
   // Get electrostatic potential

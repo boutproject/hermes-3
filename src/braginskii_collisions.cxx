@@ -104,7 +104,7 @@ void BraginskiiCollisions::collide(Options & species1, Options & species2, const
   }
 }
 
-void BraginskiiCollisions::transform(GuardedOptions& state) {
+void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];

@@ -61,7 +61,7 @@ private:
   ///   - <species>          [ if AA < 4 ("light") or AA > 10 ("heavy") ]
   ///     - momentum_source
   ///
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

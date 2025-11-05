@@ -44,7 +44,7 @@ struct ADASNeonIonisation : public OpenADAS {
                  -neon_ionisation_energy[level]) {}
 
 private:
-  void transform(GuardedOptions& state) override {
+  void transform_impl(GuardedOptions& state) override {
     calculate_rates(
         state["species"]["e"],                         // Electrons
         state["species"][neon_species_name<level>],    // From this ionisation state
@@ -66,7 +66,7 @@ struct ADASNeonRecombination : public OpenADAS {
                  neon_ionisation_energy[level]) {}
 
 private:
-  void transform(GuardedOptions& state) override {
+  void transform_impl(GuardedOptions& state) override {
     calculate_rates(
         state["species"]["e"],                          // Electrons
         state["species"][neon_species_name<level + 1>], // From this ionisation state
@@ -84,8 +84,8 @@ struct ADASNeonCX : public OpenADASChargeExchange {
       : OpenADASChargeExchange(alloptions["units"], "ccd89_ne.json", level) {}
 
 private:
-  void transform(GuardedOptions& state) override {
-    Options& species = state["species"];
+  void transform_impl(GuardedOptions& state) override {
+    GuardedOptions species = state["species"];
     calculate_rates(
         species["e"],                          // Electrons
         species[neon_species_name<level + 1>], // From this ionisation state

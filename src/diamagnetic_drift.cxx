@@ -57,7 +57,7 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   }
 }
 
-void DiamagneticDrift::transform(GuardedOptions& state) {
+void DiamagneticDrift::transform_impl(GuardedOptions& state) {
   // Iterate through all subsections
   GuardedOptions allspecies = state["species"];
 

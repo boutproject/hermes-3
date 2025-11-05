@@ -207,7 +207,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     .withDefault<bool>(false);
 }
 
-void Vorticity::transform(GuardedOptions& state) {
+void Vorticity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   phi.name = "phi";

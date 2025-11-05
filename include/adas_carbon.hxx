@@ -41,7 +41,7 @@ struct ADASCarbonIonisation : public OpenADAS {
                  -carbon_ionisation_energy[level]) {}
 
 private:
-  void transform(GuardedOptions& state) override {
+  void transform_impl(GuardedOptions& state) override {
     calculate_rates(
         state["species"]["e"],                           // Electrons
         state["species"][carbon_species_name<level>],    // From this ionisation state
@@ -64,7 +64,7 @@ struct ADASCarbonRecombination : public OpenADAS {
 
 
 private:
-  void transform(GuardedOptions& state) override {
+  void transform_impl(GuardedOptions& state) override {
     calculate_rates(
         state["species"]["e"],                            // Electrons
         state["species"][carbon_species_name<level + 1>], // From this ionisation state
@@ -83,8 +83,8 @@ struct ADASCarbonCX : public OpenADASChargeExchange {
 
 
 private:
-  void transform(GuardedOptions& state) override {
-    Options& species = state["species"];
+  void transform_impl(GuardedOptions& state) override {
+    GuardedOptions species = state["species"];
     calculate_rates(
         species["e"],                            // Electrons
         species[carbon_species_name<level + 1>], // From this ionisation state

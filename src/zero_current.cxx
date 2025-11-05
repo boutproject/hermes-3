@@ -13,7 +13,7 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
   ASSERT0(charge != 0.0);
 }
 
-void ZeroCurrent::transform(GuardedOptions &state) {
+void ZeroCurrent::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Current due to other species

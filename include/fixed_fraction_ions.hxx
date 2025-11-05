@@ -28,7 +28,7 @@ struct FixedFractionIons : public Component {
   ///   - <species1>
   ///     - density  = <fraction1> * electron density
   ///   - ... 
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

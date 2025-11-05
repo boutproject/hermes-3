@@ -122,7 +122,7 @@ void Reaction::outputVars(Options& state) {
  *
  * @param state
  */
-void Reaction::transform(GuardedOptions& state) {
+void Reaction::transform_impl(GuardedOptions& state) {
 
   Field3D momentum_exchange, energy_exchange, energy_loss;
   zero_diagnostics(state);

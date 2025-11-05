@@ -3,7 +3,7 @@
 #include <bout/mesh.hxx>
 using bout::globals::mesh;
 
-void TemperatureFeedback::transform(GuardedOptions& state) {
+void TemperatureFeedback::transform_impl(GuardedOptions& state) {
   GuardedOptions species = state["species"][name];
 
   // Doesn't need all boundaries to be set

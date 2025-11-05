@@ -47,7 +47,7 @@ struct SOLKITHydrogenChargeExchangeIsotope : public SOLKITHydrogenChargeExchange
       : SOLKITHydrogenChargeExchange(name, alloptions, solver) {}
 
 private:
-  void transform(GuardedOptions& state) override {
+  void transform_impl(GuardedOptions& state) override {
     calculate_rates(state["species"][{Isotope}],        // e.g. "h"
                     state["species"][{Isotope, '+'}]);  // e.g. "d+"
   }

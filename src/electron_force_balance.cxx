@@ -5,7 +5,7 @@
 
 using bout::globals::mesh;
 
-void ElectronForceBalance::transform(GuardedOptions &state) {
+void ElectronForceBalance::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   if (IS_SET(state["fields"]["phi"])) {

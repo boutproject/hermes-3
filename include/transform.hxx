@@ -12,7 +12,7 @@ struct Transform : public Component {
 private:
   std::map<std::string, std::string> transforms;
 
-  void transform(GuardedOptions& state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

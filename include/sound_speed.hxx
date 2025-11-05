@@ -60,7 +60,7 @@ private:
   ///     - AA       // Atomic mass
   ///     - pressure
   ///
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

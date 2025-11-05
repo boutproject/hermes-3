@@ -314,7 +314,7 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
     std::vector<BoutReal> time_buffer;
     std::vector<BoutReal> error_buffer;
 
-    void transform(GuardedOptions& state) override;
+    void transform_impl(GuardedOptions& state) override;
 
 };
 

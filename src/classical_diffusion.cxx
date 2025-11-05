@@ -12,7 +12,7 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
   custom_D = options["custom_D"].doc("Custom diffusion coefficient override. -1: Off, calculate D normally").withDefault<BoutReal>(-1);
 }
 
-void ClassicalDiffusion::transform(GuardedOptions &state) {
+void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   GuardedOptions allspecies = state["species"];
   

@@ -15,7 +15,7 @@ private:
   Field3D Dn; ///< Particle diffusion coefficient
   BoutReal custom_D; ///< User-set particle diffusion coefficient override
 
-  void transform(GuardedOptions &state) override;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

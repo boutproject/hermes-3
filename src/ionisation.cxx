@@ -38,7 +38,7 @@ Ionisation::Ionisation(std::string name, Options &alloptions, Solver *) {
   Eionize /= Tnorm;
 }
 
-void Ionisation::transform(GuardedOptions &state) {
+void Ionisation::transform_impl(GuardedOptions& state) {
   // Get neutral atom properties
   GuardedOptions hydrogen = state["species"]["h"];
   Field3D Nn = get<Field3D>(hydrogen["density"]);

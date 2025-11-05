@@ -51,7 +51,7 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
           .withDefault<BoutReal>(0.8);
 }
 
-void NeutralBoundary::transform(GuardedOptions& state) {
+void NeutralBoundary::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   auto species = state["species"][name];
   const BoutReal AA = get<BoutReal>(species["AA"]);

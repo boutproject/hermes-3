@@ -78,7 +78,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   Bsq = SQ(coord->Bxy);
 }
 
-void RelaxPotential::transform(GuardedOptions& state) {
+void RelaxPotential::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Scale potential

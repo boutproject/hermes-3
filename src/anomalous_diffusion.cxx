@@ -52,7 +52,7 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
                    .withDefault<bool>(false);
 }
 
-void AnomalousDiffusion::transform(GuardedOptions& state) {
+void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   GuardedOptions species = state["species"][name];

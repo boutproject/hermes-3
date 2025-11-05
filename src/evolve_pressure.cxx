@@ -164,7 +164,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .withDefault<bool>(true);
 }
 
-void EvolvePressure::transform(GuardedOptions& state) {
+void EvolvePressure::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   if (evolve_log) {

@@ -60,7 +60,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   NV_err = 0.0;
 }
 
-void EvolveMomentum::transform(GuardedOptions &state) {
+void EvolveMomentum::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   mesh->communicate(NV);
 
