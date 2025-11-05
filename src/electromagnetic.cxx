@@ -115,7 +115,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
   for (auto& kv : allspecies.getChildren()) {
     const GuardedOptions species = kv.second;
 
-    if (!IS_SET(species["charge"]) or !IS_SET(species["momentum"])) {
+    if (!species.isSet("charge") or !species.isSet("momentum")) {
       continue; // Not charged, or no parallel flow
     }
     const BoutReal Z = get<BoutReal>(species["charge"]);
@@ -186,7 +186,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
   for (auto& kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
-    if (!IS_SET(species["charge"]) or !IS_SET(species["momentum"])) {
+    if (!species.isSet("charge") or !species.isSet("momentum")) {
       continue; // Not charged, or no parallel flow
     }
     const BoutReal Z = get<BoutReal>(species["charge"]);

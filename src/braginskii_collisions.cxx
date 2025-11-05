@@ -153,7 +153,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
       GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-      if (IS_SET(species["charge"]) and (get<BoutReal>(species["charge"]) > 0.0)) {
+      if (species.isSet("charge") and (get<BoutReal>(species["charge"]) > 0.0)) {
         ////////////////////////////////////
         // electron-positive ion collisions
 
@@ -210,7 +210,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
         collide(electrons.getWritable(), species.getWritable(), nu_ei / Omega_ci, mom_coeff);
 
-      } else if (IS_SET(species["charge"]) and (get<BoutReal>(species["charge"]) < 0.0)) {
+      } else if (species.isSet("charge") and (get<BoutReal>(species["charge"]) < 0.0)) {
         ////////////////////////////////////
         // electron-negative ion collisions
 
@@ -267,7 +267,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
     // If temperature isn't set, assume zero. in eV
     const Field3D temperature1 =
-      IS_SET(species1["temperature"])
+        species1.isSet("temperature")
             ? GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm
             : 0.0;
 
@@ -276,7 +276,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
     const BoutReal AA1 = get<BoutReal>(species1["AA"]);
     const BoutReal mass1 = AA1 * SI::Mp; // in Kg
 
-    if (IS_SET(species1["charge"]) and (get<BoutReal>(species1["charge"]) != 0.0)) {
+    if (species1.isSet("charge") and (get<BoutReal>(species1["charge"]) != 0.0)) {
       // Charged species
       const BoutReal Z1 = get<BoutReal>(species1["charge"]);
       const BoutReal charge1 = Z1 * SI::qe; // in Coulombs
@@ -295,7 +295,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
         // If temperature isn't set, assume zero. in eV
         const Field3D temperature2 =
-            IS_SET(species2["temperature"])
+            species2.isSet("temperature")
                 ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
                 : 0.0;
 
@@ -304,7 +304,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const BoutReal mass2 = AA2 * SI::Mp; // in Kg
 
-        if (IS_SET(species2["charge"]) and (get<BoutReal>(species2["charge"]) != 0.0)) {
+        if (species2.isSet("charge") and (get<BoutReal>(species2["charge"]) != 0.0)) {
           //////////////////////////////
           // Both charged species
 
@@ -383,7 +383,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
         // If temperature isn't set, assume zero
         const Field3D temperature2 =
-            IS_SET(species2["temperature"])
+            species2.isSet("temperature")
                 ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
                 : 0.0;
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);

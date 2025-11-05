@@ -178,10 +178,10 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
     // Recycling particle and energy sources will be added to these global sources 
     // which are then passed to the density and pressure equations
-    density_source = IS_SET(species_to["density_source"])
+    density_source = species_to.isSet("density_source")
                                  ? getNonFinal<Field3D>(species_to["density_source"])
                                  : 0.0;
-    energy_source = IS_SET(species_to["energy_source"])
+    energy_source = species_to.isSet("energy_source")
                                 ? getNonFinal<Field3D>(species_to["energy_source"])
                                 : 0.0;
 
@@ -189,7 +189,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
     if (target_recycle) {
 
       // Fast recycling needs to know how much energy the "from" species is losing to the boundary
-      if (IS_SET(species_from["energy_flow_ylow"])) {
+      if (species_from.isSet("energy_flow_ylow")) {
         energy_flow_ylow = get<Field3D>(species_from["energy_flow_ylow"]);
       } else {
         energy_flow_ylow = 0;
@@ -291,13 +291,13 @@ void Recycling::transform_impl(GuardedOptions& state) {
       channel.pump_density_source = 0;
       channel.pump_energy_source = 0;
 
-      if (IS_SET(species_from["energy_flow_xlow"])) {
+      if (species_from.isSet("energy_flow_xlow")) {
         energy_flow_xlow = get<Field3D>(species_from["energy_flow_xlow"]);
       } else if ((channel.sol_fast_recycle_fraction > 0) or (channel.pfr_fast_recycle_fraction > 0)) {
         throw BoutException("SOL/PFR fast recycle enabled but no cell edge heat flow available, check your wall BC choice");
       };
 
-      if (IS_SET(species_from["particle_flow_xlow"])) {
+      if (species_from.isSet("particle_flow_xlow")) {
         particle_flow_xlow = get<Field3D>(species_from["particle_flow_xlow"]);
       } else if ((channel.sol_fast_recycle_fraction > 0) or (channel.pfr_fast_recycle_fraction > 0)) {
         throw BoutException("SOL/PFR fast recycle enabled but no cell edge particle flow available, check your wall BC choice");

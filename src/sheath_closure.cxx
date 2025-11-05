@@ -51,7 +51,7 @@ void SheathClosure::transform_impl(GuardedOptions& state) {
   add(electrons["density_source"], DivJsh);
 
   // Electron heat conduction
-  if (IS_SET(electrons["temperature"])) {
+  if (electrons.isSet("temperature")) {
     // Assume attached, sheath-limited regime
     // Sheath heat transmission gamma * n * T * cs
 
