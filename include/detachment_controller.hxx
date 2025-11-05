@@ -9,8 +9,11 @@
 
 struct DetachmentController : public Component {
 
-  DetachmentController(std::string, Options& options, Solver*) {
-ASSERT0(BoutComm::size() == 1); // Only works on one processor
+  DetachmentController(std::string, Options& options, Solver*)
+      : Component({readOnly("species:{neutral}:density", Permissions::Interior),
+                   readOnly("species:e:density", Permissions::Interior), readOnly("time"),
+                   readWrite("species:{sp}:{output}")}) {
+    ASSERT0(BoutComm::size() == 1); // Only works on one processor
     Options& detachment_controller_options = options["detachment_controller"];
 
     const auto& units = options["units"];
@@ -153,7 +156,19 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
       detachment_controller_options["debug"]
       .doc("Print debugging information to the screen (0 for none, 1 for basic, 2 for extensive).")
       .withDefault<int>(0);
-    
+
+    state_variable_access.substitute("neutral", {neutral_species});
+    state_variable_access.substitute(
+        "sp", std::vector<std::string>(species_list.begin(), species_list.end()));
+    std::string output;
+    if (control_mode == control_power) {
+      output = "energy_source";
+    } else if (control_mode == control_particles) {
+      output = "density_source";
+    } else {
+      ASSERT2(false);
+    }
+    state_variable_access.substitute("output", {output});
   };
 
   void outputVars(Options& state) override {

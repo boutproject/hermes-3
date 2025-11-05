@@ -13,7 +13,13 @@ BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:rtol_accept", 1e-2);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:atol_accept", 1e-6);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:maxits", 1000);
 
-Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* solver) {
+Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* solver)
+    : Component({readIfSet("species:{all_species}:charge"),
+                 writeFinal("species:{all_species}:momentum"),
+                 writeFinal("species:{all_species}:velocity"), readOnly("time"),
+                 readOnly("species:{all_species}:AA"),
+                 readOnly("species:{all_species}:density", Permissions::Interior),
+                 readWrite("fields:Apar")}) {
   AUTO_TRACE();
 
   Options& units = alloptions["units"];
@@ -79,6 +85,9 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
   magnetic_flutter = options["magnetic_flutter"]
     .doc("Set magnetic flutter terms (Apar_flutter)?")
     .withDefault<bool>(false);
+
+  if (magnetic_flutter)
+    state_variable_access.setAccess(readWrite("fields:Apar_flutter"));
 }
 
 void Electromagnetic::restartVars(Options& state) {
