@@ -29,8 +29,20 @@
 
 using bout::globals::mesh;
 
-BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
-                                               Options& alloptions, Solver*) {
+BraginskiiIonViscosity::BraginskiiIonViscosity(cons tstd::string& name,
+                                               Options& alloptions, Solver*)
+    // FIXME: does not read or write electron data
+    : Component({
+        readIfSet("species:{all_species}:pressure"),
+        readIfSet("species:{all_species}:velocity"),
+        readIfSet("species:{all_species}:charge"),
+        // FIXME: This specifies more collision frequencies than are actually read
+        readOnly("species:{all_species}:collision_frequencies"),
+        readOnly("fields:phi"),
+        readWrite("species:{all_species}:momentum_source"),
+        readWrite("species:{all_species}:energy_source"),
+        readWrite("fields:DivJextra"),
+    }) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]

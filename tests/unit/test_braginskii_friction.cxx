@@ -36,6 +36,7 @@ TEST_F(BraginskiiFrictionTest, OnlyElectrons) {
   state["species"]["e"]["AA"] = 1. / 1836;
   state["species"]["e"]["collision_frequencies"]["e_e_coll"] = 1.;
 
+  component.declareAllSpecies({"e"});
   component.transform(state);
 
   // A species can't exert friction on itself, so momentum and energy transfer won't be
@@ -73,6 +74,7 @@ TEST_F(BraginskiiFrictionTest, TwoComovingSpeciesCharged) {
   state["species"]["s2"]["collision_frequencies"]["s2_s1_coll"] = 0.25;
 
   // Run calculations
+  component.declareAllSpecies({"s1", "s2"});
   component.transform(state);
   ASSERT_TRUE(state["species"]["s1"].isSet("momentum_source"));
   ASSERT_TRUE(state["species"]["s2"].isSet("momentum_source"));
@@ -119,6 +121,7 @@ TEST_F(BraginskiiFrictionTest, TwoSpeciesCharged) {
   state["species"]["s2"]["collision_frequencies"]["s2_s1_coll"] = 0.25;
 
   // Run calculations
+  component.declareAllSpecies({"s1", "s2"});
   component.transform(state);
 
   Field3D ms1 = get<Field3D>(state["species"]["s1"]["momentum_source"]);
@@ -166,6 +169,7 @@ TEST_F(BraginskiiFrictionTest, DoubleRelativeVelocities) {
   state2["species"]["s2"]["velocity"] = 3;
 
   // Run calculations
+  component.declareAllSpecies({"s1", "s2"});
   component.transform(state1);
   component.transform(state2);
 
@@ -214,6 +218,7 @@ TEST_F(BraginskiiFrictionTest, TwoSpeciesNoHeating) {
   state["species"]["s2"]["velocity"] = 2;
 
   // Run calculations
+  component.declareAllSpecies({"s1", "s2"});
   component.transform(state);
 
   ASSERT_TRUE(state["species"]["s1"]["momentum_source"].isSet());
@@ -251,6 +256,7 @@ TEST_F(BraginskiiFrictionTest, DoubleCollisionRate) {
   state2["species"]["s2"]["collision_frequencies"]["s2_s1_coll"] = 1.0;
 
   // Run calculations
+  component.declareAllSpecies({"s1", "s2"});
   component.transform(state1);
   component.transform(state2);
 

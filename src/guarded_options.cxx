@@ -2,6 +2,20 @@
 
 #include "../include/guarded_options.hxx"
 
+/// Check whether an option is set, without creating any parent
+/// Options objects in the process.
+bool isSetRecursive(Options& opt, std::string varname) {
+  size_t colon = varname.find(":");
+  if (colon == std::string::npos) {
+    return opt.isSet(varname);
+  }
+  std::string fragment = varname.substr(0, colon);
+  if (not opt.isSection(fragment)) {
+    return false;
+  }
+  return isSetRecursive(opt[fragment], varname.substr(colon + 1));
+}
+
 GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
     : options(options), permissions(permissions),
       unread_variables(std::make_shared<std::map<std::string, Permissions::Regions>>()),
@@ -15,14 +29,7 @@ GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
     if (options != nullptr) {
       for (auto& [varname, region] :
            permissions->getVariablesWithPermission(Permissions::ReadIfSet)) {
-        // find the last component of the full varname path
-        size_t last_colon = varname.find_last_of(":");
-        Options& parent = (last_colon != std::string::npos)
-                              ? (*options)[varname.substr(0, last_colon)]
-                              : *options;
-        if (parent.isSet((last_colon != std::string::npos)
-                             ? varname.substr(last_colon + 1)
-                             : varname)) {
+        if (isSetRecursive(*options, varname)) {
           unread_variables->insert({varname, region});
         }
       }

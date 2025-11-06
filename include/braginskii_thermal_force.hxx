@@ -26,7 +26,17 @@
 ///   - ion_ion       : bool   Include ion-ion elastic collisions?
 ///
 struct BraginskiiThermalForce : public Component {
-  BraginskiiThermalForce(const std::string& name, Options& alloptions, Solver*) {
+  BraginskiiThermalForce(const std::string& name, Options& alloptions, Solver*)
+      : Component({// FIXME: Not account for electron_ion or ion_ion settings
+                   // FIXME: don't access charge for electrons
+                   // FIXME: Don't read or write for neutrals
+                   readIfSet("species:{all_species}:charge"),
+                   readOnly("species:{all_species}:density", Permissions::Interior),
+                   // FIXME: Only get temperature for electrons and light ions
+                   readOnly("species:{all_species}:temperature"),
+                   // FIXME: Don't access AA for electrons
+                   readOnly("species:{all_species}:AA"),
+                   readWrite("species:{all_species}:momentum_source")}) {
     Options& options = alloptions[name];
     electron_ion = options["electron_ion"]
                        .doc("Include electron-ion collisions?")
@@ -52,6 +62,7 @@ private:
   ///   - <species>
   ///     - charge    [ Checks, skips species if not set ]
   ///     - AA
+  ///     - density
   ///     - temperature [ If AA < 4 i.e. "light" species ]
   ///
   /// Outputs

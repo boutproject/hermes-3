@@ -20,8 +20,20 @@
 #include "../include/component.hxx"
 #include "../include/hermes_utils.hxx"
 
-BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions,
-                                           Solver*) {
+BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions, Solver*)
+    // FIXME: Not everything is necessarily read/written, depending on which
+    // collisions are calculated. Ideally I would be able to distinguish between them.
+    //
+    // FIXME: temperature is used unconditionally for species that
+    // collide with electrons, but only if set for other species.
+    : Component({readOnly("species:{all_species}:temperature", Permissions::Interior),
+                 readOnly("species:{all_species}:density", Permissions::Interior),
+                 readOnly("species:{all_species}:AA"),
+                 // FIXME: This isn't actually used for electrons
+                 readIfSet("species:{all_species}:charge"),
+                 readWrite("species:{all_species}:collision_frequency"),
+                 readWrite("species:{all_species}:collision_frequencies:{all_species}_{"
+                           "all_species2}_coll")}) {
   AUTO_TRACE();
   const Options& units = alloptions["units"];
 
@@ -69,7 +81,8 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
 ///
 /// Note: A* variables are used for atomic mass numbers;
 ///       mass* variables are species masses in kg
-void BraginskiiCollisions::collide(Options & species1, Options & species2, const Field3D& nu_12, BoutReal momentum_coefficient) {
+void BraginskiiCollisions::collide(GuardedOptions& species1, GuardedOptions& species2,
+                                   const Field3D& nu_12) {
   AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12); // Total collision frequency
@@ -80,7 +93,7 @@ void BraginskiiCollisions::collide(Options & species1, Options & species2, const
   set(collision_rates[species1.name()][species2.name()],
       nu_12); // Individual collision frequency used for diagnostics
 
-  if (&species1 != &species2) {
+  if (species1 != species2) {
     // For collisions between different species
     // m_a n_a \nu_{ab} = m_b n_b \nu_{ba}
 
@@ -147,7 +160,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           return nu;
         });
 
-        collide(electrons.getWritable(), electrons.getWritable(), nu_ee / Omega_ci, 1.0);
+        collide(electrons, electrons, nu_ee / Omega_ci);
         continue;
       }
 
@@ -200,15 +213,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           return nu;
         });
 
-        // Coefficient in front of parallel momentum exchange
-        // This table is from Braginskii 1965
-        BoutReal mom_coeff =
-          Zi == 1 ? 0.51 :
-          Zi == 2 ? 0.44 :
-          Zi == 3 ? 0.40 :
-          0.38; // Note: 0.38 is for Zi=4; tends to 0.29 for Zi->infty
-
-        collide(electrons.getWritable(), species.getWritable(), nu_ei / Omega_ci, mom_coeff);
+        collide(electrons, species, nu_ei / Omega_ci);
 
       } else if (species.isSet("charge") and (get<BoutReal>(species["charge"]) < 0.0)) {
         ////////////////////////////////////
@@ -240,7 +245,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           return vth_e * Nnorm * Nn[i] * a0 * rho_s0;
         });
 
-        collide(electrons.getWritable(), species.getWritable(), nu_en, 1.0);
+        collide(electrons, species, nu_en);
       }
     }
   }
@@ -270,7 +275,6 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         species1.isSet("temperature")
             ? GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm
             : 0.0;
-
     const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]) * Nnorm;
 
     const BoutReal AA1 = get<BoutReal>(species1["AA"]);
@@ -342,7 +346,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           });
 
           // Update the species collision rates, momentum & energy exchange
-          collide(species1.getWritable(), species2.getWritable(), nu_12 / Omega_ci, 1.0);
+          collide(species1, species2, nu_12 / Omega_ci);
 
         } else {
           // species1 charged, species2 neutral
@@ -363,7 +367,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1.getWritable(), species2.getWritable(), nu_12, 1.0);
+          collide(species1, species2, nu_12);
         }
       }
     } else {
@@ -411,7 +415,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1.getWritable(), species2.getWritable(), nu_12, 1.0);
+          collide(species1, species2, nu_12);
 
         } else {
           // Both species neutral
@@ -440,7 +444,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
             return vrel * density2[i] * a0 * rho_s0;
           });
 
-          collide(species1.getWritable(), species2.getWritable(), nu_12, 1.0);
+          collide(species1, species2, nu_12);
         }
       }
     }

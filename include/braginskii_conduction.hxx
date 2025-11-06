@@ -37,26 +37,6 @@ struct BraginskiiConduction : public Component {
   ///
   BraginskiiConduction(const std::string& name, Options& alloptions, Solver*);
 
-  /// Calculate conduction of energy for each species where this has been turned on.
-  ///
-  /// Uses
-  ///   - species
-  ///     - <name>
-  ///       - AA
-  ///       - collision_frequencies
-  ///       - density
-  ///       - temperature
-  ///       - pressure
-  ///
-  /// Modifies
-  ///   - species
-  ///     - <name>
-  ///       - energy_source     Conduction contribution to energy evolution
-  ///       - kappa_par         The parallel heat conduction coefficient
-  ///       - energy_flow_ylow  Energy flow diagnostics.
-  ///
-  void transform(Options& state) override;
-
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options& state) override;
 
@@ -76,6 +56,26 @@ private:
       all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
   /// Save more diagnostics?
   std::map<std::string, bool> all_diagnose;
+
+  /// Calculate conduction of energy for each species where this has been turned on.
+  ///
+  /// Uses
+  ///   - species
+  ///     - <name>
+  ///       - AA
+  ///       - collision_frequencies
+  ///       - density
+  ///       - temperature
+  ///       - pressure
+  ///
+  /// Modifies
+  ///   - species
+  ///     - <name>
+  ///       - energy_source     Conduction contribution to energy evolution
+  ///       - kappa_par         The parallel heat conduction coefficient
+  ///       - energy_flow_ylow  Energy flow diagnostics.
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

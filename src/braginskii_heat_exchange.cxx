@@ -13,17 +13,29 @@
 #include "../include/component.hxx"
 
 BraginskiiHeatExchange::BraginskiiHeatExchange(const std::string& name,
-                                               Options& alloptions, Solver*) {
+                                               Options& alloptions, Solver*)
+    // FIXME: Not all species are actually read or written; only those with collision
+    // rates and temperatures
+    : Component({readOnly("species:{all_species}:{input_vars}"),
+                 readIfSet("species:{all_species}:{optional_vars}"),
+                 readWrite("species:{all_species}:{output_vars}")}) {
   AUTO_TRACE();
   diagnose = alloptions[name]["diagnose"]
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
+  state_variable_access.substitute("input_vars", {"AA", "density"});
+  // FIXME: We don't access the self-collision rate
+  state_variable_access.substitute(
+      "optional_vars",
+      {"charge", "collision_frequencies:{all_species}_{all_species2}_coll",
+       "temperature"});
+  state_variable_access.substitute("output_vars", {"momentum_source", "energy_source"});
 }
 
-void BraginskiiHeatExchange::transform(Options& state) {
+void BraginskiiHeatExchange::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   // Iterate through all species
   // To avoid double counting, this needs to iterate over pairs
@@ -37,9 +49,9 @@ void BraginskiiHeatExchange::transform(Options& state) {
   //  ||   species2               X         X
   //  \/   species3                         X
   //
-  const std::map<std::string, Options>& children = allspecies.getChildren();
+  const std::map<std::string, GuardedOptions> children = allspecies.getChildren();
   for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
-    Options& species1 = allspecies[kv1->first];
+    GuardedOptions species1 = allspecies[kv1->first];
     // If collisions were not calculated for this species, skip it.
     if (not species1.isSection("collision_frequencies")) {
       continue;
@@ -54,16 +66,17 @@ void BraginskiiHeatExchange::transform(Options& state) {
 
     // Copy the iterator, so we don't iterate over the
     // lower half of the matrix, but start at the diagonal
-    for (std::map<std::string, Options>::const_iterator kv2 = kv1;
+    for (std::map<std::string, GuardedOptions>::const_iterator kv2 = kv1;
          kv2 != std::end(children); ++kv2) {
       // Can't have heat exchange with oneself
       if (kv1->first == kv2->first) {
         continue;
       }
 
-      Options& species2 = allspecies[kv2->first];
+      GuardedOptions species2 = allspecies[kv2->first];
 
-      // At least one of the species must have a velocity for there to be friction.
+      // At least one of the species must have a temperature for there to be heat
+      // exchange.
       if (!(species1.isSet("temperature") or species2.isSet("temperature"))) {
         continue;
       }
