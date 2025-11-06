@@ -45,6 +45,8 @@ void Permissions::substitute(const std::string& label,
   }
 }
 
+#include <iostream>
+
 std::pair<std::string, Permissions::AccessRights>
 Permissions::bestMatchRights(const std::string& variable) const {
   Permissions::AccessRights best_candidate = {Permissions::Nowhere, Permissions::Nowhere,

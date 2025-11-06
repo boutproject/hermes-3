@@ -7,7 +7,18 @@
 #include "../include/braginskii_friction.hxx"
 #include "../include/hermes_utils.hxx"
 
-BraginskiiFriction::BraginskiiFriction(std::string name, Options& alloptions, Solver*) {
+BraginskiiFriction::BraginskiiFriction(std::string name, Options& alloptions, Solver*)
+    // FIXME: Not all species actually have collisions calculated
+    : Component({readOnly("species:{all_species}:density"),
+                 readIfSet("species:{all_species}:velocity", Permissions::Interior),
+                 readOnly("species:{all_species}:AA"),
+                 readIfSet("species:{all_species}:charge"),
+                 // FIXME: Need to add setting of all_species_2. Could result
+                 // in doubling-up of settings, although I don't think that
+                 // will actually cause any problems.
+                 readOnly("species:{all_species}:collision_frequencies:{all_species}_{"
+                          "all_species2}_coll"),
+                 readWrite("species:{all_species}:momentum_source")}) {
   AUTO_TRACE();
   Options& options = alloptions[name];
   frictional_heating = options["frictional_heating"]
@@ -15,6 +26,10 @@ BraginskiiFriction::BraginskiiFriction(std::string name, Options& alloptions, So
                            .withDefault<bool>(true);
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+
+  if (frictional_heating) {
+    state_variable_access.setAccess(readWrite("species:{all_species}:energy_source"));
+  }
 }
 
 BoutReal momentumCoefficient(BoutReal Zi) {
@@ -32,10 +47,10 @@ BoutReal momentumCoefficient(std::string name1, BoutReal Z1, std::string name2,
   }
 }
 
-void BraginskiiFriction::transform(Options& state) {
+void BraginskiiFriction::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   // Iterate through all species
   // To avoid double counting, this needs to iterate over pairs
@@ -49,9 +64,9 @@ void BraginskiiFriction::transform(Options& state) {
   //  ||   species2               X         X
   //  \/   species3                         X
   //
-  const std::map<std::string, Options>& children = allspecies.getChildren();
+  const std::map<std::string, GuardedOptions> children = allspecies.getChildren();
   for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
-    Options& species1 = allspecies[kv1->first];
+    GuardedOptions species1 = allspecies[kv1->first];
     // If collisions were not calculated for this species, skip it.
     if (not species1.isSection("collision_frequencies"))
       continue;
@@ -73,7 +88,7 @@ void BraginskiiFriction::transform(Options& state) {
       if (kv1->first == kv2->first)
         continue;
 
-      Options& species2 = allspecies[kv2->first];
+      GuardedOptions species2 = allspecies[kv2->first];
 
       // At least one of the species must have a velocity for there to be friction.
       if (!(isSetFinalNoBoundary(species1["velocity"])

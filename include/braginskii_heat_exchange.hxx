@@ -14,25 +14,6 @@ struct BraginskiiHeatExchange : public Component {
   ///
   BraginskiiHeatExchange(std::string name, Options& alloptions, Solver*);
 
-  /// Calculate thermal energy exchange between species due to collisions.
-  ///
-  /// Uses
-  ///   - species
-  ///     - <name>
-  ///       - AA
-  ///       - charge
-  ///       - collision_frequencies
-  ///       - density
-  ///       - velocity
-  ///
-  /// Modifies
-  ///   - species
-  ///     - <name>
-  ///       - momentum_source   if species1 or species2 velocity is set
-  ///       - energy_source     if velocity is set and frictional_heating
-  ///
-  void transform(Options& state) override;
-
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options& state) override;
 
@@ -43,6 +24,25 @@ private:
 
   /// Save more diagnostics?
   bool diagnose;
+
+  /// Calculate thermal energy exchange between species due to collisions.
+  ///
+  /// Uses
+  ///   - species
+  ///     - <name>
+  ///       - AA
+  ///       - charge (if set)
+  ///       - collision_frequencies (if section)
+  ///       - density
+  ///       - temperature (if set)
+  ///
+  /// Modifies
+  ///   - species
+  ///     - <name>
+  ///       - momentum_source   if species1 or species2 temperature is set
+  ///       - energy_source     if temperature is set
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
