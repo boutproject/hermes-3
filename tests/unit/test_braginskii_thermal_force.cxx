@@ -52,6 +52,7 @@ TEST_F(BraginskiiThermalForceTest, OnlyElectrons) {
   state["species"]["e"]["charge"] = -1;
   state["species"]["e"]["AA"] = 1. / 1836;
 
+  component.declareAllSpecies({"e"});
   component.transform(state);
   EXPECT_FALSE(state["species"]["e"]["momentum_source"].isSet());
 }
@@ -63,6 +64,7 @@ TEST_F(BraginskiiThermalForceTest, OnlyOneIon) {
   state["species"]["d+"]["charge"] = 1;
   state["species"]["d+"]["AA"] = 2.;
 
+  component.declareAllSpecies({"d+"});
   component.transform(state);
   EXPECT_FALSE(state["species"]["d+"]["momentum_source"].isSet());
 }
@@ -78,6 +80,7 @@ TEST_F(BraginskiiThermalForceTest, ElectronIonBalance) {
   state["species"]["d+"]["charge"] = 1;
   state["species"]["d+"]["AA"] = 2.;
 
+  component.declareAllSpecies({"e", "d+"});
   component.transform(state);
 
   Field3D mom_e = state["species"]["e"]["momentum_source"];
@@ -99,6 +102,7 @@ TEST_F(BraginskiiThermalForceTest, IonIonBalance) {
   state["species"]["d+"]["charge"] = 1;
   state["species"]["d+"]["AA"] = 2.;
 
+  component.declareAllSpecies({"c", "d+"});
   component.transform(state);
 
   Field3D mom_c = state["species"]["c"]["momentum_source"];
@@ -132,6 +136,7 @@ TEST_F(BraginskiiThermalForceTest, NoNetForce) {
   state["species"]["e"]["charge"] = -1;
   state["species"]["e"]["AA"] = 1. / 1836;
 
+  component.declareAllSpecies({"c", "ar", "d", "d+", "e"});
   component.transform(state);
   Field3D force(0.);
   for (const auto& [name, species] : state["species"].subsections()) {
@@ -159,6 +164,7 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceDensityScaling) {
   state["species"]["e"]["charge"] = -1;
   state["species"]["e"]["AA"] = 1. / 1836;
 
+  component.declareAllSpecies({"d1+", "d2+", "e"});
   component.transform(state);
   Field3D mom1 = state["species"]["d1+"]["momentum_source"];
   Field3D mom2 = state["species"]["d2+"]["momentum_source"];
@@ -184,6 +190,7 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceChargeScaling) {
   state["species"]["e"]["charge"] = -1;
   state["species"]["e"]["AA"] = 1. / 1836;
 
+  component.declareAllSpecies({"d1+", "d2+", "e"});
   component.transform(state);
   Field3D mom1 = state["species"]["d1+"]["momentum_source"];
   Field3D mom2 = state["species"]["d2+"]["momentum_source"];
@@ -218,6 +225,7 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceTemperatureGradScaling) {
   state1["species"]["d2+"]["charge"] = 1;
   state1["species"]["d2+"]["AA"] = 2.;
 
+  component.declareAllSpecies({"d+", "d2+", "e"});
   component.transform(state0);
   component.transform(state1);
   component.transform(state2);
@@ -255,6 +263,7 @@ TEST_F(BraginskiiThermalForceTest, IonIonForceTemperatureGradScaling) {
   state1["species"]["d+"]["temperature"] = grad1;
   state2["species"]["d+"]["temperature"] = grad2;
 
+  component.declareAllSpecies({"d+", "c1", "c2"});
   component.transform(state1);
   component.transform(state2);
 
@@ -281,6 +290,7 @@ TEST_P(BraginskiiThermalForceTest_MassRatio, CheckForIonMasses) {
       {"species",
        {{"M", {{"density", 1}, {"temperature", grad1}, {"charge", 1}, {"AA", aa1}}},
         {"N", {{"density", 1}, {"temperature", grad2}, {"charge", 2}, {"AA", aa2}}}}}};
+  component.declareAllSpecies({"M", "N"});
   component.transform(state);
   if (thermal_force_present) {
     Field3D momentum_source1 = state["species"]["M"]["momentum_source"];

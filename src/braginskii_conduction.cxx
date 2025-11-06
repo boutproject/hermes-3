@@ -26,7 +26,11 @@
 using bout::globals::mesh;
 
 BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptions,
-                                           Solver*) {
+                                           Solver*)
+    // FIXME: state variables are only read and written for species that have collisions
+    : Component({readOnly("species:{all_species}:{input_vars}"),
+                 writeBoundary("species:{all_species}:pressure"),
+                 readWrite("species:{all_species}:{output_vars}")}) {
   AUTO_TRACE();
 
   // Get settings for each species
@@ -84,10 +88,16 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
             .doc("Can be multispecies: all collisions, or "
                  "braginskii: self collisions and ie")
             .withDefault<std::string>("multispecies");
+
+    // FIXME: Should I try specifying exactly which collision frequencies are used?
+    state_variable_access.substitute(
+        "input_vars", {"AA", "density", "temperature", "collision_frequencies"});
+    state_variable_access.substitute("output_vars",
+                                     {"energy_source", "kappa_par", "energy_flow_ylow"});
   }
 }
 
-void BraginskiiConduction::transform(Options& state) {
+void BraginskiiConduction::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   for (auto& kv : state["species"].getChildren()) {
@@ -97,8 +107,8 @@ void BraginskiiConduction::transform(Options& state) {
       continue;
     }
     /// Get the section containing this species
-    auto& species = state["species"][name];
-    std::string const conduction_collisions_mode = all_conduction_collisions_mode[name];
+    auto species = state["species"][name];
+    const std::string conduction_collisions_mode = all_conduction_collisions_mode[name];
 
     // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
     if (all_collision_names.count(name) == 0) { /// Calculate only once - at the beginning
@@ -205,7 +215,7 @@ void BraginskiiConduction::transform(Options& state) {
     // FIXME: We end up applying these operations twice: here and in
     // EvolvePressure::finally
 
-    Field3D P = species["pressure"];
+    Field3D P = GET_VALUE(Field3D, species["pressure"]);
     P.clearParallelSlices();
     P.setBoundaryTo(get<Field3D>(species["pressure"]));
     Field3D const Pfloor = floor(P, 0.0); // Restricted to never go below zero

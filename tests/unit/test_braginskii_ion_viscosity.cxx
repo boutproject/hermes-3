@@ -68,6 +68,7 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityPressureScaling) {
   state2["species"]["d+"]["pressure"] =
       2 * state1["species"]["d+"]["pressure"].as<Field3D>();
 
+  component.declareAllSpecies({"d+"});
   component.transform(state1);
   component.transform(state2);
 
@@ -98,6 +99,7 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityCollisionScaling) {
   state2["species"]["d+"]["collision_frequencies"]["d+_he+_coll"] =
       2 * state1["species"]["d+"]["collision_frequencies"]["d+_he+_coll"].as<Field3D>();
 
+  component.declareAllSpecies({"d+"});
   component.transform(state1);
   component.transform(state2);
 
@@ -129,6 +131,7 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityVelocityScaling) {
   state2["species"]["d+"]["velocity"] =
       2 * state1["species"]["d+"]["velocity"].as<Field3D>();
 
+  component.declareAllSpecies({"d+"});
   component.transform(state0);
   component.transform(state1);
   component.transform(state2);
@@ -161,7 +164,9 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityCollisionMode) {
   options2["test2"]["viscosity_collisions_mode"] = "braginskii";
   BraginskiiIonViscosity component2("test2", options2, nullptr);
 
+  component.declareAllSpecies({"d+"});
   component.transform(state1);
+  component2.declareAllSpecies({"d+"});
   component2.transform(state2);
 
   Field3D visc1 = state1["species"]["d+"]["momentum_source"];

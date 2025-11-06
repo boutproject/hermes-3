@@ -20,7 +20,9 @@ protected:
                        Permissions::Nowhere}},
                      {"species:d:collision_frequencies",
                       {Permissions::Nowhere, Permissions::Nowhere,
-                       Permissions::Boundaries, Permissions::Nowhere}}}),
+                       Permissions::Boundaries, Permissions::Nowhere}},
+                     readIfSet("fields:phi"),
+                     readOnly("unused:option")}),
         opts({{"species",
                {{"he",
                  {{"charge", 0},
@@ -136,11 +138,13 @@ TEST_F(GuardedOptionsTests, TestUnreadItems) {
       expected1 = {{"species:he:charge", Permissions::AllRegions},
                    {"species:he:density", Permissions::AllRegions},
                    {"species:he:velocity", Permissions::Boundaries},
-                   {"species:d", Permissions::AllRegions}},
+                   {"species:d", Permissions::AllRegions},
+                   {"unused:option", Permissions::AllRegions}},
       expected2 = {{"species:he:charge", Permissions::AllRegions},
                    {"species:he:density", Permissions::Boundaries},
                    {"species:he:velocity", Permissions::Boundaries},
-                   {"species:d", Permissions::AllRegions}},
+                   {"species:d", Permissions::AllRegions},
+                   {"unused:option", Permissions::AllRegions}},
       expected3 = {{"species:d", Permissions::AllRegions}}, expected4;
 
   EXPECT_EQ(guarded_opts.unreadItems(), expected1);
@@ -154,6 +158,7 @@ TEST_F(GuardedOptionsTests, TestUnreadItems) {
   guarded_opts["species"]["he"]["charge"].get();
   guarded_opts["species"]["he"]["density"].get();
   guarded_opts["species:he:velocity"].get(Permissions::Boundaries);
+  EXPECT_FALSE(guarded_opts["unused"]["option"].get().isSet());
   EXPECT_EQ(guarded_opts.unreadItems(), expected3);
 
   guarded_opts["species:d:velocity"].get();
@@ -241,4 +246,19 @@ TEST_F(GuardedOptionsTests, TestIsChildSet) {
   // Unforunately Operator::isSet does not support full paths
   EXPECT_FALSE(guarded_opts.isSet("species:he:temperature"));
   EXPECT_TRUE(guarded_opts["species"]["d"]["collision_frequencies"].isSet("d_d_coll"));
+}
+
+TEST_F(GuardedOptionsTests, TestUnsetNotInChildren) {
+  // This is a test for a bug that was found in the initial implementation
+  auto children = guarded_opts.getChildren();
+  EXPECT_EQ(children.count("fields"), 0);
+  EXPECT_EQ(children.count("unused"), 0);
+}
+
+TEST_F(GuardedOptionsTests, TestEqual) {
+  EXPECT_EQ(guarded_opts, guarded_opts);
+  EXPECT_EQ(guarded_opts["species:he:pressure"],
+            guarded_opts["species"]["he"]["pressure"]);
+  EXPECT_NE(guarded_opts["species:he:pressure"], guarded_opts["species:he:velocity"]);
+  EXPECT_NE(guarded_opts, GuardedOptions(&opts, &permissions));
 }

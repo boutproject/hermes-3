@@ -69,7 +69,7 @@ private:
 
   /// Update collision frequencies, momentum and energy exchange
   /// nu_12    normalised frequency
-  void collide(Options& species1, Options& species2, const Field3D& nu_12, BoutReal momentum_coefficient);
+  void collide(GuardedOptions& species1, GuardedOptions& species2, const Field3D& nu_12);
 };
 
 namespace {

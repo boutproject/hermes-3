@@ -91,6 +91,7 @@ TEST_F(BraginskiiConductionTest, ConductionGradientScaling) {
   state1["species"]["test+"]["temperature"] = this->temp1;
   state2["species"]["test+"]["temperature"] = this->temp2;
 
+  component.declareAllSpecies({"test+"});
   component.transform(state0);
   component.transform(state1);
   component.transform(state2);
@@ -116,7 +117,9 @@ TEST_F(BraginskiiConductionTest, ConductionKappaScaling) {
   state1["species"]["test+"]["temperature"] = this->temp1;
   Options state2 = state1.copy();
 
+  component1.declareAllSpecies({"test+"});
   component1.transform(state1);
+  component2.declareAllSpecies({"test+"});
   component2.transform(state2);
 
   Field3D conduction1 = this->getDeriv(state1);
@@ -146,6 +149,7 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionScaling) {
   state2["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 2.;
   state2["species"]["test+"]["collision_frequency"] = 2.;
 
+  component.declareAllSpecies({"test+"});
   component.transform(state0);
   component.transform(state1);
   component.transform(state2);
@@ -172,7 +176,9 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionsMode) {
   state_brag["species"]["test+"]["collision_frequency"] = 1.0;
   Options state_multi = state_brag.copy();
 
+  component_braginskii.declareAllSpecies({"test+"});
   component_braginskii.transform(state_brag);
+  component_multispecies.declareAllSpecies({"test+"});
   component_multispecies.transform(state_multi);
 
   Field3D conduction_brag = this->getDeriv(state_brag);

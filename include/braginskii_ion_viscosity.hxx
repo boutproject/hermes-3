@@ -76,14 +76,20 @@ private:
   /// Inputs
   /// - species
   ///   - <name>   (skips "e")
+  ///     - charge
   ///     - pressure  (skips if not present)
   ///     - velocity  (skips if not present)
   ///     - collision_frequency
+  ///   - fields
+  ///     - phi
   ///
   /// Sets in the state
   /// - species
   ///   - <name>
   ///     - momentum_source
+  ///     - energy_source
+  ///   - fields
+  ///     - DivJextra
   ///
   void transform_impl(GuardedOptions& state) override;
 };

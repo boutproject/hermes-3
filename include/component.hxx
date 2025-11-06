@@ -69,6 +69,7 @@ struct Component {
   /// "all_species" label in `svate_variable_access`.
   void declareAllSpecies(const std::vector<std::string>& species) {
     state_variable_access.substitute("all_species", species);
+    state_variable_access.substitute("all_species2", species);
   }
 
 protected:

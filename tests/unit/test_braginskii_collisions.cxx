@@ -46,6 +46,7 @@ TEST_F(BraginskiiCollisionsTest, OnlyElectrons) {
   state["species"]["e"]["density"] = 1e19;
   state["species"]["e"]["temperature"] = 10.;
 
+  component.declareAllSpecies({"e"});
   component.transform(state);
 
   ASSERT_TRUE(state["species"]["e"].isSet("collision_frequency"));
@@ -67,7 +68,6 @@ TEST_F(BraginskiiCollisionsTest, OneOrTwoSpeciesCharged) {
   state1["species"]["s1"]["charge"] = 1;
   state1["species"]["s1"]["AA"] = 2;
 
-  // State with two species, both the same but half the density
   Options state2;
   state2["species"]["s1"]["density"] = 5e18; // Half density
   state2["species"]["s1"]["temperature"] = 10;
@@ -77,6 +77,7 @@ TEST_F(BraginskiiCollisionsTest, OneOrTwoSpeciesCharged) {
   state2["species"]["s2"] = state2["species"]["s1"].copy();
 
   // Run calculations
+  component.declareAllSpecies({"s1", "s2"});
   component.transform(state1);
   component.transform(state2);
 
@@ -115,6 +116,7 @@ TEST_F(BraginskiiCollisionsTest, TnormDependence) {
         {"d+", {{"density", 2e19}, {"temperature", 20}, {"charge", 1}, {"AA", 2}}},
         {"d", {{"density", 1e18}, {"temperature", 3}, {"AA", 2}}}}}};
 
+  component.declareAllSpecies({"e", "d", "d+"});
   component.transform(state);
 
   ASSERT_TRUE(state["species"]["e"].isSet("collision_frequency"));
@@ -154,6 +156,7 @@ TEST_F(BraginskiiCollisionsTest, TnormDependence) {
          {{"density", 2e19}, {"temperature", 20 / Tnorm}, {"charge", 1}, {"AA", 2}}},
         {"d", {{"density", 1e18}, {"temperature", 3 / Tnorm}, {"AA", 2}}}}}};
 
+  component2.declareAllSpecies({"e", "d", "d+"});
   component2.transform(state2);
 
   // Normalised frequencies should be unchanged
