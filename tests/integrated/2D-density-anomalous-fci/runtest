@@ -18,13 +18,13 @@ from numpy import sqrt, max, abs, mean, array, log, concatenate
 import tarfile
 
 gridpath = "../../../../grids/mms_slab_fci_xz/"
-archive_path = "mms_slab_fci_XZ.tar.xz"
+archive_path = "MMS_Slab_fci_XZ.tar.xz"
 
-#try:
-#  with tarfile.open(gridpath + archive_path, "r:xz") as tar:
-#    tar.extractall(path=gridpath)
-#except:
-#  raise FileNotFoundError("Could not fine mms slab y file to extract")
+try:
+  with tarfile.open(gridpath + archive_path, "r:xz") as tar:
+    tar.extractall(path=gridpath)
+except:
+  raise FileNotFoundError("Could not fine mms slab y file to extract")
     
 def gridname(nx):
   return gridpath + f"MMS_straight_slab_{nx}_4_{nx-4}.fci.grid.nc"
