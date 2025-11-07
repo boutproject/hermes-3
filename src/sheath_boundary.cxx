@@ -45,7 +45,23 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 
 } // namespace
 
-SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
+SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
+    // FIXME: writeBoundaryIfSet doesn't really express that boundary
+    // should only be written if the interior is set. Instead it just
+    // give the permission readIfSet to the interior and writeFinal to
+    // the boundary.
+    : Component({
+        readIfSet("species:e:{e_whole_domain}"),
+        writeBoundary("species:e:{e_boundary}"),
+        readWrite("species:e:energy_source"),
+        writeBoundaryIfSet("species:e:{e_optional}"),
+        // FIXME: These only applies to ions, not to all species
+        readIfSet("species:{all_species}:{ion_whole_domain}"),
+        readOnly("species:{all_species}:AA"),
+        readWrite("species:{all_species}:energy_source"),
+        writeBoundary("species:{all_species}:{ion_boundary}"),
+        writeBoundaryIfSet("species:{all_species}:{ion_optional}"),
+    }) {
   AUTO_TRACE();
 
   Options& options = alloptions[name];
@@ -94,6 +110,23 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
   floor_potential = options["floor_potential"]
                         .doc("Apply a floor to wall potential when calculating Ve?")
                         .withDefault<bool>(true);
+
+  state_variable_access.substitute("e_whole_domain", {"AA", "charge", "adiabatic"});
+  state_variable_access.substitute("e_boundary", {"density", "temperature"});
+  state_variable_access.substitute("e_optional", {"pressure", "velocity"});
+  state_variable_access.substitute("ion_whole_domain", {"charge", "adiabatic"});
+  state_variable_access.substitute("ion_boundary", {"density", "temperature"});
+  // FIXME: velocity and momentum will only be set on boundaries if already set on
+  // interior
+  state_variable_access.substitute("ion_optional", {"pressure", "velocity", "momentum"});
+  // FIXME: The two results of the ternary are actually the same; need
+  // to change what writeBoundaryIfSet returns (and how we model
+  // permissions, for that matter)
+  state_variable_access.setAccess(
+      always_set_phi ? std::pair<std::string, Permissions::AccessRights>(
+          "fields:phi", {Permissions::Interior, Permissions::Nowhere,
+                         Permissions::Nowhere, Permissions::Boundaries})
+                     : writeBoundaryIfSet("fields:phi"));
 }
 
 void SheathBoundary::transform_impl(GuardedOptions& state) {

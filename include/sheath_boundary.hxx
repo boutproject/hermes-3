@@ -52,11 +52,11 @@ private:
   ///     - temperature
   ///     - pressure    Optional
   ///     - velocity    Optional
-  ///     - mass        Optional
+  ///     - AA          Optional
   ///     - adiabatic   Optional. Ratio of specific heats, default 5/3.
   ///   - <ions>  if charge is set (i.e. not neutrals)
   ///     - charge
-  ///     - mass
+  ///     - AA
   ///     - density
   ///     - temperature
   ///     - pressure     Optional
@@ -71,11 +71,13 @@ private:
   ///   - e
   ///     - density      Sets boundary
   ///     - temperature  Sets boundary
+  ///     - pressure     Sets boundary
   ///     - velocity     Sets boundary
   ///     - energy_source
   ///   - <ions>
   ///     - density      Sets boundary
   ///     - temperature  Sets boundary
+  ///     - pressure     Sets boundary
   ///     - velocity     Sets boundary
   ///     - momentum     Sets boundary
   ///     - energy_source

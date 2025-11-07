@@ -55,6 +55,11 @@ public:
   bool operator==(const GuardedOptions& other) const;
   bool operator!=(const GuardedOptions& other) const;
 
+  Permissions::PermissionTypes
+  getHighestPermission(Permissions::Regions region = Permissions::AllRegions) const {
+    return permissions->getHighestPermission(options->str(), region).first;
+  }
+
 private:
   Options* options{nullptr};
   Permissions* permissions{nullptr};
