@@ -79,6 +79,8 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f, Field3D& flow_ylow,
                                      bool bndry_flux = true);
 
+
+Field3D Div_a_Grad_perp_curv(const Field3D& b, const Field3D& a);
 /*!
  * Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) -- Vorticity
  *
