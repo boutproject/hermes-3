@@ -1025,6 +1025,18 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
   return result;
 }
 
+
+Field3D Div_a_Grad_perp_curv(const Field3D& b, const Field3D& a){
+  auto *coord = mesh->getCoordinates();
+  Field3D tmp = (DDX(coord->J * coord->g11*b)*DDX(a) + coord->J * coord->g11 * b * D2DX2(a))/coord->J;
+  tmp += (DDZ(coord->J * coord->g33 * b)*DDZ(a) + coord->J * coord->g33 * b * D2DZ2(a))/coord->J;
+  tmp += (DDX(coord->J * coord->g13 * b)*DDZ(a) + coord->J * coord->g13 * b * D2DXDZ(a) * 2.0 + DDZ(coord->J * coord->g13 * b)*DDX(a))/coord->J;
+  return tmp; 
+}
+
+
+
+
 // Div ( a Grad_perp(f) )  -- diffusion
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
 const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
