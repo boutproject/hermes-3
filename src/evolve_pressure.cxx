@@ -260,7 +260,6 @@ void EvolvePressure::transform(Options& state) {
   Pfloor = N * T; // Ensure consistency
 
   set(species["pressure"], Pfloor);
-  T.applyBoundary("neumann");
   mesh->communicate(T);
   T.applyParallelBoundary("parallel_neumann_o1");
   set(species["temperature"], T);
