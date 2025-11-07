@@ -28,7 +28,7 @@ rho_s = 0.00022847
 omega = 0.0001
 #n = 1 + 0.1*sin(2 * pi * x) * sin(3 * z)# * sin(t*omega)
 n = 1.0 + 0.1 * sin(2.0 * pi * x) * sin(2 * z) 
-D = (1.0 + 0.0*x) / (rho_s * rho_s * Omega_ci)
+D = (1.0 + 0.1*sin(4.0 * pi * x) + 0.05 * cos(z)) / (rho_s * rho_s * Omega_ci)
 
 
 # Turn solution into real x and z coordinates
@@ -48,8 +48,8 @@ D = D.subs(replace)
 
 
 # Density equation
-#dndt = (DDX(D*DDX(n)) + DDZ(D*DDZ(n))) * rho_s**2
-dndt = D * Delp2(n) * rho_s**2   
+
+dndt = (DDX(D*DDX(n)) + DDZ(D*DDZ(n))) * rho_s**2   
 
 #############################
 # Calculate sources
