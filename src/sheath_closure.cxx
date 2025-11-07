@@ -1,7 +1,14 @@
 
 #include "../include/sheath_closure.hxx"
 
-SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
+SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
+    : Component({readOnly("fields:phi"), readOnly("species:e:density"),
+                 // FIXME: If sink is true then electron temperature seems to be used
+                 // unconditionally
+                 readIfSet("species:e:temperature"),
+                 readWrite("species:e:density_source"),
+                 // FIXME: This is only written if temperature is set
+                 readWrite("species:e:energy_source"), readWrite("fields:DivJextra")}) {
   Options& options = alloptions[name];
 
   BoutReal Lnorm = alloptions["units"]["meters"]; // Length normalisation factor
@@ -29,6 +36,14 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
                .withDefault<bool>(false);
 
   output.write("\tL_par = {:e} (normalised)\n", L_par);
+
+  if (sinks) {
+    // FIXME: This shouldn't apply to electrons
+    state_variable_access.setAccess(readOnly("species:{all_species}:{inputs}"));
+    state_variable_access.setAccess(readWrite("species:{all_species}:{outputs}"));
+    state_variable_access.substitute("inputs", {"AA", "density", "temperature"});
+    state_variable_access.substitute("output", {"density_source", "energy_source"});
+  }
 }
 
 void SheathClosure::transform_impl(GuardedOptions& state) {
@@ -74,6 +89,7 @@ void SheathClosure::transform_impl(GuardedOptions& state) {
     for (auto& kv : allspecies.getChildren()) {
       GuardedOptions species = allspecies[kv.first];
 
+      // FIXME: This includes electrons in the calculation. Is that desired?
       const BoutReal A = get<BoutReal>(species["AA"]);
       Field3D Ns = get<Field3D>(species["density"]);
       Field3D Ts = get<Field3D>(species["temperature"]);
