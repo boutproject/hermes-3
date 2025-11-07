@@ -34,7 +34,7 @@ shell("ln -s ../../../build/hermes-3 hermes-3")
 
 # List of NY values to use
 #nxlist = [36, 68, 132, 260] #, 640, 1280, 2560, 5120]
-nxlist = [36, 68,132,260]
+nxlist = [36, 68,132]
 nout = 20
 timestep = 1e7 / nout
 
