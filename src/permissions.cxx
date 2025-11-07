@@ -40,7 +40,11 @@ void Permissions::substitute(const std::string& label,
     }
     it = variable_permissions.erase(it);
     for (const std::string& val : substitutions) {
-      variable_permissions[replaceAll(varname, pattern, val)] = access;
+      const std::string newname = replaceAll(varname, pattern, val);
+      // Do not overwrite permissiosn that are already set
+      if (variable_permissions.count(newname) == 0) {
+        variable_permissions[newname] = access;
+      }
     }
   }
 }
@@ -162,5 +166,12 @@ writeFinal(std::string varname, Permissions::Regions region) {
 std::pair<std::string, Permissions::AccessRights> writeBoundary(std::string varname) {
   return {varname,
           {Permissions::Nowhere, Permissions::Interior, Permissions::Nowhere,
+           Permissions::Boundaries}};
+}
+
+std::pair<std::string, Permissions::AccessRights>
+writeBoundaryIfSet(std::string varname) {
+  return {varname,
+          {Permissions::Interior, Permissions::Nowhere, Permissions::Nowhere,
            Permissions::Boundaries}};
 }

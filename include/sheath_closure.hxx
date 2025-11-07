@@ -34,13 +34,15 @@ private:
   ///
   /// Optional inputs
   /// - species
+  ///   - AA
   ///   - density
-  ///   - pressure
+  ///   - temperature
   ///
   /// Modifies
   /// - species
   ///   - e
-  ///     - density_source   (If density present)
+  ///     - density_source
+  ///     - energy_source (if temperature present)
   ///   - density_source and energy_source (If sinks=true)
   /// - fields
   ///   - DivJdia     Divergence of current

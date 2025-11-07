@@ -133,6 +133,9 @@ public:
   ///     });
   ///     example.substitute("name", {"d", "d+", "t", "t+", "he", "he+", "c", "c+", "e"});
   ///
+  /// Note that variable names which already have a permission set
+  /// will not be overwritten.
+  ///
   void substitute(const std::string& label,
                   const std::vector<std::string>& substitutions);
 
@@ -222,3 +225,11 @@ writeFinal(std::string varname, Permissions::Regions region = Permissions::AllRe
 /// have Read permissions in the interior, as this is normally
 /// required to set the boundaries correctly.
 std::pair<std::string, Permissions::AccessRights> writeBoundary(std::string varname);
+
+/// Convenience function to return an object expressing that the
+/// variable should have Write permissions on the boundaries. It will
+/// have Read permissions in the interior if the interior is already set.
+std::pair<std::string, Permissions::AccessRights> writeBoundaryIfSet(std::string varname);
+
+// FIXME: Ideally there would be some way to express write permissions only if setaccess
+// FIXME: Ideally we could express to write a boundary only if the interior is set

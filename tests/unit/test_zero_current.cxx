@@ -45,6 +45,7 @@ TEST_F(ZeroCurrentTest, ElectronFlowVelocity) {
   Field3D Vi =  FieldFactory::get()->create3D("y - x", &options, mesh);
   options["species"]["ion"]["velocity"] = Vi;
 
+  component.declareAllSpecies({"e", "ion"});
   component.transform(options);
 
   // Electron velocity should be equal to ion velocity
