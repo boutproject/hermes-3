@@ -10,7 +10,10 @@
 struct FixedVelocity : public Component {
 
   FixedVelocity(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : name(name) {
+      : Component({readIfSet("species:{name}:density", Permissions::Interior),
+                   // FIXME: AA is only read if density is set
+                   readOnly("species:{name}:AA"), readWrite("species:{name}:{output}")}),
+        name(name) {
     AUTO_TRACE();
 
     auto& options = alloptions[name];
@@ -28,6 +31,9 @@ struct FixedVelocity : public Component {
     // Option overrides mesh value
     // so use mesh value (if any) as default value.
     V = options["velocity"].withDefault(V) / Cs0;
+    state_variable_access.substitute("name", {name});
+    // FIXME: Momentum is only written if density is set
+    state_variable_access.substitute("output", {"velocity", "momentum"});
   }
 
   void outputVars(Options& state) override {

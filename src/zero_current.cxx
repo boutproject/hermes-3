@@ -4,13 +4,18 @@
 #include "../include/zero_current.hxx"
 
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
-    : name(name) {
+    : Component({readIfSet("species:{all_species}:charge"),
+                 readIfSet("species:{all_species}:{inputs}", Permissions::Interior),
+                 readWrite(fmt::format("species:{}:velocity", name))}),
+      name(name) {
   AUTO_TRACE();
   Options &options = alloptions[name];
 
   charge = options["charge"].doc("Particle charge. electrons = -1");
 
   ASSERT0(charge != 0.0);
+
+  state_variable_access.substitute("inputs", {"density", "velocity"});
 }
 
 void ZeroCurrent::transform_impl(GuardedOptions& state) {

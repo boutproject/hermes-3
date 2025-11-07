@@ -13,7 +13,7 @@ struct FixedDensity : public Component {
   ///   - charge
   ///   - density   value (expression) in units of m^-3
   FixedDensity(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : name(name) {
+      : Component({readWrite("species:{name}:{vars}")}), name(name) {
     AUTO_TRACE();
 
     auto& options = alloptions[name];
@@ -27,6 +27,8 @@ struct FixedDensity : public Component {
 
     // Get the density and normalise
     N = options["density"].as<Field3D>() / Nnorm;
+    state_variable_access.substitute("name", {name});
+    state_variable_access.substitute("vars", {"AA", "charge", "density"});
   }
 
   void outputVars(Options& state) override {

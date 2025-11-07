@@ -322,7 +322,8 @@ TEST(PermissionsTests, TestGetVariablesWithPermissions) {
 TEST(PermissionsTests, TestSubstitute) {
   Permissions example({{"species:{s1}:collision_frequencies:{s1}_{s2}_coll",
                         {Permissions::Nowhere, Permissions::AllRegions,
-                         Permissions::Nowhere, Permissions::Nowhere}}});
+                         Permissions::Nowhere, Permissions::Nowhere}},
+                       readIfSet("d")});
 
   example.setAccess("{var}", {Permissions::Nowhere, Permissions::Nowhere,
                               Permissions::Interior, Permissions::Nowhere});
@@ -342,11 +343,14 @@ TEST(PermissionsTests, TestSubstitute) {
   EXPECT_EQ(readable["species:d+:collision_frequencies:d+_d+_coll"],
             Permissions::AllRegions);
 
-  example.substitute("var", {"a", "b", "c"});
+  example.substitute("var", {"a", "b", "c", "d"});
 
   auto writable = example.getVariablesWithPermission(Permissions::Write);
   EXPECT_EQ(writable.size(), 3);
   EXPECT_EQ(writable["a"], Permissions::Interior);
   EXPECT_EQ(writable["b"], Permissions::Interior);
   EXPECT_EQ(writable["c"], Permissions::Interior);
+
+  EXPECT_EQ(example.getHighestPermission("d"),
+            make_permission(Permissions::ReadIfSet, "d"));
 }
