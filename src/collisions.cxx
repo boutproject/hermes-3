@@ -73,9 +73,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 
   add(species1["collision_frequency"], nu_12);
   set(collision_rates[species1.name()][species2.name()], nu_12);
-  if (species1.name() == species2.name()) {
-    set(species1["collision_frequency_self"], nu_12);
-  }
+
   if (&species1 != &species2) {
     // For collisions between different species
     // m_a n_a \nu_{ab} = m_b n_b \nu_{ba}

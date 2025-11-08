@@ -373,7 +373,7 @@ void EvolvePressure::finally(const Options& state) {
 
     // Calculate ion collision times
     //const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
-    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency_self"]), 1e-10);                                                                                                                                                                                  
+    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);                                                                                                                                                                                  
 
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
