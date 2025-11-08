@@ -32,7 +32,7 @@ void ElectronViscosity::transform(Options& state) {
   }
 
   //const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
-  const Field3D tau = 1. / get<Field3D>(species["collision_frequency_self"]);
+  const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
   const Field3D P = get<Field3D>(species["pressure"]);
   const Field3D V = get<Field3D>(species["velocity"]);
 
