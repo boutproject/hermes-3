@@ -341,7 +341,7 @@ void RelaxPotential::finally(const Options& state) {
   if (boussinesq) {
 
     Field3D flow_xlow_phi,flow_zlow_phi;
-    ddt(phi1) += lambda_1 *( (*dagp)(average_atomic_mass / Bsq, phi, flow_xlow_phi, flow_zlow_phi, false) - Vort);
+    ddt(phi1) = lambda_1 *( (*dagp)(average_atomic_mass / Bsq, phi, flow_xlow_phi, flow_zlow_phi, false) - Vort);
 
     if (diamagnetic_polarisation) {
       for (auto& kv : allspecies.getChildren()) {
