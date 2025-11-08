@@ -35,7 +35,7 @@ struct SoundSpeed : public Component {
 
     fastest_wave_factor = options["fastest_wave_factor"]
       .doc("Multiply the fastest wave by this factor, affecting lax flux strength")
-      .withDefault(0.0);
+      .withDefault(1.0);
 
     if (temperature_floor > 0.0) {
       temperature_floor /= get<BoutReal>(alloptions["units"]["eV"]);
