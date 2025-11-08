@@ -260,6 +260,9 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-conduction-fci)
   hermes_add_integrated_test(1D-electron-viscosity-fci)
   hermes_add_integrated_test(1D-ion-viscosity-fci)
+  hermes_add_integrated_test(2D-density-anomalous-fci)
+  hermes_add_integrated_test(2D-fluid-anomalous-fci)
+
 
   
   # Unit tests
