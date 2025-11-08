@@ -191,7 +191,6 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                           )
         / (2 * dy[i] * sqrt(g_22[i]));
 
-      
 #if CHECK > 0
       if(!std::isfinite(result[i])) {
         throw BoutException("Non-finite value in Div_par_fvv at {}\n"
