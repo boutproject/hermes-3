@@ -15,7 +15,7 @@
 using bout::globals::mesh;
 
 EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solver)
-    : name(name) {
+    : Component({readWrite("species:{name}:{outputs}")}), name(name) {
   AUTO_TRACE();
 
   auto& options = alloptions[name];
@@ -130,6 +130,16 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
+
+  std::vector<std::string> outputs = {"AA", "density", "density_source"};
+  if (charge != 0.) {
+    outputs.push_back("charge");
+  }
+  if (low_n_diffuse) {
+    outputs.push_back("low_n_coeff");
+  }
+  state_variable_access.substitute("name", {name});
+  state_variable_access.substitute("outputs", outputs);
 }
 
 void EvolveDensity::transform_impl(GuardedOptions& state) {

@@ -17,7 +17,9 @@
 using bout::globals::mesh;
 
 EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver)
-    : name(name) {
+    : Component(
+        {readOnly("species:{name}:{inputs}"), readWrite("species:{name}:{outputs}")}),
+      name(name) {
   AUTO_TRACE();
 
   auto& options = alloptions[name];
@@ -111,6 +113,10 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
   thermal_conduction = options["thermal_conduction"]
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
+
+  state_variable_access.substitute("name", {name});
+  state_variable_access.substitute("inputs", {"AA", "density", "velocity"});
+  state_variable_access.substitute("outputs", {"pressure", "temperature"});
 }
 
 void EvolveEnergy::transform_impl(GuardedOptions& state) {

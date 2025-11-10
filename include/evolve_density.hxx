@@ -90,8 +90,10 @@ private:
   /// - species
   ///   - <name>
   ///     - AA
-  ///     - charge
+  ///     - charge (if non-zero)
   ///     - density
+  ///     - density_source
+  ///     - low_n_coeff (if low_n_diffuse)
   void transform_impl(GuardedOptions& state) override;
 };
 
