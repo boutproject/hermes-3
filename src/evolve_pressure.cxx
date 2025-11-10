@@ -16,7 +16,9 @@
 using bout::globals::mesh;
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
-    : name(name) {
+    : Component(
+                {readOnly("species:{name}:{inputs}", Permissions::Interior), readWrite("species:{name}:{outputs}")}),
+      name(name) {
   AUTO_TRACE();
 
   auto& options = alloptions[name];
@@ -162,6 +164,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   thermal_conduction = options["thermal_conduction"]
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
+
+  state_variable_access.substitute("name", {name});
+  state_variable_access.substitute("inputs", {"density"});
+  state_variable_access.substitute("outputs", {"pressure", "temperature"});
 }
 
 void EvolvePressure::transform_impl(GuardedOptions& state) {
