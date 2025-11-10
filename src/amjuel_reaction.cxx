@@ -7,12 +7,12 @@
  *
  * @param T temperature in eV
  * @param n number density in m^-3
- * @param coeff_table a table of polynomial fit coefficients (coefs[T][n])
+ * @param coeff_table polynomial fit coefficients in a vector-of-vectors (outer index T,
+ * inner index n)
  * @return BoutReal the fit in SI, units m^3/s, or eV m^3/s for energy loss
  */
-BoutReal
-AmjuelReaction::eval_amjuel_fit(BoutReal T, BoutReal n,
-                                const std::vector<std::vector<BoutReal>>& coeff_table) {
+BoutReal AmjuelReaction::eval_amjuel_nT_fit(
+    BoutReal T, BoutReal n, const std::vector<std::vector<BoutReal>>& coeff_table) {
   // Enforce range of validity
   n = std::clamp(n, 1e14, 1e22); // 1e8 - 1e16 cm^-3
   T = std::clamp(T, 0.1, 1e4);
@@ -34,52 +34,96 @@ AmjuelReaction::eval_amjuel_fit(BoutReal T, BoutReal n,
 }
 
 /**
- * @brief Evaluate <sigma . v . E> at a particular density and temperature by evaluating
- * an Amjuel fit.
+ * @brief Evaluate an Amjuel single polynomial fit in T, given a table of
+ * coefficients (see page 20 of amjuel.pdf).
  *
- * @param T temperature
- * @param n number density
- * @return BoutReal <sigma . v . E>(n, T)
+ * @param T temperature in eV
+ * @param coeff_table a table of polynomial fit coefficients (index T)
+ * @return BoutReal the fit in SI, units m^3/s, or eV m^3/s for energy loss
  */
-BoutReal AmjuelReaction::eval_sigma_v_E(BoutReal T, BoutReal n) {
-  return eval_amjuel_fit(T, n, amjuel_data.sigma_v_E_coeffs);
+BoutReal AmjuelReaction::eval_amjuel_T_fit(BoutReal T,
+                                           const std::vector<BoutReal>& coeff_table) {
+  const BoutReal lnT = log(T);
+  BoutReal ln_sigmav = coeff_table[0];
+  BoutReal lnT_n = lnT; // (lnT)^n
+
+  for (auto n = 1; n < coeff_table.size(); n++) {
+    ln_sigmav += coeff_table[n] * lnT_n;
+    lnT_n *= lnT;
+  }
+
+  return exp(ln_sigmav);
 }
 
 /**
- * @brief Evaluate <sigma . v . E> at a particular density and temperature
- * (Subclasses MAY define)
+ * @brief Use Amjuel coeffs to evaluate <sigma.v.E> at a particular density and
+ * temperature.
+ *
+ * @param T temperature
+ * @param n number density
+ * @return BoutReal <sigma.v.E>(n, T)
+ */
+BoutReal AmjuelReaction::eval_sigma_vE_nT(BoutReal T, BoutReal n) {
+  return eval_amjuel_nT_fit(T, n, amjuel_data.sigma_v_E_coeffs);
+}
+
+/**
+ * @brief Use Amjuel coeffs to evaluate <sigma.v> at a particular density and
+ * temperature.
  *
  * @param T a temperature
  * @param n a density
- * @return BoutReal <sigma . v . E>(n, T)
+ * @return BoutReal <sigma.v>(n, T)
  */
-BoutReal AmjuelReaction::eval_sigma_v(BoutReal T, BoutReal n) {
-  return eval_amjuel_fit(T, n, amjuel_data.sigma_v_coeffs);
+BoutReal AmjuelReaction::eval_sigma_v_nT(BoutReal T, BoutReal n) {
+  return eval_amjuel_nT_fit(T, n, amjuel_data.sigma_v_coeffs);
 }
 
-void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate) {
+/**
+ * @brief Use Amjuel coeffs to evaluate <sigma.v> at a particular (effective)
+ * temperature
+ *
+ * @param T a temperature
+ * @param n a density
+ * @return BoutReal <sigma.v>(T_eff)
+ */
+BoutReal AmjuelReaction::eval_sigma_v_T(BoutReal T) {
+  return eval_amjuel_T_fit(T, amjuel_data.sigma_v_coeffs[0]);
+}
+
+/**
+ * @brief Extract rate parameters type from json data
+ *
+ * @return RateParamsTypes the rate parameters type
+ */
+RateParamsTypes AmjuelReaction::get_rate_params_type() const {
+  std::string fit_type_lcase = this->amjuel_data.fit_type;
+  std::transform(fit_type_lcase.begin(), fit_type_lcase.end(), fit_type_lcase.begin(),
+                 ::tolower);
+  return RateParamsTypesFromString(fit_type_lcase);
+}
+
+void AmjuelReaction::transform_additional(Options& state, RatesMap& rate_calc_results) {
 
   // Amjuel-based reactions are assumed to have exactly 2 reactants, for now.
   std::vector<std::string> reactant_species =
       parser->get_species(species_filter::reactants);
   ASSERT1(reactant_species.size() == 2);
 
-  // Extract heavy reactant properties
-  std::vector<std::string> heavy_reactant_species =
-      parser->get_species(reactant_species, species_filter::heavy);
-  // Amjuel-based reactions are assumed to have exactly 1 heavy reactant, for now.
-  ASSERT1(heavy_reactant_species.size() == 1);
-  Options& rh = state["species"][heavy_reactant_species[0]];
+  // Amjuel-based reactions are assumed to have exactly 1 heavy reactant unless this
+  // function has been overridden
+  std::string heavy_reactant_species =
+      parser->get_single_species(reactant_species, species_filter::heavy);
+  Options& rh = state["species"][heavy_reactant_species];
   BoutReal AA_rh = get<BoutReal>(rh["AA"]);
   Field3D n_rh = get<Field3D>(rh["density"]);
   Field3D v_rh = get<Field3D>(rh["velocity"]);
 
-  // Extract heavy product properties
-  std::vector<std::string> heavy_product_species =
-      parser->get_species(species_filter::heavy, species_filter::products);
-  // Amjuel-based reactions are assumed to have exactly 1 heavy product, for now.
-  ASSERT1(heavy_product_species.size() == 1);
-  Options& ph = state["species"][heavy_product_species[0]];
+  // Amjuel-based reactions are assumed to have exactly 1 heavy product unless this
+  // function has been overridden
+  std::string heavy_product_species =
+      parser->get_single_species(species_filter::heavy, species_filter::products);
+  Options& ph = state["species"][heavy_product_species];
   Field3D v_ph = get<Field3D>(ph["velocity"]);
 
   // Kinetic energy transfer to thermal energy
@@ -113,12 +157,12 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   // The greater the difference in velocities of the underlying species,
   // the wider the resultant distribution, which corresponds to an
   // increase in temperature and therefore internal energy.
-  add(ph["energy_source"], 0.5 * AA_rh * reaction_rate * SQ(v_rh - v_ph));
+  add(ph["energy_source"], 0.5 * AA_rh * rate_calc_results["rate"] * SQ(v_rh - v_ph));
 
   // Energy source for electrons due to pop change
   Options& electron = state["species"]["e"];
   Field3D T_e = get<Field3D>(electron["temperature"]);
-  const int e_pop_change = this->parser->get_stoich().at("e");
+  const int e_pop_change = this->parser->pop_change("e");
   if (e_pop_change != 0) {
     if (electron.isSet("velocity")) {
       // Transfer of electron kinetic to thermal energy due to density source
@@ -131,7 +175,8 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
       // kinetic energy converted to an internal energy source of that species.
       auto v_e = get<Field3D>(electron["velocity"]);
       auto m_e = get<BoutReal>(electron["AA"]);
-      add(electron["energy_source"], 0.5 * m_e * e_pop_change * reaction_rate * SQ(v_e));
+      add(electron["energy_source"],
+          0.5 * m_e * e_pop_change * rate_calc_results["rate"] * SQ(v_e));
     }
   }
 
@@ -139,14 +184,14 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   Field3D n_e = get<Field3D>(electron["density"]);
   Field3D energy_loss = cellAverage(
       [&](BoutReal nrh, BoutReal ne, BoutReal te) {
-        return nrh * ne * eval_sigma_v_E(te * Tnorm, ne * Nnorm) * Nnorm
+        return nrh * ne * eval_sigma_vE_nT(te * Tnorm, ne * Nnorm) * Nnorm
                / (Tnorm * FreqNorm) * radiation_multiplier;
       },
       n_e.getRegion("RGN_NOBNDRY"))(n_rh, n_e, T_e);
 
   // Loss is reduced by heating
-  energy_loss -=
-      (amjuel_data.electron_heating / Tnorm) * reaction_rate * radiation_multiplier;
+  energy_loss -= (amjuel_data.electron_heating / Tnorm) * rate_calc_results["rate"]
+                 * radiation_multiplier;
 
   update_source<subtract<Field3D>>(state, "e", ReactionDiagnosticType::energy_loss,
                                    energy_loss);
@@ -157,7 +202,7 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   // [s^-1]
   Field3D heavy_particle_frequency = cellAverage(
       [&](BoutReal ne, BoutReal te) {
-        return ne * eval_sigma_v(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
+        return ne * eval_sigma_v_nT(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
                * rate_multiplier;
       },
       n_e.getRegion("RGN_NOBNDRY"))(n_e, T_e);
@@ -166,16 +211,15 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   // [s^-1]
   Field3D electron_frequency = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
-        return n1 * eval_sigma_v(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
+        return n1 * eval_sigma_v_nT(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm
                * rate_multiplier;
       },
       n_e.getRegion("RGN_NOBNDRY"))(n_e, n_rh, T_e);
 
-  // Set collision frequency on the neutral species (should be exactly 1 of them for
-  // Amjuel reactions)
-  std::vector<std::string> neutral_species = parser->get_species(species_filter::neutral);
-  ASSERT1(neutral_species.size() == 1);
-  set(state["species"][neutral_species[0]]["collision_frequencies"]
+  // Set collision frequency on the neutral species (must be exactly 1 of them if this
+  // function hasn't been overridden)
+  std::string neutral_species = parser->get_single_species(species_filter::neutral);
+  set(state["species"][neutral_species]["collision_frequencies"]
            [rh.name() + "_" + ph.name() + "_" + this->short_reaction_type],
       heavy_particle_frequency);
 }

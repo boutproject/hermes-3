@@ -32,6 +32,20 @@ def check_value(name, val, target, **kws):
     return success
 
 
+def check_ULPs_diff(name, val, target, **kws):
+    kws["maxulp"] = kws.pop("maxulp", 4)
+    success = False
+    try:
+        numpy.testing.assert_array_max_ulp(val, target, **kws)
+        success = True
+    except AssertionError as e:
+        print(
+            f'{name} differs from reference data by > {kws["maxulp"]} ULPs\n Value = {val}\n Reference = {target}'
+        )
+
+    return success
+
+
 def end_test(success):
     if success:
         print(" => Test passed")
@@ -56,6 +70,16 @@ def fail_on_missing_exec():
 def fail_test():
     end_test(False)
 
+def optimisation_level(run_output):
+    comp_flags_line=[l for l in run_output.split('\n') if l.startswith("\tCompiled with flags")]
+    if len(comp_flags_line)==1:
+        comp_flags = comp_flags_line[0].split()
+        for opt_level in range(4):
+            if f"-O{opt_level}" in comp_flags:
+                return opt_level
+        # No optimisation flag found; assume -O0
+        return 0
+    raise RuntimeError("Failed to find compile flags in run output")
 
 # =============================================================================
 
@@ -69,11 +93,11 @@ fail_on_missing_exec()
 output_path.unlink(missing_ok=True)
 
 # Use Bout wrapper to run exec
-s, out = launch(f"{hermes_exec} -d {data_dir}", nproc=1, pipe=True)
+s, run_stdout = launch(f"{hermes_exec} -d {data_dir}", nproc=1, pipe=True)
 
 # Save output to log file
 with open("run.log", "w") as f:
-    f.write(out)
+    f.write(run_stdout)
 
 # Check that the run produced output
 fail_on_missing_data()
@@ -94,27 +118,45 @@ success &= check_value("Ion temperature", Ti_up, 150, atol=10)
 
 # fmt: off
 # Check the values of various diagnostics
-pos_idx = -1    # 1D position index to check (excluding guards)
-rel_tol = 1e-4  # Relative tolerance (should be high enough to accommodate compiler optimisation differences)
-diags_ref = {   # Diagnostic names and reference values (generated with -O2)
-    "Sd+_iz": 0.0012500877296552468,
-    "Fd+_iz": 5.027449522167903e-05,
-    "Ed+_iz": 0.0008867627959864742,
-    "Rd+_ex": -0.0002980827888026677,
-    "Sd+_rec": -3.479788534373128e-09,
-    "Fd+_rec": -1.0525255255905655e-09,
-    "Ed+_rec": -4.289581450623666e-09,
-    "Rd+_rec": -7.859435290992585e-10,
-    "Kdd+_cx": 0.006218829645880973,
-    "Fdd+_cx": 0.00035836480520026217,
-    "Edd+_cx": 0.000715157957576078,
+pos_idx = -1         # 1D position index to check (excluding guards)
+ULPs_max_diff = 5e11 # Max number of ULPs allowed between test value and reference value.
+# Diagnostic names and reference values (generated with -O2)
+release_diags_ref = {        
+    "Sd+_iz": 0.0012500909495553412,
+    "Fd+_iz": 5.027068667820757e-05,
+    "Ed+_iz": 0.000886755705516266,
+    "Rd+_ex": -0.0002980834490515916,
+    "Sd+_rec": -3.479956822392232e-09,
+    "Fd+_rec": -1.0525376960966807e-09,
+    "Ed+_rec": -4.2897231511986676e-09,
+    "Rd+_rec": -7.859691378400104e-10,
+    "Kdd+_cx": 0.006218892146342787,
+    "Fdd+_cx": 0.0003583556988699099,
+    "Edd+_cx": 0.0007151459741692755,
+}
+# Store separate values to accommodate changes due to lack of optimisation in Debug
+debug_diags_ref = {
+    "Sd+_iz": 0.0012500735313762568,
+    "Fd+_iz": 5.02717560389327e-05,
+    "Ed+_iz": 0.000886723905748805,
+    "Rd+_ex": -0.0002980794264560838,
+    "Sd+_rec": -3.4799501270106546e-09,
+    "Fd+_rec": -1.052540890652335e-09,
+    "Ed+_rec": -4.289620508224417e-09,
+    "Rd+_rec": -7.859637620094049e-10,
+    "Kdd+_cx": 0.00621882891858038,
+    "Fdd+_cx": 0.00035834961120024964,
+    "Edd+_cx": 0.0007151177865694317,
 }
 # fmt: on
+
+# Check 
+diags_ref = debug_diags_ref if optimisation_level(run_stdout) < 2 else release_diags_ref
 
 # Do the diagnostic checks
 ds_diags = ds_last.isel(pos=slice(2, -2))
 for name, target in diags_ref.items():
     val = ds_diags[name].values[pos_idx]
-    success &= check_value(name, val, target, rtol=rel_tol)
+    success &= check_ULPs_diff(name, val, target, maxulp=ULPs_max_diff)
 
 end_test(success)

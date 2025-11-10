@@ -39,7 +39,7 @@ protected:
   }
 
   void check_pop_change(std::string sp, int pop_change) {
-    int result = parser.get_stoich().at(sp);
+    int result = parser.pop_change(sp);
     ASSERT_EQ(result, pop_change)
         << std::endl
         << "Expected population change of species [" << sp << "] to be [" << pop_change
