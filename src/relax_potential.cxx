@@ -163,7 +163,7 @@ void RelaxPotential::transform(Options& state) {
   }
   
   
-  Vort.applyBoundary("neumann");
+  Vort.applyBoundary();
 
   mesh->communicate(Vort, phi1);
 
