@@ -48,6 +48,12 @@ private:
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D flow_xlow, flow_ylow; ///< Momentum flow diagnostics
 
+  /// This takes as inputs
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - density
+  ///
   /// This sets in the state
   /// - species
   ///   - <name>

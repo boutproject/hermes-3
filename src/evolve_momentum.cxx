@@ -12,7 +12,11 @@
 
 using bout::globals::mesh;
 
-EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) : name(name) {
+EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* solver)
+    : Component({readOnly("species:{name}:AA"),
+                 readOnly("species:{name}:density", Permissions::Interior),
+                 readWrite("species:{name}:{outputs}")}),
+      name(name) {
   AUTO_TRACE();
   
   // Evolve the momentum in time
@@ -58,6 +62,9 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   // Set to zero so set for output
   momentum_source = 0.0;
   NV_err = 0.0;
+
+  state_variable_access.substitute("name", {name});
+  state_variable_access.substitute("inputs", {"velocity", "momentum"});
 }
 
 void EvolveMomentum::transform_impl(GuardedOptions& state) {
