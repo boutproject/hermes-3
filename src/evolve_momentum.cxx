@@ -326,8 +326,7 @@ void EvolveMomentum::outputVars(Options &state) {
        {"species", name},
        {"source", "evolve_momentum"}});
 
-  if (diagnose) {
-    set_with_attrs(state[std::string("V") + name], V,
+  set_with_attrs(state[std::string("V") + name], V,
                    {{"time_dimension", "t"},
                     {"units", "m / s"},
                     {"conversion", Cs0},
@@ -335,6 +334,8 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"standard_name", "velocity"},
                     {"species", name},
                     {"source", "evolve_momentum"}});
+  
+  if (diagnose) {
 
     set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NV),
                    {{"time_dimension", "t"},
