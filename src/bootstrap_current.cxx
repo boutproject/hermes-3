@@ -49,12 +49,12 @@ void BootstrapCurrent::transform(Options& state) {
   Field2D Te_av =
       fluxSurfaceAverage(GET_NOBOUNDARY(Field3D, electrons["temperature"])) * Pnorm;
 
-  JparB = fluxSurfaceAverage(get<BoutReal>(electrons["charge"])
-                             * GET_NOBOUNDARY(Field3D, electrons["density"])
-                             * GET_NOBOUNDARY(Field3D, electrons["velocity"]) * Bxy);
+  Field3D JparB = get<BoutReal>(electrons["charge"])
+    * GET_NOBOUNDARY(Field3D, electrons["density"])
+    * GET_NOBOUNDARY(Field3D, electrons["velocity"]) * Bxy;
 
-  Field2D pi_av = 0.0;
-  Field2D ni_av = 0.0;
+  Field3D pi = 0.0;
+  Field3D ni = 0.0;
   for (auto& kv : allspecies.getChildren()) {
     if (kv.first == "e") {
       continue;
@@ -69,12 +69,18 @@ void BootstrapCurrent::transform(Options& state) {
       continue;
     }
 
-    pi_av += fluxSurfaceAverage(GET_NOBOUNDARY(Field3D, species["pressure"])) * Pnorm;
-    ni_av += fluxSurfaceAverage(GET_NOBOUNDARY(Field3D, species["density"])) * Nnorm;
+    pi += GET_NOBOUNDARY(Field3D, species["pressure"]);
 
-    JparB += fluxSurfaceAverage(Zi * GET_NOBOUNDARY(Field3D, species["density"])
-                                * GET_NOBOUNDARY(Field3D, species["velocity"]) * Bxy);
+    Field3D species_n = GET_NOBOUNDARY(Field3D, species["density"]);
+    ni += species_n;
+
+    JparB += Zi * species_n
+      * GET_NOBOUNDARY(Field3D, species["velocity"]) * Bxy;
   }
+
+  Field2D pi_av = fluxSurfaceAverage(pi);
+  Field2D ni_av = fluxSurfaceAverage(ni);
+  JparB_av = fluxSurfaceAverage(JparB);
 
   Field2D p_av = pe_av + pi_av;
   Field2D Ti_av = pi_av / ni_av;
@@ -148,7 +154,7 @@ void BootstrapCurrent::outputVars(Options& state) {
   const auto Bnorm = get<BoutReal>(state["Bnorm"]);
   const auto Cs0 = get<BoutReal>(state["Cs0"]);
 
-  set_with_attrs(state["JparB"], JparB,
+  set_with_attrs(state["JparB"], JparB_av,
                  {{"time_dimension", "t"},
                   {"units", "s-1"},
                   {"conversion", SI::qe * Cs0 * Nnorm * Bnorm},

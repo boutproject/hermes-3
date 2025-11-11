@@ -67,7 +67,7 @@ private:
   BoutReal Nnorm, Tnorm, Pnorm, Bnorm; ///< Normalization factors
 
   bool diagnose;    ///< Output additional diagnostics?
-  Field2D JparB;    ///< Current value of <J||B>
+  Field2D JparB_av;    ///< Current value of <J||B>
   Field2D JparB_bs; ///< Steady state <J||B>
 
   Field2D Bxy; ///< Magnetic field strength
