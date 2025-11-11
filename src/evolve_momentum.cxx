@@ -50,6 +50,10 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                    .doc("Include ExB advection?")
                    .withDefault<bool>(true);
 
+  scale_ExB = options["scale_ExB"]
+                   .doc("Scale ExB flow?")
+                   .withDefault<BoutReal>(1.0);
+  
   poloidal_flows = options["poloidal_flows"]
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
@@ -166,7 +170,7 @@ void EvolveMomentum::finally(const Options &state) {
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
       if (exb_advection) {
-        ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+        ddt(NV) = -scale_ExB * Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
                                          true) * bracket_factor; // ExB drift
       } else {
         ddt(NV) = 0.0;

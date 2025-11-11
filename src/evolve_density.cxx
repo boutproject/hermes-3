@@ -28,6 +28,11 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Include ExB advection?")
                    .withDefault<bool>(true);
 
+  scale_ExB = options["scale_ExB"]
+                   .doc("Scale ExB flow?")
+                   .withDefault<BoutReal>(1.0);
+
+  
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
@@ -251,7 +256,7 @@ void EvolveDensity::finally(const Options& state) {
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(N) = -Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
+    ddt(N) = -scale_ExB * Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
                                     true) * bracket_factor; // ExB drift
   } else {
     ddt(N) = 0.0;

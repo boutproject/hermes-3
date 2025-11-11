@@ -23,6 +23,10 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                       .doc("Include nonlinear ExB advection?")
                       .withDefault<bool>(true);
 
+  scale_ExB = options["scale_ExB"]
+                   .doc("Scale ExB flow?")
+                   .withDefault<BoutReal>(1.0);
+  
   diamagnetic =
       options["diamagnetic"].doc("Include diamagnetic current?").withDefault<bool>(true);
 
@@ -285,7 +289,7 @@ void RelaxPotential::finally(const Options& state) {
   Vort = get<Field3D>(state["fields"]["vorticity"]);
 
   if (exb_advection) {
-    ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
+    ddt(Vort) -= scale_ExB * Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
   }
 
   if (state.isSection("fields") and state["fields"].isSet("DivJextra")) {

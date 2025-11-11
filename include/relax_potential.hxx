@@ -76,7 +76,7 @@ private:
   bool floating_boundary;
   Coordinates::FieldMetric Bsq;      ///< SQ(coord->Bxy)
   VectorMetric Curlb_B; ///< Curvature vector Curl(b/B)
-
+  BoutReal scale_ExB;
   BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
 
   Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
