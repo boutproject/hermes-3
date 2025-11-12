@@ -12,14 +12,16 @@ std::unique_ptr<Component> Component::create(const std::string &type,
 void Component::transform(Options& state) {
   GuardedOptions guarded(&state, &state_variable_access);
   transform_impl(guarded);
+#if CHECKLEVEL >= 1
   for (auto& [varname, region] : guarded.unreadItems()) {
-    output_warn.write("Did not read from state variable {} in region(s) {}",
-                      varname, Permissions::regionNames(region));
+    output_warn.write("Did not read from state variable {} in region(s) {}\n", varname,
+                      Permissions::regionNames(region));
   }
   for (auto& [varname, region] : guarded.unwrittenItems()) {
-    output_warn.write("Did not write to state variable {} in region(s) {}",
-                      varname, Permissions::regionNames(region));
+    output_warn.write("Did not write to state variable {} in region(s) {}\n", varname,
+                      Permissions::regionNames(region));
   }
+#endif
 }
 
 constexpr decltype(ComponentFactory::type_name) ComponentFactory::type_name;
