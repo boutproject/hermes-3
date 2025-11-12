@@ -11,7 +11,7 @@
 #include <neso_particles.hpp>
 #include <random>
 #define REACTIONS_CELL_BLOCK_SIZE 2
-#include <reactions.hpp>
+#include <reactions/reactions.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -22,4 +22,4 @@
 #endif
 
 using namespace NESO::Particles;
-using namespace Reactions;
+using namespace VANTAGE::Reactions;

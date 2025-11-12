@@ -5,7 +5,7 @@
 spack:
   # add package specs to the `specs` list
   specs:
-  - hermes-3%gcc+petsc+reactions ^py-numpy@1.26.4 ^nec_reactions.reactions~nvcxx+enable_tests
+  - hermes-3%gcc+petsc+reactions ^py-numpy@1.26.4 ^vantage-reactions.reactions~nvcxx+enable_tests
     ^neso.neso-particles~nvcxx+petsc+build_tests ^openblas ^neso.adaptivecpp ^hdf5
   - cmake@3.30.5
   - py-meshio

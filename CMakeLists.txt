@@ -52,7 +52,7 @@ endif()
 
 find_package(MPI REQUIRED)
 find_package(NESO-Particles REQUIRED)
-find_package(Reactions REQUIRED)
+find_package(VANTAGE-Reactions REQUIRED)
 
 set(HERMES_SOURCES
     src/classical_diffusion.cxx
@@ -169,7 +169,7 @@ set(HERMES_SOURCES
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
 
-target_link_libraries(hermes-3-lib PUBLIC bout++::bout++ Reactions::Reactions)
+target_link_libraries(hermes-3-lib PUBLIC bout++::bout++ VANTAGE-Reactions::VANTAGE-Reactions)
 
 target_compile_features(hermes-3-lib PUBLIC cxx_std_17)
 set_target_properties(hermes-3-lib PROPERTIES CXX_EXTENSIONS OFF)
@@ -234,7 +234,7 @@ add_executable(bout-particle-push
                bout-particle-push.cxx
                ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
 add_sycl_to_target(TARGET bout-particle-push SOURCES bout-particle-push.cxx)
-target_link_libraries(bout-particle-push PUBLIC bout++::bout++ Reactions::Reactions)
+target_link_libraries(bout-particle-push PUBLIC bout++::bout++ VANTAGE-Reactions::VANTAGE-Reactions)
 
 # Tests
 option(HERMES_TESTS "Build the tests" ON)
