@@ -11,7 +11,11 @@ struct FixedTemperature : public Component {
   /// - <name>
   ///   - temperature   value (expression) in units of eV
   FixedTemperature(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : name(name) {
+      : Component({readIfSet("species:{name}:density", Permissions::Interior),
+                   readWrite("species:{name}:temperature"),
+                   // FIXME: Only written if density is set
+                   readWrite("species:{name}:pressure")}),
+        name(name) {
     AUTO_TRACE();
 
     auto& options = alloptions[name];
@@ -24,10 +28,11 @@ struct FixedTemperature : public Component {
         / Tnorm; // Normalise
 
     diagnose = options["diagnose"]
-      .doc("Save additional output diagnostics")
-      .withDefault<bool>(false);
-  }
+                   .doc("Save additional output diagnostics")
+                   .withDefault<bool>(false);
 
+    state_variable_access.substitute("name", {name});
+  }
 
   void outputVars(Options& state) override {
     AUTO_TRACE();

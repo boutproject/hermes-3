@@ -9,7 +9,10 @@
 
 struct SimplePump : public Component {
 
-  SimplePump(std::string name, Options& alloptions, Solver*) : name(name) {
+  SimplePump(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:{name}:density", Permissions::Interior),
+                   readWrite("species:{name}:density_source")}),
+        name(name) {
 
     Options& options = alloptions[name];
 
@@ -31,7 +34,8 @@ struct SimplePump : public Component {
                   .doc("Output additional diagnostics?")
                   .withDefault<bool>(false);
 
-    };
+    state_variable_access.substitute("name", {name});
+  };
 
     void outputVars(Options& state) override {
     AUTO_TRACE();

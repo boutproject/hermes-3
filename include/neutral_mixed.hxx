@@ -80,7 +80,15 @@ private:
   Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
   Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
 
-  /// Modify the given simulation state
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - density
+  ///     - momentum
+  ///     - pressure
+  ///     - temperature
+  ///     - velocity
   void transform_impl(GuardedOptions& state) override;
 };
 

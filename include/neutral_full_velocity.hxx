@@ -63,7 +63,15 @@ private:
   bool diagnose; ///< Output additional diagnostics?
   Field2D Vnpar; ///< Parallel flow velocity diagnostic
 
-  /// Modify the given simulation state
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - density
+  ///     - momentum
+  ///     - pressure
+  ///     - temperature
+  ///     - velocity
   void transform_impl(GuardedOptions& state) override;
 };
 
