@@ -102,7 +102,6 @@ void HydrogenChargeExchange::calculate_rates(GuardedOptions atom1, GuardedOption
   add(atom1["collision_frequency"], atom_rate);
   add(ion1["collision_frequency"], ion_rate);
 
-  std::cout << 1;
   // Set individual collision frequencies
   set(atom1["collision_frequencies"]
            [atom1.name() + std::string("_") + ion1.name() + std::string("_cx")],
@@ -110,6 +109,4 @@ void HydrogenChargeExchange::calculate_rates(GuardedOptions atom1, GuardedOption
   set(ion1["collision_frequencies"]
           [ion1.name() + std::string("_") + atom1.name() + std::string("_cx")],
       ion_rate);
-  std::cout << 2;
-  std::cout << "\n";
 }

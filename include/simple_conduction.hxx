@@ -14,7 +14,11 @@
 /// Expressions taken from:
 /// https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html
 struct SimpleConduction : public Component {
-  SimpleConduction(std::string name, Options& alloptions, Solver*) : name(name) {
+  SimpleConduction(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:{name}:temperature", Permissions::Interior),
+                   readOnly("species:{name}:AA"),
+                   readWrite("species:{name}:energy_source")}),
+        name(name) {
     auto& units = alloptions["units"];
     Tnorm = units["eV"];
     Nnorm = units["inv_meters_cubed"];
@@ -54,6 +58,12 @@ struct SimpleConduction : public Component {
     boundary_flux = options["conduction_boundary_flux"]
       .doc("Allow heat conduction through sheath boundaries?")
       .withDefault<bool>(false);
+
+    if (density <= 0.0) {
+      state_variable_access.setAccess(
+          readOnly("species:{name}:density", Permissions::Interior));
+    }
+    state_variable_access.substitute("name", {name});
   }
 
 private:

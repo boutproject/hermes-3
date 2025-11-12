@@ -19,12 +19,8 @@ class Solver; // Time integrator
 /// 
 /// The constructor of derived types should have signature
 ///   (std::string name, Options &options, Solver *solver)
-/// 
+///
 struct Component {
-  Component() = default;
-  Component(Component& other) = default;
-  Component(Component&& other) = default;
-
   /// Initialise the `state_variable_acceess` permissions. Note that
   /// `{all_species}` in any variable names will be replaced with the
   /// names of all species being simulated (by claling

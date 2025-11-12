@@ -40,7 +40,8 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 }
 } // namespace
 
-Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
+Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
+    : Component({readWrite("fields:vorticity"), readWrite("fields:phi")}) {
   AUTO_TRACE();
 
   solver->add(Vort, "Vort");
@@ -205,6 +206,39 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
+
+  if (diamagnetic or diamagnetic_polarisation) {
+    // FIXME: These should apply only to charged species
+    // FIXME: These will only be read if BOTH charge and pressure (and possibly AA) are
+    // set
+    state_variable_access.setAccess(
+        readIfSet("species:{all_species}:pressure", Permissions::Interior));
+    state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
+  }
+  if (diamagnetic) {
+    // FIXME: These should only apply to charged species
+    state_variable_access.setAccess(readWrite("species:{all_species}:energy_source"));
+    state_variable_access.setAccess(readWrite("fields:DivJdia"));
+  }
+  if (diamagnetic_polarisation or collisional_friction) {
+    // FIXME: Only read for charged species and only if pressure and charge also set
+    state_variable_access.setAccess(readIfSet("species:{all_species}:AA"));
+  }
+  if (phi_boundary_relax) {
+    state_variable_access.setAccess(readOnly("time"));
+  } else {
+    state_variable_access.setAccess(readOnly("species:e:AA"));
+    state_variable_access.setAccess(
+        readIfSet("species:e:temperature", Permissions::Interior));
+  }
+  if (collisional_friction) {
+    state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
+    // FIXME: Only applies for ions
+    state_variable_access.setAccess(readOnly("species:{all_species}:density"));
+    state_variable_access.setAccess(
+        readIfSet("species:{all_species}:collision_frequency"));
+    state_variable_access.setAccess(readWrite("fields:DivJcol"));
+  }
 }
 
 void Vorticity::transform_impl(GuardedOptions& state) {

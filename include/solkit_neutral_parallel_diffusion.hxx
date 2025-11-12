@@ -18,8 +18,12 @@ struct SOLKITNeutralParallelDiffusion : public Component {
   ///     - inv_meters_cubed
   ///   - <name>
   ///     - neutral_temperature [eV]
-  ///     
-  SOLKITNeutralParallelDiffusion(std::string name, Options &alloptions, Solver *) {
+  ///
+  SOLKITNeutralParallelDiffusion(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:{all_species}:{inputs}"),
+                   // FIXME: These only apply to neutral species
+                   readOnly("species:{all_species}:AA"),
+                   readWrite("species:{all_species}:density_source")}) {
     auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
     auto& options = alloptions[name];
     neutral_temperature = options["neutral_temperature"]
@@ -30,6 +34,8 @@ struct SOLKITNeutralParallelDiffusion : public Component {
     auto Nnorm = get<BoutReal>(alloptions["units"]["inv_meters_cubed"]);
     auto rho_s0 = get<BoutReal>(alloptions["units"]["meters"]);
     area_norm = 1. / (Nnorm * rho_s0);
+
+    state_variable_access.substitute("inputs", {"charge", "density"});
   }
 
 private:
@@ -39,13 +45,14 @@ private:
   ///
   /// Inputs
   ///  - species
-  ///    - <all neutrals>    # Applies to all neutral species
-  ///      - AA
+  ///    - <all species>
+  ///      - AA       [neutral species only]
+  ///      - charge
   ///      - density
   ///
   /// Sets
   ///  - species
-  ///    - <name>
+  ///    - <neutral species>   # Applies to all neutral species
   ///      - density_source
   void transform_impl(GuardedOptions& state) override;
 };

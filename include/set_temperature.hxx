@@ -23,7 +23,12 @@ struct SetTemperature : public Component {
   /// - <name>
   ///   - temperature_from   name of species
   SetTemperature(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : name(name) {
+      : Component({readIfSet("species:{name}:density", Permissions::Interior),
+                   readOnly("species:{from}:temperature"),
+                   readWrite("species:{name}:temperature"),
+                   // FIXME: Only written if density set
+                   readWrite("species:{name}:pressure")}),
+        name(name) {
     AUTO_TRACE();
 
     auto& options = alloptions[name];
@@ -35,6 +40,9 @@ struct SetTemperature : public Component {
     diagnose = options["diagnose"]
                    .doc("Save additional output diagnostics")
                    .withDefault<bool>(false);
+
+    state_variable_access.substitute("name", {name});
+    state_variable_access.substitute("from", {temperature_from});
   }
 
   void outputVars(Options& state) override {
@@ -66,6 +74,8 @@ private:
   /// - species
   ///   - <temperature_from>
   ///     - temperature
+  ///   - <name>
+  ///     - density (if set)
   ///
   /// Sets in the state:
   /// - species

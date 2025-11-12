@@ -5,7 +5,8 @@
 #include "component.hxx"
 
 struct NoFlowBoundary : public Component {
-  NoFlowBoundary(std::string name, Options& alloptions, Solver*) : name(name) {
+  NoFlowBoundary(std::string name, Options& alloptions, Solver*)
+      : Component({writeBoundaryIfSet("species:{name}:{variables}")}), name(name) {
     AUTO_TRACE();
 
     Options& options = alloptions[name];
@@ -15,6 +16,9 @@ struct NoFlowBoundary : public Component {
     noflow_upper_y = options["noflow_upper_y"]
                          .doc("No-flow boundary on upper y?")
                          .withDefault<bool>(true);
+    state_variable_access.substitute("name", {name});
+    state_variable_access.substitute(
+        "variables", {"density", "temperature", "pressure", "velocity", "momentum"});
   }
 
 private:
