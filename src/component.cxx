@@ -24,6 +24,23 @@ void Component::transform(Options& state) {
 #endif
 }
 
+void Component::declareAllSpecies(const SpeciesInformation & info) {
+    state_variable_access.substitute("neutrals", info.neutrals);
+    state_variable_access.substitute("neutrals2", info.neutrals);
+    state_variable_access.substitute("positive_ions", info.positive_ions);
+    state_variable_access.substitute("positive_ions2", info.positive_ions);
+    state_variable_access.substitute("negative_ions", info.negative_ions);
+    state_variable_access.substitute("negative_ions2", info.negative_ions);
+    state_variable_access.substitute("ions", info.ions);
+    state_variable_access.substitute("ions2", info.ions);
+    state_variable_access.substitute("charged", info.charged);
+    state_variable_access.substitute("charged", info.charged);
+    state_variable_access.substitute("non_electrons", info.non_electrons);
+    state_variable_access.substitute("non_electrons2", info.non_electrons);
+    state_variable_access.substitute("all_species", info.all_species);
+    state_variable_access.substitute("all_species2", info.all_species);
+}
+
 constexpr decltype(ComponentFactory::type_name) ComponentFactory::type_name;
 constexpr decltype(ComponentFactory::section_name) ComponentFactory::section_name;
 constexpr decltype(ComponentFactory::option_name) ComponentFactory::option_name;
