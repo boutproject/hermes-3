@@ -131,16 +131,20 @@ private:
   ///
   /// - species
   ///   - pressure and charge => Calculates diamagnetic terms [if diamagnetic=true]
-  ///   - pressure, charge and mass => Calculates polarisation current terms [if diamagnetic_polarisation=true]
-  /// 
+  ///   - pressure, charge and mass => Calculates polarisation current terms [if
+  ///   diamagnetic_polarisation=true]
+  ///   - density, charge, and collision_frequency => Calculate damping due to friction
+  ///   [if collisional_friction=true]
+  ///
   /// Sets in the state
   /// - species
-  ///   - [if has pressure and charge]
+  ///   - [if has pressure and charge and diamagnetic=true]
   ///     - energy_source
   /// - fields
   ///   - vorticity
   ///   - phi         Electrostatic potential
   ///   - DivJdia     Divergence of diamagnetic current [if diamagnetic=true]
+  ///   - DivJcol     [if collisional_friction=true]
   ///
   /// Note: Diamagnetic current calculated here, but could be moved
   ///       to a component with the diamagnetic drift advection terms

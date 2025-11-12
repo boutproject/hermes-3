@@ -64,7 +64,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
   NV_err = 0.0;
 
   state_variable_access.substitute("name", {name});
-  state_variable_access.substitute("inputs", {"velocity", "momentum"});
+  state_variable_access.substitute("outputs", {"velocity", "momentum"});
 }
 
 void EvolveMomentum::transform_impl(GuardedOptions& state) {

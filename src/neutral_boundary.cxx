@@ -7,7 +7,10 @@ using bout::globals::mesh;
 
 NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                  [[maybe_unused]] Solver* solver)
-    : name(name) {
+    : Component({writeBoundary("species:{name}:{outputs}"),
+                 writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
+                 readWrite("species:{name}:energy_source")}),
+      name(name) {
   AUTO_TRACE();
 
   auto& options = alloptions[name];
@@ -49,6 +52,10 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
       options["pfr_fast_refl_fraction"]
           .doc("Fraction of neutrals that are undergoing fast reflection at the pfr")
           .withDefault<BoutReal>(0.8);
+
+  state_variable_access.substitute("name", {name});
+  state_variable_access.substitute("outputs", {"density", "temperature", "pressure"});
+  state_variable_access.substitute("conditional_outputs", {"velocity", "momentum"});
 }
 
 void NeutralBoundary::transform_impl(GuardedOptions& state) {

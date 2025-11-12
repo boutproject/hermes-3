@@ -11,7 +11,8 @@
 /// where the aim is to reach ddt -> 0
 ///
 struct ScaleTimeDerivs : public Component {
-  ScaleTimeDerivs(std::string, Options&, Solver*) {}
+  ScaleTimeDerivs(std::string, Options&, Solver*)
+      : Component({readOnly("species:e:temperature"), writeFinal("scale_timederivs")}) {}
 
   void outputVars(Options& state) override {
     set_with_attrs(
@@ -23,6 +24,12 @@ struct ScaleTimeDerivs : public Component {
 private:
   Field3D scaling; // The scaling factor applied to each cell
 
+  /// Inputs
+  ///
+  /// - species
+  ///   - e
+  ///     - temperature
+  ///
   /// Sets in the state
   ///
   /// - scale_timederivs

@@ -22,7 +22,10 @@ struct TemperatureFeedback : public Component {
   ///  - T<name>  (e.g. "Td+")
   ///    - source_shape  The initial source that is scaled by a time-varying factor
   ///
-  TemperatureFeedback(std::string name, Options& alloptions, Solver*) : name(name) {
+  TemperatureFeedback(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:{name}:temperature", Permissions::Interior),
+                   readOnly("time"), readWrite("species:{sp}:energy_source")}),
+        name(name) {
 
     Options& options = alloptions[name];
     const auto& units = alloptions["units"];
@@ -82,6 +85,12 @@ struct TemperatureFeedback : public Component {
     diagnose = options["diagnose"]
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
+
+    std::vector<std::string> species_stripped;
+    std::transform(species_list.begin(), species_list.end(), species_stripped.begin(),
+                   [](const std::string& val) { return trim(val); });
+    state_variable_access.substitute("name", {name});
+    state_variable_access.substitute("sp", species_stripped);
   }
 
   void outputVars(Options& state) override {

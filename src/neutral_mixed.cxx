@@ -18,7 +18,7 @@ using bout::globals::mesh;
 using ParLimiter = hermes::Limiter;
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
-    : name(name) {
+    : Component({readWrite("species:{name}:{outputs}")}), name(name) {
   AUTO_TRACE();
 
   // Normalisations
@@ -169,6 +169,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnNn.setBoundary(std::string("Dnn") + name);
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnNVn.setBoundary(std::string("Dnn") + name);
+
+  state_variable_access.substitute("name", {name});
+  state_variable_access.substitute(
+      "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
 }
 
 void NeutralMixed::transform_impl(GuardedOptions& state) {

@@ -49,7 +49,25 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 } // namespace
 
 SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& alloptions,
-                                                   Solver*) {
+                                                   Solver*)
+    : Component({
+        readIfSet("species:e:{e_whole_domain}"),
+        writeBoundary("species:e:{e_boundary}"),
+        readWrite("species:e:energy_source"),
+        writeBoundaryIfSet("species:e:{e_optional}"),
+        {"species:e:pressure",
+         {Permissions::Interior, Permissions::Nowhere, Permissions::Boundaries,
+          Permissions::Nowhere}},
+        // FIXME: These only applies to ions, not to all species
+        readIfSet("species:{all_species}:{ion_whole_domain}"),
+        readOnly("species:{all_species}:AA"),
+        readWrite("species:{all_species}:energy_source"),
+        {"species:{all_species}:pressure",
+         {Permissions::Interior, Permissions::Nowhere, Permissions::Boundaries,
+          Permissions::Nowhere}},
+        writeBoundary("species:{all_species}:{ion_boundary}"),
+        writeBoundaryIfSet("species:{all_species}:{ion_optional}"),
+    }) {
   AUTO_TRACE();
 
   Options& options = alloptions[name];
@@ -77,6 +95,16 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
   gamma_e = options["gamma_e"]
                 .doc("Electron sheath heat transmission coefficient")
                 .withDefault(3.5);
+
+  state_variable_access.substitute("e_whole_domain", {"AA", "charge", "adiabatic"});
+  state_variable_access.substitute("e_boundary", {"density", "temperature"});
+  state_variable_access.substitute("e_optional", {"velocity", "momentum"});
+  state_variable_access.substitute("ion_whole_domain", {"charge", "adiabatic"});
+  state_variable_access.substitute("ion_boundary", {"density", "temperature"});
+  // FIXME: velocity and momentum will only be set on boundaries if already set on
+  // interior
+  state_variable_access.substitute("ion_optional", {"velocity", "momentum"});
+  state_variable_access.setAccess(writeBoundaryIfSet("fields:phi"));
 }
 
 void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {

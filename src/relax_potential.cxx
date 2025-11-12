@@ -6,7 +6,8 @@ using bout::globals::mesh;
 #include "../include/div_ops.hxx"
 #include "../include/relax_potential.hxx"
 
-RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver) {
+RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver)
+    : Component({readWrite("fields:vorticity"), readWrite("fields:phi")}) {
   AUTO_TRACE();
 
   auto* coord = mesh->getCoordinates();
@@ -44,6 +45,18 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
 
   if (diamagnetic) {
+    // FIXME: These should apply only to charged species
+    // FIXME: These will only be read if BOTH charge and pressure are set
+    state_variable_access.setAccess(
+        readIfSet("species:{all_species}:pressure", Permissions::Interior));
+    state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
+    // FIXME: The weay transform_impl is currently written,
+    // energy_source is set for neutral species with an explicit
+    // charge declared as 0 if diamagnetic_polarisation == true. I
+    // suspect that's a mistake though.
+    state_variable_access.setAccess(readWrite("species:{all_species}:energy_source"));
+    state_variable_access.setAccess(readWrite("fields:DivJdia"));
+
     // Read curvature vector
     try {
       Curlb_B.covariant = false; // Contravariant
@@ -137,6 +150,7 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
       for (auto& kv : allspecies.getChildren()) {
         GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
+        // FIXME: Should this apply even if charge is 0?
         if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
               and IS_SET(species["AA"]))) {
           continue; // No pressure, charge or mass -> no polarisation current due to

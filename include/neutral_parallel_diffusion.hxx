@@ -23,7 +23,12 @@
 ///  - F<name>_Dpar   Momentum source due to diffusion
 ///
 struct NeutralParallelDiffusion : public Component {
-  NeutralParallelDiffusion(std::string name, Options &alloptions, Solver *) {
+  NeutralParallelDiffusion(std::string name, Options& alloptions, Solver*)
+      : Component({readIfSet("species:{all_species}:charge"),
+                   // FIXME: These applies only to neutral species.
+                   readIfSet("species:{all_species}:{optional_inputs}"),
+                   readOnly("species:{all_species}:{inputs}"),
+                   readWrite("species:{all_species}:{outputs}")}) {
     auto& options = alloptions[name];
     dneut = options["dneut"]
                 .doc("cross-field diffusion projection (B  / Bpol)^2")
@@ -48,6 +53,15 @@ struct NeutralParallelDiffusion : public Component {
     perpendicular_viscosity = options["perpendicular_viscosity"]
       .doc("Enable parallel projection of perpendicular viscosity?")
       .withDefault<bool>(true);
+
+    // FIXME: strictly speaking, momentum is not optional if velocity has been set
+    state_variable_access.substitute("optional_inputs",
+                                     {"pressure", "velocity", "momentum"});
+    state_variable_access.substitute(
+        "inputs", {"AA", "collision_frequencies", "density", "temperature"});
+    // FIXME: momentum_source is only set if velocity was set.
+    state_variable_access.substitute(
+        "outputs", {"density_source", "energy_source", "momentum_source"});
   }
 
   /// Save variables to the output
@@ -79,7 +93,8 @@ private:
   ///  - species
   ///    - <all neutrals>    # Applies to all neutral species
   ///      - AA
-  ///      - collision_frequency
+  ///      - charge       [if set]
+  ///      - collision_frequencies
   ///      - density
   ///      - temperature
   ///      - pressure     [optional, or density * temperature]

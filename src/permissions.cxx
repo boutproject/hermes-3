@@ -53,6 +53,10 @@ void Permissions::substitute(const std::string& label,
 
 std::pair<std::string, Permissions::AccessRights>
 Permissions::bestMatchRights(const std::string& variable) const {
+  auto match = variable_permissions.find(variable);
+  if (match != variable_permissions.end()) {
+    return *match;
+  }
   Permissions::AccessRights best_candidate = {Permissions::Nowhere, Permissions::Nowhere,
                                               Permissions::Nowhere};
   std::string best_candidate_name = "";

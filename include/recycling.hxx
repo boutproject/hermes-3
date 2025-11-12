@@ -68,15 +68,22 @@ private:
   /// Inputs
   ///
   /// - species
-  ///   - <species>
-  ///    - density
-  ///    - velocity
+  ///   - <from species>
+  ///     - density
+  ///     - velocity
+  ///     - temperature
+  ///   - <to species>
+  ///     - AA
+  ///     - density
+  ///     - pressure
+  ///     - temperature
   ///
   /// Outputs
   ///
   /// - species
-  ///  - <species>
-  ///   - density_source
+  ///   - <species>
+  ///     - density_source
+  ///     - energy_source
   ///
   void transform_impl(GuardedOptions& state) override;
 };
