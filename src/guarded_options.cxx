@@ -21,6 +21,7 @@ GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
       unread_variables(std::make_shared<std::map<std::string, Permissions::Regions>>()),
       unwritten_variables(
           std::make_shared<std::map<std::string, Permissions::Regions>>()) {
+#if CHECKLEVEL >= 1
   if (permissions != nullptr) {
     *unread_variables = permissions->getVariablesWithPermission(Permissions::Read);
     // Only add variables with permission ReadIfSet to
@@ -37,6 +38,7 @@ GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
     *unwritten_variables =
         permissions->getVariablesWithPermission(Permissions::Write, false);
   }
+#endif
 }
 
 GuardedOptions GuardedOptions::operator[](const std::string& name) {
@@ -80,6 +82,7 @@ const Options& GuardedOptions::get(Permissions::Regions region) const {
   if (options == nullptr)
     throw BoutException(
         "Trying to access GuardedOptions when underlying options are nullptr.");
+#if CHECKLEVEL >= 1
   std::string name = options->str();
   if (permissions != nullptr) {
     auto [permission, varname] = permissions->getHighestPermission(name, region);
@@ -94,12 +97,16 @@ const Options& GuardedOptions::get(Permissions::Regions region) const {
     }
   }
   throw BoutException("Do not have read permission for {}.", name);
+#else
+  return *options;
+#endif
 }
 
 Options& GuardedOptions::getWritable(Permissions::Regions region) {
   if (options == nullptr)
     throw BoutException(
         "Trying to access GuardedOptions when underlying options are nullptr.");
+#if CHECKLEVEL >= 1
   std::string name = options->str();
   if (permissions != nullptr) {
     auto [access, varname] = permissions->canAccess(name, Permissions::Write, region);
@@ -109,14 +116,27 @@ Options& GuardedOptions::getWritable(Permissions::Regions region) {
     }
   }
   throw BoutException("Do not have write permission for {}.", options->str());
+#else
+  return *options;
+#endif
 }
 
 std::map<std::string, Permissions::Regions> GuardedOptions::unreadItems() const {
+#if CHECKLEVEL >= 1
   return *unread_variables;
+#else
+  throw BoutException(
+      "Reading of items in GuardedOptions is not tracked when CHECKLEVEL < 1");
+#endif
 }
 
 std::map<std::string, Permissions::Regions> GuardedOptions::unwrittenItems() const {
+#if CHECKLEVEL >= 1
   return *unwritten_variables;
+#else
+  throw BoutException(
+      "Reading of items in GuardedOptions is not tracked when CHECKLEVEL < 1");
+#endif
 }
 
 bool GuardedOptions::operator==(const GuardedOptions& other) const {
