@@ -15,8 +15,33 @@
 
 class Solver; // Time integrator
 
+/// Simple struct to store information on the different types of
+/// species present in a simulation
+struct SpeciesInformation {
+  SpeciesInformation(bool has_electrons, bool has_electron_beam,
+                     const std::vector<std::string>& neutrals,
+                     const std::vector<std::string>& positive_ions,
+                     const std::vector<std::string> negative_ions)
+    : neutrals(neutrals), positive_ions(positive_ions), negative_ions(negative_ions), ions(positive_ions) {
+    ions.insert(ions.end(), negative_ions.begin(), negative_ions.end());
+    charged = ions;
+    if (has_electrons) {
+      charged.push_back("e");
+    }
+    if (has_electron_beam) {
+      charged.push_back("ebeam");
+    }
+    non_electrons = ions;
+    non_electrons.insert(non_electrons.end(), neutrals.begin(), neutrals.end());
+    all_species = charged;
+    all_species.insert(all_species.end(), neutrals.begin(), neutrals.end());
+  }
+
+  std::vector<std::string> neutrals, positive_ions, negative_ions, ions, charged, non_electrons, all_species;
+};
+
 /// Interface for a component of a simulation model
-/// 
+///
 /// The constructor of derived types should have signature
 ///   (std::string name, Options &options, Solver *solver)
 ///
@@ -60,13 +85,23 @@ struct Component {
                                            Options &options,  // Component settings: options[name] are specific to this component
                                            Solver *solver); // Time integration solver
 
-  /// Tell the component the name of all species in the simulation. It
-  /// will use this information to substitute these for the
-  /// "all_species" label in `svate_variable_access`.
-  void declareAllSpecies(const std::vector<std::string>& species) {
-    state_variable_access.substitute("all_species", species);
-    state_variable_access.substitute("all_species2", species);
-  }
+  /// Tell the component the name of all species in the simulation, by type. It
+  /// will use this information to substitute the following placeholders in `svate_variable_access`:
+  ///   - neutrals (species with no charge)
+  ///   - neutrals2 (same as above, used for cross-product)
+  ///   - positive_ions (ions with a positive charge)
+  ///   - positive_ions2 (same as above, used for cross-product)
+  ///   - negative_ions (ions with a negative charge)
+  ///   - negative_ions2 (same as above, used for cross-product)
+  ///   - ions (all ions, regardless of sign of charge)
+  ///   - ions2 (same as above, used for cross-product)
+  ///   - charged (ions and electrons)
+  ///   - charged2 (same as above, used for cross-product)
+  ///   - non_electrons (ions and neutrals)
+  ///   - non_electrons2 (same as above, used for cross-product)
+  ///   - all_species (ions, neutrals, and electrons)
+  ///   - all_species2 (same as above, used for cross-product)
+  void declareAllSpecies(const SpeciesInformation & info);
 
 protected:
   /// Information on which state variables the transform method will read and write.
