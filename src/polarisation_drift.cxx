@@ -8,9 +8,16 @@
 
 using bout::globals::mesh;
 
-PolarisationDrift::PolarisationDrift(std::string name,
-                                     Options &alloptions,
-                                     Solver *UNUSED(solver)) {
+PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
+                                     Solver* UNUSED(solver))
+    // FIXME: There is a lot of complicated conditional logic which is not being captured
+    // here
+    // FIXME: Only charged species (with mass) are actually read/written (except for
+    // charge itself)
+    : Component({readOnly("species:{all_species}:{inputs}"),
+                 readIfSet("species:{all_species}:{optional_inputs}"),
+                 readIfSet("fields:{fields}"),
+                 readWrite("species:{all_species}:{outputs}")}) {
   AUTO_TRACE();
 
   // Get options for this component
@@ -57,6 +64,24 @@ PolarisationDrift::PolarisationDrift(std::string name,
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
+
+  // Pressure interior only,
+  std::vector<std::string> inputs = {"AA"}, fields = {"DivJdia"},
+                           outputs = {"energy_source"};
+  if (advection) {
+    // Interior only
+    inputs.push_back("density");
+    fields.push_back("DivJextra");
+    fields.push_back("DivJdia");
+    outputs.push_back("density_source");
+    outputs.push_back("momentum_source");
+  }
+  state_variable_access.substitute("inputs", {"AA", "density"});
+  state_variable_access.substitute("optional_inputs", {"charge", "momentum, pressure"});
+  state_variable_access.substitute("fields", fields);
+  // FIXME: energy_source and momentum source are only set if pressure
+  // and momentum were set, respectively
+  state_variable_access.substitute("outputs", outputs);
 }
 
 void PolarisationDrift::transform_impl(GuardedOptions& state) {
