@@ -10,8 +10,7 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                     .doc("Components in order of execution")
                                     .as<std::string>();
 
-  std::vector<std::string> neutrals, positive_ions, negative_ions;
-  bool electrons_present = false, ebeam_present = false;
+  std::vector<std::string> electrons, neutrals, positive_ions, negative_ions;
 
   // For now split on ','. Something like "->" might be better
   for (const auto &name : strsplit(component_names, ',')) {
@@ -23,12 +22,13 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
       continue;
     }
 
-    if (component_options[name_trimmed].isSet("AA")) {
-      if (name_trimmed == "e") {
-        electrons_present = true;
-      } else if (name == "ebeam") {
-        ebeam_present = true;
-      } else if (component_options[name_trimmed].isSet("charge")) {
+    if (name_trimmed == "e" or name == "ebeam") {
+      electrons.push_back(name_trimmed);
+    }
+    // FIXME: Would there be any spcies without AA? Is there any other
+    // reliable way to identify what is a species?
+    else if (component_options[name_trimmed].isSet("AA")) {
+      if (component_options[name_trimmed].isSet("charge")) {
         BoutReal charge = component_options[name_trimmed]["charge"];
         if (charge > 1e-5) {
           positive_ions.push_back(name_trimmed);
@@ -61,7 +61,7 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
     }
   }
 
-  const SpeciesInformation species(electrons_present, ebeam_present, neutrals, positive_ions, negative_ions);
+  const SpeciesInformation species(electrons, neutrals, positive_ions, negative_ions);
     
   for (auto& component : components) {
     component->declareAllSpecies(species);

@@ -12,32 +12,52 @@
 
 #include "guarded_options.hxx"
 #include "permissions.hxx"
+#include "hermes_utils.hxx"
 
 class Solver; // Time integrator
 
 /// Simple struct to store information on the different types of
 /// species present in a simulation
 struct SpeciesInformation {
-  SpeciesInformation(bool has_electrons, bool has_electron_beam,
+  SpeciesInformation(const std::vector<std::string>& electrons,
                      const std::vector<std::string>& neutrals,
                      const std::vector<std::string>& positive_ions,
-                     const std::vector<std::string> negative_ions)
-    : neutrals(neutrals), positive_ions(positive_ions), negative_ions(negative_ions), ions(positive_ions) {
-    ions.insert(ions.end(), negative_ions.begin(), negative_ions.end());
-    charged = ions;
-    if (has_electrons) {
-      charged.push_back("e");
-    }
-    if (has_electron_beam) {
-      charged.push_back("ebeam");
-    }
-    non_electrons = ions;
-    non_electrons.insert(non_electrons.end(), neutrals.begin(), neutrals.end());
-    all_species = charged;
-    all_species.insert(all_species.end(), neutrals.begin(), neutrals.end());
+                     const std::vector<std::string> & negative_ions)
+    : electrons(electrons), neutrals(neutrals), positive_ions(positive_ions), negative_ions(negative_ions), ions(positive_ions) {
+    finish_construction();
   }
 
-  std::vector<std::string> neutrals, positive_ions, negative_ions, ions, charged, non_electrons, all_species;
+  SpeciesInformation(const std::initializer_list<std::string> species) {
+    for (auto& sp : species) {
+      // FIXME: identifySpecies only identifies positive ions
+      // FIXME: identifySpecies has no concept of ebeam
+      SpeciesType type = identifySpeciesType(sp);
+      if (type == SpeciesType::electron) {
+        electrons.push_back(sp);
+      } else if (type == SpeciesType::ion) {
+        positive_ions.push_back(sp);
+      } else if (type == SpeciesType::neutral) {
+        neutrals.push_back(sp);
+      } else {
+        throw BoutException("Species {} has unrecognised type {}", sp, toString(type));
+      }
+      finish_construction();
+    }
+  }
+
+  std::vector<std::string> electrons, neutrals, positive_ions, negative_ions, ions, charged, non_electrons, all_species;
+
+  private:
+    void finish_construction() {
+      ions = positive_ions;
+      ions.insert(ions.end(), negative_ions.begin(), negative_ions.end());
+      charged = ions;
+      charged.insert(charged.end(), electrons.begin(), electrons.end());
+      non_electrons = ions;
+      non_electrons.insert(non_electrons.end(), neutrals.begin(), neutrals.end());
+      all_species = charged;
+      all_species.insert(all_species.end(), neutrals.begin(), neutrals.end());
+    }
 };
 
 /// Interface for a component of a simulation model
@@ -87,6 +107,8 @@ struct Component {
 
   /// Tell the component the name of all species in the simulation, by type. It
   /// will use this information to substitute the following placeholders in `svate_variable_access`:
+  ///   - electrons (any electron species)
+  ///   - electrons2 (same as above, used for cross-product)
   ///   - neutrals (species with no charge)
   ///   - neutrals2 (same as above, used for cross-product)
   ///   - positive_ions (ions with a positive charge)
