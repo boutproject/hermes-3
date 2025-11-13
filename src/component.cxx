@@ -25,6 +25,8 @@ void Component::transform(Options& state) {
 }
 
 void Component::declareAllSpecies(const SpeciesInformation & info) {
+    state_variable_access.substitute("electrons", info.electrons);
+    state_variable_access.substitute("electrons2", info.electrons);
     state_variable_access.substitute("neutrals", info.neutrals);
     state_variable_access.substitute("neutrals2", info.neutrals);
     state_variable_access.substitute("positive_ions", info.positive_ions);
