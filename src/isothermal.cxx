@@ -2,6 +2,8 @@
 #include <bout/constants.hxx>
 #include <bout/mesh.hxx>
 
+#include <bout/mesh.hxx> 
+
 #include "../include/isothermal.hxx"
 
 Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(solver))
@@ -28,13 +30,20 @@ void Isothermal::transform(Options& state) {
 
   Options& species = state["species"][name];
 
-  set(species["temperature"], T);
+  T_f3d = T;
+  if (T_f3d.isFci()) {
+    T_f3d.applyBoundary("neumann_o2");
+    T_f3d.getMesh()->communicate(T_f3d);
+    T_f3d.applyParallelBoundary("parallel_neumann_o2");
+  }
+  
+  set(species["temperature"], T_f3d);
 
   // If density is set, also set pressure
   if (isSetFinalNoBoundary(species["density"])) {
     // Note: The boundary of N may not be set yet
     auto N = GET_NOBOUNDARY(Field3D, species["density"]);
-    P = N * T;
+    P = N * T_f3d;
     set(species["pressure"], P);
   }
 }

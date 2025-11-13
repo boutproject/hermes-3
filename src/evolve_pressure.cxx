@@ -205,6 +205,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     // Clebsch coordinate system
     bracket_factor = 1.0;
   }
+
+  T.setBoundary(fmt::format("T{}", name));
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -260,6 +262,14 @@ void EvolvePressure::transform(Options& state) {
   Field3D Pfloor = floor(P, 0.0);
   T = Pfloor / softFloor(N, density_floor);
   Pfloor = N * T; // Ensure consistency
+
+  if (T.isFci()) {
+    // Note: Communicating and interpolating rather than
+    //       using T calculation in the yup/down cells.
+    mesh->communicate(T);
+    T.applyBoundary();
+    T.applyParallelBoundary();
+  }
 
   set(species["pressure"], Pfloor);
   set(species["temperature"], T);
@@ -502,18 +512,20 @@ void EvolvePressure::finally(const Options& state) {
       kappa_par = kappa_par / (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
-      mesh->communicate(kappa_par);
-    }
-
-    if (kappa_par.isFci()) {
       kappa_par.applyBoundary("neumann");
       mesh->communicate(kappa_par);
-      kappa_par.applyParallelBoundary("parallel_dirichlet_o2");
+
+    } else if (kappa_par.isFci()) {
+      kappa_par.applyBoundary("neumann");
+      mesh->communicate(kappa_par);
+      //kappa_par.applyParallelBoundary("parallel_dirichlet_o2");
+      //T.applyParallelBoundary("parallel_neumann_o2");
     }
 
     yboundary.iter([&](auto& region) {
       for (auto& pnt : region) {
-	pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
+	pnt.ynext(kappa_par) = - kappa_par[pnt.ind()];
+	pnt.ynext(T) = T[pnt.ind()];
       }
     });
 
@@ -594,7 +606,8 @@ void EvolvePressure::finally(const Options& state) {
 #if CHECKLEVEL >= 1
   for (auto& i : P.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(P)[i])) {
-      throw BoutException("ddt(P{}) non-finite at {}. Sp={}\n", name, i, Sp[i]);
+      throw BoutException("ddt(P{}) non-finite at {}. Sp={}. P {} N {} T {} Tup {} Tdown {}\n", name, i, Sp[i], P[i], N[i], T[i],
+			  T.yup()[i.yp()], T.ydown()[i.ym()]);
     }
   }
 #endif
