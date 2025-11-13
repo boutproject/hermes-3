@@ -238,12 +238,12 @@ void Recycling::transform(Options& state) {
       
       // Y boundaries
       yboundary.iter_pnts([&](auto& pnt) {
-	BoutReal flux = pnt.dir * pnt.interpolate_sheath_o1(N) * pnt.interpolate_sheath_o1(V);
+	BoutReal flux = pnt.dir * pnt.interpolate_sheath_o2(N) * pnt.interpolate_sheath_o2(V);
 	if (flux < 0.0) {
 	  flux = 0.0;
 	}
 	
-	BoutReal flow = channel.target_multiplier * flux * pnt.interpolate_sheath_o1(J) / pnt.interpolate_sheath_o1(g_22) * pnt.interpolate_sheath_o1(dx) * pnt.interpolate_sheath_o1(dz);
+	BoutReal flow = channel.target_multiplier * flux * pnt.interpolate_sheath_o2(J) / pnt.interpolate_sheath_o2(g_22) * pnt.interpolate_sheath_o2(dx) * pnt.interpolate_sheath_o2(dz);
 
 	BoutReal volume  = pnt.ythis(J) * pnt.ythis(dx) * pnt.ythis(dy) * pnt.ythis(dz);
 

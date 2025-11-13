@@ -246,13 +246,13 @@ void SheathBoundaryParallel::transform(Options &state) {
       const BoutReal phiGradient = pnt.extrapolate_grad_o2(phi);
       pnt.neumann_o1(phi, phiGradient);
 
-      const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);
-      const BoutReal tesheath = pnt.interpolate_sheath_o1(Te);  // electron temperature
+      const BoutReal nesheath = pnt.interpolate_sheath_o2(Ne);
+      const BoutReal tesheath = pnt.interpolate_sheath_o2(Te);  // electron temperature
       const BoutReal phi_wall = pnt.ythis(wall_potential);
 
       const BoutReal phisheath = floor_potential ? floor(
-            pnt.interpolate_sheath_o1(phi), phi_wall) // Electron saturation at phi = phi_wall
-	    : pnt.interpolate_sheath_o1(phi);
+            pnt.interpolate_sheath_o2(phi), phi_wall) // Electron saturation at phi = phi_wall
+	    : pnt.interpolate_sheath_o2(phi);
 
       // Electron sheath heat transmission
       const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
@@ -376,10 +376,10 @@ void SheathBoundaryParallel::transform(Options &state) {
         pnt.limitFree(Pi);
 
         // Calculate sheath values at half-way points (cell edge)
-        const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);
-	const BoutReal nisheath = pnt.interpolate_sheath_o1(Ni);
-	const BoutReal tesheath = floor(pnt.interpolate_sheath_o1(Te), 1e-5);  // electron temperature
-	const BoutReal tisheath = floor(pnt.interpolate_sheath_o1(Ti), 1e-5);  // ion temperature
+        const BoutReal nesheath = pnt.interpolate_sheath_o2(Ne);
+	const BoutReal nisheath = pnt.interpolate_sheath_o2(Ni);
+	const BoutReal tesheath = floor(pnt.interpolate_sheath_o2(Te), 1e-5);  // electron temperature
+	const BoutReal tisheath = floor(pnt.interpolate_sheath_o2(Ti), 1e-5);  // ion temperature
 
 	// Ion sheath heat transmission coefficient
 	// Equation (22) in Tskhakaya 2005

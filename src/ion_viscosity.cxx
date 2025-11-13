@@ -5,8 +5,9 @@
 #include <bout/difops.hxx>
 #include <bout/output_bout_types.hxx>
 #include <bout/mesh.hxx>
-#include "../include/hermes_utils.hxx"
+#include <bout/vecops.hxx>
 
+#include "../include/hermes_utils.hxx"
 #include "../include/ion_viscosity.hxx"
 #include "../include/div_ops.hxx"
 

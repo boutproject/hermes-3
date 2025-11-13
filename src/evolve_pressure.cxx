@@ -7,6 +7,7 @@
 #include <bout/output_bout_types.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
+#include <bout/solver.hxx>
 #include <bout/yboundary_regions.hxx>
 
 #include "../include/div_ops.hxx"

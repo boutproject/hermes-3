@@ -2,13 +2,13 @@
 #ifndef VORTICITY_H
 #define VORTICITY_H
 
+#include <bout/invert/laplacexy.hxx>
 #include <bout/vectormetric.hxx>
 #include <bout/yboundary_regions.hxx>
 
 #include "component.hxx"
 #include "div_ops.hxx"
 
-class LaplaceXY;
 class Laplacian;
 
 /// Evolve electron density in time
@@ -135,7 +135,7 @@ private:
   bool phi_core_averagey; ///< Average phi core boundary in Y?
   
   bool split_n0; // Split phi into n=0 and n!=0 components
-  LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
+  std::unique_ptr<LaplaceXY> laplacexy; // Laplacian solver in X-Y (n=0)
   Field3D logB;
   bool diamagnetic_bracketform;
   Field3D Bsq; // SQ(coord->Bxy)
