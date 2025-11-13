@@ -207,6 +207,7 @@ void NeutralMixed::transform(Options& state) {
   yboundary.iter_pnts([&](auto& pnt) {
     // Free boundary (constant gradient) density
     pnt.dirichlet_o2(Nn, pnt.extrapolate_sheath_o2(Nn));
+    pnt.dirichlet_o2(Nnlim, pnt.extrapolate_sheath_o2(Nnlim));
 
     // Zero gradient temperature, heat flux added later
     pnt.neumann_o2(Tn,0.0);
@@ -217,7 +218,6 @@ void NeutralMixed::transform(Options& state) {
     
     // No flow into wall
     pnt.dirichlet_o2(Vn,0.0); 
-    pnt.dirichlet_o2(Vnlim,0.0);
     pnt.dirichlet_o2(NVn,0.0);
     
   }); // end yboundary.iter_pnts()

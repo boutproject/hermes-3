@@ -15,12 +15,6 @@
 using bout::globals::mesh;
 
 namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
-
 Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int ny = f.getNy();
   int nz = f.getNz();

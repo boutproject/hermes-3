@@ -352,7 +352,7 @@ void EvolvePressure::finally(const Options& state) {
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
       // skip if only for diagnostic with FCI, as not yet implemented
       if (numerical_viscous_heating || (!Nlim.isFci())) {
-	Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
+	Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_viscous_heating, fix_momentum_boundary_flux);
 	flow_ylow_viscous_heating *= AA;
 	flow_ylow += flow_ylow_viscous_heating;
       }
