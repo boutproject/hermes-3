@@ -156,9 +156,12 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
                    .withDefault<bool>(false);                 
   }
 
-  // FIXME: Need to do this for the other regions too
   if (target_recycle) {
     state_variable_access.setAccess(readIfSet("species:{from}:energy_flow_ylow"));
+  }
+  if (sol_recycle or pfr_recycle) {
+    state_variable_access.setAccess(readIfSet("species:{from}:energy_flow_xlow"));
+    state_variable_access.setAccess(readIfSet("species:{from}:particle_flow_xlow"));
   }
   state_variable_access.substitute(
       "to", std::vector<std::string>(to_species.begin(), to_species.end()));

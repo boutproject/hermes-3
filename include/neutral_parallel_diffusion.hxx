@@ -25,10 +25,9 @@
 struct NeutralParallelDiffusion : public Component {
   NeutralParallelDiffusion(std::string name, Options& alloptions, Solver*)
       : Component({readIfSet("species:{all_species}:charge"),
-                   // FIXME: These applies only to neutral species.
-                   readIfSet("species:{all_species}:{optional_inputs}"),
-                   readOnly("species:{all_species}:{inputs}"),
-                   readWrite("species:{all_species}:{outputs}")}) {
+                   readIfSet("species:{neutrals}:{optional_inputs}"),
+                   readOnly("species:{neutrals}:{inputs}"),
+                   readWrite("species:{neutrals}:{outputs}")}) {
     auto& options = alloptions[name];
     dneut = options["dneut"]
                 .doc("cross-field diffusion projection (B  / Bpol)^2")

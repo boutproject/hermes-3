@@ -58,15 +58,14 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
         {"species:e:pressure",
          {Permissions::Interior, Permissions::Nowhere, Permissions::Boundaries,
           Permissions::Nowhere}},
-        // FIXME: These only applies to ions, not to all species
-        readIfSet("species:{all_species}:{ion_whole_domain}"),
-        readOnly("species:{all_species}:AA"),
-        readWrite("species:{all_species}:energy_source"),
-        {"species:{all_species}:pressure",
+        readIfSet("species:{ions}:{ion_whole_domain}"),
+        readOnly("species:{ions}:AA"),
+        readWrite("species:{ions}:energy_source"),
+        {"species:{ions}:pressure",
          {Permissions::Interior, Permissions::Nowhere, Permissions::Boundaries,
           Permissions::Nowhere}},
-        writeBoundary("species:{all_species}:{ion_boundary}"),
-        writeBoundaryIfSet("species:{all_species}:{ion_optional}"),
+        writeBoundary("species:{ions}:{ion_boundary}"),
+        writeBoundaryIfSet("species:{ions}:{ion_optional}"),
     }) {
   AUTO_TRACE();
 
