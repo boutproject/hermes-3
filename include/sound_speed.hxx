@@ -12,13 +12,11 @@
 /// so should run after those have been set.
 struct SoundSpeed : public Component {
   SoundSpeed(std::string name, Options& alloptions, Solver*)
-      : Component(
-          {readOnly("species:{all_species}:pressure", Permissions::Interior),
-           writeFinal("sound_speed"), writeFinal("fastest_wave"),
-           // FIXME: These are not read for electrons
-           readIfSet("species:{all_species}:AA"),
-           // FIXME: Only read if AA is set
-           readIfSet("species:{all_species}:{opt_inputs}", Permissions::Interior)}) {
+      : Component({readOnly("species:{all_species}:pressure", Permissions::Interior),
+                   writeFinal("sound_speed"), writeFinal("fastest_wave"),
+                   readIfSet("species:{sp}:AA"),
+                   // FIXME: Only read if AA is set
+                   readIfSet("species:{sp}:{opt_inputs}", Permissions::Interior)}) {
     Options &options = alloptions[name];
     electron_dynamics = options["electron_dynamics"]
       .doc("Include electron sound speed?")
@@ -48,6 +46,8 @@ struct SoundSpeed : public Component {
       temperature_floor /= get<BoutReal>(alloptions["units"]["eV"]);
     }
 
+    state_variable_access.substitute(
+        "sp", {electron_dynamics ? "{all_species}" : "{non_electrons}"});
     state_variable_access.substitute("opt_inputs", {"density", "temperature"});
   }
 

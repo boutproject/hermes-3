@@ -27,16 +27,7 @@
 ///
 struct BraginskiiThermalForce : public Component {
   BraginskiiThermalForce(const std::string& name, Options& alloptions, Solver*)
-      : Component({// FIXME: Not account for electron_ion or ion_ion settings
-                   // FIXME: don't access charge for electrons
-                   // FIXME: Don't read or write for neutrals
-                   readIfSet("species:{all_species}:charge"),
-                   readOnly("species:{all_species}:density", Permissions::Interior),
-                   // FIXME: Only get temperature for electrons and light ions
-                   readOnly("species:{all_species}:temperature"),
-                   // FIXME: Don't access AA for electrons
-                   readOnly("species:{all_species}:AA"),
-                   readWrite("species:{all_species}:momentum_source")}) {
+      : Component(Permissions()) {
     Options& options = alloptions[name];
     electron_ion = options["electron_ion"]
                        .doc("Include electron-ion collisions?")
@@ -45,6 +36,31 @@ struct BraginskiiThermalForce : public Component {
     ion_ion = options["ion_ion"]
                   .doc("Include ion-ion elastic collisions?")
                   .withDefault<bool>(true);
+
+    if (electron_ion or ion_ion) {
+      state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
+    }
+    if (electron_ion) {
+      // FIXME: These are only accessed if electrons present
+      state_variable_access.setAccess(readOnly("species:e:temperature"));
+      state_variable_access.setAccess(
+          readOnly("species:{ions}:density", Permissions::Interior));
+      state_variable_access.setAccess(readWrite("species:{ions}:momentum_source"));
+      state_variable_access.setAccess(readWrite("species:e:momentum_source"));
+    } else if (ion_ion) {
+    }
+    if (ion_ion) {
+      state_variable_access.setAccess(readOnly("species:{ions}:AA"));
+      // FIXME: This is only accessed for light ions
+      state_variable_access.setAccess(readOnly("species:{ions}:temperature"));
+      if (!electron_ion) {
+        // FIXME: This is only accessed for heavy ions
+        state_variable_access.setAccess(
+            readOnly("species:{ions}:density", Permissions::Interior));
+        // FIXME: This is only set for heavy and light ions, not intermediate
+        state_variable_access.setAccess(readWrite("species:{ions}:momentum_source"));
+      }
+    }
   }
 
 private:

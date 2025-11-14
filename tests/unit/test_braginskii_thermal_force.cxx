@@ -93,19 +93,19 @@ TEST_F(BraginskiiThermalForceTest, ElectronIonBalance) {
 
 TEST_F(BraginskiiThermalForceTest, IonIonBalance) {
   Options state;
-  state["species"]["c"]["density"] = 0.01;
-  state["species"]["c"]["temperature"] = grad1;
-  state["species"]["c"]["charge"] = 1;
-  state["species"]["c"]["AA"] = 12.;
+  state["species"]["c+"]["density"] = 0.01;
+  state["species"]["c+"]["temperature"] = grad1;
+  state["species"]["c+"]["charge"] = 1;
+  state["species"]["c+"]["AA"] = 12.;
   state["species"]["d+"]["density"] = 1;
   state["species"]["d+"]["temperature"] = grad1;
   state["species"]["d+"]["charge"] = 1;
   state["species"]["d+"]["AA"] = 2.;
 
-  component.declareAllSpecies({"c", "d+"});
+  component.declareAllSpecies({"c+", "d+"});
   component.transform(state);
 
-  Field3D mom_c = state["species"]["c"]["momentum_source"];
+  Field3D mom_c = state["species"]["c+"]["momentum_source"];
   Field3D mom_d = state["species"]["d+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom_c.getRegion("RGN_NOBNDRY")) {
     // Forces on the species should be equal and opposite
@@ -115,14 +115,14 @@ TEST_F(BraginskiiThermalForceTest, IonIonBalance) {
 
 TEST_F(BraginskiiThermalForceTest, NoNetForce) {
   Options state;
-  state["species"]["c"]["density"] = 0.01;
-  state["species"]["c"]["temperature"] = grad1;
-  state["species"]["c"]["charge"] = 1;
-  state["species"]["c"]["AA"] = 12.;
-  state["species"]["ar"]["density"] = 0.01;
-  state["species"]["ar"]["temperature"] = grad2;
-  state["species"]["ar"]["charge"] = 1;
-  state["species"]["ar"]["AA"] = 40.;
+  state["species"]["c+"]["density"] = 0.01;
+  state["species"]["c+"]["temperature"] = grad1;
+  state["species"]["c+"]["charge"] = 1;
+  state["species"]["c+"]["AA"] = 12.;
+  state["species"]["ar+"]["density"] = 0.01;
+  state["species"]["ar+"]["temperature"] = grad2;
+  state["species"]["ar+"]["charge"] = 1;
+  state["species"]["ar+"]["AA"] = 40.;
   state["species"]["d"]["density"] = 1;
   state["species"]["d"]["temperature"] = grad1;
   state["species"]["d"]["charge"] = 0;
@@ -136,7 +136,7 @@ TEST_F(BraginskiiThermalForceTest, NoNetForce) {
   state["species"]["e"]["charge"] = -1;
   state["species"]["e"]["AA"] = 1. / 1836;
 
-  component.declareAllSpecies({"c", "ar", "d", "d+", "e"});
+  component.declareAllSpecies({"c+", "ar+", "d", "d+", "e"});
   component.transform(state);
   Field3D force(0.);
   for (const auto& [name, species] : state["species"].subsections()) {
@@ -247,14 +247,14 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceTemperatureGradScaling) {
 TEST_F(BraginskiiThermalForceTest, IonIonForceTemperatureGradScaling) {
   Options state1;
   Options state2;
-  state1["species"]["c1"]["density"] = 0.01;
-  state1["species"]["c1"]["temperature"] = grad1;
-  state1["species"]["c1"]["charge"] = 1;
-  state1["species"]["c1"]["AA"] = 12.;
-  state1["species"]["c2"]["density"] = 0.01;
-  state1["species"]["c2"]["temperature"] = grad2;
-  state1["species"]["c2"]["charge"] = 1;
-  state1["species"]["c2"]["AA"] = 12.;
+  state1["species"]["c1+"]["density"] = 0.01;
+  state1["species"]["c1+"]["temperature"] = grad1;
+  state1["species"]["c1+"]["charge"] = 1;
+  state1["species"]["c1+"]["AA"] = 12.;
+  state1["species"]["c2+"]["density"] = 0.01;
+  state1["species"]["c2+"]["temperature"] = grad2;
+  state1["species"]["c2+"]["charge"] = 1;
+  state1["species"]["c2+"]["AA"] = 12.;
   state1["species"]["d+"]["density"] = 1;
   state1["species"]["d+"]["charge"] = 1;
   state1["species"]["d+"]["AA"] = 2.;
@@ -263,14 +263,14 @@ TEST_F(BraginskiiThermalForceTest, IonIonForceTemperatureGradScaling) {
   state1["species"]["d+"]["temperature"] = grad1;
   state2["species"]["d+"]["temperature"] = grad2;
 
-  component.declareAllSpecies({"d+", "c1", "c2"});
+  component.declareAllSpecies({"d+", "c1+", "c2+"});
   component.transform(state1);
   component.transform(state2);
 
-  Field3D mom1_1 = state1["species"]["c1"]["momentum_source"];
-  Field3D mom1_2 = state1["species"]["c2"]["momentum_source"];
-  Field3D mom2_1 = state2["species"]["c1"]["momentum_source"];
-  Field3D mom2_2 = state2["species"]["c2"]["momentum_source"];
+  Field3D mom1_1 = state1["species"]["c1+"]["momentum_source"];
+  Field3D mom1_2 = state1["species"]["c2+"]["momentum_source"];
+  Field3D mom2_1 = state2["species"]["c1+"]["momentum_source"];
+  Field3D mom2_2 = state2["species"]["c2+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom1_1.getRegion("RGN_NOBNDRY")) {
     // Changing temperature gradient of the heavy ion should not change the force
     EXPECT_DOUBLE_EQ(mom1_1[i], mom1_2[i]);
@@ -288,13 +288,13 @@ TEST_P(BraginskiiThermalForceTest_MassRatio, CheckForIonMasses) {
   auto [aa1, aa2, thermal_force_present] = GetParam();
   Options state{
       {"species",
-       {{"M", {{"density", 1}, {"temperature", grad1}, {"charge", 1}, {"AA", aa1}}},
-        {"N", {{"density", 1}, {"temperature", grad2}, {"charge", 2}, {"AA", aa2}}}}}};
-  component.declareAllSpecies({"M", "N"});
+       {{"M+", {{"density", 1}, {"temperature", grad1}, {"charge", 1}, {"AA", aa1}}},
+        {"N+", {{"density", 1}, {"temperature", grad2}, {"charge", 2}, {"AA", aa2}}}}}};
+  component.declareAllSpecies({"M+", "N+"});
   component.transform(state);
   if (thermal_force_present) {
-    Field3D momentum_source1 = state["species"]["M"]["momentum_source"];
-    Field3D momentum_source2 = state["species"]["N"]["momentum_source"];
+    Field3D momentum_source1 = state["species"]["M+"]["momentum_source"];
+    Field3D momentum_source2 = state["species"]["N+"]["momentum_source"];
 
     BOUT_FOR_SERIAL(i, momentum_source1.getRegion("RGN_NOBNDRY")) {
       // The masses of the ions are different enough for thermal force to be present.
@@ -302,8 +302,8 @@ TEST_P(BraginskiiThermalForceTest_MassRatio, CheckForIonMasses) {
       EXPECT_NE(momentum_source2[i], 0.);
     }
   } else {
-    EXPECT_FALSE(state["species"]["M"]["momentum_source"].isSet());
-    EXPECT_FALSE(state["species"]["N"]["momentum_source"].isSet());
+    EXPECT_FALSE(state["species"]["M+"]["momentum_source"].isSet());
+    EXPECT_FALSE(state["species"]["N+"]["momentum_source"].isSet());
   }
 }
 

@@ -21,9 +21,8 @@ struct SOLKITNeutralParallelDiffusion : public Component {
   ///
   SOLKITNeutralParallelDiffusion(std::string name, Options& alloptions, Solver*)
       : Component({readOnly("species:{all_species}:{inputs}"),
-                   // FIXME: These only apply to neutral species
-                   readOnly("species:{all_species}:AA"),
-                   readWrite("species:{all_species}:density_source")}) {
+                   readOnly("species:{neutrals}:AA"),
+                   readWrite("species:{neutrals}:density_source")}) {
     auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
     auto& options = alloptions[name];
     neutral_temperature = options["neutral_temperature"]

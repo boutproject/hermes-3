@@ -32,7 +32,7 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
         BoutReal charge = component_options[name_trimmed]["charge"];
         if (charge > 1e-5) {
           positive_ions.push_back(name_trimmed);
-        } else if (charge < 1e-5) {
+        } else if (charge < -1e-5) {
           negative_ions.push_back(name_trimmed);
         } else {
           neutrals.push_back(name_trimmed);

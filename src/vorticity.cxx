@@ -208,21 +208,19 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
     .withDefault<bool>(false);
 
   if (diamagnetic or diamagnetic_polarisation) {
-    // FIXME: These should apply only to charged species
     // FIXME: These will only be read if BOTH charge and pressure (and possibly AA) are
     // set
     state_variable_access.setAccess(
-        readIfSet("species:{all_species}:pressure", Permissions::Interior));
+        readIfSet("species:{charged}:pressure", Permissions::Interior));
     state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
   }
   if (diamagnetic) {
-    // FIXME: These should only apply to charged species
-    state_variable_access.setAccess(readWrite("species:{all_species}:energy_source"));
+    state_variable_access.setAccess(readWrite("species:{charged}:energy_source"));
     state_variable_access.setAccess(readWrite("fields:DivJdia"));
   }
   if (diamagnetic_polarisation or collisional_friction) {
-    // FIXME: Only read for charged species and only if pressure and charge also set
-    state_variable_access.setAccess(readIfSet("species:{all_species}:AA"));
+    // FIXME: Only read if pressure also set
+    state_variable_access.setAccess(readIfSet("species:{charged}:AA"));
   }
   if (phi_boundary_relax) {
     state_variable_access.setAccess(readOnly("time"));
@@ -233,10 +231,9 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
   }
   if (collisional_friction) {
     state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
-    // FIXME: Only applies for ions
-    state_variable_access.setAccess(readOnly("species:{all_species}:density"));
+    state_variable_access.setAccess(readOnly("species:{positive_ions}:density"));
     state_variable_access.setAccess(
-        readIfSet("species:{all_species}:collision_frequency"));
+        readIfSet("species:{positive_ions}:collision_frequency"));
     state_variable_access.setAccess(readWrite("fields:DivJcol"));
   }
 }

@@ -72,8 +72,7 @@ struct OpenADAS : public ReactionBase {
     state_variable_access.substitute("e_val", {"density", "temperature"});
     state_variable_access.substitute(
         "w_val", {"density_source", "momentum_source", "energy_source"});
-    // FIXME: There are hypothetically circumstances in which species:e:density_source
-    // will not be written
+    // FIXME: electron density_source only written if from_ion charge != to_ion charge.
     state_variable_access.substitute(
         "ew_val", {"density_source", "momentum_source", "energy_source"});
     state_variable_access.substitute("sp", {from_ion, to_ion});
