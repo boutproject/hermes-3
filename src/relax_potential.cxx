@@ -47,7 +47,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   if (diamagnetic) {
     // FIXME: These will only be read if BOTH charge and pressure are set
     state_variable_access.setAccess(
-        readIfSet("species:{charged}:pressure", Permissions::Interior));
+        readIfSet("species:{charged}:pressure", Regions::Interior));
     state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
     // FIXME: The weay transform_impl is currently written,
     // energy_source is set for neutral species with an explicit

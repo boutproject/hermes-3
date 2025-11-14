@@ -3,7 +3,7 @@
 #include "../include/permissions.hxx"
 
 auto make_access = std::make_pair<bool, std::string>;
-auto make_permission = std::make_pair<Permissions::PermissionTypes, std::string>;
+auto make_permission = std::make_pair<PermissionTypes, std::string>;
 
 TEST(PermissionsTests, TestCanAccess) {
   Permissions example({
@@ -11,21 +11,17 @@ TEST(PermissionsTests, TestCanAccess) {
       readOnly("species:he:density"),
       // Read and write permissions for pressure in the interior region
       {"species:he:pressure",
-       {Permissions::Nowhere, Permissions::Nowhere, Permissions::Interior,
-        Permissions::Nowhere}},
+       {Regions::Nowhere, Regions::Nowhere, Regions::Interior, Regions::Nowhere}},
       // Set the final value for collision frequency
       writeFinal("species:he:collision_frequency"),
       // Only allow reading of boundary velocity
       {"species:he:velocity",
-       {Permissions::Nowhere, Permissions::Boundaries, Permissions::Nowhere,
-        Permissions::Nowhere}},
+       {Regions::Nowhere, Regions::Boundaries, Regions::Nowhere, Regions::Nowhere}},
       readOnly("species:d"),
       {"species:d:pressure",
-       {Permissions::Nowhere, Permissions::Nowhere, Permissions::Interior,
-        Permissions::Nowhere}},
+       {Regions::Nowhere, Regions::Nowhere, Regions::Interior, Regions::Nowhere}},
       {"species:d:collision_frequencies",
-       {Permissions::Nowhere, Permissions::Nowhere, Permissions::Boundaries,
-        Permissions::Nowhere}},
+       {Regions::Nowhere, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}},
   });
 
   auto no_access = make_access(false, "");
@@ -41,316 +37,295 @@ TEST(PermissionsTests, TestCanAccess) {
   EXPECT_EQ(example.canAccess("unset"), no_access);
 
   // Check whether we have ReadIfSet permissions
-  EXPECT_EQ(example.canAccess("species:he:charge", Permissions::ReadIfSet),
+  EXPECT_EQ(example.canAccess("species:he:charge", PermissionTypes::ReadIfSet),
             make_access(true, "species:he:charge"));
-  EXPECT_EQ(example.canAccess("species:he:density", Permissions::ReadIfSet),
+  EXPECT_EQ(example.canAccess("species:he:density", PermissionTypes::ReadIfSet),
             make_access(true, "species:he:density"));
-  EXPECT_EQ(example.canAccess("unset", Permissions::ReadIfSet), no_access);
+  EXPECT_EQ(example.canAccess("unset", PermissionTypes::ReadIfSet), no_access);
 
   // Check whether we have write permission for the variables across the entire domain
-  EXPECT_EQ(example.canAccess("species:he:charge", Permissions::Write), no_access);
-  EXPECT_EQ(example.canAccess("species:he:density", Permissions::Write), no_access);
-  EXPECT_EQ(example.canAccess("species:he:pressure", Permissions::Write), no_access);
-  EXPECT_EQ(example.canAccess("species:he:collision_frequency", Permissions::Write),
+  EXPECT_EQ(example.canAccess("species:he:charge", PermissionTypes::Write), no_access);
+  EXPECT_EQ(example.canAccess("species:he:density", PermissionTypes::Write), no_access);
+  EXPECT_EQ(example.canAccess("species:he:pressure", PermissionTypes::Write), no_access);
+  EXPECT_EQ(example.canAccess("species:he:collision_frequency", PermissionTypes::Write),
             make_access(true, "species:he:collision_frequency"));
-  EXPECT_EQ(example.canAccess("species:he:velocity", Permissions::Write), no_access);
-  EXPECT_EQ(example.canAccess("unset", Permissions::Write), no_access);
+  EXPECT_EQ(example.canAccess("species:he:velocity", PermissionTypes::Write), no_access);
+  EXPECT_EQ(example.canAccess("unset", PermissionTypes::Write), no_access);
 
   // Check whether we have read permission at the boundaries
   EXPECT_EQ(
-      example.canAccess("species:he:charge", Permissions::Read, Permissions::Boundaries),
+      example.canAccess("species:he:charge", PermissionTypes::Read, Regions::Boundaries),
       no_access);
   EXPECT_EQ(
-      example.canAccess("species:he:density", Permissions::Read, Permissions::Boundaries),
+      example.canAccess("species:he:density", PermissionTypes::Read, Regions::Boundaries),
       make_access(true, "species:he:density"));
-  EXPECT_EQ(example.canAccess("species:he:pressure", Permissions::Read,
-                              Permissions::Boundaries),
+  EXPECT_EQ(example.canAccess("species:he:pressure", PermissionTypes::Read,
+                              Regions::Boundaries),
             no_access);
-  EXPECT_EQ(example.canAccess("species:he:collision_frequency", Permissions::Read,
-                              Permissions::Boundaries),
+  EXPECT_EQ(example.canAccess("species:he:collision_frequency", PermissionTypes::Read,
+                              Regions::Boundaries),
             make_access(true, "species:he:collision_frequency"));
-  EXPECT_EQ(example.canAccess("species:he:velocity", Permissions::Read,
-                              Permissions::Boundaries),
+  EXPECT_EQ(example.canAccess("species:he:velocity", PermissionTypes::Read,
+                              Regions::Boundaries),
             make_access(true, "species:he:velocity"));
-  EXPECT_EQ(example.canAccess("unset", Permissions::Read, Permissions::Boundaries),
+  EXPECT_EQ(example.canAccess("unset", PermissionTypes::Read, Regions::Boundaries),
             no_access);
 
   // Check permissions set for whole sections
   EXPECT_EQ(example.canAccess("species:d:pressure"), no_access);
-  EXPECT_EQ(example.canAccess("species:d:pressure", Permissions::Write), no_access);
+  EXPECT_EQ(example.canAccess("species:d:pressure", PermissionTypes::Write), no_access);
   EXPECT_EQ(
-      example.canAccess("species:d:pressure", Permissions::Write, Permissions::Interior),
+      example.canAccess("species:d:pressure", PermissionTypes::Write, Regions::Interior),
       make_access(true, "species:d:pressure"));
   EXPECT_EQ(example.canAccess("species:d:velocity"), make_access(true, "species:d"));
-  EXPECT_EQ(example.canAccess("species:d:velocity", Permissions::Write), no_access);
+  EXPECT_EQ(example.canAccess("species:d:velocity", PermissionTypes::Write), no_access);
   EXPECT_EQ(
-      example.canAccess("species:d:velocity", Permissions::Read, Permissions::Boundaries),
+      example.canAccess("species:d:velocity", PermissionTypes::Read, Regions::Boundaries),
       make_access(true, "species:d"));
   EXPECT_EQ(example.canAccess("species:d:collision_frequencies:d_d_coll"), no_access);
-  EXPECT_EQ(
-      example.canAccess("species:d:collision_frequencies:d_d_coll", Permissions::Write),
-      no_access);
   EXPECT_EQ(example.canAccess("species:d:collision_frequencies:d_d_coll",
-                              Permissions::Write, Permissions::Boundaries),
+                              PermissionTypes::Write),
+            no_access);
+  EXPECT_EQ(example.canAccess("species:d:collision_frequencies:d_d_coll",
+                              PermissionTypes::Write, Regions::Boundaries),
             make_access(true, "species:d:collision_frequencies"));
 
   // Check permissions for a species that might be mistaken for one of
   // the sections we've given permissions for
   EXPECT_EQ(example.canAccess("species:d+"), no_access);
-  EXPECT_EQ(example.canAccess("species:d+", Permissions::Write), no_access);
-  EXPECT_EQ(example.canAccess("species:d+", Permissions::Read, Permissions::Interior),
+  EXPECT_EQ(example.canAccess("species:d+", PermissionTypes::Write), no_access);
+  EXPECT_EQ(example.canAccess("species:d+", PermissionTypes::Read, Regions::Interior),
             no_access);
-  EXPECT_EQ(example.canAccess("species:d+", Permissions::Read, Permissions::Boundaries),
+  EXPECT_EQ(example.canAccess("species:d+", PermissionTypes::Read, Regions::Boundaries),
             no_access);
 }
 
 TEST(PermissionsTests, TestGetHighestPermission) {
   Permissions example({
       {"species:he:charge",
-       {Permissions::AllRegions, Permissions::Nowhere, Permissions::Nowhere,
-        Permissions::Nowhere}},
+       {Regions::All, Regions::Nowhere, Regions::Nowhere, Regions::Nowhere}},
       {"species:he:density",
-       {Permissions::Nowhere, Permissions::AllRegions, Permissions::Nowhere,
-        Permissions::Boundaries}},
+       {Regions::Nowhere, Regions::All, Regions::Nowhere, Regions::Boundaries}},
       // Read and write permissions for pressure in the interior region
       {"species:he:pressure",
-       {Permissions::Nowhere, Permissions::Boundaries, Permissions::Interior,
-        Permissions::Nowhere}},
+       {Regions::Nowhere, Regions::Boundaries, Regions::Interior, Regions::Nowhere}},
       // Set the final value for collision frequency
       {"species:he:collision_frequency",
-       {Permissions::Nowhere, Permissions::Interior, Permissions::Nowhere,
-        Permissions::AllRegions}},
+       {Regions::Nowhere, Regions::Interior, Regions::Nowhere, Regions::All}},
       // Only allow reading of boundary velocity
       {"species:he:velocity",
-       {Permissions::Nowhere, Permissions::Boundaries, Permissions::Nowhere,
-        Permissions::Nowhere}},
-      {"species:d",
-       {Permissions::Nowhere, Permissions::AllRegions, Permissions::Nowhere,
-        Permissions::Nowhere}},
+       {Regions::Nowhere, Regions::Boundaries, Regions::Nowhere, Regions::Nowhere}},
+      {"species:d", {Regions::Nowhere, Regions::All, Regions::Nowhere, Regions::Nowhere}},
       {"species:d:pressure",
-       {Permissions::Nowhere, Permissions::Nowhere, Permissions::Interior,
-        Permissions::Nowhere}},
+       {Regions::Nowhere, Regions::Nowhere, Regions::Interior, Regions::Nowhere}},
       {"species:d:collision_frequencies",
-       {Permissions::Nowhere, Permissions::Nowhere, Permissions::Boundaries,
-        Permissions::Nowhere}},
+       {Regions::Nowhere, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}},
   });
 
-  auto no_permission = make_permission(Permissions::None, "");
+  auto no_permission = make_permission(PermissionTypes::None, "");
 
   // Get the highest permission that covers the entire domain
   EXPECT_EQ(example.getHighestPermission("species:he:charge"),
-            make_permission(Permissions::ReadIfSet, "species:he:charge"));
+            make_permission(PermissionTypes::ReadIfSet, "species:he:charge"));
   EXPECT_EQ(example.getHighestPermission("species:he:density"),
-            make_permission(Permissions::Read, "species:he:density"));
+            make_permission(PermissionTypes::Read, "species:he:density"));
   EXPECT_EQ(example.getHighestPermission("species:he:pressure"),
-            make_permission(Permissions::Read, "species:he:pressure"));
+            make_permission(PermissionTypes::Read, "species:he:pressure"));
   EXPECT_EQ(example.getHighestPermission("species:he:collision_frequency"),
-            make_permission(Permissions::Final, "species:he:collision_frequency"));
+            make_permission(PermissionTypes::Final, "species:he:collision_frequency"));
   EXPECT_EQ(example.getHighestPermission("species:he:velocity"),
-            make_permission(Permissions::None, "species:he:velocity"));
+            make_permission(PermissionTypes::None, "species:he:velocity"));
   EXPECT_EQ(example.getHighestPermission("species:d:pressure"),
-            make_permission(Permissions::None, "species:d:pressure"));
+            make_permission(PermissionTypes::None, "species:d:pressure"));
   EXPECT_EQ(example.getHighestPermission("species:d:velocity"),
-            make_permission(Permissions::Read, "species:d"));
+            make_permission(PermissionTypes::Read, "species:d"));
   EXPECT_EQ(example.getHighestPermission("species:d:collision_frequencies:d_d_coll"),
-            make_permission(Permissions::None, "species:d:collision_frequencies"));
+            make_permission(PermissionTypes::None, "species:d:collision_frequencies"));
   EXPECT_EQ(example.getHighestPermission("unset"), no_permission);
 
   // Get the highest permission on the boundaries
-  EXPECT_EQ(example.getHighestPermission("species:he:charge", Permissions::Boundaries),
-            make_permission(Permissions::ReadIfSet, "species:he:charge"));
-  EXPECT_EQ(example.getHighestPermission("species:he:density", Permissions::Boundaries),
-            make_permission(Permissions::Final, "species:he:density"));
-  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Permissions::Boundaries),
-            make_permission(Permissions::Read, "species:he:pressure"));
-  EXPECT_EQ(example.getHighestPermission("species:he:collision_frequency",
-                                         Permissions::Boundaries),
-            make_permission(Permissions::Final, "species:he:collision_frequency"));
-  EXPECT_EQ(example.getHighestPermission("species:he:velocity", Permissions::Boundaries),
-            make_permission(Permissions::Read, "species:he:velocity"));
-  EXPECT_EQ(example.getHighestPermission("species:d:pressure", Permissions::Boundaries),
-            make_permission(Permissions::None, "species:d:pressure"));
-  EXPECT_EQ(example.getHighestPermission("species:d:velocity", Permissions::Boundaries),
-            make_permission(Permissions::Read, "species:d"));
+  EXPECT_EQ(example.getHighestPermission("species:he:charge", Regions::Boundaries),
+            make_permission(PermissionTypes::ReadIfSet, "species:he:charge"));
+  EXPECT_EQ(example.getHighestPermission("species:he:density", Regions::Boundaries),
+            make_permission(PermissionTypes::Final, "species:he:density"));
+  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Regions::Boundaries),
+            make_permission(PermissionTypes::Read, "species:he:pressure"));
+  EXPECT_EQ(
+      example.getHighestPermission("species:he:collision_frequency", Regions::Boundaries),
+      make_permission(PermissionTypes::Final, "species:he:collision_frequency"));
+  EXPECT_EQ(example.getHighestPermission("species:he:velocity", Regions::Boundaries),
+            make_permission(PermissionTypes::Read, "species:he:velocity"));
+  EXPECT_EQ(example.getHighestPermission("species:d:pressure", Regions::Boundaries),
+            make_permission(PermissionTypes::None, "species:d:pressure"));
+  EXPECT_EQ(example.getHighestPermission("species:d:velocity", Regions::Boundaries),
+            make_permission(PermissionTypes::Read, "species:d"));
   EXPECT_EQ(example.getHighestPermission("species:d:collision_frequencies:d_d_coll",
-                                         Permissions::Boundaries),
-            make_permission(Permissions::Write, "species:d:collision_frequencies"));
-  EXPECT_EQ(example.getHighestPermission("unset", Permissions::Boundaries),
-            no_permission);
+                                         Regions::Boundaries),
+            make_permission(PermissionTypes::Write, "species:d:collision_frequencies"));
+  EXPECT_EQ(example.getHighestPermission("unset", Regions::Boundaries), no_permission);
 
   // Get the highest permission on the interior
-  EXPECT_EQ(example.getHighestPermission("species:he:charge", Permissions::Interior),
-            make_permission(Permissions::ReadIfSet, "species:he:charge"));
-  EXPECT_EQ(example.getHighestPermission("species:he:density", Permissions::Interior),
-            make_permission(Permissions::Read, "species:he:density"));
-  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Permissions::Interior),
-            make_permission(Permissions::Write, "species:he:pressure"));
-  EXPECT_EQ(example.getHighestPermission("species:he:collision_frequency",
-                                         Permissions::Interior),
-            make_permission(Permissions::Final, "species:he:collision_frequency"));
-  EXPECT_EQ(example.getHighestPermission("species:he:velocity", Permissions::Interior),
-            make_permission(Permissions::None, "species:he:velocity"));
-  EXPECT_EQ(example.getHighestPermission("species:d:pressure", Permissions::Interior),
-            make_permission(Permissions::Write, "species:d:pressure"));
-  EXPECT_EQ(example.getHighestPermission("species:d:velocity", Permissions::Interior),
-            make_permission(Permissions::Read, "species:d"));
+  EXPECT_EQ(example.getHighestPermission("species:he:charge", Regions::Interior),
+            make_permission(PermissionTypes::ReadIfSet, "species:he:charge"));
+  EXPECT_EQ(example.getHighestPermission("species:he:density", Regions::Interior),
+            make_permission(PermissionTypes::Read, "species:he:density"));
+  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Regions::Interior),
+            make_permission(PermissionTypes::Write, "species:he:pressure"));
+  EXPECT_EQ(
+      example.getHighestPermission("species:he:collision_frequency", Regions::Interior),
+      make_permission(PermissionTypes::Final, "species:he:collision_frequency"));
+  EXPECT_EQ(example.getHighestPermission("species:he:velocity", Regions::Interior),
+            make_permission(PermissionTypes::None, "species:he:velocity"));
+  EXPECT_EQ(example.getHighestPermission("species:d:pressure", Regions::Interior),
+            make_permission(PermissionTypes::Write, "species:d:pressure"));
+  EXPECT_EQ(example.getHighestPermission("species:d:velocity", Regions::Interior),
+            make_permission(PermissionTypes::Read, "species:d"));
   EXPECT_EQ(example.getHighestPermission("species:d:collision_frequencies:d_d_coll",
-                                         Permissions::Interior),
-            make_permission(Permissions::None, "species:d:collision_frequencies"));
-  EXPECT_EQ(example.getHighestPermission("unset", Permissions::Interior), no_permission);
+                                         Regions::Interior),
+            make_permission(PermissionTypes::None, "species:d:collision_frequencies"));
+  EXPECT_EQ(example.getHighestPermission("unset", Regions::Interior), no_permission);
 
   // Check the permission for the "Nowhere" region is always "None"
-  EXPECT_EQ(example.getHighestPermission("species:he:charge", Permissions::Nowhere),
+  EXPECT_EQ(example.getHighestPermission("species:he:charge", Regions::Nowhere),
             no_permission);
-  EXPECT_EQ(example.getHighestPermission("species:he:density", Permissions::Nowhere),
+  EXPECT_EQ(example.getHighestPermission("species:he:density", Regions::Nowhere),
             no_permission);
-  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Permissions::Nowhere),
+  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Regions::Nowhere),
             no_permission);
-  EXPECT_EQ(example.getHighestPermission("species:he:collision_frequency",
-                                         Permissions::Nowhere),
+  EXPECT_EQ(
+      example.getHighestPermission("species:he:collision_frequency", Regions::Nowhere),
+      no_permission);
+  EXPECT_EQ(example.getHighestPermission("species:he:velocity", Regions::Nowhere),
             no_permission);
-  EXPECT_EQ(example.getHighestPermission("species:he:velocity", Permissions::Nowhere),
+  EXPECT_EQ(example.getHighestPermission("species:d:pressure", Regions::Nowhere),
             no_permission);
-  EXPECT_EQ(example.getHighestPermission("species:d:pressure", Permissions::Nowhere),
-            no_permission);
-  EXPECT_EQ(example.getHighestPermission("species:d:velocity", Permissions::Nowhere),
+  EXPECT_EQ(example.getHighestPermission("species:d:velocity", Regions::Nowhere),
             no_permission);
   EXPECT_EQ(example.getHighestPermission("species:d:collision_frequencies:d_d_coll",
-                                         Permissions::Nowhere),
+                                         Regions::Nowhere),
             no_permission);
-  EXPECT_EQ(example.getHighestPermission("unset", Permissions::Nowhere), no_permission);
+  EXPECT_EQ(example.getHighestPermission("unset", Regions::Nowhere), no_permission);
 
   // Check permissions for a species that might be mistaken for one of
   // the sections we've given permissions for
   EXPECT_EQ(example.getHighestPermission("species:d+"), no_permission);
-  EXPECT_EQ(example.getHighestPermission("species:d+", Permissions::Interior),
-            no_permission);
-  EXPECT_EQ(example.getHighestPermission("species:d+", Permissions::Boundaries),
+  EXPECT_EQ(example.getHighestPermission("species:d+", Regions::Interior), no_permission);
+  EXPECT_EQ(example.getHighestPermission("species:d+", Regions::Boundaries),
             no_permission);
 }
 
 TEST(PermissionsTests, TestSetAccess) {
   Permissions example({
       {"species:he:density",
-       {Permissions::Nowhere, Permissions::AllRegions, Permissions::Nowhere,
-        Permissions::Nowhere}},
+       {Regions::Nowhere, Regions::All, Regions::Nowhere, Regions::Nowhere}},
       // Read and write permissions for pressure in the interior region
       {"species:he:pressure",
-       {Permissions::Nowhere, Permissions::Nowhere, Permissions::Interior,
-        Permissions::Nowhere}},
+       {Regions::Nowhere, Regions::Nowhere, Regions::Interior, Regions::Nowhere}},
   });
 
   EXPECT_EQ(example.getHighestPermission("species:he:density"),
-            make_permission(Permissions::Read, "species:he:density"));
-  example.setAccess("species:he:density",
-                    {Permissions::Nowhere, Permissions::Nowhere, Permissions::Boundaries,
-                     Permissions::Nowhere});
+            make_permission(PermissionTypes::Read, "species:he:density"));
+  example.setAccess("species:he:density", {Regions::Nowhere, Regions::Nowhere,
+                                           Regions::Boundaries, Regions::Nowhere});
   EXPECT_EQ(example.getHighestPermission("species:he:density"),
-            make_permission(Permissions::None, "species:he:density"));
-  EXPECT_EQ(example.getHighestPermission("species:he:density", Permissions::Boundaries),
-            make_permission(Permissions::Write, "species:he:density"));
+            make_permission(PermissionTypes::None, "species:he:density"));
+  EXPECT_EQ(example.getHighestPermission("species:he:density", Regions::Boundaries),
+            make_permission(PermissionTypes::Write, "species:he:density"));
 
-  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Permissions::Interior),
-            make_permission(Permissions::Write, "species:he:pressure"));
-  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Permissions::AllRegions),
-            make_permission(Permissions::None, "species:he:pressure"));
-  example.setAccess("species:he:pressure", {Permissions::Nowhere, Permissions::AllRegions,
-                                            Permissions::Nowhere, Permissions::Nowhere});
-  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Permissions::Interior),
-            make_permission(Permissions::Read, "species:he:pressure"));
+  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Regions::Interior),
+            make_permission(PermissionTypes::Write, "species:he:pressure"));
+  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Regions::All),
+            make_permission(PermissionTypes::None, "species:he:pressure"));
+  example.setAccess("species:he:pressure",
+                    {Regions::Nowhere, Regions::All, Regions::Nowhere, Regions::Nowhere});
+  EXPECT_EQ(example.getHighestPermission("species:he:pressure", Regions::Interior),
+            make_permission(PermissionTypes::Read, "species:he:pressure"));
   EXPECT_EQ(example.getHighestPermission("species:he:pressure"),
-            make_permission(Permissions::Read, "species:he:pressure"));
+            make_permission(PermissionTypes::Read, "species:he:pressure"));
 
-  EXPECT_EQ(example.getHighestPermission("unset", Permissions::Interior),
-            make_permission(Permissions::None, ""));
-  EXPECT_EQ(example.getHighestPermission("unset", Permissions::Boundaries),
-            make_permission(Permissions::None, ""));
-  example.setAccess("unset", {Permissions::Nowhere, Permissions::Interior,
-                              Permissions::Nowhere, Permissions::Boundaries});
-  EXPECT_EQ(example.getHighestPermission("unset", Permissions::AllRegions),
-            make_permission(Permissions::Read, "unset"));
-  EXPECT_EQ(example.getHighestPermission("unset", Permissions::Boundaries),
-            make_permission(Permissions::Final, "unset"));
+  EXPECT_EQ(example.getHighestPermission("unset", Regions::Interior),
+            make_permission(PermissionTypes::None, ""));
+  EXPECT_EQ(example.getHighestPermission("unset", Regions::Boundaries),
+            make_permission(PermissionTypes::None, ""));
+  example.setAccess("unset", {Regions::Nowhere, Regions::Interior, Regions::Nowhere,
+                              Regions::Boundaries});
+  EXPECT_EQ(example.getHighestPermission("unset", Regions::All),
+            make_permission(PermissionTypes::Read, "unset"));
+  EXPECT_EQ(example.getHighestPermission("unset", Regions::Boundaries),
+            make_permission(PermissionTypes::Final, "unset"));
 }
 
 TEST(PermissionsTests, TestGetVariablesWithPermissions) {
-  Permissions example({{"species:he:density",
-                        {Permissions::Nowhere, Permissions::AllRegions,
-                         Permissions::Nowhere, Permissions::Boundaries}},
-                       // Read and write permissions for pressure in the interior region
-                       {"species:he:pressure",
-                        {Permissions::Nowhere, Permissions::Boundaries,
-                         Permissions::Interior, Permissions::Nowhere}},
-                       // Set the final value for collision frequency
-                       {"species:he:collision_frequency",
-                        {Permissions::Nowhere, Permissions::Interior,
-                         Permissions::Nowhere, Permissions::AllRegions}},
-                       // Only allow reading of boundary velocity
-                       {"species:he:velocity",
-                        {Permissions::Nowhere, Permissions::Boundaries,
-                         Permissions::Nowhere, Permissions::Nowhere}}});
+  Permissions example(
+      {{"species:he:density",
+        {Regions::Nowhere, Regions::All, Regions::Nowhere, Regions::Boundaries}},
+       // Read and write permissions for pressure in the interior region
+       {"species:he:pressure",
+        {Regions::Nowhere, Regions::Boundaries, Regions::Interior, Regions::Nowhere}},
+       // Set the final value for collision frequency
+       {"species:he:collision_frequency",
+        {Regions::Nowhere, Regions::Interior, Regions::Nowhere, Regions::All}},
+       // Only allow reading of boundary velocity
+       {"species:he:velocity",
+        {Regions::Nowhere, Regions::Boundaries, Regions::Nowhere, Regions::Nowhere}}});
 
-  auto read_only = example.getVariablesWithPermission(Permissions::Read);
+  auto read_only = example.getVariablesWithPermission(PermissionTypes::Read);
   EXPECT_EQ(read_only.size(), 3);
-  EXPECT_EQ(read_only["species:he:density"], Permissions::Interior);
-  EXPECT_EQ(read_only["species:he:pressure"], Permissions::Boundaries);
-  EXPECT_EQ(read_only["species:he:velocity"], Permissions::Boundaries);
+  EXPECT_EQ(read_only["species:he:density"], Regions::Interior);
+  EXPECT_EQ(read_only["species:he:pressure"], Regions::Boundaries);
+  EXPECT_EQ(read_only["species:he:velocity"], Regions::Boundaries);
 
-  auto readable = example.getVariablesWithPermission(Permissions::Read, false);
+  auto readable = example.getVariablesWithPermission(PermissionTypes::Read, false);
   EXPECT_EQ(readable.size(), 4);
-  EXPECT_EQ(readable["species:he:density"], Permissions::AllRegions);
-  EXPECT_EQ(readable["species:he:pressure"], Permissions::AllRegions);
-  EXPECT_EQ(readable["species:he:collision_frequency"], Permissions::AllRegions);
-  EXPECT_EQ(readable["species:he:velocity"], Permissions::Boundaries);
+  EXPECT_EQ(readable["species:he:density"], Regions::All);
+  EXPECT_EQ(readable["species:he:pressure"], Regions::All);
+  EXPECT_EQ(readable["species:he:collision_frequency"], Regions::All);
+  EXPECT_EQ(readable["species:he:velocity"], Regions::Boundaries);
 
-  auto write_nonfinal = example.getVariablesWithPermission(Permissions::Write, true);
+  auto write_nonfinal = example.getVariablesWithPermission(PermissionTypes::Write, true);
   EXPECT_EQ(write_nonfinal.size(), 1);
-  EXPECT_EQ(write_nonfinal["species:he:pressure"], Permissions::Interior);
+  EXPECT_EQ(write_nonfinal["species:he:pressure"], Regions::Interior);
 
-  auto writable = example.getVariablesWithPermission(Permissions::Write, false);
+  auto writable = example.getVariablesWithPermission(PermissionTypes::Write, false);
   EXPECT_EQ(writable.size(), 3);
-  EXPECT_EQ(writable["species:he:density"], Permissions::Boundaries);
-  EXPECT_EQ(writable["species:he:pressure"], Permissions::Interior);
-  EXPECT_EQ(writable["species:he:collision_frequency"], Permissions::AllRegions);
+  EXPECT_EQ(writable["species:he:density"], Regions::Boundaries);
+  EXPECT_EQ(writable["species:he:pressure"], Regions::Interior);
+  EXPECT_EQ(writable["species:he:collision_frequency"], Regions::All);
 
-  auto final_write = example.getVariablesWithPermission(Permissions::Final);
+  auto final_write = example.getVariablesWithPermission(PermissionTypes::Final);
   EXPECT_EQ(final_write.size(), 2);
-  EXPECT_EQ(final_write["species:he:density"], Permissions::Boundaries);
-  EXPECT_EQ(final_write["species:he:collision_frequency"], Permissions::AllRegions);
+  EXPECT_EQ(final_write["species:he:density"], Regions::Boundaries);
+  EXPECT_EQ(final_write["species:he:collision_frequency"], Regions::All);
 }
 
 TEST(PermissionsTests, TestSubstitute) {
-  Permissions example({{"species:{s1}:collision_frequencies:{s1}_{s2}_coll",
-                        {Permissions::Nowhere, Permissions::AllRegions,
-                         Permissions::Nowhere, Permissions::Nowhere}},
-                       readIfSet("d")});
+  Permissions example(
+      {{"species:{s1}:collision_frequencies:{s1}_{s2}_coll",
+        {Regions::Nowhere, Regions::All, Regions::Nowhere, Regions::Nowhere}},
+       readIfSet("d")});
 
-  example.setAccess("{var}", {Permissions::Nowhere, Permissions::Nowhere,
-                              Permissions::Interior, Permissions::Nowhere});
+  example.setAccess(
+      "{var}", {Regions::Nowhere, Regions::Nowhere, Regions::Interior, Regions::Nowhere});
 
   example.substitute("s1", {"e", "d+"});
   example.substitute("s2", {"e", "d+"});
 
-  auto readable = example.getVariablesWithPermission(Permissions::Read, false);
+  auto readable = example.getVariablesWithPermission(PermissionTypes::Read, false);
   EXPECT_EQ(readable.size(), 5);
-  EXPECT_EQ(readable["{var}"], Permissions::Interior);
-  EXPECT_EQ(readable["species:e:collision_frequencies:e_e_coll"],
-            Permissions::AllRegions);
-  EXPECT_EQ(readable["species:e:collision_frequencies:e_d+_coll"],
-            Permissions::AllRegions);
-  EXPECT_EQ(readable["species:d+:collision_frequencies:d+_e_coll"],
-            Permissions::AllRegions);
-  EXPECT_EQ(readable["species:d+:collision_frequencies:d+_d+_coll"],
-            Permissions::AllRegions);
+  EXPECT_EQ(readable["{var}"], Regions::Interior);
+  EXPECT_EQ(readable["species:e:collision_frequencies:e_e_coll"], Regions::All);
+  EXPECT_EQ(readable["species:e:collision_frequencies:e_d+_coll"], Regions::All);
+  EXPECT_EQ(readable["species:d+:collision_frequencies:d+_e_coll"], Regions::All);
+  EXPECT_EQ(readable["species:d+:collision_frequencies:d+_d+_coll"], Regions::All);
 
   example.substitute("var", {"a", "b", "c", "d"});
 
-  auto writable = example.getVariablesWithPermission(Permissions::Write);
+  auto writable = example.getVariablesWithPermission(PermissionTypes::Write);
   EXPECT_EQ(writable.size(), 3);
-  EXPECT_EQ(writable["a"], Permissions::Interior);
-  EXPECT_EQ(writable["b"], Permissions::Interior);
-  EXPECT_EQ(writable["c"], Permissions::Interior);
+  EXPECT_EQ(writable["a"], Regions::Interior);
+  EXPECT_EQ(writable["b"], Regions::Interior);
+  EXPECT_EQ(writable["c"], Regions::Interior);
 
   EXPECT_EQ(example.getHighestPermission("d"),
-            make_permission(Permissions::ReadIfSet, "d"));
+            make_permission(PermissionTypes::ReadIfSet, "d"));
 }

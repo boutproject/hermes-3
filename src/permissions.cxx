@@ -1,7 +1,30 @@
 #include "../include/permissions.hxx"
+#include <fmt/core.h>
 
-const std::map<Permissions::Regions, std::string> Permissions::fundamental_regions = {
-    {Permissions::Interior, "Interior"}, {Permissions::Boundaries, "Boundaries"}};
+// TODO: It might be useful to add an optional condition which must be
+// met for conditions to apply. So a variable is only read or written
+// if another variable is already set, for example. Could potentially
+// have conditions based on values as well. Could put in boolean
+// logic. This would allow finer-grained access control in Components,
+// but is it worth the hassle?
+//
+// struct Condition {
+//   virtual bool eval() const = 0;
+// }
+//
+// struct IsSetCondition : Condition {
+//   std::string varname
+// }
+//
+// struct TrueCondition;
+// struct AndCondition;
+// struct OrCondition;
+//
+// There should be ways to do this with templates to allow greater inlining
+//
+
+const std::map<Regions, std::string> Permissions::fundamental_regions = {
+    {Regions::Interior, "Interior"}, {Regions::Boundaries, "Boundaries"}};
 
 Permissions::Permissions(std::initializer_list<std::pair<std::string, AccessRights>> data)
     : variable_permissions() {
@@ -27,6 +50,16 @@ std::string replaceAll(const std::string& str, const std::string& from,
         to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
   }
   return result;
+}
+
+void Permissions::printAllPermissions() const {
+  for (const auto& [varname, perms] : variable_permissions) {
+    fmt::print("{}", varname);
+    for (int i = 0; i < static_cast<int>(PermissionTypes::END); i++) {
+      fmt::print(" {}", static_cast<int>(perms[i]));
+    }
+    fmt::print("\n");
+  }
 }
 
 void Permissions::substitute(const std::string& label,
@@ -55,8 +88,8 @@ Permissions::bestMatchRights(const std::string& variable) const {
   if (match != variable_permissions.end()) {
     return *match;
   }
-  Permissions::AccessRights best_candidate = {Permissions::Nowhere, Permissions::Nowhere,
-                                              Permissions::Nowhere};
+  Permissions::AccessRights best_candidate = {Regions::Nowhere, Regions::Nowhere,
+                                              Regions::Nowhere};
   std::string best_candidate_name = "";
   int max_len = 0;
   for (const auto& [varname, rights] : variable_permissions) {
@@ -73,42 +106,42 @@ std::pair<bool, std::string> Permissions::canAccess(const std::string& variable,
                                                     PermissionTypes permission,
                                                     Regions region) const {
   auto [match_name, match_rights] = bestMatchRights(variable);
-  if ((match_rights[permission] & region) == region) {
+  if ((match_rights[static_cast<int>(permission)] & region) == region) {
     return {true, match_name};
   } else {
     return {false, ""};
   }
 }
 
-std::pair<Permissions::PermissionTypes, std::string>
-Permissions::getHighestPermission(const std::string& variable,
-                                  Permissions::Regions region) const {
-  if (region == Nowhere)
-    return {None, ""};
+std::pair<PermissionTypes, std::string>
+Permissions::getHighestPermission(const std::string& variable, Regions region) const {
+  if (region == Regions::Nowhere)
+    return {PermissionTypes::None, ""};
   auto [varname, rights] = bestMatchRights(variable);
-  int i = ReadIfSet;
-  while (i < PERMISSION_TYPES_END and (rights[i] & region) == region) {
+  int i = static_cast<int>(PermissionTypes::ReadIfSet);
+  while (i < static_cast<int>(PermissionTypes::END) and (rights[i] & region) == region) {
     i++;
   }
   return {static_cast<PermissionTypes>(i - 1), varname};
 }
 
-std::map<std::string, Permissions::Regions>
+std::map<std::string, Regions>
 Permissions::getVariablesWithPermission(PermissionTypes permission,
                                         bool highestOnly) const {
-  std::map<std::string, Permissions::Regions> result;
-  if (highestOnly and permission < PERMISSION_TYPES_END - 1) {
+  std::map<std::string, Regions> result;
+  if (highestOnly
+      and static_cast<int>(permission) < static_cast<int>(PermissionTypes::END) - 1) {
     for (const auto& [varname, rights] : variable_permissions) {
-      auto regions = rights[permission];
-      auto perm_in_regions =
-          static_cast<Regions>(rights[permission] & ~rights[permission + 1]);
-      if (perm_in_regions != Nowhere)
+      auto regions = rights[static_cast<int>(permission)];
+      auto perm_in_regions = rights[static_cast<int>(permission)]
+                             & ~rights[static_cast<int>(permission) + 1];
+      if (perm_in_regions != Regions::Nowhere)
         result.emplace(varname, perm_in_regions);
     }
   } else {
     for (const auto& [varname, rights] : variable_permissions) {
-      auto regions = rights[permission];
-      if (regions != Nowhere)
+      auto regions = rights[static_cast<int>(permission)];
+      if (regions != Regions::Nowhere)
         result.emplace(varname, regions);
     }
   }
@@ -117,11 +150,12 @@ Permissions::getVariablesWithPermission(PermissionTypes permission,
 
 Permissions::AccessRights Permissions::applyLowerPermissions(const AccessRights& rights) {
   AccessRights result(rights);
-  for (int i = ReadIfSet; i < PERMISSION_TYPES_END; i++) {
+  for (int i = static_cast<int>(PermissionTypes::ReadIfSet);
+       i < static_cast<int>(PermissionTypes::END); i++) {
     result[i] = rights[i];
     // Higher permissions imply lower permissions
-    for (int j = ReadIfSet; j < i; j++) {
-      result[j] = static_cast<Regions>(result[j] | rights[i]);
+    for (int j = static_cast<int>(PermissionTypes::ReadIfSet); j < i; j++) {
+      result[j] = result[j] | rights[i];
     }
   }
   return result;
@@ -139,38 +173,32 @@ std::string Permissions::regionNames(const Regions regions) {
 }
 
 std::pair<std::string, Permissions::AccessRights> readIfSet(std::string varname,
-                                                            Permissions::Regions region) {
-  return {varname,
-          {region, Permissions::Nowhere, Permissions::Nowhere, Permissions::Nowhere}};
+                                                            Regions region) {
+  return {varname, {region, Regions::Nowhere, Regions::Nowhere, Regions::Nowhere}};
 }
 
 std::pair<std::string, Permissions::AccessRights> readOnly(std::string varname,
-                                                           Permissions::Regions region) {
-  return {varname,
-          {Permissions::Nowhere, region, Permissions::Nowhere, Permissions::Nowhere}};
+                                                           Regions region) {
+  return {varname, {Regions::Nowhere, region, Regions::Nowhere, Regions::Nowhere}};
 }
 
 std::pair<std::string, Permissions::AccessRights> readWrite(std::string varname,
-                                                            Permissions::Regions region) {
-  return {varname,
-          {Permissions::Nowhere, Permissions::Nowhere, region, Permissions::Nowhere}};
+                                                            Regions region) {
+  return {varname, {Regions::Nowhere, Regions::Nowhere, region, Regions::Nowhere}};
 }
 
-std::pair<std::string, Permissions::AccessRights>
-writeFinal(std::string varname, Permissions::Regions region) {
-  return {varname,
-          {Permissions::Nowhere, Permissions::Nowhere, Permissions::Nowhere, region}};
+std::pair<std::string, Permissions::AccessRights> writeFinal(std::string varname,
+                                                             Regions region) {
+  return {varname, {Regions::Nowhere, Regions::Nowhere, Regions::Nowhere, region}};
 }
 
 std::pair<std::string, Permissions::AccessRights> writeBoundary(std::string varname) {
   return {varname,
-          {Permissions::Nowhere, Permissions::Interior, Permissions::Nowhere,
-           Permissions::Boundaries}};
+          {Regions::Nowhere, Regions::Interior, Regions::Nowhere, Regions::Boundaries}};
 }
 
 std::pair<std::string, Permissions::AccessRights>
 writeBoundaryIfSet(std::string varname) {
   return {varname,
-          {Permissions::Interior, Permissions::Nowhere, Permissions::Nowhere,
-           Permissions::Boundaries}};
+          {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}};
 }

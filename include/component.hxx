@@ -287,11 +287,11 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
 }
 template<typename T>
 T getNoBoundary(const GuardedOptions & option, const std::string& location = "") {
-  return getNoBoundary<T>(option.get(Permissions::Interior), location);
+  return getNoBoundary<T>(option.get(Regions::Interior), location);
 }
 template<typename T>
 T getNoBoundary(const GuardedOptions && option, const std::string& location = "") {
-  return getNoBoundary<T>(option.get(Permissions::Interior), location);
+  return getNoBoundary<T>(option.get(Regions::Interior), location);
 }
 
 #if CHECKLEVEL >= 1
@@ -399,12 +399,12 @@ Options& setBoundary(Options& option, T value) {
 }
 template<typename T>
 GuardedOptions & setBoundary(GuardedOptions & option, T value) {
-  setBoundary(option.getWritable(Permissions::Boundaries), value);
+  setBoundary(option.getWritable(Regions::Boundaries), value);
   return option;
 }
 template<typename T>
 GuardedOptions && setBoundary(GuardedOptions && option, T value) {
-  setBoundary(option.getWritable(Permissions::Boundaries), value);
+  setBoundary(option.getWritable(Regions::Boundaries), value);
   return std::move(option);
 }
 
