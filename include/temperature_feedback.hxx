@@ -23,7 +23,7 @@ struct TemperatureFeedback : public Component {
   ///    - source_shape  The initial source that is scaled by a time-varying factor
   ///
   TemperatureFeedback(std::string name, Options& alloptions, Solver*)
-      : Component({readOnly("species:{name}:temperature", Permissions::Interior),
+      : Component({readOnly("species:{name}:temperature", Regions::Interior),
                    readOnly("time"), readWrite("species:{sp}:energy_source")}),
         name(name) {
 

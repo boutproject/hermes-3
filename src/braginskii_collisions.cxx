@@ -21,9 +21,9 @@
 #include "../include/hermes_utils.hxx"
 
 BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions, Solver*)
-    : Component({readOnly("species:{non_electrons}:density", Permissions::Interior),
+    : Component({readOnly("species:{non_electrons}:density", Regions::Interior),
                  readIfSet("species:{non_electrons}:charge"),
-                 readIfSet("species:{negative_ions}:temperature", Permissions::Interior),
+                 readIfSet("species:{negative_ions}:temperature", Regions::Interior),
                  readOnly("species:{all_species}:AA")}) {
   AUTO_TRACE();
   const Options& units = alloptions["units"];
@@ -63,16 +63,16 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
   state_variable_access.setAccess(
-      readOnly("species:{electrons}:temperature", Permissions::Interior));
+      readOnly("species:{electrons}:temperature", Regions::Interior));
   state_variable_access.setAccess(
-      readOnly("species:{electrons}:density", Permissions::Interior));
+      readOnly("species:{electrons}:density", Regions::Interior));
   if (electron_electron) {
     state_variable_access.setAccess(readWrite(
         "species:{electrons}:collision_frequencies:{electrons}_{electrons2}_coll"));
   }
   if (electron_ion) {
     state_variable_access.setAccess(
-        readOnly("species:{positive_ions}:temperature", Permissions::Interior));
+        readOnly("species:{positive_ions}:temperature", Regions::Interior));
     state_variable_access.setAccess(
         readWrite("species:{positive_ions}:collision_frequencies:{positive_ions}_{"
                   "electrons}_coll"));
@@ -80,18 +80,18 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
         "species:{electrons}:collision_frequencies:{electrons}_{positive_ions}_coll"));
   } else {
     state_variable_access.setAccess(
-        readIfSet("species:{positive_ions}:temperature", Permissions::Interior));
+        readIfSet("species:{positive_ions}:temperature", Regions::Interior));
   }
   if (electron_neutral) {
     state_variable_access.setAccess(
-        readOnly("species:{neutrals}:temperature", Permissions::Interior));
+        readOnly("species:{neutrals}:temperature", Regions::Interior));
     state_variable_access.setAccess(readWrite(
         "species:{neutrals}:collision_frequencies:{neutrals}_{electrons}_coll"));
     state_variable_access.setAccess(readWrite(
         "species:{electrons}:collision_frequencies:{electrons}_{neutrals}_coll"));
   } else {
     state_variable_access.setAccess(
-        readIfSet("species:{neutrals}:temperature", Permissions::Interior));
+        readIfSet("species:{neutrals}:temperature", Regions::Interior));
   }
   if (ion_ion) {
     state_variable_access.setAccess(

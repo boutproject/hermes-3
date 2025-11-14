@@ -18,25 +18,24 @@ bool isSetRecursive(Options& opt, std::string varname) {
 
 GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
     : options(options), permissions(permissions),
-      unread_variables(std::make_shared<std::map<std::string, Permissions::Regions>>()),
-      unwritten_variables(
-          std::make_shared<std::map<std::string, Permissions::Regions>>()) {
+      unread_variables(std::make_shared<std::map<std::string, Regions>>()),
+      unwritten_variables(std::make_shared<std::map<std::string, Regions>>()) {
 #if CHECKLEVEL >= 1
   if (permissions != nullptr) {
-    *unread_variables = permissions->getVariablesWithPermission(Permissions::Read);
+    *unread_variables = permissions->getVariablesWithPermission(PermissionTypes::Read);
     // Only add variables with permission ReadIfSet to
     // unread_variables if they are already present in the options
     // object
     if (options != nullptr) {
       for (auto& [varname, region] :
-           permissions->getVariablesWithPermission(Permissions::ReadIfSet)) {
+           permissions->getVariablesWithPermission(PermissionTypes::ReadIfSet)) {
         if (isSetRecursive(*options, varname)) {
           unread_variables->insert({varname, region});
         }
       }
     }
     *unwritten_variables =
-        permissions->getVariablesWithPermission(Permissions::Write, false);
+        permissions->getVariablesWithPermission(PermissionTypes::Write, false);
   }
 #endif
 }
@@ -65,12 +64,11 @@ std::map<std::string, GuardedOptions> GuardedOptions::getChildren() {
   return result;
 }
 
-void updateAccessRecords(std::map<std::string, Permissions::Regions>& records,
-                         const std::string& name, Permissions::Regions region) {
+void updateAccessRecords(std::map<std::string, Regions>& records, const std::string& name,
+                         Regions region) {
   if (records.count(name) > 0) {
-    Permissions::Regions new_region =
-        static_cast<Permissions::Regions>(records[name] & ~region);
-    if (new_region == Permissions::Nowhere) {
+    Regions new_region = static_cast<Regions>(records[name] & ~region);
+    if (new_region == Regions::Nowhere) {
       records.erase(name);
     } else {
       records[name] = new_region;
@@ -78,7 +76,7 @@ void updateAccessRecords(std::map<std::string, Permissions::Regions>& records,
   }
 }
 
-const Options& GuardedOptions::get(Permissions::Regions region) const {
+const Options& GuardedOptions::get(Regions region) const {
   if (options == nullptr)
     throw BoutException(
         "Trying to access GuardedOptions when underlying options are nullptr.");
@@ -86,8 +84,8 @@ const Options& GuardedOptions::get(Permissions::Regions region) const {
   std::string name = options->str();
   if (permissions != nullptr) {
     auto [permission, varname] = permissions->getHighestPermission(name, region);
-    if (permission >= Permissions::ReadIfSet) {
-      if (permission == Permissions::ReadIfSet && !options->isSet()) {
+    if (permission >= PermissionTypes::ReadIfSet) {
+      if (permission == PermissionTypes::ReadIfSet && !options->isSet()) {
         throw BoutException(
             "Only have permission to read {} if it is already set, which it is not.",
             name);
@@ -102,14 +100,14 @@ const Options& GuardedOptions::get(Permissions::Regions region) const {
 #endif
 }
 
-Options& GuardedOptions::getWritable(Permissions::Regions region) {
+Options& GuardedOptions::getWritable(Regions region) {
   if (options == nullptr)
     throw BoutException(
         "Trying to access GuardedOptions when underlying options are nullptr.");
 #if CHECKLEVEL >= 1
   std::string name = options->str();
   if (permissions != nullptr) {
-    auto [access, varname] = permissions->canAccess(name, Permissions::Write, region);
+    auto [access, varname] = permissions->canAccess(name, PermissionTypes::Write, region);
     if (access) {
       updateAccessRecords(*unwritten_variables, varname, region);
       return *options;
@@ -121,7 +119,7 @@ Options& GuardedOptions::getWritable(Permissions::Regions region) {
 #endif
 }
 
-std::map<std::string, Permissions::Regions> GuardedOptions::unreadItems() const {
+std::map<std::string, Regions> GuardedOptions::unreadItems() const {
 #if CHECKLEVEL >= 1
   return *unread_variables;
 #else
@@ -130,7 +128,7 @@ std::map<std::string, Permissions::Regions> GuardedOptions::unreadItems() const 
 #endif
 }
 
-std::map<std::string, Permissions::Regions> GuardedOptions::unwrittenItems() const {
+std::map<std::string, Regions> GuardedOptions::unwrittenItems() const {
 #if CHECKLEVEL >= 1
   return *unwritten_variables;
 #else
