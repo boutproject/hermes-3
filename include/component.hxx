@@ -185,7 +185,7 @@ T getNonFinal(const Options& option) {
   }
 }
 template<typename T>
-T getNonFinal(const GuardedOptions option) {
+T getNonFinal(const GuardedOptions & option) {
   return getNonFinal<T>(option.get());
 }
 
@@ -213,7 +213,7 @@ T get(const Options& option, const std::string& location = "") {
   return getNonFinal<T>(option);
 }
 template<typename T>
-T get(const GuardedOptions option, const std::string& location = "") {
+T get(const GuardedOptions & option, const std::string& location = "") {
   return get<T>(option.get(), location);
 }
 
@@ -221,7 +221,7 @@ T get(const GuardedOptions option, const std::string& location = "") {
 /// Sets the final flag so setting the value
 /// afterwards will lead to an error
 bool isSetFinal(const Options& option, const std::string& location = "");
-bool isSetFinal(const GuardedOptions option, const std::string& location = "");
+bool isSetFinal(const GuardedOptions & option, const std::string& location = "");
 
 #if CHECKLEVEL >= 1
 /// A wrapper around isSetFinal() which captures debugging information
@@ -239,7 +239,7 @@ bool isSetFinal(const GuardedOptions option, const std::string& location = "");
 /// Sets the final flag so setting the value in the domain
 /// afterwards will lead to an error
 bool isSetFinalNoBoundary(const Options& option, const std::string& location = "");
-bool isSetFinalNoBoundary(const GuardedOptions option, const std::string& location = "");
+bool isSetFinalNoBoundary(const GuardedOptions & option, const std::string& location = "");
 
 #if CHECKLEVEL >= 1
 /// A wrapper around isSetFinalNoBoundary() which captures debugging information
@@ -286,7 +286,11 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
   return getNonFinal<T>(option);
 }
 template<typename T>
-T getNoBoundary(const GuardedOptions option, const std::string& location = "") {
+T getNoBoundary(const GuardedOptions & option, const std::string& location = "") {
+  return getNoBoundary<T>(option.get(Permissions::Interior), location);
+}
+template<typename T>
+T getNoBoundary(const GuardedOptions && option, const std::string& location = "") {
   return getNoBoundary<T>(option.get(Permissions::Interior), location);
 }
 
@@ -363,9 +367,14 @@ Options& set(Options& option, T value) {
   return option;
 }
 template<typename T>
-GuardedOptions set(GuardedOptions option, T value) {
+GuardedOptions & set(GuardedOptions & option, T value) {
   set(option.getWritable(), value);
   return option;
+}
+template<typename T>
+GuardedOptions && set(GuardedOptions && option, T value) {
+  set(option.getWritable(), value);
+  return std::move(option);
 }
 
 /// Set values in an option. This could be optimised, but
@@ -389,9 +398,14 @@ Options& setBoundary(Options& option, T value) {
   return option;
 }
 template<typename T>
-GuardedOptions setBoundary(GuardedOptions option, T value) {
+GuardedOptions & setBoundary(GuardedOptions & option, T value) {
   setBoundary(option.getWritable(Permissions::Boundaries), value);
   return option;
+}
+template<typename T>
+GuardedOptions && setBoundary(GuardedOptions && option, T value) {
+  setBoundary(option.getWritable(Permissions::Boundaries), value);
+  return std::move(option);
 }
 
 /// Add value to a given option. If not already set, treats
@@ -417,9 +431,14 @@ Options& add(Options& option, T value) {
   }
 }
 template<typename T>
-GuardedOptions add(GuardedOptions option, T value) {
+GuardedOptions & add(GuardedOptions & option, T value) {
   add(option.getWritable(), value);
   return option;
+}
+template<typename T>
+GuardedOptions && add(GuardedOptions && option, T value) {
+  add(option.getWritable(), value);
+  return std::move(option);
 }
 
 /// Add value to a given option. If not already set, treats
@@ -442,9 +461,14 @@ Options& subtract(Options& option, T value) {
   }
 }
 template<typename T>
-GuardedOptions subtract(GuardedOptions option, T value) {
+GuardedOptions & subtract(GuardedOptions & option, T value) {
   subtract(option.getWritable(), value);
   return option;
+}
+template<typename T>
+GuardedOptions && subtract(GuardedOptions && option, T value) {
+  subtract(option.getWritable(), value);
+  return std::move(option);
 }
 
 template<typename T>
@@ -453,7 +477,11 @@ void set_with_attrs(Options& option, T value, std::initializer_list<std::pair<st
   option.setAttributes(attrs);
 }
 template<typename T>
-void set_with_attrs(GuardedOptions option, T value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+void set_with_attrs(GuardedOptions & option, T value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(option.getWritable(), value, attrs);
+}
+template<typename T>
+void set_with_attrs(GuardedOptions && option, T value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
   set_with_attrs(option.getWritable(), value, attrs);
 }
 
@@ -467,7 +495,11 @@ inline void set_with_attrs(Options& option, Field3D value, std::initializer_list
   option.setAttributes(attrs);
 }
 template<>
-inline void set_with_attrs(GuardedOptions option, Field3D value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+inline void set_with_attrs(GuardedOptions & option, Field3D value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(option.getWritable(), value, attrs);
+}
+template<>
+inline void set_with_attrs(GuardedOptions && option, Field3D value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
   set_with_attrs(option.getWritable(), value, attrs);
 }
 #endif

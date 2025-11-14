@@ -7,7 +7,7 @@
 #include "reaction_diagnostic.hxx"
 #include "reaction_parser.hxx"
 
-typedef GuardedOptions (*OPTYPE)(GuardedOptions, Field3D);
+typedef GuardedOptions && (*OPTYPE)(GuardedOptions&&, Field3D);
 
 /**
  * @brief Temporary struct to use as a base class for all reactions components. Ensures
@@ -84,7 +84,7 @@ protected:
    *
    * @param state Current sim state
    */
-  void calc_weightsums(GuardedOptions state);
+  void calc_weightsums(GuardedOptions & state);
 
   /**
    * @brief Evaluate <sigma . v . E> at a particular density and temperature
@@ -170,7 +170,7 @@ private:
   /// Participation factors of all species
   std::map<std::string, BoutReal> pfactors;
 
-  void zero_diagnostics(GuardedOptions state);
+  void zero_diagnostics(GuardedOptions& state);
 
   void transform_impl(GuardedOptions& state) override final;
 };

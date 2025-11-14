@@ -1,7 +1,7 @@
 #include "../include/hydrogen_charge_exchange.hxx"
 
-void HydrogenChargeExchange::calculate_rates(GuardedOptions atom1, GuardedOptions ion1,
-                                             GuardedOptions atom2, GuardedOptions ion2,
+void HydrogenChargeExchange::calculate_rates(GuardedOptions&& atom1, GuardedOptions&& ion1,
+                                             GuardedOptions&& atom2, GuardedOptions&& ion2,
                                              Field3D &R,
                                              Field3D &atom_mom, Field3D &ion_mom,
                                              Field3D &atom_energy, Field3D &ion_energy,

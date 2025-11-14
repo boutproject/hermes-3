@@ -84,7 +84,7 @@ struct OpenADAS : public ReactionBase {
   /// @param electron  The electron species e.g. state["species"]["e"]
   /// @param from_ion  The ion on the left of the reaction
   /// @param to_ion    The ion on the right of the reaction
-  void calculate_rates(GuardedOptions electron, GuardedOptions from_ion, GuardedOptions to_ion);
+  void calculate_rates(GuardedOptions && electron, GuardedOptions && from_ion, GuardedOptions && to_ion);
 private:
   OpenADASRateCoefficient rate_coef;      ///< Reaction rate coefficient
   OpenADASRateCoefficient radiation_coef; ///< Energy loss (radiation) coefficient
@@ -120,8 +120,8 @@ struct OpenADASChargeExchange : public ReactionBase {
   /// from_A and to_A must have the same atomic mass
   /// from_B and to_B must have the same atomic mass
   /// The charge of from_A + from_B must equal the charge of to_A + to_B
-  void calculate_rates(GuardedOptions electron, GuardedOptions from_A, GuardedOptions from_B, GuardedOptions to_A,
-                       GuardedOptions to_B);
+  void calculate_rates(GuardedOptions && electron, GuardedOptions && from_A, GuardedOptions && from_B, GuardedOptions && to_A,
+                       GuardedOptions && to_B);
 
 private:
   OpenADASRateCoefficient rate_coef;      ///< Reaction rate coefficient
