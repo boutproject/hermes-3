@@ -20,6 +20,8 @@ inline BoutReal softFloor(BoutReal value, BoutReal min) {
   return value + min * exp(-value / min);
 }
 
+class Field3DParallel;
+
 /// Apply a soft floor value \p f to a field \p var. Any value lower than
 /// the floor is set to the floor.
 ///
@@ -32,8 +34,16 @@ inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_ALL")
   T result {emptyFrom(var)};
   result.allocate();
 
-  BOUT_FOR(d, var.getRegion(rgn)) {
+  BOUT_FOR(d, var.getValidRegionWithDefault(rgn)) {
     result[d] = softFloor(var[d], f);
+  }
+
+  if constexpr (std::is_base_of_v<Field3DParallel, T>) {
+    ASSERT2(var.hasParallelSlices());
+    for (size_t i = 0; i < var.numberParallelSlices(); ++i) {
+      result.yup(i) = softFloor(var.yup(i), f);
+      result.ydown(i) = softFloor(var.ydown(i), f);
+    }
   }
 
   return result;

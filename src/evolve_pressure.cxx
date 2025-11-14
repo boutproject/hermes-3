@@ -260,9 +260,9 @@ void EvolvePressure::transform(Options& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
 
-  Field3D Pfloor = floor(P, 0.0);
-  T = Pfloor / softFloor(N, density_floor);
-  Pfloor = N * T; // Ensure consistency
+  Field3DParallel Pfloor = floor(P.asField3DParallel(), 0.0);
+  T = Pfloor / softFloor(N.asField3DParallel(), density_floor);
+  Pfloor = N * T.asField3DParallel(); // Ensure consistency
 
   if (T.isFci()) {
     // Note: Communicating and interpolating rather than
@@ -272,7 +272,7 @@ void EvolvePressure::transform(Options& state) {
     T.applyParallelBoundary();
   }
 
-  set(species["pressure"], Pfloor);
+  set(species["pressure"], Pfloor.asField3D());
   set(species["temperature"], T);
 }
 
