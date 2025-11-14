@@ -57,7 +57,7 @@ bool isSetFinal(const Options& option, const std::string& location) {
   return option.isSet();
 }
 
-bool isSetFinal(const GuardedOptions option, const std::string& location) {
+bool isSetFinal(const GuardedOptions & option, const std::string& location) {
   bool set = option.isSet();
 #if CHECKLEVEL >= 1
   Permissions::PermissionTypes perm = option.getHighestPermission();
@@ -79,7 +79,7 @@ bool isSetFinalNoBoundary(const Options& option, const std::string& location) {
   return option.isSet();
 }
 
-bool isSetFinalNoBoundary(const GuardedOptions option, const std::string& location) {
+bool isSetFinalNoBoundary(const GuardedOptions & option, const std::string& location) {
   bool set = option.isSet();
 #if CHECKLEVEL >= 1
   Permissions::PermissionTypes perm = option.getHighestPermission(Permissions::Interior);

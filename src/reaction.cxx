@@ -96,7 +96,7 @@ void Reaction::add_diagnostic(const std::string& sp_name, const std::string& dia
  *
  * @param state current simulation state
  */
-void Reaction::calc_weightsums(GuardedOptions state) {
+void Reaction::calc_weightsums(GuardedOptions & state) {
   if (this->energy_weightsum < 0 || this->momentum_weightsum < 0) {
     this->momentum_weightsum = 0;
     this->energy_weightsum = 0;
@@ -239,7 +239,7 @@ void Reaction::transform_impl(GuardedOptions& state) {
  *
  * @param state
  */
-void Reaction::zero_diagnostics(GuardedOptions state) {
+void Reaction::zero_diagnostics(GuardedOptions& state) {
   if (this->diagnose) {
     for (auto& [key, diag] : diagnostics) {
       set<Field3D>(state[diag.name], 0.0);
