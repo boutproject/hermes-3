@@ -231,5 +231,5 @@ std::pair<std::string, Permissions::AccessRights> writeBoundary(std::string varn
 /// have Read permissions in the interior if the interior is already set.
 std::pair<std::string, Permissions::AccessRights> writeBoundaryIfSet(std::string varname);
 
-// FIXME: Ideally there would be some way to express write permissions only if setaccess
+// FIXME: Ideally there would be some way to express write permissions only if set
 // FIXME: Ideally we could express to write a boundary only if the interior is set

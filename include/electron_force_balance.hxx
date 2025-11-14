@@ -21,14 +21,14 @@
 struct ElectronForceBalance : public Component {
   ElectronForceBalance(std::string name, Options& alloptions, Solver*)
       : Component({readOnly("species:e:pressure"),
-                   // FIXME: This is read unconditionally for electrons, only if set for
-                   // everything else
-                   readIfSet("species:{all_species}:density", Permissions::Interior),
-                   // FIXME: This is read unconditionally for electrons, only if set for
-                   // everything else
-                   readIfSet("species:{all_species}:charge"),
+                   readOnly("species:e:density", Permissions::Interior),
+                   readOnly("species:e:charge"),
+                   // FIXME: Only writes if already exists
+                   readWrite("species:e:momentum_source"),
+                   readIfSet("species:{non_electrons}:density", Permissions::Interior),
+                   readIfSet("species:{non_electrons}:charge"),
                    // FIXME: Only written if density and charge have been set.
-                   readWrite("species:{all_species}:momentum_source")}) {
+                   readWrite("species:{non_electrons}:momentum_source")}) {
     AUTO_TRACE();
     auto& options = alloptions[name];
     diagnose = options["diagnose"]

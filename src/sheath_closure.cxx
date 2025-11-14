@@ -3,9 +3,6 @@
 
 SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
     : Component({readOnly("fields:phi"), readOnly("species:e:density"),
-                 // FIXME: If sink is true then electron temperature seems to be used
-                 // unconditionally
-                 readIfSet("species:e:temperature"),
                  readWrite("species:e:density_source"),
                  // FIXME: This is only written if temperature is set
                  readWrite("species:e:energy_source"), readWrite("fields:DivJextra")}) {
@@ -38,11 +35,13 @@ SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
   output.write("\tL_par = {:e} (normalised)\n", L_par);
 
   if (sinks) {
-    // FIXME: This shouldn't apply to electrons
-    state_variable_access.setAccess(readOnly("species:{all_species}:{inputs}"));
-    state_variable_access.setAccess(readWrite("species:{all_species}:{outputs}"));
+    state_variable_access.setAccess(readOnly("species:e:temperature"));
+    state_variable_access.setAccess(readOnly("species:{non_electrons}:{inputs}"));
+    state_variable_access.setAccess(readWrite("species:{non_electrons}:{outputs}"));
     state_variable_access.substitute("inputs", {"AA", "density", "temperature"});
     state_variable_access.substitute("output", {"density_source", "energy_source"});
+  } else {
+    state_variable_access.setAccess(readIfSet("species:e:temperature"));
   }
 }
 
