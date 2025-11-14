@@ -39,37 +39,35 @@ public:
 
   /// Get read-only access to the underlying Options object. Throws
   /// BoutException if there is not read-permission for this object.
-  const Options& get(Permissions::Regions region = Permissions::AllRegions) const;
+  const Options& get(Regions region = Regions::All) const;
   /// Get read-write access to the underlying Options object. Throws
   /// BoutException if there is not write-permission for this object.
-  Options& getWritable(Permissions::Regions region = Permissions::AllRegions);
+  Options& getWritable(Regions region = Regions::All);
 
   /// Returns a list of variables with read-only permission but which
   /// have not been accessed using the `get()` method.
-  std::map<std::string, Permissions::Regions> unreadItems() const;
+  std::map<std::string, Regions> unreadItems() const;
 
   /// Returns a list of variables with read-write permission but which
   /// have not been accessed using the `getWritable()` method.
-  std::map<std::string, Permissions::Regions> unwrittenItems() const;
+  std::map<std::string, Regions> unwrittenItems() const;
 
   bool operator==(const GuardedOptions& other) const;
   bool operator!=(const GuardedOptions& other) const;
 
-  Permissions::PermissionTypes
-  getHighestPermission(Permissions::Regions region = Permissions::AllRegions) const {
+  PermissionTypes getHighestPermission(Regions region = Regions::All) const {
     return permissions->getHighestPermission(options->str(), region).first;
   }
 
 private:
   Options* options{nullptr};
   Permissions* permissions{nullptr};
-  mutable std::shared_ptr<std::map<std::string, Permissions::Regions>> unread_variables,
+  mutable std::shared_ptr<std::map<std::string, Regions>> unread_variables,
       unwritten_variables;
 
-  GuardedOptions(
-      Options* options, Permissions* permissions,
-      std::shared_ptr<std::map<std::string, Permissions::Regions>> unread_vars,
-      std::shared_ptr<std::map<std::string, Permissions::Regions>> unwritten_vars)
+  GuardedOptions(Options* options, Permissions* permissions,
+                 std::shared_ptr<std::map<std::string, Regions>> unread_vars,
+                 std::shared_ptr<std::map<std::string, Regions>> unwritten_vars)
       : options(options), permissions(permissions), unread_variables(unread_vars),
         unwritten_variables(unwritten_vars) {}
 };

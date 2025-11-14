@@ -10,7 +10,7 @@ using bout::globals::mesh;
 BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions,
                            [[maybe_unused]] Solver* solver)
     : Component({
-        readIfSet("species:{all_species}:{input}", Permissions::Interior),
+        readIfSet("species:{all_species}:{input}", Regions::Interior),
         readOnly("species:{all_species}:AA"),
         readWrite("species:{all_species}:{output}"),
     }),

@@ -211,7 +211,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
     // FIXME: These will only be read if BOTH charge and pressure (and possibly AA) are
     // set
     state_variable_access.setAccess(
-        readIfSet("species:{charged}:pressure", Permissions::Interior));
+        readIfSet("species:{charged}:pressure", Regions::Interior));
     state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
   }
   if (diamagnetic) {
@@ -227,7 +227,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
   } else {
     state_variable_access.setAccess(readOnly("species:e:AA"));
     state_variable_access.setAccess(
-        readIfSet("species:e:temperature", Permissions::Interior));
+        readIfSet("species:e:temperature", Regions::Interior));
   }
   if (collisional_friction) {
     state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));

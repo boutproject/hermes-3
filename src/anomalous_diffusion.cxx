@@ -7,8 +7,8 @@
 using bout::globals::mesh;
 
 AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, Solver*)
-    : Component({readOnly("species:{name}:density", Permissions::Interior),
-                 readIfSet("species:{name}:{optional}", Permissions::Interior),
+    : Component({readOnly("species:{name}:density", Regions::Interior),
+                 readIfSet("species:{name}:{optional}", Regions::Interior),
                  readWrite("species:{name}:{output}")}),
       name(name) {
   // Normalisations

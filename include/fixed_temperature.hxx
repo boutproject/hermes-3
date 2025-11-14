@@ -11,7 +11,7 @@ struct FixedTemperature : public Component {
   /// - <name>
   ///   - temperature   value (expression) in units of eV
   FixedTemperature(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : Component({readIfSet("species:{name}:density", Permissions::Interior),
+      : Component({readIfSet("species:{name}:density", Regions::Interior),
                    readWrite("species:{name}:temperature"),
                    // FIXME: Only written if density is set
                    readWrite("species:{name}:pressure")}),

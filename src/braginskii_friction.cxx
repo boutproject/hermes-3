@@ -10,7 +10,7 @@
 BraginskiiFriction::BraginskiiFriction(std::string name, Options& alloptions, Solver*)
     // FIXME: Not all species actually have collisions calculated
     : Component({readOnly("species:{all_species}:density"),
-                 readIfSet("species:{all_species}:velocity", Permissions::Interior),
+                 readIfSet("species:{all_species}:velocity", Regions::Interior),
                  readOnly("species:{all_species}:AA"),
                  readIfSet("species:{all_species}:charge"),
                  readOnly("species:{all_species}:collision_frequencies:{all_species}_{"
