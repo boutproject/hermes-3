@@ -49,8 +49,6 @@ void Permissions::substitute(const std::string& label,
   }
 }
 
-#include <iostream>
-
 std::pair<std::string, Permissions::AccessRights>
 Permissions::bestMatchRights(const std::string& variable) const {
   auto match = variable_permissions.find(variable);
@@ -62,9 +60,6 @@ Permissions::bestMatchRights(const std::string& variable) const {
   std::string best_candidate_name = "";
   int max_len = 0;
   for (const auto& [varname, rights] : variable_permissions) {
-    if (varname == variable) {
-      return {varname, rights};
-    }
     if (varname.size() > max_len and variable.find(varname + ":") == 0) {
       max_len = varname.size();
       best_candidate = rights;

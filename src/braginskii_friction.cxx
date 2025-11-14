@@ -19,9 +19,6 @@ BraginskiiFriction::BraginskiiFriction(const std::string& name, Options& allopti
                  readIfSet("species:{all_species}:velocity", Permissions::Interior),
                  readOnly("species:{all_species}:AA"),
                  readIfSet("species:{all_species}:charge"),
-                 // FIXME: Need to add setting of all_species_2. Could result
-                 // in doubling-up of settings, although I don't think that
-                 // will actually cause any problems.
                  readOnly("species:{all_species}:collision_frequencies:{all_species}_{"
                           "all_species2}_coll"),
                  readWrite("species:{all_species}:momentum_source")}) {

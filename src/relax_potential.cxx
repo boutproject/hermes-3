@@ -45,10 +45,9 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
 
   if (diamagnetic) {
-    // FIXME: These should apply only to charged species
     // FIXME: These will only be read if BOTH charge and pressure are set
     state_variable_access.setAccess(
-        readIfSet("species:{all_species}:pressure", Permissions::Interior));
+        readIfSet("species:{charged}:pressure", Permissions::Interior));
     state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
     // FIXME: The weay transform_impl is currently written,
     // energy_source is set for neutral species with an explicit

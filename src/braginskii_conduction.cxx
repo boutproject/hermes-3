@@ -27,10 +27,9 @@ using bout::globals::mesh;
 
 BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptions,
                                            Solver*)
-    // FIXME: state variables are only read and written for species that have collisions
-    : Component({readOnly("species:{all_species}:{input_vars}"),
-                 writeBoundary("species:{all_species}:pressure"),
-                 readWrite("species:{all_species}:{output_vars}")}) {
+    : Component({readOnly("species:{sp}:{input_vars}"),
+                 writeBoundary("species:{sp}:pressure"),
+                 readWrite("species:{sp}:{output_vars}")}) {
   AUTO_TRACE();
 
   // Get settings for each species
@@ -88,13 +87,32 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
             .doc("Can be multispecies: all collisions, or "
                  "braginskii: self collisions and ie")
             .withDefault<std::string>("multispecies");
-
-    // FIXME: Should I try specifying exactly which collision frequencies are used?
-    state_variable_access.substitute(
-        "input_vars", {"AA", "density", "temperature", "collision_frequencies"});
-    state_variable_access.substitute("output_vars",
-                                     {"energy_source", "kappa_par", "energy_flow_ylow"});
   }
+
+  std::vector<std::string> coll_types;
+
+  state_variable_access.substitute("input_vars", {"AA", "density", "temperature"});
+  state_variable_access.substitute("output_vars",
+                                   {"energy_source", "kappa_par", "energy_flow_ylow"});
+  std::vector<std::string> species;
+  for (const auto& [sp, mode] : all_conduction_collisions_mode) {
+    species.push_back(sp);
+    if (mode == "braginskii" and identifySpeciesType(sp) != SpeciesType::neutral) {
+      state_variable_access.setAccess(readIfSet(
+          fmt::format("species:{}:collision_frequencies:{}_{}_coll", sp, sp, sp)));
+    } else if (mode == "multispecies") {
+      state_variable_access.setAccess(readIfSet(fmt::format(
+          "species:{}:collision_frequencies:{}_{}_coll", sp, sp, "{all_species}")));
+      state_variable_access.setAccess(readIfSet(fmt::format(
+          "species:{}:collision_frequencies:{}_{}_cx", sp, sp, "{all_species}")));
+    } else if (mode == "AFN" and identifySpeciesType(sp) == SpeciesType::neutral) {
+      state_variable_access.setAccess(readIfSet(fmt::format(
+          "species:{}:collision_frequencies:{}_{}_cx", sp, sp, "{positive_ions}")));
+      state_variable_access.setAccess(readIfSet(fmt::format(
+          "species:{}:collision_frequencies:{}_{}_iz", sp, sp, "{positive_ions}")));
+    }
+  }
+  state_variable_access.substitute("sp", species);
 }
 
 void BraginskiiConduction::transform_impl(GuardedOptions& state) {

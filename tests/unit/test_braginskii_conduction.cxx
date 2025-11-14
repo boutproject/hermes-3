@@ -178,7 +178,7 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionsMode) {
 
   component_braginskii.declareAllSpecies({"test+"});
   component_braginskii.transform(state_brag);
-  component_multispecies.declareAllSpecies({"test+"});
+  component_multispecies.declareAllSpecies({"test+", "e"});
   component_multispecies.transform(state_multi);
 
   Field3D conduction_brag = this->getDeriv(state_brag);

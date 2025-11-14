@@ -29,18 +29,16 @@
 
 using bout::globals::mesh;
 
-BraginskiiIonViscosity::BraginskiiIonViscosity(cons tstd::string& name,
+BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                                                Options& alloptions, Solver*)
-    // FIXME: does not read or write electron data
     : Component({
-        readIfSet("species:{all_species}:pressure"),
-        readIfSet("species:{all_species}:velocity"),
-        readIfSet("species:{all_species}:charge"),
-        // FIXME: This specifies more collision frequencies than are actually read
-        readOnly("species:{all_species}:collision_frequencies"),
+        readIfSet("species:{non_electrons}:pressure"),
+        readIfSet("species:{non_electrons}:velocity"),
+        readIfSet("species:{non_electrons}:charge"),
+        readIfSet("species:{non_electrons}:collision_frequencies:{coll_type}"),
         readOnly("fields:phi"),
-        readWrite("species:{all_species}:momentum_source"),
-        readWrite("species:{all_species}:energy_source"),
+        readWrite("species:{non_electrons}:momentum_source"),
+        readWrite("species:{non_electrons}:energy_source"),
         readWrite("fields:DivJextra"),
     }) {
   auto& options = alloptions[name];
@@ -119,6 +117,15 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(cons tstd::string& name,
     const BoutReal Lnorm = units["meters"];
     bounce_frequency_R /= Lnorm;
   }
+
+  std::vector<std::string> coll_types;
+  if (viscosity_collisions_mode == "braginskii") {
+    coll_types.push_back("{non_electrons}_{non_electrons}_coll");
+  } else if (viscosity_collisions_mode == "multispecies") {
+    coll_types.push_back("{non_electrons}_{all_species}_coll");
+    coll_types.push_back("{non_electrons}_{all_species}_cx");
+  }
+  state_variable_access.substitute("coll_type", coll_types);
 }
 
 void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {

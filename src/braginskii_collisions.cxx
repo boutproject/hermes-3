@@ -21,19 +21,10 @@
 #include "../include/hermes_utils.hxx"
 
 BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions, Solver*)
-    // FIXME: Not everything is necessarily read/written, depending on which
-    // collisions are calculated. Ideally I would be able to distinguish between them.
-    //
-    // FIXME: temperature is used unconditionally for species that
-    // collide with electrons, but only if set for other species.
-    : Component({readOnly("species:{all_species}:temperature", Permissions::Interior),
-                 readOnly("species:{all_species}:density", Permissions::Interior),
-                 readOnly("species:{all_species}:AA"),
-                 // FIXME: This isn't actually used for electrons
-                 readIfSet("species:{all_species}:charge"),
-                 readWrite("species:{all_species}:collision_frequency"),
-                 readWrite("species:{all_species}:collision_frequencies:{all_species}_{"
-                           "all_species2}_coll")}) {
+    : Component({readOnly("species:{non_electrons}:density", Permissions::Interior),
+                 readIfSet("species:{non_electrons}:charge"),
+                 readIfSet("species:{negative_ions}:temperature", Permissions::Interior),
+                 readOnly("species:{all_species}:AA")}) {
   AUTO_TRACE();
   const Options& units = alloptions["units"];
 
@@ -70,6 +61,64 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+
+  state_variable_access.setAccess(
+      readOnly("species:{electrons}:temperature", Permissions::Interior));
+  state_variable_access.setAccess(
+      readOnly("species:{electrons}:density", Permissions::Interior));
+  if (electron_electron) {
+    state_variable_access.setAccess(readWrite(
+        "species:{electrons}:collision_frequencies:{electrons}_{electrons2}_coll"));
+  }
+  if (electron_ion) {
+    state_variable_access.setAccess(
+        readOnly("species:{positive_ions}:temperature", Permissions::Interior));
+    state_variable_access.setAccess(
+        readWrite("species:{positive_ions}:collision_frequencies:{positive_ions}_{"
+                  "electrons}_coll"));
+    state_variable_access.setAccess(readWrite(
+        "species:{electrons}:collision_frequencies:{electrons}_{positive_ions}_coll"));
+  } else {
+    state_variable_access.setAccess(
+        readIfSet("species:{positive_ions}:temperature", Permissions::Interior));
+  }
+  if (electron_neutral) {
+    state_variable_access.setAccess(
+        readOnly("species:{neutrals}:temperature", Permissions::Interior));
+    state_variable_access.setAccess(readWrite(
+        "species:{neutrals}:collision_frequencies:{neutrals}_{electrons}_coll"));
+    state_variable_access.setAccess(readWrite(
+        "species:{electrons}:collision_frequencies:{electrons}_{neutrals}_coll"));
+  } else {
+    state_variable_access.setAccess(
+        readIfSet("species:{neutrals}:temperature", Permissions::Interior));
+  }
+  if (ion_ion) {
+    state_variable_access.setAccess(
+        readWrite("species:{ions}:collision_frequencies:{ions}_{ions2}_coll"));
+  }
+  if (ion_neutral) {
+    state_variable_access.setAccess(
+        readWrite("species:{ions}:collision_frequencies:{ions}_{neutrals}_coll"));
+    state_variable_access.setAccess(
+        readWrite("species:{neutrals}:collision_frequencies:{neutrals}_{ions}_coll"));
+  }
+  if (neutral_neutral) {
+    state_variable_access.setAccess(readWrite(
+        "species:{neutrals}:collision_frequencies:{neutrals}_{neutrals2}_coll"));
+  }
+  if (electron_electron or electron_ion or electron_neutral) {
+    state_variable_access.setAccess(readWrite("species:{electrons}:collision_frequency"));
+  }
+  if (ion_ion or ion_neutral) {
+    state_variable_access.setAccess(readWrite("species:{ions}:collision_frequency"));
+  } else if (electron_ion) {
+    state_variable_access.setAccess(
+        readWrite("species:{positive_ions}:collision_frequency"));
+  }
+  if (neutral_neutral or electron_neutral or ion_neutral) {
+    state_variable_access.setAccess(readWrite("species:{neutrals}:collision_frequency"));
+  }
 }
 
 /// Calculate apply collision data for the two species.
@@ -377,6 +426,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
       // lower half of the matrix, but start at the diagonal
       for (std::map<std::string, GuardedOptions>::const_iterator kv2 = kv1;
            kv2 != std::end(children); ++kv2) {
+        // FIXME: Should this include a check for "ebeam" too?
         if (kv2->first == "e") {
           continue; // Skip electrons
         }

@@ -55,12 +55,11 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
         writeBoundary("species:e:{e_boundary}"),
         readWrite("species:e:energy_source"),
         writeBoundaryIfSet("species:e:{e_optional}"),
-        // FIXME: These only applies to ions, not to all species
-        readIfSet("species:{all_species}:{ion_whole_domain}"),
-        readOnly("species:{all_species}:AA"),
-        readWrite("species:{all_species}:energy_source"),
-        writeBoundary("species:{all_species}:{ion_boundary}"),
-        writeBoundaryIfSet("species:{all_species}:{ion_optional}"),
+        readIfSet("species:{ions}:{ion_whole_domain}"),
+        readOnly("species:{ions}:AA"),
+        readWrite("species:{ions}:energy_source"),
+        writeBoundary("species:{ions}:{ion_boundary}"),
+        writeBoundaryIfSet("species:{ions}:{ion_optional}"),
     }) {
   AUTO_TRACE();
 
