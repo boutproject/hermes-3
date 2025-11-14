@@ -74,7 +74,7 @@ protected:
   ///  atom_energy  Energy removed from atom1, added to ion2
   ///  ion_energy   Energy removed from ion1, added to atom2
   ///
-  void calculate_rates(GuardedOptions atom1, GuardedOptions ion1, GuardedOptions atom2, GuardedOptions ion2,
+  void calculate_rates(GuardedOptions&& atom1, GuardedOptions&& ion1, GuardedOptions&& atom2, GuardedOptions&& ion2,
                        Field3D& R, Field3D& atom_mom, Field3D& ion_mom,
                        Field3D& atom_energy, Field3D& ion_energy, Field3D& atom_rate,
                        Field3D& ion_rate, BoutReal& rate_multiplier,
