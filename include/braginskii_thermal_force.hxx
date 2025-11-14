@@ -44,7 +44,7 @@ struct BraginskiiThermalForce : public Component {
       // FIXME: These are only accessed if electrons present
       state_variable_access.setAccess(readOnly("species:e:temperature"));
       state_variable_access.setAccess(
-          readOnly("species:{ions}:density", Permissions::Interior));
+          readOnly("species:{ions}:density", Regions::Interior));
       state_variable_access.setAccess(readWrite("species:{ions}:momentum_source"));
       state_variable_access.setAccess(readWrite("species:e:momentum_source"));
     } else if (ion_ion) {
@@ -56,7 +56,7 @@ struct BraginskiiThermalForce : public Component {
       if (!electron_ion) {
         // FIXME: This is only accessed for heavy ions
         state_variable_access.setAccess(
-            readOnly("species:{ions}:density", Permissions::Interior));
+            readOnly("species:{ions}:density", Regions::Interior));
         // FIXME: This is only set for heavy and light ions, not intermediate
         state_variable_access.setAccess(readWrite("species:{ions}:momentum_source"));
       }

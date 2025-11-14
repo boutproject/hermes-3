@@ -12,11 +12,11 @@
 /// so should run after those have been set.
 struct SoundSpeed : public Component {
   SoundSpeed(std::string name, Options& alloptions, Solver*)
-      : Component({readOnly("species:{all_species}:pressure", Permissions::Interior),
+      : Component({readOnly("species:{all_species}:pressure", Regions::Interior),
                    writeFinal("sound_speed"), writeFinal("fastest_wave"),
                    readIfSet("species:{sp}:AA"),
                    // FIXME: Only read if AA is set
-                   readIfSet("species:{sp}:{opt_inputs}", Permissions::Interior)}) {
+                   readIfSet("species:{sp}:{opt_inputs}", Regions::Interior)}) {
     Options &options = alloptions[name];
     electron_dynamics = options["electron_dynamics"]
       .doc("Include electron sound speed?")

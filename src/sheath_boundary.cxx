@@ -123,8 +123,8 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
   // permissions, for that matter)
   state_variable_access.setAccess(
       always_set_phi ? std::pair<std::string, Permissions::AccessRights>(
-          "fields:phi", {Permissions::Interior, Permissions::Nowhere,
-                         Permissions::Nowhere, Permissions::Boundaries})
+          "fields:phi",
+          {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries})
                      : writeBoundaryIfSet("fields:phi"));
 }
 

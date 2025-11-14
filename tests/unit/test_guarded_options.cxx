@@ -4,25 +4,22 @@
 class GuardedOptionsTests : public testing::Test {
 protected:
   GuardedOptionsTests()
-      : permissions({readIfSet("species:he:AA"),
-                     readIfSet("species:he:charge"),
-                     readOnly("species:he:density"),
-                     {"species:he:pressure",
-                      {Permissions::Nowhere, Permissions::Nowhere, Permissions::Interior,
-                       Permissions::Nowhere}},
-                     writeFinal("species:he:collision_frequency"),
-                     {"species:he:velocity",
-                      {Permissions::Nowhere, Permissions::Boundaries,
-                       Permissions::Nowhere, Permissions::Nowhere}},
-                     readOnly("species:d"),
-                     {"species:d:pressure",
-                      {Permissions::Nowhere, Permissions::Nowhere, Permissions::Interior,
-                       Permissions::Nowhere}},
-                     {"species:d:collision_frequencies",
-                      {Permissions::Nowhere, Permissions::Nowhere,
-                       Permissions::Boundaries, Permissions::Nowhere}},
-                     readIfSet("fields:phi"),
-                     readOnly("unused:option")}),
+      : permissions(
+          {readIfSet("species:he:AA"),
+           readIfSet("species:he:charge"),
+           readOnly("species:he:density"),
+           {"species:he:pressure",
+            {Regions::Nowhere, Regions::Nowhere, Regions::Interior, Regions::Nowhere}},
+           writeFinal("species:he:collision_frequency"),
+           {"species:he:velocity",
+            {Regions::Nowhere, Regions::Boundaries, Regions::Nowhere, Regions::Nowhere}},
+           readOnly("species:d"),
+           {"species:d:pressure",
+            {Regions::Nowhere, Regions::Nowhere, Regions::Interior, Regions::Nowhere}},
+           {"species:d:collision_frequencies",
+            {Regions::Nowhere, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}},
+           readIfSet("fields:phi"),
+           readOnly("unused:option")}),
         opts({{"species",
                {{"he",
                  {{"charge", 0},
@@ -44,20 +41,20 @@ protected:
 TEST_F(GuardedOptionsTests, TestGet) {
   EXPECT_EQ(guarded_opts["species:he:charge"].get(), 0);
   EXPECT_EQ(guarded_opts["species:he:density"].get(), 1);
-  EXPECT_EQ(guarded_opts["species:he:density"].get(Permissions::Boundaries), 1);
-  EXPECT_EQ(guarded_opts["species:he:pressure"].get(Permissions::Interior), 2);
+  EXPECT_EQ(guarded_opts["species:he:density"].get(Regions::Boundaries), 1);
+  EXPECT_EQ(guarded_opts["species:he:pressure"].get(Regions::Interior), 2);
   EXPECT_FALSE(guarded_opts["species:he:collision_frequency"].get().isSet());
-  EXPECT_EQ(guarded_opts["species"]["he"]["velocity"].get(Permissions::Boundaries), 4);
-  EXPECT_EQ(guarded_opts["species"]["d"]["pressure"].get(Permissions::Interior), 5);
-  EXPECT_EQ(guarded_opts["species"]["d"]["velocity"].get(Permissions::AllRegions), 6);
+  EXPECT_EQ(guarded_opts["species"]["he"]["velocity"].get(Regions::Boundaries), 4);
+  EXPECT_EQ(guarded_opts["species"]["d"]["pressure"].get(Regions::Interior), 5);
+  EXPECT_EQ(guarded_opts["species"]["d"]["velocity"].get(Regions::All), 6);
   EXPECT_EQ(guarded_opts["species:d:collision_frequencies"]["d_d_coll"].get(
-                Permissions::Boundaries),
+                Regions::Boundaries),
             7);
   EXPECT_EQ(guarded_opts["species:d:collision_frequencies"].get(
-                Permissions::Boundaries)["d_he_coll"],
+                Regions::Boundaries)["d_he_coll"],
             8);
   EXPECT_FALSE(guarded_opts["species:d:collision_frequencies:d_t+_cx"]
-                   .get(Permissions::Boundaries)
+                   .get(Regions::Boundaries)
                    .isSet());
 }
 
@@ -65,19 +62,18 @@ TEST_F(GuardedOptionsTests, TestGetException) {
   EXPECT_THROW(guarded_opts["species:he:AA"].get(), BoutException);
   EXPECT_THROW(guarded_opts["species"]["he"]["temperature"].get(), BoutException);
   EXPECT_THROW(guarded_opts["species:he:pressure"].get(), BoutException);
-  EXPECT_THROW(guarded_opts["species"]["he"]["velocity"].get(Permissions::Interior),
+  EXPECT_THROW(guarded_opts["species"]["he"]["velocity"].get(Regions::Interior),
                BoutException);
-  EXPECT_THROW(guarded_opts["species:d:collision_frequencies"].get(Permissions::Interior),
+  EXPECT_THROW(guarded_opts["species:d:collision_frequencies"].get(Regions::Interior),
                BoutException);
-  EXPECT_THROW(guarded_opts["species:d:pressure"].get(Permissions::Boundaries),
+  EXPECT_THROW(guarded_opts["species:d:pressure"].get(Regions::Boundaries),
                BoutException);
   EXPECT_THROW(guarded_opts["no_permission"].get(), BoutException);
   EXPECT_THROW(guarded_opts["species:d+:velocity"].get(), BoutException);
 }
 
 TEST_F(GuardedOptionsTests, TestGetWritable) {
-  auto& he_pressure =
-      guarded_opts["species:he:pressure"].getWritable(Permissions::Interior);
+  auto& he_pressure = guarded_opts["species:he:pressure"].getWritable(Regions::Interior);
   EXPECT_EQ(he_pressure, 2);
   EXPECT_EQ(opts["species"]["he"]["pressure"], 2);
   he_pressure.force(10);
@@ -90,19 +86,19 @@ TEST_F(GuardedOptionsTests, TestGetWritable) {
   EXPECT_EQ(opts["species"]["he"]["collision_frequency"], 11);
 
   auto& d_pressure =
-      guarded_opts["species"]["d"]["pressure"].getWritable(Permissions::Interior);
+      guarded_opts["species"]["d"]["pressure"].getWritable(Regions::Interior);
   EXPECT_EQ(opts["species"]["d"]["pressure"], 5);
   d_pressure.force(12);
   EXPECT_EQ(opts["species"]["d"]["pressure"], 12);
 
   auto& d_d_coll = guarded_opts["species:d:collision_frequencies:d_d_coll"].getWritable(
-      Permissions::Boundaries);
+      Regions::Boundaries);
   EXPECT_EQ(d_d_coll, 7);
   d_d_coll.force(13);
   EXPECT_EQ(opts["species:d:collision_frequencies:d_d_coll"], 13);
 
   auto& d_tp_coll = guarded_opts["species:d:collision_frequencies:d_t+_coll"].getWritable(
-      Permissions::Boundaries);
+      Regions::Boundaries);
   EXPECT_FALSE(d_tp_coll.isSet());
   d_tp_coll = 14;
   EXPECT_EQ(opts["species:d:collision_frequencies:d_t+_coll"], 14);
@@ -112,52 +108,52 @@ TEST_F(GuardedOptionsTests, TestGetWritableException) {
   EXPECT_THROW(guarded_opts["species"]["he"]["temperature"].getWritable(), BoutException);
   EXPECT_THROW(guarded_opts["unset"].getWritable(), BoutException);
   EXPECT_THROW(guarded_opts["species:he:density"].getWritable(), BoutException);
-  EXPECT_THROW(guarded_opts["species:he:density"].getWritable(Permissions::Interior),
+  EXPECT_THROW(guarded_opts["species:he:density"].getWritable(Regions::Interior),
                BoutException);
-  EXPECT_THROW(guarded_opts["species:he:density"].getWritable(Permissions::Boundaries),
+  EXPECT_THROW(guarded_opts["species:he:density"].getWritable(Regions::Boundaries),
                BoutException);
   EXPECT_THROW(guarded_opts["species:he:pressure"].getWritable(), BoutException);
-  EXPECT_THROW(guarded_opts["species:he:pressure"].getWritable(Permissions::Boundaries),
+  EXPECT_THROW(guarded_opts["species:he:pressure"].getWritable(Regions::Boundaries),
                BoutException);
   EXPECT_THROW(guarded_opts["species"]["d"]["velocity"].getWritable(), BoutException);
-  EXPECT_THROW(
-      guarded_opts["species"]["d"]["pressure"].getWritable(Permissions::Boundaries),
-      BoutException);
+  EXPECT_THROW(guarded_opts["species"]["d"]["pressure"].getWritable(Regions::Boundaries),
+               BoutException);
   EXPECT_THROW(guarded_opts["species:d:collision_frequencies:unset"].getWritable(),
                BoutException);
   EXPECT_THROW(guarded_opts["species:d:collision_frequencies:unset"].getWritable(
-                   Permissions::Interior),
+                   Regions::Interior),
                BoutException);
   EXPECT_THROW(
-      guarded_opts["species"]["d"]["pressure_suffix"].getWritable(Permissions::Interior),
+      guarded_opts["species"]["d"]["pressure_suffix"].getWritable(Regions::Interior),
       BoutException);
 }
 
 TEST_F(GuardedOptionsTests, TestUnreadItems) {
-  std::map<std::string, Permissions::Regions>
-      expected1 = {{"species:he:charge", Permissions::AllRegions},
-                   {"species:he:density", Permissions::AllRegions},
-                   {"species:he:velocity", Permissions::Boundaries},
-                   {"species:d", Permissions::AllRegions},
-                   {"unused:option", Permissions::AllRegions}},
-      expected2 = {{"species:he:charge", Permissions::AllRegions},
-                   {"species:he:density", Permissions::Boundaries},
-                   {"species:he:velocity", Permissions::Boundaries},
-                   {"species:d", Permissions::AllRegions},
-                   {"unused:option", Permissions::AllRegions}},
-      expected3 = {{"species:d", Permissions::AllRegions}}, expected4;
+  std::map<std::string, Regions> expected1 = {{"species:he:charge", Regions::All},
+                                              {"species:he:density", Regions::All},
+                                              {"species:he:velocity",
+                                               Regions::Boundaries},
+                                              {"species:d", Regions::All},
+                                              {"unused:option", Regions::All}},
+                                 expected2 = {{"species:he:charge", Regions::All},
+                                              {"species:he:density", Regions::Boundaries},
+                                              {"species:he:velocity",
+                                               Regions::Boundaries},
+                                              {"species:d", Regions::All},
+                                              {"unused:option", Regions::All}},
+                                 expected3 = {{"species:d", Regions::All}}, expected4;
 
   EXPECT_EQ(guarded_opts.unreadItems(), expected1);
 
-  guarded_opts["species:he:density"].get(Permissions::Interior);
-  guarded_opts["species:d:pressure"].get(Permissions::Interior);
+  guarded_opts["species:he:density"].get(Regions::Interior);
+  guarded_opts["species:d:pressure"].get(Regions::Interior);
   guarded_opts["species:d:collision_frequencies:d_d_coll"].getWritable(
-      Permissions::Boundaries);
+      Regions::Boundaries);
   EXPECT_EQ(guarded_opts.unreadItems(), expected2);
 
   guarded_opts["species"]["he"]["charge"].get();
   guarded_opts["species"]["he"]["density"].get();
-  guarded_opts["species:he:velocity"].get(Permissions::Boundaries);
+  guarded_opts["species:he:velocity"].get(Regions::Boundaries);
   EXPECT_FALSE(guarded_opts["unused"]["option"].get().isSet());
   EXPECT_EQ(guarded_opts.unreadItems(), expected3);
 
@@ -166,28 +162,30 @@ TEST_F(GuardedOptionsTests, TestUnreadItems) {
 }
 
 TEST_F(GuardedOptionsTests, TestUnwrittenItems) {
-  std::map<std::string, Permissions::Regions>
-      expected1 = {{"species:he:pressure", Permissions::Interior},
-                   {"species:he:collision_frequency", Permissions::AllRegions},
-                   {"species:d:pressure", Permissions::Interior},
-                   {"species:d:collision_frequencies", Permissions::Boundaries}},
-      expected2 = {{"species:he:collision_frequency", Permissions::AllRegions},
-                   {"species:d:pressure", Permissions::Interior}},
-      expected3;
+  std::map<std::string, Regions> expected1 = {{"species:he:pressure", Regions::Interior},
+                                              {"species:he:collision_frequency",
+                                               Regions::All},
+                                              {"species:d:pressure", Regions::Interior},
+                                              {"species:d:collision_frequencies",
+                                               Regions::Boundaries}},
+                                 expected2 = {{"species:he:collision_frequency",
+                                               Regions::All},
+                                              {"species:d:pressure", Regions::Interior}},
+                                 expected3;
 
   EXPECT_EQ(guarded_opts.unwrittenItems(), expected1);
 
-  guarded_opts["species:he:pressure"].get(Permissions::Interior);
+  guarded_opts["species:he:pressure"].get(Regions::Interior);
   guarded_opts["species:he:collision_frequency"].get();
   EXPECT_EQ(guarded_opts.unwrittenItems(), expected1);
 
-  guarded_opts["species"]["he"]["pressure"].getWritable(Permissions::Interior);
+  guarded_opts["species"]["he"]["pressure"].getWritable(Regions::Interior);
   guarded_opts["species:d:collision_frequencies:d_d_coll"].getWritable(
-      Permissions::Boundaries);
+      Regions::Boundaries);
   EXPECT_EQ(guarded_opts.unwrittenItems(), expected2);
 
   guarded_opts["species:he:collision_frequency"].getWritable();
-  guarded_opts["species:d:pressure"].getWritable(Permissions::Interior);
+  guarded_opts["species:d:pressure"].getWritable(Regions::Interior);
   EXPECT_EQ(guarded_opts.unwrittenItems(), expected3);
 }
 
@@ -201,8 +199,8 @@ TEST_F(GuardedOptionsTests, TestNullOptions) {
 TEST_F(GuardedOptionsTests, TestNullPermissions) {
   GuardedOptions null_perms(&opts, nullptr);
   GuardedOptions sub_opt = null_perms["species:he:pressure"];
-  EXPECT_THROW(sub_opt.get(Permissions::Interior), BoutException);
-  EXPECT_THROW(sub_opt.getWritable(Permissions::Interior), BoutException);
+  EXPECT_THROW(sub_opt.get(Regions::Interior), BoutException);
+  EXPECT_THROW(sub_opt.getWritable(Regions::Interior), BoutException);
 }
 
 TEST_F(GuardedOptionsTests, TestGetChildren) {

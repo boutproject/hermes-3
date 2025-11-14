@@ -346,7 +346,7 @@ struct FixedFractionRadiation : public Component {
   /// - <name>
   ///   - fraction
   FixedFractionRadiation(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : Component({readOnly("species:e:{inputs}", Permissions::Interior),
+      : Component({readOnly("species:e:{inputs}", Regions::Interior),
                    readWrite("species:e:energy_source")}),
         name(name) {
     auto& options = alloptions[name];

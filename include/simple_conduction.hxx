@@ -15,7 +15,7 @@
 /// https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html
 struct SimpleConduction : public Component {
   SimpleConduction(std::string name, Options& alloptions, Solver*)
-      : Component({readOnly("species:{name}:temperature", Permissions::Interior),
+      : Component({readOnly("species:{name}:temperature", Regions::Interior),
                    readOnly("species:{name}:AA"),
                    readWrite("species:{name}:energy_source")}),
         name(name) {
@@ -61,7 +61,7 @@ struct SimpleConduction : public Component {
 
     if (density <= 0.0) {
       state_variable_access.setAccess(
-          readOnly("species:{name}:density", Permissions::Interior));
+          readOnly("species:{name}:density", Regions::Interior));
     }
     state_variable_access.substitute("name", {name});
   }

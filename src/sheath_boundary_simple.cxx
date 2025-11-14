@@ -65,16 +65,14 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
         readWrite("species:e:energy_flow_ylow"),
         writeBoundaryIfSet("species:e:{e_optional}"),
         {"species:e:pressure",
-         {Permissions::Interior, Permissions::Nowhere, Permissions::Boundaries,
-          Permissions::Nowhere}},
+         {Regions::Interior, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}},
         // FIXME: These only applies to ions, not to all species
         readIfSet("species:{all_species}:{ion_whole_domain}"),
         readOnly("species:{all_species}:AA"),
         readWrite("species:{all_species}:energy_source"),
         readWrite("species:{all_species}:energy_flow_ylow"),
         {"species:{all_species}:pressure",
-         {Permissions::Interior, Permissions::Nowhere, Permissions::Boundaries,
-          Permissions::Nowhere}},
+         {Regions::Interior, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}},
         writeBoundary("species:{all_species}:{ion_boundary}"),
         writeBoundaryIfSet("species:{all_species}:{ion_optional}"),
     }) {

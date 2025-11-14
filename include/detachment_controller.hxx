@@ -10,8 +10,8 @@
 struct DetachmentController : public Component {
 
   DetachmentController(std::string, Options& options, Solver*)
-      : Component({readOnly("species:{neutral}:density", Permissions::Interior),
-                   readOnly("species:e:density", Permissions::Interior), readOnly("time"),
+      : Component({readOnly("species:{neutral}:density", Regions::Interior),
+                   readOnly("species:e:density", Regions::Interior), readOnly("time"),
                    readWrite("species:{sp}:{output}")}) {
     ASSERT0(BoutComm::size() == 1); // Only works on one processor
     Options& detachment_controller_options = options["detachment_controller"];

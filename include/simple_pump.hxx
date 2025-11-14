@@ -10,7 +10,7 @@
 struct SimplePump : public Component {
 
   SimplePump(std::string name, Options& alloptions, Solver*)
-      : Component({readOnly("species:{name}:density", Permissions::Interior),
+      : Component({readOnly("species:{name}:density", Regions::Interior),
                    readWrite("species:{name}:density_source")}),
         name(name) {
 

@@ -10,7 +10,7 @@
 struct FixedVelocity : public Component {
 
   FixedVelocity(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : Component({readIfSet("species:{name}:density", Permissions::Interior),
+      : Component({readIfSet("species:{name}:density", Regions::Interior),
                    // FIXME: AA is only read if density is set
                    readOnly("species:{name}:AA"), readWrite("species:{name}:{output}")}),
         name(name) {

@@ -4,11 +4,10 @@
 #include "../include/isothermal.hxx"
 
 Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(solver))
-    : Component(
-        {readIfSet(fmt::format("species:{}:density", name), Permissions::Interior),
-         readWrite(fmt::format("species:{}:temperature", name)),
-         // FIXME: This is only written if density is set
-         readWrite(fmt::format("species:{}:pressure", name))}),
+    : Component({readIfSet(fmt::format("species:{}:density", name), Regions::Interior),
+                 readWrite(fmt::format("species:{}:temperature", name)),
+                 // FIXME: This is only written if density is set
+                 readWrite(fmt::format("species:{}:pressure", name))}),
       name(name) {
   AUTO_TRACE();
   Options& options = alloptions[name];

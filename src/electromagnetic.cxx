@@ -18,7 +18,7 @@ Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* 
                  writeFinal("species:{all_species}:momentum"),
                  writeFinal("species:{all_species}:velocity"), readOnly("time"),
                  readOnly("species:{all_species}:AA"),
-                 readOnly("species:{all_species}:density", Permissions::Interior),
+                 readOnly("species:{all_species}:density", Regions::Interior),
                  readWrite("fields:Apar")}) {
   AUTO_TRACE();
 

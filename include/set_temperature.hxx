@@ -23,7 +23,7 @@ struct SetTemperature : public Component {
   /// - <name>
   ///   - temperature_from   name of species
   SetTemperature(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : Component({readIfSet("species:{name}:density", Permissions::Interior),
+      : Component({readIfSet("species:{name}:density", Regions::Interior),
                    readOnly("species:{from}:temperature"),
                    readWrite("species:{name}:temperature"),
                    // FIXME: Only written if density set

@@ -14,7 +14,7 @@ using bout::globals::mesh;
 
 EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* solver)
     : Component({readOnly("species:{name}:AA"),
-                 readOnly("species:{name}:density", Permissions::Interior),
+                 readOnly("species:{name}:density", Regions::Interior),
                  readWrite("species:{name}:{outputs}")}),
       name(name) {
   AUTO_TRACE();

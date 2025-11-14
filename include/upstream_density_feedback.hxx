@@ -22,10 +22,10 @@ struct UpstreamDensityFeedback : public Component {
   ///
   UpstreamDensityFeedback(std::string name, Options& alloptions, Solver*)
       : Component({readOnly("time"),
-                   readOnly("species:{name}:density", Permissions::Interior),
+                   readOnly("species:{name}:density", Regions::Interior),
                    // FIXME: These are only read if BOTH are set
                    readIfSet("species:{name}:AA"),
-                   readIfSet("species:{name}:velocity", Permissions::Interior),
+                   readIfSet("species:{name}:velocity", Regions::Interior),
                    readWrite("species:{name}:density_source"),
                    // FIXME: This is only set if AA and density_source are set
                    readWrite("species:{name}:energy_source")}),

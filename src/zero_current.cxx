@@ -5,7 +5,7 @@
 
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : Component({readIfSet("species:{all_species}:charge"),
-                 readIfSet("species:{all_species}:{inputs}", Permissions::Interior),
+                 readIfSet("species:{all_species}:{inputs}", Regions::Interior),
                  readWrite(fmt::format("species:{}:velocity", name))}),
       name(name) {
   AUTO_TRACE();
