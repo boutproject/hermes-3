@@ -198,21 +198,31 @@ configure_file(
   "${PROJECT_SOURCE_DIR}/include/revision.hxx.in"
   "${PROJECT_BINARY_DIR}/include/revision.hxx")
 
-# Once built, copy the data and test directories
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
-
-# add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#                    COMMAND ${CMAKE_COMMAND} -E copy_directory
-#                    ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
 
 # Tests
 option(HERMES_TESTS "Build the tests" ON)
+if (HERMES_TESTS)
+  add_custom_target(setup-test ALL)
+else()
+  add_custom_target(setup-test)
+endif()
+
+add_custom_target(setup-examples ALL)
+
+
+# copy the data and test directories
+add_custom_command(TARGET setup-examples
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+
+add_custom_command(TARGET setup-examples
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+
+add_custom_command(TARGET setup-test
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+
 if(HERMES_TESTS)
   enable_testing()
 
@@ -237,7 +247,7 @@ if(HERMES_TESTS)
 	COMMENT "Downloading ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}"
       )
       add_custom_target(download_test_data DEPENDS ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME})
-      add_dependencies(${TESTNAME} download_test_data)
+      add_dependencies(setup-test download_test_data)
     endif()
   endfunction()
 
