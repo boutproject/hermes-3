@@ -1743,11 +1743,13 @@ std::shared_ptr<dagp_fv> getDagp_fv(Options& alloptions, Mesh* mesh) {
 
 dagp_fv::dagp_fv(Mesh& mesh)
     : fac_XX(&mesh), fac_XZ(&mesh), fac_ZX(&mesh), fac_ZZ(&mesh), volume(&mesh) {
-  ASSERT0(mesh.get(fac_XX, "dagp_fv_XX") == 0);
-  ASSERT0(mesh.get(fac_XZ, "dagp_fv_XZ") == 0);
-  ASSERT0(mesh.get(fac_ZX, "dagp_fv_ZX") == 0);
-  ASSERT0(mesh.get(fac_ZZ, "dagp_fv_ZZ") == 0);
-  ASSERT0(mesh.get(volume, "dagp_fv_volume") == 0);
+  ASSERT0(mesh.get(fac_XX, "dagp_fv_XX", 0.0, false) == 0);
+  ASSERT0(mesh.get(fac_XZ, "dagp_fv_XZ", 0.0, false) == 0);
+  ASSERT0(mesh.get(fac_ZX, "dagp_fv_ZX", 0.0, false) == 0);
+  ASSERT0(mesh.get(fac_ZZ, "dagp_fv_ZZ", 0.0, false) == 0);
+  ASSERT0(volume.hasParallelSlices() == false);
+  ASSERT0(mesh.get(volume, "dagp_fv_volume", 0.0, false) == 0);
+  ASSERT0(volume.hasParallelSlices() == false);
   volume.setRegion("RGN_NOBNDRY");
   if (!mesh.hasRegion3D("RGN_dapg_fv_xbndry")) {
     mesh.addRegion("RGN_dapg_fv_xbndry",
