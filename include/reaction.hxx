@@ -7,7 +7,7 @@
 #include "reaction_diagnostic.hxx"
 #include "reaction_parser.hxx"
 
-typedef GuardedOptions && (*OPTYPE)(GuardedOptions&&, Field3D);
+using OPTYPE = GuardedOptions &&(GuardedOptions&&, Field3D);
 
 /**
  * @brief Temporary struct to use as a base class for all reactions components. Ensures

@@ -40,22 +40,6 @@ GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
 #endif
 }
 
-GuardedOptions GuardedOptions::operator[](const std::string& name) {
-  if (options == nullptr)
-    throw BoutException(
-        "Trying to access GuardedOptions when underlying options are nullptr.");
-  return GuardedOptions(&(*options)[name], permissions, unread_variables,
-                        unwritten_variables);
-}
-
-const GuardedOptions GuardedOptions::operator[](const std::string& name) const {
-  if (options == nullptr)
-    throw BoutException(
-        "Trying to access GuardedOptions when underlying options are nullptr.");
-  return GuardedOptions(&(*options)[name], permissions, unread_variables,
-                        unwritten_variables);
-}
-
 std::map<std::string, GuardedOptions> GuardedOptions::getChildren() {
   std::map<std::string, GuardedOptions> result;
   for (const auto& [varname, _] : options->getChildren()) {
@@ -116,24 +100,6 @@ Options& GuardedOptions::getWritable(Regions region) {
   throw BoutException("Do not have write permission for {}.", options->str());
 #else
   return *options;
-#endif
-}
-
-std::map<std::string, Regions> GuardedOptions::unreadItems() const {
-#if CHECKLEVEL >= 1
-  return *unread_variables;
-#else
-  throw BoutException(
-      "Reading of items in GuardedOptions is not tracked when CHECKLEVEL < 1");
-#endif
-}
-
-std::map<std::string, Regions> GuardedOptions::unwrittenItems() const {
-#if CHECKLEVEL >= 1
-  return *unwritten_variables;
-#else
-  throw BoutException(
-      "Reading of items in GuardedOptions is not tracked when CHECKLEVEL < 1");
 #endif
 }
 
