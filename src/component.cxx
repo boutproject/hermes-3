@@ -6,8 +6,7 @@ std::unique_ptr<Component> Component::create(const std::string &type,
                                              Options &alloptions,
                                              Solver *solver) {
 
-  return std::unique_ptr<Component>(
-      ComponentFactory::getInstance().create(type, name, alloptions, solver));
+  return ComponentFactory::getInstance().create(type, name, alloptions, solver);
 }
 
 constexpr decltype(ComponentFactory::type_name) ComponentFactory::type_name;
