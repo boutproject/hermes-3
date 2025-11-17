@@ -3,6 +3,7 @@
 #include "bout/petsclib.hxx"
 #include <neso_particles.hpp>
 #include <neso_particles/external_interfaces/petsc/petsc_interface.hpp>
+#include <neso_particles/typedefs.hpp>
 #include <petscsystypes.h>
 #include <string>
 #include "bout/bout.hxx"
@@ -70,12 +71,11 @@ void RZ_to_ivertex_vector(Field2D& ivertex_corners,
             abs(global_R_vertices.at(iv) - Rxy_corners(ix,iy)) < zero ) {
           ivertex_corners(ix,iy) = iv;
           index_found = true;
-          // we have determined that the point is not unique
+          // we have matched an iv global index to a (R,Z) from Hypnotoad
         }
       }
-      if (!index_found) {
-        std::cout << fmt::format("ivertex not found for ix = {} iy = {}",ix,iy);
-      }
+      // exit if we fail to find a match
+      NESOASSERT(index_found, fmt::format("ivertex not found for ix = {} iy = {}",ix,iy));
     }
   }
 }
@@ -91,9 +91,7 @@ void load_vertex_information_from_netcdf(int& Nvertex,
   // Get the variable
   std::string varName = "global_vertex_list_R";
   netCDF::NcVar dataVar = dataFile.getVar(varName);
-  if (dataVar.isNull()) {
-      std::cerr << "Variable '" << varName << "' not found in file." << std::endl;
-  }
+  NESOASSERT(!dataVar.isNull(), fmt::format("Variable {} not found in file.",varName));
   std::vector<netCDF::NcDim> dims = dataVar.getDims();
   size_t nvertices = dims[0].getSize();
 
@@ -104,9 +102,7 @@ void load_vertex_information_from_netcdf(int& Nvertex,
   // Get the variable
   varName = "global_vertex_list_Z";
   dataVar = dataFile.getVar(varName);
-  if (dataVar.isNull()) {
-      std::cerr << "Variable '" << varName << "' not found in file." << std::endl;
-  }
+  NESOASSERT(!dataVar.isNull(), fmt::format("Variable {} not found in file.",varName));
   // Read the data into a vector
   std::vector<double> global_vertex_list_Z(nvertices);
   dataVar.getVar(global_vertex_list_Z.data());
