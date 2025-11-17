@@ -10,7 +10,28 @@ codecov:
 coverage:
   status:
     project:
-      default:
+      unit:
         target: auto
         flags:
           - unit
+      integration:
+        target: auto
+        threshold: 5%
+        flags:
+          - integration
+      # default:
+      #   target: auto
+      #   flags:
+      #     - unit
+
+flags:
+  unit:
+    paths:
+      - "src"
+      - "include"
+  integration:
+    paths:
+      - "src"
+      - "integration"
+      - "hermes-3.cxx"
+      - "hermes-3,hxx"

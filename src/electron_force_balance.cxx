@@ -5,17 +5,17 @@
 
 using bout::globals::mesh;
 
-void ElectronForceBalance::transform(Options &state) {
+void ElectronForceBalance::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  if (IS_SET(state["fields"]["phi"])) {
+  if (state["fields"].isSet("phi")) {
     // Here we use electron force balance to calculate the parallel electric field
     // rather than the electrostatic potential
     throw BoutException("Cannot calculate potential and use electron force balance\n");
   }
 
   // Get the electron pressure, with boundary condition applied
-  Options& electrons = state["species"]["e"];
+  GuardedOptions electrons = state["species"]["e"];
   Field3D Pe = GET_VALUE(Field3D, electrons["pressure"]);
   Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]);
 
@@ -34,14 +34,14 @@ void ElectronForceBalance::transform(Options &state) {
   Epar = force_density / floor(Ne, 1e-5);
 
   // Now calculate forces on other species
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
     if (kv.first == "e") {
       continue; // Skip electrons
     }
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-    if (!(IS_SET(species["density"]) and IS_SET(species["charge"]))) {
+    if (!(species.isSet("density") and species.isSet("charge"))) {
       continue; // Needs both density and charge to experience a force
     }
 

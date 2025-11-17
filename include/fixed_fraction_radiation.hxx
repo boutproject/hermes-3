@@ -345,7 +345,10 @@ struct FixedFractionRadiation : public Component {
   /// Inputs
   /// - <name>
   ///   - fraction
-  FixedFractionRadiation(std::string name, Options &alloptions, Solver *UNUSED(solver)) : name(name) {
+  FixedFractionRadiation(std::string name, Options& alloptions, Solver* UNUSED(solver))
+      : Component({readOnly("species:e:{inputs}", Regions::Interior),
+                   readWrite("species:e:energy_source")}),
+        name(name) {
     auto& options = alloptions[name];
 
     fraction = options["fraction"]
@@ -371,6 +374,33 @@ struct FixedFractionRadiation : public Component {
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
   }
 
+  void outputVars(Options& state) override {
+    AUTO_TRACE();
+
+    if (diagnose) {
+      set_with_attrs(state[std::string("R") + name], -radiation,
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", SI::qe * Tnorm * Nnorm * FreqNorm},
+                      {"long_name", std::string("Radiation cooling ") + name},
+                      {"source", "fixed_fraction_radiation"}});
+    }
+  }
+
+ private:
+  std::string name;
+
+  CoolingCurve cooling; ///< The cooling curve L(T) -> Wm^3
+  BoutReal fraction; ///< Fixed fraction
+
+  bool diagnose; ///< Output radiation diagnostic?
+  bool no_core_radiation; ///< Set radiation to zero in core?
+  BoutReal radiation_multiplier; ///< Scale the radiation rate by this factor
+  Field3D radiation; ///< For output diagnostic
+
+  // Normalisations
+  BoutReal Tnorm, Nnorm, FreqNorm;
+
   /// Required inputs
   ///
   /// - species
@@ -384,8 +414,8 @@ struct FixedFractionRadiation : public Component {
   ///   - e
   ///     - energy_source
   ///
-  void transform(Options &state) override {
-    auto& electrons = state["species"]["e"];
+  void transform_impl(GuardedOptions& state) override {
+    auto electrons = state["species"]["e"];
     // Don't need boundary cells
     const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]);
     const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]);
@@ -421,32 +451,6 @@ struct FixedFractionRadiation : public Component {
     // Remove radiation from the electron energy source
     subtract(electrons["energy_source"], radiation);
   }
-
-  void outputVars(Options& state) override {
-    AUTO_TRACE();
-
-    if (diagnose) {
-      set_with_attrs(state[std::string("R") + name], -radiation,
-                     {{"time_dimension", "t"},
-                      {"units", "W / m^3"},
-                      {"conversion", SI::qe * Tnorm * Nnorm * FreqNorm},
-                      {"long_name", std::string("Radiation cooling ") + name},
-                      {"source", "fixed_fraction_radiation"}});
-    }
-  }
- private:
-  std::string name;
-
-  CoolingCurve cooling; ///< The cooling curve L(T) -> Wm^3
-  BoutReal fraction; ///< Fixed fraction
-
-  bool diagnose; ///< Output radiation diagnostic?
-  bool no_core_radiation; ///< Set radiation to zero in core?
-  BoutReal radiation_multiplier; ///< Scale the radiation rate by this factor
-  Field3D radiation; ///< For output diagnostic
-
-  // Normalisations
-  BoutReal Tnorm, Nnorm, FreqNorm;
 };
 
 namespace {
