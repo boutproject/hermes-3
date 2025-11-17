@@ -1,5 +1,6 @@
 #include "../include/permissions.hxx"
 #include <fmt/core.h>
+#include <fmt/ranges.h>
 
 // TODO: It might be useful to add an optional condition which must be
 // met for conditions to apply. So a variable is only read or written
@@ -23,11 +24,26 @@
 // There should be ways to do this with templates to allow greater inlining
 //
 
+/// Return a set of access rights where the lower permissions have
+/// been updated so that they reflect higher permissions (e.g., read
+/// permission will be set in all cases where write permission was
+/// set).
+Permissions::AccessRights applyLowerPermissions(const Permissions::AccessRights& rights) {
+  Permissions::AccessRights result(rights);
+  for (int i = static_cast<int>(PermissionTypes::ReadIfSet);
+       i < static_cast<int>(PermissionTypes::END); i++) {
+    // Higher permissions imply lower permissions
+    for (int j = static_cast<int>(PermissionTypes::ReadIfSet); j < i; j++) {
+      result[j] = result[j] | rights[i];
+    }
+  }
+  return result;
+}
+
 const std::map<Regions, std::string> Permissions::fundamental_regions = {
     {Regions::Interior, "Interior"}, {Regions::Boundaries, "Boundaries"}};
 
-Permissions::Permissions(std::initializer_list<std::pair<std::string, AccessRights>> data)
-    : variable_permissions() {
+Permissions::Permissions(std::initializer_list<VarRights> data) : variable_permissions() {
   for (const auto& [varname, access] : data) {
     setAccess(varname, access);
   }
@@ -82,11 +98,10 @@ void Permissions::substitute(const std::string& label,
   }
 }
 
-std::pair<std::string, Permissions::AccessRights>
-Permissions::bestMatchRights(const std::string& variable) const {
+Permissions::VarRights Permissions::bestMatchRights(const std::string& variable) const {
   auto match = variable_permissions.find(variable);
   if (match != variable_permissions.end()) {
-    return *match;
+    return {match->first, match->second};
   }
   Permissions::AccessRights best_candidate = {Regions::Nowhere, Regions::Nowhere,
                                               Regions::Nowhere};
@@ -148,57 +163,12 @@ Permissions::getVariablesWithPermission(PermissionTypes permission,
   return result;
 }
 
-Permissions::AccessRights Permissions::applyLowerPermissions(const AccessRights& rights) {
-  AccessRights result(rights);
-  for (int i = static_cast<int>(PermissionTypes::ReadIfSet);
-       i < static_cast<int>(PermissionTypes::END); i++) {
-    result[i] = rights[i];
-    // Higher permissions imply lower permissions
-    for (int j = static_cast<int>(PermissionTypes::ReadIfSet); j < i; j++) {
-      result[j] = result[j] | rights[i];
-    }
-  }
-  return result;
-}
-
 std::string Permissions::regionNames(const Regions regions) {
-  std::string result;
+  std::vector<std::string> regions_present(fundamental_regions.size());
   for (auto & [region, name] : fundamental_regions) {
     if ((regions & region) == region) {
-      if (result.size() > 0) result += ", ";
-      result += name;
+      regions_present.push_back(name);
     }
   }
-  return result;
-}
-
-std::pair<std::string, Permissions::AccessRights> readIfSet(std::string varname,
-                                                            Regions region) {
-  return {varname, {region, Regions::Nowhere, Regions::Nowhere, Regions::Nowhere}};
-}
-
-std::pair<std::string, Permissions::AccessRights> readOnly(std::string varname,
-                                                           Regions region) {
-  return {varname, {Regions::Nowhere, region, Regions::Nowhere, Regions::Nowhere}};
-}
-
-std::pair<std::string, Permissions::AccessRights> readWrite(std::string varname,
-                                                            Regions region) {
-  return {varname, {Regions::Nowhere, Regions::Nowhere, region, Regions::Nowhere}};
-}
-
-std::pair<std::string, Permissions::AccessRights> writeFinal(std::string varname,
-                                                             Regions region) {
-  return {varname, {Regions::Nowhere, Regions::Nowhere, Regions::Nowhere, region}};
-}
-
-std::pair<std::string, Permissions::AccessRights> writeBoundary(std::string varname) {
-  return {varname,
-          {Regions::Nowhere, Regions::Interior, Regions::Nowhere, Regions::Boundaries}};
-}
-
-std::pair<std::string, Permissions::AccessRights>
-writeBoundaryIfSet(std::string varname) {
-  return {varname,
-          {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}};
+  return fmt::format("{}", fmt::join(regions_present, ", "));
 }
