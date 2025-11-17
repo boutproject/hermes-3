@@ -9,7 +9,7 @@ plotting = False
 fail_early = True # Stop on the first failure?
 
 import numpy as np
-from boututils.run_wrapper import shell, launch, getmpirun
+from boututils.run_wrapper import shell, launch_safe, getmpirun
 import sys
 from boutdata import collect
 
@@ -49,7 +49,7 @@ for Ly in Lys:
         # Run hermes-3 using MPI
         print(f"Running Ly = {Ly} Lz = {Lz}")
         shell("rm data/BOUT.*.nc") # Delete data files
-        s, out = launch(f"./hermes-3 mesh:B={B} i:density={n0} i:AA={AA} mesh:Ly={Ly} mesh:Lz={Lz}", nproc=1, pipe=True)
+        s, out = launch_safe(f"./hermes-3 mesh:B={B} i:density={n0} i:AA={AA} mesh:Ly={Ly} mesh:Lz={Lz}", nproc=1, pipe=True)
 
         # Save output to log file
         f = open(f"run.log_{Ly}_{Lz}", "w")

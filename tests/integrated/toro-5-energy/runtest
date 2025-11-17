@@ -15,7 +15,7 @@ plotting = True
 
 from math import sqrt
 import numpy as np
-from boututils.run_wrapper import shell, launch, getmpirun
+from boututils.run_wrapper import shell, launch_safe, getmpirun
 from boutdata.collect import collect
 import sys
 
@@ -129,7 +129,7 @@ for ny, sym, tol in resolutions:
     shell("rm data/BOUT.dmp.*.nc")
 
     # Launch using MPI
-    s, out = launch(f"./hermes-3 mesh:ny={ny}", nproc=1, pipe=True)
+    s, out = launch_safe(f"./hermes-3 mesh:ny={ny}", nproc=1, pipe=True)
 
     # Save output to log file
     f = open(f"run.log.{ny}", "w")

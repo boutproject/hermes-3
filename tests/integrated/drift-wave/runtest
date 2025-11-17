@@ -8,7 +8,7 @@
 plotting = False
 
 import numpy as np
-from boututils.run_wrapper import shell, launch, getmpirun
+from boututils.run_wrapper import shell, launch_safe, getmpirun
 import sys
 
 import analysis
@@ -32,7 +32,7 @@ for B in Bs:
     # Run hermes-3 using MPI
     print(f"Running B = {B}")
     shell("rm data/BOUT.*.nc") # Delete data files
-    s, out = launch(f"./hermes-3 mesh:B={B}", nproc=1, pipe=True)
+    s, out = launch_safe(f"./hermes-3 mesh:B={B}", nproc=1, pipe=True)
 
     # Save output to log file
     f = open(f"run.log.{B}", "w")
