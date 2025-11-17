@@ -60,7 +60,7 @@ jobs:
           echo ~/.local/bin >> $GITHUB_PATH
       - name: Build and run tests
         run: cmake . -B build $BOUT_CONFIGURE_OPTIONS &&
-             cmake --build build &&
+             cmake --build build -j 2 &&
              cd build &&
              ctest --output-on-failure --timeout 300
         env:
