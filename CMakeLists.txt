@@ -211,15 +211,15 @@ add_custom_target(setup-examples ALL)
 
 
 # copy the data and test directories
-add_custom_command(TARGET setup-examples
+add_custom_command(TARGET setup-examples PRE_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory
                    ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
 
-add_custom_command(TARGET setup-examples
+add_custom_command(TARGET setup-examples PRE_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory
                    ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
 
-add_custom_command(TARGET setup-test
+add_custom_command(TARGET setup-test PRE_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory
                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
 
@@ -246,8 +246,9 @@ if(HERMES_TESTS)
 	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME}
 	COMMENT "Downloading ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}"
       )
-      add_custom_target(download_test_data DEPENDS ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME})
-      add_dependencies(setup-test download_test_data)
+      add_custom_target(download_test_data ALL
+	DEPENDS ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+	DEPENDS setup-test)
     endif()
   endfunction()
 
