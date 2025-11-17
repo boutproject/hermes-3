@@ -218,9 +218,27 @@ if(HERMES_TESTS)
 
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
+    set(oneValueArgs EXECUTABLE_NAME PROCESSORS DOWNLOAD DOWNLOAD_NAME)
+    cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
     add_test(NAME ${TESTNAME}
-           WORKING_DIRECTORY tests/integrated/${TESTNAME}
-           COMMAND runtest)
+      WORKING_DIRECTORY tests/integrated/${TESTNAME}
+      COMMAND runtest)
+    add_custom_target(${TESTNAME})
+
+    if (HERMES_TEST_OPTIONS_DOWNLOAD)
+      if (NOT HERMES_TEST_OPTIONS_DOWNLOAD_NAME)
+	message(FATAL_ERROR "We need DOWNLOAD_NAME if we should DOWNLOAD!")
+      endif()
+      set(output )
+      add_custom_command(OUTPUT ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+	COMMAND wget ${HERMES_TEST_OPTIONS_DOWNLOAD} -O ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME}
+	COMMENT "Downloading ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}"
+      )
+      add_custom_target(download_test_data DEPENDS ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME})
+      add_dependencies(${TESTNAME} download_test_data)
+    endif()
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
@@ -233,6 +251,10 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave)
   hermes_add_integrated_test(alfven-wave)
+  hermes_add_integrated_test(fci-example-1
+    DOWNLOAD https://zenodo.org/records/17571607/files/W7X-conf0-36x8x128.fci.nc?download=1
+    DOWNLOAD_NAME grid.fci.nc
+  )
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
