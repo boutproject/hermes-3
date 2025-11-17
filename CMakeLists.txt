@@ -52,6 +52,7 @@ endif()
 
 find_package(MPI REQUIRED)
 find_package(NESO-Particles REQUIRED)
+find_sycl_if_required()
 find_package(VANTAGE-Reactions REQUIRED)
 
 set(HERMES_SOURCES
