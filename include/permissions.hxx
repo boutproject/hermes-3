@@ -22,15 +22,17 @@ enum class Regions {
   All = Interior | Boundaries
 };
 
-inline Regions operator&(Regions a, Regions b) {
+constexpr Regions operator&(Regions a, Regions b) {
   return static_cast<Regions>(static_cast<int>(a) & static_cast<int>(b));
 }
 
-inline Regions operator|(Regions a, Regions b) {
+constexpr Regions operator|(Regions a, Regions b) {
   return static_cast<Regions>(static_cast<int>(a) | static_cast<int>(b));
 }
 
-inline Regions operator~(Regions a) { return static_cast<Regions>(~static_cast<int>(a)); }
+constexpr Regions operator~(Regions a) {
+  return static_cast<Regions>(~static_cast<int>(a));
+}
 
 /// Class to store information on whether particular variables an be
 /// read from and/or written to. These permissions can apply on
@@ -48,15 +50,24 @@ public:
   /// Data type for storing the regions of a variable which have a
   /// particular level of permission. Some examples can be seen below:
   ///
-  ///     AccessRights only_read_if_set = { AllRegions, Nowhere, Nowhere, Nowhere },
-  ///                  read_only = { Nowhere, AllRegions, Nowhere, Nowhere },
-  ///                  write_boundaries = { Nowhere, Nowhere, Boundaries, Nowhere },
-  ///                  read_and_write_everywhere = { Nowhere, AllReginos, AllRegions,
-  ///                  Nowhere
-  ///                  }, final_write_boundaries_read_interior = { Interior, Nowhere,
-  ///                      Boundaries };
+  ///     AccessRights only_read_if_set = { Regions::All, Regions::Nowhere,
+  ///                      Regions::Nowhere, Regions::Nowhere },
+  ///                  read_only = { Regions::Nowhere, Regions::All, Regions::Nowhere,
+  ///                      Regions::Nowhere },
+  ///                  write_boundaries = { Regions::Nowhere, Regions::Nowhere,
+  ///                      Regions::Boundaries, Regions::Nowhere },
+  ///                  read_and_write_everywhere = { Regions::Nowhere,
+  ///                      Regions::AllReginos, Regions::All, Regions::Nowhere },
+  ///                  final_write_boundaries_read_interior = { Regions::Nowhere,
+  ///                      Regions::Interior, Regions::Nowhere, Regions::Boundaries };
   ///
   using AccessRights = std::array<Regions, static_cast<size_t>(PermissionTypes::END)>;
+
+  /// Data used to specify what access rights apply to the named variable.
+  struct VarRights {
+    std::string name;
+    AccessRights rights;
+  };
 
   /// Create permission from an initialiser list. Each item in the
   /// initialiser list should be a pair made up of the name of a
@@ -69,20 +80,20 @@ public:
   ///
   ///     Permissions example({
   ///         // Permission to read charge only if it has been set
-  ///         {"species:he:charge", {Regions::AllRegions, Regions::Nowhere,
+  ///         {"species:he:charge", {Regions::All, Regions::Nowhere,
   ///         Regions::Nowhere,, Regions::Nowhere}},
   ///         // Read permission for atomic mass
-  ///         {"species:he:AA", {Regions::Nowhere, Regions::AllRegions,
+  ///         {"species:he:AA", {Regions::Nowhere, Regions::All,
   ///         Regions::Nowhere, Regions::Nowhere}},
   ///         // Read permissions for density
-  ///         {"species:he:density", {Regions::Nowhere, Regions::AllRegions,
+  ///         {"species:he:density", {Regions::Nowhere, Regions::All,
   ///         Regions::Nowhere, Regions::Nowhere}},
   ///         // Read and write permissions for pressure in the interior region
   ///         {"species:he:pressure", {Regions::Nowhere, Regions::Nowhere,
   ///         Regions::Interior, Regions::Nowhere}},
   ///         // Set the final value for collision frequency
   ///         {"species:he:collision_frequency", {Regions::Nowhere,
-  ///         Regions::Nowhere, Regions::Nowhere, Regions::AllRegions}}
+  ///         Regions::Nowhere, Regions::Nowhere, Regions::All}}
   ///     });
   ///
   /// If a variable is not included in the initialiser list then it is
@@ -101,11 +112,11 @@ public:
   ///
   ///     Permissions example2({
   ///         {"species:{name}:collision_frequency", {Regions::Nowhere,
-  ///         Regions::AllRegions, Regions::Nowhere, Regions::Nowhere}}
+  ///         Regions::All, Regions::Nowhere, Regions::Nowhere}}
   ///     });
   ///     example2.substitute("name", {"he+", "d+", "e", "d", "he"});
   ///
-  Permissions(std::initializer_list<std::pair<std::string, AccessRights>> data);
+  Permissions(std::initializer_list<VarRights> data);
 
   /// Set the level of access for the various regions of the
   /// variable. This uses the same logic as the constructor. For
@@ -113,7 +124,7 @@ public:
   /// everywhere but only writeable in the interior, you would use
   ///
   ///     permissions.setAccess("species:he:density",
-  ///                           {Regions::Nowhere, Regions::AllRegions,
+  ///                           {Regions::Nowhere, Regions::All,
   ///                           Regions::Interior, Regions::Nowhere})
   /// 0
   /// or, equivalently,
@@ -127,9 +138,7 @@ public:
   /// that section. Placeholder names can also be used.
   void setAccess(const std::string& variable, const AccessRights& rights);
 
-  void setAccess(const std::pair<std::string, AccessRights>& info) {
-    setAccess(info.first, info.second);
-  }
+  void setAccess(const VarRights& info) { setAccess(info.name, info.rights); }
 
   void printAllPermissions() const;
 
@@ -140,10 +149,10 @@ public:
   /// for every species.
   ///
   ///     Permissions example({
-  ///         {"species:{name}:density", {Regions::Nowhere, Regions::AllRegions,
+  ///         {"species:{name}:density", {Regions::Nowhere, Regions::All,
   ///         Regions::Nowhere, Regions::Nowhere}},
   ///         {"species:{name}:collision_frequency", {Regions::Nowhere,
-  ///         Regions::Nowhere, Regions::AllRegions, Regions::Nowhere}},
+  ///         Regions::Nowhere, Regions::All, Regions::Nowhere}},
   ///     });
   ///     example.substitute("name", {"d", "d+", "t", "t+", "he", "he+", "c", "c+", "e"});
   ///
@@ -164,10 +173,10 @@ public:
             Regions region = Regions::All) const;
 
   /// Get the highest permission level with which the given variable
-  /// can be accessed in the given region. The second item
-  /// returned indicates the name of the variable or section from
-  /// which the access rights are derived. If there is no matching
-  /// section then it will be an empty string.
+  /// can be accessed in the given region. The second item returned
+  /// indicates the name of the variable or section from which the
+  /// access rights are derived. If there is no matching section then
+  /// it will return `PermissionTypes::None` and an empty string.
   std::pair<PermissionTypes, std::string>
   getHighestPermission(const std::string& variable, Regions region = Regions::All) const;
 
@@ -176,8 +185,8 @@ public:
   /// true then it will only include variables/regions for which this
   /// is the highest permission.
   ///
-  ///     Permissions example({"test", {Regions::Nowhere, Regions::AllRegions,
-  ///     Regions::AllRegions, Permissions:Nowhere}});
+  ///     Permissions example({"test", {Regions::Nowhere, Regions::All,
+  ///     Regions::All, Permissions:Nowhere}});
   ///     // Print variables which can be read
   ///     for (const auto [varname, region] :
   ///     example.getVariablesWithPermission(PermissionTypes::Read), false))
@@ -204,47 +213,55 @@ private:
   /// string indicates the name of the variable from which the access
   /// rights were derived. It will be empty if there are no matching
   /// entries.
-  std::pair<std::string, AccessRights> bestMatchRights(const std::string& variable) const;
-
-  /// Return a set of access rights where the lower permissions have
-  /// been updated so that they reflect higher permissions (e.g., read
-  /// permission will be set in all cases where write permission was
-  /// set).
-  static AccessRights applyLowerPermissions(const AccessRights& rights);
+  VarRights bestMatchRights(const std::string& variable) const;
 
   std::map<std::string, AccessRights> variable_permissions;
 };
 
 /// Convenience function to return an object expressing that the
 /// variable should have ReadIfSet permissions in the specified regions.
-std::pair<std::string, Permissions::AccessRights>
-readIfSet(std::string varname, Regions region = Regions::All);
+inline Permissions::VarRights readIfSet(std::string varname,
+                                        Regions region = Regions::All) {
+  return {varname, {region, Regions::Nowhere, Regions::Nowhere, Regions::Nowhere}};
+}
 
 /// Convenience function to return an object expressing that the
 /// variable should have Read permissions in the specified regions.
-std::pair<std::string, Permissions::AccessRights> readOnly(std::string varname,
-                                                           Regions region = Regions::All);
+inline Permissions::VarRights readOnly(std::string varname,
+                                       Regions region = Regions::All) {
+  return {varname, {Regions::Nowhere, region, Regions::Nowhere, Regions::Nowhere}};
+}
 
 /// Convenience function to return an object expressing that the
 /// variable should have Write permissions in the specified regions.
-std::pair<std::string, Permissions::AccessRights>
-readWrite(std::string varname, Regions region = Regions::All);
+inline Permissions::VarRights readWrite(std::string varname,
+                                        Regions region = Regions::All) {
+  return {varname, {Regions::Nowhere, Regions::Nowhere, region, Regions::Nowhere}};
+}
 
 /// Convenience function to return an object expressing that the
 /// variable should have Final permissions in the specified regions.
-std::pair<std::string, Permissions::AccessRights>
-writeFinal(std::string varname, Regions region = Regions::All);
+inline Permissions::VarRights writeFinal(std::string varname,
+                                         Regions region = Regions::All) {
+  return {varname, {Regions::Nowhere, Regions::Nowhere, Regions::Nowhere, region}};
+}
 
 /// Convenience function to return an object expressing that the
 /// variable should have Write permissions on the boundaries. It will
 /// have Read permissions in the interior, as this is normally
 /// required to set the boundaries correctly.
-std::pair<std::string, Permissions::AccessRights> writeBoundary(std::string varname);
+inline Permissions::VarRights writeBoundary(std::string varname) {
+  return {varname,
+          {Regions::Nowhere, Regions::Interior, Regions::Nowhere, Regions::Boundaries}};
+}
 
 /// Convenience function to return an object expressing that the
 /// variable should have Write permissions on the boundaries. It will
 /// have Read permissions in the interior if the interior is already set.
-std::pair<std::string, Permissions::AccessRights> writeBoundaryIfSet(std::string varname);
+inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
+  return {varname,
+          {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}};
+}
 
 // FIXME: Ideally there would be some way to express write permissions only if set
 // FIXME: Ideally we could express to write a boundary only if the interior is set

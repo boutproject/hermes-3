@@ -22,10 +22,22 @@ public:
 
   /// Get a subsection or value. The result will also be wrapped in a
   /// GuardedOptions object, with the same permissions as this one.
-  GuardedOptions operator[](const std::string& name);
+  GuardedOptions operator[](const std::string& name) {
+    if (options == nullptr)
+      throw BoutException(
+          "Trying to access GuardedOptions when underlying options are nullptr.");
+    return GuardedOptions(&(*options)[name], permissions, unread_variables,
+                          unwritten_variables);
+  }
   GuardedOptions operator[](const char* name) { return (*this)[std::string(name)]; }
 
-  const GuardedOptions operator[](const std::string& name) const;
+  const GuardedOptions operator[](const std::string& name) const {
+    if (options == nullptr)
+      throw BoutException(
+          "Trying to access GuardedOptions when underlying options are nullptr.");
+    return GuardedOptions(&(*options)[name], permissions, unread_variables,
+                          unwritten_variables);
+  }
   const GuardedOptions operator[](const char* name) const { return (*this)[std::string(name)]; }
 
   std::map<std::string, GuardedOptions> getChildren();
@@ -46,11 +58,25 @@ public:
 
   /// Returns a list of variables with read-only permission but which
   /// have not been accessed using the `get()` method.
-  std::map<std::string, Regions> unreadItems() const;
+  std::map<std::string, Regions> unreadItems() const {
+#if CHECKLEVEL >= 1
+    return *unread_variables;
+#else
+    throw BoutException(
+        "Reading of items in GuardedOptions is not tracked when CHECKLEVEL < 1");
+#endif
+  }
 
   /// Returns a list of variables with read-write permission but which
   /// have not been accessed using the `getWritable()` method.
-  std::map<std::string, Regions> unwrittenItems() const;
+  std::map<std::string, Regions> unwrittenItems() const {
+#if CHECKLEVEL >= 1
+    return *unwritten_variables;
+#else
+    throw BoutException(
+        "Reading of items in GuardedOptions is not tracked when CHECKLEVEL < 1");
+#endif
+  }
 
   bool operator==(const GuardedOptions& other) const;
   bool operator!=(const GuardedOptions& other) const;
