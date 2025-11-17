@@ -226,6 +226,8 @@ if(HERMES_TESTS)
 
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
+    set(oneValueArgs EXECUTABLE_NAME PROCESSORS DOWNLOAD DOWNLOAD_NAME)
+    cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
     if(HERMES_COPY_TESTS_TO_BUILD)
       set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
       set(INT_TEST_DEST
@@ -241,6 +243,20 @@ if(HERMES_TESTS)
       NAME ${TESTNAME}
       WORKING_DIRECTORY ${INT_TEST_DEST}
       COMMAND runtest)
+
+    if (HERMES_TEST_OPTIONS_DOWNLOAD)
+      if (NOT HERMES_TEST_OPTIONS_DOWNLOAD_NAME)
+	message(FATAL_ERROR "We need DOWNLOAD_NAME if we should DOWNLOAD!")
+      endif()
+      set(output )
+      add_custom_command(OUTPUT ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+	COMMAND wget ${HERMES_TEST_OPTIONS_DOWNLOAD} -O ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME}
+	COMMENT "Downloading ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}"
+      )
+      add_custom_target(download_test_data DEPENDS ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME})
+      add_dependencies(${TESTNAME} download_test_data)
+    endif()
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
@@ -262,6 +278,10 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-ion-viscosity-fci)
   hermes_add_integrated_test(2D-density-anomalous-fci)
   hermes_add_integrated_test(2D-fluid-anomalous-fci)
+  hermes_add_integrated_test(fci-example-1
+    DOWNLOAD https://zenodo.org/records/17571607/files/W7X-conf0-36x8x128.fci.nc?download=1
+    DOWNLOAD_NAME grid.fci.nc
+  )
 
 
   
