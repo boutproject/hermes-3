@@ -1,0 +1,109 @@
+# Stellarator diffusion
+
+nout = 4000
+timestep = 100
+
+MYG = 1
+
+[mesh]
+
+file = "../grids/W7-X_smooth.nc" #rotating-ellipse.fci.nc" #W7-X_smooth.nc"#stellarator.fci.nc"
+
+[mesh:paralleltransform]
+type = fci
+
+[mesh:paralleltransform:xzinterpolation]
+type = monotonichermitespline
+
+# [mesh:diff]
+# first = C4
+# second = C4
+
+[solver]
+type = pvode
+mxstep = 1000000
+
+# only with cvode
+#maxl = 1000
+#max_nonlinear_iterations = 100
+
+# only with pvode
+debug_on_failure = True
+
+[hermes]
+show_timesteps = true
+
+components = h+, e, collisions, sheath_boundary_parallel, electron_force_balance
+
+Nnorm = 5e18  # Reference density [m^-3]
+Bnorm = 2.5   # Reference magnetic field [T]
+Tnorm = 20   # Reference temperature [eV]
+
+[h+]
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion_3d
+
+AA = 1
+charge = 1
+anomalous_D = 0.5    # Density diffusion [m^2/s]
+anomalous_chi = 1.5
+anomalous_nu = 0.5
+
+thermal_conduction = false # true
+low_n_diffuse_perp = true
+diagnose = true
+
+#parallel_slow_down = 1000
+
+[Nh+]
+
+function = 1-0.95*x
+source = 4.8e2*gauss(x - 1, 0.24)
+bndry_core = dirichlet_o2(1.0)  # Core boundary high density
+#bndry_par_xin = parallel_dirichlet_o2(1.0)
+bndry_par_all = parallel_neumann_o1
+bndry_all = neumann   # All other boundaries low density
+
+[Ph+]
+function = `Nh+`:function
+source = 2*4.8e6*gauss(x, 0.24)
+bndry_core = neumann_o2
+bndry_par_all = parallel_neumann_o1
+bndry_all = neumann
+
+[Vh+]
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+
+[NVh+]
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+#bndry_par_all = parallel_dirichlet_o2(0.0)
+
+[e]
+type = quasineutral, zero_current, evolve_pressure, anomalous_diffusion_3d
+
+AA = 1 / 1836
+charge = -1
+
+anomalous_D = 0.5    # Density diffusion [m^2/s]
+anomalous_chi = 1.5
+anomalous_nu = 0.5
+
+thermal_conduction = false # true
+low_n_diffuse_perp = true
+diagnose = true
+
+# kappa_limit_alpha = 0.2
+#parallel_slow_down = 1000
+
+[Pe]
+function = `Ph+`:function
+source = `Ph+`:source
+bndry_core = neumann_o2(0.0)
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+#bndry_par_xin = parallel_dirichlet_o2(1.0)
+
+# [fixed_fraction_carbon]
+# fraction = 0.05   # 5% of electron density
+# diagnose = true   # Saves Rfixed_fraction_carbon to output
