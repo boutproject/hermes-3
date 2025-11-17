@@ -205,6 +205,8 @@ int main(int argc, char **argv) {
   BoutInitialise(argc, argv);
   Mesh* bout_mesh = Mesh::create(&Options::root()["mesh"]);
   bool use_cxx_ivertex = Options::root()["mesh"]["use_cxx_ivertex"].withDefault(false);
+  std::string dmplex_name = Options::root()["mesh"]["dmplex_name"].withDefault("hypnotoad_dmplex_mesh");
+  std::string dmplex_h5_filename = Options::root()["mesh"]["dmplex_h5_filename"].withDefault("hypnotoad_dmplex_mesh_output.h5");
   output << fmt::format("Using option use_cxx_ivertex = {}",use_cxx_ivertex) << std::endl;
   bout_mesh->load();
   Coordinates *coord = bout_mesh->getCoordinates();
@@ -479,9 +481,9 @@ int main(int argc, char **argv) {
   // save a HDF5 file containing the DM for diagnostics
   PetscViewer viewer;
   // Set a name for the DMPlex object (important for HDF5)
-  PetscObjectSetName((PetscObject)dm, "hypnotoad_dmplex_mesh");
+  PetscObjectSetName((PetscObject)dm, dmplex_name.c_str());
   // Create an HDF5 viewer
-  PetscViewerHDF5Open(PETSC_COMM_WORLD, "hypnotoad_dmplex_mesh_output.h5", FILE_MODE_WRITE, &viewer);
+  PetscViewerHDF5Open(PETSC_COMM_WORLD, dmplex_h5_filename.c_str(), FILE_MODE_WRITE, &viewer);
   // Set viewer format to PETSC_VIEWER_HDF5_PETSC for compatibility
   PetscViewerPushFormat(viewer, PETSC_VIEWER_HDF5_PETSC);
   // Save the DMPlex to the HDF5 file
