@@ -888,6 +888,44 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
     return;
   }
 
+  Field3D DTdtN = Dnn * Tn * ddt(Nn);
+  mesh->communicate(DTdtN);
+  DTdtN.applyBoundary("dirichlet");
+
+  ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(DTdtN,
+                                                  logPnlim);
+  Field3D DNdt = ddt(Nn);
+  mesh->communicate(DNdt);
+  DNdt.applyBoundary("dirichlet");
+  //Field3D DPdt = ddt(Pn);
+  //mesh->communicate(DPdt);
+  //DPdt.applyBoundary("dirichlet");
+
+  //Field3D Tnlim = Pn / Nn;
+  Field3D Tnlim = softFloor(Tn, temperature_floor);
+
+  Field3D epsilon_3 = (5+sqrt(10.0))/3.0 * Tnlim;
+  Field3D epsilon_4 = (5-sqrt(10.0))/3.0 * Tnlim;
+  mesh->communicate(epsilon_3);
+  epsilon_3.applyBoundary("dirichlet");
+  mesh->communicate(epsilon_4);
+  epsilon_4.applyBoundary("dirichlet");
+
+  // Simplified m_X and m_Y using Tn
+  Field3D m_X = (Pn - Nn*epsilon_4) / (epsilon_3-epsilon_4);
+  Field3D m_Y = (Pn - Nn*epsilon_3) / (epsilon_4-epsilon_3);
+  ddt(m_X) = (ddt(Pn) - DNdt*epsilon_4) / (epsilon_3-epsilon_4);
+  ddt(m_Y) = (ddt(Pn) - DNdt*epsilon_3) / (epsilon_4-epsilon_3);
+  // need 2 inv? 
+  inv->setCoefA(1.0);
+  inv->setCoefD(-gamma *((5.0+sqrt(10.0))/3.0 * Dnn));
+  ddt(m_X) = inv->solve(ddt(m_X)); 
+  inv->setCoefD(-gamma *((5.0-sqrt(10.0))/3.0 * Dnn));
+  ddt(m_Y) = inv->solve(ddt(m_Y)); 
+
+  ddt(Nn) = ddt(m_X) + ddt(m_Y);
+  ddt(Pn) = ddt(m_X) * epsilon_3 + ddt(m_Y) * epsilon_4;
+  /*
   // First matrix
   //   ( I   0)
   //   (-LE  I)
@@ -921,6 +959,8 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
   // ( 0     I   )
 
   ddt(Nn) -= gamma * FV::Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
+  */
+
 
   if (evolve_momentum) {
     ddt(NVn) -= gamma * FV::Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
