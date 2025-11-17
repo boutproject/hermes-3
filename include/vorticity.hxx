@@ -140,6 +140,8 @@ private:
   BoutReal hyper_z; ///< Hyper-viscosity in Z
   Field2D viscosity; ///< Kinematic viscosity
 
+  bool freeze_profiles; ///< Subtract Z average from time derivatives?
+
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 

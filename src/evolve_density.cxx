@@ -48,6 +48,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
+  freeze_profiles = options["freeze_profiles"].doc("Subtract Z average from time derivatives?").withDefault<bool>(false);
+
   evolve_log = options["evolve_log"]
                    .doc("Evolve the logarithm of density?")
                    .withDefault<bool>(false);
@@ -310,6 +312,10 @@ void EvolveDensity::finally(const Options& state) {
     if (species.isSet("particle_flow_ylow")) {
       flow_ylow += get<Field3D>(species["particle_flow_ylow"]);
     }
+  }
+
+  if (freeze_profiles) {
+    ddt(N) -= DC(ddt(N)); // Remove the DC, i.e. Z-averaged, component.
   }
 }
 
