@@ -52,6 +52,7 @@ endif()
 
 find_package(MPI REQUIRED)
 find_package(NESO-Particles REQUIRED)
+find_sycl_if_required()
 find_package(VANTAGE-Reactions REQUIRED)
 
 set(HERMES_SOURCES
@@ -280,26 +281,6 @@ if(HERMES_TESTS)
     set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
   endif()
 endif()
-
-# WIP script for testing ideas for making a DMPlex
-add_executable(dmplex_test dmtest_main.cxx)
-target_link_libraries(dmplex_test PRIVATE bout++::bout++ hermes-3-lib)
-target_include_directories(dmplex_test PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-  )
-set_target_properties(dmplex_test PROPERTIES BUILD_RPATH "$ORIGIN")
-
-# WIP script for testing ideas for making a DMPlex
-add_executable(netcdf_test netcdftest_main.cxx)
-target_link_libraries(netcdf_test PUBLIC bout++::bout++)
-target_include_directories(netcdf_test PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-  )
-set_target_properties(netcdf_test PROPERTIES BUILD_RPATH "$ORIGIN")
 
 # Compile-time options
 

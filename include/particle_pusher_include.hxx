@@ -10,7 +10,6 @@
 #include <mpi.h>
 #include <neso_particles.hpp>
 #include <random>
-#define REACTIONS_CELL_BLOCK_SIZE 2
 #include <reactions/reactions.hpp>
 #include <sstream>
 #include <stdexcept>

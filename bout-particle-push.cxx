@@ -3,6 +3,7 @@
 #include "bout/petsclib.hxx"
 #include <neso_particles.hpp>
 #include <neso_particles/external_interfaces/petsc/petsc_interface.hpp>
+#include <neso_particles/typedefs.hpp>
 #include <petscsystypes.h>
 #include <string>
 #include "bout/bout.hxx"
@@ -70,12 +71,11 @@ void RZ_to_ivertex_vector(Field2D& ivertex_corners,
             abs(global_R_vertices.at(iv) - Rxy_corners(ix,iy)) < zero ) {
           ivertex_corners(ix,iy) = iv;
           index_found = true;
-          // we have determined that the point is not unique
+          // we have matched an iv global index to a (R,Z) from Hypnotoad
         }
       }
-      if (!index_found) {
-        std::cout << fmt::format("ivertex not found for ix = {} iy = {}",ix,iy);
-      }
+      // exit if we fail to find a match
+      NESOASSERT(index_found, fmt::format("ivertex not found for ix = {} iy = {}",ix,iy));
     }
   }
 }
@@ -91,9 +91,7 @@ void load_vertex_information_from_netcdf(int& Nvertex,
   // Get the variable
   std::string varName = "global_vertex_list_R";
   netCDF::NcVar dataVar = dataFile.getVar(varName);
-  if (dataVar.isNull()) {
-      std::cerr << "Variable '" << varName << "' not found in file." << std::endl;
-  }
+  NESOASSERT(!dataVar.isNull(), fmt::format("Variable {} not found in file.",varName));
   std::vector<netCDF::NcDim> dims = dataVar.getDims();
   size_t nvertices = dims[0].getSize();
 
@@ -104,9 +102,7 @@ void load_vertex_information_from_netcdf(int& Nvertex,
   // Get the variable
   varName = "global_vertex_list_Z";
   dataVar = dataFile.getVar(varName);
-  if (dataVar.isNull()) {
-      std::cerr << "Variable '" << varName << "' not found in file." << std::endl;
-  }
+  NESOASSERT(!dataVar.isNull(), fmt::format("Variable {} not found in file.",varName));
   // Read the data into a vector
   std::vector<double> global_vertex_list_Z(nvertices);
   dataVar.getVar(global_vertex_list_Z.data());
@@ -207,11 +203,13 @@ int main(int argc, char **argv) {
   // N.B. Comment the next three lines
   // to permit compilation as is
   BoutInitialise(argc, argv);
-  Mesh* mesh = Mesh::create(&Options::root()["mesh"]);
+  Mesh* bout_mesh = Mesh::create(&Options::root()["mesh"]);
   bool use_cxx_ivertex = Options::root()["mesh"]["use_cxx_ivertex"].withDefault(false);
+  std::string dmplex_name = Options::root()["mesh"]["dmplex_name"].withDefault("hypnotoad_dmplex_mesh");
+  std::string dmplex_h5_filename = Options::root()["mesh"]["dmplex_h5_filename"].withDefault("hypnotoad_dmplex_mesh_output.h5");
   output << fmt::format("Using option use_cxx_ivertex = {}",use_cxx_ivertex) << std::endl;
-  mesh->load();
-  Coordinates *coord = mesh->getCoordinates();
+  bout_mesh->load();
+  Coordinates *coord = bout_mesh->getCoordinates();
   Field2D Rxy_lower_left_corners;
   Field2D Rxy_lower_right_corners;
   Field2D Rxy_upper_right_corners;
@@ -221,38 +219,28 @@ int main(int argc, char **argv) {
   Field2D Zxy_upper_right_corners;
   Field2D Zxy_upper_left_corners;
   //mesh->get(ivertex, "ivertex_lower_left_corners");
-  mesh->get(Rxy_lower_left_corners, "Rxy_corners");
-  mesh->get(Rxy_lower_right_corners, "Rxy_lower_right_corners");
-  mesh->get(Rxy_upper_right_corners, "Rxy_upper_right_corners");
-  mesh->get(Rxy_upper_left_corners, "Rxy_upper_left_corners");
-  mesh->get(Zxy_lower_left_corners, "Zxy_corners");
-  mesh->get(Zxy_lower_right_corners, "Zxy_lower_right_corners");
-  mesh->get(Zxy_upper_right_corners, "Zxy_upper_right_corners");
-  mesh->get(Zxy_upper_left_corners, "Zxy_upper_left_corners");
+  bout_mesh->get(Rxy_lower_left_corners, "Rxy_corners");
+  bout_mesh->get(Rxy_lower_right_corners, "Rxy_lower_right_corners");
+  bout_mesh->get(Rxy_upper_right_corners, "Rxy_upper_right_corners");
+  bout_mesh->get(Rxy_upper_left_corners, "Rxy_upper_left_corners");
+  bout_mesh->get(Zxy_lower_left_corners, "Zxy_corners");
+  bout_mesh->get(Zxy_lower_right_corners, "Zxy_lower_right_corners");
+  bout_mesh->get(Zxy_upper_right_corners, "Zxy_upper_right_corners");
+  bout_mesh->get(Zxy_upper_left_corners, "Zxy_upper_left_corners");
   Field2D ivertex_lower_left_corners;
   Field2D ivertex_lower_right_corners;
   Field2D ivertex_upper_right_corners;
   Field2D ivertex_upper_left_corners;
   if (!use_cxx_ivertex) {
-    mesh->get(ivertex_lower_left_corners, "ivertex_lower_left_corners");
-    mesh->get(ivertex_lower_right_corners, "ivertex_lower_right_corners");
-    mesh->get(ivertex_upper_right_corners, "ivertex_upper_right_corners");
-    mesh->get(ivertex_upper_left_corners, "ivertex_upper_left_corners");
+    bout_mesh->get(ivertex_lower_left_corners, "ivertex_lower_left_corners");
+    bout_mesh->get(ivertex_lower_right_corners, "ivertex_lower_right_corners");
+    bout_mesh->get(ivertex_upper_right_corners, "ivertex_upper_right_corners");
+    bout_mesh->get(ivertex_upper_left_corners, "ivertex_upper_left_corners");
   }
-  // for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
-  //  for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
-  //      //for(int iz=0; iz < mesh->LocalNz; iz++){
-
-  //        std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
-        //  output << string_count + std::string(": ") + std::to_string(static_cast<int>(std::lround(ivertex_lower_left_corners(ix,iy)))) + std::string("; ");
-  //      //}
-  //  }
-  // output << "\n";
-  // }
   // local number of x cells, excluding guards
-  int Nx = mesh->xend - mesh->xstart + 1;
+  int Nx = bout_mesh->xend - bout_mesh->xstart + 1;
   // local number of y cells, excluding guards
-  int Ny = mesh->yend - mesh->ystart + 1;
+  int Ny = bout_mesh->yend - bout_mesh->ystart + 1;
   // output << "Nx " + std::to_string(Nx) + "Ny " + std::to_string(Ny) << "\n";
   // output << "Got here -1 \n";
 
@@ -284,8 +272,8 @@ int main(int argc, char **argv) {
   // fill these vectors with vertex values from the local rank
   // at indices determined by the local rank
   int icxy = Nx*Ny*mpi_rank;
-  for (int ix = mesh->xstart; ix<= mesh->xend; ix++) {
-    for (int iy = mesh->ystart; iy <= mesh->yend; iy++) {
+  for (int ix = bout_mesh->xstart; ix<= bout_mesh->xend; ix++) {
+    for (int iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
       local_R_lower_left_vertices.at(icxy) = Rxy_lower_left_corners(ix,iy);
       local_Z_lower_left_vertices.at(icxy) = Zxy_lower_left_corners(ix,iy);
       local_R_lower_right_vertices.at(icxy) = Rxy_lower_right_corners(ix,iy);
@@ -365,30 +353,30 @@ int main(int argc, char **argv) {
       std::cout << "N_unique=" << N_unique << std::endl;
   }
   // ivertex arrays made in cxx, initialise with -1 index
-  Field2D ivertex_lower_left_corners_cxx{-1,mesh};
-  Field2D ivertex_lower_right_corners_cxx{-1,mesh};
-  Field2D ivertex_upper_right_corners_cxx{-1,mesh};
-  Field2D ivertex_upper_left_corners_cxx{-1,mesh};
+  Field2D ivertex_lower_left_corners_cxx{-1,bout_mesh};
+  Field2D ivertex_lower_right_corners_cxx{-1,bout_mesh};
+  Field2D ivertex_upper_right_corners_cxx{-1,bout_mesh};
+  Field2D ivertex_upper_left_corners_cxx{-1,bout_mesh};
   // now fill ivertex_corners arrays
   RZ_to_ivertex_vector(ivertex_lower_left_corners_cxx,
       global_Z_vertices, global_R_vertices, zero,
-      mesh, Rxy_lower_left_corners, Zxy_lower_left_corners);
+      bout_mesh, Rxy_lower_left_corners, Zxy_lower_left_corners);
   RZ_to_ivertex_vector(ivertex_lower_right_corners_cxx,
       global_Z_vertices, global_R_vertices, zero,
-      mesh, Rxy_lower_right_corners, Zxy_lower_right_corners);
+      bout_mesh, Rxy_lower_right_corners, Zxy_lower_right_corners);
   RZ_to_ivertex_vector(ivertex_upper_right_corners_cxx,
       global_Z_vertices, global_R_vertices, zero,
-      mesh, Rxy_upper_right_corners, Zxy_upper_right_corners);
+      bout_mesh, Rxy_upper_right_corners, Zxy_upper_right_corners);
   RZ_to_ivertex_vector(ivertex_upper_left_corners_cxx,
       global_Z_vertices, global_R_vertices, zero,
-      mesh, Rxy_upper_left_corners, Zxy_upper_left_corners);
+      bout_mesh, Rxy_upper_left_corners, Zxy_upper_left_corners);
 
   // First we setup the topology of the mesh.
   PetscInt num_cells_owned = Nx*Ny;
   // std::vector<double> cells(4*num_cells_owned);
   std::vector<PetscInt> cells;
   if (use_cxx_ivertex) {
-    cells_definition_from_RZ_ivertex(cells, mesh,
+    cells_definition_from_RZ_ivertex(cells, bout_mesh,
     Rxy_lower_left_corners,
     Rxy_lower_right_corners,
     Rxy_upper_right_corners,
@@ -402,7 +390,7 @@ int main(int argc, char **argv) {
     ivertex_upper_right_corners_cxx,
     ivertex_upper_left_corners_cxx);
   } else {
-    cells = cells_definition_from_RZ_ivertex(cells, mesh,
+    cells = cells_definition_from_RZ_ivertex(cells, bout_mesh,
     Rxy_lower_left_corners,
     Rxy_lower_right_corners,
     Rxy_upper_right_corners,
@@ -493,9 +481,9 @@ int main(int argc, char **argv) {
   // save a HDF5 file containing the DM for diagnostics
   PetscViewer viewer;
   // Set a name for the DMPlex object (important for HDF5)
-  PetscObjectSetName((PetscObject)dm, "hypnotoad_dmplex_mesh");
+  PetscObjectSetName((PetscObject)dm, dmplex_name.c_str());
   // Create an HDF5 viewer
-  PetscViewerHDF5Open(PETSC_COMM_WORLD, "hypnotoad_dmplex_mesh_output.h5", FILE_MODE_WRITE, &viewer);
+  PetscViewerHDF5Open(PETSC_COMM_WORLD, dmplex_h5_filename.c_str(), FILE_MODE_WRITE, &viewer);
   // Set viewer format to PETSC_VIEWER_HDF5_PETSC for compatibility
   PetscViewerPushFormat(viewer, PETSC_VIEWER_HDF5_PETSC);
   // Save the DMPlex to the HDF5 file
@@ -505,9 +493,9 @@ int main(int argc, char **argv) {
   output << "Finished DMPlex creation and diagnostic \n";
   output << "Begin particle push \n";
   // get data from BOUT for forces in particle push
-  Field2D phi{mesh};
-  Field2D ex{mesh};
-  Field2D ey{mesh};
+  Field2D phi{bout_mesh};
+  Field2D ex{bout_mesh};
+  Field2D ey{bout_mesh};
   auto& opt = Options::root();
   phi = opt["mesh"]["phi"].as<Field2D>();
   ex = opt["mesh"]["ex"].as<Field2D>();
@@ -532,9 +520,9 @@ int main(int argc, char **argv) {
     const int npart_per_cell = Options::root()["neso_particles"]["npart_per_cell"].withDefault(1);
     const REAL dt = Options::root()["neso_particles"]["dt"].withDefault(0.01);
     const int nsteps = Options::root()["neso_particles"]["nsteps"].withDefault(10);
-    Field2D density{mesh};
-    mesh->get(density, "density", 0.0, false);
-    mesh->communicate(density);
+    Field2D density{bout_mesh};
+    bout_mesh->get(density, "density", 0.0, false);
+    bout_mesh->communicate(density);
 
     // Create a mesh interface from the DM
     auto neso_mesh = std::make_shared<PetscInterface::DMPlexInterface>(
@@ -606,8 +594,8 @@ int main(int argc, char **argv) {
     // this call should allocate h_project2
     // dg0->set_dofs(2, h_project2);
     PetscInt ixy=0;
-    for (PetscInt ix = mesh->xstart; ix<= mesh->xend; ix++) {
-      for (PetscInt iy = mesh->ystart; iy <= mesh->yend; iy++) {
+    for (PetscInt ix = bout_mesh->xstart; ix<= bout_mesh->xend; ix++) {
+      for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
         h_project2.at(2*ixy) = ex(ix,iy);
         h_project2.at(2*ixy+1) = ey(ix,iy);
         ixy++;
@@ -673,7 +661,7 @@ int main(int argc, char **argv) {
           Access::read(Sym<REAL>("TSP")));
     };
     auto lambda_partial_moves_remaining = [&](auto aa) -> bool {
-      const int size = aa->get_npart_local();
+      const int size = get_npart_global(aa);;
       return size > 0;
     };
     auto lambda_apply_timestep = [&](auto aa) {
@@ -689,9 +677,9 @@ int main(int argc, char **argv) {
         aa = lambda_find_partial_moves(aa);
       }
     };
-    // for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
-    //   for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
-    //       //for(int iz=0; iz < mesh->LocalNz; iz++){
+    // for(int ix = bout_mesh->xstart; ix<= bout_mesh->xend; ix++){
+    //   for(int iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++){
+    //       //for(int iz=0; iz < bout_mesh->LocalNz; iz++){
     //         std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
     //         output << string_count + std::string(": ") + std::to_string(phi(ix,iy)) + std::string("; ");
     //       //}
@@ -702,19 +690,19 @@ int main(int argc, char **argv) {
     H5Part h5part("traj_reflection_dmplex_example.h5part", A, Sym<REAL>("P"),
     Sym<REAL>("V"));
 
-    // get a density by projecting the particle property Q to the mesh
+    // get a density by projecting the particle property Q to the bout_mesh
     dg0->project(A, Sym<REAL>("Q"));
     std::vector<REAL> h_project1;
     dg0->get_dofs(1, h_project1);
     PetscInt ic=0;
-    for (PetscInt ix = mesh->xstart; ix<= mesh->xend; ix++) {
-      for (PetscInt iy = mesh->ystart; iy <= mesh->yend; iy++) {
+    for (PetscInt ix = bout_mesh->xstart; ix<= bout_mesh->xend; ix++) {
+      for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
         density(ix,iy) = h_project1.at(ic);
         ic++;
       }
     }
     // this fills internal guards
-    mesh->communicate(density);
+    bout_mesh->communicate(density);
     // apply boundary conditions to fill external guards
     // density.applyBoundary();
     // extrapolate -> Neumann
@@ -722,9 +710,9 @@ int main(int argc, char **argv) {
     // print density to screen to show non-trivial result
     // compare to 1/J*dx*dy*dz -> at the initial time we have 1 particle per cell
     // so the density is 1/Cell_volume
-    // for(int ix = mesh->xstart; ix<= mesh->xend; ix++){
-    //   for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
-    //       //for(int iz=0; iz < mesh->LocalNz; iz++){
+    // for(int ix = bout_mesh->xstart; ix<= bout_mesh->xend; ix++){
+    //   for(int iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++){
+    //       //for(int iz=0; iz < bout_mesh->LocalNz; iz++){
     //         std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy) + std::string(")");
     //         output << string_count + std::string(": ") + std::to_string(density(ix,iy)) + std::string("; ") + std::to_string(1.0/(coord->J(ix,iy)*coord->dx(ix,iy)*coord->dy(ix,iy)*coord->dz(ix,iy)));
     //       //}
