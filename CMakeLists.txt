@@ -175,15 +175,14 @@ set(HERMES_SOURCES
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
 
+# link to bout++
+target_link_libraries(hermes-3-lib PUBLIC bout++::bout++)
 # logic for linking libraries with an optional VANTAGE-Reactions dependence
 if(HERMES_USE_VANTAGE)
   # preprocessor flag for optional VANTAGE includes
-  add_definitions(-DHERMES_USE_VANTAGE)
-  # link bout++ and VANTAGE-Reactions libraries
-  target_link_libraries(hermes-3-lib PUBLIC bout++::bout++ VANTAGE-Reactions::VANTAGE-Reactions)
-else()
-  # link only to bout++
-  target_link_libraries(hermes-3-lib PUBLIC bout++::bout++)
+  target_compile_definitions(hermes-3-lib PUBLIC HERMES_INCLUDE_VANTAGE)
+  # link to VANTAGE-Reactions libraries
+  target_link_libraries(hermes-3-lib PUBLIC VANTAGE-Reactions::VANTAGE-Reactions)
 endif()
 
 target_compile_features(hermes-3-lib PUBLIC cxx_std_17)

@@ -84,7 +84,7 @@
 #include <bout/field_factory.hxx>
 
 #include "include/recalculate_metric.hxx"
-#ifdef HERMES_USE_VANTAGE
+#ifdef HERMES_INCLUDE_VANTAGE
 #include "include/particle_pusher_include.hxx"
 #endif
 #if !BOUT_USE_METRIC_3D
