@@ -294,8 +294,10 @@ if(HERMES_TESTS)
     CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(diffusion)
   hermes_add_integrated_test(evolve_density)
-  hermes_add_integrated_test(neutral_mixed)
-  hermes_add_integrated_test(vorticity)
+  hermes_add_integrated_test(neutral_mixed
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(vorticity
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave)
