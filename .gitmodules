@@ -11,3 +11,6 @@
 [submodule "Reactions"]
 	path = external/Reactions
 	url = git@github.com:UKAEA-Edge-Code/Reactions.git
+[submodule "external/xhermes"]
+	path = external/xhermes
+	url = https://github.com/boutproject/xhermes
