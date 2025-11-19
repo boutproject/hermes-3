@@ -210,12 +210,12 @@ endif()
 # Tests
 option(HERMES_TESTS "Build the tests" ON)
 if (HERMES_TESTS)
-  add_custom_target(setup-test ALL)
+  add_custom_target(setup-test)
 else()
   add_custom_target(setup-test)
 endif()
 
-add_custom_target(setup-examples ALL)
+add_custom_target(setup-examples)
 
 
 # copy the data and test directories
