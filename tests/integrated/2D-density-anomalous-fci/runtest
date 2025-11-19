@@ -10,7 +10,7 @@ try:
 except:
   pass
 
-from boututils.run_wrapper import shell, launch, getmpirun
+from boututils.run_wrapper import shell, launch_safe, getmpirun
 from boutdata.collect import collect
 
 from numpy import sqrt, max, abs, mean, array, log, concatenate
@@ -57,7 +57,7 @@ for ny in nxlist:
     # Command to run
     cmd = "./hermes-3 "+args
     # Launch using MPI
-    s, out = launch(cmd, nproc=nproc, pipe=True)
+    s, out = launch_safe(cmd, nproc=nproc, pipe=True)
 
     # Save output to log file
     f = open("run.log."+str(ny), "w")
