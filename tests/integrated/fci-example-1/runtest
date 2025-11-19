@@ -5,11 +5,9 @@
 
 from boututils.run_wrapper import shell_safe, launch_safe, getmpirun
 
-shell_safe("test -d data || mkdir data")
-
 # Launch using MPI
 launch_safe(
-    f"../../../hermes-3 -f ../../../../examples/stellarator/transport-emc3/BOUT.inp nout=1 timestep=20 solver:mxstep=50 mesh:file=grid.fci.nc",
+    f"../../../hermes-3 nout=1 timestep=20 solver:mxstep=50 mesh:file=grid.fci.nc",
     nproc=1,
     pipe=True,
 )
