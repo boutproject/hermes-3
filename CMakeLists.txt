@@ -300,8 +300,10 @@ if(HERMES_TESTS)
     CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
-  hermes_add_integrated_test(drift-wave)
-  hermes_add_integrated_test(alfven-wave)
+  hermes_add_integrated_test(drift-wave
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(alfven-wave
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-density-fci)
   hermes_add_integrated_test(1D-momentum-fci)
   hermes_add_integrated_test(1D-pressure-fci)
