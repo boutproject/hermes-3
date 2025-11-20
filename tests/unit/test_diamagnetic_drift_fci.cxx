@@ -155,7 +155,7 @@ TEST_F(DiamagneticDriftFCITest, NoGradientB) {
   options["units"]["Tesla"] = 1.0;
 
 
-  mesh->getCoordinates()->Bxy = FieldFactory::get()->create2D("1 + x", &options, mesh);
+  mesh->getCoordinates()->Bxy = FieldFactory::get()->create2D("1.0", &options, mesh);
 
 
   DiamagneticDriftFCI component("h+", options, nullptr);
