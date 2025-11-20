@@ -92,7 +92,6 @@ TEST_F(DiamagneticDriftFCITest, NoCharge) {
 }
 
 
-
 TEST_F(DiamagneticDriftFCITest, TwoSpeciesOppositeCharge) {
   Options options;
   options["units"]["meters"] = 1.0;
@@ -100,10 +99,9 @@ TEST_F(DiamagneticDriftFCITest, TwoSpeciesOppositeCharge) {
   options["units"]["Tesla"] = 1.0;
 
 
-  Field3D B = FieldFactory::get()->create3D("1 + x", &options, mesh);
-  mesh->getCoordinates()->Bxy = B;
-  
-  
+  mesh->getCoordinates()->Bxy = FieldFactory::get()->create2D("1 + x", &options, mesh);
+
+
   DiamagneticDriftFCI component("h+", options, nullptr);
 
   Field3D N = FieldFactory::get()->create3D("1 + y * (x - 0.5)", &options, mesh);  
@@ -157,8 +155,7 @@ TEST_F(DiamagneticDriftFCITest, NoGradientB) {
   options["units"]["Tesla"] = 1.0;
 
 
-  Field3D B = FieldFactory::get()->create3D("1.0", &options, mesh);
-  mesh->getCoordinates()->Bxy = B;
+  mesh->getCoordinates()->Bxy = FieldFactory::get()->create2D("1 + x", &options, mesh);
 
 
   DiamagneticDriftFCI component("h+", options, nullptr);
@@ -201,8 +198,7 @@ TEST_F(DiamagneticDriftFCITest, DifferentCharge) {
   options["units"]["Tesla"] = 1.0;
 
 
-  Field3D B = FieldFactory::get()->create3D("1 + x", &options, mesh);
-  mesh->getCoordinates()->Bxy = B;
+  mesh->getCoordinates()->Bxy = FieldFactory::get()->create2D("1 + x", &options, mesh);
 
 
   DiamagneticDriftFCI component("h+", options, nullptr);
@@ -278,8 +274,7 @@ TEST_F(DiamagneticDriftFCITest, DoubleGradient) {
   options["units"]["Tesla"] = 1.0;
 
 
-  Field3D B = FieldFactory::get()->create3D("1 + x", &options, mesh);
-  mesh->getCoordinates()->Bxy = B;
+  mesh->getCoordinates()->Bxy = FieldFactory::get()->create2D("1 + x", &options, mesh);
 
 
   DiamagneticDriftFCI component("h+", options, nullptr);
