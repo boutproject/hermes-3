@@ -304,16 +304,26 @@ if(HERMES_TESTS)
     CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(alfven-wave
     CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-density-fci)
-  hermes_add_integrated_test(1D-momentum-fci)
-  hermes_add_integrated_test(1D-pressure-fci)
-  hermes_add_integrated_test(1D-fluid-fci)
-  hermes_add_integrated_test(1D-conduction-fci)
-  hermes_add_integrated_test(1D-electron-viscosity-fci)
-  hermes_add_integrated_test(1D-ion-viscosity-fci)
-  hermes_add_integrated_test(2D-density-anomalous-fci)
-  hermes_add_integrated_test(2D-fluid-anomalous-fci)
+  hermes_add_integrated_test(1D-density-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-momentum-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-pressure-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-fluid-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-conduction-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-electron-viscosity-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-ion-viscosity-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-density-anomalous-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-fluid-anomalous-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(fci-example-1
+    REQUIRES BOUT_ENABLE_METRIC_3D
     DOWNLOAD https://zenodo.org/records/17571607/files/W7X-conf0-36x8x128.fci.nc?download=1
     DOWNLOAD_NAME grid.fci.nc
   )
