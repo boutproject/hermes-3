@@ -16,7 +16,6 @@ rtol = 1e-7
 atol = 1e-12
 mms = true  # Run with MMS sources and output diagnostics
 mms_initialise = true
-cvode_max_order = 3
 
 [hermes]
 components = h+, collisions, ion_viscosity
