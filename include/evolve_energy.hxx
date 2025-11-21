@@ -23,13 +23,9 @@ struct EvolveEnergy : public Component {
   ///   - diagnose             Output additional diagnostic fields?
   ///   - evolve_log           Evolve logarithm of pressure? Default is false
   ///   - hyper_z              Hyper-diffusion in Z
-  ///   - kappa_coefficient    Heat conduction constant. Default is 3.16 for
-  ///   electrons, 3.9 otherwise
-  ///   - kappa_limit_alpha    Flux limiter, off by default.
   ///   - poloidal_flows       Include poloidal ExB flows? Default is true
   ///   - precon               Enable preconditioner? Note: solver may not use it even if
   ///   enabled.
-  ///   - thermal_conduction   Include parallel heat conduction? Default is true
   ///
   /// - E<name>  e.g. "Ee", "Ed+"
   ///   - source     Source of energy [W / s].
@@ -61,7 +57,6 @@ struct EvolveEnergy : public Component {
   ///   - <name>
   ///     - velocity. Must have sound_speed or temperature
   ///     - energy_source
-  ///     - collision_rate  (needed if thermal_conduction on)
   /// - fields
   ///   - phi      Electrostatic potential -> ExB drift
   ///
@@ -86,18 +81,13 @@ private:
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
-  std::vector<std::string> collision_names; ///< Collisions used for collisionality
-  std::string conduction_collisions_mode;  ///< Collision selection, either multispecies or braginskii
+
   Field3D nu;   ///< Collision frequency for conduction
-  BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
-                              ///< calculation
-  BoutReal kappa_limit_alpha; ///< Flux limit if >0
 
   bool evolve_log; ///< Evolve logarithm of E?
   Field3D logE;    ///< Natural logarithm of E
 
   BoutReal density_floor; ///< Minimum density for calculating T
-  Field3D kappa_par;      ///< Parallel heat conduction coefficient
 
   Field3D source; ///< External power source
   Field3D Se;     ///< Total energy source
