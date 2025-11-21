@@ -37,4 +37,4 @@ ey = 0
 
 npart_per_cell = 1
 dt = 0.005
-nsteps = 500
+nsteps = 50
