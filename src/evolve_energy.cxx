@@ -405,6 +405,14 @@ void EvolveEnergy::outputVars(Options& state) {
 }
 
 void EvolveEnergy::precon(const Options& state, BoutReal gamma) {
+  // Note: This preconditioner handles the conduction term in the
+  // equation. That term is actually calculated elsewhere (e.g.,
+  // BraginskiiConduction), so doing the preconditioning here breaks
+  // encapsulation to some extent. However, it is not expected that
+  // there will be any need to change the preconditioner in the near
+  // future and the current preconditioner should work well-enough for
+  // any implementation of conduction. Therefore, we are just leaving
+  // this as is for now.
   if (!(enable_precon and thermal_conduction)) {
     return; // Disabled
   }
