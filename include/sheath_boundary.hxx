@@ -77,7 +77,7 @@ struct SheathBoundary : public Component {
   void transform(Options &state) override;
 private:
   BoutReal Ge; // Secondary electron emission coefficient
-  BoutReal sin_alpha; // sin of angle between magnetic field and wall.
+  Field3D sin_alpha; // sin of angle between magnetic field and wall.
   
   bool lower_y; // Boundary on lower y?
   bool upper_y; // Boundary on upper y?
