@@ -33,10 +33,6 @@ struct BraginskiiCollisions : public Component {
   ///   - ion_neutral
   ///   - neutral_neutral
   ///
-  /// There are also switches for other terms:
-  ///
-  ///   - frictional_heating    Include R dot v heating term as energy source? (includes Ohmic heating)
-  ///
   BraginskiiCollisions(std::string name, Options& alloptions, Solver*);
 
   void transform(Options &state) override;
