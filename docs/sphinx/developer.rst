@@ -58,7 +58,7 @@ Editing documentation is much easier if you can compile it locally using the fol
    .. code-block:: bash
 
       cd hermes-3/docs/doxygen
-      Doxygen doxyfile
+      doxygen Doxyfile
 
 5. **Run Sphinx** - this will parse the RST files and generate the
    documentation. ``sphinx`` and ``build`` are the source and build
@@ -391,7 +391,10 @@ atoms has an input file specifying the components
 .. code-block:: ini
   
   [hermes]
-  components = d+, d, t+, t, e, collisions, sheath_boundary, recycling, reactions
+  components = (d+, d, t+, t, e, braginskii_collisions,
+                braginskii_friction, braginskii_heat_exchange,
+                sheath_boundary, recycling, reactions,
+                braginskii_conduction)
 
 The governing equations for each species are specified e.g.
 

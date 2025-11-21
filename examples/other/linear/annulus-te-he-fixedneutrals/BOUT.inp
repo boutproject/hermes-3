@@ -61,8 +61,9 @@ type = identity
 mxstep = 10000
 
 [hermes]
-components = (e, he+, he, sound_speed, vorticity,
-              sheath_boundary, collisions, reactions,
+components = (e, he+, he, sound_speed, vorticity, sheath_boundary,
+              braginskii_collisions, braginskii_friction, braginskii_heat_exchange,
+              reactions, braginskii_conduction,
               )
 
 Nnorm = 1e18  # Reference density [m^-3]
