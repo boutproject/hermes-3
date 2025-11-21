@@ -78,9 +78,9 @@ def unique_points_2D(corners_Rxy,corners_Zxy):
                         continue
                     if (isapprox(corners_Rxy[ix,iy],corners_Rxy[ixp,iyp]) and isapprox(corners_Zxy[ix,iy],corners_Zxy[ixp,iyp])):
                         ic = iy + Ny*ix
-                        print("non-unique point:",ix,iy,ic)
+                        #print("non-unique point:",ix,iy,ic)
                         unique = False
-    print("unique points =",unique)
+    #print("unique points =",unique)
     return None
 
 def unique_points_1D(corners_Rxy,corners_Zxy):
@@ -91,9 +91,9 @@ def unique_points_1D(corners_Rxy,corners_Zxy):
             if ic == icp:
                 continue
             if (isapprox(corners_Rxy[ic],corners_Rxy[icp]) and isapprox(corners_Zxy[ic],corners_Zxy[icp])):
-                print("non-unique point:",ix,iy,ic)
+                #print("non-unique point:",ix,iy,ic)
                 unique = False
-    print("unique points =",unique)
+    #print("unique points =",unique)
     return None
 
 def remove_nonunique_points(corners_Rxy,corners_Zxy):
@@ -104,11 +104,11 @@ def remove_nonunique_points(corners_Rxy,corners_Zxy):
             if ic == icp:
                 continue
             if (isapprox(corners_Rxy[ic],corners_Rxy[icp]) and isapprox(corners_Zxy[ic],corners_Zxy[icp])):
-                print("non-unique point:",icp)
+                #print("non-unique point:",icp)
                 # store the duplicate index, if we have not already stored the index for this point
                 if (ic not in duplicate_indices) and (icp not in duplicate_indices):
                     duplicate_indices.append(icp)
-    print(duplicate_indices)
+    #print(duplicate_indices)
     if len(duplicate_indices) > 0:
         corners_Rxy = np.delete(corners_Rxy,duplicate_indices)
         corners_Zxy = np.delete(corners_Zxy,duplicate_indices)
@@ -121,7 +121,7 @@ def convert_R_Z_to_vertex_index(R,Z,R_vertices,Z_vertices,failure=None):
         if isapprox(R,R_vertices[ic]) and isapprox(Z,Z_vertices[ic]):
             ic_vertex = ic
             return ic_vertex
-    print("Failed to find (R,Z) index")
+    #print("Failed to find (R,Z) index")
     return failure
 
 def get_cell_vertex_list_inner(R_ll,Z_ll, R_lr, Z_lr,
@@ -395,14 +395,14 @@ def plot_corners_get_dmplex_data(file_path,interactive_plot=False,print_cells_to
     jyseps1_2 = np.copy(dataset.variables['jyseps1_2'][...])
     jyseps2_2 = np.copy(dataset.variables['jyseps2_2'][...])
     ny_inner = np.copy(dataset.variables['ny_inner'][...])
-    print("y_boundary_guards",y_boundary_guards)
-    print("ixseps1",ixseps1)
-    print("ixseps2",ixseps2)
-    print("jyseps1_1",jyseps1_1)
-    print("jyseps2_1",jyseps2_1)
-    print("jyseps1_2",jyseps1_2)
-    print("jyseps2_2",jyseps2_2)
-    print("ny_inner",ny_inner)
+    # print("y_boundary_guards",y_boundary_guards)
+    # print("ixseps1",ixseps1)
+    # print("ixseps2",ixseps2)
+    # print("jyseps1_1",jyseps1_1)
+    # print("jyseps2_1",jyseps2_1)
+    # print("jyseps1_2",jyseps1_2)
+    # print("jyseps2_2",jyseps2_2)
+    # print("ny_inner",ny_inner)
     exclude_y_guard_cells = True
     if exclude_y_guard_cells:
         s = slice(0,-1,1), list(range(y_boundary_guards,ny_inner+y_boundary_guards)) + list(range(ny_inner+3*y_boundary_guards,2*ny_inner+3*y_boundary_guards))

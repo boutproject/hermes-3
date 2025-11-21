@@ -32,8 +32,8 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_ver
     # integers defining the cells
     #cells = [[0, 1, 3, 4], [1, 2, 4, 5]]
     cells = cell_list.astype('int32')
-    print("cells")
-    print(cells)
+    #print("cells")
+    #print(cells)
     # global list of vertices, in correct order
     # vertex_coords = [[0.0, 0.0],
     #                  [0.0, 1.0],
@@ -51,8 +51,8 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_ver
     #                  [2.0, 1.0],
     #                 ]
     vertex_coords = vertex_list
-    print("vertex_coords")
-    print(vertex_coords)
+    #print("vertex_coords")
+    #print(vertex_coords)
     # Create the mesh from the cell list
     dm.createFromCellList(dim, cells, vertex_coords, comm=comm)
     # Distribute the mesh (optional, useful for parallel runs)
@@ -74,8 +74,8 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_ver
         for key in boundary_vertex_info.keys():
             label_value = boundary_vertex_info[key]["DMFaceSetsLabel"]
             boundary_vertex_indices = boundary_vertex_info[key]["ivertex"]
-            print(key)
-            print(boundary_vertex_indices)
+            #print(key)
+            #print(boundary_vertex_indices)
             # loop over faces
             for face in range(face_start, face_end):
                 # vertices supporting this face
@@ -96,10 +96,10 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_ver
         cone = dm.getCone(face)
         coords = vertex_coords[cone - vertex_start]
         if value in [100,200,300,400]:
-            print(f"Face {face} labeled with value {value}")
-            print(f"Face {face} coords {coords[0]}")
+            #print(f"Face {face} labeled with value {value}")
+            #print(f"Face {face} coords {coords[0]}")
             check = check_label_value_coords(value,coords[0],boundary_vertex_info)
-            print(f"Test passed: {check}")
+            #print(f"Test passed: {check}")
     mesh_name = file_path+".mesh"
     mesh_path = mesh_name+".vtk"
     # Write the mesh to a VTK file
