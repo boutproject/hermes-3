@@ -70,6 +70,7 @@
 #include "include/solkit_neutral_parallel_diffusion.hxx"
 #include "include/sound_speed.hxx"
 #include "include/thermal_force.hxx"
+#include "include/tokamak_core.hxx"
 #include "include/transform.hxx"
 #include "include/upstream_density_feedback.hxx"
 #include "include/temperature_feedback.hxx"
