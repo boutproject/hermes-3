@@ -203,9 +203,6 @@ endif()
 add_executable(hermes-3
                hermes-3.cxx
                ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
-if(HERMES_USE_VANTAGE)
-  add_sycl_to_target(TARGET hermes-3 SOURCES hermes-3.cxx)
-endif()
 target_link_libraries(hermes-3 PRIVATE hermes-3-lib)
 
 target_include_directories(hermes-3 PUBLIC
@@ -216,7 +213,9 @@ target_include_directories(hermes-3 PUBLIC
 
 # Have hermes-3 look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3 PROPERTIES BUILD_RPATH "$ORIGIN")
-
+if(HERMES_USE_VANTAGE)
+  add_sycl_to_target(TARGET hermes-3 SOURCES hermes-3.cxx)
+endif()
 # Build the file containing just the commit hash
 # This will be rebuilt on every commit!
 configure_file(
@@ -250,8 +249,8 @@ if(HERMES_USE_VANTAGE)
   add_executable(bout-particle-push
                 bout-particle-push.cxx
                 ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
-  add_sycl_to_target(TARGET bout-particle-push SOURCES bout-particle-push.cxx)
   target_link_libraries(bout-particle-push PUBLIC bout++::bout++ VANTAGE-Reactions::VANTAGE-Reactions)
+  add_sycl_to_target(TARGET bout-particle-push SOURCES bout-particle-push.cxx)
 endif()
 
 # Tests
