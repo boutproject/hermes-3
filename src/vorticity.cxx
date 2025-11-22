@@ -475,11 +475,9 @@ void Vorticity::transform(Options& state) {
     const auto tosolve = Vort * (Bsq / average_atomic_mass);
     checkData(tosolve);
     checkData(phi_plus_pi);
-    //output.write("WE ARE SOLVING!!!!\n");
     try {
       phi = phiSolver->solve(tosolve, phi_plus_pi) - Pi_hat;
     } catch (const BoutException& e) {
-      output.write("WE ARE DEBUGGING!!!!\n");
       Options debug;
       debug["tosolve"] = tosolve;
       debug["guess"] = phi_plus_pi;
@@ -487,7 +485,6 @@ void Vorticity::transform(Options& state) {
       debug["Bsq"] = Bsq;
       debug["Pi_hat"] = Pi_hat;
       mesh->outputVars(debug);
-      //debug["BOUT_VERSION"].force(bout::version::as_double);
       const std::string outname =
         fmt::format("{}/BOUT.debug_vorticity.{}.nc",
                     Options::root()["datadir"].withDefault<std::string>("data"),
