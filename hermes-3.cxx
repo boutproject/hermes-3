@@ -280,9 +280,10 @@ int Hermes::init(bool restarting) {
 	coord->g_23 /= SQ(rho_s0);
 
         // Need yup/down fields on Bxy
-        coord->Bxy.applyBoundary("neumann_o2");
-        mesh->communicate(coord->Bxy);
-        coord->Bxy.applyParallelBoundary("parallel_neumann_o2");
+	if (! coord->Bxy.hasParallelSlices()) {
+	  mesh->communicate(coord->Bxy);
+	  coord->Bxy.applyParallelBoundary("parallel_neumann_o2");
+	}
 
         BOUT_FOR(i, coord->Bxy.getRegion("RGN_NOBNDRY")) {
           if (fabs(coord->Bxy.yup()[i]) < 1e-3) {
