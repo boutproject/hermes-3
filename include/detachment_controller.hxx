@@ -5,6 +5,8 @@
 #include "component.hxx"
 #include <bout/constants.hxx>
 
+#include <cstddef>
+
 struct DetachmentController : public Component {
 
   DetachmentController(std::string, Options& options, Solver*) {
@@ -108,7 +110,7 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
 
     buffer_size = detachment_controller_options["buffer_size"]
                                .doc("Number of points to store for calculating derivatives.")
-                               .withDefault(10);
+                               .withDefault(std::size_t{10});
     
     species_list = strsplit(detachment_controller_options["species_list"]
                                   .doc("Comma-separated list of species to apply the PI-controlled source to")
@@ -310,7 +312,7 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
     bool first_step{true};
     BoutReal number_of_crossings{0.0};
 
-    int buffer_size = 0;
+    std::size_t buffer_size = 0;
     std::vector<BoutReal> time_buffer;
     std::vector<BoutReal> error_buffer;
 

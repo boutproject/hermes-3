@@ -29,7 +29,6 @@ struct EvolvePressure : public Component {
   ///   - poloidal_flows       Include poloidal ExB flows? Default is true
   ///   - precon               Enable preconditioner? Note: solver may not use it even if
   ///   enabled.
-  ///   - p_div_v              Use p * Div(v) form? Default is v * Grad(p) form
   ///   - thermal_conduction   Include parallel heat conduction? Default is true
   ///
   /// - P<name>  e.g. "Pe", "Pd+"
@@ -84,11 +83,11 @@ private:
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
-  BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
-                              ///< calculation
+  std::vector<std::string> collision_names; ///< Collisions used for collisionality
+  std::string conduction_collisions_mode;  ///< Collision selection, either multispecies or braginskii
+  Field3D nu;   ///< Collision frequency for conduction
+  BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
-
-  bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
 
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
@@ -104,6 +103,8 @@ private:
 
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 
+  Field3D conduction_div; ///< Divergence of heat conduction flux
+
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;                   ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
@@ -114,15 +115,17 @@ private:
   bool diagnose;                 ///< Output additional diagnostics?
   bool enable_precon;            ///< Enable preconditioner?
   BoutReal source_normalisation; ///< Normalisation factor [Pa/s]
-  BoutReal time_normalisation;   ///< Normalisation factor [s]
-  bool source_time_dependent;    ///< Is the input source time dependent?
-  Field3D flow_xlow, flow_ylow;  ///< Energy flow diagnostics
-  Field3D flow_ylow_conduction;  ///< Conduction energy flow diagnostics
-  Field3D flow_ylow_kinetic;     ///< Parallel flow of kinetic energy
+  BoutReal time_normalisation; ///< Normalisation factor [s]
+  bool source_time_dependent; ///< Is the input source time dependent?
+  Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
+  Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
+  Field3D flow_ylow_advection;    ///< Advection energy flow diagnostics
+  Field3D flow_ylow_viscous_heating; ///< Flow of kinetic energy due to numerical viscosity
 
   bool numerical_viscous_heating;  ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
-  Field3D Sp_nvh;                  ///< Pressure source due to artificial viscosity
+  Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
+  Field3D E_PdivV, E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
 };
 
 namespace {

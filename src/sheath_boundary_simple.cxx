@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "../include/sheath_boundary_simple.hxx"
 #include "../include/hermes_utils.hxx"
 
@@ -6,14 +8,6 @@
 using bout::globals::mesh;
 
 namespace {
-BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
-  if (value < min)
-    return min;
-  if (value > max)
-    return max;
-  return value;
-}
-
 Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int ny = f.getNy();
   int nz = f.getNz();
@@ -227,10 +221,7 @@ void SheathBoundarySimple::transform(Options& state) {
             // Sound speed squared
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-            BoutReal visheath = -sqrt(C_i_sq);
-            if (Vi[i] < visheath) {
-              visheath = Vi[i];
-            }
+            const BoutReal visheath = std::min(Vi[i], -sqrt(C_i_sq));
 
             ion_sum[i] -= Zi * nisheath * visheath;
           }
@@ -258,10 +249,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-            BoutReal visheath = sqrt(C_i_sq);
-            if (Vi[i] > visheath) {
-              visheath = Vi[i];
-            }
+            const BoutReal visheath = std::max(Vi[i], sqrt(C_i_sq));
 
             ion_sum[i] += Zi * nisheath * visheath;
           }
@@ -561,7 +549,6 @@ void SheathBoundarySimple::transform(Options& state) {
           Pi[im] = limitFree(Pi[ip], Pi[i], pressure_boundary_mode);
 
           // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
           const BoutReal tesheath =
               floor(0.5 * (Te[im] + Te[i]), 1e-5); // electron temperature
@@ -571,11 +558,8 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
-
-          if (Vi[i] < visheath) {
-            visheath = Vi[i];
-          }
+          // Negative -> into sheath
+          BoutReal visheath = std::min(Vi[i], -sqrt(C_i_sq));
 
           // Note: Here this is negative because visheath < 0
           BoutReal q = gamma_i * tisheath * nisheath * visheath;
@@ -630,7 +614,6 @@ void SheathBoundarySimple::transform(Options& state) {
           Pi[ip] = limitFree(Pi[im], Pi[i], pressure_boundary_mode);
 
           // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[ip] + Ni[i]);
           const BoutReal tesheath =
               floor(0.5 * (Te[ip] + Te[i]), 1e-5); // electron temperature
@@ -640,11 +623,8 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
-
-          if (Vi[i] > visheath) {
-            visheath = Vi[i];
-          }
+          // Positive -> into sheath
+          BoutReal visheath = std::max(Vi[i], sqrt(C_i_sq));
 
           BoutReal q = gamma_i * tisheath * nisheath * visheath;
 
@@ -720,7 +700,6 @@ void SheathBoundarySimple::outputVars(Options& state) {
   AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
-  auto rho_s0 = get<BoutReal>(state["rho_s0"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation

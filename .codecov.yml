@@ -1,0 +1,32 @@
+ignore:
+  - "tests"
+  - "external"
+
+codecov:
+  branch: master
+
+coverage:
+  status:
+    project:
+      default: false
+      unit:
+        target: auto
+        flags:
+          - unit
+      integration:
+        target: auto
+        threshold: 5%
+        flags:
+          - integration
+
+flags:
+  unit:
+    paths:
+      - "src"
+      - "include"
+  integration:
+    paths:
+      - "src"
+      - "integration"
+      - "hermes-3.cxx"
+      - "hermes-3.hxx"

@@ -53,9 +53,18 @@ private:
 
     // Recycling particle and energy sources for the different sources of recycling
     // These sources are per-channel and added to the `to` species
-    Field3D target_recycle_density_source, target_recycle_energy_source;
-    Field3D wall_recycle_density_source, wall_recycle_energy_source;  ///< Recycling particle and energy sources for pfr + sol recycling
-    Field3D pump_density_source, pump_energy_source;  ///< Recycling particle and energy sources for pump recycling
+    /// Recycling density source for target recycling
+    Field3D target_recycle_density_source = 0.0;
+    /// Recycling energy source for target recycling
+    Field3D target_recycle_energy_source = 0.0;
+    /// Recycling density source for pfr + sol recycling
+    Field3D wall_recycle_density_source = 0.0;
+    /// Recycling energy source for pfr + sol recycling
+    Field3D wall_recycle_energy_source = 0.0;
+    /// Recycling density source for pump recycling
+    Field3D pump_density_source = 0.0;
+    /// Recycling energy source for pump recycling
+    Field3D pump_energy_source = 0.0;
   };
 
   std::vector<RecycleChannel> channels; // Recycling channels

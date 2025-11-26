@@ -50,6 +50,11 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                   .doc("Damp P - N*T? Active when P < 0 or N < density_floor")
                   .withDefault<bool>(false);
 
+  conduction_collisions_mode = options["conduction_collisions_mode"]
+                                   .doc("Can be multispecies: all collisions, or "
+                                        "braginskii: self collisions and ie")
+                                   .withDefault<std::string>("multispecies");
+
   if (evolve_log) {
     // Evolve logarithm of pressure
     solver->add(logP, std::string("logP") + name);
@@ -259,7 +264,7 @@ void EvolvePressure::transform(Options& state) {
 void EvolvePressure::finally(const Options& state) {
   AUTO_TRACE();
 
-  /// Get the section containing this species
+  // Get the section containing this species
   const auto& species = state["species"][name];
 
   // Get updated pressure and temperature with boundary conditions
@@ -297,11 +302,13 @@ void EvolvePressure::finally(const Options& state) {
     //
     // The internal energy term Pint = Nlim * T
     ddt(P) -=
-        FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave, flow_ylow);
+        FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave, flow_ylow_advection);
 
-    ddt(P) += (2. / 3) * V * Grad_par(P);
+    E_VgradP = V * Grad_par(P);
+    ddt(P) += (2. / 3) * E_VgradP;
 
-    flow_ylow *= 5. / 2; // Energy flow
+    flow_ylow_advection *= 5. / 2; // Energy flow
+    flow_ylow = flow_ylow_advection;
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -311,18 +318,20 @@ void EvolvePressure::finally(const Options& state) {
     }
 
     if (numerical_viscous_heating || diagnose) {
-      // Viscous heating coming from numerical viscosity
+      // Viscous heating coming from numerical viscosity from the Lax flux
       Field3D Nlim = softFloor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
       Sp_nvh = (2. / 3) * AA
-               * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic,
+               * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_viscous_heating,
                                          fix_momentum_boundary_flux);
-      flow_ylow_kinetic *= AA;
-      flow_ylow += flow_ylow_kinetic;
+      flow_ylow_viscous_heating *= AA;
+      flow_ylow += flow_ylow_viscous_heating;
       if (numerical_viscous_heating) {
         ddt(P) += Sp_nvh;
       }
     }
+  } else if (diagnose) {
+    flow_ylow = 0;
   }
 
   if (species.isSet("low_n_coeff")) {
@@ -333,8 +342,8 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_n_diffuse_perp) {
-    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P,
-                                    true);
+    ddt(P) +=
+        Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P);
   }
 
   if (low_T_diffuse_perp) {
@@ -342,20 +351,111 @@ void EvolvePressure::finally(const Options& state) {
         1e-4
         * Div_Perp_Lap_FV_Index(
             floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
-            T, false);
+            T);
   }
 
   if (low_p_diffuse_perp) {
     Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
-    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
+    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P);
   }
 
   // Parallel heat conduction
   if (thermal_conduction) {
 
+    // Collisionality
+    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+    if (collision_names.empty()) { // Calculate only once - at the beginning
+
+      const auto species_type = identifySpeciesType(name);
+
+      if (conduction_collisions_mode == "braginskii") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (species_type == SpeciesType::neutral) {
+            throw BoutException("\tBraginskii conduction collisions mode not available "
+                                "for neutrals, choose multispecies or afn");
+          } else if (species_type == SpeciesType::electron) {
+            if ( // Electron-electron collisions
+                (collisionSpeciesMatch(collision_name, species.name(), "e", "coll",
+                                       "exact"))) {
+              collision_names.push_back(collision_name);
+            }
+
+          } else if (species_type == SpeciesType::ion) {
+            if ( // Self-collisions
+                (collisionSpeciesMatch(collision_name, species.name(), species.name(),
+                                       "coll", "exact"))) {
+              collision_names.push_back(collision_name);
+            }
+          }
+        }
+
+        // Multispecies mode: all collisions and CX are included
+      } else if (conduction_collisions_mode == "multispecies") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, species.name(), "", "cx", "partial"))
+              or
+              // Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(collision_name, species.name(), "", "coll",
+                                     "partial"))) {
+            collision_names.push_back(collision_name);
+          }
+        }
+
+      } else if (conduction_collisions_mode == "afn") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (species_type != SpeciesType::neutral) {
+            throw BoutException("\tAFN conduction collisions mode not available for ions "
+                                "or electrons, choose braginskii or multispecies");
+          }
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, species.name(), "+", "cx",
+                                     "partial"))
+              or
+              // Ionisation
+              (collisionSpeciesMatch(collision_name, species.name(), "+", "iz",
+                                     "partial"))) {
+            collision_names.push_back(collision_name);
+          }
+        }
+
+      } else {
+        throw BoutException("\tConduction_collisions_mode incorrect", species.name());
+      }
+
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in evolve_pressure for "
+                            "selected collisions mode",
+                            species.name());
+      }
+
+      // Write chosen collisions to log file
+      output_info.write("\t{:s} conduction collisionality mode: '{:s}' using ",
+                        species.name(), conduction_collisions_mode);
+      for (const auto& collision : collision_names) {
+        output_info.write("{:s} ", collision);
+      }
+
+      output_info.write("\n");
+    }
+
+    // Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
+    }
+
     // Calculate ion collision times
-    const Field3D tau =
-        1. / softFloor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau = 1. / softFloor(nu, 1e-10);
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -406,7 +506,6 @@ void EvolvePressure::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    flow_ylow_conduction;
     ddt(P) +=
         (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
     flow_ylow += flow_ylow_conduction;
@@ -535,6 +634,14 @@ void EvolvePressure::outputVars(Options& state) {
                       {"long_name", name + " heat conduction coefficient"},
                       {"species", name},
                       {"source", "evolve_pressure"}});
+
+      set_with_attrs(state[std::string("K") + name + std::string("_cond")], nu,
+                     {{"time_dimension", "t"},
+                      {"units", "s^-1"},
+                      {"conversion", Omega_ci},
+                      {"long_name", "collision frequency for conduction"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
     }
     set_with_attrs(state[std::string("T") + name], T,
                    {{"time_dimension", "t"},
@@ -571,6 +678,16 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
+    if (E_VgradP.isAllocated()) {
+      set_with_attrs(state["E" + name + "_VgradP"], E_VgradP,
+		     {{"time_dimension", "t"},
+		      {"units", "W / m^-3"},
+		      {"conversion", Pnorm * Omega_ci},
+		      {"standard_name", "energy source"},
+		      {"long_name", name + " energy source due to pressure gradient"},
+		      {"species", name},
+		      {"source", "evolve_pressure"}});
+    }
     if (flow_xlow.isAllocated()) {
       set_with_attrs(
           state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
@@ -595,27 +712,37 @@ void EvolvePressure::outputVars(Options& state) {
     }
 
     if (flow_ylow_conduction.isAllocated()) {
-      set_with_attrs(
-          state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
-          {{"time_dimension", "t"},
-           {"units", "W"},
-           {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-           {"standard_name", "power"},
-           {"long_name",
-            name + " conduction through Y cell face. Note: May be incomplete."},
-           {"species", name},
-           {"source", "evolve_pressure"}});
+      set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
+                     {{"time_dimension", "t"},
+                      {"units", "W"},
+                      {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                      {"standard_name", "power"},
+                      {"long_name", name + " conduction through Y cell face."},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
     }
 
-    if (flow_ylow_kinetic.isAllocated()) {
+    if (flow_ylow_advection.isAllocated()) {
+      set_with_attrs(state[fmt::format("ef{}_adv_ylow", name)], flow_ylow_advection,
+                     {{"time_dimension", "t"},
+                      {"units", "W"},
+                      {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                      {"standard_name", "power"},
+                      {"long_name", name + " advected energy flow through Y cell face."},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+    }
+
+    if (flow_ylow_viscous_heating.isAllocated()) {
       set_with_attrs(
-          state[fmt::format("ef{}_kin_ylow", name)], flow_ylow_kinetic,
+          state[fmt::format("ef{}_visc_heat_ylow", name)], flow_ylow_viscous_heating,
           {{"time_dimension", "t"},
            {"units", "W"},
            {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
            {"standard_name", "power"},
            {"long_name",
-            name + " kinetic energy flow through Y cell face. Note: May be incomplete."},
+            name
+                + " energy flow due to Lax flux numerical viscosity through Y cell face"},
            {"species", name},
            {"source", "evolve_pressure"}});
     }

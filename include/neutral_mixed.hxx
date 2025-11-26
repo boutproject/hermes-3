@@ -43,8 +43,13 @@ private:
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
+  std::vector<std::string> collision_names; ///< Collisions used for collisionality
+  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or multispecies
+  Field3D nu; ///< Collisionality to use for diffusion
   Field3D Dnn; ///< Diffusion coefficient
-  Field3D DnnNn, DnnPn, DnnNVn;
+  Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
+  BoutReal flux_limit; ///< Diffusive flux limit
+  BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
   bool sheath_ydown, sheath_yup;
 
@@ -52,9 +57,6 @@ private:
   BoutReal temperature_floor;
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
   bool freeze_low_density; ///< Freeze evolution in low density regions?
-
-  BoutReal flux_limit;      ///< Diffusive flux limit
-  BoutReal diffusion_limit; ///< Maximum diffusion coefficient
 
   bool neutral_viscosity;  ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?

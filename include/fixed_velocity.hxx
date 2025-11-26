@@ -3,6 +3,7 @@
 #define FIXED_VELOCITY_H
 
 #include "component.hxx"
+#include <bout/globals.hxx>
 
 /// Set parallel velocity to a fixed value
 ///
@@ -19,7 +20,14 @@ struct FixedVelocity : public Component {
     const BoutReal Cs0 = units["meters"].as<BoutReal>() / units["seconds"].as<BoutReal>();
 
     // Get the velocity and normalise
-    V = options["velocity"].as<Field3D>() / Cs0;
+    // First read from the mesh file e.g. "Ve0"
+    if ((bout::globals::mesh->get(V, std::string("V") + name + "0") != 0) and
+        !options.isSet("velocity")) {
+      throw BoutException("fixed_velocity: Missing mesh V{}0 or option {}:velocity\n", name, name);
+    }
+    // Option overrides mesh value
+    // so use mesh value (if any) as default value.
+    V = options["velocity"].withDefault(V) / Cs0;
   }
 
   /// This sets in the state

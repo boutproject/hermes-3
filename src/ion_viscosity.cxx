@@ -1,10 +1,11 @@
-/// Ion viscosity model
+// Ion viscosity model
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/difops.hxx>
 #include <bout/output_bout_types.hxx>
 #include <bout/mesh.hxx>
+#include "../include/hermes_utils.hxx"
 
 #include "../include/ion_viscosity.hxx"
 #include "../include/div_ops.hxx"
@@ -25,6 +26,10 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
   perpendicular = options["perpendicular"]
     .doc("Include perpendicular flow? (Requires phi)")
     .withDefault<bool>(false);
+
+  viscosity_collisions_mode = options["viscosity_collisions_mode"]
+      .doc("Can be multispecies: all collisions, or braginskii: self collisions")
+      .withDefault<std::string>("multispecies");
 
   bounce_frequency = options["bounce_frequency"]
     .doc("Include neoclassical modification of the collision time?")
@@ -117,7 +122,71 @@ void IonViscosity::transform(Options &state) {
       continue;
     }
 
-    const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
+    // Initialise collision_names for each species if not already done
+    if (collision_names.find(species_name) == collision_names.end()) {
+      collision_names[species_name] = {};  // Initialise with empty vector
+    }
+
+    if (collision_names[species_name].empty()) {     // Calculate only once - at the beginning
+
+
+      if (viscosity_collisions_mode == "braginskii") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (// Self-collisions
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), species.name(), "coll", "exact")) or
+              // Ion-electron collisions
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "+", "coll", "partial"))) {
+                  
+                  collision_names[species_name].push_back(collision_name);
+                }
+        }
+      // Multispecies mode: all collisions and CX are included
+      } else if (viscosity_collisions_mode == "multispecies") {
+        for (const auto& collision : species["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if (// Charge exchange
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "cx", "partial")) or
+              // Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(    
+                collision_name, species.name(), "", "coll", "partial"))) {
+                  
+                  collision_names[species_name].push_back(collision_name);
+                }
+        }
+      } else {
+        throw BoutException("\tviscosity_collisions_mode for {:s} must be either multispecies or braginskii", species.name());
+      }
+
+      if (collision_names[species_name].empty()) {
+        throw BoutException("\tNo collisions found for {:s} in ion_viscosity for selected collisions mode", species.name());
+      }
+
+      // Write chosen collisions to log file
+      output_info.write("\t{:s} viscosity collisionality mode: '{:s}' using ",
+                      species.name(), viscosity_collisions_mode);
+      for (const auto& collision : collision_names[species_name]) {        
+        output_info.write("{:s} ", collision);
+      }
+
+      output_info.write("\n");
+
+      }
+
+    // Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names[species_name]) {
+      nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
+    }
+
+    const Field3D tau = 1. / nu;
     const Field3D P = get<Field3D>(species["pressure"]);
     const Field3D V = get<Field3D>(species["velocity"]);
 
@@ -175,19 +244,7 @@ void IonViscosity::transform(Options &state) {
                           (2. * Grad_par(V_av) + V_av * Grad_par_logB);
         Field2D Pi_ciperp = 0 * Pi_cipar; // Perpendicular components and divergence of current J equal to 0 for only parallel viscosity case
         Field2D DivJ = 0 * Pi_cipar;
-        // Find the diagnostics struct for this species
-        auto search = diagnostics.find(species_name);
-        if (search == diagnostics.end()) {
-          // First time, create diagnostic
-          diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor});
-        } else {
-          // Update diagnostic values
-          auto& d = search->second;
-          d.Pi_ciperp = Pi_ciperp;
-          d.Pi_cipar = Pi_cipar;
-          d.DivJ = DivJ;
-          d.bounce_factor = bounce_factor;
-        }
+        diagnostics[species_name] = Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
       }
       continue; // Skip perpendicular flow parts below
     }
@@ -280,20 +337,7 @@ void IonViscosity::transform(Options &state) {
                      - (1 / 3) * bracket(Pi_ci, phi_av + P_av, BRACKET_STD)));
 
     if (diagnose) {
-      // Find the diagnostics struct for this species
-      auto search = diagnostics.find(species_name);
-      if (search == diagnostics.end()) {
-        // First time, create diagnostic
-        diagnostics.emplace(species_name, Diagnostics {Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star});
-      } else {
-        // Update diagnostic values
-        auto& d = search->second;
-        d.Pi_ciperp = Pi_ciperp;
-        d.Pi_cipar = Pi_cipar;
-        d.DivJ = DivJ;
-        d.bounce_factor = bounce_factor;
-        d.nu_star = nu_star;
-      }
+      diagnostics[species_name] = Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
     }
   }
 }

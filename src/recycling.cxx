@@ -1,12 +1,13 @@
 
 #include "../include/recycling.hxx"
+#include "../include/hermes_utils.hxx" // For indexAt
 
-#include <bout/utils.hxx> // for trim, strsplit
-#include "../include/hermes_utils.hxx"  // For indexAt
-#include "../include/hermes_utils.hxx"  // For indexAt
+#include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
-#include <bout/constants.hxx>
+#include <bout/utils.hxx> // for trim, strsplit
+
+#include <algorithm>
 
 using bout::globals::mesh;
 
@@ -157,7 +158,6 @@ void Recycling::transform(Options& state) {
   const Field2D& dx = coord->dx;
   const Field2D& dz = coord->dz;
   const Field2D& g_22 = coord->g_22;
-  const Field2D& g11 = coord->g11;
 
   for (auto& channel : channels) {
     const Options& species_from = state["species"][channel.from];
@@ -211,9 +211,7 @@ void Recycling::transform(Options& state) {
               -0.5 * (N(r.ind, mesh->ystart, jz) + N(r.ind, mesh->ystart - 1, jz)) * 0.5
               * (V(r.ind, mesh->ystart, jz) + V(r.ind, mesh->ystart - 1, jz));
 
-          if (flux < 0.0) {
-            flux = 0.0;
-          }
+          flux = std::max(flux, 0.0);
 
           // Flow of recycled neutrals into domain [s-1]
           BoutReal flow =
@@ -253,9 +251,7 @@ void Recycling::transform(Options& state) {
           BoutReal flux = 0.5 * (N(r.ind, mesh->yend, jz) + N(r.ind, mesh->yend + 1, jz))
                           * 0.5 * (V(r.ind, mesh->yend, jz) + V(r.ind, mesh->yend + 1, jz));
 
-          if (flux < 0.0) {
-            flux = 0.0;
-          }
+          flux = std::max(flux, 0.0);
 
           // Flow of recycled neutrals into domain [s-1]
           BoutReal flow =
@@ -361,7 +357,6 @@ void Recycling::transform(Options& state) {
               // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
               // While enabling us to still calculate radial wall fluxes separately here
               BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
-              BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
               BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
               // Calculate wall conditions
@@ -461,7 +456,6 @@ void Recycling::transform(Options& state) {
                 // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
                 // While enabling us to still calculate radial wall fluxes separately here
                 BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
-                BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
                 BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
                 // Calculate wall conditions

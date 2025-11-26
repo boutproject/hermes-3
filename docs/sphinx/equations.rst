@@ -187,6 +187,12 @@ By default parallel thermal conduction is included, which requires a collision
 time. If collisions are not calculated, then thermal conduction should be turned off
 by setting `thermal_conduction = false` in the input options.
 
+The choice of collision frequency used for conduction is set by the flag `conduction_collisions_mode`: 
+`multispecies` uses all available collision frequencies involving the chosen species, while `braginskii` uses only
+self-collisions .The default is `multispecies` and it is recommended for use if solving more than one ion.
+If you are solving for a single ion and want to recover Braginskii, use the `braginskii` mode.
+
+
 If the component option ``diagnose = true`` then additional fields
 will be saved to the dump files: The species temperature ``T + name``
 (e.g. ``Td+`` or ``Te``), the time derivative ``ddt(P + name)``
@@ -296,6 +302,17 @@ component also calculates the momentum.
 
 Saves the temperature once as a non-evolving variable.
 
+The velocity may be set in the mesh file as an array (2D or 3D), or in
+the options as an expression. The options value overrides the value in
+the mesh. If neither mesh array nor option are set then an exception
+will be thrown. Both mesh array and option should be specified in
+units of meters per second.
+
+The name of the array in the mesh file is ``V<name>0`` where
+``<name>`` is the name of the species e.g. for species ``e``
+(electrons), ``fixed_velocity`` will try to read ``Ve0`` from the mesh
+file, and then the ``velocity`` option in the ``[e]`` section:
+
 .. code-block:: ini
 
    [e]
@@ -374,6 +391,8 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
+.. _electron_viscosity:
+
 electron_viscosity
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -401,6 +420,8 @@ and all other species therefore need to be calculated before this component is r
 .. doxygenstruct:: ElectronViscosity
    :members:
 
+.. _ion_viscosity:
+
 ion_viscosity
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -425,6 +446,13 @@ The ion parallel viscosity is
 .. math::
 
    \eta_i = \frac{4}{3} 0.96 p_i \tau_i
+
+The choice of collision frequency is set by the flag `viscosity_collisions_mode`: `multispecies` uses
+all available collision frequencies involving the chosen species, while `braginskii` uses only
+ii collisions. The default is `multispecies` and it is recommended when solving
+more than one ion. If you are solving for a single ion and want to recover Braginskii, 
+use the `braginskii` mode.
+
 
 If the `perpendicular` option is set:
 
@@ -611,6 +639,8 @@ it is recommended to set `dneut` according to the field line pitch at the target
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
 
+.. _neutral_mixed:
+
 2D/3D: neutral_mixed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -662,7 +692,12 @@ The perpendicular velocity is calculated as:
    \end{aligned}
 
 Where in the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`ln(P_n)`, which helps
-preserve pressure positivity.
+preserve pressure positivity. 
+
+The choice of collision frequency is set by the flag `diffusion_collisions_mode`: `multispecies` uses
+all available collision frequencies involving the chosen species, while `afn` uses only
+CX and IZ rates. The default is `afn` and corresponds to the choice in UEDGE and 
+the SOLPS-ITER AFN (Advanced Fluid Neutral) model. 
 
 The diffusion coefficients are defined as:
 
