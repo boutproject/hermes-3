@@ -142,6 +142,8 @@ struct Component {
   /// must be completed or else an exception will be thrown.
   void declareAllSpecies(const SpeciesInformation & info);
 
+  const Permissions& getPermissions() const { return state_variable_access; }
+
 protected:
   /// Set the level of access needed by this component for a particular variable.
   void setPermissions(const std::string& variable,
