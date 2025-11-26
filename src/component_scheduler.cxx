@@ -79,6 +79,18 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
   }
 }
 
+// Use index to identify component
+// std::map<int, std::set<int>> dependencies;
+// std::map<std::string, int> var_written_by, var_final_written_by, read_dependencies;
+
+// Assemble the maps of which components write each variable
+// Assemble read_dependencies using values from var_final_written_by, if present, else
+// from var_written_by For each component
+//   For each write-final var, create dependency between component and all components that
+//   write it For each read-if-set var that has a write-final, create dependency between
+//   component and (final) writer(s) For each read-var create a dependency between
+//   component and (final) writers; if none then raise exception
+
 std::unique_ptr<ComponentScheduler> ComponentScheduler::create(Options &scheduler_options,
                                                                Options &component_options,
                                                                Solver *solver) {
