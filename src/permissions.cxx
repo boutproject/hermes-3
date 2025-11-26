@@ -242,3 +242,9 @@ std::istream& operator>>(std::istream& is, Permissions& permissions) {
 
   return is;
 }
+
+std::string toString(const Permissions& value) {
+  std::ostringstream ss;
+  ss << value;
+  return ss.str();
+}
