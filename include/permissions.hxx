@@ -337,3 +337,5 @@ std::ostream& operator<<(std::ostream& os, const Permissions& permissions);
 /// behaviour if the input is corrupted; an exception may be thrown or
 /// the permissions that are read may be incomplete.
 std::istream& operator>>(std::istream& is, Permissions& permissions);
+
+std::string toString(const Permissions& value);
