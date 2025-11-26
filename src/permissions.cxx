@@ -194,7 +194,6 @@ std::ostream& operator<<(std::ostream& os, const Permissions& permissions) {
   return os;
 }
 
-#include <iostream>
 std::istream& operator>>(std::istream& is, Permissions& permissions) {
   std::string tmp, object;
   std::getline(is, tmp, '{');
@@ -213,7 +212,7 @@ std::istream& operator>>(std::istream& is, Permissions& permissions) {
     rights_patterns.push_back("\\s*(\\d+)\\s*");
   }
   const std::regex re(
-      fmt::format("\\s*(\\w+)\\s*:\\s*\\[{}\\]", fmt::join(rights_patterns, ",")));
+      fmt::format("\\s*([:\\w]+)\\s*:\\s*\\[{}\\]", fmt::join(rights_patterns, ",")));
   auto items_begin = std::sregex_iterator(object.begin(), object.end(), re);
   auto items_end = std::sregex_iterator();
 
