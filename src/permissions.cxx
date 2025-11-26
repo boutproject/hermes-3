@@ -1,4 +1,7 @@
+#include <regex>
+
 #include "../include/permissions.hxx"
+#include "bout/boutexception.hxx"
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 
@@ -143,6 +146,9 @@ Permissions::getHighestPermission(const std::string& variable, Regions region) c
 std::map<std::string, Regions>
 Permissions::getVariablesWithPermission(PermissionTypes permission,
                                         bool highestOnly) const {
+  if (permission == PermissionTypes::None) {
+    throw BoutException("Can not return information on variables with no permission.");
+  }
   std::map<std::string, Regions> result;
   if (highestOnly
       and static_cast<int>(permission) < static_cast<int>(PermissionTypes::END) - 1) {
@@ -171,4 +177,55 @@ std::string Permissions::regionNames(const Regions regions) {
     }
   }
   return fmt::format("{}", fmt::join(regions_present, ", "));
+}
+
+std::ostream& operator<<(std::ostream& os, const Permissions& permissions) {
+  os << std::string("{");
+  bool first = true;
+  for (const auto& [varname, rights] : permissions.variable_permissions) {
+    if (!first) {
+      os << std::string(",");
+    } else {
+      first = false;
+    }
+    os << fmt::format("{}:{}", varname, rights);
+  }
+  os << std::string("}");
+  return os;
+}
+
+#include <iostream>
+std::istream& operator>>(std::istream& is, Permissions& permissions) {
+  std::string tmp, object;
+  std::getline(is, tmp, '{');
+  if (is.eof()) {
+    throw BoutException("Error parsing Permissions data; no opening bracket.");
+  }
+  std::getline(is, object, '}');
+  if (is.eof()) {
+    throw BoutException("Error parsing Permissions data; no closing bracket.");
+  }
+  permissions.variable_permissions.clear();
+
+  // FIXME: This will just skip over any malformed content, without an error or warning
+  std::vector<std::string> rights_patterns;
+  for (int i = 0; i < static_cast<int>(PermissionTypes::END); i++) {
+    rights_patterns.push_back("\\s*(\\d+)\\s*");
+  }
+  const std::regex re(
+      fmt::format("\\s*(\\w+)\\s*:\\s*\\[{}\\]", fmt::join(rights_patterns, ",")));
+  auto items_begin = std::sregex_iterator(object.begin(), object.end(), re);
+  auto items_end = std::sregex_iterator();
+
+  for (std::sregex_iterator i = items_begin; i != items_end; ++i) {
+    std::smatch item = *i;
+    Permissions::AccessRights rights;
+    for (int i = 0; i < static_cast<int>(PermissionTypes::END); i++) {
+      std::string val = item[2 + i];
+      rights[i] = static_cast<Regions>(std::stoi(val));
+    }
+    permissions.setAccess(item[1], rights);
+  }
+
+  return is;
 }

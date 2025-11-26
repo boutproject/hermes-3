@@ -1,3 +1,4 @@
+#include "bout/boutexception.hxx"
 #include "gtest/gtest.h"
 
 #include "../include/permissions.hxx"
@@ -296,6 +297,11 @@ TEST(PermissionsTests, TestGetVariablesWithPermissions) {
   EXPECT_EQ(final_write.size(), 2);
   EXPECT_EQ(final_write["species:he:density"], Regions::Boundaries);
   EXPECT_EQ(final_write["species:he:collision_frequency"], Regions::All);
+
+  EXPECT_THROW(example.getVariablesWithPermission(PermissionTypes::None, true),
+               BoutException);
+  EXPECT_THROW(example.getVariablesWithPermission(PermissionTypes::None, false),
+               BoutException);
 }
 
 TEST(PermissionsTests, TestSubstitute) {
@@ -328,4 +334,47 @@ TEST(PermissionsTests, TestSubstitute) {
 
   EXPECT_EQ(example.getHighestPermission("d"),
             make_permission(PermissionTypes::ReadIfSet, "d"));
+}
+
+TEST(PermissionsTests, TestIO) {
+  Permissions empty({}), single({readOnly("test")}),
+      multiple({readIfSet("a", Regions::Interior), writeBoundary("b"), readWrite("c")}),
+      new_perm;
+
+  std::stringstream ss1, ss2, ss3;
+
+  ss1 << empty;
+  ss1 >> new_perm;
+  EXPECT_EQ(new_perm.getVariablesWithPermission(PermissionTypes::ReadIfSet, false).size(),
+            0);
+
+  ss2 << single;
+  ss2 >> new_perm;
+  EXPECT_EQ(new_perm.getVariablesWithPermission(PermissionTypes::ReadIfSet, false).size(),
+            1);
+  std::map<std::string, Regions> read_only =
+      new_perm.getVariablesWithPermission(PermissionTypes::Read);
+  EXPECT_EQ(read_only.size(), 1);
+  EXPECT_EQ(read_only["test"], Regions::All);
+
+  ss3 << multiple;
+  ss3 >> new_perm;
+  EXPECT_EQ(new_perm.getVariablesWithPermission(PermissionTypes::ReadIfSet, false).size(),
+            3);
+  std::map<std::string, Regions> read_if_set =
+      new_perm.getVariablesWithPermission(PermissionTypes::ReadIfSet);
+  EXPECT_EQ(read_if_set.size(), 1);
+  EXPECT_EQ(read_if_set["a"], Regions::Interior);
+  std::map<std::string, Regions> read =
+      new_perm.getVariablesWithPermission(PermissionTypes::Read);
+  EXPECT_EQ(read.size(), 1);
+  EXPECT_EQ(read["b"], Regions::Interior);
+  std::map<std::string, Regions> read_write =
+      new_perm.getVariablesWithPermission(PermissionTypes::Write);
+  EXPECT_EQ(read_write.size(), 1);
+  EXPECT_EQ(read_write["c"], Regions::All);
+  std::map<std::string, Regions> write_final =
+      new_perm.getVariablesWithPermission(PermissionTypes::Final);
+  EXPECT_EQ(write_final.size(), 1);
+  EXPECT_EQ(write_final["b"], Regions::Boundaries);
 }
