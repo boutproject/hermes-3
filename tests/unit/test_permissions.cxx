@@ -338,7 +338,7 @@ TEST(PermissionsTests, TestSubstitute) {
 
 TEST(PermissionsTests, TestIO) {
   Permissions empty({}), single({readOnly("test")}),
-      multiple({readIfSet("a", Regions::Interior), writeBoundary("b"), readWrite("c")}),
+      multiple({readIfSet("a", Regions::Interior), writeBoundary("b"), readWrite("c:d")}),
       new_perm;
 
   std::stringstream ss1, ss2, ss3;
@@ -372,7 +372,7 @@ TEST(PermissionsTests, TestIO) {
   std::map<std::string, Regions> read_write =
       new_perm.getVariablesWithPermission(PermissionTypes::Write);
   EXPECT_EQ(read_write.size(), 1);
-  EXPECT_EQ(read_write["c"], Regions::All);
+  EXPECT_EQ(read_write["c:d"], Regions::All);
   std::map<std::string, Regions> write_final =
       new_perm.getVariablesWithPermission(PermissionTypes::Final);
   EXPECT_EQ(write_final.size(), 1);
