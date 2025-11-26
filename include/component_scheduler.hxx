@@ -57,6 +57,11 @@ public:
 
   /// Preconditioning
   void precon(const Options &state, BoutReal gamma);
+
+  /// All the variable names which are pre-set in the state, before
+  /// any components are applied.
+  static const std::set<std::string> predeclared_variables;
+
 private:
   /// The components to be executed in order
   std::vector<std::unique_ptr<Component>> components;
