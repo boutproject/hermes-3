@@ -9,6 +9,10 @@
 #include "../include/component.hxx"
 #include "../include/component_scheduler.hxx"
 
+const std::set<std::string> ComponentScheduler::predeclared_variables = {
+    "time",          "linear",      "units:inv_meters_cubed", "units:eV", "units:Tesla",
+    "units:seconds", "units:meters"};
+
 /// Perform a depth-first topological sort, starting from `item`.
 void topological_sort(const std::vector<std::set<size_t>>& dependencies, size_t item,
                       std::vector<size_t>& sorted, std::vector<bool>& processing,
@@ -79,6 +83,9 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
     // them
     for (const auto& [name, regions] :
          permissions.getVariablesWithPermission(PermissionTypes::Read)) {
+      std::cout << name << "\n";
+      if (ComponentScheduler::predeclared_variables.count(name) > 0)
+        continue;
       for (const auto& [region, _] : Permissions::fundamental_regions) {
         if ((regions & region) == region) {
           const auto item = variable_writers.find({name, region});
@@ -96,6 +103,8 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
     // which sets them
     for (const auto& [name, regions] :
          permissions.getVariablesWithPermission(PermissionTypes::ReadIfSet)) {
+      if (ComponentScheduler::predeclared_variables.count(name) > 0)
+        continue;
       for (const auto& [region, _] : Permissions::fundamental_regions) {
         if ((regions & region) == region) {
           const auto item = variable_writers.find({name, region});
