@@ -9,6 +9,123 @@
 #include "../include/component.hxx"
 #include "../include/component_scheduler.hxx"
 
+/// Perform a depth-first topological sort, starting from `item`.
+void topological_sort(const std::vector<std::set<size_t>>& dependencies, size_t item,
+                      std::vector<size_t>& sorted, std::vector<bool>& processing,
+                      std::vector<bool>& processed) {
+  if (processed[item]) {
+    return;
+  }
+  if (processing[item]) {
+    throw BoutException("Circular dependency among components.");
+  }
+  processing[item] = true;
+
+  for (const auto dep : dependencies[item]) {
+    topological_sort(dependencies, dep, sorted, processing, processed);
+  }
+  processed[item] = true;
+  sorted.push_back(item);
+}
+
+/// Consumes a list of components and returns a new one that has been
+/// topolgically sorted to ensure variables are written and read in
+/// the right order.
+std::vector<std::unique_ptr<Component>>
+sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
+  using Var = std::pair<std::string, Regions>;
+  std::map<Var, std::set<size_t>> nonfinal_writes, final_writes;
+  // Build up information on which components write each variable
+  for (size_t i = 0; i < components.size(); i++) {
+    const Permissions& permissions = components[i]->getPermissions();
+    for (const auto& [name, regions] :
+         permissions.getVariablesWithPermission(PermissionTypes::Write)) {
+      for (const auto& [region, _] : Permissions::fundamental_regions) {
+        if ((regions & region) == region) {
+          nonfinal_writes[{name, region}].insert(i);
+        }
+      }
+    }
+    for (const auto& [name, regions] :
+         permissions.getVariablesWithPermission(PermissionTypes::Final)) {
+      for (const auto& [region, _] : Permissions::fundamental_regions) {
+        if ((regions & region) == region) {
+          final_writes[{name, region}].insert(i);
+        }
+      }
+    }
+  }
+
+  std::vector<std::set<size_t>> component_dependencies(components.size());
+
+  // Components which do a final write on a variable depend on all
+  // components which do non-final writes on that variable
+  for (const auto& [var, comp_indices] : final_writes) {
+    for (size_t i : comp_indices) {
+      const auto item = nonfinal_writes.find(var);
+      if (item != nonfinal_writes.end()) {
+        component_dependencies[i].merge(item->second);
+      }
+    }
+  }
+
+  // Work out which component(s) last write a variable before it may be read
+  std::map<Var, std::set<size_t>> variable_writers = std::move(final_writes);
+  variable_writers.merge(std::move(nonfinal_writes));
+
+  for (size_t i = 0; i < components.size(); i++) {
+    const Permissions& permissions = components[i]->getPermissions();
+    // Create dependencies between components that read variables and those that write
+    // them
+    for (const auto& [name, regions] :
+         permissions.getVariablesWithPermission(PermissionTypes::Read)) {
+      for (const auto& [region, _] : Permissions::fundamental_regions) {
+        if ((regions & region) == region) {
+          const auto item = variable_writers.find({name, region});
+          if (item == variable_writers.end()) {
+            throw BoutException(
+                "Required variable {} (in region {}) is not written by any component.",
+                name, Permissions::fundamental_regions.at(region));
+          }
+          component_dependencies[i].merge(item->second);
+        }
+      }
+    }
+
+    // Create dependencies for ReadIfSet variables only if there exist another component
+    // which sets them
+    for (const auto& [name, regions] :
+         permissions.getVariablesWithPermission(PermissionTypes::ReadIfSet)) {
+      for (const auto& [region, _] : Permissions::fundamental_regions) {
+        if ((regions & region) == region) {
+          const auto item = variable_writers.find({name, region});
+          if (item != variable_writers.end()) {
+            component_dependencies[i].merge(item->second);
+          }
+        }
+      }
+    }
+  }
+
+  std::vector<bool> processing(components.size(), false),
+      processed(components.size(), false);
+  std::vector<std::size_t> order;
+
+  for (size_t i = 0; i < components.size(); i++) {
+    if (!processed[i]) {
+      topological_sort(component_dependencies, i, order, processing, processed);
+    }
+  }
+
+  // Create the result with components in the desired order
+  std::vector<std::unique_ptr<Component>> result(components.size());
+  for (size_t i = 0; i < components.size(); i++) {
+    std::swap(result[i], components[order[i]]);
+  }
+
+  return result;
+}
+
 ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                        Options &component_options,
                                        Solver *solver) {
@@ -77,19 +194,9 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
   for (auto& component : components) {
     component->declareAllSpecies(species);
   }
+
+  components = sortComponents(std::move(components));
 }
-
-// Use index to identify component
-// std::map<int, std::set<int>> dependencies;
-// std::map<std::string, int> var_written_by, var_final_written_by, read_dependencies;
-
-// Assemble the maps of which components write each variable
-// Assemble read_dependencies using values from var_final_written_by, if present, else
-// from var_written_by For each component
-//   For each write-final var, create dependency between component and all components that
-//   write it For each read-if-set var that has a write-final, create dependency between
-//   component and (final) writer(s) For each read-var create a dependency between
-//   component and (final) writers; if none then raise exception
 
 std::unique_ptr<ComponentScheduler> ComponentScheduler::create(Options &scheduler_options,
                                                                Options &component_options,

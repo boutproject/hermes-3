@@ -187,7 +187,7 @@ Permissions::getVariablesWithPermission(PermissionTypes permission,
 }
 
 std::string Permissions::regionNames(const Regions regions) {
-  std::vector<std::string> regions_present(fundamental_regions.size());
+  std::vector<std::string> regions_present;
   for (auto & [region, name] : fundamental_regions) {
     if ((regions & region) == region) {
       regions_present.push_back(name);
