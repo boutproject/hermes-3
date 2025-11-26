@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include <fmt/format.h>
+
 /// Ways in which someone is allowed to access the variable, with
 /// increasing levels of rights. "ReadIfSet" indicates that
 /// variables should only be read if already set. "Final" refers to
@@ -38,6 +40,8 @@ constexpr Regions operator~(Regions a) {
 }
 
 /// @}
+
+inline auto format_as(Regions r) { return fmt::underlying(r); }
 
 /// Class to store information on whether particular variables an be
 /// read from and/or written to. These permissions can apply on
@@ -211,6 +215,10 @@ public:
   /// Return a string version of the region names
   static std::string regionNames(const Regions regions);
 
+  // Allow to be streamed, so can be stored in Options.
+  friend std::ostream& operator<<(std::ostream& os, const Permissions& permissions);
+  friend std::istream& operator>>(std::istream& is, Permissions& permissions);
+
 private:
   /// Returns the access rights for the most specific entry in this
   /// object which matches the variable name. If there are no matching
@@ -255,8 +263,8 @@ inline Permissions::VarRights writeFinal(std::string varname,
 }
 
 /// Convenience function to return an object expressing that the
-/// variable should have Write permissions on the boundaries. It will
-/// have Read permissions in the interior, as this is normally
+/// variable should have Final write permissions on the boundaries. It
+/// will have Read permissions in the interior, as this is normally
 /// required to set the boundaries correctly.
 inline Permissions::VarRights writeBoundary(std::string varname) {
   return {varname,
@@ -264,8 +272,9 @@ inline Permissions::VarRights writeBoundary(std::string varname) {
 }
 
 /// Convenience function to return an object expressing that the
-/// variable should have Write permissions on the boundaries. It will
-/// have Read permissions in the interior if the interior is already set.
+/// variable should have Final write permissions on the boundaries. It
+/// will have Read permissions in the interior if the interior is
+/// already set.
 inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
   return {varname,
           {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}};
@@ -275,3 +284,15 @@ inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
 
 // FIXME: Ideally there would be some way to express write permissions only if set
 // FIXME: Ideally we could express to write a boundary only if the interior is set
+
+/// Write a string-representation of the permissions to an IO
+/// stream. This is useful for allowing permission data to be stored
+/// in Options objects.
+std::ostream& operator<<(std::ostream& os, const Permissions& permissions);
+
+/// Read a string representation of permissions from an IO
+/// stream. This is useful for allowing permissions data to be
+/// retrieved from Options objects. Note that there is undefined
+/// behaviour if the input is corrupted; an exception may be thrown or
+/// the permissions that are read may be incomplete.
+std::istream& operator>>(std::istream& is, Permissions& permissions);
