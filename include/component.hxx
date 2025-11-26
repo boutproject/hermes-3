@@ -125,6 +125,8 @@ struct Component {
   ///   - all_species2 (same as above, used for cross-product)
   void declareAllSpecies(const SpeciesInformation & info);
 
+  const Permissions& getPermissions() const { return state_variable_access; }
+
 protected:
   /// Information on which state variables the transform method will read and write.
   Permissions state_variable_access;
