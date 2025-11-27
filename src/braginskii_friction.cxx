@@ -19,8 +19,8 @@ BraginskiiFriction::BraginskiiFriction(const std::string& name, Options& allopti
                  readIfSet("species:{all_species}:velocity", Regions::Interior),
                  readOnly("species:{all_species}:AA"),
                  readIfSet("species:{all_species}:charge"),
-                 readOnly("species:{all_species}:collision_frequencies:{all_species}_{"
-                          "all_species2}_coll"),
+                 readIfSet("species:{all_species}:collision_frequencies:{all_species}_{"
+                           "all_species2}_coll"),
                  readWrite("species:{all_species}:momentum_source")}) {
   AUTO_TRACE();
   Options& options = alloptions[name];
