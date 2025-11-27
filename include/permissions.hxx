@@ -219,7 +219,6 @@ public:
   friend std::ostream& operator<<(std::ostream& os, const Permissions& permissions);
   friend std::istream& operator>>(std::istream& is, Permissions& permissions);
 
-private:
   /// Returns the access rights for the most specific entry in this
   /// object which matches the variable name. If there are no matching
   /// entries then the result will indicate no access rights. The
@@ -228,6 +227,7 @@ private:
   /// entries.
   VarRights bestMatchRights(const std::string& variable) const;
 
+private:
   std::map<std::string, AccessRights> variable_permissions;
 };
 
