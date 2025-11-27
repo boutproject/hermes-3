@@ -19,7 +19,6 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(std::string name, Options& allopt
         readIfSet("species:{non_electrons}:velocity"),
         readIfSet("species:{non_electrons}:charge"),
         readIfSet("species:{non_electrons}:collision_frequencies:{coll_type}"),
-        readOnly("fields:phi"),
         readWrite("species:{non_electrons}:momentum_source"),
         readWrite("species:{non_electrons}:energy_source"),
         readWrite("fields:DivJextra"),
@@ -107,6 +106,9 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(std::string name, Options& allopt
   } else if (viscosity_collisions_mode == "multispecies") {
     coll_types.push_back("{non_electrons}_{all_species}_coll");
     coll_types.push_back("{non_electrons}_{all_species}_cx");
+  }
+  if (perpendicular) {
+    state_variable_access.setAccess(readOnly("fields:phi"));
   }
   state_variable_access.substitute("coll_type", coll_types);
 }

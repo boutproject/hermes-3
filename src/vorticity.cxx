@@ -225,7 +225,9 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
   if (phi_boundary_relax) {
     state_variable_access.setAccess(readOnly("time"));
   } else {
-    state_variable_access.setAccess(readOnly("species:e:AA"));
+    if (sheath_boundary) {
+      state_variable_access.setAccess(readOnly("species:e:AA"));
+    }
     state_variable_access.setAccess(
         readIfSet("species:e:temperature", Regions::Interior));
   }
