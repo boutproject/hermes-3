@@ -14,6 +14,3 @@
 [submodule "external/xhermes"]
 	path = external/xhermes
 	url = git@github.com:boutproject/xhermes
-[submodule "xbout"]
-	path = xbout
-	url = https://github.com/boutproject/xbout
