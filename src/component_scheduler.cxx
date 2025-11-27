@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -5,6 +6,7 @@
 #include <bout/bout_types.hxx>
 #include <bout/options.hxx>
 #include <bout/utils.hxx> // for trim, strsplit
+#include <fmt/ranges.h>
 
 #include "../include/component.hxx"
 #include "../include/component_scheduler.hxx"
@@ -32,33 +34,176 @@ void topological_sort(const std::vector<std::set<size_t>>& dependencies, size_t 
   sorted.push_back(item);
 }
 
+std::set<std::string> getParents(const std::string& name) {
+  std::set<std::string> result;
+  size_t start = 0, position = name.find(":", start);
+  while (position != std::string::npos) {
+    result.insert(name.substr(0, position));
+    start = position + 1;
+    position = name.find(":", start);
+  }
+  return result;
+}
+
+/// Produce a map between Option paths and all variable names held within
+/// that path. If a path does not refer to a section then it just maps
+/// to itself.
+std::map<std::string, std::set<std::string>>
+getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) {
+  // Build up a set of all variable names which are read only if they
+  // are set by another component
+  std::set<std::string> conditional_names;
+  for (const auto& component : components) {
+    const Permissions& permissions = component->getPermissions();
+    for (const auto& [varname, _] :
+         permissions.getVariablesWithPermission(PermissionTypes::ReadIfSet, true)) {
+      conditional_names.insert(varname);
+    }
+  }
+
+  // Build up a set of all variable names which are definitely
+  // read/written by components, and the sections which they imply
+  // exist
+  std::set<std::string> unconditional_names, unconditional_sections;
+  for (const auto& component : components) {
+    const Permissions& permissions = component->getPermissions();
+    for (const auto& [varname, _] :
+         permissions.getVariablesWithPermission(PermissionTypes::Read, false)) {
+      unconditional_names.insert(varname);
+      unconditional_sections.merge(getParents(varname));
+    }
+  }
+
+  // Split the set of all variable names used by components into
+  // those that are sections and those that are not.
+  std::set<std::string> sections_present, non_sections;
+  std::set_intersection(unconditional_names.begin(), unconditional_names.end(),
+                        unconditional_sections.begin(), unconditional_sections.end(),
+                        std::inserter(sections_present, sections_present.begin()));
+  std::set_difference(unconditional_names.begin(), unconditional_names.end(),
+                      sections_present.begin(), sections_present.end(),
+                      std::inserter(non_sections, non_sections.begin()));
+
+  std::map<std::string, std::set<std::string>> result;
+
+  // ReadIfSet variables will only actually be used if they are
+  // reference elsewhere. We create them with empty sets, which will
+  // get filled if they are present.
+  for (const auto& name : conditional_names) {
+    result.insert({name, {name}});
+  }
+
+  // Non-sections map to themselves
+  for (const auto& name : non_sections) {
+    result[name] = {name};
+  }
+  // Sections map to those variables which they contain
+  for (const auto& section : sections_present) {
+    auto& children = result[section];
+    const std::string sec_suffixed = section + ':';
+    for (const auto& name : non_sections) {
+      if (name.rfind(sec_suffixed, 0) == 0) {
+        children.insert(name);
+      }
+    }
+  }
+
+  return result;
+}
+
+/// Get all variables to which the name could be referring (e.g., its
+/// children if it is a section name). These will be filtered to
+/// remove any variables for which more specific permissions are
+/// given.
+std::set<std::string>
+expandVariableName(const std::map<std::string, std::set<std::string>>& hierarchy,
+                   const Permissions& permissions, const std::string& name) {
+  const std::set<std::string>& candidates = hierarchy.at(name);
+  std::set<std::string> result;
+  // Only return the values that do not have a more specific permission
+  std::copy_if(candidates.begin(), candidates.end(),
+               std::inserter(result, result.begin()),
+               [&permissions, &name](const std::string& candidate) -> bool {
+                 return permissions.bestMatchRights(candidate).name == name;
+               });
+  return result;
+}
+
+using Var = std::pair<std::string, Regions>;
+
+std::map<Var, std::set<size_t>>
+getPermissionComponentMap(const std::vector<std::unique_ptr<Component>>& components,
+                          const std::map<std::string, std::set<std::string>>& hierarchy,
+                          PermissionTypes permission) {
+  std::map<Var, std::set<size_t>> result;
+  for (size_t i = 0; i < components.size(); i++) {
+    const Permissions& permissions = components[i]->getPermissions();
+    for (const auto& [name, regions] :
+         permissions.getVariablesWithPermission(permission)) {
+      for (const auto& sub_name : expandVariableName(hierarchy, permissions, name)) {
+        for (const auto& [region, _] : Permissions::fundamental_regions) {
+          if ((regions & region) == region) {
+            result[{sub_name, region}].insert(i);
+          }
+        }
+      }
+    }
+  }
+  return result;
+}
+
+/// Modifies component_dependencies to include information on which
+/// variables each component reads. Returns a set of any read
+/// variables which are not written by any component.
+std::set<std::string>
+setReadDependencies(const std::vector<std::unique_ptr<Component>>& components,
+                    const std::map<std::string, std::set<std::string>>& hierarchy,
+                    const std::map<Var, std::set<size_t>>& writers,
+                    PermissionTypes permission,
+                    std::vector<std::set<size_t>>& component_dependencies) {
+  std::set<std::string> missing;
+  for (size_t i = 0; i < components.size(); i++) {
+    const Permissions& permissions = components[i]->getPermissions();
+    // Create dependencies between components that read variables and those that write
+    // them
+    for (const auto& [name, regions] :
+         permissions.getVariablesWithPermission(permission)) {
+      if (ComponentScheduler::predeclared_variables.count(name) > 0)
+        continue;
+      for (const auto& sub_name : expandVariableName(hierarchy, permissions, name)) {
+        for (const auto& [region, _] : Permissions::fundamental_regions) {
+          if ((regions & region) == region) {
+            const auto item = writers.find({sub_name, region});
+            if (item == writers.end()) {
+              missing.insert(
+                  fmt::format("{} ({})", sub_name, Permissions::regionNames(region)));
+            } else {
+              component_dependencies[i].insert(item->second.begin(), item->second.end());
+            }
+          }
+        }
+      }
+    }
+  }
+  return missing;
+}
+
 /// Consumes a list of components and returns a new one that has been
 /// topolgically sorted to ensure variables are written and read in
 /// the right order.
 std::vector<std::unique_ptr<Component>>
 sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
-  using Var = std::pair<std::string, Regions>;
-  std::map<Var, std::set<size_t>> nonfinal_writes, final_writes;
-  // Build up information on which components write each variable
-  for (size_t i = 0; i < components.size(); i++) {
-    const Permissions& permissions = components[i]->getPermissions();
-    for (const auto& [name, regions] :
-         permissions.getVariablesWithPermission(PermissionTypes::Write)) {
-      for (const auto& [region, _] : Permissions::fundamental_regions) {
-        if ((regions & region) == region) {
-          nonfinal_writes[{name, region}].insert(i);
-        }
-      }
-    }
-    for (const auto& [name, regions] :
-         permissions.getVariablesWithPermission(PermissionTypes::Final)) {
-      for (const auto& [region, _] : Permissions::fundamental_regions) {
-        if ((regions & region) == region) {
-          final_writes[{name, region}].insert(i);
-        }
-      }
-    }
-  }
+  // Map variables to the components that write them
+  std::map<std::string, std::set<std::string>> variable_hierarchy =
+      getVariableHierarchy(components);
+
+  // Get information on which components write each variable
+  std::map<Var, std::set<size_t>> nonfinal_writes = getPermissionComponentMap(
+                                      components, variable_hierarchy,
+                                      PermissionTypes::Write),
+                                  final_writes = getPermissionComponentMap(
+                                      components, variable_hierarchy,
+                                      PermissionTypes::Final);
 
   std::vector<std::set<size_t>> component_dependencies(components.size());
 
@@ -68,6 +213,12 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
     for (size_t i : comp_indices) {
       const auto item = nonfinal_writes.find(var);
       if (item != nonfinal_writes.end()) {
+        // Note that calling merge actually removes the items from
+        // nonfinal_writes. This is fine because the only remaining
+        // thing for which we will use nonfinal_writes is setting up
+        // variable_writers. That doesn't use any information on
+        // nonfinal writes for variables which have a final write, so
+        // it won't do any harm to remove it.
         component_dependencies[i].merge(item->second);
       }
     }
@@ -77,49 +228,26 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
   std::map<Var, std::set<size_t>> variable_writers = std::move(final_writes);
   variable_writers.merge(std::move(nonfinal_writes));
 
-  for (size_t i = 0; i < components.size(); i++) {
-    const Permissions& permissions = components[i]->getPermissions();
-    // Create dependencies between components that read variables and those that write
-    // them
-    for (const auto& [name, regions] :
-         permissions.getVariablesWithPermission(PermissionTypes::Read)) {
-      std::cout << name << "\n";
-      if (ComponentScheduler::predeclared_variables.count(name) > 0)
-        continue;
-      for (const auto& [region, _] : Permissions::fundamental_regions) {
-        if ((regions & region) == region) {
-          const auto item = variable_writers.find({name, region});
-          if (item == variable_writers.end()) {
-            throw BoutException(
-                "Required variable {} (in region {}) is not written by any component.",
-                name, Permissions::fundamental_regions.at(region));
-          }
-          component_dependencies[i].merge(item->second);
-        }
-      }
-    }
-
-    // Create dependencies for ReadIfSet variables only if there exist another component
-    // which sets them
-    for (const auto& [name, regions] :
-         permissions.getVariablesWithPermission(PermissionTypes::ReadIfSet)) {
-      if (ComponentScheduler::predeclared_variables.count(name) > 0)
-        continue;
-      for (const auto& [region, _] : Permissions::fundamental_regions) {
-        if ((regions & region) == region) {
-          const auto item = variable_writers.find({name, region});
-          if (item != variable_writers.end()) {
-            component_dependencies[i].merge(item->second);
-          }
-        }
-      }
-    }
+  // Create dependency information for read variables
+  std::set<std::string> missing =
+      setReadDependencies(components, variable_hierarchy, variable_writers,
+                          PermissionTypes::Read, component_dependencies);
+  if (missing.size() > 0) {
+    throw BoutException(
+        "The following required variables are not written by any component:\n\t{}\n",
+        fmt::format("{}", fmt::join(missing, "\n\t")));
   }
+  // If can not find a place where a ReadIfSet variable is written, it will just be
+  // skipped
+  setReadDependencies(components, variable_hierarchy, variable_writers,
+                      PermissionTypes::ReadIfSet, component_dependencies);
 
+  // Create ancillary variables for sorting process
   std::vector<bool> processing(components.size(), false),
       processed(components.size(), false);
   std::vector<std::size_t> order;
 
+  // Perform the sort
   for (size_t i = 0; i < components.size(); i++) {
     if (!processed[i]) {
       topological_sort(component_dependencies, i, order, processing, processed);
