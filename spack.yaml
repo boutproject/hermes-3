@@ -13,6 +13,9 @@ spack:
   - py-h5py
   - py-matplotlib+animation
   - py-ipykernel
+  - py-xhermes@develop
+  - py-xbout@develop
+  - py-pip
   view:
     gcc:
       root: ./views/gcc
@@ -49,3 +52,10 @@ spack:
     neso-particles:
       path: ./external/Reactions/neso-particles
       spec: neso-particles@working
+    py-xhermes:
+      path: ./external/xhermes
+      spec: py-xhermes@develop
+    py-xbout:
+      path: ./external/xbout
+      spec: py-xbout@develop
+
