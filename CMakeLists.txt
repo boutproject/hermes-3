@@ -56,6 +56,7 @@ set(HERMES_SOURCES
     src/ionisation.cxx
     src/radiation.cxx
     src/div_ops.cxx
+    src/fci_gridcheck.cxx
     src/neutral_mixed.cxx
     src/full_velocity.cxx
     src/electromagnetic.cxx
@@ -107,6 +108,7 @@ set(HERMES_SOURCES
     include/adas_reaction.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
+    include/fci_gridcheck.hxx
     include/amjuel_helium.hxx
     include/amjuel_hyd_ionisation.hxx
     include/amjuel_hyd_recombination.hxx
