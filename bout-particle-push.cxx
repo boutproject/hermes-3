@@ -25,7 +25,7 @@ inline void ASSERT_EQ(T t, U u) {
 
 void collect_unique_points(std::vector<double>& global_Z_vertices_buffer,
                            std::vector<double>& global_R_vertices_buffer, int& N_unique,
-                           const double& zero,
+                           const double& tolerance,
                            std::vector<double>& global_Z_hypnotoad_vertices,
                            std::vector<double>& global_R_hypnotoad_vertices) {
   bool unique;
@@ -38,10 +38,10 @@ void collect_unique_points(std::vector<double>& global_Z_vertices_buffer,
     // check if the point is unique, by comparing the the existing N_unique points
     for (int iunique = 0; iunique < N_unique; iunique++) {
       if (abs(global_Z_hypnotoad_vertices.at(iv) - global_Z_vertices_buffer.at(iunique))
-              < zero
+              < tolerance
           && abs(global_R_hypnotoad_vertices.at(iv)
                  - global_R_vertices_buffer.at(iunique))
-                 < zero) {
+                 < tolerance) {
         unique = false;
         // we have determined that the point is not unique
       }
@@ -57,7 +57,7 @@ void collect_unique_points(std::vector<double>& global_Z_vertices_buffer,
 
 void RZ_to_ivertex_vector(Field2D& ivertex_corners,
                           std::vector<double>& global_Z_vertices,
-                          std::vector<double>& global_R_vertices, const double& zero,
+                          std::vector<double>& global_R_vertices, const double& tolerance,
                           Mesh*& bout_mesh, Field2D& Rxy_corners, Field2D& Zxy_corners) {
   int Nvertex = global_Z_vertices.size();
   bool index_found;
@@ -66,8 +66,8 @@ void RZ_to_ivertex_vector(Field2D& ivertex_corners,
     for (int iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
       index_found = false;
       for (int iv = 0; iv < Nvertex; iv++) {
-        if (abs(global_Z_vertices.at(iv) - Zxy_corners(ix, iy)) < zero
-            && abs(global_R_vertices.at(iv) - Rxy_corners(ix, iy)) < zero) {
+        if (abs(global_Z_vertices.at(iv) - Zxy_corners(ix, iy)) < tolerance
+            && abs(global_R_vertices.at(iv) - Rxy_corners(ix, iy)) < tolerance) {
           ivertex_corners(ix, iy) = iv;
           index_found = true;
           // we have matched an iv global index to a (R,Z) from Hypnotoad
@@ -327,21 +327,21 @@ int main(int argc, char** argv) {
   global_Z_vertices_buffer.at(0) = global_Z_lower_left_vertices.at(0);
   global_R_vertices_buffer.at(0) = global_R_lower_left_vertices.at(0);
   int N_unique = 1; // we have one unique point in the buffer
-  const double zero = 1.0e-8;
+  const double tolerance = 1.0e-8;
   // loop over lower left vertices
   collect_unique_points(global_Z_vertices_buffer, global_R_vertices_buffer, N_unique,
-                        zero, global_Z_lower_left_vertices, global_R_lower_left_vertices);
+                        tolerance, global_Z_lower_left_vertices, global_R_lower_left_vertices);
   // loop over lower right vertices
   collect_unique_points(global_Z_vertices_buffer, global_R_vertices_buffer, N_unique,
-                        zero, global_Z_lower_right_vertices,
+                        tolerance, global_Z_lower_right_vertices,
                         global_R_lower_right_vertices);
   // loop over upper right vertices
   collect_unique_points(global_Z_vertices_buffer, global_R_vertices_buffer, N_unique,
-                        zero, global_Z_upper_right_vertices,
+                        tolerance, global_Z_upper_right_vertices,
                         global_R_upper_right_vertices);
   // loop over upper left vertices
   collect_unique_points(global_Z_vertices_buffer, global_R_vertices_buffer, N_unique,
-                        zero, global_Z_upper_left_vertices, global_R_upper_left_vertices);
+                        tolerance, global_Z_upper_left_vertices, global_R_upper_left_vertices);
   // now make a vector of the size N_unique and fill from the buffer
   std::vector<double> global_Z_vertices(N_unique, 0.0);
   std::vector<double> global_R_vertices(N_unique, 0.0);
@@ -365,16 +365,16 @@ int main(int argc, char** argv) {
   Field2D ivertex_upper_left_corners_cxx{-1, bout_mesh};
   // now fill ivertex_corners arrays
   RZ_to_ivertex_vector(ivertex_lower_left_corners_cxx, global_Z_vertices,
-                       global_R_vertices, zero, bout_mesh, Rxy_lower_left_corners,
+                       global_R_vertices, tolerance, bout_mesh, Rxy_lower_left_corners,
                        Zxy_lower_left_corners);
   RZ_to_ivertex_vector(ivertex_lower_right_corners_cxx, global_Z_vertices,
-                       global_R_vertices, zero, bout_mesh, Rxy_lower_right_corners,
+                       global_R_vertices, tolerance, bout_mesh, Rxy_lower_right_corners,
                        Zxy_lower_right_corners);
   RZ_to_ivertex_vector(ivertex_upper_right_corners_cxx, global_Z_vertices,
-                       global_R_vertices, zero, bout_mesh, Rxy_upper_right_corners,
+                       global_R_vertices, tolerance, bout_mesh, Rxy_upper_right_corners,
                        Zxy_upper_right_corners);
   RZ_to_ivertex_vector(ivertex_upper_left_corners_cxx, global_Z_vertices,
-                       global_R_vertices, zero, bout_mesh, Rxy_upper_left_corners,
+                       global_R_vertices, tolerance, bout_mesh, Rxy_upper_left_corners,
                        Zxy_upper_left_corners);
 
   // First we setup the topology of the mesh.
