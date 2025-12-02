@@ -187,6 +187,15 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
     .withDefault(-1.0);
 
+  poloidally_average_timederiv = options["poloidally_average_timederiv"]
+                           .doc("Poloidally average time derivatives to avoid \
+                             numerical instabilities in 2D. Tries to mimic the partial \
+                             flux surface averaging method by (Kaveeva et al., 2018).")
+                           .withDefault<bool>(false);
+
+  alpha_pol_ave = options["alpha_pol_ave"].doc("alpha parameter used in the poloidal averaging of the time derivative. \ 
+    Used only when poloidally_average_timederivs = true").withDefault(0.01);
+
   // Initilize the Field3D P from 2D profiles stored in the mesh file.
   initialize_from_mesh = p_options["initialize_from_mesh"]
     .doc("Initilize field from 2D profiles stored in the mesh file?")
@@ -469,6 +478,11 @@ void EvolvePressure::finally(const Options& state) {
   if (state.isSet("scale_timederivs")) {
     ddt(P) *= get<Field3D>(state["scale_timederivs"]);
   }
+
+  // Poloidally average time derivatives
+  if (poloidally_average_timederiv) {
+    ddt(P) = poloidallyAverage(ddt(P)) + alpha_pol_ave * ( ddt(P) - poloidallyAverage(ddt(P)) ) ;
+  }  
 
   if (evolve_log) {
     ddt(logP) = ddt(P) / P;

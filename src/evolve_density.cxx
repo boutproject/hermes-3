@@ -54,9 +54,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   evolve_log = options["evolve_log"]
                    .doc("Evolve the logarithm of density?")
                    .withDefault<bool>(false);
-
-
-
+             
   if (evolve_log) {
     // Evolve logarithm of density
     solver->add(logN, std::string("logN") + name);
@@ -135,6 +133,15 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
+
+  poloidally_average_timederiv = options["poloidally_average_timederiv"]
+                           .doc("Poloidally average time derivatives to avoid \
+                             numerical instabilities in 2D. Tries to mimic the partial \
+                             flux surface averaging method by (Kaveeva et al., 2018).")
+                           .withDefault<bool>(false);
+
+  alpha_pol_ave = options["alpha_pol_ave"].doc("alpha parameter used in the poloidal averaging of the time derivative. \ 
+    Used only when poloidally_average_timederivs = true").withDefault(0.01);      
 
   // Initilize the Field3D N from 2D profiles stored in the mesh file.
   initialize_from_mesh = n_options["initialize_from_mesh"]
@@ -308,6 +315,11 @@ void EvolveDensity::finally(const Options& state) {
   if (state.isSet("scale_timederivs")) {
     ddt(N) *= get<Field3D>(state["scale_timederivs"]);
   }
+
+  // Poloidally average time derivatives
+  if (poloidally_average_timederiv) {
+    ddt(N) = poloidallyAverage(ddt(N)) + alpha_pol_ave * ( ddt(N) - poloidallyAverage(ddt(N)) ) ;
+  }  
 
   if (evolve_log) {
     ddt(logN) = ddt(N) / N;

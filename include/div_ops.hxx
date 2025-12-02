@@ -76,6 +76,8 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f, Field3D& flow_ylow,
                                      bool bndry_flux = true);
 
+const Field3D poloidallyAverage(const Field3D& f); // Does this belong here? Whewre should we put it?
+
 namespace FV {
 
 /// Superbee limiter

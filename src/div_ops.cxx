@@ -1601,3 +1601,70 @@ const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
 
   return result;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+// Polloidal averaging Functions
+// This should probably go to BOUT-dev
+
+// Compute poloidal (and toroidal) average of a Field3D
+// Result: Field3D that depends only on x, and is constant in y and z.
+// NOTE(malamast): Is there a more efficient way of doing this? Can we vectorize it 
+//                 and avoid the loop in x points?
+const Field3D poloidallyAverage(const Field3D& f) {
+
+  TRACE("poloidallyAverage");
+
+  Mesh* mesh = f.getMesh();
+
+  Field2D favg(mesh);
+  favg = 0.0;  // initialise
+
+
+  // Loop over local x range
+  for (int i = mesh->xstart; i <= mesh->xend; ++i) {
+
+    if (mesh->periodicY(i)) {
+
+      // Local sum and count for this x on this MPI rank
+      BoutReal local_sum   = 0.0;
+      int      local_count = 0;
+
+      for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+        for (int k = 0; k < mesh->LocalNz; ++k) {
+          local_sum   += f(i, j, k);
+          local_count += 1;
+        }
+      }
+
+      // Communicator for this radial index
+      MPI_Comm comm_inner = mesh->getYcomm(i);
+
+      BoutReal global_sum   = 0.0;
+      int      global_count = 0;
+
+      // Reduce sum and count across all procs sharing this x
+      MPI_Allreduce(&local_sum,   &global_sum,   1, MPI_DOUBLE, MPI_SUM, comm_inner);
+      MPI_Allreduce(&local_count, &global_count, 1, MPI_INT,    MPI_SUM, comm_inner);
+
+      BoutReal avg = 0.0;
+      if (global_count > 0) {
+        avg = global_sum / global_count;
+      }
+
+      // Store in favg: constant in y for this x
+      for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+        for (int k = 0; k < mesh->LocalNz; ++k) {
+          favg(i, j, k) = avg;
+        }
+      }
+    }
+
+  }
+
+  // Fill guard cells & communicate
+  mesh->communicate(favg);    // halo exchange
+  // favg.applyBoundary();       // if you want consistent BCs (optional depending on use)
+
+  return favg;
+}

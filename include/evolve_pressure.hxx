@@ -121,6 +121,9 @@ private:
 
   bool initialize_from_mesh;  ///< Initilize the Field3D P from 2D/3D profiles stored in the mesh file. 
 
+  bool poloidally_average_timederiv;
+  BoutReal alpha_pol_ave; 
+
 };
 
 namespace {

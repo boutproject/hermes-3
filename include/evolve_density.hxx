@@ -100,6 +100,9 @@ private:
                               ///< May be usefull when you have experimental profiles for example. 
   // Field2D N_init;       ///< Species density (normalised, initial). For initial 2D profiles stored in the mesh.
 
+  bool poloidally_average_timederiv;
+  BoutReal alpha_pol_ave; 
+
 };
 
 namespace {
