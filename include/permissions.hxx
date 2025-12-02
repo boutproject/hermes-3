@@ -13,6 +13,9 @@
 /// execute components.
 enum class PermissionTypes { None = -1, ReadIfSet, Read, Write, Final, END };
 
+/// \defgroup RegionsGroup
+/// @{
+
 /// The regions of the domain to which a particular permission
 /// apply. These are designed to be used as bit-flags.
 enum class Regions {
@@ -33,6 +36,8 @@ constexpr Regions operator|(Regions a, Regions b) {
 constexpr Regions operator~(Regions a) {
   return static_cast<Regions>(~static_cast<int>(a));
 }
+
+/// @}
 
 /// Class to store information on whether particular variables an be
 /// read from and/or written to. These permissions can apply on
@@ -126,7 +131,7 @@ public:
   ///     permissions.setAccess("species:he:density",
   ///                           {Regions::Nowhere, Regions::All,
   ///                           Regions::Interior, Regions::Nowhere})
-  /// 0
+  /// 
   /// or, equivalently,
   ///
   ///     permissions.setAccess("species:he:density",
@@ -218,6 +223,9 @@ private:
   std::map<std::string, AccessRights> variable_permissions;
 };
 
+/// \defgroup PermissionFactories
+/// @{
+
 /// Convenience function to return an object expressing that the
 /// variable should have ReadIfSet permissions in the specified regions.
 inline Permissions::VarRights readIfSet(std::string varname,
@@ -262,6 +270,8 @@ inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
   return {varname,
           {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}};
 }
+
+/// @}
 
 // FIXME: Ideally there would be some way to express write permissions only if set
 // FIXME: Ideally we could express to write a boundary only if the interior is set
