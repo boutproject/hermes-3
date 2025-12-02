@@ -216,7 +216,8 @@ void EvolvePressure::transform(Options& state) {
     // Evolving logP, but most calculations use P
     P = exp(logP);
   }
-
+  
+  P.applyBoundary();
   mesh->communicate(P);
   P.applyParallelBoundary();
 
