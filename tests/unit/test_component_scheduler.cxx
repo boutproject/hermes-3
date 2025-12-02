@@ -276,6 +276,14 @@ INSTANTIATE_TEST_SUITE_P(
                  {"b",
                   {{"type", "orderchecker"},
                    {"permissions", toString(Permissions({readWrite("3")}))}}}}),
+        // Multiple final writes
+        Options({{"components", "a,b"},
+                 {"a",
+                  {{"type", "orderchecker"},
+                   {"permissions", toString(Permissions({writeFinal("1")}))}}},
+                 {"b",
+                  {{"type", "orderchecker"},
+                   {"permissions", toString(Permissions({writeFinal("1")}))}}}}),
         // Circular dependency
         Options({{"components", "a,b"},
                  {"a",
