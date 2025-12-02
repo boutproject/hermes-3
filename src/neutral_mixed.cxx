@@ -65,7 +65,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
-                     .withDefault<bool>(true);
+                     .withDefault<bool>(false);
 
   lax_flux = options["lax_flux"]
                      .doc("Enable stabilising lax flux?")
@@ -74,7 +74,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   flux_limit =
       options["flux_limit"]
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
-          .withDefault(0.2);
+          .withDefault(-1.0);
 
   diffusion_limit = options["diffusion_limit"]
                         .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
@@ -83,11 +83,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   neutral_viscosity = options["neutral_viscosity"]
                           .doc("Include neutral gas viscosity?")
-                          .withDefault<bool>(true);
+                          .withDefault<bool>(false);
 
   neutral_conduction = options["neutral_conduction"]
                           .doc("Include neutral gas heat conduction?")
-                          .withDefault<bool>(true);
+                          .withDefault<bool>(false);
 
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
@@ -167,8 +167,17 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 void NeutralMixed::transform(Options& state) {
   AUTO_TRACE();
 
+  Nn.applyBoundary();
+  Pn.applyBoundary();
+  NVn.applyBoundary();
+  
   mesh->communicate(Nn, Pn, NVn);
 
+  Nn.applyParallelBoundary();
+  Pn.applyParallelBoundary();
+  NVn.applyParallelBoundary();
+
+  
   if (!Nn.isFci()) {
     Nn.clearParallelSlices();
     Pn.clearParallelSlices();
