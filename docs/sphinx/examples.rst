@@ -276,9 +276,10 @@ so that the equation solved is
 
 where :math:`T_e` is the fixed electron temperature (5eV).
 
-The :ref:`vorticity` component uses the pressure to calculate the diamagnetic current,
-so must come after the `e` component. This component then calculates the potential.
-Options to control the vorticity component are set in the `[vorticity]` section.
+The :ref:`vorticity` component uses the pressure to calculate the
+diamagnetic current. This component then calculates the potential.
+Options to control the vorticity component are set in the
+`[vorticity]` section.
 
 .. math::
 
@@ -287,8 +288,7 @@ Options to control the vorticity component are set in the `[vorticity]` section.
    \nabla\cdot\left(\frac{1}{B^2}\nabla_\perp\phi\right) = \omega
    \end{aligned}
 
-The `sheath_closure` component uses the potential, so must come after :ref:`vorticity`.
-Options are also set as
+The `sheath_closure` component uses the potential. Options are also set as
 
 .. code-block:: ini
 
