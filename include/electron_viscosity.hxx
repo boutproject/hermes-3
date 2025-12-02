@@ -41,6 +41,7 @@ struct ElectronViscosity : public Component {
   void outputVars(Options &state) override;
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
+  BoutReal eta_multiplier;  ///< Electron viscosity multiplier
   bool diagnose; ///< Output viscosity diagnostic?
   Field3D viscosity; ///< The viscosity momentum source
 };

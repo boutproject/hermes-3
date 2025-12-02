@@ -14,6 +14,10 @@ ElectronViscosity::ElectronViscosity(std::string name, Options& alloptions, Solv
                         .doc("Viscosity flux limiter coefficient. <0 = turned off")
                         .withDefault(-1.0);
 
+  eta_multiplier = options["eta_multiplier"]
+                        .doc("Electron viscosity multiplier. Default is 1.0")
+                        .withDefault(1.0);
+
   diagnose = options["diagnose"].doc("Output diagnostics?").withDefault<bool>(false);
 }
 
@@ -39,7 +43,7 @@ void ElectronViscosity::transform(Options& state) {
   const Field3D sqrtB = sqrt(Bxy);
 
   // Parallel electron viscosity
-  Field3D eta = (4. / 3) * 0.73 * P * tau;
+  Field3D eta = (4. / 3) * 0.73 * P * tau * eta_multiplier;
 
   if (eta_limit_alpha > 0.) {
     // SOLPS-style flux limiter
