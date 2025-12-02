@@ -210,6 +210,10 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
   // Components which do a final write on a variable depend on all
   // components which do non-final writes on that variable
   for (const auto& [var, comp_indices] : final_writes) {
+    if (comp_indices.size() > 1) {
+      throw BoutException(
+          "Multiple components have permission to make final write to variable {}", var);
+    }
     for (size_t i : comp_indices) {
       const auto item = nonfinal_writes.find(var);
       if (item != nonfinal_writes.end()) {
