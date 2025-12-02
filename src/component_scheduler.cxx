@@ -10,6 +10,8 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                     .doc("Components in order of execution")
                                     .as<std::string>();
 
+  std::vector<std::string> electrons, neutrals, positive_ions, negative_ions;
+
   // For now split on ','. Something like "->" might be better
   for (const auto &name : strsplit(component_names, ',')) {
     // Ignore brackets, to allow these to be used to span lines.
@@ -18,6 +20,26 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
     auto name_trimmed = trim(name, " \t\r()");
     if (name_trimmed.empty()) {
       continue;
+    }
+
+    if (name_trimmed == "e" or name == "ebeam") {
+      electrons.push_back(name_trimmed);
+    }
+    // FIXME: Would there be any spcies without AA? Is there any other
+    // reliable way to identify what is a species?
+    else if (component_options[name_trimmed].isSet("AA")) {
+      if (component_options[name_trimmed].isSet("charge")) {
+        BoutReal charge = component_options[name_trimmed]["charge"];
+        if (charge > 1e-5) {
+          positive_ions.push_back(name_trimmed);
+        } else if (charge < -1e-5) {
+          negative_ions.push_back(name_trimmed);
+        } else {
+          neutrals.push_back(name_trimmed);
+        }
+      } else {
+        neutrals.push_back(name_trimmed);
+      }
     }
 
     // For each component e.g. "e", several Component types can be created
@@ -37,6 +59,12 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                              component_options,
                                              solver));
     }
+  }
+
+  const SpeciesInformation species(electrons, neutrals, positive_ions, negative_ions);
+    
+  for (auto& component : components) {
+    component->declareAllSpecies(species);
   }
 }
 

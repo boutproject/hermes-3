@@ -51,16 +51,30 @@ struct OpenADAS : public ReactionBase {
   ///
   /// Notes
   ///  - The rate and radiation file names have "json_database/" prepended
-  /// 
+  ///
   OpenADAS(const Options& units, const std::string& rate_file,
-           const std::string& radiation_file, int level, BoutReal electron_heating)
-      : rate_coef(std::string("json_database/") + rate_file, level),
+           const std::string& radiation_file, std::string from_ion, std::string to_ion,
+           int level, BoutReal electron_heating)
+      : ReactionBase({readIfSet("species:{sp}:charge"), readOnly("species:{sp}:AA"),
+                      readOnly("species:{from_ion}:{val}"), readOnly("species:e:{e_val}"),
+                      readWrite("species:{sp}:{w_val}"),
+                      readWrite("species:e:{ew_val}")}),
+        rate_coef(std::string("json_database/") + rate_file, level),
         radiation_coef(std::string("json_database/") + radiation_file, level),
         electron_heating(electron_heating) {
     // Get the units
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
+    state_variable_access.substitute("val", {"density", "temperature", "velocity"});
+    state_variable_access.substitute("e_val", {"density", "temperature"});
+    state_variable_access.substitute(
+        "w_val", {"density_source", "momentum_source", "energy_source"});
+    // FIXME: electron density_source only written if from_ion charge != to_ion charge.
+    state_variable_access.substitute(
+        "ew_val", {"density_source", "momentum_source", "energy_source"});
+    state_variable_access.substitute("sp", {from_ion, to_ion});
+    state_variable_access.substitute("from_ion", {from_ion});
   }
 
   /// Perform the calculation of rates, and transfer of particles/momentum/energy
@@ -68,7 +82,7 @@ struct OpenADAS : public ReactionBase {
   /// @param electron  The electron species e.g. state["species"]["e"]
   /// @param from_ion  The ion on the left of the reaction
   /// @param to_ion    The ion on the right of the reaction
-  void calculate_rates(Options& electron, Options& from_ion, Options& to_ion);
+  void calculate_rates(GuardedOptions && electron, GuardedOptions && from_ion, GuardedOptions && to_ion);
 private:
   OpenADASRateCoefficient rate_coef;      ///< Reaction rate coefficient
   OpenADASRateCoefficient radiation_coef; ///< Energy loss (radiation) coefficient
@@ -79,12 +93,23 @@ private:
 };
 
 struct OpenADASChargeExchange : public ReactionBase {
-  OpenADASChargeExchange(const Options& units, const std::string& rate_file, int level)
-      : rate_coef(std::string("json_database/") + rate_file, level) {
+  OpenADASChargeExchange(const Options& units, const std::string& rate_file,
+                         std::string from_A, std::string from_B, std::string to_A,
+                         std::string to_B, int level)
+      : ReactionBase({readIfSet("species:{sp}:charge"), readOnly("species:{sp}:AA"),
+                      readOnly("species:{from_ion}:{val}"), readOnly("species:e:{e_val}"),
+                      readWrite("species:{sp}:{w_val}")}),
+        rate_coef(std::string("json_database/") + rate_file, level) {
     // Get the units
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
+    state_variable_access.substitute("val", {"density", "temperature", "velocity"});
+    state_variable_access.substitute("e_val", {"density", "temperature"});
+    state_variable_access.substitute(
+        "w_val", {"density_source", "momentum_source", "energy_source"});
+    state_variable_access.substitute("sp", {from_A, from_B, to_A, to_B});
+    state_variable_access.substitute("from_ion", {from_A, from_B});
   }
   /// Perform charge exchange
   ///
@@ -93,8 +118,8 @@ struct OpenADASChargeExchange : public ReactionBase {
   /// from_A and to_A must have the same atomic mass
   /// from_B and to_B must have the same atomic mass
   /// The charge of from_A + from_B must equal the charge of to_A + to_B
-  void calculate_rates(Options& electron, Options& from_A, Options& from_B, Options& to_A,
-                       Options& to_B);
+  void calculate_rates(GuardedOptions && electron, GuardedOptions && from_A, GuardedOptions && from_B, GuardedOptions && to_A,
+                       GuardedOptions && to_B);
 
 private:
   OpenADASRateCoefficient rate_coef;      ///< Reaction rate coefficient

@@ -1,0 +1,95 @@
+#pragma once
+#ifndef BRAGINSKII_THERMAL_FORCE_H
+#define BRAGINSKII_THERMAL_FORCE_H
+
+#include "component.hxx"
+
+/// Simple calculation of the thermal force for the Braginskii closure
+///
+/// Important: This implements a quite crude approximation,
+/// which is intended for initial development and testing.
+/// The expressions used are only valid for trace heavy ions and
+/// light main ion species, and would not be valid for Helium impurities
+/// in a D-T plasma, for example. For this reason only collisions
+/// where one ion has an atomic mass < 4, and the other an atomic mass > 10
+/// are considered. Warning messages will be logged for species combinations
+/// which are not calculated.
+///
+/// Options used:
+///
+/// - <name>
+///   - electron_ion  : bool   Include electron-ion collisions?
+///   - ion_ion       : bool   Include ion-ion elastic collisions?
+///
+struct BraginskiiThermalForce : public Component {
+  BraginskiiThermalForce(std::string name, Options& alloptions, Solver*)
+      : Component(Permissions()) {
+    Options& options = alloptions[name];
+    electron_ion = options["electron_ion"]
+                       .doc("Include electron-ion collisions?")
+                       .withDefault<bool>(true);
+
+    ion_ion = options["ion_ion"]
+                  .doc("Include ion-ion elastic collisions?")
+                  .withDefault<bool>(true);
+
+    if (electron_ion or ion_ion) {
+      state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
+    }
+    if (electron_ion) {
+      // FIXME: These are only accessed if electrons present
+      state_variable_access.setAccess(readOnly("species:e:temperature"));
+      state_variable_access.setAccess(
+          readOnly("species:{ions}:density", Regions::Interior));
+      state_variable_access.setAccess(readWrite("species:{ions}:momentum_source"));
+      state_variable_access.setAccess(readWrite("species:e:momentum_source"));
+    } else if (ion_ion) {
+    }
+    if (ion_ion) {
+      state_variable_access.setAccess(readOnly("species:{ions}:AA"));
+      // FIXME: This is only accessed for light ions
+      state_variable_access.setAccess(readOnly("species:{ions}:temperature"));
+      if (!electron_ion) {
+        // FIXME: This is only accessed for heavy ions
+        state_variable_access.setAccess(
+            readOnly("species:{ions}:density", Regions::Interior));
+        // FIXME: This is only set for heavy and light ions, not intermediate
+        state_variable_access.setAccess(readWrite("species:{ions}:momentum_source"));
+      }
+    }
+  }
+
+private:
+  bool electron_ion; ///< Include electron-ion collisions?
+  bool ion_ion; ///< Include ion-ion elastic collisions?
+
+  bool first_time{true}; ///< True the first time transform() is called
+
+  /// Inputs
+  /// - species
+  ///   - e           [ if electron_ion true ]
+  ///     - charge
+  ///     - density
+  ///     - temperature
+  ///   - <species>
+  ///     - charge    [ Checks, skips species if not set ]
+  ///     - AA
+  ///     - density
+  ///     - temperature [ If AA < 4 i.e. "light" species ]
+  ///
+  /// Outputs
+  /// - species
+  ///   - e
+  ///     - momentum_source  [ if electron_ion true ]
+  ///   - <species>          [ if AA < 4 ("light") or AA > 10 ("heavy") ]
+  ///     - momentum_source
+  ///
+  void transform_impl(GuardedOptions& state) override;
+};
+
+namespace {
+RegisterComponent<BraginskiiThermalForce>
+    registercomponentbraginskiithermalforce("thermal_force");
+}
+
+#endif // BRAGINSKII_THERMAL_FORCE_H

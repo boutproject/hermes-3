@@ -57,7 +57,7 @@ BoutReal AmjuelReaction::eval_sigma_v(BoutReal T, BoutReal n) {
   return eval_amjuel_fit(T, n, amjuel_data.sigma_v_coeffs);
 }
 
-void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate) {
+void AmjuelReaction::transform_additional(GuardedOptions& state, Field3D& reaction_rate) {
 
   // Amjuel-based reactions are assumed to have exactly 2 reactants, for now.
   std::vector<std::string> reactant_species =
@@ -69,7 +69,7 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
       parser->get_species(reactant_species, species_filter::heavy);
   // Amjuel-based reactions are assumed to have exactly 1 heavy reactant, for now.
   ASSERT1(heavy_reactant_species.size() == 1);
-  Options& rh = state["species"][heavy_reactant_species[0]];
+  GuardedOptions rh = state["species"][heavy_reactant_species[0]];
   BoutReal AA_rh = get<BoutReal>(rh["AA"]);
   Field3D n_rh = get<Field3D>(rh["density"]);
   Field3D v_rh = get<Field3D>(rh["velocity"]);
@@ -79,7 +79,7 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
       parser->get_species(species_filter::heavy, species_filter::products);
   // Amjuel-based reactions are assumed to have exactly 1 heavy product, for now.
   ASSERT1(heavy_product_species.size() == 1);
-  Options& ph = state["species"][heavy_product_species[0]];
+  GuardedOptions ph = state["species"][heavy_product_species[0]];
   Field3D v_ph = get<Field3D>(ph["velocity"]);
 
   // Kinetic energy transfer to thermal energy
@@ -116,7 +116,7 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   add(ph["energy_source"], 0.5 * AA_rh * reaction_rate * SQ(v_rh - v_ph));
 
   // Energy source for electrons due to pop change
-  Options& electron = state["species"]["e"];
+  GuardedOptions electron = state["species"]["e"];
   Field3D T_e = get<Field3D>(electron["temperature"]);
   const int e_pop_change = this->parser->get_stoich().at("e");
   if (e_pop_change != 0) {
@@ -176,6 +176,6 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   std::vector<std::string> neutral_species = parser->get_species(species_filter::neutral);
   ASSERT1(neutral_species.size() == 1);
   set(state["species"][neutral_species[0]]["collision_frequencies"]
-           [rh.name() + "_" + ph.name() + "_" + this->short_reaction_type],
+           [heavy_reactant_species[0] + "_" + heavy_product_species[0] + "_" + this->short_reaction_type],
       heavy_particle_frequency);
 }

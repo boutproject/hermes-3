@@ -45,7 +45,22 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 
 } // namespace
 
-SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
+SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
+    // FIXME: writeBoundaryIfSet doesn't really express that boundary
+    // should only be written if the interior is set. Instead it just
+    // give the permission readIfSet to the interior and writeFinal to
+    // the boundary.
+    : Component({
+        readIfSet("species:e:{e_whole_domain}"),
+        writeBoundary("species:e:{e_boundary}"),
+        readWrite("species:e:energy_source"),
+        writeBoundaryIfSet("species:e:{e_optional}"),
+        readIfSet("species:{ions}:{ion_whole_domain}"),
+        readOnly("species:{ions}:AA"),
+        readWrite("species:{ions}:energy_source"),
+        writeBoundary("species:{ions}:{ion_boundary}"),
+        writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+    }) {
   AUTO_TRACE();
 
   Options& options = alloptions[name];
@@ -94,13 +109,30 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
   floor_potential = options["floor_potential"]
                         .doc("Apply a floor to wall potential when calculating Ve?")
                         .withDefault<bool>(true);
+
+  state_variable_access.substitute("e_whole_domain", {"AA", "charge", "adiabatic"});
+  state_variable_access.substitute("e_boundary", {"density", "temperature"});
+  state_variable_access.substitute("e_optional", {"pressure", "velocity"});
+  state_variable_access.substitute("ion_whole_domain", {"charge", "adiabatic"});
+  state_variable_access.substitute("ion_boundary", {"density", "temperature"});
+  // FIXME: velocity and momentum will only be set on boundaries if already set on
+  // interior
+  state_variable_access.substitute("ion_optional", {"pressure", "velocity", "momentum"});
+  // FIXME: The two results of the ternary are actually the same; need
+  // to change what writeBoundaryIfSet returns (and how we model
+  // permissions, for that matter)
+  state_variable_access.setAccess(
+      always_set_phi ? Permissions::VarRights(
+          {"fields:phi",
+           {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}})
+                     : writeBoundaryIfSet("fields:phi"));
 }
 
-void SheathBoundary::transform(Options& state) {
+void SheathBoundary::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
-  Options& electrons = allspecies["e"];
+  GuardedOptions allspecies = state["species"];
+  GuardedOptions electrons = allspecies["e"];
 
   // Need electron properties
   // Not const because boundary conditions will be set
@@ -149,7 +181,7 @@ void SheathBoundary::transform(Options& state) {
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first];
+      GuardedOptions species = allspecies[kv.first];
 
       if ((kv.first == "e") or !IS_SET(species["charge"])
           or (get<BoutReal>(species["charge"]) == 0.0)) {
@@ -464,7 +496,7 @@ void SheathBoundary::transform(Options& state) {
       continue; // Skip electrons
     }
 
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
     // Ion charge
     const BoutReal Zi =

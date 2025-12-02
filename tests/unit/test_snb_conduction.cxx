@@ -21,12 +21,16 @@ using namespace bout::globals;
 using SNBConductionTest = FakeMeshFixture;
 
 TEST_F(SNBConductionTest, CreateComponent) {
-  Options options;
+  Options options{
+      {"units",
+       {{"meters", 1.0}, {"eV", 1.0}, {"inv_meters_cubed", 1e19}, {"seconds", 1e-6}}}};
   SNBConduction component("test", options, nullptr);
 }
 
 TEST_F(SNBConductionTest, Transform) {
-  Options options;
+  Options options{
+      {"units",
+       {{"meters", 1.0}, {"eV", 1.0}, {"inv_meters_cubed", 1e19}, {"seconds", 1e-6}}}};
   SNBConduction component("test", options, nullptr);
 
   Options state{
@@ -44,7 +48,9 @@ TEST_F(SNBConductionTest, Transform) {
 }
 
 TEST_F(SNBConductionTest, OutputDiagnose) {
-  Options options;
+  Options options{
+      {"units",
+       {{"meters", 1.0}, {"eV", 1.0}, {"inv_meters_cubed", 1e19}, {"seconds", 1e-6}}}};
   options["test"]["diagnose"] = true;
   SNBConduction component("test", options, nullptr);
 
