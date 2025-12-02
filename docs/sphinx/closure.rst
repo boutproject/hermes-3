@@ -262,8 +262,7 @@ Input
 
 This top-level component calculates the frictional forces between each
 pair of species for which collisional frequencies have been calculated
-(see `Braginskii Collisions component`_). As such, it must be run after
-`braginskii_collisions`. If the option `frictional_heating` is
+(see `Braginskii Collisions component`_). If the option `frictional_heating` is
 enabled then it will also calculate the energy source arising from
 friction.
 
@@ -346,8 +345,8 @@ Braginskii Heat Exchange
 Input
 -----
 This top-level component calculates the heat exchange between species
-due to collisions (see `Braginskii Collisions component`_). As such, it must be run after
-`braginskii_collisions`. There are no configurations for this component.
+due to collisions (see `Braginskii Collisions component`_). There are no
+configurations for this component.
 
 Theory
 ------
