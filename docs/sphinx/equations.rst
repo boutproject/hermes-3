@@ -120,9 +120,8 @@ quasineutral
 ~~~~~~~~~~~~
 
 This component sets the density of one species, so that the overall
-charge density is zero everywhere. This must therefore be done after
-all other charged species densities have been calculated. It only
-makes sense to use this component for species with a non-zero charge.
+charge density is zero everywhere. It only makes sense to use this
+component for species with a non-zero charge.
 
 .. doxygenstruct:: Quasineutral
    :members:
@@ -229,8 +228,8 @@ energy, :math:`\mathcal{E}`:
    \mathcal{E} = \frac{1}{\gamma - 1} P + \frac{1}{2}m nv_{||}^2
 
 Note that this component requires the parallel velocity :math:`v_{||}`
-to calculate the pressure. It must therefore be listed after a component
-that sets the velocity, such as `evolve_momentum`:
+to calculate the pressure. It must therefore be listed alongside a
+component that sets the velocity, such as `evolve_momentum`:
 
 .. code-block:: ini
 
@@ -293,13 +292,6 @@ conduction for all species that use :ref:`evolve_pressure` or
 :ref:`evolve_energy`, storing it in `energy_source`. If this is not
 desired for a particular species then it can be turned off by setting
 `thermal_conduction = false` in the input options for that species.
-
-This component requires a collision time to have been calculated
-(i.e., with the :ref:`Braginskii Collisions` component). It is
-recommended that this be one of the last component to run, to ensure density,
-pressure, and temperature have their final values. However, it must be
-run before :ref:`Recycling`, as that component will need to use the
-`energy_flow_ylow` value, to which conduction contributes.
 
 The choice of collision frequency used for conduction is set by the
 flag `conduction_collisions_mode`: `multispecies` uses all available
@@ -382,7 +374,7 @@ using flows already calculated for other species. It is used like `quasineutral`
 .. code-block:: ini
 
    [hermes]
-   components = h+, ..., e, ...   # Note: e after all other species
+   components = h+, ..., e, ...
    
    [e]
    type = ..., zero_current,... # Set e:velocity
@@ -436,7 +428,7 @@ The electron parallel viscosity is
    \eta_e = \frac{4}{3} 0.73 p_e \tau_e
 
 where :math:`\tau_e` is the electron collision time. The collisions between electrons
-and all other species therefore need to be calculated before this component is run:
+and all other species therefore needs to be calculated:
 
 .. code-block:: ini
 
@@ -451,9 +443,8 @@ and all other species therefore need to be calculated before this component is r
 braginskii_ion_viscosity
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Adds ion viscosity terms to all charged species that are not electrons.
-The collision frequency is required so this is a top-level component that
-must be calculated after collisions:
+Adds ion viscosity terms to all charged species that are not
+electrons, calculated using collision frequencies.
 
 .. code-block:: ini
 
@@ -623,8 +614,7 @@ has cross-field transport. This discrepancy is due to historical reasons and wil
 1D: neutral_parallel_diffusion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This adds diffusion to **all** neutral species (those with no or zero charge),
-because it needs to be calculated after the collision frequencies are known.
+This adds diffusion to **all** neutral species (those with no or zero charge).
 
 .. code-block:: ini
 
@@ -982,9 +972,8 @@ electrostatic potential :math:`\phi` in the frame of the fluid, with
 an ion diamagnetic contribution. This is calculated by inverting a
 Laplacian equation similar to that solved in the vorticity equation.
 
-This component needs to be run after all other currents have been
-calculated.  It marks currents as used, so out-of-order modifications
-should raise errors.
+This component will be run after all other currents have been
+calculated.
 
 See the `examples/blob2d-vpol` example, which contains:
 
