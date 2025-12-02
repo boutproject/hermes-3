@@ -164,7 +164,7 @@ void EvolveDensity::transform(Options& state) {
     // Evolving logN, but most calculations use N
     N = exp(logN);
   }
-
+  N.applyBoundary();
   mesh->communicate(N);
   N.applyParallelBoundary();
 

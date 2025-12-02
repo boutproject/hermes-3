@@ -113,6 +113,10 @@ void EvolveMomentum::transform(Options &state) {
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   NV.applyBoundary();
+  mesh->communicate(NV);
+  NV.applyParallelBoundary();
+
+  
   V = NV / (AA * Nlim);
   V.name = Vname;
   mesh->communicate(V);
