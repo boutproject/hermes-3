@@ -67,9 +67,10 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   // Normalisations
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
   const BoutReal Bnorm = units["Tesla"];
-  const BoutReal Lnorm = units["meters"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
+  // const BoutReal Lnorm = units["meters"];
+  Lnorm = units["meters"];
 
   auto& options = alloptions[name];
 
@@ -189,6 +190,20 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault(3e8) / (Tnorm * Omega_ci / SI::qe / Nnorm);
   lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault(1.0);
 
+  inlcude_anomalous_current = options["inlcude_anomalous_current"]
+	  .doc("Include anomalous carrurnt? This is only for 2D axisymmetric transport simulations. See (Rozhansky et al, 2000).")
+	  .withDefault<bool>(false);
+
+  k_AN = options["k_AN"].doc("Anomalous current conductivity parameter for 2D simulations. Units: [m^2 / s / Volt].  \
+    Range: [10^-6 - 5*10^-5]. The anomalous current cconductivity should \
+    be an order of magnitude smaller than the neoclassical value. \
+    References: (Rozhansky et al, 2000) and  (Kaveeva et al, 2018)").withDefault(1e-5) / (SQ(Lnorm) * Omega_ci / Tnorm );
+
+  damp_poloidally_averaged_vorticity =  options["damp_poloidally_averaged_vorticity"]
+      .doc("Damp poloidally averaged vorticity to suppress the GAM-like time oscillation. \
+            This should only be used to damp the initial transient phase and should be diactivated at later phases.")
+      .withDefault<bool>(false);
+
   // NOTE(malamast): How do we do that?
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
@@ -282,24 +297,28 @@ void RelaxPotential::transform(Options& state) {
     Field3D &Vort_yup = Vort.yup();
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Vort_ydown(r.ind, mesh->ystart - 1, jz) = 2 * Vort(r.ind, mesh->ystart, jz) - Vort_yup(r.ind, mesh->ystart + 1, jz);
+        // Vort_ydown(r.ind, mesh->ystart - 1, jz) = 2 * Vort(r.ind, mesh->ystart, jz) - Vort_yup(r.ind, mesh->ystart + 1, jz);
+        Vort_ydown(r.ind, mesh->ystart - 1, jz) = Vort(r.ind, mesh->ystart, jz); // TODO: <! Check if this is correct?
       }
     }
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Vort_yup(r.ind, mesh->yend + 1, jz) = 2 * Vort(r.ind, mesh->yend, jz) - Vort_ydown(r.ind, mesh->yend - 1, jz);
+        // Vort_yup(r.ind, mesh->yend + 1, jz) = 2 * Vort(r.ind, mesh->yend, jz) - Vort_ydown(r.ind, mesh->yend - 1, jz);
+        Vort_yup(r.ind, mesh->yend + 1, jz) = Vort(r.ind, mesh->yend, jz);
       }
     }
   } else {
     Field3D Vort_fa = toFieldAligned(Vort);
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Vort_fa(r.ind, mesh->ystart - 1, jz) = 2 * Vort_fa(r.ind, mesh->ystart, jz) - Vort_fa(r.ind, mesh->ystart + 1, jz);
+        // Vort_fa(r.ind, mesh->ystart - 1, jz) = 2 * Vort_fa(r.ind, mesh->ystart, jz) - Vort_fa(r.ind, mesh->ystart + 1, jz);
+        Vort_fa(r.ind, mesh->ystart - 1, jz) = Vort_fa(r.ind, mesh->ystart, jz); // Neumann BC
       }
     }
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Vort_fa(r.ind, mesh->yend + 1, jz) = 2 * Vort_fa(r.ind, mesh->yend, jz) - Vort_fa(r.ind, mesh->yend - 1, jz);
+        // Vort_fa(r.ind, mesh->yend + 1, jz) = 2 * Vort_fa(r.ind, mesh->yend, jz) - Vort_fa(r.ind, mesh->yend - 1, jz);
+        Vort_fa(r.ind, mesh->yend + 1, jz) = Vort_fa(r.ind, mesh->yend, jz); // Neumann BC
       }
     }
     Vort = fromFieldAligned(Vort_fa);
@@ -848,6 +867,19 @@ void RelaxPotential::transform(Options& state) {
     set(fields["DivJcol"], DivJcol);
   }
 
+  // Add anomalous current
+  if (inlcude_anomalous_current) {
+
+    const Options& electrons = allspecies["e"];
+
+    Field3D Ne = floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0);
+
+    DivJanomalous = -FV::Div_a_Grad_perp(k_AN * Ne, phi); //NOTE(malamast): Do I need to add the Pi_hat here as above? 
+
+    ddt(Vort) += DivJanomalous;
+    set(fields["DivJanomalous"], DivJanomalous);
+  }
+
   set(fields["vorticity"], Vort);
   set(fields["phi"], phi);
 }
@@ -1045,6 +1077,22 @@ void RelaxPotential::finally(const Options& state) {
   }
 
 
+  if (damp_poloidally_averaged_vorticity) {
+
+    const Options& electrons = allspecies["e"];
+
+    Field3D Te = floor(GET_NOBOUNDARY(Field3D, electrons["temperature"]), 0.0);
+
+    Field3D Vith = sqrt(2.0 * Te / average_atomic_mass);
+
+    // BoutReal nu_gam = 0.01;
+    Field3D nu_gam = 0.4 * poloidallyAverage(Vith) / (1.67/Lnorm); // R0 = 1.67 is for DIII-D 
+
+    // Add GAM damping term: -nu_gam * <omega>(x)
+    ddt(Vort) -= nu_gam * poloidallyAverage(Vort);
+
+  }
+
   // Solve diffusion equation for potential
 
   if (boussinesq) {
@@ -1149,6 +1197,7 @@ void RelaxPotential::outputVars(Options& state) {
                       {"long_name", "Divergence of diamagnetic current"},
                       {"source", "relax_potential"}});
     }
+
     if (collisional_friction) {
       set_with_attrs(state["DivJcol"], DivJcol,
                      {{"time_dimension", "t"},
@@ -1157,6 +1206,16 @@ void RelaxPotential::outputVars(Options& state) {
                       {"long_name", "Divergence of collisional current"},
                       {"source", "relax_potential"}});
     }
+
+    if (inlcude_anomalous_current) {
+      set_with_attrs(state["DivJanomalous"], DivJanomalous,
+                     {{"time_dimension", "t"},
+                      {"units", "A m^-3"},
+                      {"conversion", SI::qe * Nnorm * Omega_ci},
+                      {"long_name", "Divergence of anomalous current"},
+                      {"source", "relax_potential"}});
+    }
+
   }
 
 }

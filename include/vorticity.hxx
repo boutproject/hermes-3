@@ -144,7 +144,19 @@ private:
   Field3D viscosity_par;  /// Parallel Kinematic viscosity
 
   // Diagnostic outputs
-  Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
+  Field3D DivJdia, DivJcol, DivJanomalous; // Divergence of diamagnetic and collisional current
+
+  bool inlcude_anomalous_current; ///< Which terms should be included?
+  BoutReal k_AN; ///< Anomalous current conductivity parameter. Units: [m^2 / s / Volt].  \
+                      Range: [10^-7 - 10^-4]. The anomalous current cconductivity should \
+                      be an order of magnitude smaller than the neoclassical value. \
+                      References: (Rozhansky et al, 2000) and  (Kaveeva et al, 2018)
+
+
+  bool damp_poloidally_averaged_vorticity;
+
+
+  BoutReal Lnorm;
 
   bool diagnose; ///< Output additional diagnostics?
 };

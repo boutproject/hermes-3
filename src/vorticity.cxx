@@ -56,7 +56,9 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   const Options& units = alloptions["units"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
   const BoutReal Bnorm = units["Tesla"];
-  const BoutReal Lnorm = units["meters"];
+  const BoutReal Tnorm = units["eV"];
+  // const BoutReal Lnorm = units["meters"];
+  Lnorm = units["meters"];
 
   exb_advection = options["exb_advection"]
                       .doc("Include ExB advection (nonlinear term)?")
@@ -143,6 +145,21 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   damp_core_vorticity = options["damp_core_vorticity"]
 	  .doc("Damp vorticity at the core boundary?")
 	  .withDefault<bool>(false);
+
+  inlcude_anomalous_current = options["inlcude_anomalous_current"]
+	  .doc("Include anomalous carrurnt? This is only for 2D axisymmetric transport simulations.")
+	  .withDefault<bool>(false);
+
+  k_AN = options["k_AN"].doc("Anomalous current conductivity parameter. Units: [m^2 / s / Volt].  \
+    Range: [10^-6 - 5*10^-5]. The anomalous current cconductivity should \
+    be an order of magnitude smaller than the neoclassical value. \
+    References: (Rozhansky et al, 2000) and  (Kaveeva et al, 2018)").withDefault(1e-5) / (SQ(Lnorm) * Omega_ci / Tnorm );
+
+  damp_poloidally_averaged_vorticity =  options["damp_poloidally_averaged_vorticity"]
+      .doc("Damp poloidally averaged vorticity to suppress the GAM-like time oscillation. \
+            This should only be used to damp the initial transient phase and should be diactivated at later phases.")
+      .withDefault<bool>(false);
+
 
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
@@ -240,24 +257,28 @@ void Vorticity::transform(Options& state) {
     Field3D &Vort_yup = Vort.yup();
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Vort_ydown(r.ind, mesh->ystart - 1, jz) = 2 * Vort(r.ind, mesh->ystart, jz) - Vort_yup(r.ind, mesh->ystart + 1, jz);
+        // Vort_ydown(r.ind, mesh->ystart - 1, jz) = 2 * Vort(r.ind, mesh->ystart, jz) - Vort_yup(r.ind, mesh->ystart + 1, jz);
+        Vort_ydown(r.ind, mesh->ystart - 1, jz) = Vort(r.ind, mesh->ystart, jz); // TODO: <! Check if this is correct?
       }
     }
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Vort_yup(r.ind, mesh->yend + 1, jz) = 2 * Vort(r.ind, mesh->yend, jz) - Vort_ydown(r.ind, mesh->yend - 1, jz);
+        // Vort_yup(r.ind, mesh->yend + 1, jz) = 2 * Vort(r.ind, mesh->yend, jz) - Vort_ydown(r.ind, mesh->yend - 1, jz);
+        Vort_yup(r.ind, mesh->yend + 1, jz) = Vort(r.ind, mesh->yend, jz); // TODO: <! Check if this is correct?
       }
     }
   } else {
     Field3D Vort_fa = toFieldAligned(Vort);
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Vort_fa(r.ind, mesh->ystart - 1, jz) = 2 * Vort_fa(r.ind, mesh->ystart, jz) - Vort_fa(r.ind, mesh->ystart + 1, jz);
+        // Vort_fa(r.ind, mesh->ystart - 1, jz) = 2 * Vort_fa(r.ind, mesh->ystart, jz) - Vort_fa(r.ind, mesh->ystart + 1, jz);
+        Vort_fa(r.ind, mesh->ystart - 1, jz) = Vort_fa(r.ind, mesh->ystart, jz); // Neumann BC
       }
     }
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Vort_fa(r.ind, mesh->yend + 1, jz) = 2 * Vort_fa(r.ind, mesh->yend, jz) - Vort_fa(r.ind, mesh->yend - 1, jz);
+        // Vort_fa(r.ind, mesh->yend + 1, jz) = 2 * Vort_fa(r.ind, mesh->yend, jz) - Vort_fa(r.ind, mesh->yend - 1, jz);
+        Vort_fa(r.ind, mesh->yend + 1, jz) = Vort_fa(r.ind, mesh->yend, jz); // Neumann BC
       }
     }
     Vort = fromFieldAligned(Vort_fa);
@@ -672,6 +693,19 @@ void Vorticity::transform(Options& state) {
     set(fields["DivJcol"], DivJcol);
   }
 
+  // Add anomalous current
+  if (inlcude_anomalous_current) {
+    const Options& allspecies = state["species"];
+    const Options& electrons = allspecies["e"];
+
+    Field3D Ne = floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0);
+
+    DivJanomalous = -FV::Div_a_Grad_perp(k_AN * Ne, phi); //NOTE(malamast): Do I need to add the Pi_hat here as above? 
+
+    ddt(Vort) += DivJanomalous;
+    set(fields["DivJanomalous"], DivJanomalous);
+  }
+
   set(fields["vorticity"], Vort);
   set(fields["phi"], phi);
 }
@@ -863,6 +897,23 @@ void Vorticity::finally(const Options& state) {
       }
     }
   }
+
+  if (damp_poloidally_averaged_vorticity) {
+
+    const Options& electrons = allspecies["e"];
+
+    Field3D Te = floor(GET_NOBOUNDARY(Field3D, electrons["temperature"]), 0.0);
+
+    Field3D Vith = sqrt(2.0 * Te / average_atomic_mass);
+
+    // BoutReal nu_gam = 0.01;
+    Field3D nu_gam = 0.4 * poloidallyAverage(Vith) / (1.67/Lnorm); // R0 = 1.67 is for DIII-D 
+
+    // Add GAM damping term: -nu_gam * <omega>(x)
+    ddt(Vort) -= nu_gam * poloidallyAverage(Vort);
+
+  }
+
 }
 
 void Vorticity::outputVars(Options& state) {
@@ -887,6 +938,7 @@ void Vorticity::outputVars(Options& state) {
                   {"source", "vorticity"}});
 
   if (diagnose) {
+
     set_with_attrs(state["ddt(Vort)"], ddt(Vort),
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},
@@ -902,6 +954,7 @@ void Vorticity::outputVars(Options& state) {
                       {"long_name", "Divergence of diamagnetic current"},
                       {"source", "vorticity"}});
     }
+
     if (collisional_friction) {
       set_with_attrs(state["DivJcol"], DivJcol,
                      {{"time_dimension", "t"},
@@ -910,5 +963,15 @@ void Vorticity::outputVars(Options& state) {
                       {"long_name", "Divergence of collisional current"},
                       {"source", "vorticity"}});
     }
+
+    if (inlcude_anomalous_current) {
+      set_with_attrs(state["DivJanomalous"], DivJanomalous,
+                     {{"time_dimension", "t"},
+                      {"units", "A m^-3"},
+                      {"conversion", SI::qe * Nnorm * Omega_ci},
+                      {"long_name", "Divergence of anomalous current"},
+                      {"source", "vorticity"}});
+    } 
+
   }
 }
