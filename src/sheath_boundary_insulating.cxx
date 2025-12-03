@@ -51,19 +51,20 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& alloptions,
                                                    Solver*)
     : Component({
-          readIfSet("species:{all_species}:charge"),
-          readIfSet("species:e:{e_whole_domain}"),
-          writeBoundary("species:e:{e_boundary}"),
-          readWrite("species:e:energy_source"),
-          writeBoundaryIfSet("species:e:{e_optional}"),
-          writeBoundaryReadInteriorIfSet("species:e:pressure"),
-          readIfSet("species:{ions}:adiabatic"),
-          readOnly("species:{ions}:AA"),
-          readWrite("species:{ions}:energy_source"),
-          writeBoundary("species:{ions}:{ion_boundary}"),
-          writeBoundaryIfSet("species:{ions}:{ion_optional}"),
-          writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
-      }) {
+        readIfSet("species:{all_species}:charge"),
+        readIfSet("species:e:{e_whole_domain}"),
+        writeBoundaryFinal("species:e:{e_boundary}"),
+        readWrite("species:e:energy_source"),
+        writeBoundaryFinalIfSet("species:e:{e_optional}"),
+        writeBoundaryReadInteriorIfSet("species:e:pressure"),
+        readIfSet("species:{ions}:adiabatic"),
+        readOnly("species:{ions}:AA"),
+        readWrite("species:{ions}:energy_source"),
+        writeBoundaryFinal("species:{ions}:{ion_boundary}"),
+        writeBoundaryFinalIfSet("species:{ions}:{ion_optional}"),
+        writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+        writeBoundaryFinalIfSet("fields:phi")
+    }) {
 
   Options& options = alloptions[name];
 
@@ -96,7 +97,6 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
   substitutePermissions("e_optional", {"velocity", "momentum"});
   substitutePermissions("ion_boundary", {"density", "temperature"});
   substitutePermissions("ion_optional", {"velocity", "momentum"});
-  setPermissions(writeBoundaryIfSet("fields:phi"));
 }
 
 void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
