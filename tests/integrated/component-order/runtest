@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse two test cases that are identical
+# except the order in which the components are specified.
+
+from __future__ import division
+from __future__ import print_function
+
+try:
+  from builtins import str
+except:
+  pass
+
+from boututils.run_wrapper import shell, launch_safe, getmpirun
+from boutdata.collect import collect
+import numpy
+import xhermes
+
+from numpy import sqrt, max, abs, mean, array, log, concatenate
+from pathlib import Path
+
+
+def check_value(name, val, target, **kws):
+    # override default tolerances to get desired behaviour
+    kws["atol"] = kws.pop("atol", 0.0)
+    kws["rtol"] = kws.pop("rtol", 0.0)
+
+    success = numpy.isclose(val, target, **kws)
+    if not success:
+        # On failure, report the effective abs tolerance used by isclose
+        atol_eff = kws["atol"] + kws["rtol"] * abs(target)
+        print(
+            f"Expected\n {target-atol_eff} < {name} < {target+atol_eff}\nBut actual value was\n {val}"
+        )
+    return success
+
+  
+cases = [
+    "d+, he+, he, d, e, sheath_boundary_simple, braginskii_collisions, braginskii_friction, braginskii_heat_exchange, reactions, electron_force_balance, neutral_parallel_diffusion, braginskii_ion_viscosity, braginskii_conduction, recycling",
+    "recycling, d+, braginskii_friction, braginskii_heat_exchange, he, reactions, electron_force_balance, neutral_parallel_diffusion, d, braginskii_ion_viscosity, sheath_boundary_simple, he+, braginskii_conduction, braginskii_collisions, e"
+]
+
+# Remove old test results and symlink executable
+
+if not Path("hermes-3").is_file():
+  shell("ln -s ../../../hermes-3 hermes-3")
+
+results = []
+
+# Run and exit if unsuccessful
+for i, c in enumerate(cases):
+    for file in ["BOUT.dmp.0.nc", "BOUT.log.0", "BOUT.restart.0.nc", "BOUT.settings", ".BOUT.pid.0"]:
+        path = Path("data") / file
+        if path.is_file():
+            print(f"Removing old file data/{file}")
+            path.unlink()
+
+    s, out = launch_safe(f"./hermes-3 hermes:components='{c}'", nproc=1, pipe=True)
+  
+    if s != 0:
+        print(" => Test failed: ")
+        print(out)
+        exit(1)
+  
+    # Save output to log file
+    with open(f"run.{i}.log", "w") as f:
+        f.write(out)
+
+    results.append(xhermes.open("data", unnormalise=False).isel(t=-1))
+
+success = True
+
+rtol = 1e-10
+atol = 1e-10
+diagnostics = ["Nd+", "Pd+", "Vd+", "NVd+", "Nd", "Pd", "Vd", "NVd", "Nhe+", "Phe+", "Vhe+", "NVhe+", "Nhe", "Phe", "Vhe", "NVhe",  "Ne", "Pe", "Ve"]
+idx = (3, 5, 7)
+
+failing = []
+
+# Check output is the same between the simulations
+for d in diagnostics:
+    if not check_value(d, results[0][d].values[idx], results[1][d].values[idx], rtol=rtol, atol=atol):
+        success = False
+        failing.append(d)
+
+
+# Final output
+if success:
+  print(" => Test passed")
+  exit(0)
+else:
+  print(f" => Test failed: \nDisagreement in diagnostic(s) {', '.join(failing)}")
+  exit(1)

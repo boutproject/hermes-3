@@ -120,9 +120,8 @@ quasineutral
 ~~~~~~~~~~~~
 
 This component sets the density of one species, so that the overall
-charge density is zero everywhere. This must therefore be done after
-all other charged species densities have been calculated. It only
-makes sense to use this component for species with a non-zero charge.
+charge density is zero everywhere. It only makes sense to use this
+component for species with a non-zero charge.
 
 .. doxygenstruct:: Quasineutral
    :members:
@@ -183,15 +182,8 @@ evolve_pressure
 Evolves the pressure in time. This pressure is named `P<species>` where `<species>`
 is the short name of the evolving species e.g. `Pe`.
 
-By default parallel thermal conduction is included, which requires a collision
-time. If collisions are not calculated, then thermal conduction should be turned off
-by setting `thermal_conduction = false` in the input options.
-
-The choice of collision frequency used for conduction is set by the flag `conduction_collisions_mode`: 
-`multispecies` uses all available collision frequencies involving the chosen species, while `braginskii` uses only
-self-collisions .The default is `multispecies` and it is recommended for use if solving more than one ion.
-If you are solving for a single ion and want to recover Braginskii, use the `braginskii` mode.
-
+Parallel conduction is included if the global
+:ref:`braginskii_conduction` component has been used.
 
 If the component option ``diagnose = true`` then additional fields
 will be saved to the dump files: The species temperature ``T + name``
@@ -203,10 +195,11 @@ The pressure source is the energy density source multiplied by ``2/3``
 
 .. math::
 
-   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}\nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right) + \frac{2}{3}S_E + S_N\frac{1}{2}mNV^2
+   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}S_E + S_N\frac{1}{2}mNV^2
 
 where :math:`S_E` is the ``energy_source`` (thermal energy source),
-and :math:`S_N` is the density source.
+and :math:`S_N` is the density source. If conduction has been
+calculated, it will be included in the ``energy_source`` term.
 
 Notes:
 
@@ -235,8 +228,8 @@ energy, :math:`\mathcal{E}`:
    \mathcal{E} = \frac{1}{\gamma - 1} P + \frac{1}{2}m nv_{||}^2
 
 Note that this component requires the parallel velocity :math:`v_{||}`
-to calculate the pressure. It must therefore be listed after a component
-that sets the velocity, such as `evolve_momentum`:
+to calculate the pressure. It must therefore be listed alongside a
+component that sets the velocity, such as `evolve_momentum`:
 
 .. code-block:: ini
 
@@ -287,6 +280,31 @@ heat conduction as the `evolve_pressure` term with electron-electron collisions
 disabled.
 
 .. doxygenstruct:: SimpleConduction
+   :members:
+
+.. _braginskii_conduction:
+
+braginskii_conduction
+~~~~~~~~~~~~~~~~~~~~~
+
+This is a global component that calculates the parallel thermal
+conduction for all species that use :ref:`evolve_pressure` or
+:ref:`evolve_energy`, storing it in `energy_source`. If this is not
+desired for a particular species then it can be turned off by setting
+`thermal_conduction = false` in the input options for that species.
+
+The choice of collision frequency used for conduction is set by the
+flag `conduction_collisions_mode`: `multispecies` uses all available
+collision frequencies involving the chosen species, while `braginskii`
+uses only self-collisions .The default is `multispecies` and it is
+recommended for use if solving more than one ion.  If you are solving
+for a single ion and want to recover Braginskii, use the `braginskii`
+mode.
+
+.. math::
+    \nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right)
+
+.. doxygenstruct:: BarginskiiConduction
    :members:
 
 
@@ -356,7 +374,7 @@ using flows already calculated for other species. It is used like `quasineutral`
 .. code-block:: ini
 
    [hermes]
-   components = h+, ..., e, ...   # Note: e after all other species
+   components = h+, ..., e, ...
    
    [e]
    type = ..., zero_current,... # Set e:velocity
@@ -391,10 +409,10 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
-.. _electron_viscosity:
+.. _braginskii_electron_viscosity:
 
-electron_viscosity
-~~~~~~~~~~~~~~~~~~~~~~
+braginskii_electron_viscosity
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Calculates the Braginskii electron parallel viscosity, adding a force (momentum source)
 to the electron momentum equation:
@@ -410,29 +428,28 @@ The electron parallel viscosity is
    \eta_e = \frac{4}{3} 0.73 p_e \tau_e
 
 where :math:`\tau_e` is the electron collision time. The collisions between electrons
-and all other species therefore need to be calculated before this component is run:
+and all other species therefore needs to be calculated:
 
 .. code-block:: ini
 
    [hermes]
-   components = ..., e, ..., collisions, electron_viscosity
+   components = ..., e, ..., braginskii_collisions, braginskii_electron_viscosity
 
-.. doxygenstruct:: ElectronViscosity
+.. doxygenstruct:: BraginskiiElectronViscosity
    :members:
 
-.. _ion_viscosity:
+.. _braginskii_ion_viscosity:
 
-ion_viscosity
-~~~~~~~~~~~~~~~~~~~~~~
+braginskii_ion_viscosity
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-Adds ion viscosity terms to all charged species that are not electrons.
-The collision frequency is required so this is a top-level component that
-must be calculated after collisions:
+Adds ion viscosity terms to all charged species that are not
+electrons, calculated using collision frequencies.
 
 .. code-block:: ini
 
    [hermes]
-   components =  ..., collisions, ion_viscosity
+   components =  ..., braginskii_collisions, braginskii_ion_viscosity
 
 By default only the parallel diffusion of momentum is included, adding a force to each
 ion's momentum equation:
@@ -458,7 +475,7 @@ If the `perpendicular` option is set:
 
 .. code-block:: ini
 
-   [ion_viscosity]
+   [braginskii_ion_viscosity]
    perpendicular = true # Include perpendicular flows
 
 Then the ion scalar viscous pressure is calculated as:
@@ -540,13 +557,13 @@ and neglecting parallel gradients of velocity gives:
   the model is likely breaking down. Occasionally happens in low-density regions.
 
    
-.. doxygenstruct:: IonViscosity
+.. doxygenstruct:: BraginskiiIonViscosity
    :members:
 
-.. _thermal_force:
+.. _braginskii_thermal_force:
 
-thermal_force
-~~~~~~~~~~~~~
+braginskii_thermal_force
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 This implements simple expressions for the thermal force. If the
 `electron_ion` option is true (which is the default), then a momentum
@@ -577,9 +594,9 @@ where subscripts :math:`z` refer to the heavy ion, and :math:`i`
 refers to the light ion. The force on the light ion fluid is equal and
 opposite: :math:`F_i = -F_z`.
 
-The implementation is in the `ThermalForce` class:
+The implementation is in the `BraginskiiThermalForce` class:
 
-.. doxygenstruct:: ThermalForce
+.. doxygenstruct:: BraginskiiThermalForce
    :members:
 
 
@@ -597,13 +614,12 @@ has cross-field transport. This discrepancy is due to historical reasons and wil
 1D: neutral_parallel_diffusion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This adds diffusion to **all** neutral species (those with no or zero charge),
-because it needs to be calculated after the collision frequencies are known.
+This adds diffusion to **all** neutral species (those with no or zero charge).
 
 .. code-block:: ini
 
    [hermes]
-   components = ... , collisions, neutral_parallel_diffusion
+   components = ... , braginskii_collisions, neutral_parallel_diffusion
 
    [neutral_parallel_diffusion]
    dneut = 1         # Diffusion multiplication factor
@@ -956,9 +972,8 @@ electrostatic potential :math:`\phi` in the frame of the fluid, with
 an ion diamagnetic contribution. This is calculated by inverting a
 Laplacian equation similar to that solved in the vorticity equation.
 
-This component needs to be run after all other currents have been
-calculated.  It marks currents as used, so out-of-order modifications
-should raise errors.
+This component will be run after all other currents have been
+calculated.
 
 See the `examples/blob2d-vpol` example, which contains:
 

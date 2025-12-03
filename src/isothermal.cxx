@@ -3,9 +3,12 @@
 
 #include "../include/isothermal.hxx"
 
-Isothermal::Isothermal(std::string name, Options &alloptions,
-                       Solver *UNUSED(solver))
-    : name(name) {
+Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(solver))
+    : Component({readIfSet(fmt::format("species:{}:density", name), Regions::Interior),
+                 readWrite(fmt::format("species:{}:temperature", name)),
+                 // FIXME: This is only written if density is set
+                 readWrite(fmt::format("species:{}:pressure", name))}),
+      name(name) {
   AUTO_TRACE();
   Options& options = alloptions[name];
 
@@ -18,10 +21,10 @@ Isothermal::Isothermal(std::string name, Options &alloptions,
     .withDefault<bool>(false);
 }
 
-void Isothermal::transform(Options &state) {
+void Isothermal::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& species = state["species"][name];
+  GuardedOptions species = state["species"][name];
 
   set(species["temperature"], T);
 
