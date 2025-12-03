@@ -52,14 +52,14 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
     // the boundary.
     : Component({
         readIfSet("species:e:{e_whole_domain}"),
-        writeBoundary("species:e:{e_boundary}"),
+        writeBoundaryFinal("species:e:{e_boundary}"),
         readWrite("species:e:energy_source"),
-        writeBoundaryIfSet("species:e:{e_optional}"),
+        writeBoundaryFinalIfSet("species:e:{e_optional}"),
         readIfSet("species:{ions}:{ion_whole_domain}"),
         readOnly("species:{ions}:AA"),
         readWrite("species:{ions}:energy_source"),
-        writeBoundary("species:{ions}:{ion_boundary}"),
-        writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+        writeBoundaryFinal("species:{ions}:{ion_boundary}"),
+        writeBoundaryFinalIfSet("species:{ions}:{ion_optional}"),
     }) {
   AUTO_TRACE();
 
@@ -125,7 +125,7 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
       always_set_phi ? Permissions::VarRights(
           {"fields:phi",
            {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}})
-                     : writeBoundaryIfSet("fields:phi"));
+                     : writeBoundaryFinalIfSet("fields:phi"));
 }
 
 void SheathBoundary::transform_impl(GuardedOptions& state) {

@@ -263,19 +263,37 @@ inline Permissions::VarRights writeFinal(std::string varname,
 }
 
 /// Convenience function to return an object expressing that the
-/// variable should have Final write permissions on the boundaries. It
+/// variable should have write permissions on the boundaries. It
 /// will have Read permissions in the interior, as this is normally
 /// required to set the boundaries correctly.
 inline Permissions::VarRights writeBoundary(std::string varname) {
   return {varname,
+          {Regions::Nowhere, Regions::Interior, Regions::Boundaries, Regions::Nowhere}};
+}
+
+/// Convenience function to return an object expressing that the
+/// variable should have Final write permissions on the boundaries. It
+/// will have Read permissions in the interior, as this is normally
+/// required to set the boundaries correctly.
+inline Permissions::VarRights writeBoundaryFinal(std::string varname) {
+  return {varname,
           {Regions::Nowhere, Regions::Interior, Regions::Nowhere, Regions::Boundaries}};
+}
+
+/// Convenience function to return an object expressing that the
+/// variable should have write permissions on the boundaries. It
+/// will have Read permissions in the interior if the interior is
+/// already set.
+inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
+  return {varname,
+          {Regions::Interior, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}};
 }
 
 /// Convenience function to return an object expressing that the
 /// variable should have Final write permissions on the boundaries. It
 /// will have Read permissions in the interior if the interior is
 /// already set.
-inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
+inline Permissions::VarRights writeBoundaryFinalIfSet(std::string varname) {
   return {varname,
           {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}};
 }

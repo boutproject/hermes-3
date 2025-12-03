@@ -52,9 +52,9 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
                                                    Solver*)
     : Component({
         readIfSet("species:e:{e_whole_domain}"),
-        writeBoundary("species:e:{e_boundary}"),
+        writeBoundaryFinal("species:e:{e_boundary}"),
         readWrite("species:e:energy_source"),
-        writeBoundaryIfSet("species:e:{e_optional}"),
+        writeBoundaryFinalIfSet("species:e:{e_optional}"),
         {"species:e:pressure",
          {Regions::Interior, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}},
         readIfSet("species:{ions}:{ion_whole_domain}"),
@@ -62,8 +62,8 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
         readWrite("species:{ions}:energy_source"),
         {"species:{ions}:pressure",
          {Regions::Interior, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}},
-        writeBoundary("species:{ions}:{ion_boundary}"),
-        writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+        writeBoundaryFinal("species:{ions}:{ion_boundary}"),
+        writeBoundaryFinalIfSet("species:{ions}:{ion_optional}"),
     }) {
   AUTO_TRACE();
 
@@ -101,7 +101,7 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
   // FIXME: velocity and momentum will only be set on boundaries if already set on
   // interior
   state_variable_access.substitute("ion_optional", {"velocity", "momentum"});
-  state_variable_access.setAccess(writeBoundaryIfSet("fields:phi"));
+  state_variable_access.setAccess(writeBoundaryFinalIfSet("fields:phi"));
 }
 
 void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {

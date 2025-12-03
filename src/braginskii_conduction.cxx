@@ -16,7 +16,6 @@ using bout::globals::mesh;
 BraginskiiConduction::BraginskiiConduction(std::string name, Options& alloptions,
                                            Solver* solver)
     : Component({readOnly("species:{sp}:{input_vars}"),
-                 writeBoundary("species:{sp}:pressure"),
                  readWrite("species:{sp}:{output_vars}")}) {
   AUTO_TRACE();
 
@@ -77,7 +76,8 @@ BraginskiiConduction::BraginskiiConduction(std::string name, Options& alloptions
 
   std::vector<std::string> coll_types;
 
-  state_variable_access.substitute("input_vars", {"AA", "density", "temperature"});
+  state_variable_access.substitute("input_vars",
+                                   {"AA", "density", "temperature", "pressure"});
   state_variable_access.substitute("output_vars",
                                    {"energy_source", "kappa_par", "energy_flow_ylow"});
   std::vector<std::string> species;

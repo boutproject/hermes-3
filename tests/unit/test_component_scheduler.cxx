@@ -217,7 +217,7 @@ INSTANTIATE_TEST_SUITE_P(
         Parameter({{"components", "a,b,c"},
                    {"a",
                     {{"type", "orderchecker"},
-                     {"permissions", toString(Permissions({writeBoundary("1")}))}}},
+                     {"permissions", toString(Permissions({writeBoundaryFinal("1")}))}}},
                    {"b",
                     {{"type", "orderchecker"},
                      {"permissions", toString(Permissions({readOnly("1")}))}}},
