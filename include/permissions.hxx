@@ -290,12 +290,35 @@ inline Permissions::VarRights writeFinal(std::string varname,
 }
 
 /// Convenience function to return an object expressing that the
-/// variable should have Final write permissions on the boundaries. It
+/// variable should have write permissions on the boundaries. It
 /// will have Read permissions in the interior, as this is normally
 /// required to set the boundaries correctly.
 inline Permissions::VarRights writeBoundary(std::string varname) {
   return {std::move(varname),
+          {Regions::Nowhere, Regions::Interior, Regions::Boundaries, Regions::Nowhere}};
+}
+
+/// Convenience function to return an object expressing that the
+/// variable should have Final write permissions on the boundaries. It
+/// will have Read permissions in the interior, as this is normally
+/// required to set the boundaries correctly.
+inline Permissions::VarRights writeBoundaryFinal(std::string varname) {
+  return {std::move(varname),
           {Regions::Nowhere, Regions::Interior, Regions::Nowhere, Regions::Boundaries}};
+}
+
+/// Convenience function to return an object expressing that, if the
+/// interior has been set, then the variable should have write
+/// permissions on the boundaries and read permissions for the
+/// interior.
+///
+/// FIXME: Currently these permissiosn are not expressed properly, due
+/// to limitations in how the permission system. The boundary will
+/// have write permission regardless of whether or not the interior is
+/// set.
+inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
+  return {std::move(varname),
+          {Regions::Interior, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}};
 }
 
 /// Convenience function to return an object expressing that, if the
@@ -307,7 +330,7 @@ inline Permissions::VarRights writeBoundary(std::string varname) {
 /// to limitations in how the permission system. The boundary will
 /// have write permission regardless of whether or not the interior is
 /// set.
-inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
+inline Permissions::VarRights writeBoundaryFinalIfSet(std::string varname) {
   return {std::move(varname),
           {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}};
 }

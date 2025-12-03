@@ -53,16 +53,17 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
     : Component({
         readIfSet("species:{all_species}:charge"),
         readIfSet("species:e:{e_whole_domain}"),
-        writeBoundary("species:e:{e_boundary}"),
+        writeBoundaryFinal("species:e:{e_boundary}"),
         readWrite("species:e:energy_source"),
-        writeBoundaryIfSet("species:e:{e_optional}"),
+        writeBoundaryFinalIfSet("species:e:{e_optional}"),
         writeBoundaryReadInteriorIfSet("species:e:pressure"),
-        readIfSet("species:{ions}:adiabatic"),
+        readIfSet("species:{ions}:{ion_whole_domain}"),
         readOnly("species:{ions}:AA"),
         readWrite("species:{ions}:energy_source"),
-        writeBoundary("species:{ions}:{ion_boundary}"),
-        writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+        writeBoundaryFinal("species:{ions}:{ion_boundary}"),
+        writeBoundaryFinalIfSet("species:{ions}:{ion_optional}"),
         writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+        writeBoundaryFinalIfSet("fields:phi")
     }) {
   AUTO_TRACE();
 
@@ -95,9 +96,9 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
   substitutePermissions("e_whole_domain", {"AA", "adiabatic"});
   substitutePermissions("e_boundary", {"density", "temperature"});
   substitutePermissions("e_optional", {"velocity", "momentum"});
+  substitutePermissions("ion_whole_domain", {"charge", "adiabatic"});
   substitutePermissions("ion_boundary", {"density", "temperature"});
   substitutePermissions("ion_optional", {"velocity", "momentum"});
-  setPermissions(writeBoundaryIfSet("fields:phi"));
 }
 
 void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {

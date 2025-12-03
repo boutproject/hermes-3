@@ -7,8 +7,8 @@ using bout::globals::mesh;
 
 NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                  [[maybe_unused]] Solver* solver)
-    : Component({writeBoundary("species:{name}:{outputs}"),
-                 writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
+    : Component({writeBoundaryFinal("species:{name}:{outputs}"),
+                 writeBoundaryFinalIfSet("species:{name}:{conditional_outputs}"),
                  readWrite("species:{name}:energy_source")}),
       name(name) {
   AUTO_TRACE();
