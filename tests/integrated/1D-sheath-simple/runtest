@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+from boututils.run_wrapper import shell, launch_safe
+from boutdata.collect import BoutArray
+from boutdata.data import BoutOutputs
+
+from numpy import isclose
+
+import os
+
+HERMES_BIN = os.environ.get("HERMES_BIN", "../../../hermes-3")
+PATH = "data"
+
+# Loose tolerance due to low-res runs
+RTOL = 1e-2
+ATOL = 1e-2
+
+
+def check(result: BoutArray, index: int, expected: float, sense: str) -> bool:
+    """Check an individual variable is the expected value, pretty print a failure message if not"""
+    result_slice = result[index]
+    if isclose(result_slice, expected, rtol=RTOL, atol=ATOL):
+        return True
+
+    abs_diff = expected - result_slice
+    rel_diff = abs_diff / expected
+    name = result.attributes["long_name"]
+    units = result.attributes["units"]
+    print(
+        f"Failed: {sense} {name} ({result_slice:.4g}{units}), expected about {expected:.4g}{units} (diff: {abs_diff:.4g}, {rel_diff:%}%)"
+    )
+    return False
+
+
+def norm(var: BoutArray) -> BoutArray:
+    """Normalise a variable by its conversion factor"""
+    return var * var.attributes["conversion"]
+
+
+def collect_all():
+    """Collect all relevant variables from an output file"""
+    out = BoutOutputs(PATH, tind=-1, caching=True)
+
+    Pe = out["Pe"]
+    Ne = out["Ne"]
+    Tnorm = out["Tnorm"]
+    Ti = out["Ti"] * Tnorm
+
+    Te = (Pe / Ne) * Tnorm
+    Te.attributes["long_name"] = "e temperature"
+    Te.attributes["units"] = "eV"
+
+    return {
+        "Te": Te,
+        "Ti": Ti,
+        "Ve": norm(out["Ve"]),
+        "Vi": norm(out["Vi"]),
+        "Ee_sheath": norm(out["Ee_sheath"]),
+        "Ei_sheath": norm(out["Ei_sheath"]),
+        "Si_sheath": norm(out["Si_sheath"]),
+    }
+
+
+def check_case(
+    case_name: str, expected: dict[str, dict[str, float]], extra_args=""
+) -> bool:
+    """Run and check a whole test case"""
+    s, out = launch_safe(f"{HERMES_BIN} -d {PATH} {extra_args}", nproc=1, pipe=True)
+
+    filename = case_name.replace(" ", "_")
+    with open(f"{filename}.log", "w") as f:
+        f.write(out)
+
+    results = collect_all()
+
+    success = True
+    for sense, slice in senses.items():
+        for field, value in expected[sense].items():
+            success &= check(results[field], slice, value, sense)
+
+    print(f"{case_name} => Test {'passed' if success else 'failed'}")
+    return success
+
+
+# Clean up any previous runs
+shell("rm -f data/BOUT.dmp.0.nc")
+
+# Slices for upstream and downstream boundaries (interior points)
+senses = {"upstream": (-1, 0, 0, 0), "downstream": (-1, 0, -1, 0)}
+
+# Save some duplication in expected dicts later
+base_upstream = {
+    "Te": 100,
+    "Ti": 100,
+    "Ve": 0.0,
+    "Vi": 0.0,
+    "Ee_sheath": 0.0,
+    "Ei_sheath": 0.0,
+    "Si_sheath": 0.0,
+}
+base_downstream = {
+    "Te": 92.2,
+    "Ti": 93.8,
+    "Ve": 24090,
+    "Vi": 24090,
+    "Ee_sheath": -4.58e8,
+    "Ei_sheath": -4.55e8,
+    "Si_sheath": -8.957e24,
+}
+
+success = True
+
+################################################################################
+# Base case
+
+expected = {
+    "upstream": base_upstream,
+    "downstream": base_downstream,
+}
+
+success &= check_case("Sheath base case", expected)
+
+################################################################################
+# Re-run with higher electron heat transmission.
+# Should give lower electron temperature and lower velocity.
+
+expected = {
+    "upstream": base_upstream,
+    "downstream": {
+        "Te": 35.1,
+        "Ti": 93.34,
+        "Ve": 18380,
+        "Vi": 18380,
+        "Ee_sheath": -1.067e9,
+        "Ei_sheath": -3.725e8,
+        "Si_sheath": -7.376e24,
+    },
+}
+
+success &= check_case(
+    "Sheath higher gamma_e", expected, "sheath_boundary_simple:gamma_e=35"
+)
+
+################################################################################
+# Re-run with lower ion heat transmission.
+# Should give higher ion temperature and higher velocity.
+
+expected = {
+    "upstream": base_upstream,
+    "downstream": {
+        "Te": 91.67,
+        "Ti": 116.5,
+        "Ve": 24815,
+        "Vi": 24815,
+        "Ee_sheath": -4.85e8,
+        "Ei_sheath": -6.21e7,
+        "Si_sheath": -9.511e24,
+    },
+}
+
+success &= check_case(
+    "Sheath lower gamma_i", expected, "sheath_boundary_simple:gamma_i=0.35"
+)
+
+################################################################################
+# Re-run with higher secondary electron emission.
+# Should give higher electron temperature and higher velocity.
+
+expected = {
+    "upstream": base_upstream,
+    "downstream": {
+        "Te": 110,
+        "Ti": 93.8,
+        "Ve": 25278,
+        "Vi": 25278,
+        "Ee_sheath": -7.321e7,
+        "Ei_sheath": -4.79e8,
+        "Si_sheath": -9.398e24,
+    },
+}
+
+success &= check_case(
+    "Sheath higher Ge", expected, "sheath_boundary_simple:secondary_electron_coef=0.99"
+)
+
+################################################################################
+# Re-run with flipped direction. Should be mirror of base case
+
+flipped_upstream = base_downstream
+flipped_upstream["Ve"] = -flipped_upstream["Ve"]
+flipped_upstream["Vi"] = -flipped_upstream["Vi"]
+flipped_upstream["Si_sheath"] = -flipped_upstream["Si_sheath"]
+
+expected = {
+    "upstream": flipped_upstream,
+    "downstream": base_upstream,
+}
+
+success &= check_case("Mirrored BCs", expected, "lower_sheath=true")
+
+################################################################################
+# Linear-free boundary
+
+expected = {
+    "upstream": base_upstream,
+    "downstream": {
+        "Te": 92.2,
+        "Ti": 93.8,
+        "Ve": 24090,
+        "Vi": 24090,
+        "Ee_sheath": -4.525e8,
+        "Ei_sheath": -4.55e8,
+        "Si_sheath": -8.957e24,
+    },
+}
+
+success &= check_case(
+    "Linear_free boundary mode",
+    expected,
+    "sheath_boundary_simple:density_boundary_mode=linear_free "
+    "sheath_boundary_simple:pressure_boundary_mode=linear_free "
+    "sheath_boundary_simple:temperature_boundary_mode=linear_free",
+)
+
+################################################################################
+
+if success:
+    print(" => Test passed")
+    exit(0)
+else:
+    print(" => Test failed")
+    exit(1)
