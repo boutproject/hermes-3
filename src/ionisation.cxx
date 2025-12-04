@@ -14,7 +14,7 @@ BoutReal ionisation_rate(BoutReal T) {
   const auto log_T = log(T);
   double lograte = 0.0;
   for (std::size_t i = 0; i < ioncoeffs.size(); i++) {
-    lograte = lograte + ioncoeffs[i] * pow(log_T, i);
+    lograte = lograte + (ioncoeffs[i] * pow(log_T, static_cast<BoutReal>(i)));
   }
 
   return exp(lograte) * 1.0E-6;

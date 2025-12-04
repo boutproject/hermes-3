@@ -203,6 +203,7 @@ add_library(hermes_warnings INTERFACE)
 hermes_set_project_warnings(hermes_warnings ${HERMES_ERROR_ON_WARNINGS} "" "" "" "")
 
 if (HERMES_ENABLE_WARNINGS)
+  target_link_libraries(hermes-3-lib PRIVATE hermes_warnings)
   target_link_libraries(hermes-3 PRIVATE hermes_warnings)
 endif()
 
