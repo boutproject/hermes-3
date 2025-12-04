@@ -104,7 +104,7 @@ base_downstream = {
     "Ti": 93.8,
     "Ve": 24090,
     "Vi": 24090,
-    "Ee_sheath": -4.52e8,
+    "Ee_sheath": -4.58e8,
     "Ei_sheath": -4.55e8,
     "Si_sheath": -8.957e24,
 }
@@ -128,13 +128,13 @@ success &= check_case("Sheath base case", expected)
 expected = {
     "upstream": base_upstream,
     "downstream": {
-        "Te": 39.27,
+        "Te": 35.1,
         "Ti": 93.34,
-        "Ve": 17778,
-        "Vi": 17778,
-        "Ee_sheath": -7.423e8,
-        "Ei_sheath": -3.592e8,
-        "Si_sheath": -7.127e24,
+        "Ve": 18380,
+        "Vi": 18380,
+        "Ee_sheath": -1.067e9,
+        "Ei_sheath": -3.725e8,
+        "Si_sheath": -7.376e24,
     },
 }
 
@@ -153,7 +153,7 @@ expected = {
         "Ti": 116.5,
         "Ve": 24815,
         "Vi": 24815,
-        "Ee_sheath": -4.78e8,
+        "Ee_sheath": -4.85e8,
         "Ei_sheath": -6.21e7,
         "Si_sheath": -9.511e24,
     },
@@ -198,6 +198,30 @@ expected = {
 }
 
 success &= check_case("Mirrored BCs", expected, "lower_sheath=true")
+
+################################################################################
+# Linear-free boundary
+
+expected = {
+    "upstream": base_upstream,
+    "downstream": {
+        "Te": 92.2,
+        "Ti": 93.8,
+        "Ve": 24090,
+        "Vi": 24090,
+        "Ee_sheath": -4.525e8,
+        "Ei_sheath": -4.55e8,
+        "Si_sheath": -8.957e24,
+    },
+}
+
+success &= check_case(
+    "Linear_free boundary mode",
+    expected,
+    "sheath_boundary_simple:density_boundary_mode=linear_free "
+    "sheath_boundary_simple:pressure_boundary_mode=linear_free "
+    "sheath_boundary_simple:temperature_boundary_mode=linear_free",
+)
 
 ################################################################################
 

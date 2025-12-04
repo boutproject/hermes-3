@@ -36,9 +36,11 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, SheathLimitMode mode) {
   switch (mode) {
   case SheathLimitMode::limit_free:
   case SheathLimitMode::exponential_free:
-    fp = SQ(fc) / fm; // Exponential
+    fp = SQ(fc) / fm;
+    break;
   case SheathLimitMode::linear_free:
-    fp = 2.0 * fc - fm; // Linear
+    fp = (2.0 * fc) - fm;
+    break;
   }
 
 #if CHECKLEVEL >= 2
