@@ -530,19 +530,15 @@ int main(int argc, char** argv) {
     // Create a domain from the neso_mesh and the mapper.
     auto domain = std::make_shared<Domain>(neso_mesh, mapper);
 
-    auto electron_species = Species("ELECTRON");
-    auto main_species = Species("ION", 1.0, 0.0, 0);
-    std::vector<Species> fluid_species = {electron_species, main_species};
+    // create a Reactions particle spec
+    auto particle_spec_builder = ParticleSpecBuilder(ndim);
+    ParticleSpec additional_props{
+      ParticleProp(Sym<REAL>("CHARGE"), 1),
+      ParticleProp(Sym<REAL>("FORCE"), ndim),
+      ParticleProp(Sym<REAL>("TSP"), 2)};
 
-    // Create the particle properties (note that if you are using the Reactions
-    // project it has its owne particle spec builder).
-    ParticleSpec particle_spec{ParticleProp(Sym<REAL>("P"), ndim, true),
-                               ParticleProp(Sym<REAL>("V"), ndim),
-                               ParticleProp(Sym<REAL>("F"), ndim),
-                               ParticleProp(Sym<REAL>("Q"), 1),
-                               ParticleProp(Sym<REAL>("TSP"), 2),
-                               ParticleProp(Sym<INT>("CELL_ID"), 1, true),
-                               ParticleProp(Sym<INT>("ID"), 1)};
+    particle_spec_builder.add_particle_spec(additional_props);
+    ParticleSpec particle_spec = particle_spec_builder.get_particle_spec();
 
     // Create a Particle group with our specied particle properties.
     auto A = std::make_shared<ParticleGroup>(domain, particle_spec, sycl_target);
@@ -569,21 +565,19 @@ int main(int argc, char** argv) {
     ParticleSet initial_distribution(N_actual, particle_spec);
     for (int px = 0; px < N_actual; px++) {
       for (int dimx = 0; dimx < ndim; dimx++) {
-        initial_distribution[Sym<REAL>("P")][px][dimx] = positions[dimx][px];
-        initial_distribution[Sym<REAL>("V")][px][dimx] = velocities[dimx][px];
+        initial_distribution[Sym<REAL>("POSITION")][px][dimx] = positions[dimx][px];
+        initial_distribution[Sym<REAL>("VELOCITY")][px][dimx] = velocities[dimx][px];
       }
       // initial_distribution[Sym<REAL>("F")][px][0] = ex_cellorder(cells.at(px));
       // initial_distribution[Sym<REAL>("F")][px][1] = ey_cellorder(cells.at(px));
-      initial_distribution[Sym<REAL>("F")][px][0] = 0.0;
-      initial_distribution[Sym<REAL>("F")][px][1] = 0.0;
+      initial_distribution[Sym<REAL>("FORCE")][px][0] = 0.0;
+      initial_distribution[Sym<REAL>("FORCE")][px][1] = 0.0;
       initial_distribution[Sym<INT>("CELL_ID")][px][0] = cells.at(px);
       initial_distribution[Sym<INT>("ID")][px][0] = px + id_offset;
-      initial_distribution[Sym<REAL>("Q")][px][0] = 1.0;
+      initial_distribution[Sym<REAL>("CHARGE")][px][0] = 1.0;
     }
-
     // Add the new particles to the particle group
     A->add_particles_local(initial_distribution);
-
     // make pointer to projection object
     auto dg0 = std::make_shared<PetscInterface::DMPlexProjectEvaluateDG>(
         neso_mesh, sycl_target, "DG", 0);
@@ -603,8 +597,7 @@ int main(int argc, char** argv) {
     // now copy the data to internal variables
     dg0->set_dofs(2, h_project2);
     // set the data from internal variables into F
-    dg0->evaluate(A, Sym<REAL>("F"));
-
+    dg0->evaluate(A, Sym<REAL>("FORCE"));
     // Create the boundary interaction objects
     std::map<PetscInt, std::vector<PetscInt>> boundary_groups;
     // boundary_groups[1] = {100, 200};
@@ -617,7 +610,7 @@ int main(int argc, char** argv) {
     auto lambda_apply_boundary_conditions = [&](auto aa) {
       auto sub_groups = b2d->post_integration(aa);
       for (auto& gx : sub_groups) {
-        reflection->execute(gx.second, Sym<REAL>("P"), Sym<REAL>("V"), Sym<REAL>("TSP"),
+        reflection->execute(gx.second, Sym<REAL>("POSITION"), Sym<REAL>("VELOCITY"), Sym<REAL>("TSP"),
                             b2d->previous_position_sym);
       }
     };
@@ -635,22 +628,22 @@ int main(int argc, char** argv) {
         [=](ParticleSubGroupSharedPtr iteration_set) -> void {
       particle_loop(
           "euler_advection", iteration_set,
-          [=](auto F, auto V, auto P, auto TSP) {
+          [=](auto FORCE, auto VELOCITY, auto POSITION, auto TSP) {
             const REAL dt_left = dt - TSP.at(0);
             if (dt_left > 0.0) {
-              P.at(0) += dt_left * V.at(0);
-              P.at(1) += dt_left * V.at(1);
+              POSITION.at(0) += dt_left * VELOCITY.at(0);
+              POSITION.at(1) += dt_left * VELOCITY.at(1);
               // update V from fixed F
               // n.b. a different advection scheme should be
               // used for more than 1st order accuracy
-              V.at(0) += dt_left * F.at(0);
-              V.at(1) += dt_left * F.at(1);
+              VELOCITY.at(0) += dt_left * FORCE.at(0);
+              VELOCITY.at(1) += dt_left * FORCE.at(1);
               TSP.at(0) = dt;
               TSP.at(1) = dt_left;
             }
           },
-          Access::read(Sym<REAL>("F")), Access::write(Sym<REAL>("V")),
-          Access::write(Sym<REAL>("P")), Access::write(Sym<REAL>("TSP")))
+          Access::read(Sym<REAL>("FORCE")), Access::write(Sym<REAL>("VELOCITY")),
+          Access::write(Sym<REAL>("POSITION")), Access::write(Sym<REAL>("TSP")))
           ->execute();
     };
     auto lambda_pre_advection = [&](auto aa) { b2d->pre_integration(aa); };
@@ -688,11 +681,11 @@ int main(int argc, char** argv) {
     //   output << "\n";
     // }
     // uncomment to write a trajectory
-    H5Part h5part("traj_reflection_dmplex_example.h5part", A, Sym<REAL>("P"),
-                  Sym<REAL>("V"));
+    H5Part h5part("traj_reflection_dmplex_example.h5part", A, Sym<REAL>("POSITION"),
+                  Sym<REAL>("VELOCITY"));
 
-    // get a density by projecting the particle property Q to the bout_mesh
-    dg0->project(A, Sym<REAL>("Q"));
+    // get a density by projecting the particle property CHARGE to the bout_mesh
+    dg0->project(A, Sym<REAL>("CHARGE"));
     std::vector<REAL> h_project1;
     dg0->get_dofs(1, h_project1);
     PetscInt ic = 0;
