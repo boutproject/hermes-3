@@ -13,10 +13,15 @@
 #include <petscviewerhdf5.h>
 #include <string>
 #include <vector>
+// for reactions integration
+#include <reactions/reactions.hpp>
 
 #ifndef NESO_PARTICLES_PETSC
 static_assert(false, "NESO-Particles was installed without PETSc support.");
 #else
+
+using namespace NESO::Particles;
+using namespace VANTAGE::Reactions;
 
 template <typename T, typename U>
 inline void ASSERT_EQ(T t, U u) {
@@ -186,8 +191,6 @@ std::vector<PetscInt> cells_definition_from_RZ_ivertex(
   }
   return cells;
 }
-
-using namespace NESO::Particles;
 
 int main(int argc, char** argv) {
   // initialise_mpi(&argc, &argv);
@@ -526,6 +529,10 @@ int main(int argc, char** argv) {
         std::make_shared<PetscInterface::DMPlexLocalMapper>(sycl_target, neso_mesh);
     // Create a domain from the neso_mesh and the mapper.
     auto domain = std::make_shared<Domain>(neso_mesh, mapper);
+
+    auto electron_species = Species("ELECTRON");
+    auto main_species = Species("ION", 1.0, 0.0, 0);
+    std::vector<Species> fluid_species = {electron_species, main_species};
 
     // Create the particle properties (note that if you are using the Reactions
     // project it has its owne particle spec builder).
