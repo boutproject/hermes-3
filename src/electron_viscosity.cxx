@@ -1,4 +1,4 @@
-/// Braginskii electron viscosity
+// Braginskii electron viscosity
 
 #include <bout/fv_ops.hxx>
 #include <bout/mesh.hxx>

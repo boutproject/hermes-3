@@ -158,7 +158,6 @@ void Recycling::transform(Options& state) {
   const Field2D& dx = coord->dx;
   const Field2D& dz = coord->dz;
   const Field2D& g_22 = coord->g_22;
-  const Field2D& g11 = coord->g11;
 
   for (auto& channel : channels) {
     const Options& species_from = state["species"][channel.from];
@@ -358,7 +357,6 @@ void Recycling::transform(Options& state) {
               // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
               // While enabling us to still calculate radial wall fluxes separately here
               BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
-              BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
               BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
               // Calculate wall conditions
@@ -458,7 +456,6 @@ void Recycling::transform(Options& state) {
                 // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
                 // While enabling us to still calculate radial wall fluxes separately here
                 BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
-                BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
                 BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
                 // Calculate wall conditions

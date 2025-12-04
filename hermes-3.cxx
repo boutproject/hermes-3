@@ -27,8 +27,7 @@
 #include "include/adas_neon.hxx"
 #include "include/adas_lithium.hxx"
 #include "include/amjuel_helium.hxx"
-#include "include/amjuel_hyd_ionisation.hxx"
-#include "include/amjuel_hyd_recombination.hxx"
+#include "include/amjuel_hydrogen.hxx"
 #include "include/anomalous_diffusion.hxx"
 #include "include/classical_diffusion.hxx"
 #include "include/binormal_stpm.hxx"
@@ -158,9 +157,10 @@ public:
     }
   }
 
-  void apply(Field2D& f) override {
+  void apply([[maybe_unused]] Field2D& f) override {
     throw BoutException("DecayLengthBoundary not implemented for Field2D");
   }
+
 private:
   std::shared_ptr<FieldGenerator> gen; // Generator
 };
@@ -285,7 +285,7 @@ int Hermes::init(bool restarting) {
   scheduler = ComponentScheduler::create(options, Options::root(), solver);
 
   // Preconditioner
-  setPrecon((preconfunc)&Hermes::precon);
+  setPrecon(&Hermes::precon);
 
   return 0;
 }
