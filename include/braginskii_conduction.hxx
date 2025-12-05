@@ -2,6 +2,14 @@
 #ifndef BRAGINSKII_CONDUCTION_H
 #define BRAGINSKII_CONDUCTION_H
 
+#include <map>
+#include <string>
+#include <vector>
+
+#include <bout/bout_types.hxx>
+#include <bout/field3d.hxx>
+#include <bout/options.hxx>
+
 #include "component.hxx"
 
 /// Calculates parallel heat conduction due to collisions
@@ -27,7 +35,7 @@ struct BraginskiiConduction : public Component {
   ///   - type                  Checks whether energy or pressure are evolved
   ///   - thermal_conduction    Include parallel heat conduction? Default is true
   ///
-  BraginskiiConduction(std::string name, Options& alloptions, Solver*);
+  BraginskiiConduction(const std::string& name, Options& alloptions, Solver*);
 
   /// Calculate conduction of energy for each species where this has been turned on.
   ///

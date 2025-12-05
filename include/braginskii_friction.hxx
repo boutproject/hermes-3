@@ -2,7 +2,9 @@
 #ifndef BRAGINSKII_FRICTION_H
 #define BRAGINSKII_FRICTION_H
 
-#include <bout/field3d.hxx>
+#include <string>
+
+#include <bout/options.hxx>
 
 #include "component.hxx"
 
@@ -15,7 +17,7 @@ struct BraginskiiFriction : public Component {
   ///   - frictional_heating    Include R dot v heating term as energy source? (includes
   ///                           Ohmic heating)
   ///
-  BraginskiiFriction(std::string name, Options& alloptions, Solver*);
+  BraginskiiFriction(const std::string& name, Options& alloptions, Solver*);
 
   /// Calculate transfer of momentum and energy between species due to
   /// friction arising from collisions.

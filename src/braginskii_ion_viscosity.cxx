@@ -1,19 +1,36 @@
 // Ion viscosity model
 
-#include "../include/hermes_utils.hxx"
+#include <cmath>
+#include <string>
+
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/difops.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/globals.hxx>
 #include <bout/mesh.hxx>
-#include <bout/output_bout_types.hxx>
+#include <bout/msg_stack.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+#include <bout/output_bout_types.hxx> // NOLINT
+#include <bout/region.hxx>
+#include <bout/sys/range.hxx>
+#include <bout/utils.hxx>
+#include <bout/vecops.hxx>
 
 #include "../include/braginskii_ion_viscosity.hxx"
+#include "../include/component.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
 
 using bout::globals::mesh;
 
-BraginskiiIonViscosity::BraginskiiIonViscosity(std::string name, Options& alloptions,
-                                               Solver*) {
+BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
+                                               Options& alloptions, Solver*) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]
@@ -133,7 +150,7 @@ void BraginskiiIonViscosity::transform(Options& state) {
       if (viscosity_collisions_mode == "braginskii") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string collision_name = collision.second.name();
+          std::string const collision_name = collision.second.name();
 
           if ( // Self-collisions
               (collisionSpeciesMatch(collision_name, species.name(), species.name(),
@@ -145,7 +162,7 @@ void BraginskiiIonViscosity::transform(Options& state) {
       } else if (viscosity_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string collision_name = collision.second.name();
+          std::string const collision_name = collision.second.name();
 
           if ( // Charge exchange
               (collisionSpeciesMatch(collision_name, species.name(), "", "cx", "partial"))
@@ -206,7 +223,7 @@ void BraginskiiIonViscosity::transform(Options& state) {
       const Field2D tau_av = DC(tau);
 
       // calculating ion thermal velocity
-      BoutReal mass = get<BoutReal>(species["AA"]);
+      BoutReal const mass = get<BoutReal>(species["AA"]);
       const Field2D v_thermal = sqrt(2.0 * T_av / mass);
 
       nu_star *= (bounce_frequency_R * bounce_frequency_q95)
@@ -248,12 +265,12 @@ void BraginskiiIonViscosity::transform(Options& state) {
 
         // Parallel ion stress tensor component, calculated here because before it was
         // only div_Pi_cipar
-        Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor
-                           * (2. * Grad_par(V_av) + V_av * Grad_par_logB);
-        Field2D Pi_ciperp =
+        Field2D const Pi_cipar = -0.96 * P_av * tau_av * bounce_factor
+                                 * (2. * Grad_par(V_av) + V_av * Grad_par_logB);
+        Field2D const Pi_ciperp =
             0 * Pi_cipar; // Perpendicular components and divergence of current J equal to
                           // 0 for only parallel viscosity case
-        Field2D DivJ = 0 * Pi_cipar;
+        Field2D const DivJ = 0 * Pi_cipar;
         diagnostics[species_name] =
             Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
       }
@@ -340,14 +357,14 @@ void BraginskiiIonViscosity::transform(Options& state) {
     Pi_ci.applyBoundary("neumann");
 
     // Divergence of current in vorticity equation
-    Field3D DivJ =
+    Field3D const DivJ =
         Div(0.5 * Pi_ci * Curlb_B) - Div_n_bxGrad_f_B_XPPM(1. / 3, Pi_ci, false, true);
     add(state["fields"]["DivJextra"], DivJ);
 
     // Transfer of energy between ion internal energy and ExB flow
     subtract(species["energy_source"],
              Field3D(0.5 * Pi_ci * Curlb_B * Grad(phi_av + P_av)
-                     - (1 / 3) * bracket(Pi_ci, phi_av + P_av, BRACKET_STD)));
+                     - (1. / 3.) * bracket(Pi_ci, phi_av + P_av, BRACKET_STD)));
 
     if (diagnose) {
       diagnostics[species_name] =

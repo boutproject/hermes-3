@@ -1,14 +1,18 @@
 #include <iterator>
+#include <map>
+#include <string>
 
+#include <bout/bout_types.hxx>
 #include <bout/constants.hxx>
 #include <bout/field.hxx>
-#include <bout/output_bout_types.hxx>
+#include <bout/field3d.hxx>
+#include <bout/options.hxx>
 
 #include "../include/braginskii_heat_exchange.hxx"
-#include "../include/hermes_utils.hxx"
+#include "../include/component.hxx"
 
-BraginskiiHeatExchange::BraginskiiHeatExchange(std::string name, Options& alloptions,
-                                               Solver*) {
+BraginskiiHeatExchange::BraginskiiHeatExchange(const std::string& name,
+                                               Options& alloptions, Solver*) {
   AUTO_TRACE();
   diagnose = alloptions[name]["diagnose"]
                  .doc("Output additional diagnostics?")
@@ -36,42 +40,44 @@ void BraginskiiHeatExchange::transform(Options& state) {
   for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
     Options& species1 = allspecies[kv1->first];
     // If collisions were not calculated for this species, skip it.
-    if (not species1.isSection("collision_frequencies"))
+    if (not species1.isSection("collision_frequencies")) {
       continue;
+    }
 
-    const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]),
-                  temperature1 = species1.isSet("temperature")
+    const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]);
+    const Field3D temperature1 = species1.isSet("temperature")
                                      ? GET_NOBOUNDARY(Field3D, species1["temperature"])
                                      : 0.0;
 
-    const BoutReal A1 = GET_VALUE(BoutReal, species1["AA"]),
-                   Z1 = species1.isSet("charge") ? GET_VALUE(BoutReal, species1["charge"])
-                                                 : 0;
+    const BoutReal A1 = GET_VALUE(BoutReal, species1["AA"]);
 
     // Copy the iterator, so we don't iterate over the
     // lower half of the matrix, but start at the diagonal
     for (std::map<std::string, Options>::const_iterator kv2 = kv1;
          kv2 != std::end(children); ++kv2) {
       // Can't have heat exchange with oneself
-      if (kv1->first == kv2->first)
+      if (kv1->first == kv2->first) {
         continue;
+      }
 
       Options& species2 = allspecies[kv2->first];
 
       // At least one of the species must have a velocity for there to be friction.
-      if (!(species1.isSet("temperature") or species2.isSet("temperature")))
+      if (!(species1.isSet("temperature") or species2.isSet("temperature"))) {
         continue;
+      }
 
       const std::string coll_name =
           kv1->first + std::string("_") + kv2->first + std::string("_coll");
       // If collisions were not calculated between these two species, skip
-      if (not species1["collision_frequencies"].isSet(coll_name))
+      if (not species1["collision_frequencies"].isSet(coll_name)) {
         continue;
+      }
 
       const BoutReal A2 = GET_VALUE(BoutReal, species2["AA"]);
 
-      const Field3D nu = GET_VALUE(Field3D, species1["collision_frequencies"][coll_name]),
-                    temperature2 = species2.isSet("temperature")
+      const Field3D nu = GET_VALUE(Field3D, species1["collision_frequencies"][coll_name]);
+      const Field3D temperature2 = species2.isSet("temperature")
                                        ? GET_NOBOUNDARY(Field3D, species2["temperature"])
                                        : 0.0;
 
@@ -99,12 +105,11 @@ void BraginskiiHeatExchange::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
-  auto Cs0 = get<BoutReal>(state["Cs0"]);
+  BoutReal const Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   for (const auto& [A, section] : energy_channels) {
     for (const auto& [B, child] : section) {
-      std::string AB = A + B;
+      const std::string AB = A + B;
 
       // Collisional energy transfer channels (i.e. thermal equilibration)
       if ((energy_channels.isSection(A)) and (energy_channels[A].isSet(B))) {

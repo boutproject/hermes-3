@@ -1,10 +1,12 @@
+#include <tuple>
 
+#include <bout/bout_types.hxx>
+#include <bout/region.hxx>
 #include "gtest/gtest.h"
 
+#include "../../include/braginskii_thermal_force.hxx"
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
-
-#include "../../include/braginskii_thermal_force.hxx"
 
 /// Global mesh
 namespace bout {
@@ -158,8 +160,8 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceDensityScaling) {
   state["species"]["e"]["AA"] = 1. / 1836;
 
   component.transform(state);
-  Field3D mom1 = state["species"]["d1+"]["momentum_source"],
-          mom2 = state["species"]["d2+"]["momentum_source"];
+  Field3D mom1 = state["species"]["d1+"]["momentum_source"];
+  Field3D mom2 = state["species"]["d2+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
     // Force is directly proportional to ion density
     ASSERT_NE(mom1[i], 0.);
@@ -183,8 +185,8 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceChargeScaling) {
   state["species"]["e"]["AA"] = 1. / 1836;
 
   component.transform(state);
-  Field3D mom1 = state["species"]["d1+"]["momentum_source"],
-          mom2 = state["species"]["d2+"]["momentum_source"];
+  Field3D mom1 = state["species"]["d1+"]["momentum_source"];
+  Field3D mom2 = state["species"]["d2+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
     // Force is proportional to square of ion density
     ASSERT_NE(mom1[i], 0.);
@@ -193,7 +195,9 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceChargeScaling) {
 }
 
 TEST_F(BraginskiiThermalForceTest, ElectronForceTemperatureGradScaling) {
-  Options state0, state1, state2;
+  Options state0;
+  Options state1;
+  Options state2;
   state1["species"]["d+"]["density"] = 1;
   state1["species"]["d+"]["temperature"] = grad1;
   state1["species"]["d+"]["charge"] = 1;
@@ -218,10 +222,10 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceTemperatureGradScaling) {
   component.transform(state1);
   component.transform(state2);
 
-  Field3D mom0 = state0["species"]["d+"]["momentum_source"],
-          mom1 = state1["species"]["d+"]["momentum_source"],
-          mom2 = state2["species"]["d+"]["momentum_source"],
-          mom1_prime = state1["species"]["d2+"]["momentum_source"];
+  Field3D mom0 = state0["species"]["d+"]["momentum_source"];
+  Field3D mom1 = state1["species"]["d+"]["momentum_source"];
+  Field3D mom2 = state2["species"]["d+"]["momentum_source"];
+  Field3D mom1_prime = state1["species"]["d2+"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom1.getRegion("RGN_NOBNDRY")) {
     // Temperature gradient of the ion doesn't influence force
     ASSERT_DOUBLE_EQ(mom1[i], mom1_prime[i]);
@@ -233,7 +237,8 @@ TEST_F(BraginskiiThermalForceTest, ElectronForceTemperatureGradScaling) {
 }
 
 TEST_F(BraginskiiThermalForceTest, IonIonForceTemperatureGradScaling) {
-  Options state1, state2;
+  Options state1;
+  Options state2;
   state1["species"]["c1"]["density"] = 0.01;
   state1["species"]["c1"]["temperature"] = grad1;
   state1["species"]["c1"]["charge"] = 1;
@@ -253,10 +258,10 @@ TEST_F(BraginskiiThermalForceTest, IonIonForceTemperatureGradScaling) {
   component.transform(state1);
   component.transform(state2);
 
-  Field3D mom1_1 = state1["species"]["c1"]["momentum_source"],
-          mom1_2 = state1["species"]["c2"]["momentum_source"],
-          mom2_1 = state2["species"]["c1"]["momentum_source"],
-          mom2_2 = state2["species"]["c2"]["momentum_source"];
+  Field3D mom1_1 = state1["species"]["c1"]["momentum_source"];
+  Field3D mom1_2 = state1["species"]["c2"]["momentum_source"];
+  Field3D mom2_1 = state2["species"]["c1"]["momentum_source"];
+  Field3D mom2_2 = state2["species"]["c2"]["momentum_source"];
   BOUT_FOR_SERIAL(i, mom1_1.getRegion("RGN_NOBNDRY")) {
     // Changing temperature gradient of the heavy ion should not change the force
     EXPECT_DOUBLE_EQ(mom1_1[i], mom1_2[i]);

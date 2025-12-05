@@ -2,6 +2,10 @@
 #ifndef BRAGINSKII_THERMAL_FORCE_H
 #define BRAGINSKII_THERMAL_FORCE_H
 
+#include <string>
+
+#include <bout/options.hxx>
+
 #include "component.hxx"
 
 /// Simple calculation of the thermal force for the Braginskii closure
@@ -22,7 +26,7 @@
 ///   - ion_ion       : bool   Include ion-ion elastic collisions?
 ///
 struct BraginskiiThermalForce : public Component {
-  BraginskiiThermalForce(std::string name, Options& alloptions, Solver*) {
+  BraginskiiThermalForce(const std::string& name, Options& alloptions, Solver*) {
     Options& options = alloptions[name];
     electron_ion = options["electron_ion"]
                        .doc("Include electron-ion collisions?")

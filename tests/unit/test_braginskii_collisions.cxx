@@ -1,10 +1,13 @@
+#include <cmath>
 
+#include <bout/bout_types.hxx>
+#include <bout/region.hxx>
 #include "gtest/gtest.h"
 
+#include "../../include/braginskii_collisions.hxx"
+#include "../../include/component.hxx"
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
-
-#include "../../include/braginskii_collisions.hxx"
 
 /// Global mesh
 namespace bout {
@@ -26,7 +29,7 @@ TEST_F(BraginskiiCollisionsTest, CreateComponent) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1e19;
-  BraginskiiCollisions component("test", options, nullptr);
+  BraginskiiCollisions const component("test", options, nullptr);
 }
 
 TEST_F(BraginskiiCollisionsTest, OnlyElectrons) {

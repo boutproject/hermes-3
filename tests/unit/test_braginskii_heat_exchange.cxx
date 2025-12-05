@@ -1,10 +1,10 @@
-
+#include <bout/region.hxx>
 #include "gtest/gtest.h"
 
+#include "../../include/braginskii_heat_exchange.hxx"
+#include "../../include/component.hxx"
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
-
-#include "../../include/braginskii_heat_exchange.hxx"
 
 /// Global mesh
 namespace bout {
@@ -130,7 +130,8 @@ TEST_F(BraginskiiHeatExchangeTest, DoubleCollisionRates) {
 
   BraginskiiHeatExchange component("test", options, nullptr);
 
-  Options state1, state2;
+  Options state1;
+  Options state2;
   state1["species"]["s1"]["density"] = 5e18; // Half density
   state1["species"]["s1"]["charge"] = 0;
   state1["species"]["s1"]["AA"] = 2;

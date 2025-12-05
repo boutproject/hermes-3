@@ -1,13 +1,24 @@
 // Braginskii electron viscosity
 
+#include <cmath>
+#include <string>
+
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
+#include <bout/coordinates.hxx>
 #include <bout/difops.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/mesh.hxx>
+#include <bout/options.hxx>
+#include <bout/solver.hxx>
 
 #include "../include/braginskii_electron_viscosity.hxx"
+#include "../include/component.hxx"
 
-BraginskiiElectronViscosity::BraginskiiElectronViscosity(std::string name,
+BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name,
                                                          Options& alloptions, Solver*) {
   auto& options = alloptions[name];
 

@@ -1,7 +1,18 @@
+#include <cmath>
+#include <iterator>
+#include <map>
+#include <string>
 
+#include <bout/bout_types.hxx>
 #include <bout/difops.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+#include <bout/utils.hxx>
 
 #include "../include/braginskii_thermal_force.hxx"
+#include "../include/component.hxx"
 
 void BraginskiiThermalForce::transform(Options& state) {
   AUTO_TRACE();
@@ -30,7 +41,7 @@ void BraginskiiThermalForce::transform(Options& state) {
       // Don't need density boundary
       const Field3D nz = GET_NOBOUNDARY(Field3D, species["density"]);
 
-      Field3D ion_force = nz * (0.71 * SQ(Z)) * Grad_Te;
+      const Field3D ion_force = nz * (0.71 * SQ(Z)) * Grad_Te;
 
       add(species["momentum_source"], ion_force);
       subtract(electrons["momentum_source"], ion_force);
@@ -71,7 +82,8 @@ void BraginskiiThermalForce::transform(Options& state) {
         // Now have two different ion species, species1 and species2
         // Only including one majority light species, and one trace heavy species
 
-        Options *light, *heavy;
+        Options* light;
+        Options* heavy;
         if ((get<BoutReal>(species1["AA"]) < 4)
             and (get<BoutReal>(species2["AA"]) > 10)) {
           // species1 light, species2 heavy

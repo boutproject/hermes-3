@@ -1,13 +1,19 @@
 #include <iterator>
+#include <map>
+#include <string>
 
+#include <bout/bout_types.hxx>
 #include <bout/constants.hxx>
 #include <bout/field.hxx>
-#include <bout/output_bout_types.hxx>
+#include <bout/field3d.hxx>
+#include <bout/options.hxx>
+#include <fmt/format.h>
 
 #include "../include/braginskii_friction.hxx"
-#include "../include/hermes_utils.hxx"
+#include "../include/component.hxx"
 
-BraginskiiFriction::BraginskiiFriction(std::string name, Options& alloptions, Solver*) {
+BraginskiiFriction::BraginskiiFriction(const std::string& name, Options& alloptions,
+                                       Solver*) {
   AUTO_TRACE();
   Options& options = alloptions[name];
   frictional_heating = options["frictional_heating"]
@@ -21,15 +27,15 @@ BoutReal momentumCoefficient(BoutReal Zi) {
   return Zi == 1 ? 0.51 : Zi == 2 ? 0.44 : Zi == 3 ? 0.40 : 0.38;
 }
 
-BoutReal momentumCoefficient(std::string name1, BoutReal Z1, std::string name2,
-                             BoutReal Z2) {
+BoutReal momentumCoefficient(const std::string& name1, BoutReal Z1,
+                             const std::string& name2, BoutReal Z2) {
   if (name1 == "e") {
     return momentumCoefficient(Z2);
-  } else if (name2 == "e") {
-    return momentumCoefficient(Z1);
-  } else {
-    return 1.;
   }
+  if (name2 == "e") {
+    return momentumCoefficient(Z1);
+  }
+  return 1.;
 }
 
 void BraginskiiFriction::transform(Options& state) {
@@ -53,49 +59,51 @@ void BraginskiiFriction::transform(Options& state) {
   for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
     Options& species1 = allspecies[kv1->first];
     // If collisions were not calculated for this species, skip it.
-    if (not species1.isSection("collision_frequencies"))
+    if (not species1.isSection("collision_frequencies")) {
       continue;
+    }
 
-    const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]),
-                  velocity1 = species1.isSet("velocity")
-                                  ? GET_NOBOUNDARY(Field3D, species1["velocity"])
-                                  : 0.0;
+    const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]);
+    const Field3D velocity1 =
+        species1.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species1["velocity"]) : 0.0;
     ;
 
-    const BoutReal A1 = GET_VALUE(BoutReal, species1["AA"]),
-                   Z1 = species1.isSet("charge") ? GET_VALUE(BoutReal, species1["charge"])
-                                                 : 0;
+    const BoutReal A1 = GET_VALUE(BoutReal, species1["AA"]);
+    const BoutReal Z1 =
+        species1.isSet("charge") ? GET_VALUE(BoutReal, species1["charge"]) : 0;
 
     // Copy the iterator, so we don't iterate over the
     // lower half of the matrix, but start at the diagonal
     for (auto kv2 = kv1; kv2 != std::end(children); ++kv2) {
       // Can't have friction with oneself
-      if (kv1->first == kv2->first)
+      if (kv1->first == kv2->first) {
         continue;
+      }
 
       Options& species2 = allspecies[kv2->first];
 
       // At least one of the species must have a velocity for there to be friction.
       if (!(isSetFinalNoBoundary(species1["velocity"])
-            or isSetFinalNoBoundary(species2["velocity"])))
+            or isSetFinalNoBoundary(species2["velocity"]))) {
         continue;
+      }
 
       const std::string coll_name = fmt::format("{}_{}_coll", kv1->first, kv2->first);
       // If collisions were not calculated between these two species, skip
-      if (not species1["collision_frequencies"].isSet(coll_name))
+      if (not species1["collision_frequencies"].isSet(coll_name)) {
         continue;
+      }
 
-      const Field3D nu = GET_VALUE(Field3D, species1["collision_frequencies"][coll_name]),
-                    density2 = GET_VALUE(Field3D, species2["density"]),
-                    velocity2 = species2.isSet("velocity")
+      const Field3D nu = GET_VALUE(Field3D, species1["collision_frequencies"][coll_name]);
+      const Field3D density2 = GET_VALUE(Field3D, species2["density"]);
+      const Field3D velocity2 = species2.isSet("velocity")
                                     ? GET_NOBOUNDARY(Field3D, species2["velocity"])
                                     : 0.0;
-      const BoutReal A2 = GET_VALUE(BoutReal, species2["AA"]),
-                     Z2 = species2.isSet("charge")
-                              ? GET_VALUE(BoutReal, species2["charge"])
-                              : 0.,
-                     momentum_coefficient =
-                         momentumCoefficient(kv1->first, Z1, kv2->first, Z2);
+      const BoutReal A2 = GET_VALUE(BoutReal, species2["AA"]);
+      const BoutReal Z2 =
+          species2.isSet("charge") ? GET_VALUE(BoutReal, species2["charge"]) : 0.;
+      const BoutReal momentum_coefficient =
+          momentumCoefficient(kv1->first, Z1, kv2->first, Z2);
       const Field3D F12 =
           momentum_coefficient * A1 * nu * density1 * (velocity2 - velocity1);
 
@@ -128,8 +136,8 @@ void BraginskiiFriction::transform(Options& state) {
         //  1) This term is always positive: Collisions don't lead to cooling
         //  2) In the limit that m_2 << m_1 (e.g. electron-ion collisions),
         //     the lighter species is heated more than the heavy species.
-        Field3D species1_source = (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12;
-        Field3D species2_source = (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12;
+        Field3D const species1_source = (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12;
+        Field3D const species2_source = (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12;
 
         add(species1["energy_source"], species1_source);
         add(species2["energy_source"], species2_source);
@@ -153,7 +161,7 @@ void BraginskiiFriction::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+  BoutReal const Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   /// Iterate through the first species in each collision pair

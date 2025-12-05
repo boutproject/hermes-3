@@ -1,12 +1,26 @@
+#include <cmath>
 #include <iterator>
+#include <map>
+#include <string>
 
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
-#include <bout/output_bout_types.hxx>
+#include <bout/field3d.hxx>
+#include <bout/msg_stack.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+#include <bout/output_bout_types.hxx> // NOLINT
+#include <bout/solver.hxx>
+#include <bout/utils.hxx>
+#include <fmt/format.h>
 
 #include "../include/braginskii_collisions.hxx"
+#include "../include/component.hxx"
 #include "../include/hermes_utils.hxx"
 
-BraginskiiCollisions::BraginskiiCollisions(std::string name, Options& alloptions,
+BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions,
                                            Solver*) {
   AUTO_TRACE();
   const Options& units = alloptions["units"];
@@ -60,7 +74,8 @@ void BraginskiiCollisions::collide(Options& species1, Options& species2,
   AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12); // Total collision frequency
-  const std::string coll_name = fmt::format("{}_{}_coll", species1.name(), species2.name();
+  const std::string coll_name =
+      fmt::format("{}_{}_coll", species1.name(), species2.name());
   // Collision frequency for individual reaction
   set(species1["collision_frequencies"][coll_name], nu_12);
   set(collision_rates[species1.name()][species2.name()],
@@ -81,7 +96,7 @@ void BraginskiiCollisions::collide(Options& species1, Options& species2,
     });
 
     add(species2["collision_frequency"], nu); // Total collision frequency
-    std::string coll_name =
+    std::string const coll_name =
         species2.name() + std::string("_") + species1.name() + std::string("_coll");
     set(species2["collision_frequencies"][coll_name],
         nu); // Collision frequency for individual reaction
@@ -108,8 +123,9 @@ void BraginskiiCollisions::transform(Options& state) {
         ////////////////////////////////////
         // electron-electron collisions
 
-        if (!electron_electron)
+        if (!electron_electron) {
           continue;
+        }
 
         const Field3D nu_ee = filledFrom(Ne, [&](auto& i) {
           const BoutReal Telim = softFloor(Te[i], 0.1);
@@ -142,8 +158,9 @@ void BraginskiiCollisions::transform(Options& state) {
         ////////////////////////////////////
         // electron-positive ion collisions
 
-        if (!electron_ion)
+        if (!electron_ion) {
           continue;
+        }
 
         const Field3D Ti = GET_NOBOUNDARY(Field3D, species["temperature"]) * Tnorm; // eV
         const Field3D Ni = GET_NOBOUNDARY(Field3D, species["density"]) * Nnorm; // In m^-3
@@ -199,8 +216,9 @@ void BraginskiiCollisions::transform(Options& state) {
         ////////////////////////////////////
         // electron-neutral collisions
 
-        if (!electron_neutral)
+        if (!electron_neutral) {
           continue;
+        }
 
         // Neutral density
         Field3D Nn = GET_NOBOUNDARY(Field3D, species["density"]);
@@ -234,8 +252,9 @@ void BraginskiiCollisions::transform(Options& state) {
   //
   const std::map<std::string, Options>& children = allspecies.getChildren();
   for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
-    if (kv1->first == "e" or kv1->first == "ebeam")
+    if (kv1->first == "e" or kv1->first == "ebeam") {
       continue; // Skip electrons
+    }
 
     Options& species1 = allspecies[kv1->first];
 
@@ -259,8 +278,9 @@ void BraginskiiCollisions::transform(Options& state) {
       // lower half of the matrix, but start at the diagonal
       for (std::map<std::string, Options>::const_iterator kv2 = kv1;
            kv2 != std::end(children); ++kv2) {
-        if (kv2->first == "e" or kv2->first == "ebeam")
+        if (kv2->first == "e" or kv2->first == "ebeam") {
           continue; // Skip electrons
+        }
 
         Options& species2 = allspecies[kv2->first];
 
@@ -281,14 +301,15 @@ void BraginskiiCollisions::transform(Options& state) {
           //////////////////////////////
           // Both charged species
 
-          if (!ion_ion)
+          if (!ion_ion) {
             continue;
+          }
 
           const BoutReal Z2 = get<BoutReal>(species2["charge"]);
           const BoutReal charge2 = Z2 * SI::qe; // in Coulombs
 
           // Ion-ion collisions
-          Field3D nu_12 = filledFrom(density1, [&](auto& i) {
+          Field3D const nu_12 = filledFrom(density1, [&](auto& i) {
             const BoutReal Tlim1 = softFloor(temperature1[i], 0.1);
             const BoutReal Tlim2 = softFloor(temperature2[i], 0.1);
 
@@ -296,7 +317,7 @@ void BraginskiiCollisions::transform(Options& state) {
             const BoutReal Nlim2 = softFloor(density2[i], 1e10);
 
             // Coulomb logarithm
-            BoutReal coulomb_log =
+            BoutReal const coulomb_log =
                 29.91
                 - log((Z1 * Z2 * (AA1 + AA2)) / (AA1 * Tlim2 + AA2 * Tlim1)
                       * sqrt(Nlim1 * SQ(Z1) / Tlim1 + Nlim2 * SQ(Z2) / Tlim2));
@@ -321,7 +342,7 @@ void BraginskiiCollisions::transform(Options& state) {
 
           // Scattering of charged species 1
           // Neutral density
-          Field3D Nn = GET_NOBOUNDARY(Field3D, species2["density"]);
+          Field3D const Nn = GET_NOBOUNDARY(Field3D, species2["density"]);
 
           BoutReal a0 = 5e-19; // Cross-section [m^2]
 
@@ -345,8 +366,9 @@ void BraginskiiCollisions::transform(Options& state) {
       // lower half of the matrix, but start at the diagonal
       for (std::map<std::string, Options>::const_iterator kv2 = kv1;
            kv2 != std::end(children); ++kv2) {
-        if (kv2->first == "e")
+        if (kv2->first == "e") {
           continue; // Skip electrons
+        }
 
         Options& species2 = allspecies[kv2->first];
 
@@ -363,8 +385,9 @@ void BraginskiiCollisions::transform(Options& state) {
         if (species2.isSet("charge") and (get<BoutReal>(species2["charge"]) != 0.0)) {
           // species1 neutral, species2 charged
 
-          if (!ion_neutral)
+          if (!ion_neutral) {
             continue;
+          }
 
           // Scattering of charged species 2
 
@@ -386,8 +409,9 @@ void BraginskiiCollisions::transform(Options& state) {
         } else {
           // Both species neutral
 
-          if (!neutral_neutral)
+          if (!neutral_neutral) {
             continue;
+          }
 
           // The cross section is given by π ( (d1 + d2)/2 )^2
           // where d is the kinetic diameter
@@ -425,10 +449,6 @@ void BraginskiiCollisions::outputVars(Options& state) {
 
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
-  auto Nnorm = get<BoutReal>(state["Nnorm"]);
-  auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
-  auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   // Iterate through the first species in each collision pair
   const std::map<std::string, Options>& level1 = collision_rates.getChildren();
@@ -439,8 +459,8 @@ void BraginskiiCollisions::outputVars(Options& state) {
     const std::map<std::string, Options>& level2 = section.getChildren();
     for (auto s2 = std::begin(level2); s2 != std::end(level2); ++s2) {
       std::string A = s1->first;
-      std::string B = s2->first;
-      std::string AB = A + B;
+      std::string const B = s2->first;
+      std::string const AB = A + B;
 
       // Collision frequencies
       set_with_attrs(state[std::string("K") + AB + std::string("_coll")],

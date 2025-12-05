@@ -2,7 +2,11 @@
 #ifndef COLLISIONS_H
 #define COLLISIONS_H
 
+#include <string>
+
+#include <bout/bout_types.hxx>
 #include <bout/field3d.hxx>
+#include <bout/options.hxx>
 
 #include "component.hxx"
 
@@ -37,7 +41,7 @@ struct BraginskiiCollisions : public Component {
   ///
   ///   - ei_multiplier   arbitrary multiplier on electron-ion collision rate
   ///
-  BraginskiiCollisions(std::string name, Options& alloptions, Solver*);
+  BraginskiiCollisions(const std::string& name, Options& alloptions, Solver*);
 
   void transform(Options& state) override;
 

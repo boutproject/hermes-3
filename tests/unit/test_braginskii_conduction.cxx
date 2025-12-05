@@ -1,12 +1,15 @@
+#include <string>
+#include <utility>
+
+#include <bout/bout_types.hxx>
+#include <bout/region.hxx>
+#include <bout/solver.hxx>
+#include <bout/utils.hxx>
 #include "gtest/gtest.h"
 
+#include "../../include/braginskii_conduction.hxx"
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
-
-#include "../../include/braginskii_conduction.hxx"
-#include "../../include/evolve_energy.hxx"
-#include "../../include/evolve_pressure.hxx"
-#include <bout/solver.hxx>
 
 /// Global mesh
 namespace bout {
@@ -51,7 +54,9 @@ public:
                                 BoutReal b2_y, BoutReal b1_z, BoutReal b2_z) {
     Field3D result(a);
     BOUT_FOR_SERIAL(i, result.getRegion("RGN_ALL")) {
-      const int x = i.x(), y = i.y(), z = i.z();
+      const int x = i.x();
+      const int y = i.y();
+      const int z = i.z();
       result[i] +=
           b1_x * x + b2_x * SQ(x) + b1_y * y + b2_y * SQ(y) + b1_z * z + b2_z * SQ(z);
     }
@@ -61,7 +66,7 @@ public:
   BraginskiiConduction makeComponent(BoutReal kappa, std::string mode = "braginskii") {
     Options opts = options.copy();
     opts["test+"]["kappa_coefficient"] = kappa;
-    opts["test+"]["conduction_collisions_mode"] = mode;
+    opts["test+"]["conduction_collisions_mode"] = std::move(mode);
     return BraginskiiConduction("test+", opts, nullptr);
   }
 
@@ -72,7 +77,9 @@ public:
 
 TEST_F(BraginskiiConductionTest, ConductionGradientScaling) {
   BraginskiiConduction component = this->makeComponent(1.);
-  Options state0, state1 = this->state_base.copy(), state2;
+  Options state0;
+  Options state1 = this->state_base.copy();
+  Options state2;
   state1["species"]["test+"]["charge"] = 1;
   state1["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 1.;
   state1["species"]["test+"]["collision_frequency"] = 1.;
@@ -88,8 +95,9 @@ TEST_F(BraginskiiConductionTest, ConductionGradientScaling) {
   component.transform(state1);
   component.transform(state2);
 
-  Field3D conduction0 = this->getDeriv(state0), conduction1 = this->getDeriv(state1),
-          conduction2 = this->getDeriv(state2);
+  Field3D conduction0 = this->getDeriv(state0);
+  Field3D conduction1 = this->getDeriv(state1);
+  Field3D conduction2 = this->getDeriv(state2);
   BOUT_FOR_SERIAL(i, conduction1.getRegion("RGN_NOBNDRY")) {
     // Conduction is proportional to the parallel second derivative of temperature
     EXPECT_NE(conduction1[i], 0.);
@@ -99,8 +107,8 @@ TEST_F(BraginskiiConductionTest, ConductionGradientScaling) {
 }
 
 TEST_F(BraginskiiConductionTest, ConductionKappaScaling) {
-  BraginskiiConduction component1 = this->makeComponent(1.),
-                       component2 = this->makeComponent(2.);
+  BraginskiiConduction component1 = this->makeComponent(1.);
+  BraginskiiConduction component2 = this->makeComponent(2.);
   Options state1 = this->state_base.copy();
   state1["species"]["test+"]["charge"] = 1;
   state1["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 1.;
@@ -111,7 +119,8 @@ TEST_F(BraginskiiConductionTest, ConductionKappaScaling) {
   component1.transform(state1);
   component2.transform(state2);
 
-  Field3D conduction1 = this->getDeriv(state1), conduction2 = this->getDeriv(state2);
+  Field3D conduction1 = this->getDeriv(state1);
+  Field3D conduction2 = this->getDeriv(state2);
   BOUT_FOR_SERIAL(i, conduction1.getRegion("RGN_NOBNDRY")) {
     // Conduction is proportional to the parallel diffusivity
     EXPECT_NE(conduction1[i], 0.);
@@ -121,7 +130,9 @@ TEST_F(BraginskiiConductionTest, ConductionKappaScaling) {
 
 TEST_F(BraginskiiConductionTest, ConductionCollisionScaling) {
   BraginskiiConduction component = this->makeComponent(1.);
-  Options state0, state1 = this->state_base.copy(), state2;
+  Options state0;
+  Options state1 = this->state_base.copy();
+  Options state2;
   state1["species"]["test+"]["charge"] = 1;
   state1["species"]["test+"]["temperature"] = this->temp1;
 
@@ -135,15 +146,13 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionScaling) {
   state2["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 2.;
   state2["species"]["test+"]["collision_frequency"] = 2.;
 
-  Options output0 = this->output_base.copy(), output1 = this->output_base.copy(),
-          output2 = this->output_base.copy();
-
   component.transform(state0);
   component.transform(state1);
   component.transform(state2);
 
-  Field3D conduction0 = this->getDeriv(state0), conduction1 = this->getDeriv(state1),
-          conduction2 = this->getDeriv(state2);
+  Field3D conduction0 = this->getDeriv(state0);
+  Field3D conduction1 = this->getDeriv(state1);
+  Field3D conduction2 = this->getDeriv(state2);
   BOUT_FOR_SERIAL(i, conduction1.getRegion("RGN_NOBNDRY")) {
     // Conduction is inversely proportional to the collision frequency
     EXPECT_NE(conduction1[i], 0.);
@@ -153,8 +162,8 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionScaling) {
 }
 
 TEST_F(BraginskiiConductionTest, ConductionCollisionsMode) {
-  BraginskiiConduction component_braginskii = this->makeComponent(1., "braginskii"),
-                       component_multispecies = this->makeComponent(1., "multispecies");
+  BraginskiiConduction component_braginskii = this->makeComponent(1., "braginskii");
+  BraginskiiConduction component_multispecies = this->makeComponent(1., "multispecies");
   Options state_brag = this->state_base.copy();
   state_brag["species"]["test+"]["charge"] = 1;
   state_brag["species"]["test+"]["temperature"] = this->temp1;
@@ -166,8 +175,8 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionsMode) {
   component_braginskii.transform(state_brag);
   component_multispecies.transform(state_multi);
 
-  Field3D conduction_brag = this->getDeriv(state_brag),
-          conduction_multi = this->getDeriv(state_multi);
+  Field3D conduction_brag = this->getDeriv(state_brag);
+  Field3D conduction_multi = this->getDeriv(state_multi);
   BOUT_FOR_SERIAL(i, conduction_brag.getRegion("RGN_NOBNDRY")) {
     EXPECT_NE(conduction_brag[i], 0.);
     EXPECT_DOUBLE_EQ(conduction_brag[i], 2 * conduction_multi[i]);

@@ -2,7 +2,9 @@
 #ifndef BRAGINSKII_HEAT_EXCHANGE_H
 #define BRAGINSKII_HEAT_EXCHANGE_H
 
-#include <bout/field3d.hxx>
+#include <string>
+
+#include <bout/options.hxx>
 
 #include "component.hxx"
 
@@ -12,7 +14,7 @@ struct BraginskiiHeatExchange : public Component {
   ///
   /// @param alloptions Settings. There is nothing to be configured.
   ///
-  BraginskiiHeatExchange(std::string name, Options& alloptions, Solver*);
+  BraginskiiHeatExchange(const std::string& name, Options& alloptions, Solver*);
 
   /// Calculate thermal energy exchange between species due to collisions.
   ///

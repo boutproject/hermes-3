@@ -1,10 +1,10 @@
-
+#include <bout/region.hxx>
 #include "gtest/gtest.h"
 
+#include "../../include/braginskii_friction.hxx"
+#include "../../include/component.hxx"
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
-
-#include "../../include/braginskii_friction.hxx"
 
 /// Global mesh
 namespace bout {
@@ -146,7 +146,8 @@ TEST_F(BraginskiiFrictionTest, DoubleRelativeVelocities) {
 
   BraginskiiFriction component("test", options, nullptr);
 
-  Options state1, state2;
+  Options state1;
+  Options state2;
   state1["species"]["s1"]["density"] = 5e18; // Half density
   state1["species"]["s1"]["temperature"] = 10;
   state1["species"]["s1"]["charge"] = 1;
@@ -231,7 +232,8 @@ TEST_F(BraginskiiFrictionTest, DoubleCollisionRate) {
 
   BraginskiiFriction component("test", options, nullptr);
 
-  Options state1, state2;
+  Options state1;
+  Options state2;
   state1["species"]["s1"]["density"] = 5e18; // Half density
   state1["species"]["s1"]["temperature"] = 10;
   state1["species"]["s1"]["charge"] = 1;

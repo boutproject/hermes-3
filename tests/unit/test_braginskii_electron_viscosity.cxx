@@ -1,10 +1,11 @@
-
+#include <bout/bout_types.hxx>
+#include <bout/region.hxx>
+#include <bout/utils.hxx>
 #include "gtest/gtest.h"
 
+#include "../../include/braginskii_electron_viscosity.hxx"
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
-
-#include "../../include/braginskii_electron_viscosity.hxx"
 
 /// Global mesh
 namespace bout {
@@ -41,7 +42,9 @@ public:
                                 BoutReal b2_y, BoutReal b1_z, BoutReal b2_z) {
     Field3D result(a);
     BOUT_FOR_SERIAL(i, result.getRegion("RGN_ALL")) {
-      const int x = i.x(), y = i.y(), z = i.z();
+      const int x = i.x();
+      const int y = i.y();
+      const int z = i.z();
       result[i] +=
           b1_x * x + b2_x * SQ(x) + b1_y * y + b2_y * SQ(y) + b1_z * z + b2_z * SQ(z);
     }
@@ -50,7 +53,8 @@ public:
 };
 
 TEST_F(BraginskiiElectronViscosityTest, ViscosityPressureScaling) {
-  Options state1, state2;
+  Options state1;
+  Options state2;
   state1["species"]["e"]["density"] = 1;
   state1["species"]["e"]["charge"] = -1;
   state1["species"]["e"]["AA"] = 1. / 1836;
@@ -66,8 +70,8 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityPressureScaling) {
   component.transform(state1);
   component.transform(state2);
 
-  Field3D visc1 = state1["species"]["e"]["momentum_source"],
-          visc2 = state2["species"]["e"]["momentum_source"];
+  Field3D visc1 = state1["species"]["e"]["momentum_source"];
+  Field3D visc2 = state2["species"]["e"]["momentum_source"];
   BOUT_FOR_SERIAL(i, visc1.getRegion("RGN_NOBNDRY")) {
     // Viscosity is proportional to the pressure.
     ASSERT_NE(visc1[i], 0.);
@@ -76,7 +80,8 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityPressureScaling) {
 }
 
 TEST_F(BraginskiiElectronViscosityTest, ViscosityCollisionScaling) {
-  Options state1, state2;
+  Options state1;
+  Options state2;
   state1["species"]["e"]["density"] = 1;
   state1["species"]["e"]["charge"] = -1;
   state1["species"]["e"]["AA"] = 1. / 1836;
@@ -93,8 +98,8 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityCollisionScaling) {
   component.transform(state1);
   component.transform(state2);
 
-  Field3D visc1 = state1["species"]["e"]["momentum_source"],
-          visc2 = state2["species"]["e"]["momentum_source"];
+  Field3D visc1 = state1["species"]["e"]["momentum_source"];
+  Field3D visc2 = state2["species"]["e"]["momentum_source"];
   BOUT_FOR_SERIAL(i, visc1.getRegion("RGN_NOBNDRY")) {
     // Viscosity is inversely proportional to the collision frequency.
     ASSERT_NE(visc1[i], 0.);
@@ -103,7 +108,9 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityCollisionScaling) {
 }
 
 TEST_F(BraginskiiElectronViscosityTest, ViscosityVelocityScaling) {
-  Options state0, state1, state2;
+  Options state0;
+  Options state1;
+  Options state2;
   state1["species"]["e"]["density"] = 1;
   state1["species"]["e"]["charge"] = -1;
   state1["species"]["e"]["AA"] = 1. / 1836;
@@ -122,9 +129,9 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityVelocityScaling) {
   component.transform(state1);
   component.transform(state2);
 
-  Field3D visc0 = state0["species"]["e"]["momentum_source"],
-          visc1 = state1["species"]["e"]["momentum_source"],
-          visc2 = state2["species"]["e"]["momentum_source"];
+  Field3D visc0 = state0["species"]["e"]["momentum_source"];
+  Field3D visc1 = state1["species"]["e"]["momentum_source"];
+  Field3D visc2 = state2["species"]["e"]["momentum_source"];
   BOUT_FOR_SERIAL(i, visc1.getRegion("RGN_NOBNDRY")) {
     // There will be no viscosity if there is no parallel velocity gradient.
     ASSERT_DOUBLE_EQ(visc0[i], 0.);

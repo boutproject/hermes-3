@@ -2,6 +2,14 @@
 #ifndef ION_VISCOSITY_H
 #define ION_VISCOSITY_H
 
+#include <map>
+#include <string>
+#include <vector>
+
+#include <bout/bout_types.hxx>
+#include <bout/options.hxx>
+#include <bout/vector2d.hxx>
+
 #include "component.hxx"
 
 /// Ion viscosity terms
@@ -32,7 +40,7 @@ struct BraginskiiIonViscosity : public Component {
   ///         Include perpendicular flows?
   ///         Requires curvature vector and phi potential
   ///
-  BraginskiiIonViscosity(std::string name, Options& alloptions, Solver*);
+  BraginskiiIonViscosity(const std::string& name, Options& alloptions, Solver*);
 
   /// Inputs
   /// - species

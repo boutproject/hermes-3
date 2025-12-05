@@ -2,6 +2,12 @@
 #ifndef BRAGINSKII_ELECTRON_VISCOSITY_H
 #define BRAGINSKII_ELECTRON_VISCOSITY_H
 
+#include <string>
+
+#include <bout/bout_types.hxx>
+#include <bout/field3d.hxx>
+#include <bout/options.hxx>
+
 #include "component.hxx"
 
 /// Electron viscosity
@@ -22,7 +28,7 @@ struct BraginskiiElectronViscosity : public Component {
   ///     Output diagnostic SNVe_viscosity?
   ///   - eta_limit_alpha: float, default -1.0
   ///     Flux limiter coefficient. < 0 means no limiter
-  BraginskiiElectronViscosity(std::string name, Options& alloptions, Solver*);
+  BraginskiiElectronViscosity(const std::string& name, Options& alloptions, Solver*);
 
   /// Inputs
   /// - species
