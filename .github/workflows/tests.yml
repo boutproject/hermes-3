@@ -8,7 +8,7 @@ defaults:
 jobs:
   cmake_tests:
     name: Test ${{ matrix.name }}
-    runs-on: u${{ matrix.config.os }}
+    runs-on: ubuntu-latest
     env:
       OMPI_MCA_rmaps_base_oversubscribe: yes
       MPIRUN: mpiexec -np
