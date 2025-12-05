@@ -60,10 +60,9 @@ void BraginskiiCollisions::collide(Options& species1, Options& species2,
   AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12); // Total collision frequency
-  std::string coll_name =
-      species1.name() + std::string("_") + species2.name() + std::string("_coll");
-  set(species1["collision_frequencies"][coll_name],
-      nu_12); // Collision frequency for individual reaction
+  const std::string coll_name = fmt::format("{}_{}_coll", species1.name(), species2.name();
+  // Collision frequency for individual reaction
+  set(species1["collision_frequencies"][coll_name], nu_12);
   set(collision_rates[species1.name()][species2.name()],
       nu_12); // Individual collision frequency used for diagnostics
 

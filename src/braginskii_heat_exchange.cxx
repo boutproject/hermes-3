@@ -43,7 +43,6 @@ void BraginskiiHeatExchange::transform(Options& state) {
                   temperature1 = species1.isSet("temperature")
                                      ? GET_NOBOUNDARY(Field3D, species1["temperature"])
                                      : 0.0;
-    ;
 
     const BoutReal A1 = GET_VALUE(BoutReal, species1["AA"]),
                    Z1 = species1.isSet("charge") ? GET_VALUE(BoutReal, species1["charge"])
@@ -103,15 +102,8 @@ void BraginskiiHeatExchange::outputVars(Options& state) {
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
-  const std::map<std::string, Options>& level1 = energy_channels.getChildren();
-  for (auto s1 = std::begin(level1); s1 != std::end(level1); ++s1) {
-    const Options& section = energy_channels[s1->first];
-
-    /// Iterate through the second species in each collision pair
-    const std::map<std::string, Options>& level2 = section.getChildren();
-    for (auto s2 = std::begin(level2); s2 != std::end(level2); ++s2) {
-      std::string A = s1->first;
-      std::string B = s2->first;
+  for (const auto& [A, section] : energy_channels) {
+    for (const auto& [B, child] : section) {
       std::string AB = A + B;
 
       // Collisional energy transfer channels (i.e. thermal equilibration)
