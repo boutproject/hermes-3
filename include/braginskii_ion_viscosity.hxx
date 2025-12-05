@@ -2,6 +2,14 @@
 #ifndef ION_VISCOSITY_H
 #define ION_VISCOSITY_H
 
+#include <map>
+#include <string>
+#include <vector>
+
+#include <bout/bout_types.hxx>
+#include <bout/options.hxx>
+#include <bout/vector2d.hxx>
+
 #include "component.hxx"
 
 /// Ion viscosity terms
@@ -23,7 +31,7 @@
 /// is solved as a parallel diffusion, so is treated separately
 /// All other terms are added to Pi_ciperp, even if they are
 /// not really parallel parts
-struct IonViscosity : public Component {
+struct BraginskiiIonViscosity : public Component {
   /// Inputs
   /// - <name>
   ///   - eta_limit_alpha: float, default -1
@@ -32,7 +40,7 @@ struct IonViscosity : public Component {
   ///         Include perpendicular flows?
   ///         Requires curvature vector and phi potential
   ///
-  IonViscosity(std::string name, Options& alloptions, Solver*);
+  BraginskiiIonViscosity(const std::string& name, Options& alloptions, Solver*);
 
   /// Inputs
   /// - species
@@ -46,23 +54,27 @@ struct IonViscosity : public Component {
   ///   - <name>
   ///     - momentum_source
   ///
-  void transform(Options &state) override;
+  void transform(Options& state) override;
 
   /// Save variables to the output
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
-  bool perpendicular; ///< Include perpendicular flow? (Requires phi)
-  std::map<std::string, std::vector<std::string>> collision_names; ///< Collisions used for collisionality
-  std::string viscosity_collisions_mode;  ///< Collision selection, either multispecies or braginskii
-  Field3D nu;   ///< Collision frequency for conduction
-  Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
-  bool bounce_frequency; ///< Modify the collision time with the bounce frequency?
+  bool perpendicular;       ///< Include perpendicular flow? (Requires phi)
+  std::map<std::string, std::vector<std::string>>
+      collision_names;                   ///< Collisions used for collisionality
+  std::string viscosity_collisions_mode; ///< Collision selection, either multispecies or
+                                         ///< braginskii
+  Field3D nu;                            ///< Collision frequency for conduction
+  Vector2D Curlb_B;                      ///< Curvature vector Curl(b/B)
+  bool bounce_frequency;         ///< Modify the collision time with the bounce frequency?
   BoutReal bounce_frequency_q95; ///< Input q95 for when including bounce frequency change
-  BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce frequency change
-  BoutReal bounce_frequency_R; ///< Input major radius
-  bool diagnose; ///< Output additional diagnostics?
-  
+  BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce
+                                     ///< frequency change
+  BoutReal bounce_frequency_R;       ///< Input major radius
+  bool diagnose;                     ///< Output additional diagnostics?
+
   /// Per-species diagnostics
   struct Diagnostics {
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar
@@ -77,7 +89,8 @@ private:
 };
 
 namespace {
-RegisterComponent<IonViscosity> registercomponentionviscosity("ion_viscosity");
+RegisterComponent<BraginskiiIonViscosity>
+    registercomponentionbraginskiiviscosity("braginskii_ion_viscosity");
 }
 
 #endif

@@ -1,9 +1,20 @@
+#include <cmath>
+#include <iterator>
+#include <map>
+#include <string>
 
+#include <bout/bout_types.hxx>
 #include <bout/difops.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+#include <bout/utils.hxx>
 
-#include "../include/thermal_force.hxx"
+#include "../include/braginskii_thermal_force.hxx"
+#include "../include/component.hxx"
 
-void ThermalForce::transform(Options& state) {
+void BraginskiiThermalForce::transform(Options& state) {
   AUTO_TRACE();
 
   Options& allspecies = state["species"];
@@ -22,7 +33,7 @@ void ThermalForce::transform(Options& state) {
       }
       Options& species = allspecies[kv.first];
 
-      if (!species.isSet("charge")) {
+      if (!species.isSet("charge") or species["charge"] == 0) {
         continue; // Only considering charged particle interactions
       }
 
@@ -30,7 +41,7 @@ void ThermalForce::transform(Options& state) {
       // Don't need density boundary
       const Field3D nz = GET_NOBOUNDARY(Field3D, species["density"]);
 
-      Field3D ion_force = nz * (0.71 * SQ(Z)) * Grad_Te;
+      const Field3D ion_force = nz * (0.71 * SQ(Z)) * Grad_Te;
 
       add(species["momentum_source"], ion_force);
       subtract(electrons["momentum_source"], ion_force);
@@ -54,7 +65,7 @@ void ThermalForce::transform(Options& state) {
     for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
       Options& species1 = allspecies[kv1->first];
 
-      if (kv1->first == "e" or !species1.isSet("charge")) {
+      if (kv1->first == "e" or !species1.isSet("charge") or species1["charge"] == 0) {
         continue; // Only considering charged particle interactions
       }
 
@@ -64,14 +75,15 @@ void ThermalForce::transform(Options& state) {
            kv2 != std::end(children); ++kv2) {
         Options& species2 = allspecies[kv2->first];
 
-        if (kv2->first == "e" or !species2.isSet("charge")) {
+        if (kv2->first == "e" or !species2.isSet("charge") or species2["charge"] == 0) {
           continue; // Only considering charged particle interactions
         }
 
         // Now have two different ion species, species1 and species2
         // Only including one majority light species, and one trace heavy species
 
-        Options *light, *heavy;
+        Options* light;
+        Options* heavy;
         if ((get<BoutReal>(species1["AA"]) < 4)
             and (get<BoutReal>(species2["AA"]) > 10)) {
           // species1 light, species2 heavy

@@ -40,7 +40,8 @@ type = identity
 mxstep = 10000
 
 [hermes]
-components = i, e, vorticity, sound_speed, collisions
+components = (i, e, vorticity, sound_speed, braginskii_collisions,
+              braginskii_friction, braginskii_heat_exchange)
 
 [vorticity]
 
