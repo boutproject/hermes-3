@@ -7,6 +7,7 @@
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
 #include <bout/options.hxx>
+#include <fmt/format.h>
 
 #include "../include/braginskii_heat_exchange.hxx"
 #include "../include/component.hxx"
@@ -67,8 +68,7 @@ void BraginskiiHeatExchange::transform(Options& state) {
         continue;
       }
 
-      const std::string coll_name =
-          kv1->first + std::string("_") + kv2->first + std::string("_coll");
+      const std::string coll_name = fmt::format("{}_{}_coll", kv1->first, kv2->first);
       // If collisions were not calculated between these two species, skip
       if (not species1["collision_frequencies"].isSet(coll_name)) {
         continue;
@@ -114,7 +114,7 @@ void BraginskiiHeatExchange::outputVars(Options& state) {
       // Collisional energy transfer channels (i.e. thermal equilibration)
       if ((energy_channels.isSection(A)) and (energy_channels[A].isSet(B))) {
 
-        set_with_attrs(state[std::string("E") + AB + std::string("_coll")],
+        set_with_attrs(state[fmt::format("E{}_coll", AB)],
                        getNonFinal<Field3D>(energy_channels[A][B]),
                        {{"time_dimension", "t"},
                         {"units", "W / m^3"},
