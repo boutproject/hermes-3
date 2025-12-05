@@ -16,12 +16,12 @@ jobs:
       fail-fast: false
       matrix:
         mode: ["debug", "opt"]
-        3d: ["3d-", ""]
+        fci: ["3d-", ""]
 
     steps:
       - name: Job information
         run: |
-          echo Build: ${{ matrix.mode }}, ${{ matrix.3d }}
+          echo Build: ${{ matrix.mode }}, ${{ matrix.fci }}
           cat /etc/os-release
 
       - name: Checkout hermes-3
