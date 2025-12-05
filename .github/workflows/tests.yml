@@ -11,8 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/boutproject/bout-dev:mpich-${{ matrix.fci }}${{ matrix.mode }}-next
-    strategy:
-      fail-fast: false
     env:
       OMPI_MCA_rmaps_base_oversubscribe: yes
       MPIRUN: mpiexec -np
