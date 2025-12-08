@@ -3,7 +3,7 @@
 #define EVOLVE_PRESSURE_H
 
 #include <bout/field3d.hxx>
-
+#include "../include/hermes_utils.hxx"
 #include "component.hxx"
 
 /// Evolves species pressure in time
@@ -79,6 +79,9 @@ private:
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
+  std::vector<std::string> collision_names; ///< Collisions used for collisionality
+  std::string conduction_collisions_mode;  ///< Collision selection, either multispecies or braginskii
+  Field3D nu;   ///< Collision frequency for conduction
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
 
@@ -93,8 +96,11 @@ private:
   bool low_T_diffuse_perp; ///< Add cross-field diffusion at low temperature?
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
+  bool damp_p_nt; ///< Damp P - N*T. Active when P < 0 or N < density_floor
 
   Field3D kappa_par; ///< Parallel heat conduction coefficient
+
+  Field3D conduction_div; ///< Divergence of heat conduction flux
 
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;     ///< Total pressure source
@@ -110,11 +116,13 @@ private:
   bool source_time_dependent; ///< Is the input source time dependent?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
   Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
-  Field3D flow_ylow_kinetic;    ///< Parallel flow of kinetic energy
+  Field3D flow_ylow_advection;    ///< Advection energy flow diagnostics
+  Field3D flow_ylow_viscous_heating; ///< Flow of kinetic energy due to numerical viscosity
 
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
+  Field3D E_PdivV, E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
 };
 
 namespace {

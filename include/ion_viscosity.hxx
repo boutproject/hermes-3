@@ -53,15 +53,23 @@ struct IonViscosity : public Component {
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
   bool perpendicular; ///< Include perpendicular flow? (Requires phi)
+  std::map<std::string, std::vector<std::string>> collision_names; ///< Collisions used for collisionality
+  std::string viscosity_collisions_mode;  ///< Collision selection, either multispecies or braginskii
+  Field3D nu;   ///< Collision frequency for conduction
   Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
-
+  bool bounce_frequency; ///< Modify the collision time with the bounce frequency?
+  BoutReal bounce_frequency_q95; ///< Input q95 for when including bounce frequency change
+  BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce frequency change
+  BoutReal bounce_frequency_R; ///< Input major radius
   bool diagnose; ///< Output additional diagnostics?
-
+  
   /// Per-species diagnostics
   struct Diagnostics {
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar
     Field3D Pi_cipar;  ///< Parallel part of Pi scalar
     Field3D DivJ;      ///< Divergence of current in vorticity equation
+    Field3D bounce_factor;
+    Field3D nu_star;
   };
 
   /// Store diagnostics for each species

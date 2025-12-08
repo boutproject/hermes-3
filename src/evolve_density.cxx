@@ -27,8 +27,11 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
+  BoutReal temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+  
   low_n_diffuse = options["low_n_diffuse"]
                       .doc("Parallel diffusion at low density")
                       .withDefault<bool>(false);
@@ -37,7 +40,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pressure_floor = density_floor * temperature_floor;
 
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
@@ -263,13 +266,12 @@ void EvolveDensity::finally(const Options& state) {
   }
 
   if (low_n_diffuse_perp) {
-    ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
-                                    bndry_flux);
+    ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N);
   }
 
   if (low_p_diffuse_perp) {
     Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
-    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N, true);
+    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N);
   }
 
   if (hyper_z > 0.) {

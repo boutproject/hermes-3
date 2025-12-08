@@ -4,7 +4,7 @@
 
 #include "component.hxx"
 
-class Laplacian;
+#include "bout/invert_laplace.hxx"
 
 /// Electromagnetic potential A||
 ///

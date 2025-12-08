@@ -47,7 +47,7 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   const Field3D Natom = floor(get<Field3D>(atom1["density"]), 1e-5);
   const Field3D Nion = floor(get<Field3D>(ion1["density"]), 1e-5);
 
-  R = Natom * Nion * sigmav; // Rate coefficient. This is an output parameter.
+  R = Natom * Nion * sigmav; // Rate coefficient in [m^-3 s^-1]
 
   if ((&atom1 != &atom2) or (&ion1 != &ion2)) {
     // Transfer particles atom1 -> ion2, ion1 -> atom2
@@ -64,14 +64,14 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   // Transfer fom atom1 to ion2
   atom_mom = R * Aatom * atom1_velocity;
   subtract(atom1["momentum_source"], atom_mom);
-  if (no_neutral_cx_mom_gain == false) {
-    add(ion2["momentum_source"], atom_mom);
-  }
+  add(ion2["momentum_source"], atom_mom);
 
   // Transfer from ion1 to atom2
   ion_mom = R * Aion * ion1_velocity;
   subtract(ion1["momentum_source"], ion_mom);
-  add(atom2["momentum_source"], ion_mom);
+  if (no_neutral_cx_mom_gain == false) {
+    add(atom2["momentum_source"], ion_mom);
+  }
 
   // Frictional heating: Friction force between ions and atoms
   // converts kinetic energy to thermal energy
@@ -94,9 +94,15 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   subtract(ion1["energy_source"], ion_energy);
   add(atom2["energy_source"], ion_energy);
 
-  // Update collision frequency for the two colliding species in s^-1
-  atom_rate = Nion * sigmav;
-  ion_rate = Natom * sigmav;
+  // Update collision frequency for the two colliding species
+  atom_rate = Nion * sigmav;  // [s^-1]
+  ion_rate = Natom * sigmav;  // [s^-1]
+
+  // Add to total collision frequency
   add(atom1["collision_frequency"], atom_rate);
   add(ion1["collision_frequency"], ion_rate);
+
+  // Set individual collision frequencies
+  set(atom1["collision_frequencies"][atom1.name() + std::string("_") + ion1.name() + std::string("_cx")], atom_rate);
+  set(ion1["collision_frequencies"][ion1.name() + std::string("_") + atom1.name() + std::string("_cx")], ion_rate);
 }

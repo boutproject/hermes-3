@@ -61,7 +61,7 @@ private:
 
   /// Calculated collision rates saved for post-processing and use by other components
   /// Saved in options, the BOUT++ dictionary-like object
-  Options collision_rates;
+  Options collision_rates, energy_channels, friction_energy_channels, momentum_channels;
 
   /// Save more diagnostics?
   bool diagnose;

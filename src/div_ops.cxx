@@ -23,15 +23,15 @@
 
 #include "../include/div_ops.hxx"
 
-#include <bout/fv_ops.hxx>
-
 #include <bout/assert.hxx>
-#include <bout/mesh.hxx>
 #include <bout/derivs.hxx>
+#include <bout/fv_ops.hxx>
 #include <bout/globals.hxx>
+#include <bout/mesh.hxx>
 #include <bout/output.hxx>
 #include <bout/utils.hxx>
 
+#include <algorithm>
 #include <cmath>
 
 using bout::globals::mesh;
@@ -69,13 +69,6 @@ const Field3D Div_par_diffusion_index(const Field3D& f, bool bndry_flux) {
 ////////////////////////////////////////////////////////////////////////////////////////////////
 // XPPM methods
 
-BoutReal BOUTMIN(const BoutReal& a, const BoutReal& b, const BoutReal& c,
-                 const BoutReal& d) {
-  BoutReal r1 = (a < b) ? a : b;
-  BoutReal r2 = (c < d) ? c : d;
-  return (r1 < r2) ? r1 : r2;
-}
-
 struct Stencil1D {
   // Cell centre values
   BoutReal c, m, p, mm, pp;
@@ -84,26 +77,8 @@ struct Stencil1D {
   BoutReal L, R;
 };
 
-// First order upwind for testing
-void Upwind(Stencil1D& n, const BoutReal h) { n.L = n.R = n.c; }
-
-// Fromm method
-void Fromm(Stencil1D& n, const BoutReal h) {
-  n.L = n.c - 0.25 * (n.p - n.m);
-  n.R = n.c + 0.25 * (n.p - n.m);
-}
-
 /// The minmod function returns the value with the minimum magnitude
 /// If the inputs have different signs then returns zero
-BoutReal minmod(BoutReal a, BoutReal b) {
-  if (a * b <= 0.0)
-    return 0.0;
-
-  if (fabs(a) < fabs(b))
-    return a;
-  return b;
-}
-
 BoutReal minmod(BoutReal a, BoutReal b, BoutReal c) {
   // If any of the signs are different, return zero gradient
   if ((a * b <= 0.0) || (a * c <= 0.0)) {
@@ -114,102 +89,12 @@ BoutReal minmod(BoutReal a, BoutReal b, BoutReal c) {
   return SIGN(a) * BOUTMIN(fabs(a), fabs(b), fabs(c));
 }
 
-void MinMod(Stencil1D& n, const BoutReal h) {
-  // Choose the gradient within the cell
-  // as the minimum (smoothest) solution
-  BoutReal slope = minmod(n.p - n.c, n.c - n.m);
-  n.L = n.c - 0.5 * slope; // 0.25*(n.p - n.m);
-  n.R = n.c + 0.5 * slope; // 0.25*(n.p - n.m);
-}
-
 // Monotonized Central limiter (Van-Leer)
-void MC(Stencil1D& n, const BoutReal h) {
-  BoutReal slope = minmod(2. * (n.p - n.c), 0.5 * (n.p - n.m), 2. * (n.c - n.m));
+void MC(Stencil1D& n) {
+  BoutReal slope =
+      minmod(2. * (n.p - n.c), 0.5 * (n.p - n.m), 2. * (n.c - n.m));
   n.L = n.c - 0.5 * slope;
   n.R = n.c + 0.5 * slope;
-}
-
-void XPPM(Stencil1D& n, const BoutReal h) {
-  // 4th-order PPM interpolation in X
-
-  const BoutReal C = 1.25; // Limiter parameter
-
-  BoutReal h2 = h * h;
-
-  n.R = (7. / 12) * (n.c + n.p) - (1. / 12) * (n.m + n.pp);
-  n.L = (7. / 12) * (n.c + n.m) - (1. / 12) * (n.mm + n.p);
-
-  // Apply limiters
-  if ((n.c - n.R) * (n.p - n.R) > 0.0) {
-    // Calculate approximations to second derivative
-
-    BoutReal D2 = (3. / h2) * (n.c - 2 * n.R + n.p);
-    BoutReal D2L = (1. / h2) * (n.m - 2 * n.c + n.p);
-    BoutReal D2R = (1. / h2) * (n.c - 2. * n.p + n.pp);
-
-    BoutReal D2lim; // Value to be used in limiter
-
-    // Check if they all have the same sign
-    if ((D2 * D2L > 0.0) && (D2 * D2R > 0.0)) {
-      // Same sign
-
-      D2lim = SIGN(D2) * BOUTMIN(C * fabs(D2L), C * fabs(D2R), fabs(D2));
-    } else {
-      // Different sign
-      D2lim = 0.0;
-    }
-
-    n.R = 0.5 * (n.c + n.p) - (h2 / 6) * D2lim;
-  }
-
-  if ((n.m - n.L) * (n.c - n.L) > 0.0) {
-    // Calculate approximations to second derivative
-
-    BoutReal D2 = (3. / h2) * (n.m - 2 * n.L + n.c);
-    BoutReal D2L = (1. / h2) * (n.mm - 2 * n.m + n.c);
-    BoutReal D2R = (1. / h2) * (n.m - 2. * n.c + n.p);
-
-    BoutReal D2lim; // Value to be used in limiter
-
-    // Check if they all have the same sign
-    if ((D2 * D2L > 0.0) && (D2 * D2R > 0.0)) {
-      // Same sign
-
-      D2lim = SIGN(D2) * BOUTMIN(C * fabs(D2L), C * fabs(D2R), fabs(D2));
-    } else {
-      // Different sign
-      D2lim = 0.0;
-    }
-
-    n.L = 0.5 * (n.m + n.c) - (h2 / 6) * D2lim;
-  }
-
-  if (((n.R - n.c) * (n.c - n.L) <= 0.0) || ((n.m - n.c) * (n.c - n.p) <= 0.0)) {
-    // At a local maximum or minimum
-
-    BoutReal D2 = (6. / h2) * (n.L - 2. * n.c + n.R);
-
-    if (fabs(D2) < 1e-10) {
-      n.R = n.L = n.c;
-    } else {
-      BoutReal D2C = (1. / h2) * (n.m - 2. * n.c + n.p);
-      BoutReal D2L = (1. / h2) * (n.mm - 2 * n.m + n.c);
-      BoutReal D2R = (1. / h2) * (n.c - 2. * n.p + n.pp);
-
-      BoutReal D2lim;
-      // Check if they all have the same sign
-      if ((D2 * D2C > 0.0) && (D2 * D2L > 0.0) && (D2 * D2R > 0.0)) {
-        // Same sign
-
-        D2lim = SIGN(D2) * BOUTMIN(C * fabs(D2L), C * fabs(D2R), C * fabs(D2C), fabs(D2));
-        n.R = n.c + (n.R - n.c) * D2lim / D2;
-        n.L = n.c + (n.L - n.c) * D2lim / D2;
-      } else {
-        // Different signs
-        n.R = n.L = n.c;
-      }
-    }
-  }
 }
 
 /* ***USED***
@@ -282,10 +167,7 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bnd
         s.p = n(i + 1, j, k);
         s.pp = n(i + 2, j, k);
 
-        // Upwind(s, mesh->dx(i,j));
-        // XPPM(s, mesh->dx(i,j));
-        // Fromm(s, coord->dx(i, j));
-        MC(s, coord->dx(i, j));
+        MC(s);
 
         // Right side
         if ((i == mesh->xend) && (mesh->lastX())) {
@@ -354,10 +236,7 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bnd
         s.p = n(i, j, kp);
         s.pp = n(i, j, kpp);
 
-        // Upwind(s, coord->dz(i, j));
-        // XPPM(s, coord->dz(i, j));
-        // Fromm(s, coord->dz(i, j));
-        MC(s, coord->dz(i, j));
+        MC(s);
 
         if (vU > 0.0) {
           BoutReal flux = vU * s.R / (coord->J(i, j) * coord->dz(i, j));
@@ -493,13 +372,11 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bnd
 
           if (mesh->firstY(i) && !mesh->periodicY(i) && (j == mesh->ystart - 1)) {
             // Lower y boundary. Allow flows out of the domain only
-            if (Vy > 0.0)
-              Vy = 0.0;
+            Vy = std::min(Vy, 0.0);
           }
           if (mesh->lastY(i) && !mesh->periodicY(i) && (j == mesh->yend)) {
             // Upper y boundary
-            if (Vy < 0.0)
-              Vy = 0.0;
+            Vy = std::max(Vy, 0.0);
           }
 
           // Fromm method
@@ -533,8 +410,7 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bnd
   return result;
 }
 
-/// *** USED ***
-const Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs, bool xflux) {
+const Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs) {
 
   Field3D result = 0.0;
 
@@ -602,8 +478,6 @@ const Field3D Div_Z_FV_Index(const Field3D &as, const Field3D &fs) {
 
   Field3D result = 0.0;
 
-  Coordinates *coord = mesh->getCoordinates();
-  
   for (int i = mesh->xstart; i <= mesh->xend; i++)
     for (int j = mesh->ystart; j <= mesh->yend; j++)
       for (int k = 0; k < mesh->LocalNz; k++) {
@@ -1710,8 +1584,8 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
   return result;
 }
 
-const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Field3D &f, 
-                                    bool bndry_flux, bool positive) {
+const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D& f,
+                                    bool bndry_flux) {
   Field3D result{0.0};
 
   Coordinates *coord = mesh->getCoordinates();
@@ -1779,8 +1653,8 @@ const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Fi
         s.p = n(i + 1, j, k);
         s.pp = n(i + 2, j, k);
 
-        MC(s, coord->dx(i, j));
-        
+        MC(s);
+
         // Right side
         if ((i == mesh->xend) && (mesh->lastX())) {
           // At right boundary in X
@@ -1849,7 +1723,7 @@ const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Fi
         s.p = n(i, j, kp);
         s.pp = n(i, j, kpp);
 
-        MC(s, coord->dz(i, j));
+        MC(s);
 
         if (vU > 0.0) {
           BoutReal flux = vU * s.R * gU/ (coord->J(i, j) * coord->dz(i, j));

@@ -44,20 +44,22 @@ option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
   set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
   set(HERMES_BOUT_SRC "external/BOUT-dev" CACHE STRING "Directory of BOUT++ dir")
-  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev)
+  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev SYSTEM)
 else()
   find_package(bout++ REQUIRED)
 endif()
 
+include("./cmake/Sanitizers.cmake")
+
 set(HERMES_SOURCES
+    src/amjuel_reaction.cxx
     src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
     src/ionisation.cxx
-    src/radiation.cxx
     src/div_ops.cxx
     src/neutral_mixed.cxx
-    src/full_velocity.cxx
+    src/neutral_full_velocity.cxx
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
     src/electron_viscosity.cxx
@@ -82,9 +84,6 @@ set(HERMES_SOURCES
     src/anomalous_diffusion.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
-    src/amjuel_hyd_ionisation.cxx
-    src/amjuel_hyd_recombination.cxx
-    src/amjuel_helium.cxx
     src/adas_reaction.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
@@ -96,6 +95,8 @@ set(HERMES_SOURCES
     src/upstream_density_feedback.cxx
     src/temperature_feedback.cxx
     src/detachment_controller.cxx
+    src/reaction.cxx
+    src/reaction_parser.cxx
     src/thermal_force.cxx
     src/ion_viscosity.cxx
     src/transform.cxx
@@ -104,8 +105,7 @@ set(HERMES_SOURCES
     include/adas_carbon.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
-    include/amjuel_hyd_ionisation.hxx
-    include/amjuel_hyd_recombination.hxx
+    include/amjuel_hydrogen.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
     include/classical_diffusion.hxx
@@ -125,7 +125,7 @@ set(HERMES_SOURCES
     include/fixed_density.hxx
     include/fixed_fraction_ions.hxx
     include/fixed_velocity.hxx
-    include/full_velocity.hxx
+    include/neutral_full_velocity.hxx
     include/hermes_utils.hxx
     include/hydrogen_charge_exchange.hxx
     include/solkit_hydrogen_charge_exchange.hxx
@@ -139,7 +139,7 @@ set(HERMES_SOURCES
     include/noflow_boundary.hxx
     include/polarisation_drift.hxx
     include/quasineutral.hxx
-    include/radiation.hxx
+    include/reaction.hxx
     include/recalculate_metric.hxx
     include/recycling.hxx
     include/relax_potential.hxx
@@ -166,11 +166,19 @@ add_library(hermes-3-lib ${HERMES_SOURCES})
 
 target_link_libraries(hermes-3-lib PRIVATE bout++::bout++)
 
+target_compile_features(hermes-3-lib PUBLIC cxx_std_17)
+set_target_properties(hermes-3-lib PROPERTIES CXX_EXTENSIONS OFF)
+
 target_include_directories(hermes-3-lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   $<INSTALL_INTERFACE:include>
   )
+
+# Have hermes-3-lib look for dynamic libs in ./ before searching elsewhere
+set_target_properties(hermes-3-lib PROPERTIES BUILD_RPATH "$ORIGIN")
+
+enable_sanitizers(hermes-3-lib)
 
 # The main executable target
 add_executable(hermes-3
@@ -185,6 +193,19 @@ target_include_directories(hermes-3 PUBLIC
   $<INSTALL_INTERFACE:include>
   )
 
+# Have hermes-3 look for dynamic libs in ./ before searching elsewhere
+set_target_properties(hermes-3 PROPERTIES BUILD_RPATH "$ORIGIN")
+
+option(HERMES_ENABLE_WARNINGS "Enable compiler warnings" ${PROJECT_IS_TOP_LEVEL})
+option(HERMES_ERROR_ON_WARNINGS "Enable compiler warnings" OFF)
+include(CompilerWarnings)
+add_library(hermes_warnings INTERFACE)
+hermes_set_project_warnings(hermes_warnings ${HERMES_ERROR_ON_WARNINGS} "" "" "" "")
+
+if (HERMES_ENABLE_WARNINGS)
+  target_link_libraries(hermes-3 PRIVATE hermes_warnings)
+endif()
+
 # Build the file containing just the commit hash
 # This will be rebuilt on every commit!
 configure_file(
@@ -192,17 +213,26 @@ configure_file(
   "${PROJECT_BINARY_DIR}/include/revision.hxx")
 
 # Once built, copy the data and test directories
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+option(HERMES_COPY_EXAMPLES_TO_BUILD "Copy the examples to the build directory" ON)
+if(HERMES_COPY_EXAMPLES_TO_BUILD)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+endif()
 
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+option(HERMES_COPY_JSON_DATABASE_TO_BUILD "Copy the json database to the build directory" ON)
+if(HERMES_COPY_JSON_DATABASE_TO_BUILD)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+endif()
 
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+option(HERMES_COPY_TESTS_TO_BUILD "Copy the tests to the build directory" ON)
+if(HERMES_COPY_TESTS_TO_BUILD)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+endif()
 
 # Tests
 option(HERMES_TESTS "Build the tests" ON)
@@ -211,9 +241,22 @@ if(HERMES_TESTS)
 
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
-    add_test(NAME ${TESTNAME}
-           WORKING_DIRECTORY tests/integrated/${TESTNAME}
-           COMMAND runtest)
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+      set(INT_TEST_DEST
+          ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
+      # Make copies of the test exec and input file in the build directory and keep them up to date
+      configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
+      configure_file(${INT_TEST_SRC}/data/BOUT.inp ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+    else()
+      set(INT_TEST_DEST
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+    endif()
+    add_test(
+      NAME ${TESTNAME}
+      WORKING_DIRECTORY ${INT_TEST_DEST}
+      COMMAND runtest)
+    set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
@@ -226,6 +269,8 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave)
   hermes_add_integrated_test(alfven-wave)
+  hermes_add_integrated_test(collfreq-braginskii-afn)
+  hermes_add_integrated_test(collfreq-multispecies)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -233,7 +278,6 @@ if(HERMES_TESTS)
     if(NOT PACKAGE_TESTS)
       # Not running BOUT++ tests
       # Since BOUT++ includes googletest, adding it again causes errors
-      set(CMAKE_CXX_STANDARD 14) # Needed to compile GoogleTest on Darwin
       add_subdirectory(external/googletest)
     endif()
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
@@ -242,8 +286,13 @@ if(HERMES_TESTS)
                    tests/unit/main.cxx
                    ${TEST_SOURCES})
 
+    target_link_libraries(hermes_unit_tests PRIVATE hermes_warnings)
+
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
+    set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
+    # Have hermes_unit_tests look for dynamic libs in ./ before searching elsewhere
+    set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
   endif()
   
 # Method of manufactured solutions (MMS) tests

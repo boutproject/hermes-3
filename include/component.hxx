@@ -202,8 +202,8 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
 
 /// Check whether value is valid, returning true
 /// if invalid i.e contains non-finite values
-template<typename T>
-bool hermesDataInvalid(const T& value) {
+template <typename T>
+bool hermesDataInvalid([[maybe_unused]] const T& value) {
   return false; // Default
 }
 
@@ -211,6 +211,18 @@ bool hermesDataInvalid(const T& value) {
 /// Doesn't check boundary cells
 template<>
 inline bool hermesDataInvalid(const Field3D& value) {
+  for (auto& i : value.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(value[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Check Field2D values.
+/// Doesn't check boundary cells
+template<>
+inline bool hermesDataInvalid(const Field2D& value) {
   for (auto& i : value.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(value[i])) {
       return true;

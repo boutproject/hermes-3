@@ -27,8 +27,7 @@
 #include "include/adas_neon.hxx"
 #include "include/adas_lithium.hxx"
 #include "include/amjuel_helium.hxx"
-#include "include/amjuel_hyd_ionisation.hxx"
-#include "include/amjuel_hyd_recombination.hxx"
+#include "include/amjuel_hydrogen.hxx"
 #include "include/anomalous_diffusion.hxx"
 #include "include/classical_diffusion.hxx"
 #include "include/binormal_stpm.hxx"
@@ -46,6 +45,7 @@
 #include "include/fixed_fraction_radiation.hxx"
 #include "include/fixed_temperature.hxx"
 #include "include/fixed_velocity.hxx"
+#include "include/neutral_full_velocity.hxx"
 #include "include/hydrogen_charge_exchange.hxx"
 #include "include/ion_viscosity.hxx"
 #include "include/ionisation.hxx"
@@ -84,7 +84,7 @@
 
 #include "include/recalculate_metric.hxx"
 
-#if !BOUT_ENABLE_METRIC_3D
+#if !BOUT_USE_METRIC_3D
 // For standard 2D metrics,
 // Hermes operators don't need parallel slices
 BOUT_OVERRIDE_DEFAULT_OPTION("mesh:calcParallelSlices_on_communicate", false);
@@ -157,9 +157,10 @@ public:
     }
   }
 
-  void apply(Field2D& f) override {
+  void apply([[maybe_unused]] Field2D& f) override {
     throw BoutException("DecayLengthBoundary not implemented for Field2D");
   }
+
 private:
   std::shared_ptr<FieldGenerator> gen; // Generator
 };
@@ -284,17 +285,18 @@ int Hermes::init(bool restarting) {
   scheduler = ComponentScheduler::create(options, Options::root(), solver);
 
   // Preconditioner
-  setPrecon((preconfunc)&Hermes::precon);
+  setPrecon(&Hermes::precon);
 
   return 0;
 }
 
-int Hermes::rhs(BoutReal time) {
+int Hermes::rhs(BoutReal time, bool linear) {
   // Need to reset the state, since fields may be modified in transform steps
   state = Options();
   
   set(state["time"], time);
   state["units"] = units.copy();
+  set(state["linear"], linear);
 
   // Call all the components
   scheduler->transform(state);
