@@ -23,9 +23,6 @@ public:
   /// Get a subsection or value. The result will also be wrapped in a
   /// GuardedOptions object, with the same permissions as this one.
   GuardedOptions operator[](const std::string& name) const {
-    if (options == nullptr)
-      throw BoutException(
-          "Trying to access GuardedOptions when underlying options are nullptr.");
     return GuardedOptions(&(*options)[name], permissions, unread_variables,
                           unwritten_variables);
   }
@@ -77,8 +74,8 @@ public:
   }
 
 private:
-  Options* options{nullptr};
-  Permissions* permissions{nullptr};
+  Options* options;
+  Permissions* permissions;
   mutable std::shared_ptr<std::map<std::string, Regions>> unread_variables,
       unwritten_variables;
 

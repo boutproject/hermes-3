@@ -190,17 +190,11 @@ TEST_F(GuardedOptionsTests, TestUnwrittenItems) {
 }
 
 TEST_F(GuardedOptionsTests, TestNullOptions) {
-  GuardedOptions null_opts(nullptr, &permissions);
-  EXPECT_THROW(null_opts["species:he:collision_frequency"], BoutException);
-  EXPECT_THROW(null_opts.get(), BoutException);
-  EXPECT_THROW(null_opts.getWritable(), BoutException);
+  EXPECT_THROW(GuardedOptions(nullptr, &permissions), BoutException);
 }
 
 TEST_F(GuardedOptionsTests, TestNullPermissions) {
-  GuardedOptions null_perms(&opts, nullptr);
-  GuardedOptions sub_opt = null_perms["species:he:pressure"];
-  EXPECT_THROW(sub_opt.get(Regions::Interior), BoutException);
-  EXPECT_THROW(sub_opt.getWritable(Regions::Interior), BoutException);
+  EXPECT_THROW(GuardedOptions(&opts, nullptr), BoutException);
 }
 
 TEST_F(GuardedOptionsTests, TestGetChildren) {

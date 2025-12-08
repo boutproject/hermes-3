@@ -20,23 +20,26 @@ GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
     : options(options), permissions(permissions),
       unread_variables(std::make_shared<std::map<std::string, Regions>>()),
       unwritten_variables(std::make_shared<std::map<std::string, Regions>>()) {
-#if CHECKLEVEL >= 1
-  if (permissions != nullptr) {
-    *unread_variables = permissions->getVariablesWithPermission(PermissionTypes::Read);
-    // Only add variables with permission ReadIfSet to
-    // unread_variables if they are already present in the options
-    // object
-    if (options != nullptr) {
-      for (auto& [varname, region] :
-           permissions->getVariablesWithPermission(PermissionTypes::ReadIfSet)) {
-        if (isSetRecursive(*options, varname)) {
-          unread_variables->insert({varname, region});
-        }
-      }
-    }
-    *unwritten_variables =
-        permissions->getVariablesWithPermission(PermissionTypes::Write, false);
+  if (options == nullptr) {
+    throw BoutException("Can not construct GuardedOptions with null options pointer.");
   }
+  if (permissions == nullptr) {
+    throw BoutException(
+        "Can not construct GuardedOptions with null permissions pointer.");
+  }
+#if CHECKLEVEL >= 1
+  *unread_variables = permissions->getVariablesWithPermission(PermissionTypes::Read);
+  // Only add variables with permission ReadIfSet to
+  // unread_variables if they are already present in the options
+  // object
+  for (auto& [varname, region] :
+       permissions->getVariablesWithPermission(PermissionTypes::ReadIfSet)) {
+    if (isSetRecursive(*options, varname)) {
+      unread_variables->insert({varname, region});
+    }
+  }
+  *unwritten_variables =
+      permissions->getVariablesWithPermission(PermissionTypes::Write, false);
 #endif
 }
 
@@ -61,22 +64,16 @@ void updateAccessRecords(std::map<std::string, Regions>& records, const std::str
 }
 
 const Options& GuardedOptions::get(Regions region) const {
-  if (options == nullptr)
-    throw BoutException(
-        "Trying to access GuardedOptions when underlying options are nullptr.");
 #if CHECKLEVEL >= 1
   std::string name = options->str();
-  if (permissions != nullptr) {
-    auto [permission, varname] = permissions->getHighestPermission(name, region);
-    if (permission >= PermissionTypes::ReadIfSet) {
-      if (permission == PermissionTypes::ReadIfSet && !options->isSet()) {
-        throw BoutException(
-            "Only have permission to read {} if it is already set, which it is not.",
-            name);
-      }
-      updateAccessRecords(*unread_variables, varname, region);
-      return *options;
+  auto [permission, varname] = permissions->getHighestPermission(name, region);
+  if (permission >= PermissionTypes::ReadIfSet) {
+    if (permission == PermissionTypes::ReadIfSet && !options->isSet()) {
+      throw BoutException(
+          "Only have permission to read {} if it is already set, which it is not.", name);
     }
+    updateAccessRecords(*unread_variables, varname, region);
+    return *options;
   }
   throw BoutException("Do not have read permission for {}.", name);
 #else
@@ -85,17 +82,12 @@ const Options& GuardedOptions::get(Regions region) const {
 }
 
 Options& GuardedOptions::getWritable(Regions region) {
-  if (options == nullptr)
-    throw BoutException(
-        "Trying to access GuardedOptions when underlying options are nullptr.");
 #if CHECKLEVEL >= 1
   std::string name = options->str();
-  if (permissions != nullptr) {
-    auto [access, varname] = permissions->canAccess(name, PermissionTypes::Write, region);
-    if (access) {
-      updateAccessRecords(*unwritten_variables, varname, region);
-      return *options;
-    }
+  auto [access, varname] = permissions->canAccess(name, PermissionTypes::Write, region);
+  if (access) {
+    updateAccessRecords(*unwritten_variables, varname, region);
+    return *options;
   }
   throw BoutException("Do not have write permission for {}.", options->str());
 #else
