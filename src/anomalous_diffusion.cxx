@@ -54,8 +54,8 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
 
-  state_variable_access.substitute("name", {name});
-  state_variable_access.substitute("optional", {"temperature", "velocity"});
+  substitutePermissions("name", {name});
+  substitutePermissions("optional", {"temperature", "velocity"});
   std::vector<std::string> output_vars;
   if (include_D) {
     output_vars.push_back("density_source");
@@ -68,12 +68,12 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
     output_vars.push_back("energy_flow_ylow");
   }
   if (include_D or include_nu) {
-    state_variable_access.setAccess(readOnly(fmt::format("species:{}:AA", name)));
+    setAccess(readOnly(fmt::format("species:{}:AA", name)));
     output_vars.push_back("momentum_source");
     output_vars.push_back("momentum_flow_xlow");
     output_vars.push_back("momentum_flow_ylow");
   }
-  state_variable_access.substitute("output", output_vars);
+  substitutePermissions("output", output_vars);
 }
 
 void AnomalousDiffusion::transform_impl(GuardedOptions& state) {

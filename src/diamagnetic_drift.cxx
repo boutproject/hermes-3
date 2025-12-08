@@ -61,13 +61,12 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   // FIXME: density, pressure, and momentum will not be read even if
   // they are defined if charge and temperature were not defined for
   // that species.
-  state_variable_access.substitute(
-      "input", {"charge", "temperature", "density", "pressure", "momentum"});
+  substitutePermissions("input",
+                        {"charge", "temperature", "density", "pressure", "momentum"});
   // FIXME: These will actually only be written if density, pressure,
   // and momentum are set, respectively. They also require charge and
   // temperature to have been set.
-  state_variable_access.substitute(
-      "output", {"density_source", "energy_source", "momentum_source"});
+  substitutePermissions("output", {"density_source", "energy_source", "momentum_source"});
 }
 
 void DiamagneticDrift::transform_impl(GuardedOptions& state) {

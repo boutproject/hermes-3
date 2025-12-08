@@ -30,7 +30,7 @@ FixedFractionIons::FixedFractionIons(std::string name, Options& alloptions,
     throw BoutException("No ion species specified. Got fractions = '%s'",
                         fractions_str.c_str());
   }
-  state_variable_access.substitute("sp", specified_species);
+  substitutePermissions("sp", specified_species);
 }
 
 void FixedFractionIons::transform_impl(GuardedOptions& state) {

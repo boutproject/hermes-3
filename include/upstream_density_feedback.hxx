@@ -69,7 +69,7 @@ struct UpstreamDensityFeedback : public Component {
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
 
-    state_variable_access.substitute("name", {name});
+    substitutePermissions("name", {name});
   }
 
   void outputVars(Options& state) override {

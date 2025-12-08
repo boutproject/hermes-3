@@ -75,12 +75,12 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
     outputs.push_back("density_source");
     outputs.push_back("momentum_source");
   }
-  state_variable_access.substitute("inputs", {"AA", "density"});
-  state_variable_access.substitute("optional_inputs", {"momentum, pressure"});
-  state_variable_access.substitute("fields", fields);
+  substitutePermissions("inputs", {"AA", "density"});
+  substitutePermissions("optional_inputs", {"momentum, pressure"});
+  substitutePermissions("fields", fields);
   // FIXME: energy_source and momentum source are only set if pressure
   // and momentum were set, respectively
-  state_variable_access.substitute("outputs", outputs);
+  substitutePermissions("outputs", outputs);
 }
 
 void PolarisationDrift::transform_impl(GuardedOptions& state) {

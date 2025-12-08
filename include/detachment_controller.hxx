@@ -157,8 +157,8 @@ struct DetachmentController : public Component {
       .doc("Print debugging information to the screen (0 for none, 1 for basic, 2 for extensive).")
       .withDefault<int>(0);
 
-    state_variable_access.substitute("neutral", {neutral_species});
-    state_variable_access.substitute(
+    substitutePermissions("neutral", {neutral_species});
+    substitutePermissions(
         "sp", std::vector<std::string>(species_list.begin(), species_list.end()));
     std::string output;
     if (control_mode == control_power) {
@@ -168,7 +168,7 @@ struct DetachmentController : public Component {
     } else {
       ASSERT2(false);
     }
-    state_variable_access.substitute("output", {output});
+    substitutePermissions("output", {output});
   };
 
   void outputVars(Options& state) override {

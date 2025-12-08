@@ -51,9 +51,8 @@ BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions,
     .doc("Output diagnostics?")
     .withDefault(false);
 
-  state_variable_access.substitute("input", {"density", "temperature", "momentum"});
-  state_variable_access.substitute(
-      "output", {"energy_source", "momentum_source", "density_source"});
+  substitutePermissions("input", {"density", "temperature", "momentum"});
+  substitutePermissions("output", {"energy_source", "momentum_source", "density_source"});
 }
 
 void BinormalSTPM::transform_impl(GuardedOptions& state) {

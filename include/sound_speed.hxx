@@ -46,9 +46,9 @@ struct SoundSpeed : public Component {
       temperature_floor /= get<BoutReal>(alloptions["units"]["eV"]);
     }
 
-    state_variable_access.substitute(
-        "sp", {electron_dynamics ? "{all_species}" : "{non_electrons}"});
-    state_variable_access.substitute("opt_inputs", {"density", "temperature"});
+    substitutePermissions("sp",
+                          {electron_dynamics ? "{all_species}" : "{non_electrons}"});
+    substitutePermissions("opt_inputs", {"density", "temperature"});
   }
 
 private:

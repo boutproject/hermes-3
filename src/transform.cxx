@@ -29,8 +29,8 @@ Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solve
     outputs.push_back(right);
   }
 
-  state_variable_access.substitute("inputs", inputs);
-  state_variable_access.substitute("outputs", outputs);
+  substitutePermissions("inputs", inputs);
+  substitutePermissions("outputs", outputs);
 }
 
 void Transform::transform_impl(GuardedOptions& state) {

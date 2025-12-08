@@ -16,8 +16,8 @@ Quasineutral::Quasineutral(std::string name, Options& alloptions, Solver* UNUSED
   AA = options["AA"].doc("Particle atomic mass. Proton = 1");
 
   ASSERT0(charge != 0.0);
-  state_variable_access.substitute("name", {name});
-  state_variable_access.substitute("outputs", {"AA", "charge", "density"});
+  substitutePermissions("name", {name});
+  substitutePermissions("outputs", {"AA", "charge", "density"});
 }
 
 void Quasineutral::transform_impl(GuardedOptions& state) {

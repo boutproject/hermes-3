@@ -35,13 +35,13 @@ SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
   output.write("\tL_par = {:e} (normalised)\n", L_par);
 
   if (sinks) {
-    state_variable_access.setAccess(readOnly("species:e:temperature"));
-    state_variable_access.setAccess(readOnly("species:{non_electrons}:{inputs}"));
-    state_variable_access.setAccess(readWrite("species:{non_electrons}:{outputs}"));
-    state_variable_access.substitute("inputs", {"AA", "density", "temperature"});
-    state_variable_access.substitute("output", {"density_source", "energy_source"});
+    setAccess(readOnly("species:e:temperature"));
+    setAccess(readOnly("species:{non_electrons}:{inputs}"));
+    setAccess(readWrite("species:{non_electrons}:{outputs}"));
+    substitutePermissions("inputs", {"AA", "density", "temperature"});
+    substitutePermissions("output", {"density_source", "energy_source"});
   } else {
-    state_variable_access.setAccess(readIfSet("species:e:temperature"));
+    setAccess(readIfSet("species:e:temperature"));
   }
 }
 

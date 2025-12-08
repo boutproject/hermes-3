@@ -138,8 +138,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   if (low_n_diffuse) {
     outputs.push_back("low_n_coeff");
   }
-  state_variable_access.substitute("name", {name});
-  state_variable_access.substitute("outputs", outputs);
+  substitutePermissions("name", {name});
+  substitutePermissions("outputs", outputs);
 }
 
 void EvolveDensity::transform_impl(GuardedOptions& state) {

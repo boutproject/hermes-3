@@ -62,62 +62,52 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
-  state_variable_access.setAccess(
-      readOnly("species:{electrons}:temperature", Regions::Interior));
-  state_variable_access.setAccess(
-      readOnly("species:{electrons}:density", Regions::Interior));
+  setAccess(readOnly("species:{electrons}:temperature", Regions::Interior));
+  setAccess(readOnly("species:{electrons}:density", Regions::Interior));
   if (electron_electron) {
-    state_variable_access.setAccess(readWrite(
+    setAccess(readWrite(
         "species:{electrons}:collision_frequencies:{electrons}_{electrons2}_coll"));
   }
   if (electron_ion) {
-    state_variable_access.setAccess(
-        readOnly("species:{positive_ions}:temperature", Regions::Interior));
-    state_variable_access.setAccess(
-        readWrite("species:{positive_ions}:collision_frequencies:{positive_ions}_{"
-                  "electrons}_coll"));
-    state_variable_access.setAccess(readWrite(
+    setAccess(readOnly("species:{positive_ions}:temperature", Regions::Interior));
+    setAccess(readWrite("species:{positive_ions}:collision_frequencies:{positive_ions}_{"
+                        "electrons}_coll"));
+    setAccess(readWrite(
         "species:{electrons}:collision_frequencies:{electrons}_{positive_ions}_coll"));
   } else {
-    state_variable_access.setAccess(
-        readIfSet("species:{positive_ions}:temperature", Regions::Interior));
+    setAccess(readIfSet("species:{positive_ions}:temperature", Regions::Interior));
   }
   if (electron_neutral) {
-    state_variable_access.setAccess(
-        readOnly("species:{neutrals}:temperature", Regions::Interior));
-    state_variable_access.setAccess(readWrite(
+    setAccess(readOnly("species:{neutrals}:temperature", Regions::Interior));
+    setAccess(readWrite(
         "species:{neutrals}:collision_frequencies:{neutrals}_{electrons}_coll"));
-    state_variable_access.setAccess(readWrite(
+    setAccess(readWrite(
         "species:{electrons}:collision_frequencies:{electrons}_{neutrals}_coll"));
   } else {
-    state_variable_access.setAccess(
-        readIfSet("species:{neutrals}:temperature", Regions::Interior));
+    setAccess(readIfSet("species:{neutrals}:temperature", Regions::Interior));
   }
   if (ion_ion) {
-    state_variable_access.setAccess(
-        readWrite("species:{ions}:collision_frequencies:{ions}_{ions2}_coll"));
+    setAccess(readWrite("species:{ions}:collision_frequencies:{ions}_{ions2}_coll"));
   }
   if (ion_neutral) {
-    state_variable_access.setAccess(
-        readWrite("species:{ions}:collision_frequencies:{ions}_{neutrals}_coll"));
-    state_variable_access.setAccess(
+    setAccess(readWrite("species:{ions}:collision_frequencies:{ions}_{neutrals}_coll"));
+    setAccess(
         readWrite("species:{neutrals}:collision_frequencies:{neutrals}_{ions}_coll"));
   }
   if (neutral_neutral) {
-    state_variable_access.setAccess(readWrite(
+    setAccess(readWrite(
         "species:{neutrals}:collision_frequencies:{neutrals}_{neutrals2}_coll"));
   }
   if (electron_electron or electron_ion or electron_neutral) {
-    state_variable_access.setAccess(readWrite("species:{electrons}:collision_frequency"));
+    setAccess(readWrite("species:{electrons}:collision_frequency"));
   }
   if (ion_ion or ion_neutral) {
-    state_variable_access.setAccess(readWrite("species:{ions}:collision_frequency"));
+    setAccess(readWrite("species:{ions}:collision_frequency"));
   } else if (electron_ion) {
-    state_variable_access.setAccess(
-        readWrite("species:{positive_ions}:collision_frequency"));
+    setAccess(readWrite("species:{positive_ions}:collision_frequency"));
   }
   if (neutral_neutral or electron_neutral or ion_neutral) {
-    state_variable_access.setAccess(readWrite("species:{neutrals}:collision_frequency"));
+    setAccess(readWrite("species:{neutrals}:collision_frequency"));
   }
 }
 

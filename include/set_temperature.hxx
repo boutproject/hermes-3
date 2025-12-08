@@ -41,8 +41,8 @@ struct SetTemperature : public Component {
                    .doc("Save additional output diagnostics")
                    .withDefault<bool>(false);
 
-    state_variable_access.substitute("name", {name});
-    state_variable_access.substitute("from", {temperature_from});
+    substitutePermissions("name", {name});
+    substitutePermissions("from", {temperature_from});
   }
 
   void outputVars(Options& state) override {

@@ -23,13 +23,13 @@ BraginskiiHeatExchange::BraginskiiHeatExchange(const std::string& name,
   diagnose = alloptions[name]["diagnose"]
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
-  state_variable_access.substitute("input_vars", {"AA", "density"});
+  substitutePermissions("input_vars", {"AA", "density"});
   // FIXME: We don't access the self-collision rate
-  state_variable_access.substitute(
-      "optional_vars",
-      {"charge", "collision_frequencies:{all_species}_{all_species2}_coll",
-       "temperature"});
-  state_variable_access.substitute("output_vars", {"momentum_source", "energy_source"});
+  substitutePermissions("optional_vars",
+                        {"charge",
+                         "collision_frequencies:{all_species}_{all_species2}_coll",
+                         "temperature"});
+  substitutePermissions("output_vars", {"momentum_source", "energy_source"});
 }
 
 void BraginskiiHeatExchange::transform_impl(GuardedOptions& state) {

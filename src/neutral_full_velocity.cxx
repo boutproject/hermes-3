@@ -188,8 +188,8 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   // Ensure that guard cells are filled and consistent between processors
   mesh->communicate(Urx, Ury, Uzx, Uzy);
   mesh->communicate(Txr, Txz, Tyr, Tyz);
-  state_variable_access.substitute("name", {name});
-  state_variable_access.substitute(
+  substitutePermissions("name", {name});
+  substitutePermissions(
       "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
 }
 

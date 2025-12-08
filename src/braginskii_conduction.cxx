@@ -91,28 +91,28 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
 
   std::vector<std::string> coll_types;
 
-  state_variable_access.substitute("input_vars", {"AA", "density", "temperature"});
-  state_variable_access.substitute("output_vars",
-                                   {"energy_source", "kappa_par", "energy_flow_ylow"});
+  substitutePermissions("input_vars", {"AA", "density", "temperature"});
+  substitutePermissions("output_vars",
+                        {"energy_source", "kappa_par", "energy_flow_ylow"});
   std::vector<std::string> species;
   for (const auto& [sp, mode] : all_conduction_collisions_mode) {
     species.push_back(sp);
     if (mode == "braginskii" and identifySpeciesType(sp) != SpeciesType::neutral) {
-      state_variable_access.setAccess(readIfSet(
+      setAccess(readIfSet(
           fmt::format("species:{}:collision_frequencies:{}_{}_coll", sp, sp, sp)));
     } else if (mode == "multispecies") {
-      state_variable_access.setAccess(readIfSet(fmt::format(
-          "species:{}:collision_frequencies:{}_{}_coll", sp, sp, "{all_species}")));
-      state_variable_access.setAccess(readIfSet(fmt::format(
-          "species:{}:collision_frequencies:{}_{}_cx", sp, sp, "{all_species}")));
+      setAccess(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_coll", sp,
+                                      sp, "{all_species}")));
+      setAccess(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_cx", sp, sp,
+                                      "{all_species}")));
     } else if (mode == "AFN" and identifySpeciesType(sp) == SpeciesType::neutral) {
-      state_variable_access.setAccess(readIfSet(fmt::format(
-          "species:{}:collision_frequencies:{}_{}_cx", sp, sp, "{positive_ions}")));
-      state_variable_access.setAccess(readIfSet(fmt::format(
-          "species:{}:collision_frequencies:{}_{}_iz", sp, sp, "{positive_ions}")));
+      setAccess(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_cx", sp, sp,
+                                      "{positive_ions}")));
+      setAccess(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_iz", sp, sp,
+                                      "{positive_ions}")));
     }
   }
-  state_variable_access.substitute("sp", species);
+  substitutePermissions("sp", species);
 }
 
 void BraginskiiConduction::transform_impl(GuardedOptions& state) {

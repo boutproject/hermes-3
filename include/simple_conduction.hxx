@@ -60,10 +60,9 @@ struct SimpleConduction : public Component {
       .withDefault<bool>(false);
 
     if (density <= 0.0) {
-      state_variable_access.setAccess(
-          readOnly("species:{name}:density", Regions::Interior));
+      setAccess(readOnly("species:{name}:density", Regions::Interior));
     }
-    state_variable_access.substitute("name", {name});
+    substitutePermissions("name", {name});
   }
 
 private:

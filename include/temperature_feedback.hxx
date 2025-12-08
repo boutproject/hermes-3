@@ -89,8 +89,8 @@ struct TemperatureFeedback : public Component {
     std::vector<std::string> species_stripped;
     std::transform(species_list.begin(), species_list.end(), species_stripped.begin(),
                    [](const std::string& val) { return trim(val); });
-    state_variable_access.substitute("name", {name});
-    state_variable_access.substitute("sp", species_stripped);
+    substitutePermissions("name", {name});
+    substitutePermissions("sp", species_stripped);
   }
 
   void outputVars(Options& state) override {

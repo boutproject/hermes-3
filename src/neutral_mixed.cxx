@@ -170,8 +170,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnNVn.setBoundary(std::string("Dnn") + name);
 
-  state_variable_access.substitute("name", {name});
-  state_variable_access.substitute(
+  substitutePermissions("name", {name});
+  substitutePermissions(
       "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
 }
 
