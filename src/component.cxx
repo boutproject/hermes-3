@@ -61,7 +61,7 @@ bool isSetFinal(const GuardedOptions & option, const std::string& location) {
   bool set = option.isSet();
 #if CHECKLEVEL >= 1
   PermissionTypes perm = option.getHighestPermission();
-  if (static_cast<int>(perm) >= static_cast<int>(PermissionTypes::Read)
+  if (perm >= PermissionTypes::Read
       or (perm == PermissionTypes::ReadIfSet and set)) {
     const Options& opt = option.get();
     const_cast<Options&>(opt).attributes["final"] = location;

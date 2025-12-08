@@ -68,7 +68,7 @@ struct SpeciesInformation {
 struct Component {
   /// Initialise the `state_variable_acceess` permissions. Note that
   /// `{all_species}` in any variable names will be replaced with the
-  /// names of all species being simulated (by claling
+  /// names of all species being simulated (by calling
   /// `declareAllSpecies()`, which is done after all components are
   /// created by a ComponentSchedular).
   Component(Permissions&& access_permissions)
@@ -106,7 +106,7 @@ struct Component {
                                            Solver *solver); // Time integration solver
 
   /// Tell the component the name of all species in the simulation, by type. It
-  /// will use this information to substitute the following placeholders in `svate_variable_access`:
+  /// will use this information to substitute the following placeholders in `state_variable_access`:
   ///   - electrons (any electron species)
   ///   - electrons2 (same as above, used for cross-product)
   ///   - neutrals (species with no charge)

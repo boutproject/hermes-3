@@ -94,6 +94,6 @@ private:
   GuardedOptions(Options* options, Permissions* permissions,
                  std::shared_ptr<std::map<std::string, Regions>> unread_vars,
                  std::shared_ptr<std::map<std::string, Regions>> unwritten_vars)
-      : options(options), permissions(permissions), unread_variables(unread_vars),
+      : options(options), permissions(std::move(permissions)), unread_variables(std::move(unread_vars)),
         unwritten_variables(unwritten_vars) {}
 };
