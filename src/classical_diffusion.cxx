@@ -17,8 +17,9 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
   state_variable_access.substitute(
       "optional", {"charge", "pressure", "density", "velocity", "temperature"});
   std::vector<std::string> e_vals = {"AA", "density"};
-  if (custom_D <= 0.)
+  if (custom_D <= 0.) {
     e_vals.push_back("collision_frequency");
+  }
   state_variable_access.substitute("e_vals", e_vals);
   // FIXME: momentum and energy sources are only set if velocity and
   // temperature are defined (respectively). Collision frequency is
