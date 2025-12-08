@@ -56,14 +56,14 @@ public:
   /// particular level of permission. Some examples can be seen below:
   ///
   ///     AccessRights only_read_if_set = { Regions::All, Regions::Nowhere,
-  ///                      Regions::Nowhere, Regions::Nowhere },
-  ///                  read_only = { Regions::Nowhere, Regions::All, Regions::Nowhere,
-  ///                      Regions::Nowhere },
-  ///                  write_boundaries = { Regions::Nowhere, Regions::Nowhere,
-  ///                      Regions::Boundaries, Regions::Nowhere },
-  ///                  read_and_write_everywhere = { Regions::Nowhere,
-  ///                      Regions::AllReginos, Regions::All, Regions::Nowhere },
-  ///                  final_write_boundaries_read_interior = { Regions::Nowhere,
+  ///                      Regions::Nowhere, Regions::Nowhere };
+  ///     AccessRights read_only = { Regions::Nowhere, Regions::All, Regions::Nowhere,
+  ///                      Regions::Nowhere };
+  ///     AccessRights write_boundaries = { Regions::Nowhere, Regions::Nowhere,
+  ///                      Regions::Boundaries, Regions::Nowhere };
+  ///     AccessRights read_and_write_everywhere = { Regions::Nowhere,
+  ///                      Regions::AllReginos, Regions::All, Regions::Nowhere };
+  ///     AccessRights final_write_boundaries_read_interior = { Regions::Nowhere,
   ///                      Regions::Interior, Regions::Nowhere, Regions::Boundaries };
   ///
   using AccessRights = std::array<Regions, static_cast<size_t>(PermissionTypes::END)>;
@@ -86,7 +86,7 @@ public:
   ///     Permissions example({
   ///         // Permission to read charge only if it has been set
   ///         {"species:he:charge", {Regions::All, Regions::Nowhere,
-  ///         Regions::Nowhere,, Regions::Nowhere}},
+  ///         Regions::Nowhere, Regions::Nowhere}},
   ///         // Read permission for atomic mass
   ///         {"species:he:AA", {Regions::Nowhere, Regions::All,
   ///         Regions::Nowhere, Regions::Nowhere}},
@@ -191,7 +191,7 @@ public:
   /// is the highest permission.
   ///
   ///     Permissions example({"test", {Regions::Nowhere, Regions::All,
-  ///     Regions::All, Permissions:Nowhere}});
+  ///                                   Regions::All, Permissions:Nowhere}});
   ///     // Print variables which can be read
   ///     for (const auto [varname, region] :
   ///     example.getVariablesWithPermission(PermissionTypes::Read), false))

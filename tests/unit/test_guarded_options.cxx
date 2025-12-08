@@ -208,9 +208,9 @@ TEST_F(GuardedOptionsTests, TestGetChildren) {
   EXPECT_EQ(guarded_children.size(), 2);
   EXPECT_EQ(guarded_children.count("he"), 1);
   EXPECT_EQ(guarded_children.count("d"), 1);
-  EXPECT_EQ(&(guarded_children["d"].get()), &(opts["species"]["d"]));
+  EXPECT_EQ(&(guarded_children.at("d").get()), &(opts["species"]["d"]));
   // We do not have access to the whole "he" section
-  EXPECT_THROW(guarded_children["he"].get(), BoutException);
+  EXPECT_THROW(guarded_children.at("he").get(), BoutException);
 }
 
 TEST_F(GuardedOptionsTests, TestIsThisSection) {
