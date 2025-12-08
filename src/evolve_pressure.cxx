@@ -165,9 +165,9 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
 
-  state_variable_access.substitute("name", {name});
-  state_variable_access.substitute("inputs", {"density"});
-  state_variable_access.substitute("outputs", {"pressure", "temperature"});
+  substitutePermissions("name", {name});
+  substitutePermissions("inputs", {"density"});
+  substitutePermissions("outputs", {"pressure", "temperature"});
 }
 
 void EvolvePressure::transform_impl(GuardedOptions& state) {

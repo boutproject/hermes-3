@@ -34,7 +34,7 @@ struct SOLKITNeutralParallelDiffusion : public Component {
     auto rho_s0 = get<BoutReal>(alloptions["units"]["meters"]);
     area_norm = 1. / (Nnorm * rho_s0);
 
-    state_variable_access.substitute("inputs", {"charge", "density"});
+    substitutePermissions("inputs", {"charge", "density"});
   }
 
 private:

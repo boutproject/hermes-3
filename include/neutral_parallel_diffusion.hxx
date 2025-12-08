@@ -54,13 +54,12 @@ struct NeutralParallelDiffusion : public Component {
       .withDefault<bool>(true);
 
     // FIXME: strictly speaking, momentum is not optional if velocity has been set
-    state_variable_access.substitute("optional_inputs",
-                                     {"pressure", "velocity", "momentum"});
-    state_variable_access.substitute(
-        "inputs", {"AA", "collision_frequencies", "density", "temperature"});
+    substitutePermissions("optional_inputs", {"pressure", "velocity", "momentum"});
+    substitutePermissions("inputs",
+                          {"AA", "collision_frequencies", "density", "temperature"});
     // FIXME: momentum_source is only set if velocity was set.
-    state_variable_access.substitute(
-        "outputs", {"density_source", "energy_source", "momentum_source"});
+    substitutePermissions("outputs",
+                          {"density_source", "energy_source", "momentum_source"});
   }
 
   /// Save variables to the output

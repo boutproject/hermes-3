@@ -49,8 +49,8 @@ struct SOLKITHydrogenChargeExchangeIsotope : public SOLKITHydrogenChargeExchange
   SOLKITHydrogenChargeExchangeIsotope(std::string name, Options& alloptions,
                                       Solver* solver)
       : SOLKITHydrogenChargeExchange(name, alloptions, solver) {
-    state_variable_access.substitute("sp", {{Isotope}, {Isotope, '+'}});
-    state_variable_access.substitute("readvals", {"AA", "density"});
+    substitutePermissions("sp", {{Isotope}, {Isotope, '+'}});
+    substitutePermissions("readvals", {"AA", "density"});
   }
 
 private:

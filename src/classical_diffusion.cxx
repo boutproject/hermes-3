@@ -14,22 +14,20 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
   diagnose = options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
   custom_D = options["custom_D"].doc("Custom diffusion coefficient override. -1: Off, calculate D normally").withDefault<BoutReal>(-1);
 
-  state_variable_access.substitute(
-      "optional", {"charge", "pressure", "density", "velocity", "temperature"});
+  substitutePermissions("optional",
+                        {"charge", "pressure", "density", "velocity", "temperature"});
   std::vector<std::string> e_vals = {"AA", "density"};
   if (custom_D <= 0.) {
     e_vals.push_back("collision_frequency");
   }
-  state_variable_access.substitute("e_vals", e_vals);
+  substitutePermissions("e_vals", e_vals);
   // FIXME: momentum and energy sources are only set if velocity and
   // temperature are defined (respectively). Collision frequency is
   // only used if temperature is set. Nothing happens if the charge or
   // density are unset.
-  state_variable_access.substitute(
-      "output", {"density_source", "momentum_source", "energy_source"});
+  substitutePermissions("output", {"density_source", "momentum_source", "energy_source"});
   if (custom_D < 0.)
-    state_variable_access.setAccess(
-        readOnly("species:{all_species}:collision_frequency"));
+    setAccess(readOnly("species:{all_species}:collision_frequency"));
 }
 
 void ClassicalDiffusion::transform_impl(GuardedOptions& state) {

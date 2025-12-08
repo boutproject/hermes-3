@@ -148,15 +148,15 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
 
-  state_variable_access.substitute("e_whole_domain", {"AA", "charge", "adiabatic"});
-  state_variable_access.substitute("e_boundary", {"density", "temperature"});
-  state_variable_access.substitute("e_optional", {"velocity", "momentum"});
-  state_variable_access.substitute("ion_whole_domain", {"charge", "adiabatic"});
-  state_variable_access.substitute("ion_boundary", {"density", "temperature"});
+  substitutePermissions("e_whole_domain", {"AA", "charge", "adiabatic"});
+  substitutePermissions("e_boundary", {"density", "temperature"});
+  substitutePermissions("e_optional", {"velocity", "momentum"});
+  substitutePermissions("ion_whole_domain", {"charge", "adiabatic"});
+  substitutePermissions("ion_boundary", {"density", "temperature"});
   // FIXME: velocity and momentum will only be set on boundaries if already set on
   // interior
-  state_variable_access.substitute("ion_optional", {"velocity", "momentum"});
-  state_variable_access.setAccess(writeBoundaryIfSet("fields:phi"));
+  substitutePermissions("ion_optional", {"velocity", "momentum"});
+  setAccess(writeBoundaryIfSet("fields:phi"));
 }
 
 void SheathBoundarySimple::transform_impl(GuardedOptions& state) {

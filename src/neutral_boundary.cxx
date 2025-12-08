@@ -53,9 +53,9 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
           .doc("Fraction of neutrals that are undergoing fast reflection at the pfr")
           .withDefault<BoutReal>(0.8);
 
-  state_variable_access.substitute("name", {name});
-  state_variable_access.substitute("outputs", {"density", "temperature", "pressure"});
-  state_variable_access.substitute("conditional_outputs", {"velocity", "momentum"});
+  substitutePermissions("name", {name});
+  substitutePermissions("outputs", {"density", "temperature", "pressure"});
+  substitutePermissions("conditional_outputs", {"velocity", "momentum"});
 }
 
 void NeutralBoundary::transform_impl(GuardedOptions& state) {

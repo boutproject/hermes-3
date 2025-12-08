@@ -157,20 +157,19 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
   }
 
   if (target_recycle) {
-    state_variable_access.setAccess(readIfSet("species:{from}:energy_flow_ylow"));
+    setAccess(readIfSet("species:{from}:energy_flow_ylow"));
   }
   if (sol_recycle or pfr_recycle) {
-    state_variable_access.setAccess(readIfSet("species:{from}:energy_flow_xlow"));
-    state_variable_access.setAccess(readIfSet("species:{from}:particle_flow_xlow"));
+    setAccess(readIfSet("species:{from}:energy_flow_xlow"));
+    setAccess(readIfSet("species:{from}:particle_flow_xlow"));
   }
-  state_variable_access.substitute(
-      "to", std::vector<std::string>(to_species.begin(), to_species.end()));
-  state_variable_access.substitute(
+  substitutePermissions("to",
+                        std::vector<std::string>(to_species.begin(), to_species.end()));
+  substitutePermissions(
       "from", std::vector<std::string>(from_species.begin(), from_species.end()));
-  state_variable_access.substitute("to_inputs",
-                                   {"AA", "density", "pressure", "temperature"});
-  state_variable_access.substitute("from_inputs", {"density", "velocity", "temperature"});
-  state_variable_access.substitute("outputs", {"density_source", "energy_source"});
+  substitutePermissions("to_inputs", {"AA", "density", "pressure", "temperature"});
+  substitutePermissions("from_inputs", {"density", "velocity", "temperature"});
+  substitutePermissions("outputs", {"density_source", "energy_source"});
 }
 
 void Recycling::transform_impl(GuardedOptions& state) {

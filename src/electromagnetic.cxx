@@ -87,7 +87,7 @@ Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* 
     .withDefault<bool>(false);
 
   if (magnetic_flutter)
-    state_variable_access.setAccess(readWrite("fields:Apar_flutter"));
+    setAccess(readWrite("fields:Apar_flutter"));
 }
 
 void Electromagnetic::restartVars(Options& state) {

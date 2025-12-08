@@ -126,10 +126,25 @@ struct Component {
   void declareAllSpecies(const SpeciesInformation & info);
 
 protected:
+  /// Set the level of access needed by this component for a particular variable.
+  void setAccess(const std::string& variable, const Permissions::AccessRights& rights) {
+    state_variable_access.setAccess(variable, rights);
+  }
+  void setAccess(const Permissions::VarRights& info) {
+    setAccess(info.name, info.rights);
+  }
+
+  /// Replace a placeholder in the name of variables stored in the access control
+  /// information for this component.
+  void substitutePermissions(const std::string& label,
+                             const std::vector<std::string>& substitution) {
+    state_variable_access.substitute(label, substitution);
+  }
+
+private:
   /// Information on which state variables the transform method will read and write.
   Permissions state_variable_access;
 
-private:
   /// Modify the given simulation state. All components must
   /// implement this function. It will only allow the reading
   /// from/writing to state variables with the appropriate permissiosn

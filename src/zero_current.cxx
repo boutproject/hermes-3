@@ -15,7 +15,7 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
 
   ASSERT0(charge != 0.0);
 
-  state_variable_access.substitute("inputs", {"density", "velocity"});
+  substitutePermissions("inputs", {"density", "velocity"});
 }
 
 void ZeroCurrent::transform_impl(GuardedOptions& state) {

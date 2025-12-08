@@ -27,8 +27,8 @@ struct FixedDensity : public Component {
 
     // Get the density and normalise
     N = options["density"].as<Field3D>() / Nnorm;
-    state_variable_access.substitute("name", {name});
-    state_variable_access.substitute("vars", {"AA", "charge", "density"});
+    substitutePermissions("name", {name});
+    substitutePermissions("vars", {"AA", "charge", "density"});
   }
 
   void outputVars(Options& state) override {

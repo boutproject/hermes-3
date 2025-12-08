@@ -68,15 +68,15 @@ struct OpenADAS : public ReactionBase {
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
-    state_variable_access.substitute("val", {"density", "temperature", "velocity"});
-    state_variable_access.substitute("e_val", {"density", "temperature"});
-    state_variable_access.substitute(
-        "w_val", {"density_source", "momentum_source", "energy_source"});
+    substitutePermissions("val", {"density", "temperature", "velocity"});
+    substitutePermissions("e_val", {"density", "temperature"});
+    substitutePermissions("w_val",
+                          {"density_source", "momentum_source", "energy_source"});
     // FIXME: electron density_source only written if from_ion charge != to_ion charge.
-    state_variable_access.substitute(
-        "ew_val", {"density_source", "momentum_source", "energy_source"});
-    state_variable_access.substitute("sp", {from_ion, to_ion});
-    state_variable_access.substitute("from_ion", {from_ion});
+    substitutePermissions("ew_val",
+                          {"density_source", "momentum_source", "energy_source"});
+    substitutePermissions("sp", {from_ion, to_ion});
+    substitutePermissions("from_ion", {from_ion});
   }
 
   /// Perform the calculation of rates, and transfer of particles/momentum/energy
@@ -106,12 +106,12 @@ struct OpenADASChargeExchange : public ReactionBase {
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
-    state_variable_access.substitute("val", {"density", "temperature", "velocity"});
-    state_variable_access.substitute("e_val", {"density", "temperature"});
-    state_variable_access.substitute(
-        "w_val", {"density_source", "momentum_source", "energy_source"});
-    state_variable_access.substitute("sp", {from_A, from_B, to_A, to_B});
-    state_variable_access.substitute("from_ion", {from_A, from_B});
+    substitutePermissions("val", {"density", "temperature", "velocity"});
+    substitutePermissions("e_val", {"density", "temperature"});
+    substitutePermissions("w_val",
+                          {"density_source", "momentum_source", "energy_source"});
+    substitutePermissions("sp", {from_A, from_B, to_A, to_B});
+    substitutePermissions("from_ion", {from_A, from_B});
   }
   /// Perform charge exchange
   ///

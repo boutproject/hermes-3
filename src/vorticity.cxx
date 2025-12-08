@@ -210,33 +210,30 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
   if (diamagnetic or diamagnetic_polarisation) {
     // FIXME: These will only be read if BOTH charge and pressure (and possibly AA) are
     // set
-    state_variable_access.setAccess(
-        readIfSet("species:{charged}:pressure", Regions::Interior));
-    state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
+    setAccess(readIfSet("species:{charged}:pressure", Regions::Interior));
+    setAccess(readIfSet("species:{all_species}:charge"));
   }
   if (diamagnetic) {
-    state_variable_access.setAccess(readWrite("species:{charged}:energy_source"));
-    state_variable_access.setAccess(readWrite("fields:DivJdia"));
+    setAccess(readWrite("species:{charged}:energy_source"));
+    setAccess(readWrite("fields:DivJdia"));
   }
   if (diamagnetic_polarisation or collisional_friction) {
     // FIXME: Only read if pressure also set
-    state_variable_access.setAccess(readIfSet("species:{charged}:AA"));
+    setAccess(readIfSet("species:{charged}:AA"));
   }
   if (phi_boundary_relax) {
-    state_variable_access.setAccess(readOnly("time"));
+    setAccess(readOnly("time"));
   } else {
     if (sheath_boundary) {
-      state_variable_access.setAccess(readOnly("species:e:AA"));
+      setAccess(readOnly("species:e:AA"));
     }
-    state_variable_access.setAccess(
-        readIfSet("species:e:temperature", Regions::Interior));
+    setAccess(readIfSet("species:e:temperature", Regions::Interior));
   }
   if (collisional_friction) {
-    state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
-    state_variable_access.setAccess(readOnly("species:{positive_ions}:density"));
-    state_variable_access.setAccess(
-        readIfSet("species:{positive_ions}:collision_frequency"));
-    state_variable_access.setAccess(readWrite("fields:DivJcol"));
+    setAccess(readIfSet("species:{all_species}:charge"));
+    setAccess(readOnly("species:{positive_ions}:density"));
+    setAccess(readIfSet("species:{positive_ions}:collision_frequency"));
+    setAccess(readWrite("fields:DivJcol"));
   }
 }
 

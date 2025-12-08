@@ -148,14 +148,14 @@ struct HydrogenIsotopeChargeExchange : public HydrogenChargeExchange {
     if constexpr (Isotope1 != Isotope2) {
       writevals.push_back("density_source");
     }
-    state_variable_access.substitute("reactant", {{Isotope1}, {Isotope2, '+'}});
-    state_variable_access.substitute("react_vals", {"density", "temperature"});
-    state_variable_access.substitute("read_vals", {"AA", "velocity"});
-    state_variable_access.substitute(
-        "sp", {{Isotope1}, {Isotope2, '+'}, {Isotope1, '+'}, {Isotope2}});
-    state_variable_access.substitute("writevals", writevals);
-    state_variable_access.substitute("atom", {{Isotope1}});
-    state_variable_access.substitute("ion", {{Isotope2, '+'}});
+    substitutePermissions("reactant", {{Isotope1}, {Isotope2, '+'}});
+    substitutePermissions("react_vals", {"density", "temperature"});
+    substitutePermissions("read_vals", {"AA", "velocity"});
+    substitutePermissions("sp",
+                          {{Isotope1}, {Isotope2, '+'}, {Isotope1, '+'}, {Isotope2}});
+    substitutePermissions("writevals", writevals);
+    substitutePermissions("atom", {{Isotope1}});
+    substitutePermissions("ion", {{Isotope2, '+'}});
   }
 
   void outputVars(Options& state) override {

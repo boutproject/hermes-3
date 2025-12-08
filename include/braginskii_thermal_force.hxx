@@ -38,27 +38,25 @@ struct BraginskiiThermalForce : public Component {
                   .withDefault<bool>(true);
 
     if (electron_ion or ion_ion) {
-      state_variable_access.setAccess(readIfSet("species:{all_species}:charge"));
+      setAccess(readIfSet("species:{all_species}:charge"));
     }
     if (electron_ion) {
       // FIXME: These are only accessed if electrons present
-      state_variable_access.setAccess(readOnly("species:e:temperature"));
-      state_variable_access.setAccess(
-          readOnly("species:{ions}:density", Regions::Interior));
-      state_variable_access.setAccess(readWrite("species:{ions}:momentum_source"));
-      state_variable_access.setAccess(readWrite("species:e:momentum_source"));
+      setAccess(readOnly("species:e:temperature"));
+      setAccess(readOnly("species:{ions}:density", Regions::Interior));
+      setAccess(readWrite("species:{ions}:momentum_source"));
+      setAccess(readWrite("species:e:momentum_source"));
     } else if (ion_ion) {
     }
     if (ion_ion) {
-      state_variable_access.setAccess(readOnly("species:{ions}:AA"));
+      setAccess(readOnly("species:{ions}:AA"));
       // FIXME: This is only accessed for light ions
-      state_variable_access.setAccess(readOnly("species:{ions}:temperature"));
+      setAccess(readOnly("species:{ions}:temperature"));
       if (!electron_ion) {
         // FIXME: This is only accessed for heavy ions
-        state_variable_access.setAccess(
-            readOnly("species:{ions}:density", Regions::Interior));
+        setAccess(readOnly("species:{ions}:density", Regions::Interior));
         // FIXME: This is only set for heavy and light ions, not intermediate
-        state_variable_access.setAccess(readWrite("species:{ions}:momentum_source"));
+        setAccess(readWrite("species:{ions}:momentum_source"));
       }
     }
   }

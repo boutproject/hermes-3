@@ -47,11 +47,10 @@ Reaction::Reaction(std::string name, Options& options)
     this->pfactors[sp] = 1;
   }
 
-  state_variable_access.substitute("sp", species);
-  state_variable_access.substitute("r_val", {"AA", "density", "velocity", "temperature"});
-  state_variable_access.substitute("e_val", {"density", "temperature"});
-  state_variable_access.substitute(
-      "w_val", {"momentum_source", "energy_source", "density_source"});
+  substitutePermissions("sp", species);
+  substitutePermissions("r_val", {"AA", "density", "velocity", "temperature"});
+  substitutePermissions("e_val", {"density", "temperature"});
+  substitutePermissions("w_val", {"momentum_source", "energy_source", "density_source"});
 
   // Initialise weight sums with dummy values. Real values are set on first call to
   // transform().
@@ -86,7 +85,7 @@ void Reaction::add_diagnostic(const std::string& sp_name, const std::string& dia
         diag_key, ReactionDiagnostic(diag_name, description, type, data_source,
                                      standard_name, transformer)));
   }
-  state_variable_access.setAccess(readWrite(diag_name));
+  setAccess(readWrite(diag_name));
 }
 
 /**

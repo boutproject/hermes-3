@@ -16,9 +16,9 @@ struct NoFlowBoundary : public Component {
     noflow_upper_y = options["noflow_upper_y"]
                          .doc("No-flow boundary on upper y?")
                          .withDefault<bool>(true);
-    state_variable_access.substitute("name", {name});
-    state_variable_access.substitute(
-        "variables", {"density", "temperature", "pressure", "velocity", "momentum"});
+    substitutePermissions("name", {name});
+    substitutePermissions("variables",
+                          {"density", "temperature", "pressure", "velocity", "momentum"});
   }
 
 private:

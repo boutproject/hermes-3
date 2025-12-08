@@ -31,9 +31,9 @@ struct FixedVelocity : public Component {
     // Option overrides mesh value
     // so use mesh value (if any) as default value.
     V = options["velocity"].withDefault(V) / Cs0;
-    state_variable_access.substitute("name", {name});
+    substitutePermissions("name", {name});
     // FIXME: Momentum is only written if density is set
-    state_variable_access.substitute("output", {"velocity", "momentum"});
+    substitutePermissions("output", {"velocity", "momentum"});
   }
 
   void outputVars(Options& state) override {
