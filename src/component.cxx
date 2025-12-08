@@ -84,8 +84,7 @@ bool isSetFinalNoBoundary(const GuardedOptions & option, const std::string& loca
   bool set = option.isSet();
 #if CHECKLEVEL >= 1
   PermissionTypes perm = option.getHighestPermission(Regions::Interior);
-  if (static_cast<int>(perm) >= static_cast<int>(PermissionTypes::Read)
-      or (perm == PermissionTypes::ReadIfSet and set)) {
+  if (perm >= PermissionTypes::Read or (perm == PermissionTypes::ReadIfSet and set)) {
     // Mark option as final inside the domain, but not in the boundary
     const_cast<Options&>(option.get(Regions::Interior)).attributes["final-domain"] =
         location;

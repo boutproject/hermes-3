@@ -11,7 +11,7 @@
 /// from and writing to the underlying data.
 class GuardedOptions {
 public:
-  GuardedOptions() = default;
+  GuardedOptions() = delete;
 
   /// Create a guarded options object which applies the specified
   /// permissions to the underlying options object. Note that the
@@ -22,23 +22,14 @@ public:
 
   /// Get a subsection or value. The result will also be wrapped in a
   /// GuardedOptions object, with the same permissions as this one.
-  GuardedOptions operator[](const std::string& name) {
+  GuardedOptions operator[](const std::string& name) const {
     if (options == nullptr)
       throw BoutException(
           "Trying to access GuardedOptions when underlying options are nullptr.");
     return GuardedOptions(&(*options)[name], permissions, unread_variables,
                           unwritten_variables);
   }
-  GuardedOptions operator[](const char* name) { return (*this)[std::string(name)]; }
-
-  const GuardedOptions operator[](const std::string& name) const {
-    if (options == nullptr)
-      throw BoutException(
-          "Trying to access GuardedOptions when underlying options are nullptr.");
-    return GuardedOptions(&(*options)[name], permissions, unread_variables,
-                          unwritten_variables);
-  }
-  const GuardedOptions operator[](const char* name) const { return (*this)[std::string(name)]; }
+  GuardedOptions operator[](const char* name) const { return (*this)[std::string(name)]; }
 
   std::map<std::string, GuardedOptions> getChildren();
   bool isSection(const std::string& name) const { return options->isSection(name); }
