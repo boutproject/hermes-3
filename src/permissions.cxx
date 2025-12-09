@@ -33,10 +33,10 @@
 /// set).
 Permissions::AccessRights applyLowerPermissions(const Permissions::AccessRights& rights) {
   Permissions::AccessRights result(rights);
-  for (int i = static_cast<int>(PermissionTypes::ReadIfSet);
-       i < static_cast<int>(PermissionTypes::END); i++) {
+  for (auto i = static_cast<size_t>(PermissionTypes::ReadIfSet);
+       i < static_cast<size_t>(PermissionTypes::END); i++) {
     // Higher permissions imply lower permissions
-    for (int j = static_cast<int>(PermissionTypes::ReadIfSet); j < i; j++) {
+    for (auto j = static_cast<size_t>(PermissionTypes::ReadIfSet); j < i; j++) {
       result[j] = result[j] | rights[i];
     }
   }
@@ -99,7 +99,7 @@ Permissions::VarRights Permissions::bestMatchRights(const std::string& variable)
   Permissions::AccessRights best_candidate = {Regions::Nowhere, Regions::Nowhere,
                                               Regions::Nowhere};
   std::string best_candidate_name = "";
-  int max_len = 0;
+  size_t max_len = 0;
   for (const auto& [varname, rights] : variable_permissions) {
     if (varname.size() > max_len and variable.find(varname + ":") == 0) {
       max_len = varname.size();
@@ -114,7 +114,7 @@ std::pair<bool, std::string> Permissions::canAccess(const std::string& variable,
                                                     PermissionTypes permission,
                                                     Regions region) const {
   auto [match_name, match_rights] = bestMatchRights(variable);
-  if ((match_rights[static_cast<int>(permission)] & region) == region) {
+  if ((match_rights[static_cast<size_t>(permission)] & region) == region) {
     return {true, match_name};
   } else {
     return {false, ""};
@@ -126,8 +126,8 @@ Permissions::getHighestPermission(const std::string& variable, Regions region) c
   if (region == Regions::Nowhere)
     return {PermissionTypes::None, ""};
   auto [varname, rights] = bestMatchRights(variable);
-  int i = static_cast<int>(PermissionTypes::ReadIfSet);
-  while (i < static_cast<int>(PermissionTypes::END) and (rights[i] & region) == region) {
+  size_t i = static_cast<int>(PermissionTypes::ReadIfSet);
+  while (i < static_cast<size_t>(PermissionTypes::END) and (rights[i] & region) == region) {
     i++;
   }
   return {static_cast<PermissionTypes>(i - 1), varname};
@@ -141,17 +141,16 @@ Permissions::getVariablesWithPermission(PermissionTypes permission,
   }
   std::map<std::string, Regions> result;
   if (highestOnly
-      and static_cast<int>(permission) < static_cast<int>(PermissionTypes::END) - 1) {
+      and static_cast<size_t>(permission) < static_cast<size_t>(PermissionTypes::END) - 1) {
     for (const auto& [varname, rights] : variable_permissions) {
-      auto regions = rights[static_cast<int>(permission)];
-      auto perm_in_regions = rights[static_cast<int>(permission)]
-                             & ~rights[static_cast<int>(permission) + 1];
+      auto perm_in_regions = rights[static_cast<size_t>(permission)]
+                             & ~rights[static_cast<size_t>(permission) + 1];
       if (perm_in_regions != Regions::Nowhere)
         result.emplace(varname, perm_in_regions);
     }
   } else {
     for (const auto& [varname, rights] : variable_permissions) {
-      auto regions = rights[static_cast<int>(permission)];
+      auto regions = rights[static_cast<size_t>(permission)];
       if (regions != Regions::Nowhere)
         result.emplace(varname, regions);
     }
@@ -205,7 +204,7 @@ std::istream& operator>>(std::istream& is, Permissions& permissions) {
   for (std::sregex_iterator i = items_begin; i != items_end; ++i) {
     std::smatch item = *i;
     Permissions::AccessRights rights;
-    for (int i = 0; i < static_cast<int>(PermissionTypes::END); i++) {
+    for (size_t i = 0; i < static_cast<size_t>(PermissionTypes::END); i++) {
       std::string val = item[2 + i];
       rights[i] = static_cast<Regions>(std::stoi(val));
     }
