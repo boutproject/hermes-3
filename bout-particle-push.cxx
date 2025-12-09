@@ -595,6 +595,7 @@ int main(int argc, char** argv) {
       }
       initial_distribution[Sym<INT>("CELL_ID")][px][0] = cells.at(px);
       initial_distribution[Sym<INT>("ID")][px][0] = px + id_offset;
+      initial_distribution[Sym<REAL>("WEIGHT")][px][0] = 1.0 + px;
       initial_distribution[Sym<REAL>("CHARGE")][px][0] = 1.0;
     }
     // Add the new particles to the particle group
@@ -602,16 +603,16 @@ int main(int argc, char** argv) {
     // make pointer to projection object
     auto dg0 = std::make_shared<PetscInterface::DMPlexProjectEvaluateDG>(
         neso_mesh, sycl_target, "DG", 0);
-
-    auto test_data = FixedRateData(1.0);
+    const REAL iz_rate = Options::root()["VANTAGE_reactions"]["iz_rate"].withDefault(1.0);
+    auto iz_rate_data = FixedRateData(iz_rate);
     main_species.set_id(0);
     auto ionisation_reaction = ElectronImpactIonisation<FixedRateData, FixedRateData>(
-        A_particle_group->sycl_target, test_data, test_data, main_species,
+        A_particle_group->sycl_target, iz_rate_data, iz_rate_data, main_species,
         electron_species);
 
     // Reaction controllers
-    REAL remove_threshold=1.0e-10;
-    REAL merge_threshold=1.0e-2;
+    const REAL remove_threshold = Options::root()["VANTAGE_reactions"]["remove_threshold"].withDefault(1.0e-10);
+    const REAL merge_threshold = Options::root()["VANTAGE_reactions"]["merge_threshold"].withDefault(1.0e-2);
 
     auto remove_wrapper = std::make_shared<TransformationWrapper>(
       std::vector<std::shared_ptr<MarkingStrategy>>{
@@ -625,7 +626,7 @@ int main(int argc, char** argv) {
               Sym<REAL>("WEIGHT"), merge_threshold)},
       make_transformation_strategy<MergeTransformationStrategy<ndim>>());
 
-    auto child_transforms = std::vector{remove_wrapper, merge_wrapper};
+    auto child_transforms = std::vector{merge_wrapper,remove_wrapper};
     std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms = child_transforms;
 
     auto reaction_controller =
@@ -776,9 +777,10 @@ int main(int argc, char** argv) {
       lambda_apply_timestep(static_particle_sub_group(A_particle_group));
       // apply reactions
       reaction_controller.apply(A_particle_group, dt, ControllerMode::standard_mode);
-
       // uncomment to write a trajectory
       h5part.write();
+      // uncomment to print particle info
+      // A_particle_group->print(Sym<REAL>("POSITION"), Sym<INT>("ID"), Sym<REAL>("WEIGHT"));
     }
 
     // uncomment to write a trajectory
