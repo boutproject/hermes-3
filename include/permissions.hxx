@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 /// Ways in which someone is allowed to access the variable, with
 /// increasing levels of rights. "ReadIfSet" indicates that
@@ -149,8 +150,6 @@ public:
 
   void setAccess(const VarRights& info) { setAccess(info.name, info.rights); }
 
-  void printAllPermissions() const;
-
   /// Replace a placeholder in the names of variables stored in this
   /// object. This is useful if you need to access the same variable
   /// for multiple species. For example, the following code gives
@@ -216,6 +215,7 @@ public:
   static std::string regionNames(const Regions regions);
 
   // Allow to be streamed, so can be stored in Options.
+  friend fmt::formatter<Permissions>;
   friend std::ostream& operator<<(std::ostream& os, const Permissions& permissions);
   friend std::istream& operator>>(std::istream& is, Permissions& permissions);
 
@@ -229,6 +229,16 @@ private:
   VarRights bestMatchRights(const std::string& variable) const;
 
   std::map<std::string, AccessRights> variable_permissions;
+};
+
+/// Format `Permissions` to string. Format string specification is the
+/// same as when formatting a `std::map<std::string, Permissions::AccessRights>`.
+/// See https://fmt.dev/12.0/syntax/#range-format-specifications.
+template <>
+struct fmt::formatter<Permissions>
+    : formatter<std::map<std::string, Permissions::AccessRights>> {
+  auto format(const Permissions& p, format_context& ctx) const
+      -> format_context::iterator;
 };
 
 /// \defgroup PermissionFactories
