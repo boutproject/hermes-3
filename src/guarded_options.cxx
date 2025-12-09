@@ -1,15 +1,24 @@
-#include <fmt/core.h>
+#include <cstddef>
+#include <map>
+#include <memory>
+#include <string>
+#include <tuple>
+
+#include <bout/assert.hxx>
+#include <bout/boutexception.hxx>
+#include <bout/options.hxx>
 
 #include "../include/guarded_options.hxx"
+#include "../include/permissions.hxx"
 
 /// Check whether an option is set, without creating any parent
 /// Options objects in the process.
-bool isSetRecursive(Options& opt, std::string varname) {
-  size_t colon = varname.find(":");
+bool isSetRecursive(Options& opt, const std::string& varname) {
+  const size_t colon = varname.find(":");
   if (colon == std::string::npos) {
     return opt.isSet(varname);
   }
-  std::string fragment = varname.substr(0, colon);
+  const std::string fragment = varname.substr(0, colon);
   if (not opt.isSection(fragment)) {
     return false;
   }
@@ -54,7 +63,7 @@ std::map<std::string, GuardedOptions> GuardedOptions::getChildren() {
 void updateAccessRecords(std::map<std::string, Regions>& records, const std::string& name,
                          Regions region) {
   if (records.count(name) > 0) {
-    Regions new_region = records[name] & ~region;
+    const Regions new_region = records[name] & ~region;
     if (new_region == Regions::Nowhere) {
       records.erase(name);
     } else {
@@ -65,7 +74,7 @@ void updateAccessRecords(std::map<std::string, Regions>& records, const std::str
 
 const Options& GuardedOptions::get(Regions region) const {
 #if CHECKLEVEL >= 1
-  std::string name = options->str();
+  const std::string name = options->str();
   auto [permission, varname] = permissions->getHighestPermission(name, region);
   if (permission >= PermissionTypes::ReadIfSet) {
     if (permission == PermissionTypes::ReadIfSet && !options->isSet()) {
@@ -83,7 +92,7 @@ const Options& GuardedOptions::get(Regions region) const {
 
 Options& GuardedOptions::getWritable(Regions region) {
 #if CHECKLEVEL >= 1
-  std::string name = options->str();
+  const std::string name = options->str();
   auto [access, varname] = permissions->canAccess(name, PermissionTypes::Write, region);
   if (access) {
     updateAccessRecords(*unwritten_variables, varname, region);

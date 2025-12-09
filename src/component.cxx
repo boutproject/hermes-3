@@ -1,5 +1,13 @@
+#include <memory>
+#include <string>
+
+#include <bout/assert.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
 
 #include "../include/component.hxx"
+#include "../include/guarded_options.hxx"
+#include "../include/permissions.hxx"
 
 std::unique_ptr<Component> Component::create(const std::string &type,
                                              const std::string &name,
@@ -58,9 +66,9 @@ bool isSetFinal(const Options& option, const std::string& location) {
 }
 
 bool isSetFinal(const GuardedOptions & option, const std::string& location) {
-  bool set = option.isSet();
+  const bool set = option.isSet();
 #if CHECKLEVEL >= 1
-  PermissionTypes perm = option.getHighestPermission();
+  const PermissionTypes perm = option.getHighestPermission();
   if (perm >= PermissionTypes::Read
       or (perm == PermissionTypes::ReadIfSet and set)) {
     const Options& opt = option.get();
@@ -81,9 +89,9 @@ bool isSetFinalNoBoundary(const Options& option, const std::string& location) {
 }
 
 bool isSetFinalNoBoundary(const GuardedOptions & option, const std::string& location) {
-  bool set = option.isSet();
+  const bool set = option.isSet();
 #if CHECKLEVEL >= 1
-  PermissionTypes perm = option.getHighestPermission(Regions::Interior);
+  const PermissionTypes perm = option.getHighestPermission(Regions::Interior);
   if (perm >= PermissionTypes::Read or (perm == PermissionTypes::ReadIfSet and set)) {
     // Mark option as final inside the domain, but not in the boundary
     const_cast<Options&>(option.get(Regions::Interior)).attributes["final-domain"] =

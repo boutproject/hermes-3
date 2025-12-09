@@ -1,7 +1,11 @@
 #pragma once
 
+#include <map>
 #include <memory>
+#include <string>
+#include <utility>
 
+#include <bout/assert.hxx>
 #include <bout/options.hxx>
 
 #include "permissions.hxx"
@@ -82,6 +86,7 @@ private:
   GuardedOptions(Options* options, Permissions* permissions,
                  std::shared_ptr<std::map<std::string, Regions>> unread_vars,
                  std::shared_ptr<std::map<std::string, Regions>> unwritten_vars)
-      : options(options), permissions(std::move(permissions)), unread_variables(std::move(unread_vars)),
-        unwritten_variables(unwritten_vars) {}
+      : options(std::move(options)), permissions(std::move(permissions)),
+        unread_variables(std::move(unread_vars)),
+        unwritten_variables(std::move(unwritten_vars)) {}
 };
