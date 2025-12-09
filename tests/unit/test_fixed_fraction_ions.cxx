@@ -63,6 +63,7 @@ TEST_F(FixedFractionIonsTest, SingleIon) {
   options["test"]["fractions"] = "h @ 0.6";
     
   FixedFractionIons component("test", options, nullptr);
+  component.performAllSubstitutions({"e"});
 
   Options state;
   state["species"]["e"]["density"] = 1.4;
@@ -77,6 +78,7 @@ TEST_F(FixedFractionIonsTest, TwoIons) {
   options["test"]["fractions"] = "some_thing @ 0.4, ne @ 0.05";
     
   FixedFractionIons component("test", options, nullptr);
+  component.performAllSubstitutions({"e"});
 
   Options state;
   state["species"]["e"]["density"] = 1.4;

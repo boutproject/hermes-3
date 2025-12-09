@@ -43,6 +43,7 @@ TEST_F(AnomalousDiffusionTest, NoDiffusion) {
   state["species"]["h"]["density"] = N;
   
   // If D is not set, then the diffusion should not be calculated
+  component.performAllSubstitutions({"h"});
   component.transform(state);
 
   ASSERT_FALSE(state["species"]["h"].isSet("density_source"));
@@ -67,7 +68,8 @@ TEST_F(AnomalousDiffusionTest, ParticleDiffusion) {
   state["species"]["h"]["density"] =
     FieldFactory::get()->create3D("1 + y * (x - 0.5)", &options, mesh);
   state["species"]["h"]["AA"] = 1.0; // Atomic mass number
-  
+
+  component.performAllSubstitutions({"h"});
   component.transform(state);
 
   // Expect all sources to be set

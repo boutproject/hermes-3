@@ -42,6 +42,7 @@ TEST_F(FixedVelocityTest, SetValues) {
                      {"e", {{"velocity", 3}}}};
 
   FixedVelocity component("e", options, nullptr);
+  component.performAllSubstitutions({"e"});
 
   Options state = {{"species", {{"e", {{"AA", 2},
                                        {"density", 7}}}}}};

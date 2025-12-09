@@ -4,7 +4,9 @@
 #include "../include/quasineutral.hxx"
 
 Quasineutral::Quasineutral(std::string name, Options& alloptions, Solver* UNUSED(solver))
-    : Component({readWrite("species:{name}:{outputs}"),
+    : Component({readWrite(fmt::format("species:{}:AA", name)),
+                 readWrite(fmt::format("species:{}:charge", name)),
+                 readWrite(fmt::format("species:{}:density", name)),
                  // FIXME: These are only read if BOTH are set
                  readIfSet("species:{all_species}:charge"),
                  readIfSet("species:{all_species}:density", Regions::Interior)}),

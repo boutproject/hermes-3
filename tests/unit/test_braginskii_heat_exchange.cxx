@@ -36,7 +36,7 @@ TEST_F(BraginskiiHeatExchangeTest, OnlyElectrons) {
   state["species"]["e"]["AA"] = 1. / 1836;
   state["species"]["e"]["collision_frequencies"]["e_e_coll"] = 1.;
 
-  component.declareAllSpecies({"e"});
+  component.performAllSubstitutions({"e"});
   component.transform(state);
 
   // A species can't exchange heat with itself
@@ -69,7 +69,7 @@ TEST_F(BraginskiiHeatExchangeTest, TwoEqualTempSpeciesCharged) {
   state["species"]["s2"]["collision_frequencies"]["s2_s1_coll"] = 0.25;
 
   // Run calculations
-  component.declareAllSpecies({"s1", "s2"});
+  component.performAllSubstitutions({"s1", "s2"});
   component.transform(state);
   ASSERT_TRUE(state["species"]["s1"].isSet("energy_source"));
   ASSERT_TRUE(state["species"]["s2"].isSet("energy_source"));
@@ -110,7 +110,7 @@ TEST_F(BraginskiiHeatExchangeTest, TwoSpeciesCharged) {
   state["species"]["s2"]["temperature"] = 20;
 
   // Run calculations
-  component.declareAllSpecies({"s1", "s2"});
+  component.performAllSubstitutions({"s1", "s2"});
   component.transform(state);
 
   Field3D es1 = get<Field3D>(state["species"]["s1"]["energy_source"]);
@@ -152,7 +152,7 @@ TEST_F(BraginskiiHeatExchangeTest, DoubleCollisionRates) {
   state2["species"]["s2"]["collision_frequencies"]["s2_s1_coll"] = 1.0;
 
   // Run calculations
-  component.declareAllSpecies({"s1", "s2"});
+  component.performAllSubstitutions({"s1", "s2"});
   component.transform(state1);
   component.transform(state2);
 

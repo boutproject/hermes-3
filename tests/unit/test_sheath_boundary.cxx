@@ -52,7 +52,7 @@ TEST_F(SheathBoundaryTest, DontSetPotential) {
                     {"charge", Zi},
                     {"velocity", 0.0}}}}}};
 
-  component.declareAllSpecies({"e", "h+"});
+  component.performAllSubstitutions({"e", "h+"});
   component.transform(state);
   
   // Should have calculated, but not set potential
@@ -82,7 +82,7 @@ TEST_F(SheathBoundaryTest, CalculatePotential) {
                     {"charge", Zi},
                     {"velocity", 0.0}}}}}};
 
-  component.declareAllSpecies({"e", "h+"});
+  component.performAllSubstitutions({"e", "h+"});
   component.transform(state);
 
   // Should have calculated, but not set potential

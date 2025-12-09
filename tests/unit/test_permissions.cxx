@@ -314,31 +314,36 @@ TEST(PermissionsTests, TestSubstitute) {
       {{"species:{s1}:collision_frequencies:{s1}_{s2}_coll",
         {Regions::Nowhere, Regions::All, Regions::Nowhere, Regions::Nowhere}},
        readIfSet("d")});
+  Permissions example2 = example;
 
   example.setAccess(
       "{var}", {Regions::Nowhere, Regions::Nowhere, Regions::Interior, Regions::Nowhere});
 
-  example.substitute("s1", {"e", "d+"});
-  example.substitute("s2", {"e", "d+"});
+  example.substitute(
+      {{"s1", {"e", "d+"}}, {"s2", {"e", "d+"}}, {"var", {"a", "b", "c", "d"}}});
 
-  auto readable = example.getVariablesWithPermission(PermissionTypes::Read, false);
-  EXPECT_EQ(readable.size(), 5);
-  EXPECT_EQ(readable["{var}"], Regions::Interior);
+  auto readable = example.getVariablesWithPermission(PermissionTypes::Read);
+  EXPECT_EQ(readable.size(), 4);
   EXPECT_EQ(readable["species:e:collision_frequencies:e_e_coll"], Regions::All);
   EXPECT_EQ(readable["species:e:collision_frequencies:e_d+_coll"], Regions::All);
   EXPECT_EQ(readable["species:d+:collision_frequencies:d+_e_coll"], Regions::All);
   EXPECT_EQ(readable["species:d+:collision_frequencies:d+_d+_coll"], Regions::All);
-
-  example.substitute("var", {"a", "b", "c", "d"});
-
   auto writable = example.getVariablesWithPermission(PermissionTypes::Write);
   EXPECT_EQ(writable.size(), 3);
   EXPECT_EQ(writable["a"], Regions::Interior);
   EXPECT_EQ(writable["b"], Regions::Interior);
   EXPECT_EQ(writable["c"], Regions::Interior);
-
   EXPECT_EQ(example.getHighestPermission("d"),
             make_permission(PermissionTypes::ReadIfSet, "d"));
+  EXPECT_EQ(example.getVariablesWithPermission(PermissionTypes::ReadIfSet, false).size(),
+            8);
+  // Trying to perform substitutions that are not present should work fine.
+  example.substitute("something", {"one", "two", "three", "four"});
+  EXPECT_EQ(example.getVariablesWithPermission(PermissionTypes::ReadIfSet, false).size(),
+            8);
+
+  // Trying to perform incomplete substitutions will throw an exception;
+  EXPECT_THROW(example2.substitute("s1", {"e", "d+"}), BoutException);
 }
 
 TEST(PermissionsTests, TestIO) {

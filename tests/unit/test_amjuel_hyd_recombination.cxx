@@ -35,6 +35,7 @@ TEST_F(HydrogenRCTest, DensitySourceSigns) {
                   {"test", {{"type", "h+ + e -> h"}}}};
 
   AmjuelHydRecombinationIsotope<'h'> component("test", options, nullptr);
+  component.performAllSubstitutions({"h", "h+", "e"});
 
   Options state{
       {"species",

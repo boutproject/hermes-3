@@ -18,17 +18,16 @@ BraginskiiHeatExchange::BraginskiiHeatExchange(const std::string& name,
     // rates and temperatures
     : Component({readOnly("species:{all_species}:{input_vars}"),
                  readIfSet("species:{all_species}:{optional_vars}"),
-                 readWrite("species:{all_species}:{output_vars}")}) {
+                 readWrite("species:{all_species}:{output_vars}"),
+                 readWrite("species:{all_species}:collision_frequencies:{all_species}_{"
+                           "all_species2}_coll")}) {
   AUTO_TRACE();
   diagnose = alloptions[name]["diagnose"]
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
   substitutePermissions("input_vars", {"AA", "density"});
   // FIXME: We don't access the self-collision rate
-  substitutePermissions("optional_vars",
-                        {"charge",
-                         "collision_frequencies:{all_species}_{all_species2}_coll",
-                         "temperature"});
+  substitutePermissions("optional_vars", {"charge", "temperature"});
   substitutePermissions("output_vars", {"momentum_source", "energy_source"});
 }
 

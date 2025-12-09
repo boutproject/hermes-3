@@ -32,6 +32,7 @@ TEST_F(HydrogenCXTest, RateAt1eV) {
   Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
 
   HydrogenIsotopeChargeExchange<'h', 'h'> component("test", options, nullptr);
+  component.performAllSubstitutions({"h", "h+"});
 
   Options state{{"species",
                  {{"h",

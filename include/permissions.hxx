@@ -169,11 +169,38 @@ public:
   ///     });
   ///     example.substitute("name", {"d", "d+", "t", "t+", "he", "he+", "c", "c+", "e"});
   ///
-  /// Note that variable names which already have a permission set
-  /// will not be overwritten.
+  /// Variable names which already have a permission set will not be
+  /// overwritten. If there are any other labels present in variable
+  /// names then an exception will be thrown.
   ///
   void substitute(const std::string& label,
-                  const std::vector<std::string>& substitutions);
+                  const std::vector<std::string>& substitutions) {
+    substitute({{label, substitutions}});
+  }
+
+  /// Replace all placeholders in the names of variables stored in
+  /// this object. This is useful if you need to access the same
+  /// variable for multiple species. A cartesian product will be
+  /// performed on all substitutions in the argument. For example, the
+  /// following code gives permission to read the density and write
+  /// the temperature and pressure for every species.
+  ///
+  ///     Permissions example({
+  ///         {"species:{name}:density", {Regions::Nowhere, Regions::All,
+  ///         Regions::Nowhere, Regions::Nowhere}},
+  ///         {"species:{name}:{writable}", {Regions::Nowhere,
+  ///         Regions::Nowhere, Regions::All, Regions::Nowhere}},
+  ///     });
+  ///     example.substitute({
+  ///         {"name", {"d", "d+", "t", "t+", "he", "he+", "c", "c+", "e"}},
+  ///         {"writable", {"pressure", "temperature"}}});
+  ///
+  /// Variable names which already have a permission set will not be
+  /// overwritten. If there are any lables in variable names for which
+  /// a substitution has not been provided then an exception will be
+  /// raised.
+  ///
+  void substitute(const std::map<std::string, std::vector<std::string>>& substitutions);
 
   /// Check whether users are allowed to access this variable to the
   /// given permission level, in the given region. The second item

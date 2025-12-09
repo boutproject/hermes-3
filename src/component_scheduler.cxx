@@ -75,7 +75,7 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
   const SpeciesInformation species(electrons, neutrals, positive_ions, negative_ions);
     
   for (auto& component : components) {
-    component->declareAllSpecies(species);
+    component->performAllSubstitutions(species);
   }
 }
 

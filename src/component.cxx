@@ -32,23 +32,27 @@ void Component::transform(Options& state) {
 #endif
 }
 
-void Component::declareAllSpecies(const SpeciesInformation & info) {
-    state_variable_access.substitute("electrons", info.electrons);
-    state_variable_access.substitute("electrons2", info.electrons);
-    state_variable_access.substitute("neutrals", info.neutrals);
-    state_variable_access.substitute("neutrals2", info.neutrals);
-    state_variable_access.substitute("positive_ions", info.positive_ions);
-    state_variable_access.substitute("positive_ions2", info.positive_ions);
-    state_variable_access.substitute("negative_ions", info.negative_ions);
-    state_variable_access.substitute("negative_ions2", info.negative_ions);
-    state_variable_access.substitute("ions", info.ions);
-    state_variable_access.substitute("ions2", info.ions);
-    state_variable_access.substitute("charged", info.charged);
-    state_variable_access.substitute("charged", info.charged);
-    state_variable_access.substitute("non_electrons", info.non_electrons);
-    state_variable_access.substitute("non_electrons2", info.non_electrons);
-    state_variable_access.substitute("all_species", info.all_species);
-    state_variable_access.substitute("all_species2", info.all_species);
+void Component::performAllSubstitutions(const SpeciesInformation& info) {
+  // FIXME: doing all substitutions at once means that if any of these
+  // species substitutions are empty then no substitutions are
+  // performed.
+  registerSubstitution("electrons", info.electrons);
+  registerSubstitution("electrons2", info.electrons);
+  registerSubstitution("neutrals", info.neutrals);
+  registerSubstitution("neutrals2", info.neutrals);
+  registerSubstitution("positive_ions", info.positive_ions);
+  registerSubstitution("positive_ions2", info.positive_ions);
+  registerSubstitution("negative_ions", info.negative_ions);
+  registerSubstitution("negative_ions2", info.negative_ions);
+  registerSubstitution("ions", info.ions);
+  registerSubstitution("ions2", info.ions);
+  registerSubstitution("charged", info.charged);
+  registerSubstitution("charged2", info.charged);
+  registerSubstitution("non_electrons", info.non_electrons);
+  registerSubstitution("non_electrons2", info.non_electrons);
+  registerSubstitution("all_species", info.all_species);
+  registerSubstitution("all_species2", info.all_species);
+  state_variable_access.substitute(permission_substitutions);
 }
 
 constexpr decltype(ComponentFactory::type_name) ComponentFactory::type_name;

@@ -40,6 +40,7 @@ TEST_F(EvolveDensityTest, Transform) {
   EvolveDensity component("i", options, &solver);
 
   Options state;
+  component.performAllSubstitutions({"i"});
   component.transform(state);
 
   Options& species = state["species"]["i"];

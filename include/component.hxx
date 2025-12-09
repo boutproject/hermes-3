@@ -3,15 +3,6 @@
 #ifndef HERMES_COMPONENT_H
 #define HERMES_COMPONENT_H
 
-#include <bout/assert.hxx>
-#include <bout/bout_types.hxx>
-#include <bout/boutexception.hxx>
-#include <bout/field2d.hxx>
-#include <bout/field3d.hxx>
-#include <bout/generic_factory.hxx>
-#include <bout/options.hxx>
-#include <bout/unused.hxx>
-
 #include <cmath>
 #include <initializer_list>
 #include <map>
@@ -20,6 +11,16 @@
 #include <typeinfo>
 #include <utility>
 #include <vector>
+
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
+#include <bout/generic_factory.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
+#include <fmt/args.h>
 
 #include "guarded_options.hxx"
 #include "permissions.hxx"
@@ -116,8 +117,9 @@ struct Component {
                                            Options &options,  // Component settings: options[name] are specific to this component
                                            Solver *solver); // Time integration solver
 
-  /// Tell the component the name of all species in the simulation, by type. It
-  /// will use this information to substitute the following placeholders in `state_variable_access`:
+  /// Perform all the substitutions registered with this component. In addition,
+  /// the following substitutions will be done using the information on the
+  /// species names in the simulation:
   ///   - electrons (any electron species)
   ///   - electrons2 (same as above, used for cross-product)
   ///   - neutrals (species with no charge)
@@ -134,7 +136,10 @@ struct Component {
   ///   - non_electrons2 (same as above, used for cross-product)
   ///   - all_species (ions, neutrals, and electrons)
   ///   - all_species2 (same as above, used for cross-product)
-  void declareAllSpecies(const SpeciesInformation & info);
+  ///
+  /// Note that substitutions must be provied for *all* labels present
+  /// in the permissions data, or else an exception will be thrown.
+  void performAllSubstitutions(const SpeciesInformation& info);
 
 protected:
   /// Set the level of access needed by this component for a particular variable.
@@ -146,22 +151,36 @@ protected:
     setPermissions(info.name, info.rights);
   }
 
-  /// Replace a placeholder in the name of variables stored in the access control
-  /// information for this component.
+  /// Replace a substitutions to be performed on the placeholder in
+  /// the name of variables stored in the access control information
+  /// for this component. The substitution won't actually happen until
+  /// `performAllSubstitutions` is called. If you register the same
+  /// label more then once then an exception will be
+  /// thrown. Therefore, be careful not to use any of the built-in
+  /// labels that will be set by `performAllSubstitutions`.
   void substitutePermissions(const std::string& label,
                              const std::vector<std::string>& substitution) {
-    state_variable_access.substitute(label, substitution);
+    registerSubstitution(label, substitution);
   }
 
 private:
   /// Information on which state variables the transform method will read and write.
   Permissions state_variable_access;
+  std::map<std::string, std::vector<std::string>> permission_substitutions;
 
   /// Modify the given simulation state. All components must
   /// implement this function. It will only allow the reading
   /// from/writing to state variables with the appropriate permissiosn
   /// in `state_variable_access`.
   virtual void transform_impl(GuardedOptions &state) = 0;
+
+  void registerSubstitution(const std::string& label,
+                            const std::vector<std::string>& substitution) {
+    if (permission_substitutions.count(label) > 0) {
+      throw BoutException("Substitution with label {} already present", label);
+    }
+    permission_substitutions[label] = substitution;
+  }
 };
 
 ///////////////////////////////////////////////////////////////////

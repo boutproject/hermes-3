@@ -4,11 +4,13 @@
 #include <map>
 #include <ostream>
 #include <regex>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include <bout/boutexception.hxx>
+#include <fmt/args.h>
 #include <fmt/base.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -67,34 +69,50 @@ void Permissions::setAccess(const std::string& variable, const AccessRights& rig
   variable_permissions[variable] = applyLowerPermissions(rights);
 }
 
-std::string replaceAll(const std::string& str, const std::string& from,
-                       const std::string& to) {
-  std::string result = str;
-  if (from.empty()) {
-    return result;
+void Permissions::substitute(
+    const std::map<std::string, std::vector<std::string>>& substitutions) {
+  std::map<std::string, size_t> sizes;
+  const size_t num_labels = substitutions.size();
+  for (const auto& [label, replacements] : substitutions) {
+    const size_t m = replacements.size();
+    sizes[label] = m;
   }
-  size_t start_pos = 0;
-  while ((start_pos = result.find(from, start_pos)) != std::string::npos) {
-    result.replace(start_pos, from.length(), to);
-    start_pos +=
-        to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
-  }
-  return result;
-}
 
-void Permissions::substitute(const std::string& label,
-                             const std::vector<std::string>& substitutions) {
+  std::regex label_re("\\{([^}]+)\\}");
+
   for (auto it = variable_permissions.begin(); it != variable_permissions.end();) {
     const auto [varname, access] = *it;
-    const std::string pattern = "{" + label + "}";
-    if (varname.find(pattern) == std::string::npos) {
+    // Find all labels present in this variable name
+    auto labels_begin = std::sregex_iterator(varname.begin(), varname.end(), label_re);
+    auto labels_end = std::sregex_iterator();
+    std::set<std::string> labels_present;
+    size_t n = 1;
+    for (std::sregex_iterator re_it = labels_begin; re_it != labels_end; ++re_it) {
+      std::string label = re_it->str(1);
+      if (labels_present.count(label) == 0) {
+        if (sizes.count(label) == 0) {
+          throw BoutException("Label `{}` in variable name `{}` has no substitutions.",
+                              label, varname);
+        }
+        n *= sizes[label];
+        labels_present.insert(std::move(label));
+      }
+    }
+    if (labels_present.size() == 0) {
       it++;
       continue;
     }
     it = variable_permissions.erase(it);
-    for (const std::string& val : substitutions) {
-      const std::string newname = replaceAll(varname, pattern, val);
-      // Do not overwrite permissiosn that are already set
+    for (size_t i = 0; i < n; i++) {
+      fmt::dynamic_format_arg_store<fmt::format_context> store;
+      size_t j = i;
+      for (const auto& label : labels_present) {
+        const size_t m = sizes[label];
+        store.push_back(fmt::arg(label.c_str(), substitutions.at(label).at(j % m)));
+        j /= m;
+      }
+      const std::string newname = fmt::vformat(varname, store);
+      // Do not overwrite permissions that are already set
       if (variable_permissions.count(newname) == 0) {
         variable_permissions[newname] = access;
       }

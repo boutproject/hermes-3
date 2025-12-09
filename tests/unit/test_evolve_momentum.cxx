@@ -37,6 +37,7 @@ TEST_F(EvolveMomentumTest, Transform) {
   Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
                   {"i", {{"AA", 2.0}, {"charge", 1.0}}}};
   EvolveMomentum component("i", options, &solver);
+  component.performAllSubstitutions({"i"});
 
   Options state;
   // Exception if density is not set

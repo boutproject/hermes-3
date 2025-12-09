@@ -13,10 +13,7 @@
 struct SoundSpeed : public Component {
   SoundSpeed(std::string name, Options& alloptions, Solver*)
       : Component({readOnly("species:{all_species}:pressure", Regions::Interior),
-                   writeFinal("sound_speed"), writeFinal("fastest_wave"),
-                   readIfSet("species:{sp}:AA"),
-                   // FIXME: Only read if AA is set
-                   readIfSet("species:{sp}:{opt_inputs}", Regions::Interior)}) {
+                   writeFinal("sound_speed"), writeFinal("fastest_wave")}) {
     Options &options = alloptions[name];
     electron_dynamics = options["electron_dynamics"]
       .doc("Include electron sound speed?")
@@ -46,8 +43,16 @@ struct SoundSpeed : public Component {
       temperature_floor /= get<BoutReal>(alloptions["units"]["eV"]);
     }
 
-    substitutePermissions("sp",
-                          {electron_dynamics ? "{all_species}" : "{non_electrons}"});
+    if (electron_dynamics) {
+      setPermissions(readIfSet("species:{all_species}:AA"));
+      // FIXME: Only read if AA is set
+      setPermissions(readIfSet("species:{all_species}:{opt_inputs}", Regions::Interior));
+    } else {
+      setPermissions(readIfSet("species:{non_electrons}:AA"));
+      // FIXME: Only read if AA is set
+      setPermissions(
+          readIfSet("species:{all_species}:{non_electrons}", Regions::Interior));
+    }
     substitutePermissions("opt_inputs", {"density", "temperature"});
   }
 

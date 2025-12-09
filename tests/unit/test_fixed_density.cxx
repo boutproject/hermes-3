@@ -46,6 +46,7 @@ TEST_F(FixedDensityTest, SetValues) {
   FixedDensity component("e", options, nullptr);
 
   Options state;
+  component.performAllSubstitutions({"e"});
   component.transform(state);
   ASSERT_DOUBLE_EQ(2, state["species"]["e"]["charge"].as<BoutReal>());
   ASSERT_DOUBLE_EQ(3, state["species"]["e"]["AA"].as<BoutReal>());

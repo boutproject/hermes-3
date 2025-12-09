@@ -52,6 +52,7 @@ protected:
 
   // Subclasses must define a function to generate the test input state
   virtual Options generate_state() = 0;
+  virtual SpeciesInformation generate_species_info() const = 0;
 
   /**
    * @brief Util to generate an appropriate string to initialise a field with values that
@@ -171,6 +172,7 @@ protected:
 
     // Run reaction
     RTYPE component = RTYPE("test" + lbl, test_state, nullptr);
+    component.performAllSubstitutions(generate_species_info());
     component.transform(test_state);
 
     compare_child_values(ref_state["species"], test_state["species"], compare_all_values,
@@ -187,6 +189,7 @@ protected:
 
     // Run reaction
     RTYPE component = RTYPE("test" + lbl, state, nullptr);
+    component.performAllSubstitutions(generate_species_info());
     component.transform(state);
 
     // Write output state
@@ -262,6 +265,10 @@ protected:
         this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::z), &state,
         mesh);
     return state;
+  }
+
+  virtual SpeciesInformation generate_species_info() const override {
+    return {"e", this->heavy_reactant, this->heavy_product};
   }
 
   /// Very clunky way to extract the heavy species names in the absence of a
@@ -366,6 +373,10 @@ protected:
     }
 
     return state;
+  }
+
+  virtual SpeciesInformation generate_species_info() const override {
+    return {this->ion_sp_in, this->ion_sp_out};
   }
 };
 

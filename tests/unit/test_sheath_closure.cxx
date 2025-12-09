@@ -38,7 +38,7 @@ TEST_F(SheathClosureTest, NeedsDensity) {
   state["fields"]["phi"] = Field3D(2.0);
 
   // Needs electron density
-  component.declareAllSpecies({"e"});
+  component.performAllSubstitutions({"e"});
   ASSERT_THROW(component.transform(state), BoutException);
 }
 
@@ -52,7 +52,7 @@ TEST_F(SheathClosureTest, PhiAndDensity) {
   Options state;
   state["fields"]["phi"] = Field3D(2.0);
   state["species"]["e"]["density"] = Field3D(1.5);
-  component.declareAllSpecies({"e"});
+  component.performAllSubstitutions({"e"});
   component.transform(state);
 
   ASSERT_TRUE(state["fields"].isSet("DivJextra"));
@@ -71,7 +71,7 @@ TEST_F(SheathClosureTest, Temperature) {
   state["species"]["e"]["density"] = Field3D(1.5);
   state["species"]["e"]["temperature"] = Field3D(1.2);
 
-  component.declareAllSpecies({"e"});
+  component.performAllSubstitutions({"e"});
   component.transform(state);
 
   ASSERT_TRUE(state["fields"].isSet("DivJextra"));

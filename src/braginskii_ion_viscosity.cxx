@@ -35,7 +35,6 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
         readIfSet("species:{non_electrons}:pressure"),
         readIfSet("species:{non_electrons}:velocity"),
         readIfSet("species:{non_electrons}:charge"),
-        readIfSet("species:{non_electrons}:collision_frequencies:{coll_type}"),
         readWrite("species:{non_electrons}:momentum_source"),
         readWrite("species:{non_electrons}:energy_source"),
         readWrite("fields:DivJextra"),
@@ -117,17 +116,18 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
     bounce_frequency_R /= Lnorm;
   }
 
-  std::vector<std::string> coll_types;
   if (viscosity_collisions_mode == "braginskii") {
-    coll_types.push_back("{non_electrons}_{non_electrons}_coll");
+    setPermissions(readIfSet("species:{non_electrons}:collision_frequencies:{non_"
+                             "electrons}_{non_electrons}_coll"));
   } else if (viscosity_collisions_mode == "multispecies") {
-    coll_types.push_back("{non_electrons}_{all_species}_coll");
-    coll_types.push_back("{non_electrons}_{all_species}_cx");
+    setPermissions(readIfSet("species:{non_electrons}:collision_frequencies:{non_"
+                             "electrons}_{all_species}_coll"));
+    setPermissions(readIfSet("species:{non_electrons}:collision_frequencies:{non_"
+                             "electrons}_{all_species}_cx"));
   }
   if (perpendicular) {
     setPermissions(readOnly("fields:phi"));
   }
-  substitutePermissions("coll_type", coll_types);
 }
 
 void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
