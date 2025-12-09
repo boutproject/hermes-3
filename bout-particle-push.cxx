@@ -488,14 +488,10 @@ int main(int argc, char** argv) {
   PetscViewerDestroy(&viewer);
   output << "Finished DMPlex creation and diagnostic \n";
   output << "Begin particle push \n";
-  // get data from BOUT for forces in particle push
-  Field2D phi{bout_mesh};
-  Field2D ex{bout_mesh};
-  Field2D ey{bout_mesh};
+  // get data from BOUT.inp to assign particle weights as a fn of x,y
   auto& opt = Options::root();
-  phi = opt["mesh"]["phi"].as<Field2D>();
-  ex = opt["mesh"]["ex"].as<Field2D>();
-  ey = opt["mesh"]["ey"].as<Field2D>();
+  Field2D particle_weights{bout_mesh};
+  particle_weights = opt["mesh"]["particle_weights"].as<Field2D>();
 
   /*
    *
@@ -546,7 +542,6 @@ int main(int argc, char** argv) {
         ndim);
     ParticleSpec additional_props{
       ParticleProp(Sym<REAL>("CHARGE"), 1),
-      ParticleProp(Sym<REAL>("FORCE"), ndim),
       ParticleProp(Sym<REAL>("TSP"), 2)};
     particle_spec_builder.add_particle_spec(additional_props);
     ParticleSpec particle_spec = particle_spec_builder.get_particle_spec();
@@ -579,10 +574,6 @@ int main(int argc, char** argv) {
         initial_distribution[Sym<REAL>("POSITION")][px][dimx] = positions[dimx][px];
         initial_distribution[Sym<REAL>("VELOCITY")][px][dimx] = velocities[dimx][px];
       }
-      // initial_distribution[Sym<REAL>("F")][px][0] = ex_cellorder(cells.at(px));
-      // initial_distribution[Sym<REAL>("F")][px][1] = ey_cellorder(cells.at(px));
-      initial_distribution[Sym<REAL>("FORCE")][px][0] = 0.0;
-      initial_distribution[Sym<REAL>("FORCE")][px][1] = 0.0;
       initial_distribution[Sym<REAL>("ION_DENSITY")][px][0] = 1.0;
       initial_distribution[Sym<REAL>("ION_SOURCE_DENSITY")][px][0] = 1.0;
       initial_distribution[Sym<REAL>("ION_SOURCE_ENERGY")][px][0] = 0.5;
@@ -595,7 +586,7 @@ int main(int argc, char** argv) {
       }
       initial_distribution[Sym<INT>("CELL_ID")][px][0] = cells.at(px);
       initial_distribution[Sym<INT>("ID")][px][0] = px + id_offset;
-      initial_distribution[Sym<REAL>("WEIGHT")][px][0] = 1.0 + px;
+      initial_distribution[Sym<REAL>("WEIGHT")][px][0] = 1.0;
       initial_distribution[Sym<REAL>("CHARGE")][px][0] = 1.0;
     }
     // Add the new particles to the particle group
@@ -633,23 +624,19 @@ int main(int argc, char** argv) {
         ReactionController(parent_transforms, child_transforms);
     // add ionisation to the controller
     reaction_controller.add_reaction(std::make_shared<decltype(ionisation_reaction)>(ionisation_reaction));
-    // set F from a field from BOUT
-    std::vector<REAL> h_project2(num_cells_owned * 2);
-    // h_project2.reserve(num_cells_owned * 2);
-    // this call should allocate h_project2
-    // dg0->set_dofs(2, h_project2);
+    // set weights from a Field2D from BOUT
+    std::vector<REAL> h_project1(num_cells_owned);
     PetscInt ixy = 0;
     for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
       for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
-        h_project2.at(2 * ixy) = ex(ix, iy);
-        h_project2.at(2 * ixy + 1) = ey(ix, iy);
+        h_project1.at(ixy) = particle_weights(ix, iy);
         ixy++;
       }
     }
     // now copy the data to internal variables
-    dg0->set_dofs(2, h_project2);
-    // set the data from internal variables into F
-    dg0->evaluate(A_particle_group, Sym<REAL>("FORCE"));
+    dg0->set_dofs(1, h_project1);
+    // set the data from internal variables into the weights
+    dg0->evaluate(A_particle_group, Sym<REAL>("WEIGHT"));
     // Create the boundary interaction objects
     std::map<PetscInt, std::vector<PetscInt>> boundary_groups;
     // boundary_groups[1] = {100, 200};
@@ -680,22 +667,18 @@ int main(int argc, char** argv) {
         [=](ParticleSubGroupSharedPtr iteration_set) -> void {
       particle_loop(
           "euler_advection", iteration_set,
-          [=](auto FORCE, auto VELOCITY, auto POSITION, auto TSP) {
+          [=](auto VELOCITY, auto POSITION, auto TSP) {
             const REAL dt_left = dt - TSP.at(0);
             if (dt_left > 0.0) {
               POSITION.at(0) += dt_left * VELOCITY.at(0);
               POSITION.at(1) += dt_left * VELOCITY.at(1);
-              // update V from fixed F
-              // n.b. a different advection scheme should be
-              // used for more than 1st order accuracy
-              VELOCITY.at(0) += dt_left * FORCE.at(0);
-              VELOCITY.at(1) += dt_left * FORCE.at(1);
               TSP.at(0) = dt;
               TSP.at(1) = dt_left;
             }
           },
-          Access::read(Sym<REAL>("FORCE")), Access::write(Sym<REAL>("VELOCITY")),
-          Access::write(Sym<REAL>("POSITION")), Access::write(Sym<REAL>("TSP")))
+          Access::read(Sym<REAL>("VELOCITY")),
+          Access::write(Sym<REAL>("POSITION")),
+          Access::write(Sym<REAL>("TSP")))
           ->execute();
     };
     auto lambda_pre_advection = [&](auto aa) { b2d->pre_integration(aa); };
@@ -738,7 +721,7 @@ int main(int argc, char** argv) {
 
     // get a density by projecting the particle property CHARGE to the bout_mesh
     dg0->project(A_particle_group, Sym<REAL>("CHARGE"));
-    std::vector<REAL> h_project1;
+    // std::vector<REAL> h_project1;
     dg0->get_dofs(1, h_project1);
     PetscInt ic = 0;
     for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
