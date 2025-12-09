@@ -71,16 +71,6 @@ std::string replaceAll(const std::string& str, const std::string& from,
   return result;
 }
 
-void Permissions::printAllPermissions() const {
-  for (const auto& [varname, perms] : variable_permissions) {
-    fmt::print("{}", varname);
-    for (int i = 0; i < static_cast<int>(PermissionTypes::END); i++) {
-      fmt::print(" {}", static_cast<int>(perms[i]));
-    }
-    fmt::print("\n");
-  }
-}
-
 void Permissions::substitute(const std::string& label,
                              const std::vector<std::string>& substitutions) {
   for (auto it = variable_permissions.begin(); it != variable_permissions.end();) {
@@ -179,18 +169,14 @@ std::string Permissions::regionNames(const Regions regions) {
   return fmt::format("{}", fmt::join(regions_present, ", "));
 }
 
+auto fmt::formatter<Permissions>::format(const Permissions& p, format_context& ctx) const
+    -> format_context::iterator {
+  return formatter<std::map<std::string, Permissions::AccessRights>>::format(
+      p.variable_permissions, ctx);
+}
+
 std::ostream& operator<<(std::ostream& os, const Permissions& permissions) {
-  os << std::string("{");
-  bool first = true;
-  for (const auto& [varname, rights] : permissions.variable_permissions) {
-    if (!first) {
-      os << std::string(",");
-    } else {
-      first = false;
-    }
-    os << fmt::format("{}:{}", varname, rights);
-  }
-  os << std::string("}");
+  os << fmt::format("{}", permissions);
   return os;
 }
 
@@ -212,7 +198,7 @@ std::istream& operator>>(std::istream& is, Permissions& permissions) {
     rights_patterns.push_back("\\s*(\\d+)\\s*");
   }
   const std::regex re(
-      fmt::format("\\s*([:\\w]+)\\s*:\\s*\\[{}\\]", fmt::join(rights_patterns, ",")));
+      fmt::format("\\s*\"([^\"]+)\"\\s*:\\s*\\[{}\\]", fmt::join(rights_patterns, ",")));
   auto items_begin = std::sregex_iterator(object.begin(), object.end(), re);
   auto items_end = std::sregex_iterator();
 
