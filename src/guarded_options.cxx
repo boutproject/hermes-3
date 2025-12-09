@@ -54,7 +54,7 @@ std::map<std::string, GuardedOptions> GuardedOptions::getChildren() {
 void updateAccessRecords(std::map<std::string, Regions>& records, const std::string& name,
                          Regions region) {
   if (records.count(name) > 0) {
-    Regions new_region = static_cast<Regions>(records[name] & ~region);
+    Regions new_region = records[name] & ~region;
     if (new_region == Regions::Nowhere) {
       records.erase(name);
     } else {
