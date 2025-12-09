@@ -60,7 +60,7 @@ struct SimpleConduction : public Component {
       .withDefault<bool>(false);
 
     if (density <= 0.0) {
-      setAccess(readOnly("species:{name}:density", Regions::Interior));
+      setPermissions(readOnly("species:{name}:density", Regions::Interior));
     }
     substitutePermissions("name", {name});
   }

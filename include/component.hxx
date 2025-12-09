@@ -127,11 +127,12 @@ struct Component {
 
 protected:
   /// Set the level of access needed by this component for a particular variable.
-  void setAccess(const std::string& variable, const Permissions::AccessRights& rights) {
+  void setPermissions(const std::string& variable,
+                      const Permissions::AccessRights& rights) {
     state_variable_access.setAccess(variable, rights);
   }
-  void setAccess(const Permissions::VarRights& info) {
-    setAccess(info.name, info.rights);
+  void setPermissions(const Permissions::VarRights& info) {
+    setPermissions(info.name, info.rights);
   }
 
   /// Replace a placeholder in the name of variables stored in the access control

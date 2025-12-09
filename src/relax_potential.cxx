@@ -46,14 +46,14 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 
   if (diamagnetic) {
     // FIXME: These will only be read if BOTH charge and pressure are set
-    setAccess(readIfSet("species:{charged}:pressure", Regions::Interior));
-    setAccess(readIfSet("species:{all_species}:charge"));
+    setPermissions(readIfSet("species:{charged}:pressure", Regions::Interior));
+    setPermissions(readIfSet("species:{all_species}:charge"));
     // FIXME: The weay transform_impl is currently written,
     // energy_source is set for neutral species with an explicit
     // charge declared as 0 if diamagnetic_polarisation == true. I
     // suspect that's a mistake though.
-    setAccess(readWrite("species:{all_species}:energy_source"));
-    setAccess(readWrite("fields:DivJdia"));
+    setPermissions(readWrite("species:{all_species}:energy_source"));
+    setPermissions(readWrite("fields:DivJdia"));
 
     // Read curvature vector
     try {
