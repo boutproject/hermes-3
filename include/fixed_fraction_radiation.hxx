@@ -372,6 +372,8 @@ struct FixedFractionRadiation : public Component {
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
+
+    substitutePermissions("inputs", {"density", "temperature"});
   }
 
   void outputVars(Options& state) override {
