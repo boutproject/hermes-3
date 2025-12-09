@@ -532,16 +532,27 @@ int main(int argc, char** argv) {
 
     // create a Reactions particle spec
     auto particle_spec_builder = ParticleSpecBuilder(ndim);
+    auto electron_species = Species("ELECTRON");
+    auto main_species = Species("ION", 1.0, 0.0, 0);
+    std::vector<Species> fluid_species = {electron_species, main_species};
+    particle_spec_builder.add_particle_prop(Properties<REAL>(
+        fluid_species, std::vector<int>{default_properties.temperature,
+                                        default_properties.density,
+                                        default_properties.source_energy,
+                                        default_properties.source_density}));
+    particle_spec_builder.add_particle_prop(
+        Properties<REAL>(fluid_species,
+                        std::vector<int>{default_properties.source_momentum}),
+        ndim);
     ParticleSpec additional_props{
       ParticleProp(Sym<REAL>("CHARGE"), 1),
       ParticleProp(Sym<REAL>("FORCE"), ndim),
       ParticleProp(Sym<REAL>("TSP"), 2)};
-
     particle_spec_builder.add_particle_spec(additional_props);
     ParticleSpec particle_spec = particle_spec_builder.get_particle_spec();
 
     // Create a Particle group with our specied particle properties.
-    auto A = std::make_shared<ParticleGroup>(domain, particle_spec, sycl_target);
+    auto A_particle_group = std::make_shared<ParticleGroup>(domain, particle_spec, sycl_target);
 
     // Create some particle data
 
@@ -572,15 +583,55 @@ int main(int argc, char** argv) {
       // initial_distribution[Sym<REAL>("F")][px][1] = ey_cellorder(cells.at(px));
       initial_distribution[Sym<REAL>("FORCE")][px][0] = 0.0;
       initial_distribution[Sym<REAL>("FORCE")][px][1] = 0.0;
+      initial_distribution[Sym<REAL>("ION_DENSITY")][px][0] = 1.0;
+      initial_distribution[Sym<REAL>("ION_SOURCE_DENSITY")][px][0] = 1.0;
+      initial_distribution[Sym<REAL>("ION_SOURCE_ENERGY")][px][0] = 0.5;
+      initial_distribution[Sym<REAL>("ELECTRON_DENSITY")][px][0] = 1.0;
+      initial_distribution[Sym<REAL>("ELECTRON_SOURCE_DENSITY")][px][0] = 1.0;
+      initial_distribution[Sym<REAL>("ELECTRON_SOURCE_ENERGY")][px][0] = 0.5;
+      for (int dimx = 0; dimx < ndim; dimx++) {
+        initial_distribution[Sym<REAL>("ION_SOURCE_MOMENTUM")][px][dimx] = 0.0;
+        initial_distribution[Sym<REAL>("ELECTRON_SOURCE_MOMENTUM")][px][dimx] = 0.0;
+      }
       initial_distribution[Sym<INT>("CELL_ID")][px][0] = cells.at(px);
       initial_distribution[Sym<INT>("ID")][px][0] = px + id_offset;
       initial_distribution[Sym<REAL>("CHARGE")][px][0] = 1.0;
     }
     // Add the new particles to the particle group
-    A->add_particles_local(initial_distribution);
+    A_particle_group->add_particles_local(initial_distribution);
     // make pointer to projection object
     auto dg0 = std::make_shared<PetscInterface::DMPlexProjectEvaluateDG>(
         neso_mesh, sycl_target, "DG", 0);
+
+    auto test_data = FixedRateData(1.0);
+    main_species.set_id(0);
+    auto ionisation_reaction = ElectronImpactIonisation<FixedRateData, FixedRateData>(
+        A_particle_group->sycl_target, test_data, test_data, main_species,
+        electron_species);
+
+    // Reaction controllers
+    REAL remove_threshold=1.0e-10;
+    REAL merge_threshold=1.0e-2;
+
+    auto remove_wrapper = std::make_shared<TransformationWrapper>(
+      std::vector<std::shared_ptr<MarkingStrategy>>{
+          make_marking_strategy<ComparisonMarkerSingle<REAL, LessThanComp>>(
+              Sym<REAL>("WEIGHT"), remove_threshold)},
+      std::dynamic_pointer_cast<TransformationStrategy>(std::make_shared<SimpleRemovalTransformationStrategy>()));
+
+    auto merge_wrapper = std::make_shared<TransformationWrapper>(
+      std::vector<std::shared_ptr<MarkingStrategy>>{
+          make_marking_strategy<ComparisonMarkerSingle<REAL, LessThanComp>>(
+              Sym<REAL>("WEIGHT"), merge_threshold)},
+      make_transformation_strategy<MergeTransformationStrategy<ndim>>());
+
+    auto child_transforms = std::vector{remove_wrapper, merge_wrapper};
+    std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms = child_transforms;
+
+    auto reaction_controller =
+        ReactionController(parent_transforms, child_transforms);
+    // add ionisation to the controller
+    reaction_controller.add_reaction(std::make_shared<decltype(ionisation_reaction)>(ionisation_reaction));
     // set F from a field from BOUT
     std::vector<REAL> h_project2(num_cells_owned * 2);
     // h_project2.reserve(num_cells_owned * 2);
@@ -597,7 +648,7 @@ int main(int argc, char** argv) {
     // now copy the data to internal variables
     dg0->set_dofs(2, h_project2);
     // set the data from internal variables into F
-    dg0->evaluate(A, Sym<REAL>("FORCE"));
+    dg0->evaluate(A_particle_group, Sym<REAL>("FORCE"));
     // Create the boundary interaction objects
     std::map<PetscInt, std::vector<PetscInt>> boundary_groups;
     // boundary_groups[1] = {100, 200};
@@ -681,11 +732,11 @@ int main(int argc, char** argv) {
     //   output << "\n";
     // }
     // uncomment to write a trajectory
-    H5Part h5part("traj_reflection_dmplex_example.h5part", A, Sym<REAL>("POSITION"),
+    H5Part h5part("traj_reflection_dmplex_example.h5part", A_particle_group, Sym<REAL>("POSITION"),
                   Sym<REAL>("VELOCITY"));
 
     // get a density by projecting the particle property CHARGE to the bout_mesh
-    dg0->project(A, Sym<REAL>("CHARGE"));
+    dg0->project(A_particle_group, Sym<REAL>("CHARGE"));
     std::vector<REAL> h_project1;
     dg0->get_dofs(1, h_project1);
     PetscInt ic = 0;
@@ -720,9 +771,11 @@ int main(int argc, char** argv) {
     for (int stepx = 0; stepx < nsteps; stepx++) {
       // nprint("step:", stepx);
       output << "step:" << std::to_string(stepx) << std::endl;
-      A->hybrid_move();
-      A->cell_move();
-      lambda_apply_timestep(static_particle_sub_group(A));
+      A_particle_group->hybrid_move();
+      A_particle_group->cell_move();
+      lambda_apply_timestep(static_particle_sub_group(A_particle_group));
+      // apply reactions
+      reaction_controller.apply(A_particle_group, dt, ControllerMode::standard_mode);
 
       // uncomment to write a trajectory
       h5part.write();
