@@ -1,9 +1,19 @@
+#include <cstddef>
+#include <initializer_list>
+#include <istream>
+#include <map>
+#include <ostream>
 #include <regex>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <bout/boutexception.hxx>
+#include <fmt/base.h>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include "../include/permissions.hxx"
-#include "bout/boutexception.hxx"
-#include <fmt/core.h>
-#include <fmt/ranges.h>
 
 // TODO: It might be useful to add an optional condition which must be
 // met for conditions to apply. So a variable is only read or written
@@ -60,8 +70,9 @@ void Permissions::setAccess(const std::string& variable, const AccessRights& rig
 std::string replaceAll(const std::string& str, const std::string& from,
                        const std::string& to) {
   std::string result = str;
-  if (from.empty())
+  if (from.empty()) {
     return result;
+  }
   size_t start_pos = 0;
   while ((start_pos = result.find(from, start_pos)) != std::string::npos) {
     result.replace(start_pos, from.length(), to);
@@ -116,15 +127,15 @@ std::pair<bool, std::string> Permissions::canAccess(const std::string& variable,
   auto [match_name, match_rights] = bestMatchRights(variable);
   if ((match_rights[static_cast<size_t>(permission)] & region) == region) {
     return {true, match_name};
-  } else {
-    return {false, ""};
   }
+  return {false, ""};
 }
 
 std::pair<PermissionTypes, std::string>
 Permissions::getHighestPermission(const std::string& variable, Regions region) const {
-  if (region == Regions::Nowhere)
+  if (region == Regions::Nowhere) {
     return {PermissionTypes::None, ""};
+  }
   auto [varname, rights] = bestMatchRights(variable);
   size_t i = static_cast<int>(PermissionTypes::ReadIfSet);
   while (i < static_cast<size_t>(PermissionTypes::END) and (rights[i] & region) == region) {
@@ -145,14 +156,16 @@ Permissions::getVariablesWithPermission(PermissionTypes permission,
     for (const auto& [varname, rights] : variable_permissions) {
       auto perm_in_regions = rights[static_cast<size_t>(permission)]
                              & ~rights[static_cast<size_t>(permission) + 1];
-      if (perm_in_regions != Regions::Nowhere)
+      if (perm_in_regions != Regions::Nowhere) {
         result.emplace(varname, perm_in_regions);
+      }
     }
   } else {
     for (const auto& [varname, rights] : variable_permissions) {
       auto regions = rights[static_cast<size_t>(permission)];
-      if (regions != Regions::Nowhere)
+      if (regions != Regions::Nowhere) {
         result.emplace(varname, regions);
+      }
     }
   }
   return result;
@@ -180,7 +193,8 @@ std::ostream& operator<<(std::ostream& os, const Permissions& permissions) {
 }
 
 std::istream& operator>>(std::istream& is, Permissions& permissions) {
-  std::string tmp, object;
+  std::string tmp;
+  std::string object;
   std::getline(is, tmp, '{');
   if (is.eof()) {
     throw BoutException("Error parsing Permissions data; no opening bracket.");
@@ -202,10 +216,10 @@ std::istream& operator>>(std::istream& is, Permissions& permissions) {
   auto items_end = std::sregex_iterator();
 
   for (std::sregex_iterator i = items_begin; i != items_end; ++i) {
-    std::smatch item = *i;
+    const std::smatch item = *i;
     Permissions::AccessRights rights;
     for (size_t i = 0; i < static_cast<size_t>(PermissionTypes::END); i++) {
-      std::string val = item[2 + i];
+      const std::string val = item[2 + i];
       rights[i] = static_cast<Regions>(std::stoi(val));
     }
     permissions.setAccess(item[1], rights);

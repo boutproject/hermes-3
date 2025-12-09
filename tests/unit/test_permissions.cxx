@@ -1,4 +1,9 @@
-#include "bout/boutexception.hxx"
+#include <map>
+#include <sstream>
+#include <string>
+#include <utility>
+
+#include <bout/boutexception.hxx>
 #include "gtest/gtest.h"
 
 #include "../include/permissions.hxx"
@@ -7,7 +12,7 @@ auto make_access = std::make_pair<bool, std::string>;
 auto make_permission = std::make_pair<PermissionTypes, std::string>;
 
 TEST(PermissionsTests, TestCanAccess) {
-  Permissions example({
+  const Permissions example({
       readIfSet("species:he:charge"),
       readOnly("species:he:density"),
       // Read and write permissions for pressure in the interior region
@@ -102,7 +107,7 @@ TEST(PermissionsTests, TestCanAccess) {
 }
 
 TEST(PermissionsTests, TestGetHighestPermission) {
-  Permissions example({
+  const Permissions example({
       {"species:he:charge",
        {Regions::All, Regions::Nowhere, Regions::Nowhere, Regions::Nowhere}},
       {"species:he:density",
@@ -257,7 +262,7 @@ TEST(PermissionsTests, TestSetAccess) {
 }
 
 TEST(PermissionsTests, TestGetVariablesWithPermissions) {
-  Permissions example(
+  const Permissions example(
       {{"species:he:density",
         {Regions::Nowhere, Regions::All, Regions::Nowhere, Regions::Boundaries}},
        // Read and write permissions for pressure in the interior region
@@ -337,11 +342,15 @@ TEST(PermissionsTests, TestSubstitute) {
 }
 
 TEST(PermissionsTests, TestIO) {
-  Permissions empty({}), single({readOnly("test")}),
-      multiple({readIfSet("a", Regions::Interior), writeBoundary("b"), readWrite("c:d")}),
-      new_perm;
+  const Permissions empty({});
+  const Permissions single({readOnly("test")});
+  const Permissions multiple(
+      {readIfSet("a", Regions::Interior), writeBoundary("b"), readWrite("c:d")});
+  Permissions new_perm;
 
-  std::stringstream ss1, ss2, ss3;
+  std::stringstream ss1;
+  std::stringstream ss2;
+  std::stringstream ss3;
 
   ss1 << empty;
   ss1 >> new_perm;

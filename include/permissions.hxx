@@ -1,10 +1,15 @@
 #pragma once
 #include <array>
+#include <cstddef>
 #include <initializer_list>
+#include <istream>
 #include <map>
+#include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include <fmt/base.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
@@ -248,28 +253,32 @@ struct fmt::formatter<Permissions>
 /// variable should have ReadIfSet permissions in the specified regions.
 inline Permissions::VarRights readIfSet(std::string varname,
                                         Regions region = Regions::All) {
-  return {varname, {region, Regions::Nowhere, Regions::Nowhere, Regions::Nowhere}};
+  return {std::move(varname),
+          {region, Regions::Nowhere, Regions::Nowhere, Regions::Nowhere}};
 }
 
 /// Convenience function to return an object expressing that the
 /// variable should have Read permissions in the specified regions.
 inline Permissions::VarRights readOnly(std::string varname,
                                        Regions region = Regions::All) {
-  return {varname, {Regions::Nowhere, region, Regions::Nowhere, Regions::Nowhere}};
+  return {std::move(varname),
+          {Regions::Nowhere, region, Regions::Nowhere, Regions::Nowhere}};
 }
 
 /// Convenience function to return an object expressing that the
 /// variable should have Write permissions in the specified regions.
 inline Permissions::VarRights readWrite(std::string varname,
                                         Regions region = Regions::All) {
-  return {varname, {Regions::Nowhere, Regions::Nowhere, region, Regions::Nowhere}};
+  return {std::move(varname),
+          {Regions::Nowhere, Regions::Nowhere, region, Regions::Nowhere}};
 }
 
 /// Convenience function to return an object expressing that the
 /// variable should have Final permissions in the specified regions.
 inline Permissions::VarRights writeFinal(std::string varname,
                                          Regions region = Regions::All) {
-  return {varname, {Regions::Nowhere, Regions::Nowhere, Regions::Nowhere, region}};
+  return {std::move(varname),
+          {Regions::Nowhere, Regions::Nowhere, Regions::Nowhere, region}};
 }
 
 /// Convenience function to return an object expressing that the
@@ -277,7 +286,7 @@ inline Permissions::VarRights writeFinal(std::string varname,
 /// will have Read permissions in the interior, as this is normally
 /// required to set the boundaries correctly.
 inline Permissions::VarRights writeBoundary(std::string varname) {
-  return {varname,
+  return {std::move(varname),
           {Regions::Nowhere, Regions::Interior, Regions::Nowhere, Regions::Boundaries}};
 }
 
@@ -286,7 +295,7 @@ inline Permissions::VarRights writeBoundary(std::string varname) {
 /// will have Read permissions in the interior if the interior is
 /// already set.
 inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
-  return {varname,
+  return {std::move(varname),
           {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}};
 }
 

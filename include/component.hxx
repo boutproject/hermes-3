@@ -3,12 +3,23 @@
 #ifndef HERMES_COMPONENT_H
 #define HERMES_COMPONENT_H
 
-#include <bout/options.hxx>
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
 #include <bout/generic_factory.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
 
+#include <cmath>
+#include <initializer_list>
 #include <map>
-#include <string>
 #include <memory>
+#include <string>
+#include <typeinfo>
+#include <utility>
+#include <vector>
 
 #include "guarded_options.hxx"
 #include "permissions.hxx"
@@ -31,7 +42,7 @@ struct SpeciesInformation {
     for (auto& sp : species) {
       // FIXME: identifySpecies only identifies positive ions
       // FIXME: identifySpecies has no concept of ebeam
-      SpeciesType type = identifySpeciesType(sp);
+      const SpeciesType type = identifySpeciesType(sp);
       if (type == SpeciesType::electron) {
         electrons.push_back(sp);
       } else if (type == SpeciesType::ion) {
@@ -512,11 +523,11 @@ inline void set_with_attrs(Options& option, Field3D value, std::initializer_list
 }
 template<>
 inline void set_with_attrs(GuardedOptions & option, Field3D value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
-  set_with_attrs(option.getWritable(), value, attrs);
+  set_with_attrs(option.getWritable(), std::move(value), attrs);
 }
 template<>
 inline void set_with_attrs(GuardedOptions && option, Field3D value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
-  set_with_attrs(option.getWritable(), value, attrs);
+  set_with_attrs(option.getWritable(), std::move(value), attrs);
 }
 #endif
 

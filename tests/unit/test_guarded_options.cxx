@@ -1,5 +1,12 @@
-#include "../include/guarded_options.hxx"
+#include <map>
+#include <string>
+
+#include <bout/boutexception.hxx>
+#include <bout/options.hxx>
 #include "gtest/gtest.h"
+
+#include "../include/guarded_options.hxx"
+#include "../include/permissions.hxx"
 
 class GuardedOptionsTests : public testing::Test {
 protected:
@@ -129,19 +136,20 @@ TEST_F(GuardedOptionsTests, TestGetWritableException) {
 }
 
 TEST_F(GuardedOptionsTests, TestUnreadItems) {
-  std::map<std::string, Regions> expected1 = {{"species:he:charge", Regions::All},
-                                              {"species:he:density", Regions::All},
-                                              {"species:he:velocity",
-                                               Regions::Boundaries},
-                                              {"species:d", Regions::All},
-                                              {"unused:option", Regions::All}},
-                                 expected2 = {{"species:he:charge", Regions::All},
-                                              {"species:he:density", Regions::Boundaries},
-                                              {"species:he:velocity",
-                                               Regions::Boundaries},
-                                              {"species:d", Regions::All},
-                                              {"unused:option", Regions::All}},
-                                 expected3 = {{"species:d", Regions::All}}, expected4;
+  const std::map<std::string, Regions> expected1 = {
+      {"species:he:charge", Regions::All},
+      {"species:he:density", Regions::All},
+      {"species:he:velocity", Regions::Boundaries},
+      {"species:d", Regions::All},
+      {"unused:option", Regions::All}};
+  const std::map<std::string, Regions> expected2 = {
+      {"species:he:charge", Regions::All},
+      {"species:he:density", Regions::Boundaries},
+      {"species:he:velocity", Regions::Boundaries},
+      {"species:d", Regions::All},
+      {"unused:option", Regions::All}};
+  const std::map<std::string, Regions> expected3 = {{"species:d", Regions::All}};
+  const std::map<std::string, Regions> expected4;
 
   EXPECT_EQ(guarded_opts.unreadItems(), expected1);
 
@@ -162,16 +170,15 @@ TEST_F(GuardedOptionsTests, TestUnreadItems) {
 }
 
 TEST_F(GuardedOptionsTests, TestUnwrittenItems) {
-  std::map<std::string, Regions> expected1 = {{"species:he:pressure", Regions::Interior},
-                                              {"species:he:collision_frequency",
-                                               Regions::All},
-                                              {"species:d:pressure", Regions::Interior},
-                                              {"species:d:collision_frequencies",
-                                               Regions::Boundaries}},
-                                 expected2 = {{"species:he:collision_frequency",
-                                               Regions::All},
-                                              {"species:d:pressure", Regions::Interior}},
-                                 expected3;
+  const std::map<std::string, Regions> expected1 = {
+      {"species:he:pressure", Regions::Interior},
+      {"species:he:collision_frequency", Regions::All},
+      {"species:d:pressure", Regions::Interior},
+      {"species:d:collision_frequencies", Regions::Boundaries}};
+  const std::map<std::string, Regions> expected2 = {
+      {"species:he:collision_frequency", Regions::All},
+      {"species:d:pressure", Regions::Interior}};
+  const std::map<std::string, Regions> expected3;
 
   EXPECT_EQ(guarded_opts.unwrittenItems(), expected1);
 

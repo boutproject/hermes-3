@@ -1,16 +1,26 @@
-#include "../include/component_scheduler.hxx"
+#include <memory>
+#include <string>
+#include <vector>
 
+#include <bout/bout_types.hxx>
+#include <bout/options.hxx>
 #include <bout/utils.hxx> // for trim, strsplit
+
+#include "../include/component.hxx"
+#include "../include/component_scheduler.hxx"
 
 ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                        Options &component_options,
                                        Solver *solver) {
 
-  std::string component_names = scheduler_options["components"]
-                                    .doc("Components in order of execution")
-                                    .as<std::string>();
+  const std::string component_names = scheduler_options["components"]
+                                          .doc("Components in order of execution")
+                                          .as<std::string>();
 
-  std::vector<std::string> electrons, neutrals, positive_ions, negative_ions;
+  std::vector<std::string> electrons;
+  std::vector<std::string> neutrals;
+  std::vector<std::string> positive_ions;
+  std::vector<std::string> negative_ions;
 
   // For now split on ','. Something like "->" might be better
   for (const auto &name : strsplit(component_names, ',')) {
@@ -29,7 +39,7 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
     // reliable way to identify what is a species?
     else if (component_options[name_trimmed].isSet("AA")) {
       if (component_options[name_trimmed].isSet("charge")) {
-        BoutReal charge = component_options[name_trimmed]["charge"];
+        const BoutReal charge = component_options[name_trimmed]["charge"];
         if (charge > 1e-5) {
           positive_ions.push_back(name_trimmed);
         } else if (charge < -1e-5) {
@@ -44,9 +54,10 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
 
     // For each component e.g. "e", several Component types can be created
     // but if types are not specified then the component name is used
-    std::string types = component_options[name_trimmed].isSet("type")
-                            ? component_options[name_trimmed]["type"].as<std::string>()
-                            : name_trimmed;
+    const std::string types =
+        component_options[name_trimmed].isSet("type")
+            ? component_options[name_trimmed]["type"].as<std::string>()
+            : name_trimmed;
 
     for (const auto &type : strsplit(types, ',')) {
       auto type_trimmed = trim(type, " \t\r()");
