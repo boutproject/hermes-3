@@ -101,7 +101,7 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
   // FIXME: velocity and momentum will only be set on boundaries if already set on
   // interior
   substitutePermissions("ion_optional", {"velocity", "momentum"});
-  setAccess(writeBoundaryIfSet("fields:phi"));
+  setPermissions(writeBoundaryIfSet("fields:phi"));
 }
 
 void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {

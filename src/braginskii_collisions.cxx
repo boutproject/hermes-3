@@ -62,52 +62,54 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
-  setAccess(readOnly("species:{electrons}:temperature", Regions::Interior));
-  setAccess(readOnly("species:{electrons}:density", Regions::Interior));
+  setPermissions(readOnly("species:{electrons}:temperature", Regions::Interior));
+  setPermissions(readOnly("species:{electrons}:density", Regions::Interior));
   if (electron_electron) {
-    setAccess(readWrite(
+    setPermissions(readWrite(
         "species:{electrons}:collision_frequencies:{electrons}_{electrons2}_coll"));
   }
   if (electron_ion) {
-    setAccess(readOnly("species:{positive_ions}:temperature", Regions::Interior));
-    setAccess(readWrite("species:{positive_ions}:collision_frequencies:{positive_ions}_{"
-                        "electrons}_coll"));
-    setAccess(readWrite(
+    setPermissions(readOnly("species:{positive_ions}:temperature", Regions::Interior));
+    setPermissions(
+        readWrite("species:{positive_ions}:collision_frequencies:{positive_ions}_{"
+                  "electrons}_coll"));
+    setPermissions(readWrite(
         "species:{electrons}:collision_frequencies:{electrons}_{positive_ions}_coll"));
   } else {
-    setAccess(readIfSet("species:{positive_ions}:temperature", Regions::Interior));
+    setPermissions(readIfSet("species:{positive_ions}:temperature", Regions::Interior));
   }
   if (electron_neutral) {
-    setAccess(readOnly("species:{neutrals}:temperature", Regions::Interior));
-    setAccess(readWrite(
+    setPermissions(readOnly("species:{neutrals}:temperature", Regions::Interior));
+    setPermissions(readWrite(
         "species:{neutrals}:collision_frequencies:{neutrals}_{electrons}_coll"));
-    setAccess(readWrite(
+    setPermissions(readWrite(
         "species:{electrons}:collision_frequencies:{electrons}_{neutrals}_coll"));
   } else {
-    setAccess(readIfSet("species:{neutrals}:temperature", Regions::Interior));
+    setPermissions(readIfSet("species:{neutrals}:temperature", Regions::Interior));
   }
   if (ion_ion) {
-    setAccess(readWrite("species:{ions}:collision_frequencies:{ions}_{ions2}_coll"));
+    setPermissions(readWrite("species:{ions}:collision_frequencies:{ions}_{ions2}_coll"));
   }
   if (ion_neutral) {
-    setAccess(readWrite("species:{ions}:collision_frequencies:{ions}_{neutrals}_coll"));
-    setAccess(
+    setPermissions(
+        readWrite("species:{ions}:collision_frequencies:{ions}_{neutrals}_coll"));
+    setPermissions(
         readWrite("species:{neutrals}:collision_frequencies:{neutrals}_{ions}_coll"));
   }
   if (neutral_neutral) {
-    setAccess(readWrite(
+    setPermissions(readWrite(
         "species:{neutrals}:collision_frequencies:{neutrals}_{neutrals2}_coll"));
   }
   if (electron_electron or electron_ion or electron_neutral) {
-    setAccess(readWrite("species:{electrons}:collision_frequency"));
+    setPermissions(readWrite("species:{electrons}:collision_frequency"));
   }
   if (ion_ion or ion_neutral) {
-    setAccess(readWrite("species:{ions}:collision_frequency"));
+    setPermissions(readWrite("species:{ions}:collision_frequency"));
   } else if (electron_ion) {
-    setAccess(readWrite("species:{positive_ions}:collision_frequency"));
+    setPermissions(readWrite("species:{positive_ions}:collision_frequency"));
   }
   if (neutral_neutral or electron_neutral or ion_neutral) {
-    setAccess(readWrite("species:{neutrals}:collision_frequency"));
+    setPermissions(readWrite("species:{neutrals}:collision_frequency"));
   }
 }
 

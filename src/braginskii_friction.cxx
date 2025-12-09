@@ -31,7 +31,7 @@ BraginskiiFriction::BraginskiiFriction(const std::string& name, Options& allopti
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
   if (frictional_heating) {
-    setAccess(readWrite("species:{all_species}:energy_source"));
+    setPermissions(readWrite("species:{all_species}:energy_source"));
   }
 }
 

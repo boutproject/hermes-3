@@ -157,11 +157,11 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
   }
 
   if (target_recycle) {
-    setAccess(readIfSet("species:{from}:energy_flow_ylow"));
+    setPermissions(readIfSet("species:{from}:energy_flow_ylow"));
   }
   if (sol_recycle or pfr_recycle) {
-    setAccess(readIfSet("species:{from}:energy_flow_xlow"));
-    setAccess(readIfSet("species:{from}:particle_flow_xlow"));
+    setPermissions(readIfSet("species:{from}:energy_flow_xlow"));
+    setPermissions(readIfSet("species:{from}:particle_flow_xlow"));
   }
   substitutePermissions("to",
                         std::vector<std::string>(to_species.begin(), to_species.end()));

@@ -27,7 +27,7 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
   // density are unset.
   substitutePermissions("output", {"density_source", "momentum_source", "energy_source"});
   if (custom_D < 0.)
-    setAccess(readOnly("species:{all_species}:collision_frequency"));
+    setPermissions(readOnly("species:{all_species}:collision_frequency"));
 }
 
 void ClassicalDiffusion::transform_impl(GuardedOptions& state) {

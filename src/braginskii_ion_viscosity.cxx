@@ -125,7 +125,7 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
     coll_types.push_back("{non_electrons}_{all_species}_cx");
   }
   if (perpendicular) {
-    setAccess(readOnly("fields:phi"));
+    setPermissions(readOnly("fields:phi"));
   }
   substitutePermissions("coll_type", coll_types);
 }

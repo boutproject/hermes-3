@@ -85,7 +85,7 @@ void Reaction::add_diagnostic(const std::string& sp_name, const std::string& dia
         diag_key, ReactionDiagnostic(diag_name, description, type, data_source,
                                      standard_name, transformer)));
   }
-  setAccess(readWrite(diag_name));
+  setPermissions(readWrite(diag_name));
 }
 
 /**

@@ -156,7 +156,7 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   // FIXME: velocity and momentum will only be set on boundaries if already set on
   // interior
   substitutePermissions("ion_optional", {"velocity", "momentum"});
-  setAccess(writeBoundaryIfSet("fields:phi"));
+  setPermissions(writeBoundaryIfSet("fields:phi"));
 }
 
 void SheathBoundarySimple::transform_impl(GuardedOptions& state) {

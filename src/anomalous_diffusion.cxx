@@ -68,7 +68,7 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
     output_vars.push_back("energy_flow_ylow");
   }
   if (include_D or include_nu) {
-    setAccess(readOnly(fmt::format("species:{}:AA", name)));
+    setPermissions(readOnly(fmt::format("species:{}:AA", name)));
     output_vars.push_back("momentum_source");
     output_vars.push_back("momentum_flow_xlow");
     output_vars.push_back("momentum_flow_ylow");

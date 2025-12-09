@@ -121,11 +121,11 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
   // FIXME: The two results of the ternary are actually the same; need
   // to change what writeBoundaryIfSet returns (and how we model
   // permissions, for that matter)
-  setAccess(always_set_phi
-                ? Permissions::VarRights({"fields:phi",
-                                          {Regions::Interior, Regions::Nowhere,
-                                           Regions::Nowhere, Regions::Boundaries}})
-                : writeBoundaryIfSet("fields:phi"));
+  setPermissions(always_set_phi
+                     ? Permissions::VarRights({"fields:phi",
+                                               {Regions::Interior, Regions::Nowhere,
+                                                Regions::Nowhere, Regions::Boundaries}})
+                     : writeBoundaryIfSet("fields:phi"));
 }
 
 void SheathBoundary::transform_impl(GuardedOptions& state) {
