@@ -11,6 +11,7 @@
 #include "../include/evolve_density.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
+#include "../include/immersed_boundary.hxx"
 
 using bout::globals::mesh;
 
@@ -127,6 +128,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
+
+  immBdry->SetBoundary(N, 0.0, ImmersedBoundary::BoundCond::NEUMANN); //TODO Get this from input file? Also get immBdry flag?
 }
 
 void EvolveDensity::transform(Options& state) {
@@ -174,7 +177,9 @@ void EvolveDensity::transform(Options& state) {
   }
 
   auto& species = state["species"][name];
-  set(species["density"], floor(N, 0.0)); // Density in state always >= 0
+  immBdry->SetBoundary(N, 0.0, ImmersedBoundary::BoundCond::NEUMANN);
+  set(species["density"], N); //TODO: Dont floor because ghost cells negative...
+  //set(species["density"], floor(N, 0.0)); // Density in state always >= 0
   set(species["AA"], AA);                 // Atomic mass
   if (charge != 0.0) {                    // Don't set charge for neutral species
     set(species["charge"], charge);

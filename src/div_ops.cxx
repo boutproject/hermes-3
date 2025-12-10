@@ -28,6 +28,7 @@
 #include <bout/assert.hxx>
 #include <bout/mesh.hxx>
 #include <bout/derivs.hxx>
+#include <../include/immersed_boundary.hxx>
 #include <bout/globals.hxx>
 #include <bout/output.hxx>
 #include <bout/utils.hxx>
@@ -1750,7 +1751,7 @@ dagp_fv::dagp_fv(Mesh &mesh)
   volume.setRegion("RGN_NOBNDRY");
   if (! mesh.hasRegion3D("RGN_dapg_fv_xbndry")) {
     mesh.addRegion("RGN_dapg_fv_xbndry",
-		   Region<>(mesh.xstart - 1, mesh.xstart - 1, mesh.ystart,
+    Region<>(mesh.xstart - 1, mesh.xstart - 1, mesh.ystart,
                             mesh.yend, mesh.zstart, mesh.zend, mesh.LocalNy,
                             mesh.LocalNz));
   }
@@ -1783,24 +1784,30 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
     flow_zlow->allocate();
   }
   BOUT_FOR(i, f.getRegion("RGN_dapg_fv_xbndry")) {
-    const auto xf = xflux<upwinding>(a, f, i);
-    result[i.xp()] = xf;
-    if constexpr (extra) {
-      (*flow_xlow)[i.xp()] = xf;
+    if (immBdry->IsInside(i) || immBdry->IsInside(i.xp())) { //TODO: immBdry logic.
+      const auto xf = xflux<upwinding>(a, f, i);
+      result[i.xp()] = xf;
+      if constexpr (extra) {
+        (*flow_xlow)[i.xp()] = xf;
+      }
     }
   }
   BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
-    const auto xf = xflux<upwinding>(a, f, i);
-    result[i.xp()] = xf;
-    result[i] -= xf;
-    if constexpr (extra) {
-      (*flow_xlow)[i.xp()] = xf;
+    if (immBdry->IsInside(i) || immBdry->IsInside(i.xp())) { //TODO: immBdry logic.
+      const auto xf = xflux<upwinding>(a, f, i);
+      result[i.xp()] = xf;
+      result[i] -= xf;
+      if constexpr (extra) {
+        (*flow_xlow)[i.xp()] = xf;
+      }
     }
-    const auto zf = zflux<upwinding>(a, f, i);
-    result[i.zp()] += zf;
-    result[i] -= zf;
-    if constexpr (extra) {
-      (*flow_zlow)[i.zp()] = zf;
+    if (immBdry->IsInside(i) || immBdry->IsInside(i.zp())) { //TODO: immBdry logic.
+      const auto zf = zflux<upwinding>(a, f, i);
+      result[i.zp()] += zf;
+      result[i] -= zf;
+      if constexpr (extra) {
+        (*flow_zlow)[i.zp()] = zf;
+      }
     }
   }
   result.setRegion("RGN_NOBNDRY");

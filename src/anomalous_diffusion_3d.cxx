@@ -89,7 +89,6 @@ void AnomalousDiffusion3D::transform(Options& state) {
     // advection velocity
     //
     //  v_D = - D Grad_perp(N) / N
-
     density_source = (*dagp)(anomalous_D, N, flow_xlow, flow_zlow, upwind);
     add(species["density_source"], density_source);
     add(species["particle_flow_xlow"], flow_xlow);
