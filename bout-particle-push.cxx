@@ -761,6 +761,13 @@ int main(int argc, char** argv) {
     //   }
     //   output << "\n";
     // }
+    // Options object to use to write out diagnostic data of fluid quantities
+    Options bout_output_data;
+    bout_output_data["neutral_density"] = density;
+    // Set the time attribute
+    bout_output_data["neutral_density"].attributes["time_dimension"] = "t";
+    std::string particle_data_filename = fmt::format("bout_particle_moments_{}.nc",mpi_rank);
+    bout::OptionsIO::create(particle_data_filename)->write(bout_output_data);
 
     for (int stepx = 0; stepx < nsteps; stepx++) {
       // nprint("step:", stepx);
@@ -774,6 +781,10 @@ int main(int argc, char** argv) {
       h5part.write();
       // uncomment to print particle info
       // A_particle_group->print(Sym<REAL>("POSITION"), Sym<INT>("ID"), Sym<REAL>("WEIGHT"));
+      // update density and write
+      bout_output_data["neutral_density"] = density;
+      // Append data to file
+      bout::OptionsIO::create({{"file", particle_data_filename}, {"append", true}})->write(bout_output_data);
     }
 
     // uncomment to write a trajectory
