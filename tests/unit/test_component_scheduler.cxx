@@ -30,17 +30,16 @@ private:
 };
 
 struct TestAdditionalComponent : public NamedComponent<TestAdditionalComponent> {
-  TestAdditionalComponent(const std::string&, Options&, Solver*)
-      : Component({}) {}
+  TestAdditionalComponent(const std::string& name, Options&, Solver*)
+      : NamedComponent(name, {}) {}
 
-  void transform_impl(GuardedOptions&) override {
-  }
+  void transform_impl(GuardedOptions&) override {}
 
   std::vector<ComponentInformation> additionalComponents() override {
-    return {{"TestComponent", "testcomponent"},  {"component2", "multiply"}};
+    return {{"TestComponent", "testcomponent"}, {"component2", "multiply"}};
   }
 
-  static constexpr auto type = "testadditionalcomponent";
+  static constexpr auto type = "additionalcomponent";
 };
 
 struct OrderChecker : public NamedComponent<OrderChecker> {
