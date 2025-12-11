@@ -38,6 +38,6 @@ dt = 0.005
 nsteps = 1
 
 [VANTAGE_reactions]
-remove_threshold = 1.0e-10
-merge_threshold = 1.0e-2
+remove_threshold = 0.0e-10
+merge_threshold = 0.0e-2
 iz_rate = 0.0
