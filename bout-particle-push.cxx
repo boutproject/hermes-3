@@ -558,15 +558,25 @@ void update_diagnostics(Field2D& density,
   bout::OptionsIO::create({{"file", particle_data_filename}, {"append", true}})->write(bout_output_data);
 }
 
-void set_initial_particle_weights(Field2D& particle_weights,
+void set_initial_particle_weights(Field2D& initial_density,
       std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
       std::shared_ptr<ParticleGroup>& A_particle_group,
+      std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
       std::vector<double>& h_project1){
-  Mesh* bout_mesh = particle_weights.getMesh();
+  Mesh* bout_mesh = initial_density.getMesh();
   PetscInt ixy = 0;
+  REAL particle_weights;
+  REAL cell_volume;
+  REAL nmarkers_per_cell;
   for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
     for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
-      h_project1.at(ixy) = particle_weights(ix, iy);
+      // particle_weights are copied to all particles in this cell so
+      // we multiply the initial density by the volume to get particle number,
+      // then divide by the number of marker particles per cell
+      cell_volume = neso_mesh->dmh->get_cell_volume(ixy);
+      nmarkers_per_cell = A_particle_group->get_npart_cell(ixy);
+      particle_weights = initial_density(ix, iy)*cell_volume/nmarkers_per_cell;
+      h_project1.at(ixy) = particle_weights;
       ixy++;
     }
   }
@@ -591,8 +601,8 @@ int main(int argc, char** argv) {
   output << "Begin particle push \n";
   // get data from BOUT.inp to assign particle weights as a fn of x,y
   auto& opt = Options::root();
-  Field2D particle_weights{bout_mesh};
-  particle_weights = opt["mesh"]["particle_weights"].as<Field2D>();
+  Field2D initial_density{bout_mesh};
+  initial_density = opt["mesh"]["initial_density"].as<Field2D>();
   /*
    *
    *
@@ -796,7 +806,7 @@ int main(int argc, char** argv) {
     // allocate buffer vector for scalar projection/evaluation of NESO-Particles properties
     std::vector<REAL> h_project1(num_cells_owned);
     // set weights from a Field2D from BOUT
-    set_initial_particle_weights(particle_weights, dg0, A_particle_group, h_project1);
+    set_initial_particle_weights(initial_density, dg0, A_particle_group, neso_mesh, h_project1);
     // diagnose the initial condition
     std::string particle_data_filename = fmt::format("bout_particle_moments_{}.nc",mpi_rank);
     Options bout_output_data = initialise_diagnostics(density, dg0,A_particle_group,
