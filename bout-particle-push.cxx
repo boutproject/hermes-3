@@ -204,7 +204,6 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh, std::shared_ptr<SYCLTarget> syc
     output << fmt::format("Using option use_cxx_ivertex = {}", use_cxx_ivertex)
           << std::endl;
     bout_mesh->load();
-    Coordinates* coord = bout_mesh->getCoordinates();
     Field2D Rxy_lower_left_corners;
     Field2D Rxy_lower_right_corners;
     Field2D Rxy_upper_right_corners;
@@ -565,17 +564,14 @@ void set_initial_particle_weights(Field2D& initial_density,
       std::vector<double>& h_project1){
   Mesh* bout_mesh = initial_density.getMesh();
   PetscInt ixy = 0;
-  REAL particle_weights;
-  REAL cell_volume;
-  REAL nmarkers_per_cell;
   for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
     for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
       // particle_weights are copied to all particles in this cell so
       // we multiply the initial density by the volume to get particle number,
       // then divide by the number of marker particles per cell
-      cell_volume = neso_mesh->dmh->get_cell_volume(ixy);
-      nmarkers_per_cell = A_particle_group->get_npart_cell(ixy);
-      particle_weights = initial_density(ix, iy)*cell_volume/nmarkers_per_cell;
+      const REAL cell_volume = neso_mesh->dmh->get_cell_volume(ixy);
+      const INT nmarkers_per_cell = A_particle_group->get_npart_cell(ixy);
+      const REAL particle_weights = initial_density(ix, iy)*cell_volume/nmarkers_per_cell;
       h_project1.at(ixy) = particle_weights;
       ixy++;
     }
@@ -584,6 +580,26 @@ void set_initial_particle_weights(Field2D& initial_density,
   dg0->set_dofs(1, h_project1);
   // set the data from internal variables into the weights
   dg0->evaluate(A_particle_group, Sym<REAL>("WEIGHT"));
+}
+
+void check_cell_volumes(
+      std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
+      Mesh*& bout_mesh){
+  Coordinates* coord = bout_mesh->getCoordinates();
+  PetscInt ixy = 0;
+  const REAL tolerance = 1.0e-12;
+  for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
+    for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
+      const REAL bout_cell_volume = coord->J(ix,iy)*
+                                coord->dx(ix,iy)*coord->dy(ix,iy);
+      const REAL neso_cell_volume = neso_mesh->dmh->get_cell_volume(ixy);
+      const bool volumes_match = (abs(bout_cell_volume - neso_cell_volume) < tolerance);
+      // exit if we fail to find a match
+      NESOASSERT(volumes_match,
+                 fmt::format("BOUT++ mesh volume {} does not match NESO-Particles mesh volume {} for ix = {} iy = {}", bout_cell_volume, neso_cell_volume, ix, iy));
+      ixy++;
+    }
+  }
 }
 
 int main(int argc, char** argv) {
@@ -634,7 +650,11 @@ int main(int argc, char** argv) {
     auto domain = std::make_shared<Domain>(neso_mesh, mapper);
     // Get the number of cells in the mesh owned on this process
     int num_cells_owned = neso_mesh->get_cell_count();
-
+    // if requested, check that neso_mesh cell volumes are identical
+    // to bout_mesh cell volumes, otherwise, exit.
+    if (Options::root()["neso_particles"]["test_cell_volumes"].withDefault(false)){
+      check_cell_volumes(neso_mesh, bout_mesh);
+    }
     // create a Reactions particle spec
     auto particle_spec_builder = ParticleSpecBuilder(ndim);
     auto electron_species = Species("ELECTRON");
