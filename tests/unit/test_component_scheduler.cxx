@@ -27,6 +27,18 @@ private:
   }
 };
 
+struct TestAdditionalComponent : public Component {
+  TestAdditionalComponent(const std::string&, Options&, Solver*)
+      : Component({}) {}
+
+  void transform_impl(GuardedOptions&) override {
+  }
+
+  std::vector<ComponentInformation> additionalComponents() override {
+    return {{"TestComponent", "testcomponent"},  {"component2", "multiply"}};
+  }
+};
+
 struct OrderChecker : public Component {
   OrderChecker(const std::string& name, Options& alloptions, Solver*)
       : Component(getPermissions(name, alloptions)), name(name) {}
@@ -46,6 +58,7 @@ std::vector<std::string> OrderChecker::execution_order;
 
 RegisterComponent<TestComponent> registertestcomponent("testcomponent");
 RegisterComponent<TestMultiply> registertestcomponent2("multiply");
+RegisterComponent<TestAdditionalComponent> registertestcomponent3("additionalcomponent");
 RegisterComponent<OrderChecker> registercomponentorderchecker("orderchecker");
 } // namespace
 
@@ -76,6 +89,39 @@ TEST(SchedulerTest, SubComponents) {
   options["components"] = "species";
   options["species"]["type"] = "testcomponent, multiply";
 
+  auto scheduler = ComponentScheduler::create(options, options, nullptr);
+
+  EXPECT_FALSE(options.isSet("answer"));
+  scheduler->transform(options);
+  ASSERT_TRUE(options.isSet("answer"));
+  ASSERT_TRUE(options["answer"] == 42 * 2);
+}
+
+TEST(SchedulerTest, AdditionalComponents) {
+  Options options;
+  options["components"] = "additionalcomponent";
+  auto scheduler = ComponentScheduler::create(options, options, nullptr);
+
+  EXPECT_FALSE(options.isSet("answer"));
+  scheduler->transform(options);
+  ASSERT_TRUE(options.isSet("answer"));
+  ASSERT_TRUE(options["answer"] == 42 * 2);
+}
+
+TEST(SchedulerTest, AdditionalComponentsPredeclared) {
+  Options options;
+  options["components"] = "testcomponent, additionalcomponent";
+  auto scheduler = ComponentScheduler::create(options, options, nullptr);
+
+  EXPECT_FALSE(options.isSet("answer"));
+  scheduler->transform(options);
+  ASSERT_TRUE(options.isSet("answer"));
+  ASSERT_TRUE(options["answer"] == 42 * 2);
+}
+
+TEST(SchedulerTest, AdditionalComponentsPredeclared2) {
+  Options options;
+  options["components"] = "additionalcomponent, testcomponent";
   auto scheduler = ComponentScheduler::create(options, options, nullptr);
 
   EXPECT_FALSE(options.isSet("answer"));

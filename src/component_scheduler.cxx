@@ -318,6 +318,8 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                           .doc("Components in order of execution")
                                           .as<std::string>();
 
+  std::set<ComponentInformation> required_components;
+
   std::vector<std::string> electrons;
   std::vector<std::string> neutrals;
   std::vector<std::string> positive_ions;
@@ -366,11 +368,22 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
         continue;
       }
 
-      components.push_back(Component::create(type_trimmed,
-                                             name_trimmed,
-                                             component_options,
-                                             solver));
+      required_components.emplace(name_trimmed, type_trimmed);
     }
+  }
+
+  std::set<ComponentInformation> created_components;
+  for (auto it = required_components.begin(); it != required_components.end();
+       it = required_components.begin()) {
+    auto comp = Component::create(it->type, it->name, component_options, solver);
+    for (const auto& sub_comp : comp->additionalComponents()) {
+      if (required_components.count(sub_comp) == 0
+          and created_components.count(sub_comp) == 0) {
+        required_components.insert(sub_comp);
+      }
+    }
+    components.push_back(std::move(comp));
+    created_components.insert(required_components.extract(it));
   }
 
   const SpeciesInformation species(electrons, neutrals, positive_ions, negative_ions);
