@@ -484,6 +484,98 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh, std::shared_ptr<SYCLTarget> syc
     return dm;
 }
 
+void calculate_density_in_place(Field2D& density,
+      std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
+      std::shared_ptr<ParticleGroup>& A_particle_group,
+      std::vector<double>& h_project1) {
+  Mesh* bout_mesh = density.getMesh();
+  // get a density by projecting the particle property WEIGHT to the bout_mesh
+  dg0->project(A_particle_group, Sym<REAL>("WEIGHT"));
+  // std::vector<REAL> h_project1;
+  dg0->get_dofs(1, h_project1);
+  PetscInt ic = 0;
+  for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
+    for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
+      density(ix, iy) = h_project1.at(ic);
+      ic++;
+    }
+  }
+  // this fills internal guards
+  bout_mesh->communicate(density);
+  // apply boundary conditions to fill external guards
+  // density.applyBoundary();
+  // extrapolate -> Neumann
+}
+
+double calculate_total_mass(Field2D& density, std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh){
+  double local_mass=0.0;
+  double total_mass=0.0;
+  Mesh* bout_mesh = density.getMesh();
+  PetscInt ic = 0;
+  for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
+    for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
+      local_mass += density(ix, iy)*neso_mesh->dmh->get_cell_volume(ic);
+      ic++;
+    }
+  }
+  MPICHK(MPI_Allreduce(&local_mass,
+                       &total_mass, 1,
+                        MPI_DOUBLE, MPI_SUM, BoutComm::get()));
+  return total_mass;
+}
+
+Options initialise_diagnostics(Field2D& density,
+      std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
+      std::shared_ptr<ParticleGroup>& A_particle_group,
+      std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
+      std::vector<double>& h_project1,
+      std::string particle_data_filename){
+  // Options object to use to write out diagnostic data of fluid quantities
+  Options bout_output_data;
+  calculate_density_in_place(density, dg0, A_particle_group, h_project1);
+  bout_output_data["neutral_density"] = density;
+  // Set the time attribute
+  bout_output_data["neutral_density"].attributes["time_dimension"] = "t";
+  bout_output_data["total_mass"] = calculate_total_mass(density, neso_mesh);
+  bout_output_data["total_mass"].attributes["time_dimension"] = "t";
+  // std::string particle_data_filename = fmt::format("bout_particle_moments_{}.nc",mpi_rank);
+  bout::OptionsIO::create(particle_data_filename)->write(bout_output_data);
+  return bout_output_data;
+}
+
+void update_diagnostics(Field2D& density,
+      std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
+      std::shared_ptr<ParticleGroup>& A_particle_group,
+      std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
+      std::vector<double>& h_project1,
+      Options& bout_output_data,
+      std::string particle_data_filename){
+  // update density and write
+  calculate_density_in_place(density, dg0, A_particle_group, h_project1);
+  bout_output_data["neutral_density"] = density;
+  bout_output_data["total_mass"] = calculate_total_mass(density, neso_mesh);
+  // Append data to file
+  bout::OptionsIO::create({{"file", particle_data_filename}, {"append", true}})->write(bout_output_data);
+}
+
+void set_initial_particle_weights(Field2D& particle_weights,
+      std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
+      std::shared_ptr<ParticleGroup>& A_particle_group,
+      std::vector<double>& h_project1){
+  Mesh* bout_mesh = particle_weights.getMesh();
+  PetscInt ixy = 0;
+  for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
+    for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
+      h_project1.at(ixy) = particle_weights(ix, iy);
+      ixy++;
+    }
+  }
+  // now copy the data to internal variables
+  dg0->set_dofs(1, h_project1);
+  // set the data from internal variables into the weights
+  dg0->evaluate(A_particle_group, Sym<REAL>("WEIGHT"));
+}
+
 int main(int argc, char** argv) {
   // initialise_mpi(&argc, &argv);
   // attempt to call BOUT to
@@ -521,10 +613,7 @@ int main(int argc, char** argv) {
         Options::root()["neso_particles"]["npart_per_cell"].withDefault(1);
     const REAL dt = Options::root()["neso_particles"]["dt"].withDefault(0.01);
     const int nsteps = Options::root()["neso_particles"]["nsteps"].withDefault(10);
-    Field2D density{bout_mesh};
-    bout_mesh->get(density, "density", 0.0, false);
-    bout_mesh->communicate(density);
-
+    Field2D density = Field2D(0.0, bout_mesh);
     // Create a mesh interface from the DM
     auto neso_mesh =
         std::make_shared<PetscInterface::DMPlexInterface>(dm, 0, MPI_COMM_WORLD);
@@ -551,7 +640,6 @@ int main(int argc, char** argv) {
                         std::vector<int>{default_properties.source_momentum}),
         ndim);
     ParticleSpec additional_props{
-      ParticleProp(Sym<REAL>("CHARGE"), 1),
       ParticleProp(Sym<REAL>("TSP"), 2)};
     particle_spec_builder.add_particle_spec(additional_props);
     ParticleSpec particle_spec = particle_spec_builder.get_particle_spec();
@@ -597,7 +685,6 @@ int main(int argc, char** argv) {
       initial_distribution[Sym<INT>("CELL_ID")][px][0] = particle_cell_ids.at(px);
       initial_distribution[Sym<INT>("ID")][px][0] = px + id_offset;
       initial_distribution[Sym<REAL>("WEIGHT")][px][0] = 1.0;
-      initial_distribution[Sym<REAL>("CHARGE")][px][0] = 1.0;
     }
     // Add the new particles to the particle group
     A_particle_group->add_particles_local(initial_distribution);
@@ -634,19 +721,7 @@ int main(int argc, char** argv) {
         ReactionController(parent_transforms, child_transforms);
     // add ionisation to the controller
     reaction_controller.add_reaction(std::make_shared<decltype(ionisation_reaction)>(ionisation_reaction));
-    // set weights from a Field2D from BOUT
-    std::vector<REAL> h_project1(num_cells_owned);
-    PetscInt ixy = 0;
-    for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
-      for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
-        h_project1.at(ixy) = particle_weights(ix, iy);
-        ixy++;
-      }
-    }
-    // now copy the data to internal variables
-    dg0->set_dofs(1, h_project1);
-    // set the data from internal variables into the weights
-    dg0->evaluate(A_particle_group, Sym<REAL>("WEIGHT"));
+
     // Create the boundary interaction objects
     std::map<PetscInt, std::vector<PetscInt>> boundary_groups;
     // boundary_groups[1] = {100, 200};
@@ -714,61 +789,19 @@ int main(int argc, char** argv) {
         aa = lambda_find_partial_moves(aa);
       }
     };
-    // for(int ix = bout_mesh->xstart; ix<= bout_mesh->xend; ix++){
-    //   for(int iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++){
-    //       //for(int iz=0; iz < bout_mesh->LocalNz; iz++){
-    //         std::string string_count = std::string("(") + std::to_string(ix) +
-    //         std::string(",") + std::to_string(iy) + std::string(")"); output <<
-    //         string_count + std::string(": ") + std::to_string(phi(ix,iy)) +
-    //         std::string("; ");
-    //       //}
-    //   }
-    //   output << "\n";
-    // }
     // uncomment to write a trajectory
     H5Part h5part("traj_reflection_dmplex_example.h5part", A_particle_group, Sym<REAL>("POSITION"),
                   Sym<REAL>("VELOCITY"));
 
-    // get a density by projecting the particle property CHARGE to the bout_mesh
-    dg0->project(A_particle_group, Sym<REAL>("CHARGE"));
-    // std::vector<REAL> h_project1;
-    dg0->get_dofs(1, h_project1);
-    PetscInt ic = 0;
-    for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
-      for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
-        density(ix, iy) = h_project1.at(ic);
-        ic++;
-      }
-    }
-    // this fills internal guards
-    bout_mesh->communicate(density);
-    // apply boundary conditions to fill external guards
-    // density.applyBoundary();
-    // extrapolate -> Neumann
-    // BOUT++ may need to do something with density Field2D guards cells
-    // print density to screen to show non-trivial result
-    // compare to 1/J*dx*dy*dz -> at the initial time we have 1 particle per cell
-    // so the density is 1/Cell_volume
-    // for(int ix = bout_mesh->xstart; ix<= bout_mesh->xend; ix++){
-    //   for(int iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++){
-    //       //for(int iz=0; iz < bout_mesh->LocalNz; iz++){
-    //         std::string string_count = std::string("(") + std::to_string(ix) +
-    //         std::string(",") + std::to_string(iy) + std::string(")"); output <<
-    //         string_count + std::string(": ") + std::to_string(density(ix,iy)) +
-    //         std::string("; ") +
-    //         std::to_string(1.0/(coord->J(ix,iy)*coord->dx(ix,iy)*coord->dy(ix,iy)*coord->dz(ix,iy)));
-    //       //}
-    //   }
-    //   output << "\n";
-    // }
-    // Options object to use to write out diagnostic data of fluid quantities
-    Options bout_output_data;
-    bout_output_data["neutral_density"] = density;
-    // Set the time attribute
-    bout_output_data["neutral_density"].attributes["time_dimension"] = "t";
+    // allocate buffer vector for scalar projection/evaluation of NESO-Particles properties
+    std::vector<REAL> h_project1(num_cells_owned);
+    // set weights from a Field2D from BOUT
+    set_initial_particle_weights(particle_weights, dg0, A_particle_group, h_project1);
+    // diagnose the initial condition
     std::string particle_data_filename = fmt::format("bout_particle_moments_{}.nc",mpi_rank);
-    bout::OptionsIO::create(particle_data_filename)->write(bout_output_data);
-
+    Options bout_output_data = initialise_diagnostics(density, dg0,A_particle_group,
+        neso_mesh,h_project1, particle_data_filename);
+    // begin timestepping
     for (int stepx = 0; stepx < nsteps; stepx++) {
       // nprint("step:", stepx);
       output << "step:" << std::to_string(stepx) << std::endl;
@@ -781,10 +814,9 @@ int main(int argc, char** argv) {
       h5part.write();
       // uncomment to print particle info
       // A_particle_group->print(Sym<REAL>("POSITION"), Sym<INT>("ID"), Sym<REAL>("WEIGHT"));
-      // update density and write
-      bout_output_data["neutral_density"] = density;
-      // Append data to file
-      bout::OptionsIO::create({{"file", particle_data_filename}, {"append", true}})->write(bout_output_data);
+      // diagnose timestep stepx
+      update_diagnostics(density, dg0, A_particle_group, neso_mesh,
+        h_project1, bout_output_data, particle_data_filename);
     }
 
     // uncomment to write a trajectory
