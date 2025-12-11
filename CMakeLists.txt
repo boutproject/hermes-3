@@ -115,6 +115,7 @@ set(HERMES_SOURCES
     include/anomalous_diffusion.hxx
     include/classical_diffusion.hxx
     include/binormal_stpm.hxx
+    include/braginskii_closure.hxx
     include/braginskii_collisions.hxx
     include/braginskii_conduction.hxx
     include/braginskii_electron_viscosity.hxx
