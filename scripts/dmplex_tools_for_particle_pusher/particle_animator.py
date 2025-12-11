@@ -54,8 +54,8 @@ def load_particle_data(file_path):
     for it in range(0,nstep):
         group = particle_data[f"Step#{it}"]
         #print(list(group.keys()))
-        P_0 = group["P_0"]
-        P_1 = group["P_1"]
+        P_0 = group["POSITION_0"]
+        P_1 = group["POSITION_1"]
         nparticles = len(P_0)
         pdata = np.zeros((nparticles,2))
         pdata[:,0] = P_0
