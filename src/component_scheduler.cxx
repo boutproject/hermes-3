@@ -269,6 +269,7 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
                                     .as<std::string>();
 
   std::vector<std::string> electrons, neutrals, positive_ions, negative_ions;
+  std::set<ComponentInformation> required_components;
 
   // For now split on ','. Something like "->" might be better
   for (const auto &name : strsplit(component_names, ',')) {
@@ -312,11 +313,22 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
         continue;
       }
 
-      components.push_back(Component::create(type_trimmed,
-                                             name_trimmed,
-                                             component_options,
-                                             solver));
+      required_components.emplace(name_trimmed, type_trimmed);
     }
+  }
+
+  std::set<ComponentInformation> created_components;
+  for (auto it = required_components.begin(); it != required_components.end();
+       it = required_components.begin()) {
+    auto comp = Component::create(it->type, it->name, component_options, solver);
+    for (const auto& sub_comp : comp->additionalComponents()) {
+      if (required_components.count(sub_comp) == 0
+          and created_components.count(sub_comp) == 0) {
+        required_components.insert(sub_comp);
+      }
+    }
+    components.push_back(std::move(comp));
+    created_components.insert(required_components.extract(it));
   }
 
   const SpeciesInformation species(electrons, neutrals, positive_ions, negative_ions);

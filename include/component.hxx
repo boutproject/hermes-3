@@ -60,6 +60,24 @@ struct SpeciesInformation {
     }
 };
 
+/// Lightweight type to store information used to build a component.
+struct ComponentInformation {
+  std::string name;
+  std::string type;
+
+  ComponentInformation(const std::string& name_, const std::string& type_) : name(name_), type(type_) {}
+
+  ComponentInformation(std::string&& name_, std::string&& type_) : name(std::move(name_)), type(std::move(type_)) {}
+
+  bool operator<(const ComponentInformation& other) const {
+    return std::pair(name, type) < std::pair(other.name, other.type);
+  }
+
+  bool operator==(const ComponentInformation& other) const {
+    return std::pair(name, type) == std::pair(other.name, other.type);
+  }
+};
+
 /// Interface for a component of a simulation model
 ///
 /// The constructor of derived types should have signature
@@ -76,37 +94,45 @@ struct Component {
 
   virtual ~Component() {}
 
+  /// Return a list of names/types of other components needed by this
+  /// component. All configurations for these components will take the
+  /// default value, unless set in the input file.
+  virtual std::vector<ComponentInformation> additionalComponents() { return {}; }
+
   /// Modify the given simulation state. This method will wrap the
   /// state in a GuardedOptions object and pass that to the private
   /// implementation of transform provided by each component.
-  void transform(Options &state);
-  
+  void transform(Options& state);
+
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
-  virtual void finally(const Options &UNUSED(state)) { }
+  virtual void finally(const Options& UNUSED(state)) {}
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  virtual void outputVars(Options &UNUSED(state)) { }
+  virtual void outputVars(Options& UNUSED(state)) {}
 
   /// Add extra fields to restart files
-  virtual void restartVars(Options &UNUSED(state)) { }
+  virtual void restartVars(Options& UNUSED(state)) {}
 
   /// Preconditioning
-  virtual void precon(const Options &UNUSED(state), BoutReal UNUSED(gamma)) { }
-  
+  virtual void precon(const Options& UNUSED(state), BoutReal UNUSED(gamma)) {}
+
   /// Create a Component
   ///
   /// @param type     The name of the component type to create (e.g. "evolve_density")
   /// @param name     The species/name for this instance.
   /// @param options  Component settings: options[name] are specific to this component
   /// @param solver   Time-integration solver
-  static std::unique_ptr<Component> create(const std::string &type, // The type to create
-                                           const std::string &name, // The species/name for this instance
-                                           Options &options,  // Component settings: options[name] are specific to this component
-                                           Solver *solver); // Time integration solver
+  static std::unique_ptr<Component>
+  create(const std::string& type, // The type to create
+         const std::string& name, // The species/name for this instance
+         Options&
+             options, // Component settings: options[name] are specific to this component
+         Solver* solver); // Time integration solver
 
   /// Tell the component the name of all species in the simulation, by type. It
-  /// will use this information to substitute the following placeholders in `svate_variable_access`:
+  /// will use this information to substitute the following placeholders in
+  /// `svate_variable_access`:
   ///   - electrons (any electron species)
   ///   - electrons2 (same as above, used for cross-product)
   ///   - neutrals (species with no charge)
@@ -123,7 +149,7 @@ struct Component {
   ///   - non_electrons2 (same as above, used for cross-product)
   ///   - all_species (ions, neutrals, and electrons)
   ///   - all_species2 (same as above, used for cross-product)
-  void declareAllSpecies(const SpeciesInformation & info);
+  void declareAllSpecies(const SpeciesInformation& info);
 
   const Permissions& getPermissions() const { return state_variable_access; }
 
@@ -136,7 +162,7 @@ private:
   /// implement this function. It will only allow the reading
   /// from/writing to state variables with the appropriate permissiosn
   /// in `state_variable_access`.
-  virtual void transform_impl(GuardedOptions &state) = 0;
+  virtual void transform_impl(GuardedOptions& state) = 0;
 };
 
 ///////////////////////////////////////////////////////////////////
