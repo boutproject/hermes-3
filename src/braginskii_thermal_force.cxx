@@ -96,6 +96,15 @@ void BraginskiiThermalForce::transform(Options& state) {
           // species1 heavy, species2 light
           light = &species2;
           heavy = &species1;
+        } else if (this->override_ion_mass_restrictions) {
+          // User has overridden mass restrictions, so calculate anyway
+          if (get<BoutReal>(species1["AA"]) < get<BoutReal>(species2["AA"])) {
+            light = &species1;
+            heavy = &species2;
+          } else {
+            light = &species2;
+            heavy = &species1;
+          }
         } else {
           // Ignore this combination
           if (first_time) {

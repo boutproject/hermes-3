@@ -44,8 +44,8 @@ void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
   // Optionally multiply by arbitrary multiplier
   const Field3D sigmav = exp(ln_sigmav) * (1e-6 * Nnorm / FreqNorm) * rate_multiplier;
 
-  const Field3D Natom = floor(get<Field3D>(atom1["density"]), 1e-5);
-  const Field3D Nion = floor(get<Field3D>(ion1["density"]), 1e-5);
+  const Field3D Natom = get<Field3D>(atom1["density"]);
+  const Field3D Nion = get<Field3D>(ion1["density"]);
 
   R = Natom * Nion * sigmav; // Rate coefficient in [m^-3 s^-1]
 
