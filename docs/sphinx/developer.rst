@@ -309,7 +309,7 @@ within that section, unless a more specific permission is also set. ::
 
   Permissions p({readOnly("time"),
                  readOnly("species:e:pressure"),
-                 readWrite("species:e:momentum", Reegions::Interior)});
+                 readWrite("species:e:momentum", Regions::Interior)});
 
 .. doxygenclass:: Permissions
    :members:
