@@ -542,6 +542,17 @@ void calculate_density_in_place(Field2D& density,
   // extrapolate -> Neumann
 }
 
+void calculate_fluid_moments_in_place(Field2D& neutral_density, Field2D& ion_density,
+      std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
+      std::shared_ptr<ParticleGroup>& A_particle_group,
+      std::vector<double>& h_project1){
+  // calculate all of the fluid moments required for the moment, from data in
+  // the particle group. Set to zero any particle properties needed in preparation
+  // for the next time step.
+  calculate_density_in_place(neutral_density, dg0, A_particle_group, h_project1);
+  extract_ionised_density_in_place(ion_density, dg0, A_particle_group, h_project1);
+}
+
 double calculate_total_mass(Field2D& density, std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh){
   double local_mass=0.0;
   double total_mass=0.0;
@@ -567,8 +578,6 @@ Options initialise_diagnostics(Field2D& neutral_density, Field2D & ion_density,
       std::string particle_data_filename){
   // Options object to use to write out diagnostic data of fluid quantities
   Options bout_output_data;
-  calculate_density_in_place(neutral_density, dg0, A_particle_group, h_project1);
-  extract_ionised_density_in_place(ion_density, dg0, A_particle_group, h_project1);
   bout_output_data["neutral_density"] = neutral_density;
   // Set the time attribute
   bout_output_data["neutral_density"].attributes["time_dimension"] = "t";
@@ -593,16 +602,13 @@ void update_diagnostics(Field2D& neutral_density, Field2D& ion_density,
       std::vector<double>& h_project1,
       Options& bout_output_data,
       std::string particle_data_filename){
-  // update density and write
-  calculate_density_in_place(neutral_density, dg0, A_particle_group, h_project1);
-  extract_ionised_density_in_place(ion_density, dg0, A_particle_group, h_project1);
+  // update density in Options object and write
   bout_output_data["neutral_density"] = neutral_density;
   bout_output_data["ion_density"] = ion_density;
   Field2D total_density = ion_density+neutral_density;
   bout_output_data["total_mass"] = calculate_total_mass(total_density, neso_mesh);
   bout_output_data["total_neutral_mass"] = calculate_total_mass(neutral_density, neso_mesh);
   bout_output_data["total_ion_mass"] = calculate_total_mass(ion_density, neso_mesh);
-
   // Append data to file
   bout::OptionsIO::create({{"file", particle_data_filename}, {"append", true}})->write(bout_output_data);
 }
@@ -878,6 +884,9 @@ int main(int argc, char** argv) {
     std::vector<REAL> h_project1(num_cells_owned);
     // set weights from a Field2D from BOUT
     set_initial_particle_weights(initial_neutral_density, dg0, A_particle_group, neso_mesh, h_project1);
+    // update fluid moments
+    calculate_fluid_moments_in_place(neutral_density, ion_density,
+      dg0, A_particle_group, h_project1);
     // diagnose the initial condition
     std::string particle_data_filename = fmt::format("bout_particle_moments_{}.nc",mpi_rank);
     Options bout_output_data = initialise_diagnostics(neutral_density, ion_density,
@@ -895,7 +904,10 @@ int main(int argc, char** argv) {
       // uncomment to write a trajectory
       h5part.write();
       // uncomment to print particle info
-      A_particle_group->print(Sym<REAL>("POSITION"), Sym<INT>("ID"), Sym<REAL>("WEIGHT"), Sym<REAL>("ION_SOURCE_DENSITY"));
+      // A_particle_group->print(Sym<REAL>("POSITION"), Sym<INT>("ID"), Sym<REAL>("WEIGHT"), Sym<REAL>("ION_SOURCE_DENSITY"));
+      // update fluid moments
+      calculate_fluid_moments_in_place(neutral_density, ion_density,
+        dg0, A_particle_group, h_project1);
       // diagnose timestep stepx
       update_diagnostics(neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
         h_project1, bout_output_data, particle_data_filename);
