@@ -68,7 +68,7 @@ noflow_upper_y = false    # Sheath boundary at upper y
 charge = 1
 AA = 2
 
-density_upstream = 1e19            # Upstream density [m^-3]
+density_upstream = 1e15            # Upstream density [m^-3]
 density_source_positive = false    # Force source to be > 0?
 density_controller_i = 5e-4
 density_controller_p = 5e2
@@ -119,7 +119,7 @@ noflow_upper_y = false    # Sheath boundary at upper y
 AA = 3
 charge = 1
 
-density_upstream = 1e19            # Upstream density [m^-3]
+density_upstream = 1e15            # Upstream density [m^-3]
 density_source_positive = false    # Force source to be > 0?
 density_controller_i = 5e-4
 density_controller_p = 5e2
