@@ -85,6 +85,7 @@ set(HERMES_SOURCES
     src/anomalous_diffusion.cxx
     src/anomalous_diffusion_3d.cxx
     src/binormal_stpm.cxx
+    src/kmodel.cxx
     src/recycling.cxx
     src/amjuel_hyd_ionisation.cxx
     src/amjuel_hyd_recombination.cxx
@@ -119,6 +120,7 @@ set(HERMES_SOURCES
     include/binormal_stpm.hxx
     include/collisions.hxx
     include/component.hxx
+    include/kmodel.hxx
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/diamagnetic_drift_fci.hxx
