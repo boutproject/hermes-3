@@ -26,7 +26,8 @@
 ///   - ion_ion       : bool   Include ion-ion elastic collisions?
 ///
 struct BraginskiiThermalForce : public Component {
-  BraginskiiThermalForce(const std::string& name, Options& alloptions, Solver*) {
+  BraginskiiThermalForce(const std::string& name, Options& alloptions, Solver*)
+      : Component(Permissions()) {
     Options& options = alloptions[name];
     electron_ion = options["electron_ion"]
                        .doc("Include electron-ion collisions?")
@@ -35,7 +36,36 @@ struct BraginskiiThermalForce : public Component {
     ion_ion = options["ion_ion"]
                   .doc("Include ion-ion elastic collisions?")
                   .withDefault<bool>(true);
+
+    if (electron_ion or ion_ion) {
+      setPermissions(readIfSet("species:{all_species}:charge"));
+    }
+    if (electron_ion) {
+      // FIXME: These are only accessed if electrons present
+      setPermissions(readOnly("species:e:temperature"));
+      setPermissions(readOnly("species:{ions}:density", Regions::Interior));
+      setPermissions(readWrite("species:{ions}:momentum_source"));
+      setPermissions(readWrite("species:e:momentum_source"));
+    } else if (ion_ion) {
+    }
+    if (ion_ion) {
+      setPermissions(readOnly("species:{ions}:AA"));
+      // FIXME: This is only accessed for light ions
+      setPermissions(readOnly("species:{ions}:temperature"));
+      if (!electron_ion) {
+        // FIXME: This is only accessed for heavy ions
+        setPermissions(readOnly("species:{ions}:density", Regions::Interior));
+        // FIXME: This is only set for heavy and light ions, not intermediate
+        setPermissions(readWrite("species:{ions}:momentum_source"));
+      }
+    }
   }
+
+private:
+  bool electron_ion; ///< Include electron-ion collisions?
+  bool ion_ion; ///< Include ion-ion elastic collisions?
+
+  bool first_time{true}; ///< True the first time transform() is called
 
   /// Inputs
   /// - species
@@ -46,6 +76,7 @@ struct BraginskiiThermalForce : public Component {
   ///   - <species>
   ///     - charge    [ Checks, skips species if not set ]
   ///     - AA
+  ///     - density
   ///     - temperature [ If AA < 4 i.e. "light" species ]
   ///
   /// Outputs
@@ -55,13 +86,7 @@ struct BraginskiiThermalForce : public Component {
   ///   - <species>          [ if AA < 4 ("light") or AA > 10 ("heavy") ]
   ///     - momentum_source
   ///
-  void transform(Options& state) override;
-
-private:
-  bool electron_ion; ///< Include electron-ion collisions?
-  bool ion_ion;      ///< Include ion-ion elastic collisions?
-
-  bool first_time{true}; ///< True the first time transform() is called
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

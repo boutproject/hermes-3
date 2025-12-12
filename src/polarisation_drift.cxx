@@ -8,9 +8,15 @@
 
 using bout::globals::mesh;
 
-PolarisationDrift::PolarisationDrift(std::string name,
-                                     Options &alloptions,
-                                     Solver *UNUSED(solver)) {
+PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
+                                     Solver* UNUSED(solver))
+    // FIXME: There is a lot of complicated conditional logic which is not being captured
+    // here. E.g., species without AA or momentum will be skipped.
+    : Component({readIfSet("species:{all_species}:charge"),
+                 readOnly("species:{charged}:{inputs}"),
+                 readIfSet("species:{charged}:{optional_inputs}"),
+                 readIfSet("fields:{fields}"),
+                 readWrite("species:{charged}:{outputs}")}) {
   AUTO_TRACE();
 
   // Get options for this component
@@ -57,13 +63,31 @@ PolarisationDrift::PolarisationDrift(std::string name,
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
+
+  // Pressure interior only,
+  std::vector<std::string> inputs = {"AA"}, fields = {"DivJdia"},
+                           outputs = {"energy_source"};
+  if (advection) {
+    // Interior only
+    inputs.push_back("density");
+    fields.push_back("DivJextra");
+    fields.push_back("DivJdia");
+    outputs.push_back("density_source");
+    outputs.push_back("momentum_source");
+  }
+  substitutePermissions("inputs", {"AA", "density"});
+  substitutePermissions("optional_inputs", {"momentum, pressure"});
+  substitutePermissions("fields", fields);
+  // FIXME: energy_source and momentum source are only set if pressure
+  // and momentum were set, respectively
+  substitutePermissions("outputs", outputs);
 }
 
-void PolarisationDrift::transform(Options &state) {
+void PolarisationDrift::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Iterate through all subsections
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   // Calculate divergence of all currents except the polarisation current
 
@@ -75,7 +99,7 @@ void PolarisationDrift::transform(Options &state) {
 
   // Parallel current due to species parallel flow
   for (auto& kv : allspecies.getChildren()) {
-    const Options& species = kv.second;
+    const GuardedOptions species = kv.second;
 
     if (!species.isSet("charge") or !species.isSet("momentum")) {
       continue; // Not charged, or no parallel flow
@@ -103,7 +127,7 @@ void PolarisationDrift::transform(Options &state) {
     // Calculate energy exchange term nonlinear in pressure
     // (3 / 2) ddt(Pi) += (Pi / n0) * Div((Pe + Pi) * Curlb_B + Jpar);
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
+      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
       if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
             and species.isSet("AA"))) {
@@ -139,7 +163,7 @@ void PolarisationDrift::transform(Options &state) {
   } else {
     mass_density = 0.0;
     for (auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
+      const GuardedOptions species = kv.second;
 
       if (!(species.isSet("charge") and species.isSet("AA"))) {
         continue; // No charge or mass -> no current
@@ -185,7 +209,7 @@ void PolarisationDrift::transform(Options &state) {
   // v_p = - (m_i / (Z_i * B^2)) * Grad(phi_pol)
   //
   for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
     if (!(species.isSet("charge") and species.isSet("AA"))) {
       continue; // No charge or mass -> no current

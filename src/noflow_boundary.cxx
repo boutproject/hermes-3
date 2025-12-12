@@ -11,13 +11,13 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 }
 }
 
-void NoFlowBoundary::transform(Options& state) {
+void NoFlowBoundary::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Make sure that the state has been set for this species
   ASSERT1(state["species"].isSection(name));
 
-  Options& species = state["species"][name];
+  GuardedOptions species = state["species"][name];
 
   // Apply zero-gradient boundary conditions to state variables
   for (const std::string field : {"density", "temperature", "pressure"}) {

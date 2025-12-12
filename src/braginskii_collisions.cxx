@@ -20,8 +20,11 @@
 #include "../include/component.hxx"
 #include "../include/hermes_utils.hxx"
 
-BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions,
-                                           Solver*) {
+BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions, Solver*)
+    : Component({readOnly("species:{non_electrons}:density", Regions::Interior),
+                 readIfSet("species:{non_electrons}:charge"),
+                 readIfSet("species:{negative_ions}:temperature", Regions::Interior),
+                 readOnly("species:{all_species}:AA")}) {
   AUTO_TRACE();
   const Options& units = alloptions["units"];
 
@@ -58,6 +61,56 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+
+  setPermissions(readOnly("species:{electrons}:temperature", Regions::Interior));
+  setPermissions(readOnly("species:{electrons}:density", Regions::Interior));
+  if (electron_electron) {
+    setPermissions(readWrite(
+        "species:{electrons}:collision_frequencies:{electrons}_{electrons2}_coll"));
+  }
+  if (electron_ion) {
+    setPermissions(readOnly("species:{positive_ions}:temperature", Regions::Interior));
+    setPermissions(
+        readWrite("species:{positive_ions}:collision_frequencies:{positive_ions}_{"
+                  "electrons}_coll"));
+    setPermissions(readWrite(
+        "species:{electrons}:collision_frequencies:{electrons}_{positive_ions}_coll"));
+  } else {
+    setPermissions(readIfSet("species:{positive_ions}:temperature", Regions::Interior));
+  }
+  if (electron_neutral) {
+    setPermissions(readOnly("species:{neutrals}:temperature", Regions::Interior));
+    setPermissions(readWrite(
+        "species:{neutrals}:collision_frequencies:{neutrals}_{electrons}_coll"));
+    setPermissions(readWrite(
+        "species:{electrons}:collision_frequencies:{electrons}_{neutrals}_coll"));
+  } else {
+    setPermissions(readIfSet("species:{neutrals}:temperature", Regions::Interior));
+  }
+  if (ion_ion) {
+    setPermissions(readWrite("species:{ions}:collision_frequencies:{ions}_{ions2}_coll"));
+  }
+  if (ion_neutral) {
+    setPermissions(
+        readWrite("species:{ions}:collision_frequencies:{ions}_{neutrals}_coll"));
+    setPermissions(
+        readWrite("species:{neutrals}:collision_frequencies:{neutrals}_{ions}_coll"));
+  }
+  if (neutral_neutral) {
+    setPermissions(readWrite(
+        "species:{neutrals}:collision_frequencies:{neutrals}_{neutrals2}_coll"));
+  }
+  if (electron_electron or electron_ion or electron_neutral) {
+    setPermissions(readWrite("species:{electrons}:collision_frequency"));
+  }
+  if (ion_ion or ion_neutral) {
+    setPermissions(readWrite("species:{ions}:collision_frequency"));
+  } else if (electron_ion) {
+    setPermissions(readWrite("species:{positive_ions}:collision_frequency"));
+  }
+  if (neutral_neutral or electron_neutral or ion_neutral) {
+    setPermissions(readWrite("species:{neutrals}:collision_frequency"));
+  }
 }
 
 /// Calculate apply collision data for the two species.
@@ -69,7 +122,7 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
 ///
 /// Note: A* variables are used for atomic mass numbers;
 ///       mass* variables are species masses in kg
-void BraginskiiCollisions::collide(Options& species1, Options& species2,
+void BraginskiiCollisions::collide(GuardedOptions& species1, GuardedOptions& species2,
                                    const Field3D& nu_12) {
   AUTO_TRACE();
 
@@ -81,7 +134,7 @@ void BraginskiiCollisions::collide(Options& species1, Options& species2,
   set(collision_rates[species1.name()][species2.name()],
       nu_12); // Individual collision frequency used for diagnostics
 
-  if (&species1 != &species2) {
+  if (species1 != species2) {
     // For collisions between different species
     // m_a n_a \nu_{ab} = m_b n_b \nu_{ba}
 
@@ -105,16 +158,16 @@ void BraginskiiCollisions::collide(Options& species1, Options& species2,
   }
 }
 
-void BraginskiiCollisions::transform(Options& state) {
+void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   // Treat electron collisions specially
   // electron-ion and electron-neutral collisions
 
   if (allspecies.isSection("e")) {
-    Options& electrons = allspecies["e"];
+    GuardedOptions electrons = allspecies["e"];
     const Field3D Te = GET_NOBOUNDARY(Field3D, electrons["temperature"]) * Tnorm; // eV
     const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]) * Nnorm; // In m^-3
 
@@ -152,7 +205,7 @@ void BraginskiiCollisions::transform(Options& state) {
         continue;
       }
 
-      Options& species = allspecies[kv.first]; // Note: Need non-const
+      GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
       if (species.isSet("charge") and (get<BoutReal>(species["charge"]) > 0.0)) {
         ////////////////////////////////////
@@ -250,20 +303,19 @@ void BraginskiiCollisions::transform(Options& state) {
   //  ||   species2               X         X
   //  \/   species3                         X
   //
-  const std::map<std::string, Options>& children = allspecies.getChildren();
+  const std::map<std::string, GuardedOptions> children = allspecies.getChildren();
   for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
     if (kv1->first == "e" or kv1->first == "ebeam") {
       continue; // Skip electrons
     }
 
-    Options& species1 = allspecies[kv1->first];
+    GuardedOptions species1 = allspecies[kv1->first];
 
     // If temperature isn't set, assume zero. in eV
     const Field3D temperature1 =
         species1.isSet("temperature")
             ? GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm
             : 0.0;
-
     const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]) * Nnorm;
 
     const BoutReal AA1 = get<BoutReal>(species1["AA"]);
@@ -276,13 +328,13 @@ void BraginskiiCollisions::transform(Options& state) {
 
       // Copy the iterator, so we don't iterate over the
       // lower half of the matrix, but start at the diagonal
-      for (std::map<std::string, Options>::const_iterator kv2 = kv1;
+      for (std::map<std::string, GuardedOptions>::const_iterator kv2 = kv1;
            kv2 != std::end(children); ++kv2) {
         if (kv2->first == "e" or kv2->first == "ebeam") {
           continue; // Skip electrons
         }
 
-        Options& species2 = allspecies[kv2->first];
+        GuardedOptions species2 = allspecies[kv2->first];
 
         // Note: Here species1 could be equal to species2
 
@@ -364,13 +416,14 @@ void BraginskiiCollisions::transform(Options& state) {
 
       // Copy the iterator, so we don't iterate over the
       // lower half of the matrix, but start at the diagonal
-      for (std::map<std::string, Options>::const_iterator kv2 = kv1;
+      for (std::map<std::string, GuardedOptions>::const_iterator kv2 = kv1;
            kv2 != std::end(children); ++kv2) {
+        // FIXME: Should this include a check for "ebeam" too?
         if (kv2->first == "e") {
           continue; // Skip electrons
         }
 
-        Options& species2 = allspecies[kv2->first];
+        GuardedOptions species2 = allspecies[kv2->first];
 
         // Note: Here species1 could be equal to species2
 
