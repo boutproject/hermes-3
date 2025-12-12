@@ -60,6 +60,7 @@ rtol = 1e-7
 
 ################################################################################
 [d+]  # Deuterium ions
+diagnose = true
 type = (evolve_density, evolve_pressure, evolve_momentum,
         noflow_boundary, upstream_density_feedback)
 noflow_lower_y = true
@@ -94,6 +95,7 @@ function = 0
 
 ################################################################################
 [d]  # Deuterium atoms
+diagnose = true
 type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
 charge = 0
 AA = 2
@@ -109,6 +111,7 @@ function = 0.0001
 
 ################################################################
 [t+] # Tritium ions
+diagnose = true
 type = (evolve_density, evolve_pressure, evolve_momentum,
         noflow_boundary, upstream_density_feedback)
 noflow_lower_y = true
@@ -143,6 +146,7 @@ function = 0
 
 ################################################################
 [t] # Tritium atoms
+diagnose = true
 type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
 charge = 0
 AA = 3
@@ -158,6 +162,7 @@ function = 0.0001
 
 ################################################################
 [he+] # Helium ions
+diagnose = true
 type = (evolve_density, evolve_pressure, evolve_momentum,
         noflow_boundary, upstream_density_feedback)
 noflow_lower_y = true
@@ -185,6 +190,7 @@ function = 0.01
 
 ################################################################
 [he] # Helium atoms
+diagnose = true
 type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
 charge = 0
 AA = 4
@@ -200,6 +206,7 @@ function = 0.000001
 
 ################################################################################
 [e] # Electrons
+diagnose = true
 type = quasineutral, evolve_pressure, zero_current, noflow_boundary
 noflow_upper_y = false
 charge = -1
