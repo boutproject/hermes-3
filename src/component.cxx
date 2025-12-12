@@ -49,6 +49,7 @@ void Component::declareAllSpecies(const SpeciesInformation & info) {
     state_variable_access.substitute("non_electrons2", info.non_electrons);
     state_variable_access.substitute("all_species", info.all_species);
     state_variable_access.substitute("all_species2", info.all_species);
+    state_variable_access.checkNoRemainingSubstitutions();
 }
 
 constexpr decltype(ComponentFactory::type_name) ComponentFactory::type_name;

@@ -341,6 +341,19 @@ TEST(PermissionsTests, TestSubstitute) {
             make_permission(PermissionTypes::ReadIfSet, "d"));
 }
 
+TEST(PermissionsTests, TestRemainingSubstitutions) {
+  const Permissions p1 = {readOnly("species:h+:density"), readWrite("fields:phi")};
+  const Permissions p2 = {readOnly("species:{all_species}:density"),
+                          writeFinal("fields:phi")};
+  const Permissions p3 = {readOnly("species:{all_species}:{inputs}"),
+                          readIfSet("species:{ions}:{maybe_inputs}")};
+  const Permissions p4 = {};
+  p1.checkNoRemainingSubstitutions();
+  EXPECT_THROW(p2.checkNoRemainingSubstitutions(), BoutException);
+  EXPECT_THROW(p3.checkNoRemainingSubstitutions(), BoutException);
+  p4.checkNoRemainingSubstitutions();
+}
+
 TEST(PermissionsTests, TestIO) {
   const Permissions empty({});
   const Permissions single({readOnly("test")});

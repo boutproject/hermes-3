@@ -5,6 +5,7 @@
 #include <istream>
 #include <map>
 #include <ostream>
+#include <regex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -175,6 +176,11 @@ public:
   void substitute(const std::string& label,
                   const std::vector<std::string>& substitutions);
 
+  /// Check there are no remaining placeholders that have not been
+  /// substituted in any variables names. If there are, then throw an
+  /// exception.
+  void checkNoRemainingSubstitutions() const;
+
   /// Check whether users are allowed to access this variable to the
   /// given permission level, in the given region. The second item
   /// returned indicates the name of the variable or section from
@@ -234,6 +240,8 @@ private:
   VarRights bestMatchRights(const std::string& variable) const;
 
   std::map<std::string, AccessRights> variable_permissions;
+
+  static const std::regex LABEL_RE;
 };
 
 /// Format `Permissions` to string. Format string specification is the

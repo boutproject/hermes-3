@@ -37,6 +37,8 @@
 // There should be ways to do this with templates to allow greater inlining
 //
 
+const std::regex Permissions::LABEL_RE{"\\{([^}]+)\\}"};
+
 /// Return a set of access rights where the lower permissions have
 /// been updated so that they reflect higher permissions (e.g., read
 /// permission will be set in all cases where write permission was
@@ -99,6 +101,19 @@ void Permissions::substitute(const std::string& label,
         variable_permissions[newname] = access;
       }
     }
+  }
+}
+
+void Permissions::checkNoRemainingSubstitutions() const {
+  std::vector<std::string> unsubstituted;
+  for (const auto& [varname, _] : variable_permissions) {
+    if (std::regex_search(varname, LABEL_RE)) {
+      unsubstituted.push_back(varname);
+    }
+  }
+  if (unsubstituted.size() > 0) {
+    throw BoutException("The following variable names have unsubstituted labels: {}",
+                        fmt::join(unsubstituted, ", "));
   }
 }
 

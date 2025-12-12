@@ -117,7 +117,8 @@ struct Component {
                                            Solver *solver); // Time integration solver
 
   /// Tell the component the name of all species in the simulation, by type. It
-  /// will use this information to substitute the following placeholders in `state_variable_access`:
+  /// will use this information to substitute the following placeholders in
+  /// `state_variable_access`:
   ///   - electrons (any electron species)
   ///   - electrons2 (same as above, used for cross-product)
   ///   - neutrals (species with no charge)
@@ -134,6 +135,10 @@ struct Component {
   ///   - non_electrons2 (same as above, used for cross-product)
   ///   - all_species (ions, neutrals, and electrons)
   ///   - all_species2 (same as above, used for cross-product)
+  ///
+  /// At the end of this function there is a call to
+  /// Permissions::checkNoRemainingSubstitutions. All substitutions
+  /// must be completed or else an exception will be thrown.
   void declareAllSpecies(const SpeciesInformation & info);
 
 protected:
