@@ -618,6 +618,17 @@ species and density of ions::
 See the documentation for `Component::declareAllSpecies` for a list of
 all substitutions that will be performed.
 
+Components may request the creation of additional components, upon
+which they depend. This is done by overriding the
+`Component::additionalComponents` method, which returns a list of
+`ComponentInformation` structs that specify the names and types of
+components required. These extra components will use the default
+settings for components of this type, unless other values are
+specified in a section of the input file with the component name.
+
+.. doxygenstruct:: ComponentInformation
+   :members:
+
 
 Component scheduler
 ~~~~~~~~~~~~~~
@@ -632,7 +643,10 @@ and then in `Hermes::rhs` the components are run by a call::
 
 The call to `ComponentScheduler::create` treats the "components"
 option as a comma-separated list of names. For each name in the list,
-the scheduler looks up the options under the section of that name. The
+the scheduler looks up the options under the section of that name. If
+any of the listed components request further components
+(via the `Component::AdditionalComponents` method) then these will be
+created too. The
 ``ComponentScheduler`` will use permission information stored by each
 component in `Component::state_variable_access` to work out the order
 to execute components. It will ensure that all writes to a variable
