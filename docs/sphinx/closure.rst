@@ -39,7 +39,12 @@ The parallel projection of diffusion from the wall in 1D
 is captured in the :ref:`neutral_parallel_diffusion` top-level component, while 
 both parallel Braginskii transport and perpendicular pressure-diffusion for 2D/3D 
 are captured in the :ref:`neutral_mixed` species-level component. 
-   
+
+A user can automatically activate all of these components at once
+using the `BraginskiiClosure` component.
+
+.. doxygenclass:: BraginskiiClosure
+   :members:
 
 
 Collision frequency selection

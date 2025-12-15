@@ -7,9 +7,18 @@
 #include "component.hxx"
 
 /// Meta-component to set up all components necessary for the
-/// Braginskii closure.
+/// Braginskii closure: `braginskii_collisions`,
+/// `braginskii_friction`, `braginskii_heat_exchange`,
+/// `braginskii_conduction`, `braginskii_electron_viscosity`,
+/// `braginskii_ion_viscosity`, and `braginskii_thermal_force`. Each
+/// of these components will have the same name as its type.
 class BraginskiiClosure : public Component {
 public:
+  /// @param alloptions Settings, which may include
+  ///    - <name>
+  ///      - electron_viscosity  : bool    Include electron viscosity? (default: true)
+  ///      - ion_viscosity  : bool    Include ion viscosity? (default: true)
+  ///      - thermal_force  : bool    Inlucde thermal force between species? (default: true)
   BraginskiiClosure(std::string name, Options& alloptions, Solver*) : Component({}) {
     Options& options = alloptions[name];
     electron_viscosity = options["electron_viscosity"]
