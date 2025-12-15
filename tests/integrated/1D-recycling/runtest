@@ -80,6 +80,16 @@ def fail_on_missing_exec():
 def fail_test():
     end_test(False)
 
+def optimisation_level(run_output):
+    comp_flags_line=[l for l in run_output.split('\n') if l.startswith("\tCompiled with flags")]
+    if len(comp_flags_line)==1:
+        comp_flags = comp_flags_line[0].split()
+        for opt_level in range(4):
+            if f"-O{opt_level}" in comp_flags:
+                return opt_level
+        # No optimisation flag found; assume -O0
+        return 0
+    raise RuntimeError("Failed to find compile flags in run output")
 
 def optimisation_level(run_output):
     comp_flags_line = [
