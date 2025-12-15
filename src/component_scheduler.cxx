@@ -15,7 +15,15 @@ const std::set<std::string> ComponentScheduler::predeclared_variables = {
     "time",          "linear",      "units:inv_meters_cubed", "units:eV", "units:Tesla",
     "units:seconds", "units:meters"};
 
-/// Perform a depth-first topological sort, starting from `item`.
+/// Perform a depth-first topological sort, starting from `item`. It
+/// will finish once it reaches the end of `item`'s dependency chain,
+/// so this needs to be called in a loop for all items. Information
+/// about `item` is stored in the corresponding index of the vector
+/// arguments.
+///
+/// In pratice, `item` here represents the index of a particular
+/// component. The indices of the dependencies of `item` are stored in
+/// the corresponding element of `dependencies`.
 void topological_sort(const std::vector<std::set<size_t>>& dependencies, size_t item,
                       std::vector<size_t>& sorted, std::vector<bool>& processing,
                       std::vector<bool>& processed) {
@@ -34,6 +42,8 @@ void topological_sort(const std::vector<std::set<size_t>>& dependencies, size_t 
   sorted.push_back(item);
 }
 
+/// Get all the parent sections of a variable "path". Sections are
+/// separated by colons in the path.
 std::set<std::string> getParents(const std::string& name) {
   std::set<std::string> result;
   size_t start = 0, position = name.find(":", start);
@@ -45,9 +55,12 @@ std::set<std::string> getParents(const std::string& name) {
   return result;
 }
 
-/// Produce a map between Option paths and all variable names held within
-/// that path. If a path does not refer to a section then it just maps
-/// to itself.
+/// Produce a map between Option paths and all variable names held
+/// within that path. If the path refers to a section then it maps to
+/// the set of all variables contained in that section and any
+/// sub-sections. Otherwise the path corresponds to a variable and
+/// just maps to itself. Only paths which are explicitly given a
+/// permission by at least one component will be present.
 std::map<std::string, std::set<std::string>>
 getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) {
   // Build up a set of all variable names which are read only if they
@@ -61,7 +74,7 @@ getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) 
     }
   }
 
-  // Build up a set of all variable names which are definitely
+  // Build up a set of all section/variable names which are definitely
   // read/written by components, and the sections which they imply
   // exist
   std::set<std::string> unconditional_names, unconditional_sections;
@@ -74,12 +87,15 @@ getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) 
     }
   }
 
-  // Split the set of all variable names used by components into
-  // those that are sections and those that are not.
-  std::set<std::string> sections_present, non_sections;
+  /// Assemble the set of all section names which are referred to
+  /// explicitly in the component permissions.
+  std::set<std::string> sections_present;
   std::set_intersection(unconditional_names.begin(), unconditional_names.end(),
                         unconditional_sections.begin(), unconditional_sections.end(),
                         std::inserter(sections_present, sections_present.begin()));
+  /// Assemble the set of all variable names which are definitlye
+  /// read/written by components (i.e., not including sections)
+  std::set<std::string> non_sections;
   std::set_difference(unconditional_names.begin(), unconditional_names.end(),
                       sections_present.begin(), sections_present.end(),
                       std::inserter(non_sections, non_sections.begin()));
@@ -90,7 +106,9 @@ getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) 
   // reference elsewhere. We create them with empty sets, which will
   // get filled if they are present.
   for (const auto& name : conditional_names) {
-    result.insert({name, {name}});
+    // FIXME: this isn't an empty set
+    //result.insert({name, {name}});
+    result.insert({name, {}});
   }
 
   // Non-sections map to themselves
@@ -131,6 +149,8 @@ expandVariableName(const std::map<std::string, std::set<std::string>>& hierarchy
 
 using Var = std::pair<std::string, Regions>;
 
+/// Create a map between a variable and the set of components that
+/// access it with the specified permission level.
 std::map<Var, std::set<size_t>>
 getPermissionComponentMap(const std::vector<std::unique_ptr<Component>>& components,
                           const std::map<std::string, std::set<std::string>>& hierarchy,
@@ -153,8 +173,11 @@ getPermissionComponentMap(const std::vector<std::unique_ptr<Component>>& compone
 }
 
 /// Modifies component_dependencies to include information on which
-/// variables each component reads. Returns a set of any read
-/// variables which are not written by any component.
+/// components depend on each other. It does this by making components
+/// which read a variable depend on whichever component(s) write that
+/// variable (information contained in the `writers`
+/// argument). Returns a set of any read variables which are not
+/// written by any component.
 std::set<std::string>
 setReadDependencies(const std::vector<std::unique_ptr<Component>>& components,
                     const std::map<std::string, std::set<std::string>>& hierarchy,
@@ -193,7 +216,10 @@ setReadDependencies(const std::vector<std::unique_ptr<Component>>& components,
 /// the right order.
 std::vector<std::unique_ptr<Component>>
 sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
-  // Map variables to the components that write them
+  // Map between variable/section names specified by component
+  // permissions and the variables they contain. In the case of
+  // sections this is all variables within the section and any
+  // sub-sections. Non-section viarables map to themselves.
   std::map<std::string, std::set<std::string>> variable_hierarchy =
       getVariableHierarchy(components);
 
@@ -205,6 +231,10 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
                                       components, variable_hierarchy,
                                       PermissionTypes::Final);
 
+  // Object mapping between components (reprsented by the index of
+  // that component in the `components` argument) and the components
+  // each of these depends upon (represented by a set of the indices
+  // for those components).
   std::vector<std::set<size_t>> component_dependencies(components.size());
 
   // Components which do a final write on a variable depend on all
@@ -217,22 +247,27 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
     for (size_t i : comp_indices) {
       const auto item = nonfinal_writes.find(var);
       if (item != nonfinal_writes.end()) {
-        // Note that calling merge actually removes the items from
-        // nonfinal_writes. This is fine because the only remaining
-        // thing for which we will use nonfinal_writes is setting up
-        // variable_writers. That doesn't use any information on
-        // nonfinal writes for variables which have a final write, so
-        // it won't do any harm to remove it.
+        // Note that calling merge actually removes the items from the
+        // sets stored in nonfinal_writes. This is fine because the
+        // only remaining thing for which we will use nonfinal_writes
+        // is setting up variable_writers and that doesn't use any
+        // information on variables which have a final
+        // write. Therefore it won't do any harm hear to remove
+        // information about variables which have a final write..
         component_dependencies[i].merge(item->second);
       }
     }
   }
 
-  // Work out which component(s) last write a variable before it may be read
+  // Work out which component(s) last write a variable before it may
+  // be read. For variables with a final-write, it is whichever
+  // component performs that final write.
   std::map<Var, std::set<size_t>> variable_writers = std::move(final_writes);
+  // For other variables, it is the set of all components which have
+  // write permission.
   variable_writers.merge(std::move(nonfinal_writes));
 
-  // Create dependency information for read variables
+  // Insert dependency information for components that (unconditionally) read variables
   std::set<std::string> missing =
       setReadDependencies(components, variable_hierarchy, variable_writers,
                           PermissionTypes::Read, component_dependencies);
@@ -241,8 +276,9 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
         "The following required variables are not written by any component:\n\t{}\n",
         fmt::format("{}", fmt::join(missing, "\n\t")));
   }
-  // If can not find a place where a ReadIfSet variable is written, it will just be
-  // skipped
+  // Insert dependency information for components that read variables
+  // if those variables have been set. If can not find a place where
+  // the variable is written, it will just be skipped.
   setReadDependencies(components, variable_hierarchy, variable_writers,
                       PermissionTypes::ReadIfSet, component_dependencies);
 
