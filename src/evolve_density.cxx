@@ -371,6 +371,15 @@ void EvolveDensity::outputVars(Options& state) {
                                                 {"species", name},
                                                 {"source", "evolve_density"}});
 
+  set_with_attrs(state[std::string("S") + name + std::string("_src")], final_source,
+                   {{"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "external density source"},
+                    {"long_name", name + " external number density source"},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+
+
   if (diagnose) {
     set_with_attrs(
         state[std::string("ddt(N") + name + std::string(")")], ddt(N),
@@ -390,14 +399,6 @@ void EvolveDensity::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_density"}});
 
-    set_with_attrs(state[std::string("S") + name + std::string("_src")], final_source,
-                   {{"time_dimension", "t"},
-                    {"units", "m^-3 s^-1"},
-                    {"conversion", Nnorm * Omega_ci},
-                    {"standard_name", "external density source"},
-                    {"long_name", name + " external number density source"},
-                    {"species", name},
-                    {"source", "evolve_density"}});
 
     // If fluxes have been set then add them to the output
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);
