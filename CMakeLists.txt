@@ -302,6 +302,22 @@ if(HERMES_TESTS)
     # Have hermes_unit_tests look for dynamic libs in ./ before searching elsewhere
     set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
   endif()
+  
+# Method of manufactured solutions (MMS) tests
+  option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
+  if(HERMES_DIVOPS_MMS_TESTS)
+    #TEST_SOURCES=
+    add_executable(hermes_mms_tests
+                   tests/mms/main.cxx)
+                   #${TEST_SOURCES})
+    target_link_libraries(hermes_mms_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
+    add_test(NAME differential_operators_mms_orthogonal
+           WORKING_DIRECTORY tests/mms/
+           COMMAND python3 orthogonal_test.py)
+    add_test(NAME differential_operators_mms_nonorthogonal
+           WORKING_DIRECTORY tests/mms/
+           COMMAND python3 nonorthogonal_test.py)
+  endif()
 endif()
 
 # Compile-time options
