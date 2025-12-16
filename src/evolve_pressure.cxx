@@ -552,6 +552,16 @@ void EvolvePressure::outputVars(Options& state) {
                                                 {"species", name},
                                                 {"source", "evolve_pressure"}});
 
+  
+  set_with_attrs(state[std::string("P") + name + std::string("_src")], final_source,
+                   {{"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+  
   if (diagnose) {
     if (thermal_conduction) {
       set_with_attrs(state[std::string("kappa_par_") + name], kappa_par,
@@ -588,14 +598,6 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    set_with_attrs(state[std::string("P") + name + std::string("_src")], final_source,
-                   {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
-                    {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "pressure source"},
-                    {"long_name", name + " pressure source"},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
 
     if (flow_xlow.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
