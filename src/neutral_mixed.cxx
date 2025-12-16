@@ -64,7 +64,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
     .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
   
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pressure_floor = density_floor * temperature_floor;
 
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
@@ -92,6 +92,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(false);
 
+  freeze_low_density = options["freeze_low_density"]
+    .doc("Freeze evolution in low density regions?")
+    .withDefault<bool>(false);
+  
   if (precondition) {
     inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
 
@@ -192,17 +196,14 @@ void NeutralMixed::transform(Options& state) {
 
   // Nnlim Used where division by neutral density is needed
   Nnlim = floor(Nn, density_floor);
+  
   Tn = Pn / Nnlim;
-  Tn.applyBoundary();
-
+  
   Vn = NVn / (AA * Nnlim);
-  Vnlim = Vn;
-
   Vn.applyBoundary("neumann");
-  Vnlim.applyBoundary("neumann");
-
+  
   Pnlim = floor(Pn, pressure_floor);
-  Pnlim.applyBoundary();
+
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
@@ -248,7 +249,6 @@ void NeutralMixed::finally(const Options& state) {
   // Field3D logTn = log(Tn);
 
   logPnlim = log(Pnlim);
-  logPnlim.applyBoundary();
 
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
@@ -286,8 +286,10 @@ void NeutralMixed::finally(const Options& state) {
 
   
   
-  Dnn.applyBoundary();
+  Dnn.applyBoundary("neumann");
   mesh->communicate(Dnn);
+  Dnn.applyParallelBoundary("parallel_neumann_o1");
+  
   if (!Dnn.isFci()) {
     Dnn.clearParallelSlices();
   }
@@ -296,15 +298,6 @@ void NeutralMixed::finally(const Options& state) {
   DnnNn = Dnn * Nnlim;
   DnnPn = Dnn * Pnlim;
   DnnNVn = Dnn * NVn;
-
-  DnnPn.applyBoundary();
-  DnnNn.applyBoundary();
-  DnnNVn.applyBoundary();
-
-
-  if (DnnNn.isFci()){
-    mesh->communicate(DnnNn);
-  }
   
   yboundary.iter_pnts([&](auto& pnt) {
     pnt.dirichlet_o2(Dnn, 0.0);
@@ -462,6 +455,41 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
+  if (freeze_low_density) {
+    // Apply a factor to time derivatives in low density regions.
+    // Keep the sources and sinks, so that temperature and flow
+    // equilibriates with the plasma through collisions.
+
+    Field3D Nn_s, Pn_s, NVn_s;
+    if (localstate.isSet("density_source")) {
+      Nn_s = get<Field3D>(localstate["density_source"]);
+    } else {
+      Nn_s = 0.0;
+    }
+    if (localstate.isSet("energy_source")) {
+      Pn_s = (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    } else {
+      Pn_s = 0.0;
+    }
+    if (localstate.isSet("momentum_source")) {
+      NVn_s = get<Field3D>(localstate["momentum_source"]);
+    } else {
+      NVn_s = 0.0;
+    }
+
+
+    BOUT_FOR(i, Pn.getRegion("RGN_NOY")) {
+      // Local average density.
+      // The purpose is to turn on evolution when nearby cells contain significant density.
+      const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
+      const BoutReal factor = exp(- density_floor / meanNn);
+      ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
+      ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
+      ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
+    }
+  }
+
+  
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
