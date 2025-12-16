@@ -9,7 +9,10 @@
 
 struct SimplePump : public Component {
 
-  SimplePump(std::string name, Options& alloptions, Solver*) : name(name) {
+  SimplePump(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:{name}:density", Regions::Interior),
+                   readWrite("species:{name}:density_source")}),
+        name(name) {
 
     Options& options = alloptions[name];
 
@@ -31,17 +34,8 @@ struct SimplePump : public Component {
                   .doc("Output additional diagnostics?")
                   .withDefault<bool>(false);
 
-    };
-
-    void transform(Options& state) override {
-
-        Field3D species_density = getNoBoundary<Field3D>(state["species"][name]["density"]);
-
-        pumping_sink = (sink_shape * species_density) * (-1.0 / residence_time);
-
-        add(state["species"][name]["density_source"], pumping_sink);
-
-    };
+    substitutePermissions("name", {name});
+  };
 
     void outputVars(Options& state) override {
     AUTO_TRACE();
@@ -69,6 +63,15 @@ struct SimplePump : public Component {
     BoutReal residence_time;
     bool diagnose;
 
+    void transform_impl(GuardedOptions& state) override {
+
+        Field3D species_density = getNoBoundary<Field3D>(state["species"][name]["density"]);
+
+        pumping_sink = (sink_shape * species_density) * (-1.0 / residence_time);
+
+        add(state["species"][name]["density_source"], pumping_sink);
+
+    };
 };
 
 namespace {

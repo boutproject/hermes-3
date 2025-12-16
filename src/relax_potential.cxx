@@ -6,7 +6,8 @@ using bout::globals::mesh;
 #include "../include/div_ops.hxx"
 #include "../include/relax_potential.hxx"
 
-RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver) {
+RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver)
+    : Component({readWrite("fields:vorticity"), readWrite("fields:phi")}) {
   AUTO_TRACE();
 
   auto* coord = mesh->getCoordinates();
@@ -44,6 +45,16 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
 
   if (diamagnetic) {
+    // FIXME: These will only be read if BOTH charge and pressure are set
+    setPermissions(readIfSet("species:{charged}:pressure", Regions::Interior));
+    setPermissions(readIfSet("species:{all_species}:charge"));
+    // FIXME: The weay transform_impl is currently written,
+    // energy_source is set for neutral species with an explicit
+    // charge declared as 0 if diamagnetic_polarisation == true. I
+    // suspect that's a mistake though.
+    setPermissions(readWrite("species:{all_species}:energy_source"));
+    setPermissions(readWrite("fields:DivJdia"));
+
     // Read curvature vector
     try {
       Curlb_B.covariant = false; // Contravariant
@@ -78,7 +89,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   Bsq = SQ(coord->Bxy);
 }
 
-void RelaxPotential::transform(Options& state) {
+void RelaxPotential::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Scale potential
@@ -86,7 +97,7 @@ void RelaxPotential::transform(Options& state) {
   phi.applyBoundary("neumann");
   Vort.applyBoundary("neumann");
 
-  auto& fields = state["fields"];
+  auto fields = state["fields"];
 
   ddt(Vort) = 0.0;
 
@@ -100,13 +111,13 @@ void RelaxPotential::transform(Options& state) {
     Jdia.z = 0.0;
     Jdia.covariant = Curlb_B.covariant;
 
-    Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
 
     // Pre-calculate this rather than calculate for each species
     Vector3D Grad_phi = Grad(phi);
 
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
+      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
       if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
             and (get<BoutReal>(species["charge"]) != 0.0))) {
@@ -135,8 +146,9 @@ void RelaxPotential::transform(Options& state) {
       // Calculate energy exchange term nonlinear in pressure
       // ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
       for (auto& kv : allspecies.getChildren()) {
-        Options& species = allspecies[kv.first]; // Note: need non-const
+        GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
+        // FIXME: Should this apply even if charge is 0?
         if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
               and IS_SET(species["AA"]))) {
           continue; // No pressure, charge or mass -> no polarisation current due to

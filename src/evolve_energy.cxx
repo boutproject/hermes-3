@@ -17,7 +17,9 @@
 using bout::globals::mesh;
 
 EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver)
-    : name(name) {
+    : Component(
+        {readOnly("species:{name}:{inputs}"), readWrite("species:{name}:{outputs}")}),
+      name(name) {
   AUTO_TRACE();
 
   auto& options = alloptions[name];
@@ -111,9 +113,13 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
   thermal_conduction = options["thermal_conduction"]
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
+
+  substitutePermissions("name", {name});
+  substitutePermissions("inputs", {"AA", "density", "velocity"});
+  substitutePermissions("outputs", {"pressure", "temperature"});
 }
 
-void EvolveEnergy::transform(Options& state) {
+void EvolveEnergy::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   if (evolve_log) {
@@ -123,7 +129,7 @@ void EvolveEnergy::transform(Options& state) {
 
   mesh->communicate(E);
 
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
   N = getNoBoundary<Field3D>(species["density"]);
   const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
   const BoutReal AA = get<BoutReal>(species["AA"]);

@@ -19,7 +19,10 @@
 #include "../include/component.hxx"
 
 BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name,
-                                                         Options& alloptions, Solver*) {
+                                                         Options& alloptions, Solver*)
+    : Component({readIfSet("species:e:pressure"), readIfSet("species:e:velocity"),
+                 readOnly("species:e:collision_frequency"),
+                 readWrite("species:e:momentum_source")}) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]
@@ -29,10 +32,10 @@ BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name
   diagnose = options["diagnose"].doc("Output diagnostics?").withDefault<bool>(false);
 }
 
-void BraginskiiElectronViscosity::transform(Options& state) {
+void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& species = state["species"]["e"];
+  GuardedOptions species = state["species"]["e"];
 
   if (!isSetFinal(species["pressure"], "electron_viscosity")) {
     throw BoutException("No electron pressure => Can't calculate electron viscosity");

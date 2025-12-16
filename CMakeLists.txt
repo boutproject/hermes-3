@@ -73,6 +73,7 @@ set(HERMES_SOURCES
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
+    src/guarded_options.cxx
     src/isothermal.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
@@ -93,6 +94,7 @@ set(HERMES_SOURCES
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
     src/neutral_boundary.cxx
+    src/permissions.cxx
     src/polarisation_drift.cxx
     src/solkit_neutral_parallel_diffusion.cxx
     src/hydrogen_charge_exchange.cxx
@@ -133,6 +135,7 @@ set(HERMES_SOURCES
     include/fixed_density.hxx
     include/fixed_fraction_ions.hxx
     include/fixed_velocity.hxx
+    include/guarded_options.hxx
     include/neutral_full_velocity.hxx
     include/hermes_utils.hxx
     include/hydrogen_charge_exchange.hxx
@@ -144,6 +147,7 @@ set(HERMES_SOURCES
     include/neutral_parallel_diffusion.hxx
     include/solkit_neutral_parallel_diffusion.hxx
     include/noflow_boundary.hxx
+    include/permissions.hxx
     include/polarisation_drift.hxx
     include/quasineutral.hxx
     include/reaction.hxx

@@ -42,20 +42,6 @@ struct BraginskiiIonViscosity : public Component {
   ///
   BraginskiiIonViscosity(const std::string& name, Options& alloptions, Solver*);
 
-  /// Inputs
-  /// - species
-  ///   - <name>   (skips "e")
-  ///     - pressure  (skips if not present)
-  ///     - velocity  (skips if not present)
-  ///     - collision_frequency
-  ///
-  /// Sets in the state
-  /// - species
-  ///   - <name>
-  ///     - momentum_source
-  ///
-  void transform(Options& state) override;
-
   /// Save variables to the output
   void outputVars(Options& state) override;
 
@@ -86,6 +72,26 @@ private:
 
   /// Store diagnostics for each species
   std::map<std::string, Diagnostics> diagnostics;
+
+  /// Inputs
+  /// - species
+  ///   - <name>   (skips "e")
+  ///     - charge
+  ///     - pressure  (skips if not present)
+  ///     - velocity  (skips if not present)
+  ///     - collision_frequency
+  ///   - fields
+  ///     - phi
+  ///
+  /// Sets in the state
+  /// - species
+  ///   - <name>
+  ///     - momentum_source
+  ///     - energy_source
+  ///   - fields
+  ///     - DivJextra
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

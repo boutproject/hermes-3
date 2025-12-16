@@ -26,7 +26,10 @@
 using bout::globals::mesh;
 
 BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptions,
-                                           Solver*) {
+                                           Solver*)
+    : Component({readOnly("species:{sp}:{input_vars}"),
+                 writeBoundary("species:{sp}:pressure"),
+                 readWrite("species:{sp}:{output_vars}")}) {
   AUTO_TRACE();
 
   // Get settings for each species
@@ -85,9 +88,34 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
                  "braginskii: self collisions and ie")
             .withDefault<std::string>("multispecies");
   }
+
+  std::vector<std::string> coll_types;
+
+  substitutePermissions("input_vars", {"AA", "density", "temperature"});
+  substitutePermissions("output_vars",
+                        {"energy_source", "kappa_par", "energy_flow_ylow"});
+  std::vector<std::string> species;
+  for (const auto& [sp, mode] : all_conduction_collisions_mode) {
+    species.push_back(sp);
+    if (mode == "braginskii" and identifySpeciesType(sp) != SpeciesType::neutral) {
+      setPermissions(readIfSet(
+          fmt::format("species:{}:collision_frequencies:{}_{}_coll", sp, sp, sp)));
+    } else if (mode == "multispecies") {
+      setPermissions(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_coll",
+                                           sp, sp, "{all_species}")));
+      setPermissions(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_cx",
+                                           sp, sp, "{all_species}")));
+    } else if (mode == "AFN" and identifySpeciesType(sp) == SpeciesType::neutral) {
+      setPermissions(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_cx",
+                                           sp, sp, "{positive_ions}")));
+      setPermissions(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_iz",
+                                           sp, sp, "{positive_ions}")));
+    }
+  }
+  substitutePermissions("sp", species);
 }
 
-void BraginskiiConduction::transform(Options& state) {
+void BraginskiiConduction::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   for (auto& kv : state["species"].getChildren()) {
@@ -97,8 +125,8 @@ void BraginskiiConduction::transform(Options& state) {
       continue;
     }
     /// Get the section containing this species
-    auto& species = state["species"][name];
-    std::string const conduction_collisions_mode = all_conduction_collisions_mode[name];
+    auto species = state["species"][name];
+    const std::string conduction_collisions_mode = all_conduction_collisions_mode[name];
 
     // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
     if (all_collision_names.count(name) == 0) { /// Calculate only once - at the beginning
@@ -205,7 +233,7 @@ void BraginskiiConduction::transform(Options& state) {
     // FIXME: We end up applying these operations twice: here and in
     // EvolvePressure::finally
 
-    Field3D P = species["pressure"];
+    Field3D P = GET_VALUE(Field3D, species["pressure"]);
     P.clearParallelSlices();
     P.setBoundaryTo(get<Field3D>(species["pressure"]));
     Field3D const Pfloor = floor(P, 0.0); // Restricted to never go below zero

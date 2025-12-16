@@ -37,24 +37,6 @@ struct Electromagnetic : public Component {
   ///
   Electromagnetic(std::string name, Options &options, Solver *solver);
 
-  /// Inputs
-  /// - species
-  ///   - <..>      All species with charge and parallel momentum
-  ///     - charge
-  ///     - momentum
-  ///     - density
-  ///     - AA
-  ///
-  /// Sets
-  /// - species
-  ///   - <..>      All species with charge and parallel momentum
-  ///     - momentum  (modifies) to m n v||
-  ///     - velocity  (modifies) to v||
-  /// - fields
-  ///   - Apar      Electromagnetic potential
-  ///
-  void transform(Options &state) override;
-
   // Save and restore Apar from restart files
   void restartVars(Options& state) override;
 
@@ -75,6 +57,24 @@ private:
   Field3D Apar_flutter;
 
   bool diagnose; ///< Output additional diagnostics?
+
+  /// Inputs
+  /// - species
+  ///   - <..>      All species with charge and parallel momentum
+  ///     - charge
+  ///     - momentum
+  ///     - density
+  ///     - AA
+  ///
+  /// Sets
+  /// - species
+  ///   - <..>      All species with charge and parallel momentum
+  ///     - momentum  (modifies) to m n v||
+  ///     - velocity  (modifies) to v||
+  /// - fields
+  ///   - Apar      Electromagnetic potential
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
