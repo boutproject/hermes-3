@@ -30,7 +30,12 @@ private:
 
   Field3D alpha;
 
+  Field3D gradPgradB_X, gradPgradB_Z;
+  Field3D DDX_P, DDX_B;
+  Field3D DDZ_P, DDZ_B;
   Field3D gamma;
+
+  bool diffusion, advection;
   
   Field3D S_k;
 
@@ -38,6 +43,8 @@ private:
 
   bool dissipative;
 
+  bool propagate;
+  
   Field3D Bxy;
   
   BoutReal R_major;
@@ -47,6 +54,8 @@ private:
   BoutReal lambda_q;
   Field3D SQ_lambdda_SOL;
 
+  BoutReal chi_factor, nu_factor;
+  
   std::shared_ptr<FCI::dagp_fv> dagp;
 
   bool diagnose;
