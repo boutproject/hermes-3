@@ -489,13 +489,14 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh, std::shared_ptr<SYCLTarget> syc
 void extract_ionised_density_in_place(Field2D& density,
       std::shared_ptr<CellwiseAccumulator<double>>& accumulator_transform,
       std::shared_ptr<ParticleGroup>& A_particle_group,
-      std::shared_ptr<TransformationStrategy>& source_zeroer) {
+      std::shared_ptr<TransformationStrategy>& source_zeroer,
+      std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh) {
   Mesh* bout_mesh = density.getMesh();
   std::vector<CellData<double>> accumulated_1d = accumulator_transform->get_cell_data("ION_SOURCE_DENSITY");
   PetscInt ic = 0;
   for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
     for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
-      density(ix, iy) += accumulated_1d[ic]->at(0,0);
+      density(ix, iy) += accumulated_1d[ic]->at(0,0)/neso_mesh->dmh->get_cell_volume(ic);
       ic++;
     }
   }
@@ -540,12 +541,13 @@ void calculate_fluid_moments_in_place(Field2D& neutral_density, Field2D& ion_den
       std::shared_ptr<ParticleGroup>& A_particle_group,
       std::vector<double>& h_project1,
       std::shared_ptr<CellwiseAccumulator<double>>& accumulator_transform,
-      std::shared_ptr<TransformationStrategy>& source_zeroer){
+      std::shared_ptr<TransformationStrategy>& source_zeroer,
+      std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh){
   // calculate all of the fluid moments required for the moment, from data in
   // the particle group. Set to zero any particle properties needed in preparation
   // for the next time step.
   calculate_density_in_place(neutral_density, dg0, A_particle_group, h_project1);
-  extract_ionised_density_in_place(ion_density, accumulator_transform, A_particle_group, source_zeroer);
+  extract_ionised_density_in_place(ion_density, accumulator_transform, A_particle_group, source_zeroer, neso_mesh);
 }
 
 double calculate_total_mass(Field2D& density, std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh){
@@ -893,7 +895,7 @@ int main(int argc, char** argv) {
     set_initial_particle_weights(initial_neutral_density, dg0, A_particle_group, neso_mesh, h_project1);
     // update fluid moments
     calculate_fluid_moments_in_place(neutral_density, ion_density,
-      dg0, A_particle_group, h_project1, accumulator_transform, source_zeroer);
+      dg0, A_particle_group, h_project1, accumulator_transform, source_zeroer, neso_mesh);
     // diagnose the initial condition
     std::string particle_data_filename = fmt::format("bout_particle_moments_{}.nc",mpi_rank);
     Options bout_output_data = initialise_diagnostics(neutral_density, ion_density,
@@ -914,7 +916,7 @@ int main(int argc, char** argv) {
       // A_particle_group->print(Sym<REAL>("POSITION"), Sym<INT>("ID"), Sym<REAL>("WEIGHT"), Sym<REAL>("ION_SOURCE_DENSITY"));
       // update fluid moments
       calculate_fluid_moments_in_place(neutral_density, ion_density,
-        dg0, A_particle_group, h_project1, accumulator_transform, source_zeroer);
+        dg0, A_particle_group, h_project1, accumulator_transform, source_zeroer, neso_mesh);
       // diagnose timestep stepx
       update_diagnostics(neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
         h_project1, bout_output_data, particle_data_filename);
