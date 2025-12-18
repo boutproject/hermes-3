@@ -49,6 +49,17 @@ else()
   find_package(bout++ REQUIRED)
 endif()
 
+
+find_package(MPI REQUIRED)
+
+# option for whether or not to compile with VANTAGE-Reactions and NESO-Particles
+option(HERMES_USE_VANTAGE "Build Hermes with VANTAGE" OFF)
+if(HERMES_USE_VANTAGE)
+  find_package(NESO-Particles REQUIRED)
+  find_sycl_if_required()
+  find_package(VANTAGE-Reactions REQUIRED)
+endif()
+
 set(HERMES_SOURCES
     src/classical_diffusion.cxx
     src/component.cxx
@@ -164,7 +175,15 @@ set(HERMES_SOURCES
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
 
-target_link_libraries(hermes-3-lib PRIVATE bout++::bout++)
+# link to bout++
+target_link_libraries(hermes-3-lib PUBLIC bout++::bout++)
+# logic for linking libraries with an optional VANTAGE-Reactions dependence
+if(HERMES_USE_VANTAGE)
+  # preprocessor flag for optional VANTAGE includes
+  target_compile_definitions(hermes-3-lib PUBLIC HERMES_INCLUDE_VANTAGE)
+  # link to VANTAGE-Reactions libraries
+  target_link_libraries(hermes-3-lib PUBLIC VANTAGE-Reactions::VANTAGE-Reactions)
+endif()
 
 target_compile_features(hermes-3-lib PUBLIC cxx_std_17)
 set_target_properties(hermes-3-lib PROPERTIES CXX_EXTENSIONS OFF)
@@ -177,13 +196,14 @@ target_include_directories(hermes-3-lib PUBLIC
 
 # Have hermes-3-lib look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3-lib PROPERTIES BUILD_RPATH "$ORIGIN")
-
+if(HERMES_USE_VANTAGE)
+  add_sycl_to_target(TARGET hermes-3-lib SOURCES ${HERMES_SOURCES})
+endif()
 # The main executable target
 add_executable(hermes-3
                hermes-3.cxx
                ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
-
-target_link_libraries(hermes-3 PRIVATE bout++::bout++ hermes-3-lib)
+target_link_libraries(hermes-3 PRIVATE hermes-3-lib)
 
 target_include_directories(hermes-3 PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -193,7 +213,9 @@ target_include_directories(hermes-3 PUBLIC
 
 # Have hermes-3 look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3 PROPERTIES BUILD_RPATH "$ORIGIN")
-
+if(HERMES_USE_VANTAGE)
+  add_sycl_to_target(TARGET hermes-3 SOURCES hermes-3.cxx)
+endif()
 # Build the file containing just the commit hash
 # This will be rebuilt on every commit!
 configure_file(
@@ -222,6 +244,15 @@ if(HERMES_COPY_TESTS_TO_BUILD)
                     ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
 endif()
 
+if(HERMES_USE_VANTAGE)
+  # Test of bout+neso
+  add_executable(bout-particle-push
+                bout-particle-push.cxx
+                ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
+  target_link_libraries(bout-particle-push PUBLIC bout++::bout++ VANTAGE-Reactions::VANTAGE-Reactions)
+  add_sycl_to_target(TARGET bout-particle-push SOURCES bout-particle-push.cxx)
+endif()
+
 # Tests
 option(HERMES_TESTS "Build the tests" ON)
 if(HERMES_TESTS)
@@ -247,8 +278,9 @@ if(HERMES_TESTS)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
+  option(SPACK_GTEST "Use spack-installed googletest for unit tests" ON)
   if(HERMES_UNIT_TESTS)
-    if(NOT PACKAGE_TESTS)
+    if(NOT PACKAGE_TESTS AND NOT SPACK_GTEST)
       # Not running BOUT++ tests
       # Since BOUT++ includes googletest, adding it again causes errors
       add_subdirectory(external/googletest)
@@ -290,3 +322,5 @@ if (BUILD_SHARED_LIBS)
 else()
   install(TARGETS hermes-3)
 endif()
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
