@@ -649,7 +649,7 @@ void check_cell_volumes(
       const bool volumes_match = (abs(bout_cell_volume - neso_cell_volume) < tolerance);
       // exit if we fail to find a match
       NESOASSERT(volumes_match,
-                 fmt::format("BOUT++ mesh volume {} does not match NESO-Particles mesh volume {} for ix = {} iy = {}", bout_cell_volume, neso_cell_volume, ix, iy));
+                 fmt::format("BOUT++ mesh volume {} does not match NESO-Particles mesh volume {} for ix = {} iy = {} \n Ignore this message by setting [neso_particles] test_cell_volumes = false", bout_cell_volume, neso_cell_volume, ix, iy));
       ixy++;
     }
   }
@@ -706,7 +706,7 @@ int main(int argc, char** argv) {
     int num_cells_owned = neso_mesh->get_cell_count();
     // if requested, check that neso_mesh cell volumes are identical
     // to bout_mesh cell volumes, otherwise, exit.
-    if (Options::root()["neso_particles"]["test_cell_volumes"].withDefault(false)){
+    if (Options::root()["neso_particles"]["test_cell_volumes"].withDefault(true)){
       check_cell_volumes(neso_mesh, bout_mesh);
     }
     // create a Reactions particle spec
