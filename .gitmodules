@@ -10,4 +10,4 @@
 	url = https://github.com/boutproject/BOUT-spack.git
 [submodule "Reactions"]
 	path = external/Reactions
-	url = git@github.com:UKAEA-Edge-Code/Reactions.git
+	url = git@github.com:UKAEA-Edge-Code/VANTAGE-Reactions.git
