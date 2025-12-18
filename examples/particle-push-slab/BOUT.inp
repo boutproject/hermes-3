@@ -30,12 +30,15 @@ Zxy_lower_right_corners = y - 0.5*dy
 Zxy_upper_left_corners = y + 0.5*dy
 Zxy_upper_right_corners = y + 0.5*dy
 
+# initial_neutral_density can be a function of (x, y)
 initial_neutral_density = 1.0
 
 [neso_particles]
 npart_per_cell = 1
 dt = 0.005
 nsteps = 1
+test_mass_conservation = true
+test_cell_volumes = true
 
 [VANTAGE_reactions]
 remove_threshold = 0.0e-10
