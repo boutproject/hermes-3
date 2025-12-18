@@ -668,6 +668,18 @@ void check_cell_volumes(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_m
   }
 }
 
+void check_mass_conservation(double total_mass_final, double total_mass_initial,
+                double remove_threshold) {
+  double rtol = 1.0e-13;
+  double atol = 1.0e-13;
+  bool mass_conserved = (abs(total_mass_final - total_mass_initial) < rtol*total_mass_initial + atol);
+  // exit if we fail to find conservation
+  NESOASSERT(mass_conserved,
+              fmt::format("Initial total mass {} does not match "
+                          "final total mass {} \n Ignore this message by "
+                          "setting [neso_particles] test_mass_conservation = false",
+                          total_mass_initial, total_mass_final));
+  }
 int main(int argc, char** argv) {
   // initialise_mpi(&argc, &argv);
   // attempt to call BOUT to
@@ -920,6 +932,9 @@ int main(int argc, char** argv) {
     Options bout_output_data =
         initialise_diagnostics(neutral_density, ion_density, dg0, A_particle_group,
                                neso_mesh, h_project1, particle_data_filename);
+    // mass for conservation check
+    Field2D total_density = neutral_density + ion_density;
+    double total_mass_initial = calculate_total_mass(total_density, neso_mesh);
     // begin timestepping
     for (int stepx = 0; stepx < nsteps; stepx++) {
       // nprint("step:", stepx);
@@ -941,10 +956,15 @@ int main(int argc, char** argv) {
       update_diagnostics(neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
                          h_project1, bout_output_data, particle_data_filename);
     }
-
     // uncomment to write a trajectory
     h5part.close();
 
+    // mass for conservation check
+    total_density = neutral_density + ion_density;
+    double total_mass_final = calculate_total_mass(total_density, neso_mesh);
+    if (Options::root()["neso_particles"]["test_mass_conservation"].withDefault(true)) {
+      check_mass_conservation(total_mass_final, total_mass_initial, remove_threshold);
+    }
     // Boundary interaction objects require a free call.
     b2d->free();
     // NESO-Particles neso_mesh objects must have free called on them.
