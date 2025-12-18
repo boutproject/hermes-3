@@ -30,11 +30,14 @@ Zxy_lower_right_corners = y - 0.5*dy
 Zxy_upper_left_corners = y + 0.5*dy
 Zxy_upper_right_corners = y + 0.5*dy
 
-phi = 0
-ex = 0
-ey = 0
-[neso_particles]
+initial_neutral_density = 1.0
 
+[neso_particles]
 npart_per_cell = 1
 dt = 0.005
-nsteps = 500
+nsteps = 1
+
+[VANTAGE_reactions]
+remove_threshold = 0.0e-10
+merge_threshold = 0.0e-2
+iz_rate = 0.0
