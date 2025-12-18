@@ -52,15 +52,21 @@ def load_particle_data(file_path):
 
     particle_positions = []
     for it in range(0,nstep):
-        group = particle_data[f"Step#{it}"]
-        #print(list(group.keys()))
-        P_0 = group["POSITION_0"]
-        P_1 = group["POSITION_1"]
-        nparticles = len(P_0)
-        pdata = np.zeros((nparticles,2))
-        pdata[:,0] = P_0
-        pdata[:,1] = P_1
-        particle_positions.append(pdata)
+        try:
+            group = particle_data[f"Step#{it}"]
+            #print(list(group.keys()))
+            P_0 = group["POSITION_0"]
+            P_1 = group["POSITION_1"]
+            nparticles = len(P_0)
+            pdata = np.zeros((nparticles,2))
+            pdata[:,0] = P_0
+            pdata[:,1] = P_1
+            particle_positions.append(pdata)
+        except (KeyError) as error:
+            print(f"No particles at time step {it}: {error}")
+            # assign empty particle data
+            pdata = np.empty((0,2))
+            particle_positions.append(pdata)
     return particle_positions
 
 def update_plot(i, data, scat):
