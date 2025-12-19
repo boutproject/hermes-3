@@ -28,6 +28,11 @@ spack:
     all:
       providers:
         mpi: [mpich, openmpi]
+    git:
+      externals:
+      - spec: git@system
+        prefix: /usr
+      buildable: false
   develop:
     hermes-3:
       path: .
