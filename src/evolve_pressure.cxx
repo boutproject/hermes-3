@@ -523,6 +523,20 @@ void EvolvePressure::finally(const Options& state) {
     }
   }
 
+
+  if (diagnose) {
+    T_up = 0.0;
+    T_down = 0.0;
+
+    BOUT_FOR(i, T.getRegion("RGN_NOY")){
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+      T_up[i] = T.yup()[iyp];
+      T_down[i] = T.ydown()[iym];
+    }
+    
+  }
+  
   if (disable_ddt){
     ddt(P) = 0.0;
   }
@@ -581,6 +595,24 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
+    set_with_attrs(state[std::string("Tup") + name], T_up,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"conversion", Tnorm},
+                    {"standard_name", "temperature"},
+                    {"long_name", name + " temperature"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    set_with_attrs(state[std::string("Tdown") + name], T_down,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"conversion", Tnorm},
+                    {"standard_name", "temperature"},
+                    {"long_name", name + " temperature"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+    
     set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(P),
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},

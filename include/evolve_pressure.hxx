@@ -116,7 +116,7 @@ private:
   YBoundary yboundary;
   Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
   Field3D flow_ylow_kinetic;    ///< Parallel flow of kinetic energy
-
+  Field3D T_up, T_down;
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
