@@ -151,8 +151,6 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   if (initialize_from_mesh) {
   // Try to read the initial field from the mesh
     mesh->get(N, std::string("N") + name + "_init"); // Units: [m^-3/s]
-    // NOTE(malamast): What happens if the stored variable in the mesh is 2D and N is 3D? 
-    //                 Will it still work? If not, do something like below where N_init is 2D. 
     N /= Nnorm; // Normalization
 
   }

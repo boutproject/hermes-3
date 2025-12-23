@@ -97,8 +97,6 @@ private:
   Field3D flow_xlow, flow_ylow; ///< Particle flow diagnostics
 
   bool initialize_from_mesh;  ///< Initilize the Field3D N from 2D/3D profiles stored in the mesh file. 
-                              ///< May be usefull when you have experimental profiles for example. 
-  // Field2D N_init;       ///< Species density (normalised, initial). For initial 2D profiles stored in the mesh.
 
   bool poloidally_average_timederiv;
   BoutReal alpha_pol_ave; 

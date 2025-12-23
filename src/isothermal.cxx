@@ -1,7 +1,9 @@
 
 #include <bout/constants.hxx>
-
+#include <bout/mesh.hxx>
 #include "../include/isothermal.hxx"
+
+using bout::globals::mesh;
 
 Isothermal::Isothermal(std::string name, Options &alloptions,
                        Solver *UNUSED(solver))
@@ -12,6 +14,17 @@ Isothermal::Isothermal(std::string name, Options &alloptions,
   auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
   T = options["temperature"].doc("Constant temperature [eV]").as<BoutReal>()
       / Tnorm; // Normalise
+
+  // Initilize the Field3D N from 2D profiles stored in the mesh file.
+  initialize_from_mesh = options["initialize_from_mesh"]
+    .doc("Initilize field from 2D profiles stored in the mesh file?")
+    .withDefault<bool>(false);
+
+  if (initialize_from_mesh) {
+  // Try to read the initial field from the mesh
+    mesh->get(T, std::string("T") + name + "_init"); // Units: [eV]
+    T /= Tnorm; // Normalization
+  }
 
   diagnose = options["diagnose"]
     .doc("Save additional output diagnostics")

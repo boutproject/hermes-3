@@ -4,6 +4,8 @@
 
 #include "component.hxx"
 
+using bout::globals::mesh;
+
 /// Set ion density to a fixed value
 ///
 struct FixedDensity : public Component {
@@ -27,6 +29,18 @@ struct FixedDensity : public Component {
 
     // Get the density and normalise
     N = options["density"].as<Field3D>() / Nnorm;
+
+    // Initilize the Field3D N from 2D profiles stored in the mesh file.
+    initialize_from_mesh = options["initialize_from_mesh"]
+      .doc("Initilize field from 2D profiles stored in the mesh file?")
+      .withDefault<bool>(false);
+
+    if (initialize_from_mesh) {
+      // Try to read the initial field from the mesh
+      mesh->get(N, std::string("N") + name + "_init"); // Units: [m^-3/s]
+      N /= Nnorm; // Normalization
+    }    
+
   }
 
   /// Sets in the state the density, mass and charge of the species
@@ -66,6 +80,9 @@ private:
   BoutReal AA;     ///< Atomic mass e.g. proton = 1
 
   Field3D N; ///< Species density (normalised)
+
+  bool initialize_from_mesh;  ///< Initilize the Field3D N from 2D profiles stored in the mesh file. 
+
 };
 
 namespace {

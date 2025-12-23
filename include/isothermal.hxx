@@ -27,8 +27,11 @@ struct Isothermal : public Component {
 private:
   std::string name; // Species name
 
-  BoutReal T; ///< The normalised temperature
+  // BoutReal T; ///< The normalised temperature
+  Field3D T; ///< The normalised temperature
   Field3D P; ///< The normalised pressure
+
+  bool initialize_from_mesh;  ///< Initilize the Field3D T from 2D/3D profiles stored in the mesh file. 
 
   bool diagnose; ///< Output additional diagnostics?
 };
