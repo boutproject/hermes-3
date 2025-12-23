@@ -7,50 +7,6 @@
 
 using bout::globals::mesh;
 
-
-namespace {
-BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
-  if (value < min)
-    return min;
-  if (value > max)
-    return max;
-  return value;
-}
-
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  int ny = f.getNy();
-  int nz = f.getNz();
-  return Ind3D{(x * ny + y) * nz + z, ny, nz};
-}
-
-/// Limited free gradient of log of a quantity
-/// This ensures that the guard cell values remain positive
-/// while also ensuring that the quantity never increases
-///
-///  fm  fc | fp
-///         ^ boundary
-///
-/// exp( 2*log(fc) - log(fm) )
-///
-BoutReal limitFree(BoutReal fm, BoutReal fc) {
-  if (fm < fc) {
-    return fc; // Neumann rather than increasing into boundary
-  }
-  if (fm < 1e-10) {
-    return fc; // Low / no density condition
-  }
-  BoutReal fp = SQ(fc) / fm;
-#if CHECKLEVEL >= 2
-  if (!std::isfinite(fp)) {
-    throw BoutException("SheathBoundary limitFree: {}, {} -> {}", fm, fc, fp);
-  }
-#endif
-
-  return fp;
-}
-
-}
-
 ParallelOhmsLaw::ParallelOhmsLaw(std::string name, Options& alloptions, Solver*)
     : name(name) {
   AUTO_TRACE();
@@ -148,7 +104,6 @@ void ParallelOhmsLaw::calculateResistivity(Options &electrons, Field3D &Ne_lim) 
   }
 
   eta = softFloor( resistivity_eta / eta_norm , resistivity_floor );
-  // eta = sqrt( SQ(resistivity_eta / eta_norm) + resistivity_floor*resistivity_floor ); // This mitigates discontinuities.
 
   mesh->communicate(eta); // Do we need this communication?
 
@@ -193,14 +148,6 @@ void ParallelOhmsLaw::transform(Options &state) {
 
   Field3D term_Te = 0.71 * Grad_par(Te) / eta;
 
-
-  // NOTE(malamast): Should we include the contribution of the electron momentum source terms? How can we exclude the contribution of collisions there?
-  // if (IS_SET(electrons["momentum_source"])) {
-  //   // Balance other forces from e.g. collisions
-  //   // Note: marked as final so can't be changed later
-  //   force_density += GET_VALUE(Field3D, electrons["momentum_source"]);
-  // }
-
   jpar = term_phi + term_Pe + term_Te;
 
   // Current due to other species
@@ -231,13 +178,7 @@ void ParallelOhmsLaw::transform(Options &state) {
         continue; // Not charged
       }
 
-      // if (!current.isAllocated()) {
-        // Not yet allocated -> Set to the value
-        // This avoids having to set to zero initially and add the first time
-        // current = charge * N * V;
-      // } else {
       current += charge * N * V;
-      // }
     }
   }
 
