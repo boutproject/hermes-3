@@ -31,6 +31,18 @@ private:
   ///     - pressure (if density is set)
   ///
   void transform_impl(GuardedOptions& state) override;
+
+  void outputVars(Options &state) override;
+private:
+  std::string name; // Species name
+
+  // BoutReal T; ///< The normalised temperature
+  Field3D T; ///< The normalised temperature
+  Field3D P; ///< The normalised pressure
+
+  bool initialize_from_mesh;  ///< Initilize the Field3D T from 2D profiles stored in the mesh file. 
+
+  bool diagnose; ///< Output additional diagnostics?
 };
 
 namespace {
