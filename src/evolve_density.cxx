@@ -130,6 +130,19 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
+
+  // Initilize the Field3D N from 2D profiles stored in the mesh file.
+  initialize_from_mesh = n_options["initialize_from_mesh"]
+    .doc("Initilize field from 2D profiles stored in the mesh file?")
+    .withDefault<bool>(false);
+
+  if (initialize_from_mesh) {
+  // Try to read the initial field from the mesh
+    mesh->get(N, std::string("N") + name + "_init"); // Units: [m^-3/s]
+    N /= Nnorm; // Normalization
+
+  }
+
 }
 
 void EvolveDensity::transform(Options& state) {

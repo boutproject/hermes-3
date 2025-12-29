@@ -113,6 +113,8 @@ private:
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
   Field3D E_PdivV, E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
+  bool initialize_from_mesh;  ///< Initilize the Field3D P from 2D profiles stored in the mesh file. 
+
 };
 
 namespace {
