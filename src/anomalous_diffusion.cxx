@@ -114,6 +114,8 @@ void AnomalousDiffusion::transform(Options& state) {
                                      flow_xlow, flow_ylow));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
+
+    set(species["anomalous_D"], anomalous_D);
   }
 
   if (include_chi) {
