@@ -31,8 +31,8 @@ struct Vorticity : public Component {
   ///     Include ion diamagnetic drift in polarisation current?
   ///   - exb_advection: bool, default true
   ///     Include ExB advection (nonlinear term)?
-  ///   - hyper_z: float, default -1.0
-  ///     Hyper-viscosity in Z. < 0 means off
+  ///   - hyper: float, default -1.0
+  ///     Hyper-viscosity. < 0 means off
   ///   - laplacian: subsection
   ///     Options for the Laplacian phi solver
   ///   - phi_boundary_relax: bool, default false
@@ -140,7 +140,7 @@ private:
   bool diamagnetic_bracketform;
   Field3D Bsq; // SQ(coord->Bxy)
   VectorMetric Curlb_B; // Curvature vector Curl(b/B)
-  BoutReal hyper_z; ///< Hyper-viscosity in Z
+  BoutReal hyper; ///< Hyper-viscosity in Z
   Field3D viscosity; ///< Kinematic viscosity
 
   // Diagnostic outputs

@@ -213,6 +213,13 @@ void XPPM(Stencil1D& n, const BoutReal h) {
   }
 }
 
+const Field3D hyperdiffusion(const BoutReal a, const Field3D& b) {
+  auto *coord = mesh->getCoordinates();
+  Field3D result = -a * (D4DX4(b)/SQ(coord->g_11) + D4DZ4(b)/SQ(coord->g_33));
+  return result;
+}
+
+
 /* ***USED***
  *  Div (n * b x Grad(f)/B)
  *

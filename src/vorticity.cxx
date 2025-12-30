@@ -92,7 +92,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     / (Lnorm * Lnorm * Omega_ci);
   viscosity.applyBoundary("dirichlet");
 
-  hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
+  hyper = options["hyper"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
 
   // Numerical dissipation terms
   // These are required to suppress parallel zig-zags in
@@ -765,10 +765,10 @@ void Vorticity::finally(const Options& state) {
     ddt(Vort) -= FV::Div_par(-phi, 0.0, sound_speed);
   }
 
-  if (hyper_z > 0) {
+  if (hyper > 0) {
     // Form of hyper-viscosity to suppress zig-zags in Z
-    auto* coord = Vort.getCoordinates();
-    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+    
+    ddt(Vort) += hyperdiffusion(hyper, Vort);
   }
 
   if (phi_sheath_dissipation) {
