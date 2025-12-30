@@ -235,6 +235,13 @@ void Vorticity::transform(Options& state) {
   phi.name = "phi";
   auto& fields = state["fields"];
 
+  Vort.applyBoundary();
+
+  mesh->communicate(Vort);
+
+  Vort.applyParallelBoundary();
+
+  
   // Set the boundary of phi. Both 2D and 3D fields are kept, though the 3D field
   // is constant in Z. This is for efficiency, to reduce the number of conversions.
   // Note: For now the boundary values are all at the midpoint,
