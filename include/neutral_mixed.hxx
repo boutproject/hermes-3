@@ -37,6 +37,9 @@ private:
   Field3D Tn;                     ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
 
+  Field3D NVn_err;       ///< Difference from momentum as input from solver
+  Field3D NVn_solver;    ///< Momentum as calculated in the solver
+
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
@@ -66,6 +69,10 @@ private:
   bool normalise_sources;  ///< Normalise input sources?
 
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
+  Field3D kappa_n_perp, eta_n_perp; ///< Neutral conduction and viscosity
+  Field3D kappa_n_par, eta_n_par; ///< Neutral conduction and viscosity
+
+  BoutReal neutral_lmax;
 
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
   bool precondition{true};        ///< Enable preconditioner?
@@ -76,6 +83,8 @@ private:
   Field3D density_source, pressure_source, momentum_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
+
+  bool zero_timederivs; ///< Set the time derivatives to zero?
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
