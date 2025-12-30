@@ -86,6 +86,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
           .withDefault(0.2);
 
+  neutral_lmax = options["neutral_lmax"].doc("Maximum length scale due to the present of walls.")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["meters"]); // Normalised length
+
   diffusion_limit = options["diffusion_limit"]
                         .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
                         .withDefault(-1.0)
@@ -109,6 +112,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     inv->setInnerBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
     inv->setOuterBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
   }
+
+  zero_timederivs = options["zero_timederivs"]
+                          .doc("Set the time derivatives to zero?")
+                          .withDefault<bool>(false);
 
   // Optionally output time derivatives
   output_ddt =
@@ -190,6 +197,13 @@ void NeutralMixed::transform(Options& state) {
 
   Vn = NVn / (AA * Nnlim);
   Vn.applyBoundary("neumann");
+
+  // NVn.applyBoundary();
+  NVn_solver = NVn; // Save the momentum as calculated by the solver
+  NVn = AA * Nn * Vn; // Re-calculate consistent with V and N
+  // Note: Now NV and NV_solver will differ when N < density_floor
+  NVn_err = NVn - NVn_solver; // This is used in the finally() function
+  NVn.applyBoundary();
 
   Pnlim = softFloor(Pn, pressure_floor);
   Pnlim.applyBoundary();
@@ -285,9 +299,6 @@ void NeutralMixed::finally(const Options& state) {
 
   Field3D Tnlim = softFloor(Tn, temperature_floor);
 
-  BoutReal neutral_lmax =
-    0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
-
   Field3D Rnn =
     sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
@@ -361,9 +372,12 @@ void NeutralMixed::finally(const Options& state) {
   }
 
   if (flux_limit > 0.0) {
+    // Thermal velocity of neutrals
+    Field3D Vnth = sqrt(Tnlim / AA); 
+    
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    Field3D Dmax = flux_limit * Vnth / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
       Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
     }
@@ -544,6 +558,70 @@ void NeutralMixed::finally(const Options& state) {
     Snv = 0;
   }
 
+  // Add the contribution of ion perp velocity (i.e. anomalous transport)
+  // See eq 20 and 21 by Horsten et al., (2017)
+  const Options& allspecies = state["species"];
+
+  for (auto& kv : allspecies.getChildren()) {
+    // NOTE:: This is only true for d+ ions. How do we generalize? 
+    //        How do we include the perpendicular ion velocity from other drifts?
+
+    const Options& species = kv.second;
+
+    if ((kv.first == "e") or !species.isSet("charge")
+        or (fabs(get<BoutReal>(species["charge"])) < 1e-5)) {
+      continue; // Skip electrons and non-charged ions
+    }
+
+    // sources/sinks due to anomalous transport
+    if (species.isSet("anomalous_D")) {
+      const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
+
+      const Field3D Ni = get<Field3D>(species["density"]);
+      Field2D Ni2D = DC(Ni);
+
+      // Apply Neumann Y boundary condition, so no additional flux into boundary
+      // Note: Not setting radial (X) boundaries since those set radial fluxes
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        Ni2D(r.ind, mesh->ystart - 1) = Ni2D(r.ind, mesh->ystart);
+      }
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
+      }
+
+      ddt(Nn) += Div_a_Grad_perp_upwind (Nn * anomalous_D / softFloor(Ni,density_floor), Ni2D);
+      //NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the equilibrium value of Nn.
+
+      ddt(Pn) += (5. / 3) * Div_a_Grad_perp_upwind ( Pn * anomalous_D / softFloor(Ni,density_floor), Ni2D);         
+
+      if (evolve_momentum) {
+        ddt(NVn) += Div_a_Grad_perp_upwind (NVn * anomalous_D / softFloor(Ni,density_floor), Ni2D);
+      }
+
+    }
+  }
+
+  // If N < density_floor then NV and NV_solver may differ
+  // -> Add term to force NV_solver towards NV
+  // Note: This correction is calculated in transform()
+  ddt(NVn) += NVn_err;
+
+  // Ste time derivatives to zero
+  if (zero_timederivs) {
+
+    Field3D zero {0.0};
+    zero.splitParallelSlices();
+    zero.yup() = 0.0;
+    zero.ydown() = 0.0;
+
+    ddt(Nn) = zero;
+    ddt(Pn) = zero;
+    if (evolve_momentum) {
+      ddt(NVn) = zero;
+    }
+    return;
+  }
+
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
@@ -584,6 +662,13 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
     }
   }
+
+  // NOTE: Do we need to do that?
+  // Restore NV to the value returned by the solver
+  // so that restart files contain the correct values
+  // Note: Copy boundary condition so dump file has correct boundary.
+  NVn_solver.setBoundaryTo(NVn);
+  NVn = NVn_solver;
 
 #if CHECKLEVEL >= 1
   for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
