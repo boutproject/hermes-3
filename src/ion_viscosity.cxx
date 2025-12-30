@@ -25,6 +25,10 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
   perpendicular = options["perpendicular"]
     .doc("Include perpendicular flow? (Requires phi)")
     .withDefault<bool>(false);
+
+  heating = options["heating"]
+			.doc("Viscous heating. Turn off at beginning of simulations")
+                        .withDefault(true);
   
   if (perpendicular) {
     // Read curvature vector
@@ -121,7 +125,9 @@ void IonViscosity::transform(Options &state) {
     const Field3D div_Pi_cipar = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy);
 
     add(species["momentum_source"], div_Pi_cipar);
-    subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+    if (heating) {
+      subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+    }
 
     if (!perpendicular) {
       if (diagnose) {
