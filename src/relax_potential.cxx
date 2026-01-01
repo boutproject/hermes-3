@@ -2,7 +2,7 @@
 #include <bout/solver.hxx>
 
 using bout::globals::mesh;
-
+#include <bout/constants.hxx>
 #include "../include/div_ops.hxx"
 #include "../include/relax_potential.hxx"
 #include "../include/hermes_build_config.hxx"
@@ -23,6 +23,10 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                       .doc("Include nonlinear ExB advection?")
                       .withDefault<bool>(true);
 
+  scale_ExB = options["scale_ExB"]
+                   .doc("Scale ExB flow?")
+                   .withDefault<BoutReal>(1.0);
+  
   diamagnetic =
       options["diamagnetic"].doc("Include diamagnetic current?").withDefault<bool>(true);
 
@@ -31,19 +35,40 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
           .doc("Include diamagnetic drift in polarisation current?")
           .withDefault<bool>(true);
 
+  diamagnetic_bracketform = options["diamagnetic_bracketform"]
+                        .doc("Include diamagnetic form that uses arakawa brackets? FCI version")
+                        .withDefault<bool>(mesh->isFci());
+  
   boussinesq = options["boussinesq"]
                    .doc("Use the Boussinesq approximation?")
                    .withDefault<bool>(true);
 
+  floating_boundary = options["floating_boundary"]
+                   .doc("Calculate boundary condition for phi from electron temperature?")
+                   .withDefault<bool>(false);
+
+  disable_ddt = options["disable_ddt"]
+                   .doc("Disable timevolution to iterate")
+                   .withDefault<bool>(false);
+  
   viscosity = options["viscosity"]
     .doc("Kinematic viscosity [m^2/s]")
     .withDefault<Field3D>(0.0)
     / (Lnorm * Lnorm * Omega_ci);
 
+  viscosity.applyBoundary("neumann");
   mesh->communicate(viscosity);
-  viscosity.applyBoundary("dirichlet");
-  viscosity.applyParallelBoundary("parallel_dirichlet_o2");
+  viscosity.applyParallelBoundary("parallel_neumann_o1");
 
+  viscosity_par = options["viscosity_par"]
+    .doc("Parallel kinematic viscosity [m^2/s]")
+    .withDefault<Field3D>(0.0)
+    / (Lnorm * Lnorm * Omega_ci);
+
+  viscosity_par.applyBoundary("neumann");
+  mesh->communicate(viscosity_par);
+  viscosity_par.applyParallelBoundary("parallel_neumann_o1");
+  
   phi_dissipation = options["phi_dissipation"]
                         .doc("Parallel dissipation of potential [Recommended]")
                         .withDefault<bool>(true);
@@ -62,7 +87,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
 
-  if (diamagnetic) {
+  if (diamagnetic and !diamagnetic_bracketform) {
     // Read curvature vector
     try {
       Curlb_B.covariant = false; // Contravariant
@@ -104,6 +129,11 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     Curlb_B *= 2. / coord->Bxy;
   }
 
+  logB = log(coord->Bxy);
+  logB.applyBoundary("neumann");
+  mesh->communicate(logB);
+  logB.applyParallelBoundary("parallel_neumann_o1");
+  
   Bsq = SQ(coord->Bxy);
   if (Vort.isFci()) {
     dagp = FCI::getDagp_fv(alloptions, mesh);
@@ -121,85 +151,135 @@ void RelaxPotential::transform(Options& state) {
   AUTO_TRACE();
 
   // Scale potential
-  phi = phi1 / lambda_2;
-  phi.applyBoundary("neumann");
-  Vort.applyBoundary("neumann");
+  
+  phi1.applyBoundary("neumann");
+  if (floating_boundary) {
+    Field3D Te = GET_NOBOUNDARY(Field3D, state["species"]["e"]["temperature"]);
+    BoutReal Me_Mp = get<BoutReal>(state["species"]["e"]["AA"]);
+    BoutReal sheathmult = log(0.5 * sqrt(1. / (Me_Mp * PI)));
 
-  mesh->communicate(Vort, phi);
+    if (mesh->lastX()) {
+      int n = mesh->LocalNx;
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	for (int k = 0; k < mesh->LocalNz; k++) {
+	  BoutReal phi1value = lambda_2 * sheathmult * 0.5 * (Te(n-2, j, k) + Te(n-3, j, k));
+	  phi1(n-2, j, k) = 2.0 * phi1value - phi1(n-3, k, k);
+	  phi1(n-1, j, k) = phi1(n-2, j, k);
+	}
+      }
+    }    
+  }
+  
+  
+  Vort.applyBoundary();
+
+  mesh->communicate(Vort, phi1);
 
   if (phi.isFci()){
-    phi.applyParallelBoundary("parallel_neumann_o2");
+    phi1.applyParallelBoundary("parallel_neumann_o1");
+    Vort.applyParallelBoundary("parallel_neumann_o1");
   }
   auto& fields = state["fields"];
 
+  phi = phi1 / lambda_2;
+  
   ddt(Vort) = 0.0;
 
   if (diamagnetic) {
     // Diamagnetic current. This is calculated here so that the energy sources/sinks
     // can be calculated for the evolving species.
 
-    Vector3D Jdia;
-    Jdia.x = 0.0;
-    Jdia.y = 0.0;
-    Jdia.z = 0.0;
-    Jdia.covariant = Curlb_B.covariant;
+    if (!diamagnetic_bracketform){
+    
+      Vector3D Jdia;
+      Jdia.x = 0.0;
+      Jdia.y = 0.0;
+      Jdia.z = 0.0;
+      Jdia.covariant = Curlb_B.covariant;
 
-    Options& allspecies = state["species"];
-
-    // Pre-calculate this rather than calculate for each species
-    Vector3D Grad_phi = Grad(phi);
-
-    for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
-
-      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
-            and (get<BoutReal>(species["charge"]) != 0.0))) {
-        continue; // No pressure or charge -> no diamagnetic current
-      }
-      // Note that the species must have a charge, but charge is not used,
-      // because it cancels out in the expression for current
-
-      auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
-
-      Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
-
-      // This term energetically balances diamagnetic term
-      // in the vorticity equation
-      subtract(species["energy_source"], Jdia_species * Grad_phi);
-
-      Jdia += Jdia_species; // Collect total diamagnetic current
-    }
-
-    // Note: This term is central differencing so that it balances
-    // the corresponding compression term in the species pressure equations
-    if (phi.isFci()) {
-      mesh->communicate(Jdia);
-      Jdia.applyBoundary("neumann");
-      Jdia.y.applyParallelBoundary("parallel_neumann_o2");
-    }
-    Field3D DivJdia = Div(Jdia);
-    ddt(Vort) += DivJdia;
-
-    if (diamagnetic_polarisation) {
-      // Calculate energy exchange term nonlinear in pressure
-      // ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
+      Options& allspecies = state["species"];
+      
+      // Pre-calculate this rather than calculate for each species
+      Vector3D Grad_phi = Grad(phi);
+      
       for (auto& kv : allspecies.getChildren()) {
-        Options& species = allspecies[kv.first]; // Note: need non-const
+	Options& species = allspecies[kv.first]; // Note: need non-const
+	
+	if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
+	      and (get<BoutReal>(species["charge"]) != 0.0))) {
+	  continue; // No pressure or charge -> no diamagnetic current
+	}
+	// Note that the species must have a charge, but charge is not used,
+	// because it cancels out in the expression for current
 
-        if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
-              and IS_SET(species["AA"]))) {
-          continue; // No pressure, charge or mass -> no polarisation current due to
-                    // rate of change of diamagnetic flow
-        }
-        auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+	auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 
-        add(species["energy_source"], (3. / 2) * P * DivJdia);
+	Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
+
+	// This term energetically balances diamagnetic term
+	// in the vorticity equation
+	subtract(species["energy_source"], Jdia_species * Grad_phi);
+
+	Jdia += Jdia_species; // Collect total diamagnetic current
+      }
+      
+      // Note: This term is central differencing so that it balances
+      // the corresponding compression term in the species pressure equations
+      if (phi.isFci()) {
+	mesh->communicate(Jdia);
+	Jdia.applyBoundary("neumann");
+	Jdia.y.applyParallelBoundary("parallel_neumann_o2");
+      }
+      Field3D DivJdia = Div(Jdia);
+      ddt(Vort) += DivJdia;
+      
+      if (diamagnetic_polarisation) {
+	// Calculate energy exchange term nonlinear in pressure
+	// ddt(Pi) += Pi * Div((Pe + Pi) * Curlb_B);
+	for (auto& kv : allspecies.getChildren()) {
+	  Options& species = allspecies[kv.first]; // Note: need non-const
+	  
+	  if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"])
+		and IS_SET(species["AA"]))) {
+	    continue; // No pressure, charge or mass -> no polarisation current due to
+	    // rate of change of diamagnetic flow
+	  }
+	  auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+
+	  add(species["energy_source"], (3. / 2) * P * DivJdia);
+	}
+      }
+      
+      set(fields["DivJdia"], DivJdia);
+    
+    } else {                    // use diamagnetic bracketform
+      Options& allspecies = state["species"];
+      
+      for (auto& kv : allspecies.getChildren()) {
+	Options& species = allspecies[kv.first]; // Note: need non-const
+	
+	if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"]))) {
+	  continue; // No pressure or charge -> no diamagnetic current                                                                                
+	}
+	
+	if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+	  // No charge                                                                                                                                
+	  continue;
+	}
+
+	auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+	Field3D DivJdia_species = 2.0 * bracket(logB, P, BRACKET_ARAKAWA) * bracket_factor;
+	ddt(Vort) += DivJdia_species;
+	// Balance of this term in the species energy equation
+	
+	if (diamagnetic_polarisation){
+	  add(species["energy_source"], P * DivJdia_species);
+	}
+	subtract(species["energy_source"], P * 2.0 * bracket(logB, phi) * bracket_factor);
+	
       }
     }
-
-    set(fields["DivJdia"], DivJdia);
   }
-
   set(fields["vorticity"], Vort);
   set(fields["phi"], phi);
 }
@@ -213,7 +293,7 @@ void RelaxPotential::finally(const Options& state) {
   Vort = get<Field3D>(state["fields"]["vorticity"]);
 
   if (exb_advection) {
-    ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
+    ddt(Vort) -= scale_ExB * Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
   }
 
   if (state.isSection("fields") and state["fields"].isSet("DivJextra")) {
@@ -259,13 +339,17 @@ void RelaxPotential::finally(const Options& state) {
   }
 
   // Viscosity
-  ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
-
+  Field3D flow_xlow,flow_zlow;
+  ddt(Vort) += (*dagp)(viscosity, Vort, flow_xlow, flow_zlow, false);
+  Field3D dummy;
+  ddt(Vort) += Div_par_K_Grad_par_mod(viscosity_par, Vort, dummy, false);
+  
   // Solve diffusion equation for potential
 
   if (boussinesq) {
-    ddt(phi1) =
-        lambda_1 * (Div_a_Grad_perp(average_atomic_mass / Bsq, phi) - Vort);
+
+    Field3D flow_xlow_phi,flow_zlow_phi;
+    ddt(phi1) = lambda_1 *( (*dagp)(average_atomic_mass / Bsq, phi, flow_xlow_phi, flow_zlow_phi, false) - Vort);
 
     if (diamagnetic_polarisation) {
       for (auto& kv : allspecies.getChildren()) {
@@ -284,12 +368,13 @@ void RelaxPotential::finally(const Options& state) {
         }
         const BoutReal A = get<BoutReal>(species["AA"]);
         const Field3D P = get<Field3D>(species["pressure"]);
-        ddt(phi1) += lambda_1 * Div_a_Grad_perp(A / Bsq, P);
+	Field3D flow_xlow_dia,flow_zlow_dia;
+	ddt(phi1) += lambda_1 * (*dagp)(A / Bsq, P, flow_xlow_dia, flow_zlow_dia, false);
       }
     }
   } else {
     // Non-Boussinesq. Calculate mass density by summing over species
-
+    throw BoutException("Non_boussinesq not implemented");
     // Calculate vorticity from potential phi
     Field3D phi_vort = 0.0;
     for (auto& kv : allspecies.getChildren()) {
@@ -316,6 +401,12 @@ void RelaxPotential::finally(const Options& state) {
 
     ddt(phi1) = lambda_1 * (phi_vort - Vort);
   }
+
+  if (disable_ddt) {
+    ddt(Vort) = 0.0;
+    ddt(phi1) = 0.0;
+  }
+  
 }
 
 void RelaxPotential::outputVars(Options& state) {

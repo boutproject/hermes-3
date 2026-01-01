@@ -91,6 +91,8 @@ private:
 
   bool legacy_match{true};
 
+  bool sheath_extrapolate; ///< Extrapolate values into sheath?
+  
   Field3D fromFieldAligned(const Field3D& f) {
     if (f.isFci()) {
       return f;
