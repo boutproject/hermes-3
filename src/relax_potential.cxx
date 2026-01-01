@@ -46,6 +46,10 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   floating_boundary = options["floating_boundary"]
                    .doc("Calculate boundary condition for phi from electron temperature?")
                    .withDefault<bool>(false);
+
+  disable_ddt = options["disable_ddt"]
+                   .doc("Disable timevolution to iterate")
+                   .withDefault<bool>(false);
   
   viscosity = options["viscosity"]
     .doc("Kinematic viscosity [m^2/s]")
@@ -397,6 +401,12 @@ void RelaxPotential::finally(const Options& state) {
 
     ddt(phi1) = lambda_1 * (phi_vort - Vort);
   }
+
+  if (disable_ddt) {
+    ddt(Vort) = 0.0;
+    ddt(phi1) = 0.0;
+  }
+  
 }
 
 void RelaxPotential::outputVars(Options& state) {

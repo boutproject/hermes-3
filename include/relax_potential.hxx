@@ -78,7 +78,7 @@ private:
   VectorMetric Curlb_B; ///< Curvature vector Curl(b/B)
   BoutReal scale_ExB;
   BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
-
+  bool disable_ddt;
   Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
     if (a.isFci()) {
       return (*dagp)(a, b, false);
