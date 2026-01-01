@@ -40,15 +40,16 @@ private:
   Field3D V;            ///< Species parallel velocity
 
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
-
+  bool disable_ddt;
   bool bndry_flux;      // Allow flows through boundaries?
   bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;  // Include ExB flow in Y direction?
-
+  bool isMMS;
   BoutReal density_floor;
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
   BoutReal pressure_floor;
   bool low_p_diffuse_perp; ///< Cross-field diffusion at low pressure?
+  BoutReal scale_ExB;
 
   BoutReal hyper_z;  ///< Hyper-diffusion
 

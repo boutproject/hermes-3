@@ -46,6 +46,9 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f,
                                     bool bndry_flux = true, bool poloidal = false,
                                     bool positive = false);
 
+
+const Field3D hyperdiffusion(const BoutReal a, const Field3D& b);
+
 /// This version has an extra coefficient 'g' that is linearly interpolated
 /// onto cell faces
 const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Field3D &f, 
@@ -79,6 +82,8 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f, Field3D& flow_ylow,
                                      bool bndry_flux = true);
 
+
+Field3D Div_a_Grad_perp_curv(const Field3D& b, const Field3D& a);
 /*!
  * Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) -- Vorticity
  *
@@ -172,29 +177,22 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
       const auto iyp = i.yp();
       const auto iym = i.ym();
 
-      // Maximum local wave speed
+      //Maximum local wave speed
       const BoutReal amax = BOUTMAX(wave_speed_in[i],
-                                    fabs(v_in[i]),
-                                    fabs(v_up[iyp]),
-                                    fabs(v_down[iym]));
+                                          fabs(v_in[i]),
+                                  fabs(v_up[iyp]),
+                                  fabs(v_down[iym]));
 
-      // result[i] = B[i] * (
-      //                     (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
-      //                     - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
-      //                     // Penalty terms. This implementation is very dissipative.
-      //                     + amax * (f_in[i] * v_in[i] - f_up[iyp] * v_up[iyp]) / (B[i] + B_up[iyp])
-      //                     + amax * (f_in[i] * v_in[i] - f_down[iym] * v_down[iym]) / (B[i] + B_down[iym])
-      //                     )
-      //   / (2 * dy[i] * sqrt(g_22[i]));
 
-      result[i] = (0.5 * (f_in[i] * v_in[i] * (v_in[i] + amax) +
-                          f_up[iyp] * v_up[iyp] * (v_up[iyp] - amax))
-                   * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
-                   -
-                   0.5 * (f_in[i] * v_in[i] * (v_in[i] - amax) +
-                          f_down[iym] * v_down[iym] * (v_down[iym] + amax))
-                   * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
-        / (dy[i] * coord->J[i]);
+      result[i] = B[i] * (
+                          (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
+                          - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
+                          // Penalty terms. This implementation is very dissipative.
+			  // Note: This version adds a viscosity that damps gradients of velocity
+			  + amax * (f_in[i] + f_up[iyp]) * (v_in[i] - v_up[iyp]) / (B[i] + B_up[iyp])
+                          + amax * (f_in[i] + f_down[iym]) * (v_in[i] - v_down[iym]) / (B[i] + B_down[iym])
+                          )
+        / (2 * dy[i] * sqrt(g_22[i]));
 
 #if CHECK > 0
       if(!std::isfinite(result[i])) {
@@ -580,7 +578,7 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
 template <typename CellEdges = MC>
 Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in,
-                          Field3D &flow_ylow, bool fixflux = true) {
+		    Field3D &flow_ylow, bool fixflux = true, bool dissipative = false) {
 
   Coordinates* coord = f_in.getCoordinates();
 
@@ -609,7 +607,7 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                                     fabs(v_in[i]),
                                     fabs(v_up[iyp]),
                                     fabs(v_down[iym]));
-
+      if (dissipative) {
       result[i] = (0.5 * (f_in[i] * (v_in[i] + amax) +
                           f_up[iyp] * (v_up[iyp] - amax))
                    * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
@@ -617,7 +615,16 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                    0.5 * (f_in[i] * (v_in[i] - amax) +
                           f_down[iym] * (v_down[iym] + amax))
                    * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
+		   / (coord->dy[i] * coord->J[i]);
+      } else {
+      
+      result[i] = (0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp])
+                   * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
+                   -
+                    0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym])
+                   * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
         / (coord->dy[i] * coord->J[i]);
+      }
     }
     return result;
   }

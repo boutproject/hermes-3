@@ -84,21 +84,21 @@ private:
   bool thermal_conduction;    ///< Include thermal conduction?
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
-
+  bool disable_ddt;
   bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
 
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
-
+  bool isMMS;
   BoutReal density_floor; ///< Minimum density for calculating T
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
   BoutReal temperature_floor; ///< Low temperature scale for low_T_diffuse_perp
   bool low_T_diffuse_perp; ///< Add cross-field diffusion at low temperature?
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
-
+  bool dissipative; ///< Use dissipative laxflux in parallel divergence
   Field3D kappa_par; ///< Parallel heat conduction coefficient
-
+  BoutReal scale_ExB;
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;     ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
@@ -116,7 +116,7 @@ private:
   YBoundary yboundary;
   Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
   Field3D flow_ylow_kinetic;    ///< Parallel flow of kinetic energy
-
+  Field3D T_up, T_down;
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity

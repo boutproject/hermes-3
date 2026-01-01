@@ -56,6 +56,7 @@ set(HERMES_SOURCES
     src/ionisation.cxx
     src/radiation.cxx
     src/div_ops.cxx
+    src/fci_gridcheck.cxx
     src/neutral_mixed.cxx
     src/full_velocity.cxx
     src/electromagnetic.cxx
@@ -85,6 +86,7 @@ set(HERMES_SOURCES
     src/anomalous_diffusion.cxx
     src/anomalous_diffusion_3d.cxx
     src/binormal_stpm.cxx
+    src/kmodel.cxx
     src/recycling.cxx
     src/amjuel_hyd_ionisation.cxx
     src/amjuel_hyd_recombination.cxx
@@ -108,6 +110,7 @@ set(HERMES_SOURCES
     include/adas_reaction.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
+    include/fci_gridcheck.hxx
     include/amjuel_helium.hxx
     include/amjuel_hyd_ionisation.hxx
     include/amjuel_hyd_recombination.hxx
@@ -119,6 +122,7 @@ set(HERMES_SOURCES
     include/collisions.hxx
     include/component.hxx
     include/adhoc_potential.hxx
+    include/kmodel.hxx
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/diamagnetic_drift_fci.hxx
@@ -200,42 +204,138 @@ configure_file(
   "${PROJECT_SOURCE_DIR}/include/revision.hxx.in"
   "${PROJECT_BINARY_DIR}/include/revision.hxx")
 
-# Once built, copy the data and test directories
-# add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#                    COMMAND ${CMAKE_COMMAND} -E copy_directory
-#                    ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
 
-# add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#                    COMMAND ${CMAKE_COMMAND} -E copy_directory
-#                    ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
-
-# add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#                    COMMAND ${CMAKE_COMMAND} -E copy_directory
-#                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+# Tests
+option(HERMES_COPY_TESTS_TO_BUILD "Copy the tests to the build directory" ON)
+if(HERMES_COPY_TESTS_TO_BUILD)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+endif()
 
 # Tests
 option(HERMES_TESTS "Build the tests" ON)
+if (HERMES_TESTS)
+  add_custom_target(setup-test)
+else()
+  add_custom_target(setup-test)
+endif()
+
+add_custom_target(setup-examples)
+
+
+# copy the data and test directories
+add_custom_command(TARGET setup-examples PRE_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+
+add_custom_command(TARGET setup-examples PRE_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+
+add_custom_command(TARGET setup-test PRE_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+
+
 if(HERMES_TESTS)
   enable_testing()
 
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
-    add_test(NAME ${TESTNAME}
-           WORKING_DIRECTORY tests/integrated/${TESTNAME}
-           COMMAND runtest)
+    set(oneValueArgs DOWNLOAD DOWNLOAD_NAME)
+    set(multiValueArgs REQUIRES CONFLICTS)
+    cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    foreach (REQUIREMENT IN LISTS HERMES_TEST_OPTIONS_REQUIRES)
+      if (NOT ${REQUIREMENT})
+	message(STATUS "Not building test ${TESTNAME}, requirement not met: ${REQUIREMENT}")
+	return()
+      endif()
+    endforeach()
+
+    foreach (CONFLICT IN LISTS HERMES_TEST_OPTIONS_CONFLICTS)
+      if (${CONFLICT})
+	message(STATUS "Not building test ${TESTNAME}, conflicts with: ${CONFLICT}")
+	return()
+      endif()
+      message(STATUS "CONFLICT ${CONFLICT} ${${CONFLICT}}")
+    endforeach()
+
+
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+      set(INT_TEST_DEST
+          ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
+      # Make copies of the test exec and input file in the build directory and keep them up to date
+      configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
+      configure_file(${INT_TEST_SRC}/data/BOUT.inp ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+    else()
+      set(INT_TEST_DEST
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+    endif()
+    add_test(
+      NAME ${TESTNAME}
+      WORKING_DIRECTORY ${INT_TEST_DEST}
+      COMMAND runtest)
+
+    if (HERMES_TEST_OPTIONS_DOWNLOAD)
+      if (NOT HERMES_TEST_OPTIONS_DOWNLOAD_NAME)
+	message(FATAL_ERROR "We need DOWNLOAD_NAME if we should DOWNLOAD!")
+      endif()
+      set(output )
+      add_custom_command(OUTPUT ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+	COMMAND wget ${HERMES_TEST_OPTIONS_DOWNLOAD} -O ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME}
+	COMMENT "Downloading ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}"
+      )
+      add_custom_target(download_test_data ALL
+	DEPENDS ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+	DEPENDS setup-test)
+    endif()
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
-  hermes_add_integrated_test(1D-recycling)
+  hermes_add_integrated_test(1D-recycling
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(diffusion)
   hermes_add_integrated_test(evolve_density)
-  hermes_add_integrated_test(neutral_mixed)
-  hermes_add_integrated_test(vorticity)
+  hermes_add_integrated_test(neutral_mixed
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(vorticity
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
-  hermes_add_integrated_test(drift-wave)
-  hermes_add_integrated_test(alfven-wave)
+  hermes_add_integrated_test(drift-wave
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(alfven-wave
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-density-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-momentum-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-pressure-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-fluid-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-conduction-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-electron-viscosity-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-ion-viscosity-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-density-anomalous-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-fluid-anomalous-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(fci-example-1
+    REQUIRES BOUT_ENABLE_METRIC_3D
+    DOWNLOAD https://zenodo.org/records/17571607/files/W7X-conf0-36x8x128.fci.nc?download=1
+    DOWNLOAD_NAME grid.fci.nc
+  )
 
+
+  
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)
@@ -253,6 +353,7 @@ if(HERMES_TESTS)
                    ${TEST_SOURCES})
 
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
+    set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
   endif()
 endif()

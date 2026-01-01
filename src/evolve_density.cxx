@@ -28,6 +28,11 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Include ExB advection?")
                    .withDefault<bool>(true);
 
+  scale_ExB = options["scale_ExB"]
+                   .doc("Scale ExB flow?")
+                   .withDefault<BoutReal>(1.0);
+
+  
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
@@ -53,6 +58,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Evolve the logarithm of density?")
                    .withDefault<bool>(false);
 
+  isMMS = options["mms"].withDefault<bool>(false);
+
+  dissipative = options["dissipative"].doc("Use dissipative parallel flow with Lax flux").withDefault<bool>(false);
+  
   if (evolve_log) {
     // Evolve logarithm of density
     solver->add(logN, std::string("logN") + name);
@@ -106,6 +115,9 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     .withDefault(source)
     / source_normalisation;
 
+  disable_ddt = n_options["disable_ddt"]
+    .withDefault<bool>(false);
+  
   // If time dependent, parse the function with respect to time from the input file
   if (source_time_dependent) {
     auto str = n_options["source_prefactor"]
@@ -141,6 +153,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     // Clebsch coordinate system
     bracket_factor = 1.0;
   }
+
+  
 }
 
 void EvolveDensity::transform(Options& state) {
@@ -150,8 +164,9 @@ void EvolveDensity::transform(Options& state) {
     // Evolving logN, but most calculations use N
     N = exp(logN);
   }
-
+  N.applyBoundary();
   mesh->communicate(N);
+  N.applyParallelBoundary();
 
   if (neumann_boundary_average_z) {
     // Take Z (usually toroidal) average and apply as X (radial) boundary condition
@@ -217,6 +232,12 @@ void EvolveDensity::transform(Options& state) {
   } else {
     final_source = source;
   }
+
+  if (isMMS) {
+    final_source = 0.0;
+  }
+  
+  
   final_source.allocate(); // Ensure unique memory storage.
   add(species["density_source"], final_source);
 }
@@ -236,7 +257,7 @@ void EvolveDensity::finally(const Options& state) {
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(N) = -Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
+    ddt(N) = -scale_ExB * Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
                                     true) * bracket_factor; // ExB drift
   } else {
     ddt(N) = 0.0;
@@ -257,9 +278,9 @@ void EvolveDensity::finally(const Options& state) {
       BoutReal AA = get<BoutReal>(species["AA"]);
       fastest_wave = sqrt(T / AA);
     }
-
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
-
+    
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow, false, dissipative);
+    
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
@@ -295,8 +316,10 @@ void EvolveDensity::finally(const Options& state) {
   // Collect the external source from above with all the sources from
   // elsewhere (collisions, reactions, etc) for diagnostics
   Sn = get<Field3D>(species["density_source"]);
+  
   ddt(N) += Sn;
-
+  
+  
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     ddt(N) *= get<Field3D>(state["scale_timederivs"]);
@@ -324,6 +347,11 @@ void EvolveDensity::finally(const Options& state) {
       flow_ylow += get<Field3D>(species["particle_flow_ylow"]);
     }
   }
+
+  if (disable_ddt){
+    ddt(N) = 0.0;
+  }
+  
 }
 
 void EvolveDensity::outputVars(Options& state) {
@@ -342,6 +370,15 @@ void EvolveDensity::outputVars(Options& state) {
                                                 {"long_name", name + " number density"},
                                                 {"species", name},
                                                 {"source", "evolve_density"}});
+
+  set_with_attrs(state[std::string("S") + name + std::string("_src")], final_source,
+                   {{"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "external density source"},
+                    {"long_name", name + " external number density source"},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+
 
   if (diagnose) {
     set_with_attrs(
@@ -362,14 +399,6 @@ void EvolveDensity::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_density"}});
 
-    set_with_attrs(state[std::string("S") + name + std::string("_src")], final_source,
-                   {{"time_dimension", "t"},
-                    {"units", "m^-3 s^-1"},
-                    {"conversion", Nnorm * Omega_ci},
-                    {"standard_name", "external density source"},
-                    {"long_name", name + " external number density source"},
-                    {"species", name},
-                    {"source", "evolve_density"}});
 
     // If fluxes have been set then add them to the output
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);

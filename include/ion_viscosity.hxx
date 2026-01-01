@@ -55,7 +55,7 @@ private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
   bool perpendicular; ///< Include perpendicular flow? (Requires phi)
   VectorMetric Curlb_B; ///< Curvature vector Curl(b/B)
-
+  bool heating;
   bool diagnose; ///< Output additional diagnostics?
 
   /// Per-species diagnostics

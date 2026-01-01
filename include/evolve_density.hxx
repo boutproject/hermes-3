@@ -69,17 +69,18 @@ private:
   bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;  ///< Include ExB flow in Y direction?
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
-
+  bool disable_ddt;
+  bool dissipative;
   BoutReal density_floor;
   bool low_n_diffuse;   ///< Parallel diffusion at low density
   bool low_n_diffuse_perp;  ///< Perpendicular diffusion at low density
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low pressure?
   BoutReal hyper_z;    ///< Hyper-diffusion in Z
-
+  BoutReal scale_ExB;
   bool evolve_log; ///< Evolve logarithm of density?
   Field3D logN;    ///< Logarithm of density (if evolving)
-
+  bool isMMS;
   Field3D source, final_source; ///< External input source
   Field3D Sn; ///< Total density source
 

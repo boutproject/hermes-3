@@ -50,6 +50,10 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                    .doc("Include ExB advection?")
                    .withDefault<bool>(true);
 
+  scale_ExB = options["scale_ExB"]
+                   .doc("Scale ExB flow?")
+                   .withDefault<BoutReal>(1.0);
+  
   poloidal_flows = options["poloidal_flows"]
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
@@ -79,6 +83,15 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
     // Clebsch coordinate system
     bracket_factor = 1.0;
   }
+
+  auto& nv_options = alloptions[std::string("NV") + name];
+
+  isMMS = nv_options["isMMS"]
+    .withDefault<bool>(false);
+  
+  disable_ddt = nv_options["disable_ddt"]
+    .withDefault<bool>(false);
+
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -100,6 +113,10 @@ void EvolveMomentum::transform(Options &state) {
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   NV.applyBoundary();
+  mesh->communicate(NV);
+  NV.applyParallelBoundary();
+
+  
   V = NV / (AA * Nlim);
   V.name = Vname;
   mesh->communicate(V);
@@ -157,7 +174,7 @@ void EvolveMomentum::finally(const Options &state) {
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
       if (exb_advection) {
-        ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+        ddt(NV) = -scale_ExB * Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
                                          true) * bracket_factor; // ExB drift
       } else {
         ddt(NV) = 0.0;
@@ -211,8 +228,13 @@ void EvolveMomentum::finally(const Options &state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
-  ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
-  
+
+  if (isMMS) {
+    Field3D NVV = NV * V;
+    ddt(NV) -= Div_par(NVV);
+  } else {
+    ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
+  }
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
     Field3D P = get<Field3D>(species["pressure"]);
@@ -289,6 +311,11 @@ void EvolveMomentum::finally(const Options &state) {
   // Note: Copy boundary condition so dump file has correct boundary.
   NV_solver.setBoundaryTo(NV, true);
   NV = NV_solver;
+
+  if (disable_ddt){
+    ddt(NV) = 0.0;
+  }
+
 }
 
 void EvolveMomentum::outputVars(Options &state) {
@@ -307,8 +334,7 @@ void EvolveMomentum::outputVars(Options &state) {
        {"species", name},
        {"source", "evolve_momentum"}});
 
-  if (diagnose) {
-    set_with_attrs(state[std::string("V") + name], V,
+  set_with_attrs(state[std::string("V") + name], V,
                    {{"time_dimension", "t"},
                     {"units", "m / s"},
                     {"conversion", Cs0},
@@ -316,6 +342,8 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"standard_name", "velocity"},
                     {"species", name},
                     {"source", "evolve_momentum"}});
+  
+  if (diagnose) {
 
     set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NV),
                    {{"time_dimension", "t"},
@@ -359,5 +387,7 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
+
+    
   }
 }
