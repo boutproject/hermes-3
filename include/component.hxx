@@ -1,16 +1,6 @@
 #pragma once
-
 #ifndef HERMES_COMPONENT_H
 #define HERMES_COMPONENT_H
-
-#include <bout/assert.hxx>
-#include <bout/bout_types.hxx>
-#include <bout/boutexception.hxx>
-#include <bout/field2d.hxx>
-#include <bout/field3d.hxx>
-#include <bout/generic_factory.hxx>
-#include <bout/options.hxx>
-#include <bout/unused.hxx>
 
 #include <cmath>
 #include <initializer_list>
@@ -21,6 +11,15 @@
 #include <typeinfo>
 #include <utility>
 #include <vector>
+
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
+#include <bout/generic_factory.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
 
 #include "guarded_options.hxx"
 #include "permissions.hxx"
@@ -34,8 +33,10 @@ struct SpeciesInformation {
   SpeciesInformation(const std::vector<std::string>& electrons,
                      const std::vector<std::string>& neutrals,
                      const std::vector<std::string>& positive_ions,
-                     const std::vector<std::string> & negative_ions)
-    : electrons(electrons), neutrals(neutrals), positive_ions(positive_ions), negative_ions(negative_ions), ions(positive_ions) {
+                     const std::vector<std::string>& negative_ions)
+      : electrons(std::move(electrons)), neutrals(std::move(neutrals)),
+        positive_ions(std::move(positive_ions)), negative_ions(std::move(negative_ions)),
+        ions(std::move(positive_ions)) {
     finish_construction();
   }
 
@@ -112,10 +113,9 @@ struct Component {
   /// @param name     The species/name for this instance.
   /// @param options  Component settings: options[name] are specific to this component
   /// @param solver   Time-integration solver
-  static std::unique_ptr<Component> create(const std::string &type, // The type to create
-                                           const std::string &name, // The species/name for this instance
-                                           Options &options,  // Component settings: options[name] are specific to this component
-                                           Solver *solver); // Time integration solver
+  static std::unique_ptr<Component> create(const std::string& type,
+                                           const std::string& name, Options& options,
+                                           Solver* solver);
 
   /// Tell the component the name of all species in the simulation, by type. It
   /// will use this information to substitute the following placeholders in
@@ -451,14 +451,15 @@ template<typename T>
 Options& add(Options& option, T value) {
   if (!option.isSet()) {
     return set(option, value);
-  } else {
-    try {
-      return set(option, value + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value));
-    } catch (const std::bad_cast &e) {
-      // Convert to a more useful error message
-      throw BoutException("Could not convert {:s} to type {:s}",
-                          option.str(), typeid(T).name());
-    }
+  }
+  try {
+    return set(option, value
+                           + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
+                               option.value));
+  } catch (const std::bad_cast& e) {
+    // Convert to a more useful error message
+    throw BoutException("Could not convert {:s} to type {:s}", option.str(),
+                        typeid(T).name());
   }
 }
 
@@ -477,14 +478,15 @@ template<typename T>
 Options& subtract(Options& option, T value) {
   if (!option.isSet()) {
     return set(option, -value);
-  } else {
-    try {
-      return set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value) - value);
-    } catch (const std::bad_cast &e) {
-      // Convert to a more useful error message
-      throw BoutException("Could not convert {:s} to type {:s}",
-                          option.str(), typeid(T).name());
-    }
+  }
+  try {
+    return set(option,
+               bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value)
+                   - value);
+  } catch (const std::bad_cast& e) {
+    // Convert to a more useful error message
+    throw BoutException("Could not convert {:s} to type {:s}", option.str(),
+                        typeid(T).name());
   }
 }
 
