@@ -1,15 +1,23 @@
 #include <algorithm>
+#include <cstddef>
+#include <iterator>
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/options.hxx>
 #include <bout/utils.hxx> // for trim, strsplit
+#include <fmt/format.h>
 #include <fmt/ranges.h>
 
 #include "../include/component.hxx"
 #include "../include/component_scheduler.hxx"
+#include "../include/permissions.hxx"
 
 const std::set<std::string> ComponentScheduler::predeclared_variables = {
     "time",          "linear",      "units:inv_meters_cubed", "units:eV", "units:Tesla",
@@ -46,7 +54,8 @@ void topological_sort(const std::vector<std::set<size_t>>& dependencies, size_t 
 /// separated by colons in the path.
 std::set<std::string> getParents(const std::string& name) {
   std::set<std::string> result;
-  size_t start = 0, position = name.find(":", start);
+  size_t start = 0;
+  size_t position = name.find(":", start);
   while (position != std::string::npos) {
     result.insert(name.substr(0, position));
     start = position + 1;
@@ -77,7 +86,8 @@ getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) 
   // Build up a set of all section/variable names which are definitely
   // read/written by components, and the sections which they imply
   // exist
-  std::set<std::string> unconditional_names, unconditional_sections;
+  std::set<std::string> unconditional_names;
+  std::set<std::string> unconditional_sections;
   for (const auto& component : components) {
     const Permissions& permissions = component->getPermissions();
     for (const auto& [varname, _] :
@@ -191,8 +201,9 @@ setReadDependencies(const std::vector<std::unique_ptr<Component>>& components,
     // them
     for (const auto& [name, regions] :
          permissions.getVariablesWithPermission(permission)) {
-      if (ComponentScheduler::predeclared_variables.count(name) > 0)
+      if (ComponentScheduler::predeclared_variables.count(name) > 0) {
         continue;
+      }
       for (const auto& sub_name : expandVariableName(hierarchy, permissions, name)) {
         for (const auto& [region, _] : Permissions::fundamental_regions) {
           if ((regions & region) == region) {
@@ -211,25 +222,21 @@ setReadDependencies(const std::vector<std::unique_ptr<Component>>& components,
   return missing;
 }
 
-/// Consumes a list of components and returns a new one that has been
-/// topolgically sorted to ensure variables are written and read in
-/// the right order.
-std::vector<std::unique_ptr<Component>>
-sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
+/// Topologically sorts the list of components to ensure variables are
+/// written and read in the right order.
+void sortComponents(std::vector<std::unique_ptr<Component>>& components) {
   // Map between variable/section names specified by component
   // permissions and the variables they contain. In the case of
   // sections this is all variables within the section and any
   // sub-sections. Non-section viarables map to themselves.
-  std::map<std::string, std::set<std::string>> variable_hierarchy =
+  const std::map<std::string, std::set<std::string>> variable_hierarchy =
       getVariableHierarchy(components);
 
   // Get information on which components write each variable
-  std::map<Var, std::set<size_t>> nonfinal_writes = getPermissionComponentMap(
-                                      components, variable_hierarchy,
-                                      PermissionTypes::Write),
-                                  final_writes = getPermissionComponentMap(
-                                      components, variable_hierarchy,
-                                      PermissionTypes::Final);
+  std::map<Var, std::set<size_t>> nonfinal_writes =
+      getPermissionComponentMap(components, variable_hierarchy, PermissionTypes::Write);
+  std::map<Var, std::set<size_t>> final_writes =
+      getPermissionComponentMap(components, variable_hierarchy, PermissionTypes::Final);
 
   // Object mapping between components (reprsented by the index of
   // that component in the `components` argument) and the components
@@ -244,7 +251,7 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
       throw BoutException(
           "Multiple components have permission to make final write to variable {}", var);
     }
-    for (size_t i : comp_indices) {
+    for (const size_t i : comp_indices) {
       const auto item = nonfinal_writes.find(var);
       if (item != nonfinal_writes.end()) {
         // Note that calling merge actually removes the items from the
@@ -283,8 +290,8 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
                       PermissionTypes::ReadIfSet, component_dependencies);
 
   // Create ancillary variables for sorting process
-  std::vector<bool> processing(components.size(), false),
-      processed(components.size(), false);
+  std::vector<bool> processing(components.size(), false);
+  std::vector<bool> processed(components.size(), false);
   std::vector<std::size_t> order;
 
   // Perform the sort
@@ -300,7 +307,7 @@ sortComponents(std::vector<std::unique_ptr<Component>>&& components) {
     std::swap(result[i], components[order[i]]);
   }
 
-  return result;
+  components = std::move(result);
 }
 
 ComponentScheduler::ComponentScheduler(Options &scheduler_options,
@@ -372,7 +379,7 @@ ComponentScheduler::ComponentScheduler(Options &scheduler_options,
     component->declareAllSpecies(species);
   }
 
-  components = sortComponents(std::move(components));
+  sortComponents(components);
 }
 
 std::unique_ptr<ComponentScheduler> ComponentScheduler::create(Options &scheduler_options,
