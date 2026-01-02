@@ -1,10 +1,11 @@
 #pragma once
-
 #ifndef COMPONENT_SCHEDULER_H
 #define COMPONENT_SCHEDULER_H
 
-#include <vector>
 #include <memory>
+#include <set>
+#include <string>
+#include <vector>
 
 #include <bout/bout_types.hxx>
 #include <bout/options.hxx>
