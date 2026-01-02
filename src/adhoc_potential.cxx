@@ -26,8 +26,8 @@ void AdhocPotential::transform(Options &state) {
     throw BoutException("Adhoc potential should be calculated, but can not find electron temperature");
   }
   
-  T_e = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["temperature"]), 0.0));
-
+  //T_e = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["temperature"]), 0.0));
+  T_e = getNoBoundary<Field3D>(electrons["temperature"]);
   if (lambda > 0.0) {
     phi_adhoc = lambda * T_e;
     phi_adhoc.applyBoundary("neumann");
