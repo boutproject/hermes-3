@@ -374,6 +374,12 @@ void NeutralMixed::finally(const Options& state) {
     Dnn = (Tnlim / AA) / Rnn;
   }
 
+  if (diffusion_limit > 0.0) {
+    // Impose an upper limit on the diffusion coefficient
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+    }
+  }
 
   // Heat conductivity 
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
@@ -416,13 +422,6 @@ void NeutralMixed::finally(const Options& state) {
       eta_n_par[i] = eta_n[i] * viscosity_factor_par[i];
     }
 
-  }
-
-  if (diffusion_limit > 0.0) {
-    // Impose an upper limit on the diffusion coefficient
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
-    }
   }
 
   mesh->communicate(Dnn);
