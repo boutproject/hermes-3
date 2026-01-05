@@ -27,7 +27,7 @@ using bout::globals::mesh;
 
 BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptions,
                                            Solver*)
-    : Component({readOnly("species:{sp}:{input_vars}"),
+    : Component({readIfSet("fields:Apar_flutter"), readOnly("species:{sp}:{input_vars}"),
                  readWrite("species:{sp}:{output_vars}")}) {
   AUTO_TRACE();
 
