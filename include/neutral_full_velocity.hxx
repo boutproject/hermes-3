@@ -32,6 +32,8 @@ private:
   BoutReal AA;      // Atomic mass
 
   BoutReal density_floor; ///< Floor when dividing by density
+  BoutReal temperature_floor;
+  BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
 
   Field2D Nn2D;                // Neutral gas density (evolving)
   Field2D Pn2D;                // Neutral gas pressure (evolving)
@@ -58,13 +60,33 @@ private:
   BoutReal neutral_conduction; // Neutral gas thermal conduction
   BoutReal neutral_gamma;      // Heat transmission for neutrals
 
+
+  std::vector<std::string> collision_names; ///< Collisions used for collisionality
+  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or multispecies
+  Field2D nu; ///< Collisionality to use for diffusion
+
+  Field2D Dnn; ///< Diffusion coefficient
+  Field2D kappa_n, eta_n; ///< Neutral conduction and viscosity
+
+  BoutReal flux_limit; ///< Diffusive flux limit
+  BoutReal neutral_lmax;
+  BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
+
   // Toroidal advection
   bool toroidal_flow;      ///< Evolve toroidal flow?
   bool momentum_advection; ///< Include advection of momentum?
   bool curved_torus;       ///< Include toroidal curvature in momentum advection?
+  bool constant_transport_coef; ///< Use constant transport coefficients?
+
+  bool zero_timederivs; ///< Set the time derivatives to zero?
+  bool output_ddt; ///< Save time derivatives?  
 
   bool diagnose; ///< Output additional diagnostics?
   Field2D Vnpar; ///< Parallel flow velocity diagnostic
+
+  Field2D density_source, pressure_source; ///< External input source
+  Field2D Sn, Sp, Snv; ///< Particle, pressure and momentum source
+
 };
 
 namespace {
