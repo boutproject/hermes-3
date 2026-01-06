@@ -99,10 +99,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   auto& p_options = alloptions[std::string("P") + name];
-  source_normalisation =
-      SI::qe * Nnorm * Tnorm * Omega_ci; // [Pa/s] or [W/m^3] if converted to energy
+  source_normalisation = Pnorm * Omega_ci; // [Pa/s] or [W/m^3] if converted to energy
   time_normalisation = 1. / Omega_ci;    // [s]
 
   // Try to read the pressure source from the mesh
@@ -162,6 +162,17 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   thermal_conduction = options["thermal_conduction"]
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
+
+  // Initilize the Field3D P from 2D profiles stored in the mesh file.
+  initialize_from_mesh = p_options["initialize_from_mesh"]
+    .doc("Initilize field from 2D profiles stored in the mesh file?")
+    .withDefault<bool>(false);
+
+  if (initialize_from_mesh) {
+  // Try to read the initial field from the mesh
+    mesh->get(P, std::string("P") + name + "_init"); // Units: Pascal [Pa]
+    P /= Pnorm; // Normalization
+  }
 }
 
 void EvolvePressure::transform(Options& state) {

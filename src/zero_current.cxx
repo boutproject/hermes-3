@@ -2,6 +2,8 @@
 #include <bout/difops.hxx>
 
 #include "../include/zero_current.hxx"
+#include <bout/constants.hxx>
+#include "../include/hermes_utils.hxx"
 
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : name(name) {
@@ -11,6 +13,9 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
   charge = options["charge"].doc("Particle charge. electrons = -1");
 
   ASSERT0(charge != 0.0);
+
+  atomic_mass = options["AA"].doc("Particle atomic number.").withDefault(0.0); // Atomic mass
+  // ASSERT0(atomic_mass != 0.0);
 }
 
 void ZeroCurrent::transform(Options &state) {
@@ -61,13 +66,17 @@ void ZeroCurrent::transform(Options &state) {
   }
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
-  velocity = current / (-charge * floor(N, 1e-5));
+  velocity = current / (-charge * softFloor(N, 1e-7));
   set(species["velocity"], velocity);
+
+  momentum = atomic_mass * N * velocity;
+  set(species["momentum"], momentum);
 }
 
 void ZeroCurrent::outputVars(Options &state) {
   AUTO_TRACE();
   auto Cs0 = get<BoutReal>(state["Cs0"]);
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
 
   // Save the velocity
   set_with_attrs(state[std::string("V") + name], velocity,
@@ -78,4 +87,14 @@ void ZeroCurrent::outputVars(Options &state) {
                   {"standard_name", "velocity"},
                   {"species", name},
                   {"source", "zero_current"}});
+
+  set_with_attrs(state[std::string("NV") + name], momentum,
+                  {{"time_dimension", "t"},
+                  {"units", "kg / m^2 / s"},
+                  {"conversion", SI::Mp * Nnorm * Cs0},
+                  {"long_name", name + " parallel momentum"},
+                  {"standard_name", "momentum"},
+                  {"species", name},
+                  {"source", "zero_current"}});
+                 
 }
