@@ -19,9 +19,9 @@ static std::map<std::string, std::string> long_reaction_types_map = {
 template <char Isotope>
 struct AmjuelHydIsotopeReaction : public AmjuelReaction {
   AmjuelHydIsotopeReaction(std::string name, std::string short_reaction_type,
-                           std::string amjuel_label, std::string from_species,
+                           std::string amjuel_label, const std::string & reaction_str, std::string from_species,
                            std::string to_species, Options& alloptions)
-      : AmjuelReaction(name, short_reaction_type, amjuel_label, from_species, to_species,
+    : AmjuelReaction(name, short_reaction_type, amjuel_label, reaction_str, from_species, to_species,
                        alloptions) {
     if (this->diagnose) {
       // Set up diagnostics
@@ -82,7 +82,7 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
 template <char Isotope>
 struct AmjuelHydRecombinationIsotope : public AmjuelHydIsotopeReaction<Isotope> {
   AmjuelHydRecombinationIsotope(std::string name, Options& alloptions, Solver*)
-      : AmjuelHydIsotopeReaction<Isotope>(name, "rec", "H.x_2.1.8", {Isotope, '+'},
+    : AmjuelHydIsotopeReaction<Isotope>(name, "rec", "H.x_2.1.8", fmt::format("{}+ + e -> {}", Isotope, Isotope), {Isotope, '+'},
                                           {Isotope}, alloptions) {
 
     this->rate_multiplier = alloptions[{Isotope}]["K_rec_multiplier"]
@@ -104,7 +104,7 @@ struct AmjuelHydRecombinationIsotope : public AmjuelHydIsotopeReaction<Isotope> 
 template <char Isotope>
 struct AmjuelHydIonisationIsotope : public AmjuelHydIsotopeReaction<Isotope> {
   AmjuelHydIonisationIsotope(std::string name, Options& alloptions, Solver*)
-      : AmjuelHydIsotopeReaction<Isotope>(name, "iz", "H.x_2.1.5", {Isotope},
+      : AmjuelHydIsotopeReaction<Isotope>(name, "iz", "H.x_2.1.5", fmt::format("{} + e -> {}+ + 2e", Isotope, Isotope), {Isotope},
                                           {Isotope, '+'}, alloptions) {
     this->rate_multiplier = alloptions[{Isotope}]["K_iz_multiplier"]
                                 .doc("Scale the ionisation rate by this factor")

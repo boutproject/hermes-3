@@ -9,7 +9,7 @@
 
 #include "integrate.hxx"
 
-Reaction::Reaction(std::string name, Options& options)
+Reaction::Reaction(std::string name, Options& options, const std::string & reaction_str)
     : ReactionBase({readOnly("species:{sp}:{r_val}"), readOnly("species:e:{e_val}"),
                     readWrite("species:{sp}:{w_val}")}),
       name(name) {
@@ -23,20 +23,6 @@ Reaction::Reaction(std::string name, Options& options)
   this->diagnose = options[name]["diagnose"]
                        .doc("Output additional diagnostics?")
                        .withDefault<bool>(false);
-
-  /*
-   * Awful hack to extract the correct reaction expression from the params; depends on
-   * instantiation order matching the order reactions are listed in the input file. There
-   * must be a better way...
-   */
-  std::string reaction_grp_str = options[name]["type"];
-  std::regex match_parentheses("\\(|\\)");
-  reaction_grp_str = std::regex_replace(reaction_grp_str, match_parentheses, "");
-  std::string reaction_str;
-  std::stringstream ss(reaction_grp_str);
-  for (auto ii = 0; ii < this->inst_num; ii++) {
-    std::getline(ss, reaction_str, ',');
-  }
 
   // Parse the reaction string
   this->parser = std::make_unique<ReactionParser>(reaction_str);
