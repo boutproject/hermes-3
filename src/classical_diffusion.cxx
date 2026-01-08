@@ -3,7 +3,10 @@
 #include <bout/fv_ops.hxx>
 #include "../include/div_ops.hxx"
 
-ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, Solver*) {
+ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, Solver*)
+    : Component({readIfSet("species:{all_species}:{optional}"),
+                 readOnly("species:e:{e_vals}"),
+                 readWrite("species:{all_species}:{output}")}) {
   AUTO_TRACE();
   Options& options = alloptions[name];
 
@@ -11,11 +14,26 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
 
   diagnose = options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
   custom_D = options["custom_D"].doc("Custom diffusion coefficient override. -1: Off, calculate D normally").withDefault<BoutReal>(-1);
+
+  substitutePermissions("optional",
+                        {"charge", "pressure", "density", "velocity", "temperature"});
+  std::vector<std::string> e_vals = {"AA", "density"};
+  if (custom_D <= 0.) {
+    e_vals.push_back("collision_frequency");
+  }
+  substitutePermissions("e_vals", e_vals);
+  // FIXME: momentum and energy sources are only set if velocity and
+  // temperature are defined (respectively). Collision frequency is
+  // only used if temperature is set. Nothing happens if the charge or
+  // density are unset.
+  substitutePermissions("output", {"density_source", "momentum_source", "energy_source"});
+  if (custom_D < 0.)
+    setPermissions(readOnly("species:{all_species}:collision_frequency"));
 }
 
-void ClassicalDiffusion::transform(Options &state) {
+void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
   
   // Particle diffusion coefficient
   // The only term here comes from the resistive drift
@@ -23,9 +41,9 @@ void ClassicalDiffusion::transform(Options &state) {
   Field3D Ptotal = 0.0;
   if (!(custom_D > 0)){
     for (auto& kv : allspecies.getChildren()) {
-      const auto& species = kv.second;
+      const auto species = kv.second;
 
-      if (!(species.isSet("charge") and IS_SET(species["pressure"]))) {
+      if (!(species.isSet("charge") and species.isSet("pressure"))) {
         continue; // Skip, go to next species
       }
       auto q = get<BoutReal>(species["charge"]);
@@ -42,7 +60,7 @@ void ClassicalDiffusion::transform(Options &state) {
   if (custom_D > 0) {    // User-set
     Dn = custom_D;   
   } else {                  // Calculated from collisions
-    auto& electrons = allspecies["e"];
+    auto electrons = allspecies["e"];
     const auto me = get<BoutReal>(electrons["AA"]);
     const Field3D Ne = GET_VALUE(Field3D, electrons["density"]);
     const Field3D nu_e = floor(GET_VALUE(Field3D, electrons["collision_frequency"]), 1e-10);
@@ -54,10 +72,10 @@ void ClassicalDiffusion::transform(Options &state) {
       Dn[i] = 0.0;
     }
 
-  for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+  for (auto kv : allspecies.getChildren()) {
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
     if (!(custom_D > 0)) { 
-      if (!(species.isSet("charge") and IS_SET(species["density"]))) {
+      if (!(species.isSet("charge") and species.isSet("density"))) {
         continue; // Skip, go to next species
       }
       auto q = get<BoutReal>(species["charge"]);

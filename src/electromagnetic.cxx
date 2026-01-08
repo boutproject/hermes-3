@@ -13,7 +13,13 @@ BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:rtol_accept", 1e-2);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:atol_accept", 1e-6);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:maxits", 1000);
 
-Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* solver) {
+Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* solver)
+    : Component({readIfSet("species:{all_species}:charge"),
+                 writeFinal("species:{all_species}:momentum"),
+                 writeFinal("species:{all_species}:velocity"), readOnly("time"),
+                 readOnly("species:{all_species}:AA"),
+                 readOnly("species:{all_species}:density", Regions::Interior),
+                 readWrite("fields:Apar")}) {
   AUTO_TRACE();
 
   Options& units = alloptions["units"];
@@ -79,6 +85,9 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
   magnetic_flutter = options["magnetic_flutter"]
     .doc("Set magnetic flutter terms (Apar_flutter)?")
     .withDefault<bool>(false);
+
+  if (magnetic_flutter)
+    setPermissions(readWrite("fields:Apar_flutter"));
 }
 
 void Electromagnetic::restartVars(Options& state) {
@@ -102,10 +111,10 @@ void Electromagnetic::restartVars(Options& state) {
                   {"source", "electromagnetic"}});
 }
 
-void Electromagnetic::transform(Options &state) {
+void Electromagnetic::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   // Sum coefficients over species
   //
@@ -113,7 +122,7 @@ void Electromagnetic::transform(Options &state) {
   alpha_em = 0.0;
   Ajpar = 0.0;
   for (auto& kv : allspecies.getChildren()) {
-    const Options& species = kv.second;
+    const GuardedOptions species = kv.second;
 
     if (!species.isSet("charge") or !species.isSet("momentum")) {
       continue; // Not charged, or no parallel flow
@@ -184,7 +193,7 @@ void Electromagnetic::transform(Options &state) {
 
   // Update momentum
   for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
     if (!species.isSet("charge") or !species.isSet("momentum")) {
       continue; // Not charged, or no parallel flow

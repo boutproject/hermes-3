@@ -63,8 +63,10 @@ TEST_F(EvolvePressureTest, Finally) {
                              {"pressure", 1.0},
                              {"temperature", 1.0},
                              {"pressure_source", 0.5}}}}}};
+#if CHECKLEVEL >= 1
   // Throws exception due to pressure_source
   EXPECT_THROW(component.finally(state), BoutException);
+#endif
 
   const Options state2 = {{"species",
                            {{"i",

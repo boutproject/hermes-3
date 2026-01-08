@@ -57,8 +57,22 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
 
 } // namespace
 
-SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions,
-                                           Solver*) {
+SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions, Solver*)
+    : Component({
+        readIfSet("species:e:{e_whole_domain}"),
+        writeBoundary("species:e:{e_boundary}"),
+        readWrite("species:e:energy_source"),
+        readWrite("species:e:energy_flow_ylow"),
+        writeBoundaryIfSet("species:e:{e_optional}"),
+        writeBoundaryReadInteriorIfSet("species:e:pressure"),
+        readIfSet("species:{all_species}:charge"),
+        readOnly("species:{ions}:AA"),
+        readWrite("species:{ions}:energy_source"),
+        readWrite("species:{ions}:energy_flow_ylow"),
+        writeBoundary("species:{ions}:{ion_boundary}"),
+        writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+        writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+    }) {
   AUTO_TRACE();
 
   Options& options = alloptions[name];
@@ -130,14 +144,21 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   diagnose = options["diagnose"]
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
-  
+
+  substitutePermissions("e_whole_domain", {"AA", "charge"});
+  substitutePermissions("e_boundary", {"density", "temperature"});
+  substitutePermissions("e_optional", {"velocity", "momentum"});
+  substitutePermissions("ion_boundary", {"density", "temperature"});
+  substitutePermissions("ion_optional", {"velocity", "momentum"});
+  setPermissions(always_set_phi ? writeBoundaryReadInteriorIfSet("fields:phi")
+                                : writeBoundaryIfSet("fields:phi"));
 }
 
-void SheathBoundarySimple::transform(Options& state) {
+void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
-  Options& electrons = allspecies["e"];
+  GuardedOptions allspecies = state["species"];
+  GuardedOptions electrons = allspecies["e"];
 
   // Need electron properties
   // Not const because boundary conditions will be set
@@ -180,7 +201,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
+      const GuardedOptions species = kv.second;
 
       if ((kv.first == "e") or !species.isSet("charge")
           or (get<BoutReal>(species["charge"]) == 0.0)) {
@@ -492,7 +513,7 @@ void SheathBoundarySimple::transform(Options& state) {
       continue; // Skip electrons
     }
 
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
     // Ion charge
     const BoutReal Zi = species.isSet("charge") ? get<BoutReal>(species["charge"]) : 0.0;
@@ -690,8 +711,8 @@ void SheathBoundarySimple::transform(Options& state) {
     // Add the total sheath power flux to the tracker of y power flows
     add(species["energy_flow_ylow"], fromFieldAligned(ion_sheath_power_ylow));
 
-    set(diagnostics[species.name()]["energy_source"], hflux_i);
-    set(diagnostics[species.name()]["particle_source"], particle_source);
+    set(diagnostics[kv.first]["energy_source"], hflux_i);
+    set(diagnostics[kv.first]["particle_source"], particle_source);
 
   }
 }

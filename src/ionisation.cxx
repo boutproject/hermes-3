@@ -14,14 +14,22 @@ BoutReal ionisation_rate(BoutReal T) {
   const auto log_T = log(T);
   double lograte = 0.0;
   for (std::size_t i = 0; i < ioncoeffs.size(); i++) {
-    lograte = lograte + ioncoeffs[i] * pow(log_T, i);
+    lograte = lograte + (ioncoeffs[i] * pow(log_T, static_cast<BoutReal>(i)));
   }
 
   return exp(lograte) * 1.0E-6;
 }
 } // namespace
 
-Ionisation::Ionisation(std::string name, Options &alloptions, Solver *) {
+Ionisation::Ionisation(std::string name, Options& alloptions, Solver*)
+    : Component(
+        {readOnly("species:h:density"), readOnly("species:h:temperature"),
+         readOnly("species:h:velocity"), readOnly("species:h:AA"),
+         readOnly("species:e:density"), readOnly("species:e:temperature"),
+         readOnly("species:h+:AA"), readWrite("species:h:density_source"),
+         readWrite("species:h+:density_source"), readWrite("species:h:momentum_source"),
+         readWrite("species:h+:momentum_source"), readWrite("species:h:energy_source"),
+         readWrite("species:h+:energy_source"), readWrite("species:e:energy_source")}) {
 
   // Get options for this component
   auto& options = alloptions[name];
@@ -38,19 +46,19 @@ Ionisation::Ionisation(std::string name, Options &alloptions, Solver *) {
   Eionize /= Tnorm;
 }
 
-void Ionisation::transform(Options &state) {
+void Ionisation::transform_impl(GuardedOptions& state) {
   // Get neutral atom properties
-  Options& hydrogen = state["species"]["h"];
+  GuardedOptions hydrogen = state["species"]["h"];
   Field3D Nn = get<Field3D>(hydrogen["density"]);
   Field3D Tn = get<Field3D>(hydrogen["temperature"]);
   Field3D Vn = get<Field3D>(hydrogen["velocity"]);
   auto AA = get<BoutReal>(hydrogen["AA"]);
   
-  Options& electron = state["species"]["e"];
+  GuardedOptions electron = state["species"]["e"];
   Field3D Ne = get<Field3D>(electron["density"]);
   Field3D Te = get<Field3D>(electron["temperature"]);
 
-  Options& ion = state["species"]["h+"];
+  GuardedOptions ion = state["species"]["h+"];
   ASSERT1(AA == get<BoutReal>(ion["AA"]));
 
   Field3D reaction_rate = cellAverage(

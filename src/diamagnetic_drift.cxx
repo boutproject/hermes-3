@@ -6,7 +6,9 @@
 using bout::globals::mesh;
 
 DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
-                                   Solver* UNUSED(solver)) {
+                                   Solver* UNUSED(solver))
+    : Component({readIfSet("species:{all_species}:{input}"),
+                 readWrite("species:{all_species}:{output}")}) {
 
   // Get options for this component
   auto& options = alloptions[name];
@@ -55,14 +57,24 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
     Curlb_B.y(r.ind, mesh->yend + 1) = -Curlb_B.y(r.ind, mesh->yend);
   }
+
+  // FIXME: density, pressure, and momentum will not be read even if
+  // they are defined if charge and temperature were not defined for
+  // that species.
+  substitutePermissions("input",
+                        {"charge", "temperature", "density", "pressure", "momentum"});
+  // FIXME: These will actually only be written if density, pressure,
+  // and momentum are set, respectively. They also require charge and
+  // temperature to have been set.
+  substitutePermissions("output", {"density_source", "energy_source", "momentum_source"});
 }
 
-void DiamagneticDrift::transform(Options& state) {
+void DiamagneticDrift::transform_impl(GuardedOptions& state) {
   // Iterate through all subsections
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
     if (!(species.isSet("charge") and species.isSet("temperature")))
       continue; // Skip, go to next species

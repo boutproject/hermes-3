@@ -3,7 +3,8 @@
 
 #include <bout/utils.hxx> // for trim, strsplit
 
-Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solver)) {
+Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solver))
+    : Component({readOnly("{inputs}"), writeFinal("{outputs}")}) {
 
   Options& options = alloptions[name];
 
@@ -11,6 +12,8 @@ Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solve
 
   const auto str = trim(
       options["transforms"].doc("Comma-separated list e.g. a = b, c = d"), trim_chars);
+
+  std::vector<std::string> inputs, outputs;
 
   for (const auto& assign_str : strsplit(str, ',')) {
     auto assign_lr = strsplit(assign_str, '=');
@@ -22,11 +25,16 @@ Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solve
     const auto right = trim(assign_lr.back(), trim_chars);
 
     transforms[left] = right;
+    inputs.push_back(left);
+    outputs.push_back(right);
   }
+
+  substitutePermissions("inputs", inputs);
+  substitutePermissions("outputs", outputs);
 }
 
-void Transform::transform(Options& state) {
+void Transform::transform_impl(GuardedOptions& state) {
   for (const auto& lr : transforms) {
-    state[lr.first] = state[lr.second].copy();
+    state[lr.first].getWritable() = state[lr.second].get().copy();
   }
 }

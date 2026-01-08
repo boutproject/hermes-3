@@ -12,7 +12,11 @@
 
 using bout::globals::mesh;
 
-EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) : name(name) {
+EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* solver)
+    : Component({readOnly("species:{name}:AA"),
+                 readOnly("species:{name}:density", Regions::Interior),
+                 readWrite("species:{name}:{outputs}")}),
+      name(name) {
   AUTO_TRACE();
   
   // Evolve the momentum in time
@@ -58,13 +62,16 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   // Set to zero so set for output
   momentum_source = 0.0;
   NV_err = 0.0;
+
+  substitutePermissions("name", {name});
+  substitutePermissions("outputs", {"velocity", "momentum"});
 }
 
-void EvolveMomentum::transform(Options &state) {
+void EvolveMomentum::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   mesh->communicate(NV);
 
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);

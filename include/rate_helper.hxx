@@ -26,12 +26,12 @@ struct RateHelper {
    * factor, n_e and T_e
    * @param region the region in which to calculate the rate
    */
-  RateHelper(const Options& state, const std::vector<std::string>& reactant_names,
+  RateHelper(const GuardedOptions state, const std::vector<std::string>& reactant_names,
              RateFunctionType rate_calc_func, const Region<IdxType> region)
       : region(region), rate_calc_func(rate_calc_func) {
 
     // Extract electron properties from state
-    const Options& electron = state["species"]["e"];
+    const GuardedOptions electron = state["species"]["e"];
     n_e = get<Field3D>(electron["density"]);
     T_e = get<Field3D>(electron["temperature"]);
 
