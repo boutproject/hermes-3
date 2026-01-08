@@ -2,7 +2,34 @@
 #include "../include/ionisation.hxx"
 #include "../include/integrate.hxx"
 
-Ionisation::Ionisation(std::string name, Options &alloptions, Solver *) {
+namespace {
+// Collision rate coefficient <sigma*v> [m3/s]
+// Hydrogen rates, fitted by Hannah Willett May 2015
+// University of York
+BoutReal ionisation_rate(BoutReal T) {
+  constexpr std::array ioncoeffs = {-3.271397E1,  1.353656E1,   -5.739329,
+                                    1.563155,     -2.877056E-1, 3.482560e-2,
+                                    -2.631976E-3, 1.119544E-4,  -2.039150E-6};
+
+  const auto log_T = log(T);
+  double lograte = 0.0;
+  for (std::size_t i = 0; i < ioncoeffs.size(); i++) {
+    lograte = lograte + (ioncoeffs[i] * pow(log_T, static_cast<BoutReal>(i)));
+  }
+
+  return exp(lograte) * 1.0E-6;
+}
+} // namespace
+
+Ionisation::Ionisation(std::string name, Options& alloptions, Solver*)
+    : Component(
+        {readOnly("species:h:density"), readOnly("species:h:temperature"),
+         readOnly("species:h:velocity"), readOnly("species:h:AA"),
+         readOnly("species:e:density"), readOnly("species:e:temperature"),
+         readOnly("species:h+:AA"), readWrite("species:h:density_source"),
+         readWrite("species:h+:density_source"), readWrite("species:h:momentum_source"),
+         readWrite("species:h+:momentum_source"), readWrite("species:h:energy_source"),
+         readWrite("species:h+:energy_source"), readWrite("species:e:energy_source")}) {
 
   // Get options for this component
   auto& options = alloptions[name];
@@ -19,24 +46,24 @@ Ionisation::Ionisation(std::string name, Options &alloptions, Solver *) {
   Eionize /= Tnorm;
 }
 
-void Ionisation::transform(Options &state) {
+void Ionisation::transform_impl(GuardedOptions& state) {
   // Get neutral atom properties
-  Options& hydrogen = state["species"]["h"];
+  GuardedOptions hydrogen = state["species"]["h"];
   Field3D Nn = get<Field3D>(hydrogen["density"]);
   Field3D Tn = get<Field3D>(hydrogen["temperature"]);
   Field3D Vn = get<Field3D>(hydrogen["velocity"]);
   auto AA = get<BoutReal>(hydrogen["AA"]);
   
-  Options& electron = state["species"]["e"];
+  GuardedOptions electron = state["species"]["e"];
   Field3D Ne = get<Field3D>(electron["density"]);
   Field3D Te = get<Field3D>(electron["temperature"]);
 
-  Options& ion = state["species"]["h+"];
+  GuardedOptions ion = state["species"]["h+"];
   ASSERT1(AA == get<BoutReal>(ion["AA"]));
 
   Field3D reaction_rate = cellAverage(
       [&](BoutReal ne, BoutReal nn, BoutReal te) {
-        return ne * nn * atomic_rates.ionisation(te * Tnorm) * Nnorm / FreqNorm;
+        return ne * nn * ionisation_rate(te * Tnorm) * Nnorm / FreqNorm;
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, Nn, Te);
 

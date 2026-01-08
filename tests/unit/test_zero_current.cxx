@@ -2,6 +2,7 @@
 #include "gtest/gtest.h"
 
 #include "test_extras.hxx" // FakeMesh
+#include "fake_mesh_fixture.hxx"
 
 #include "../../include/zero_current.hxx"
 
@@ -44,6 +45,7 @@ TEST_F(ZeroCurrentTest, ElectronFlowVelocity) {
   Field3D Vi =  FieldFactory::get()->create3D("y - x", &options, mesh);
   options["species"]["ion"]["velocity"] = Vi;
 
+  component.declareAllSpecies({"e", "ion"});
   component.transform(options);
 
   // Electron velocity should be equal to ion velocity

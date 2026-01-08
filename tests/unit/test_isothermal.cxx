@@ -2,6 +2,7 @@
 #include "gtest/gtest.h"
 
 #include "test_extras.hxx" // FakeMesh
+#include "fake_mesh_fixture.hxx"
 
 #include "../../include/isothermal.hxx"
 
@@ -67,6 +68,70 @@ TEST_F(IsothermalTest, GivenTandN) {
 
   auto Pe = get<Field3D>(state["species"]["e"]["pressure"]);
   
+  BOUT_FOR_SERIAL(i, Pe.getRegion("RGN_ALL")) {
+    ASSERT_DOUBLE_EQ(Pe[i], 6.0);
+  }
+}
+
+TEST_F(IsothermalTest, Outputs) {
+  Options options;
+  options["units"]["eV"] = 5.0;
+  options["e"]["temperature"] = 15.0; // In eV -> Normalised Te = 3
+
+  Isothermal component("e", options, nullptr);
+
+  Field3D Ne = 2.0;
+
+  Options state;
+  state["species"]["e"]["density"] = Ne;
+
+  component.transform(state);
+
+  Options outputs = {{"Tnorm", 1.0},
+                     {"Nnorm", 1.0}};
+  component.outputVars(outputs);
+
+  ASSERT_TRUE(outputs.isSet("Te"));
+  
+  // Temperature should be a scalar, and normalised to 1
+  auto Te = get<Field3D>(outputs["Te"]);
+  BOUT_FOR_SERIAL(i, Te.getRegion("RGN_ALL")) {
+    ASSERT_DOUBLE_EQ(Te[i], 3.0);
+  }
+
+  ASSERT_FALSE(outputs.isSet("Pe"));
+}
+
+TEST_F(IsothermalTest, OutputsDiagnose) {
+  Options options;
+  options["units"]["eV"] = 5.0;
+  options["e"]["temperature"] = 15.0; // In eV -> Normalised Te = 3
+  options["e"]["diagnose"] = true;
+
+  Isothermal component("e", options, nullptr);
+
+  Field3D Ne = 2.0;
+
+  Options state;
+  state["species"]["e"]["density"] = Ne;
+
+  component.transform(state);
+
+  Options outputs = {{"Tnorm", 1.0},
+                     {"Nnorm", 1.0}};
+  component.outputVars(outputs);
+
+  ASSERT_TRUE(outputs.isSet("Te"));
+  
+  // Temperature should be a scalar, and normalised to 1
+  auto Te = get<Field3D>(outputs["Te"]);
+  BOUT_FOR_SERIAL(i, Te.getRegion("RGN_ALL")) {
+    ASSERT_DOUBLE_EQ(Te[i], 3.0);
+  }
+
+  ASSERT_TRUE(outputs.isSet("Pe"));
+
+  auto Pe = get<Field3D>(outputs["Pe"]);
   BOUT_FOR_SERIAL(i, Pe.getRegion("RGN_ALL")) {
     ASSERT_DOUBLE_EQ(Pe[i], 6.0);
   }

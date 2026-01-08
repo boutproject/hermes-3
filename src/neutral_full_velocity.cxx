@@ -1,19 +1,20 @@
 
 #include <bout/constants.hxx>
+#include <bout/mesh.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/neutral_full_velocity.hxx"
 
-#include "bout/mesh.hxx"
-#include "bout/solver.hxx"
+#include <algorithm>
 
 using bout::globals::mesh;
 
 NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& alloptions,
                                          Solver* solver)
-    : name(name) {
+    : Component({readWrite("species:{name}:{outputs}")}), name(name) {
   AUTO_TRACE();
 
   // This is used in both transform and finally functions
@@ -24,7 +25,6 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   const BoutReal meters = units["meters"];
   const BoutReal seconds = units["seconds"];
   const BoutReal Bnorm = units["Tesla"];
-  const BoutReal Tnorm = units["eV"];
 
   auto& options = alloptions[name];
 
@@ -188,10 +188,13 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   // Ensure that guard cells are filled and consistent between processors
   mesh->communicate(Urx, Ury, Uzx, Uzy);
   mesh->communicate(Txr, Txz, Tyr, Tyz);
+  substitutePermissions("name", {name});
+  substitutePermissions(
+      "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
 }
 
 /// Modify the given simulation state
-void NeutralFullVelocity::transform(Options& state) {
+void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   mesh->communicate(Nn2D, Vn2D, Pn2D);
 
@@ -254,7 +257,7 @@ void NeutralFullVelocity::transform(Options& state) {
   Vnpar = Vn2D.y / (coord->J * coord->Bxy);
 
   // Set values in the state
-  auto& localstate = state["species"][name];
+  auto localstate = state["species"][name];
   set(localstate["density"], Nn2D);
   set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn2D);
@@ -348,13 +351,11 @@ void NeutralFullVelocity::finally(const Options& state) {
     //         q = neutral_gamma * n * T * cs
 
     // Density at the target
-    BoutReal Nnout = 0.5 * (Nn2D(r.ind, mesh->ystart) + Nn2D(r.ind, mesh->ystart - 1));
-    if (Nnout < 0.0)
-      Nnout = 0.0;
+    const BoutReal Nnout =
+        std::max(0.5 * (Nn2D(r.ind, mesh->ystart) + Nn2D(r.ind, mesh->ystart - 1)), 0.0);
     // Temperature at the target
-    BoutReal Tnout = 0.5 * (Tn2D(r.ind, mesh->ystart) + Tn2D(r.ind, mesh->ystart - 1));
-    if (Tnout < 0.0)
-      Tnout = 0.0;
+    const BoutReal Tnout =
+        std::max(0.5 * (Tn2D(r.ind, mesh->ystart) + Tn2D(r.ind, mesh->ystart - 1)), 0.0);
 
     // gamma * n * T * cs
     BoutReal q = neutral_gamma * Nnout * Tnout * sqrt(Tnout);
@@ -379,13 +380,11 @@ void NeutralFullVelocity::finally(const Options& state) {
     //         q = neutral_gamma * n * T * cs
 
     // Density at the target
-    BoutReal Nnout = 0.5 * (Nn2D(r.ind, mesh->yend) + Nn2D(r.ind, mesh->yend + 1));
-    if (Nnout < 0.0)
-      Nnout = 0.0;
+    const BoutReal Nnout =
+        std::max(0.5 * (Nn2D(r.ind, mesh->yend) + Nn2D(r.ind, mesh->yend + 1)), 0.0);
     // Temperature at the target
-    BoutReal Tnout = 0.5 * (Tn2D(r.ind, mesh->yend) + Tn2D(r.ind, mesh->yend + 1));
-    if (Tnout < 0.0)
-      Tnout = 0.0;
+    const BoutReal Tnout =
+        std::max(0.5 * (Tn2D(r.ind, mesh->yend) + Tn2D(r.ind, mesh->yend + 1)), 0.0);
 
     // gamma * n * T * cs
     BoutReal q = neutral_gamma * Nnout * Tnout * sqrt(Tnout);
@@ -468,7 +467,6 @@ void NeutralFullVelocity::outputVars(Options& state) {
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
 
