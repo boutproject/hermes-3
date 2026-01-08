@@ -3,11 +3,10 @@ name: Tests
 on:
   push:
     branches:
-      - master
-      - 'VANTAGE-Reactions-Coupling/dev'
+      - '**'
   pull_request:
     branches:
-      - '*'  # This will trigger for PRs against any branch
+      - '**'  # This will trigger for PRs against any branch
 
 defaults:
   run:
