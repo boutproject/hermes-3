@@ -24,19 +24,24 @@
 #include "revision.hxx"
 
 #include "include/adas_carbon.hxx"
-#include "include/adas_neon.hxx"
 #include "include/adas_lithium.hxx"
+#include "include/adas_neon.hxx"
 #include "include/amjuel_helium.hxx"
-#include "include/amjuel_hyd_ionisation.hxx"
-#include "include/amjuel_hyd_recombination.hxx"
+#include "include/amjuel_hydrogen.hxx"
 #include "include/anomalous_diffusion.hxx"
-#include "include/classical_diffusion.hxx"
 #include "include/binormal_stpm.hxx"
-#include "include/collisions.hxx"
+#include "include/braginskii_collisions.hxx"
+#include "include/braginskii_conduction.hxx"
+#include "include/braginskii_electron_viscosity.hxx"
+#include "include/braginskii_friction.hxx"
+#include "include/braginskii_heat_exchange.hxx"
+#include "include/braginskii_ion_viscosity.hxx"
+#include "include/braginskii_thermal_force.hxx"
+#include "include/classical_diffusion.hxx"
+#include "include/detachment_controller.hxx"
 #include "include/diamagnetic_drift.hxx"
 #include "include/electromagnetic.hxx"
 #include "include/electron_force_balance.hxx"
-#include "include/electron_viscosity.hxx"
 #include "include/evolve_density.hxx"
 #include "include/evolve_energy.hxx"
 #include "include/evolve_momentum.hxx"
@@ -46,12 +51,11 @@
 #include "include/fixed_fraction_radiation.hxx"
 #include "include/fixed_temperature.hxx"
 #include "include/fixed_velocity.hxx"
-#include "include/neutral_full_velocity.hxx"
 #include "include/hydrogen_charge_exchange.hxx"
-#include "include/ion_viscosity.hxx"
 #include "include/ionisation.hxx"
 #include "include/isothermal.hxx"
 #include "include/neutral_boundary.hxx"
+#include "include/neutral_full_velocity.hxx"
 #include "include/neutral_mixed.hxx"
 #include "include/neutral_parallel_diffusion.hxx"
 #include "include/noflow_boundary.hxx"
@@ -66,21 +70,19 @@
 #include "include/sheath_boundary_simple.hxx"
 #include "include/sheath_closure.hxx"
 #include "include/simple_conduction.hxx"
+#include "include/simple_pump.hxx"
 #include "include/snb_conduction.hxx"
 #include "include/solkit_hydrogen_charge_exchange.hxx"
 #include "include/solkit_neutral_parallel_diffusion.hxx"
 #include "include/sound_speed.hxx"
-#include "include/thermal_force.hxx"
+#include "include/temperature_feedback.hxx"
 #include "include/transform.hxx"
 #include "include/upstream_density_feedback.hxx"
-#include "include/temperature_feedback.hxx"
-#include "include/detachment_controller.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
-#include "include/simple_pump.hxx"
-#include <bout/constants.hxx>
 #include <bout/boundary_factory.hxx>
 #include <bout/boundary_op.hxx>
+#include <bout/constants.hxx>
 #include <bout/field_factory.hxx>
 
 #include "include/recalculate_metric.hxx"
@@ -160,9 +162,10 @@ public:
     }
   }
 
-  void apply(Field2D& f) override {
+  void apply([[maybe_unused]] Field2D& f) override {
     throw BoutException("DecayLengthBoundary not implemented for Field2D");
   }
+
 private:
   std::shared_ptr<FieldGenerator> gen; // Generator
 };
@@ -287,7 +290,7 @@ int Hermes::init(bool restarting) {
   scheduler = ComponentScheduler::create(options, Options::root(), solver);
 
   // Preconditioner
-  setPrecon((preconfunc)&Hermes::precon);
+  setPrecon(&Hermes::precon);
 
   return 0;
 }
