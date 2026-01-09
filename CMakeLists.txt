@@ -70,7 +70,6 @@ set(HERMES_SOURCES
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
     src/parallel_ohms_law.cxx   
-    src/electron_viscosity.cxx
     src/evolve_density.cxx
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
@@ -129,7 +128,6 @@ set(HERMES_SOURCES
     include/electromagnetic.hxx
     include/electron_force_balance.hxx
     include/parallel_ohms_law.hxx
-    include/electron_viscosity.hxx
     include/evolve_density.hxx
     include/evolve_energy.hxx
     include/evolve_momentum.hxx
