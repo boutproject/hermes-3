@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 from job_functions import run_neutral_mixed_manufactured_solutions_test
-from perpendicular_laplacian import x, y, z, div_a_grad_perp_f_symbolic
-from perpendicular_laplacian import div_par_k_grad_par_f_symbolic
-from perpendicular_laplacian import div_par_f_symbolic, metric_coefficients
-from perpendicular_laplacian import grad_par_f_symbolic
+from boutdata.mms import x, y, z, Div_par, Grad_par
+from perpendicular_laplacian import Div_a_Grad_perp_f, Div_par_k_Grad_par_f, GeneralMetric
 from sympy import sin, cos, log
 
 # specify symbolic inputs
@@ -24,7 +22,18 @@ g33 = 1.0
 g12 = 0.0
 g23 = 0.0
 g13 = 0.0
-g_11, g_12, g_13, g_22, g_23, g_33, J = metric_coefficients(g11, g12, g13, g22, g23, g33)
+# the metric object
+metric = GeneralMetric(
+            g11=g11, g12=g12, g13=g13,
+            g22=g22, g23=g23, g33=g33)
+# extract covariant metric coeffs and Jacobian
+g_11 = metric.g_11
+g_12 = metric.g_12
+g_13 = metric.g_13
+g_22 = metric.g_22
+g_23 = metric.g_23
+g_33 = metric.g_33
+J = metric.J
 
 def neutral_mixed_equations(evolve_momentum=False,
                             conservation_test=False,
@@ -68,29 +77,29 @@ def neutral_mixed_equations(evolve_momentum=False,
     # vec(b) . Grad f
     #grad_par_f = grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, f)
 
-    ddt_Nn = (  -div_par_f_symbolic(g11, g12, g13, g22, g23, g33, Nn*Vn)
-                -div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, -Dn*Nn, logPn)
+    ddt_Nn = (  -Div_par(Nn*Vn, metric=metric)
+                -Div_a_Grad_perp_f(-Dn*Nn, logPn, metric=metric)
                 )
 
-    ddt_Pn = (  -div_par_f_symbolic(g11, g12, g13, g22, g23, g33, Pn*Vn)
-                -(5.0/3.0)*div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, -Dn*Pn, logPn)
-                -(2.0/3.0)*Pn*div_par_f_symbolic(g11, g12, g13, g22, g23, g33, Vn)
+    ddt_Pn = (  -Div_par(Pn*Vn, metric=metric)
+                -(5.0/3.0)*Div_a_Grad_perp_f(-Dn*Pn, logPn, metric=metric)
+                -(2.0/3.0)*Pn*Div_par(Vn, metric=metric)
                 )
 
-    ddt_NVn = ( - AA*div_par_f_symbolic(g11, g12, g13, g22, g23, g33, Nn*Vn*Vn)
-                + AA*div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, Nn*Vn*Dn, logPn)
-                - grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, Pn)
+    ddt_NVn = ( - AA*Div_par(Nn*Vn*Vn, metric=metric)
+                + AA*Div_a_Grad_perp_f(Nn*Vn*Dn, logPn, metric=metric)
+                - Grad_par(Pn, metric=metric)
                 )
     # if neutral conduction included in test
     if neutral_conduction:
         ddt_Pn = (ddt_Pn +
-                +(2.0/3.0)*div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, Kn, Tn)
-                +(2.0/3.0)*div_par_k_grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, Kn, Tn)
+                +(2.0/3.0)*Div_a_Grad_perp_f(Kn, Tn, metric=metric)
+                +(2.0/3.0)*Div_par_k_Grad_par_f(Kn, Tn, metric=metric)
                 )
     # if neutral viscosity included in test
     if neutral_viscosity:
-        viscosity_source = (div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, Etan, Vn)
-                        + div_par_k_grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, Etan, Vn))
+        viscosity_source = (Div_a_Grad_perp_f(Etan, Vn, metric=metric)
+                        + Div_par_k_Grad_par_f(Etan, Vn, metric=metric))
         ddt_NVn = (ddt_NVn +
                     viscosity_source
                     )
