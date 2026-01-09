@@ -78,6 +78,8 @@ struct ComponentInformation {
   std::string name;
   std::string type;
 
+  ComponentInformation() {};
+
   ComponentInformation(const std::string& name_, const std::string& type_) : name(name_), type(type_) {}
 
   ComponentInformation(std::string&& name_, std::string&& type_) : name(std::move(name_)), type(std::move(type_)) {}
@@ -90,6 +92,20 @@ struct ComponentInformation {
     return std::pair(name, type) == std::pair(other.name, other.type);
   }
 };
+
+/// Format `ComponentInformation` to string. Format string specification is the
+/// same as when formatting a string.
+/// See https://fmt.dev/12.0/syntax/#format-specification-mini-language.
+///
+/// TODO: provide custom formatting to configure exactly how the
+/// component name and type are displayed.
+template <>
+struct fmt::formatter<ComponentInformation>
+    : formatter<std::string> {
+  auto format(const ComponentInformation& ci, format_context& ctx) const
+      -> format_context::iterator;
+};
+
 
 /// Interface for a component of a simulation model
 ///
