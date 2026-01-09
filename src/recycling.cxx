@@ -1,16 +1,20 @@
 
 #include "../include/recycling.hxx"
+#include "../include/hermes_utils.hxx" // For indexAt
 
-#include <bout/utils.hxx> // for trim, strsplit
-#include "../include/hermes_utils.hxx"  // For indexAt
-#include "../include/hermes_utils.hxx"  // For indexAt
+#include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
-#include <bout/constants.hxx>
+#include <bout/utils.hxx> // for trim, strsplit
+
+#include <algorithm>
 
 using bout::globals::mesh;
 
-Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
+Recycling::Recycling(std::string name, Options& alloptions, Solver*)
+    : Component({readOnly("species:{from}:{from_inputs}"),
+                 readOnly("species:{to}:{to_inputs}"),
+                 readWrite("species:{to}:{outputs}")}) {
   AUTO_TRACE();
 
   const Options& units = alloptions["units"];
@@ -23,7 +27,8 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                                    .as<std::string>(),
                                ',');
 
-  
+  std::set<std::string> from_species, to_species;
+
   // Neutral pump
   // Mark cells as having a pump by setting the Field2D is_pump to 1 in the grid file
   // Works only on SOL and PFR edges, where it locally modifies the recycle multiplier to the pump albedo
@@ -41,6 +46,12 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
     std::string to = from_options["recycle_as"]
                          .doc("Name of the species to recycle into")
                          .as<std::string>();
+
+    from_species.insert(from);
+    to_species.insert(to);
+
+    density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
+    pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
     diagnose =
       from_options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
@@ -124,6 +135,8 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
       target_recycle_energy, sol_recycle_energy, pfr_recycle_energy,
       target_fast_recycle_fraction, pfr_fast_recycle_fraction, sol_fast_recycle_fraction,
       target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor, pfr_fast_recycle_energy_factor});
+    // FIXME: These are global settings, but are being overwritten by each particular
+    // recycling channel
 
     // Boolean flags for enabling recycling in different regions
     target_recycle = from_options["target_recycle"]
@@ -142,9 +155,24 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                    .doc("Neutral pump enabled? Note, need location in grid file")
                    .withDefault<bool>(false);                 
   }
+
+  if (target_recycle) {
+    setPermissions(readIfSet("species:{from}:energy_flow_ylow"));
+  }
+  if (sol_recycle or pfr_recycle) {
+    setPermissions(readIfSet("species:{from}:energy_flow_xlow"));
+    setPermissions(readIfSet("species:{from}:particle_flow_xlow"));
+  }
+  substitutePermissions("to",
+                        std::vector<std::string>(to_species.begin(), to_species.end()));
+  substitutePermissions(
+      "from", std::vector<std::string>(from_species.begin(), from_species.end()));
+  substitutePermissions("to_inputs", {"AA", "density", "pressure", "temperature"});
+  substitutePermissions("from_inputs", {"density", "velocity", "temperature"});
+  substitutePermissions("outputs", {"density_source", "energy_source"});
 }
 
-void Recycling::transform(Options& state) {
+void Recycling::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Get metric tensor components
@@ -154,20 +182,23 @@ void Recycling::transform(Options& state) {
   const Field2D& dx = coord->dx;
   const Field2D& dz = coord->dz;
   const Field2D& g_22 = coord->g_22;
-  const Field2D& g11 = coord->g11;
 
   for (auto& channel : channels) {
-    const Options& species_from = state["species"][channel.from];
+    const GuardedOptions species_from = state["species"][channel.from];
 
     const Field3D N = get<Field3D>(species_from["density"]);
     const Field3D V = get<Field3D>(species_from["velocity"]); // Parallel flow velocity
     const Field3D T = get<Field3D>(species_from["temperature"]); // Ion temperature
 
-    Options& species_to = state["species"][channel.to];
+    GuardedOptions species_to = state["species"][channel.to];
     const Field3D Nn = get<Field3D>(species_to["density"]);
     const Field3D Pn = get<Field3D>(species_to["pressure"]);
     const Field3D Tn = get<Field3D>(species_to["temperature"]);
     const BoutReal AAn = get<BoutReal>(species_to["AA"]);
+
+    const Field3D Nnlim = floor(Nn, density_floor);
+    const Field3D Pnlim = floor(Pn, pressure_floor);
+    const Field3D Tnlim = Pnlim / Nnlim;
 
     // Recycling particle and energy sources will be added to these global sources 
     // which are then passed to the density and pressure equations
@@ -204,9 +235,7 @@ void Recycling::transform(Options& state) {
               -0.5 * (N(r.ind, mesh->ystart, jz) + N(r.ind, mesh->ystart - 1, jz)) * 0.5
               * (V(r.ind, mesh->ystart, jz) + V(r.ind, mesh->ystart - 1, jz));
 
-          if (flux < 0.0) {
-            flux = 0.0;
-          }
+          flux = std::max(flux, 0.0);
 
           // Flow of recycled neutrals into domain [s-1]
           BoutReal flow =
@@ -246,9 +275,7 @@ void Recycling::transform(Options& state) {
           BoutReal flux = 0.5 * (N(r.ind, mesh->yend, jz) + N(r.ind, mesh->yend + 1, jz))
                           * 0.5 * (V(r.ind, mesh->yend, jz) + V(r.ind, mesh->yend + 1, jz));
 
-          if (flux < 0.0) {
-            flux = 0.0;
-          }
+          flux = std::max(flux, 0.0);
 
           // Flow of recycled neutrals into domain [s-1]
           BoutReal flow =
@@ -353,9 +380,8 @@ void Recycling::transform(Options& state) {
               // These are NOT communicated back into state and will exist only in this component
               // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
               // While enabling us to still calculate radial wall fluxes separately here
-              BoutReal nnguard = SQ(Nn[i]) / Nn[is];
-              BoutReal pnguard = SQ(Pn[i]) / Pn[is];
-              BoutReal tnguard = SQ(Tn[i]) / Tn[is];
+              BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
+              BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
               // Calculate wall conditions
               BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
@@ -453,9 +479,8 @@ void Recycling::transform(Options& state) {
                 // These are NOT communicated back into state and will exist only in this component
                 // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
                 // While enabling us to still calculate radial wall fluxes separately here
-                BoutReal nnguard = SQ(Nn[i]) / Nn[is];
-                BoutReal pnguard = SQ(Pn[i]) / Pn[is];
-                BoutReal tnguard = SQ(Tn[i]) / Tn[is];
+                BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
+                BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
                 // Calculate wall conditions
                 BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
@@ -572,23 +597,31 @@ void Recycling::outputVars(Options& state) {
 
       // Neutral pump
       if (neutral_pump) {
-        set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump")}],
-                       channel.pump_density_source,
-                       {{"time_dimension", "t"},
-                        {"units", "m^-3 s^-1"},
-                        {"conversion", Nnorm * Omega_ci},
-                        {"standard_name", "particle source"},
-                        {"long_name", std::string("Pump recycling particle source of ") + channel.to},
-                        {"source", "recycling"}});
 
-        set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump")}],
-                       channel.pump_energy_source,
-                       {{"time_dimension", "t"},
-                        {"units", "W m^-3"},
-                        {"conversion", Pnorm * Omega_ci},
-                        {"standard_name", "energy source"},
-                        {"long_name", std::string("Pump recycling energy source of ") + channel.to},
-                        {"source", "recycling"}});
+        if (channel.pump_density_source.isAllocated()) { 
+          set_with_attrs(state[{std::string("S") + channel.to + std::string("_pump")}],
+                        channel.pump_density_source,
+                        {{"time_dimension", "t"},
+                          {"units", "m^-3 s^-1"},
+                          {"conversion", Nnorm * Omega_ci},
+                          {"standard_name", "particle source"},
+                          {"long_name", std::string("Pump recycling particle source of ") + channel.to},
+                          {"source", "recycling"}});
+
+          set_with_attrs(state[{std::string("E") + channel.to + std::string("_pump")}],
+                        channel.pump_energy_source,
+                        {{"time_dimension", "t"},
+                          {"units", "W m^-3"},
+                          {"conversion", Pnorm * Omega_ci},
+                          {"standard_name", "energy source"},
+                          {"long_name", std::string("Pump recycling energy source of ") + channel.to},
+                          {"source", "recycling"}});
+        } else {
+          throw BoutException("Error: neutral pump sources unallocated, likely because recycling " 
+            "on the relevant surface is disabled. Check that all boundaries with a neutral pump " 
+            "have recycling enabled!");
+        }
+
       }
 
     }

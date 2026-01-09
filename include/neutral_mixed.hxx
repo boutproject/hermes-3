@@ -19,9 +19,6 @@ struct NeutralMixed : public Component {
   /// @param solver   Time-integration solver to be used
   NeutralMixed(const std::string& name, Options& options, Solver *solver);
   
-  /// Modify the given simulation state
-  void transform(Options &state) override;
-  
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
   void finally(const Options &state) override;
@@ -37,20 +34,25 @@ private:
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
-  Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
+  Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
+  std::vector<std::string> collision_names; ///< Collisions used for collisionality
+  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or multispecies
+  Field3D nu; ///< Collisionality to use for diffusion
   Field3D Dnn; ///< Diffusion coefficient
-  Field3D DnnNn, DnnPn, DnnNVn;
+  Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
+  BoutReal flux_limit; ///< Diffusive flux limit
+  BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
   bool sheath_ydown, sheath_yup;
 
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
+  BoutReal temperature_floor;
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
+  bool freeze_low_density; ///< Freeze evolution in low density regions?
 
-  BoutReal flux_limit; ///< Diffusive flux limit
-  BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
   BoutReal rnn_override; ///< Rnn input for testing
   BoutReal density_norm, pressure_norm; ///< Normalisations
   BoutReal momentum_norm; ///< Normalisations
@@ -63,6 +65,7 @@ private:
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
   bool precondition {true}; ///< Enable preconditioner?
+  bool precon_laplacexy {false}; ///< Use LaplaceXY?
   bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
@@ -79,6 +82,17 @@ private:
   Field3D mf_visc_perp_xlow, mf_visc_perp_ylow, mf_visc_par_ylow;
   Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
   Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
+
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - density
+  ///     - momentum
+  ///     - pressure
+  ///     - temperature
+  ///     - velocity
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

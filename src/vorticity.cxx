@@ -1,6 +1,7 @@
 
 #include "../include/vorticity.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
@@ -12,18 +13,6 @@
 using bout::globals::mesh;
 
 namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
-
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  int ny = f.getNy();
-  int nz = f.getNz();
-  return Ind3D{(x * ny + y) * nz + z, ny, nz};
-}
-
 /// Limited free gradient of log of a quantity
 /// This ensures that the guard cell values remain positive
 /// while also ensuring that the quantity never increases
@@ -49,9 +38,10 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 
   return fp;
 }
-}
+} // namespace
 
-Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
+Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
+    : Component({readWrite("fields:vorticity"), readWrite("fields:phi")}) {
   AUTO_TRACE();
 
   solver->add(Vort, "Vort");
@@ -148,7 +138,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
 
   if (split_n0) {
     // Create an XY solver for n=0 component
-    laplacexy = new LaplaceXY(mesh);
+    laplacexy = LaplaceXY::create(mesh);
     // Set coefficients for Boussinesq solve
     laplacexy->setCoefs(average_atomic_mass / SQ(coord->Bxy), 0.0);
   }
@@ -216,13 +206,42 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
+
+  if (diamagnetic or diamagnetic_polarisation) {
+    // FIXME: These will only be read if BOTH charge and pressure (and possibly AA) are
+    // set
+    setPermissions(readIfSet("species:{charged}:pressure", Regions::Interior));
+    setPermissions(readIfSet("species:{all_species}:charge"));
+  }
+  if (diamagnetic) {
+    setPermissions(readWrite("species:{charged}:energy_source"));
+    setPermissions(readWrite("fields:DivJdia"));
+  }
+  if (diamagnetic_polarisation or collisional_friction) {
+    // FIXME: Only read if pressure also set
+    setPermissions(readIfSet("species:{charged}:AA"));
+  }
+  if (phi_boundary_relax) {
+    setPermissions(readOnly("time"));
+  } else {
+    if (sheath_boundary) {
+      setPermissions(readOnly("species:e:AA"));
+    }
+    setPermissions(readIfSet("species:e:temperature", Regions::Interior));
+  }
+  if (collisional_friction) {
+    setPermissions(readIfSet("species:{all_species}:charge"));
+    setPermissions(readOnly("species:{positive_ions}:density"));
+    setPermissions(readIfSet("species:{positive_ions}:collision_frequency"));
+    setPermissions(readWrite("fields:DivJcol"));
+  }
 }
 
-void Vorticity::transform(Options& state) {
+void Vorticity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   phi.name = "phi";
-  auto& fields = state["fields"];
+  auto fields = state["fields"];
 
   // Set the boundary of phi. Both 2D and 3D fields are kept, though the 3D field
   // is constant in Z. This is for efficiency, to reduce the number of conversions.
@@ -232,9 +251,9 @@ void Vorticity::transform(Options& state) {
   if (diamagnetic_polarisation) {
     // Diamagnetic term in vorticity. Note this is weighted by the mass
     // This includes all species, including electrons
-    Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
+      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
       if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
             and species.isSet("AA"))) {
@@ -493,10 +512,10 @@ void Vorticity::transform(Options& state) {
     Jdia.z = 0.0;
     Jdia.covariant = Curlb_B.covariant;
 
-    Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
 
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
+      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
       if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"]))) {
         continue; // No pressure or charge -> no diamagnetic current
@@ -598,9 +617,9 @@ void Vorticity::transform(Options& state) {
         zeroFrom(Vort); // Sum of atomic mass * collision frequency * density
     Field3D sum_A_n = zeroFrom(Vort); // Sum of atomic mass * density
 
-    const Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
     for (const auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
+      const GuardedOptions species = kv.second;
 
       if (!(species.isSet("charge") and species.isSet("AA"))) {
         continue; // No charge or mass -> no current

@@ -22,20 +22,6 @@ struct Recycling : public Component {
   ///
   Recycling(std::string name, Options &alloptions, Solver *);
 
-  /// Inputs
-  ///
-  /// - species
-  ///   - <species>
-  ///    - density
-  ///    - velocity
-  ///
-  /// Outputs
-  ///
-  /// - species
-  ///  - <species>
-  ///   - density_source
-  ///
-  void transform(Options &state) override;
   void outputVars(Options &state) override;
 
 private:
@@ -53,9 +39,18 @@ private:
 
     // Recycling particle and energy sources for the different sources of recycling
     // These sources are per-channel and added to the `to` species
-    Field3D target_recycle_density_source, target_recycle_energy_source;
-    Field3D wall_recycle_density_source, wall_recycle_energy_source;  ///< Recycling particle and energy sources for pfr + sol recycling
-    Field3D pump_density_source, pump_energy_source;  ///< Recycling particle and energy sources for pump recycling
+    /// Recycling density source for target recycling
+    Field3D target_recycle_density_source = 0.0;
+    /// Recycling energy source for target recycling
+    Field3D target_recycle_energy_source = 0.0;
+    /// Recycling density source for pfr + sol recycling
+    Field3D wall_recycle_density_source = 0.0;
+    /// Recycling energy source for pfr + sol recycling
+    Field3D wall_recycle_energy_source = 0.0;
+    /// Recycling density source for pump recycling
+    Field3D pump_density_source = 0.0;
+    /// Recycling energy source for pump recycling
+    Field3D pump_energy_source = 0.0;
   };
 
   std::vector<RecycleChannel> channels; // Recycling channels
@@ -63,11 +58,34 @@ private:
   bool target_recycle, sol_recycle, pfr_recycle, neutral_pump;  ///< Flags for enabling recycling in different regions
   bool diagnose; ///< Save additional post-processing variables?
 
+  BoutReal density_floor, pressure_floor; ///< minimum values for Nn, Pn to avoid divide by zero
+
   Field3D density_source, energy_source; ///< Recycling particle and energy sources for all locations
   Field3D energy_flow_ylow, energy_flow_xlow; ///< Cell edge fluxes used for calculating fast recycling energy source
   Field3D particle_flow_xlow; ///< Radial wall particle fluxes for recycling calc. No need to get poloidal from here, it's calculated from sheath velocity
 
   Field2D is_pump; ///< 1 = pump, 0 = no pump. Works only in SOL/PFR. Provided by user in grid file.
+  /// Inputs
+  ///
+  /// - species
+  ///   - <from species>
+  ///     - density
+  ///     - velocity
+  ///     - temperature
+  ///   - <to species>
+  ///     - AA
+  ///     - density
+  ///     - pressure
+  ///     - temperature
+  ///
+  /// Outputs
+  ///
+  /// - species
+  ///   - <species>
+  ///     - density_source
+  ///     - energy_source
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

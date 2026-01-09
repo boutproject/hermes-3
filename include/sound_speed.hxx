@@ -11,7 +11,12 @@
 /// This uses the sum of all species pressures and mass densities
 /// so should run after those have been set.
 struct SoundSpeed : public Component {
-  SoundSpeed(std::string name, Options &alloptions, Solver*) {
+  SoundSpeed(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:{all_species}:pressure", Regions::Interior),
+                   writeFinal("sound_speed"), writeFinal("fastest_wave"),
+                   readIfSet("species:{sp}:AA"),
+                   // FIXME: Only read if AA is set
+                   readIfSet("species:{sp}:{opt_inputs}", Regions::Interior)}) {
     Options &options = alloptions[name];
     electron_dynamics = options["electron_dynamics"]
       .doc("Include electron sound speed?")
@@ -35,15 +40,27 @@ struct SoundSpeed : public Component {
 
     fastest_wave_factor = options["fastest_wave_factor"]
       .doc("Multiply the fastest wave by this factor, affecting lax flux strength")
-      .withDefault(0.0);
+      .withDefault(1.0);
 
     if (temperature_floor > 0.0) {
       temperature_floor /= get<BoutReal>(alloptions["units"]["eV"]);
     }
+
+    substitutePermissions("sp",
+                          {electron_dynamics ? "{all_species}" : "{non_electrons}"});
+    substitutePermissions("opt_inputs", {"density", "temperature"});
   }
-  
+
+private:
+  bool electron_dynamics; ///< Include electron sound speed?
+  bool alfven_wave; ///< Include Alfven wave speed?
+  BoutReal beta_norm{0.0}; ///< Normalisation factor for Alfven speed
+  BoutReal temperature_floor; ///< Minimum temperature when calculating speed
+  BoutReal fastest_wave_factor; ///< Multiply the fastest wave by this factor
+
   /// This sets in the state
-  /// - sound_speed     The collective sound speed, based on total pressure and total mass density
+  /// - sound_speed     The collective sound speed, based on total pressure and total mass
+  /// density
   /// - fastest_wave    The highest species sound speed at each point in the domain
   ///
   /// Optional inputs:
@@ -52,15 +69,9 @@ struct SoundSpeed : public Component {
   ///     - density
   ///     - AA       // Atomic mass
   ///     - pressure
+  ///     - temperature
   ///
-  void transform(Options &state) override;
-
-private:
-  bool electron_dynamics; ///< Include electron sound speed?
-  bool alfven_wave; ///< Include Alfven wave speed?
-  BoutReal beta_norm{0.0}; ///< Normalisation factor for Alfven speed
-  BoutReal temperature_floor; ///< Minimum temperature when calculating speed
-  BoutReal fastest_wave_factor; ///< Multiply the fastest wave by this factor
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

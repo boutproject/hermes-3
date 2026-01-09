@@ -13,6 +13,9 @@ struct FixedFractionIons : public Component {
   ///                 e.g. 'd+ @ 0.5, t+ @ 0.5'
   FixedFractionIons(std::string name, Options &options, Solver *UNUSED(solver));
 
+ private:
+  std::vector<std::pair<std::string, BoutReal>> fractions;
+
   /// Required inputs
   ///
   /// - species
@@ -25,10 +28,7 @@ struct FixedFractionIons : public Component {
   ///   - <species1>
   ///     - density  = <fraction1> * electron density
   ///   - ... 
-  void transform(Options &state) override;
-
- private:
-  std::vector<std::pair<std::string, BoutReal>> fractions;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

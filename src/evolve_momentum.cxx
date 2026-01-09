@@ -8,18 +8,15 @@
 #include "../include/evolve_momentum.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/hermes_build_config.hxx"
-
-namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
-}
+#include "../include/hermes_utils.hxx"
 
 using bout::globals::mesh;
 
-EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) : name(name) {
+EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* solver)
+    : Component({readOnly("species:{name}:AA"),
+                 readOnly("species:{name}:density", Regions::Interior),
+                 readWrite("species:{name}:{outputs}")}),
+      name(name) {
   AUTO_TRACE();
   
   // Evolve the momentum in time
@@ -27,13 +24,16 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   auto& options = alloptions[name];
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
+
+  BoutReal temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pressure_floor = density_floor * temperature_floor;
 
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
@@ -61,17 +61,21 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   // Set to zero so set for output
   momentum_source = 0.0;
+  NV_err = 0.0;
+
+  substitutePermissions("name", {name});
+  substitutePermissions("outputs", {"velocity", "momentum"});
 }
 
-void EvolveMomentum::transform(Options &state) {
+void EvolveMomentum::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   mesh->communicate(NV);
 
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
-  Field3D Nlim = floor(N, density_floor);
+  Field3D Nlim = softFloor(N, density_floor);
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   V = NV / (AA * Nlim);
@@ -98,7 +102,7 @@ void EvolveMomentum::finally(const Options &state) {
   // Get the species density
   Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  Field3D Nlim = floor(N, density_floor);
+  Field3D Nlim = softFloor(N, density_floor);
 
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
@@ -145,8 +149,8 @@ void EvolveMomentum::finally(const Options &state) {
           - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true)
           ;
         if (low_n_diffuse_perp) {
-          dndt += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
-                                        bndry_flux);
+          dndt += Div_Perp_Lap_FV_Index(
+              density_floor / softFloor(N, 1e-3 * density_floor), N);
         }
         ddt(NV) += Z * Apar * dndt;
       }
@@ -195,12 +199,13 @@ void EvolveMomentum::finally(const Options &state) {
   }
 
   if (low_n_diffuse_perp) {
-    ddt(NV) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), NV, true);
+    ddt(NV) +=
+        Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), NV);
   }
 
   if (low_p_diffuse_perp) {
-    Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
-    ddt(NV) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV, true);
+    Field3D Plim = softFloor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
+    ddt(NV) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV);
   }
 
   if (hyper_z > 0.) {

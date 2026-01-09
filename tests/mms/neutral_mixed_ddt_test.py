@@ -89,7 +89,7 @@ def neutral_mixed_equations(evolve_momentum=False,
                 )
     # if neutral viscosity included in test
     if neutral_viscosity:
-        viscosity_source = AA*(div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, Etan, Vn)
+        viscosity_source = (div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, Etan, Vn)
                         + div_par_k_grad_par_f_symbolic(g11, g12, g13, g22, g23, g33, Etan, Vn))
         ddt_NVn = (ddt_NVn +
                     viscosity_source

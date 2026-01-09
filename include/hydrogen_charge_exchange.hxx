@@ -5,7 +5,7 @@
 #include <bout/constants.hxx>
 
 #include "component.hxx"
-
+#include "reaction.hxx"
 /// Hydrogen charge exchange total rate coefficient
 ///
 ///   p + H(1s) -> H(1s) + p
@@ -22,14 +22,20 @@
 ///            should probably be disabled in the `collisions` component,
 ///            to avoid double-counting.
 ///
-struct HydrogenChargeExchange : public Component {
+struct HydrogenChargeExchange : public ReactionBase {
   ///
   /// @param alloptions Settings, which should include:
   ///        - units
   ///          - eV
   ///          - inv_meters_cubed
   ///          - seconds
-  HydrogenChargeExchange(std::string name, Options& alloptions, Solver*) {
+  HydrogenChargeExchange([[maybe_unused]] std::string name, Options& alloptions, Solver*)
+      : ReactionBase({readOnly("species:{reactant}:{react_vals}"),
+                      readOnly("species:{sp}:{read_vals}"),
+                      readWrite("species:{sp}:{writevals}"),
+                      readWrite("species:{reactant}:collision_frequency"),
+                      readWrite("species:{atom}:collision_frequencies:{atom}_{ion}_cx"),
+                      readWrite("species:{ion}:collision_frequencies:{ion}_{atom}_cx")}) {
     // Get the units
     const auto& units = alloptions["units"];
     Tnorm = get<BoutReal>(units["eV"]);
@@ -48,11 +54,11 @@ protected:
   ///
   /// atom1 -> ion2, ion1 -> atom2
   ///
-  /// Assumes that both atom1 and ion1 have:
-  ///   - AA
-  ///   - density
-  ///   - velocity
-  ///   - temperature
+  /// Assumes that species have:
+  ///   - AA (all)
+  ///   - density (atom1, ion1)
+  ///   - velocity (all)
+  ///   - temperature (atom2, ion2)
   ///
   /// Sets in all species:
   ///   - density_source     [If atom1 != atom2 or ion1 != ion2]
@@ -68,11 +74,10 @@ protected:
   ///  atom_energy  Energy removed from atom1, added to ion2
   ///  ion_energy   Energy removed from ion1, added to atom2
   ///
-  void calculate_rates(Options& atom1, Options& ion1, Options& atom2, Options& ion2,
+  void calculate_rates(GuardedOptions&& atom1, GuardedOptions&& ion1, GuardedOptions&& atom2, GuardedOptions&& ion2,
                        Field3D& R, Field3D& atom_mom, Field3D& ion_mom,
-                       Field3D& atom_energy, Field3D& ion_energy, 
-                       Field3D& atom_rate, Field3D& ion_rate,
-                       BoutReal& rate_multiplier,
+                       Field3D& atom_energy, Field3D& ion_energy, Field3D& atom_rate,
+                       Field3D& ion_rate, BoutReal& rate_multiplier,
                        bool& no_neutral_cx_mom_gain);
 };
 
@@ -116,8 +121,8 @@ protected:
 ///                                Shd+_cx d/dt(Nd+) = ... + Shd+_cx
 ///
 template <char Isotope1, char Isotope2>
-struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
-  HydrogenChargeExchangeIsotope(std::string name, Options& alloptions, Solver* solver)
+struct HydrogenIsotopeChargeExchange : public HydrogenChargeExchange {
+  HydrogenIsotopeChargeExchange(std::string name, Options& alloptions, Solver* solver)
       : HydrogenChargeExchange(name, alloptions, solver) {
 
     //// Options under [reactions]
@@ -126,50 +131,31 @@ struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
                    .withDefault<bool>(false);
 
     // This is useful for testing the impact of enabling the neutral momentum equation.
-    // When set to true, CX behaves as if using diffusive neutrals but the neutral transport
-    // still enjoys the full momentum equation treatment.
-    no_neutral_cx_mom_gain = alloptions[name]["no_neutral_cx_mom_gain"]
-                           .doc("If true, ion momentum in CX is still lost but not given to the neutrals")
-                           .withDefault<bool>(false);
+    // When set to true, CX behaves as if using diffusive neutrals but the neutral
+    // transport still enjoys the full momentum equation treatment.
+    no_neutral_cx_mom_gain =
+        alloptions[name]["no_neutral_cx_mom_gain"]
+            .doc(
+                "If true, ion momentum in CX is still lost but not given to the neutrals")
+            .withDefault<bool>(false);
 
     // Options under neutral species of isotope 1 (on LHS of reaction)
     rate_multiplier = alloptions[{Isotope1}]["K_cx_multiplier"]
-                           .doc("Scale the charge exchange rate by this factor")
-                           .withDefault<BoutReal>(1.0);
+                          .doc("Scale the charge exchange rate by this factor")
+                          .withDefault<BoutReal>(1.0);
 
-    
-  }
-
-  void transform(Options& state) override {
-    Field3D R, atom_mom, ion_mom, atom_energy, ion_energy;
-
-    calculate_rates(state["species"][{Isotope1}],                   // e.g. "h"
-                    state["species"][{Isotope2, '+'}],              // e.g. "d+"
-                    state["species"][{Isotope2}],                   // e.g. "d"
-                    state["species"][{Isotope1, '+'}],              // e.g. "h+"
-                    R, atom_mom, ion_mom, atom_energy, ion_energy,  // Transfer channels
-                    atom_rate, ion_rate,                            // Collision rates in s^-1
-                    rate_multiplier,                                // Arbitrary user set multiplier
-                    no_neutral_cx_mom_gain);                        // Make CX behave as in diffusive neutrals?
-
-    if (diagnose) {
-      // Calculate diagnostics to be written to dump file
-      if (Isotope1 == Isotope2) {
-        // Simpler case of same isotopes
-        //  - No net particle source/sink
-        //  - atoms lose atom_mom, gain ion_mom
-        //
-        F = ion_mom - atom_mom;       // Momentum transferred to atoms due to CX with ions
-        E = ion_energy - atom_energy; // Energy transferred to atoms
-      } else {
-        // Different isotopes
-        S = -R;           // Source of Isotope1 atoms
-        F = -atom_mom;    // Source of momentum for Isotope1 atoms
-        F2 = -ion_mom;    // Source of momentum for Isotope2 ions
-        E = -atom_energy; // Source of energy for Isotope1 atoms
-        E2 = -ion_energy; // Source of energy for Isotope2 ions
-      }
+    std::vector<std::string> writevals = {"momentum_source", "energy_source"};
+    if constexpr (Isotope1 != Isotope2) {
+      writevals.push_back("density_source");
     }
+    substitutePermissions("reactant", {{Isotope1}, {Isotope2, '+'}});
+    substitutePermissions("react_vals", {"density", "temperature"});
+    substitutePermissions("read_vals", {"AA", "velocity"});
+    substitutePermissions("sp",
+                          {{Isotope1}, {Isotope2, '+'}, {Isotope1, '+'}, {Isotope2}});
+    substitutePermissions("writevals", writevals);
+    substitutePermissions("atom", {{Isotope1}});
+    substitutePermissions("ion", {{Isotope2, '+'}});
   }
 
   void outputVars(Options& state) override {
@@ -215,8 +201,9 @@ struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
                       {"units", "s^-1"},
                       {"conversion", Omega_ci},
                       {"standard_name", "collision frequency"},
-                      {"long_name", (std::string("CX collision frequency between") + atom1 + " and "
-                                     + ion1 + " producing" + ion2 + " and" + atom2 + ". Note Kab != Kba")},
+                      {"long_name", (std::string("Collision frequency of CX of ") + atom1
+                                     + " and " + ion1 + " producing " + ion2 + " and "
+                                     + atom2 + ". Note Kab != Kba")},
                       {"source", "hydrogen_charge_exchange"}});
 
       if (Isotope1 != Isotope2) {
@@ -259,39 +246,71 @@ struct HydrogenChargeExchangeIsotope : public HydrogenChargeExchange {
   }
 
 private:
-  bool diagnose; ///< Outputting diagnostics?
-  BoutReal rate_multiplier; ///< Multiply rate by arbitrary user set factor
-  Field3D S;     ///< Particle exchange, used if Isotope1 != Isotope2
-  Field3D F, F2; ///< Momentum exchange
-  Field3D E, E2; ///< Energy exchange
+  bool diagnose;               ///< Outputting diagnostics?
+  BoutReal rate_multiplier;    ///< Multiply rate by arbitrary user set factor
+  Field3D S;                   ///< Particle exchange, used if Isotope1 != Isotope2
+  Field3D F, F2;               ///< Momentum exchange
+  Field3D E, E2;               ///< Energy exchange
   Field3D atom_rate, ion_rate; ///< Collision rates in s^-1
   bool no_neutral_cx_mom_gain; ///< Make CX behave as in diffusive neutrals?
+
+  void transform_impl(GuardedOptions& state) override {
+    Field3D R, atom_mom, ion_mom, atom_energy, ion_energy;
+
+    calculate_rates(state["species"][{Isotope1}],                  // e.g. "h"
+                    state["species"][{Isotope2, '+'}],             // e.g. "d+"
+                    state["species"][{Isotope2}],                  // e.g. "d"
+                    state["species"][{Isotope1, '+'}],             // e.g. "h+"
+                    R, atom_mom, ion_mom, atom_energy, ion_energy, // Transfer channels
+                    atom_rate, ion_rate,     // Collision rates in s^-1
+                    rate_multiplier,         // Arbitrary user set multiplier
+                    no_neutral_cx_mom_gain); // Make CX behave as in diffusive neutrals?
+
+    if (diagnose) {
+      // Calculate diagnostics to be written to dump file
+      if (Isotope1 == Isotope2) {
+        // Simpler case of same isotopes
+        //  - No net particle source/sink
+        //  - atoms lose atom_mom, gain ion_mom
+        //
+        F = ion_mom - atom_mom;       // Momentum transferred to atoms due to CX with ions
+        E = ion_energy - atom_energy; // Energy transferred to atoms
+      } else {
+        // Different isotopes
+        S = -R;           // Source of Isotope1 atoms
+        F = -atom_mom;    // Source of momentum for Isotope1 atoms
+        F2 = -ion_mom;    // Source of momentum for Isotope2 ions
+        E = -atom_energy; // Source of energy for Isotope1 atoms
+        E2 = -ion_energy; // Source of energy for Isotope2 ions
+      }
+    }
+  }
 };
 
 namespace {
 /// Register three components, one for each hydrogen isotope
 /// so no isotope dependence included.
-RegisterComponent<HydrogenChargeExchangeIsotope<'h', 'h'>>
+RegisterComponent<HydrogenIsotopeChargeExchange<'h', 'h'>>
     register_cx_hh("h + h+ -> h+ + h");
-RegisterComponent<HydrogenChargeExchangeIsotope<'d', 'd'>>
+RegisterComponent<HydrogenIsotopeChargeExchange<'d', 'd'>>
     register_cx_dd("d + d+ -> d+ + d");
-RegisterComponent<HydrogenChargeExchangeIsotope<'t', 't'>>
+RegisterComponent<HydrogenIsotopeChargeExchange<'t', 't'>>
     register_cx_tt("t + t+ -> t+ + t");
 
 // Charge exchange between different isotopes
-RegisterComponent<HydrogenChargeExchangeIsotope<'h', 'd'>>
+RegisterComponent<HydrogenIsotopeChargeExchange<'h', 'd'>>
     register_cx_hd("h + d+ -> h+ + d");
-RegisterComponent<HydrogenChargeExchangeIsotope<'d', 'h'>>
+RegisterComponent<HydrogenIsotopeChargeExchange<'d', 'h'>>
     register_cx_dh("d + h+ -> d+ + h");
 
-RegisterComponent<HydrogenChargeExchangeIsotope<'h', 't'>>
+RegisterComponent<HydrogenIsotopeChargeExchange<'h', 't'>>
     register_cx_ht("h + t+ -> h+ + t");
-RegisterComponent<HydrogenChargeExchangeIsotope<'t', 'h'>>
+RegisterComponent<HydrogenIsotopeChargeExchange<'t', 'h'>>
     register_cx_th("t + h+ -> t+ + h");
 
-RegisterComponent<HydrogenChargeExchangeIsotope<'d', 't'>>
+RegisterComponent<HydrogenIsotopeChargeExchange<'d', 't'>>
     register_cx_dt("d + t+ -> d+ + t");
-RegisterComponent<HydrogenChargeExchangeIsotope<'t', 'd'>>
+RegisterComponent<HydrogenIsotopeChargeExchange<'t', 'd'>>
     register_cx_td("t + d+ -> t+ + d");
 } // namespace
 

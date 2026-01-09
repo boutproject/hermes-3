@@ -1,0 +1,27 @@
+# This is a Spack Environment file.
+#
+# It describes the set of packages to be installed when developing,
+# along with configuration settings.
+spack:
+  # add package specs to the `specs` list
+  specs:
+    - hermes-3%gcc+petsc
+    - cmake
+  view:
+    gcc:
+      root: ./views/gcc
+      select: ["%gcc"]
+      link_type: symlink
+  concretizer:
+    unify: when_possible
+  repos:
+    - ./external/BOUT-spack
+    - $spack/var/spack/repos/builtin
+  packages:
+    all:
+      providers:
+        mpi: [mpich, openmpi]
+  develop:
+    hermes-3:
+      path: .
+      spec: hermes-3@develop

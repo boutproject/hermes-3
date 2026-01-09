@@ -3,104 +3,47 @@
 Examples
 ========
 
+Hermes-3 contains a large number of example simulations, with only a selection
+shown here. Please refer to the ``examples`` directory for more.
 
-1D flux-tube
-------------
+As the development of the code has progressed rapidly, it has been difficult
+to keep all of the examples up to date and not all are guaranteed to represent
+the most optimal setup.
 
-These simulations follow the dynamics of one or more species along the
-magnetic field. By putting a source at one end of the domain, and a
-sheath at the other, this can be a useful model of plasma dynamics in
-the Scrape-Off Layer (SOL) of a tokamak or other magnetised plasma.
+A review is currently in process to select a few of the most useful examples
+and keep them up to date regularly, with the remaining examples being updated
+in the future.
 
-1D periodic domain, Te and Ti
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+So far, only 1D example cases received this treatment, resulting in a new,
+updated example ``1D-threshold`` and the remaining 1D cases moved to ``examples/1D-tokamak/extra``.
+Note that many will likely work with no modifications.
 
-A fluid is evolved in 1D, imposing quasineutrality and zero net current.
-Both electron and ion pressures are evolved, but there is no exchange
-of energy between them, or heat conduction.
+1D Field line
+-----------------------
 
-.. figure:: figs/1d_te_ti.*
-   :name: 1d_te_ti
-   :alt:
-   :width: 60%
-   
-   Evolution of pressure, starting from a top hat. Input in ``examples/1D-te-ti``.
+In 1D, Hermes-3 follows a single flux tube, typically from midplane to target.
+The code inherits a lot of capability and convention from the code `SD1D
+<https://github.com/boutproject/SD1D/>`_ - see `Dudson 2019
+<https://iopscience.iop.org/article/10.1088/1361-6587/ab1321/meta>`_. for a good description
+of the equations and capabilities. Note that SD1D features a "plasma" pressure equation, 
+combining the ion and electron pressures, which are separate in Hermes-3.
 
-To run this example:
+There is an `xHermes 1D post-processing example
+<https://github.com/boutproject/xhermes/blob/main/examples/1d-postprocessing.ipynb>`_
+to guide you through results analysis.
 
-.. code-block:: bash
-
-   ./hermes-3 -d examples/1D-te-ti
-
-Which takes a few seconds to run on a single core. Then in the
-``examples/1D-te-ti`` directory run the analysis script
-
-.. code-block:: bash
-
-   python3 makeplot.py
-
-That should generate png files and an animated gif if ImageMagick is
-installed (the ``convert`` program). If an error like
-``ModuleNotFoundError: No module named 'boutdata'`` occurs, then
-install the ``boutdata`` package with ``python3 -m pip install
-boutdata``.
-
-The model components are ions (i) and electrons (e), and a component
-which uses the force on the electrons to calculate the parallel electric field,
-which transfers the force to the ions.
-
-.. code-block:: ini
-
-   [hermes]
-   components = i, e, electron_force_balance
+For published Hermes-1D applications, see `Body 2024 
+<https://www.sciencedirect.com/science/article/pii/S2352179124002424>`_
+and `Holt 2024 <https://iopscience.iop.org/article/10.1088/1741-4326/ad4f9e/meta>`_. 
 
 
-The ion density, pressure and momentum equations are evolved:
 
-.. code-block:: ini
 
-   [i]  # Ions
-   type = evolve_density, evolve_pressure, evolve_momentum
 
-which solves the equations
+.. _1D-threshold:
 
-.. math::
-
-   \begin{aligned}
-   \frac{\partial n_i}{\partial t} =& -\nabla\cdot\left(n_i\mathbf{b}v_{||i}\right) \\
-   \frac{\partial p_i}{\partial t} =& -\nabla\cdot\left(p_i\mathbf{b}v_{||i}\right) - \frac{2}{3}p_i\nabla\cdot\left(\mathbf{b}v_{||i}\right) \\
-   \frac{\partial}{\partial t}\left(n_iv_{||i}\right) =& -\nabla\cdot\left(n_iv_{||i} \mathbf{b}v_{||i}\right) - \partial_{||}p_i + E
-   \end{aligned}
-
-The electron density is set to the ion density by quasineutrality, the
-parallel velocity is set by a zero current condition, and only the
-electron pressure is evolved.
-
-.. code-block:: ini
-
-   [e] # Electrons
-   type = quasineutral, zero_current, evolve_pressure
-
-which adds the equations:
-
-.. math::
-
-   \begin{aligned}
-   n_e =& n_i \\
-   \frac{\partial p_e}{\partial t} =& -\nabla\cdot\left(p_e\mathbf{b}v_{||e}\right) - \frac{2}{3}p_e\nabla\cdot\left(\mathbf{b}v_{||e}\right)
-   \end{aligned}
-
-The :ref:`zero_current` component sets:
-
-.. math::
-
-   \begin{aligned}
-   E =& -\partial_{||}p_e \\
-   v_{||e} =& v_{||i}
-   \end{aligned}
-
-1D Scrape-off Layer (SOL)
-~~~~~~~~~~~~~~~~~~~~~~~~~
+1D-threshold
+~~~~~~
 
 This simulates a similar setup to the `SD1D
 <https://github.com/boutproject/SD1D/>`_ code: A 1D domain, with a
@@ -109,8 +52,8 @@ other. Ions recycle into neutrals, which charge exchange and are
 ionised.  A difference is that separate ion and electron temperatures
 are evolved here.
 
-.. figure:: figs/1d_recycling.*
-   :name: 1d_recycling
+.. figure:: figs/1d_threshold.*
+   :name: 1d_threshold_fig
    :alt:
    :width: 60%
 
@@ -135,20 +78,24 @@ The components are ion species `d+`, atoms `d`, electrons `e`:
 
    [hermes]
    components = (d+, d, e,
-                zero_current, sheath_boundary, collisions, recycling, reactions,
-                neutral_parallel_diffusion)
+                 sheath_boundary_simple, braginskii_collisions,
+                 braginskii_friction, braginskii_heat_exchange,
+                 recycling, reactions, electron_force_balance,
+                 neutral_parallel_diffusion, braginskii_conduction)
 
 The electron velocity is set to the ion by specifying :ref:`zero_current`;
 A sheath boundary is included; Collisions are needed to be able to calculate
 heat conduction, as well as neutral diffusion rates; Recycling at the targets
 provides a source of atoms; :ref:`neutral_parallel_diffusion` simulates cross-field
-diffusion in a 1D system.
+diffusion in a 1D system. The electron force balance links electron pressure gradient
+with the ion momentum equation. Please see the relevant documentation pages about these
+components for further information.
 
 The sheath boundary is only imposed on the upper Y boundary:
 
 .. code-block:: ini
 
-   [sheath_boundary]
+   [sheath_boundary_simple]
 
    lower_y = false
    upper_y = true
@@ -160,26 +107,110 @@ The reactions component is a group, which lists the reactions included:
    [reactions]
    type = (
            d + e -> d+ + 2e,   # Deuterium ionisation
+           d+ + e -> d,          # Deuterium recombination
            d + d+ -> d+ + d,   # Charge exchange
           )
 
-To run this example:
 
-.. code-block:: bash
+.. 
+   1D-te-ti
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-   nice -n 10 ./hermes-3 -d examples/1D-recycling
+   A fluid is evolved in 1D, imposing quasineutrality and zero net current.
+   Both electron and ion pressures are evolved, but there is no exchange
+   of energy between them, or heat conduction.
 
-This should take 5-10 minutes to run. There is a `makeplots.py` script in the
-`examples/1D-recycling` directory which will generate plots and a gif animation
-(if `ImageMagick <https://imagemagick.org/index.php>`_ is installed).
+   .. figure:: figs/1d_te_ti.*
+      :name: 1d_te_ti
+      :alt:
+      :width: 60%
+      
+      Evolution of pressure, starting from a top hat. Input in ``examples/1D-te-ti``.
 
-2D drift-plane
+   To run this example:
+
+   .. code-block:: bash
+
+      ./hermes-3 -d examples/1D-te-ti
+
+   Which takes a few seconds to run on a single core. Then in the
+   ``examples/1D-te-ti`` directory run the analysis script
+
+   .. code-block:: bash
+
+      python3 makeplot.py
+
+   That should generate png files and an animated gif if ImageMagick is
+   installed (the ``convert`` program). If an error like
+   ``ModuleNotFoundError: No module named 'boutdata'`` occurs, then
+   install the ``boutdata`` package with ``python3 -m pip install
+   boutdata``.
+
+   The model components are ions (i) and electrons (e), and a component
+   which uses the force on the electrons to calculate the parallel electric field,
+   which transfers the force to the ions.
+
+   .. code-block:: ini
+
+      [hermes]
+      components = i, e, electron_force_balance
+
+
+   The ion density, pressure and momentum equations are evolved:
+
+   .. code-block:: ini
+
+      [i]  # Ions
+      type = evolve_density, evolve_pressure, evolve_momentum
+
+   which solves the equations
+
+   .. math::
+
+      \begin{aligned}
+      \frac{\partial n_i}{\partial t} =& -\nabla\cdot\left(n_i\mathbf{b}v_{||i}\right) \\
+      \frac{\partial p_i}{\partial t} =& -\nabla\cdot\left(p_i\mathbf{b}v_{||i}\right) - \frac{2}{3}p_i\nabla\cdot\left(\mathbf{b}v_{||i}\right) \\
+      \frac{\partial}{\partial t}\left(n_iv_{||i}\right) =& -\nabla\cdot\left(n_iv_{||i} \mathbf{b}v_{||i}\right) - \partial_{||}p_i + E
+      \end{aligned}
+
+   The electron density is set to the ion density by quasineutrality, the
+   parallel velocity is set by a zero current condition, and only the
+   electron pressure is evolved.
+
+   .. code-block:: ini
+
+      [e] # Electrons
+      type = quasineutral, zero_current, evolve_pressure
+
+   which adds the equations:
+
+   .. math::
+
+      \begin{aligned}
+      n_e =& n_i \\
+      \frac{\partial p_e}{\partial t} =& -\nabla\cdot\left(p_e\mathbf{b}v_{||e}\right) - \frac{2}{3}p_e\nabla\cdot\left(\mathbf{b}v_{||e}\right)
+      \end{aligned}
+
+   The :ref:`zero_current` component sets:
+
+   .. math::
+
+      \begin{aligned}
+      E =& -\partial_{||}p_e \\
+      v_{||e} =& v_{||i}
+      \end{aligned}
+
+
+2D Drift-plane
 --------------
 
 Simulations where the dynamics along the magnetic field is not
 included, or only included in a parameterised way as sources or
-sinks. These are useful for the study of the basic physics of plasma
-"blobs" / filaments, and tokamak edge turbulence.
+sinks. The field line direction is then "into the page", and the
+domain represents a slice somewhere along the field line, e.g. 
+at the midplane.
+These are useful for the study of the basic physics of plasma
+"blobs" / filaments, and tokamak edge turbulence. 
 
 .. _Blob2d:
 
@@ -414,7 +445,7 @@ the best choices, especially for cases with multiple ion species; they were
 chosen as being simple to implement by John Omotani in May 2022.
 
 
-2D axisymmetric tokamak
+2D Axisymmetric SOL
 -----------------------
 
 These are transport simulations, where the cross-field transport is given
@@ -452,7 +483,9 @@ The components of the model are given in `heat-transport/BOUT.inp`:
 .. code-block:: ini
 
    [hermes]
-   components = e, h+, collisions, sheath_boundary_simple
+   components = (e, h+,
+                 braginskii_collisions, braginskii_friction, braginskii_heat_exchange,
+                 sheath_boundary_simple, braginskii_conduction)
 
 We have two species, electrons and hydrogen ions, and add collisions
 between them and a simple sheath boundary condition.
@@ -531,10 +564,11 @@ species. The name of that species is given by the `temperature_from` option:
 
    temperature_from = e  # Set Th+ = Te
 
-The `collisions` component is described in the manual, and calculates both electron-electron
-and electron-ion collisions. These can be disabled if desired, using individual options.
-There are also ion-ion, electron-neutral, ion-neutral and neutral-neutral collisions that
-are not used here.
+The `braginskii_collisions` component is described in the manual, and
+calculates both electron-electron and electron-ion collisions. These
+can be disabled if desired, using individual options.  There are also
+ion-ion, electron-neutral, ion-neutral and neutral-neutral collisions
+that are not used here.
 
 The `sheath_boundary_simple` component is a simplified Bohm-Chodura sheath boundary
 condition, that allows the sheath heat transmission coefficient to be specified for
@@ -555,11 +589,17 @@ The equations solved by this example are:
    \end{aligned}
 
 The calculation of the Coulomb logarithms follows the NRL formulary,
-and the above expression is used for temperatures above 10eV. See
-the `collisions` manual section for the expressions used in other regimes.
+and the above expression is used for temperatures above 10eV. See the
+`braginskii_collisions` manual section for the expressions used in
+other regimes.
 
 recycling-dthene
 ~~~~~~~~~~~~~~~~
+
+Warning
+   Impurity transport can be notoriously computationally expensive to run.
+   If you are interested in 2D transport simulations, consider starting 
+   with the much simpler ``recycling`` example (not yet in documentation)
    
 The `recycling-dthene` example includes cross-field diffusion,
 parallel flow and heat conduction, collisions between species, sheath
@@ -581,8 +621,9 @@ which couple multiple species.
 .. code-block:: ini
 
    [hermes]
-   components = (d+, d, t+, t, he+, he, ne+, ne, e,
-                 collisions, sheath_boundary, recycling, reactions)
+   components = (d+, d, t+, t, he+, he, ne+, ne, e, braginskii_collisions,
+                 braginskii_friction, braginskii_heat_exchange, sheath_boundary,
+                 recycling, reactions, braginskii_conduction)
 
 Note that long lists like this can be split across multiple lines by
 using parentheses. 
@@ -611,3 +652,166 @@ Atomic reactions are specified as a list:
         ne + e -> ne+ + 2e, # Neon ionisation
         ne+ + e -> ne,      # Neon+ recombination
        )
+
+
+3D Turbulence
+------------
+
+turbulence
+~~~~~~~~~~~~
+
+In this example, Hermes-3 is configured to solve an electrostatic 6-field model for vorticity,
+electron density, electron and ion parallel velocity, electron and ion
+pressure.
+
+The input file is in the Hermes-3 repository under
+``examples/tokamak-2D/turbulence``.
+
+The lines that define the components to include in the model are:
+
+.. code-block:: ini
+
+   [hermes]
+   components = (e, d+, sound_speed, vorticity,
+                 sheath_boundary, braginskii_collisions, braginskii_friction,
+                 braginskii_heat_exchange, diamagnetic_drift, classical_diffusion,
+                 polarisation_drift, braginskii_conduction
+                )
+
+   [e]
+   type = evolve_density, evolve_pressure, evolve_momentum
+
+   [d+]
+   type = quasineutral, evolve_pressure, evolve_momentum
+
+We define two species: electrons ``e`` and deuterium ions ``d+``.
+Electron density is evolved, and ion density is set to electron
+density by quasineutrality.  The electron fluid equations for density
+:math:`n_e`, parallel momentum :math:`m_en_ev_{||e}`, and pressure
+:math:`p_e = en_eT_e` are:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial n_e}{\partial t} =& -\nabla\cdot\left[n_e \left(\mathbf{v}_{E\times B} + \mathbf{b}v_{||e} + \mathbf{v}_{de}\right)\right] + S_n \\
+   \frac{\partial}{\partial t}\left(m_en_ev_{||e}\right) =& -\nabla\cdot\left[m_en_ev_{||e} \left(\mathbf{v}_{E\times B} + \mathbf{b}v_{||e} + \mathbf{v}_{de}\right)\right] - \mathbf{b}\cdot\nabla p_e \nonumber \\
+   &- en_eE_{||} + F_{ei} \\
+   \frac{\partial}{\partial t}\left(\frac{3}{2}p_e\right) =& -\nabla\cdot\left[\frac{3}{2}p_e \left(\mathbf{v}_{E\times B} + \mathbf{b}v_{||e}\right) + \frac{5}{2}p_e\mathbf{v}_{de}\right] - p_e\nabla\cdot\left(\mathbf{v}_{E\times B} + \mathbf{b}v_{||e}\right) \nonumber \\
+   & + \nabla\cdot\left(\kappa_{||e}\mathbf{b}\mathbf{b}\cdot\nabla T_e\right) + S_{Ee} + W_{ei}
+   \end{aligned}
+
+Here the electrostatic approximation is made, so :math:`E_{||} = -\mathbf{b}\cdot\nabla\phi`.
+
+The ion fluid equations assume quasineutrality so :math:`n_i = n_e`,
+and evolve the ion parallel momentum :math:`m_in_iv_{||i}` and
+pressure :math:`p_i`:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial}{\partial t}\left(m_in_iv_{||i}\right) =& -\nabla\cdot\left[m_in_iv_{||i} \left(\mathbf{v}_{E\times B} + \mathbf{b}v_{||i} + \mathbf{v}_{di}\right)\right] - \mathbf{b}\cdot\nabla p_i \nonumber \\
+   &+ Z_ien_iE_{||} - F_{ei} \\
+   \frac{\partial}{\partial t}\left(\frac{3}{2}p_i\right) =& -\nabla\cdot\left[\frac{3}{2}p_i \left(\mathbf{v}_{E\times B} + \mathbf{b}v_{||i}\right) + \frac{5}{2}p_i\mathbf{v}_{di}\right] - p_i\nabla\cdot\left(\mathbf{v}_{E\times B} + \mathbf{b}v_{||i}\right) \nonumber \\
+   & + \nabla\cdot\left(\kappa_{||i}\mathbf{b}\mathbf{b}\cdot\nabla T_i\right) + S_{Ei} + S_n\frac{1}{2}m_in_iv_{||i}^2 - W_{ei} \nonumber \\
+   & + \frac{p_i}{en_0}\nabla\cdot\left(\mathbf{J}_{||} + \mathbf{J}_d\right)
+   \end{aligned}
+
+The vorticity :math:`\omega` is
+
+.. math::
+
+   \omega = \nabla\cdot\left[\frac{m_in_0}{B^2}\nabla_\perp\left(\phi + \frac{p_i}{n_0}\right)\right]
+
+whose evolution is given by the current continuity equation:
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial \omega}{\partial t} =& -\nabla\cdot\left[\frac{m_i}{2B^2}\nabla_\perp\left(\mathbf{v}_E \cdot\nabla p_i\right) + \frac{\omega}{2}\mathbf{v}_E + \frac{m_in_0}{2B^2}\nabla_\perp^2\phi\left(\mathbf{v}_E + \frac{\mathbf{b}}{n_0B}\times\nabla p_i\right)\right] \nonumber \\
+   &+ \nabla\cdot\left(\mathbf{J}_{||} + \mathbf{J}_d + \mathbf{J}_{ci}\right)
+   \end{aligned}
+
+where the Boussinesq approximation is made, replacing the density in
+the polarisation current with a constant :math:`\overline{n}`.  The
+divergence of the diamagnetic current is written as
+
+.. math::
+
+   \nabla\cdot\mathbf{J}_d = \nabla\cdot\left[\left(p_e + p_i\right)\nabla\times\frac{\mathbf{b}}{B}\right]
+   
+
+
+The input file sets the number of output steps to take and the time
+between outputs in units of reference ion cyclotron time:
+
+.. code-block:: ini
+
+   nout = 10      # Number of output steps
+   timestep = 10  # Output timestep, normalised ion cyclotron times [1/Omega_ci]
+
+With the normalisations in the input that reference time is about 1e-8
+seconds, so taking 10 steps of 10 reference cyclotron times each
+advances the simulation by around 1 microsecond in total.
+
+The first few steps are likely to be slow, but the simulation should
+speed up considerably by the end of these 10 steps. This is largely
+due to rapid transients as the electric field is set up by the sheath
+and parallel electron flows.
+
+
+**Note**: When starting a new simulation, it is important to calibrate
+the input sources, to ensure that the particle and power fluxes are
+what you intend.
+
+The inputs are electron density source, electron and ion heating power.
+The particle source is set in the electron density section ``[Ne]``:
+
+.. code-block:: ini
+
+   [Ne]
+   flux = 3e21 # /s
+   shape_factor = 1.0061015504152746
+
+   source = flux * shape_factor * exp(-((x - 0.05)/0.05)^2)
+   source_only_in_core = true
+
+The inputs read by Hermes-3/BOUT++ are ``source`` and
+``source_only_in_core``. The ``flux`` and ``shape_factor`` values are
+just convenient ways to calculate the source (New variables can be
+defined and used, and their order in the input file doesn't matter).
+
+
+A turbulence simulation typically takes many days of running, to reach
+(quasi-)steady state then gather statistics for analysis.  To continue
+a simulation, the simulation state is loaded from restart files
+(BOUT.restart.*) and the simulation continues running. The "nout" and
+"timestep" set the number of *new* steps to take. To do this, copy
+the BOUT.inp (options) file and BOUT.restart.* files into a new directory.
+For example, if the first simulation was in a directory "01":
+
+.. code-block:: bash
+
+   $ mkdir 02
+   $ cp 01/BOUT.inp 02/
+   $ cp 01/BOUT.restart.* 02/
+
+We now have a new input file (02/BOUT.inp) that we can edit to update
+settings. I recommend increasing the output ``timestep`` from 10 to 100,
+and the number of outputs ``nout`` from 10 to 100. You can also adjust
+particle and power sources, or make other changes to the settings. Once
+ready, restart the simulation:
+
+.. code-block:: bash
+
+   $ mpirun -np 64 ./hermes-3 -d 02 restart
+
+Note the ``restart`` argument.
+
+TCV-X21
+~~~~~~~~~~~~
+
+An example based on the TCV validation in `Oliveira, Body et al. 2022
+<https://iopscience.iop.org/article/10.1088/1741-4326/ac4cde/meta>`_, 
+located in located in ``examples\tcv-x21``.
+
+

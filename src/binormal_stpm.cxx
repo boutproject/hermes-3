@@ -7,8 +7,14 @@
 
 using bout::globals::mesh;
 
-BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions, Solver* solver)
-  : name(name) {
+BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions,
+                           [[maybe_unused]] Solver* solver)
+    : Component({
+        readIfSet("species:{all_species}:{input}", Regions::Interior),
+        readOnly("species:{all_species}:AA"),
+        readWrite("species:{all_species}:{output}"),
+    }),
+      name(name) {
   AUTO_TRACE();
   auto& options = alloptions[name];
   const Options& units = alloptions["units"];
@@ -44,16 +50,19 @@ BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions, Solver* solver
   diagnose = options["diagnose"]
     .doc("Output diagnostics?")
     .withDefault(false);
+
+  substitutePermissions("input", {"density", "temperature", "momentum"});
+  substitutePermissions("output", {"energy_source", "momentum_source", "density_source"});
 }
 
-void BinormalSTPM::transform(Options& state) {
+void BinormalSTPM::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
     const auto& species_name = kv.first;
 
-    Options& species = allspecies[species_name];
+    GuardedOptions species = allspecies[species_name];
     auto AA = get<BoutReal>(species["AA"]);
 
     const Field3D N = species.isSet("density")
