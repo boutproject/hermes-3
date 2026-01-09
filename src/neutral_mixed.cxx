@@ -442,13 +442,12 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-
   ddt(Nn) =
-    - FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed, pf_adv_par_ylow); // Parallel advection
-
-  ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim,
-                                   pf_adv_perp_xlow,
-                                   pf_adv_perp_ylow);    // Perpendicular advection
+    - FV::Div_par_mod<ParLimiter>(
+                  Nn, Vn, sound_speed, pf_adv_par_ylow) // Parallel advection
+    + Div_a_Grad_perp_nonorthog(DnnNn, logPnlim,
+        pf_adv_perp_xlow, pf_adv_perp_ylow); // Perpendicular diffusion
+   ;
 
   Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
@@ -463,7 +462,7 @@ void NeutralMixed::finally(const Options& state) {
   ddt(Pn) = - (5. / 3) * FV::Div_par_mod<ParLimiter>(       // Parallel advection
                     Pn, Vn, sound_speed, ef_adv_par_ylow)
             + (2. / 3) * Vn * Grad_par(Pn)                  // Work done
-            + (5. / 3) * Div_a_Grad_perp_flows(             // Perpendicular advection
+            + (5. / 3) * Div_a_Grad_perp_nonorthog(             // Perpendicular advection
                     DnnPn, logPnlim,
                     ef_adv_perp_xlow, ef_adv_perp_ylow)  
      ;
@@ -474,7 +473,7 @@ void NeutralMixed::finally(const Options& state) {
   ef_adv_perp_ylow *= 5./2;
 
   if (neutral_conduction) {
-    ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(
+    ddt(Pn) += (2. / 3) * Div_a_Grad_perp_nonorthog(
                     kappa_n, Tn,                             // Perpendicular conduction
                     ef_cond_perp_xlow, ef_cond_perp_ylow)
 
@@ -506,22 +505,23 @@ void NeutralMixed::finally(const Options& state) {
 
         - Grad_par(Pn)                                 // Pressure gradient
         
-        + Div_a_Grad_perp_flows(DnnNVn, logPnlim,
-                                     mf_adv_perp_xlow,
-                                     mf_adv_perp_ylow) // Perpendicular advection
+        + Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim, 
+                      mf_adv_perp_xlow, mf_adv_perp_ylow) // Perpendicular diffusion
+       // + Div_a_Grad_perp_flows(DnnNVn, logPnlim,
+       //                              mf_adv_perp_xlow,
+       //                              mf_adv_perp_ylow) // Perpendicular advection
       ;
 
     if (neutral_viscosity) {
       // NOTE: The following viscosity terms are not (yet) balanced
       //       by a viscous heating term
-
       // Relationship between heat conduction and viscosity for neutral
       // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
       // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = Div_a_Grad_perp_flows(
+      Field3D viscosity_source = Div_a_Grad_perp_nonorthog(
                                 eta_n, Vn,               // Perpendicular viscosity
                                 mf_visc_perp_xlow,
                                 mf_visc_perp_ylow)    
