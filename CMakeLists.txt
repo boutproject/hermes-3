@@ -368,9 +368,11 @@ if(HERMES_TESTS)
     add_test(NAME differential_operators_mms_orthogonal
            WORKING_DIRECTORY tests/mms/
            COMMAND python3 orthogonal_test.py)
+    set_tests_properties(differential_operators_mms_orthogonal PROPERTIES LABELS integration)
     add_test(NAME differential_operators_mms_nonorthogonal
            WORKING_DIRECTORY tests/mms/
            COMMAND python3 nonorthogonal_test.py)
+    set_tests_properties(differential_operators_mms_nonorthogonal PROPERTIES LABELS integration)
   endif()
 endif()
 
