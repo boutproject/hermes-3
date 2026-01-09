@@ -53,7 +53,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   const BoutReal Lnorm = units["meters"];
 
   exb_advection = options["exb_advection"]
-                      .doc("Include ExB advection (nonlinear term)?")
+                      .doc("Include nonlinear ExB advection?")
                       .withDefault<bool>(true);
 
   exb_advection_simplified = options["exb_advection_simplified"]
