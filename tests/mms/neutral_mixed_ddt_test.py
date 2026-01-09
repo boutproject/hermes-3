@@ -26,13 +26,13 @@ g23 = 0.0
 g13 = 0.0
 g_11, g_12, g_13, g_22, g_23, g_33, J = metric_coefficients(g11, g12, g13, g22, g23, g33)
 
-def neutral_mixed_equations(evolve_momentum=False, 
+def neutral_mixed_equations(evolve_momentum=False,
                             conservation_test=False,
                             # expected N in discretisation error ~ (grid_spacing)^N
                             expected_convergence_order=2.0):
     pfac = 0.2
     nfac = 0.2
-    # mass 
+    # mass
     AA = 2.0
     # collision frequency
     nu_cfreq = 1.0
@@ -58,7 +58,7 @@ def neutral_mixed_equations(evolve_momentum=False,
     neutral_viscosity = True
 
     # time evolution equations without sources
-    # N.B. 
+    # N.B.
     # Div . ( a Grad_perp f )
     #div_a_grad_perp_f = div_a_grad_perp_f_symbolic(g11, g12, g13, g22, g23, g33, a, f)
     # Div . ( a Grad_par f)
@@ -94,7 +94,7 @@ def neutral_mixed_equations(evolve_momentum=False,
         ddt_NVn = (ddt_NVn +
                     viscosity_source
                     )
-        ddt_Pn = (ddt_Pn - 
+        ddt_Pn = (ddt_Pn -
                 (2.0/3.0)*Vn*viscosity_source
                 )
 
@@ -116,7 +116,7 @@ def neutral_mixed_equations(evolve_momentum=False,
         source_NVn = -ddt_NVn
 
     test_input = {
-        "ntest" : 3, 
+        "ntest" : 3,
         "ngrid" : 10,
         "collision_frequency" : nu_cfreq,
         "g11_string": str(g11),
