@@ -94,6 +94,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
                  .doc("Split phi into n=0 and n!=0 components")
                  .withDefault<bool>(false);
 
+  include_viscosity = options.isSet("viscosity"); // Only include if set
   viscosity = options["viscosity"]
     .doc("Kinematic viscosity [m^2/s]")
     .withDefault<BoutReal>(0.0)
@@ -647,6 +648,68 @@ void Vorticity::transform_impl(GuardedOptions& state) {
     set(fields["DivJcol"], DivJcol);
   }
 
+  // Kinematic viscosity
+  if (include_viscosity) {
+    // This uses a viscous force density F = -nu * B * b x ∇ω
+    // This gives rise to a drift and so the divergence of a current
+    //   ∇ . Jvis = ∇ . [ b x F / B ] = ∇ . [ nu ∇⟂ ω ]
+    //
+    // Fluid velocity u = b x ∇Φ / B   (Boussinesq approximation)
+    // where potential Φ = ϕ + Pi/n0
+    // Work done F . u = - nu * ∇⟂ ω . ∇⟂Φ
+    //                 = - nu B^2 / (n0 m_i) ∇⟂(∇ . g) . g
+    //                 = nu B^2 / (n0 m_i) [ (∇⟂g : ∇⟂g) - ∇ . ([g . ∇⟂]g) ]
+    //                                                     ^^^^^^^^^^^^^^^
+    //                                                   not positive definite
+    // where vector g = n0 m_i / B^2 ∇⟂Φ
+    //
+    // The work done is not positive definite but integrates to zero over the
+    // domain provided that nu B^2 = const, because then the scalars
+    // in front can move through the divergence, integrating to leave only
+    // boundary fluxes.
+
+    ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
+
+    Field3D heating = - viscosity * (Grad_perp(Vort) * Grad_perp(phi + Pi_hat));
+
+    // Weight the heating by mass density of charged species
+    // This is an approximation motivated because the perpendicular
+    // kinetic energy is proportional to mass
+
+    Field3D sum_A_n = zeroFrom(Vort); // Sum of atomic mass * density
+    GuardedOptions allspecies = state["species"];
+    for (const auto& kv : allspecies.getChildren()) {
+      const GuardedOptions species = kv.second;
+
+      if (!(species.isSet("charge") and species.isSet("AA"))) {
+        continue; // No charge or mass -> no current
+      }
+      if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+        continue; // Zero charge
+      }
+
+      const BoutReal A = get<BoutReal>(species["AA"]);
+      const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
+      sum_A_n += A * N;
+    }
+
+    for (const auto& kv : allspecies.getChildren()) {
+      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
+
+      if (!(species.isSet("charge") and species.isSet("AA"))) {
+        continue; // No charge or mass -> no current
+      }
+      if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+        continue; // Zero charge
+      }
+
+      const BoutReal A = get<BoutReal>(species["AA"]);
+      const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
+
+      add(species["energy_source"], heating * A * N / sum_A_n);
+    }
+  }
+
   set(fields["vorticity"], Vort);
   set(fields["phi"], phi);
 }
@@ -728,9 +791,6 @@ void Vorticity::finally(const Options& state) {
       ddt(Vort) += coord->Bxy * bracket(jpar / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA);
     }
   }
-
-  // Viscosity
-  ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
 
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
