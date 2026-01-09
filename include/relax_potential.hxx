@@ -123,10 +123,6 @@ private:
 
   bool sheath_boundary; ///< Set outer boundary to j=0?
 
-  BoutReal Ge; // Secondary electron emission coefficient
-  BoutReal sin_alpha; // sin of angle between magnetic field and wall.
-  Field3D wall_potential; ///< Voltage at the wall. Normalised units.
-
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
   bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
@@ -139,6 +135,7 @@ private:
 
   Field2D Bsq;      ///< SQ(coord->Bxy)
   Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
+  BoutReal hyper_z; ///< Hyper-viscosity in Z
   Field2D viscosity; ///< Perpendicular Kinematic viscosity
   Field2D viscosity_par;  ///< Parallel Kinematic viscosity
 

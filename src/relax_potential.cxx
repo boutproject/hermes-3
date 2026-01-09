@@ -1,16 +1,14 @@
-#include <bout/solver.hxx>
 
 #include "../include/relax_potential.hxx"
-
 #include "../include/div_ops.hxx"
-#include <bout/fv_ops.hxx>
+#include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
-#include "../include/hermes_build_config.hxx"
-#include "hermes_utils.hxx"
+#include <bout/fv_ops.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
 
 using bout::globals::mesh;
-
 
 namespace {
 /// Limited free gradient of log of a quantity
@@ -40,22 +38,20 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 }
 } // namespace
 
-
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver) {
   AUTO_TRACE();
 
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
 
-  const Options& units = alloptions["units"];
+  auto& options = alloptions[name];
   // Normalisations
+  const Options& units = alloptions["units"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
   const BoutReal Bnorm = units["Tesla"];
+  const BoutReal Lnorm = units["meters"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
-  const BoutReal Lnorm = units["meters"];
-
-  auto& options = alloptions[name];
 
   exb_advection = options["exb_advection"]
                       .doc("Include nonlinear ExB advection?")
@@ -72,36 +68,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                         .doc("Set potential to j=0 sheath at radial boundaries? (default = 0)")
                         .withDefault<bool>(false);
 
-  Ge = options["secondary_electron_coef"]
-           .doc("Effective secondary electron emission coefficient")
-           .withDefault(0.0);
-
-  if ((Ge < 0.0) or (Ge > 1.0)) {
-    throw BoutException("Secondary electron emission must be between 0 and 1 ({:e})", Ge);
-  }
-
-  sin_alpha = options["sin_alpha"]
-                  .doc("Sin of the angle between magnetic field line and wall surface. "
-                       "Should be between 0 and 1")
-                  .withDefault(1.0);
-
-  if ((sin_alpha < 0.0) or (sin_alpha > 1.0)) {
-    throw BoutException("Range of sin_alpha must be between 0 and 1");
-  }
-
-  // Read wall voltage, convert to normalised units
-  wall_potential = options["wall_potential"]
-                       .doc("Voltage of the wall [Volts]")
-                       .withDefault(Field3D(0.0))
-                   / Tnorm;
-  // Convert to field aligned coordinates
-  wall_potential = toFieldAligned(wall_potential);
-
-  // Note: wall potential at the last cell before the boundary is used,
-  // not the value at the boundary half-way between cells. This is due
-  // to how twist-shift boundary conditions and non-aligned inputs are
-  // treated; using the cell boundary gives incorrect results.
-
   diamagnetic_polarisation =
       options["diamagnetic_polarisation"]
           .doc("Include diamagnetic drift in polarisation current?")
@@ -117,7 +83,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                    .withDefault<bool>(true);
 
   average_atomic_mass = options["average_atomic_mass"]
-                            .doc("Weighted average atomic mass, for polarisaion current "
+                            .doc("Weighted average atomic mass, for polarisation current "
                                  "(Boussinesq approximation)")
                             .withDefault<BoutReal>(2.0); // Deuterium
 
@@ -143,6 +109,13 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   viscosity_par.applyBoundary("dirichlet");
   viscosity_par.applyParallelBoundary("parallel_dirichlet_o2");
 
+  hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
+
+  // Numerical dissipation terms
+  // These are required to suppress parallel zig-zags in
+  // cell centred formulations. Essentially adds (hopefully small)
+  // parallel currents
+
   vort_dissipation = options["vort_dissipation"]
                          .doc("Parallel dissipation of vorticity")
                          .withDefault<bool>(false);
@@ -167,7 +140,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault(1.0);
 
 
-  // NOTE(malamast): How do we do that?
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
   // so that phi can be saved and re-loaded
@@ -176,7 +148,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   phi1 = 0.0;
   Vort = 0.0;
 
-  auto* coord = mesh->getCoordinates();
+  auto coord = mesh->getCoordinates();
 
   if (phi_boundary_relax) {
     // Set the last update time to -1, so it will reset
@@ -192,7 +164,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                                  .withDefault(1e-4)
                              / get<BoutReal>(alloptions["units"]["seconds"]);
   }
-
 
   // Read curvature vector
   try {
@@ -242,7 +213,7 @@ void RelaxPotential::transform(Options& state) {
 
   Options& allspecies = state["species"];
 
-  // phi.name = "phi";
+  phi.name = "phi";
   auto& fields = state["fields"];
 
   // Set the boundary of phi1. 
@@ -514,9 +485,7 @@ void RelaxPotential::transform(Options& state) {
 
     // Pre-calculate this rather than calculate for each species
     // Note: The below calculation requires phi derivatives at the Y boundaries
-    // NOTE: Do we actually need that?
     //       Setting to free boundaries
-
     if (phi.hasParallelSlices()) {
       Field3D &phi_ydown = phi.ydown();
       Field3D &phi_yup = phi.yup();
@@ -563,6 +532,38 @@ void RelaxPotential::transform(Options& state) {
 
       auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 
+      // Note: We need boundary conditions on P, so apply the same
+      //       free boundary condition as sheath_boundary.
+      if (P.hasParallelSlices()) {
+        Field3D &P_ydown = P.ydown();
+        Field3D &P_yup = P.yup();
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            P_ydown(r.ind, mesh->ystart - 1, jz) = 2 * P(r.ind, mesh->ystart, jz) - P_yup(r.ind, mesh->ystart + 1, jz);
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
+          }
+        }
+      } else {
+        Field3D P_fa = toFieldAligned(P);
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            auto i = indexAt(P_fa, r.ind, mesh->ystart, jz);
+            P_fa[i.ym()] = limitFree(P_fa[i.yp()], P_fa[i]);
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            auto i = indexAt(P_fa, r.ind, mesh->yend, jz);
+            P_fa[i.yp()] = limitFree(P_fa[i.ym()], P_fa[i]);
+          }
+        }
+        P = fromFieldAligned(P_fa);
+      }
+
       Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
 
       // This term energetically balances diamagnetic term
@@ -588,7 +589,6 @@ void RelaxPotential::transform(Options& state) {
         zeroFrom(Vort); // Sum of atomic mass * collision frequency * density
     Field3D sum_A_n = zeroFrom(Vort); // Sum of atomic mass * density
 
-    // const Options& allspecies = state["species"];
     for (const auto& kv : allspecies.getChildren()) {
       const Options& species = kv.second;
 
@@ -627,10 +627,10 @@ void RelaxPotential::finally(const Options& state) {
 
   const Options& allspecies = state["species"];
 
-  auto* coord = mesh->getCoordinates();
+  auto coord = mesh->getCoordinates();
 
   phi = get<Field3D>(state["fields"]["phi"]);
-  Vort = get<Field3D>(state["fields"]["vorticity"]);
+  // Vort = get<Field3D>(state["fields"]["vorticity"]);
 
   // Solve vorticity equation
 
@@ -667,15 +667,16 @@ void RelaxPotential::finally(const Options& state) {
     }
   }
 
-  if (state.isSection("fields") and state["fields"].isSet("DivJextra")) {
+  if (state["fields"].isSet("DivJextra")) {
     auto DivJextra = get<Field3D>(state["fields"]["DivJextra"]);
+
     // Parallel current is handled here, to allow different 2D or 3D closures
     // to be used
     ddt(Vort) += DivJextra;
   }
 
   // Parallel current due to species parallel flow
-  for (auto& kv : allspecies.getChildren()) {
+  for (auto& kv : state["species"].getChildren()) {
     const Options& species = kv.second;
 
     if (!species.isSet("charge") or !species.isSet("momentum")) {
@@ -709,7 +710,6 @@ void RelaxPotential::finally(const Options& state) {
   ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
 
   ddt(Vort) += FV::Div_par_K_Grad_par(viscosity_par, Vort);  
-  // NOTE(malamast): Need to check if Div_par_K_Grad_par is equivalent with the Laplace_par operator.
   // ddt(Vort) += viscosity_par * Laplace_par(Vort); 
 
 
@@ -723,14 +723,13 @@ void RelaxPotential::finally(const Options& state) {
     // Adds dissipation term like in other equations, but depending on gradient of
     // potential
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+    ddt(Vort) -= FV::Div_par(-phi, 0.0, sound_speed);
+  }
 
-    Field3D zero {0.0};
-    zero.splitParallelSlices();
-    zero.yup() = 0.0;
-    zero.ydown() = 0.0;
-
-    Field3D dummy;
-    ddt(Vort) -= FV::Div_par_mod<hermes::Limiter>(-phi, zero, sound_speed, dummy);
+  if (hyper_z > 0) {
+    // Form of hyper-viscosity to suppress zig-zags in Z
+    auto* coord = Vort.getCoordinates();
+    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
   }
 
   if (phi_sheath_dissipation) {
@@ -772,8 +771,7 @@ void RelaxPotential::finally(const Options& state) {
     }
   }
 
-
-
+  
   // Solve diffusion equation for potential
 
   if (boussinesq) {
