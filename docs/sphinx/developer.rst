@@ -577,6 +577,17 @@ The `name` is a string labelling the instance. The `alloptions` tree contains at
 
 * `alloptions[name]` options for this instance
 * `alloptions['units']`
+  
+All component constructors must pass a `Permissions` object to the
+constructor on the `Component::Component` base class. This specifies
+which variables will be read/written by the `Component::transform`
+method and will be used to construct a `GuardedOptions` object to be
+passed into `Component::transform_impl`. The `Permissions` object
+(`Component::state_variable_access`) can be further updated in the
+body of the constructor of your component, based on what
+configurations were specified in ``alloptions``. You should give read
+and write permissions to the minimum number of variables necessary, to
+avoid circular dependencies arising among components.
 
 
 Component Permissions
@@ -607,6 +618,17 @@ species and density of ions::
 See the documentation for `Component::declareAllSpecies` for a list of
 all substitutions that will be performed.
 
+Components may request the creation of additional components, upon
+which they depend. This is done by overriding the
+`Component::additionalComponents` method, which returns a list of
+`ComponentInformation` structs that specify the names and types of
+components required. These extra components will use the default
+settings for components of this type, unless other values are
+specified in a section of the input file with the component name.
+
+.. doxygenstruct:: ComponentInformation
+   :members:
+
 
 Component scheduler
 ~~~~~~~~~~~~~~
@@ -620,9 +642,17 @@ and then in `Hermes::rhs` the components are run by a call::
   scheduler->transform(state);
 
 The call to `ComponentScheduler::create` treats the "components"
-option as a comma-separated list of names. The order of the components
-is the order that they are run in. For each name in the list, the
-scheduler looks up the options under the section of that name. 
+option as a comma-separated list of names. For each name in the list,
+the scheduler looks up the options under the section of that name. If
+any of the listed components request further components
+(via the `Component::AdditionalComponents` method) then these will be
+created too. The
+``ComponentScheduler`` will use permission information stored by each
+component in `Component::state_variable_access` to work out the order
+to execute components. It will ensure that all writes to a variable
+have occurred before the first time it is read. If there is a variable
+needed by some component which is never set or if there is a circular
+dependency then it will throw an exception.
 
 .. code-block:: ini
 
@@ -639,8 +669,9 @@ scheduler looks up the options under the section of that name.
 
 This would create two `Component` objects, of type `component1` and
 `component2`. Each time `Hermes::rhs` is run, the `transform`
-functions of `component1` and then `component2` will be called,
-followed by their `finally` functions.
+functions of `component1` and `component2` will be called, with the
+order depending on what state variables each reads and writes. This is
+followed by a call to their `finally` functions.
 
 It is often useful to group components together, for example to
 define the governing equations for different species. A `type` setting
@@ -662,8 +693,10 @@ of components
    # options to control component3
 
 This will create three components, which will be run in the order
-`component1`, `component2`, `component3`: First all the components
-in `group1`, and then `component3`. 
+`component1`, `component2`, `component3`: First all the components in
+`group1`, and then `component3`. Grouped components will be sorted
+individually when determining the run order; they may not be run
+together.
 
 .. doxygenclass:: ComponentScheduler
    :members:

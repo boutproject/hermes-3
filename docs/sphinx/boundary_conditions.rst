@@ -250,7 +250,7 @@ The boundary fluxes might be set by sheath boundary conditions,
 which potentially depend on the density and temperature of all species.
 Recycling therefore can't be calculated until all species boundary conditions
 have been set. It is therefore expected that this component is a top-level
-component (i.e. in the `Hermes` section) which comes after boundary conditions are set.
+component (i.e. in the `Hermes` section).
 
 Recycling has been implemented at the target, the SOL edge and the PFR edge.
 Each is off by default and must be activated with a separate flag. Each can be 

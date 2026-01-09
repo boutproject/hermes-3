@@ -23,7 +23,7 @@ static Options valid_options{
 /// @brief Test that setting an invalid json db dir throws.
 TEST(AmjuelDataTest, InvalidCustomDataDir) {
   Options options{{"json_database_dir", "/invalid/file/path"}};
-  ASSERT_THROW(AmjuelReaction("dummy_name", "iz", "test", "dummy_from_species",
+  ASSERT_THROW(AmjuelReaction("dummy_name", "iz", "test", "dummy_from_species -> dummy_to_species", "dummy_from_species",
                               "dummy_to_species", options),
                BoutException);
 }
@@ -32,7 +32,7 @@ TEST(AmjuelDataTest, InvalidCustomDataDir) {
 TEST(AmjuelDataTest, InValidFilename) {
   std::string invalid_amjuel_lbl = "invalid_lbl";
   if (std::filesystem::is_directory(test_json_db_path)) {
-    ASSERT_THROW(AmjuelReaction("test", "valid", invalid_amjuel_lbl, "dummy_from_species",
+    ASSERT_THROW(AmjuelReaction("test", "valid", invalid_amjuel_lbl, "dummy_from_species -> dummy_to_species", "dummy_from_species",
                                 "dummy_to_species", valid_options),
                  BoutException);
   } else {
@@ -45,7 +45,7 @@ TEST(AmjuelDataTest, InValidFilename) {
 /// @brief Test that trying to read invalid data throws.
 TEST(AmjuelDataTest, InValidData) {
   if (std::filesystem::is_directory(test_json_db_path)) {
-    ASSERT_THROW(AmjuelReaction("test", "invalid", "test", "dummy_from_species",
+    ASSERT_THROW(AmjuelReaction("test", "invalid", "test", "dummy_from_species -> dummy_to_species", "dummy_from_species",
                                 "dummy_to_species", valid_options),
                  BoutException);
   } else {
@@ -58,7 +58,7 @@ TEST(AmjuelDataTest, InValidData) {
 /// Test that json_database_dir can be overridden with a valid path
 TEST(AmjuelDataTest, ValidCustomDataDir) {
   if (std::filesystem::is_directory(test_json_db_path)) {
-    ASSERT_NO_THROW(AmjuelReaction("test", "valid", "test", "dummy_from_species",
+    ASSERT_NO_THROW(AmjuelReaction("test", "valid", "test", "dummy_from_species -> dummy_to_species", "dummy_from_species",
                                    "dummy_to_species", valid_options));
   } else {
     // If tests are run on a filesystem where repo path isn't accessible, just skip
@@ -70,7 +70,7 @@ TEST(AmjuelDataTest, ValidCustomDataDir) {
 /// Test that reading data without <sigma v E> coefficients works
 TEST(AmjuelDataTest, ValidNoSigmavEData) {
   if (std::filesystem::is_directory(test_json_db_path)) {
-    ASSERT_NO_THROW(AmjuelReaction("test", "valid_no-sigma-v-E", "test",
+    ASSERT_NO_THROW(AmjuelReaction("test", "valid_no-sigma-v-E", "test",  "dummy_from_species -> dummy_to_species",
                                    "dummy_from_species", "dummy_to_species",
                                    valid_options));
   } else {

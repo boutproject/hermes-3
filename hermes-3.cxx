@@ -30,6 +30,7 @@
 #include "include/amjuel_hydrogen.hxx"
 #include "include/anomalous_diffusion.hxx"
 #include "include/binormal_stpm.hxx"
+#include "include/braginskii_closure.hxx"
 #include "include/braginskii_collisions.hxx"
 #include "include/braginskii_conduction.hxx"
 #include "include/braginskii_electron_viscosity.hxx"

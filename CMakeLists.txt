@@ -115,6 +115,7 @@ set(HERMES_SOURCES
     include/anomalous_diffusion.hxx
     include/classical_diffusion.hxx
     include/binormal_stpm.hxx
+    include/braginskii_closure.hxx
     include/braginskii_collisions.hxx
     include/braginskii_conduction.hxx
     include/braginskii_electron_viscosity.hxx
@@ -333,6 +334,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(alfven-wave)
   hermes_add_integrated_test(collfreq-braginskii-afn)
   hermes_add_integrated_test(collfreq-multispecies)
+  hermes_add_integrated_test(component-order)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)

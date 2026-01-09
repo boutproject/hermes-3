@@ -24,7 +24,7 @@ struct ElectronForceBalance : public Component {
                    readOnly("species:e:density", Regions::Interior),
                    readOnly("species:e:charge"),
                    // FIXME: Only writes if already exists
-                   readWrite("species:e:momentum_source"),
+                   readIfSet("species:e:momentum_source"),
                    readIfSet("species:{non_electrons}:density", Regions::Interior),
                    readIfSet("species:{non_electrons}:charge"),
                    // FIXME: Only written if density and charge have been set.

@@ -1,10 +1,11 @@
 #pragma once
-
 #ifndef COMPONENT_SCHEDULER_H
 #define COMPONENT_SCHEDULER_H
 
-#include <vector>
 #include <memory>
+#include <set>
+#include <string>
+#include <vector>
 
 #include <bout/bout_types.hxx>
 #include <bout/options.hxx>
@@ -57,6 +58,11 @@ public:
 
   /// Preconditioning
   void precon(const Options &state, BoutReal gamma);
+
+  /// All the variable names which are pre-set in the state, before
+  /// any components are applied.
+  static const std::set<std::string> predeclared_variables;
+
 private:
   /// The components to be executed in order
   std::vector<std::unique_ptr<Component>> components;

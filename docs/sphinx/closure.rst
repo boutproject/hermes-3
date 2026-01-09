@@ -39,7 +39,12 @@ The parallel projection of diffusion from the wall in 1D
 is captured in the :ref:`neutral_parallel_diffusion` top-level component, while 
 both parallel Braginskii transport and perpendicular pressure-diffusion for 2D/3D 
 are captured in the :ref:`neutral_mixed` species-level component. 
-   
+
+A user can automatically activate all of these components at once
+using the `BraginskiiClosure` component.
+
+.. doxygenclass:: BraginskiiClosure
+   :members:
 
 
 Collision frequency selection
@@ -262,8 +267,7 @@ Input
 
 This top-level component calculates the frictional forces between each
 pair of species for which collisional frequencies have been calculated
-(see `Braginskii Collisions component`_). As such, it must be run after
-`braginskii_collisions`. If the option `frictional_heating` is
+(see `Braginskii Collisions component`_). If the option `frictional_heating` is
 enabled then it will also calculate the energy source arising from
 friction.
 
@@ -346,8 +350,8 @@ Braginskii Heat Exchange
 Input
 -----
 This top-level component calculates the heat exchange between species
-due to collisions (see `Braginskii Collisions component`_). As such, it must be run after
-`braginskii_collisions`. There are no configurations for this component.
+due to collisions (see `Braginskii Collisions component`_). There are no
+configurations for this component.
 
 Theory
 ------

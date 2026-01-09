@@ -1,16 +1,6 @@
 #pragma once
-
 #ifndef HERMES_COMPONENT_H
 #define HERMES_COMPONENT_H
-
-#include <bout/assert.hxx>
-#include <bout/bout_types.hxx>
-#include <bout/boutexception.hxx>
-#include <bout/field2d.hxx>
-#include <bout/field3d.hxx>
-#include <bout/generic_factory.hxx>
-#include <bout/options.hxx>
-#include <bout/unused.hxx>
 
 #include <cmath>
 #include <initializer_list>
@@ -21,6 +11,15 @@
 #include <typeinfo>
 #include <utility>
 #include <vector>
+
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
+#include <bout/generic_factory.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
 
 #include "guarded_options.hxx"
 #include "permissions.hxx"
@@ -34,8 +33,10 @@ struct SpeciesInformation {
   SpeciesInformation(const std::vector<std::string>& electrons,
                      const std::vector<std::string>& neutrals,
                      const std::vector<std::string>& positive_ions,
-                     const std::vector<std::string> & negative_ions)
-    : electrons(electrons), neutrals(neutrals), positive_ions(positive_ions), negative_ions(negative_ions), ions(positive_ions) {
+                     const std::vector<std::string>& negative_ions)
+      : electrons(std::move(electrons)), neutrals(std::move(neutrals)),
+        positive_ions(std::move(positive_ions)), negative_ions(std::move(negative_ions)),
+        ions(std::move(positive_ions)) {
     finish_construction();
   }
 
@@ -72,6 +73,40 @@ struct SpeciesInformation {
     }
 };
 
+/// Lightweight type to store information used to build a component.
+struct ComponentInformation {
+  std::string name;
+  std::string type;
+
+  ComponentInformation() {};
+
+  ComponentInformation(const std::string& name_, const std::string& type_) : name(name_), type(type_) {}
+
+  ComponentInformation(std::string&& name_, std::string&& type_) : name(std::move(name_)), type(std::move(type_)) {}
+
+  bool operator<(const ComponentInformation& other) const {
+    return std::pair(name, type) < std::pair(other.name, other.type);
+  }
+
+  bool operator==(const ComponentInformation& other) const {
+    return std::pair(name, type) == std::pair(other.name, other.type);
+  }
+};
+
+/// Format `ComponentInformation` to string. Format string specification is the
+/// same as when formatting a string.
+/// See https://fmt.dev/12.0/syntax/#format-specification-mini-language.
+///
+/// TODO: provide custom formatting to configure exactly how the
+/// component name and type are displayed.
+template <>
+struct fmt::formatter<ComponentInformation>
+    : formatter<std::string> {
+  auto format(const ComponentInformation& ci, format_context& ctx) const
+      -> format_context::iterator;
+};
+
+
 /// Interface for a component of a simulation model
 ///
 /// The constructor of derived types should have signature
@@ -88,34 +123,38 @@ struct Component {
 
   virtual ~Component() {}
 
+  /// Return a list of names/types of other components needed by this
+  /// component. All configurations for these components will take the
+  /// default value, unless set in the input file.
+  virtual std::vector<ComponentInformation> additionalComponents() { return {}; }
+
   /// Modify the given simulation state. This method will wrap the
   /// state in a GuardedOptions object and pass that to the private
   /// implementation of transform provided by each component.
-  void transform(Options &state);
-  
+  void transform(Options& state);
+
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
-  virtual void finally(const Options &UNUSED(state)) { }
+  virtual void finally(const Options& UNUSED(state)) {}
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  virtual void outputVars(Options &UNUSED(state)) { }
+  virtual void outputVars(Options& UNUSED(state)) {}
 
   /// Add extra fields to restart files
-  virtual void restartVars(Options &UNUSED(state)) { }
+  virtual void restartVars(Options& UNUSED(state)) {}
 
   /// Preconditioning
-  virtual void precon(const Options &UNUSED(state), BoutReal UNUSED(gamma)) { }
-  
+  virtual void precon(const Options& UNUSED(state), BoutReal UNUSED(gamma)) {}
+
   /// Create a Component
   ///
   /// @param type     The name of the component type to create (e.g. "evolve_density")
   /// @param name     The species/name for this instance.
   /// @param options  Component settings: options[name] are specific to this component
   /// @param solver   Time-integration solver
-  static std::unique_ptr<Component> create(const std::string &type, // The type to create
-                                           const std::string &name, // The species/name for this instance
-                                           Options &options,  // Component settings: options[name] are specific to this component
-                                           Solver *solver); // Time integration solver
+  static std::unique_ptr<Component> create(const std::string& type,
+                                           const std::string& name, Options& options,
+                                           Solver* solver);
 
   /// Tell the component the name of all species in the simulation, by type. It
   /// will use this information to substitute the following placeholders in
@@ -141,6 +180,8 @@ struct Component {
   /// Permissions::checkNoRemainingSubstitutions. All substitutions
   /// must be completed or else an exception will be thrown.
   void declareAllSpecies(const SpeciesInformation & info);
+
+  const Permissions& getPermissions() const { return state_variable_access; }
 
 protected:
   /// Set the level of access needed by this component for a particular variable.
@@ -449,14 +490,15 @@ template<typename T>
 Options& add(Options& option, T value) {
   if (!option.isSet()) {
     return set(option, value);
-  } else {
-    try {
-      return set(option, value + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value));
-    } catch (const std::bad_cast &e) {
-      // Convert to a more useful error message
-      throw BoutException("Could not convert {:s} to type {:s}",
-                          option.str(), typeid(T).name());
-    }
+  }
+  try {
+    return set(option, value
+                           + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
+                               option.value));
+  } catch (const std::bad_cast& e) {
+    // Convert to a more useful error message
+    throw BoutException("Could not convert {:s} to type {:s}", option.str(),
+                        typeid(T).name());
   }
 }
 
@@ -475,14 +517,15 @@ template<typename T>
 Options& subtract(Options& option, T value) {
   if (!option.isSet()) {
     return set(option, -value);
-  } else {
-    try {
-      return set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value) - value);
-    } catch (const std::bad_cast &e) {
-      // Convert to a more useful error message
-      throw BoutException("Could not convert {:s} to type {:s}",
-                          option.str(), typeid(T).name());
-    }
+  }
+  try {
+    return set(option,
+               bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value)
+                   - value);
+  } catch (const std::bad_cast& e) {
+    // Convert to a more useful error message
+    throw BoutException("Could not convert {:s} to type {:s}", option.str(),
+                        typeid(T).name());
   }
 }
 

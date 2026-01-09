@@ -31,7 +31,7 @@ protected:
  *
  */
 struct Reaction : public ReactionBase {
-  Reaction(std::string name, Options& alloptions);
+  Reaction(std::string name, Options& alloptionss, const std::string & reaction_str);
 
   void outputVars(Options& state) override final;
 

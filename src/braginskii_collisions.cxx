@@ -21,7 +21,8 @@
 #include "../include/hermes_utils.hxx"
 
 BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions, Solver*)
-    : Component({readOnly("species:{non_electrons}:density", Regions::Interior),
+    : Component({readOnly("species:{all_species}:density", Regions::Interior),
+                 readOnly("species:{electrons}:temperature", Regions::Interior),
                  readIfSet("species:{non_electrons}:charge"),
                  readIfSet("species:{negative_ions}:temperature", Regions::Interior),
                  readOnly("species:{all_species}:AA")}) {
@@ -62,8 +63,6 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
-  setPermissions(readOnly("species:{electrons}:temperature", Regions::Interior));
-  setPermissions(readOnly("species:{electrons}:density", Regions::Interior));
   if (electron_electron) {
     setPermissions(readWrite(
         "species:{electrons}:collision_frequencies:{electrons}_{electrons2}_coll"));

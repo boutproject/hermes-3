@@ -9,6 +9,12 @@
 #include "../include/guarded_options.hxx"
 #include "../include/permissions.hxx"
 
+auto fmt::formatter<ComponentInformation>::format(const ComponentInformation& ci, format_context& ctx) const
+    -> format_context::iterator {
+  return formatter<std::string>::format(
+                                        fmt::format("{} ({})", ci.name, ci.type), ctx);
+}
+
 std::unique_ptr<Component> Component::create(const std::string &type,
                                              const std::string &name,
                                              Options &alloptions,
