@@ -28,6 +28,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Cs0 = sqrt(SI::qe * Tnorm / SI::Mp);
 
   // Need to take derivatives in X for cross-field diffusion terms
   ASSERT0(mesh->xstart > 0);
@@ -99,6 +100,13 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(true);
 
+  rnn_override = options["rnn_override"]
+                    .doc("Paramter for overriding the neutral collision frequency in Dn for testing")
+                    .withDefault(-1.0);
+
+  normalise_sources = options["normalise_sources"]
+                          .doc("Normalise input sources?")
+                          .withDefault<bool>(true);
   diffusion_collisions_mode = options["diffusion_collisions_mode"]
       .doc("Can be multispecies: all enabled collisions excl. IZ, or afn: CX, IZ and NN collisions")
       .withDefault<std::string>("multispecies");
@@ -119,6 +127,15 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(1.0);
 
+  if (normalise_sources) {
+    density_norm = Nnorm * Omega_ci;
+    pressure_norm = SI::qe * Nnorm * Tnorm * Omega_ci;
+    momentum_norm = SI::Mp * Nnorm * Cs0 * Omega_ci;
+  } else {
+    density_norm = 1.0;
+    pressure_norm = 1.0;
+    momentum_norm = 1.0;
+  }
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
   density_source = 0.0;
@@ -128,7 +145,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
       alloptions[std::string("N") + name]["source"]
           .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
           .withDefault(density_source)
-      / (Nnorm * Omega_ci);
+      / density_norm;
 
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
@@ -139,7 +156,16 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                         .doc(std::string("Source term in ddt(P") + name
                              + std::string("). Units [N/m^2/s]"))
                         .withDefault(pressure_source)
-                    / (SI::qe * Nnorm * Tnorm * Omega_ci);
+                    / pressure_norm;
+  // Try to read the momentum source from the mesh
+  momentum_source = 0.0;
+  mesh->get(momentum_source, fmt::format("NV{}_src", name));
+   // Allow the user to override the source
+  momentum_source = alloptions[fmt::format("NV{}", name)]["source"]
+                        .doc(fmt::format("Source term in ddt(NV{}). Units [kg m^-2 s^-2]", name))
+                        .withDefault(momentum_source)
+                    / momentum_norm;
+  // need some normalisation convention here
 
   // Set boundary condition defaults: Neumann for all but the diffusivity.
   // The dirichlet on diffusivity ensures no radial flux.
@@ -294,76 +320,78 @@ void NeutralMixed::finally(const Options& state) {
 
   Field3D Rnn =
     sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
-
-  if (localstate.isSet("collision_frequency")) {
-
-    // Collisionality
-    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
-    if (collision_names.empty()) {     // Calculate only once - at the beginning
-
-      if (diffusion_collisions_mode == "afn") {
-        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
-
-          std::string collision_name = collision.second.name();
-
-          if (// Charge exchange
-              (collisionSpeciesMatch(    
-                collision_name, name, "+", "cx", "partial")) or
-              // Ionisation
-              (collisionSpeciesMatch(    
-                collision_name, name, "+", "iz", "partial")) or
-              // Neutral-neutral collisions
-              (collisionSpeciesMatch(    
-                collision_name, name, name, "coll", "exact"))) {
-                  collision_names.push_back(collision_name);
-                }
-        }
-      // Multispecies mode: all collisions and CX are included
-      } else if (diffusion_collisions_mode == "multispecies") {
-        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
-
-          std::string collision_name = collision.second.name();
-
-          if (// Charge exchange
-              (collisionSpeciesMatch(    
-                collision_name, name, "", "cx", "partial")) or
-              // Any collision (en, in, ee, ii, nn)
-              (collisionSpeciesMatch(    
-                collision_name, name, "", "coll", "partial"))) {
-                  collision_names.push_back(collision_name);
-                }
-        }
-        
-      } else {
-        throw BoutException("\ndiffusion_collisions_mode for {:s} must be either multispecies or braginskii", name);
-      }
-
-      if (collision_names.empty()) {
-        throw BoutException("\tNo collisions found for {:s} in neutral_mixed for selected collisions mode", name);
-      }
-
-      // Write chosen collisions to log file
-      output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ",
-                      name, diffusion_collisions_mode);
-      for (const auto& collision : collision_names) {        
-        output_info.write("{:s} ", collision);
-      }
-      output_info.write("\n");
-      }
-
-    // Collect the collisionalities based on list of names
-    nu = 0;
-    for (const auto& collision_name : collision_names) {
-      nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
-    }
-
-
-    // Dnn = Vth^2 / sigma
-    Dnn = (Tnlim / AA) / (nu + Rnn);
+  if (rnn_override > 0.0) { 
+    // user has set an override for collision frequency
+    Dnn = (Tn / AA) / rnn_override;
   } else {
-    Dnn = (Tnlim / AA) / Rnn;
-  }
+    if (localstate.isSet("collision_frequency")) {
+      // Collisionality
+      // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+      if (collision_names.empty()) {     // Calculate only once - at the beginning
 
+        if (diffusion_collisions_mode == "afn") {
+          for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+
+            std::string collision_name = collision.second.name();
+
+            if (// Charge exchange
+                (collisionSpeciesMatch(    
+                  collision_name, name, "+", "cx", "partial")) or
+                // Ionisation
+                (collisionSpeciesMatch(    
+                  collision_name, name, "+", "iz", "partial")) or
+                // Neutral-neutral collisions
+                (collisionSpeciesMatch(    
+                  collision_name, name, name, "coll", "exact"))) {
+                    collision_names.push_back(collision_name);
+                  }
+          }
+        // Multispecies mode: all collisions and CX are included
+        } else if (diffusion_collisions_mode == "multispecies") {
+          for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+
+            std::string collision_name = collision.second.name();
+
+            if (// Charge exchange
+                (collisionSpeciesMatch(    
+                  collision_name, name, "", "cx", "partial")) or
+                // Any collision (en, in, ee, ii, nn)
+                (collisionSpeciesMatch(    
+                  collision_name, name, "", "coll", "partial"))) {
+                    collision_names.push_back(collision_name);
+                  }
+          }
+          
+        } else {
+          throw BoutException("\ndiffusion_collisions_mode for {:s} must be either multispecies or braginskii", name);
+        }
+
+        if (collision_names.empty()) {
+          throw BoutException("\tNo collisions found for {:s} in neutral_mixed for selected collisions mode", name);
+        }
+
+        // Write chosen collisions to log file
+        output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ",
+                        name, diffusion_collisions_mode);
+        for (const auto& collision : collision_names) {        
+          output_info.write("{:s} ", collision);
+        }
+        output_info.write("\n");
+        }
+
+      // Collect the collisionalities based on list of names
+      nu = 0;
+      for (const auto& collision_name : collision_names) {
+        nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
+      }
+
+
+      // Dnn = Vth^2 / sigma
+      Dnn = (Tnlim / AA) / (nu + Rnn);
+    } else {
+      Dnn = (Tnlim / AA) / Rnn;
+    }
+  }
   if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
@@ -535,13 +563,11 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn) += viscosity_source;
       ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
     }
-
+    Snv = momentum_source;
     if (localstate.isSet("momentum_source")) {
-      Snv = get<Field3D>(localstate["momentum_source"]);
-      ddt(NVn) += Snv;
-    } else {
-      Snv = 0;
+      Snv += get<Field3D>(localstate["momentum_source"]);
     }
+    ddt(NVn) += Snv;
 
   } else {
     ddt(NVn) = 0;

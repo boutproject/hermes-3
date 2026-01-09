@@ -373,6 +373,10 @@ if(HERMES_TESTS)
            WORKING_DIRECTORY tests/mms/
            COMMAND python3 nonorthogonal_test.py)
     set_tests_properties(differential_operators_mms_nonorthogonal PROPERTIES LABELS integration)
+    add_test(NAME rhs_mms_neutral_mixed
+           WORKING_DIRECTORY tests/mms/
+           COMMAND python3 neutral_mixed_ddt_test.py)
+    set_tests_properties(rhs_mms_neutral_mixed PROPERTIES LABELS integration)
   endif()
 endif()
 
