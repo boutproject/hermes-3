@@ -7,6 +7,34 @@
 
 using bout::globals::mesh;
 
+namespace {
+/// Limited free gradient of log of a quantity
+/// This ensures that the guard cell values remain positive
+/// while also ensuring that the quantity never increases
+///
+///  fm  fc | fp
+///         ^ boundary
+///
+/// exp( 2*log(fc) - log(fm) )
+///
+BoutReal limitFree(BoutReal fm, BoutReal fc) {
+  if (fm < fc) {
+    return fc; // Neumann rather than increasing into boundary
+  }
+  if (fm < 1e-10) {
+    return fc; // Low / no density condition
+  }
+  BoutReal fp = SQ(fc) / fm;
+#if CHECKLEVEL >= 2
+  if (!std::isfinite(fp)) {
+    throw BoutException("SheathBoundary limitFree: {}, {} -> {}", fm, fc, fp);
+  }
+#endif
+
+  return fp;
+}
+} // namespace
+
 ParallelOhmsLaw::ParallelOhmsLaw(std::string name, Options& alloptions, Solver*)
     : name(name) {
   AUTO_TRACE();
@@ -15,10 +43,10 @@ ParallelOhmsLaw::ParallelOhmsLaw(std::string name, Options& alloptions, Solver*)
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
 
-  resistivity_floor = options["resistivity_floor"].doc("Minimum resistivity floor").withDefault(1e-4);
+  resistivity_floor = options["resistivity_floor"].doc("Minimum resistivity floor").withDefault(1e-5);
 
-  spitzer_resist = 
-        options["spitzer_resist"].doc("Use Spitzer resistivity?").withDefault<bool>(false);
+  spitzer_resistivity = 
+        options["spitzer_resistivity"].doc("Use Spitzer resistivity?").withDefault<bool>(false);
 
 
   const Options& units = alloptions["units"];
@@ -29,48 +57,12 @@ ParallelOhmsLaw::ParallelOhmsLaw(std::string name, Options& alloptions, Solver*)
   Omega_ci = 1. / units["seconds"].as<BoutReal>();
   Cs0 = rho_s0 * Omega_ci; 
 
-
+  jpar = 0.0; 
   Ve = 0.0 , NVe = 0.0;
   Ve.setBoundary(std::string("Ve"));
   NVe.setBoundary(std::string("NVe"));
 
-  jpar = 0.0; 
-
-
-  lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
-  upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
-
-  // Read wall voltage, convert to normalised units
-  wall_potential = options["wall_potential"]
-                       .doc("Voltage of the wall [Volts]")
-                       .withDefault(Field3D(0.0))
-                   / Tnorm;
-  // Convert to field aligned coordinates
-  wall_potential = toFieldAligned(wall_potential);
-
-  // Note: wall potential at the last cell before the boundary is used,
-  // not the value at the boundary half-way between cells. This is due
-  // to how twist-shift boundary conditions and non-aligned inputs are
-  // treated; using the cell boundary gives incorrect results.
-
-  floor_potential = options["floor_potential"]
-                        .doc("Apply a floor to wall potential when calculating Ve?")
-                        .withDefault<bool>(true);
-
-  temperature_floor = options["temperature_floor"].doc("Low temperature scale")
-    .withDefault<BoutReal>(0.1) / Tnorm;
-
-  Ge = options["secondary_electron_coef"]
-           .doc("Effective secondary electron emission coefficient")
-           .withDefault(0.0);
-
-  if ((Ge < 0.0) or (Ge > 1.0)) {
-    throw BoutException("Secondary electron emission must be between 0 and 1 ({:e})", Ge);
-  }
-  
 }
-
-
 
 void ParallelOhmsLaw::calculateResistivity(Options &electrons, Field3D &Ne_lim) {
 
@@ -79,7 +71,7 @@ void ParallelOhmsLaw::calculateResistivity(Options &electrons, Field3D &Ne_lim) 
 
   Field3D resistivity_eta;
 
-  if (!spitzer_resist){
+  if (!spitzer_resistivity){
 
     // Get electron collision frequency
     const Field3D nu = softFloor(get<Field3D>(electrons["collision_frequency"]), 1e-10); // Nondimentionalized. Multiply with Omega_ci to get nu in [s^-1]
@@ -90,7 +82,7 @@ void ParallelOhmsLaw::calculateResistivity(Options &electrons, Field3D &Ne_lim) 
   } else {
 
     // Get electron temperature
-    const Field3D Te = floor(GET_VALUE(Field3D, electrons["temperature"]), 0.0);
+    const Field3D Te = floor(GET_NOBOUNDARY(Field3D, electrons["temperature"]), 0.0);
 
     BoutReal Zi = 1.0;      // ion charge number
     BoutReal Zeff = 2.5;    // effective charge?
@@ -113,7 +105,7 @@ void ParallelOhmsLaw::calculateResistivity(Options &electrons, Field3D &Ne_lim) 
 void ParallelOhmsLaw::transform(Options &state) {
   AUTO_TRACE();
 
-  if (!IS_SET(state["fields"]["phi"])) {
+  if (!IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     // Here we use the electrostatic potential to calculate the parallel current
     throw BoutException("Parallel Ohm's law requires the electrostatic potential. Otherwise use electron force balance\n");
   }
@@ -122,17 +114,48 @@ void ParallelOhmsLaw::transform(Options &state) {
     throw BoutException("Parallel Ohm's law requires a section for electrons in the input file. \n");
   }
 
-  // Get electrostatic potential, with boundary condition applied
-  Field3D phi = get<Field3D>(state["fields"]["phi"]);
-
-  // Get the electron temperature and pressure, with boundary condition applied
+  // Get electrostatic potential, without boundary conditions
+  Field3D phi = GET_NOBOUNDARY(Field3D, state["fields"]["phi"]);
+  
+  // Get the electron temperature and pressure, without boundary conditions
   Options& electrons = state["species"]["e"];
-  Field3D Te = floor(GET_VALUE(Field3D, electrons["temperature"]), 0.0); // Need boundary to take gradient
-  Field3D Pe = floor(GET_VALUE(Field3D, electrons["pressure"]), 0.0);
-  Field3D Ne = floor(GET_VALUE(Field3D, electrons["density"]), 0.0);
+  Field3D Te = floor(GET_NOBOUNDARY(Field3D, electrons["temperature"]), 0.0); // Need boundary to take gradient
+  Field3D Pe = floor(GET_NOBOUNDARY(Field3D, electrons["pressure"]), 0.0);
+  Field3D Ne = floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0);
 
   // mesh->communicate(Te, Pe, Ne, phi);
   mesh->communicate(Te, Ne);
+
+  // Note: We need boundary conditions on P, so apply the same
+  //       free boundary condition as sheath_boundary.
+  // Note: The below calculation requires phi derivatives at the Y boundaries
+  //       Setting to free boundaries
+  Field3D phi_fa = toFieldAligned(phi);
+  Field3D Pe_fa = toFieldAligned(Pe);
+  Field3D Te_fa = toFieldAligned(Te);
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      phi_fa(r.ind, mesh->ystart - 1, jz) = 2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
+      auto i = indexAt(Pe_fa, r.ind, mesh->ystart, jz);
+      auto ip = i.yp();
+      auto im = i.ym();
+      Pe_fa[im] = limitFree(Pe_fa[ip], Pe_fa[i]);
+      Te_fa[im] = limitFree(Te_fa[ip], Te_fa[i]);
+    }
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      phi_fa(r.ind, mesh->yend + 1, jz) = 2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
+      auto i = indexAt(Pe_fa, r.ind, mesh->yend, jz);
+      auto ip = i.yp();
+      auto im = i.ym();
+      Pe_fa[ip] = limitFree(Pe_fa[im], Pe_fa[i]);
+      Te_fa[ip] = limitFree(Te_fa[im], Te_fa[i]);
+    }
+  }
+  phi = fromFieldAligned(phi_fa);
+  Pe = fromFieldAligned(Pe_fa);
+  Te = fromFieldAligned(Te_fa);
 
   Field3D Ne_lim = softFloor(Ne, 1e-7);
 
@@ -151,7 +174,6 @@ void ParallelOhmsLaw::transform(Options &state) {
   jpar = term_phi + term_Pe + term_Te;
 
   // Current due to other species
-  // Field3D current;
   Field3D current = 0.0;
 
   // Now calculate current from all other species
@@ -190,96 +212,8 @@ void ParallelOhmsLaw::transform(Options &state) {
 
   mesh->communicate(Ve, NVe);
 
-
-  // set(electrons["velocity"], Ve); // # This is causing a problem with option.hasAttribute("final-domain") check in set function.
-  electrons["velocity"].force(Ve);
-
-  // set(electrons["momentum"], NVe);
-  electrons["momentum"].force(NVe);
-
-
-  //////////////////////////////////////////////////////////////////
-  // sheath BC for Electrons
-
-  // Mass, normalised to proton mass
-  const BoutReal Me =
-      IS_SET(electrons["AA"]) ? get<BoutReal>(electrons["AA"]) : SI::Me / SI::Mp;
-
-  // Need electron properties
-  // Not const because boundary conditions will be set
-  Field3D Ne_fa = toFieldAligned(Ne);
-  Field3D Te_fa = toFieldAligned(Te);
-  Field3D Pe_fa = toFieldAligned(Pe);
-
-  Field3D phi_fa  = toFieldAligned(phi);
-
-  // This is for applying boundary conditions
-  Field3D Ve_fa = toFieldAligned(Ve);
-  Field3D NVe_fa = toFieldAligned(NVe);
-
-
-  if (lower_y) {
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(Ne_fa, r.ind, mesh->ystart, jz);
-        auto ip = i.yp();
-        auto im = i.ym();
-
-        const BoutReal nesheath = 0.5 * (Ne_fa[im] + Ne_fa[i]);
-        const BoutReal tesheath = 0.5 * (Te_fa[im] + Te_fa[i]);  // electron temperature
-        const BoutReal phi_wall = wall_potential[i];
-
-        const BoutReal phisheath = floor_potential ? floor(
-            0.5 * (phi_fa[im] + phi_fa[i]), phi_wall) // Electron saturation at phi = phi_wall
-	        : 0.5 * (phi_fa[im] + phi_fa[i]);
-
-        // Electron velocity into sheath (< 0)
-        const BoutReal vesheath = (tesheath < 1e-10) ?
-          0.0 :
-          -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / tesheath);
-
-        Ve_fa[im] = 2 * vesheath - Ve_fa[i];
-        NVe_fa[im] = 2. * Me * nesheath * vesheath - NVe_fa[i];
-
-      }
-    }
-  }
-
-  if (upper_y) {
-    // This is essentially the same as at the lower y boundary
-    // except ystart -> yend, ip <-> im
-    // 
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(Ne, r.ind, mesh->yend, jz);
-        auto ip = i.yp();
-        auto im = i.ym();
-
-        const BoutReal nesheath = 0.5 * (Ne_fa[ip] + Ne_fa[i]);
-        const BoutReal tesheath = 0.5 * (Te_fa[ip] + Te_fa[i]);  // electron temperature
-        const BoutReal phi_wall = wall_potential[i];
-        const BoutReal phisheath = floor_potential ? floor(
-            0.5 * (phi_fa[ip] + phi_fa[i]), phi_wall) // Electron saturation at phi = phi_wall
-          : 0.5 * (phi_fa[ip] + phi_fa[i]);
-
-        // Electron velocity into sheath (> 0)
-        const BoutReal vesheath = (tesheath < 1e-10) ?
-          0.0 :
-          sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / tesheath);
-
-        Ve_fa[ip] = 2 * vesheath - Ve_fa[i];
-        NVe_fa[ip] = 2. * Me * nesheath * vesheath - NVe_fa[i];
-
-      }
-    }
-  }
-
-  Ve_fa.clearParallelSlices();
-  setBoundary(electrons["velocity"], fromFieldAligned(Ve_fa));
-
-  NVe_fa.clearParallelSlices();
-  setBoundary(electrons["momentum"], fromFieldAligned(NVe_fa));
-
+  set(electrons["velocity"], Ve);
+  set(electrons["momentum"], NVe);
 }
 
 void ParallelOhmsLaw::outputVars(Options& state) {
@@ -323,7 +257,5 @@ void ParallelOhmsLaw::outputVars(Options& state) {
                     {"standard_name", "eta"},
                     {"long_name", "plasma resistivity"},
                     {"source", "parallel_ohms_law"}});
-
-
   }
 }

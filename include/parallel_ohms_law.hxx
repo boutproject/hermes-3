@@ -71,24 +71,13 @@ private:
   BoutReal Omega_ci; // Frequency normalisation [s^-1]
   BoutReal Cs0;      // Velocity normalisation [m/s]
 
-  bool spitzer_resist;  // Use Spitzer formula for resistivity. Otherwise, get collision frequency from collisions component. 
-
+  bool spitzer_resistivity;  // Use Spitzer formula for resistivity. Otherwise, get collision frequency from collisions component. 
 
   Field3D jpar; ///< Parallel current
   Field3D eta; ///< Parallel plasma resistivity
 
   Field3D Ve;   ///< Electron parallel velocity
   Field3D NVe;  ///< Electron parallel momentum (normalised)
-
-  bool lower_y; // Boundary on lower y?
-  bool upper_y; // Boundary on upper y?
-
-  Field3D wall_potential; ///< Voltage at the wall. Normalised units.
-
-  bool floor_potential; ///< Apply floor to sheath potential?
-  BoutReal temperature_floor;
-
-  BoutReal Ge; // Secondary electron emission coefficient
 
 };
 
