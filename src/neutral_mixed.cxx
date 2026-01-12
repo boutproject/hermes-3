@@ -362,13 +362,13 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
   } else {
     bool upwind = false;
-    ddt(Nn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
+    ddt(Nn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
-  ef_adv_par_ylow  *= 5/2;
-  ef_adv_perp_xlow *= 5/2; 
-  ef_adv_perp_ylow *= 5/2;
+  //ef_adv_par_ylow  *= 5/2;
+  //ef_adv_perp_xlow *= 5/2; 
+  //ef_adv_perp_ylow *= 5/2;
 
   if (neutral_conduction) {
     ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
@@ -377,7 +377,7 @@ void NeutralMixed::finally(const Options& state) {
       ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
     } else {
       bool upwind = false;
-      ddt(Nn) += (5.0 / 3.0) * (*dagp)(kappa_n, Tn,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
+      ddt(Nn) += (5.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
     }
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
     ef_cond_perp_xlow *= 3/2;
