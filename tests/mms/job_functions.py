@@ -4,13 +4,6 @@ from xbout import open_boutdataset
 import numpy as np
 from scipy.optimize import curve_fit
 from boututils.run_wrapper import shell, launch, getmpirun
-# print versions
-import xbout
-import boututils
-import boutdata
-print("xbout.__version__",xbout.__version__)
-print("boututils.__version__",boututils.__version__)
-print("boutdata.__version__",boutdata.__version__)
 
 def lin_func(x,b,a):
     return b*x + a

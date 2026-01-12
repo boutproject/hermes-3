@@ -82,7 +82,7 @@ jobs:
           echo ~/.local/bin >> $GITHUB_PATH
       - name: Run tests
         run: cd build &&
-             ctest --output-on-failure --timeout 300 -L $TEST_TYPE -V
+             ctest --output-on-failure --timeout 300 -L $TEST_TYPE
       - name: Upload test coverage data
         uses: codecov/codecov-action@v5
         if: ${{ matrix.build_type.coverage == 'ON' }}
