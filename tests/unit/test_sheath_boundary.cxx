@@ -40,19 +40,19 @@ TEST_F(SheathBoundaryTest, DontSetPotential) {
   BoutReal Ti = 3.0;
   BoutReal Zi = 1.1;
   BoutReal si = 0.5;
-  
-  Options state {{"species",
-                  {// Electrons
-                   {"e", {{"density", N},
-                          {"temperature", Te},
-                          {"velocity", 0.0}}},
-                   // Ion species
-                   {"h", {{"density", si*N},
-                          {"temperature", Ti},
-                          {"AA", 1.0},
-                          {"charge", Zi},
-                          {"velocity", 0.0}}}}}};
 
+  Options state{{"species",
+                 {// Electrons
+                  {"e", {{"density", N}, {"temperature", Te}, {"velocity", 0.0}}},
+                  // Ion species
+                  {"h+",
+                   {{"density", si * N},
+                    {"temperature", Ti},
+                    {"AA", 1.0},
+                    {"charge", Zi},
+                    {"velocity", 0.0}}}}}};
+
+  component.declareAllSpecies({"e", "h+"});
   component.transform(state);
   
   // Should have calculated, but not set potential
@@ -75,13 +75,14 @@ TEST_F(SheathBoundaryTest, CalculatePotential) {
                  {// Electrons
                   {"e", {{"density", N}, {"temperature", Te}, {"velocity", 0.0}}},
                   // Ion species
-                  {"h",
+                  {"h+",
                    {{"density", si * N},
                     {"temperature", Ti},
                     {"AA", 1.0},
                     {"charge", Zi},
                     {"velocity", 0.0}}}}}};
 
+  component.declareAllSpecies({"e", "h+"});
   component.transform(state);
 
   // Should have calculated, but not set potential

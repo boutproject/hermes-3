@@ -14,7 +14,11 @@
 /// Expressions taken from:
 /// https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html
 struct SimpleConduction : public Component {
-  SimpleConduction(std::string name, Options& alloptions, Solver*) : name(name) {
+  SimpleConduction(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:{name}:temperature", Regions::Interior),
+                   readOnly("species:{name}:AA"),
+                   readWrite("species:{name}:energy_source")}),
+        name(name) {
     auto& units = alloptions["units"];
     Tnorm = units["eV"];
     Nnorm = units["inv_meters_cubed"];
@@ -54,10 +58,25 @@ struct SimpleConduction : public Component {
     boundary_flux = options["conduction_boundary_flux"]
       .doc("Allow heat conduction through sheath boundaries?")
       .withDefault<bool>(false);
+
+    if (density <= 0.0) {
+      setPermissions(readOnly("species:{name}:density", Regions::Interior));
+    }
+    substitutePermissions("name", {name});
   }
 
-  void transform(Options& state) override {
-    auto& species = state["species"][name];
+private:
+  std::string name;      ///< Name of the species e.g. "e"
+  BoutReal kappa0;       ///< Pre-calculated constant in heat conduction coefficient
+  BoutReal Nnorm, Tnorm; ///< Normalisation coefficients
+
+  BoutReal temperature; ///< Fix temperature if > 0
+  BoutReal density;     ///< Fix density if > 0
+
+  bool boundary_flux;   ///< Allow flux through sheath boundaries?
+
+  void transform_impl(GuardedOptions& state) override {
+    auto species = state["species"][name];
 
     // Species time-evolving temperature
     Field3D T = GET_NOBOUNDARY(Field3D, species["temperature"]);
@@ -85,16 +104,6 @@ struct SimpleConduction : public Component {
 
     add(species["energy_source"], DivQ);
   }
-
-private:
-  std::string name;      ///< Name of the species e.g. "e"
-  BoutReal kappa0;       ///< Pre-calculated constant in heat conduction coefficient
-  BoutReal Nnorm, Tnorm; ///< Normalisation coefficients
-
-  BoutReal temperature; ///< Fix temperature if > 0
-  BoutReal density;     ///< Fix density if > 0
-
-  bool boundary_flux;   ///< Allow flux through sheath boundaries?
 };
 
 namespace {

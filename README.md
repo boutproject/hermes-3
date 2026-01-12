@@ -2,6 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-GPL-blue.svg)](https://img.shields.io/badge/license-GPL-blue.svg)
 ![Build status](https://github.com/bendudson/hermes-3/workflows/Tests/badge.svg)
+[![codecov](https://codecov.io/gh/boutproject/hermes-3/graph/badge.svg?token=R8CCYL15GN)](https://codecov.io/gh/boutproject/hermes-3)
 
 Hermes-3 is a multifluid plasma simulation model for transport and
 turbulence in the edge of magnetically confined plasmas, such as
@@ -112,15 +113,16 @@ for more complicated cases.
 * B.Dudson, M.Kryjak, H.Muhammed, P.Hill, J,Omotani [Hermes-3:
   Multi-component plasma simulations with
   BOUT++](https://doi.org/10.1016/j.cpc.2023.108991)
-  Comp. Phys. Comm. 2023
-  108991. doi:[10.1016/j.cpc.2023.108991](https://doi.org/10.1016/j.cpc.2023.108991).
+  Comp. Phys. Comm. 
+  108991 (2023).
+  doi:[10.1016/j.cpc.2023.108991](https://doi.org/10.1016/j.cpc.2023.108991).
   Preprint:
   [arXiv.2303.12131](https://doi.org/10.48550/arXiv.2303.12131).
 * G.K. Holt, A. Keats, S. Pamela, M. Kryjak, A. Agnello,
   N.C. Amorisco, B.D. Dudson and M. Smyrnakis [Tokamak divertor plasma
   emulation with machine
-  learning](https://doi.org/10.1088/1741-4326/ad4f9e) 2024
-  Nucl. Fusion 64 086009
+  learning](https://doi.org/10.1088/1741-4326/ad4f9e)
+  Nucl. Fusion 64 086009 (2024)
   doi:[10.1088/1741-4326/ad4f9e](https://doi.org/10.1088/1741-4326/ad4f9e)
 * Thomas Body, Thomas Eich, Adam Kuang, Tom Looby, Mike Kryjak, Ben Dudson, Matthew Reinke
   [Detachment scalings derived from 1D scrape-off-layer simulations](https://doi.org/10.1016/j.nme.2024.101819)
@@ -137,5 +139,6 @@ for more complicated cases.
 * M. V. Umansky, B. D. Dudson, T. G. Jenkins, J. R. Myra, D. N. Smithe
   [Modeling of convective cells, turbulence, and transport induced by
   a radio-frequency antenna in the tokamak boundary
-  plasma](https://doi.org/10.48550/arXiv.2509.08178) 2025 Preprint:
-  [arXiv:2509.08178](https://arxiv.org/abs/2509.08178)
+  plasma](https://doi.org/10.1088/1361-6587/ae1bd1) Plasma Phys. Control. Fusion 67 115025 (2025)
+  doi:[https://doi.org/10.1088/1361-6587/ae1bd1](https://doi.org/10.1088/1361-6587/ae1bd1)
+  Preprint: [arXiv:2509.08178](https://arxiv.org/abs/2509.08178)

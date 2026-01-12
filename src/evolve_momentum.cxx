@@ -12,7 +12,11 @@
 
 using bout::globals::mesh;
 
-EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) : name(name) {
+EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* solver)
+    : Component({readOnly("species:{name}:AA"),
+                 readOnly("species:{name}:density", Regions::Interior),
+                 readWrite("species:{name}:{outputs}")}),
+      name(name) {
   AUTO_TRACE();
   
   // Evolve the momentum in time
@@ -57,13 +61,17 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   // Set to zero so set for output
   momentum_source = 0.0;
+  NV_err = 0.0;
+
+  substitutePermissions("name", {name});
+  substitutePermissions("outputs", {"velocity", "momentum"});
 }
 
-void EvolveMomentum::transform(Options &state) {
+void EvolveMomentum::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   mesh->communicate(NV);
 
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
@@ -141,8 +149,8 @@ void EvolveMomentum::finally(const Options &state) {
           - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true)
           ;
         if (low_n_diffuse_perp) {
-          dndt += Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), N,
-                                        bndry_flux);
+          dndt += Div_Perp_Lap_FV_Index(
+              density_floor / softFloor(N, 1e-3 * density_floor), N);
         }
         ddt(NV) += Z * Apar * dndt;
       }
@@ -191,12 +199,13 @@ void EvolveMomentum::finally(const Options &state) {
   }
 
   if (low_n_diffuse_perp) {
-    ddt(NV) += Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), NV, true);
+    ddt(NV) +=
+        Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), NV);
   }
 
   if (low_p_diffuse_perp) {
     Field3D Plim = softFloor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
-    ddt(NV) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV, true);
+    ddt(NV) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV);
   }
 
   if (hyper_z > 0.) {

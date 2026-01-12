@@ -46,34 +46,44 @@ struct SNBConduction : public Component {
   /// Inputs
   ///  - <name>
   ///    - diagnose   Saves Div_Q_SH and Div_Q_SNB
-  SNBConduction(std::string name, Options& alloptions, Solver*) : snb(alloptions[name]) {
+  SNBConduction(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:e:density"), readOnly("species:e:temperature"),
+                   readWrite("species:e:energy_source")}),
+        snb(alloptions[name]) {
     AUTO_TRACE();
     auto& options = alloptions[name];
+
+    auto& units = alloptions["units"];
+    rho_s0 = get<BoutReal>(units["meters"]);
+    Tnorm = get<BoutReal>(units["eV"]);
+    Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
+    Omega_ci = 1. / get<BoutReal>(units["seconds"]);
 
     diagnose = options["diagnose"]
       .doc("Save additional output diagnostics")
       .withDefault<bool>(false);
   }
 
+  void outputVars(Options& state) override;
+private:
+  bout::HeatFluxSNB snb;
+
+  BoutReal rho_s0, Tnorm, Nnorm, Omega_ci; ///< Normalisations for units
+  Field3D Div_Q_SH, Div_Q_SNB; ///< Divergence of heat fluxes
+
+  bool diagnose; ///< Output additional diagnostics?
+
   /// Inputs
   /// - species
   ///   - e
   ///     - density
-  ///     - collision_frequency
+  ///     - temperature
   ///
   /// Sets
   /// - species
   ///   - e
   ///     - energy_source
-  void transform(Options& state) override;
-
-  void outputVars(Options& state) override;
-private:
-  bout::HeatFluxSNB snb;
-
-  Field3D Div_Q_SH, Div_Q_SNB; ///< Divergence of heat fluxes
-
-  bool diagnose; ///< Output additional diagnostics?
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

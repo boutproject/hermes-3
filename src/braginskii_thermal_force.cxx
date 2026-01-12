@@ -1,17 +1,28 @@
+#include <cmath>
+#include <iterator>
+#include <map>
+#include <string>
 
+#include <bout/bout_types.hxx>
 #include <bout/difops.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+#include <bout/utils.hxx>
 
-#include "../include/thermal_force.hxx"
+#include "../include/braginskii_thermal_force.hxx"
+#include "../include/component.hxx"
 
-void ThermalForce::transform(Options& state) {
+void BraginskiiThermalForce::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   if (electron_ion && allspecies.isSection("e")) {
     // Electron-ion collisions
 
-    Options& electrons = allspecies["e"];
+    GuardedOptions electrons = allspecies["e"];
     // Need Te boundary to take gradient
     const Field3D Te = GET_VALUE(Field3D, electrons["temperature"]);
     const Field3D Grad_Te = Grad_par(Te);
@@ -20,9 +31,9 @@ void ThermalForce::transform(Options& state) {
       if (kv.first == "e") {
         continue; // Omit electron-electron
       }
-      Options& species = allspecies[kv.first];
+      GuardedOptions species = allspecies[kv.first];
 
-      if (!species.isSet("charge")) {
+      if (!species.isSet("charge") or get<BoutReal>(species["charge"]) == 0) {
         continue; // Only considering charged particle interactions
       }
 
@@ -30,7 +41,7 @@ void ThermalForce::transform(Options& state) {
       // Don't need density boundary
       const Field3D nz = GET_NOBOUNDARY(Field3D, species["density"]);
 
-      Field3D ion_force = nz * (0.71 * SQ(Z)) * Grad_Te;
+      const Field3D ion_force = nz * (0.71 * SQ(Z)) * Grad_Te;
 
       add(species["momentum_source"], ion_force);
       subtract(electrons["momentum_source"], ion_force);
@@ -50,28 +61,31 @@ void ThermalForce::transform(Options& state) {
     //  ||   species2                         X
     //  \/   species3
     //
-    const std::map<std::string, Options>& children = allspecies.getChildren();
+    const std::map<std::string, GuardedOptions> children = allspecies.getChildren();
     for (auto kv1 = std::begin(children); kv1 != std::end(children); ++kv1) {
-      Options& species1 = allspecies[kv1->first];
+      GuardedOptions species1 = allspecies[kv1->first];
 
-      if (kv1->first == "e" or !species1.isSet("charge")) {
+      if (kv1->first == "e" or !species1.isSet("charge")
+          or get<BoutReal>(species1["charge"]) == 0) {
         continue; // Only considering charged particle interactions
       }
 
       // Copy the iterator, so we don't iterate over the
       // lower half of the matrix or the diagonal but start  the diagonal
-      for (std::map<std::string, Options>::const_iterator kv2 = std::next(kv1);
+      for (std::map<std::string, GuardedOptions>::const_iterator kv2 = std::next(kv1);
            kv2 != std::end(children); ++kv2) {
-        Options& species2 = allspecies[kv2->first];
+        GuardedOptions species2 = allspecies[kv2->first];
 
-        if (kv2->first == "e" or !species2.isSet("charge")) {
+        if (kv2->first == "e" or !species2.isSet("charge")
+            or get<BoutReal>(species2["charge"]) == 0) {
           continue; // Only considering charged particle interactions
         }
 
         // Now have two different ion species, species1 and species2
         // Only including one majority light species, and one trace heavy species
 
-        Options *light, *heavy;
+        GuardedOptions* light;
+        GuardedOptions* heavy;
         if ((get<BoutReal>(species1["AA"]) < 4)
             and (get<BoutReal>(species2["AA"]) > 10)) {
           // species1 light, species2 heavy
@@ -82,6 +96,15 @@ void ThermalForce::transform(Options& state) {
           // species1 heavy, species2 light
           light = &species2;
           heavy = &species1;
+        } else if (this->override_ion_mass_restrictions) {
+          // User has overridden mass restrictions, so calculate anyway
+          if (get<BoutReal>(species1["AA"]) < get<BoutReal>(species2["AA"])) {
+            light = &species1;
+            heavy = &species2;
+          } else {
+            light = &species2;
+            heavy = &species1;
+          }
         } else {
           // Ignore this combination
           if (first_time) {

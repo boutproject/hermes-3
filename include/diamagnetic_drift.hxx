@@ -9,6 +9,11 @@
 struct DiamagneticDrift : public Component {
   DiamagneticDrift(std::string name, Options &options, Solver *UNUSED(solver));
 
+private:
+  Vector2D Curlb_B;
+  bool bndry_flux;
+  Field2D diamag_form;
+
   /// For every species, if it has:
   ///  - temperature
   ///  - charge
@@ -17,12 +22,7 @@ struct DiamagneticDrift : public Component {
   ///  - density_source
   ///  - energy_source
   ///  - momentum_source
-  void transform(Options &state) override;
-
-private:
-  Vector2D Curlb_B;
-  bool bndry_flux;
-  Field2D diamag_form;
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

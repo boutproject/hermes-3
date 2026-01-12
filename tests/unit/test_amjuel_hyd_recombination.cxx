@@ -66,7 +66,7 @@ TEST_F(HydrogenRCTest, DensitySourceSigns) {
     output.write("{}: {}\n", i.ind, atom_density_source[i]);
     ASSERT_TRUE(atom_density_source[i] > 0.0);
     ASSERT_TRUE(ion_density_source[i] < 0.0);
-    ASSERT_FLOAT_EQ(electron_density_source[i], ion_density_source[i]);
+    ASSERT_DOUBLE_EQ(electron_density_source[i], ion_density_source[i]);
 
     ASSERT_TRUE(atom_momentum_source[i] > 0.0);
     ASSERT_TRUE(ion_momentum_source[i] < 0.0);
