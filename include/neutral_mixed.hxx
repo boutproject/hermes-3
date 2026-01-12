@@ -47,7 +47,7 @@ private:
 
   Field3D Dnn; ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnNVn;
-
+  BoutReal temperature_floor;
   bool sheath_ydown, sheath_yup;
 
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
@@ -59,6 +59,8 @@ private:
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
+
+  bool freeze_low_density;
   
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
