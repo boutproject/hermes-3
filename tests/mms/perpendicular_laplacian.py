@@ -1,7 +1,5 @@
-from sympy import symbols, Function, lambdify
-from sympy import sin, log, diff, cos, sqrt, pi
+from sympy import diff, sqrt
 from sympy.matrices import Matrix
-import numpy as np
 
 from boutdata.mms import identity, x, y, z
 
