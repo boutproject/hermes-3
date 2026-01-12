@@ -667,17 +667,6 @@ void EvolvePressure::outputVars(Options& state) {
                         {"source", "evolve_pressure"}});
       }
 
-      if (ddtP_cond.isAllocated()) {
-        set_with_attrs(state["ddtP_cond"], ddtP_cond,
-                       {{"time_dimension", "t"},
-                        {"units", "Pa s^-1"},
-                        {"conversion", Pnorm * Omega_ci},
-                        {"standard_name", "pressure term"},
-                        {"long_name", name + " conduction pressure term"},
-                        {"species", name},
-                        {"source", "evolve_pressure"}});
-      }
-
       if (ddtP_low_N_diff.isAllocated()) {
         set_with_attrs(state["ddtP_low_N_diff"], ddtP_low_N_diff,
                        {{"time_dimension", "t"},
