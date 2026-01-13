@@ -20,6 +20,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   auto& options = alloptions[name];
 
+  
+  
   bndry_flux = options["bndry_flux"]
                    .doc("Allow flows through radial boundaries")
                    .withDefault<bool>(true);
@@ -92,7 +94,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
-
+  const BoutReal Lnorm = units["meters"];
+  
   auto& n_options = alloptions[std::string("N") + name];
   source_time_dependent = n_options["source_time_dependent"]
     .doc("Use a time-dependent source?")
@@ -102,6 +105,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     .doc("Zero the source outside the closed field-line region?")
     .withDefault<bool>(false);
 
+  hyper_n = options["hyper_n"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
+  
   source_normalisation = Nnorm * Omega_ci;
   time_normalisation = 1./Omega_ci;
 
@@ -313,6 +318,11 @@ void EvolveDensity::finally(const Options& state) {
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 
+  if (hyper_n > 0) {
+    // Form of hyper-viscosity  
+    ddt(N) += hyperdiffusion(hyper_n, N);
+  }
+  
   // Collect the external source from above with all the sources from
   // elsewhere (collisions, reactions, etc) for diagnostics
   Sn = get<Field3D>(species["density_source"]);
