@@ -45,7 +45,21 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 
 } // namespace
 
-SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
+SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
+    : Component({
+        readIfSet("species:{all_species}:charge"),
+        readIfSet("species:e:{e_whole_domain}"),
+        writeBoundary("species:e:{e_boundary}"),
+        readWrite("species:e:energy_source"),
+        writeBoundaryIfSet("species:e:{e_optional}"),
+        writeBoundaryReadInteriorIfSet("species:e:pressure"),
+        readIfSet("species:{ions}:adiabatic"),
+        readOnly("species:{ions}:AA"),
+        readWrite("species:{ions}:energy_source"),
+        writeBoundary("species:{ions}:{ion_boundary}"),
+        writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+        writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+    }) {
   AUTO_TRACE();
 
   Options& options = alloptions[name];
@@ -61,9 +75,9 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
   sin_alpha = options["sin_alpha"]
                   .doc("Sin of the angle between magnetic field line and wall surface. "
                        "Should be between 0 and 1")
-                  .withDefault(1.0);
+    .withDefault(Field3D(1.0));
 
-  if ((sin_alpha < 0.0) or (sin_alpha > 1.0)) {
+  if ((min(sin_alpha) < 0.0) or (max(sin_alpha) > 1.0)) {
     throw BoutException("Range of sin_alpha must be between 0 and 1");
   }
 
@@ -94,13 +108,21 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
   floor_potential = options["floor_potential"]
                         .doc("Apply a floor to wall potential when calculating Ve?")
                         .withDefault<bool>(true);
+
+  substitutePermissions("e_whole_domain", {"AA", "adiabatic"});
+  substitutePermissions("e_boundary", {"density", "temperature"});
+  substitutePermissions("e_optional", {"velocity", "momentum"});
+  substitutePermissions("ion_boundary", {"density", "temperature"});
+  substitutePermissions("ion_optional", {"velocity", "momentum"});
+  setPermissions(always_set_phi ? writeBoundaryReadInteriorIfSet("fields:phi")
+                                : writeBoundaryIfSet("fields:phi"));
 }
 
-void SheathBoundary::transform(Options& state) {
+void SheathBoundary::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
-  Options& electrons = allspecies["e"];
+  GuardedOptions allspecies = state["species"];
+  GuardedOptions electrons = allspecies["e"];
 
   // Need electron properties
   // Not const because boundary conditions will be set
@@ -149,7 +171,7 @@ void SheathBoundary::transform(Options& state) {
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first];
+      GuardedOptions species = allspecies[kv.first];
 
       if ((kv.first == "e") or !IS_SET(species["charge"])
           or (get<BoutReal>(species["charge"]) == 0.0)) {
@@ -202,7 +224,7 @@ void SheathBoundary::transform(Options& state) {
                 (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0., 100.);
 
             // Note: Vzi = C_i * sin(α)
-            ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+            ion_sum[i] += s_i * Zi * sin_alpha[ip] * sqrt(C_i_sq);
           }
         }
       }
@@ -238,7 +260,7 @@ void SheathBoundary::transform(Options& state) {
             BoutReal C_i_sq = std::clamp(
                 (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0., 100.);
 
-            ion_sum[i] += s_i * Zi * sin_alpha * sqrt(C_i_sq);
+            ion_sum[i] += s_i * Zi * sin_alpha[im] * sqrt(C_i_sq);
           }
         }
       }
@@ -464,7 +486,7 @@ void SheathBoundary::transform(Options& state) {
       continue; // Skip electrons
     }
 
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
     // Ion charge
     const BoutReal Zi =

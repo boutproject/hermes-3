@@ -15,9 +15,6 @@
 struct NeutralFullVelocity : public Component {
   NeutralFullVelocity(const std::string& name, Options& options, Solver* solver);
 
-  /// Modify the given simulation state
-  void transform(Options& state) override;
-
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
   void finally(const Options& state) override;
@@ -66,6 +63,17 @@ private:
 
   bool diagnose; ///< Output additional diagnostics?
   Field2D Vnpar; ///< Parallel flow velocity diagnostic
+
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - density
+  ///     - momentum
+  ///     - pressure
+  ///     - temperature
+  ///     - velocity
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

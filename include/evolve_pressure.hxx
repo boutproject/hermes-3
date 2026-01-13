@@ -24,34 +24,18 @@ struct EvolvePressure : public Component {
   ///   - evolve_log           Evolve logarithm of pressure? Default is false
   ///   - hyper_z              Hyper-diffusion in Z
   ///   - kappa_coefficient    Heat conduction constant. Default is 3.16 for
-  ///   electrons, 3.9 otherwise
+  ///                          electrons, 3.9 otherwise
   ///   - kappa_limit_alpha    Flux limiter, off by default.
-  ///   - poloidal_flows       Include poloidal ExB flows? Default is true
-  ///   - precon               Enable preconditioner? Note: solver may not use it even if
-  ///   enabled.
   ///   - thermal_conduction   Include parallel heat conduction? Default is true
   ///
   /// - P<name>  e.g. "Pe", "Pd+"
   ///   - source     Source of pressure [Pa / s].
   ///                NOTE: This overrides mesh input P<name>_src
   ///   - source_only_in_core         Zero the source outside the closed field-line
-  ///   region?
+  ///                                 region?
   ///   - neumann_boundary_average_z  Apply Neumann boundaries with Z average?
   ///
   EvolvePressure(std::string name, Options& options, Solver* solver);
-
-  /// Inputs
-  /// - species
-  ///   - <name>
-  ///     - density
-  ///
-  /// Sets
-  /// - species
-  ///   - <name>
-  ///     - pressure
-  ///     - temperature   Requires density
-  ///
-  void transform(Options& state) override;
 
   ///
   /// Optional inputs
@@ -82,12 +66,7 @@ private:
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
-  bool thermal_conduction;    ///< Include thermal conduction?
-  std::vector<std::string> collision_names; ///< Collisions used for collisionality
-  std::string conduction_collisions_mode;  ///< Collision selection, either multispecies or braginskii
-  Field3D nu;   ///< Collision frequency for conduction
-  BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
-  BoutReal kappa_limit_alpha; ///< Flux limit if >0
+  bool thermal_conduction; ///< Include thermal conduction?
 
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
@@ -101,10 +80,6 @@ private:
                               ///< pressure?
   bool damp_p_nt;             ///< Damp P - N*T. Active when P < 0 or N < density_floor
 
-  Field3D kappa_par; ///< Parallel heat conduction coefficient
-
-  Field3D conduction_div; ///< Divergence of heat conduction flux
-
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;                   ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
@@ -117,8 +92,7 @@ private:
   BoutReal source_normalisation; ///< Normalisation factor [Pa/s]
   BoutReal time_normalisation; ///< Normalisation factor [s]
   bool source_time_dependent; ///< Is the input source time dependent?
-  Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
-  Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
+  Field3D flow_xlow, flow_ylow;   ///< Energy flow diagnostics
   Field3D flow_ylow_advection;    ///< Advection energy flow diagnostics
   Field3D flow_ylow_viscous_heating; ///< Flow of kinetic energy due to numerical viscosity
 
@@ -126,6 +100,19 @@ private:
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
   Field3D E_PdivV, E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
+
+  /// Inputs
+  /// - species
+  ///   - <name>
+  ///     - density
+  ///
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - pressure
+  ///     - temperature   Requires density
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

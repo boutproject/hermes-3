@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Test that a 1D-recyling example produces expected results
+# Test that a 1D-recycling example produces expected results
 
 from __future__ import division
 from __future__ import print_function
@@ -14,6 +14,16 @@ this_dir = pathlib.Path(__file__).parent
 data_dir = this_dir / "data"
 hermes_exec = this_dir.parent.parent.parent / "hermes-3"
 output_path = data_dir / "BOUT.dmp.0.nc"
+
+# Test settings
+# N.B. If hermes was compiled with optimisation -O2 or greater, the tolerance is set to `ULPs_tolerance_opt`
+#      Otherwise (or if strict=True is set), the tolerance is set to 4 ULPs
+gen_data = False  # Set to True to generate new regression data (outputs to test stdout)
+pos_idx = -1  # 1D position index at which diagnostics are compared (excludes guards)
+ULPs_tolerance_opt = 2e13  # Max number of ULPs allowed between test value and reference value for optimised (-02 and greater) builds
+strict = (
+    False  # Set to True to require results to match reference data to within 4 ULPs
+)
 
 
 # ============================= Helper functions ==============================
@@ -29,6 +39,20 @@ def check_value(name, val, target, **kws):
         print(
             f"Expected\n {target-atol_eff} < {name} < {target+atol_eff}\nBut actual value was\n {val}"
         )
+    return success
+
+
+def check_ULPs_diff(name, val, target, **kws):
+    kws["maxulp"] = kws.pop("maxulp", 4)
+    success = False
+    try:
+        numpy.testing.assert_array_max_ulp(val, target, **kws)
+        success = True
+    except AssertionError as e:
+        print(
+            f'{name} differs from reference data by > {kws["maxulp"]} ULPs\n Value = {val}\n Reference = {target}'
+        )
+
     return success
 
 
@@ -57,10 +81,30 @@ def fail_test():
     end_test(False)
 
 
+def optimisation_level(run_output):
+    comp_flags_line = [
+        l for l in run_output.split("\n") if l.startswith("\tCompiled with flags")
+    ]
+    if len(comp_flags_line) == 1:
+        comp_flags = comp_flags_line[0].split()
+        for opt_level in range(4):
+            if f"-O{opt_level}" in comp_flags:
+                return opt_level
+        if "-Ofast" in comp_flags:
+            return 4
+        # No optimisation flag found; assume -O0
+        return 0
+    raise RuntimeError("Failed to find compile flags in run output")
+
+
 # =============================================================================
 
+if gen_data:
+    print("Generating test data (test will register failure!)")
+    success = False
+else:
+    success = True
 
-success = True
 
 # Make sure the executable is where it should be
 fail_on_missing_exec()
@@ -69,11 +113,11 @@ fail_on_missing_exec()
 output_path.unlink(missing_ok=True)
 
 # Use Bout wrapper to run exec
-s, out = launch_safe(f"{hermes_exec} -d {data_dir}", nproc=1, pipe=True)
+s, run_stdout = launch_safe(f"{hermes_exec} -d {data_dir}", nproc=1, pipe=True)
 
 # Save output to log file
 with open("run.log", "w") as f:
-    f.write(out)
+    f.write(run_stdout)
 
 # Check that the run produced output
 fail_on_missing_data()
@@ -85,7 +129,7 @@ ds_last = ds.isel(t=-1)
 # Upstream electron temperature should be about 70eV
 Te = ds_last["Pe"] / ds_last["Ne"]
 Te_up = Te.values[0] * ds.metadata["Tnorm"]
-success = check_value("Electron temperature [eV]", Te_up, 70, atol=10)
+success &= check_value("Electron temperature [eV]", Te_up, 70, atol=10)
 
 # Upstream ion temperature should be about 140eV
 Ti = ds_last["Td+"]
@@ -94,27 +138,41 @@ success &= check_value("Ion temperature", Ti_up, 150, atol=10)
 
 # fmt: off
 # Check the values of various diagnostics
-pos_idx = -1    # 1D position index to check (excluding guards)
-rel_tol = 1e-4  # Relative tolerance (should be high enough to accommodate compiler optimisation differences)
-diags_ref = {   # Diagnostic names and reference values (generated with -O2)
-    "Sd+_iz": 0.0012500877296552468,
-    "Fd+_iz": 5.027449522167903e-05,
-    "Ed+_iz": 0.0008867627959864742,
-    "Rd+_ex": -0.0002980827888026677,
-    "Sd+_rec": -3.479788534373128e-09,
-    "Fd+_rec": -1.0525255255905655e-09,
-    "Ed+_rec": -4.289581450623666e-09,
-    "Rd+_rec": -7.859435290992585e-10,
-    "Kdd+_cx": 0.006218829645880973,
-    "Fdd+_cx": 0.00035836480520026217,
-    "Edd+_cx": 0.000715157957576078,
+# Diagnostic names and reference values (generated with -O1)
+diags_ref = {
+    "Sd+_iz": 0.0012499619217883283,
+    "Fd+_iz": 5.0313380951453235e-05,
+    "Ed+_iz": 0.0008868037136983765,
+    "Rd+_ex": -0.00029805651868773566,
+    "Sd+_rec": -3.477039265232431e-09,
+    "Fd+_rec": -1.052175126556987e-09,
+    "Ed+_rec": -4.287208089859149e-09,
+    "Rd+_rec": -7.854559370875191e-10,
+    "Kdd+_cx": 0.006217417259960819,
+    "Fdd+_cx": 0.000358469132093473,
+    "Edd+_cx": 0.0007153415365599912,
 }
 # fmt: on
+
+# Extract compiler flags from stdout and determine optimisation level
+opt_level = optimisation_level(run_stdout)
+# Set tolerance
+if strict or opt_level < 2:
+    ULPs_tolerance = 4
+else:
+    ULPs_tolerance = ULPs_tolerance_opt
 
 # Do the diagnostic checks
 ds_diags = ds_last.isel(pos=slice(2, -2))
 for name, target in diags_ref.items():
-    val = ds_diags[name].values[pos_idx]
-    success &= check_value(name, val, target, rtol=rel_tol)
+    try:
+        val = ds_diags[name].values[pos_idx]
+        if gen_data:
+            print(f'"{name}": {val},')
+        else:
+            success &= check_ULPs_diff(name, val, target, maxulp=ULPs_tolerance)
+    except KeyError:
+        print(f" *** Diagnostic '{name}' missing from test data ***")
+        end_test(False)
 
 end_test(success)

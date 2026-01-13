@@ -17,10 +17,7 @@ struct NeutralMixed : public Component {
   /// @param name     The name of the species e.g. "h"
   /// @param options  Top-level options. Settings will be taken from options[name]
   /// @param solver   Time-integration solver to be used
-  NeutralMixed(const std::string& name, Options& options, Solver* solver);
-
-  /// Modify the given simulation state
-  void transform(Options& state) override;
+  NeutralMixed(const std::string& name, Options& options, Solver *solver);
 
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
@@ -82,6 +79,17 @@ private:
   Field3D mf_visc_perp_xlow, mf_visc_perp_ylow, mf_visc_par_ylow;
   Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
   Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
+
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - density
+  ///     - momentum
+  ///     - pressure
+  ///     - temperature
+  ///     - velocity
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

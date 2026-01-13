@@ -9,7 +9,10 @@
 
 #include "integrate.hxx"
 
-Reaction::Reaction(std::string name, Options& options) : name(name) {
+Reaction::Reaction(std::string name, Options& options)
+    : ReactionBase({readOnly("species:{sp}:{r_val}"), readOnly("species:e:{e_val}"),
+                    readWrite("species:{sp}:{w_val}")}),
+      name(name) {
 
   // Extract some relevant options, units to member vars for readability
   const auto& units = options["units"];
@@ -38,10 +41,16 @@ Reaction::Reaction(std::string name, Options& options) : name(name) {
   // Parse the reaction string
   this->parser = std::make_unique<ReactionParser>(reaction_str);
 
+  std::vector<std::string> species = this->parser->get_species();
   // Participation factors. All set to unity for now; could make configurable in future.
-  for (const std::string& sp : this->parser->get_species()) {
+  for (const std::string& sp : species) {
     this->pfactors[sp] = 1;
   }
+
+  substitutePermissions("sp", species);
+  substitutePermissions("r_val", {"AA", "density", "velocity", "temperature"});
+  substitutePermissions("e_val", {"density", "temperature"});
+  substitutePermissions("w_val", {"momentum_source", "energy_source", "density_source"});
 
   // Initialise weight sums with dummy values. Real values are set on first call to
   // transform().
@@ -76,6 +85,7 @@ void Reaction::add_diagnostic(const std::string& sp_name, const std::string& dia
         diag_key, ReactionDiagnostic(diag_name, description, type, data_source,
                                      standard_name, transformer)));
   }
+  setPermissions(readWrite(diag_name));
 }
 
 /**
@@ -85,7 +95,7 @@ void Reaction::add_diagnostic(const std::string& sp_name, const std::string& dia
  *
  * @param state current simulation state
  */
-void Reaction::calc_weightsums(Options& state) {
+void Reaction::calc_weightsums(GuardedOptions & state) {
   if (this->energy_weightsum < 0 || this->momentum_weightsum < 0) {
     this->momentum_weightsum = 0;
     this->energy_weightsum = 0;
@@ -122,7 +132,7 @@ void Reaction::outputVars(Options& state) {
  *
  * @param state
  */
-void Reaction::transform(Options& state) {
+void Reaction::transform_impl(GuardedOptions& state) {
 
   Field3D momentum_exchange, energy_exchange, energy_loss;
   zero_diagnostics(state);
@@ -131,7 +141,7 @@ void Reaction::transform(Options& state) {
       parser->get_species(species_filter::reactants);
 
   // Extract electron properties
-  Options& electron = state["species"]["e"];
+  GuardedOptions electron = state["species"]["e"];
   Field3D n_e = get<Field3D>(electron["density"]);
   Field3D T_e = get<Field3D>(electron["temperature"]);
 
@@ -228,7 +238,7 @@ void Reaction::transform(Options& state) {
  *
  * @param state
  */
-void Reaction::zero_diagnostics(Options& state) {
+void Reaction::zero_diagnostics(GuardedOptions& state) {
   if (this->diagnose) {
     for (auto& [key, diag] : diagnostics) {
       set<Field3D>(state[diag.name], 0.0);

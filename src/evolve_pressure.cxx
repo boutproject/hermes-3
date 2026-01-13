@@ -16,7 +16,9 @@
 using bout::globals::mesh;
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
-    : name(name) {
+    : Component({readOnly("species:{name}:{inputs}", Regions::Interior),
+                 readWrite("species:{name}:{outputs}")}),
+      name(name) {
   AUTO_TRACE();
 
   auto& options = alloptions[name];
@@ -49,11 +51,6 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   damp_p_nt = options["damp_p_nt"]
                   .doc("Damp P - N*T? Active when P < 0 or N < density_floor")
                   .withDefault<bool>(false);
-
-  conduction_collisions_mode = options["conduction_collisions_mode"]
-                                   .doc("Can be multispecies: all collisions, or "
-                                        "braginskii: self collisions and ie")
-                                   .withDefault<std::string>("multispecies");
 
   if (evolve_log) {
     // Evolve logarithm of pressure
@@ -164,37 +161,15 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
 
-  BoutReal default_kappa; // default conductivity, changes depending on species
-  switch (identifySpeciesType(name)) {
-  case SpeciesType::ion:
-    default_kappa = 3.9;
-    break;
-  case SpeciesType::electron:
-    // Hermes-3 electron collision time is in Fitzpatrick form (3.187 in
-    // https://farside.ph.utexas.edu/teaching/plasma/Plasma/node41.html) This means that
-    // the Braginskii prefactor of 3.16 needs to be divided by sqrt(2) to be consistent.
-    default_kappa = 3.16 / sqrt(2);
-    break;
-  case SpeciesType::neutral:
-    default_kappa = 2.5;
-    break;
-  default:
-    throw BoutException("Unhandled species type in default_kappa switch");
+  if (source_time_dependent) {
+    setPermissions(readOnly("time"));
   }
-
-  kappa_coefficient =
-      options["kappa_coefficient"]
-          .doc("Numerical coefficient in parallel heat conduction. Default is "
-               "3.16/sqrt(2) for electrons, 2.5 for neutrals and 3.9 otherwise")
-          .withDefault(default_kappa);
-
-  kappa_limit_alpha = options["kappa_limit_alpha"]
-                          .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 "
-                               "for electrons, 1 for ions.")
-                          .withDefault(-1.0);
+  substitutePermissions("name", {name});
+  substitutePermissions("inputs", {"density"});
+  substitutePermissions("outputs", {"pressure", "temperature"});
 }
 
-void EvolvePressure::transform(Options& state) {
+void EvolvePressure::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   if (evolve_log) {
@@ -238,7 +213,7 @@ void EvolvePressure::transform(Options& state) {
     }
   }
 
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
 
   // Calculate temperature
   // Not using density boundary condition
@@ -626,23 +601,6 @@ void EvolvePressure::outputVars(Options& state) {
                                                 {"source", "evolve_pressure"}});
 
   if (diagnose) {
-    if (thermal_conduction) {
-      set_with_attrs(state[std::string("kappa_par_") + name], kappa_par,
-                     {{"time_dimension", "t"},
-                      {"units", "W / m / eV"},
-                      {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
-                      {"long_name", name + " heat conduction coefficient"},
-                      {"species", name},
-                      {"source", "evolve_pressure"}});
-
-      set_with_attrs(state[std::string("K") + name + std::string("_cond")], nu,
-                     {{"time_dimension", "t"},
-                      {"units", "s^-1"},
-                      {"conversion", Omega_ci},
-                      {"long_name", "collision frequency for conduction"},
-                      {"species", name},
-                      {"source", "evolve_pressure"}});
-    }
     set_with_attrs(state[std::string("T") + name], T,
                    {{"time_dimension", "t"},
                     {"units", "eV"},
@@ -711,17 +669,6 @@ void EvolvePressure::outputVars(Options& state) {
            {"source", "evolve_pressure"}});
     }
 
-    if (flow_ylow_conduction.isAllocated()) {
-      set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
-                     {{"time_dimension", "t"},
-                      {"units", "W"},
-                      {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                      {"standard_name", "power"},
-                      {"long_name", name + " conduction through Y cell face."},
-                      {"species", name},
-                      {"source", "evolve_pressure"}});
-    }
-
     if (flow_ylow_advection.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_adv_ylow", name)], flow_ylow_advection,
                      {{"time_dimension", "t"},
@@ -762,6 +709,14 @@ void EvolvePressure::outputVars(Options& state) {
 }
 
 void EvolvePressure::precon(const Options& state, BoutReal gamma) {
+  // Note: This preconditioner handles the conduction term in the
+  // equation. That term is actually calculated elsewhere (e.g.,
+  // BraginskiiConduction), so doing the preconditioning here breaks
+  // encapsulation to some extent. However, it is not expected that
+  // there will be any need to change the preconditioner in the near
+  // future and the current preconditioner should work well-enough for
+  // any implementation of conduction. Therefore, we are just leaving
+  // this as is for now.
   if (!(enable_precon and thermal_conduction)) {
     return; // Disabled
   }
@@ -776,7 +731,8 @@ void EvolvePressure::precon(const Options& state, BoutReal gamma) {
   const Field3D N = get<Field3D>(species["density"]);
 
   // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coef = -(2. / 3) * gamma * kappa_par / softFloor(N, density_floor);
+  Field3D coef = -(2. / 3) * gamma * get<Field3D>(species["kappa_par"])
+                 / softFloor(N, density_floor);
 
   if (state.isSet("scale_timederivs")) {
     coef *= get<Field3D>(state["scale_timederivs"]);

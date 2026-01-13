@@ -9,8 +9,11 @@
 
 struct DetachmentController : public Component {
 
-  DetachmentController(std::string, Options& options, Solver*) {
-ASSERT0(BoutComm::size() == 1); // Only works on one processor
+  DetachmentController(std::string, Options& options, Solver*)
+      : Component({readOnly("species:{neutral}:density", Regions::Interior),
+                   readOnly("species:e:density", Regions::Interior), readOnly("time"),
+                   readWrite("species:{sp}:{output}")}) {
+    ASSERT0(BoutComm::size() == 1); // Only works on one processor
     Options& detachment_controller_options = options["detachment_controller"];
 
     const auto& units = options["units"];
@@ -153,10 +156,20 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
       detachment_controller_options["debug"]
       .doc("Print debugging information to the screen (0 for none, 1 for basic, 2 for extensive).")
       .withDefault<int>(0);
-    
-  };
 
-  void transform(Options& state) override;
+    substitutePermissions("neutral", {neutral_species});
+    substitutePermissions(
+        "sp", std::vector<std::string>(species_list.begin(), species_list.end()));
+    std::string output;
+    if (control_mode == control_power) {
+      output = "energy_source";
+    } else if (control_mode == control_particles) {
+      output = "density_source";
+    } else {
+      ASSERT2(false);
+    }
+    substitutePermissions("output", {output});
+  };
 
   void outputVars(Options& state) override {
     AUTO_TRACE();
@@ -315,6 +328,8 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
     std::size_t buffer_size = 0;
     std::vector<BoutReal> time_buffer;
     std::vector<BoutReal> error_buffer;
+
+    void transform_impl(GuardedOptions& state) override;
 
 };
 
