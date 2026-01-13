@@ -61,7 +61,6 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
 
   // Set to zero so set for output
   momentum_source = 0.0;
-  NV_err = 0.0;
 
   substitutePermissions("name", {name});
   substitutePermissions("outputs", {"velocity", "momentum"});
