@@ -52,7 +52,7 @@ private:
   BoutReal scale_ExB;
 
   BoutReal hyper_z;  ///< Hyper-diffusion
-
+  BoutReal hyper_nv;
   std::string Vname;
   bool diagnose; ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?

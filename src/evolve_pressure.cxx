@@ -36,6 +36,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
     .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
 
+  
   low_T_diffuse_perp = options["low_T_diffuse_perp"].doc("Add cross-field diffusion at low temperature?")
     .withDefault<bool>(false);
 
@@ -106,7 +107,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Lnorm = units["meters"];
+  hyper_p = options["hyper_p"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
 
+  
   auto& p_options = alloptions[std::string("P") + name];
   source_normalisation = SI::qe * Nnorm * Tnorm * Omega_ci;   // [Pa/s] or [W/m^3] if converted to energy
   time_normalisation = 1./Omega_ci;   // [s]
@@ -460,6 +464,11 @@ void EvolvePressure::finally(const Options& state) {
 
   if (hyper_z_T > 0.) {
     ddt(P) -= hyper_z_T * D4DZ4_Index(T);
+  }
+
+  if (hyper_p > 0) {
+    // Form of hyper-viscosity                                                                                                                                                                                    
+    ddt(P) += hyperdiffusion(hyper_p, P);
   }
 
   //////////////////////

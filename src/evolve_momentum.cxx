@@ -36,6 +36,9 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
+
+
+  
   pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
@@ -60,6 +63,14 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
+
+  const Options& units = alloptions["units"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Lnorm = units["meters"];
+  hyper_nv = options["hyper_nv"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
+
+
+  
   V.setBoundary(std::string("V") + name);
 
   diagnose = options["diagnose"]
@@ -271,6 +282,12 @@ void EvolveMomentum::finally(const Options &state) {
     auto* coord = N.getCoordinates();
     ddt(NV) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(NV);
   }
+
+  if (hyper_nv > 0) {
+    // Form of hyper-viscosity                                                                                                                                                                                    
+    ddt(NV) += hyperdiffusion(hyper_nv, NV);
+  }
+  
 
   // Other sources/sinks
   if (species.isSet("momentum_source")) {
