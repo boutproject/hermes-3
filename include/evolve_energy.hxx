@@ -80,6 +80,8 @@ private:
 
   BoutReal hyper_z; ///< Hyper-diffusion
 
+  bool freeze_profiles; ///< Subtract Z average from time derivatives?
+
   bool diagnose;      ///< Output additional diagnostics?
   bool enable_precon; ///< Enable preconditioner?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
