@@ -19,4 +19,4 @@
 	url = git@github.com:boutproject/xbout
 [submodule "external/boutdata"]
 	path = external/boutdata
-	url = https://github.com/boutproject/boutdata.git
+	url = git@github.com:boutproject/boutdata.git
