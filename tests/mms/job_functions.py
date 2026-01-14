@@ -3,7 +3,8 @@ import os
 from xbout import open_boutdataset
 import numpy as np
 from scipy.optimize import curve_fit
-from boututils.run_wrapper import shell, launch, getmpirun
+from boututils.run_wrapper import shell, launch_safe, getmpirun
+import pathlib
 
 def lin_func(x,b,a):
     return b*x + a
@@ -95,12 +96,13 @@ def run_manufactured_solutions_test(test_input):
          file.write(mesh_string.replace("**","^"))
 
       # run job on this input
-      print("../.././hermes_mms_tests -d "+workdir+" > "+workdir+"/output.txt")
-      s = os.system("../.././hermes_mms_tests -d "+workdir+" > "+workdir+"/output.txt")
+      workdir = pathlib.Path(workdir)
+      command = f"../.././hermes_mms_tests -d {workdir}"
+      print(command)
+      s, out = launch_safe(command, pipe=True, nproc=1)
+      (workdir / "output.txt").write_text(out)
       if s != 0:
-          print(f"Command exited with status {s}. STDOUT printed below:")
-          with open(workdir + "/output.txt") as f:
-              print(f.read())
+         print(f"Command exited with status {s}. STDOUT printed below:\n{out}")
 
    # now analyse the results of the test
    # this slice avoids including guard cells in the test
@@ -365,16 +367,14 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    """
          file.write(mesh_string.replace("**","^"))
 
-      # run job on this input
-      print("mpirun -n 1 ../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt")
-      # Command to run
-      cmd = "../.././hermes-3 -d "+workdir+" > "+workdir+"/output.txt"
+      workdir = pathlib.Path(workdir)
+      command = f"../.././hermes_mms_tests -d {workdir}"
+      print(command)
       # Launch using MPI
-      s, out = launch(cmd, nproc=1, mthread=1, pipe=True)
+      s, out = launch_safe(command, nproc=1, mthread=1, pipe=True)
+      (workdir / "output.txt").write_text(out)
       if s != 0:
-          print(f"Command exited with status {s}. STDOUT printed below:")
-          with open(workdir + "/output.txt") as f:
-              print(f.read())
+         print(f"Command exited with status {s}. STDOUT printed below:\n{out}")
 
    # now analyse the results of the test
    # this slice avoids including guard cells in the test
