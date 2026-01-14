@@ -52,6 +52,10 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   const BoutReal Lnorm = units["meters"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
+      
+  boussinesq = options["boussinesq"]
+                   .doc("Use the Boussinesq approximation?")
+                   .withDefault<bool>(true);
 
   exb_advection = options["exb_advection"]
                       .doc("Include nonlinear ExB advection?")
@@ -77,10 +81,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
       options["collisional_friction"]
           .doc("Damp vorticity based on mass-weighted collision frequency")
           .withDefault<bool>(false);
-
-  boussinesq = options["boussinesq"]
-                   .doc("Use the Boussinesq approximation?")
-                   .withDefault<bool>(true);
 
   average_atomic_mass = options["average_atomic_mass"]
                             .doc("Weighted average atomic mass, for polarisation current "
@@ -139,14 +139,12 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault(3e8) / (Tnorm * Omega_ci / SI::qe / Nnorm);
   lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault(1.0);
 
-
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
   // so that phi can be saved and re-loaded
 
   // Set initial value. Will be overwritten if restarting
-  phi1 = 0.0;
-  Vort = 0.0;
+  phi1 = 0.0; phi = 0.0; Vort = 0.0;
 
   auto coord = mesh->getCoordinates();
 
@@ -163,6 +161,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                                  .doc("Timescale for phi boundary relaxation [seconds]")
                                  .withDefault(1e-4)
                              / get<BoutReal>(alloptions["units"]["seconds"]);
+    // Normalise to internal time units
   }
 
   // Read curvature vector
@@ -771,7 +770,6 @@ void RelaxPotential::finally(const Options& state) {
     }
   }
 
-  
   // Solve diffusion equation for potential
 
   if (boussinesq) {
