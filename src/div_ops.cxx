@@ -31,6 +31,7 @@
 #include <bout/mesh.hxx>
 #include <bout/output.hxx>
 #include <bout/utils.hxx>
+#include "../include/hermes_utils.hxx"
 
 #include <cmath>
 
@@ -551,6 +552,20 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bnd
 
   return result;
 }
+
+
+const Field3D adaptive_sourceterm(const Field3D& thisfield ,const Field3D& sourceterm, const BoutReal maximum, const BoutReal overshoot){
+  Field2D averaged = DC(thisfield);
+  BoutReal thismax = max(averaged);
+  if (thismax>maximum){
+    BoutReal ratio = floor((thismax - maximum)/overshoot,0.0);
+    return sourceterm * exp(-ratio);	
+  } else {
+    return sourceterm;
+  }
+}
+
+
 
 /// *** USED ***
 const Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs, bool xflux) {

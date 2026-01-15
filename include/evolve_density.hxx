@@ -85,6 +85,8 @@ private:
   Field3D source, final_source; ///< External input source
   Field3D Sn; ///< Total density source
 
+  BoutReal adapt_source;
+  
   bool source_only_in_core;  ///< Zero source where Y is non-periodic?
   bool source_time_dependent; ///< Is the input source time dependent?
   BoutReal source_normalisation; ///< Normalisation factor [m^-3/s]

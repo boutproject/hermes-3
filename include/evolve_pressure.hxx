@@ -103,6 +103,8 @@ private:
   Field3D Sp;     ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
 
+  BoutReal adapt_source;
+  
   BoutReal hyper_z; ///< Hyper-diffusion
   BoutReal hyper_z_T; ///< 4th-order dissipation in T
   BoutReal hyper_p;

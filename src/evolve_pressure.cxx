@@ -119,6 +119,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   source_normalisation = SI::qe * Nnorm * Tnorm * Omega_ci;   // [Pa/s] or [W/m^3] if converted to energy
   time_normalisation = 1./Omega_ci;   // [s]
 
+  adapt_source = p_options["adapt_source"].doc("Adaptive source to pin temperature to value, given as electronvolt")
+    .withDefault<BoutReal>(-1.0) / (Tnorm);
   
   disable_ddt = p_options["disable_ddt"]
     .withDefault<bool>(false);
@@ -483,6 +485,8 @@ void EvolvePressure::finally(const Options& state) {
     BoutReal time = get<BoutReal>(state["time"]);
     BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
     final_source = source * source_prefactor;
+  } else if (adapt_source > 0.0) {
+    final_source = adaptive_sourceterm(T ,source, adapt_source, 0.05);
   } else {
     final_source = source;
   }
