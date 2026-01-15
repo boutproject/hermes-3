@@ -100,9 +100,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(true);
 
-  collisionality_override = options["collisionality_override"]
-                    .doc("Paramter for overriding the neutral collision frequency in Dn for testing")
-                    .withDefault(-1.0);
+  collisionality_override =
+      options["collisionality_override"]
+          .doc(
+              "Paramter for overriding the neutral collision frequency in Dn for testing")
+          .withDefault(-1.0);
 
   normalise_sources = options["normalise_sources"]
                           .doc("Normalise input sources?")
@@ -160,11 +162,12 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   // Try to read the momentum source from the mesh
   momentum_source = 0.0;
   mesh->get(momentum_source, fmt::format("NV{}_src", name));
-   // Allow the user to override the source
-  momentum_source = alloptions[fmt::format("NV{}", name)]["source"]
-                        .doc(fmt::format("Source term in ddt(NV{}). Units [kg m^-2 s^-2]", name))
-                        .withDefault(momentum_source)
-                    / momentum_norm;
+  // Allow the user to override the source
+  momentum_source =
+      alloptions[fmt::format("NV{}", name)]["source"]
+          .doc(fmt::format("Source term in ddt(NV{}). Units [kg m^-2 s^-2]", name))
+          .withDefault(momentum_source)
+      / momentum_norm;
   // need some normalisation convention here
 
   // Set boundary condition defaults: Neumann for all but the diffusivity.
@@ -327,64 +330,64 @@ void NeutralMixed::finally(const Options& state) {
     if (localstate.isSet("collision_frequency")) {
       // Collisionality
       // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
-      if (collision_names.empty()) {     // Calculate only once - at the beginning
+      if (collision_names.empty()) { // Calculate only once - at the beginning
 
         if (diffusion_collisions_mode == "afn") {
-          for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+          for (const auto& collision :
+               localstate["collision_frequencies"].getChildren()) {
 
             std::string collision_name = collision.second.name();
 
-            if (// Charge exchange
-                (collisionSpeciesMatch(
-                  collision_name, name, "+", "cx", "partial")) or
+            if ( // Charge exchange
+                (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
                 // Ionisation
-                (collisionSpeciesMatch(
-                  collision_name, name, "+", "iz", "partial")) or
+                (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) or
                 // Neutral-neutral collisions
-                (collisionSpeciesMatch(
-                  collision_name, name, name, "coll", "exact"))) {
-                    collision_names.push_back(collision_name);
-                  }
+                (collisionSpeciesMatch(collision_name, name, name, "coll", "exact"))) {
+              collision_names.push_back(collision_name);
+            }
           }
-        // Multispecies mode: all collisions and CX are included
+          // Multispecies mode: all collisions and CX are included
         } else if (diffusion_collisions_mode == "multispecies") {
-          for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+          for (const auto& collision :
+               localstate["collision_frequencies"].getChildren()) {
 
             std::string collision_name = collision.second.name();
 
-            if (// Charge exchange
-                (collisionSpeciesMatch(
-                  collision_name, name, "", "cx", "partial")) or
+            if ( // Charge exchange
+                (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
                 // Any collision (en, in, ee, ii, nn)
-                (collisionSpeciesMatch(
-                  collision_name, name, "", "coll", "partial"))) {
-                    collision_names.push_back(collision_name);
-                  }
+                (collisionSpeciesMatch(collision_name, name, "", "coll", "partial"))) {
+              collision_names.push_back(collision_name);
+            }
           }
 
         } else {
-          throw BoutException("\ndiffusion_collisions_mode for {:s} must be either multispecies or braginskii", name);
+          throw BoutException("\ndiffusion_collisions_mode for {:s} must be either "
+                              "multispecies or braginskii",
+                              name);
         }
 
         if (collision_names.empty()) {
-          throw BoutException("\tNo collisions found for {:s} in neutral_mixed for selected collisions mode", name);
+          throw BoutException("\tNo collisions found for {:s} in neutral_mixed for "
+                              "selected collisions mode",
+                              name);
         }
 
         // Write chosen collisions to log file
-        output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ",
-                        name, diffusion_collisions_mode);
+        output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ", name,
+                          diffusion_collisions_mode);
         for (const auto& collision : collision_names) {
           output_info.write("{:s} ", collision);
         }
         output_info.write("\n");
-        }
+      }
 
       // Collect the collisionalities based on list of names
       nu = 0;
       for (const auto& collision_name : collision_names) {
         nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
       }
-
 
       // Dnn = Vth^2 / sigma
       Dnn = (Tnlim / AA) / (nu + Rnn);
@@ -470,12 +473,11 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  ddt(Nn) =
-    - FV::Div_par_mod<ParLimiter>(
-                  Nn, Vn, sound_speed, pf_adv_par_ylow) // Parallel advection
-    + Div_a_Grad_perp_nonorthog(DnnNn, logPnlim,
-        pf_adv_perp_xlow, pf_adv_perp_ylow); // Perpendicular diffusion
-   ;
+  ddt(Nn) = -FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed,
+                                         pf_adv_par_ylow) // Parallel advection
+            + Div_a_Grad_perp_nonorthog(DnnNn, logPnlim, pf_adv_perp_xlow,
+                                        pf_adv_perp_ylow); // Perpendicular diffusion
+  ;
 
   Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
@@ -487,28 +489,30 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = - (5. / 3) * FV::Div_par_mod<ParLimiter>(       // Parallel advection
+  ddt(Pn) = -(5. / 3)
+                * FV::Div_par_mod<ParLimiter>( // Parallel advection
                     Pn, Vn, sound_speed, ef_adv_par_ylow)
-            + (2. / 3) * Vn * Grad_par(Pn)                  // Work done
-            + (5. / 3) * Div_a_Grad_perp_nonorthog(             // Perpendicular advection
-                    DnnPn, logPnlim,
-                    ef_adv_perp_xlow, ef_adv_perp_ylow)
-     ;
+            + (2. / 3) * Vn * Grad_par(Pn) // Work done
+            + (5. / 3)
+                  * Div_a_Grad_perp_nonorthog( // Perpendicular advection
+                      DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
   ef_adv_par_ylow  *= 5./2;
-  ef_adv_perp_xlow *= 5./2;
+  ef_adv_perp_xlow *= 5. / 2;
   ef_adv_perp_ylow *= 5./2;
 
   if (neutral_conduction) {
-    ddt(Pn) += (2. / 3) * Div_a_Grad_perp_nonorthog(
-                    kappa_n, Tn,                             // Perpendicular conduction
-                    ef_cond_perp_xlow, ef_cond_perp_ylow)
+    ddt(Pn) +=
+        (2. / 3)
+            * Div_a_Grad_perp_nonorthog(kappa_n, Tn, // Perpendicular conduction
+                                        ef_cond_perp_xlow, ef_cond_perp_ylow)
 
-            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction
-                      ef_cond_par_ylow,
-                      false)  // No conduction through target boundary
-      ;
+        + (2. / 3)
+              * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction
+                                       ef_cond_par_ylow,
+                                       false) // No conduction through target boundary
+        ;
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
     ef_cond_perp_xlow *= 3./2;
     ef_cond_perp_ylow *= 3./2;
@@ -527,18 +531,18 @@ void NeutralMixed::finally(const Options& state) {
     // Neutral momentum
     TRACE("Neutral momentum");
 
-    ddt(NVn) =
-        -AA * FV::Div_par_fvv<ParLimiter>(             // Momentum flow
-              Nnlim, Vn, sound_speed)
+    ddt(NVn) = -AA
+                   * FV::Div_par_fvv<ParLimiter>( // Momentum flow
+                       Nnlim, Vn, sound_speed)
 
-        - Grad_par(Pn)                                 // Pressure gradient
+               - Grad_par(Pn) // Pressure gradient
 
-        + Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim,
-                      mf_adv_perp_xlow, mf_adv_perp_ylow) // Perpendicular diffusion
-       // + Div_a_Grad_perp_flows(DnnNVn, logPnlim,
-       //                              mf_adv_perp_xlow,
-       //                              mf_adv_perp_ylow) // Perpendicular advection
-      ;
+               + Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim, mf_adv_perp_xlow,
+                                           mf_adv_perp_ylow) // Perpendicular diffusion
+        // + Div_a_Grad_perp_flows(DnnNVn, logPnlim,
+        //                              mf_adv_perp_xlow,
+        //                              mf_adv_perp_ylow) // Perpendicular advection
+        ;
 
     if (neutral_viscosity) {
       // NOTE: The following viscosity terms are not (yet) balanced
@@ -549,16 +553,15 @@ void NeutralMixed::finally(const Options& state) {
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = Div_a_Grad_perp_nonorthog(
-                                eta_n, Vn,               // Perpendicular viscosity
-                                mf_visc_perp_xlow,
-                                mf_visc_perp_ylow)
+      Field3D viscosity_source =
+          Div_a_Grad_perp_nonorthog(eta_n, Vn, // Perpendicular viscosity
+                                    mf_visc_perp_xlow,
+                                    mf_visc_perp_ylow)
 
-                              + Div_par_K_Grad_par_mod(  // Parallel viscosity
-                                eta_n, Vn,
-                                mf_visc_par_ylow,
-                                false) // No viscosity through target boundary
-                          ;
+          + Div_par_K_Grad_par_mod( // Parallel viscosity
+              eta_n, Vn, mf_visc_par_ylow,
+              false) // No viscosity through target boundary
+          ;
 
       ddt(NVn) += viscosity_source;
       ddt(Pn)  += -(2. /3) * Vn * viscosity_source;

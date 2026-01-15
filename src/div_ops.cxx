@@ -1037,9 +1037,8 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
 // Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) --  Vorticity
 // Includes nonorthogonal X-Y and X-Z metric corrections
 //
-Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f,
-                                        Field3D &flow_xlow, 
-                                        Field3D &flow_ylow) {
+Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& flow_xlow,
+                                  Field3D& flow_ylow) {
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
@@ -1253,7 +1252,7 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f,
                       * (dfdx - coef_xy * dfdy));
 
         yzresult(i, j, k) -= fout / (dyc(i, j, k) * Jc(i, j, k));
-   
+
         // Flow will be positive in the positive coordinate direction
         flow_ylow(i, j, k) = -1.0 * fout * coord->dx(i, j) * coord->dz(i, j);
       }
@@ -1351,15 +1350,13 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f,
                        / (coord->dx(i, j, k) + coord->dx(i + 1, j, k));
         BoutReal ddy = 0.5 * (fddy(i, j, k) + fddy(i + 1, j, k));
 
-        BoutReal ddz =
-            0.5
-            * ((f(i, j, kp) - f(i, j, km))
-                   / (0.5 * coord->dz(i, j, kp) + coord->dz(i, j, k)
-                      + 0.5 * coord->dz(i, j, km))
-               + (f(i + 1, j, kp)
-                  - f(i + 1, j, km))
-                        / (0.5 * coord->dz(i + 1, j, kp) + coord->dz(i + 1, j, k)
-                           + 0.5 * coord->dz(i + 1, j, km)));
+        BoutReal ddz = 0.5
+                       * ((f(i, j, kp) - f(i, j, km))
+                              / (0.5 * coord->dz(i, j, kp) + coord->dz(i, j, k)
+                                 + 0.5 * coord->dz(i, j, km))
+                          + (f(i + 1, j, kp) - f(i + 1, j, km))
+                                / (0.5 * coord->dz(i + 1, j, kp) + coord->dz(i + 1, j, k)
+                                   + 0.5 * coord->dz(i + 1, j, km)));
 
         BoutReal fout =
             0.5 * (a(i, j, k) + a(i + 1, j, k))
@@ -1384,7 +1381,7 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f,
 
         result(i, j, k) += fout / (coord->dx(i, j, k) * coord->J(i, j, k));
         result(i + 1, j, k) -= fout / (coord->dx(i + 1, j, k) * coord->J(i + 1, j, k));
-        
+
         // Flow will be positive in the positive coordinate direction
         flow_xlow(i + 1, j, k) = -1.0 * fout * coord->dy(i, j) * coord->dz(i, j);
       }

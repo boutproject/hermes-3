@@ -1,7 +1,7 @@
 #include "classical_diffusion.hxx"
 
-#include <bout/fv_ops.hxx>
 #include "../include/div_ops.hxx"
+#include <bout/fv_ops.hxx>
 
 ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, Solver*)
     : Component({readIfSet("species:{all_species}:{optional}"),
@@ -39,7 +39,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   // The only term here comes from the resistive drift
 
   Field3D Ptotal = 0.0;
-  if (!(custom_D > 0)){
+  if (!(custom_D > 0)) {
     for (auto& kv : allspecies.getChildren()) {
       const auto species = kv.second;
 
@@ -53,7 +53,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
       Ptotal += GET_VALUE(Field3D, species["pressure"]);
     }
   }
-  
+
   // Particle diffusion coefficient. Applied to all charged species
   // so that net transport is ambipolar
 
@@ -74,7 +74,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
 
   for (auto kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
-    if (!(custom_D > 0)) { 
+    if (!(custom_D > 0)) {
       if (!(species.isSet("charge") and species.isSet("density"))) {
         continue; // Skip, go to next species
       }
@@ -86,26 +86,24 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
     const auto N = GET_VALUE(Field3D, species["density"]);
 
     // add(species["density_source"], FV::Div_a_Grad_perp(Dn, N));
-    add(species["density_source"], 
-      Div_a_Grad_perp_nonorthog(Dn, N, 
-        cls_pf_perp_xlow, cls_pf_perp_ylow));
+    add(species["density_source"],
+        Div_a_Grad_perp_nonorthog(Dn, N, cls_pf_perp_xlow, cls_pf_perp_ylow));
 
     if (IS_SET(species["velocity"])) {
       const auto V = GET_VALUE(Field3D, species["velocity"]);
       const auto AA = GET_VALUE(BoutReal, species["AA"]);
 
       // add(species["momentum_source"], FV::Div_a_Grad_perp(Dn * AA * V, N));
-      add(species["momentum_source"], 
-        Div_a_Grad_perp_nonorthog(Dn * AA * V, N, 
-          cls_mf_perp_xlow, cls_mf_perp_ylow));
+      add(species["momentum_source"],
+          Div_a_Grad_perp_nonorthog(Dn * AA * V, N, cls_mf_perp_xlow, cls_mf_perp_ylow));
     }
 
     if (IS_SET(species["temperature"])) {
       const auto T = GET_VALUE(Field3D, species["temperature"]);
       // add(species["energy_source"], FV::Div_a_Grad_perp(Dn * (3. / 2) * T, N));
-      add(species["energy_source"], 
-        Div_a_Grad_perp_nonorthog(Dn * (3. / 2) * T, N,
-          cls_nef_perp_xlow, cls_nef_perp_ylow));
+      add(species["energy_source"],
+          Div_a_Grad_perp_nonorthog(Dn * (3. / 2) * T, N, cls_nef_perp_xlow,
+                                    cls_nef_perp_ylow));
 
       // TODO: Figure out what to do with the below
       if(custom_D < 0) {
@@ -114,10 +112,11 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
         const auto P = GET_VALUE(Field3D, species["pressure"]);
         const auto AA = GET_VALUE(BoutReal, species["AA"]);
         const Field3D nu = floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
-        // add(species["energy_source"], FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA / Bsq, T));
-        add(species["energy_source"], 
-          Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
-            cls_tef_perp_xlow, cls_tef_perp_ylow));
+        // add(species["energy_source"], FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA
+        // / Bsq, T));
+        add(species["energy_source"],
+            Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
+                                      cls_tef_perp_xlow, cls_tef_perp_ylow));
       }
     }
   }

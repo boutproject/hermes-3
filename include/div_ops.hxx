@@ -83,8 +83,8 @@ const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f, Field3D
  * in which the g12 and g13 components can be non-zero
  * i.e. X-Y, X-Z and Y-Z coordinates can all be non-orthogonal.
  */
-Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x,
-                          Field3D& flux_xlow, Field3D& flux_ylow);
+Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x, Field3D& flux_xlow,
+                                  Field3D& flux_ylow);
 
 namespace FV {
 
