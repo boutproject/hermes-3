@@ -33,6 +33,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
+  output_ddt = options["output_ddt"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(false);
+  
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
     .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
 
@@ -584,6 +588,17 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
+
+  if (output_ddt || diagnose) {
+    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(P),
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", std::string("Rate of change of ") + name + " pressure"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+  }
+
   
   if (diagnose) {
     if (thermal_conduction) {
@@ -619,14 +634,6 @@ void EvolvePressure::outputVars(Options& state) {
                     {"conversion", Tnorm},
                     {"standard_name", "temperature"},
                     {"long_name", name + " temperature"},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
-    
-    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(P),
-                   {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
-                    {"conversion", Pnorm * Omega_ci},
-                    {"long_name", std::string("Rate of change of ") + name + " pressure"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
 

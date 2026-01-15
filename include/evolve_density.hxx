@@ -93,7 +93,7 @@ private:
 
   /// Modifies the `source` member variable
   void updateSource(BoutReal time);
-
+  bool output_ddt;
   bool diagnose; ///< Output additional diagnostics?
   Field3D flow_xlow, flow_ylow; ///< Particle flow diagnostics
 

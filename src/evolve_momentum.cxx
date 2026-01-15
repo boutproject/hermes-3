@@ -36,7 +36,9 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
-
+  output_ddt = options["output_ddt"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(false);
 
   
   pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
@@ -359,9 +361,8 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"standard_name", "velocity"},
                     {"species", name},
                     {"source", "evolve_momentum"}});
-  
-  if (diagnose) {
 
+  if (output_ddt || diagnose) {
     set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NV),
                    {{"time_dimension", "t"},
                     {"units", "kg m^-2 s^-2"},
@@ -369,6 +370,10 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"long_name", std::string("Rate of change of ") + name + " momentum"},
                     {"species", name},
                     {"source", "evolve_momentum"}});
+  }
+
+  
+  if (diagnose) {
 
     if (momentum_source.isAllocated()) {
       set_with_attrs(state[std::string("SNV") + name], momentum_source,
