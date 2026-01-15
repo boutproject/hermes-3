@@ -95,7 +95,7 @@ def run_manufactured_solutions_test(test_input):
          file.write(mesh_string.replace("**","^"))
 
       # run job on this input
-      cmd = "../.././hermes_mms_tests -d "+workdir+" > "+workdir+"/output.txt"
+      cmd = "../.././hermes_mms_operator_tests -d "+workdir+" > "+workdir+"/output.txt"
       print(cmd)
       # Launch using MPI
       s, out = launch_safe(cmd, nproc=1, mthread=1, pipe=True)
