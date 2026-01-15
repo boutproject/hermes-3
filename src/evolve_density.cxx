@@ -34,6 +34,9 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Scale ExB flow?")
                    .withDefault<BoutReal>(1.0);
 
+  output_ddt = options["output_ddt"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(false);
   
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
@@ -389,8 +392,7 @@ void EvolveDensity::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_density"}});
 
-
-  if (diagnose) {
+  if (output_ddt || diagnose) {
     set_with_attrs(
         state[std::string("ddt(N") + name + std::string(")")], ddt(N),
         {{"time_dimension", "t"},
@@ -399,7 +401,10 @@ void EvolveDensity::outputVars(Options& state) {
          {"long_name", std::string("Rate of change of ") + name + " number density"},
          {"species", name},
          {"source", "evolve_density"}});
+  }
 
+  if (diagnose) {
+    
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
                     {"units", "m^-3 s^-1"},
