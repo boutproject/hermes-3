@@ -46,6 +46,7 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f,
                                     bool bndry_flux = true, bool poloidal = false,
                                     bool positive = false);
 
+const Field3D adaptive_sourceterm(const Field3D& thisfield ,const Field3D& sourceterm, const BoutReal maximum, const BoutReal overshoot);
 
 const Field3D hyperdiffusion(const BoutReal a, const Field3D& b);
 

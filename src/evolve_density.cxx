@@ -113,6 +113,9 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   source_normalisation = Nnorm * Omega_ci;
   time_normalisation = 1./Omega_ci;
 
+  adapt_source = n_options["adapt_source"].doc("Adaptive source for density").withDefault(-1.0) / (Nnorm);
+
+  
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
   source = 0.0;
@@ -237,6 +240,8 @@ void EvolveDensity::transform(Options& state) {
     BoutReal time = get<BoutReal>(state["time"]);
     BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
     final_source = source * source_prefactor;
+  } else if (adapt_source > 0.0) {
+    final_source = adaptive_sourceterm(N ,source, adapt_source, 0.05);
   } else {
     final_source = source;
   }
