@@ -15,6 +15,12 @@ inline BoutReal floor(BoutReal value, BoutReal min) {
 /// The intention is to keep the RHS function differentiable
 ///
 /// Note: This function cannot be used with min = 0!
+///
+/// Uses value + min * exp(-value / min)
+///
+/// Alternatives include:
+///  - sqrt(value^2 + min^2)
+///
 inline BoutReal softFloor(BoutReal value, BoutReal min) {
   value = std::max(value, 0.0);
   return value + min * exp(-value / min);
