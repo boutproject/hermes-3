@@ -59,6 +59,7 @@
 #include "include/neutral_mixed.hxx"
 #include "include/neutral_parallel_diffusion.hxx"
 #include "include/noflow_boundary.hxx"
+#include "include/parallel_inertia_curvature_drift.hxx"
 #include "include/parallel_ohms_law.hxx"
 #include "include/polarisation_drift.hxx"
 #include "include/quasineutral.hxx"
