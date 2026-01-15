@@ -48,6 +48,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                       .doc("Simplify nonlinear ExB advection form?")
                       .withDefault<bool>(true);
 
+  output_ddt = options["output_ddt"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(false);
+  
   diamagnetic =
       options["diamagnetic"].doc("Include diamagnetic current?").withDefault<bool>(true);
 
@@ -839,14 +843,17 @@ void Vorticity::outputVars(Options& state) {
                   {"long_name", "plasma potential"},
                   {"source", "vorticity"}});
 
-  if (diagnose) {
+  if (output_ddt || diagnose) {
     set_with_attrs(state["ddt(Vort)"], ddt(Vort),
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},
                     {"conversion", SI::qe * Nnorm * Omega_ci},
                     {"long_name", "Rate of change of vorticity"},
                     {"source", "vorticity"}});
-
+  }
+  
+  if (diagnose) {
+    
     if (diamagnetic) {
       set_with_attrs(state["DivJdia"], DivJdia,
                      {{"time_dimension", "t"},

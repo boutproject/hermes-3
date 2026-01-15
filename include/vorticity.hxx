@@ -146,6 +146,7 @@ private:
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
+  bool output_ddt;
   bool diagnose; ///< Output additional diagnostics?
 
   YBoundary yboundary;
