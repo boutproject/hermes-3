@@ -9,7 +9,8 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                  [[maybe_unused]] Solver* solver)
     : Component({writeBoundary("species:{name}:{outputs}"),
                  writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
-                 readWrite("species:{name}:energy_source")}),
+                 readWrite("species:{name}:energy_source"),
+                 readOnly("species:{name}:AA")}),
       name(name) {
   AUTO_TRACE();
 
