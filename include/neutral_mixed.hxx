@@ -53,7 +53,7 @@ private:
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
   bool freeze_low_density; ///< Freeze evolution in low density regions?
 
-  BoutReal rnn_override; ///< Rnn input for testing
+  BoutReal collisionality_override; ///< Rnn input for testing
   BoutReal density_norm, pressure_norm; ///< Normalisations
   BoutReal momentum_norm; ///< Normalisations
 

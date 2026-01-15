@@ -339,7 +339,7 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    evolve_momentum = {evolve_momentum}
    precondition = true
    diagnose = true
-   rnn_override = {nu_cfreq}
+   collisionality_override = {nu_cfreq}
    flux_limit = -1.0
    diffusion_limit = -1.0
    lax_flux = false
