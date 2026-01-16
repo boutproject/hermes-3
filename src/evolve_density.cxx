@@ -129,7 +129,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
 
-  immBdry->SetBoundary(N, 0.0, ImmersedBoundary::BoundCond::NEUMANN); //TODO Get this from input file? Also get immBdry flag?
+  //immBdry->SetBoundary(N, 0.0, ImmersedBoundary::BoundCond::DIRICHLET); //TODO Get this from input file? Also get immBdry flag? Dont need twice at start?
 }
 
 void EvolveDensity::transform(Options& state) {
@@ -177,7 +177,7 @@ void EvolveDensity::transform(Options& state) {
   }
 
   auto& species = state["species"][name];
-  immBdry->SetBoundary(N, 0.0, ImmersedBoundary::BoundCond::NEUMANN);
+  immBdry->SetBoundary(N, 2.0, ImmersedBoundary::BoundCond::NEUMANN);
   set(species["density"], N); //TODO: Dont floor because ghost cells negative...
   //set(species["density"], floor(N, 0.0)); // Density in state always >= 0
   set(species["AA"], AA);                 // Atomic mass

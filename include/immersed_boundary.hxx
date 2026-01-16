@@ -15,8 +15,8 @@ public:
   ImmersedBoundary();
   enum class BoundCond {DIRICHLET, NEUMANN, SIZE};
   void SetBoundary(Field3D& f, const BoutReal bc, const BoundCond bc_type) const;
+  BoutReal BoundaryNormalFlux(const Field3D& a, const Field3D& f, const Ind3D& i) const;
   bool IsInside(const Ind3D& ind) const;
-  void ResetGhosts(Field3D& f) const;
 
 private:
   /// Mask function that is 1 in the plasma, 0 in the wall
@@ -42,6 +42,18 @@ private:
   Matrix<BoutReal> is_plasma;
   Array<int> all_plasma;
 
+  //Boundary information.
+  Field3D bound_ids;
+  int num_bounds = 0;          // nb
+  BoutReal s1 = 0;
+  BoutReal s2 = 0;
+  Array<BoutReal> bds;         // (nb)
+  Array<BoutReal> bd_len;      // (nb)
+  Matrix<BoutReal> mid_pts;    // (nb,2)
+  Matrix<BoutReal> bnorms;     // (nb,2)
+  Matrix<BoutReal> bbase_inds; // (nb,4): i0A,j0A,i0B,j0B
+  Matrix<BoutReal> bweights;   // (nb, 2*nw): A then B
+
   /// TODO: Use these?
   /// Cell indices which are in the plasma.
   Region<Ind3D> plasma_region;
@@ -53,7 +65,7 @@ private:
   BoutReal GetImageValue(Field3D& f, const int gid, const BoutReal bc_val,
                     const BoundCond bc_type) const;
 
-  std::string bc_exception = "Invalid boundary condition specified for immersed boundary.";
+  const std::string bc_exception = "Invalid boundary condition specified for immersed boundary.";
 
   // Solve 4x4 A x = b (A is copied by value; partial pivoting)
   // TODO: Clean up or find better solution...Thanks ChatGPT...
