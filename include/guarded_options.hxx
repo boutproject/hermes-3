@@ -51,22 +51,22 @@ public:
   /// Returns a list of variables with read-only permission but which
   /// have not been accessed using the `get()` method.
   std::map<std::string, Regions> unreadItems() const {
-#if CHECKLEVEL >= 1
+#if CHECKLEVEL >= 3
     return *unread_variables;
 #else
     throw BoutException(
-        "Reading of items in GuardedOptions is not tracked when CHECKLEVEL < 1");
+        "Reading of items in GuardedOptions is not tracked when CHECKLEVEL < 3");
 #endif
   }
 
   /// Returns a list of variables with read-write permission but which
   /// have not been accessed using the `getWritable()` method.
   std::map<std::string, Regions> unwrittenItems() const {
-#if CHECKLEVEL >= 1
+#if CHECKLEVEL >= 3
     return *unwritten_variables;
 #else
     throw BoutException(
-        "Reading of items in GuardedOptions is not tracked when CHECKLEVEL < 1");
+        "Reading of items in GuardedOptions is not tracked when CHECKLEVEL < 3");
 #endif
   }
 
