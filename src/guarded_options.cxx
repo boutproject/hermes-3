@@ -36,7 +36,7 @@ GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
     throw BoutException(
         "Can not construct GuardedOptions with null permissions pointer.");
   }
-#if CHECKLEVEL >= 1
+#if CHECKLEVEL >= 999
   *unread_variables = permissions->getVariablesWithPermission(PermissionTypes::Read);
   // Only add variables with permission ReadIfSet to
   // unread_variables if they are already present in the options
@@ -81,7 +81,9 @@ const Options& GuardedOptions::get([[maybe_unused]] Regions region) const {
       throw BoutException(
           "Only have permission to read {} if it is already set, which it is not.", name);
     }
+#if CHECKLEVEL >= 999
     updateAccessRecords(*unread_variables, varname, region);
+#endif
     return *options;
   }
   throw BoutException("Do not have read permission for {}.", name);
@@ -95,7 +97,9 @@ Options& GuardedOptions::getWritable([[maybe_unused]] Regions region) {
   const std::string name = options->str();
   auto [access, varname] = permissions->canAccess(name, PermissionTypes::Write, region);
   if (access) {
+#if CHECKLEVEL >= 999
     updateAccessRecords(*unwritten_variables, varname, region);
+#endif
     return *options;
   }
   throw BoutException("Do not have write permission for {}.", options->str());
