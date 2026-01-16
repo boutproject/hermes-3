@@ -14,7 +14,8 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
     // here. E.g., species without AA or momentum will be skipped.
     : Component({readIfSet("species:{all_species}:charge"),
                  readOnly("species:{charged}:{inputs}"),
-                 readIfSet("species:{charged}:{optional_inputs}"),
+                 readIfSet("species:{charged}:momentum"),
+                 readIfSet("species:{charged}:pressure", Regions::Interior),
                  readIfSet("fields:{fields}"),
                  readWrite("species:{charged}:{outputs}")}) {
   AUTO_TRACE();
@@ -75,22 +76,19 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
     outputs.push_back("density_source");
     outputs.push_back("momentum_source");
   }
-  substitutePermissions("inputs", {"AA", "density"});
-  substitutePermissions("optional_inputs", {"momentum, pressure"});
+  substitutePermissions("inputs", inputs);
   substitutePermissions("fields", fields);
   // FIXME: energy_source and momentum source are only set if pressure
   // and momentum were set, respectively
   substitutePermissions("outputs", outputs);
 }
 
-void PolarisationDrift::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
-
+Field3D PolarisationDrift::calcDivJ(GuardedOptions& state) {
   // Iterate through all subsections
   GuardedOptions allspecies = state["species"];
 
   // Calculate divergence of all currents except the polarisation current
-
+  Field3D DivJ;
   if (IS_SET(state["fields"]["DivJdia"])) {
     DivJ = get<Field3D>(state["fields"]["DivJdia"]);
   } else {
@@ -116,45 +114,53 @@ void PolarisationDrift::transform_impl(GuardedOptions& state) {
     DivJ += Div_par((Z / A) * NV);
   }
 
-  if (diamagnetic_polarisation) {
-    // Compression of ion diamagnetic contribution to polarisation velocity
-    // Note: For now this ONLY includes the parallel and diamagnetic current terms
-    //       Other terms e.g. ion viscous current, are in their separate components
-    if (!boussinesq) {
-      throw BoutException("diamagnetic_polarisation not implemented for non-Boussinesq");
-    }
-
-    // Calculate energy exchange term nonlinear in pressure
-    // (3 / 2) ddt(Pi) += (Pi / n0) * Div((Pe + Pi) * Curlb_B + Jpar);
-    for (auto& kv : allspecies.getChildren()) {
-      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
-
-      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
-            and species.isSet("AA"))) {
-        // No pressure, charge or mass -> no polarisation current due to
-        // diamagnetic flow
-        continue;
-      }
-
-      const auto charge = get<BoutReal>(species["charge"]);
-      if (fabs(charge) < 1e-5) {
-        // No charge
-        continue;
-      }
-
-      const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
-      const auto AA = get<BoutReal>(species["AA"]);
-
-      add(species["energy_source"],
-          P * (AA / average_atomic_mass / charge) * DivJ);
-    }
+  if (IS_SET(state["fields"]["DivJextra"])) {
+    DivJ += get<Field3D>(state["fields"]["DivJextra"]);
+  }
+  if (IS_SET(state["fields"]["DivJcol"])) {
+    DivJ += get<Field3D>(state["fields"]["DivJcol"]);
   }
 
-  if (!advection) {
-    return;
-  }
-  // Calculate advection terms using a potential-flow approximation
+  return DivJ;
+}
 
+void PolarisationDrift::diamagneticCompression(GuardedOptions& state, Field3D DivJ) {
+  // Compression of ion diamagnetic contribution to polarisation velocity
+  // Note: For now this ONLY includes the parallel and diamagnetic current terms
+  //       Other terms e.g. ion viscous current, are in their separate components
+  if (!boussinesq) {
+    throw BoutException("diamagnetic_polarisation not implemented for non-Boussinesq");
+  }
+
+  GuardedOptions allspecies = state["species"];
+
+  // Calculate energy exchange term nonlinear in pressure
+  // (3 / 2) ddt(Pi) += (Pi / n0) * Div((Pe + Pi) * Curlb_B + Jpar);
+  for (auto& kv : allspecies.getChildren()) {
+    GuardedOptions species = allspecies[kv.first]; // Note: need non-const
+
+    if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
+          and species.isSet("AA"))) {
+      // No pressure, charge or mass -> no polarisation current due to
+      // diamagnetic flow
+      continue;
+    }
+
+    const auto charge = get<BoutReal>(species["charge"]);
+    if (fabs(charge) < 1e-5) {
+      // No charge
+      continue;
+    }
+
+    const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+    const auto AA = get<BoutReal>(species["AA"]);
+
+    add(species["energy_source"],
+        P * (AA / average_atomic_mass / charge) * DivJ);
+  }
+}
+
+Field3D PolarisationDrift::calcMassDensity(GuardedOptions& state) {
   // Calculate the total mass density of species
   // which contribute to polarisation current
   Field3D mass_density;
@@ -162,10 +168,11 @@ void PolarisationDrift::transform_impl(GuardedOptions& state) {
     mass_density = average_atomic_mass;
   } else {
     mass_density = 0.0;
+    GuardedOptions allspecies = state["species"];
     for (auto& kv : allspecies.getChildren()) {
       const GuardedOptions species = kv.second;
 
-      if (!(species.isSet("charge") and species.isSet("AA"))) {
+      if (!(species.isSet("charge") and species.isSet("AA") and species.isSet("density"))) {
         continue; // No charge or mass -> no current
       }
       if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
@@ -180,23 +187,16 @@ void PolarisationDrift::transform_impl(GuardedOptions& state) {
     // Apply a floor to prevent divide-by-zero errors
     mass_density = floor(mass_density, density_floor);
   }
-  
-  if (IS_SET(state["fields"]["DivJextra"])) {
-    DivJ += get<Field3D>(state["fields"]["DivJextra"]);
-  }
-  if (IS_SET(state["fields"]["DivJcol"])) {
-    DivJ += get<Field3D>(state["fields"]["DivJcol"]);
-  }
+  return mass_density;
+}
 
-  // Solve for time derivative of potential
-  // Using Div(mass_density / B^2 Grad_perp(dphi/dt)) = DivJ
-
+Field3D PolarisationDrift::calcPolFlowPotential(Field3D mass_density, Field3D DivJ) {
   phiSolver->setCoefC(mass_density / Bsq);
 
   // Calculate time derivative of generalised potential
   // The assumption is that the polarisation drift can be parameterised
   // as a potential flow
-  phi_pol = phiSolver->solve(DivJ * Bsq / mass_density);
+  Field3D phi_pol = phiSolver->solve(DivJ * Bsq / mass_density);
 
   // Ensure that potential is set in communication guard cells
   mesh->communicate(phi_pol);
@@ -204,10 +204,12 @@ void PolarisationDrift::transform_impl(GuardedOptions& state) {
   // Zero flux
   phi_pol.applyBoundary("neumann");
 
-  // Polarisation drift is given by
-  //
-  // v_p = - (m_i / (Z_i * B^2)) * Grad(phi_pol)
-  //
+  return phi_pol;
+}
+
+void PolarisationDrift::polarisationAdvection(GuardedOptions& state, Field3D phi_pol) {
+  GuardedOptions allspecies = state["species"];
+
   for (auto& kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
@@ -238,6 +240,31 @@ void PolarisationDrift::transform_impl(GuardedOptions& state) {
       add(species["momentum_source"], FV::Div_a_Grad_perp(NV * coef, phi_pol));
     }
   }
+}
+
+void PolarisationDrift::transform_impl(GuardedOptions& state) {
+  AUTO_TRACE();
+
+  // Calculate divergence of all current except polarisation
+  DivJ = calcDivJ(state);
+
+  // Iterate through all subsections
+  GuardedOptions allspecies = state["species"];
+
+  if (diamagnetic_polarisation) {
+    // Calculate energy source due to compression of polarisation drift
+    diamagneticCompression(state, DivJ);
+  }
+
+  if (!advection) {
+    return;
+  }
+
+  // Calculate advection terms using a potential-flow approximation
+  Field3D mass_density = calcMassDensity(state);
+  phi_pol = calcPolFlowPotential(mass_density, DivJ);
+  // Calculate the advection terms for each species
+  polarisationAdvection(state, phi_pol);
 }
 
 void PolarisationDrift::outputVars(Options &state) {
