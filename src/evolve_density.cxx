@@ -241,7 +241,7 @@ void EvolveDensity::transform(Options& state) {
     BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
     final_source = source * source_prefactor;
   } else if (adapt_source > 0.0) {
-    final_source = adaptive_sourceterm(N ,source, adapt_source, 0.05);
+    final_source = adaptive_sourceterm(N ,source, adapt_source, 0.02);
   } else {
     final_source = source;
   }
