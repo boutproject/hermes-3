@@ -362,7 +362,7 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
   } else {
     bool upwind = false;
-    ddt(Nn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+    ddt(Pn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -377,7 +377,7 @@ void NeutralMixed::finally(const Options& state) {
       ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
     } else {
       bool upwind = false;
-      ddt(Nn) += (5.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+      ddt(Pn) += (5.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
     }
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
     ef_cond_perp_xlow *= 3/2;
@@ -405,7 +405,7 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn) += Div_a_Grad_perp_flows(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow);
     } else {
       bool upwind = false;
-      ddt(Nn) += (*dagp)(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind);
+      ddt(NVn) += (*dagp)(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind);
     }
     
     if (neutral_viscosity) {
