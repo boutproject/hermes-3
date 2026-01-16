@@ -13,7 +13,6 @@ ImmersedBoundary::ImmersedBoundary() {
 
   //TODO: Set up options based on // sheath bdry class?
   //Options& options = alloptions[name];
-  xunit = sqrt(SI::qe*5.0/SI::Mp)/(SI::qe * 1.0 / SI::Mp);
 
   if (mesh->get(bndry_mask,     "in_mask") != 0 ||
       mesh->get(ghost_ids,     "ghost_id") != 0 ||
@@ -27,36 +26,17 @@ ImmersedBoundary::ImmersedBoundary() {
       mesh->get(is_plasma,    "is_plasma") != 0 ||
       mesh->get(weights,        "weights") != 0 ||
       mesh->get(R3,                   "R") != 0 ||
-      mesh->get(Z3,                   "Z") != 0 ) {
+      mesh->get(Z3,                   "Z") != 0 ||
+      mesh->get(bound_ids,     "bound_id") != 0 ||
+      mesh->get(num_bounds,          "nb") != 0 ||
+      mesh->get(mid_pts,        "mid_pts") != 0 ||
+      mesh->get(bnorms,          "bnorms") != 0 ||
+      mesh->get(bd_len,          "bd_len") != 0 ||
+      mesh->get(s1,                  "s1") != 0 ||
+      mesh->get(s2,                  "s2") != 0 ||
+      mesh->get(bweights,      "bweights") != 0 ||
+      mesh->get(bbase_inds,   "base_inds") != 0 ) {
         throw BoutException("Could not read immersed boundary values");
-  }
-
-  if (mesh->get(bound_ids,     "bound_id") != 0) {
-    throw BoutException("Could not read bound_id values.");
-  }
-  if (mesh->get(num_bounds, "nb") != 0) {
-    throw BoutException("Could not read nb values.");
-  }
-  if (mesh->get(mid_pts,     "mid_pts") != 0) {
-    throw BoutException("Could not read mid_pts values.");
-  }
-  if (mesh->get(bnorms,     "bnorms") != 0) {
-    throw BoutException("Could not read bnorms values.");
-  }
-  if (mesh->get(bd_len,     "bd_len") != 0) {
-    throw BoutException("Could not read bd_len values.");
-  }
-  if (mesh->get(s1,     "s1") != 0) {
-    throw BoutException("Could not read s1 values.");
-  }
-  if (mesh->get(s2,     "s2") != 0) {
-    throw BoutException("Could not read s2 values.");
-  }
-  if (mesh->get(bweights,     "bweights") != 0) {
-    throw BoutException("Could not read bweights values.");
-  }
-  if (mesh->get(bbase_inds, "base_inds") != 0) {
-    throw BoutException("Could not read base_inds values.");
   }
 
   if (num_weights <= 0 or num_ghosts <= 0 or num_bounds <= 0) {
@@ -91,7 +71,7 @@ BoutReal ImmersedBoundary::BoundaryNormalFlux(const Field3D& a, const Field3D& f
   BoutReal dfdn = 0.0;
   const auto bc_type = BoundCond::NEUMANN;
   if (bc_type == BoundCond::NEUMANN) {
-    dfdn = 2.0; // df/dn at boundary, use negative for outward normal here. TODO: Get from input with correct sign?.
+    dfdn = 2.0; // df/dn at boundary, use outward normal here.
     const auto bflux = -a[i] * dfdn * bd_len[b] * 1.0;
     return bflux; //TODO: Dont need to duplicate this logic?
   }
@@ -173,13 +153,13 @@ BoutReal ImmersedBoundary::GetImageValue(Field3D& f, const int gid,
         auto zB = bndry_points(node_gid,1);
         auto xN = normals(node_gid,0);
         auto zN = normals(node_gid,1);
-        node_vals[i] = bc_val; // Just change the node val directly.
         switch (bc_type) {
           case BoundCond::DIRICHLET:
+            node_vals[i] = bc_val;
             vandMat[i] = std::array<BoutReal, 4>{xB*zB, xB, zB, 1.0};
             break;
           case BoundCond::NEUMANN:
-            node_vals[i] = -node_vals[i]; //TODO: Fix neg sign? Same as below...
+            node_vals[i] = -bc_val; //TODO: Fix neg sign? Same as below.
             vandMat[i] = std::array<BoutReal, 4>{xB*zN + zB*xN, xN, zN, 0};
               break;
           default:
