@@ -321,7 +321,7 @@ void Collisions::transform(Options& state) {
     const Field3DParallel temperature1 =
         species1.isSet("temperature")
             ? GET_NOBOUNDARY(Field3D, species1["temperature"]).asField3DParallel() * Tnorm
-            : 0.0;
+            : Field3DParallel(0.0);
 
     const Field3DParallel density1 = GET_NOBOUNDARY(Field3D, species1["density"]).asField3DParallel() * Nnorm;
 
@@ -348,7 +348,7 @@ void Collisions::transform(Options& state) {
         const Field3DParallel temperature2 =
             species2.isSet("temperature")
                 ? GET_NOBOUNDARY(Field3D, species2["temperature"]).asField3DParallel() * Tnorm
-                : 0.0;
+    	  : Field3DParallel(0.0);
 
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]).asField3DParallel() * Nnorm;
 
