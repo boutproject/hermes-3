@@ -9,6 +9,8 @@
 #include <bout/fv_ops.hxx>
 #include <bout/invert/laplacexy.hxx>
 #include <bout/invert_laplace.hxx>
+#include <bout/solver.hxx>
+#include <bout/vecops.hxx>
 #include <bout/version.hxx>
 #include <bout/yboundary_regions.hxx>
 
@@ -120,7 +122,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
 
   if (split_n0) {
     // Create an XY solver for n=0 component
-    laplacexy = new LaplaceXY(mesh);
+    laplacexy = LaplaceXYFactory::getInstance().create(mesh);
     // Set coefficients for Boussinesq solve
     if (bout::build::use_metric_3d) {
       throw BoutException("split_n0 not useable with 3d metrics");
