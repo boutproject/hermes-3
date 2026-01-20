@@ -55,7 +55,7 @@ ImmersedBoundary::ImmersedBoundary() {
 }
 
 bool ImmersedBoundary::IsInside(const Ind3D& ind) const {
-  return static_cast<bool>(bndry_mask(ind.x(),0,ind.z()));
+  return static_cast<bool>(bndry_mask(ind.x(),1,ind.z()));
 }
 
 BoutReal ImmersedBoundary::BoundaryNormalFlux(const Field3D& a, const Field3D& f, const Ind3D& i) const {
@@ -63,7 +63,7 @@ BoutReal ImmersedBoundary::BoundaryNormalFlux(const Field3D& a, const Field3D& f
   const auto y = i.y();
   const auto z = i.z();
 
-  const int b = static_cast<int>(std::lround(bound_ids(x,0,z)));
+  const int b = static_cast<int>(std::lround(bound_ids(x,y,z)));
   if (b < 0) {
     return 0.0;
   }
@@ -71,6 +71,8 @@ BoutReal ImmersedBoundary::BoundaryNormalFlux(const Field3D& a, const Field3D& f
   BoutReal dfdn = 0.0;
   const auto bc_type = BoundCond::NEUMANN;
   if (bc_type == BoundCond::NEUMANN) {
+    //TODO: Interpolate dfdn from dfdn at segment endpoints (bdy/cell intersections).
+    //(dfdn_a + dfdn_b)/2. If dfdn varying on bdy then cant just set dfdn to bc_val.
     dfdn = 2.0; // df/dn at boundary, use outward normal here.
     const auto bflux = -a[i] * dfdn * bd_len[b] * 1.0;
     return bflux; //TODO: Dont need to duplicate this logic?
@@ -99,7 +101,7 @@ BoutReal ImmersedBoundary::BoundaryNormalFlux(const Field3D& a, const Field3D& f
   const BoutReal fB = wB00*f(bi0,1,bj0) + wB01*f(bi0,1,bj0+1) + wB10*f(bi0+1,1,bj0) + wB11*f(bi0+1,1,bj0+1);
 
   // Boundary value and one-sided derivative from J&C.
-  const BoutReal fb = 1.0/3.0; //.09; //TODO: Sample at midpoint for J&C.
+  const BoutReal fb = 1.0; //TODO: Sample at midpoint for J&C. Use midpoint rule as above for Neumann?
 
   const BoutReal term1 = (s2/s1) * (fb - fA);
   const BoutReal term2 = (s1/s2) * (fb - fB);
@@ -136,14 +138,14 @@ BoutReal ImmersedBoundary::GetImageValue(Field3D& f, const int gid,
   else {
     //TODO: Deal with not knowing num_weights?
     std::array<std::array<BoutReal, 4>, 4> vandMat{};
-    // Get R,Z values of nearby cells. //TODO: Use Ind3D and xp(), etc...?
-    auto nodes_x = std::array<BoutReal, 4>{R3(indx,0,indz),   R3(indx,0,indz+1),
-                                          R3(indx+1,0,indz), R3(indx+1,0,indz+1)};
-    auto nodes_z = std::array<BoutReal, 4>{Z3(indx,0,indz),   Z3(indx,0,indz+1),
-                                          Z3(indx+1,0,indz), Z3(indx+1,0,indz+1)};
+    // Get R,Z values of nearby cells. //TODO: Use Ind3D and xp(), etc...? TODO: Get i.y() passed in?
+    auto nodes_x = std::array<BoutReal, 4>{R3(indx,1,indz),   R3(indx,1,indz+1),
+                                          R3(indx+1,1,indz), R3(indx+1,1,indz+1)};
+    auto nodes_z = std::array<BoutReal, 4>{Z3(indx,1,indz),   Z3(indx,1,indz+1),
+                                          Z3(indx+1,1,indz), Z3(indx+1,1,indz+1)};
     // Get indices to nearby ghost cell data.
-    auto node_gids = std::array<BoutReal, 4>{ghost_ids(indx,0,indz), ghost_ids(indx,0,indz+1),
-                                             ghost_ids(indx+1,0,indz), ghost_ids(indx+1,0,indz+1)};
+    auto node_gids = std::array<BoutReal, 4>{ghost_ids(indx,1,indz), ghost_ids(indx,1,indz+1),
+                                             ghost_ids(indx+1,1,indz), ghost_ids(indx+1,1,indz+1)};
 
     for (size_t i = 0; i < num_weights; ++i) {
       int igid = static_cast<int>(std::lround(node_gids[i])); //TODO Template to allow for reading ints and remove all lrounds...
@@ -191,7 +193,7 @@ BoutReal ImmersedBoundary::GetGhostValue(const BoutReal image_val, const int gid
                           const BoutReal bc_val, const BoundCond bc_type) const {
   switch (bc_type) {
     case BoundCond::DIRICHLET:
-      return 2*bc_val - image_val;
+      return 2.0*bc_val - image_val;
     case BoundCond::NEUMANN:
       return image_val - 2.0*norm_dist[gid]*(-bc_val); //TODO: Fix neg sign?
     default:
@@ -200,29 +202,29 @@ BoutReal ImmersedBoundary::GetGhostValue(const BoutReal image_val, const int gid
 }
 
 void ImmersedBoundary::SetBoundary(Field3D& f, const BoutReal bc_val,
-                                   const BoundCond bc_type) const {
-  // Do a few Gauss–Seidel-style sweeps so ghost cells that depend on other
-  // ghost cells (via interpolation) can converge. //TODO:Get mpi working.
-  constexpr int max_gs_iters = 12;
+                                  const BoundCond bc_type) const {
+ // Do a few Gauss–Seidel-style sweeps so ghost cells that depend on other
+ // ghost cells (via interpolation) can converge. //TODO:Get mpi working.
+ constexpr int max_gs_iters = 12;
 
-  for (int it = 0; it < max_gs_iters; ++it) { //TODO: Is this equivalent to GS iteration?
-    // NOTE: This is "Gauss–Seidel-like" because we update f in-place as we sweep.
-    BOUT_FOR_SERIAL(i, f.getRegion("RGN_NOBNDRY")) {
-      const auto x = i.x();
-      const auto y = i.y();
-      const auto z = i.z();
+ for (int it = 0; it < max_gs_iters; ++it) { //TODO: Is this equivalent to GS iteration?
+   // NOTE: This is "Gauss–Seidel-like" because we update f in-place as we sweep.
+   BOUT_FOR_SERIAL(i, f.getRegion("RGN_NOBNDRY")) {
+     const auto x = i.x();
+     const auto y = i.y();
+     const auto z = i.z();
 
-      const auto gid = ghost_ids(x, 0, z);
-      if (gid >= 0) {
-        if (it == 0 || //TODO: Clean up this if check?
-           (it > 0 && (is_plasma(gid,0) + is_plasma(gid,1) + is_plasma(gid,2) + is_plasma(gid,3) < 3))) {
-            const auto image_val = GetImageValue(f, gid, bc_val, bc_type);
-            const auto ghost_val = GetGhostValue(image_val, gid, bc_val, bc_type);
-            f(x, y, z) = ghost_val;
-        }
-      } else if (bndry_mask(x, 0, z) == 0) {
-          f(x, y, z) = 0.0;
-      }
-    }
-  }
+     const auto gid = ghost_ids(x, y, z);
+     if (gid >= 0) {
+       if (it == 0 || //TODO: Clean up this if check?
+          (it > 0 && (is_plasma(gid,0) + is_plasma(gid,1) + is_plasma(gid,2) + is_plasma(gid,3) < 3))) {
+           const auto image_val = GetImageValue(f, gid, bc_val, bc_type);
+           const auto ghost_val = GetGhostValue(image_val, gid, bc_val, bc_type);
+           f(x, y, z) = ghost_val;
+       }
+     } else if (bndry_mask(x, y, z) == 0) {
+         f(x, y, z) = 0.0;
+     }
+   }
+ }
 }
