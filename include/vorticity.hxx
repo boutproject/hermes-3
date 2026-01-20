@@ -142,7 +142,7 @@ private:
   VectorMetric Curlb_B; // Curvature vector Curl(b/B)
   BoutReal hyper; ///< Hyper-viscosity in Z
   Field3D viscosity; ///< Kinematic viscosity
-
+  Field3D viscosity_par;
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
