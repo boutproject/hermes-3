@@ -1,9 +1,10 @@
 
+#include <bout/constants.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
-#include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
 #include "../include/evolve_momentum.hxx"
 #include "../include/div_ops.hxx"

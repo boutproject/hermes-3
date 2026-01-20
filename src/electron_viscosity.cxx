@@ -35,7 +35,7 @@ void ElectronViscosity::transform(Options& state) {
   const Field3D V = get<Field3D>(species["velocity"]);
 
   Coordinates* coord = P.getCoordinates();
-  const Field3D Bxy = coord->Bxy;
+  const Field3DParallel Bxy = coord->Bxy;
   const Field3D sqrtB = sqrt(Bxy);
 
   // Parallel electron viscosity
@@ -47,15 +47,16 @@ void ElectronViscosity::transform(Options& state) {
 
     const Field3D q_cl = eta * Grad_par(V);   // Collisional value
     const Field3D q_fl = eta_limit_alpha * P; // Flux limit
-
     eta = eta / (1. + abs(q_cl / q_fl));
-
-    eta.getMesh()->communicate(eta);
+  }
+  if (eta_limit_alpha > 0. || eta.isFci()) {
     eta.applyBoundary("neumann");
+    eta.getMesh()->communicate(eta);
+    eta.applyParallelBoundary("parallel_neumann_o1");
   }
 
   // Save term for output diagnostic
-  viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+  viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB.asField3DParallel() * V);
   add(species["momentum_source"], viscosity);
 }
 

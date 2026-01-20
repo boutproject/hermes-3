@@ -136,7 +136,7 @@ private:
   bool phi_core_averagey; ///< Average phi core boundary in Y?
   
   bool split_n0; // Split phi into n=0 and n!=0 components
-  LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
+  std::unique_ptr<LaplaceXY> laplacexy; // Laplacian solver in X-Y (n=0)
 
   Field3D Bsq; // SQ(coord->Bxy)
   VectorMetric Curlb_B; // Curvature vector Curl(b/B)

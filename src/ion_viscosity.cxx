@@ -1,11 +1,12 @@
 // Ion viscosity model
 
-#include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/difops.hxx>
-#include <bout/output_bout_types.hxx>
-#include <bout/mesh.hxx>
 #include "../include/hermes_utils.hxx"
+#include <bout/constants.hxx>
+#include <bout/difops.hxx>
+#include <bout/fv_ops.hxx>
+#include <bout/mesh.hxx>
+#include <bout/output_bout_types.hxx>
+#include <bout/vecops.hxx>
 
 #include "../include/ion_viscosity.hxx"
 #include "../include/div_ops.hxx"
@@ -97,7 +98,7 @@ void IonViscosity::transform(Options &state) {
   Options& allspecies = state["species"];
 
   auto coord = mesh->getCoordinates();
-  const Coordinates::FieldMetric Bxy = coord->Bxy;
+  const auto Bxy = coord->Bxy.asField3DParallel();
   const Coordinates::FieldMetric sqrtB = sqrt(Bxy);
   const Coordinates::FieldMetric Grad_par_logB = Grad_par(log(Bxy));
 
@@ -231,7 +232,8 @@ void IonViscosity::transform(Options &state) {
     // This term is the parallel flow part of
     // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
     Field3D dummy;
-    const Field3D div_Pi_cipar = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy);
+    const Field3D div_Pi_cipar =
+        sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB.asField3DParallel() * V, dummy);
 
     add(species["momentum_source"], div_Pi_cipar);
     subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy

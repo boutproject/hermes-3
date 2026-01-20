@@ -1,12 +1,13 @@
 
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/field_factory.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
-#include <bout/output_bout_types.hxx>
+#include <bout/field_factory.hxx>
+#include <bout/fv_ops.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
+#include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 #include <bout/yboundary_regions.hxx>
 
 #include "../include/div_ops.hxx"
