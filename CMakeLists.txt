@@ -71,6 +71,7 @@ set(HERMES_SOURCES
     src/isothermal.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
+    src/diamagnetic_drift_fci.cxx
     src/recalculate_metric.cxx
     src/relax_potential.cxx
     src/sheath_closure.cxx
@@ -119,6 +120,7 @@ set(HERMES_SOURCES
     include/component.hxx
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
+    include/diamagnetic_drift_fci.hxx
     include/div_ops.hxx
     include/electromagnetic.hxx
     include/electron_force_balance.hxx
