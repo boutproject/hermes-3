@@ -46,6 +46,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
 
+  isMMS = options["mms"].withDefault<bool>(false);
+
   damp_p_nt = options["damp_p_nt"]
     .doc("Damp P - N*T? Active when P < 0 or N < density_floor")
     .withDefault<bool>(false);
@@ -113,7 +115,9 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   auto& p_options = alloptions[std::string("P") + name];
   source_normalisation = SI::qe * Nnorm * Tnorm * Omega_ci;   // [Pa/s] or [W/m^3] if converted to energy
   time_normalisation = 1./Omega_ci;   // [s]
-  
+
+  disable_ddt = p_options["disable_ddt"].withDefault<bool>(false);
+
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
   source = 0.0;
@@ -568,6 +572,10 @@ void EvolvePressure::finally(const Options& state) {
     final_source = source;
   }
 
+  if (isMMS) {
+    final_source = 0.0;
+  }
+
   Sp = final_source;
   if (species.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(species["energy_source"]); // For diagnostic output
@@ -611,6 +619,10 @@ void EvolvePressure::finally(const Options& state) {
     if (species.isSet("energy_flow_ylow")) {
       flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
+  }
+
+  if (disable_ddt) {
+    ddt(P) = 0.0;
   }
 }
 

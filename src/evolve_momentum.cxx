@@ -75,6 +75,12 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
     // Clebsch coordinate system
     bracket_factor = 1.0;
   }
+
+  auto& nv_options = alloptions[std::string("NV") + name];
+
+  isMMS = nv_options["isMMS"].withDefault<bool>(false);
+
+  disable_ddt = nv_options["disable_ddt"].withDefault<bool>(false);
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -286,6 +292,10 @@ void EvolveMomentum::finally(const Options &state) {
   // Note: Copy boundary condition so dump file has correct boundary.
   NV_solver.setBoundaryTo(NV, true);
   NV = NV_solver;
+
+  if (disable_ddt) {
+    ddt(NV) = 0.0;
+  }
 }
 
 void EvolveMomentum::outputVars(Options &state) {

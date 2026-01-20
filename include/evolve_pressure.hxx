@@ -87,12 +87,12 @@ private:
   Field3D nu;   ///< Collision frequency for conduction
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
-
+  bool disable_ddt;
   bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
 
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
-
+  bool isMMS;
   BoutReal density_floor; ///< Minimum density for calculating T
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
   BoutReal temperature_floor; ///< Low temperature scale for low_T_diffuse_perp
