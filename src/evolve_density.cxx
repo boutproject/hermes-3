@@ -1,11 +1,12 @@
 
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/field_factory.hxx>
-#include <bout/output_bout_types.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field_factory.hxx>
+#include <bout/fv_ops.hxx>
 #include <bout/initialprofiles.hxx>
+#include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_density.hxx"

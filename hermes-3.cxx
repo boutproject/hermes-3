@@ -269,7 +269,7 @@ int Hermes::init(bool restarting) {
 
         // dx,dy and dz are dimensionless,
         // so J has SI units of volume. Divide by volume to normalise.
-        coord->J.asField3DParallel() /= rho_s0 * rho_s0 * rho_s0;
+        coord->J /= rho_s0 * rho_s0 * rho_s0;
 
         coord->g_11.asField3DParallel() /= SQ(rho_s0);
         coord->g_22.asField3DParallel() /= SQ(rho_s0);

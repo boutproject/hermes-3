@@ -6,6 +6,7 @@
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_energy.hxx"
