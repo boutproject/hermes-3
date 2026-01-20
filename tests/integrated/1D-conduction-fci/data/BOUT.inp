@@ -1,0 +1,56 @@
+nout = 50
+timestep = 0.1
+
+
+[mesh]
+
+extrapolate_y = false 
+
+[mesh:paralleltransform]
+type = fci
+
+
+[solver]
+mxstep = 10000
+rtol = 1e-7
+atol = 1e-10
+mms = true  # Run with MMS sources and output diagnostics
+mms_initialise = true
+
+[hermes]
+components = e, collisions
+
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[collisions]
+electron_ion = false
+ion_ion = false
+electron_electron = true
+electron_neutral = false
+[e] 
+type = evolve_density, evolve_pressure
+charge = -1.0
+AA = 1 / 1836
+thermal_conduction = true  # in evolve_pressure
+p_div_v = true
+mms = true
+diagnose = true
+
+
+
+[Ne]
+
+solution = 0.3*sin(y) + 1
+
+source = 0
+
+disable_ddt = true
+
+[Pe]
+
+solution = (0.3*sin(y) + 1)*(2.0*sin(y) + 4)
+
+source = 0.252529947526105*sqrt(2)*(0.5*sin(y) + 1)^1.5*(2.0*sin(y) + 4)*cos(y)^2/((0.3*sin(y) + 1)*(-0.5*sqrt((0.5*log(10.0*sin(y) + 20) - 1)^2 + 4.0e-5) + 1.25*log(10.0*sin(y) + 20) - 0.5*log(3.0e+17*sin(y) + 1.0e+18) + 30.4)) - 4.16001089238855e-58*sqrt(2)*(0.3*sin(y) + 1)*(0.5*sin(y) + 1)^0.5*(2.0*sin(y) + 4)*cos(y)^2/((1.97680042298754e-58*sin(y) + 6.58933474329179e-58)*(-0.5*sqrt((0.5*log(10.0*sin(y) + 20) - 1)^2 + 4.0e-5) + 1.25*log(10.0*sin(y) + 20) - 0.5*log(3.0e+17*sin(y) + 1.0e+18) + 30.4)) - 6.00186243707951e-61*sqrt(2)*(0.3*sin(y) + 1)*(0.5*sin(y) + 1)^1.5*(2.0*sin(y) + 4)*(1.5e+17*cos(y)/(3.0e+17*sin(y) + 1.0e+18) - 12.5*cos(y)/(10.0*sin(y) + 20) + 2.5*(0.5*log(10.0*sin(y) + 20) - 1)*cos(y)/(sqrt((0.5*log(10.0*sin(y) + 20) - 1)^2 + 4.0e-5)*(10.0*sin(y) + 20)))*cos(y)/((1.97680042298754e-58*sin(y) + 6.58933474329179e-58)*(-0.0164473684210526*sqrt((0.5*log(10.0*sin(y) + 20) - 1)^2 + 4.0e-5) + 0.0411184210526316*log(10.0*sin(y) + 20) - 0.0164473684210526*log(3.0e+17*sin(y) + 1.0e+18) + 1)^2) + 5.5466811898514e-58*sqrt(2)*(0.3*sin(y) + 1)*(0.5*sin(y) + 1)^1.5*(2.0*sin(y) + 4)*sin(y)/((1.97680042298754e-58*sin(y) + 6.58933474329179e-58)*(-0.5*sqrt((0.5*log(10.0*sin(y) + 20) - 1)^2 + 4.0e-5) + 1.25*log(10.0*sin(y) + 20) - 0.5*log(3.0e+17*sin(y) + 1.0e+18) + 30.4)) - 1.10933623797028e-57*sqrt(2)*(0.3*sin(y) + 1)*(0.5*sin(y) + 1)^1.5*cos(y)^2/((1.97680042298754e-58*sin(y) + 6.58933474329179e-58)*(-0.5*sqrt((0.5*log(10.0*sin(y) + 20) - 1)^2 + 4.0e-5) + 1.25*log(10.0*sin(y) + 20) - 0.5*log(3.0e+17*sin(y) + 1.0e+18) + 30.4)) - 1.66400435695542e-58*sqrt(2)*(0.5*sin(y) + 1)^1.5*(2.0*sin(y) + 4)*cos(y)^2/((1.97680042298754e-58*sin(y) + 6.58933474329179e-58)*(-0.5*sqrt((0.5*log(10.0*sin(y) + 20) - 1)^2 + 4.0e-5) + 1.25*log(10.0*sin(y) + 20) - 0.5*log(3.0e+17*sin(y) + 1.0e+18) + 30.4))

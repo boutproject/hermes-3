@@ -57,6 +57,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Evolve the logarithm of density?")
                    .withDefault<bool>(false);
 
+  isMMS = options["mms"].withDefault<bool>(false);
+
   if (evolve_log) {
     // Evolve logarithm of density
     solver->add(logN, std::string("logN") + name);
@@ -109,6 +111,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
     .withDefault(source)
     / source_normalisation;
+
+  disable_ddt = n_options["disable_ddt"].withDefault<bool>(false);
 
   // If time dependent, parse the function with respect to time from the input file
   if (source_time_dependent) {
@@ -222,6 +226,11 @@ void EvolveDensity::transform(Options& state) {
   } else {
     final_source = source;
   }
+
+  if (isMMS) {
+    final_source = 0.0;
+  }
+
   final_source.allocate(); // Ensure unique memory storage.
   add(species["density_source"], final_source);
 }
@@ -327,6 +336,10 @@ void EvolveDensity::finally(const Options& state) {
     if (species.isSet("particle_flow_ylow")) {
       flow_ylow += get<Field3D>(species["particle_flow_ylow"]);
     }
+  }
+
+  if (disable_ddt) {
+    ddt(N) = 0.0;
   }
 }
 
