@@ -50,7 +50,6 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 
 SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& alloptions,
                                                    Solver*) {
-  AUTO_TRACE();
 
   Options& options = alloptions[name];
 
@@ -80,7 +79,6 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
 }
 
 void SheathBoundaryInsulating::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& allspecies = state["species"];
   Options& electrons = allspecies["e"];

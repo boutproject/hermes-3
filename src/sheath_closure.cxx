@@ -31,9 +31,8 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
   output.write("\tL_par = {:e} (normalised)\n", L_par);
 }
 
-void SheathClosure::transform(Options &state) {
-  AUTO_TRACE();
-  
+void SheathClosure::transform(Options& state) {
+
   // Get electrostatic potential
   auto phi = get<Field3D>(state["fields"]["phi"]);
 

@@ -8,7 +8,6 @@ using bout::globals::mesh;
 NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                  [[maybe_unused]] Solver* solver)
     : name(name) {
-  AUTO_TRACE();
 
   auto& options = alloptions[name];
   const Options& units = alloptions["units"];
@@ -52,7 +51,6 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
 }
 
 void NeutralBoundary::transform(Options& state) {
-  AUTO_TRACE();
   auto& species = state["species"][name];
   const BoutReal AA = get<BoutReal>(species["AA"]);
 
@@ -313,8 +311,7 @@ void NeutralBoundary::transform(Options& state) {
 }
 
 void NeutralBoundary::outputVars(Options& state) {
-  
-  AUTO_TRACE();
+
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
@@ -322,8 +319,6 @@ void NeutralBoundary::outputVars(Options& state) {
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   if (diagnose) {
-
-      AUTO_TRACE();
 
       // Save particle and energy source for the species created during recycling
 

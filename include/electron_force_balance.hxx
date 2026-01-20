@@ -20,7 +20,6 @@
 ///
 struct ElectronForceBalance : public Component {
   ElectronForceBalance(std::string name, Options& alloptions, Solver*) {
-    AUTO_TRACE();
     auto& options = alloptions[name];
     diagnose = options["diagnose"]
       .doc("Save additional output diagnostics")

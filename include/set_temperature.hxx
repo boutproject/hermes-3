@@ -24,7 +24,6 @@ struct SetTemperature : public Component {
   ///   - temperature_from   name of species
   SetTemperature(std::string name, Options& alloptions, Solver* UNUSED(solver))
       : name(name) {
-    AUTO_TRACE();
 
     auto& options = alloptions[name];
 
@@ -50,7 +49,6 @@ struct SetTemperature : public Component {
   ///     - pressure (if density is set)
   ///
   void transform(Options& state) override {
-    AUTO_TRACE();
 
     // Get the temperature
     T = GET_NOBOUNDARY(Field3D, state["species"][temperature_from]["temperature"]);
@@ -67,7 +65,6 @@ struct SetTemperature : public Component {
   }
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
 
     if (diagnose) {
       auto Tnorm = get<BoutReal>(state["Tnorm"]);

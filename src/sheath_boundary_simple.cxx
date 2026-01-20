@@ -59,7 +59,6 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
 
 SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions,
                                            Solver*) {
-  AUTO_TRACE();
 
   Options& options = alloptions[name];
 
@@ -130,11 +129,9 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   diagnose = options["diagnose"]
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
-  
 }
 
 void SheathBoundarySimple::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& allspecies = state["species"];
   Options& electrons = allspecies["e"];
@@ -697,7 +694,6 @@ void SheathBoundarySimple::transform(Options& state) {
 }
 
 void SheathBoundarySimple::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
@@ -731,5 +727,4 @@ void SheathBoundarySimple::outputVars(Options& state) {
 
     }
   }
-
-  }
+}

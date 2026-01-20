@@ -3,10 +3,8 @@
 
 #include "../include/isothermal.hxx"
 
-Isothermal::Isothermal(std::string name, Options &alloptions,
-                       Solver *UNUSED(solver))
+Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(solver))
     : name(name) {
-  AUTO_TRACE();
   Options& options = alloptions[name];
 
   auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
@@ -18,8 +16,7 @@ Isothermal::Isothermal(std::string name, Options &alloptions,
     .withDefault<bool>(false);
 }
 
-void Isothermal::transform(Options &state) {
-  AUTO_TRACE();
+void Isothermal::transform(Options& state) {
 
   Options& species = state["species"][name];
 
@@ -35,7 +32,6 @@ void Isothermal::transform(Options &state) {
 }
 
 void Isothermal::outputVars(Options& state) {
-  AUTO_TRACE();
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
 

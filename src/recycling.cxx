@@ -13,7 +13,6 @@
 using bout::globals::mesh;
 
 Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
-  AUTO_TRACE();
 
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
@@ -182,7 +181,6 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
 }
 
 void Recycling::transform(Options& state) {
-  AUTO_TRACE();
 
   // Get metric tensor components
   Coordinates* coord = mesh->getCoordinates();
@@ -504,7 +502,6 @@ void Recycling::transform(Options& state) {
 }
 
 void Recycling::outputVars(Options& state) {
-  AUTO_TRACE();
 
   if (neutral_pump) {
     // Save the pump mask as a time-independent field

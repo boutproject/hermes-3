@@ -17,7 +17,6 @@ using bout::globals::mesh;
 NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& alloptions,
                                          Solver* solver)
     : name(name) {
-  AUTO_TRACE();
 
   // This is used in both transform and finally functions
   coord = mesh->getCoordinates();
@@ -194,7 +193,6 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
 
 /// Modify the given simulation state
 void NeutralFullVelocity::transform(Options& state) {
-  AUTO_TRACE();
   mesh->communicate(Nn2D, Vn2D, Pn2D);
 
   // Boundary conditions
@@ -268,7 +266,6 @@ void NeutralFullVelocity::transform(Options& state) {
 /// Use the final simulation state to update internal state
 /// (e.g. time derivatives)
 void NeutralFullVelocity::finally(const Options& state) {
-  AUTO_TRACE();
 
   // Density
   ddt(Nn2D) = -Div(Vn2D_contravariant, Nn2D);

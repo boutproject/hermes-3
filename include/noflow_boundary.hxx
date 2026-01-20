@@ -6,7 +6,6 @@
 
 struct NoFlowBoundary : public Component {
   NoFlowBoundary(std::string name, Options& alloptions, Solver*) : name(name) {
-    AUTO_TRACE();
 
     Options& options = alloptions[name];
     noflow_lower_y = options["noflow_lower_y"]

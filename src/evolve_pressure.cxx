@@ -20,7 +20,6 @@ using bout::globals::mesh;
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
     : name(name) {
-  AUTO_TRACE();
 
   auto& options = alloptions[name];
 
@@ -213,7 +212,6 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 }
 
 void EvolvePressure::transform(Options& state) {
-  AUTO_TRACE();
 
   if (evolve_log) {
     // Evolving logP, but most calculations use P
@@ -271,7 +269,6 @@ void EvolvePressure::transform(Options& state) {
 }
 
 void EvolvePressure::finally(const Options& state) {
-  AUTO_TRACE();
 
   // Get the section containing this species
   const auto& species = state["species"][name];
@@ -627,7 +624,6 @@ void EvolvePressure::finally(const Options& state) {
 }
 
 void EvolvePressure::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);

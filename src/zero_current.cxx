@@ -3,9 +3,7 @@
 
 #include "../include/zero_current.hxx"
 
-ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
-    : name(name) {
-  AUTO_TRACE();
+ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*) : name(name) {
   Options &options = alloptions[name];
 
   charge = options["charge"].doc("Particle charge. electrons = -1");
@@ -13,8 +11,7 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
   ASSERT0(charge != 0.0);
 }
 
-void ZeroCurrent::transform(Options &state) {
-  AUTO_TRACE();
+void ZeroCurrent::transform(Options& state) {
 
   // Current due to other species
   Field3DParallel current;
@@ -65,8 +62,7 @@ void ZeroCurrent::transform(Options &state) {
   set(species["velocity"], velocity);
 }
 
-void ZeroCurrent::outputVars(Options &state) {
-  AUTO_TRACE();
+void ZeroCurrent::outputVars(Options& state) {
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   // Save the velocity

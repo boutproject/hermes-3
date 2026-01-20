@@ -44,21 +44,20 @@ struct SimplePump : public Component {
     };
 
     void outputVars(Options& state) override {
-    AUTO_TRACE();
-    if (diagnose) {
+      if (diagnose) {
 
-      set_with_attrs(state[fmt::format("simple_pump_src_shape_{}", name)], sink_shape,
-          {{"long_name", "simple pump source shape"},
-           {"source", "simple_pump"}});
-    
-      set_with_attrs(state[fmt::format("simple_pump_sink_{}", name)], pumping_sink,
-          {{"time_dimension", "t"},
-           {"units", "m^-3 / s"},
-           {"conversion", Nnorm * Omega_ci},
-           {"long_name", "simple pump source shape"},
-           {"source", "simple_pump"}});
+        set_with_attrs(
+            state[fmt::format("simple_pump_src_shape_{}", name)], sink_shape,
+            {{"long_name", "simple pump source shape"}, {"source", "simple_pump"}});
 
-    }}
+        set_with_attrs(state[fmt::format("simple_pump_sink_{}", name)], pumping_sink,
+                       {{"time_dimension", "t"},
+                        {"units", "m^-3 / s"},
+                        {"conversion", Nnorm * Omega_ci},
+                        {"long_name", "simple pump source shape"},
+                        {"source", "simple_pump"}});
+      }
+    }
 
   private:
     std::string name; ///< The species name

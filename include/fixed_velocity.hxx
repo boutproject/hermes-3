@@ -11,7 +11,6 @@ struct FixedVelocity : public Component {
 
   FixedVelocity(std::string name, Options& alloptions, Solver* UNUSED(solver))
       : name(name) {
-    AUTO_TRACE();
 
     auto& options = alloptions[name];
 
@@ -40,7 +39,6 @@ struct FixedVelocity : public Component {
   ///     - velocity
   ///     - momentum
   void transform(Options& state) override {
-    AUTO_TRACE();
     auto& species = state["species"][name];
     set(species["velocity"], V);
 
@@ -58,7 +56,6 @@ struct FixedVelocity : public Component {
   }
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     auto Cs0 = get<BoutReal>(state["Cs0"]);
 
     // Save the density, not time dependent

@@ -92,8 +92,7 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
 
 }
 
-void IonViscosity::transform(Options &state) {
-  AUTO_TRACE();
+void IonViscosity::transform(Options& state) {
 
   Options& allspecies = state["species"];
 
@@ -351,8 +350,7 @@ void IonViscosity::transform(Options &state) {
   }
 }
 
-void IonViscosity::outputVars(Options &state) {
-  AUTO_TRACE();
+void IonViscosity::outputVars(Options& state) {
 
   if (diagnose) {
     // Normalisations

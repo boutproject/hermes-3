@@ -210,7 +210,6 @@ implementation file. See this example from ``evolve_momentum.cxx``:
 .. code-block:: ini
 
    void EvolveMomentum::outputVars(Options &state) {
-   AUTO_TRACE();
    // Normalisations
    auto Nnorm = get<BoutReal>(state["Nnorm"]);
    auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
