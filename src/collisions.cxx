@@ -7,7 +7,6 @@
 #include "../include/collisions.hxx"
 
 Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
-  AUTO_TRACE();
   const Options& units = alloptions["units"];
 
   // Normalisations
@@ -61,8 +60,8 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
 ///
 /// Note: A* variables are used for atomic mass numbers;
 ///       mass* variables are species masses in kg
-void Collisions::collide(Options& species1, Options& species2, const Field3D& nu_12, BoutReal momentum_coefficient) {
-  AUTO_TRACE();
+void Collisions::collide(Options& species1, Options& species2, const Field3D& nu_12,
+                         BoutReal momentum_coefficient) {
 
   add(species1["collision_frequency"], nu_12);                           // Total collision frequency
   std::string coll_name = species1.name() + std::string("_") + species2.name() + std::string("_coll");
@@ -164,7 +163,6 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 }
 
 void Collisions::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& allspecies = state["species"];
 
@@ -494,7 +492,6 @@ void Collisions::transform(Options& state) {
 }
 
 void Collisions::outputVars(Options& state) {
-  AUTO_TRACE();
 
   if (!diagnose) {
     return; // Don't save diagnostics
@@ -575,6 +572,4 @@ void Collisions::outputVars(Options& state) {
 
     }
   }
-
-
 }

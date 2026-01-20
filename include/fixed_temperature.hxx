@@ -12,7 +12,6 @@ struct FixedTemperature : public Component {
   ///   - temperature   value (expression) in units of eV
   FixedTemperature(std::string name, Options& alloptions, Solver* UNUSED(solver))
       : name(name) {
-    AUTO_TRACE();
 
     auto& options = alloptions[name];
 
@@ -46,7 +45,6 @@ struct FixedTemperature : public Component {
   ///     - temperature
   ///     - pressure (if density is set)
   void transform(Options& state) override {
-    AUTO_TRACE();
     auto& species = state["species"][name];
 
     set(species["temperature"], T);
@@ -64,7 +62,6 @@ struct FixedTemperature : public Component {
   }
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     auto Tnorm = get<BoutReal>(state["Tnorm"]);
 
     // Save temperature to output files

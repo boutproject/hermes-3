@@ -8,10 +8,8 @@
 
 using bout::globals::mesh;
 
-PolarisationDrift::PolarisationDrift(std::string name,
-                                     Options &alloptions,
-                                     Solver *UNUSED(solver)) {
-  AUTO_TRACE();
+PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
+                                     Solver* UNUSED(solver)) {
 
   // Get options for this component
   auto& options = alloptions[name];
@@ -59,8 +57,7 @@ PolarisationDrift::PolarisationDrift(std::string name,
     .withDefault<bool>(false);
 }
 
-void PolarisationDrift::transform(Options &state) {
-  AUTO_TRACE();
+void PolarisationDrift::transform(Options& state) {
 
   // Iterate through all subsections
   Options& allspecies = state["species"];
@@ -216,8 +213,7 @@ void PolarisationDrift::transform(Options &state) {
   }
 }
 
-void PolarisationDrift::outputVars(Options &state) {
-  AUTO_TRACE();
+void PolarisationDrift::outputVars(Options& state) {
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);

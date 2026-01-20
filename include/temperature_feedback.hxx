@@ -96,7 +96,6 @@ struct TemperatureFeedback : public Component {
   void transform(Options& state) override;
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     if (diagnose) {
       // Normalisations
       auto Tnorm = get<BoutReal>(state["Tnorm"]);
@@ -148,7 +147,6 @@ struct TemperatureFeedback : public Component {
   }
 
   void restartVars(Options& state) override {
-    AUTO_TRACE();
 
     // NOTE: This is a hack because we know that the loaded restart file
     //       is passed into restartVars in PhysicsModel::postInit

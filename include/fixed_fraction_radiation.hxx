@@ -423,7 +423,6 @@ struct FixedFractionRadiation : public Component {
   }
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
 
     if (diagnose) {
       set_with_attrs(state[std::string("R") + name], -radiation,
@@ -434,6 +433,7 @@ struct FixedFractionRadiation : public Component {
                       {"source", "fixed_fraction_radiation"}});
     }
   }
+
  private:
   std::string name;
 

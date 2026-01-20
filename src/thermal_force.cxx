@@ -4,7 +4,6 @@
 #include "../include/thermal_force.hxx"
 
 void ThermalForce::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& allspecies = state["species"];
 

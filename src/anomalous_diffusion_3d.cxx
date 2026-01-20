@@ -64,7 +64,6 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
 }
 
 void AnomalousDiffusion3D::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& species = state["species"][name];
 
@@ -129,44 +128,41 @@ void AnomalousDiffusion3D::transform(Options& state) {
 }
 
 void AnomalousDiffusion3D::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   if (diagnose) {
-      AUTO_TRACE();
-      // Save particle, momentum and energy channels
-      set_with_attrs(state[std::string("S") + name + std::string("_anom")], density_source,
-                      {{"time_dimension", "t"},
-                      {"units", "m^-3 s^-1"},
-                      {"conversion", Nnorm * Omega_ci},
-                      {"standard_name", "anomalous diffusion density source"},
-                      {"long_name", std::string("Anomalous density diffusion of ") + name},
-                      {"source", "anomalous_diffusion_3d"}});
+    // Save particle, momentum and energy channels
+    set_with_attrs(state[std::string("S") + name + std::string("_anom")], density_source,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "anomalous diffusion density source"},
+                    {"long_name", std::string("Anomalous density diffusion of ") + name},
+                    {"source", "anomalous_diffusion_3d"}});
 
-      // Save diffusion coefficients
-      set_with_attrs(state[std::string("anomalous_D_") + name], anomalous_D,
-                      {{"units", "m^2 s^-1"},
-                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
-                      {"standard_name", "anomalous density diffusion"},
-                      {"long_name", std::string("Anomalous density diffusion of ") + name},
-                      {"source", "anomalous_diffusion_3d"}});
+    // Save diffusion coefficients
+    set_with_attrs(state[std::string("anomalous_D_") + name], anomalous_D,
+                   {{"units", "m^2 s^-1"},
+                    {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                    {"standard_name", "anomalous density diffusion"},
+                    {"long_name", std::string("Anomalous density diffusion of ") + name},
+                    {"source", "anomalous_diffusion_3d"}});
 
-      set_with_attrs(state[std::string("anomalous_Chi_") + name], anomalous_chi,
-                      {{"units", "m^2 s^-1"},
-                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
-                      {"standard_name", "anomalous thermal diffusion"},
-                      {"long_name", std::string("Anomalous thermal diffusion of ") + name},
-                      {"source", "anomalous_diffusion_3d"}});
+    set_with_attrs(state[std::string("anomalous_Chi_") + name], anomalous_chi,
+                   {{"units", "m^2 s^-1"},
+                    {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                    {"standard_name", "anomalous thermal diffusion"},
+                    {"long_name", std::string("Anomalous thermal diffusion of ") + name},
+                    {"source", "anomalous_diffusion_3d"}});
 
-      set_with_attrs(state[std::string("anomalous_nu_") + name], anomalous_nu,
-                      {{"units", "m^2 s^-1"},
-                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
-                      {"standard_name", "anomalous momentum diffusion"},
-                      {"long_name", std::string("Anomalous momentum diffusion of ") + name},
-                      {"source", "anomalous_diffusion_3d"}});
+    set_with_attrs(state[std::string("anomalous_nu_") + name], anomalous_nu,
+                   {{"units", "m^2 s^-1"},
+                    {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                    {"standard_name", "anomalous momentum diffusion"},
+                    {"long_name", std::string("Anomalous momentum diffusion of ") + name},
+                    {"source", "anomalous_diffusion_3d"}});
   }
 }
-

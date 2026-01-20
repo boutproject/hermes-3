@@ -34,9 +34,9 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 
 
 extern Options* tracking;
-SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &alloptions, Solver *) {
-  AUTO_TRACE();
-  
+SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options& alloptions,
+                                               Solver*) {
+
   Options &options = alloptions[name];
 
   Ge = options["secondary_electron_coef"]
@@ -86,8 +86,7 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
                         .withDefault<bool>(true);
 }
 
-void SheathBoundaryParallel::transform(Options &state) {
-  AUTO_TRACE();
+void SheathBoundaryParallel::transform(Options& state) {
 
   Options& allspecies = state["species"];
   Options& electrons = allspecies["e"];

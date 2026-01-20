@@ -28,8 +28,7 @@ FixedFractionIons::FixedFractionIons(std::string name, Options &alloptions,
   }
 }
 
-void FixedFractionIons::transform(Options &state) {
-  AUTO_TRACE();
+void FixedFractionIons::transform(Options& state) {
 
   // Electron density
   auto Ne = get<Field3D>(state["species"]["e"]["density"]);

@@ -12,7 +12,6 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 }
 
 void NoFlowBoundary::transform(Options& state) {
-  AUTO_TRACE();
 
   // Make sure that the state has been set for this species
   ASSERT1(state["species"].isSection(name));

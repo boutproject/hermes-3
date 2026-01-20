@@ -22,7 +22,6 @@ struct AmjuelData {
 private:
   AmjuelData(const std::filesystem::path& data_dir,
              const std::string& short_reaction_type, const std::string& data_label) {
-    AUTO_TRACE();
 
     if (!std::filesystem::is_directory(data_dir)) {
       throw BoutException(fmt::format("No json database found at ", data_dir.string()));

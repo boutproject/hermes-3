@@ -7,7 +7,6 @@
 using bout::globals::mesh;
 
 void SOLKITNeutralParallelDiffusion::transform(Options& state) {
-  AUTO_TRACE();
   Options& allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
     // Get non-const reference

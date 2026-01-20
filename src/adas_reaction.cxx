@@ -23,7 +23,6 @@
 #include <iterator>
 
 OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename, int level) {
-  AUTO_TRACE();
 
   // Read the rate file
   std::ifstream json_file(filename);
@@ -73,7 +72,6 @@ int get_high_index(const std::vector<BoutReal>& vec, BoutReal value) {
 } // namespace
 
 BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
-  AUTO_TRACE();
 
   // Ensure that the inputs are in range
   BoutReal log10T = log10(std::clamp(T, Tmin, Tmax));
@@ -111,7 +109,6 @@ BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
 }
 
 void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to_ion) {
-  AUTO_TRACE();
 
   Field3D Ne = GET_VALUE(Field3D, electron["density"]);
   Field3D Te = GET_VALUE(Field3D, electron["temperature"]);
@@ -174,7 +171,6 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
 void OpenADASChargeExchange::calculate_rates(Options& electron, Options& from_A,
                                              Options& from_B, Options& to_A,
                                              Options& to_B) {
-  AUTO_TRACE();
 
   // Check that the reaction conserves mass and charge
   ASSERT1(get<BoutReal>(from_A["AA"]) == get<BoutReal>(to_A["AA"]));

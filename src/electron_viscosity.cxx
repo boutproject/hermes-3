@@ -18,7 +18,6 @@ ElectronViscosity::ElectronViscosity(std::string name, Options& alloptions, Solv
 }
 
 void ElectronViscosity::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& species = state["species"]["e"];
 
@@ -61,7 +60,6 @@ void ElectronViscosity::transform(Options& state) {
 }
 
 void ElectronViscosity::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
@@ -78,5 +76,3 @@ void ElectronViscosity::outputVars(Options& state) {
                     {"source", "electron_viscosity"}});
   }
 }
-
-

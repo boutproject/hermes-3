@@ -10,7 +10,6 @@ using bout::globals::mesh;
 BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions,
                            [[maybe_unused]] Solver* solver)
     : name(name) {
-  AUTO_TRACE();
   auto& options = alloptions[name];
   const Options& units = alloptions["units"];
   const BoutReal rho_s0 = units["meters"];
@@ -48,7 +47,6 @@ BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions,
 }
 
 void BinormalSTPM::transform(Options& state) {
-  AUTO_TRACE();
   Options& allspecies = state["species"];
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
@@ -80,14 +78,12 @@ void BinormalSTPM::transform(Options& state) {
 }
 
 void BinormalSTPM::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   if (diagnose) {
 
-      AUTO_TRACE();
       // Save particle, momentum and energy channels
 
       set_with_attrs(state[{std::string("D_") + name}], D,
