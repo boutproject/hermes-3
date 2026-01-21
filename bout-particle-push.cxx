@@ -1,4 +1,5 @@
 #include "bout/bout.hxx"
+#include "bout/bout_types.hxx"
 #include "bout/field2d.hxx"
 #include "bout/output.hxx"
 #include "bout/petsclib.hxx"
@@ -668,6 +669,46 @@ void check_cell_volumes(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_m
   }
 }
 
+void check_cell_centres(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
+                        Mesh*& bout_mesh, BoutReal tolerance) {
+  Coordinates* coord = bout_mesh->getCoordinates();
+  // get (R,Z) of cell centres in Hypnotoad grid
+  Field2D Rxy;
+  Field2D Zxy;
+  bout_mesh->get(Rxy, "Rxy");
+  bout_mesh->get(Zxy, "Zxy");
+  // compare to cell centres calculated from cell corners
+  std::vector<std::vector<REAL>> cell_vertices;
+  PetscInt ixy = 0;
+  for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
+    for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
+      const REAL bout_Rxy = Rxy(ix, iy);
+      const REAL bout_Zxy = Zxy(ix, iy);
+      neso_mesh->dmh->get_cell_vertices(ixy, cell_vertices);
+
+      REAL neso_Rxy = 0.0;
+      REAL neso_Zxy = 0.0;
+      for (PetscInt iv = 0; iv < 4; iv++){
+        neso_Rxy += cell_vertices.at(iv).at(0);
+        neso_Zxy += cell_vertices.at(iv).at(1);
+      }
+      neso_Rxy /= 4.0;
+      neso_Zxy /= 4.0;
+
+      const bool centres_match = (abs(neso_Rxy - bout_Rxy) < tolerance) &&
+                                 (abs(neso_Zxy - bout_Zxy) < tolerance);
+      // exit if we fail to find a match
+      NESOASSERT(centres_match,
+                 fmt::format("Hypnotoad/BOUT++ cell centre (R, Z) ({}, {}) does not match NESO-Particles mesh "
+                             "cell centre ({}, {}) for ix = {} iy = {} \n Ignore this message by "
+                             "setting [neso_particles] test_cell_centres = false\n Relax the "
+                             "tolerance used in this check by increasing [neso_particles] cell_centre_tolerance = {}",
+                             bout_Rxy, bout_Zxy, neso_Rxy, neso_Zxy, ix, iy, tolerance));
+      ixy++;
+    }
+  }
+}
+
 void check_mass_conservation(double total_mass_final, double total_mass_initial,
                 double remove_threshold) {
   double rtol = 1.0e-13;
@@ -733,6 +774,9 @@ int main(int argc, char** argv) {
     // to bout_mesh cell volumes, otherwise, exit.
     if (Options::root()["neso_particles"]["test_cell_volumes"].withDefault(true)) {
       check_cell_volumes(neso_mesh, bout_mesh);
+    }
+    if (Options::root()["neso_particles"]["test_cell_centres"].withDefault(true)){
+      check_cell_centres(neso_mesh,bout_mesh, Options::root()["neso_particles"]["cell_centre_tolerance"].withDefault(1.0e-12));
     }
     // create a Reactions particle spec
     auto particle_spec_builder = ParticleSpecBuilder(ndim);
