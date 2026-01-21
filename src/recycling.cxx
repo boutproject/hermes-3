@@ -1,16 +1,20 @@
 
 #include "../include/recycling.hxx"
+#include "../include/hermes_utils.hxx" // For indexAt
 
-#include <bout/utils.hxx> // for trim, strsplit
-#include "../include/hermes_utils.hxx"  // For indexAt
-#include "../include/hermes_utils.hxx"  // For indexAt
+#include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
-#include <bout/constants.hxx>
+#include <bout/utils.hxx> // for trim, strsplit
+
+#include <algorithm>
 
 using bout::globals::mesh;
 
-Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
+Recycling::Recycling(std::string name, Options& alloptions, Solver*)
+    : Component({readOnly("species:{from}:{from_inputs}"),
+                 readOnly("species:{to}:{to_inputs}"),
+                 readWrite("species:{to}:{outputs}")}) {
   AUTO_TRACE();
 
   const Options& units = alloptions["units"];
@@ -23,7 +27,8 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                                    .as<std::string>(),
                                ',');
 
-  
+  std::set<std::string> from_species, to_species;
+
   // Neutral pump
   // Mark cells as having a pump by setting the Field2D is_pump to 1 in the grid file
   // Works only on SOL and PFR edges, where it locally modifies the recycle multiplier to the pump albedo
@@ -41,6 +46,9 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
     std::string to = from_options["recycle_as"]
                          .doc("Name of the species to recycle into")
                          .as<std::string>();
+
+    from_species.insert(from);
+    to_species.insert(to);
 
     density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
     pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
@@ -127,6 +135,8 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
       target_recycle_energy, sol_recycle_energy, pfr_recycle_energy,
       target_fast_recycle_fraction, pfr_fast_recycle_fraction, sol_fast_recycle_fraction,
       target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor, pfr_fast_recycle_energy_factor});
+    // FIXME: These are global settings, but are being overwritten by each particular
+    // recycling channel
 
     // Boolean flags for enabling recycling in different regions
     target_recycle = from_options["target_recycle"]
@@ -145,9 +155,24 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
                    .doc("Neutral pump enabled? Note, need location in grid file")
                    .withDefault<bool>(false);                 
   }
+
+  if (target_recycle) {
+    setPermissions(readIfSet("species:{from}:energy_flow_ylow"));
+  }
+  if (sol_recycle or pfr_recycle) {
+    setPermissions(readIfSet("species:{from}:energy_flow_xlow"));
+    setPermissions(readIfSet("species:{from}:particle_flow_xlow"));
+  }
+  substitutePermissions("to",
+                        std::vector<std::string>(to_species.begin(), to_species.end()));
+  substitutePermissions(
+      "from", std::vector<std::string>(from_species.begin(), from_species.end()));
+  substitutePermissions("to_inputs", {"AA", "density", "pressure", "temperature"});
+  substitutePermissions("from_inputs", {"density", "velocity", "temperature"});
+  substitutePermissions("outputs", {"density_source", "energy_source"});
 }
 
-void Recycling::transform(Options& state) {
+void Recycling::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   // Get metric tensor components
@@ -157,16 +182,15 @@ void Recycling::transform(Options& state) {
   const Field2D& dx = coord->dx;
   const Field2D& dz = coord->dz;
   const Field2D& g_22 = coord->g_22;
-  const Field2D& g11 = coord->g11;
 
   for (auto& channel : channels) {
-    const Options& species_from = state["species"][channel.from];
+    const GuardedOptions species_from = state["species"][channel.from];
 
     const Field3D N = get<Field3D>(species_from["density"]);
     const Field3D V = get<Field3D>(species_from["velocity"]); // Parallel flow velocity
     const Field3D T = get<Field3D>(species_from["temperature"]); // Ion temperature
 
-    Options& species_to = state["species"][channel.to];
+    GuardedOptions species_to = state["species"][channel.to];
     const Field3D Nn = get<Field3D>(species_to["density"]);
     const Field3D Pn = get<Field3D>(species_to["pressure"]);
     const Field3D Tn = get<Field3D>(species_to["temperature"]);
@@ -211,9 +235,7 @@ void Recycling::transform(Options& state) {
               -0.5 * (N(r.ind, mesh->ystart, jz) + N(r.ind, mesh->ystart - 1, jz)) * 0.5
               * (V(r.ind, mesh->ystart, jz) + V(r.ind, mesh->ystart - 1, jz));
 
-          if (flux < 0.0) {
-            flux = 0.0;
-          }
+          flux = std::max(flux, 0.0);
 
           // Flow of recycled neutrals into domain [s-1]
           BoutReal flow =
@@ -253,9 +275,7 @@ void Recycling::transform(Options& state) {
           BoutReal flux = 0.5 * (N(r.ind, mesh->yend, jz) + N(r.ind, mesh->yend + 1, jz))
                           * 0.5 * (V(r.ind, mesh->yend, jz) + V(r.ind, mesh->yend + 1, jz));
 
-          if (flux < 0.0) {
-            flux = 0.0;
-          }
+          flux = std::max(flux, 0.0);
 
           // Flow of recycled neutrals into domain [s-1]
           BoutReal flow =
@@ -361,7 +381,6 @@ void Recycling::transform(Options& state) {
               // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
               // While enabling us to still calculate radial wall fluxes separately here
               BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
-              BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
               BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
               // Calculate wall conditions
@@ -461,7 +480,6 @@ void Recycling::transform(Options& state) {
                 // This will prevent neutrals leaking through cross-field transport from neutral_mixed or other components
                 // While enabling us to still calculate radial wall fluxes separately here
                 BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
-                BoutReal pnguard = SQ(Pn[i]) / Pnlim[is];
                 BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
 
                 // Calculate wall conditions

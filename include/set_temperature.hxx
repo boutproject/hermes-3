@@ -23,7 +23,12 @@ struct SetTemperature : public Component {
   /// - <name>
   ///   - temperature_from   name of species
   SetTemperature(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : name(name) {
+      : Component({readIfSet("species:{name}:density", Regions::Interior),
+                   readOnly("species:{from}:temperature"),
+                   readWrite("species:{name}:temperature"),
+                   // FIXME: Only written if density set
+                   readWrite("species:{name}:pressure")}),
+        name(name) {
     AUTO_TRACE();
 
     auto& options = alloptions[name];
@@ -35,35 +40,9 @@ struct SetTemperature : public Component {
     diagnose = options["diagnose"]
                    .doc("Save additional output diagnostics")
                    .withDefault<bool>(false);
-  }
 
-  ///
-  /// Inputs
-  /// - species
-  ///   - <temperature_from>
-  ///     - temperature
-  ///
-  /// Sets in the state:
-  /// - species
-  ///   - <name>
-  ///     - temperature
-  ///     - pressure (if density is set)
-  ///
-  void transform(Options& state) override {
-    AUTO_TRACE();
-
-    // Get the temperature
-    T = GET_NOBOUNDARY(Field3D, state["species"][temperature_from]["temperature"]);
-
-    // Set temperature
-    auto& species = state["species"][name];
-    set(species["temperature"], T);
-
-    if (isSetFinalNoBoundary(species["density"])) {
-      // Note: The boundary of N may not be set yet
-      auto N = GET_NOBOUNDARY(Field3D, species["density"]);
-      set(species["pressure"], N * T);
-    }
+    substitutePermissions("name", {name});
+    substitutePermissions("from", {temperature_from});
   }
 
   void outputVars(Options& state) override {
@@ -89,6 +68,37 @@ private:
   std::string temperature_from; ///< The species that the temperature is taken from
   Field3D T;                    ///< The temperature
   bool diagnose;                ///< Output diagnostics?
+
+  ///
+  /// Inputs
+  /// - species
+  ///   - <temperature_from>
+  ///     - temperature
+  ///   - <name>
+  ///     - density (if set)
+  ///
+  /// Sets in the state:
+  /// - species
+  ///   - <name>
+  ///     - temperature
+  ///     - pressure (if density is set)
+  ///
+  void transform_impl(GuardedOptions& state) override {
+    AUTO_TRACE();
+
+    // Get the temperature
+    T = GET_NOBOUNDARY(Field3D, state["species"][temperature_from]["temperature"]);
+
+    // Set temperature
+    auto species = state["species"][name];
+    set(species["temperature"], T);
+
+    if (isSetFinalNoBoundary(species["density"])) {
+      // Note: The boundary of N may not be set yet
+      auto N = GET_NOBOUNDARY(Field3D, species["density"]);
+      set(species["pressure"], N * T);
+    }
+  }
 };
 
 namespace {

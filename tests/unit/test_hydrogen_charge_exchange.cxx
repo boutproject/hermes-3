@@ -2,6 +2,7 @@
 #include "gtest/gtest.h"
 
 #include "test_extras.hxx" // FakeMesh
+#include "fake_mesh_fixture.hxx"
 
 #include "../../include/hydrogen_charge_exchange.hxx"
 
@@ -24,13 +25,13 @@ using HydrogenCXTest = FakeMeshFixture;
 TEST_F(HydrogenCXTest, CreateComponent) {
   Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
 
-  HydrogenChargeExchangeIsotope<'h', 'h'> component("test", options, nullptr);
+  HydrogenIsotopeChargeExchange<'h', 'h'> component("test", options, nullptr);
 }
 
 TEST_F(HydrogenCXTest, RateAt1eV) {
   Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
 
-  HydrogenChargeExchangeIsotope<'h', 'h'> component("test", options, nullptr);
+  HydrogenIsotopeChargeExchange<'h', 'h'> component("test", options, nullptr);
 
   Options state{{"species",
                  {{"h",

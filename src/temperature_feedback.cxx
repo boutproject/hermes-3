@@ -3,8 +3,8 @@
 #include <bout/mesh.hxx>
 using bout::globals::mesh;
 
-void TemperatureFeedback::transform(Options& state) {
-  Options& species = state["species"][name];
+void TemperatureFeedback::transform_impl(GuardedOptions& state) {
+  GuardedOptions species = state["species"][name];
 
   // Doesn't need all boundaries to be set
   Field3D T = getNoBoundary<Field3D>(species["temperature"]);

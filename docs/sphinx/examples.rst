@@ -52,7 +52,7 @@ other. Ions recycle into neutrals, which charge exchange and are
 ionised.  A difference is that separate ion and electron temperatures
 are evolved here.
 
-.. figure:: figs/1d_threshold.gif
+.. figure:: figs/1d_threshold.*
    :name: 1d_threshold_fig
    :alt:
    :width: 60%
@@ -78,8 +78,10 @@ The components are ion species `d+`, atoms `d`, electrons `e`:
 
    [hermes]
    components = (d+, d, e,
-              sheath_boundary_simple, collisions, recycling, reactions,
-              electron_force_balance, neutral_parallel_diffusion)
+                 sheath_boundary_simple, braginskii_collisions,
+                 braginskii_friction, braginskii_heat_exchange,
+                 recycling, reactions, electron_force_balance,
+                 neutral_parallel_diffusion, braginskii_conduction)
 
 The electron velocity is set to the ion by specifying :ref:`zero_current`;
 A sheath boundary is included; Collisions are needed to be able to calculate
@@ -481,7 +483,9 @@ The components of the model are given in `heat-transport/BOUT.inp`:
 .. code-block:: ini
 
    [hermes]
-   components = e, h+, collisions, sheath_boundary_simple
+   components = (e, h+,
+                 braginskii_collisions, braginskii_friction, braginskii_heat_exchange,
+                 sheath_boundary_simple, braginskii_conduction)
 
 We have two species, electrons and hydrogen ions, and add collisions
 between them and a simple sheath boundary condition.
@@ -560,10 +564,11 @@ species. The name of that species is given by the `temperature_from` option:
 
    temperature_from = e  # Set Th+ = Te
 
-The `collisions` component is described in the manual, and calculates both electron-electron
-and electron-ion collisions. These can be disabled if desired, using individual options.
-There are also ion-ion, electron-neutral, ion-neutral and neutral-neutral collisions that
-are not used here.
+The `braginskii_collisions` component is described in the manual, and
+calculates both electron-electron and electron-ion collisions. These
+can be disabled if desired, using individual options.  There are also
+ion-ion, electron-neutral, ion-neutral and neutral-neutral collisions
+that are not used here.
 
 The `sheath_boundary_simple` component is a simplified Bohm-Chodura sheath boundary
 condition, that allows the sheath heat transmission coefficient to be specified for
@@ -584,8 +589,9 @@ The equations solved by this example are:
    \end{aligned}
 
 The calculation of the Coulomb logarithms follows the NRL formulary,
-and the above expression is used for temperatures above 10eV. See
-the `collisions` manual section for the expressions used in other regimes.
+and the above expression is used for temperatures above 10eV. See the
+`braginskii_collisions` manual section for the expressions used in
+other regimes.
 
 recycling-dthene
 ~~~~~~~~~~~~~~~~
@@ -615,8 +621,9 @@ which couple multiple species.
 .. code-block:: ini
 
    [hermes]
-   components = (d+, d, t+, t, he+, he, ne+, ne, e,
-                 collisions, sheath_boundary, recycling, reactions)
+   components = (d+, d, t+, t, he+, he, ne+, ne, e, braginskii_collisions,
+                 braginskii_friction, braginskii_heat_exchange, sheath_boundary,
+                 recycling, reactions, braginskii_conduction)
 
 Note that long lists like this can be split across multiple lines by
 using parentheses. 
@@ -658,7 +665,7 @@ electron density, electron and ion parallel velocity, electron and ion
 pressure.
 
 The input file is in the Hermes-3 repository under
-``examples/tokamak/turbulence``.
+``examples/tokamak-2D/turbulence``.
 
 The lines that define the components to include in the model are:
 
@@ -666,9 +673,9 @@ The lines that define the components to include in the model are:
 
    [hermes]
    components = (e, d+, sound_speed, vorticity,
-                 sheath_boundary, collisions,
-                 diamagnetic_drift, classical_diffusion,
-                 polarisation_drift
+                 sheath_boundary, braginskii_collisions, braginskii_friction,
+                 braginskii_heat_exchange, diamagnetic_drift, classical_diffusion,
+                 polarisation_drift, braginskii_conduction
                 )
 
    [e]

@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+
+from __future__ import division
+from __future__ import print_function
+
+try:
+  from builtins import str
+except:
+  pass
+
+from boututils.run_wrapper import shell, launch_safe, getmpirun
+from boutdata.collect import collect
+
+from numpy import sqrt, max, abs, mean, array, log, concatenate
+from pathlib import Path
+
+# Remove old test results and symlink executable
+for file in ["BOUT.dmp.0.nc", "BOUT.log.0", "BOUT.restart.0.nc", "BOUT.settings", ".BOUT.pid.0"]:
+    path = Path("data/" + file)
+    if path.is_file():
+        print(f"Removing old file data/{file}")
+        path.unlink()
+
+if not Path("hermes-3").is_file():
+  shell("ln -s ../../../hermes-3 hermes-3")
+
+# Run and exit if unsuccessful
+s, out = launch_safe("./hermes-3 -d data", nproc=1, pipe=True)
+
+if s != 0:
+  print(" => Test failed: ")
+  print(out)
+  exit(1)
+
+# Save output to log file
+with open("run.log", "w") as f:
+  f.write(out)
+
+# Check log for success/failure
+success = True
+collisionality_lines = []
+
+# Check for exceptions and collect collision selections
+with open("run.log", "r") as f:
+  lines = f.readlines()
+  for i, line in enumerate(lines):
+    if "====== Exception thrown ======" in line:
+        success = False
+        message = lines[i+1]
+        
+    if "collisionality mode" in line:
+      collisionality_lines.append(line.strip())
+        
+# Check that expected collisions were chosen
+expected_lines = [
+  "d neutral diffusion collisionality mode: 'multispecies' using d_d+_coll d_d+_cx d_d_coll d_e_coll d_he+_coll d_he_coll",
+	"he neutral diffusion collisionality mode: 'multispecies' using he_d+_coll he_d_coll he_e_coll he_he+_coll he_he_coll",
+	"d+ viscosity collisionality mode: 'multispecies' using d+_d+_coll d+_d_coll d+_d_cx d+_e_coll d+_he+_coll d+_he_coll",
+	"he+ viscosity collisionality mode: 'multispecies' using he+_d+_coll he+_d_coll he+_e_coll he+_he+_coll he+_he_coll",
+	"d+ conduction collisionality mode: 'multispecies' using d+_d+_coll d+_d_coll d+_d_cx d+_e_coll d+_he+_coll d+_he_coll",
+	"he+ conduction collisionality mode: 'multispecies' using he+_d+_coll he+_d_coll he+_e_coll he+_he+_coll he+_he_coll",
+	"he neutral collisionality mode: 'multispecies' using he_d+_coll he_d_coll he_e_coll he_he+_coll he_he_coll",
+	"d neutral collisionality mode: 'multispecies' using d_d+_coll d_d+_cx d_d_coll d_e_coll d_he+_coll d_he_coll",
+	"e conduction collisionality mode: 'multispecies' using e_d+_coll e_d_coll e_e_coll e_he+_coll e_he_coll",
+]
+
+for line in expected_lines:
+  if line not in collisionality_lines:
+    success = False
+    message = f"Did not find expected collisionality line:\n{line}"
+        
+# Final output
+if success:
+  print(" => Test passed")
+  exit(0)
+else:
+  print(f" => Test failed: \n{message}")
+  exit(1)

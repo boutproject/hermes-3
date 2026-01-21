@@ -2,12 +2,13 @@
 #ifndef VORTICITY_H
 #define VORTICITY_H
 
+#include <bout/invert_laplace.hxx>
+#include <bout/invert/laplacexy.hxx>
 #include <bout/vector2d.hxx>
 
 #include "component.hxx"
 
-class LaplaceXY;
-class Laplacian;
+#include <memory>
 
 /// Evolve electron density in time
 /// 
@@ -55,25 +56,6 @@ struct Vorticity : public Component {
   ///     Damp axisymmetric component of vorticity in cell next to core boundary
   ///
   Vorticity(std::string name, Options &options, Solver *solver);
-
-  /// Optional inputs
-  ///
-  /// - species
-  ///   - pressure and charge => Calculates diamagnetic terms [if diamagnetic=true]
-  ///   - pressure, charge and mass => Calculates polarisation current terms [if diamagnetic_polarisation=true]
-  /// 
-  /// Sets in the state
-  /// - species
-  ///   - [if has pressure and charge]
-  ///     - energy_source
-  /// - fields
-  ///   - vorticity
-  ///   - phi         Electrostatic potential
-  ///   - DivJdia     Divergence of diamagnetic current [if diamagnetic=true]
-  ///
-  /// Note: Diamagnetic current calculated here, but could be moved
-  ///       to a component with the diamagnetic drift advection terms
-  void transform(Options &state) override;
 
   /// Optional inputs
   /// - fields
@@ -133,7 +115,7 @@ private:
   bool phi_core_averagey; ///< Average phi core boundary in Y?
   
   bool split_n0; // Split phi into n=0 and n!=0 components
-  LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
+  std::unique_ptr<LaplaceXY> laplacexy; // Laplacian solver in X-Y (n=0)
 
   Field2D Bsq; // SQ(coord->Bxy)
   Vector2D Curlb_B; // Curvature vector Curl(b/B)
@@ -144,6 +126,29 @@ private:
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
   bool diagnose; ///< Output additional diagnostics?
+
+  /// Optional inputs
+  ///
+  /// - species
+  ///   - pressure and charge => Calculates diamagnetic terms [if diamagnetic=true]
+  ///   - pressure, charge and mass => Calculates polarisation current terms [if
+  ///   diamagnetic_polarisation=true]
+  ///   - density, charge, and collision_frequency => Calculate damping due to friction
+  ///   [if collisional_friction=true]
+  ///
+  /// Sets in the state
+  /// - species
+  ///   - [if has pressure and charge and diamagnetic=true]
+  ///     - energy_source
+  /// - fields
+  ///   - vorticity
+  ///   - phi         Electrostatic potential
+  ///   - DivJdia     Divergence of diamagnetic current [if diamagnetic=true]
+  ///   - DivJcol     [if collisional_friction=true]
+  ///
+  /// Note: Diamagnetic current calculated here, but could be moved
+  ///       to a component with the diamagnetic drift advection terms
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

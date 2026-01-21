@@ -1,0 +1,261 @@
+# 1D system with:
+#  - No-flow boundary on lower Y
+#  - Sheath boundary on upper Y
+#  - Evolving electron and multiple ion species
+#  - Heat conduction
+#  - Uniform source of heat and particles throughout domain
+#  - Non-uniform grid, packed towards the target
+#  - Recycling of ions as atoms
+#  - Ionisation of neutrals as ions
+#  - Charge exchange between neutrals and ions
+#  - Feedback control of upstream density7
+#  - D, T and He neutrals and ions
+
+
+nout = 3
+timestep = 2500
+
+MXG = 0  # No guard cells in X
+
+################################################################################
+[mesh]
+nx = 1
+ny = 50    # Resolution along field-line
+nz = 1
+
+length = 30        # Length of the domain in meters
+length_xpt = 10    # Length from midplane to X-point [m]
+
+dymin = 0.1        # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+J = 1              # Identity metric
+
+# Calculate where the source ends in grid index
+source = length_xpt / length
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+ixseps1 = -1
+ixseps2 = -1
+
+################################################################################
+[hermes]
+# Evolve ion density, ion and electron pressure, then calculate force on ions due
+# to electron pressure by using electron force balance.
+components = (d+, d, t+, t, he+, he, e,
+              sheath_boundary, braginskii_collisions, recycling, reactions,
+              braginskii_thermal_force, braginskii_conduction,
+              electron_force_balance, neutral_parallel_diffusion, braginskii_ion_viscosity)
+
+Nnorm = 1e19
+Bnorm = 1
+Tnorm = 100
+
+################################################################################
+[solver]
+mxstep = 50000
+atol = 1e-12
+rtol = 1e-7
+
+################################################################################
+[d+]  # Deuterium ions
+diagnose = true
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary, upstream_density_feedback)
+noflow_lower_y = true
+noflow_upper_y = false    # Sheath boundary at upper y
+charge = 1
+AA = 2
+
+density_upstream = 1e19            # Upstream density [m^-3]
+density_source_positive = false    # Force source to be > 0?
+density_controller_i = 5e-4
+density_controller_p = 5e2
+thermal_conduction = true          # in evolve_pressure
+recycle_as = d
+target_recycle = true
+target_recycle_multiplier = 1.0    # Recycling fraction
+target_recycle_energy = 0.0        # Realistic number is 3eV, but here 0 for consistency with older tests
+
+#------------------------------------------------
+[Nd+]
+function = 1
+source_shape = H(mesh:y_xpt - y) * 1e20    # Feedback controller source shape
+
+#------------------------------------------------
+[Pd+]
+function = 1
+powerflux = 2.5e7                                                 # Input power flux in W/m^2
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)    # Input power as function of y
+
+#------------------------------------------------
+[NVd+]
+function = 0
+
+################################################################################
+[d]  # Deuterium atoms
+diagnose = true
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
+charge = 0
+AA = 2
+thermal_conduction = true
+
+#------------------------------------------------
+[Nd]
+function = 0.001
+
+#------------------------------------------------
+[Pd]
+function = 0.0001
+
+################################################################
+[t+] # Tritium ions
+diagnose = true
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary, upstream_density_feedback)
+noflow_lower_y = true
+noflow_upper_y = false    # Sheath boundary at upper y
+AA = 3
+charge = 1
+
+density_upstream = 1e19            # Upstream density [m^-3]
+density_source_positive = false    # Force source to be > 0?
+density_controller_i = 5e-4
+density_controller_p = 5e2
+thermal_conduction = true
+recycle_as = t
+target_recycle = true
+target_recycle_multiplier = 1.0  # Recycling fraction
+target_recycle_energy = 0.0
+
+#------------------------------------------------
+[Nt+]
+function = 1
+source_shape = H(mesh:y_xpt - y) * 1e20    # Feedback controller source shape
+
+#------------------------------------------------
+[Pt+]
+function = 1
+powerflux = 2.5e7                                                 # Input power flux in W/m^2
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)    # Input power as function of y
+
+#------------------------------------------------
+[NVt+]
+function = 0
+
+################################################################
+[t] # Tritium atoms
+diagnose = true
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
+charge = 0
+AA = 3
+thermal_conduction = true
+
+#------------------------------------------------
+[Nt]
+function = 0.001
+
+#------------------------------------------------
+[Pt]
+function = 0.0001
+
+################################################################
+[he+] # Helium ions
+diagnose = true
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary, upstream_density_feedback)
+noflow_lower_y = true
+noflow_upper_y = false    # Sheath boundary at upper y
+AA = 4
+charge = 1
+
+density_upstream = 1e19            # Upstream density [m^-3]
+density_source_positive = false    # Force source to be > 0?
+density_controller_i = 5e-4
+density_controller_p = 5e2
+thermal_conduction = true
+recycle_as = he
+target_recycle = true
+target_recycle_multiplier = 1.0  # Recycling fraction
+target_recycle_energy = 0.0
+
+#------------------------------------------------
+[Nhe+]
+function = 0.01
+
+#------------------------------------------------
+[Phe+]
+function = 0.01
+
+################################################################
+[he] # Helium atoms
+diagnose = true
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
+charge = 0
+AA = 4
+thermal_conduction = true
+
+#------------------------------------------------
+[Nhe]
+function = 0.00001
+
+#------------------------------------------------
+[Phe]
+function = 0.000001
+
+################################################################################
+[e] # Electrons
+diagnose = true
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
+noflow_upper_y = false
+charge = -1
+AA = 1/1836
+thermal_conduction = true    # in evolve_pressure
+
+#------------------------------------------------
+[Pe]
+function = `Pd+:function`    # Same as ion pressure initially
+source = `Pd+:source`        # Same as ion pressure source
+
+################################################################################
+[braginskii_collisions]
+diagnose=true
+electron_electron = true
+electron_ion = true
+electron_neutral = true
+ion_ion = true
+ion_neutral = true
+neutral_neutral = true
+
+################################################################################
+[neutral_parallel_diffusion]
+dneut = 10    # (B / Bpol)^2 in neutral diffusion terms
+
+################################################################################
+[reactions]
+diagnose = true
+type = (
+        d + e -> d+ + 2e,   # Deuterium ionisation
+        d+ + e -> d,        # Deuterium recombination
+        d + d+ -> d+ + d,   # Deuterium charge exchange
+        t + e -> t+ + 2e,   # Tritium ionisation
+        t+ + e -> t,        # Tritium recombination
+        t + t+ -> t+ + t,   # Tritium charge exchange
+        d + t+ -> d+ + t,   # D-T charge exchange
+        t + d+ -> t+ + d,   # T-D charge exchange
+        he + e -> he+ + 2e, # Helium ionisation
+        he+ + e -> he,      # Helium+ recombination
+       )
+
+################################################################################
+[recycling]
+species = d+, t+, he+
+
+################################################################################
+[sheath_boundary]
+lower_y = false
+upper_y = true
+
+[braginskii_thermal_force]
+override_ion_mass_restrictions = true

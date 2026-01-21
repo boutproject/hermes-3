@@ -1,0 +1,31 @@
+{
+    "info": {
+        "sigma_v_coeffs_ref": "Dummy test data",
+        "sigma_v_E_coeffs_ref": "Dummy test data",
+        "reaction_lbl": "Dummy test data",
+        "sigma_v_E_notes": "Dummy test data",
+        "sigma_v_notes": "Dummy test data.",
+        "includes_sigma_v_e": true
+    },
+    "electron_heating": 0.0,
+    "sigma_v_coeffs": [
+        [
+            -32.4802533034,
+            -0.05440669186583
+        ],
+        [
+            14.2533239151,
+            -0.0359434716076
+        ]
+    ],
+    "sigma_v_E_coeffs": [
+        [
+            9.648139704737e-08,
+            -1.611904413846e-09
+        ],
+        [
+            4.164960852522e-08,
+            -9.893423877739e-10
+        ]
+    ]
+}

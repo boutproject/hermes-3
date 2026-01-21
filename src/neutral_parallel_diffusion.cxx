@@ -6,18 +6,22 @@
 
 using bout::globals::mesh;
 
-void NeutralParallelDiffusion::transform(Options& state) {
+void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
     const auto& species_name = kv.first;
 
     // Get non-const reference
-    auto& species = allspecies[species_name];
+    auto species = allspecies[species_name];
 
     if (species.isSet("charge") and (get<BoutReal>(species["charge"]) != 0.0)) {
       // Skip charged species
       continue;
+    }
+    // Initialise collision_names for each species if not already done
+    if (collision_names.find(species_name) == collision_names.end()) {
+      collision_names[species_name] = {};  // Initialise with empty vector
     }
 
     const BoutReal AA = GET_VALUE(BoutReal, species["AA"]); // Atomic mass
@@ -29,61 +33,61 @@ void NeutralParallelDiffusion::transform(Options& state) {
     // Collisionality
     // Multispecies mode: in, en, nn, cx
     // New mode: cx, iz (in line with SOLPS AFN, Horsten 2017)
-    if (collision_names.empty()) {     /// Calculate only once - at the beginning
+    if (collision_names[species_name].empty()) {     // Calculate only once - at the beginning
 
       if (diffusion_collisions_mode == "afn") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string collision_name = collision.second.name();
+          std::string collision_name = collision.first;
 
-          if (/// Charge exchange
+          if (// Charge exchange
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "+", "cx", "partial")) or
-              /// Ionisation
+                collision_name, species_name, "+", "cx", "partial")) or
+              // Ionisation
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "+", "iz", "partial"))) {
+                collision_name, species_name, "+", "iz", "partial"))) {
                   
-                  collision_names.push_back(collision_name);
+                  collision_names[species_name].push_back(collision_name);
                 }
         }
       // Multispecies mode: all collisions and CX are included
       } else if (diffusion_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string collision_name = collision.second.name();
+          std::string collision_name = collision.first;
 
-          if (/// Charge exchange
+          if (// Charge exchange
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "", "cx", "partial")) or
-              /// Any collision (ne, ni, nn)
+                collision_name, species_name, "", "cx", "partial")) or
+              // Any collision (ne, ni, nn)
               (collisionSpeciesMatch(    
-                collision_name, species.name(), "", "coll", "partial"))) {
+                collision_name, species_name, "", "coll", "partial"))) {
                   
-                  collision_names.push_back(collision_name);
+                  collision_names[species_name].push_back(collision_name);
                 }
         }
 
       } else {
-        throw BoutException("\tdiffusion_collisions_mode for {:s} must be either multispecies or afn", species.name());
+        throw BoutException("\tdiffusion_collisions_mode for {:s} must be either multispecies or afn", species_name);
       }
 
-      if (collision_names.empty()) {
-        throw BoutException("\tNo collisions found for {:s} in neutral_parallel_diffusion for selected collisions mode", species.name());
+      if (collision_names[species_name].empty()) {
+        throw BoutException("\tNo collisions found for {:s} in neutral_parallel_diffusion for selected collisions mode", species_name);
       }
 
-      /// Write chosen collisions to log file
+      // Write chosen collisions to log file
       output_info.write("\t{:s} neutral diffusion collisionality mode: '{:s}' using ",
-                      species.name(), diffusion_collisions_mode);
-      for (const auto& collision : collision_names) {        
+                      species_name, diffusion_collisions_mode);
+      for (const auto& collision : collision_names[species_name]) {        
         output_info.write("{:s} ", collision);
       }
       output_info.write("\n");
 
     }
 
-    /// Collect the collisionalities based on list of names
+    // Collect the collisionalities based on list of names
     nu = 0;
-    for (const auto& collision_name : collision_names) {
+    for (const auto& collision_name : collision_names[species_name]) {
       nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
     }
 

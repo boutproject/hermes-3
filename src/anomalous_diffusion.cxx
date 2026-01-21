@@ -7,7 +7,10 @@
 using bout::globals::mesh;
 
 AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, Solver*)
-    : name(name) {
+    : Component({readOnly("species:{name}:density", Regions::Interior),
+                 readIfSet("species:{name}:{optional}", Regions::Interior),
+                 readWrite("species:{name}:{output}")}),
+      name(name) {
   // Normalisations
   const Options& units = alloptions["units"];
   const BoutReal rho_s0 = units["meters"];
@@ -50,12 +53,33 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
   diagnose = alloptions[name]["diagnose"]
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
+
+  substitutePermissions("name", {name});
+  substitutePermissions("optional", {"temperature", "velocity"});
+  std::vector<std::string> output_vars;
+  if (include_D) {
+    output_vars.push_back("density_source");
+    output_vars.push_back("particle_flow_xlow");
+    output_vars.push_back("particle_flow_ylow");
+  }
+  if (include_D or include_chi) {
+    output_vars.push_back("energy_source");
+    output_vars.push_back("energy_flow_xlow");
+    output_vars.push_back("energy_flow_ylow");
+  }
+  if (include_D or include_nu) {
+    setPermissions(readOnly(fmt::format("species:{}:AA", name)));
+    output_vars.push_back("momentum_source");
+    output_vars.push_back("momentum_flow_xlow");
+    output_vars.push_back("momentum_flow_ylow");
+  }
+  substitutePermissions("output", output_vars);
 }
 
-void AnomalousDiffusion::transform(Options& state) {
+void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& species = state["species"][name];
+  GuardedOptions species = state["species"][name];
 
   // Diffusion operates on 2D (axisymmetric) profiles
   // Note: Includes diffusion in Y, so set boundary fluxes
@@ -69,7 +93,7 @@ void AnomalousDiffusion::transform(Options& state) {
   Field2D T2D = DC(T);
 
   const Field3D V =
-      species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
+    species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
   Field2D V2D = DC(V);
 
   if (!anomalous_sheath_flux) {
@@ -168,4 +192,3 @@ void AnomalousDiffusion::outputVars(Options& state) {
                       {"source", "anomalous_diffusion"}});
   }
 }
-

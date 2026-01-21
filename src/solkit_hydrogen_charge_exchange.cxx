@@ -2,7 +2,7 @@
 
 #include "../include/integrate.hxx"  // for cellAverage
 
-void SOLKITHydrogenChargeExchange::calculate_rates(Options& atom, Options& ion) {
+void SOLKITHydrogenChargeExchange::calculate_rates(GuardedOptions atom, GuardedOptions ion) {
   const auto AA = get<BoutReal>(ion["AA"]);
   // Check that mass is consistent
   ASSERT1(get<BoutReal>(atom["AA"]) == AA);

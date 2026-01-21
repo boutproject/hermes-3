@@ -6,12 +6,12 @@
 
 using bout::globals::mesh;
 
-void SOLKITNeutralParallelDiffusion::transform(Options& state) {
+void SOLKITNeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
     // Get non-const reference
-    auto& species = allspecies[kv.first];
+    auto species = allspecies[kv.first];
 
     if (species.isSet("charge") and (get<BoutReal>(species["charge"]) != 0.0)) {
       // Skip charged species
@@ -25,8 +25,8 @@ void SOLKITNeutralParallelDiffusion::transform(Options& state) {
       // Start with no collisions
       Field3D(0.0),
       [this](Field3D value,
-             const std::map<std::string, Options>::value_type &name_species) {
-        const Options &species = name_species.second;
+             const std::map<std::string, GuardedOptions>::value_type &name_species) {
+        const GuardedOptions species = name_species.second;
         if (name_species.first == "e") {
           // Electrons
           const Field3D Ne = GET_VALUE(Field3D, species["density"]);

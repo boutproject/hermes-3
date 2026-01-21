@@ -1,7 +1,11 @@
 
 #include "../include/sheath_closure.hxx"
 
-SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
+SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
+    : Component({readOnly("fields:phi"), readOnly("species:e:density"),
+                 readWrite("species:e:density_source"),
+                 // FIXME: This is only written if temperature is set
+                 readWrite("species:e:energy_source"), readWrite("fields:DivJextra")}) {
   Options& options = alloptions[name];
 
   BoutReal Lnorm = alloptions["units"]["meters"]; // Length normalisation factor
@@ -29,15 +33,25 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
                .withDefault<bool>(false);
 
   output.write("\tL_par = {:e} (normalised)\n", L_par);
+
+  if (sinks) {
+    setPermissions(readOnly("species:e:temperature"));
+    setPermissions(readOnly("species:{non_electrons}:{inputs}"));
+    setPermissions(readWrite("species:{non_electrons}:{outputs}"));
+    substitutePermissions("inputs", {"AA", "density", "temperature"});
+    substitutePermissions("output", {"density_source", "energy_source"});
+  } else {
+    setPermissions(readIfSet("species:e:temperature"));
+  }
 }
 
-void SheathClosure::transform(Options &state) {
+void SheathClosure::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   
   // Get electrostatic potential
   auto phi = get<Field3D>(state["fields"]["phi"]);
 
-  auto& electrons = state["species"]["e"];
+  auto electrons = state["species"]["e"];
   
   // Electron density
   auto n = get<Field3D>(electrons["density"]);
@@ -70,10 +84,11 @@ void SheathClosure::transform(Options &state) {
     // standard Bohm boundary conditions for a pure, hydrogenic plasma.]
     Field3D P_total = 0.0;
     Field3D rho_total = 0.0; // mass density
-    Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first];
+      GuardedOptions species = allspecies[kv.first];
 
+      // FIXME: This includes electrons in the calculation. Is that desired?
       const BoutReal A = get<BoutReal>(species["AA"]);
       Field3D Ns = get<Field3D>(species["density"]);
       Field3D Ts = get<Field3D>(species["temperature"]);
@@ -85,7 +100,7 @@ void SheathClosure::transform(Options &state) {
     Field3D c_s = sqrt(P_total / rho_total);
 
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first];
+      GuardedOptions species = allspecies[kv.first];
       Field3D Ns = get<Field3D>(species["density"]);
 
       Field3D sheath_flux = floor(Ns * c_s, 0.0);

@@ -58,7 +58,7 @@ Editing documentation is much easier if you can compile it locally using the fol
    .. code-block:: bash
 
       cd hermes-3/docs/doxygen
-      Doxygen doxyfile
+      doxygen Doxyfile
 
 5. **Run Sphinx** - this will parse the RST files and generate the
    documentation. ``sphinx`` and ``build`` are the source and build
@@ -181,7 +181,9 @@ are of unit length. See relevant `BOUT++ docs
 <https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`_ 
 for more info. There is also a data type called ``Options`` which is equivalent
 to a Python dictionary with extra functionality, and is used to store input
-options, the entire simulation state and many other data.
+options, the entire simulation state and many other data. Finally,
+there is the ``GuardedOptions`` datatype, which wraps an ``Options``
+object and controls access to its contents.
 
 
 Adding new settings
@@ -265,7 +267,7 @@ the variables in one place, which could allow some components to overwrite other
 In ``component.hxx`` there is the function ``get``, which once called sets the 
 "final" and "final-domain" attributes:
 
-.. code-bloc:: ini
+.. code-block:: ini
 
    T get(const Options& option, const std::string& location = "") {
    #if CHECKLEVEL >= 1
@@ -327,6 +329,9 @@ And there is a corresponding ``setBoundary`` that can be used for BC operations:
    option.force(std::move(value));
    return option;
    }
+
+All of these functions are overloaded to accept both `Options` and
+`GuardedOptions` objects.
 
 These functions take a second argument which tells you where they were set, which is easier for debugging.
 They are wrapped into additional functions, ``GET_VALUE`` and ``GET_NOBOUNDARY`` which automatically
@@ -391,7 +396,10 @@ atoms has an input file specifying the components
 .. code-block:: ini
   
   [hermes]
-  components = d+, d, t+, t, e, collisions, sheath_boundary, recycling, reactions
+  components = (d+, d, t+, t, e, braginskii_collisions,
+                braginskii_friction, braginskii_heat_exchange,
+                sheath_boundary, recycling, reactions,
+                braginskii_conduction)
 
 The governing equations for each species are specified e.g.
 
@@ -513,21 +521,28 @@ Notes:
 - The species name convention is that the charge state is last, after the `+` or `-`
   sign: `n2+` is a singly charged nitrogen molecule, while `n+2` is a +2 charged
   nitrogen atom.
+
   
 Components
 ~~~~~~~~~~~~~~
 
 The basic building block of all Hermes-3 models is the
 `Component`. This defines an interface to a class which takes a state
-(a tree of dictionaries/maps), and transforms (modifies) it.  After
-all components have modified the state in turn, all components may
-then implement a `finally` method to take the final state but not
+(a tree of dictionaries/maps) and transforms (modifies) it. This is
+done by calling the public `Component::transform` method. This will
+call the private `Component::transform_impl` method, which must be
+overriden for each Component implementation.
+
+After all components have modified the state in turn, all components
+may then implement a `finally` method to take the final state but not
 modify it. This allows two components to depend on each other, but
 makes debugging and testing easier by limiting the places where the
 state can be modified.
 
 .. doxygenstruct:: Component
    :members:
+   :protected-members:
+   :private-members:
 
 Components are usually defined in separate files; sometimes multiple
 components in one file if they are small and related to each other (e.g.
@@ -549,7 +564,7 @@ file using a code like::
 where `MyComponent` is the component class, and "mycomponent" is the
 name that can be used in the BOUT.inp settings file to create a
 component of this type. Note that the name can be any string except it
-can't contain commas or brackets (), and shouldn't start or end with
+can't contain commas or brackets, and shouldn't start or end with
 whitespace.
 
 Inputs to the component constructors are:
@@ -562,11 +577,39 @@ The `name` is a string labelling the instance. The `alloptions` tree contains at
 
 * `alloptions[name]` options for this instance
 * `alloptions['units']`
-  
+
+
+Component Permissions
+`````````````````````
+
+All component constructors must pass a `Permissions` object (see
+below) to the constructor on the `Component::Component` base
+class. This specifies which variables will be read/written by the
+`Component::transform` method and will be used to construct a
+`GuardedOptions` object to be passed into
+`Component::transform_impl`. The `Permissions` object can be further
+updated in the body of the constructor of your component using the
+`Component::setPermissions` and `Component::substitutePermissions`
+methods. You should give read and write permissions to the minimum
+number of variables necessary, to avoid circular dependencies arising
+among components.
+
+A number of substitutions will automatically be performed on your
+permissions (see `Permission Substitution`_), so that you can specify
+permissions for some variables for each species. For example, the
+following permissions would give read access to pressure for all
+species and density of ions::
+
+  MyComponent::MyComponent(const std::string &name, Options &options,
+      Solver *solver) : Component({readOnly("species:{all_species}:pressure"),
+                                   readOnly("species:{ions}:density")}) {}
+
+See the documentation for `Component::declareAllSpecies` for a list of
+all substitutions that will be performed.
+
 
 Component scheduler
 ~~~~~~~~~~~~~~
-
 
 The simulation model is created in `Hermes::init` by a call to the `ComponentScheduler`::
 
@@ -596,7 +639,7 @@ scheduler looks up the options under the section of that name.
 
 This would create two `Component` objects, of type `component1` and
 `component2`. Each time `Hermes::rhs` is run, the `transform`
-functions of `component1` amd then `component2` will be called,
+functions of `component1` and then `component2` will be called,
 followed by their `finally` functions.
 
 It is often useful to group components together, for example to
@@ -625,6 +668,202 @@ in `group1`, and then `component3`.
 .. doxygenclass:: ComponentScheduler
    :members:
 
+
+Permissions
+~~~~~~~~~~~~~~
+
+The ``Permissions`` class can be used to store information about which
+variables within an ``Options`` object are allowed to be accessed and
+for what purpose. This is used to control the variables used by a
+``Component``. There is a hierarchy of four types of increasing
+permission. These are expressed using the
+`PermissionTypes` `enum <https://en.wikipedia.org/wiki/Enumerated_type>`__:
+
+#. **ReadIfSet:** Only allowed to read variable if it is already set.
+#. **Read:** Can read the contents of the variable. Assumes it has already been set.
+#. **Write:** Can write variable. Makes no assumption about whether it has already been written or will be written again in future.
+#. **Final:** This will be the last component to write to the variable. Only one component may have ``Final`` permission for a given variable.
+
+The order these per permissions are listed in is significant: each
+higher permission implies a component also has all lower permissions. E.g.,
+write permission implies read permission as well.
+
+Declaring Permissions for Particular Variables
+``````````````````````````````````````````````
+
+Permission information for a variable is stored in a
+`Permissions::VarRights` object. The overwhelming majority of the
+permissions you would want to create can be constructed using one of
+the provided convenience-functions. For example::
+
+  Permissions::VarRights read_e_pressure = readOnly("species:e:pressure");
+  Permissions::VarRights write_d_density = readWrite("species:d:density");
+  Permissions::VarRights read_e_velocity_in_interior_if_set =
+    readIfSet("species:e:velocity", Regions::Interior);
+
+Permissions can be set to apply only to a particular region of the
+domain (e.g., the boundary or the interior) using a `Regions` enum
+(see `Specifying a Region`_).
+
+Creating Permissions Objects
+````````````````````````````
+
+Permission data like that created in the previous example can be used
+to construct a ``Permissions`` object. These objects describe the
+permissions for multiple variables.::
+
+  Permissions p({readOnly("time"),
+                 readOnly("species:e:pressure"),
+                 readWrite("species:e:momentum", Regions::Interior)});
+
+A permission applied to a section of an ``Options`` object will apply
+to all variables contained within that section, unless a more specific
+permission is also set. Therefore, if we have a state with variables
+``species:e:pressure``, ``species:e:density``, ``species:e:velocity``,
+and ``species:e:momentum``, then the following are equivalent::
+
+  Permissions p({readOnly("species:e"),
+                 readWrite("species:e:momentum")});
+  Permissions p({readOnly("species:e:pressure"),
+                 readOnly("species:e:density"),
+                 readOnly("species:e:velocity"),
+                 readWrite("species:e:momentum")});
+
+Specifying a Region
+```````````````````
+
+The `PermissionTypes` are applied to particular regions of the domain.
+This allows, e.g., for there to be read permissions for the interior
+of the domain but write permissions for the boundaries. Regions are
+expressed using the `Permissions::Regions` enum, which functions as a `bitset
+<https://en.wikipedia.org/wiki/Bit_array>`__. You can combine regions
+using bitwise logical operators.
+
+.. doxygengroup:: RegionsGroup
+   :members:
+         
+Permission Substitution
+```````````````````````
+
+Variable names can include labels, marked in curly-braces, that will
+later be substituted (using `Permissions::substitute` and
+`Component::substitutePermissions`). Substitutions are necessary
+because, when declaring permissions for a `Component`, you may need to
+express that it can access some variable for all species (or all ions,
+all neutrals, etc.), but you won't yet know the names of all the
+species. For example, if you need to read the density of all species
+and write the collision frequency of all ions then you would write::
+
+  Permissions p({readOnly("species:{all_spcies}:density"),
+                 readWrite("species:{ions}:collision_frequency"});
+
+If there are species e, d, d+, h, and h+ then the above will be
+equivalent to::
+
+  Permissions p({readOnly("species:e:density"),
+                 readOnly("species:d:density"),
+                 readOnly("species:d+:density"),
+                 readOnly("species:h:density"),
+                 readOnly("species:h+:density"),
+                 readWrite("species:d+:collision_frequency"),
+                 readWrite("species:h+:collision_frequency")});
+
+These substitutions will be performed in
+`Component::declareAllSpecies`. See the documentation for that method
+for a full list of the substitutions which it can perform.
+
+It can also be useful to define your own substitutions, to save
+repetitive declarations. For example, you could declare read
+permissions for electron density, pressure, temperature, velocity, and
+momentum as follows::
+
+  Permissions p({readOnly("species:e:{inputs}");
+  p.substitute({"density", "pressure", "temperature", "velocity", "momentum"});
+
+This is equivalent to having written::
+   
+   Permissions p({readOnly("species:e:density"),
+                  readOnly("species:e:pressure")},
+                  readOnly("species:e:temperature")},
+                  readOnly("species:e:velocity")},
+                  readOnly("species:e:momentum")});
+
+Permission Factory Functions
+````````````````````````````
+
+.. doxygengroup:: PermissionFactories
+   :members:
+
+Permissions Class
+`````````````````
+.. doxygenclass:: Permissions
+   :members:
+
+Further Implementation Details
+``````````````````````````````
+
+The above information should be sufficient for users that are
+developing or modifying components. The following explains in more
+detail how permission data is stored and should be read by anyone
+looking to modify the `Permissions` or `GuardedOptions` classes.
+
+Permission information for a variable gets stored in
+`Permissions::AccessRights` objects, which are arrays of
+`Regions`. Each element of the array corresponds to information about
+a permission level: ``{read_if_set, read, write, final}``. To access
+the element for a desired permission level, you can index the array
+with the corresponding member of the `PermissionTypes` enum::
+
+  Permissions::AccessRights rights;
+  Regions read_regions = rights[PermissionTypes::Read];
+  Regions write_regions = rights[PermissionTypes::Write];
+
+The contents of each element of an `Permissions::AccessRights` array
+is the set of regions for which the permissions apply. For example::
+
+  Permissions::AccessRights read_boundaries_if_set =
+    {Regions::Boundaries, Regions::Nowhere, Regions::Nowhere,
+     Regions::Nowhere};
+  Permissions::AccessRights read_interior_write_boundaries =
+    {Regions::Nowhere, Regions::Interior, Regions::Boundaries,
+     Regions::Nowhere};
+  Permissions::AccessRights final_write_all_regions =
+    {Regions::Nowhere, Regions::Nowhere, Regions::Nowhere, Regions::All};
+
+The `Permissions::VarRights` struct is used to pair a variable name
+with a `Permissions::AccessRights` array containing the permission
+information for that variable.
+
+
+GuardedOptions
+~~~~~~~~~~~~~~
+
+``GuardedOptions`` objects combine a `Permissions` object and an
+`Options` object. They can be indexed just like normal ``Options``
+objects but will return another ``GuardedOptions``, wrapping the
+result. In order to read or write the contents of a ``GuardedOptions``
+object you must use the ``get()`` or ``getWritable()`` methods,
+respectively. These will return the underlying (const) ``Options``
+object, if you have the necessary permissions to access it. Otherwise,
+they will raise an exception.
+
+If ``CHECKLEVEL`` is 1 or above, then the ``GuardedOptions`` will track
+which variables have actually been accessed. Lists of
+unread/unwritten variables can be returned with the ``unreadItems()``
+and ``unwrittenItems()`` methods. If ``CHECKLEVEL`` is zero then
+calling these methods will raise an exception.
+
+.. doxygenclass:: GuardedOptions
+   :members:
+
+.. note::
+   When indexing a ``GuardedOptions`` object, it will create a new
+   ``GuardedOptions`` on-demand. This is unlike with a normal
+   ``Options`` object which returns a reference to a preexisting child
+   ``Options`` object. You generally should not store
+   ``GuardedOptions`` by reference. You may be able to pass them by
+   reference, but this requires you to think carefully about whether
+   the argument is going to be an r-value or an l-value.
 
 .. _sec-tests:
 
@@ -882,3 +1121,12 @@ When collisions are neglected, we obtain the result
    :name: alfven-wave
    :alt: Alfven wave speed, as function of parallel and perpendicular wavenumbers
    :width: 60%
+
+Collision frequency selection
+~~~~~~~~~~~~~~
+
+There are two simple integrated tests to make sure that the collision frequency selection is correct
+across `neutral_mixed`, `evolve_pressure`, `ion_viscosity` and `neutral_parallel_diffusion`.
+A minimal 3D geometry is run for one RHS evaluation, and the test checks the log file
+to make sure the correct collisionalities were selected. One of the tests is for the `multispecies`
+mode across all components, while the other is for `braginskii` for plasma and `afn` for neutrals.

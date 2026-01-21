@@ -7,8 +7,6 @@
 struct ClassicalDiffusion : public Component {
   ClassicalDiffusion(std::string name, Options& alloptions, Solver*);
 
-  void transform(Options &state) override;
-
   void outputVars(Options &state) override;
 private:
   Field2D Bsq; // Magnetic field squared
@@ -16,6 +14,8 @@ private:
   bool diagnose; ///< Output additional diagnostics?
   Field3D Dn; ///< Particle diffusion coefficient
   BoutReal custom_D; ///< User-set particle diffusion coefficient override
+
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

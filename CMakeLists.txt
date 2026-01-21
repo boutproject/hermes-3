@@ -44,7 +44,7 @@ option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
   set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
   set(HERMES_BOUT_SRC "external/BOUT-dev" CACHE STRING "Directory of BOUT++ dir")
-  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev)
+  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev SYSTEM)
 else()
   find_package(bout++ REQUIRED)
 endif()
@@ -59,23 +59,31 @@ if(HERMES_USE_VANTAGE)
   find_sycl_if_required()
   find_package(VANTAGE-Reactions REQUIRED)
 endif()
+include("./cmake/Sanitizers.cmake")
 
 set(HERMES_SOURCES
+    src/amjuel_reaction.cxx
+    src/braginskii_collisions.cxx
+    src/braginskii_conduction.cxx
+    src/braginskii_electron_viscosity.cxx
+    src/braginskii_friction.cxx
+    src/braginskii_heat_exchange.cxx
+    src/braginskii_thermal_force.cxx
+    src/braginskii_ion_viscosity.cxx
     src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
     src/ionisation.cxx
-    src/radiation.cxx
     src/div_ops.cxx
     src/neutral_mixed.cxx
     src/neutral_full_velocity.cxx
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
-    src/electron_viscosity.cxx
     src/evolve_density.cxx
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
+    src/guarded_options.cxx
     src/isothermal.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
@@ -89,17 +97,14 @@ set(HERMES_SOURCES
     src/fixed_fraction_ions.cxx
     src/sound_speed.cxx
     src/zero_current.cxx
-    src/collisions.cxx
     src/anomalous_diffusion.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
-    src/amjuel_hyd_ionisation.cxx
-    src/amjuel_hyd_recombination.cxx
-    src/amjuel_helium.cxx
     src/adas_reaction.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
     src/neutral_boundary.cxx
+    src/permissions.cxx
     src/polarisation_drift.cxx
     src/solkit_neutral_parallel_diffusion.cxx
     src/hydrogen_charge_exchange.cxx
@@ -107,28 +112,32 @@ set(HERMES_SOURCES
     src/upstream_density_feedback.cxx
     src/temperature_feedback.cxx
     src/detachment_controller.cxx
-    src/thermal_force.cxx
-    src/ion_viscosity.cxx
+    src/reaction.cxx
+    src/reaction_parser.cxx
     src/transform.cxx
     src/vorticity.cxx
     include/adas_reaction.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
     include/amjuel_helium.hxx
-    include/amjuel_hyd_ionisation.hxx
-    include/amjuel_hyd_recombination.hxx
+    include/amjuel_hydrogen.hxx
     include/amjuel_reaction.hxx
     include/anomalous_diffusion.hxx
     include/classical_diffusion.hxx
     include/binormal_stpm.hxx
-    include/collisions.hxx
+    include/braginskii_collisions.hxx
+    include/braginskii_conduction.hxx
+    include/braginskii_electron_viscosity.hxx
+    include/braginskii_friction.hxx
+    include/braginskii_heat_exchange.hxx
+    include/braginskii_ion_viscosity.hxx
+    include/braginskii_thermal_force.hxx
     include/component.hxx
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/div_ops.hxx
     include/electromagnetic.hxx
     include/electron_force_balance.hxx
-    include/electron_viscosity.hxx
     include/evolve_density.hxx
     include/evolve_energy.hxx
     include/evolve_momentum.hxx
@@ -136,21 +145,22 @@ set(HERMES_SOURCES
     include/fixed_density.hxx
     include/fixed_fraction_ions.hxx
     include/fixed_velocity.hxx
+    include/guarded_options.hxx
     include/neutral_full_velocity.hxx
     include/hermes_utils.hxx
     include/hydrogen_charge_exchange.hxx
     include/solkit_hydrogen_charge_exchange.hxx
     include/integrate.hxx
-    include/ion_viscosity.hxx
     include/ionisation.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
     include/solkit_neutral_parallel_diffusion.hxx
     include/noflow_boundary.hxx
+    include/permissions.hxx
     include/polarisation_drift.hxx
     include/quasineutral.hxx
-    include/radiation.hxx
+    include/reaction.hxx
     include/recalculate_metric.hxx
     include/recycling.hxx
     include/relax_potential.hxx
@@ -161,7 +171,6 @@ set(HERMES_SOURCES
     include/snb_conduction.hxx
     include/sheath_closure.hxx
     include/sound_speed.hxx
-    include/thermal_force.hxx
     include/upstream_density_feedback.hxx
     include/temperature_feedback.hxx
     include/detachment_controller.hxx
@@ -196,9 +205,11 @@ target_include_directories(hermes-3-lib PUBLIC
 
 # Have hermes-3-lib look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3-lib PROPERTIES BUILD_RPATH "$ORIGIN")
+enable_sanitizers(hermes-3-lib)
 if(HERMES_USE_VANTAGE)
   add_sycl_to_target(TARGET hermes-3-lib SOURCES ${HERMES_SOURCES})
 endif()
+
 # The main executable target
 add_executable(hermes-3
                hermes-3.cxx
@@ -213,9 +224,21 @@ target_include_directories(hermes-3 PUBLIC
 
 # Have hermes-3 look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3 PROPERTIES BUILD_RPATH "$ORIGIN")
+
+option(HERMES_ENABLE_WARNINGS "Enable compiler warnings" ${PROJECT_IS_TOP_LEVEL})
+option(HERMES_ERROR_ON_WARNINGS "Enable compiler warnings" OFF)
+include(CompilerWarnings)
+add_library(hermes_warnings INTERFACE)
+hermes_set_project_warnings(hermes_warnings ${HERMES_ERROR_ON_WARNINGS} "" "" "" "")
+
+if (HERMES_ENABLE_WARNINGS)
+  target_link_libraries(hermes-3-lib PRIVATE hermes_warnings)
+  target_link_libraries(hermes-3 PRIVATE hermes_warnings)
+endif()
 if(HERMES_USE_VANTAGE)
   add_sycl_to_target(TARGET hermes-3 SOURCES hermes-3.cxx)
 endif()
+
 # Build the file containing just the commit hash
 # This will be rebuilt on every commit!
 configure_file(
@@ -224,25 +247,16 @@ configure_file(
 
 # Once built, copy the data and test directories
 option(HERMES_COPY_EXAMPLES_TO_BUILD "Copy the examples to the build directory" ON)
-if(HERMES_COPY_EXAMPLES_TO_BUILD)
-  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
-endif()
 
 option(HERMES_COPY_JSON_DATABASE_TO_BUILD "Copy the json database to the build directory" ON)
-if(HERMES_COPY_JSON_DATABASE_TO_BUILD)
-  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+
+if(HERMES_COPY_EXAMPLES_TO_BUILD OR HERMES_COPY_JSON_DATABASE_TO_BUILD)
+  add_custom_target(setup-examples ALL)
+else()
+  add_custom_target(setup-examples)
 endif()
 
-option(HERMES_COPY_TESTS_TO_BUILD "Copy the tests to the build directory" ON)
-if(HERMES_COPY_TESTS_TO_BUILD)
-  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
-endif()
+
 
 if(HERMES_USE_VANTAGE)
   # Test of bout+neso
@@ -254,19 +268,92 @@ if(HERMES_USE_VANTAGE)
 endif()
 
 # Tests
+option(HERMES_COPY_TESTS_TO_BUILD "Copy the tests to the build directory" ON)
 option(HERMES_TESTS "Build the tests" ON)
+if(HERMES_COPY_TESTS_TO_BUILD OR HERMES_TESTS)
+  add_custom_target(setup-test ALL)
+else()
+  add_custom_target(setup-test)
+endif()
+
+
+
+# copy the data and test directories
+add_custom_command(TARGET setup-examples PRE_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+
+add_custom_command(TARGET setup-examples PRE_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+
+add_custom_command(TARGET setup-test PRE_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+
+
 if(HERMES_TESTS)
   enable_testing()
 
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
-    add_test(NAME ${TESTNAME}
-           WORKING_DIRECTORY tests/integrated/${TESTNAME}
-           COMMAND runtest)
+    set(oneValueArgs DOWNLOAD DOWNLOAD_NAME)
+    set(multiValueArgs REQUIRES CONFLICTS)
+    cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    foreach (REQUIREMENT IN LISTS HERMES_TEST_OPTIONS_REQUIRES)
+      if (NOT ${REQUIREMENT})
+        message(STATUS "Not building test ${TESTNAME}, requirement not met: ${REQUIREMENT}")
+        return()
+      endif()
+    endforeach()
+
+    foreach (CONFLICT IN LISTS HERMES_TEST_OPTIONS_CONFLICTS)
+      if (${CONFLICT})
+        message(STATUS "Not building test ${TESTNAME}, conflicts with: ${CONFLICT}")
+        return()
+      endif()
+      message(STATUS "CONFLICT ${CONFLICT} ${${CONFLICT}}")
+    endforeach()
+
+
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+      set(INT_TEST_DEST
+          ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
+      # Make copies of the test exec and input file in the build directory and keep them up to date
+      configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
+      configure_file(${INT_TEST_SRC}/data/BOUT.inp ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+    else()
+      set(INT_TEST_DEST
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+    endif()
+    add_test(
+      NAME ${TESTNAME}
+      WORKING_DIRECTORY ${INT_TEST_DEST}
+      COMMAND runtest)
+    set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
+
+    if (HERMES_TEST_OPTIONS_DOWNLOAD)
+      if (NOT HERMES_TEST_OPTIONS_DOWNLOAD_NAME)
+        message(FATAL_ERROR "We need DOWNLOAD_NAME if we should DOWNLOAD!")
+      endif()
+      file(REAL_PATH ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME} DOWNLOAD_DEST_PATH BASE_DIRECTORY ${INT_TEST_DEST})
+      add_custom_command(OUTPUT ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+                         COMMAND wget -nv ${HERMES_TEST_OPTIONS_DOWNLOAD} -O ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+                         WORKING_DIRECTORY ${INT_TEST_DEST}
+                         COMMENT "Downloading test data to ${DOWNLOAD_DEST_PATH}")
+      # Custom target to run download command; use sanitised absolute path for the target name
+      string(REPLACE "/" "_" DOWNLOAD_TARGET_NAME ${DOWNLOAD_DEST_PATH})
+      add_custom_target(${DOWNLOAD_TARGET_NAME} ALL
+                        DEPENDS ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+                        DEPENDS setup-test)
+    endif()
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
   hermes_add_integrated_test(1D-recycling)
+  hermes_add_integrated_test(1D-recycling-dthe)
   hermes_add_integrated_test(diffusion)
   hermes_add_integrated_test(evolve_density)
   hermes_add_integrated_test(neutral_mixed)
@@ -275,6 +362,8 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave)
   hermes_add_integrated_test(alfven-wave)
+  hermes_add_integrated_test(collfreq-braginskii-afn)
+  hermes_add_integrated_test(collfreq-multispecies)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -291,7 +380,10 @@ if(HERMES_TESTS)
                    tests/unit/main.cxx
                    ${TEST_SOURCES})
 
+    target_link_libraries(hermes_unit_tests PRIVATE hermes_warnings)
+
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
+    set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
     # Have hermes_unit_tests look for dynamic libs in ./ before searching elsewhere
     set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")

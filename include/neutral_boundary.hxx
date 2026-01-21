@@ -4,14 +4,6 @@
 
 #include "component.hxx"
 
-namespace {
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  int ny = f.getNy();
-  int nz = f.getNz();
-  return Ind3D{(x * ny + y) * nz + z, ny, nz};
-}
-}; // namespace
-
 /// Per-species boundary condition for neutral particles at
 /// sheath (Y) boundaries.
 ///
@@ -31,18 +23,6 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 struct NeutralBoundary : public Component {
   NeutralBoundary(std::string name, Options& options, Solver*);
 
-  ///
-  /// state
-  ///  - species
-  ///    - <name>
-  ///      - density       Free boundary
-  ///      - temperature   Free boundary
-  ///      - pressure      Free boundary
-  ///      - velocity [if set] Zero boundary
-  ///      - momentum [if set] Zero boundary
-  ///      - energy_source  Adds wall losses
-  ///
-  void transform(Options& state) override;
   void outputVars(Options &state) override;
 
 private:
@@ -61,6 +41,19 @@ private:
   bool upper_y; ///< Boundary condition at upper y?
   bool sol; ///< Boundary condition at sol?
   bool pfr; ///< Boundary condition at pfr?
+
+  ///
+  /// state
+  ///  - species
+  ///    - <name>
+  ///      - density       Free boundary
+  ///      - temperature   Free boundary
+  ///      - pressure      Free boundary
+  ///      - velocity [if set] Zero boundary
+  ///      - momentum [if set] Zero boundary
+  ///      - energy_source  Adds wall losses
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
