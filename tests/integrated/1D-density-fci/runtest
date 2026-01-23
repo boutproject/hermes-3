@@ -2,18 +2,12 @@
 
 # Python script to run and analyse MMS test
 
-from __future__ import division
-from __future__ import print_function
+import sys
 
-try:
-    from builtins import str
-except:
-    pass
-
-from boututils.run_wrapper import shell, launch_safe, getmpirun
+from boututils.run_wrapper import shell, launch_safe
 from boutdata.collect import collect
 
-from numpy import sqrt, max, abs, mean, array, log, concatenate
+from numpy import sqrt, max, abs, mean, array, log
 
 import tarfile
 
@@ -95,39 +89,40 @@ for var in varnames:
         success = False
 
 # plot errors
-try:
-    import matplotlib.pyplot as plt
+if "-p" in sys.argv or "--plot" in sys.argv:
+    try:
+        import matplotlib.pyplot as plt
 
-    for var in varnames:
-        l2 = results[var]["l2"]
-        inf = results[var]["inf"]
-        order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
+        for var in varnames:
+            l2 = results[var]["l2"]
+            inf = results[var]["inf"]
+            order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
 
-        plt.plot(dy, l2, "-o", label=r"$l_2$ (" + var + ")")
-        plt.plot(dy, inf, "-x", label=r"$l_\infty$ (" + var + ")")
-        plt.plot(
-            dy, l2[-1] * (dy / dy[-1]) ** order, "--", label="Order %.1f" % (order)
-        )
+            plt.plot(dy, l2, "-o", label=r"$l_2$ (" + var + ")")
+            plt.plot(dy, inf, "-x", label=r"$l_\infty$ (" + var + ")")
+            plt.plot(
+                dy, l2[-1] * (dy / dy[-1]) ** order, "--", label="Order %.1f" % (order)
+            )
 
-    plt.legend(loc="upper left")
-    plt.grid()
+        plt.legend(loc="upper left")
+        plt.grid()
 
-    plt.yscale("log")
-    plt.xscale("log")
+        plt.yscale("log")
+        plt.xscale("log")
 
-    plt.xlabel(r"Mesh spacing $\delta y$")
-    plt.ylabel("Error norm")
+        plt.xlabel(r"Mesh spacing $\delta y$")
+        plt.ylabel("Error norm")
 
-    plt.savefig("fluid_norm.pdf")
-    plt.savefig("fluid_norm.png")
+        plt.savefig("fluid_norm.pdf")
+        plt.savefig("fluid_norm.png")
 
-    # plt.show()
-    plt.close()
-except:
-    # Plotting could fail for any number of reasons, and the actual
-    # error raised may depend on, among other things, the current
-    # matplotlib backend, so catch everything
-    pass
+        # plt.show()
+        plt.close()
+    except:  # noqa
+        # Plotting could fail for any number of reasons, and the actual
+        # error raised may depend on, among other things, the current
+        # matplotlib backend, so catch everything
+        pass
 
 if success:
     print(" => Test passed")
