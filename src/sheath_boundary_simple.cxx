@@ -274,9 +274,12 @@ void SheathBoundarySimple::transform(Options& state) {
           const BoutReal nesheath = 0.5 * (Ne_im + Ne[i]);
           const BoutReal tesheath = floor(0.5 * (Te_im + Te[i]), 1e-5);
 
+          // Note: Floor on nesheath is << floor on ion_sum so that the ratio is
+          // small but non-zero when both go to zero.
           phi[i] =
               tesheath
-              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
+              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge)
+                    * floor(nesheath, 1e-10) / floor(ion_sum[i], 1e-5));
 
           const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
@@ -301,7 +304,8 @@ void SheathBoundarySimple::transform(Options& state) {
 
           phi[i] =
               tesheath
-              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
+              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge)
+                    * floor(nesheath, 1e-10) / floor(ion_sum[i], 1e-5));
 
           const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
