@@ -18,7 +18,7 @@ struct NeutralMixed : public Component {
   /// @param options  Top-level options. Settings will be taken from options[name]
   /// @param solver   Time-integration solver to be used
   NeutralMixed(const std::string& name, Options& options, Solver *solver);
-  
+
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
   void finally(const Options &state) override;
@@ -30,7 +30,7 @@ struct NeutralMixed : public Component {
   void precon(const Options &state, BoutReal gamma) override;
 private:
   std::string name;  ///< Species name
-  
+
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
@@ -45,6 +45,7 @@ private:
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
+  BoutReal neutral_lmax;
 
   bool sheath_ydown, sheath_yup;
 
