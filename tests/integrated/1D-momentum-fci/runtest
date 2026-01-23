@@ -18,68 +18,59 @@ def gridname(ny):
 
 
 # List of NY values to use
-nylist = [16, 32, 64, 128]  # , 640, 1280, 2560, 5120]
-
-nout = 20
-timestep = 1e4 / nout
+nylist = [64, 128]
 
 nproc = 1
 
 varnames = ["NVh+"]
 
-results = {}
-for var in varnames:
-    results[var] = {"l2": [], "inf": []}
-
-for ny in nylist:
-    args = (
-        "mesh:file="
-        + gridname(ny)
-        + " nout="
-        + str(nout)
-        + " timestep="
-        + str(timestep)
-    )
-
-    print("Running with " + args)
-
-    # Delete old data
-    shell("rm data/BOUT.dmp.*.nc")
-
-    # Command to run
-    cmd = "../../../hermes-3 " + args
-    # Launch using MPI
-    s, out = launch_safe(cmd, nproc=nproc, pipe=True)
-
-    # Save output to log file
-    f = open("run.log." + str(ny), "w")
-    f.write(out)
-    f.close()
-
-    # Collect data
-    for var in varnames:
-        E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
-        E = E[:, 2:-2, 2:-2, 0]
-
-        l2 = sqrt(mean(E**2))
-        linf = max(abs(E))
-        results[var]["l2"].append(l2)
-        results[var]["inf"].append(linf)
-
-        print("Error norm %s: l-2 %f l-inf %f" % (var, l2, linf))
-
-# Calculate grid spacing
-dy = 1.0 / array(nylist)
-
 success = True
 
-for var in varnames:
-    l2 = results[var]["l2"]
-    order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
-    print("Convergence order %s = %f" % (var, order))
+todo = ("NVh+:isMMS=true", 2), ("NVh+:isMMS=false", 1)
+for extraarg, expected in todo:
+    results = {}
+    for var in varnames:
+        results[var] = {"l2": [], "inf": []}
 
-    if order < 1.8:
-        success = False
+    for ny in nylist:
+        args = f"mesh:file={gridname(ny)} {extraarg}"
+
+        print("Running with " + args)
+
+        # Delete old data
+        shell("rm data/BOUT.dmp.*.nc")
+
+        # Command to run
+        cmd = "../../../hermes-3 " + args
+        # Launch using MPI
+        _, out = launch_safe(cmd, nproc=nproc, pipe=True)
+
+        # Save output to log file
+        with open(f"run.log.{ny}", "w") as f:
+            f.write(out)
+
+        # Collect data
+        for var in varnames:
+            E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
+            E = E[:, 2:-2, 2:-2, 0]
+
+            l2 = sqrt(mean(E**2))
+            linf = max(abs(E))
+            results[var]["l2"].append(l2)
+            results[var]["inf"].append(linf)
+
+            print("Error norm %s: l-2 %f l-inf %f" % (var, l2, linf))
+
+    # Calculate grid spacing
+    dy = 1.0 / array(nylist)
+
+    for var in varnames:
+        l2 = results[var]["l2"]
+        order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
+        print("Convergence order %s = %f" % (var, order))
+
+        if order < expected - 0.2:
+            success = False
 
 # plot errors
 if "-p" in sys.argv or "--plot" in sys.argv:
