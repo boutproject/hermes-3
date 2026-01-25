@@ -17,7 +17,18 @@ using bout::globals::mesh;
 
 EvolveAnisotropicPressure::EvolveAnisotropicPressure(std::string name,
                                                      Options& alloptions, Solver* solver)
-    : name(name) {
+    : Component({
+          readOnly("species:{name}:density", Regions::Interior),
+          readOnly("species:{name}:velocity", Regions::Interior),
+          readOnly("species:{name}:AA"),
+          readWrite("species:{name}:pressure"),
+          readWrite("species:{name}:pressure_perp"),
+          readWrite("species:{name}:pressure_par"),
+          readWrite("species:{name}:temperature"),
+          readWrite("species:{name}:temperature_perp"),
+          readWrite("species:{name}:temperature_par"),
+      }),
+      name(name) {
   AUTO_TRACE();
 
   auto& options = alloptions[name];
@@ -27,7 +38,7 @@ EvolveAnisotropicPressure::EvolveAnisotropicPressure(std::string name,
           .doc("Ratio of specific heats γ = Cp/Cv [5/3 for monatomic ideal gas]")
           .withDefault(5. / 3);
   Cv = 1. / (adiabatic_index - 1.);
-  
+
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   temperature_floor = options["temperature_floor"]
@@ -107,12 +118,12 @@ EvolveAnisotropicPressure::EvolveAnisotropicPressure(std::string name,
                                    .withDefault<bool>(false);
 }
 
-void EvolveAnisotropicPressure::transform(Options& state) {
+void EvolveAnisotropicPressure::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   mesh->communicate(E, PA);
 
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
   N = getNoBoundary<Field3D>(species["density"]);
   const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
   const BoutReal AA = get<BoutReal>(species["AA"]);
@@ -199,8 +210,8 @@ void EvolveAnisotropicPressure::transform(Options& state) {
   set(species["pressure_perp"], P_perp);
   set(species["pressure_par"], P_par);
   set(species["temperature"], T);
-  set(species["temperature_par"], T_par);
   set(species["temperature_perp"], T_perp);
+  set(species["temperature_par"], T_par);
 }
 
 void EvolveAnisotropicPressure::finally(const Options& state) {
@@ -280,7 +291,6 @@ void EvolveAnisotropicPressure::outputVars(Options& state) {
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
-  auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 

@@ -39,21 +39,6 @@ struct EvolveAnisotropicPressure : public Component {
   ///
   EvolveAnisotropicPressure(std::string name, Options& options, Solver* solver);
 
-  /// Inputs
-  /// - species
-  ///   - <name>
-  ///     - density
-  ///
-  /// Sets
-  /// - species
-  ///   - <name>
-  ///     - pressure       <- This is (2pressure_perp + pressure_par)/3
-  ///     - temperature   Requires density
-  ///     - pressure_par
-  ///     - pressure_perp
-  ///
-  void transform(Options& state) override;
-
   ///
   /// Optional inputs
   ///
@@ -100,7 +85,20 @@ private:
   BoutReal time_normalisation;   ///< Normalisation factor [s]
   bool source_time_dependent;    ///< Is the input source time dependent?
 
-  bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
+  /// Inputs
+  /// - species
+  ///   - <name>
+  ///     - density
+  ///
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - pressure       <- This is (2pressure_perp + pressure_par)/3
+  ///     - temperature   Requires density
+  ///     - pressure_par
+  ///     - pressure_perp
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

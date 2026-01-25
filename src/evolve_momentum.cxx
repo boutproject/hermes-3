@@ -150,7 +150,7 @@ void EvolveMomentum::finally(const Options& state) {
                        - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true);
         if (low_n_diffuse_perp) {
           dndt += Div_Perp_Lap_FV_Index(
-              density_floor / softFloor(N, 1e-3 * density_floor), N, bndry_flux);
+              density_floor / softFloor(N, 1e-3 * density_floor), N);
         }
         ddt(NV) += Z * Apar * dndt;
       }
@@ -209,7 +209,7 @@ void EvolveMomentum::finally(const Options& state) {
 
   if (low_n_diffuse_perp) {
     ddt(NV) += Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor),
-                                     NV, true);
+                                     NV);
   }
 
   if (low_p_diffuse_perp) {
