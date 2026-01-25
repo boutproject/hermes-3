@@ -22,11 +22,11 @@ enum class species_filter {
 static inline std::map<std::string, int> count_species(std::string expr) {
   // std::regex_iterator instead?
   std::map<std::string, int> counts;
-  std::regex pattern("([0-9]*)([a-zA-Z]*[0-9]*\\+?\\-?[0-9]*)");
+  const std::regex pattern("([0-9]*)([a-zA-Z]*[0-9]*\\+?\\-?[0-9]*)");
   for (auto el : strsplit(expr, ' ')) {
     if (el.compare("+") != 0) {
       std::smatch matches;
-      bool has_matches = std::regex_search(el, matches, pattern);
+      [[maybe_unused]] const bool has_matches = std::regex_search(el, matches, pattern);
       ASSERT1(has_matches);
 
       int el_count = (matches[1].length() == 0) ? 1 : stringToInt(matches[1]);
@@ -116,7 +116,7 @@ public:
     std::vector<std::string> first_filter_applied =
         get_species(species_names, first_filter);
     return get_species(first_filter_applied, other_filters...);
-  };
+  }
 
   /**
    * @brief Apply multiple filters to the list of species identified by the parser

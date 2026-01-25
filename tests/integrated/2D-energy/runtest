@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse 2D energy test
+
+from boututils.run_wrapper import shell, launch_safe, getmpirun
+from boutdata.collect import collect
+
+import numpy as np
+
+path = "data"
+nproc = 1
+
+# Link to the executable
+shell("ln -s ../../../hermes-3 hermes-3")
+
+# Delete old data
+shell("rm data/BOUT.dmp.*.nc")
+
+# Launch using MPI
+s, out = launch_safe("./hermes-3 -d data", nproc=nproc, pipe=True)
+
+# Save output to log file
+f = open("run.log", "w")
+f.write(out)
+f.close()
+
+# Collect data
+pe = collect("Pe", path=path, info=False)
+pi = collect("Ph+", path=path, info=False)
+
+pe_tot = np.mean(pe[:, 2:-2, 0, :], axis=(1,2))
+pi_tot = np.mean(pi[:, 2:-2, 0, :], axis=(1,2))
+p_tot = pe_tot + pi_tot
+
+success = True
+
+# Expect electron pressure to fall
+if pe_tot[-1] > pe_tot[0]:
+  print(f"Expected final Pe ({pe_tot[-1]}) to be lower than initial ({pe_tot[0]})")
+  success = False
+
+# Expect ion pressure to rise
+if pi_tot[-1] < pi_tot[0]:
+  print(f"Expected final Ph+ ({pi_tot[-1]}) to be higher than initial ({pi_tot[0]})")
+  success = False
+
+# Expect total pressure to rise
+if p_tot[-1] < p_tot[0]:
+  print(f"Expected final P ({p_tot[-1]}) to be higher than initial ({p_tot[0]})")
+  success = False
+
+if success:
+  print(" => Test passed")
+  exit(0)
+else:
+  print(" => Test failed")
+  exit(1)

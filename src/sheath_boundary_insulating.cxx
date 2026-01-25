@@ -49,7 +49,21 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 } // namespace
 
 SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& alloptions,
-                                                   Solver*) {
+                                                   Solver*)
+    : Component({
+        readIfSet("species:{all_species}:charge"),
+        readIfSet("species:e:{e_whole_domain}"),
+        writeBoundary("species:e:{e_boundary}"),
+        readWrite("species:e:energy_source"),
+        writeBoundaryIfSet("species:e:{e_optional}"),
+        writeBoundaryReadInteriorIfSet("species:e:pressure"),
+        readIfSet("species:{ions}:adiabatic"),
+        readOnly("species:{ions}:AA"),
+        readWrite("species:{ions}:energy_source"),
+        writeBoundary("species:{ions}:{ion_boundary}"),
+        writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+        writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+    }) {
   AUTO_TRACE();
 
   Options& options = alloptions[name];
@@ -77,13 +91,20 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
   gamma_e = options["gamma_e"]
                 .doc("Electron sheath heat transmission coefficient")
                 .withDefault(3.5);
+
+  substitutePermissions("e_whole_domain", {"AA", "adiabatic"});
+  substitutePermissions("e_boundary", {"density", "temperature"});
+  substitutePermissions("e_optional", {"velocity", "momentum"});
+  substitutePermissions("ion_boundary", {"density", "temperature"});
+  substitutePermissions("ion_optional", {"velocity", "momentum"});
+  setPermissions(writeBoundaryIfSet("fields:phi"));
 }
 
-void SheathBoundaryInsulating::transform(Options& state) {
+void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  Options& allspecies = state["species"];
-  Options& electrons = allspecies["e"];
+  GuardedOptions allspecies = state["species"];
+  GuardedOptions electrons = allspecies["e"];
 
   // Need electron properties
   // Not const because boundary conditions will be set
@@ -203,7 +224,7 @@ void SheathBoundaryInsulating::transform(Options& state) {
       continue; // Skip electrons
     }
 
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
     // Ion charge
     const BoutReal Zi =
@@ -437,7 +458,6 @@ void SheathBoundaryInsulating::transform(Options& state) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         auto i = indexAt(Ne, r.ind, mesh->ystart, jz);
-        auto ip = i.yp();
         auto im = i.ym();
 
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);

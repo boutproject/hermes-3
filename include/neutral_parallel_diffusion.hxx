@@ -23,7 +23,11 @@
 ///  - F<name>_Dpar   Momentum source due to diffusion
 ///
 struct NeutralParallelDiffusion : public Component {
-  NeutralParallelDiffusion(std::string name, Options &alloptions, Solver *) {
+  NeutralParallelDiffusion(std::string name, Options& alloptions, Solver*)
+      : Component({readIfSet("species:{all_species}:charge"),
+                   readIfSet("species:{neutrals}:{optional_inputs}"),
+                   readOnly("species:{neutrals}:{inputs}"),
+                   readWrite("species:{neutrals}:{outputs}")}) {
     auto& options = alloptions[name];
     dneut = options["dneut"]
                 .doc("cross-field diffusion projection (B  / Bpol)^2")
@@ -48,27 +52,15 @@ struct NeutralParallelDiffusion : public Component {
     perpendicular_viscosity = options["perpendicular_viscosity"]
       .doc("Enable parallel projection of perpendicular viscosity?")
       .withDefault<bool>(true);
-  }
 
-  ///
-  /// Inputs
-  ///  - species
-  ///    - <all neutrals>    # Applies to all neutral species
-  ///      - AA
-  ///      - collision_frequency
-  ///      - density
-  ///      - temperature
-  ///      - pressure     [optional, or density * temperature]
-  ///      - velocity     [optional]
-  ///      - momentum     [if velocity set]
-  ///
-  /// Sets
-  ///  - species
-  ///    - <name>
-  ///      - density_source
-  ///      - energy_source
-  ///      - momentum_source  [if velocity set]
-  void transform(Options &state) override;
+    // FIXME: strictly speaking, momentum is not optional if velocity has been set
+    substitutePermissions("optional_inputs", {"pressure", "velocity", "momentum"});
+    substitutePermissions("inputs",
+                          {"AA", "collision_frequencies", "density", "temperature"});
+    // FIXME: momentum_source is only set if velocity was set.
+    substitutePermissions("outputs",
+                          {"density_source", "energy_source", "momentum_source"});
+  }
 
   /// Save variables to the output
   void outputVars(Options &state) override;
@@ -93,6 +85,27 @@ private:
 
   /// Store diagnostics for each species
   std::map<std::string, Diagnostics> diagnostics;
+
+  ///
+  /// Inputs
+  ///  - species
+  ///    - <all neutrals>    # Applies to all neutral species
+  ///      - AA
+  ///      - charge       [if set]
+  ///      - collision_frequencies
+  ///      - density
+  ///      - temperature
+  ///      - pressure     [optional, or density * temperature]
+  ///      - velocity     [optional]
+  ///      - momentum     [if velocity set]
+  ///
+  /// Sets
+  ///  - species
+  ///    - <name>
+  ///      - density_source
+  ///      - energy_source
+  ///      - momentum_source  [if velocity set]
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

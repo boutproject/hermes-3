@@ -5,7 +5,7 @@
 spack:
   # add package specs to the `specs` list
   specs:
-    - hermes-3%gcc+petsc
+    - hermes-3%gcc ^boutpp+petsc+sundials ^petsc+hypre+mumps
     - cmake
   view:
     gcc:
@@ -22,6 +22,9 @@ spack:
       providers:
         mpi: [mpich, openmpi]
   develop:
+    boutpp:
+      path: ./external/BOUT-dev
+      spec: boutpp@develop
     hermes-3:
       path: .
       spec: hermes-3@develop

@@ -1,22 +1,22 @@
 
 #include "gtest/gtest.h"
 
-#include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
+#include "test_extras.hxx" // FakeMesh
 
 #include "../../include/zero_current.hxx"
 
 /// Global mesh
-namespace bout{
-namespace globals{
-extern Mesh *mesh;
+namespace bout {
+namespace globals {
+extern Mesh* mesh;
 } // namespace globals
 } // namespace bout
 
 // The unit tests use the global mesh
 using namespace bout::globals;
 
-#include <bout/field_factory.hxx>  // For generating functions
+#include <bout/field_factory.hxx> // For generating functions
 
 // Reuse the "standard" fixture for FakeMesh
 using ZeroCurrentTest = FakeMeshFixture;
@@ -42,14 +42,31 @@ TEST_F(ZeroCurrentTest, ElectronFlowVelocity) {
   options["species"]["ion"]["charge"] = 2.0;
 
   // Set ion velocity
-  Field3D Vi =  FieldFactory::get()->create3D("y - x", &options, mesh);
+  Field3D Vi = FieldFactory::get()->create3D("y - x", &options, mesh);
   options["species"]["ion"]["velocity"] = Vi;
 
+  component.declareAllSpecies({"e", "ion"});
   component.transform(options);
 
   // Electron velocity should be equal to ion velocity
   Field3D Ve = get<Field3D>(options["species"]["e"]["velocity"]);
   BOUT_FOR_SERIAL(i, Ve.getRegion("RGN_NOBNDRY")) {
-    ASSERT_DOUBLE_EQ(Ve[i], Vi[i]) << "Electron velocity not equal to ion velocity at " << i;
+    ASSERT_DOUBLE_EQ(Ve[i], Vi[i])
+        << "Electron velocity not equal to ion velocity at " << i;
   }
+}
+
+TEST_F(ZeroCurrentTest, OutputVelocity) {
+  Options options{{"e", {{"charge", -1.0}}}};
+
+  ZeroCurrent component("e", options, nullptr);
+
+  Options state{{"species", {{"e", {{"velocity", 1.4}}}}}};
+  component.finally(state);
+
+  Options output{{"Cs0", 1.0}};
+  component.outputVars(output);
+
+  ASSERT_TRUE(output.isSet("Ve"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(output["Ve"]), 1.4));
 }

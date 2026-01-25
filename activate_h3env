@@ -95,47 +95,70 @@ in_h3env() {
   eval $cmd
 }
 
-# Update the links at <REPO_ROOT>/builds/spack-* such that there's
-# exactly one link for every package returned by 'spack find hermes-3'
-updatelinks_h3env() {
-  local links_dir="${REPO_ROOT}/builds"
-  local link_prefix="spack-"
+
+
+# Update spack build links for a dev package
+# usage: updatelinks [package name] [directory containing spack builds] [directory in which to create build links]
+#        where the directory paths are relative to the repository root
+updatelinks() {
+  local pkg_name="$1"
+  local builds_dir="${REPO_ROOT}/$2"
+  local links_dir="${REPO_ROOT}/builds/spack/$1"
   
-  # Use 'spack find' to get the hashes of currently installed hermes-3 packages
+  # Use 'spack find' to get the hashes of current installations of the package
   # Discard stderr to suppress error message when no installs are found
   local identifier_fmt="{hash:7}"
-  installed_hashes=$(spack find --format "$identifier_fmt" "hermes-3" 2> /dev/null)
+  installed_hashes=$(spack find --format "$identifier_fmt" "$pkg_name" 2> /dev/null)
 
   # Create any links for installed packages that don't exist already
   mkdir -p "${links_dir}"
   for hash in $installed_hashes; do
-    spack_build_dir=$(spack location -b "hermes-3/$hash")
-    _create-link "${spack_build_dir}" "${links_dir}/${link_prefix}${hash}"
+    spack_build_dir=$(spack location -s "$pkg_name/$hash")
+    _create-link "${spack_build_dir}" "${links_dir}/${hash}"
   done
 
   # Check whether existing links are still valid (Could also just use find -xtype l ?)
-  for l in "${links_dir}/${link_prefix}"*; do
+  for l in "${links_dir}/"*; do
     # Skip if l isn't a link (also guards against case where pattern has zero matches)
     [ ! -L "$l" ] && break;
     hash=$(echo "$l"|rev|cut -c -7|rev)
     # Remove link if 'spack find' returns non-zero for this hash
-    spack find "hermes-3/$hash" &> /dev/null
+    spack find "$pkg_name/$hash" &> /dev/null
     if [ $? -ne 0 ]; then
-      echo "    Removing stale link at $l"
+      echo "    Removing stale $pkg_name link at $l"
       rm -f "$l"
     fi
   done
 
-  # Also clean up top-level build links created by spack install
-  spack_link_paths=$(find "$REPO_ROOT" -type l -regextype posix-egrep -regex "${REPO_ROOT}/build-.*-[a-z0-9]{7}$")
+  # Also clean up old build links created by spack install and git ignore valid links in submodules
+  spack_link_paths=$(find "$builds_dir" -type l -regextype posix-egrep -regex "${builds_dir}/build-.*-[a-z0-9]{7}$")
   for link_path in $spack_link_paths; do
       local hash="${link_path:(-7)}"
       if ! [[ " ${installed_hashes[*]} " =~ " ${hash} " ]]
       then
           echo "    Removing stale spack link at ${link_path}"
           rm -Rf "$link_path" > /dev/null
+      else
+        # Hack to avoid having to mark submodule as ignore=untracked
+        submodule_exclude_file="$REPO_ROOT/.git/modules/$2/info/exclude"
+        if [ -f "$submodule_exclude_file" ]; then
+          link_file=$(basename "$link_path")
+          ignore_pattern="${link_file::-8}"\*
+          if grep -vwq "$ignore_pattern" "$submodule_exclude_file"; then 
+            echo >> "$submodule_exclude_file"
+            echo "$ignore_pattern" >> "$submodule_exclude_file"
+          fi
+        fi
       fi
   done
+  
+}
+
+# Update the <REPO_ROOT>/builds/spack/<pkg_name>/ links such that there's
+# exactly one link for every package returned by 'spack find [pkg_name]'
+updatelinks_h3env() {
+  updatelinks "hermes-3" "."
+  updatelinks "boutpp" "external/BOUT-dev"
 }
 
 # Print help/usage info

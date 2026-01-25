@@ -1,0 +1,8 @@
+ignore:
+  - "tests"
+  - "external"
+  - "hermes-3.cxx"
+  - "hermes-3.hxx"
+
+codecov:
+  branch: master
