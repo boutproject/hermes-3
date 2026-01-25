@@ -15,22 +15,6 @@ struct BootstrapCurrent : public Component {
   ///
   BootstrapCurrent(std::string name, Options& options, Solver* solver);
 
-  /// Inputs
-  /// - species
-  ///   - <..>      All species with charge and parallel momentum
-  ///     - charge
-  ///     - momentum
-  ///     - density
-  ///     - AA
-  ///
-  /// Sets
-  /// - species
-  ///   - <..>      All species with charge and parallel momentum
-  ///     - momentum  (modifies) to m n v||
-  ///     - velocity  (modifies) to v||
-  ///
-  void transform(Options& state) override;
-
   void outputVars(Options& state) override;
 
   // Individual equations for unit testing
@@ -67,7 +51,7 @@ private:
   BoutReal Nnorm, Tnorm, Pnorm, Bnorm; ///< Normalization factors
 
   bool diagnose;    ///< Output additional diagnostics?
-  Field2D JparB_av;    ///< Current value of <J||B>
+  Field2D JparB_av; ///< Current value of <J||B>
   Field2D JparB_bs; ///< Steady state <J||B>
 
   Field2D Bxy; ///< Magnetic field strength
@@ -77,6 +61,22 @@ private:
   Field2D averageJ; /// Used to calculate flux surface averages
 
   Field2D trapped_fraction; ///< f_t, constant on each flux surface
+
+  /// Inputs
+  /// - species
+  ///   - <..>      All species with charge and parallel momentum
+  ///     - charge
+  ///     - momentum
+  ///     - density
+  ///     - AA
+  ///
+  /// Sets
+  /// - species
+  ///   - <..>      All species with charge and parallel momentum
+  ///     - momentum  (modifies) to m n v||
+  ///     - velocity  (modifies) to v||
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

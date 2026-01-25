@@ -6,7 +6,11 @@
 #include <bout/mesh.hxx>
 #include <bout/smoothing.hxx>
 
-BootstrapCurrent::BootstrapCurrent(std::string name, Options& alloptions, Solver*) {
+BootstrapCurrent::BootstrapCurrent(std::string name, Options& alloptions, Solver*)
+    : Component(
+          {readIfSet("species:{all_species}:charge"),
+           readOnly("species:{charged}:pressure"), readOnly("species:{charged}:density"),
+           readOnly("species:{charged}:velocity"), readOnly("species:e:temperature")}) {
   AUTO_TRACE();
 
   const Options& units = alloptions["units"];
@@ -37,10 +41,10 @@ BootstrapCurrent::BootstrapCurrent(std::string name, Options& alloptions, Solver
   trapped_fraction = trappedFraction(Bxy);
 }
 
-void BootstrapCurrent::transform(Options& state) {
+void BootstrapCurrent::transform_impl(GuardedOptions& state) {
 
-  Options& allspecies = state["species"];
-  Options& electrons = allspecies["e"];
+  GuardedOptions allspecies = state["species"];
+  GuardedOptions electrons = allspecies["e"];
 
   // Calculate flux-surface averages
   Field2D pe_av =
@@ -50,8 +54,8 @@ void BootstrapCurrent::transform(Options& state) {
       fluxSurfaceAverage(GET_NOBOUNDARY(Field3D, electrons["temperature"])) * Pnorm;
 
   Field3D JparB = get<BoutReal>(electrons["charge"])
-    * GET_NOBOUNDARY(Field3D, electrons["density"])
-    * GET_NOBOUNDARY(Field3D, electrons["velocity"]) * Bxy;
+                  * GET_NOBOUNDARY(Field3D, electrons["density"])
+                  * GET_NOBOUNDARY(Field3D, electrons["velocity"]) * Bxy;
 
   Field3D pi = 0.0;
   Field3D ni = 0.0;
@@ -60,7 +64,7 @@ void BootstrapCurrent::transform(Options& state) {
       continue;
     }
 
-    Options& species = allspecies[kv.first];
+    GuardedOptions species = allspecies[kv.first];
     if (!species.isSet("charge")) {
       continue; // Skip uncharged ions
     }
@@ -74,8 +78,7 @@ void BootstrapCurrent::transform(Options& state) {
     Field3D species_n = GET_NOBOUNDARY(Field3D, species["density"]);
     ni += species_n;
 
-    JparB += Zi * species_n
-      * GET_NOBOUNDARY(Field3D, species["velocity"]) * Bxy;
+    JparB += Zi * species_n * GET_NOBOUNDARY(Field3D, species["velocity"]) * Bxy;
   }
 
   Field2D pi_av = fluxSurfaceAverage(pi);
