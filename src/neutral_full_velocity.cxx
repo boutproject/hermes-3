@@ -14,7 +14,7 @@ using bout::globals::mesh;
 
 NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& alloptions,
                                          Solver* solver)
-    : name(name) {
+    : Component({readWrite("species:{name}:{outputs}")}), name(name) {
   AUTO_TRACE();
 
   // This is used in both transform and finally functions
@@ -25,7 +25,6 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   const BoutReal meters = units["meters"];
   const BoutReal seconds = units["seconds"];
   const BoutReal Bnorm = units["Tesla"];
-  const BoutReal Tnorm = units["eV"];
 
   auto& options = alloptions[name];
 
@@ -189,10 +188,13 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   // Ensure that guard cells are filled and consistent between processors
   mesh->communicate(Urx, Ury, Uzx, Uzy);
   mesh->communicate(Txr, Txz, Tyr, Tyz);
+  substitutePermissions("name", {name});
+  substitutePermissions(
+      "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
 }
 
 /// Modify the given simulation state
-void NeutralFullVelocity::transform(Options& state) {
+void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
   mesh->communicate(Nn2D, Vn2D, Pn2D);
 
@@ -255,7 +257,7 @@ void NeutralFullVelocity::transform(Options& state) {
   Vnpar = Vn2D.y / (coord->J * coord->Bxy);
 
   // Set values in the state
-  auto& localstate = state["species"][name];
+  auto localstate = state["species"][name];
   set(localstate["density"], Nn2D);
   set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn2D);
@@ -465,7 +467,6 @@ void NeutralFullVelocity::outputVars(Options& state) {
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
 

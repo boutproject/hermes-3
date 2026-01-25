@@ -10,7 +10,7 @@ try:
 except:
   pass
 
-from boututils.run_wrapper import shell, launch, getmpirun
+from boututils.run_wrapper import shell, launch_safe, getmpirun
 from boutdata.collect import collect
 
 from numpy import sqrt, max, abs, mean, array, log, concatenate
@@ -27,7 +27,7 @@ if not Path("hermes-3").is_file():
   shell("ln -s ../../../hermes-3 hermes-3")
 
 # Run and exit if unsuccessful
-s, out = launch("./hermes-3 -d data", nproc=1, pipe=True)
+s, out = launch_safe("./hermes-3 -d data", nproc=1, pipe=True)
 
 if s != 0:
   print(" => Test failed: ")
@@ -57,8 +57,8 @@ with open("run.log", "r") as f:
 expected_lines = [
 	"d neutral diffusion collisionality mode: 'afn' using d_d+_cx d_d+_iz", 
 	"he neutral diffusion collisionality mode: 'afn' using he_he+_iz", 
-	"d+ viscosity collisionality mode: 'braginskii' using d+_d+_coll d+_he+_coll", 
-	"he+ viscosity collisionality mode: 'braginskii' using he+_d+_coll he+_he+_coll", 
+	"d+ viscosity collisionality mode: 'braginskii' using d+_d+_coll", 
+	"he+ viscosity collisionality mode: 'braginskii' using he+_he+_coll", 
 	"d+ conduction collisionality mode: 'braginskii' using d+_d+_coll", 
 	"he+ conduction collisionality mode: 'braginskii' using he+_he+_coll", 
 	"he neutral collisionality mode: 'afn' using he_he+_iz he_he_coll", 

@@ -2,13 +2,10 @@
 #ifndef AMJUEL_REACTION_H
 #define AMJUEL_REACTION_H
 
-#include <algorithm>
 #include <filesystem>
 #include <string>
 
 #include "amjueldata.hxx"
-#include "component.hxx"
-#include "integrate.hxx"
 #include "reaction.hxx"
 
 /**
@@ -38,12 +35,25 @@ struct AmjuelReaction : public Reaction {
   AmjuelReaction(std::string name, std::string short_reaction_type,
                  std::string amjuel_lbl, std::string from_species, std::string to_species,
                  Options& alloptions)
-      : Reaction(name, alloptions),
-        amjuel_data(get_json_db_dir(alloptions), short_reaction_type, amjuel_lbl),
-        amjuel_src(std::string("Amjuel ") + amjuel_lbl), from_species(from_species),
-        short_reaction_type(short_reaction_type), to_species(to_species) {
+      : Reaction(name, alloptions), amjuel_src(std::string("Amjuel ") + amjuel_lbl),
+        short_reaction_type(short_reaction_type), from_species(from_species),
+        to_species(to_species),
+        amjuel_data(get_json_db_dir(alloptions), short_reaction_type, amjuel_lbl) {
 
     this->includes_sigma_v_e = amjuel_data.includes_sigma_v_e;
+    // Most of the access information we need is inherited from the parent Reaction class.
+    // The electron velocity will be read if it is set
+    setPermissions(readIfSet("species:e:velocity"));
+    // The energy source is set for electrons
+    setPermissions(readWrite("species:e:energy_source"));
+    std::string heavy_reactant = this->parser->get_species(species_filter::reactants,
+                                                           species_filter::heavy)[0],
+                heavy_product = this->parser->get_species(species_filter::products,
+                                                          species_filter::heavy)[0],
+                neutral = this->parser->get_species(species_filter::neutral)[0];
+    setPermissions(
+        readWrite(fmt::format("species:{}:collision_frequencies:{}_{}_{}", neutral,
+                              heavy_reactant, heavy_product, short_reaction_type)));
   }
 
 protected:
@@ -59,7 +69,7 @@ protected:
   virtual BoutReal eval_sigma_v_E(BoutReal T, BoutReal n) override final;
   virtual BoutReal eval_sigma_v(BoutReal T, BoutReal n) override final;
 
-  virtual void transform_additional(Options& state,
+  virtual void transform_additional(GuardedOptions& state,
                                     Field3D& reaction_rate) override final;
 
 private:

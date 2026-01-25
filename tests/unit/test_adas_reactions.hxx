@@ -6,6 +6,7 @@
 #include "../../include/adas_carbon.hxx"
 #include "../../include/adas_lithium.hxx"
 #include "../../include/adas_neon.hxx"
+#include <cstddef>
 
 /**
  * @brief Base fixture for tests of OpenADAS subclasses.
@@ -192,7 +193,7 @@ public:
 };
 
 // Li CX
-template <int level, char Hisotope>
+template <std::size_t level, char Hisotope>
 class ADASLiCXReactionTest : public ADASCXReactionTest<ADASLithiumCX<level, Hisotope>> {
 public:
   ADASLiCXReactionTest(std::string lbl, std::string reaction_str)
@@ -217,7 +218,7 @@ public:
 };
 
 // Ne CX
-template <int level, char Hisotope>
+template <std::size_t level, char Hisotope>
 class ADASNeCXReactionTest : public ADASCXReactionTest<ADASNeonCX<level, Hisotope>> {
 public:
   ADASNeCXReactionTest(std::string lbl, std::string reaction_str)

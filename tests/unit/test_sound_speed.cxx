@@ -32,7 +32,8 @@ TEST_F(SoundSpeedTest, OneSpecies) {
   options["species"]["e"]["density"] = 2.0;
   options["species"]["e"]["pressure"] = 1.2;
   options["species"]["e"]["AA"] = 1.5;
-  
+
+  component.declareAllSpecies({"e"});
   component.transform(options);
 
   ASSERT_TRUE(options.isSet("sound_speed"));
@@ -51,7 +52,8 @@ TEST_F(SoundSpeedTest, TwoSpecies) {
   options["species"]["h"]["density"] = 3.0;
   options["species"]["h"]["pressure"] = 2.5;
   options["species"]["h"]["AA"] = 0.9;
-  
+
+  component.declareAllSpecies({"e", "h"});
   component.transform(options);
 
   ASSERT_TRUE(options.isSet("sound_speed"));

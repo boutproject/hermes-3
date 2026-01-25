@@ -183,15 +183,8 @@ evolve_pressure
 Evolves the pressure in time. This pressure is named `P<species>` where `<species>`
 is the short name of the evolving species e.g. `Pe`.
 
-By default parallel thermal conduction is included, which requires a collision
-time. If collisions are not calculated, then thermal conduction should be turned off
-by setting `thermal_conduction = false` in the input options.
-
-The choice of collision frequency used for conduction is set by the flag `conduction_collisions_mode`: 
-`multispecies` uses all available collision frequencies involving the chosen species, while `braginskii` uses only
-self-collisions .The default is `multispecies` and it is recommended for use if solving more than one ion.
-If you are solving for a single ion and want to recover Braginskii, use the `braginskii` mode.
-
+Parallel conduction is included if the global
+:ref:`braginskii_conduction` component has been used.
 
 If the component option ``diagnose = true`` then additional fields
 will be saved to the dump files: The species temperature ``T + name``
@@ -203,10 +196,11 @@ The pressure source is the energy density source multiplied by ``2/3``
 
 .. math::
 
-   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}\nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right) + \frac{2}{3}S_E + S_N\frac{1}{2}mNV^2
+   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}S_E + S_N\frac{1}{2}mNV^2
 
 where :math:`S_E` is the ``energy_source`` (thermal energy source),
-and :math:`S_N` is the density source.
+and :math:`S_N` is the density source. If conduction has been
+calculated, it will be included in the ``energy_source`` term.
 
 Notes:
 
@@ -287,6 +281,38 @@ heat conduction as the `evolve_pressure` term with electron-electron collisions
 disabled.
 
 .. doxygenstruct:: SimpleConduction
+   :members:
+
+.. _braginskii_conduction:
+
+braginskii_conduction
+~~~~~~~~~~~~~~~~~~~~~
+
+This is a global component that calculates the parallel thermal
+conduction for all species that use :ref:`evolve_pressure` or
+:ref:`evolve_energy`, storing it in `energy_source`. If this is not
+desired for a particular species then it can be turned off by setting
+`thermal_conduction = false` in the input options for that species.
+
+This component requires a collision time to have been calculated
+(i.e., with the :ref:`Braginskii Collisions` component). It is
+recommended that this be one of the last component to run, to ensure density,
+pressure, and temperature have their final values. However, it must be
+run before :ref:`Recycling`, as that component will need to use the
+`energy_flow_ylow` value, to which conduction contributes.
+
+The choice of collision frequency used for conduction is set by the
+flag `conduction_collisions_mode`: `multispecies` uses all available
+collision frequencies involving the chosen species, while `braginskii`
+uses only self-collisions .The default is `multispecies` and it is
+recommended for use if solving more than one ion.  If you are solving
+for a single ion and want to recover Braginskii, use the `braginskii`
+mode.
+
+.. math::
+    \nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right)
+
+.. doxygenstruct:: BarginskiiConduction
    :members:
 
 
@@ -391,10 +417,10 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
-.. _electron_viscosity:
+.. _braginskii_electron_viscosity:
 
-electron_viscosity
-~~~~~~~~~~~~~~~~~~~~~~
+braginskii_electron_viscosity
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Calculates the Braginskii electron parallel viscosity, adding a force (momentum source)
 to the electron momentum equation:
@@ -415,15 +441,15 @@ and all other species therefore need to be calculated before this component is r
 .. code-block:: ini
 
    [hermes]
-   components = ..., e, ..., collisions, electron_viscosity
+   components = ..., e, ..., braginskii_collisions, braginskii_electron_viscosity
 
-.. doxygenstruct:: ElectronViscosity
+.. doxygenstruct:: BraginskiiElectronViscosity
    :members:
 
-.. _ion_viscosity:
+.. _braginskii_ion_viscosity:
 
-ion_viscosity
-~~~~~~~~~~~~~~~~~~~~~~
+braginskii_ion_viscosity
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 Adds ion viscosity terms to all charged species that are not electrons.
 The collision frequency is required so this is a top-level component that
@@ -432,7 +458,7 @@ must be calculated after collisions:
 .. code-block:: ini
 
    [hermes]
-   components =  ..., collisions, ion_viscosity
+   components =  ..., braginskii_collisions, braginskii_ion_viscosity
 
 By default only the parallel diffusion of momentum is included, adding a force to each
 ion's momentum equation:
@@ -458,7 +484,7 @@ If the `perpendicular` option is set:
 
 .. code-block:: ini
 
-   [ion_viscosity]
+   [braginskii_ion_viscosity]
    perpendicular = true # Include perpendicular flows
 
 Then the ion scalar viscous pressure is calculated as:
@@ -540,13 +566,13 @@ and neglecting parallel gradients of velocity gives:
   the model is likely breaking down. Occasionally happens in low-density regions.
 
    
-.. doxygenstruct:: IonViscosity
+.. doxygenstruct:: BraginskiiIonViscosity
    :members:
 
-.. _thermal_force:
+.. _braginskii_thermal_force:
 
-thermal_force
-~~~~~~~~~~~~~
+braginskii_thermal_force
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 This implements simple expressions for the thermal force. If the
 `electron_ion` option is true (which is the default), then a momentum
@@ -577,9 +603,9 @@ where subscripts :math:`z` refer to the heavy ion, and :math:`i`
 refers to the light ion. The force on the light ion fluid is equal and
 opposite: :math:`F_i = -F_z`.
 
-The implementation is in the `ThermalForce` class:
+The implementation is in the `BraginskiiThermalForce` class:
 
-.. doxygenstruct:: ThermalForce
+.. doxygenstruct:: BraginskiiThermalForce
    :members:
 
 
@@ -603,7 +629,7 @@ because it needs to be calculated after the collision frequencies are known.
 .. code-block:: ini
 
    [hermes]
-   components = ... , collisions, neutral_parallel_diffusion
+   components = ... , braginskii_collisions, neutral_parallel_diffusion
 
    [neutral_parallel_diffusion]
    dneut = 1         # Diffusion multiplication factor
@@ -658,16 +684,16 @@ new AFN (Advanced Fluid Neutral) model in SOLPS-ITER [N. Horsten, N.F. (2017)].
    
    \begin{aligned}
 
-   \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{||n} + n_n\mathbf{v}_{\perp n}\right) \\
+   \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{\parallel, n} + n_n\mathbf{v}_{\perp n}\right) \\
          &    + S \\
-   \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& -\nabla\cdot\left(n_nv_{||n} \mathbf{b}v_{||n} + n_nv_{||n}\mathbf{v}_{\perp n}\right) \\
-         &    - \partial_{||}p_n \\
-         &    + \nabla \cdot (m_n \eta_{n} \nabla_{\perp} v_{\parallel n}) + \nabla \cdot( m_n \eta_{n} \nabla{\parallel} v_{\parallel n} ) \\
+   \frac{\partial}{\partial t}\left(m_nn_nv_{\parallel, n}\right) =& -m_n \nabla\cdot\left(n_n v_{\parallel, n} (\mathbf{b}v_{||n} + \mathbf{v}_{\perp n}\right)) \\
+         &    - \nabla_{\parallel}p_n \\
+         &    + \nabla \cdot (\eta_{n} (\nabla_{\perp} v_{\parallel n} + \mathbf{b} \nabla_{\parallel} v_{\parallel n} )) \\
          &    + F \\
-   \frac{\partial p_n}{\partial t} =& -\nabla\cdot\left(p_n\mathbf{b}v_{||n} + \frac{5}{3} p_n\mathbf{v}_{\perp n}\right) \\
-         &    - \frac{2}{3}p_n\nabla\cdot\left(\mathbf{b}v_{||n}\right) \\
-         &    + \frac{2}{3} \nabla\cdot\left(\kappa_n \nabla_\perp T_n\right) + \frac{2}{3} \nabla\cdot\left(\kappa_n \nabla_{\parallel} T_n\right) \\
-         &    - \frac{2}{3} v_n \nabla \cdot (m_n \eta_{n} \nabla_{\perp} v_{\parallel n}) + \frac{2}{3} \nabla \cdot( m_n \eta_{n} \nabla_{\parallel} v_{\parallel n} ) \\
+   \frac{\partial p_n}{\partial t} =& -\frac{5}{3} \nabla\cdot\left(p_n\mathbf{b}v_{\parallel, n} +  p_n\mathbf{v}_{\perp n}\right) \\
+         &    + \frac{2}{3}v_{\parallel, n} \nabla_{\parallel} p_n \\
+         &    + \frac{2}{3} \nabla\cdot\left(\kappa_n \left(\nabla_\perp T_n + \mathbf{b} \nabla_{\parallel} T_n\right)\right) \\
+         &    - \frac{2}{3} v_{\parallel,n} \nabla \cdot \left(\eta_{n} \left( \nabla_{\perp} v_{\parallel n} + \mathbf{b} \nabla_{\parallel} v_{\parallel n} \right) \right) \\
          &    + \frac{2}{3}E \\
 
    \end{aligned}
@@ -694,25 +720,24 @@ The perpendicular velocity is calculated as:
 Where in the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`ln(P_n)`, which helps
 preserve pressure positivity. 
 
-The choice of collision frequency is set by the flag `diffusion_collisions_mode`: `multispecies` uses
-all available collision frequencies involving the chosen species, while `afn` uses only
-CX and IZ rates. The default is `afn` and corresponds to the choice in UEDGE and 
-the SOLPS-ITER AFN (Advanced Fluid Neutral) model. 
-
 The diffusion coefficients are defined as:
 
 .. math::
 
    \begin{aligned} 
-   D_n =& v_{th,n}^{2} \nu_{n, tot}  \\
+   D_n =& \frac{v_{th,n}^{2}}{\nu_{n, tot}} = \frac{T_n}{m_n \nu_{n, tot}} \\
    \kappa_{n} =& \frac{5}{2} D_n N_n \\
    \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
    \end{aligned}
 
 Where :math:`v_{th,n}= \sqrt{\frac{T_n}{m_n}}` is the thermal velocity of neutrals and :math:`\nu_{n, tot}` is the total
-neutral collisionality. This is primarily driven by charge exchange and ionisation, which can cause issues in regions
-where plasma density is low. Because of this, an additional pseudo-collisionality is calculated based on the maximum vessel 
-mean free path and added to the total neutral collisionality.
+neutral collisionality.  When the `AFN` diffusion collision mode is selected using the `diffusion_collisions_mode` setting, 
+this collisionality is the sum of charge exchange, ionisation, neutral-neutral collisions and the 
+pseudo-collisionality `Rnn`, which represents a mean-free path limit. When the `multispecies` mode is selected, all available 
+collision frequencies are enabled instead of ionisation. `AFN` is recommended in all cases, with the `multispecies` mode representing
+a legacy approach. The `Rnn` pseudo-collisionality is based on the `neutral_lmax` parameter, currently hardcoded to 0.1m, 
+which acts as an effective maximum neutral mean free path. It represents the distance that neutrals can travel before
+hitting a solid surface.
 
 In an additional effort to limit the diffusivitiy to more physical values, a flux limiter has been implemented which clamps
 :math:`D_n` to :math:`D_{n,max}` defined as:
@@ -720,7 +745,7 @@ In an additional effort to limit the diffusivitiy to more physical values, a flu
 .. math::
 
    \begin{aligned}
-   D_{n,max} =& f_l \frac{v_{th,n}}{abs(\nabla ln(P_n) + 1/l_{max}}
+   D_{n,max} =& f_l \frac{v_{th,n}}{abs(\nabla ln(P_n) + 1/l_{max})}
    \end{aligned}
 
 This formulation is equivalent to defining a :math:`D_n` with a free streaming velocity while accounting for the pseudo collisionality due 
@@ -1146,6 +1171,58 @@ The form of the vorticity equation is based on `Simakov & Catto
 <https://doi.org/10.1063/1.1703527>`_), in the Boussinesq limit and
 with the first term modified to conserve energy. In the limit of zero
 ion pressure and constant :math:`B` it reduces to the simplified form.
+
+
+Kinematic viscosity can be included by setting e.g. ``viscosity = 0.1`` in SI units (m^2/s).
+This adds a diffusion of vorticity and corresponding ion heating.
+The viscous friction force in this simplified operator is
+
+.. math::
+
+   \mathbf{F}_\nu = - \nu B \mathbf{b} \times \nabla \Omega
+
+This gives rise to a drift and current with divergence:
+
+.. math::
+
+   \begin{aligned}\nabla\cdot\mathbf{J_{\nu}} =& \nabla\cdot\left[\frac{\mathbf{b}\times\mathbf{F}_\nu}{B}\right] \\
+   =& \nabla\cdot\left[\nu \nabla_\perp \Omega\right]\end{aligned}
+
+Viscous heating is calculated using the work done by a fluid velocity
+consistent with the Boussinesq approximation:
+
+.. math::
+
+   \mathbf{u} = \frac{\mathbf{b}\times\nabla\Phi}{B}
+
+where the generalized potential is
+
+.. math::
+
+   \Phi = \phi + \hat{p} / \overline{n}
+
+The work done is
+
+.. math::
+
+   \mathbf{F}_\nu\cdot\mathbf{u} = -\nu \nabla_\perp\Omega \cdot \nabla_\perp\Phi
+
+This heating is distributed between charged species in proportion to their local mass density.
+The properties of the work done can be analysed by writing in terms of a vector :math:`\mathbf{g}`:
+
+.. math::
+
+   \mathbf{g} = \frac{\overline{A}\overline{n}}{B^2}\nabla_\perp\Phi
+
+to write:
+
+.. math::
+
+   \begin{aligned}\mathbf{F}_\nu\cdot\mathbf{u} =& -\nu\frac{B^2}{\overline{A}\overline{n}} \nabla_\perp\left(\nabla\cdot\mathbf{g}\right)\cdot\mathbf{g} \\
+   =& \nu\frac{B^2}{\overline{A}\overline{n}} \left[\left(\nabla_\perp\mathbf{g} : \nabla_\perp\mathbf{g}\right) - \nabla\cdot\left(\mathbf{g}\cdot\nabla\mathbf{g}\right)\right]\end{aligned}
+
+The last term is not in general positive definite, so this simple form
+of viscosity could in some cases lead to cooling.
 
 .. doxygenstruct:: Vorticity
    :members:

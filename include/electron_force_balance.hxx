@@ -19,13 +19,29 @@
 ///       components which impose forces on electrons
 ///
 struct ElectronForceBalance : public Component {
-  ElectronForceBalance(std::string name, Options& alloptions, Solver*) {
+  ElectronForceBalance(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:e:pressure"),
+                   readOnly("species:e:density", Regions::Interior),
+                   readOnly("species:e:charge"),
+                   // FIXME: Only writes if already exists
+                   readWrite("species:e:momentum_source"),
+                   readIfSet("species:{non_electrons}:density", Regions::Interior),
+                   readIfSet("species:{non_electrons}:charge"),
+                   // FIXME: Only written if density and charge have been set.
+                   readWrite("species:{non_electrons}:momentum_source")}) {
     AUTO_TRACE();
     auto& options = alloptions[name];
     diagnose = options["diagnose"]
       .doc("Save additional output diagnostics")
       .withDefault<bool>(false);
   }
+
+  /// Save output diagnostics
+  void outputVars(Options& state) override;
+private:
+  bool diagnose; ///< Output additional fields
+
+  Field3D Epar; ///< Parallel electric field
 
   /// Required inputs
   /// - species
@@ -40,14 +56,7 @@ struct ElectronForceBalance : public Component {
   ///   - <all except e>   if both density and charge are set
   ///     - momentum_source
   /// 
-  void transform(Options &state) override;
-
-  /// Save output diagnostics
-  void outputVars(Options& state) override;
-private:
-  bool diagnose; ///< Output additional fields
-
-  Field3D Epar; ///< Parallel electric field
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

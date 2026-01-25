@@ -31,6 +31,19 @@ struct SheathBoundary : public Component {
   ///   - always_set_phi           Always set phi field? Default is to only modify if already set
   SheathBoundary(std::string name, Options &options, Solver *);
 
+private:
+  BoutReal Ge; // Secondary electron emission coefficient
+  Field3D sin_alpha; // sin of angle between magnetic field and wall.
+  
+  bool lower_y; // Boundary on lower y?
+  bool upper_y; // Boundary on upper y?
+
+  bool always_set_phi; ///< Set phi field?
+
+  Field3D wall_potential; ///< Voltage at the wall. Normalised units.
+
+  bool floor_potential; ///< Apply floor to sheath potential?
+
   ///
   /// # Inputs
   /// - species
@@ -39,11 +52,11 @@ struct SheathBoundary : public Component {
   ///     - temperature
   ///     - pressure    Optional
   ///     - velocity    Optional
-  ///     - mass        Optional
+  ///     - AA          Optional
   ///     - adiabatic   Optional. Ratio of specific heats, default 5/3.
   ///   - <ions>  if charge is set (i.e. not neutrals)
   ///     - charge
-  ///     - mass
+  ///     - AA
   ///     - density
   ///     - temperature
   ///     - pressure     Optional
@@ -58,11 +71,13 @@ struct SheathBoundary : public Component {
   ///   - e
   ///     - density      Sets boundary
   ///     - temperature  Sets boundary
+  ///     - pressure     Sets boundary
   ///     - velocity     Sets boundary
   ///     - energy_source
   ///   - <ions>
   ///     - density      Sets boundary
   ///     - temperature  Sets boundary
+  ///     - pressure     Sets boundary
   ///     - velocity     Sets boundary
   ///     - momentum     Sets boundary
   ///     - energy_source
@@ -74,19 +89,7 @@ struct SheathBoundary : public Component {
   /// Note that phi in the domain will not be set, so will be invalid data.
   ///
   ///
-  void transform(Options &state) override;
-private:
-  BoutReal Ge; // Secondary electron emission coefficient
-  BoutReal sin_alpha; // sin of angle between magnetic field and wall.
-  
-  bool lower_y; // Boundary on lower y?
-  bool upper_y; // Boundary on upper y?
-
-  bool always_set_phi; ///< Set phi field?
-
-  Field3D wall_potential; ///< Voltage at the wall. Normalised units.
-
-  bool floor_potential; ///< Apply floor to sheath potential?
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

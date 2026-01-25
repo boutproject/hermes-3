@@ -18,7 +18,7 @@ using bout::globals::mesh;
 using ParLimiter = hermes::Limiter;
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
-    : name(name) {
+    : Component({readWrite("species:{name}:{outputs}")}), name(name) {
   AUTO_TRACE();
 
   // Normalisations
@@ -104,7 +104,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
       .withDefault<std::string>("multispecies");
 
   if (precondition) {
-    inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
+    inv = Laplacian::create(&options["precon_laplace"]);
 
     inv->setInnerBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
     inv->setOuterBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
@@ -169,9 +169,13 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnNn.setBoundary(std::string("Dnn") + name);
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnNVn.setBoundary(std::string("Dnn") + name);
+
+  substitutePermissions("name", {name});
+  substitutePermissions(
+      "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
 }
 
-void NeutralMixed::transform(Options& state) {
+void NeutralMixed::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
   mesh->communicate(Nn, Pn, NVn);
@@ -254,7 +258,7 @@ void NeutralMixed::transform(Options& state) {
   }
 
   // Set values in the state
-  auto& localstate = state["species"][name];
+  auto localstate = state["species"][name];
   set(localstate["density"], Nn);
   set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn);
@@ -883,7 +887,7 @@ void NeutralMixed::outputVars(Options& state) {
   }
 }
 
-void NeutralMixed::precon(const Options& state, BoutReal gamma) {
+void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma) {
   if (!precondition) {
     return;
   }
@@ -937,5 +941,4 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
       throw BoutException("Precon ddt(NV{}) non-finite at {}\n", name, i);
     }
   }
-
 }

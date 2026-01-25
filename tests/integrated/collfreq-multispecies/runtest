@@ -10,7 +10,7 @@ try:
 except:
   pass
 
-from boututils.run_wrapper import shell, launch, getmpirun
+from boututils.run_wrapper import shell, launch_safe, getmpirun
 from boutdata.collect import collect
 
 from numpy import sqrt, max, abs, mean, array, log, concatenate
@@ -27,7 +27,7 @@ if not Path("hermes-3").is_file():
   shell("ln -s ../../../hermes-3 hermes-3")
 
 # Run and exit if unsuccessful
-s, out = launch("./hermes-3 -d data", nproc=1, pipe=True)
+s, out = launch_safe("./hermes-3 -d data", nproc=1, pipe=True)
 
 if s != 0:
   print(" => Test failed: ")
