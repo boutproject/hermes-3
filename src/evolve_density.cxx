@@ -406,7 +406,7 @@ void EvolveDensity::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_density"}});
 
-  if (n_lowsource > 0.0 || diagnose) {
+  if (n_lowsource > 0.0 && diagnose) {
     set_with_attrs(state[std::string("S") + name + std::string("_lowsrc")], lowsource_term,
 		 {{"time_dimension", "t"},
 		  {"units", "m^-3 s^-1"},
