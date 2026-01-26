@@ -221,6 +221,18 @@ const Field3D hyperdiffusion(const BoutReal a, const Field3D& b) {
 }
 
 
+const Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor){
+  Field3D result = 0.0;
+  BOUT_FOR(i, f.getRegion("RGN_NOY")){
+    BoutReal diff = f[i] - lowvalue;
+    if (diff < 0.0){
+      result[i] = -diff/scalefactor;
+    }
+  }
+  return result;
+}
+
+
 /* ***USED***
  *  Div (n * b x Grad(f)/B)
  *
