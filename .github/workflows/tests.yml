@@ -7,7 +7,7 @@ defaults:
 
 jobs:
   cmake_tests:
-    name: Test ${{ matrix.name }}
+    name: Test ${{ matrix.fci }}${{ matrix.mode }}
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/boutproject/bout-dev:mpich-${{ matrix.fci }}${{ matrix.mode }}-fci-higher-order-tidy-noop-default
