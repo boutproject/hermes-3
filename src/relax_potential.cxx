@@ -81,8 +81,8 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault(100);
-  lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault(1e5);
+  lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault<BoutReal>(100.0);
+  lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault<BoutReal>(10000.0);
 
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ

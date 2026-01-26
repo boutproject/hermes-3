@@ -79,6 +79,7 @@ void AnomalousDiffusion3D::transform(Options& state) {
   // to zero by imposing neumann boundary conditions.
   Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
+  
   Field3D T = species.isSet("temperature")
                         ? GET_NOBOUNDARY(Field3D, species["temperature"])
                         : 0.0;
@@ -89,6 +90,12 @@ void AnomalousDiffusion3D::transform(Options& state) {
 
   bool upwind = false;
 
+  if (species.isSet("tracedensity")) {
+    Field3D tN = GET_NOBOUNDARY(Field3D, species["tracedensity"]);
+    add(species["tracedensity_source"], (*dagp)(anomalous_D, tN, flow_xlow, flow_zlow, upwind));
+
+  }
+  
   if (include_D) {
     // Particle diffusion. Gradients of density drive flows of particles,
     // momentum and energy. The implementation here is equivalent to an
@@ -156,6 +163,9 @@ void AnomalousDiffusion3D::transform(Options& state) {
       add(species["momentum_flow_zlow"], flow_zlow);
     }
   }
+
+
+  
 }
 
 void AnomalousDiffusion3D::outputVars(Options& state) {
