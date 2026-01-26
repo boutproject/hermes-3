@@ -53,6 +53,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
+  
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
@@ -98,6 +99,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
   const BoutReal Lnorm = units["meters"];
+
+  n_lowsource = options["n_lowsource"].withDefault(-1.0) / Nnorm;
+  lowsource_scale = options["lowsource_scale"].withDefault(1e-6) * Omega_ci;
+  
   
   auto& n_options = alloptions[std::string("N") + name];
   source_time_dependent = n_options["source_time_dependent"]
@@ -326,7 +331,7 @@ void EvolveDensity::finally(const Options& state) {
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 
-  if (hyper_n > 0) {
+  if (hyper_n > 0.0) {
     // Form of hyper-viscosity  
     ddt(N) += hyperdiffusion(hyper_n, N);
   }
@@ -337,6 +342,10 @@ void EvolveDensity::finally(const Options& state) {
   
   ddt(N) += Sn;
   
+  if (n_lowsource > 0.0) {
+    lowsource_term = low_sourceterm(N, n_lowsource, lowsource_scale);
+    ddt(N) += lowsource_term;
+  } 
   
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
@@ -397,6 +406,15 @@ void EvolveDensity::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_density"}});
 
+  if (n_lowsource > 0.0 && diagnose) {
+    set_with_attrs(state[std::string("S") + name + std::string("_lowsrc")], lowsource_term,
+		 {{"time_dimension", "t"},
+		  {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},                    
+                    {"species", name},
+                    {"source", "evolve_density"}});
+
+  }
   if (output_ddt || diagnose) {
     set_with_attrs(
         state[std::string("ddt(N") + name + std::string(")")], ddt(N),

@@ -94,6 +94,8 @@ Field3D Div_a_Grad_perp_curv(const Field3D& b, const Field3D& a);
  */
 const Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x);
 
+const Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor);
+
 namespace FV {
 
 /// Superbee limiter

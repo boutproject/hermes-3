@@ -63,6 +63,7 @@ set(HERMES_SOURCES
     src/electron_force_balance.cxx
     src/electron_viscosity.cxx
     src/evolve_density.cxx
+    src/evolve_tracedensity.cxx
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
@@ -131,6 +132,7 @@ set(HERMES_SOURCES
     include/electron_force_balance.hxx
     include/electron_viscosity.hxx
     include/evolve_density.hxx
+    include/evolve_tracedensity.hxx
     include/evolve_energy.hxx
     include/evolve_momentum.hxx
     include/evolve_pressure.hxx
