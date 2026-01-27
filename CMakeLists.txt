@@ -297,17 +297,13 @@ if(HERMES_TESTS)
     endforeach()
 
 
-    if(HERMES_COPY_TESTS_TO_BUILD)
-      set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
-      set(INT_TEST_DEST
-          ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
-      # Make copies of the test exec and input file in the build directory and keep them up to date
-      configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
-      configure_file(${INT_TEST_SRC}/data/BOUT.inp ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
-    else()
-      set(INT_TEST_DEST
-          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
-    endif()
+    set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
+    set(INT_TEST_DEST
+      ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
+    # Make copies of the test exec and input file in the build directory and keep them up to date
+    configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
+    configure_file(${INT_TEST_SRC}/data/BOUT.inp ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+
     add_test(
       NAME ${TESTNAME}
       WORKING_DIRECTORY ${INT_TEST_DEST}
