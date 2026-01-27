@@ -61,6 +61,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e-8);
 
+  use_finite_difference = options["use_finite_difference"]
+                   .doc("Use finite difference for perpendicular diffusion?")
+                   .withDefault<bool>(false);
+  
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
     .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
   
@@ -339,8 +343,11 @@ void NeutralMixed::finally(const Options& state) {
   } else {
     
     bool upwind = false;
-    ddt(Nn) += (*dagp)(DnnNn, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
-    
+    if (!use_finite_difference) {
+      ddt(Nn) += (*dagp)(DnnNn, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
+    } else {
+      ddt(Nn) += Div_a_Grad_perp_curv(DnnNn, logPnlim);
+    }
   }
 
   
@@ -362,7 +369,11 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
   } else {
     bool upwind = false;
-    ddt(Pn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+    if (!use_finite_difference) { 
+      ddt(Pn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+    } else {
+      ddt(Pn) += (5.0 / 3.0) * Div_a_Grad_perp_curv(DnnPn, logPnlim);
+    }
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -377,7 +388,11 @@ void NeutralMixed::finally(const Options& state) {
       ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
     } else {
       bool upwind = false;
-      ddt(Pn) += (5.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+      if (!use_finite_difference) {
+	ddt(Pn) += (5.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+      } else {
+	ddt(Pn) += (5.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
+      }
     }
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
     ef_cond_perp_xlow *= 3/2;
@@ -405,7 +420,11 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn) += Div_a_Grad_perp_flows(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow);
     } else {
       bool upwind = false;
-      ddt(NVn) += (*dagp)(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind);
+      if (!use_finite_difference) {
+	ddt(NVn) += (*dagp)(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind);
+      } else {
+	ddt(NVn) += Div_a_Grad_perp_curv(DnnNVn, logPnlim);
+      }
     }
     
     if (neutral_viscosity) {
@@ -424,7 +443,11 @@ void NeutralMixed::finally(const Options& state) {
 	viscosity_source += Div_a_Grad_perp_flows(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow);
       } else {
 	bool upwind = false;
-	viscosity_source += (*dagp)(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow, upwind);
+	if (!use_finite_difference) {
+	  viscosity_source += (*dagp)(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow, upwind);
+	} else {
+	  viscosity_source += Div_a_Grad_perp_curv(eta_n, Vn);
+	}
       }
       
       ddt(NVn) += viscosity_source;

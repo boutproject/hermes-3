@@ -61,7 +61,7 @@ private:
   bool evolve_momentum; ///< Evolve parallel momentum?
 
   bool freeze_low_density;
-  
+  bool use_finite_difference;
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
   bool precondition {true}; ///< Enable preconditioner?
