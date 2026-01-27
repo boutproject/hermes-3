@@ -699,26 +699,27 @@ void EvolvePressure::outputVars(Options& state) {
                     {"source", "evolve_pressure"}});
 
     if (p_div_v) {
-
-      set_with_attrs(state["E" + name + "_PdivV"], E_PdivV,
-                   {{"time_dimension", "t"},
-                    {"units", "W / m^-3"},
-                    {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "energy source"},
-                    {"long_name", name + " energy source due to pressure gradient"},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+      if (E_PdivV.isAllocated()) {
+        set_with_attrs(state["E" + name + "_PdivV"], E_PdivV,
+                       {{"time_dimension", "t"},
+                        {"units", "W / m^-3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", name + " energy source due to pressure gradient"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
     } else {
-
-      set_with_attrs(state["E" + name + "_VgradP"], E_VgradP,
-                   {{"time_dimension", "t"},
-                    {"units", "W / m^-3"},
-                    {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "energy source"},
-                    {"long_name", name + " energy source due to pressure gradient"},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
-
+      if (E_VgradP.isAllocated()) {
+        set_with_attrs(state["E" + name + "_VgradP"], E_VgradP,
+                       {{"time_dimension", "t"},
+                        {"units", "W / m^-3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", name + " energy source due to pressure gradient"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
     }
                   
 
