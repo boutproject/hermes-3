@@ -2,24 +2,14 @@
 
 # Python script to run and analyse MMS test
 
-from __future__ import division
-from __future__ import print_function
 
-try:
-  from builtins import str
-except:
-  pass
-
-from boututils.run_wrapper import shell, launch_safe, getmpirun
+from boututils.run_wrapper import shell, launch_safe
 from boutdata.collect import collect
 
-from numpy import sqrt, max, abs, mean, array, log, concatenate
-
-# Link to the executable
-shell("ln -s ../../../hermes-3 hermes-3")
+from numpy import sqrt, max, abs, mean, array, log
 
 # List of NY values to use
-nylist = [40, 80, 160, 320] #, 640, 1280, 2560, 5120]
+nylist = [40, 80, 160, 320]
 
 nout = 1
 timestep = 1
@@ -33,7 +23,7 @@ for var in varnames:
   results[var] = {"l2":[], "inf":[]}
 
 for ny in nylist:
-    args = "mesh:ny="+str(ny)+" nout="+str(nout)+" timestep="+str(timestep)
+    args = f"mesh:ny={ny} nout={nout} timestep={timestep}"
     
     print("Running with " + args)
 
@@ -41,7 +31,7 @@ for ny in nylist:
     shell("rm data/BOUT.dmp.*.nc")
     
     # Command to run
-    cmd = "./hermes-3 "+args
+    cmd = "../../../hermes-3 "+args
     # Launch using MPI
     s, out = launch_safe(cmd, nproc=nproc, pipe=True)
 
