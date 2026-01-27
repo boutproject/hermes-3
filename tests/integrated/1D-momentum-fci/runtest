@@ -51,7 +51,7 @@ for extraarg, expected in todo:
 
         # Collect data
         for var in varnames:
-            E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
+            E = collect("E_" + var, tind=-1, path="data", info=False)
             E = E[:, 2:-2, 2:-2, 0]
 
             l2 = sqrt(mean(E**2))
