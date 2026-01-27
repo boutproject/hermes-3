@@ -334,7 +334,7 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral density
   TRACE("Neutral density");
 
-  ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow);
+  ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, true);
 
   if (!Nn.isFci()) {
     
@@ -361,7 +361,7 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = -FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow);      // Parallel advection
+  ddt(Pn) = -FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection
 
   ddt(Pn) -= (2. / 3) * Pn * Div_par(Vn);                                                // Compression
 
