@@ -119,17 +119,14 @@ if plotting:
         plotting = False
 
 # Perform simulations at required resolutions
-
-# Link to the executable
-shell("ln -s ../../../hermes-3 hermes-3")
-
+ Link to the executable
 errs = []
 for ny, sym, tol in resolutions:
     # Delete old data
     shell("rm data/BOUT.dmp.*.nc")
 
     # Launch using MPI
-    s, out = launch(f"./hermes-3 mesh:ny={ny}", nproc=1, pipe=True)
+    s, out = launch(f"../../../hermes-3 mesh:ny={ny}", nproc=1, pipe=True)
 
     # Save output to log file
     f = open(f"run.log.{ny}", "w")

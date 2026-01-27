@@ -9,20 +9,18 @@ from boutdata.collect import collect
 from sys import stdout, exit
 import numpy as np
 
-shell("ln -s ../../../hermes-3 hermes-3")
-
 # Run the case
-s, out = launch_safe("./hermes-3", nproc=1, mthread=1, pipe=True)
+s, out = launch_safe("../../../hermes-3", nproc=1, mthread=1, pipe=True)
 with open("run.log", "w") as f:
-  f.write(out)
+    f.write(out)
 
 # Collect the density
 n = collect("Ne", path="data")
 
 # Check that the density is changing in time
-assert np.amax(n[0,2:-2,:,:]) - np.amin(n[0,2:-2,:,:]) > 0.1
+assert np.amax(n[0, 2:-2, :, :]) - np.amin(n[0, 2:-2, :, :]) > 0.1
 
 # Check density is not changing without sources
-assert np.amax(abs(n[-1,2:-2,:,:] - n[0,2:-2,:,:])) < 1e-10
+assert np.amax(abs(n[-1, 2:-2, :, :] - n[0, 2:-2, :, :])) < 1e-10
 
 exit(0)
