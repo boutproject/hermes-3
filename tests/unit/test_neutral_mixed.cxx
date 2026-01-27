@@ -19,7 +19,8 @@ using namespace bout::globals;
 
 // Reuse the "standard" fixture for FakeMesh
 using NeutralMixedTest = FakeMeshFixture;
-
+// Component test checking only that the state
+// includes Nd, Pd, NVd as evolved variables.
 TEST_F(NeutralMixedTest, CreateComponent) {
   FakeSolver solver;
 
@@ -33,7 +34,8 @@ TEST_F(NeutralMixedTest, CreateComponent) {
   ASSERT_TRUE(state.isSet("Pd"));
   ASSERT_TRUE(state.isSet("NVd"));
 }
-
+// Component test checking only that the state
+// includes Nd, Pd as evolved variables when evolve_momentum = false.
 TEST_F(NeutralMixedTest, CreateComponentEvolveMomentumFalse) {
   FakeSolver solver;
 
@@ -47,7 +49,9 @@ TEST_F(NeutralMixedTest, CreateComponentEvolveMomentumFalse) {
   ASSERT_TRUE(state.isSet("Pd"));
   ASSERT_FALSE(state.isSet("NVd"));
 }
-
+// Transform test checking only that the state has data set in
+// the the required auxiliary variables. Note that boundary conditions
+// are also set in the evolved variables.
 TEST_F(NeutralMixedTest, Transform) {
   FakeSolver solver;
 
@@ -66,7 +70,15 @@ TEST_F(NeutralMixedTest, Transform) {
   ASSERT_TRUE(species.isSet("velocity"));
   ASSERT_TRUE(species.isSet("temperature"));
 }
-
+// Test of finally() for this component following
+// tests of evolve_density and evolve_pressure.
+// We provide a state vector where all fields are constants.
+// We use finally to compute the ddt() of the evolved
+// state variables. For these inputs, the only non-zero
+// contribution comes from the sources, which may be tested
+// by checking that the ddt() variables match expected constants.
+// Note that this test does not check the definition of the
+// differential operators in the right-hand-side of the equations.
 TEST_F(NeutralMixedTest, Finally) {
   FakeSolver solver;
 
@@ -105,7 +117,7 @@ TEST_F(NeutralMixedTest, Finally) {
     ASSERT_DOUBLE_EQ(0.75, ddt_NVd[i]);
   }
 }
-
+// Identical to the test above, but using the collisionality_override variable.
 TEST_F(NeutralMixedTest, FinallyCollisionalityOverride) {
   FakeSolver solver;
 
@@ -145,7 +157,7 @@ TEST_F(NeutralMixedTest, FinallyCollisionalityOverride) {
     ASSERT_DOUBLE_EQ(0.75, ddt_NVd[i]);
   }
 }
-
+// Identical to the test above, but using evolve_momentum = false.
 TEST_F(NeutralMixedTest, FinallyEvolveMomentumFalse) {
   FakeSolver solver;
 
