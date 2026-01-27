@@ -301,7 +301,7 @@ void NeutralMixed::finally(const Options& state) {
   // Nn, Pn, NVn, from the local state
   // and set boundary conditions on evolved quantities
   Tn = get<Field3D>(localstate["temperature"]);
-  Vn = get<Field3D>(localstate["density"]);
+  Vn = get<Field3D>(localstate["velocity"]);
   Pn.setBoundaryTo(get<Field3D>(localstate["pressure"]));
   Nn.setBoundaryTo(get<Field3D>(localstate["density"]));
   if (!evolve_momentum) {
