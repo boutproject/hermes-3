@@ -89,6 +89,7 @@ set(HERMES_SOURCES
     src/binormal_stpm.cxx
     src/kmodel.cxx
     src/recycling.cxx
+    src/recycling_fci.cxx
     src/amjuel_hyd_ionisation.cxx
     src/amjuel_hyd_recombination.cxx
     src/amjuel_helium.cxx
@@ -156,6 +157,7 @@ set(HERMES_SOURCES
     include/radiation.hxx
     include/recalculate_metric.hxx
     include/recycling.hxx
+    include/recycling_fci.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
     include/sheath_boundary_parallel.hxx
