@@ -9,6 +9,7 @@
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 #include <bout/invert_laplace.hxx>
+#include <bout/output_bout_types.hxx>
 
 using bout::globals::mesh;
 
@@ -896,6 +897,23 @@ void Vorticity::finally(const Options& state) {
     }
 
   }
+
+#if CHECKLEVEL >= 1
+  for (auto& i : Vort.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(Vort)[i])) {
+      throw BoutException("ddt(Vort) non-finite at {}\n", i);
+    }
+  }
+
+  if (constraint) {
+    for (auto& i : phi.getRegion("RGN_NOBNDRY")) {
+      if (!std::isfinite(ddt(phi)[i])) {
+        throw BoutException("ddt(phi) non-finite at {}\n", i);
+      }
+    }
+  }
+#endif
+  
 }
 
 void Vorticity::outputVars(Options& state) {

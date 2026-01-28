@@ -43,9 +43,6 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
     throw BoutException("Unknown boundary mode");
   }
 
-  return fp;  // Extrapolation
-
-
 #if CHECKLEVEL >= 2
   if (!std::isfinite(fp)) {
     throw BoutException("SheathBoundary limitFree: {}, {} -> {}", fm, fc, fp);

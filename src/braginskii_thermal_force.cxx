@@ -39,7 +39,7 @@ void BraginskiiThermalForce::transform(Options& state) {
 
       const BoutReal Z = get<BoutReal>(species["charge"]);
       // Don't need density boundary
-      const Field3D nz = GET_NOBOUNDARY(Field3D, species["density"]);
+      const Field3D nz = floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0);
 
       const Field3D ion_force = nz * (0.71 * SQ(Z)) * Grad_Te;
 
@@ -124,7 +124,7 @@ void BraginskiiThermalForce::transform(Options& state) {
 
         const BoutReal mz = get<BoutReal>((*heavy)["AA"]);
         const BoutReal Z = get<BoutReal>((*heavy)["charge"]);
-        const Field3D nz = GET_NOBOUNDARY(Field3D, (*heavy)["density"]);
+        const Field3D nz = floor(GET_NOBOUNDARY(Field3D, (*heavy)["density"]), 0.0);
 
         if (Z == 0.0) {
           continue; // Check that the charge is not zero

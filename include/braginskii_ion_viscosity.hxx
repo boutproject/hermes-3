@@ -75,6 +75,10 @@ private:
   BoutReal bounce_frequency_R;       ///< Input major radius
   bool diagnose;                     ///< Output additional diagnostics?
 
+  BoutReal density_floor;
+  BoutReal pressure_floor; ///< When non-zero pressure is needed
+
+
   /// Per-species diagnostics
   struct Diagnostics {
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar

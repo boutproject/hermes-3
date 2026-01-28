@@ -37,6 +37,14 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                         .doc("Viscosity flux limiter coefficient. <0 = turned off")
                         .withDefault(-1.0);
 
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-8);
+
+  BoutReal temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+
+  pressure_floor = density_floor * temperature_floor;
+
+
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
@@ -203,7 +211,7 @@ void BraginskiiIonViscosity::transform(Options& state) {
     }
 
     const Field3D tau = 1. / nu;
-    const Field3D P = get<Field3D>(species["pressure"]);
+    const Field3D P = floor(get<Field3D>(species["pressure"]), pressure_floor);
     const Field3D V = get<Field3D>(species["velocity"]);
 
     // Parallel ion viscosity (4/3 * 0.96 coefficient)
