@@ -9,6 +9,7 @@ from boututils.run_wrapper import launch_safe
 import numpy
 import pathlib
 import xhermes
+
 from numpy.testing._private.utils import nulp_diff
 
 this_dir = pathlib.Path(__file__).parent
@@ -42,12 +43,14 @@ def check_value(name, val, target, **kws):
         )
     return success
 
-def check_ULPs_diff(name,val,target, maxulps):
-    nulps = nulp_diff(val,target)
+
+def check_ULPs_diff(name, val, target, maxulps):
+    nulps = nulp_diff(val, target)
     success = nulps <= maxulps
     if not success:
         print(
-            f'{name} differs from reference data by {nulps} ULPs (max allowed is {maxulps})\n Value = {val}\n Reference = {target}')
+            f"{name} differs from reference data by {nulps} ULPs (max allowed is {maxulps})\n Value = {val}\n Reference = {target}"
+        )
     return success
 
 
@@ -135,17 +138,17 @@ success &= check_value("Ion temperature", Ti_up, 150, atol=10)
 # Check the values of various diagnostics
 # Diagnostic names and reference values (generated with -O1)
 diags_ref = {
-    "Sd+_iz": 0.0012499733087984837,
-    "Fd+_iz": 5.031884239132974e-05,
-    "Ed+_iz": 0.0008868546724864824,
-    "Rd+_ex": -0.0002980594078569322,
-    "Sd+_rec": -3.47672067567105e-09,
-    "Fd+_rec": -1.0521433154929093e-09,
-    "Ed+_rec": -4.287064694541695e-09,
-    "Rd+_rec": -7.854083423012946e-10,
-    "Kdd+_cx": 0.006217352262215783,
-    "Fdd+_cx": 0.00035849318054988167,
-    "Edd+_cx": 0.0007154009328739765,
+    "Sd+_iz": 0.0012499450155767928,
+    "Fd+_iz": 5.031688066165597e-05,
+    "Ed+_iz": 0.0008868024038263632,
+    "Rd+_ex": -0.0002980529144394331,
+    "Sd+_rec": -3.4767808113538417e-09,
+    "Fd+_rec": -1.0521415760210433e-09,
+    "Ed+_rec": -4.286979394676452e-09,
+    "Rd+_rec": -7.85407423965575e-10,
+    "Kdd+_cx": 0.0062172680518249885,
+    "Fdd+_cx": 0.0003584776616794801,
+    "Edd+_cx": 0.0007153563349443771,
 }
 # fmt: on
 

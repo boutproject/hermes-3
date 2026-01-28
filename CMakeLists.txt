@@ -97,7 +97,6 @@ set(HERMES_SOURCES
     src/permissions.cxx
     src/polarisation_drift.cxx
     src/solkit_neutral_parallel_diffusion.cxx
-    src/hydrogen_charge_exchange.cxx
     src/solkit_hydrogen_charge_exchange.cxx
     src/upstream_density_feedback.cxx
     src/temperature_feedback.cxx
