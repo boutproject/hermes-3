@@ -1,6 +1,6 @@
 #include "bout/field_factory.hxx"
 
-//#include "hermes-2.hxx"
+// #include "hermes-2.hxx"
 #include "../include/div_ops.hxx"
 #include "div_ops.hxx"
 #include "bout/difops.hxx"
