@@ -26,9 +26,9 @@ with DataFile(filename) as g:
     bxcvz = g["bxcvz"]
 
     try:
-      sinty = g["sinty"]  # Integrated magnetic shear
+        sinty = g["sinty"]  # Integrated magnetic shear
     except KeyError:
-      sinty = 0.0
+        sinty = 0.0
 
     # Curl(b / B)
     curlb_Bx = 2 * bxcvx / B
