@@ -24,8 +24,10 @@ using NeutralMixedTest = FakeMeshFixture;
 TEST_F(NeutralMixedTest, CreateComponent) {
   FakeSolver solver;
 
-  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
-                  {"d", {{"type","neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", true}}}};
+  Options options{
+      {"units",
+       {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
+      {"d", {{"type", "neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", true}}}};
   NeutralMixed component("d", options, &solver);
 
   Options state = solver.getState();
@@ -39,8 +41,10 @@ TEST_F(NeutralMixedTest, CreateComponent) {
 TEST_F(NeutralMixedTest, CreateComponentEvolveMomentumFalse) {
   FakeSolver solver;
 
-  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
-                  {"d", {{"type","neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", false}}}};
+  Options options{
+      {"units",
+       {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
+      {"d", {{"type", "neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", false}}}};
   NeutralMixed component("d", options, &solver);
 
   Options state = solver.getState();
@@ -55,8 +59,10 @@ TEST_F(NeutralMixedTest, CreateComponentEvolveMomentumFalse) {
 TEST_F(NeutralMixedTest, Transform) {
   FakeSolver solver;
 
-  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
-                  {"d", {{"type","neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", true}}}};
+  Options options{
+      {"units",
+       {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
+      {"d", {{"type", "neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", true}}}};
   NeutralMixed component("d", options, &solver);
 
   Options state;
@@ -82,16 +88,23 @@ TEST_F(NeutralMixedTest, Transform) {
 TEST_F(NeutralMixedTest, Finally) {
   FakeSolver solver;
 
-  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
-                  {"d", {{"type","neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", true}}}};
+  Options options{
+      {"units",
+       {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
+      {"d", {{"type", "neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", true}}}};
   NeutralMixed component("d", options, &solver);
 
   // Call the finally() method with a density, energy, and momentum source
-  const Options state = {
-      {"species", {{"d", {{"density", 1.0}, {"density_source", 0.5},
-                         {"pressure", 1.0}, {"energy_source", 1.5},
-                         {"momentum", 1.0}, {"momentum_source", 0.75},
-                         {"temperature", 1.0}, {"velocity", 1.0}}}}}};
+  const Options state = {{"species",
+                          {{"d",
+                            {{"density", 1.0},
+                             {"density_source", 0.5},
+                             {"pressure", 1.0},
+                             {"energy_source", 1.5},
+                             {"momentum", 1.0},
+                             {"momentum_source", 0.75},
+                             {"temperature", 1.0},
+                             {"velocity", 1.0}}}}}};
   component.finally(state);
 
   Options ddt = solver.getTimeDerivs();
@@ -121,17 +134,27 @@ TEST_F(NeutralMixedTest, Finally) {
 TEST_F(NeutralMixedTest, FinallyCollisionalityOverride) {
   FakeSolver solver;
 
-  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
-                  {"d", {{"type","neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", true},
-                         {"collisionality_override", 1.0}}}};
+  Options options{
+      {"units",
+       {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
+      {"d",
+       {{"type", "neutral_mixed"},
+        {"AA", 2.0},
+        {"evolve_momentum", true},
+        {"collisionality_override", 1.0}}}};
   NeutralMixed component("d", options, &solver);
 
   // Call the finally() method with a density, energy, and momentum source
-  const Options state = {
-      {"species", {{"d", {{"density", 1.0}, {"density_source", 0.5},
-                         {"pressure", 1.0}, {"energy_source", 1.5},
-                         {"momentum", 1.0}, {"momentum_source", 0.75},
-                         {"temperature", 1.0}, {"velocity", 1.0}}}}}};
+  const Options state = {{"species",
+                          {{"d",
+                            {{"density", 1.0},
+                             {"density_source", 0.5},
+                             {"pressure", 1.0},
+                             {"energy_source", 1.5},
+                             {"momentum", 1.0},
+                             {"momentum_source", 0.75},
+                             {"temperature", 1.0},
+                             {"velocity", 1.0}}}}}};
   component.finally(state);
 
   Options ddt = solver.getTimeDerivs();
@@ -161,16 +184,23 @@ TEST_F(NeutralMixedTest, FinallyCollisionalityOverride) {
 TEST_F(NeutralMixedTest, FinallyEvolveMomentumFalse) {
   FakeSolver solver;
 
-  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
-                  {"d", {{"type","neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", false}}}};
+  Options options{
+      {"units",
+       {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
+      {"d", {{"type", "neutral_mixed"}, {"AA", 2.0}, {"evolve_momentum", false}}}};
   NeutralMixed component("d", options, &solver);
 
   // Call the finally() method with a density, energy, and momentum source
-  const Options state = {
-      {"species", {{"d", {{"density", 1.0}, {"density_source", 0.5},
-                         {"pressure", 1.0}, {"energy_source", 1.5},
-                         {"momentum", 1.0}, {"momentum_source", 0.75},
-                         {"temperature", 1.0}, {"velocity", 1.0}}}}}};
+  const Options state = {{"species",
+                          {{"d",
+                            {{"density", 1.0},
+                             {"density_source", 0.5},
+                             {"pressure", 1.0},
+                             {"energy_source", 1.5},
+                             {"momentum", 1.0},
+                             {"momentum_source", 0.75},
+                             {"temperature", 1.0},
+                             {"velocity", 1.0}}}}}};
   component.finally(state);
 
   Options ddt = solver.getTimeDerivs();

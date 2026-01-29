@@ -304,8 +304,7 @@ void NeutralMixed::finally(const Options& state) {
   if (!evolve_momentum) {
     // momentum is not evolved, so need to get the value from the localstate
     NVn = get<Field3D>(localstate["momentum"]);
-  }
-  else {
+  } else {
     NVn.setBoundaryTo(get<Field3D>(localstate["momentum"]));
   }
   // Logarithms used to calculate perpendicular velocity
