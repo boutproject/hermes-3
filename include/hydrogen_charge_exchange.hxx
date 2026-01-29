@@ -159,7 +159,6 @@ struct HydrogenIsotopeChargeExchange : public HydrogenChargeExchange {
   }
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     // Normalisations
     auto Nnorm = get<BoutReal>(state["Nnorm"]);
     auto Tnorm = get<BoutReal>(state["Tnorm"]);

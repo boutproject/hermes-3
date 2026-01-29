@@ -19,7 +19,6 @@ using ParLimiter = hermes::Limiter;
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
     : Component({readWrite("species:{name}:{outputs}")}), name(name) {
-  AUTO_TRACE();
 
   // Normalisations
   const Options& units = alloptions["units"];
@@ -207,7 +206,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 }
 
 void NeutralMixed::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   mesh->communicate(Nn, Pn, NVn);
 
@@ -294,7 +292,6 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
 }
 
 void NeutralMixed::finally(const Options& state) {
-  AUTO_TRACE();
   auto& localstate = state["species"][name];
 
   // extract auxiliary variables derived from

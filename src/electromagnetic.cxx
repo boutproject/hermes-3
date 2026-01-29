@@ -20,7 +20,6 @@ Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* 
                  readOnly("species:{all_species}:AA"),
                  readOnly("species:{all_species}:density", Regions::Interior),
                  readWrite("fields:Apar")}) {
-  AUTO_TRACE();
 
   Options& units = alloptions["units"];
   BoutReal Bnorm = units["Tesla"];
@@ -91,7 +90,6 @@ Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* 
 }
 
 void Electromagnetic::restartVars(Options& state) {
-  AUTO_TRACE();
 
   // NOTE: This is a hack because we know that the loaded restart file
   //       is passed into restartVars in PhysicsModel::postInit
@@ -112,8 +110,7 @@ void Electromagnetic::restartVars(Options& state) {
 }
 
 void Electromagnetic::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
-  
+
   GuardedOptions allspecies = state["species"];
 
   // Sum coefficients over species

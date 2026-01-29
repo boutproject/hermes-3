@@ -30,9 +30,9 @@ TEST_F(NeutralMixedTest, CreateComponent) {
 
   Options state = solver.getState();
 
-  ASSERT_TRUE(state.isSet("Nd"));
-  ASSERT_TRUE(state.isSet("Pd"));
-  ASSERT_TRUE(state.isSet("NVd"));
+  EXPECT_TRUE(state.isSet("Nd"));
+  EXPECT_TRUE(state.isSet("Pd"));
+  EXPECT_TRUE(state.isSet("NVd"));
 }
 // Component test checking only that the state
 // includes Nd, Pd as evolved variables when evolve_momentum = false.
@@ -45,9 +45,9 @@ TEST_F(NeutralMixedTest, CreateComponentEvolveMomentumFalse) {
 
   Options state = solver.getState();
 
-  ASSERT_TRUE(state.isSet("Nd"));
-  ASSERT_TRUE(state.isSet("Pd"));
-  ASSERT_FALSE(state.isSet("NVd"));
+  EXPECT_TRUE(state.isSet("Nd"));
+  EXPECT_TRUE(state.isSet("Pd"));
+  EXPECT_FALSE(state.isSet("NVd"));
 }
 // Transform test checking only that the state has data set in
 // the the required auxiliary variables. Note that boundary conditions
@@ -63,12 +63,12 @@ TEST_F(NeutralMixedTest, Transform) {
   component.transform(state);
 
   Options& species = state["species"]["d"];
-  ASSERT_TRUE(species.isSet("density"));
-  ASSERT_TRUE(species.isSet("AA"));
-  ASSERT_TRUE(species.isSet("pressure"));
-  ASSERT_TRUE(species.isSet("momentum"));
-  ASSERT_TRUE(species.isSet("velocity"));
-  ASSERT_TRUE(species.isSet("temperature"));
+  EXPECT_TRUE(species.isSet("density"));
+  EXPECT_TRUE(species.isSet("AA"));
+  EXPECT_TRUE(species.isSet("pressure"));
+  EXPECT_TRUE(species.isSet("momentum"));
+  EXPECT_TRUE(species.isSet("velocity"));
+  EXPECT_TRUE(species.isSet("temperature"));
 }
 // Test of finally() for this component following
 // tests of evolve_density and evolve_pressure.
@@ -96,21 +96,21 @@ TEST_F(NeutralMixedTest, Finally) {
 
   Options ddt = solver.getTimeDerivs();
 
-  ASSERT_TRUE(ddt.isSet("Nd"));
+  EXPECT_TRUE(ddt.isSet("Nd"));
   Field3D ddt_Nd = ddt["Nd"].as<Field3D>();
 
   BOUT_FOR_SERIAL(i, ddt_Nd.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(0.5, ddt_Nd[i]);
   }
 
-  ASSERT_TRUE(ddt.isSet("Pd"));
+  EXPECT_TRUE(ddt.isSet("Pd"));
   Field3D ddt_Pd = ddt["Pd"].as<Field3D>();
 
   BOUT_FOR_SERIAL(i, ddt_Pd.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(1.0, ddt_Pd[i]);
   }
 
-  ASSERT_TRUE(ddt.isSet("NVd"));
+  EXPECT_TRUE(ddt.isSet("NVd"));
   Field3D ddt_NVd = ddt["NVd"].as<Field3D>();
 
   BOUT_FOR_SERIAL(i, ddt_NVd.getRegion("RGN_NOBNDRY")) {
@@ -136,21 +136,21 @@ TEST_F(NeutralMixedTest, FinallyCollisionalityOverride) {
 
   Options ddt = solver.getTimeDerivs();
 
-  ASSERT_TRUE(ddt.isSet("Nd"));
+  EXPECT_TRUE(ddt.isSet("Nd"));
   Field3D ddt_Nd = ddt["Nd"].as<Field3D>();
 
   BOUT_FOR_SERIAL(i, ddt_Nd.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(0.5, ddt_Nd[i]);
   }
 
-  ASSERT_TRUE(ddt.isSet("Pd"));
+  EXPECT_TRUE(ddt.isSet("Pd"));
   Field3D ddt_Pd = ddt["Pd"].as<Field3D>();
 
   BOUT_FOR_SERIAL(i, ddt_Pd.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(1.0, ddt_Pd[i]);
   }
 
-  ASSERT_TRUE(ddt.isSet("NVd"));
+  EXPECT_TRUE(ddt.isSet("NVd"));
   Field3D ddt_NVd = ddt["NVd"].as<Field3D>();
 
   BOUT_FOR_SERIAL(i, ddt_NVd.getRegion("RGN_NOBNDRY")) {
@@ -175,19 +175,19 @@ TEST_F(NeutralMixedTest, FinallyEvolveMomentumFalse) {
 
   Options ddt = solver.getTimeDerivs();
 
-  ASSERT_TRUE(ddt.isSet("Nd"));
+  EXPECT_TRUE(ddt.isSet("Nd"));
   Field3D ddt_Nd = ddt["Nd"].as<Field3D>();
 
   BOUT_FOR_SERIAL(i, ddt_Nd.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(0.5, ddt_Nd[i]);
   }
 
-  ASSERT_TRUE(ddt.isSet("Pd"));
+  EXPECT_TRUE(ddt.isSet("Pd"));
   Field3D ddt_Pd = ddt["Pd"].as<Field3D>();
 
   BOUT_FOR_SERIAL(i, ddt_Pd.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(1.0, ddt_Pd[i]);
   }
 
-  ASSERT_FALSE(ddt.isSet("NVd"));
+  EXPECT_FALSE(ddt.isSet("NVd"));
 }

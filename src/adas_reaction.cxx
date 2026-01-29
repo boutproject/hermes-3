@@ -23,8 +23,8 @@
 #include <fstream>
 #include <iterator>
 
-OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename, std::size_t level) {
-  AUTO_TRACE();
+OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename,
+                                                 std::size_t level) {
 
   // Read the rate file
   std::ifstream json_file(filename);
@@ -74,7 +74,6 @@ auto get_high_index(const std::vector<BoutReal>& vec, BoutReal value) {
 } // namespace
 
 BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
-  AUTO_TRACE();
 
   // Ensure that the inputs are in range
   BoutReal log10T = log10(std::clamp(T, Tmin, Tmax));
@@ -112,8 +111,8 @@ BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
   return pow(10., eval_log_coef);
 }
 
-void OpenADAS::calculate_rates(GuardedOptions && electron, GuardedOptions && from_ion, GuardedOptions && to_ion) {
-  AUTO_TRACE();
+void OpenADAS::calculate_rates(GuardedOptions&& electron, GuardedOptions&& from_ion,
+                               GuardedOptions&& to_ion) {
 
   Field3D Ne = GET_VALUE(Field3D, electron["density"]);
   Field3D Te = GET_VALUE(Field3D, electron["temperature"]);
@@ -173,10 +172,11 @@ void OpenADAS::calculate_rates(GuardedOptions && electron, GuardedOptions && fro
   subtract(electron["energy_source"], energy_loss);
 }
 
-void OpenADASChargeExchange::calculate_rates(GuardedOptions && electron, GuardedOptions && from_A,
-                                             GuardedOptions && from_B, GuardedOptions && to_A,
-                                             GuardedOptions && to_B) {
-  AUTO_TRACE();
+void OpenADASChargeExchange::calculate_rates(GuardedOptions&& electron,
+                                             GuardedOptions&& from_A,
+                                             GuardedOptions&& from_B,
+                                             GuardedOptions&& to_A,
+                                             GuardedOptions&& to_B) {
 
   // Check that the reaction conserves mass and charge
   ASSERT1(get<BoutReal>(from_A["AA"]) == get<BoutReal>(to_A["AA"]));

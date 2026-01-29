@@ -68,7 +68,6 @@ struct Vorticity : public Component {
 
   // Save and restore potential phi
   void restartVars(Options& state) override {
-    AUTO_TRACE();
 
     // NOTE: This is a hack because we know that the loaded restart file
     //       is passed into restartVars in PhysicsModel::postInit
@@ -84,6 +83,17 @@ struct Vorticity : public Component {
                    {{"long_name", "plasma potential"},
                     {"source", "vorticity"}});
   }
+
+  // The following are public functions for unit testing
+
+  /// Diamagnetic term in vorticity. Note this is weighted by the mass
+  /// This includes all species, including electrons
+  Field3D calculatePihat(GuardedOptions allspecies);
+
+  /// Calculates Div(Jdia) and sets energy_source for all
+  /// charged species with pressure.
+  Field3D calculateDivJdia(Field3D phi, GuardedOptions allspecies);
+
 private:
   Field3D Vort; // Evolving vorticity
 
@@ -121,6 +131,8 @@ private:
   Vector2D Curlb_B; // Curvature vector Curl(b/B)
   BoutReal hyper_z; ///< Hyper-viscosity in Z
   Field2D viscosity; ///< Kinematic viscosity
+  Field3D viscous_heating; ///< Heating due to kinematic viscosity
+  bool include_viscosity; ///< Is viscosity > 0?
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current

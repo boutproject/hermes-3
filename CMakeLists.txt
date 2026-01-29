@@ -333,6 +333,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(alfven-wave)
   hermes_add_integrated_test(collfreq-braginskii-afn)
   hermes_add_integrated_test(collfreq-multispecies)
+  hermes_add_integrated_test(2D-energy)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)

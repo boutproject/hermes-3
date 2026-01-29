@@ -19,7 +19,6 @@ BraginskiiHeatExchange::BraginskiiHeatExchange(const std::string& name,
     : Component({readOnly("species:{all_species}:{input_vars}"),
                  readIfSet("species:{all_species}:{optional_vars}"),
                  readWrite("species:{all_species}:{output_vars}")}) {
-  AUTO_TRACE();
   diagnose = alloptions[name]["diagnose"]
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
@@ -33,7 +32,6 @@ BraginskiiHeatExchange::BraginskiiHeatExchange(const std::string& name,
 }
 
 void BraginskiiHeatExchange::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];
 
@@ -108,7 +106,6 @@ void BraginskiiHeatExchange::transform_impl(GuardedOptions& state) {
 }
 
 void BraginskiiHeatExchange::outputVars(Options& state) {
-  AUTO_TRACE();
 
   if (!diagnose) {
     return; // Don't save diagnostics

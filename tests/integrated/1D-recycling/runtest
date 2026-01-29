@@ -9,6 +9,7 @@ from boututils.run_wrapper import launch_safe
 import numpy
 import pathlib
 import xhermes
+from numpy.testing._private.utils import nulp_diff
 
 this_dir = pathlib.Path(__file__).parent
 data_dir = this_dir / "data"
@@ -41,18 +42,12 @@ def check_value(name, val, target, **kws):
         )
     return success
 
-
-def check_ULPs_diff(name, val, target, **kws):
-    kws["maxulp"] = kws.pop("maxulp", 4)
-    success = False
-    try:
-        numpy.testing.assert_array_max_ulp(val, target, **kws)
-        success = True
-    except AssertionError as e:
+def check_ULPs_diff(name,val,target, maxulps):
+    nulps = nulp_diff(val,target)
+    success = nulps <= maxulps
+    if not success:
         print(
-            f'{name} differs from reference data by > {kws["maxulp"]} ULPs\n Value = {val}\n Reference = {target}'
-        )
-
+            f'{name} differs from reference data by {nulps} ULPs (max allowed is {maxulps})\n Value = {val}\n Reference = {target}')
     return success
 
 
@@ -140,17 +135,17 @@ success &= check_value("Ion temperature", Ti_up, 150, atol=10)
 # Check the values of various diagnostics
 # Diagnostic names and reference values (generated with -O1)
 diags_ref = {
-    "Sd+_iz": 0.0012499619217883283,
-    "Fd+_iz": 5.0313380951453235e-05,
-    "Ed+_iz": 0.0008868037136983765,
-    "Rd+_ex": -0.00029805651868773566,
-    "Sd+_rec": -3.477039265232431e-09,
-    "Fd+_rec": -1.052175126556987e-09,
-    "Ed+_rec": -4.287208089859149e-09,
-    "Rd+_rec": -7.854559370875191e-10,
-    "Kdd+_cx": 0.006217417259960819,
-    "Fdd+_cx": 0.000358469132093473,
-    "Edd+_cx": 0.0007153415365599912,
+    "Sd+_iz": 0.0012499733087984837,
+    "Fd+_iz": 5.031884239132974e-05,
+    "Ed+_iz": 0.0008868546724864824,
+    "Rd+_ex": -0.0002980594078569322,
+    "Sd+_rec": -3.47672067567105e-09,
+    "Fd+_rec": -1.0521433154929093e-09,
+    "Ed+_rec": -4.287064694541695e-09,
+    "Rd+_rec": -7.854083423012946e-10,
+    "Kdd+_cx": 0.006217352262215783,
+    "Fdd+_cx": 0.00035849318054988167,
+    "Edd+_cx": 0.0007154009328739765,
 }
 # fmt: on
 
@@ -168,9 +163,9 @@ for name, target in diags_ref.items():
     try:
         val = ds_diags[name].values[pos_idx]
         if gen_data:
-            print(f'"{name}": {val},')
+            print(f'    "{name}": {val},')
         else:
-            success &= check_ULPs_diff(name, val, target, maxulp=ULPs_tolerance)
+            success &= check_ULPs_diff(name, val, target, maxulps=ULPs_tolerance)
     except KeyError:
         print(f" *** Diagnostic '{name}' missing from test data ***")
         end_test(False)
