@@ -129,7 +129,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
 
-  //immBdry->SetBoundary(N, 0.0, ImmersedBoundary::BoundCond::DIRICHLET); //TODO Get this from input file? Also get immBdry flag? Dont need twice at start?
+  if (immBndry) {
+    N.name = std::string("N") + name;
+    immBndry->FieldSetup(N);
+  }
 }
 
 void EvolveDensity::transform(Options& state) {
@@ -177,9 +180,12 @@ void EvolveDensity::transform(Options& state) {
   }
 
   auto& species = state["species"][name];
-  immBdry->SetBoundary(N, 2.0, ImmersedBoundary::BoundCond::NEUMANN);
-  set(species["density"], N); //TODO: Dont floor because ghost cells negative...
-  //set(species["density"], floor(N, 0.0)); // Density in state always >= 0
+  if (immBndry) {
+    immBndry->SetBoundary(N);
+    set(species["density"], N); //Dont floor and zero out ghost cells...
+  } else {
+    set(species["density"], floor(N, 0.0));
+  }
   set(species["AA"], AA);                 // Atomic mass
   if (charge != 0.0) {                    // Don't set charge for neutral species
     set(species["charge"], charge);

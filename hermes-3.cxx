@@ -88,8 +88,6 @@
 
 #include <unistd.h>
 
-ImmersedBoundary* immBdry = nullptr;
-
 #if !BOUT_USE_METRIC_3D
 // For standard 2D metrics,
 // Hermes operators don't need parallel slices
@@ -303,7 +301,15 @@ int Hermes::init(bool restarting) {
     }
   }
 
-  immBdry = new ImmersedBoundary();
+  if (options["imm_bndry"]
+        .doc("Flag to use immersed boundary method. Note, requires FCI (z_periodic=0 also recommended).")
+        .withDefault(false)) {
+    if (mesh->isFci()) {
+      immBndry = std::make_unique<ImmersedBoundary>();
+    } else {
+      throw BoutException("Immersed boundary flag is on but fci is not. z_periodic=0 also recommended.");
+    }
+  }
 
   // Tell the components if they are restarting
   options["restarting"] = restarting;

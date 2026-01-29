@@ -1749,11 +1749,16 @@ dagp_fv::dagp_fv(Mesh &mesh)
   ASSERT0(mesh.get(fac_ZZ, "dagp_fv_ZZ") == 0);
   ASSERT0(mesh.get(volume, "dagp_fv_volume") == 0);
   volume.setRegion("RGN_NOBNDRY");
-  if (! mesh.hasRegion3D("RGN_dapg_fv_xbndry")) {
-    mesh.addRegion("RGN_dapg_fv_xbndry",
+  if (!mesh.hasRegion3D("RGN_dagp_fv_xbndry")) {
+    mesh.addRegion("RGN_dagp_fv_xbndry",
     Region<>(mesh.xstart - 1, mesh.xstart - 1, mesh.ystart,
                             mesh.yend, mesh.zstart, mesh.zend, mesh.LocalNy,
                             mesh.LocalNz));
+  }
+  //Create empty zbndry, can be used when needed.
+  if (!mesh.hasRegion3D("RGN_dagp_fv_zbndry")) {
+    Region<Ind3D>::RegionIndices zbndry_indices;
+    mesh.addRegion(("RGN_dagp_fv_zbndry"), Region<Ind3D>(zbndry_indices));
   }
 }
 
@@ -1774,6 +1779,7 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, bool upwinding) 
   }
 }
 
+//IMM_BNDRY_TODO: Note immBndry requires midpoint rule for cut-face fluxes...and a at partial edge midpoint.
 template <bool extra, bool upwinding>
 Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xlow,
                             Field3D* flow_zlow) {
@@ -1783,41 +1789,38 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
     flow_xlow->allocate();
     flow_zlow->allocate();
   }
-  BOUT_FOR(i, f.getRegion("RGN_dapg_fv_xbndry")) {
-    if (immBdry->IsInside(i) || immBdry->IsInside(i.xp())) { //TODO: immBdry logic.
-      const auto xf = xflux<upwinding>(a, f, i);
-      result[i.xp()] = xf;
-      if constexpr (extra) {
-        (*flow_xlow)[i.xp()] = xf;
-      }
+  BOUT_FOR(i, f.getRegion("RGN_dagp_fv_xbndry")) {
+    const auto xf = xflux<upwinding>(a, f, i);
+    result[i.xp()] = xf;
+    if constexpr (extra) {
+      (*flow_xlow)[i.xp()] = xf;
     }
   }
-  BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
-   if (immBdry->IsInside(i) || immBdry->IsInside(i.xp())) { //TODO: immBdry logic.
-     const auto xf = xflux<upwinding>(a, f, i);
-     result[i.xp()] = xf;
-     if (immBdry->IsInside(i)) {
-       result[i] -= xf; //TODO: Note a needs to be calculated at the partial edge midpoint above as well...
-     }
-     if constexpr (extra) {
-       (*flow_xlow)[i.xp()] = xf;
-     }
-   }
-   if (immBdry->IsInside(i) || immBdry->IsInside(i.zp())) { //TODO: immBdry logic.
-     const auto zf = zflux<upwinding>(a, f, i);
-     result[i.zp()] += zf;
-     if (immBdry->IsInside(i)) {
-       result[i] -= zf;
-     }
-     if constexpr (extra) {
-       (*flow_zlow)[i.zp()] = zf;
-     }
-   }
-   if (immBdry->IsInside(i)) {
-      result[i] -= immBdry->BoundaryNormalFlux(a,f,i);
-   }
+  BOUT_FOR(i, f.getRegion("RGN_dagp_fv_zbndry")) {
+    const auto zf = zflux<upwinding>(a, f, i);
+    result[i.zp()] += zf;
+    if constexpr (extra) {
+      (*flow_zlow)[i.zp()] = zf;
+    }
   }
-  result.setRegion("RGN_NOBNDRY");
+  BOUT_FOR(i, f.getValidRegionWithDefault("RGN_NOBNDRY")) {
+    const auto xf = xflux<upwinding>(a, f, i);
+    result[i.xp()] = xf;
+    result[i] -= xf;
+    if constexpr (extra) {
+      (*flow_xlow)[i.xp()] = xf;
+    }
+    const auto zf = zflux<upwinding>(a, f, i);
+    result[i.zp()] += zf;
+    result[i] -= zf;
+    if constexpr (extra) {
+      (*flow_zlow)[i.zp()] = zf;
+    }
+  }
+  if (immBndry) {
+    immBndry->ComputeBoundaryFluxes(a, f, result);
+  }
+  result.setRegion("RGN_NOBNDRY"); //IMM_BNDRY_TODO: Does the region matter?
   if constexpr (extra) {
     flow_xlow->setRegion("RGN_NOBNDRY");
     flow_zlow->setRegion("RGN_NOBNDRY");

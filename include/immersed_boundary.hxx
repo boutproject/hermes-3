@@ -2,6 +2,10 @@
 #ifndef IMMERSED_BOUNDARY_H
 #define IMMERSED_BOUNDARY_H
 
+#include <memory>
+#include <unordered_map>
+#include <utility>
+
 #include <bout/array.hxx>
 #include <bout/bout_types.hxx>
 #include <bout/field3d.hxx>
@@ -14,9 +18,14 @@ class ImmersedBoundary {
 public:
   ImmersedBoundary();
   enum class BoundCond {DIRICHLET, NEUMANN, SIZE};
-  void SetBoundary(Field3D& f, const BoutReal bc, const BoundCond bc_type) const;
-  BoutReal BoundaryNormalFlux(const Field3D& a, const Field3D& f, const Ind3D& i) const;
+  void FieldSetup(Field3D& f);
+  void SetBoundary(Field3D& f);
+  void ComputeBoundaryFluxes(const Field3D& a, const Field3D& f, Field3D& result) const;
   bool IsInside(const Ind3D& ind) const;
+  bool IsGhost(const Ind3D& ind) const;
+  bool IsCutCell(const Ind3D& ind) const;
+
+  using BC_Info = std::pair<BoundCond, BoutReal>;
 
 private:
   /// Mask function that is 1 in the plasma, 0 in the wall
@@ -27,8 +36,9 @@ private:
   Field3D R3;
   Field3D Z3;
 
-  /// Ghost cell data arrays. #TODO: Add ghost_points in case needed. Useful for testing normals.
+  /// Ghost cell data arrays.
   int num_ghosts = 0;
+  //IMM_BNDRY_TODO: Allow for reading arrays of ints not just BoutReals from mesh. Then dont need to lround data to nearest int w/ floating point error in indexing.
   Matrix<BoutReal> image_inds;
   Matrix<BoutReal> ghost_points;
   Matrix<BoutReal> image_points;
@@ -41,24 +51,20 @@ private:
   Matrix<BoutReal> weights;
   Matrix<BoutReal> is_plasma;
   Array<int> all_plasma;
+  Array<int> ghost_count;
 
   //Boundary information.
   Field3D bound_ids;
-  int num_bounds = 0;          // nb
+  int num_bounds = 0;
   BoutReal s1 = 0;
   BoutReal s2 = 0;
-  Array<BoutReal> bds;         // (nb)
-  Array<BoutReal> bd_len;      // (nb)
-  Matrix<BoutReal> mid_pts;    // (nb,2)
-  Matrix<BoutReal> bnorms;     // (nb,2)
-  Matrix<BoutReal> bbase_inds; // (nb,4): i0A,j0A,i0B,j0B
-  Matrix<BoutReal> bweights;   // (nb, 2*nw): A then B
-
-  /// TODO: Use these?
-  /// Cell indices which are in the plasma.
-  Region<Ind3D> plasma_region;
-  /// Cell indices where a ghost point exists.
-  Region<Ind3D> ghost_region;
+  Array<BoutReal> bds;
+  Array<BoutReal> bd_len;
+  Matrix<BoutReal> mid_pts;
+  Matrix<BoutReal> bnorms;
+  Matrix<BoutReal> bbase_inds;
+  Matrix<BoutReal> bweights;
+  std::unordered_map<std::string, BC_Info> bc_map;
 
   BoutReal GetGhostValue(const BoutReal image_val, const int gid,
                     const BoutReal bc, const BoundCond bc_type) const;
@@ -66,9 +72,11 @@ private:
                     const BoundCond bc_type) const;
 
   const std::string bc_exception = "Invalid boundary condition specified for immersed boundary.";
+  const std::string bc_key = "bndry_wall";
+  std::pair<BoundCond, BoutReal> ReadBC(const std::string& bc_info) const;
 
   // Solve 4x4 A x = b (A is copied by value; partial pivoting)
-  // TODO: Clean up or find better solution...Thanks ChatGPT...
+  // TODO: Clean up/double check this functionality.
   template <typename T>
   static std::array<T,4> solve4x4(std::array<std::array<T,4>,4> A,
                                   const std::array<T,4> b) {
@@ -111,7 +119,6 @@ private:
   }
 };
 
-//TODO Global for now.
-extern ImmersedBoundary* immBdry;
+inline std::unique_ptr<ImmersedBoundary> immBndry; //C++17 global.
 
 #endif // IMMERSED_BOUNDARY_H
