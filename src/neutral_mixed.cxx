@@ -82,6 +82,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                      .doc("Enable stabilising lax flux?")
                      .withDefault<bool>(true);
 
+  neutral_lmax = 0.1 / meters; // Normalised length
+
   flux_limit =
       options["flux_limit"]
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
@@ -224,9 +226,6 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   Vn = NVn / (AA * Nnlim);
   Vn.applyBoundary("neumann");
 
-  Pnlim = softFloor(Pn, pressure_floor);
-  Pnlim.applyBoundary();
-
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
   TRACE("Neutral boundary conditions");
@@ -252,7 +251,6 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
 
         // Zero-gradient pressure
         Pn(r.ind, mesh->ystart - 1, jz) = Pn(r.ind, mesh->ystart, jz);
-        Pnlim(r.ind, mesh->ystart - 1, jz) = Pnlim(r.ind, mesh->ystart, jz);
 
         // No flow into wall
         Vn(r.ind, mesh->ystart - 1, jz) = -Vn(r.ind, mesh->ystart, jz);
@@ -277,7 +275,6 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
 
         // Zero-gradient pressure
         Pn(r.ind, mesh->yend + 1, jz) = Pn(r.ind, mesh->yend, jz);
-        Pnlim(r.ind, mesh->yend + 1, jz) = Pnlim(r.ind, mesh->yend, jz);
 
         // No flow into wall
         Vn(r.ind, mesh->yend + 1, jz) = -Vn(r.ind, mesh->yend, jz);
@@ -300,6 +297,20 @@ void NeutralMixed::finally(const Options& state) {
   AUTO_TRACE();
   auto& localstate = state["species"][name];
 
+  // extract auxiliary variables derived from
+  // Nn, Pn, NVn, from the local state
+  // and set boundary conditions on evolved quantities
+  Tn = get<Field3D>(localstate["temperature"]);
+  Vn = get<Field3D>(localstate["velocity"]);
+  Pn.setBoundaryTo(get<Field3D>(localstate["pressure"]));
+  Nn.setBoundaryTo(get<Field3D>(localstate["density"]));
+  if (!evolve_momentum) {
+    // momentum is not evolved, so need to get the value from the localstate
+    NVn = get<Field3D>(localstate["momentum"]);
+  }
+  else {
+    NVn.setBoundaryTo(get<Field3D>(localstate["momentum"]));
+  }
   // Logarithms used to calculate perpendicular velocity
   // V_perp = -Dnn * ( Grad_perp(Nn)/Nn + Grad_perp(Tn)/Tn )
   //
@@ -308,18 +319,18 @@ void NeutralMixed::finally(const Options& state) {
   // Field3D logNn = log(Nn);
   // Field3D logTn = log(Tn);
 
+  // Nnlim Used where division by neutral density is needed
+  Nnlim = softFloor(Nn, density_floor);
+  // Tnlim used where positivity of Tn is required
+  Field3D Tnlim = softFloor(Tn, temperature_floor);
+  // Pnlim used where positivity of Pn is required
+  Pnlim = softFloor(Pn, pressure_floor);
   logPnlim = log(Pnlim);
   logPnlim.applyBoundary();
-
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
   //
   //
-
-  Field3D Tnlim = softFloor(Tn, temperature_floor);
-
-  BoutReal neutral_lmax =
-    0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
   Field3D Rnn =
     sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
