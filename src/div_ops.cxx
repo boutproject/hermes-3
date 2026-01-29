@@ -1751,14 +1751,14 @@ dagp_fv::dagp_fv(Mesh &mesh)
   volume.setRegion("RGN_NOBNDRY");
   if (!mesh.hasRegion3D("RGN_dagp_fv_xbndry")) {
     mesh.addRegion("RGN_dagp_fv_xbndry",
-    Region<>(mesh.xstart - 1, mesh.xstart - 1, mesh.ystart,
+                   Region<>(mesh.xstart - 1, mesh.xstart - 1, mesh.ystart,
                             mesh.yend, mesh.zstart, mesh.zend, mesh.LocalNy,
                             mesh.LocalNz));
   }
   //Create empty zbndry, can be used when needed.
   if (!mesh.hasRegion3D("RGN_dagp_fv_zbndry")) {
-    Region<Ind3D>::RegionIndices zbndry_indices;
-    mesh.addRegion(("RGN_dagp_fv_zbndry"), Region<Ind3D>(zbndry_indices));
+    Region<>::RegionIndices zbndry_indices;
+    mesh.addRegion(("RGN_dagp_fv_zbndry"), Region<>(zbndry_indices));
   }
 }
 

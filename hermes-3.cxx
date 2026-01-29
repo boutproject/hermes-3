@@ -86,8 +86,6 @@
 
 #include "include/recalculate_metric.hxx"
 
-#include <unistd.h>
-
 #if !BOUT_USE_METRIC_3D
 // For standard 2D metrics,
 // Hermes operators don't need parallel slices
@@ -454,28 +452,4 @@ void Hermes::restartVars(Options& options) {
 }
 
 // Standard main() function
-//BOUTMAIN(Hermes);
-int main(int argc, char** argv) {                               
-  int init_err = BoutInitialise(argc, argv);                    
-  if (init_err < 0) {                                           
-    return 0;                                                   
-  }                                                             
-  if (init_err > 0) {                                           
-    return init_err;                                            
-  }                                                             
-  try {                                                         
-    auto model = bout::utils::make_unique<Hermes>();        
-    auto solver = Solver::create();                             
-    solver->setModel(model.get());                              
-    auto bout_monitor = bout::utils::make_unique<BoutMonitor>();
-    solver->addMonitor(bout_monitor.get(), Solver::BACK);       
-    solver->solve();                                            
-  } catch (const BoutException& e) {                            
-    output << "Error encountered: " << e.what();                
-    output << e.getBacktrace() << endl;                         
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    MPI_Abort(BoutComm::get(), 1);                              
-  }                                                             
-  BoutFinalise();                                               
-  return 0;                                                     
-}
+BOUTMAIN(Hermes);

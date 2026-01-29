@@ -4,7 +4,6 @@
 
 #include <bout/field.hxx>
 #include <bout/globals.hxx>
-#include <bout/constants.hxx>
 #include <bout/mesh.hxx>
 using bout::globals::mesh;
 
@@ -288,7 +287,7 @@ BoutReal ImmersedBoundary::GetGhostValue(const BoutReal image_val, const int gid
   }
 }
 
-//IMM_BNDRY_TODO: Get mpi working.
+//IMM_BNDRY_TODO: Get mpi working. Use global indexer to convert global to local indices. Then make Ind3Ds and use .xp(), etc.
 void ImmersedBoundary::SetBoundary(Field3D& f) {
   const auto bc_type = bc_map.at(f.name).first;
   const auto bc_val  = bc_map.at(f.name).second;
