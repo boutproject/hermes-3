@@ -19,7 +19,7 @@ def gridname(nx):
 
 # List of NY values to use
 # nxlist = [36, 68, 132, 260] #, 640, 1280, 2560, 5120]
-nxlist = [36, 68, 132]
+nxlist = [36, 68]
 nout = 20
 timestep = 1e7 / nout
 
