@@ -394,9 +394,9 @@ void NeutralMixed::finally(const Options& state) {
       }
     }
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
-    ef_cond_perp_xlow *= 3/2;
-    ef_cond_perp_ylow *= 3/2;
-    ef_cond_par_ylow *= 3/2;
+    //ef_cond_perp_xlow *= 3/2;
+    //ef_cond_perp_ylow *= 3/2;
+    //ef_cond_par_ylow *= 3/2;
   }
   
   Sp = pressure_source;
