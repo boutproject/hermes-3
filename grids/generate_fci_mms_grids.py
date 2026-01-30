@@ -26,6 +26,9 @@ for folder, nx, ny, nz in todo:
     filename = f"MMS_straight_slab_{nx}_{ny}_{nz}.fci.grid.nc"
     fn = folder + filename
 
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+
     if os.path.exists(fn) and not force:
         continue
 
