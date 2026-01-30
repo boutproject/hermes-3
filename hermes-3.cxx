@@ -278,6 +278,11 @@ int Hermes::init(bool restarting) {
         coord->g_12.asField3DParallel() /= SQ(rho_s0);
         coord->g_13.asField3DParallel() /= SQ(rho_s0);
         coord->g_23.asField3DParallel() /= SQ(rho_s0);
+	coord->g_22_yhigh() /= SQ(rho_s0);
+	coord->g_22_ylow() /= SQ(rho_s0);
+	coord->Jxz() /= SQ(rho_s0);
+	coord->Jxz_ylow() /= SQ(rho_s0);
+	coord->Jxz_yhigh() /= SQ(rho_s0);
       } else {
 	coord->dx /= rho_s0 * rho_s0 * Bnorm;
 	coord->Bxy /= Bnorm;
