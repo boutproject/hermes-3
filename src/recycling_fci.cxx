@@ -177,7 +177,7 @@ void RecyclingFCI::transform(Options& state) {
     const Field3D Tn = get<Field3D>(species_to["temperature"]);
     const BoutReal AAn = get<BoutReal>(species_to["AA"]);
 
-    bool dissipative = species_from["dissipative"].withDefault(true); 
+    bool dissipative = true; 
     
     // Recycling particle and energy sources will be added to these global sources 
     // which are then passed to the density and pressure equations
@@ -213,7 +213,7 @@ void RecyclingFCI::transform(Options& state) {
 					fabs(pnt.ythis(V)),
 					fabs(pnt.ynext(V)),
 					fabs(pnt.yprev(V)));
-	  flux = pnt.dir * (0.5 * (pnt.ythis(N) * (pnt.ythis(V) + amax) + pnt.ynext(N) * (pnt.ynext(N) - amax)));
+	  flux = pnt.dir * (0.5 * (pnt.ythis(N) * (pnt.ythis(V) + amax) + pnt.ynext(N) * (pnt.ynext(V) - amax)));
 	} else {
 	  flux = pnt.dir * (0.25 * (pnt.ythis(N) + pnt.ynext(N)) * (pnt.ythis(V) + pnt.ynext(V)));
 	}
