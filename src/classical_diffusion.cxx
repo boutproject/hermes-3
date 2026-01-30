@@ -57,8 +57,8 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   // so that net transport is ambipolar
 
   if (custom_D > 0) {    // User-set
-    Dn = custom_D;   
-  } else {                  // Calculated from collisions
+    Dn = custom_D;
+  } else { // Calculated from collisions
     const Field3D nu_e = floor(GET_VALUE(Field3D, electrons["collision_frequency"]), 1e-10);
     Dn = floor(Ptotal, 1e-5) * me * nu_e / (floor(Ne, 1e-5) * Bsq);
   }
@@ -101,9 +101,11 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
       const auto AA = GET_VALUE(BoutReal, species["AA"]);
 
       // TODO: Figure out what to do with the below
-      if(custom_D < 0) {
-        const Field3D nu = floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
-        add(species["energy_source"], FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA / Bsq, T));
+      if (custom_D < 0) {
+        const Field3D nu =
+            floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
+        add(species["energy_source"],
+            FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA / Bsq, T));
       }
     }
   }
