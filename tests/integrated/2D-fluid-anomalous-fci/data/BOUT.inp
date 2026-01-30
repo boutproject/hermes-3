@@ -36,8 +36,6 @@ thermal_conduction = false
 anomalous_D = 1.0 +  0.1*sin(2.0 * pi * x) * cos(2*z)
 anomalous_chi = 1.0
 
-use_finite_difference = true
-
 [Nh+]
 
 solution = 0.1*sin(6.28318530717959*x)*sin(2.0*z + 0.231) + 1.0
