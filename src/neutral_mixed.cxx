@@ -64,6 +64,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   use_finite_difference = options["use_finite_difference"]
                    .doc("Use finite difference for perpendicular diffusion?")
                    .withDefault<bool>(false);
+
+  neutral_lmax = options["neutral_lmax"].doc("Largest distance to the target, limits diffusion").withDefault<BoutReal>(0.1) / meters;
   
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
     .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
@@ -260,9 +262,6 @@ void NeutralMixed::finally(const Options& state) {
 
   Field3D Tnlim = floor(Tn, temperature_floor);
   
-  BoutReal neutral_lmax =
-      0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
-
   Field3D Rnn =
     sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 

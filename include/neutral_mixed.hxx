@@ -63,7 +63,7 @@ private:
   bool freeze_low_density;
   bool use_finite_difference;
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
-
+  BoutReal neutral_lmax;
   bool precondition {true}; ///< Enable preconditioner?
   bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
