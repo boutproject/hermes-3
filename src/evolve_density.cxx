@@ -213,6 +213,16 @@ void EvolveDensity::transform(Options& state) {
     set(species["low_n_coeff"], low_n_coeff);
   }
 
+  auto tracking = ddt(N).getTracking();
+  if (tracking) {
+    auto& species = state["species"][name];
+    saveParallel(*tracking, fmt::format("N{}_initial0", name), N);
+    species["density_source"] = zeroFrom(ddt(N));
+    auto src = mpark::get_if<Field3D>(&species["density_source"].value);
+    src->enableTracking(fmt::format("ddt_N{}_density", name), *tracking);
+    setName(*src, "N{}_density", name);
+  }
+
   // The particle source needs to be known in other components
   // (e.g when electromagnetic terms are enabled)
   // So evaluate them here rather than in finally()
