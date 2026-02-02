@@ -310,6 +310,10 @@ void NeutralMixed::finally(const Options& state) {
     sound_speed = sqrt(Tn * (5. / 3) / AA);
   }
 
+  if (isMMS) {
+    sound_speed = 0.0;
+  }
+
   // Heat conductivity 
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
   //       where nu is the collision frequency used in Dnn
