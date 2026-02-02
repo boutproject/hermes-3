@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - f3dwy
   pull_request:
     branches:
       - '*'  # This will trigger for PRs against any branch
