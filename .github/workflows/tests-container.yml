@@ -26,6 +26,7 @@ jobs:
           git clone ${{ github.server_url }}/${{ github.repository }} -b ${{ github.ref_name }} hermes-3
           cd hermes-3
           git checkout ${{ github.sha }}
+          git submodule update --init external/googletest
 
       - name: Build
         run: |
