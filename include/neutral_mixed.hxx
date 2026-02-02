@@ -42,7 +42,7 @@ private:
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
-
+  bool isMMS;
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn; ///< Diffusion coefficient
