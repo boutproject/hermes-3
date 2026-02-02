@@ -26,7 +26,7 @@ static inline std::map<std::string, int> count_species(std::string expr) {
   for (auto el : strsplit(expr, ' ')) {
     if (el.compare("+") != 0) {
       std::smatch matches;
-      bool has_matches = std::regex_search(el, matches, pattern);
+      [[maybe_unused]] bool has_matches = std::regex_search(el, matches, pattern);
       ASSERT1(has_matches);
 
       int el_count = (matches[1].length() == 0) ? 1 : stringToInt(matches[1]);

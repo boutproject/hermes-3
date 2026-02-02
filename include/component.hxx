@@ -112,7 +112,7 @@ T getNonFinal(const Options& option) {
 /// @param option  The Option whose value will be returned
 /// @param location  An optional string to indicate where this value is used
 template<typename T>
-T get(const Options& option, const std::string& location = "") {
+T get(const Options& option, [[maybe_unused]]  const std::string& location = "") {
 #if CHECKLEVEL >= 1
   // Mark option as final, both inside the domain and the boundary
   const_cast<Options&>(option).attributes["final"] = location;
@@ -124,7 +124,7 @@ T get(const Options& option, const std::string& location = "") {
 /// Check if an option can be fetched
 /// Sets the final flag so setting the value
 /// afterwards will lead to an error
-bool isSetFinal(const Options& option, const std::string& location = "");
+bool isSetFinal(const Options& option, [[maybe_unused]] const std::string& location = "");
 
 #if CHECKLEVEL >= 1
 /// A wrapper around isSetFinal() which captures debugging information
@@ -141,7 +141,7 @@ bool isSetFinal(const Options& option, const std::string& location = "");
 /// Check if an option can be fetched
 /// Sets the final flag so setting the value in the domain
 /// afterwards will lead to an error
-bool isSetFinalNoBoundary(const Options& option, const std::string& location = "");
+bool isSetFinalNoBoundary(const Options& option, [[maybe_unused]] const std::string& location = "");
 
 #if CHECKLEVEL >= 1
 /// A wrapper around isSetFinalNoBoundary() which captures debugging information
@@ -180,7 +180,7 @@ bool isSetFinalNoBoundary(const Options& option, const std::string& location = "
 /// @param option  The Option whose value will be returned
 /// @param location  An optional string to indicate where this value is used
 template<typename T>
-T getNoBoundary(const Options& option, const std::string& location = "") {
+T getNoBoundary(const Options& option, [[maybe_unused]] const std::string& location = "") {
 #if CHECKLEVEL >= 1
   // Mark option as final inside the domain
   const_cast<Options&>(option).attributes["final-domain"] = location;
@@ -231,7 +231,7 @@ bool hermesDataInvalid(const T& value) {
 ///
 /// @tparam T The type of the value to set. Usually this is inferred
 template<typename T>
-void setCheck(Options& option, T value) {
+void setCheck([[maybe_unused]] Options& option, [[maybe_unused]] T value) {
 #if CHECKLEVEL >= 1
   if (option.hasAttribute("final")) {
     throw BoutException("Setting value of {} but it has already been used in {}.",
