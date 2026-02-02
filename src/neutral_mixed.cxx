@@ -284,17 +284,13 @@ void NeutralMixed::finally(const Options& state) {
       Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
     }
   }
-
   
-  /*
+  
   Dnn.applyBoundary("neumann");
   mesh->communicate(Dnn);
   Dnn.applyParallelBoundary("parallel_neumann_o1");
-  */
+  
 
-  if (!Dnn.isFci()) {
-    Dnn.clearParallelSlices();
-  }
   
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
