@@ -3,21 +3,21 @@ on: [push]
 
 jobs:
   standard_tests:
-    name: Tests with ${{ matrix.3d }}${{ matrix.mode }}
+    name: Tests with ${{ matrix.metric }}${{ matrix.mode }}
     timeout-minutes: 120
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/boutproject/bout-dev:mpich-${{ matrix.3d }}${{ matrix.mode }}-f3dwy
+      image: ghcr.io/boutproject/bout-dev:mpich-${{ matrix.metric }}${{ matrix.mode }}-f3dwy
     strategy:
       fail-fast: false
       matrix:
         mode: [opt, debug]
-        3d: ['3d-', '']
+        metric: ['3d-', '']
         
     steps:
       - name: Job information
         run: |
-          echo Build: ${{ matrix.3d }}${{ matrix.mode }}
+          echo Build: ${{ matrix.metric }}${{ matrix.mode }}
           cat /etc/os-release
 
       - name: Checkout hermes-3
