@@ -396,9 +396,9 @@ void NeutralMixed::finally(const Options& state) {
     } else {
       bool upwind = false;
       if (!use_finite_difference) {
-	ddt(Pn) += (5.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+	ddt(Pn) += (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
       } else {
-	ddt(Pn) += (5.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
+	ddt(Pn) += (2.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
       }
     }
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
