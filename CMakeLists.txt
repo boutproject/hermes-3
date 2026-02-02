@@ -320,6 +320,8 @@ if(HERMES_TESTS)
     CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-density-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-neutral-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-pressure-fci
