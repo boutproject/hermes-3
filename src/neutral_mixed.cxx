@@ -366,8 +366,8 @@ void NeutralMixed::finally(const Options& state) {
   TRACE("Neutral pressure");
 
   if (evolve_momentum) {
-    ddt(Pn) = -FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection                              
-    ddt(Pn) -= (2. / 3) * Pn * Div_par(Vn);
+    ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection                              
+    ddt(Pn) -= (2. / 3) * Vn * Grad_par(Pn);
   } else {
     ddt(Pn) = 0.0;
   }
