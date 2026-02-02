@@ -296,12 +296,15 @@ void NeutralMixed::finally(const Options& state) {
   DnnNn = Dnn * Nnlim;
   DnnPn = Dnn * Pnlim;
   DnnNVn = Dnn * NVn;
+  Dnn_Pn = Dnn / Pn;
   
   yboundary.iter_pnts([&](auto& pnt) {
     pnt.dirichlet_o2(Dnn, 0.0);
     pnt.dirichlet_o2(DnnPn, 0.0);
     pnt.dirichlet_o2(DnnNn, 0.0);
     pnt.dirichlet_o2(DnnNVn, 0.0);
+    pnt.dirichlet_o2(Dnn_Pn, 0.0);
+
   });
   
   // Sound speed appearing in Lax flux for advection terms
@@ -346,9 +349,9 @@ void NeutralMixed::finally(const Options& state) {
     
     bool upwind = false;
     if (!use_finite_difference) {
-      ddt(Nn) += (*dagp)(DnnNn, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
+      ddt(Nn) += (*dagp)(Dnn_Pn * Nn, Pn,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
     } else {
-      ddt(Nn) += Div_a_Grad_perp_curv(DnnNn, logPnlim);
+      ddt(Nn) += Div_a_Grad_perp_curv(Dnn_Pn * Nn, Pn);
     }
   }
 
@@ -366,20 +369,20 @@ void NeutralMixed::finally(const Options& state) {
   TRACE("Neutral pressure");
 
   if (evolve_momentum) {
-    ddt(Pn) = -FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection                              
-    ddt(Pn) -= (2. / 3) * Pn * Div_par(Vn);
+    ddt(Pn) = - (5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection                              
+    ddt(Pn) += (2.0 / 3.0) * Vn * Grad_par(Pn);
   } else {
     ddt(Pn) = 0.0;
   }
   
   if (!Pn.isFci()) {                                                                     // Perpendicular advection
-    ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
+    ddt(Pn) += (5.0 / 3.0) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
   } else {
     bool upwind = false;
     if (!use_finite_difference) { 
-      ddt(Pn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+      ddt(Pn) += (5.0 / 3.0) * (*dagp)(Dnn, Pn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
     } else {
-      ddt(Pn) += (5.0 / 3.0) * Div_a_Grad_perp_curv(DnnPn, logPnlim);
+      ddt(Pn) += (5.0 / 3.0) * Div_a_Grad_perp_curv(Dnn, Pn);
     }
   }
 
@@ -392,7 +395,7 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
     
     if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
-      ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
+      ddt(Pn) += (2.0 / 3.0) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
     } else {
       bool upwind = false;
       if (!use_finite_difference) {
@@ -430,9 +433,9 @@ void NeutralMixed::finally(const Options& state) {
     } else {
       bool upwind = false;
       if (!use_finite_difference) {
-	ddt(NVn) += (*dagp)(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind);
+	ddt(NVn) += (*dagp)(Dnn_Pn * NVn , Pn , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind);
       } else {
-	ddt(NVn) += Div_a_Grad_perp_curv(DnnNVn, logPnlim);
+	ddt(NVn) += Div_a_Grad_perp_curv(Dnn_Pn * NVn, Pn);
       }
     }
     
