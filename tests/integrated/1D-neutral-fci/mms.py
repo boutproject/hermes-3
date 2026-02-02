@@ -27,9 +27,9 @@ neutral_lmax = 0.02/ rho_s
 # Define solution in terms of input x,y,z
 
 
-Nn = (1e17 + 2e16* sin(y ) ) / Nnorm
-Tn = (10.0 + 2.0 * sin(2.0 * y )) / Tnorm
-Vn = (0.0 + 0.1 * sin(y))
+Nn = (1e17 + 2e16* sin(y +0.3123) ) / Nnorm
+Tn = (10.0 + 2.0 * sin(2.0 * y + 1.321)) / Tnorm
+Vn = (0.0 + 0.1 * sin(y + 2.613))
 NVn = AA * Nn * Vn
 #Tn = (10.0 + 0.0 * x ) /Tnorm
 Pn = Nn * Tn
@@ -87,19 +87,19 @@ SPn = SPn.subs(replace)
 print("[Nh]")
 print("solution = " + exprToStr(Nn))
 print("\nsource = " + exprToStr(SNn))
-print("bndry_all = dirichlet_o2(`Nh:solution`)")
+print("bndry_all = neumann")
 print("bndry_par_all = parallel_dirichlet_o2(`Nh:solution`)")
 
 
 print("[NVh]")
 print("solution = " + exprToStr(NVn))
 print("\nsource = " + exprToStr(SNVn))
-print("bndry_all = dirichlet_o2(`NVh:solution`)")
+print("bndry_all = neumann")
 print("bndry_par_all = parallel_dirichlet_o2(`NVh:solution`)")
 
 
 print("[Ph]")
 print("solution = " + exprToStr(Pn))
 print("\nsource = " + exprToStr(SPn))
-print("bndry_all = dirichlet_o2(`Ph:solution`)")
+print("bndry_all = neumann")
 print("bndry_par_all = parallel_dirichlet_o2(`Ph:solution`)")

@@ -17,8 +17,9 @@ from numpy import sqrt, max, abs, mean, array, log, concatenate
 
 import tarfile
 
-gridpath = "../../../../grids/mms_slab_fci_y_BC/"
-archive_path = "mms_slab_fci_y_BC.tar.xz"
+gridpath = "../../../../grids/mms_slab_fci_y/"
+archive_path = "mms_slab_fci.tar.xz"
+
 try:
     with tarfile.open(gridpath + archive_path, "r:xz") as tar:
         tar.extractall(path=gridpath)
@@ -27,14 +28,14 @@ except:
 
 
 def gridname(ny):
-    return gridpath + f"MMS_straight_slab_8_{ny}_4_True.fci.grid.nc"
+    return gridpath + f"MMS_straight_slab_6_{ny}_4.fci.grid.nc"
 
 
 # List of NY values to use
 nylist = [32, 64]  # , 640, 1280, 2560, 5120]
 
 nout = 20
-timestep = 1e4 / nout
+timestep = 1e5 / nout
 
 nproc = 1
 
