@@ -49,6 +49,7 @@ if(HERMES_BUILD_BOUT)
   add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev SYSTEM)
 else()
   find_package(bout++ REQUIRED)
+  get_target_property(BOUT_ENABLE_METRIC_3D bout++ BOUT_USE_METRIC_3D)
 endif()
 
 set(HERMES_SOURCES
