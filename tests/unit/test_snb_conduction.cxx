@@ -16,9 +16,10 @@ extern Mesh *mesh;
 using namespace bout::globals;
 
 #include <bout/field_factory.hxx>  // For generating functions
-
 // Reuse the "standard" fixture for FakeMesh
 using SNBConductionTest = FakeMeshFixture;
+
+#if not BOUT_USE_METRIC_3D
 
 TEST_F(SNBConductionTest, CreateComponent) {
   Options options;
@@ -44,3 +45,13 @@ TEST_F(SNBConductionTest, Transform) {
     ASSERT_LT(abs(source[i]), 1e-20);
   }
 }
+
+#else
+
+TEST_F(SNBConductionTest, CreateComponent) {
+  Options options;
+  ASSERT_THROW(SNBConduction component("test", options, nullptr),
+	       BoutException);
+}
+
+#endif
