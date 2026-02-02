@@ -1,0 +1,41 @@
+name: MMS Test
+on: [push]
+
+jobs:
+  standard_tests:
+    name: Tests with ${{ matrix.3d }}${{ matrix.mode }}
+    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/boutproject/bout-dev:mpich-${{ matrix.3d }}${{ matrix.mode }}-f3dwy
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [opt, debug]
+        3d: ['3d-', '']
+        
+    steps:
+      - name: Job information
+        run: |
+          echo Build: ${{ matrix.3d }}${{ matrix.mode }}
+          cat /etc/os-release
+
+      - name: Checkout hermes-3
+        run: |
+          cd /home/boutuser/
+          git clone ${{ github.server_url }}/${{ github.repository }} -b ${{ github.ref_name }} hermes-3
+          cd hermes-3
+          git checkout ${{ github.sha }}
+
+      - name: Build
+        run: |
+          export HOME=/home/boutuser
+          cd /home/boutuser/hermes-3
+          cmake -B build -S . -DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DHERMES_BUILD_BOUT=OFF
+
+      - name: Run test
+        run: |
+          export HOME=/home/boutuser
+          cd /home/boutuser/hermes-3/build
+          # Run test
+          ctest --output-on-failure
