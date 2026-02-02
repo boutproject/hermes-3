@@ -1,0 +1,65 @@
+nout = 50
+timestep = 0.1
+
+
+[mesh]
+extrapolate_y = false 
+
+
+[mesh:paralleltransform]
+type = fci
+
+
+[solver]
+mxstep = 10000
+rtol = 1e-5
+atol = 1e-9
+mms = true  # Run with MMS sources and output diagnostics
+mms_initialise = true
+
+
+[hermes]
+components = h
+
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[h]
+type = neutral_mixed
+
+AA = 1.0
+
+use_finite_difference = true
+neutral_lmax = 0.02
+evolve_momentum = true
+isMMS = true
+neutral_conduction = false
+
+
+[Nh]
+
+solution = 0.02*sin(y + 1.74773) + 0.1
+
+source = 2.2847e-5*(0.02*sin(y + 1.74773) + 0.1)*cos(y) + 4.5694e-7*sin(y)*cos(y + 1.74773)
+
+bndry_all = dirichlet_o2(`Nh:solution`)
+
+
+[NVh]
+
+solution = 0.1*(0.02*sin(y + 1.74773) + 0.1)*sin(y)
+
+source = 4.5694e-6*(0.02*sin(y + 1.74773) + 0.1)*sin(y)*cos(y) + 0.000182776*(0.02*sin(y + 1.74773) + 0.1)*cos(2.0*y + 5.23131) + 4.5694e-6*(0.4*sin(2.0*y + 5.23131) + 2.0)*cos(y + 1.74773) + 4.5694e-8*sin(y)^2*cos(y + 1.74773)
+
+bndry_all = dirichlet_o2(`NVh:solution`)
+
+
+[Ph]
+
+solution = (0.02*sin(y + 1.74773) + 0.1)*(0.4*sin(2.0*y + 5.23131) + 2.0)
+
+source = 1.52313333333333e-5*(0.8*(0.02*sin(y + 1.74773) + 0.1)*cos(2.0*y + 5.23131) + 0.02*(0.4*sin(2.0*y + 5.23131) + 2.0)*cos(y + 1.74773))*sin(y) + 3.80783333333333e-5*(0.02*sin(y + 1.74773) + 0.1)*(0.4*sin(2.0*y + 5.23131) + 2.0)*cos(y) + 3.04626666666667e-5*(0.02*sin(y + 1.74773) + 0.1)*sin(y)*cos(2.0*y + 5.23131) + 7.61566666666667e-7*(0.4*sin(2.0*y + 5.23131) + 2.0)*sin(y)*cos(y + 1.74773)
+
+bndry_all = dirichlet_o2(`Ph:solution`)
