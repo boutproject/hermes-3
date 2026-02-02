@@ -69,6 +69,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                    .doc("Use finite difference for perpendicular diffusion?")
                    .withDefault<bool>(false);
 
+  disable_Dnn = options["disable_Dnn"]
+                   .doc("Set Dnn to 0? Useful for MMS tests")
+                   .withDefault<bool>(false);
+  
   neutral_lmax = options["neutral_lmax"].doc("Largest distance to the target, limits diffusion").withDefault<BoutReal>(0.1) / meters;
   
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
@@ -285,6 +289,9 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
   
+  if (disable_Dnn) {
+    Dnn = 0.0;
+  }
   
   Dnn.applyBoundary("neumann");
   mesh->communicate(Dnn);
@@ -332,7 +339,11 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral density
   TRACE("Neutral density");
   if (evolve_momentum) {
-    ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, true);
+    if (!isMMS){
+      ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, true);
+    } else {
+      ddt(Nn) = -Div_par(Nn * Vn);
+    }
   } else {
     ddt(Nn) = 0.0;
   }
@@ -366,7 +377,11 @@ void NeutralMixed::finally(const Options& state) {
   TRACE("Neutral pressure");
 
   if (evolve_momentum) {
-    ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection                              
+    if (!isMMS) {
+      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection
+    } else {
+      ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
+    }
     ddt(Pn) -= (2. / 3) * Vn * Grad_par(Pn);
   } else {
     ddt(Pn) = 0.0;
@@ -420,8 +435,11 @@ void NeutralMixed::finally(const Options& state) {
     /////////////////////////////////////////////////////
     // Neutral momentum
     TRACE("Neutral momentum");
-
-    ddt(NVn) = -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed);             // Momentum flow
+    if (!isMMS) {
+      ddt(NVn) = -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed);             // Momentum flow
+    } else {
+      ddt(NVn) = -Div_par(NVn * Vn);
+    }
 
     ddt(NVn) -= Grad_par(Pn);                                 // Pressure gradient
       
