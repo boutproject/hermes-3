@@ -39,6 +39,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                         .doc("Evolve parallel neutral momentum?")
                         .withDefault<bool>(true);
 
+  isMMS = options["isMMS"]
+                        .doc("Is this MMS? If yes, stop sources and sinks")
+                        .withDefault<bool>(false);
+  
   if (evolve_momentum) {
     solver->add(NVn, std::string("NV") + name);
   } else {
@@ -202,7 +206,6 @@ void NeutralMixed::transform(Options& state) {
   Tn = Pn / Nnlim;
   
   Vn = NVn / (AA * Nnlim);
-  Vn.applyBoundary("neumann");
   
   Pnlim = floor(Pn, pressure_floor);
 
@@ -283,11 +286,12 @@ void NeutralMixed::finally(const Options& state) {
   }
 
   
-  
+  /*
   Dnn.applyBoundary("neumann");
   mesh->communicate(Dnn);
   Dnn.applyParallelBoundary("parallel_neumann_o1");
-  
+  */
+
   if (!Dnn.isFci()) {
     Dnn.clearParallelSlices();
   }
@@ -327,9 +331,13 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
+  if (evolve_momentum) {
+    ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, true);
+  } else {
+    ddt(Nn) = 0.0;
+  }
 
-  ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, true);
-
+  
   if (!Nn.isFci()) {
     
     ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
@@ -349,16 +357,21 @@ void NeutralMixed::finally(const Options& state) {
   if (localstate.isSet("density_source")) {
     Sn += get<Field3D>(localstate["density_source"]);
   }
-  ddt(Nn) += Sn; // Always add density_source
-
+  if (!isMMS) {
+    ddt(Nn) += Sn; // Always add density_source
+  }
+  
   /////////////////////////////////////////////////////
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = -FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection
-
-  ddt(Pn) -= (2. / 3) * Pn * Div_par(Vn);                                                // Compression
-
+  if (evolve_momentum) {
+    ddt(Pn) = -FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection                              
+    ddt(Pn) -= (2. / 3) * Pn * Div_par(Vn);
+  } else {
+    ddt(Pn) = 0.0;
+  }
+  
   if (!Pn.isFci()) {                                                                     // Perpendicular advection
     ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
   } else {
@@ -398,8 +411,10 @@ void NeutralMixed::finally(const Options& state) {
   if (localstate.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
   }
-  ddt(Pn) += Sp;
-
+  if (!isMMS) {
+    ddt(Pn) += Sp;
+  }
+  
   if (evolve_momentum) {
 
     /////////////////////////////////////////////////////
