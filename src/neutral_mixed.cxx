@@ -149,33 +149,34 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   // Set boundary condition defaults: Neumann for all but the diffusivity.
   // The dirichlet on diffusivity ensures no radial flux.
   // NV and V are ignored as they are hardcoded in the parallel BC code.
-  alloptions[std::string("Dnn") + name]["bndry_all"] =
+  if (!isMMS) {
+    alloptions[std::string("Dnn") + name]["bndry_all"] =
       alloptions[std::string("Dnn") + name]["bndry_all"].withDefault("dirichlet");
-  alloptions[std::string("T") + name]["bndry_all"] =
+    alloptions[std::string("T") + name]["bndry_all"] =
       alloptions[std::string("T") + name]["bndry_all"].withDefault("neumann");
-  alloptions[std::string("P") + name]["bndry_all"] =
+    alloptions[std::string("P") + name]["bndry_all"] =
       alloptions[std::string("P") + name]["bndry_all"].withDefault("neumann");
-  alloptions[std::string("N") + name]["bndry_all"] =
+    alloptions[std::string("N") + name]["bndry_all"] =
       alloptions[std::string("N") + name]["bndry_all"].withDefault("neumann");
 
-  // Pick up BCs from input file
-  Dnn.setBoundary(std::string("Dnn") + name);
-  Tn.setBoundary(std::string("T") + name);
-  Pn.setBoundary(std::string("P") + name);
-  Nn.setBoundary(std::string("N") + name);
+    // Pick up BCs from input file
+    Dnn.setBoundary(std::string("Dnn") + name);
+    Tn.setBoundary(std::string("T") + name);
+    Pn.setBoundary(std::string("P") + name);
+    Nn.setBoundary(std::string("N") + name);
 
-  // All floored versions of variables get the same boundary as the original
-  Tnlim.setBoundary(std::string("T") + name);
-  Pnlim.setBoundary(std::string("P") + name);
-  logPnlim.setBoundary(std::string("P") + name);
-  Nnlim.setBoundary(std::string("N") + name);
+    // All floored versions of variables get the same boundary as the original
+    Tnlim.setBoundary(std::string("T") + name);
+    Pnlim.setBoundary(std::string("P") + name);
+    logPnlim.setBoundary(std::string("P") + name);
+    Nnlim.setBoundary(std::string("N") + name);
 
-  // Product of Dnn and another parameter has same BC as Dnn - see eqns to see why this is
-  // necessary
-  DnnNn.setBoundary(std::string("Dnn") + name);
-  DnnPn.setBoundary(std::string("Dnn") + name);
-  DnnNVn.setBoundary(std::string("Dnn") + name);
-
+    // Product of Dnn and another parameter has same BC as Dnn - see eqns to see why this is
+    // necessary
+    DnnNn.setBoundary(std::string("Dnn") + name);
+    DnnPn.setBoundary(std::string("Dnn") + name);
+    DnnNVn.setBoundary(std::string("Dnn") + name);
+  }
   if (Nn.isFci()) {
     dagp = FCI::getDagp_fv(alloptions, mesh);
   }
@@ -216,23 +217,28 @@ void NeutralMixed::transform(Options& state) {
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
-  TRACE("Neutral boundary conditions");
-  yboundary.iter_pnts([&](auto& pnt) {
-    // Free boundary (constant gradient) density
-    pnt.dirichlet_o2(Nn, pnt.extrapolate_sheath_o2(Nn));
+  if (!isMMS) {
+    TRACE("Neutral boundary conditions");
+    yboundary.iter_pnts([&](auto& pnt) {
+      // Free boundary (constant gradient) density
+      pnt.dirichlet_o2(Nn, pnt.extrapolate_sheath_o2(Nn));
 
-    // Zero gradient temperature, heat flux added later
-    pnt.neumann_o2(Tn,0.0);
+      // Zero gradient temperature, heat flux added later
+      pnt.neumann_o2(Tn,0.0);
 
-    // Zero-gradient pressure
-    pnt.neumann_o1(Pn,0.0);
-    pnt.neumann_o1(Pnlim,0.0);
+      // Zero-gradient pressure
+      pnt.neumann_o1(Pn,0.0);
+      pnt.neumann_o1(Pnlim,0.0);
     
-    // No flow into wall
-    pnt.dirichlet_o2(Vn,0.0); 
-    pnt.dirichlet_o2(NVn,0.0);
+      // No flow into wall
+      pnt.dirichlet_o2(Vn,0.0); 
+      pnt.dirichlet_o2(NVn,0.0);
     
-  }); // end yboundary.iter_pnts()
+    }); // end yboundary.iter_pnts()
+  }
+
+  Nh_up = 0.0;
+  Nh_down = 0.0;
   
   // Set values in the state
   auto& localstate = state["species"][name];
@@ -303,13 +309,15 @@ void NeutralMixed::finally(const Options& state) {
   DnnNn = Dnn * Nnlim;
   DnnPn = Dnn * Pnlim;
   DnnNVn = Dnn * NVn;
-  
-  yboundary.iter_pnts([&](auto& pnt) {
-    pnt.dirichlet_o2(Dnn, 0.0);
-    pnt.dirichlet_o2(DnnPn, 0.0);
-    pnt.dirichlet_o2(DnnNn, 0.0);
-    pnt.dirichlet_o2(DnnNVn, 0.0);
-  });
+
+  if (!isMMS) {
+    yboundary.iter_pnts([&](auto& pnt) {
+      pnt.dirichlet_o2(Dnn, 0.0);
+      pnt.dirichlet_o2(DnnPn, 0.0);
+      pnt.dirichlet_o2(DnnNn, 0.0);
+      pnt.dirichlet_o2(DnnNVn, 0.0);
+    });
+  }
   
   // Sound speed appearing in Lax flux for advection terms
   sound_speed = 0;
@@ -539,6 +547,22 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
+
+
+  if (diagnose) {
+
+    Nh_up = 0.0;
+    Nh_down = 0.0;
+
+    BOUT_FOR(i, Nn.getRegion("RGN_NOY")){
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+      Nh_up[i] = Nn.yup()[iyp];
+      Nh_down[i] = Nn.ydown()[iym];
+    }
+    
+  }
+  
   
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
@@ -617,6 +641,17 @@ void NeutralMixed::outputVars(Options& state) {
                     {"source", "neutral_mixed"}});
   }
   if (diagnose) {
+
+    set_with_attrs(state[std::string("Nh_up")], Nh_up,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"source", "neutral_mixed"}});
+
+    set_with_attrs(state[std::string("Nh_down")], Nh_down,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"source", "neutral_mixed"}});
+    
     set_with_attrs(state[std::string("T") + name], Tn,
                    {{"time_dimension", "t"},
                     {"units", "eV"},
