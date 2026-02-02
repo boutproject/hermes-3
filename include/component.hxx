@@ -204,7 +204,10 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
 /// if invalid i.e contains non-finite values
 inline bool hermesDataInvalid(BoutReal value) { return !std::isfinite(value); }
 
-inline bool hermesDataInvalid(bool value) {
+inline bool hermesDataInvalid([[maybe_unused]] bool value) {
+  return false; // Default
+}
+inline bool hermesDataInvalid([[maybe_unused]] int value) {
   return false; // Default
 }
 
