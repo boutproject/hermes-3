@@ -27,8 +27,8 @@ neutral_lmax = 0.02/ rho_s
 # Define solution in terms of input x,y,z
 
 
-Nn = (1e17 + 2e16* sin(y + 1.74773) ) / Nnorm
-Tn = (10.0 + 2.0 * sin(2.0 * y + 5.23131)) / Tnorm
+Nn = (1e17 + 2e16* sin(y ) ) / Nnorm
+Tn = (10.0 + 2.0 * sin(2.0 * y )) / Tnorm
 Vn = (0.0 + 0.1 * sin(y))
 NVn = AA * Nn * Vn
 #Tn = (10.0 + 0.0 * x ) /Tnorm
@@ -37,7 +37,8 @@ Rnn = sqrt(Tn / AA) / neutral_lmax
 Dnn = (Tn / AA) / Rnn
 DnnNn = Dnn * Nn
 DnnPn = Dnn * Pn
-kappa_n = (5.0 / 2.0) * DnnNn 
+kappa_n = (5.0 / 2.0) * DnnNn
+eta_n = AA * (2.0 / 5.0) * kappa_n
 logPn = log(Pn)
 
 replace = [ (y, metric.y*2*pi/Ly) ]
@@ -52,16 +53,17 @@ Dnn = Dnn.subs(replace)
 DnnNn = DnnNn.subs(replace)
 DnnPn = DnnPn.subs(replace)
 kappa_n = kappa_n.subs(replace)
+eta_n = eta_n.subs(replace)
 logPn = logPn.subs(replace)
 ##############################
 # Calculate time derivatives
 # Density equation
 
-
+viscosity_source = (rho_s**2)* ( DDX(eta_n * DDX(Vn)) + DDZ(eta_n * DDZ(Vn)) + DDY(eta_n * DDY(Vn)) )
 
 dNndt = -Div_par(Nn * Vn) * rho_s
-DNVndt = (-AA * Div_par(NVn * Vn) - Grad_par(Pn)) * rho_s
-dPndt = (-(5.0 / 3.0) * Div_par(Pn * Vn) - (2.0 / 3.0) * Vn * Grad_par(Pn)) * rho_s
+DNVndt = (-AA * Div_par(NVn * Vn) - Grad_par(Pn)) * rho_s + viscosity_source
+dPndt = (-(5.0 / 3.0) * Div_par(Pn * Vn) - (2.0 / 3.0) * Vn * Grad_par(Pn)) * rho_s + (2.0 / 3.0) * (rho_s**2)*(DDY(kappa_n*DDY(Tn)) + DDX(kappa_n*DDX(Tn)) + DDZ(kappa_n*DDZ(Tn))) - (2.0/3.0) * Vn * viscosity_source
 
 
 
@@ -82,15 +84,22 @@ SNn = SNn.subs(replace)
 SNVn = SNVn.subs(replace)
 SPn = SPn.subs(replace)
 
-print("[Nn]")
+print("[Nh]")
 print("solution = " + exprToStr(Nn))
 print("\nsource = " + exprToStr(SNn))
+print("bndry_all = dirichlet_o2(`Nh:solution`)")
+print("bndry_par_all = parallel_dirichlet_o2(`Nh:solution`)")
 
-print("[NVn]")
+
+print("[NVh]")
 print("solution = " + exprToStr(NVn))
 print("\nsource = " + exprToStr(SNVn))
+print("bndry_all = dirichlet_o2(`NVh:solution`)")
+print("bndry_par_all = parallel_dirichlet_o2(`NVh:solution`)")
 
-print("[Pn]")
+
+print("[Ph]")
 print("solution = " + exprToStr(Pn))
 print("\nsource = " + exprToStr(SPn))
-
+print("bndry_all = dirichlet_o2(`Ph:solution`)")
+print("bndry_par_all = parallel_dirichlet_o2(`Ph:solution`)")
