@@ -31,7 +31,12 @@ jobs:
         run: |
           export HOME=/home/boutuser
           cd /home/boutuser/hermes-3
-          cmake -B build -S . -DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DHERMES_BUILD_BOUT=OFF
+          cmake -B build -S . -DHERMES_UPDATE_GIT_SUBMODULE=OFF \
+                              -DPACKAGE_TESTS=OFF \
+                              -DCMAKE_PREFIX_PATH=/usr/local \
+                              -DHERMES_ERROR_ON_WARNINGS=ON \
+                              -DHERMES_BUILD_BOUT=OFF
+          make -C build -j 2 V=1
 
       - name: Run test
         run: |
