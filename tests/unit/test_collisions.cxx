@@ -29,6 +29,29 @@ TEST_F(CollisionsTest, CreateComponent) {
   Collisions component("test", options, nullptr);
 }
 
+#if BOUT_USE_METRIC_3D
+
+TEST_F(CollisionsTest, OnlyElectrons) {
+  Options options;
+
+  options["units"]["eV"] = 1.0;
+  options["units"]["meters"] = 1.0;
+  options["units"]["seconds"] = 1.0;
+  options["units"]["inv_meters_cubed"] = 1.0;
+  
+  Collisions component("test", options, nullptr);
+
+  Options state;
+  state["species"]["e"]["density"] = 1e19;
+  state["species"]["e"]["temperature"] = 10.;
+
+  ASSERT_THROW(component.transform(state),
+	       BoutException);
+
+}
+
+#else
+
 TEST_F(CollisionsTest, OnlyElectrons) {
   Options options;
 
@@ -165,3 +188,5 @@ TEST_F(CollisionsTest, TnormDependence) {
   ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["d+"]["collision_frequency"])(0,0,0),
                    get<Field3D>(state2["species"]["d+"]["collision_frequency"])(0,0,0));
 }
+
+#endif

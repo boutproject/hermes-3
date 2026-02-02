@@ -20,6 +20,8 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using ElectromagneticTest = FakeMeshFixture;
 
+#if not BOUT_USE_METRIC_3D
+
 TEST_F(ElectromagneticTest, CreateComponent) {
   Options options = {
       {"units", {{"Tesla", 1.0}, {"eV", 1.0}, {"inv_meters_cubed", 1e19}}}};
@@ -72,3 +74,14 @@ TEST_F(ElectromagneticTest, FlutterSetsField) {
     ASSERT_DOUBLE_EQ(Apar_flutter[i], 0.0);
   }
 }
+#else
+
+TEST_F(ElectromagneticTest, CreateComponent) {
+  Options options = {
+      {"units", {{"Tesla", 1.0}, {"eV", 1.0}, {"inv_meters_cubed", 1e19}}}};
+
+  ASSERT_THROW(Electromagnetic component("test", options, nullptr),
+	       BoutException);
+}
+
+#endif
