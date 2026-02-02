@@ -46,7 +46,7 @@ private:
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn; ///< Diffusion coefficient
-  Field3D DnnNn, DnnPn, DnnNVn;
+  Field3D DnnNn, DnnPn, DnnNVn, Dnn_Pn;
   BoutReal temperature_floor;
   bool sheath_ydown, sheath_yup;
 
