@@ -92,6 +92,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                  .doc("Save additional output diagnostics")
                  .withDefault<bool>(false);
 
+  diagnose_terms = options["diagnose_terms"]
+                       .doc("Save detailed per-term diagnostics")
+                       .withDefault<bool>(false);
+
   enable_precon = options["precondition"]
                       .doc("Enable preconditioner? (Note: solver may not use it)")
                       .withDefault<bool>(true);
@@ -249,7 +253,8 @@ void EvolvePressure::finally(const Options& state) {
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddtP_ExB = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) += ddtP_ExB;
   } else {
     ddt(P) = 0.0;
   }
@@ -268,23 +273,28 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      ddtP_advection =
+          -FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      ddt(P) += ddtP_advection;
 
       // Work done. This balances energetically a term in the momentum equation
       E_PdivV = -Pfloor * Div_par(V);
-      ddt(P) += (2. / 3) * E_PdivV;
+      ddtP_PdivV = (2. / 3) * E_PdivV;
+      ddt(P) += ddtP_PdivV;
 
     } else {
       // Use V * Grad(P) form
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -=
-          (5. / 3)
+      ddtP_advection =
+          -(5. / 3)
           * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      ddt(P) += ddtP_advection;
 
       E_VgradP = V * Grad_par(P);
-      ddt(P) += (2. / 3) * E_VgradP;
+      ddtP_VgradP = (2. / 3) * E_VgradP;
+      ddt(P) += ddtP_VgradP;
     }
     flow_ylow_advection *= 5. / 2; // Energy flow
     flow_ylow = flow_ylow_advection;
@@ -292,21 +302,25 @@ void EvolvePressure::finally(const Options& state) {
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
-      ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
-      ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+
+      ddtP_flutter1 = -(5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
+      ddtP_flutter2 = (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(P) += ddtP_flutter1;
+      ddt(P) += ddtP_flutter2;
     }
 
     if (numerical_viscous_heating || diagnose) {
       // Viscous heating coming from numerical viscosity from the Lax flux
       Field3D Nlim = softFloor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
-      Sp_nvh = (2. / 3) * AA
-               * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_viscous_heating,
-                                         fix_momentum_boundary_flux);
+      ddtP_viscousheat =
+          (2. / 3) * AA
+          * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_viscous_heating,
+                                    fix_momentum_boundary_flux);
       flow_ylow_viscous_heating *= AA;
       flow_ylow += flow_ylow_viscous_heating;
       if (numerical_viscous_heating) {
-        ddt(P) += Sp_nvh;
+        ddt(P) += ddtP_viscousheat;
       }
     }
   } else if (diagnose) {
@@ -316,96 +330,107 @@ void EvolvePressure::finally(const Options& state) {
   if (species.isSet("low_n_coeff")) {
     // Low density parallel diffusion
     Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
-    ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N)
-              + FV::Div_par_K_Grad_par(low_n_coeff, P);
+    ddtP_low_N_diff = FV::Div_par_K_Grad_par(low_n_coeff * T, N)
+                      + FV::Div_par_K_Grad_par(low_n_coeff, P);
+    ddt(P) += ddtP_low_N_diff;
   }
 
   if (low_n_diffuse_perp) {
-    ddt(P) +=
+    ddtP_low_N_diff_perp =
         Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P);
+    ddt(P) += ddtP_low_N_diff_perp;
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) +=
+    ddtP_low_T_diff_perp =
         1e-4
         * Div_Perp_Lap_FV_Index(
             floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
             T);
+    ddt(P) += ddtP_low_T_diff_perp;
   }
 
   if (low_p_diffuse_perp) {
     Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
-    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P);
+    ddtP_low_P_diff_perp = Div_Perp_Lap_FV_Index(pressure_floor / Plim, P);
+    ddt(P) += ddtP_low_P_diff_perp;
   }
+}
 
-  if (hyper_z > 0.) {
-    ddt(P) -= hyper_z * D4DZ4_Index(P);
-  }
+if (hyper_z > 0.) {
+  ddtP_hyperz = -hyper_z * D4DZ4_Index(P);
+  ddt(P) += ddtP_hyperz;
+}
 
-  if (hyper_z_T > 0.) {
-    ddt(P) -= hyper_z_T * D4DZ4_Index(T);
-  }
+if (hyper_z_T > 0.) {
+  ddtP_T_hyperz = -hyper_z_T * D4DZ4_Index(T);
+  ddt(P) += ddtP_T_hyperz;
+}
 
-  //////////////////////
-  // Other sources
+//////////////////////
+// Other sources
 
-  if (source_time_dependent) {
-    // Evaluate the source_prefactor function at the current time in seconds and scale
-    // source with it
-    BoutReal time = get<BoutReal>(state["time"]);
-    BoutReal source_prefactor =
-        source_prefactor_function->generate(bout::generator::Context().set(
-            "x", 0, "y", 0, "z", 0, "t", time * time_normalisation));
-    final_source = source * source_prefactor;
-  } else {
-    final_source = source;
-  }
+if (source_time_dependent) {
+  // Evaluate the source_prefactor function at the current time in seconds and scale
+  // source with it
+  BoutReal time = get<BoutReal>(state["time"]);
+  BoutReal source_prefactor =
+      source_prefactor_function->generate(bout::generator::Context().set(
+          "x", 0, "y", 0, "z", 0, "t", time * time_normalisation));
+  ddtP_user_source = source * source_prefactor;
+} else {
+  ddtP_user_source = source;
+}
 
-  Sp = final_source;
-  if (species.isSet("energy_source")) {
-    Sp += (2. / 3) * get<Field3D>(species["energy_source"]); // For diagnostic output
-  }
+// Sp is composed of user source and source from other components
+Sp = ddtP_user_source;
+if (species.isSet("energy_source")) {
+  ddtP_component_source = (2. / 3) * get<Field3D>(species["energy_source"]);
+  Sp += ddtP_component_source;
+}
 #if CHECKLEVEL >= 1
-  if (species.isSet("pressure_source")) {
-    throw BoutException(
-        "Components must evolve `energy_source` rather then `pressure_source`");
-  }
+if (species.isSet("pressure_source")) {
+  throw BoutException(
+      "Components must evolve `energy_source` rather then `pressure_source`");
+}
 #endif
-  ddt(P) += Sp;
+ddt(P) += Sp;
 
-  if (damp_p_nt) {
-    // Term to force evolved P towards N * T
-    // This is active when P < 0 or when N < density_floor
-    ddt(P) += N * T - P;
-  }
+if (damp_p_nt) {
+  // Term to force evolved P towards N * T
+  // This is active when P < 0 or when N < density_floor
 
-  // Scale time derivatives
-  if (state.isSet("scale_timederivs")) {
-    ddt(P) *= get<Field3D>(state["scale_timederivs"]);
-  }
+  ddtP_damp_NT = N * T - P;
+  ddt(P) += ddtP_damp_NT;
+}
 
-  if (evolve_log) {
-    ddt(logP) = ddt(P) / P;
-  }
+// Scale time derivatives
+if (state.isSet("scale_timederivs")) {
+  ddt(P) *= get<Field3D>(state["scale_timederivs"]);
+}
+
+if (evolve_log) {
+  ddt(logP) = ddt(P) / P;
+}
 
 #if CHECKLEVEL >= 1
-  for (auto& i : P.getRegion("RGN_NOBNDRY")) {
-    if (!std::isfinite(ddt(P)[i])) {
-      throw BoutException("ddt(P{}) non-finite at {}. Sp={}\n", name, i, Sp[i]);
-    }
+for (auto& i : P.getRegion("RGN_NOBNDRY")) {
+  if (!std::isfinite(ddt(P)[i])) {
+    throw BoutException("ddt(P{}) non-finite at {}. Sp={}\n", name, i, Sp[i]);
   }
+}
 #endif
 
-  if (diagnose) {
-    // Save flows of energy if they are set
+if (diagnose) {
+  // Save flows of energy if they are set
 
-    if (species.isSet("energy_flow_xlow")) {
-      flow_xlow = get<Field3D>(species["energy_flow_xlow"]);
-    }
-    if (species.isSet("energy_flow_ylow")) {
-      flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
-    }
+  if (species.isSet("energy_flow_xlow")) {
+    flow_xlow = get<Field3D>(species["energy_flow_xlow"]);
   }
+  if (species.isSet("energy_flow_ylow")) {
+    flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
+  }
+}
 }
 
 void EvolvePressure::outputVars(Options& state) {
@@ -452,16 +477,16 @@ void EvolvePressure::outputVars(Options& state) {
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
                     {"standard_name", "pressure source"},
-                    {"long_name", name + " pressure source"},
+                    {"long_name", name + "user + component pressure source"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    set_with_attrs(state[std::string("P") + name + std::string("_src")], final_source,
+    set_with_attrs(state[std::string("P") + name + std::string("_src")], ddtP_user_source,
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
                     {"standard_name", "pressure source"},
-                    {"long_name", name + " pressure source"},
+                    {"long_name", name + " user pressure source"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
@@ -539,7 +564,7 @@ void EvolvePressure::outputVars(Options& state) {
 
     if (numerical_viscous_heating) {
       set_with_attrs(
-          state[std::string("E") + name + std::string("_nvh")], Sp_nvh * 3 / .2,
+          state[std::string("E") + name + std::string("_nvh")], ddtP_viscousheat * 3 / .2,
           {{"time_dimension", "t"},
            {"units", "W"},
            {"conversion", Pnorm * Omega_ci},
@@ -547,6 +572,187 @@ void EvolvePressure::outputVars(Options& state) {
            {"long_name", name + " energy source from numerical viscous heating"},
            {"species", name},
            {"source", "evolve_pressure"}});
+    }
+
+    if (diagnose_terms) {
+      if (ddtP_ExB.isAllocated()) {
+        set_with_attrs(state["ddtP_ExB"], ddtP_ExB,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " ExB pressure term"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_advection.isAllocated()) {
+        set_with_attrs(state["ddtP_advection"], ddtP_advection,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " advection pressure term"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_PdivV.isAllocated()) {
+        set_with_attrs(state["ddtP_PdivV"], ddtP_PdivV,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " PdivV pressure term"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_VgradP.isAllocated()) {
+        set_with_attrs(state["ddtP_VgradP"], ddtP_VgradP,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " VgradP pressure term"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_flutter1.isAllocated()) {
+        set_with_attrs(state["ddtP_flutter1"], ddtP_flutter1,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " flutter pressure term 1"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_flutter2.isAllocated()) {
+        set_with_attrs(state["ddtP_flutter2"], ddtP_flutter2,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " flutter pressure term 2"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_flutter3.isAllocated()) {
+        set_with_attrs(state["ddtP_flutter3"], ddtP_flutter3,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " flutter pressure term 3"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_viscousheat.isAllocated()) {
+        set_with_attrs(state["ddtP_viscousheat"], ddtP_viscousheat,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " viscous heat pressure term"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_low_N_diff.isAllocated()) {
+        set_with_attrs(state["ddtP_low_N_diff"], ddtP_low_N_diff,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " low N diffusion pressure term"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_low_N_diff_perp.isAllocated()) {
+        set_with_attrs(
+            state["ddtP_low_N_diff_perp"], ddtP_low_N_diff_perp,
+            {{"time_dimension", "t"},
+             {"units", "Pa s^-1"},
+             {"conversion", Pnorm * Omega_ci},
+             {"standard_name", "pressure term"},
+             {"long_name", name + " low N perpendicular diffusion pressure term"},
+             {"species", name},
+             {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_low_T_diff_perp.isAllocated()) {
+        set_with_attrs(state["ddtP_low_T_diff_perp"], ddtP_low_T_diff_perp,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " low T diffusion pressure term"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_low_P_diff_perp.isAllocated()) {
+        set_with_attrs(
+            state["ddtP_low_P_diff_perp"], ddtP_low_P_diff_perp,
+            {{"time_dimension", "t"},
+             {"units", "Pa s^-1"},
+             {"conversion", Pnorm * Omega_ci},
+             {"standard_name", "pressure term"},
+             {"long_name", name + " low P perpendicular diffusion pressure term"},
+             {"species", name},
+             {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_hyperz.isAllocated()) {
+        set_with_attrs(state["ddtP_hyperz"], ddtP_hyperz,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " Pressure Z hyper-diffusion pressure term"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_T_hyperz.isAllocated()) {
+        set_with_attrs(
+            state["ddtP_T_hyperz"], ddtP_T_hyperz,
+            {{"time_dimension", "t"},
+             {"units", "Pa s^-1"},
+             {"conversion", Pnorm * Omega_ci},
+             {"standard_name", "pressure term"},
+             {"long_name", name + " Temperature Z hyper-diffusion pressure term"},
+             {"species", name},
+             {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_damp_NT.isAllocated()) {
+        set_with_attrs(state["ddtP_damp_NT"], ddtP_damp_NT,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "pressure term"},
+                        {"long_name", name + " NT damping pressure term"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+
+      if (ddtP_component_source.isAllocated()) {
+        set_with_attrs(state["ddtP_component_source"], ddtP_component_source,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "divergence of pressure"},
+                        {"long_name", name + " other component pressure source term"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
     }
   }
 }
