@@ -444,27 +444,25 @@ void RelaxPotential::transform(Options& state) {
     }
   }
 
-
-  // Outer boundary cells
-  if (mesh->firstX()) {
-    for (int i = mesh->xstart - 2; i >= 0; --i) {
-      for (int j = mesh->ystart; j <= mesh->yend; ++j) {
-        for (int k = 0; k < mesh->LocalNz; ++k) {
-          phi(i, j, k) = phi(i + 1, j, k);
-        }
-      }
-    }
-  }
-  if (mesh->lastX()) {
-    for (int i = mesh->xend + 2; i < mesh->LocalNx; ++i) {
-      for (int j = mesh->ystart; j <= mesh->yend; ++j) {
-        for (int k = 0; k < mesh->LocalNz; ++k) {
-          phi(i, j, k) = phi(i - 1, j, k);
-        }
-      }
-    }
-  }
-
+  // // Outer boundary cells
+  // if (mesh->firstX()) {
+  //   for (int i = mesh->xstart - 2; i >= 0; --i) {
+  //     for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+  //       for (int k = 0; k < mesh->LocalNz; ++k) {
+  //         phi(i, j, k) = phi(i + 1, j, k);
+  //       }
+  //     }
+  //   }
+  // }
+  // if (mesh->lastX()) {
+  //   for (int i = mesh->xend + 2; i < mesh->LocalNx; ++i) {
+  //     for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+  //       for (int k = 0; k < mesh->LocalNz; ++k) {
+  //         phi(i, j, k) = phi(i - 1, j, k);
+  //       }
+  //     }
+  //   }
+  // }
 
   // Ensure that potential is set in the communication guard cells
   mesh->communicate(phi, phi1, Vort); //NOTE(malamast): Should we include phi1?
