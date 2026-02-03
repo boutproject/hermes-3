@@ -134,6 +134,8 @@ private:
   Field3D viscous_heating; ///< Heating due to kinematic viscosity
   bool include_viscosity; ///< Is viscosity > 0?
 
+  bool freeze_profiles; ///< Subtract Z average from time derivatives?
+
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 

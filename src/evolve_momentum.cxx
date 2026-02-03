@@ -48,6 +48,8 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
+  freeze_profiles = options["freeze_profiles"].doc("Subtract Z average from time derivatives?").withDefault<bool>(false);
+
   V.setBoundary(std::string("V") + name);
 
   diagnose = options["diagnose"]
@@ -250,6 +252,10 @@ void EvolveMomentum::finally(const Options& state) {
   // Note: Copy boundary condition so dump file has correct boundary.
   NV_solver.setBoundaryTo(NV);
   NV = NV_solver;
+
+  if (freeze_profiles) {
+    ddt(NV) -= DC(ddt(NV)); // Remove the DC, i.e. Z-averaged, component.
+  }
 }
 
 void EvolveMomentum::outputVars(Options& state) {

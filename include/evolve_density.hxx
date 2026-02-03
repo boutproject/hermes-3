@@ -68,6 +68,8 @@ private:
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low pressure?
   BoutReal hyper_z;    ///< Hyper-diffusion in Z
 
+  bool freeze_profiles; ///< Subtract Z average from time derivatives?
+
   bool evolve_log; ///< Evolve logarithm of density?
   Field3D logN;    ///< Logarithm of density (if evolving)
 
