@@ -209,11 +209,12 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
     channel.pump_density_source = 0;
     channel.pump_energy_source = 0;
+    debug_ion_energy_flow = zeroFrom(Nn);
+    debug = zeroFrom(Nn);
 
     // Recycling at the divertor target plates
     if (target_recycle) {
 
-      energy_flow_recycling_read = getNonFinal<Field3D>(species_from["energy_flow_ylow"]);
 
       // Fast recycling needs to know how much energy the "from" species is losing to the boundary
       if (species_from.isSet("energy_flow_ylow")) {
@@ -290,17 +291,22 @@ void Recycling::transform_impl(GuardedOptions& state) {
           // Parallel cross-sectional area at the sheath [m^2]
           BoutReal daparsheath =
               (J(r.ind, mesh->yend) + J(r.ind, mesh->yend + 1))
-              / (sqrt(g_22(r.ind, mesh->yend)) + sqrt(g_22(r.ind, mesh->yend + 1))) * 0.5
-              * (dx(r.ind, mesh->yend) + dx(r.ind, mesh->yend + 1)) * 0.5
-              * (dz(r.ind, mesh->yend) + dz(r.ind, mesh->yend + 1));
+              / (sqrt(g_22(r.ind, mesh->yend)) + sqrt(g_22(r.ind, mesh->yend + 1))) 
+              * 0.5 * (dx(r.ind, mesh->yend) + dx(r.ind, mesh->yend + 1)) 
+              * 0.5 * (dz(r.ind, mesh->yend) + dz(r.ind, mesh->yend + 1));
+
+          
 
           // Flow of recycled neutrals into domain [s-1]
           BoutReal recycle_particle_flow = multiplier * flux * daparsheath;
           BoutReal volume = J(r.ind, mesh->yend) * dx(r.ind, mesh->yend)
                             * dy(r.ind, mesh->yend) * dz(r.ind, mesh->yend);
 
+          debug(r.ind, mesh->yend, jz) = multiplier * flux * daparsheath;
+
           // Energy of recycled particles
           BoutReal ion_energy_flow = energy_flow_ylow(r.ind, mesh->yend + 1, jz);   // Ion heat flow to wall in [W]. This is yup end so take guard cell
+          debug_ion_energy_flow(r.ind, mesh->yend, jz) = ion_energy_flow;
 
           // Blend fast (ion energy) and thermal (constant energy) recycling 
           // Calculate returning neutral heat flow in [W]
@@ -606,6 +612,24 @@ void Recycling::outputVars(Options& state) {
     auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
     auto Tnorm = get<BoutReal>(state["Tnorm"]);
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+    set_with_attrs(state[std::string("debug")],
+                       debug,
+                       {{"time_dimension", "t"},
+                        {"units", "-"},
+                        {"conversion", 1},
+                        {"standard_name", std::string("debug variable")},
+                        {"long_name", std::string("debug variable")},
+                        {"source", "recycling"}});
+
+    set_with_attrs(state[std::string("debug_ion_energy_flow")],
+                       debug_ion_energy_flow,
+                       {{"time_dimension", "t"},
+                        {"units", "-"},
+                        {"conversion", 1},
+                        {"standard_name", std::string("debug variable")},
+                        {"long_name", std::string("debug variable")},
+                        {"source", "recycling"}});
 
     for (const auto& channel : channels) {
       // Save particle and energy source for the species created during recycling

@@ -64,6 +64,10 @@ private:
   Field3D energy_flow_ylow, energy_flow_xlow; ///< Cell edge fluxes used for calculating fast recycling energy source
   Field3D particle_flow_xlow; ///< Radial wall particle fluxes for recycling calc. No need to get poloidal from here, it's calculated from sheath velocity
 
+  //TODO: debug variables to be removed
+  Field3D debug_ion_energy_flow;
+  Field3D debug;
+
   Field2D is_pump; ///< 1 = pump, 0 = no pump. Works only in SOL/PFR. Provided by user in grid file.
   /// Inputs
   ///
