@@ -309,9 +309,9 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(vorticity
     CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-perpdiffusion-fci
-    CONFLICTS BOUT_ENABLE_METRIC_3D)
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-perpdiffusion-conduction-fci
-    CONFLICTS BOUT_ENABLE_METRIC_3D)
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave
