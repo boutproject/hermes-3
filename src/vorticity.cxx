@@ -513,26 +513,26 @@ void Vorticity::transform(Options& state) {
       phi = phiSolver->solve(Vort * (Bsq / average_atomic_mass), phi_plus_pi) - Pi_hat;
     }
 
-  }
+    // Outer boundary cells
+    if (mesh->firstX()) {
+      for (int i = mesh->xstart - 2; i >= 0; --i) {
+        for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+          for (int k = 0; k < mesh->LocalNz; ++k) {
+            phi(i, j, k) = phi(i + 1, j, k);
+          }
+        }
+      }
+    }
+    if (mesh->lastX()) {
+      for (int i = mesh->xend + 2; i < mesh->LocalNx; ++i) {
+        for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+          for (int k = 0; k < mesh->LocalNz; ++k) {
+            phi(i, j, k) = phi(i - 1, j, k);
+          }
+        }
+      }
+    }
 
-  // Outer boundary cells
-  if (mesh->firstX()) {
-    for (int i = mesh->xstart - 2; i >= 0; --i) {
-      for (int j = mesh->ystart; j <= mesh->yend; ++j) {
-        for (int k = 0; k < mesh->LocalNz; ++k) {
-          phi(i, j, k) = phi(i + 1, j, k);
-        }
-      }
-    }
-  }
-  if (mesh->lastX()) {
-    for (int i = mesh->xend + 2; i < mesh->LocalNx; ++i) {
-      for (int j = mesh->ystart; j <= mesh->yend; ++j) {
-        for (int k = 0; k < mesh->LocalNz; ++k) {
-          phi(i, j, k) = phi(i - 1, j, k);
-        }
-      }
-    }
   }
 
   // Ensure that potential is set in the communication guard cells
@@ -944,6 +944,15 @@ void Vorticity::outputVars(Options& state) {
                     {"conversion", SI::qe * Nnorm * Omega_ci},
                     {"long_name", "Rate of change of vorticity"},
                     {"source", "vorticity"}});
+
+    if (constraint) {
+      set_with_attrs(state["ddt(phi)"], ddt(phi),
+                    {{"time_dimension", "t"},
+                      {"units", "C m^-3"},
+                      {"conversion", SI::qe * Nnorm},
+                      {"long_name", "Residual of electrostatic potential equation"},
+                      {"source", "vorticity"}});
+    }                    
 
     if (diamagnetic) {
       set_with_attrs(state["DivJdia"], DivJdia,
