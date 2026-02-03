@@ -117,6 +117,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   viscosity_par.applyBoundary("dirichlet");
   viscosity_par.applyParallelBoundary("parallel_dirichlet_o2");
 
+  viscosity_from_anomalous_nu = options["viscosity_from_anomalous_nu"]
+      .doc("Calculate perpendicular viscosity from anomalous viscosity?")
+      .withDefault<bool>(false);
+
   hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
 
   // Numerical dissipation terms
@@ -776,6 +780,40 @@ void Vorticity::finally(const Options& state) {
   }
 
   // Viscosity
+
+  if (viscosity_from_anomalous_nu) {
+
+    // Calculate a mass-weighted anomalous viscosity
+    Field3D sum_A_mu_n =
+        zeroFrom(Vort); // Sum of atomic mass * collision frequency * density
+    Field3D sum_A_n = zeroFrom(Vort); // Sum of atomic mass * density
+
+    for (const auto& kv : allspecies.getChildren()) {
+      const Options& species = kv.second;
+
+      if (!(species.isSet("charge") and species.isSet("AA"))) {
+        continue; // No charge or mass -> no current
+      }
+      if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+        continue; // Zero charge
+      }
+
+      const BoutReal A = get<BoutReal>(species["AA"]);
+      const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
+      const Field3D AN = A * N;
+      sum_A_n += AN;
+      if (IS_SET(species["anomalous_D"])) {
+        sum_A_mu_n += AN * GET_VALUE(Field3D, species["anomalous_D"]);
+      }
+    }
+
+    Field3D weighted_viscosity = sum_A_mu_n / sum_A_n;
+    weighted_viscosity.applyBoundary("neumann");
+
+    ddt(Vort) += FV::Div_a_Grad_perp(weighted_viscosity, Vort);
+  }
+
+
   ddt(Vort) += FV::Div_a_Grad_perp(viscosity, Vort);
 
   ddt(Vort) += FV::Div_par_K_Grad_par(viscosity_par, Vort);  

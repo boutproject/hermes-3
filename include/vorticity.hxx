@@ -146,6 +146,8 @@ private:
   Field2D viscosity; ///< Perpendicular Kinematic viscosity
   Field2D viscosity_par; ///< Parallel Kinematic viscosity
 
+  bool viscosity_from_anomalous_nu; ///< Calculate perpendicular viscosity from anomalous viscosity?
+
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
