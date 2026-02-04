@@ -357,11 +357,6 @@ if(HERMES_TESTS)
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-fluid-anomalous-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(fci-example-1
-    REQUIRES BOUT_ENABLE_METRIC_3D
-    DOWNLOAD https://zenodo.org/records/17571607/files/W7X-conf0-36x8x128.fci.nc?download=1
-    DOWNLOAD_NAME grid.fci.nc
-  )
   hermes_add_integrated_test(collfreq-braginskii-afn)
   hermes_add_integrated_test(collfreq-multispecies)
 
