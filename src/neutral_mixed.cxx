@@ -5,7 +5,6 @@
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
 
-#include "../include/hermes_utils.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/hermes_utils.hxx"
@@ -516,10 +515,10 @@ void NeutralMixed::finally(const Options& state) {
   Field3D e_plus_p = Nnlim * Tn + (2. / 3) * Pn;
 
   ddt(Pn) = -FV::Div_par_mod<ParLimiter>( // Parallel advection
-                    e_plus_p, Vn, sound_speed, ef_adv_par_ylow)
+                e_plus_p, Vn, sound_speed, ef_adv_par_ylow)
             + (2. / 3) * Vn * Grad_par(Pn) // Work done
-            + Div_a_Grad_perp_nonorthog( // Perpendicular advection
-                    Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+            + Div_a_Grad_perp_nonorthog(   // Perpendicular advection
+                Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
   ef_adv_par_ylow  *= 5./2;

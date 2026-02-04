@@ -273,8 +273,8 @@ void EvolvePressure::finally(const Options& state) {
     // Use V * Grad(P) form
     //
     // The internal energy term Pint = Nlim * T
-    ddt(P) -=
-        FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave, flow_ylow_advection);
+    ddt(P) -= FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave,
+                                               flow_ylow_advection);
 
     E_VgradP = V * Grad_par(P);
     ddt(P) += (2. / 3) * E_VgradP;
@@ -465,13 +465,13 @@ void EvolvePressure::outputVars(Options& state) {
 
     if (E_VgradP.isAllocated()) {
       set_with_attrs(state["E" + name + "_VgradP"], E_VgradP,
-		     {{"time_dimension", "t"},
-		      {"units", "W / m^-3"},
-		      {"conversion", Pnorm * Omega_ci},
-		      {"standard_name", "energy source"},
-		      {"long_name", name + " energy source due to pressure gradient"},
-		      {"species", name},
-		      {"source", "evolve_pressure"}});
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy source"},
+                      {"long_name", name + " energy source due to pressure gradient"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
     }
     if (flow_xlow.isAllocated()) {
       set_with_attrs(
