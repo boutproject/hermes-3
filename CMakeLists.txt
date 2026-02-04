@@ -251,7 +251,7 @@ endif()
 # Tests
 option(HERMES_TESTS "Build the tests" ON)
 if (HERMES_TESTS)
-  add_custom_target(setup-test)
+  add_custom_target(setup-test ALL)
 else()
   add_custom_target(setup-test)
 endif()
@@ -271,6 +271,14 @@ add_custom_command(TARGET setup-examples PRE_BUILD
 
 if(HERMES_TESTS)
   enable_testing()
+
+  if (BOUT_ENABLE_METRIC_3D)
+    add_custom_command(TARGET setup-test PRE_BUILD
+      COMMAND python3 ./generate_fci_mms_grids.py
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/grids
+    )
+    file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/grids ${CMAKE_CURRENT_BINARY_DIR}/grids SYMBOLIC)
+  endif()
 
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
