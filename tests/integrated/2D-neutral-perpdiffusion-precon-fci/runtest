@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+
+from __future__ import division
+from __future__ import print_function
+import numpy as np
+
+try:
+    from builtins import str
+except:
+    pass
+
+from boututils.run_wrapper import shell, launch_safe, getmpirun
+from boutdata.collect import collect
+
+from numpy import sqrt, max, abs, mean, array, log, concatenate
+
+import tarfile
+
+gridpath = "../../../../grids/mms_slab_fci_xz/"
+archive_path = "MMS_Slab_fci_XZ.tar.xz"
+
+try:
+    with tarfile.open(gridpath + archive_path, "r:xz") as tar:
+        tar.extractall(path=gridpath)
+except:
+    raise FileNotFoundError("Could not fine mms slab y file to extract")
+
+
+def gridname(nx):
+    return gridpath + f"MMS_straight_slab_{nx}_4_{nx-4}.fci.grid.nc"
+
+
+# List of NY values to use
+# nxlist = [36, 68, 132, 260] #, 640, 1280, 2560, 5120]
+nxlist = [68]
+ny =  nxlist[0]
+nproc = 1
+results = {}
+
+use_precon = ["false", "true"]
+
+for precon in use_precon:
+    args = (
+        "mesh:file="
+        + gridname(ny)
+        + " solver:use_precon=" + precon
+        + " h:precondition=" + precon
+        #+ str(nout)
+        #+ " timestep="
+        #+ str(timestep)
+    )
+
+    print("Running with " + args)
+
+    # Delete old data
+    shell("rm data/BOUT.dmp.*.nc")
+
+    # Command to run
+    cmd = "../../../hermes-3 " + args
+    # Launch using MPI
+    s, out = launch_safe(cmd, nproc=nproc, pipe=True)
+
+    # Save output to log file
+    f = open("run.log." + str(ny), "w")
+    f.write(out)
+    f.close()
+
+    # Collect data
+    wall_time = np.array(collect("wall_time", path="data", info=False))[-1]
+    print(f"wall_time {wall_time}")
+    results[precon] = wall_time
+    
+success = False
+if results["true"] < results["false"]:
+    success = True
+
+if success:
+    print(" => Test passed")
+    exit(0)
+else:
+    print(" => Test failed")
+    exit(1)
