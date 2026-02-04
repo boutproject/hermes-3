@@ -38,7 +38,6 @@ nxlist = [68]
 ny =  nxlist[0]
 nproc = 1
 results = {}
-
 use_precon = ["false", "true"]
 
 for precon in use_precon:

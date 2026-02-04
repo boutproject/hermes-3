@@ -881,7 +881,7 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   const Field3D N = get<Field3D>(species["density"]);
 
   // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coef = -(2. / 3) * gamma * Dnn / N;
+  Field3D coef = - gamma * Dnn;
 
   inv->setCoefD(coef);
   Field3D dT = ddt(Pn);
