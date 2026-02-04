@@ -303,7 +303,7 @@ void NeutralMixed::finally(const Options& state) {
   mesh->communicate(Dnn);
   Dnn.applyParallelBoundary("parallel_neumann_o1");
   
-
+  
   
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
@@ -877,34 +877,17 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   if (!precondition) {
     return;
   }
+  const auto& species = state["species"][name];
+  const Field3D N = get<Field3D>(species["density"]);
 
-  // First matrix
-  //   ( I   0)
-  //   (-LE  I)
+  // Set the coefficient in Div_par( B * Grad_par )
+  Field3D coef = -(2. / 3) * gamma * Dnn / N;
 
-  Field3D DTdtN = Dnn * Tn * ddt(Nn);
-  DTdtN.applyBoundary("dirichlet");
-  mesh->communicate(DTdtN);
-
-  Field3D dummyA = 0.0;
-  Field3D dummyB = 0.0;
-  bool upwind = false;
-  ddt(Pn) -= (gamma * 5.0 / 3.0) * (*dagp)(DTdtN, logPnlim,dummyA, dummyB, upwind);
-  // Second matrix: Invert Pshur
-  //   (E^-1   0  )
-  //   ( 0    P^-1)
-  //
-  // d Laplace_perp(x) + a x + (1/c1)Grad(c2) dot Grad_perp(x) = b
-  // inv->setCoefA(1 - gamma * FV::Div_a_Grad_perp(Dnn, logPnlim));
-  
-  // Third matrix: update Nn and NVn equations
-  // ( I   E^-1U )
-  // ( 0     I   )
-
-  ddt(Nn) -= gamma * (*dagp)(DnnNn / Pnlim, ddt(Pn),dummyA, dummyB, upwind);
-  if (evolve_momentum) {
-    // ddt(NVn) -= gamma * FV::Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
-    ddt(NVn) -= gamma * (*dagp)(DnnNVn / Pnlim, ddt(Pn),dummyA, dummyB, upwind);
-  }
+  inv->setCoefD(coef);
+  Field3D dT = ddt(Pn);
+  dT.applyBoundary("neumann");
+  mesh->communicate(dT);
+  Field3D dummy = 0.0;
+  ddt(Pn) = inv->solve(dT, ddt(Pn));
 
 }

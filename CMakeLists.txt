@@ -312,6 +312,8 @@ if(HERMES_TESTS)
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-perpdiffusion-conduction-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-neutral-perpdiffusion-precon-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave

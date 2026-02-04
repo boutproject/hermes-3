@@ -1,0 +1,66 @@
+nout = 5
+timestep = 100
+
+
+[mesh]
+
+extrapolate_y = false 
+
+[mesh:paralleltransform]
+type = fci
+
+[input]
+
+error_on_unused_options = 0
+
+[solver]
+mxstep = 10000
+rtol = 1e-5
+atol = 1e-12
+[hermes]
+components = h
+
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[h]
+type = neutral_mixed
+
+AA = 1.0
+
+use_finite_difference = true
+neutral_lmax = 0.1
+evolve_momentum = false
+
+
+[Nh]
+sigNh = 0.2
+function = (1e16 + 5e17 * gauss(x-0.5, sigNh) * (sqrt(2*pi)*sigNh)) / `hermes:Nnorm`
+
+source = 0.0
+
+bndry_all = neumann
+
+
+[Ph]
+
+Tprofile = (20.0 + 160 * gauss(x-0.5, `Nh:sigNh`) * (sqrt(2*pi)*`Nh:sigNh`) ) / `hermes:Tnorm`
+function = `Nh:function` * Tprofile
+
+source = 0.0
+
+bndry_all = neumann
+
+[h:precon_laplace]
+
+type   = petsc  # Needed if Boussinesq = false
+ksptype = gmres # Linear iterative method
+pctype = hypre
+
+inner_boundary_flags = 2
+outer_boundary_flags = 2
+atol = 1e-8
+all_terms = true
+nonuniform = true   # NOTE: Necessary to avoid numerical instability
