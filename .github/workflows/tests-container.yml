@@ -30,7 +30,7 @@ jobs:
           git submodule update --init external/googletest
           if test ${{ matrix.metric }} ; then
             python3 -m ensurepip
-            python3 -m pip install git@https://github.com/boutproject/zoidberg@better-metric
+            python3 -m pip install git+https://github.com/boutproject/zoidberg@better-metric
           fi
 
       - name: Build
