@@ -324,8 +324,6 @@ int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal UNUSED(delta)) {
 }
 
 void Hermes::outputVars(Options& options) {
-  AUTO_TRACE();
-
   // Save the Hermes version in the output dump files
   options["HERMES_REVISION"].force(hermes::version::revision);
 
@@ -374,8 +372,6 @@ void Hermes::outputVars(Options& options) {
 }
 
 void Hermes::restartVars(Options& options) {
-  AUTO_TRACE();
-
   set_with_attrs(options["Tnorm"], Tnorm, {
       {"units", "eV"},
       {"conversion", 1}, // Already in SI units

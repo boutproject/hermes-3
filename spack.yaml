@@ -5,9 +5,9 @@
 spack:
   # add package specs to the `specs` list
   specs:
-  - hermes-3%gcc+petsc+reactions ^py-numpy@1.26.4 ^vantage-reactions.reactions~nvcxx+enable_tests
+  - hermes-3%gcc+vantagereactions ^boutpp+petsc+sundials ^petsc+hypre+mumps ^py-numpy@1.26.4 ^vantage.vantagereactions~nvcxx+enable_tests
     ^neso.neso-particles~nvcxx+petsc+build_tests ^openblas ^neso.adaptivecpp ^hdf5
-  - cmake@3.30.5
+  - cmake
   - py-meshio
   - py-petsc4py
   - py-h5py
@@ -15,25 +15,29 @@ spack:
   view:
     gcc:
       root: ./views/gcc
-      select: ['%gcc']
+      select: ['%gcc', '^python' ]
       link_type: symlink
   concretizer:
     unify: when_possible
   repos:
-  - ./external/BOUT-spack
-  - ./external/Reactions/Reactions-repo
-  - ./external/Reactions/NESO-Spack
-  - $spack/var/spack/repos/builtin
+    - ./external/BOUT-spack/spack_repo/bout
+    - ./external/Reactions/VANTAGE-repo
+    - ./external/Reactions/NESO-Spack
+    #- $spack/var/spack/repos/builtin
+    # - ./external/BOUT-spack
   packages:
     all:
       providers:
-        mpi: [mpich, openmpi]
+        mpi: [mpich, openmpi ]
     git:
       externals:
       - spec: git@system
         prefix: /usr
       buildable: false
   develop:
+    boutpp:
+      path: ./external/BOUT-dev
+      spec: boutpp@develop
     hermes-3:
       path: .
       spec: hermes-3@develop

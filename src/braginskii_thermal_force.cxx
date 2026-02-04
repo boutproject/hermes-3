@@ -15,7 +15,6 @@
 #include "../include/component.hxx"
 
 void BraginskiiThermalForce::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];
 

@@ -47,20 +47,19 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 
 SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
     : Component({
-        readIfSet("species:{all_species}:charge"),
-        readIfSet("species:e:{e_whole_domain}"),
-        writeBoundary("species:e:{e_boundary}"),
-        readWrite("species:e:energy_source"),
-        writeBoundaryIfSet("species:e:{e_optional}"),
-        writeBoundaryReadInteriorIfSet("species:e:pressure"),
-        readIfSet("species:{ions}:adiabatic"),
-        readOnly("species:{ions}:AA"),
-        readWrite("species:{ions}:energy_source"),
-        writeBoundary("species:{ions}:{ion_boundary}"),
-        writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
-        writeBoundaryIfSet("species:{ions}:{ion_optional}"),
-    }) {
-  AUTO_TRACE();
+          readIfSet("species:{all_species}:charge"),
+          readIfSet("species:e:{e_whole_domain}"),
+          writeBoundary("species:e:{e_boundary}"),
+          readWrite("species:e:energy_source"),
+          writeBoundaryIfSet("species:e:{e_optional}"),
+          writeBoundaryReadInteriorIfSet("species:e:pressure"),
+          readIfSet("species:{ions}:adiabatic"),
+          readOnly("species:{ions}:AA"),
+          readWrite("species:{ions}:energy_source"),
+          writeBoundary("species:{ions}:{ion_boundary}"),
+          writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+          writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+      }) {
 
   Options& options = alloptions[name];
 
@@ -119,7 +118,6 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
 }
 
 void SheathBoundary::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];
   GuardedOptions electrons = allspecies["e"];

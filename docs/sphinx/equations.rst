@@ -1172,6 +1172,58 @@ The form of the vorticity equation is based on `Simakov & Catto
 with the first term modified to conserve energy. In the limit of zero
 ion pressure and constant :math:`B` it reduces to the simplified form.
 
+
+Kinematic viscosity can be included by setting e.g. ``viscosity = 0.1`` in SI units (m^2/s).
+This adds a diffusion of vorticity and corresponding ion heating.
+The viscous friction force in this simplified operator is
+
+.. math::
+
+   \mathbf{F}_\nu = - \nu B \mathbf{b} \times \nabla \Omega
+
+This gives rise to a drift and current with divergence:
+
+.. math::
+
+   \begin{aligned}\nabla\cdot\mathbf{J_{\nu}} =& \nabla\cdot\left[\frac{\mathbf{b}\times\mathbf{F}_\nu}{B}\right] \\
+   =& \nabla\cdot\left[\nu \nabla_\perp \Omega\right]\end{aligned}
+
+Viscous heating is calculated using the work done by a fluid velocity
+consistent with the Boussinesq approximation:
+
+.. math::
+
+   \mathbf{u} = \frac{\mathbf{b}\times\nabla\Phi}{B}
+
+where the generalized potential is
+
+.. math::
+
+   \Phi = \phi + \hat{p} / \overline{n}
+
+The work done is
+
+.. math::
+
+   \mathbf{F}_\nu\cdot\mathbf{u} = -\nu \nabla_\perp\Omega \cdot \nabla_\perp\Phi
+
+This heating is distributed between charged species in proportion to their local mass density.
+The properties of the work done can be analysed by writing in terms of a vector :math:`\mathbf{g}`:
+
+.. math::
+
+   \mathbf{g} = \frac{\overline{A}\overline{n}}{B^2}\nabla_\perp\Phi
+
+to write:
+
+.. math::
+
+   \begin{aligned}\mathbf{F}_\nu\cdot\mathbf{u} =& -\nu\frac{B^2}{\overline{A}\overline{n}} \nabla_\perp\left(\nabla\cdot\mathbf{g}\right)\cdot\mathbf{g} \\
+   =& \nu\frac{B^2}{\overline{A}\overline{n}} \left[\left(\nabla_\perp\mathbf{g} : \nabla_\perp\mathbf{g}\right) - \nabla\cdot\left(\mathbf{g}\cdot\nabla\mathbf{g}\right)\right]\end{aligned}
+
+The last term is not in general positive definite, so this simple form
+of viscosity could in some cases lead to cooling.
+
 .. doxygenstruct:: Vorticity
    :members:
 

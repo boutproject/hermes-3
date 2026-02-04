@@ -30,7 +30,6 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
     : Component({readOnly("species:{sp}:{input_vars}"),
                  writeBoundary("species:{sp}:pressure"),
                  readWrite("species:{sp}:{output_vars}")}) {
-  AUTO_TRACE();
 
   // Get settings for each species
   for (auto& kv : alloptions.getChildren()) {
@@ -116,7 +115,6 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
 }
 
 void BraginskiiConduction::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   for (auto& kv : state["species"].getChildren()) {
     const std::string& name = kv.first;
@@ -317,7 +315,6 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
 }
 
 void BraginskiiConduction::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);

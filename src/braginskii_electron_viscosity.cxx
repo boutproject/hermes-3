@@ -33,7 +33,6 @@ BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name
 }
 
 void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   GuardedOptions species = state["species"]["e"];
 
@@ -75,7 +74,6 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
 }
 
 void BraginskiiElectronViscosity::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);

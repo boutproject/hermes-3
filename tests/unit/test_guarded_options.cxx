@@ -137,6 +137,7 @@ TEST_F(GuardedOptionsTests, TestGetWritableException) {
       guarded_opts["species"]["d"]["pressure_suffix"].getWritable(Regions::Interior),
       BoutException);
 }
+#endif
 
 TEST_F(GuardedOptionsTests, TestUnreadItems) {
   const std::map<std::string, Regions> expected1 = {
@@ -154,22 +155,38 @@ TEST_F(GuardedOptionsTests, TestUnreadItems) {
   const std::map<std::string, Regions> expected3 = {{"species:d", Regions::All}};
   const std::map<std::string, Regions> expected4;
 
+#if CHECKLEVEL >= 999
   EXPECT_EQ(guarded_opts.unreadItems(), expected1);
+#else
+  EXPECT_THROW(guarded_opts.unreadItems(), BoutException);
+#endif
 
   guarded_opts["species:he:density"].get(Regions::Interior);
   guarded_opts["species:d:pressure"].get(Regions::Interior);
   guarded_opts["species:d:collision_frequencies:d_d_coll"].getWritable(
       Regions::Boundaries);
+#if CHECKLEVEL >= 999
   EXPECT_EQ(guarded_opts.unreadItems(), expected2);
+#else
+  EXPECT_THROW(guarded_opts.unreadItems(), BoutException);
+#endif
 
   guarded_opts["species"]["he"]["charge"].get();
   guarded_opts["species"]["he"]["density"].get();
   guarded_opts["species:he:velocity"].get(Regions::Boundaries);
   EXPECT_FALSE(guarded_opts["unused"]["option"].get().isSet());
+#if CHECKLEVEL >= 999
   EXPECT_EQ(guarded_opts.unreadItems(), expected3);
+#else
+  EXPECT_THROW(guarded_opts.unreadItems(), BoutException);
+#endif
 
   guarded_opts["species:d:velocity"].get();
+#if CHECKLEVEL >= 999
   EXPECT_EQ(guarded_opts.unreadItems(), expected4);
+#else
+  EXPECT_THROW(guarded_opts.unreadItems(), BoutException);
+#endif
 }
 
 TEST_F(GuardedOptionsTests, TestUnwrittenItems) {
@@ -183,22 +200,37 @@ TEST_F(GuardedOptionsTests, TestUnwrittenItems) {
       {"species:d:pressure", Regions::Interior}};
   const std::map<std::string, Regions> expected3;
 
+#if CHECKLEVEL >= 999
   EXPECT_EQ(guarded_opts.unwrittenItems(), expected1);
+#else
+  EXPECT_THROW(guarded_opts.unwrittenItems(), BoutException);
+#endif
 
   guarded_opts["species:he:pressure"].get(Regions::Interior);
   guarded_opts["species:he:collision_frequency"].get();
+#if CHECKLEVEL >= 999
   EXPECT_EQ(guarded_opts.unwrittenItems(), expected1);
+#else
+  EXPECT_THROW(guarded_opts.unwrittenItems(), BoutException);
+#endif
 
   guarded_opts["species"]["he"]["pressure"].getWritable(Regions::Interior);
   guarded_opts["species:d:collision_frequencies:d_d_coll"].getWritable(
       Regions::Boundaries);
+#if CHECKLEVEL >= 999
   EXPECT_EQ(guarded_opts.unwrittenItems(), expected2);
+#else
+  EXPECT_THROW(guarded_opts.unwrittenItems(), BoutException);
+#endif
 
   guarded_opts["species:he:collision_frequency"].getWritable();
   guarded_opts["species:d:pressure"].getWritable(Regions::Interior);
+#if CHECKLEVEL >= 999
   EXPECT_EQ(guarded_opts.unwrittenItems(), expected3);
-}
+#else
+  EXPECT_THROW(guarded_opts.unwrittenItems(), BoutException);
 #endif
+}
 
 TEST_F(GuardedOptionsTests, TestNullOptions) {
   EXPECT_THROW(GuardedOptions(nullptr, &permissions), BoutException);

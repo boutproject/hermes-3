@@ -77,7 +77,6 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
 }
 
 void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   GuardedOptions species = state["species"][name];
 
@@ -157,14 +156,12 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
 }
 
 void AnomalousDiffusion::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   if (diagnose) {
 
-      AUTO_TRACE();
       // Save particle, momentum and energy channels
 
       set_with_attrs(state[{std::string("anomalous_D_") + name}], anomalous_D,

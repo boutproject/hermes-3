@@ -46,8 +46,7 @@ SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
 }
 
 void SheathClosure::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
-  
+
   // Get electrostatic potential
   auto phi = get<Field3D>(state["fields"]["phi"]);
 

@@ -14,7 +14,6 @@ struct FixedDensity : public Component {
   ///   - density   value (expression) in units of m^-3
   FixedDensity(std::string name, Options& alloptions, Solver* UNUSED(solver))
       : Component({readWrite("species:{name}:{vars}")}), name(name) {
-    AUTO_TRACE();
 
     auto& options = alloptions[name];
 
@@ -32,7 +31,6 @@ struct FixedDensity : public Component {
   }
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     auto Nnorm = get<BoutReal>(state["Nnorm"]);
 
     // Save the density, not time dependent
@@ -44,6 +42,7 @@ struct FixedDensity : public Component {
                     {"species", name},
                     {"source", "fixed_density"}});
   }
+
 private:
   std::string name; ///< Short name of species e.g "e"
 
@@ -60,7 +59,6 @@ private:
   ///     - charge
   ///     - density
   void transform_impl(GuardedOptions& state) override {
-    AUTO_TRACE();
     auto species = state["species"][name];
     if (charge != 0.0) { // Don't set charge for neutral species
       set(species["charge"], charge);
