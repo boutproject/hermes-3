@@ -27,7 +27,10 @@ jobs:
           cd hermes-3
           git checkout ${{ github.sha }}
           git submodule update --init external/googletest
-          test ${{ matrix.metric }} && pip install git@https://github.com/boutproject/zoidberg@better-metric
+          if test ${{ matrix.metric }} ; then
+            python3 -m ensurepip
+            python3 -m pip install git@https://github.com/boutproject/zoidberg@better-metric
+          fi
 
       - name: Build
         run: |
