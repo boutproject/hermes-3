@@ -17,7 +17,7 @@ struct NeutralMixed : public Component {
   /// @param name     The name of the species e.g. "h"
   /// @param options  Top-level options. Settings will be taken from options[name]
   /// @param solver   Time-integration solver to be used
-  NeutralMixed(const std::string& name, Options& options, Solver *solver);
+  NeutralMixed(const std::string& name, Options& options, Solver* solver);
 
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
@@ -30,23 +30,24 @@ struct NeutralMixed : public Component {
   void precon(const Options& state, BoutReal gamma) override;
 
 private:
-  std::string name;  ///< Species name
+  std::string name; ///< Species name
 
-  Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
-  Field3D Pn_solver;   ///< Saved to restore in finally
-  Field3D Vn; ///< Neutral parallel velocity
-  Field3D Tn; ///< Neutral temperature
+  Field3D Nn, Pn, NVn;            // Density, pressure and parallel momentum
+  Field3D Pn_solver;              ///< Saved to restore in finally
+  Field3D Vn;                     ///< Neutral parallel velocity
+  Field3D Tn;                     ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
-  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or multispecies
-  Field3D nu; ///< Collisionality to use for diffusion
-  Field3D Dnn; ///< Diffusion coefficient
+  std::string
+      diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
+  Field3D nu;                    ///< Collisionality to use for diffusion
+  Field3D Dnn;                   ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
-  BoutReal flux_limit; ///< Diffusive flux limit
-  BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
+  BoutReal flux_limit;                 ///< Diffusive flux limit
+  BoutReal diffusion_limit;            ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;
 
   bool sheath_ydown, sheath_yup;
@@ -60,10 +61,10 @@ private:
   BoutReal density_norm, pressure_norm; ///< Normalisations
   BoutReal momentum_norm;               ///< Normalisations
 
-  bool neutral_viscosity; ///< include viscosity?
+  bool neutral_viscosity;  ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
-  bool evolve_momentum; ///< Evolve parallel momentum?
-  bool normalise_sources; ///< Normalise input sources?
+  bool evolve_momentum;    ///< Evolve parallel momentum?
+  bool normalise_sources;  ///< Normalise input sources?
 
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 

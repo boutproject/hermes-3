@@ -111,8 +111,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Normalise input sources?")
                           .withDefault<bool>(true);
   diffusion_collisions_mode = options["diffusion_collisions_mode"]
-      .doc("Can be multispecies: all enabled collisions excl. IZ, or afn: CX, IZ and NN collisions")
-      .withDefault<std::string>("multispecies");
+                                  .doc("Can be multispecies: all enabled collisions "
+                                       "excl. IZ, or afn: CX, IZ and NN collisions")
+                                  .withDefault<std::string>("multispecies");
 
   if (precondition) {
     inv = Laplacian::create(&options["precon_laplace"]);
@@ -339,9 +340,8 @@ void NeutralMixed::finally(const Options& state) {
   //
   //
 
-  Field3D Rnn =
-    sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
-
+  Field3D Rnn = sqrt(Tnlim / AA)
+                / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
   if (collisionality_override > 0.0) {
     // user has set an override for collision frequency
     Dnn = (Tn / AA) / collisionality_override;
@@ -521,9 +521,9 @@ void NeutralMixed::finally(const Options& state) {
                 Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
-  ef_adv_par_ylow  *= 5./2;
+  ef_adv_par_ylow *= 5. / 2;
   ef_adv_perp_xlow *= 5. / 2;
-  ef_adv_perp_ylow *= 5./2;
+  ef_adv_perp_ylow *= 5. / 2;
 
   if (neutral_conduction) {
     ddt(Pn) +=
@@ -537,9 +537,9 @@ void NeutralMixed::finally(const Options& state) {
                                        false) // No conduction through target boundary
         ;
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-    ef_cond_perp_xlow *= 3./2;
-    ef_cond_perp_ylow *= 3./2;
-    ef_cond_par_ylow *= 3./2;
+    ef_cond_perp_xlow *= 3. / 2;
+    ef_cond_perp_ylow *= 3. / 2;
+    ef_cond_par_ylow *= 3. / 2;
   }
 
   Sp = pressure_source;
@@ -693,12 +693,12 @@ void NeutralMixed::outputVars(Options& state) {
        {"source", "neutral_mixed"}});
 
   set_with_attrs(state[std::string("V") + name], Vn,
-                   {{"time_dimension", "t"},
-                    {"units", "m / s"},
-                    {"conversion", Cs0},
-                    {"standard_name", "velocity"},
-                    {"long_name", name + " parallel velocity"},
-                    {"source", "neutral_mixed"}});
+                 {{"time_dimension", "t"},
+                  {"units", "m / s"},
+                  {"conversion", Cs0},
+                  {"standard_name", "velocity"},
+                  {"long_name", name + " parallel velocity"},
+                  {"source", "neutral_mixed"}});
 
   if (output_ddt) {
     set_with_attrs(
@@ -862,14 +862,15 @@ void NeutralMixed::outputVars(Options& state) {
            {"source", "evolve_momentum"}});
     }
     if (mf_visc_perp_xlow.isAllocated()) {
-      set_with_attrs(state[fmt::format("mf{}_visc_perp_xlow", name)], mf_visc_perp_xlow,
-                   {{"time_dimension", "t"},
-                    {"units", "N"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum flow"},
-                    {"long_name", name + " radial component of perpendicular viscosity."},
-                    {"species", name},
-                    {"source", "evolve_momentum"}});
+      set_with_attrs(
+          state[fmt::format("mf{}_visc_perp_xlow", name)], mf_visc_perp_xlow,
+          {{"time_dimension", "t"},
+           {"units", "N"},
+           {"conversion", rho_s0 * SQ(rho_s0) * SI::Mp * Nnorm * Cs0 * Omega_ci},
+           {"standard_name", "momentum flow"},
+           {"long_name", name + " radial component of perpendicular viscosity."},
+           {"species", name},
+           {"source", "evolve_momentum"}});
     }
     if (mf_visc_par_ylow.isAllocated()) {
       set_with_attrs(
