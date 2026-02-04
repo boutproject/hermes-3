@@ -1,4 +1,4 @@
-nout = 4
+nout = 5
 timestep = 100
 
 
@@ -31,13 +31,13 @@ type = neutral_mixed
 AA = 1.0
 
 use_finite_difference = true
-neutral_lmax = 10.0
+neutral_lmax = 0.1
 evolve_momentum = false
 
 
 [Nh]
-sigNh = 0.1
-function = (1e16 + 1e17 * gauss(x-0.5, sigNh) * (sqrt(2*pi)*sigNh)) / `hermes:Nnorm`
+sigNh = 0.2
+function = (1e16 + 5e17 * gauss(x-0.5, sigNh) * (sqrt(2*pi)*sigNh)) / `hermes:Nnorm`
 
 source = 0.0
 
@@ -46,7 +46,7 @@ bndry_all = neumann
 
 [Ph]
 
-Tprofile = (20.0 + 360 * gauss(x-0.5, `Nh:sigNh`) * (sqrt(2*pi)*`Nh:sigNh`) ) / `hermes:Tnorm`
+Tprofile = (20.0 + 160 * gauss(x-0.5, `Nh:sigNh`) * (sqrt(2*pi)*`Nh:sigNh`) ) / `hermes:Tnorm`
 function = `Nh:function` * Tprofile
 
 source = 0.0
