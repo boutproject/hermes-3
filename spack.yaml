@@ -41,9 +41,9 @@ spack:
     hermes-3:
       path: .
       spec: hermes-3@develop
-    reactions:
+    vantage.vantagereactions:
       path: ./external/Reactions
-      spec: reactions@working
+      spec: vantage.vantagereactions@working
     neso-particles:
       path: ./external/Reactions/neso-particles
       spec: neso-particles@working
