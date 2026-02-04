@@ -1,4 +1,4 @@
-name: MMS Test
+name: Container based tests
 on: [push]
 
 jobs:
@@ -27,6 +27,7 @@ jobs:
           cd hermes-3
           git checkout ${{ github.sha }}
           git submodule update --init external/googletest
+          test ${{ matrix.metric }} && pip install git@https://github.com/boutproject/zoidberg@better-metric
 
       - name: Build
         run: |
