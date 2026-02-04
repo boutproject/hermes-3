@@ -33,7 +33,6 @@ void SNBConduction::transform_impl(GuardedOptions& state) {
 }
 
 void SNBConduction::outputVars(Options& state) {
-  AUTO_TRACE();
 
   if (diagnose) {
     auto Nnorm = get<BoutReal>(state["Nnorm"]);

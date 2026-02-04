@@ -6,7 +6,6 @@
 using bout::globals::mesh;
 
 void ElectronForceBalance::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   if (state["fields"].isSet("phi")) {
     // Here we use electron force balance to calculate the parallel electric field
@@ -57,7 +56,6 @@ void ElectronForceBalance::outputVars(Options& state) {
   if (!diagnose) {
     return;
   }
-  AUTO_TRACE();
   // Get normalisations
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Lnorm = get<BoutReal>(state["rho_s0"]);

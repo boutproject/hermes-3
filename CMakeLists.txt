@@ -333,6 +333,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(alfven-wave)
   hermes_add_integrated_test(collfreq-braginskii-afn)
   hermes_add_integrated_test(collfreq-multispecies)
+  hermes_add_integrated_test(2D-energy)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -355,6 +356,28 @@ if(HERMES_TESTS)
     target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
     # Have hermes_unit_tests look for dynamic libs in ./ before searching elsewhere
     set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
+  endif()
+  
+# Method of manufactured solutions (MMS) tests of operators
+  option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
+  if(HERMES_DIVOPS_MMS_TESTS)
+    #TEST_SOURCES=
+    add_executable(hermes_mms_operator_tests
+                   tests/mms_operator/main.cxx)
+                   #${TEST_SOURCES})
+    target_link_libraries(hermes_mms_operator_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
+    add_test(NAME differential_operators_mms_orthogonal
+           WORKING_DIRECTORY tests/mms_operator/
+           COMMAND python3 orthogonal_test.py)
+    set_tests_properties(differential_operators_mms_orthogonal PROPERTIES LABELS integration)
+    add_test(NAME differential_operators_mms_nonorthogonal
+           WORKING_DIRECTORY tests/mms_operator/
+           COMMAND python3 nonorthogonal_test.py)
+    set_tests_properties(differential_operators_mms_nonorthogonal PROPERTIES LABELS integration)
+    add_test(NAME rhs_mms_neutral_mixed
+           WORKING_DIRECTORY tests/mms_operator/
+           COMMAND python3 neutral_mixed_ddt_test.py)
+    set_tests_properties(rhs_mms_neutral_mixed PROPERTIES LABELS integration)
   endif()
 endif()
 

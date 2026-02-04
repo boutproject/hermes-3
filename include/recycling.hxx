@@ -55,7 +55,7 @@ private:
 
   std::vector<RecycleChannel> channels; // Recycling channels
 
-  bool target_recycle, sol_recycle, pfr_recycle, neutral_pump;  ///< Flags for enabling recycling in different regions
+  bool target_recycle {false}, sol_recycle {false}, pfr_recycle {false}, neutral_pump {false};  ///< Flags for enabling recycling in different regions
   bool diagnose; ///< Save additional post-processing variables?
 
   BoutReal density_floor, pressure_floor; ///< minimum values for Nn, Pn to avoid divide by zero

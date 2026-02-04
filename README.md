@@ -1,7 +1,7 @@
 # Hermes-3
 
 [![License](https://img.shields.io/badge/license-GPL-blue.svg)](https://img.shields.io/badge/license-GPL-blue.svg)
-![Build status](https://github.com/bendudson/hermes-3/workflows/Tests/badge.svg)
+[![Tests](https://github.com/boutproject/hermes-3/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/boutproject/hermes-3/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/boutproject/hermes-3/graph/badge.svg?token=R8CCYL15GN)](https://codecov.io/gh/boutproject/hermes-3)
 
 Hermes-3 is a multifluid plasma simulation model for transport and

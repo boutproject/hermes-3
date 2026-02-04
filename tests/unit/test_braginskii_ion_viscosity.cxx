@@ -56,6 +56,7 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityPressureScaling) {
   Options state1;
   Options state2;
   state1["species"]["d+"]["density"] = 1;
+  state1["species"]["d+"]["temperature"] = 1;
   state1["species"]["d+"]["charge"] = 1;
   state1["species"]["d+"]["AA"] = 2.;
   state1["species"]["d+"]["velocity"] = linearGradient(1., 0., 1., 1., 1., 0., 0.);
@@ -85,6 +86,7 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityCollisionScaling) {
   Options state1;
   Options state2;
   state1["species"]["d+"]["density"] = 1;
+  state1["species"]["d+"]["temperature"] = 1;
   state1["species"]["d+"]["charge"] = 1;
   state1["species"]["d+"]["AA"] = 2.;
   state1["species"]["d+"]["velocity"] = linearGradient(1., 0., 1., 1., 1., 0., 0.);
@@ -117,6 +119,7 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityVelocityScaling) {
   Options state1;
   Options state2;
   state1["species"]["d+"]["density"] = 1;
+  state1["species"]["d+"]["temperature"] = 1;
   state1["species"]["d+"]["charge"] = 1;
   state1["species"]["d+"]["AA"] = 2.;
   state1["species"]["d+"]["collision_frequencies"]["d+_d+_coll"] = 0.5;
@@ -152,6 +155,7 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityCollisionMode) {
   Options state1;
   Options state2;
   state1["species"]["d+"]["density"] = 1;
+  state1["species"]["d+"]["temperature"] = 1;
   state1["species"]["d+"]["charge"] = 1;
   state1["species"]["d+"]["AA"] = 2.;
   state1["species"]["d+"]["velocity"] = linearGradient(1., 0., 1., 1., 1., 0., 0.);

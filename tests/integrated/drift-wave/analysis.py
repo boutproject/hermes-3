@@ -89,6 +89,9 @@ def extract_data(path):
     dt = float(bd["t"][1] - bd["t"][0])  # Seconds
     gamma = np.mean(np.gradient(np.log(nrms))[-10:]) / dt  # Growth rate [1/s]
 
+    # close dataset after last use
+    bd.close()
+
     print(f"gamma = {gamma}, gamma / w* = {gamma / wstar}")
 
     # Track the motion of the peak to infer phase velocity

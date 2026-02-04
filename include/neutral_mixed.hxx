@@ -30,12 +30,12 @@ struct NeutralMixed : public Component {
   void precon(const Options& state, BoutReal gamma) override;
 
 private:
-  std::string name; ///< Species name
+  std::string name;  ///< Species name
 
-  Field3D Nn, Pn, NVn;            // Density, pressure and parallel momentum
-  Field3D Pn_solver;              // Saved to restore in finally
-  Field3D Vn;                     ///< Neutral parallel velocity
-  Field3D Tn;                     ///< Neutral temperature
+  Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
+  Field3D Pn_solver; ///< Saved to restore in finally
+  Field3D Vn; ///< Neutral parallel velocity
+  Field3D Tn; ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
@@ -47,6 +47,7 @@ private:
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
+  BoutReal neutral_lmax;
 
   bool sheath_ydown, sheath_yup;
 
@@ -55,9 +56,14 @@ private:
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
   bool freeze_low_density; ///< Freeze evolution in low density regions?
 
-  bool neutral_viscosity;  ///< include viscosity?
+  BoutReal collisionality_override;     ///< Rnn input for testing
+  BoutReal density_norm, pressure_norm; ///< Normalisations
+  BoutReal momentum_norm;               ///< Normalisations
+
+  bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
-  bool evolve_momentum;    ///< Evolve parallel momentum?
+  bool evolve_momentum; ///< Evolve parallel momentum?
+  bool normalise_sources; ///< Normalise input sources?
 
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
@@ -66,9 +72,9 @@ private:
   bool lax_flux;                  ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
 
-  Field3D density_source, pressure_source; ///< External input source
-  Field3D Sn, Sp, Snv;                     ///< Particle, pressure and momentum source
-  Field3D sound_speed;                     ///< Sound speed for use with Lax flux
+  Field3D density_source, pressure_source, momentum_source; ///< External input source
+  Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
+  Field3D sound_speed; ///< Sound speed for use with Lax flux
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
