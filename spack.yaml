@@ -23,8 +23,6 @@ spack:
     - ./external/BOUT-spack/spack_repo/bout
     - ./external/Reactions/VANTAGE-repo
     - ./external/Reactions/NESO-Spack
-    #- $spack/var/spack/repos/builtin
-    # - ./external/BOUT-spack
   packages:
     all:
       providers:
