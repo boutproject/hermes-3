@@ -5,7 +5,7 @@ from boutdata.mms import Metric, sin, cos, Div_par, Grad_par, exprToStr, diff, y
 from math import pi
 
 # Length of the y domain
-Ly = 10.
+Ly = 10.0
 
 # Atomic mass number
 AA = 2.0
@@ -15,12 +15,12 @@ metric = Metric()  # Identity
 
 # Define solution in terms of input x,y,z
 
-n = 1 + 0.1*sin(2*y - t)
-p = 1 + 0.1*cos(3*y + t)
-mnv = AA * 0.1*sin(y + 2*t)
+n = 1 + 0.1 * sin(2 * y - t)
+p = 1 + 0.1 * cos(3 * y + t)
+mnv = AA * 0.1 * sin(y + 2 * t)
 
 # Turn solution into real x and z coordinates
-replace = [ (y, metric.y*2*pi/Ly) ]
+replace = [(y, metric.y * 2 * pi / Ly)]
 
 n = n.subs(replace)
 p = p.subs(replace)
@@ -31,16 +31,16 @@ mnv = mnv.subs(replace)
 
 nv = mnv / AA
 v = nv / n
-gamma = 5./3
+gamma = 5.0 / 3
 
 # Density equation
-dndt = - Div_par(nv)
+dndt = -Div_par(nv)
 
 # Pressure equation
-dpdt = - Div_par(p*v) - (gamma-1.0)*p*Div_par(v)
+dpdt = -Div_par(p * v) - (gamma - 1.0) * p * Div_par(v)
 
 # Momentum equation
-dmnvdt = - Div_par(mnv*v) - Grad_par(p)
+dmnvdt = -Div_par(mnv * v) - Grad_par(p)
 
 #############################
 # Calculate sources
@@ -50,7 +50,7 @@ Sp = diff(p, t) - dpdt
 Smnv = diff(mnv, t) - dmnvdt
 
 # Substitute back to get input y coordinates
-replace = [ (metric.y, y*Ly/(2*pi) ) ]
+replace = [(metric.y, y * Ly / (2 * pi))]
 
 n = n.subs(replace)
 p = p.subs(replace)
