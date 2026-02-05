@@ -411,6 +411,14 @@ if(HERMES_TESTS)
            COMMAND python3 neutral_mixed_ddt_test.py)
     set_tests_properties(rhs_mms_neutral_mixed PROPERTIES LABELS integration)
   endif()
+
+  # Integrated tests of VANTAGE-Reactions+NESO-Particles features
+  if(HERMES_USE_VANTAGE)
+    add_test(NAME bout_particle_push
+           WORKING_DIRECTORY tests/integrated/particle-pusher/
+           COMMAND runtest)
+    set_tests_properties(bout_particle_push PROPERTIES LABELS integration)
+  endif()
 endif()
 
 # Compile-time options
