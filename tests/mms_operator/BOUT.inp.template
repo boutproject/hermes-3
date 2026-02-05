@@ -1,0 +1,34 @@
+TwistShift = false  # use twist-shift condition?
+ballooning = false  # ballooning transformation?
+shiftinitial = false
+ShiftWithoutTwist=false
+
+MYG=1
+MXG=2
+NXPE=1
+
+dump_format = nc
+
+[input]
+error_on_unused_options=false
+
+##################################################
+# derivative methods
+
+[ddx]
+
+first = C2
+second = C2
+upwind = W3
+
+[ddy]
+
+first = C2
+second = C2
+upwind = W3
+
+[ddz]
+
+first = C2
+second = C2
+upwind = W3

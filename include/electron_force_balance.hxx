@@ -29,7 +29,6 @@ struct ElectronForceBalance : public Component {
                    readIfSet("species:{non_electrons}:charge"),
                    // FIXME: Only written if density and charge have been set.
                    readWrite("species:{non_electrons}:momentum_source")}) {
-    AUTO_TRACE();
     auto& options = alloptions[name];
     diagnose = options["diagnose"]
       .doc("Save additional output diagnostics")

@@ -33,6 +33,8 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                                                Options& alloptions, Solver*)
     : Component({
         readIfSet("species:{non_electrons}:pressure"),
+        readIfSet("species:{non_electrons}:temperature"),
+        readIfSet("species:{non_electrons}:density"),
         readIfSet("species:{non_electrons}:velocity"),
         readIfSet("species:{non_electrons}:charge"),
         readIfSet("species:{non_electrons}:collision_frequencies:{coll_type}"),
@@ -48,6 +50,10 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+
+  parallel = options["parallel"]
+    .doc("Include parallel viscosity (requires parallel velocity)")
+    .withDefault<bool>(true);
 
   perpendicular = options["perpendicular"]
                       .doc("Include perpendicular flow? (Requires phi)")
@@ -77,6 +83,8 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                            .doc("Include input for major radius R when using bounce "
                                 "frequency modification to viscosity")
                            .withDefault(2.0);
+
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   if (perpendicular) {
     // Read curvature vector
@@ -131,7 +139,6 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
 }
 
 void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];
 
@@ -150,9 +157,8 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     GuardedOptions species = allspecies[species_name];
 
     if (!(isSetFinal(species["pressure"], "ion_viscosity")
-          and isSetFinal(species["velocity"], "ion_viscosity")
           and isSetFinal(species["charge"], "ion_viscosity"))) {
-      // Species doesn't have a pressure, velocity and charge => Skip
+      // Species doesn't have a pressure and charge => Skip
       continue;
     }
 
@@ -225,13 +231,16 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
     const Field3D tau = 1. / nu;
     const Field3D P = get<Field3D>(species["pressure"]);
-    const Field3D V = get<Field3D>(species["velocity"]);
+    const Field3D T = get<Field3D>(species["temperature"]);
+    const Field3D N = get<Field3D>(species["density"]);
 
     // Parallel ion viscosity (4/3 * 0.96 coefficient)
     Field3D eta = 1.28 * P * tau;
 
+    const Field2D tau_av = DC(tau);
+
     Field2D bounce_factor =
-        1.0; // if bounce_frequency = false, this factor does nothing to anything
+      1.0; // if bounce_frequency = false, this factor does nothing to anything
     Field2D nu_star = 1.0;
 
     if (bounce_frequency) {
@@ -239,133 +248,114 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       // velocity to calculate the bounce frequency, with the equation taken as in
       // Rozhansky 2009.
 
-      const Field2D N_av = DC(get<Field3D>(species["density"]));
-      const Field2D T_av = DC(get<Field3D>(species["temperature"]));
-      const Field2D tau_av = DC(tau);
-
       // calculating ion thermal velocity
-      BoutReal const mass = get<BoutReal>(species["AA"]);
+      const BoutReal mass = get<BoutReal>(species["AA"]);
+      const Field2D T_av = DC(T);
+
       const Field2D v_thermal = sqrt(2.0 * T_av / mass);
 
-      nu_star *= (bounce_frequency_R * bounce_frequency_q95)
-                 / (tau_av * pow(bounce_frequency_epsilon, 1.5) * v_thermal);
+      nu_star = (bounce_frequency_R * bounce_frequency_q95)
+        / (tau_av * pow(bounce_frequency_epsilon, 1.5) * v_thermal);
 
       bounce_factor *=
-          (1 / (1 + (1. / nu_star)))
-          * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1. / nu_star)));
+        (1 / (1 + (1. / nu_star)))
+        * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1. / nu_star)));
       eta *= bounce_factor;
     }
 
-    if (eta_limit_alpha > 0.) {
-      // SOLPS-style flux limiter
-      // Values of alpha ~ 0.5 typically
+    Field3D Pi_cipar = zeroFrom(P);
+    if (parallel and isSetFinal(species["velocity"], "ion_viscosity")) {
 
-      const Field3D q_cl = eta * Grad_par(V);   // Collisional value
-      const Field3D q_fl = eta_limit_alpha * P; // Flux limit
+      const Field3D V = get<Field3D>(species["velocity"]);
 
-      eta = eta / (1. + abs(q_cl / q_fl));
+      if (eta_limit_alpha > 0.) {
+        // SOLPS-style flux limiter
+        // Values of alpha ~ 0.5 typically
 
-      eta.getMesh()->communicate(eta);
-      eta.applyBoundary("neumann");
+        const Field3D q_cl = eta * Grad_par(V);   // Collisional value
+        const Field3D q_fl = eta_limit_alpha * P; // Flux limit
+
+        eta = eta / (1. + abs(q_cl / q_fl));
+
+        eta.getMesh()->communicate(eta);
+        eta.applyBoundary("neumann");
+      }
+
+      // This term is the parallel flow part of
+      // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
+      const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+
+      add(species["momentum_source"], div_Pi_cipar);
+      subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+
+      // Parallel ion stress tensor component
+      Pi_cipar = -0.96 * P * tau * bounce_factor
+        * (2. * Grad_par(V) + V * Grad_par_logB);
+      // Could also be written as:
+      // Pi_cipar = -0.96*Pi*tau*2.*Grad_par(sqrt(Bxy)*Vi)/sqrt(Bxy);
+
+      if (diagnose and !perpendicular) {
+        const Field3D Pi_ciperp = 0.0;
+        const Field3D DivJ = 0.0;
+        diagnostics[species_name] =
+          Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
+      }
     }
 
-    // This term is the parallel flow part of
-    // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
-    const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
-    // BOUT_FOR_SERIAL(i, div_Pi_cipar.getRegion("RGN_NOBNDRY")) {std::cout << " " <<
-    // div_Pi_cipar[i] << std::endl;}
-
-    add(species["momentum_source"], div_Pi_cipar);
-    subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
-
     if (!perpendicular) {
-      if (diagnose) {
-        const Field2D P_av = DC(P);
-        const Field2D tau_av = DC(tau);
-        const Field2D V_av = DC(V);
-
-        // Parallel ion stress tensor component, calculated here because before it was
-        // only div_Pi_cipar
-        Field2D const Pi_cipar = -0.96 * P_av * tau_av * bounce_factor
-                                 * (2. * Grad_par(V_av) + V_av * Grad_par_logB);
-        Field2D const Pi_ciperp =
-            0 * Pi_cipar; // Perpendicular components and divergence of current J equal to
-                          // 0 for only parallel viscosity case
-        Field2D const DivJ = 0 * Pi_cipar;
-        diagnostics[species_name] =
-            Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
-      }
       continue; // Skip perpendicular flow parts below
     }
 
     // The following calculation is performed on the axisymmetric components
 
     // Need electrostatic potential for ExB flow
-    const Field2D phi_av = DC(get<Field3D>(state["fields"]["phi"]));
+    const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    // Density and temperature needed for diamagnetic flows
-    const Field2D N_av = DC(get<Field3D>(species["density"]));
-    const Field2D T_av = DC(get<Field3D>(species["temperature"]));
-    const Field2D P_av = DC(P);
-    const Field2D tau_av = DC(tau);
-    const Field2D V_av = DC(V);
-
-    // Parallel ion stress tensor component
-    Field2D Pi_cipar = -0.96 * P_av * tau_av * bounce_factor
-                       * (2. * Grad_par(V_av) + V_av * Grad_par_logB);
-    // Could also be written as:
-    // Pi_cipar = -0.96*Pi*tau*2.*Grad_par(sqrt(Bxy)*Vi)/sqrt(Bxy);
+    Field3D Nlim = softFloor(N, density_floor);
 
     // Perpendicular ion stress tensor
     // 0.96 P tau kappa * (V_E + V_di + 1.61 b x Grad(T)/B )
     // Note: Heat flux terms are neglected for now
-    Field2D Pi_ciperp =
-        -0.5 * 0.96 * P_av * tau_av * bounce_factor
-        * (Curlb_B * Grad(phi_av + 1.61 * T_av) - Curlb_B * Grad(P_av) / N_av);
+    Field3D Pi_ciperp =
+        -0.5 * 0.96 * P * tau * bounce_factor
+        * (Curlb_B * Grad(phi + 1.61 * T) - Curlb_B * Grad(P) / Nlim);
 
     // Limit size of stress tensor components
     // If the off-diagonal components of the pressure tensor are large compared
     // to the scalar pressure, then the model is probably breaking down.
     // This can happen in very low density regions
     BOUT_FOR(i, Pi_ciperp.getRegion("RGN_NOBNDRY")) {
-      if (fabs(Pi_ciperp[i]) > P_av[i]) {
-        Pi_ciperp[i] = SIGN(Pi_ciperp[i]) * P_av[i];
+      if (fabs(Pi_ciperp[i]) > P[i]) {
+        Pi_ciperp[i] = SIGN(Pi_ciperp[i]) * P[i];
       }
-      if (fabs(Pi_cipar[i]) > P_av[i]) {
-        Pi_cipar[i] = SIGN(Pi_cipar[i]) * P_av[i];
+      if (fabs(Pi_cipar[i]) > P[i]) {
+        Pi_cipar[i] = SIGN(Pi_cipar[i]) * P[i];
       }
     }
-
-    // Apply perpendicular boundary conditions
-    Pi_ciperp.applyBoundary("neumann");
-    Pi_cipar.applyBoundary("neumann");
 
     // Apply parallel boundary conditions
-    int jy = 1;
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      Pi_ciperp(r.ind, jy) = Pi_ciperp(r.ind, jy + 1);
-      Pi_cipar(r.ind, jy) = Pi_cipar(r.ind, jy + 1);
-    }
-    jy = mesh->yend + 1;
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      Pi_ciperp(r.ind, jy) = Pi_ciperp(r.ind, jy - 1);
-      Pi_cipar(r.ind, jy) = Pi_cipar(r.ind, jy - 1);
-    }
+    Pi_ciperp.applyParallelBoundary("neumann");
+    Pi_cipar.applyParallelBoundary("neumann");
 
     mesh->communicate(Pi_ciperp, Pi_cipar);
 
-    const Field3D div_Pi_ciperp =
-        -(2. / 3) * Grad_par(Pi_ciperp) + Pi_ciperp * Grad_par_logB;
-    // const Field3D div_Pi_ciperp = - (2. / 3) * B32 * Grad_par(Pi_ciperp / B32);
+    if (parallel) {
+      const Field3D V = get<Field3D>(species["velocity"]);
 
-    add(species["momentum_source"], div_Pi_ciperp);
-    subtract(species["energy_source"], V_av * div_Pi_ciperp);
+      const Field3D div_Pi_ciperp =
+        -(2. / 3) * Grad_par(Pi_ciperp) + Pi_ciperp * Grad_par_logB;
+      // const Field3D div_Pi_ciperp = - (2. / 3) * B32 * Grad_par(Pi_ciperp / B32);
+
+      add(species["momentum_source"], div_Pi_ciperp);
+      subtract(species["energy_source"], V * div_Pi_ciperp);
+    }
 
     // Total scalar ion viscous pressure
-    Field2D Pi_ci = Pi_cipar + Pi_ciperp;
+    Field3D Pi_ci = Pi_cipar + Pi_ciperp;
+    Pi_ci.applyBoundary("neumann");
 
 #if CHECKLEVEL >= 1
-    for (auto& i : N_av.getRegion("RGN_NOBNDRY")) {
+    for (auto& i : Pi_cipar.getRegion("RGN_NOBNDRY")) {
       if (!std::isfinite(Pi_cipar[i])) {
         throw BoutException("{} Pi_cipar non-finite at {}.\n", species_name, i);
       }
@@ -375,17 +365,16 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     }
 #endif
 
-    Pi_ci.applyBoundary("neumann");
-
     // Divergence of current in vorticity equation
-    Field3D const DivJ =
-        Div(0.5 * Pi_ci * Curlb_B) - Div_n_bxGrad_f_B_XPPM(1. / 3, Pi_ci, false, true);
+    const Field3D DivJ =
+        Div(0.5 * Pi_ci * Curlb_B) - Div_n_bxGrad_f_B_XPPM(1. / 3, Pi_ci, true, true);
+
     add(state["fields"]["DivJextra"], DivJ);
 
     // Transfer of energy between ion internal energy and ExB flow
     subtract(species["energy_source"],
-             Field3D(0.5 * Pi_ci * Curlb_B * Grad(phi_av + P_av)
-                     - (1. / 3.) * bracket(Pi_ci, phi_av + P_av, BRACKET_STD)));
+             0.5 * Pi_ci * Curlb_B * Grad(phi + P)
+             - (1. / 3.) * bracket(Pi_ci, phi + P, BRACKET_STD));
 
     if (diagnose) {
       diagnostics[species_name] =
@@ -395,7 +384,6 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 }
 
 void BraginskiiIonViscosity::outputVars(Options& state) {
-  AUTO_TRACE();
 
   if (diagnose) {
     // Normalisations

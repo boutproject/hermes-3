@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse particle pushing test
+
+from boututils.run_wrapper import shell, launch_safe
+
+import h5py
+import numpy as np
+from petsc4py import PETSc
+import netCDF4 as nc
+
+# Link to the executable
+shell("ln -s ../../../bout-particle-push bout-particle-push")
+# make the run directory
+shell("mkdir particle-push-slab-test")
+
+# A function to define the BOUT.inp file contents
+def particle_push_input(nx=40, ny=36, dt=0.005, nsteps=1,
+      iz_rate=0.0, remove_threshold=0.0, merge_threshold=0.0):
+  input_file_string = f"""
+  # run a simulation with this file using
+  # $ OMP_NUM_THREADS=1 mpirun -np 8 ./bout-particle-push -d particle-push-slab
+  # postprocess with 
+  # $ python3 path/to/the/particle_animater.py hypnotoad_dmplex_mesh_output.h5 traj_reflection_dmplex_example.h5part
+  [mesh]
+  # Uses the full cxx implementation of DMPlex
+  # calculation to interface to NESO-Particles,
+  # removing need for python preprocessing.
+  # Needed for slab example to run.
+  use_cxx_ivertex=true
+
+  # if using a slab, uncomment and
+  # modify nx, ny, below
+  nx = {nx}  # X grid size
+  ny = {ny}  # Y grid size
+
+  dx = 1.0/({nx}-4)  # X mesh spacing
+  dy = 2*pi/{ny}  # Y mesh spacing
+
+  Rxy_corners = x - 0.5*dx
+  Rxy_lower_right_corners = x + 0.5*dx
+  Rxy_upper_left_corners = x - 0.5*dx
+  Rxy_upper_right_corners = x + 0.5*dx
+  Zxy_corners = y - 0.5*dy
+  Zxy_lower_right_corners = y - 0.5*dy
+  Zxy_upper_left_corners = y + 0.5*dy
+  Zxy_upper_right_corners = y + 0.5*dy
+
+  # initial_neutral_density can be a function of (x, y)
+  initial_neutral_density = 1.0
+
+  [neso_particles]
+  npart_per_cell = 1
+  dt = {dt}
+  nsteps = {nsteps}
+  test_mass_conservation = true
+  test_cell_volumes = true
+
+  [VANTAGE_reactions]
+  remove_threshold = {remove_threshold}
+  merge_threshold = {merge_threshold}
+  iz_rate = {iz_rate}
+  """
+  return input_file_string
+
+# function for reading resulting particle data
+def load_particle_data(file_path):
+  particle_data = h5py.File(file_path,"r")
+  data_all_timesteps = list(particle_data.keys())
+  nstep = len(data_all_timesteps)
+
+  particle_positions = []
+  for it in range(0,nstep):
+      try:
+          group = particle_data[f"Step#{it}"]
+          #print(list(group.keys()))
+          P_0 = group["POSITION_0"]
+          P_1 = group["POSITION_1"]
+          nparticles = len(P_0)
+          pdata = np.zeros((nparticles,2))
+          pdata[:,0] = P_0
+          pdata[:,1] = P_1
+          particle_positions.append(pdata)
+      except (KeyError) as error:
+          print(f"No particles at time step {it}: {error}")
+          # assign empty particle data
+          pdata = np.empty((0,2))
+          particle_positions.append(pdata)
+  return particle_positions
+
+def test_particle_push(file, nsteps = 10, remove_threshold = 0.0, merge_threshold = 0.0, iz_rate = 0.0):
+  with open(file,"w") as file:
+    file.write(particle_push_input(nx=40, ny=36, dt=0.005, nsteps=nsteps,
+        iz_rate=iz_rate, remove_threshold=remove_threshold, merge_threshold=remove_threshold))
+
+  # Command to run
+  cmd = "./bout-particle-push -d particle-push-slab-test"
+  nproc = 1
+  # Launch using MPI
+  s, out = launch_safe(cmd, nproc=nproc, mthread=1, pipe=True)
+  # variable to determine if test passed
+  success = True
+  particle_positions_file_path = "traj_reflection_dmplex_example.h5part"
+  particle_positions = load_particle_data(particle_positions_file_path)
+  nsteps_out = len(particle_positions)
+  # number of steps the same
+  success = success and (nsteps == nsteps_out)
+  # number of markers (or super particles) conserved
+  nparticles_0, _ = np.shape(particle_positions[0])
+  nparticles_N, _ = np.shape(particle_positions[-1])
+  success = success and (nparticles_0 == nparticles_N)
+  # check the mass diagnostic
+  ncfile_path = "bout_particle_moments_0.nc"
+  ncdataset = nc.Dataset(ncfile_path, mode='r')
+  total_mass = np.copy(ncdataset.variables["total_mass"][:])
+  total_ion_mass = np.copy(ncdataset.variables["total_ion_mass"][:])
+  total_neutral_mass = np.copy(ncdataset.variables["total_neutral_mass"][:])
+  # total mass should always be conserved
+  success = success and np.abs(total_mass[0] - total_mass[-1]) < 1.0e-11
+  # if we ionise particles there should be mass exchange between neutral and ion
+  if iz_rate > 0.0:
+    success = success and total_ion_mass[0] < total_ion_mass[-1]
+    success = success and total_neutral_mass[0] > total_neutral_mass[-1]
+  return success
+
+file = "particle-push-slab-test/BOUT.inp"
+success = True
+success = success and test_particle_push(file, nsteps = 10, remove_threshold = 1.0e-10, merge_threshold = 1.0e-6, iz_rate = 0.01)
+
+if success:
+  print(" => Test passed")
+  exit(0)
+else:
+  print(" => Test failed")
+  exit(1)

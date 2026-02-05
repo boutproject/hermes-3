@@ -7,7 +7,6 @@
 using bout::globals::mesh;
 
 void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
   GuardedOptions allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
     const auto& species_name = kv.first;
@@ -164,8 +163,7 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
   }
 }
 
-void NeutralParallelDiffusion::outputVars(Options &state) {
-  AUTO_TRACE();
+void NeutralParallelDiffusion::outputVars(Options& state) {
 
   if (diagnose) {
     // Normalisations

@@ -16,7 +16,6 @@ using bout::globals::mesh;
 
 EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solver)
     : Component({readWrite("species:{name}:{outputs}")}), name(name) {
-  AUTO_TRACE();
 
   auto& options = alloptions[name];
 
@@ -147,7 +146,6 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 }
 
 void EvolveDensity::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   if (evolve_log) {
     // Evolving logN, but most calculations use N
@@ -225,7 +223,6 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
 }
 
 void EvolveDensity::finally(const Options& state) {
-  AUTO_TRACE();
 
   auto& species = state["species"][name];
 

@@ -50,7 +50,6 @@ struct SNBConduction : public Component {
       : Component({readOnly("species:e:density"), readOnly("species:e:temperature"),
                    readWrite("species:e:energy_source")}),
         snb(alloptions[name]) {
-    AUTO_TRACE();
     auto& options = alloptions[name];
 
     auto& units = alloptions["units"];

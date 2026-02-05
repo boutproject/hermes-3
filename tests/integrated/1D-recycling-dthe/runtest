@@ -9,6 +9,7 @@ from boututils.run_wrapper import launch
 import numpy
 import pathlib
 import xhermes
+from numpy.testing._private.utils import nulp_diff
 
 this_dir = pathlib.Path(__file__).parent
 data_dir = this_dir / "data"
@@ -42,17 +43,12 @@ def check_value(name, val, target, **kws):
     return success
 
 
-def check_ULPs_diff(name, val, target, **kws):
-    kws["maxulp"] = kws.pop("maxulp", 4)
-    success = False
-    try:
-        numpy.testing.assert_array_max_ulp(val, target, **kws)
-        success = True
-    except AssertionError as e:
+def check_ULPs_diff(name,val,target, maxulps):
+    nulps = nulp_diff(val,target)
+    success = nulps <= maxulps
+    if not success:
         print(
-            f'{name} differs from reference data by > {kws["maxulp"]} ULPs\n Value = {val}\n Reference = {target}'
-        )
-
+            f'{name} differs from reference data by {nulps} ULPs (max allowed is {maxulps})\n Value = {val}\n Reference = {target}')
     return success
 
 
@@ -130,24 +126,24 @@ ds_last = ds.isel(t=-1)
 # Check the values of various diagnostics
 # Diagnostic names and reference values (generated with -O1)
 diags_ref = {
-    "Ed+t_cx": -0.00044916942235749286,
-    "Edd+_cx": 0.0001584462055586012,
-    "Edt+_cx": -0.0004246825908348509,
-    "Et+d_cx": -0.000703213458219236,
-    "Etd+_cx": -0.0005438529063749786,
-    "Ett+_cx": 4.1129091954560007e-05,
-    "Fd+t_cx": -0.00012159622040998301,
-    "Fdd+_cx": 0.00023601241685116078,
-    "Fdt+_cx": -1.480474061534612e-05,
-    "Ft+d_cx": -8.170568455767375e-05,
-    "Ftd+_cx": 4.734980178143874e-05,
-    "Ftt+_cx": 6.209672003436238e-05,
-    "Kdd+_cx": 0.010612777344029932,
-    "Kdt+_cx": 0.005504396701388891,
-    "Ktd+_cx": 0.010560574694497988,
-    "Ktt+_cx": 0.005475965585803034,
-    "Sdt+_cx": -0.0007849565120605158,
-    "Std+_cx": -0.0006956104988655306,
+    "Ed+t_cx": -0.00023620535893063399,
+    "Edd+_cx": 2.9343286852402813e-05,
+    "Edt+_cx": -0.00026917215840358076,
+    "Et+d_cx": -0.0003328909005722493,
+    "Etd+_cx": -0.0002463479543128938,
+    "Ett+_cx": 1.6901539608568433e-05,
+    "Fd+t_cx": -5.942064642716903e-05,
+    "Fdd+_cx": 9.141841216238106e-05,
+    "Fdt+_cx": -1.4714592209841299e-05,
+    "Ft+d_cx": -5.178881170800972e-05,
+    "Ftd+_cx": -1.6272330148884757e-06,
+    "Ftt+_cx": 2.561818691160369e-05,
+    "Kdd+_cx": 0.009792335533604365,
+    "Kdt+_cx": 0.0061757164382375985,
+    "Ktd+_cx": 0.009413185313428586,
+    "Ktt+_cx": 0.005896736941813992,
+    "Sdt+_cx": -0.0004883584931543128,
+    "Std+_cx": -0.0004009791378759027,
 }
 # fmt: on
 
@@ -165,9 +161,9 @@ for name, target in diags_ref.items():
     try:
         val = ds_diags[name].values[pos_idx]
         if gen_data:
-            print(f'"{name}": {val},')
+            print(f'    "{name}": {val},')
         else:
-            success &= check_ULPs_diff(name, val, target, maxulp=ULPs_tolerance)
+            success &= check_ULPs_diff(name, val, target, maxulps=ULPs_tolerance)
     except KeyError:
         print(f" *** Diagnostic '{name}' missing from test data ***")
         end_test(False)
