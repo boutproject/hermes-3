@@ -33,7 +33,7 @@ mms = true
 diagnose = true
 
 anomalous_D = 1.0 + 0.1*sin(4.0 * pi * x) + 0.05 * cos(z)
-use_finite_difference = true
+
 [Nh+]
 
 solution = 0.1*sin(6.28318530717959*x)*sin(2.0*z) + 1.0
