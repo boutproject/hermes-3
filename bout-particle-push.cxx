@@ -4,6 +4,8 @@
 #include "bout/output.hxx"
 #include "bout/petsclib.hxx"
 #include <bout/field_factory.hxx>
+#include <algorithm>
+#include <cmath>
 #include <fmt/core.h>
 #include <iostream>
 #include <memory>
@@ -669,8 +671,18 @@ void check_cell_volumes(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_m
   }
 }
 
+REAL cell_length(std::vector<std::vector<REAL>> cell_vertices, INT iv1, INT iv2, INT iv3, INT iv4){
+  const REAL Rlength2 = std::pow(0.5*(cell_vertices.at(iv1).at(0) + cell_vertices.at(iv2).at(0) -
+                 cell_vertices.at(iv3).at(0) - cell_vertices.at(iv4).at(0)),2.0);
+  const REAL Zlength2 = std::pow(0.5*(cell_vertices.at(iv1).at(1) + cell_vertices.at(iv2).at(1) -
+                 cell_vertices.at(iv3).at(1) - cell_vertices.at(iv4).at(1)),2.0);
+  REAL length = std::pow(Zlength2+Rlength2,0.5);
+  return length;
+}
+
+
 void check_cell_centres(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
-                        Mesh*& bout_mesh, BoutReal tolerance) {
+                        Mesh*& bout_mesh, BoutReal absolute_tolerance, BoutReal relative_tolerance) {
   Coordinates* coord = bout_mesh->getCoordinates();
   // get (R,Z) of cell centres in Hypnotoad grid
   Field2D Rxy;
@@ -694,16 +706,29 @@ void check_cell_centres(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_m
       }
       neso_Rxy /= 4.0;
       neso_Zxy /= 4.0;
-
+      // get lengths of cell across the two dimensions
+      const REAL cell_length_a = cell_length(cell_vertices, 0, 1, 2, 3);
+      const REAL cell_length_b = cell_length(cell_vertices, 0, 3, 2, 1);
+      const REAL min_cell_length = std::min(cell_length_a, cell_length_b);
+      // we compare the difference in cell centres to the absolute tolerance and
+      // the relative tolerance formed by comparing to the smallest length across the cell
+      const REAL tolerance = absolute_tolerance + min_cell_length*relative_tolerance;
       const bool centres_match = (abs(neso_Rxy - bout_Rxy) < tolerance) &&
                                  (abs(neso_Zxy - bout_Zxy) < tolerance);
       // exit if we fail to find a match
       NESOASSERT(centres_match,
                  fmt::format("Hypnotoad/BOUT++ cell centre (R, Z) ({}, {}) does not match NESO-Particles mesh "
-                             "cell centre ({}, {}) for ix = {} iy = {} \n Ignore this message by "
+                             "cell centre ({}, {}) for ix = {} iy = {} \n"
+                             "The cell height and width are {} {} \n"
+                             "The displacements in R and Z are {} {} \n"
+                             "Ignore this message by "
                              "setting [neso_particles] test_cell_centres = false\n Relax the "
-                             "tolerance used in this check by increasing [neso_particles] cell_centre_tolerance = {}",
-                             bout_Rxy, bout_Zxy, neso_Rxy, neso_Zxy, ix, iy, tolerance));
+                             "tolerance used in this check by increasing\n"
+                             "[neso_particles] cell_centre_absolute_tolerance = {}\n"
+                             "[neso_particles] cell_centre_relative_tolerance = {}",
+                             bout_Rxy, bout_Zxy, neso_Rxy, neso_Zxy, ix, iy,
+                             cell_length_a, cell_length_b, abs(neso_Rxy - bout_Rxy), abs(neso_Zxy - bout_Zxy),
+                             absolute_tolerance, relative_tolerance));
       ixy++;
     }
   }
@@ -776,7 +801,9 @@ int main(int argc, char** argv) {
       check_cell_volumes(neso_mesh, bout_mesh);
     }
     if (Options::root()["neso_particles"]["test_cell_centres"].withDefault(true)){
-      check_cell_centres(neso_mesh,bout_mesh, Options::root()["neso_particles"]["cell_centre_tolerance"].withDefault(1.0e-12));
+      check_cell_centres(neso_mesh,bout_mesh,
+        Options::root()["neso_particles"]["cell_centre_absolute_tolerance"].withDefault(1.0e-12),
+        Options::root()["neso_particles"]["cell_centre_relative_tolerance"].withDefault(0.0));
     }
     // create a Reactions particle spec
     auto particle_spec_builder = ParticleSpecBuilder(ndim);

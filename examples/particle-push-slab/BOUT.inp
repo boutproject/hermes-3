@@ -42,7 +42,11 @@ nsteps = 1
 test_mass_conservation = true
 test_cell_volumes = true
 test_cell_centres = true
-cell_centre_tolerance = 1e-12
+# tolerance to use when determining if the cell centre in the DMPlex matches the Hypnotoad grid
+cell_centre_absolute_tolerance = 1e-12
+# The relative tolerance is used to compare the displacement of the cell centre
+# to the smallest of the width and height of the DMPlex cell
+cell_centre_relative_tolerance = 1e-12
 
 [VANTAGE_reactions]
 remove_threshold = 0.0e-10
