@@ -62,9 +62,13 @@ private:
   bool target_recycle{false}, sol_recycle{false}, pfr_recycle{false},
       neutral_pump{false}; ///< Flags for enabling recycling in different regions
   bool diagnose;           ///< Save additional post-processing variables?
+  bool has_sheath_boundary_simple{
+      false}; ///< Whether sheath_boundary_simple component is available
 
   BoutReal density_floor,
       pressure_floor; ///< minimum values for Nn, Pn to avoid divide by zero
+
+  BoutReal gamma_i; /// Sheath heat transmission coefficient
 
   Field3D density_source,
       energy_source; ///< Recycling particle and energy sources for all locations
@@ -73,7 +77,7 @@ private:
   Field3D particle_flow_xlow; ///< Radial wall particle fluxes for recycling calc. No need
                               ///< to get poloidal from here, it's calculated from sheath
                               ///< velocity
-
+  Field3D debug;
   Field2D is_pump; ///< 1 = pump, 0 = no pump. Works only in SOL/PFR. Provided by user in
                    ///< grid file.
   /// Inputs

@@ -1,0 +1,338 @@
+#!/usr/bin/env python3
+from boututils.run_wrapper import shell, launch_safe, getmpirun
+import numpy as np
+import shutil
+import zipfile
+import hashlib
+from pathlib import Path
+import urllib.request
+import xhermes
+
+
+"""
+This test reconstructs neutra target density and energy sources due to recycling 
+and compares them to code output. It uses the same file as 2D-production.
+
+It mirrors the code in recycling.cxx. It's written in a way to allow easy debugging
+of the recycling calculation for development reasons.
+"""
+
+gen_data = False
+verbose = False
+plot = False
+rtol = 1e-6
+atol = 1e-8
+
+### Setup
+this_dir = Path(__file__).parent
+data_dir = this_dir / "data"
+hermes_exec = this_dir.parent.parent.parent / "hermes-3"
+output_path = data_dir / "BOUT.dmp.*.nc"
+
+zipfile_path = this_dir / "test-2D-production.zip"
+url = "https://zenodo.org/records/18301171/files/test-2D-production-v1.zip"
+expected_hash = "b8e2be76791fad1fe7fe8c8734b3020eb63e7da5d69a4fafdf7c9a4695785ff3"
+expected_filenames = [
+    "BOUT.restart.0.nc",
+    "BOUT.restart.1.nc",
+    "BOUT.restart.2.nc",
+    "BOUT.restart.3.nc",
+    "BOUT.restart.4.nc",
+    "BOUT.restart.5.nc",
+    "BOUT.restart.6.nc",
+    "BOUT.restart.7.nc",
+    "BOUT.restart.8.nc",
+    "BOUT.restart.9.nc",
+    "grid_test2.nc",
+]
+
+
+### Download files
+tmp_path = zipfile_path.with_name(zipfile_path.name + ".tmp")
+
+with urllib.request.urlopen(url, timeout=60) as response:
+    if response.status != 200:
+        raise RuntimeError(
+            f"2D-recycling test: download failed - HTTP {response.status}"
+        )
+
+    # Copy bits of the file from response to a temp file
+    # This ensures no partial files are left if the download fails
+    with open(tmp_path, "wb") as out_file:
+        shutil.copyfileobj(response, out_file)
+
+# Rename temp file with the correct name
+tmp_path.replace(zipfile_path)
+
+with zipfile.ZipFile(zipfile_path, "r") as zf:
+    zip_contents = set(zf.namelist())
+    try:
+        # Extract only expected grids
+        for filename in expected_filenames:
+            if filename in zip_contents:
+                zf.extract(filename, path=this_dir)
+
+    except Exception as e:
+        print("2D-recycling test: extracting test grids failed:", e)
+
+# Check hash
+with open(zipfile_path, "rb") as f:
+    file_hash = hashlib.sha256(f.read()).hexdigest()
+    print(file_hash)
+
+if file_hash != expected_hash:
+    raise RuntimeError(
+        "2D-recycling test: downloaded zip file hash does not match expected value"
+    )
+
+if verbose:
+    print("2D-recycling test: downloaded and extracted files")
+
+## Run test
+if not Path("hermes-3").is_file():
+    shell("ln -s ../../../hermes-3 hermes-3")
+
+runcmd = getmpirun().split(" ")[0] + " --oversubscribe -np"
+
+s, out = launch_safe("./hermes-3 -d data", runcmd=runcmd, nproc=10, pipe=True)
+
+if s != 0:
+    print(" => 2D-recycling test failed: ")
+    print(out)
+    exit(1)
+
+if verbose:
+    print("2D-recycling test: completed simulation")
+
+##########################################################################
+# Load case and perform test
+##########################################################################
+# The case is read without unnormalising to make debugging easier.
+# The sources of density and energy due to recycling on both
+# the outer lower and outer upper target are reproduced in Python and
+# compared to the simulation.
+##########################################################################
+
+### Load case
+ds = xhermes.open_hermesdataset(
+    datapath=output_path,
+    gridfilepath=this_dir / "grid_test2.nc",
+    keep_yboundaries=True,
+    keep_xboundaries=True,
+    geometry="toroidal",
+    unnormalise=False,
+).isel(t=-1)
+
+ds = ds.hermes.extract_2d_tokamak_geometry()
+
+ds = ds.load()
+if "t" in ds.sizes:
+    ds = ds.isel(t=-1)
+m = ds.metadata
+
+### Extract data
+
+# Options
+options = ds.options
+sol_multiplier = options["d+"]["sol_recycle_multiplier"]
+sol_fast_recycle_energy_factor = 0.0
+sol_fast_recycle_fraction = 0.0
+sol_energy = options["d+"]["sol_recycle_energy"] / m["Tnorm"]
+target_multiplier = options["d+"]["target_recycle_multiplier"]
+target_energy = options["d+"]["target_recycle_energy"] / m["Tnorm"]
+target_fast_recycle_fraction = options["d+"]["target_fast_recycle_fraction"]
+target_fast_recycle_energy_factor = options["d+"]["target_fast_recycle_energy_factor"]
+gamma_i = options["sheath_boundary_simple"]["gamma_i"]
+
+# Constants
+Mi = 2
+
+# Geometry and physics
+params = [
+    "J",
+    "g_22",
+    "dx",
+    "dy",
+    "dz",
+    "dv",
+    "dl",
+    "dtor",
+    "Ne",
+    "Nd",
+    "Nd+",
+    "Vd+",
+    "Td",
+    "Td+",
+]
+d = {}
+for param in params:
+    d[param] = ds[param].values
+
+
+### Functions
+def at_sheath(f, i, g):
+    """
+    Linear interpolation between final and guard cell.
+    f = field, i = final cell slice, g = guard cell slice.
+    """
+    return 0.5 * (f[i] + f[g])
+
+
+### Reproduce upper target recycling
+# Using domain region at target, excluding guard cells and last domain cells
+# as to not include SOL/PFR recycling
+
+
+def reconstruct_target_recycle(name):
+    """
+    Reconstructs neutral density and energy sources due to target recycling.
+
+    Parameters
+    ----------
+    name : str
+        Target region name, either "outer_lower_target" or "outer_upper_target".
+
+    Returns
+    -------
+    reg : xarray.Dataset
+        The dataset of the target region (final domain cell row, excluding guard
+        cells and the final domain cells on each end to avoid SOL/PFR recycling effects).
+    target_recycle_density_source : numpy.ndarray
+        Calculated density source due to target recycling.
+    target_recycle_energy_source : numpy.ndarray
+        Calculated energy source due to target recycling.
+    debug : numpy.ndarray
+        This allows you to take any intermediate calculation value and output it for debugging
+        purposes, such as comparing it to an intermediate value in Hermes-3.
+
+    """
+    ### Indexing
+    xslice = slice(3, -3)
+    i_index = xhermes.slice_poloidal(ds, name)
+
+    if name == "outer_lower_target":
+        g_index = i_index + 1
+    elif name == "outer_upper_target":
+        g_index = i_index - 1
+
+    i = (xslice, i_index)
+    g = (xslice, g_index)
+    reg = ds.hermes.select_region(name).isel(x=slice(1, -1))
+
+    ### Calculate sheath values
+    sheath = {}
+    for param in params:
+        sheath[param] = at_sheath(d[param], i, g)
+
+    daparsheath = (
+        (d["J"][i] + d["J"][g])
+        / (np.sqrt(d["g_22"][i]) + np.sqrt(d["g_22"][g]))
+        * 0.5
+        * (d["dx"][i] + d["dx"][g])
+        * 0.5
+        * (d["dz"][i] + d["dz"][g])
+    )
+
+    ### Calculate density source
+    flux = abs(sheath["Ne"] * sheath["Vd+"])
+    recycle_particle_flow = target_multiplier * flux * daparsheath
+
+    volume = d["dv"][i]
+    target_recycle_density_source = recycle_particle_flow / volume
+
+    ### Calculate energy source
+    sheath_ion_heat_flow = (
+        abs(gamma_i * sheath["Nd+"] * sheath["Td+"] * sheath["Vd+"])
+        * daparsheath
+        / volume
+    )
+
+    recycle_energy_flow = (
+        sheath_ion_heat_flow
+        * target_multiplier
+        * target_fast_recycle_energy_factor
+        * target_fast_recycle_fraction
+        + recycle_particle_flow * (1 - target_fast_recycle_fraction) * target_energy
+    )
+
+    target_recycle_energy_source = recycle_energy_flow / volume
+
+    # Change this to whatever you want to debug.
+    debug = flux
+
+    return reg, target_recycle_density_source, target_recycle_energy_source, debug
+
+
+def plot_result(ax, xplot, sim_result, calc_result, title):
+    ax.plot(xplot, sim_result, label="Simulation Result", lw=1, ms=7, marker="o", c="k")
+    ax.plot(xplot, calc_result, label="Calc Result", lw=1, ms=7, marker="o", c="r")
+    ax.set_ylabel("Value")
+    ax2 = ax.twinx()
+    ax2.plot(xplot, calc_result / sim_result, lw=1, c="blue")
+    ax2.set_ylabel("Calc/sim ratio", color="blue")
+    ax.set_title(title)
+    ax.legend(fontsize="x-small")
+
+
+### Test outer lower target
+xslice = slice(3, -3)
+i_index = xhermes.slice_poloidal(ds, "outer_lower_target")
+g_index = i_index + 1
+i = (xslice, i_index)
+g = (xslice, g_index)
+reg = ds.hermes.select_region("outer_lower_target").isel(x=slice(1, -1))
+xplot = reg["x"].values
+
+reg, target_recycle_density_source, target_recycle_energy_source, debug = (
+    reconstruct_target_recycle("outer_lower_target")
+)
+
+if plot:
+    fig, axes = plt.subplots(1, 2, figsize=(7, 3), dpi=100)
+
+    plot_result(
+        axes[0],
+        xplot,
+        sim_result=reg["Sd_target_recycle"],
+        calc_result=target_recycle_density_source,
+        title="Density source",
+    )
+
+    plot_result(
+        axes[1],
+        xplot,
+        sim_result=reg["Ed_target_recycle"],
+        calc_result=target_recycle_energy_source,
+        title="Energy source",
+    )
+
+    fig.tight_layout()
+    fig.savefig("target_recycle_test_outer_lower.png", bbox_inches="tight")
+
+### Outer upper target recycle test
+reg, target_recycle_density_source, target_recycle_energy_source, debug = (
+    reconstruct_target_recycle("outer_upper_target")
+)
+
+if plot:
+    fig, axes = plt.subplots(1, 2, figsize=(7, 3), dpi=100)
+
+    plot_result(
+        axes[0],
+        reg["x"].values,
+        sim_result=reg["Sd_target_recycle"],
+        calc_result=target_recycle_density_source,
+        title="Density source",
+    )
+
+    plot_result(
+        axes[1],
+        reg["x"].values,
+        sim_result=reg["Ed_target_recycle"],
+        calc_result=target_recycle_energy_source,
+        title="Energy source",
+    )
+
+    fig.tight_layout()
+    fig.savefig("target_recycle_test_outer_upper.png", bbox_inches="tight")
+
