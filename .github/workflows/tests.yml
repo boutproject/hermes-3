@@ -31,7 +31,7 @@ jobs:
       matrix:
         config:
           - name: "CMake default options"
-            os: ubuntu-22.04
+            os: ubuntu-latest
             configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DHERMES_COVERAGE=ON"
         build_type:
           - cmake_build_type: Debug
