@@ -875,6 +875,36 @@ The specification of the Toro tests used here is taken from
 originally from Toro's book `Riemann Solvers and Numerical Methods for
 Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`_.
 
+1D-recycling-dthe
+~~~~~~~~~~~~~~
+
+This is a comprehensive 1D test featuring three species (deuterium tritium and helium)
+as well as all of the parallel closure terms apart from electron viscosity.
+It includes ionisation and recombination reactions for all species as well as
+charge exchange for D-D, T-T, D-T and T-D species pairs. 
+
+The test checks the values of charge
+exchange channels in the final domain cell against a reference.
+
+The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
+of the script. 
+
+2D-production
+~~~~~~~~~~~~~~
+
+This is a test representing the most common production fidelity simulations at the time
+of implementation. It features a double null 2D tokamak from an upcoming publication with 
+deuterium only, a neutral puff, H-mode profiles of anomalous diffusion coefficients, a neutral pump, 
+fast/thermal recycling, fast/thermal reflection as well as decay length boundary conditions on the SOL and PFR.
+Viscosity, impurities, currents and drifts are neglected.
+
+The test downloads the restart files and the grid from Zenodo and runs a few very short timesteps.
+It compares electron pressure and ion momentum at the four targets, outer midplane, SOL boundary
+and core/pfr boundaries. If the test fails, it will print the degree of error at each boundary.
+
+The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
+of the script. 
+
 1D fluid (MMS)
 ~~~~~~~~~~~~~~
 

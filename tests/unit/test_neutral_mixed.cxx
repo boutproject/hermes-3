@@ -221,3 +221,53 @@ TEST_F(NeutralMixedTest, FinallyEvolveMomentumFalse) {
 
   EXPECT_FALSE(ddt.isSet("NVd"));
 }
+// Identical to the test above, but using nonorthogonal_operators = true.
+TEST_F(NeutralMixedTest, FinallyNonorthogonalOperators) {
+  FakeSolver solver;
+
+  Options options{
+      {"units",
+       {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
+      {"d",
+       {{"type", "neutral_mixed"},
+        {"AA", 2.0},
+        {"evolve_momentum", true},
+        {"nonorthogonal_operators", true}}}};
+  NeutralMixed component("d", options, &solver);
+
+  // Call the finally() method with a density, energy, and momentum source
+  const Options state = {{"species",
+                          {{"d",
+                            {{"density", 1.0},
+                             {"density_source", 0.5},
+                             {"pressure", 1.0},
+                             {"energy_source", 1.5},
+                             {"momentum", 1.0},
+                             {"momentum_source", 0.75},
+                             {"temperature", 1.0},
+                             {"velocity", 1.0}}}}}};
+  component.finally(state);
+
+  Options ddt = solver.getTimeDerivs();
+
+  EXPECT_TRUE(ddt.isSet("Nd"));
+  Field3D ddt_Nd = ddt["Nd"].as<Field3D>();
+
+  BOUT_FOR_SERIAL(i, ddt_Nd.getRegion("RGN_NOBNDRY")) {
+    ASSERT_DOUBLE_EQ(0.5, ddt_Nd[i]);
+  }
+
+  EXPECT_TRUE(ddt.isSet("Pd"));
+  Field3D ddt_Pd = ddt["Pd"].as<Field3D>();
+
+  BOUT_FOR_SERIAL(i, ddt_Pd.getRegion("RGN_NOBNDRY")) {
+    ASSERT_DOUBLE_EQ(1.0, ddt_Pd[i]);
+  }
+
+  EXPECT_TRUE(ddt.isSet("NVd"));
+  Field3D ddt_NVd = ddt["NVd"].as<Field3D>();
+
+  BOUT_FOR_SERIAL(i, ddt_NVd.getRegion("RGN_NOBNDRY")) {
+    ASSERT_DOUBLE_EQ(0.75, ddt_NVd[i]);
+  }
+}
