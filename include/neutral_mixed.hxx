@@ -67,6 +67,7 @@ private:
 
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
+  bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
   bool precondition{true};        ///< Enable preconditioner?
   bool precon_laplacexy{false};   ///< Use LaplaceXY?
   bool lax_flux;                  ///< Use Lax flux for advection terms
