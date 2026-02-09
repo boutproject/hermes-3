@@ -207,6 +207,9 @@ void RecyclingFCI::transform(Options& state) {
       // Y boundaries
       yboundary.iter_pnts([&](auto& pnt) {
 	// BoutReal flux = pnt.dir * pnt.interpolate_sheath_o1(N) * pnt.interpolate_sheath_o1(V);
+
+	const auto& i = pnt.ind();
+	
 	BoutReal flux = 0.0;
 	if (dissipative) {
 	  const BoutReal amax = BOUTMAX(pnt.ythis(fastest_wave),
@@ -222,25 +225,28 @@ void RecyclingFCI::transform(Options& state) {
 	  flux = 0.0;
 	}
 	
-	BoutReal area = (pnt.ythis(coord->J) + pnt.ynext(coord->J)) / (pnt.ythis(coord->dy) * (sqrt(pnt.ythis(coord->g_22)) + sqrt(pnt.ynext(coord->g_22))));
 
-	BoutReal flow = channel.target_multiplier * flux * area;
+	BoutReal flow = 0.0;
+	if (pnt.dir < 0.0) {
+	  flow = channel.target_multiplier * flux * coord->cellarea_ydown[i];
+	} else {
+	  flow = channel.target_multiplier * flux * coord->cellarea_yup[i];
+	}
 
-	BoutReal volume  = pnt.ythis(coord->J);
+
 
 	// Calculate sources in the final cell [m^-3 s^-1]
 	if (pnt.abs_offset() == 1){
-	  pnt.ythis(channel.target_recycle_density_source) += flow / volume;    // For diagnostic
-	  pnt.ythis(density_source) += flow / volume;         // For use in solver
+	  pnt.ythis(channel.target_recycle_density_source) += flow / coord->cellvolume[i];    // For diagnostic
+	  pnt.ythis(density_source) += flow / coord->cellvolume[i];         // For use in solver
 	}
         
-        BoutReal recycle_energy_flow = flow  * channel.target_energy;   // Thermal recycling par
-	
+        BoutReal recycle_energy_flow = flow  * channel.target_energy;   // Thermal recycling par	
 
 	// Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
 	if (pnt.abs_offset() == 1) {
-	  pnt.ythis(channel.target_recycle_energy_source) += recycle_energy_flow / volume;
-	  pnt.ythis(energy_source) += recycle_energy_flow / volume;
+	  pnt.ythis(channel.target_recycle_energy_source) += recycle_energy_flow / coord->cellvolume[i];
+	  pnt.ythis(energy_source) += recycle_energy_flow / coord->cellvolume[i];
 	}
 	  
       }); // end yboundary.iter_pnts()
