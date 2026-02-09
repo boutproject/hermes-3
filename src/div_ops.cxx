@@ -2093,25 +2093,18 @@ const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
       //             / dl;
 
       // Upper cell edge
-      BoutReal c = 0.5 * (Kin[i] + K_up[iyp]);               // K at the upper boundary
-      BoutReal J = 0.5 * (coord->J[i] + coord->J.yup()[iyp]); // Jacobian at boundary
-      BoutReal g_22 = 0.5 * (coord->g_22[i] + coord->g_22.yup()[iyp]);
+      BoutReal c = 0.5 * (Kin[i] + K_up[iyp]);      
+      BoutReal gradient =  (f_up[iyp] - fin[i]) / (coord->dy[i] * sqrt(coord->g_22_cell_yhigh[i]));
 
-      BoutReal gradient = 2. * (f_up[iyp] - fin[i]) / (coord->dy[i] + coord->dy.yup()[iyp]);
-
-      BoutReal flux_up = c * J * gradient / g_22;
+      BoutReal flux_up = c * coord->cellarea_yup[i] * gradient ;
 
       // Lower cell edge
-      c = 0.5 * (Kin[i] + K_down[iym]);               // K at the lower boundary
-      J = 0.5 * (coord->J[i] + coord->J.ydown()[iym]); // Jacobian at boundary
+      c = 0.5 * (Kin[i] + K_down[iym]);             
+      gradient =  (fin[i] - f_down[iym]) / (coord->dy[i] * sqrt(coord->g_22_cell_ylow[i]));
 
-      g_22 = 0.5 * (coord->g_22[i] + coord->g_22.ydown()[iym]);
+      BoutReal flux_down = c * coord->cellarea_ydown[i] * gradient ;
 
-      gradient = 2. * (fin[i] - f_down[iym]) / (coord->dy[i] + coord->dy.ydown()[iym]);
-
-      BoutReal flux_down = c * J * gradient / g_22;
-
-      result[i] = (flux_up - flux_down) / (coord->dy[i] * coord->J[i]);
+      result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
     }
 
     return result;

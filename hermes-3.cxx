@@ -268,8 +268,36 @@ int Hermes::init(bool restarting) {
 
         // dx,dy and dz are dimensionless,
         // so J has SI units of volume. Divide by volume to normalise.
+
+	Field3D Jtmp = 0.0;
+	mesh->get(Jtmp, "J_new", 0.0);
+	mesh->communicate(Jtmp);
+	coord->J = Jtmp;
+	
 	coord->J /= rho_s0 * rho_s0 * rho_s0;
 
+	
+	
+	Field3D loadtmp = 0.0;
+	mesh->get(loadtmp, "g_22_cell_ylow", 0.0);
+	coord->g_22_cell_ylow = loadtmp / SQ(rho_s0);
+
+	loadtmp = 0.0;
+	mesh->get(loadtmp, "g_22_cell_yhigh", 0.0);
+	coord->g_22_cell_yhigh =	loadtmp / SQ(rho_s0);
+
+	loadtmp = 0.0;
+	mesh->get(loadtmp, "By_cell_ylow", 0.0);
+	coord->By_cell_ylow =        loadtmp / Bnorm;
+
+	loadtmp = 0.0;
+	mesh->get(loadtmp, "By_cell_yhigh", 0.0);
+        coord->By_cell_yhigh =        loadtmp / Bnorm;
+
+
+
+	
+	
 	coord->Bxy /= Bnorm;
 
 	coord->g_11 /= SQ(rho_s0);
@@ -279,11 +307,16 @@ int Hermes::init(bool restarting) {
 	coord->g_13 /= SQ(rho_s0);
 	coord->g_23 /= SQ(rho_s0);
 
+	coord->J_perp = sqrt(coord->g_11 * coord->g_33 - coord->g_13 * coord->g_13);
+
         // Need yup/down fields on Bxy
         coord->Bxy.applyBoundary("neumann_o2");
         mesh->communicate(coord->Bxy);
         coord->Bxy.applyParallelBoundary("parallel_neumann_o2");
 
+	
+
+	
         BOUT_FOR(i, coord->Bxy.getRegion("RGN_NOBNDRY")) {
           if (fabs(coord->Bxy.yup()[i]) < 1e-3) {
             coord->Bxy.yup()[i] = coord->Bxy[i];
@@ -292,6 +325,11 @@ int Hermes::init(bool restarting) {
             coord->Bxy.ydown()[i] = coord->Bxy[i];
           }
         }
+
+	coord->cellarea_yup = coord->J_perp * coord->dx * coord->dz * coord->Bxy / coord->By_cell_yhigh;
+        coord->cellarea_ydown = coord->J_perp * coord->dx * coord->dz * coord->Bxy / coord->By_cell_ylow;
+	coord->cellvolume = coord->J * coord->dx * coord->dy * coord->dz;
+	
       } else {
 	coord->dx /= rho_s0 * rho_s0 * Bnorm;
 	coord->Bxy /= Bnorm;
