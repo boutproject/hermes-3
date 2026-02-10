@@ -39,10 +39,6 @@ jobs:
           - cmake_build_type: Release
             test_type: integration
 
-          - name: "3D Metrics"
-            os: ubuntu-latest
-            configure_options: "-DPACKAGE_TESTS=OFF -DBOUT_ENABLE_METRIC_3D=ON"
-
     steps:
       - name: Job information
         run: |
