@@ -84,6 +84,8 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   lambda_1 = options["lambda_1"].doc("λ_1 > 1").withDefault<BoutReal>(100.0);
   lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault<BoutReal>(10000.0);
 
+  vort_timedissipation = options["vort_timedissipation"].doc("Vort dissipation").withDefault<BoutReal>(-1.0) * Omega_ci;
+  
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
 
@@ -346,6 +348,10 @@ void RelaxPotential::finally(const Options& state) {
   
   // Solve diffusion equation for potential
 
+  if (vort_timedissipation > 0.0) {
+    ddt(Vort) -= vort_timedissipation * Vort;
+  } 
+  
   if (boussinesq) {
 
     Field3D flow_xlow_phi,flow_zlow_phi;
