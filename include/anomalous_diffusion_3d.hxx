@@ -1,6 +1,6 @@
 #pragma once
-#ifndef ANOMALOUS_DIFFUSION_H
-#define ANOMALOUS_DIFFUSION_H
+#ifndef ANOMALOUS_DIFFUSION_3D_H
+#define ANOMALOUS_DIFFUSION_3D_H
 
 #include "component.hxx"
 #include "div_ops.hxx"
@@ -61,4 +61,4 @@ namespace {
 RegisterComponent<AnomalousDiffusion3D> registercomponentanomalousdiffusion("anomalous_diffusion_3d");
 }
 
-#endif // ANOMALOUS_DIFFUSION_H
+#endif // ANOMALOUS_DIFFUSION_3D_H
