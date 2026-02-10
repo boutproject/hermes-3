@@ -32,6 +32,7 @@ jobs:
             python3 -m ensurepip
             python3 -m pip install git+https://github.com/boutproject/zoidberg@better-metric
           fi
+          python3 -m pip install git+https://github.com/boutproject/xhermes
 
       - name: Build
         run: |
