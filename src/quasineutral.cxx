@@ -43,7 +43,7 @@ void Quasineutral::transform(Options& state) {
   Options &species = allspecies[name];
 
   // Calculate density required. Floor so that density is >= 0
-  density = floor(rho / (-charge), 0.0);
+  density = floor(rho.asField3D() / (-charge), 0.0);
   set(species["density"], density);
 
   set(species["charge"], charge);
