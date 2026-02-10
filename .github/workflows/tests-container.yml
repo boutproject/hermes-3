@@ -42,7 +42,7 @@ jobs:
                               -DCMAKE_PREFIX_PATH=/usr/local \
                               -DHERMES_ERROR_ON_WARNINGS=ON \
                               -DHERMES_BUILD_BOUT=OFF
-          make -C build -j 2 V=1
+          make -C build -j 2 VERBOSE=1
 
       - name: Run test
         run: |
