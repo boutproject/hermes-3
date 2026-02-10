@@ -119,7 +119,7 @@ if plotting:
         plotting = False
 
 # Perform simulations at required resolutions
- Link to the executable
+
 errs = []
 for ny, sym, tol in resolutions:
     # Delete old data
