@@ -29,6 +29,7 @@
 #include "include/amjuel_helium.hxx"
 #include "include/amjuel_hydrogen.hxx"
 #include "include/anomalous_diffusion.hxx"
+#include "include/anomalous_diffusion_3d.hxx"
 #include "include/binormal_stpm.hxx"
 #include "include/classical_diffusion.hxx"
 #include "include/collisions.hxx"
