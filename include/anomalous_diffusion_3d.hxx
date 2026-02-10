@@ -58,7 +58,7 @@ private:
 };
 
 namespace {
-RegisterComponent<AnomalousDiffusion3D> registercomponentanomalousdiffusion("anomalous_diffusion_3d");
+RegisterComponent<AnomalousDiffusion3D> registercomponentanomalousdiffusion3d("anomalous_diffusion_3d");
 }
 
 #endif // ANOMALOUS_DIFFUSION_3D_H
