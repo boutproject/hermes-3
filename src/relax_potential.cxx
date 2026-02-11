@@ -50,12 +50,21 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   disable_ddt = options["disable_ddt"]
                    .doc("Disable timevolution to iterate")
                    .withDefault<bool>(false);
+
+  viscosity_core = options["viscosity_core"]
+    .doc("Kinematic viscosity [m^2/s]")
+    .withDefault<Field3D>(0.0)
+    / (Lnorm * Lnorm * Omega_ci);
+
+  viscosity_core.applyBoundary("neumann");
+  mesh->communicate(viscosity_core);
+  viscosity_core.applyParallelBoundary("parallel_neumann_o1");
   
   viscosity = options["viscosity"]
     .doc("Kinematic viscosity [m^2/s]")
     .withDefault<Field3D>(0.0)
     / (Lnorm * Lnorm * Omega_ci);
-
+  
   viscosity.applyBoundary("neumann");
   mesh->communicate(viscosity);
   viscosity.applyParallelBoundary("parallel_neumann_o1");
@@ -147,6 +156,12 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   } else {
     bracket_factor = 1.0;
   }
+
+  ones = 1.0;
+  ones.applyBoundary("neumann");
+  mesh->communicate(ones);
+  ones.applyParallelBoundary("parallel_neumann_o1");
+  
 }
 
 void RelaxPotential::transform(Options& state) {
@@ -343,6 +358,8 @@ void RelaxPotential::finally(const Options& state) {
   // Viscosity
   Field3D flow_xlow,flow_zlow;
   ddt(Vort) += (*dagp)(viscosity, Vort, flow_xlow, flow_zlow, false);
+  ddt(Vort) += viscosity_core * (*dagp)(ones, Vort, flow_xlow, flow_zlow, false);
+  
   Field3D dummy;
   ddt(Vort) += Div_par_K_Grad_par_mod(viscosity_par, Vort, dummy, false);
   
