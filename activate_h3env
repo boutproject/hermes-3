@@ -49,10 +49,6 @@ function _update_links_on_spack_install ()
     if [[ $BASH_COMMAND == "spack "*"install"* ]]; then
         $BASH_COMMAND 
         updatelinks_h3env
-        pip install -e "${REPO_ROOT}/external/boutdata"
-        pip install -e "${REPO_ROOT}/external/xbout"
-        pip install -e "${REPO_ROOT}/external/xhermes"
-        echo "    Installed boutdata, xbout, xhermes from external/ in editable mode"
         # (We've already run the command explicitly, return non-zero so that it doesn't run again.)
         return 1
     else
