@@ -20,11 +20,11 @@ jobs:
         config:
           - name: "CMake default options"
             os: ubuntu-22.04
-            configure_options: "-DPACKAGE_TESTS=OFF"
+            configure_options: ""
 
           - name: "3D Metrics"
             os: ubuntu-latest
-            configure_options: "-DPACKAGE_TESTS=OFF -DBOUT_ENABLE_METRIC_3D=ON"
+            configure_options: "-DBOUT_ENABLE_METRIC_3D=ON"
 
     steps:
       - name: Job information
@@ -48,6 +48,7 @@ jobs:
                  libopenmpi-dev
                  liblapack-dev
                  libparpack2-dev
+                 petsc-dev
 
       - uses: actions/checkout@v2
         with:
@@ -59,7 +60,7 @@ jobs:
           # Add the pip install location to the runner's PATH
           echo ~/.local/bin >> $GITHUB_PATH
       - name: Build and run tests
-        run: cmake . -B build $BOUT_CONFIGURE_OPTIONS &&
+        run: cmake . -B build $BOUT_CONFIGURE_OPTIONS -DPACKAGE_TESTS=OFF -DBOUT_USE_PETSC=ON &&
              cmake --build build -j 2 &&
              cd build &&
              ctest --output-on-failure --timeout 300
