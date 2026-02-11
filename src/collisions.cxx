@@ -222,35 +222,35 @@ void Collisions::transform(Options& state) {
         const BoutReal Ai = get<BoutReal>(species["AA"]);
         const BoutReal me_mi = SI::Me / (SI::Mp * Ai); // m_e / m_i
 
-        const Field3D nu_ei = filledFrom(Ne.asField3DParallel(), [&](int yo, Ind3D i) {
+        const Field3D nu_ei = filledFrom(Ne, [&](Ind3D i) {
           // NRL formulary 2019, page 34
           const BoutReal coulomb_log =
-              ((Te.ynext(yo)[i] < 0.1) || (Ni.ynext(yo)[i] < 1e10) || (Ne.ynext(yo)[i] < 1e10)) ? 10
-              : (Te.ynext(yo)[i] < Ti.ynext(yo)[i] * me_mi)
-                  ? 23 - 0.5 * log(Ni.ynext(yo)[i]) + 1.5 * log(Ti.ynext(yo)[i]) - log(SQ(Zi) * Ai)
-              : (Te.ynext(yo)[i] < exp(2) * SQ(Zi)) // Fix to ei coulomb log from S.Mijin ReMKiT1D
+              ((Te[i] < 0.1) || (Ni[i] < 1e10) || (Ne[i] < 1e10)) ? 10
+              : (Te[i] < Ti[i] * me_mi)
+                  ? 23 - 0.5 * log(Ni[i]) + 1.5 * log(Ti[i]) - log(SQ(Zi) * Ai)
+              : (Te[i] < exp(2) * SQ(Zi)) // Fix to ei coulomb log from S.Mijin ReMKiT1D
                   // Ti m_e/m_i < Te < 10 Z^2
-                  ? 30.0 - 0.5 * log(Ne.ynext(yo)[i]) - log(Zi) + 1.5 * log(Te.ynext(yo)[i])
+                  ? 30.0 - 0.5 * log(Ne[i]) - log(Zi) + 1.5 * log(Te[i])
                   // Ti m_e/m_i < 10 Z^2 < Te
-                  : 31.0 - 0.5 * log(Ne.ynext(yo)[i]) + log(Te.ynext(yo)[i]);
+                  : 31.0 - 0.5 * log(Ne[i]) + log(Te[i]);
 
           // Calculate v_a^2, v_b^2
-          const BoutReal vesq = 2 * softFloor(Te.ynext(yo)[i], 0.1) * SI::qe / SI::Me;
-          const BoutReal visq = 2 * softFloor(Ti.ynext(yo)[i], 0.1) * SI::qe / (SI::Mp * Ai);
+          const BoutReal vesq = 2 * softFloor(Te[i], 0.1) * SI::qe / SI::Me;
+          const BoutReal visq = 2 * softFloor(Ti[i], 0.1) * SI::qe / (SI::Mp * Ai);
 
           // Collision frequency
-          const BoutReal nu = SQ(SQ(SI::qe) * Zi) * floor(Ni.ynext(yo)[i], 0.0)
+          const BoutReal nu = SQ(SQ(SI::qe) * Zi) * floor(Ni[i], 0.0)
                               * softFloor(coulomb_log, 1.0) * (1. + me_mi)
                               / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me))
                               * ei_multiplier;
 #if CHECK >= 2
 	  if (!std::isfinite(nu)) {
 	    throw BoutException("Collisions 195 {}: {} at {}: Ni {}, Ne {}, Clog {}, vesq {}, visq {}, Te {}, Ti {}\n",
-                                kv.first, nu, i, Ni.ynext(yo)[i], Ne.ynext(yo)[i], coulomb_log, vesq, visq, Te.ynext(yo)[i], Ti.ynext(yo)[i]);
+                                kv.first, nu, i, Ni[i], Ne[i], coulomb_log, vesq, visq, Te[i], Ti[i]);
 	  }
 #endif
           return nu;
-        });
+        }, "RGN_NOY");
 
         // Coefficient in front of parallel momentum exchange
         // This table is from Braginskii 1965
@@ -364,12 +364,12 @@ void Collisions::transform(Options& state) {
           const BoutReal charge2 = Z2 * SI::qe; // in Coulombs
 
           // Ion-ion collisions
-          Field3D nu_12 = filledFrom(density1, [&](auto yo, auto i) {
-            const BoutReal Tlim1 = softFloor(temperature1.ynext(yo)[i], 0.1);
-            const BoutReal Tlim2 = softFloor(temperature2.ynext(yo)[i], 0.1);
+          Field3D nu_12 = filledFrom(density1.asField3D(), [&](auto i) {
+            const BoutReal Tlim1 = softFloor(temperature1[i], 0.1);
+            const BoutReal Tlim2 = softFloor(temperature2[i], 0.1);
 
-            const BoutReal Nlim1 = softFloor(density1.ynext(yo)[i], 1e10);
-            const BoutReal Nlim2 = softFloor(density2.ynext(yo)[i], 1e10);
+            const BoutReal Nlim1 = softFloor(density1[i], 1e10);
+            const BoutReal Nlim2 = softFloor(density2[i], 1e10);
 
             // Coulomb logarithm
             BoutReal coulomb_log =
@@ -387,7 +387,7 @@ void Collisions::transform(Options& state) {
                                 / (3 * pow(PI * (v1sq + v2sq), 1.5) * SQ(SI::e0 * mass1));
             ASSERT2(std::isfinite(nu));
             return nu;
-          });
+          }, "RGN_NOY");
 
           // Update the species collision rates, momentum & energy exchange
           collide(species1, species2, nu_12 / Omega_ci, 1.0);
