@@ -21,7 +21,6 @@ Quasineutral::Quasineutral(std::string name, Options& alloptions, Solver* UNUSED
 }
 
 void Quasineutral::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
   // Iterate through all subsections
   GuardedOptions allspecies = state["species"];
   std::map<std::string, GuardedOptions> children = allspecies.getChildren();
@@ -62,8 +61,7 @@ void Quasineutral::finally(const Options &state) {
   density = get<Field3D>(state["species"][name]["density"]);
 }
 
-void Quasineutral::outputVars(Options &state) {
-  AUTO_TRACE();
+void Quasineutral::outputVars(Options& state) {
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
 
   // Save the density
