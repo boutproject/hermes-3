@@ -11,12 +11,16 @@
 [submodule "Reactions"]
 	path = external/Reactions
 	url = git@github.com:UKAEA-Edge-Code/VANTAGE-Reactions.git
+	ignore = dirty	
 [submodule "external/xhermes"]
 	path = external/xhermes
 	url = git@github.com:boutproject/xhermes
+	ignore = dirty
 [submodule "external/xbout"]
 	path = external/xbout
 	url = git@github.com:boutproject/xbout
+	ignore = dirty
 [submodule "external/boutdata"]
 	path = external/boutdata
 	url = git@github.com:boutproject/boutdata.git
+	ignore = dirty
