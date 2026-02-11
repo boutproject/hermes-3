@@ -37,8 +37,7 @@ struct SimplePump : public Component {
     substitutePermissions("name", {name});
   };
 
-    void outputVars(Options& state) override {
-    AUTO_TRACE();
+  void outputVars(Options& state) override {
     if (diagnose) {
 
       set_with_attrs(state[fmt::format("simple_pump_src_shape_{}", name)], sink_shape,
@@ -51,8 +50,8 @@ struct SimplePump : public Component {
            {"conversion", Nnorm * Omega_ci},
            {"long_name", "simple pump source shape"},
            {"source", "simple_pump"}});
-
-    }}
+    }
+  }
 
   private:
     std::string name; ///< The species name

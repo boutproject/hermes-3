@@ -3,6 +3,7 @@
 #define FIXED_TEMPERATURE_H
 
 #include "component.hxx"
+#include <bout/constants.hxx>
 
 /// Set species temperature to a fixed value
 ///
@@ -16,7 +17,6 @@ struct FixedTemperature : public Component {
                    // FIXME: Only written if density is set
                    readWrite("species:{name}:pressure")}),
         name(name) {
-    AUTO_TRACE();
 
     auto& options = alloptions[name];
 
@@ -35,7 +35,6 @@ struct FixedTemperature : public Component {
   }
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     auto Tnorm = get<BoutReal>(state["Tnorm"]);
 
     // Save temperature to output files
@@ -85,7 +84,6 @@ private:
   ///     - temperature
   ///     - pressure (if density is set)
   void transform_impl(GuardedOptions& state) override {
-    AUTO_TRACE();
     auto species = state["species"][name];
 
     set(species["temperature"], T);

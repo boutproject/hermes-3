@@ -12,7 +12,6 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                  readWrite("species:{name}:energy_source"),
                  readOnly("species:{name}:AA")}),
       name(name) {
-  AUTO_TRACE();
 
   auto& options = alloptions[name];
   const Options& units = alloptions["units"];
@@ -60,7 +59,6 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
 }
 
 void NeutralBoundary::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
   auto species = state["species"][name];
   const BoutReal AA = get<BoutReal>(species["AA"]);
 
@@ -321,8 +319,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
 }
 
 void NeutralBoundary::outputVars(Options& state) {
-  
-  AUTO_TRACE();
+
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
@@ -330,8 +327,6 @@ void NeutralBoundary::outputVars(Options& state) {
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   if (diagnose) {
-
-      AUTO_TRACE();
 
       // Save particle and energy source for the species created during recycling
 

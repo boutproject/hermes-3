@@ -9,7 +9,6 @@ Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(sol
                  // FIXME: This is only written if density is set
                  readWrite(fmt::format("species:{}:pressure", name))}),
       name(name) {
-  AUTO_TRACE();
   Options& options = alloptions[name];
 
   auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
@@ -22,7 +21,6 @@ Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(sol
 }
 
 void Isothermal::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   GuardedOptions species = state["species"][name];
 
@@ -38,7 +36,6 @@ void Isothermal::transform_impl(GuardedOptions& state) {
 }
 
 void Isothermal::outputVars(Options& state) {
-  AUTO_TRACE();
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
 

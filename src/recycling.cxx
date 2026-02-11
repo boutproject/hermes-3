@@ -15,7 +15,6 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
     : Component({readOnly("species:{from}:{from_inputs}"),
                  readOnly("species:{to}:{to_inputs}"),
                  readWrite("species:{to}:{outputs}")}) {
-  AUTO_TRACE();
 
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
@@ -173,7 +172,6 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
 }
 
 void Recycling::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   // Get metric tensor components
   Coordinates* coord = mesh->getCoordinates();
@@ -533,7 +531,6 @@ void Recycling::transform_impl(GuardedOptions& state) {
 }
 
 void Recycling::outputVars(Options& state) {
-  AUTO_TRACE();
 
   if (neutral_pump) {
     // Save the pump mask as a time-independent field
