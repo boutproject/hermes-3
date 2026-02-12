@@ -2,41 +2,36 @@
 
 # Python script to run and analyse MMS test
 
-from __future__ import division
-from __future__ import print_function
-
-try:
-  from builtins import str
-except:
-  pass
-
 from boututils.run_wrapper import shell, launch, getmpirun
 from boutdata.collect import collect
 
-from numpy import sqrt, max, abs, mean, array, log, concatenate
+from numpy import sqrt, max, abs, mean, array, log
 from pathlib import Path
 
 # Remove old test results and symlink executable
-for file in ["BOUT.dmp.0.nc", "BOUT.log.0", "BOUT.restart.0.nc", "BOUT.settings", ".BOUT.pid.0"]:
+for file in [
+    "BOUT.dmp.0.nc",
+    "BOUT.log.0",
+    "BOUT.restart.0.nc",
+    "BOUT.settings",
+    ".BOUT.pid.0",
+]:
     path = Path("data/" + file)
     if path.is_file():
         print(f"Removing old file data/{file}")
         path.unlink()
 
-if not Path("hermes-3").is_file():
-  shell("ln -s ../../../hermes-3 hermes-3")
-
 # Run and exit if unsuccessful
-s, out = launch("./hermes-3 -d data", nproc=1, pipe=True)
+s, out = launch("../../../hermes-3", nproc=1, pipe=True)
 
 if s != 0:
-  print(" => Test failed: ")
-  print(out)
-  exit(1)
+    print(" => Test failed: ")
+    print(out)
+    exit(1)
 
 # Save output to log file
 with open("run.log", "w") as f:
-  f.write(out)
+    f.write(out)
 
 # Check log for success/failure
 success = True
@@ -44,37 +39,37 @@ collisionality_lines = []
 
 # Check for exceptions and collect collision selections
 with open("run.log", "r") as f:
-  lines = f.readlines()
-  for i, line in enumerate(lines):
-    if "====== Exception thrown ======" in line:
-        success = False
-        message = lines[i+1]
-        
-    if "collisionality mode" in line:
-      collisionality_lines.append(line.strip())
-        
+    lines = f.readlines()
+    for i, line in enumerate(lines):
+        if "====== Exception thrown ======" in line:
+            success = False
+            message = lines[i + 1]
+
+        if "collisionality mode" in line:
+            collisionality_lines.append(line.strip())
+
 # Check that expected collisions were chosen
 expected_lines = [
-	"d neutral diffusion collisionality mode: 'afn' using d_d+_cx d_d+_iz", 
-	"he neutral diffusion collisionality mode: 'afn' using he_he+_iz", 
-	"d+ viscosity collisionality mode: 'braginskii' using d+_d+_coll d+_he+_coll", 
-	"he+ viscosity collisionality mode: 'braginskii' using he+_d+_coll he+_he+_coll", 
-	"d+ conduction collisionality mode: 'braginskii' using d+_d+_coll", 
-	"he+ conduction collisionality mode: 'braginskii' using he+_he+_coll", 
-	"he neutral collisionality mode: 'afn' using he_he+_iz he_he_coll", 
-	"d neutral collisionality mode: 'afn' using d_d+_cx d_d+_iz d_d_coll", 
-	"e conduction collisionality mode: 'braginskii' using e_e_coll", 
+    "d neutral diffusion collisionality mode: 'afn' using d_d+_cx d_d+_iz",
+    "he neutral diffusion collisionality mode: 'afn' using he_he+_iz",
+    "d+ viscosity collisionality mode: 'braginskii' using d+_d+_coll d+_he+_coll",
+    "he+ viscosity collisionality mode: 'braginskii' using he+_d+_coll he+_he+_coll",
+    "d+ conduction collisionality mode: 'braginskii' using d+_d+_coll",
+    "he+ conduction collisionality mode: 'braginskii' using he+_he+_coll",
+    "he neutral collisionality mode: 'afn' using he_he+_iz he_he_coll",
+    "d neutral collisionality mode: 'afn' using d_d+_cx d_d+_iz d_d_coll",
+    "e conduction collisionality mode: 'braginskii' using e_e_coll",
 ]
 
 for line in expected_lines:
-  if line not in collisionality_lines:
-    success = False
-    message = f"Did not find expected collisionality line:\n{line}"
-        
+    if line not in collisionality_lines:
+        success = False
+        message = f"Did not find expected collisionality line:\n{line}"
+
 # Final output
 if success:
-  print(" => Test passed")
-  exit(0)
+    print(" => Test passed")
+    exit(0)
 else:
-  print(f" => Test failed: \n{message}")
-  exit(1)
+    print(f" => Test failed: \n{message}")
+    exit(1)
