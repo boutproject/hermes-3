@@ -17,7 +17,7 @@ BOUT_ENUM_CLASS(ReactionDiagnosticType, collision_freq, density_src, energy_src,
 
 std::string toString(ReactionDiagnosticType diag_type);
 
-static std::map<ReactionDiagnosticType, std::string> state_labels = {
+static const std::map<ReactionDiagnosticType, std::string> state_labels = {
     {ReactionDiagnosticType::collision_freq, "collision_frequency"},
     {ReactionDiagnosticType::density_src, "density_source"},
     {ReactionDiagnosticType::energy_src, "energy_source"},
@@ -44,15 +44,19 @@ struct ReactionDiagnostic {
       standard_name = "radiation loss";
       break;
     case ReactionDiagnosticType::energy_src:
-    case ReactionDiagnosticType::momentum_src: // fall through
-      standard_name = fmt::format("{:s} transfer", toString(type));
+      standard_name = "energy transfer";
+      break;
+    case ReactionDiagnosticType::momentum_src:
+      standard_name = "momentum transfer";
       break;
     default:
-      throw BoutException("ReactionDiagnostic type not set up!");
+      throw BoutException(
+          fmt::format("ReactionDiagnostic type [{:s}]] not set up!", toString(type)));
     }
     return standard_name;
   }
 
+public:
   ReactionDiagnostic(const std::string& name, const std::string& long_name,
                      ReactionDiagnosticType type, const std::string& source,
                      DiagnosticTransformerType transformer = identity)
@@ -63,8 +67,8 @@ struct ReactionDiagnostic {
                      ReactionDiagnosticType type, const std::string& source,
                      const std::string& standard_name,
                      DiagnosticTransformerType transformer)
-      : name(name), long_name(long_name), source(source), standard_name(standard_name),
-        type(type), transformer(transformer) {
+      : long_name(long_name), name(name), source(source), standard_name(standard_name),
+        transformer(transformer), type(type) {
 
     // Extract normalisation units from the root options
     Options& options = Options::root();
@@ -106,8 +110,11 @@ struct ReactionDiagnostic {
   ReactionDiagnostic(const ReactionDiagnostic&) = delete;
   // No copy-assignment
   ReactionDiagnostic& operator=(const ReactionDiagnostic&) = delete;
+  // No move-assignment
+  ReactionDiagnostic& operator=(ReactionDiagnostic&&) = delete;
   // Allow moves (needed for std::map::insert)
   ReactionDiagnostic(ReactionDiagnostic&&) = default;
+  ~ReactionDiagnostic() = default;
 
   void add_to_state(Options& state) {
     set_with_attrs(state[this->name], this->data,
@@ -119,20 +126,21 @@ struct ReactionDiagnostic {
                     {"source", this->source}});
   }
 
+  std::string get_name() const { return this->name; }
+
   void set_data(const Field3D& data) { this->data = data; }
 
   Field3D transform(Field3D src_fld) { return this->transformer(src_fld); }
 
-  const std::string name;
-  const std::string long_name;
-  const std::string source;
-  const std::string standard_name;
-  const ReactionDiagnosticType type;
-
 private:
   BoutReal conversion;
   Field3D data;
+  const std::string long_name;
+  const std::string name;
+  const std::string source;
+  const std::string standard_name;
   const DiagnosticTransformerType transformer;
+  const ReactionDiagnosticType type;
   std::string units;
 };
 

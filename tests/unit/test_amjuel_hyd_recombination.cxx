@@ -36,17 +36,27 @@ TEST_F(HydrogenRCTest, DensitySourceSigns) {
 
   AmjuelHydRecombinationIsotope<'h'> component("test", options, nullptr);
 
-  Options state{
-      {"species",
-       {{"e", {{"AA", 1.0}, {"density", 1.0}, {"temperature", 1.0}, {"velocity", 1.0}}},
-        {"h", {{"AA", 1.0}, {"density", 1.0}, {"temperature", 1.0}, {"velocity", 1.0}}},
-        {"h+",
-         {{"AA", 1.0},
-          {"charge", 1.0},
-          {"density", 1.0},
-          {"temperature", 1.0},
-          {"velocity", 1.0}}}}},
-      {"test", {{"type", "h+ + e -> h"}}}};
+  Field3D electron_dens(1.0), electron_temp(1.0), electron_vel(1.0);
+  Field3D atom_dens(1.0), atom_temp(1.0), atom_vel(1.0);
+  Field3D ion_dens(1.0), ion_temp(1.0), ion_vel(1.0);
+  Options state{{"species",
+                 {{"e",
+                   {{"AA", 1.0},
+                    {"density", electron_dens},
+                    {"temperature", electron_temp},
+                    {"velocity", electron_vel}}},
+                  {"h",
+                   {{"AA", 1.0},
+                    {"density", atom_dens},
+                    {"temperature", atom_temp},
+                    {"velocity", atom_vel}}},
+                  {"h+",
+                   {{"AA", 1.0},
+                    {"charge", 1.0},
+                    {"density", ion_dens},
+                    {"temperature", ion_temp},
+                    {"velocity", ion_vel}}}}},
+                {"test", {{"type", "h+ + e -> h"}}}};
 
   component.transform(state);
 
