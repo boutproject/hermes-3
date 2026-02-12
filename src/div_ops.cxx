@@ -747,9 +747,11 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
   Field3D yzresult(mesh);
   yzresult.allocate();
 
-  if (f.hasParallelSlices() && a.hasParallelSlices()) {
-    // Both inputs have yup and ydown
+  if (f.isFci()) {
+    ASSERT1(f.hasParallelSlices());
+    ASSERT1(a.hasParallelSlices());
 
+    // Both inputs have yup and ydown
     fup = f.yup();
     fdown = f.ydown();
 
@@ -766,7 +768,7 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
     flow_ylow.setDirectionY(YDirectionType::Aligned);
   }
 
-  if (bout::build::use_metric_3d) {
+  if (f.isFci()) {
     // 3D Metric, need yup/ydown fields.
     // Requires previous communication of metrics
     // -- should insert communication here?
