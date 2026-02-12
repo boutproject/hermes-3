@@ -41,6 +41,9 @@ inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_ALL")
 
 inline Field3DParallel softFloor(const Field3DParallel& var, BoutReal f,
                                  const std::string& rgn = "RGN_ALL") {
+  if (! var.isFci()) {
+    return softFloor(var.asField3D(), f, rgn);
+  }
   auto result = softFloor(var.asField3D(), f, var.hasParallelSlices() ? "RGN_NOY" : rgn);
 
   if (var.hasParallelSlices()) {
