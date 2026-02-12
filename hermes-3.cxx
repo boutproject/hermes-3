@@ -269,37 +269,16 @@ int Hermes::init(bool restarting) {
         // dx,dy and dz are dimensionless,
         // so J has SI units of volume. Divide by volume to normalise.
 
+
+	// try loading J from the grid, otherwise use the one calculated from the metric coefficients
 	Field3D Jtmp = 0.0;
-	mesh->get(Jtmp, "J_new", 0.0);
-	mesh->communicate(Jtmp);
-	coord->J = Jtmp;
+	if (mesh->get(Jtmp, "J_new")==0){
+	  mesh->communicate(Jtmp);
+	  coord->J = Jtmp;
+	} 
 	
 	coord->J /= rho_s0 * rho_s0 * rho_s0;
-
-	
-	
-	Field3D loadtmp = 0.0;
-	mesh->get(loadtmp, "g_22_cell_ylow", 0.0);
-	coord->g_22_cell_ylow = loadtmp / SQ(rho_s0);
-
-	loadtmp = 0.0;
-	mesh->get(loadtmp, "g_22_cell_yhigh", 0.0);
-	coord->g_22_cell_yhigh =	loadtmp / SQ(rho_s0);
-
-	loadtmp = 0.0;
-	mesh->get(loadtmp, "By_cell_ylow", 0.0);
-	coord->By_cell_ylow =        loadtmp / Bnorm;
-
-	loadtmp = 0.0;
-	mesh->get(loadtmp, "By_cell_yhigh", 0.0);
-        coord->By_cell_yhigh =        loadtmp / Bnorm;
-
-
-
-	
-	
-	coord->Bxy /= Bnorm;
-
+     	
 	coord->g_11 /= SQ(rho_s0);
 	coord->g_22 /= SQ(rho_s0);
 	coord->g_33 /= SQ(rho_s0);
@@ -308,13 +287,61 @@ int Hermes::init(bool restarting) {
 	coord->g_23 /= SQ(rho_s0);
 
 	coord->J_perp = sqrt(coord->g_11 * coord->g_33 - coord->g_13 * coord->g_13);
+	
+	// try loading g_22 at the lower and upper cell interface from the grid, otherwise caluculate from the mean of the two cellcentered ones                                                           
+        Field3D loadtmp = 0.0;
+        if (mesh->get(loadtmp, "g_22_cell_ylow")==0) {
+          coord->g_22_cell_ylow = loadtmp / SQ(rho_s0);
+        } else {
+          coord->g_22_cell_ylow = 0.0;
+          BOUT_FOR(i, coord->J.getRegion("RGN_NOY")) {
+            const auto iym = i.ym();
+            coord->g_22_cell_ylow[i] = 0.5 * (coord->g_22[i] + coord->g_22.ydown()[iym]);
+          }
+        }
+
+        loadtmp = 0.0;
+        if (mesh->get(loadtmp, "g_22_cell_yhigh")==0) {
+          coord->g_22_cell_yhigh = loadtmp / SQ(rho_s0);
+        } else {
+          coord->g_22_cell_yhigh = 0.0;
+          BOUT_FOR(i, coord->J.getRegion("RGN_NOY")) {
+            const auto iyp = i.yp();
+            coord->g_22_cell_yhigh[i] = 0.5 * (coord->g_22[i] + coord->g_22.yup()[iyp]);
+          }
+        }			
 
         // Need yup/down fields on Bxy
+
+	coord->Bxy /= Bnorm;
+	
         coord->Bxy.applyBoundary("neumann_o2");
         mesh->communicate(coord->Bxy);
         coord->Bxy.applyParallelBoundary("parallel_neumann_o2");
 
-	
+
+	// Try loading the B field and the upper and lower interface, otherwise calculate from the mean of the two cellcentered values
+	loadtmp = 0.0;
+	if (mesh->get(loadtmp, "By_cell_yhigh")==0) {
+	  coord->By_cell_yhigh = loadtmp / Bnorm;
+        } else {
+          coord->By_cell_yhigh = 0.0;
+          BOUT_FOR(i, coord->J.getRegion("RGN_NOY")) {
+            const auto iyp = i.yp();
+            coord->By_cell_yhigh[i] = 0.5 * (coord->Bxy[i] + coord->Bxy.yup()[iyp]);
+          }
+        }
+
+	loadtmp = 0.0;
+	if (mesh->get(loadtmp, "By_cell_ylow")==0) {
+          coord->By_cell_ylow = loadtmp / Bnorm;
+        } else {
+          coord->By_cell_ylow = 0.0;
+          BOUT_FOR(i, coord->J.getRegion("RGN_NOY")) {
+            const auto iym = i.ym();
+            coord->By_cell_ylow[i] = 0.5 * (coord->Bxy[i] + coord->Bxy.ydown()[iym]);
+          }
+        }
 
 	
         BOUT_FOR(i, coord->Bxy.getRegion("RGN_NOBNDRY")) {
@@ -329,6 +356,7 @@ int Hermes::init(bool restarting) {
 	coord->cellarea_yup = coord->J_perp * coord->dx * coord->dz * coord->Bxy / coord->By_cell_yhigh;
         coord->cellarea_ydown = coord->J_perp * coord->dx * coord->dz * coord->Bxy / coord->By_cell_ylow;
 	coord->cellvolume = coord->J * coord->dx * coord->dy * coord->dz;
+	
 	
       } else {
 	coord->dx /= rho_s0 * rho_s0 * Bnorm;
