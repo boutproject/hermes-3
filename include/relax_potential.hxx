@@ -87,9 +87,12 @@ private:
   }
   Field3D logB;
   Field3D viscosity; /// Kinematic viscosity
+  Field3D viscosity_core;
   Field3D viscosity_par;
+  Field3D ones;
   bool phi_dissipation; /// Parallel dissipation of potential
-
+  BoutReal vort_timedissipation;
+  
   Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 
