@@ -1,7 +1,7 @@
 nout = 10
 timestep = 20
 
-MYG = 0
+MYG = 1
 
 [mesh]
 nx = 10
