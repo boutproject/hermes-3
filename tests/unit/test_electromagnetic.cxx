@@ -20,8 +20,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using ElectromagneticTest = FakeMeshFixture;
 
-#if not BOUT_USE_METRIC_3D
-
 TEST_F(ElectromagneticTest, CreateComponent) {
   Options options = {
       {"units", {{"Tesla", 1.0}, {"eV", 1.0}, {"inv_meters_cubed", 1e19}}}};
@@ -38,6 +36,7 @@ TEST_F(ElectromagneticTest, TransformNoChargedSpecies) {
   // Transform with no charged species
   Options state = {{"species", {{"d", {{"AA", 2.0}}}}}};
 
+#if not BOUT_USE_METRIC_3D
   component.transform(state);
 
   // Apar should be set
@@ -49,6 +48,10 @@ TEST_F(ElectromagneticTest, TransformNoChargedSpecies) {
 
   // Apar_flutter should not be set
   EXPECT_FALSE(state["fields"]["Apar_flutter"].isSet());
+#else
+  // Ensure we enable the test, once we can
+  ASSERT_THROW(component.transform(state), BoutException);
+#endif
 }
 
 TEST_F(ElectromagneticTest, FlutterSetsField) {
@@ -60,6 +63,7 @@ TEST_F(ElectromagneticTest, FlutterSetsField) {
   // Transform with no charged species
   Options state = {{"species", {{"d", {{"AA", 2.0}}}}}};
 
+#if not BOUT_USE_METRIC_3D
   component.transform(state);
 
   // Apar should be set
@@ -73,15 +77,8 @@ TEST_F(ElectromagneticTest, FlutterSetsField) {
   BOUT_FOR_SERIAL(i, Apar_flutter.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(Apar_flutter[i], 0.0);
   }
-}
 #else
-
-TEST_F(ElectromagneticTest, CreateComponent) {
-  Options options = {
-      {"units", {{"Tesla", 1.0}, {"eV", 1.0}, {"inv_meters_cubed", 1e19}}}};
-
-  ASSERT_THROW(Electromagnetic component("test", options, nullptr),
-	       BoutException);
-}
-
+  // Ensure we enable the test, once we can
+  ASSERT_THROW(component.transform(state), BoutException);
 #endif
+}
