@@ -46,7 +46,7 @@ for Ly in Lys:
         # Run hermes-3 using MPI
         print(f"Running Ly = {Ly} Lz = {Lz}")
         shell("rm data/BOUT.*.nc")  # Delete data files
-        _, out = launch(
+        _, out = launch_safe(
             f"../../../hermes-3 mesh:B={B} i:density={n0} i:AA={AA} mesh:Ly={Ly} mesh:Lz={Lz}",
             nproc=1,
             pipe=True,
