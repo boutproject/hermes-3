@@ -2,10 +2,7 @@
 
 # Test that a 1D-recyling example produces expected results
 
-from __future__ import division
-from __future__ import print_function
-
-from boututils.run_wrapper import launch
+from boututils.run_wrapper import launch_safe
 import numpy
 import pathlib
 import xhermes
@@ -69,7 +66,7 @@ fail_on_missing_exec()
 output_path.unlink(missing_ok=True)
 
 # Use Bout wrapper to run exec
-s, out = launch(f"{hermes_exec} -d {data_dir}", nproc=1, pipe=True)
+s, out = launch_safe(f"{hermes_exec} -d {data_dir}", nproc=1, pipe=True)
 
 # Save output to log file
 with open("run.log", "w") as f:

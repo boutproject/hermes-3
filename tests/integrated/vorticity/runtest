@@ -9,25 +9,23 @@ from boutdata.collect import collect
 from sys import stdout, exit
 import numpy as np
 
-shell("ln -s ../../../hermes-3 hermes-3")
-
 # Run the case
-s, out = launch_safe("./hermes-3", nproc=1, mthread=1, pipe=True)
+s, out = launch_safe("../../../hermes-3", nproc=1, mthread=1, pipe=True)
 with open("run.log", "w") as f:
-  f.write(out)
+    f.write(out)
 
 # Collect the vorticity
 vort = collect("Vort", path="data")
 
 # Initial and final value has no negatives
 # i.e. no new oscillations produced
-assert np.amin(vort[0,2:-2,0,:]) > 0.0
-assert np.amin(vort[-1,2:-2,0,:]) > 0.0
+assert np.amin(vort[0, 2:-2, 0, :]) > 0.0
+assert np.amin(vort[-1, 2:-2, 0, :]) > 0.0
 
 # Total vorticity is conserved
-assert abs(np.sum(vort[-1,2:-2,0,:]) - np.sum(vort[0,2:-2,0,:])) < 1e-5
+assert abs(np.sum(vort[-1, 2:-2, 0, :]) - np.sum(vort[0, 2:-2, 0, :])) < 1e-5
 
 # Total enstrophy decreases
-assert np.sum(vort[-1,2:-2,0,:]**2) < np.sum(vort[0,2:-2,0,:]**2)
+assert np.sum(vort[-1, 2:-2, 0, :] ** 2) < np.sum(vort[0, 2:-2, 0, :] ** 2)
 
 exit(0)

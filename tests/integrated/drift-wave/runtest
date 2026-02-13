@@ -8,13 +8,10 @@
 plotting = False
 
 import numpy as np
-from boututils.run_wrapper import shell, launch, getmpirun
+from boututils.run_wrapper import shell, launch_safe, getmpirun
 import sys
 
 import analysis
-
-# Link to the executable
-shell("ln -s ../../../hermes-3 hermes-3")
 
 sparns = []  # sigma_par / w_star
 analytic_gammas = []
@@ -31,13 +28,12 @@ else:
 for B in Bs:
     # Run hermes-3 using MPI
     print(f"Running B = {B}")
-    shell("rm data/BOUT.*.nc") # Delete data files
-    s, out = launch(f"./hermes-3 mesh:B={B}", nproc=1, pipe=True)
+    shell("rm data/BOUT.*.nc")  # Delete data files
+    s, out = launch_safe(f"./hermes-3 mesh:B={B}", nproc=1, pipe=True)
 
     # Save output to log file
-    f = open(f"run.log.{B}", "w")
-    f.write(out)
-    f.close()
+    with open(f"run.log.{B}", "w") as f:
+        f.write(out)
 
     result = analysis.extract_data("data")
     sparns.append(result["sigmapar"] / result["wstar"])
