@@ -29,6 +29,7 @@
 #include "include/amjuel_helium.hxx"
 #include "include/amjuel_hydrogen.hxx"
 #include "include/anomalous_diffusion.hxx"
+#include "include/bootstrap_current.hxx"
 #include "include/binormal_stpm.hxx"
 #include "include/braginskii_collisions.hxx"
 #include "include/braginskii_conduction.hxx"
