@@ -39,7 +39,7 @@ SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
     setPermissions(readOnly("species:{non_electrons}:{inputs}"));
     setPermissions(readWrite("species:{non_electrons}:{outputs}"));
     substitutePermissions("inputs", {"AA", "density", "temperature"});
-    substitutePermissions("output", {"density_source", "energy_source"});
+    substitutePermissions("outputs", {"density_source", "energy_source"});
   } else {
     setPermissions(readIfSet("species:e:temperature"));
   }
