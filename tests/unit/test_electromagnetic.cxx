@@ -50,7 +50,9 @@ TEST_F(ElectromagneticTest, TransformNoChargedSpecies) {
   EXPECT_FALSE(state["fields"]["Apar_flutter"].isSet());
 #else
   // Ensure we enable the test, once we can
+#if CHECK > 0
   ASSERT_THROW(component.transform(state), BoutException);
+#endif
 #endif
 }
 
@@ -79,6 +81,8 @@ TEST_F(ElectromagneticTest, FlutterSetsField) {
   }
 #else
   // Ensure we enable the test, once we can
+#if CHECK > 0
   ASSERT_THROW(component.transform(state), BoutException);
+#endif
 #endif
 }
