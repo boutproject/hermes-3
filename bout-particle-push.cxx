@@ -33,6 +33,19 @@ inline void ASSERT_EQ(T t, U u) {
   NESOASSERT(t == u, "A check failed.");
 }
 
+std::string get_restart_output_dir() {
+  auto& root = Options::root();
+  return root["restart_files"]["path"].withDefault(
+      root["datadir"].withDefault<std::string>("data"));
+}
+
+std::string make_output_path(const std::string& filename) {
+  if (filename.find('/') != std::string::npos) {
+    return filename;
+  }
+  return fmt::format("{}/{}", get_restart_output_dir(), filename);
+}
+
 void collect_unique_points(std::vector<double>& global_Z_vertices_buffer,
                            std::vector<double>& global_R_vertices_buffer, int& N_unique,
                            const double& tolerance,
@@ -205,6 +218,7 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
   std::string dmplex_h5_filename =
       Options::root()["mesh"]["dmplex_h5_filename"].withDefault(
           "hypnotoad_dmplex_mesh_output.h5");
+  dmplex_h5_filename = make_output_path(dmplex_h5_filename);
   output << fmt::format("Using option use_cxx_ivertex = {}", use_cxx_ivertex)
          << std::endl;
   bout_mesh->load();
@@ -572,12 +586,6 @@ double calculate_total_mass(Field2D& density,
   return total_mass;
 }
 
-std::string get_restart_output_dir() {
-  auto& root = Options::root();
-  return root["restart_files"]["path"].withDefault(
-      root["datadir"].withDefault<std::string>("data"));
-}
-
 Options
 initialise_diagnostics(Mesh* bout_mesh, Field2D& neutral_density, Field2D& ion_density,
                        std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
@@ -676,17 +684,18 @@ void check_cell_volumes(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_m
 }
 
 void check_mass_conservation(double total_mass_final, double total_mass_initial,
-                double remove_threshold) {
+                             double remove_threshold) {
   double rtol = 1.0e-13;
   double atol = 1.0e-13;
-  bool mass_conserved = (abs(total_mass_final - total_mass_initial) < rtol*total_mass_initial + atol);
+  bool mass_conserved =
+      (abs(total_mass_final - total_mass_initial) < rtol * total_mass_initial + atol);
   // exit if we fail to find conservation
   NESOASSERT(mass_conserved,
-              fmt::format("Initial total mass {} does not match "
-                          "final total mass {} \n Ignore this message by "
-                          "setting [neso_particles] test_mass_conservation = false",
-                          total_mass_initial, total_mass_final));
-  }
+             fmt::format("Initial total mass {} does not match "
+                         "final total mass {} \n Ignore this message by "
+                         "setting [neso_particles] test_mass_conservation = false",
+                         total_mass_initial, total_mass_final));
+}
 int main(int argc, char** argv) {
   // initialise_mpi(&argc, &argv);
   // attempt to call BOUT to
@@ -920,8 +929,8 @@ int main(int argc, char** argv) {
       }
     };
     // uncomment to write a trajectory
-    H5Part h5part("traj_reflection_dmplex_example.h5part", A_particle_group,
-                  Sym<REAL>("POSITION"), Sym<REAL>("VELOCITY"));
+    H5Part h5part(make_output_path("traj_reflection_dmplex_example.h5part"),
+                  A_particle_group, Sym<REAL>("POSITION"), Sym<REAL>("VELOCITY"));
 
     // allocate buffer vector for scalar projection/evaluation of NESO-Particles
     // properties
@@ -934,8 +943,8 @@ int main(int argc, char** argv) {
                                      h_project1, accumulator_transform, source_zeroer,
                                      neso_mesh);
     // diagnose the initial condition
-    std::string particle_data_filename =
-        fmt::format("{}/BOUT.dmp.{}.nc", get_restart_output_dir(), mpi_rank);
+    std::string particle_data_filename = make_output_path(
+        fmt::format("{}/BOUT.dmp.{}.nc", get_restart_output_dir(), mpi_rank));
     Options bout_output_data = initialise_diagnostics(
         bout_mesh, neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
         h_project1, particle_data_filename);
