@@ -572,6 +572,12 @@ double calculate_total_mass(Field2D& density,
   return total_mass;
 }
 
+std::string get_restart_output_dir() {
+  auto& root = Options::root();
+  return root["restart_files"]["path"].withDefault(
+      root["datadir"].withDefault<std::string>("data"));
+}
+
 Options
 initialise_diagnostics(Field2D& neutral_density, Field2D& ion_density,
                        std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
@@ -928,7 +934,7 @@ int main(int argc, char** argv) {
                                      neso_mesh);
     // diagnose the initial condition
     std::string particle_data_filename =
-        fmt::format("bout_particle_moments_{}.nc", mpi_rank);
+        fmt::format("{}/bout_particle_moments_{}.nc", get_restart_output_dir(), mpi_rank);
     Options bout_output_data =
         initialise_diagnostics(neutral_density, ion_density, dg0, A_particle_group,
                                neso_mesh, h_project1, particle_data_filename);
