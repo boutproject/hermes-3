@@ -935,7 +935,7 @@ int main(int argc, char** argv) {
                                      neso_mesh);
     // diagnose the initial condition
     std::string particle_data_filename =
-        fmt::format("{}/bout_particle_moments_{}.nc", get_restart_output_dir(), mpi_rank);
+        fmt::format("{}/BOUT.dmp.{}.nc", get_restart_output_dir(), mpi_rank);
     Options bout_output_data = initialise_diagnostics(
         bout_mesh, neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
         h_project1, particle_data_filename);
