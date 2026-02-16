@@ -23,15 +23,17 @@
 struct NeutralBoundary : public Component {
   NeutralBoundary(std::string name, Options& options, Solver*);
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
 
 private:
   std::string name; ///< Short name of species e.g "d"
 
   BoutReal Tnorm; // Temperature normalisation [eV]
 
-  BoutReal target_energy_refl_factor, sol_energy_refl_factor, pfr_energy_refl_factor; ///< Fraction of energy retained after reflection
-  BoutReal target_fast_refl_fraction, sol_fast_refl_fraction, pfr_fast_refl_fraction; ///< Fraction of neutrals undergoing fast reflection
+  BoutReal target_energy_refl_factor, sol_energy_refl_factor,
+      pfr_energy_refl_factor; ///< Fraction of energy retained after reflection
+  BoutReal target_fast_refl_fraction, sol_fast_refl_fraction,
+      pfr_fast_refl_fraction; ///< Fraction of neutrals undergoing fast reflection
 
   Field3D target_energy_source, wall_energy_source; ///< Diagnostic for power loss
 
@@ -39,8 +41,8 @@ private:
 
   bool lower_y; ///< Boundary condition at lower y?
   bool upper_y; ///< Boundary condition at upper y?
-  bool sol; ///< Boundary condition at sol?
-  bool pfr; ///< Boundary condition at pfr?
+  bool sol;     ///< Boundary condition at sol?
+  bool pfr;     ///< Boundary condition at pfr?
 
   ///
   /// state
@@ -57,8 +59,7 @@ private:
 };
 
 namespace {
-RegisterComponent<NeutralBoundary>
-    registercomponentneutralboundary("neutral_boundary");
+RegisterComponent<NeutralBoundary> registercomponentneutralboundary("neutral_boundary");
 }
 
 #endif // NEUTRAL_BOUNDARY_H

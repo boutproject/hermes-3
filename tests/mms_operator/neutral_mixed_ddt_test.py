@@ -156,6 +156,7 @@ def neutral_mixed_equations(evolve_momentum=False,
         "interactive_plots" : False,
         "conservation_test" : conservation_test,
         "expected_convergence_order" : expected_convergence_order,
+        "nonorthogonal_operators" : True,
     }
     return test_input
 

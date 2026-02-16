@@ -364,7 +364,9 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(alfven-wave)
   hermes_add_integrated_test(collfreq-braginskii-afn)
   hermes_add_integrated_test(collfreq-multispecies)
+  hermes_add_integrated_test(2D-production)
   hermes_add_integrated_test(2D-energy)
+  hermes_add_integrated_test(2D-recycling)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -410,6 +412,14 @@ if(HERMES_TESTS)
            WORKING_DIRECTORY tests/mms_operator/
            COMMAND python3 neutral_mixed_ddt_test.py)
     set_tests_properties(rhs_mms_neutral_mixed PROPERTIES LABELS integration)
+  endif()
+
+  # Integrated tests of VANTAGE-Reactions+NESO-Particles features
+  if(HERMES_USE_VANTAGE)
+    add_test(NAME bout_particle_push
+           WORKING_DIRECTORY tests/integrated/particle-pusher/
+           COMMAND runtest)
+    set_tests_properties(bout_particle_push PROPERTIES LABELS integration)
   endif()
 endif()
 

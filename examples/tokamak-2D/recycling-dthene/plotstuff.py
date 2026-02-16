@@ -4,11 +4,13 @@ import xhermes
 
 # Following two lines needed so all variables are shown when printing the Dataset
 import xarray as xr
+
 xr.set_options(display_max_rows=1000)
 
 # Set better figure size
 from matplotlib import pyplot as plt
-plt.rcParams["figure.figsize"] = (16,8)
+
+plt.rcParams["figure.figsize"] = (16, 8)
 
 ds = xhermes.open(".", geometry="toroidal", gridfilepath="tokamak.nc")
 print(ds)
