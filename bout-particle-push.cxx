@@ -608,6 +608,8 @@ initialise_diagnostics(Mesh* bout_mesh, Field2D& neutral_density, Field2D& ion_d
   Field2D total_density = ion_density + neutral_density;
   bout_output_data["total_mass"] = calculate_total_mass(total_density, neso_mesh);
   bout_output_data["total_mass"].attributes["time_dimension"] = "t";
+  bout_output_data["t_array"] = 0.0;
+  bout_output_data["t_array"].attributes["time_dimension"] = "t";
   // Mesh metadata
   bout_mesh->outputVars(bout_output_data);
 
@@ -620,7 +622,7 @@ void update_diagnostics(Field2D& neutral_density, Field2D& ion_density,
                         std::shared_ptr<ParticleGroup>& A_particle_group,
                         std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
                         std::vector<double>& h_project1, Options& bout_output_data,
-                        std::string particle_data_filename) {
+                        std::string particle_data_filename, BoutReal sim_time) {
   // update density in Options object and write
   bout_output_data["neutral_density"] = neutral_density;
   bout_output_data["ion_density"] = ion_density;
@@ -629,6 +631,8 @@ void update_diagnostics(Field2D& neutral_density, Field2D& ion_density,
   bout_output_data["total_neutral_mass"] =
       calculate_total_mass(neutral_density, neso_mesh);
   bout_output_data["total_ion_mass"] = calculate_total_mass(ion_density, neso_mesh);
+  bout_output_data["t_array"] = sim_time;
+  // bout_output_data["t_array"] = 0.0;
   // Append data to file
   bout::OptionsIO::create({{"file", particle_data_filename}, {"append", true}})
       ->write(bout_output_data);
@@ -733,6 +737,7 @@ int main(int argc, char** argv) {
         Options::root()["neso_particles"]["npart_per_cell"].withDefault(1);
     const REAL dt = Options::root()["neso_particles"]["dt"].withDefault(0.01);
     const int nsteps = Options::root()["neso_particles"]["nsteps"].withDefault(10);
+    BoutReal sim_time = 0.0;
     Field2D ion_density = Field2D(0.0, bout_mesh);
     Field2D neutral_density = Field2D(0.0, bout_mesh);
     // Create a mesh interface from the DM
@@ -955,6 +960,7 @@ int main(int argc, char** argv) {
     for (int stepx = 0; stepx < nsteps; stepx++) {
       // nprint("step:", stepx);
       output << "step:" << std::to_string(stepx) << std::endl;
+      sim_time += dt;
       A_particle_group->hybrid_move();
       A_particle_group->cell_move();
       lambda_apply_timestep(static_particle_sub_group(A_particle_group));
@@ -970,7 +976,7 @@ int main(int argc, char** argv) {
                                        accumulator_transform, source_zeroer, neso_mesh);
       // diagnose timestep stepx
       update_diagnostics(neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
-                         h_project1, bout_output_data, particle_data_filename);
+                         h_project1, bout_output_data, particle_data_filename, sim_time);
     }
     // uncomment to write a trajectory
     h5part.close();
