@@ -579,7 +579,7 @@ std::string get_restart_output_dir() {
 }
 
 Options
-initialise_diagnostics(Field2D& neutral_density, Field2D& ion_density,
+initialise_diagnostics(Mesh* bout_mesh, Field2D& neutral_density, Field2D& ion_density,
                        std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
                        std::shared_ptr<ParticleGroup>& A_particle_group,
                        std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
@@ -600,8 +600,9 @@ initialise_diagnostics(Field2D& neutral_density, Field2D& ion_density,
   Field2D total_density = ion_density + neutral_density;
   bout_output_data["total_mass"] = calculate_total_mass(total_density, neso_mesh);
   bout_output_data["total_mass"].attributes["time_dimension"] = "t";
-  // std::string particle_data_filename =
-  // fmt::format("bout_particle_moments_{}.nc",mpi_rank);
+  // Mesh metadata
+  bout_mesh->outputVars(bout_output_data);
+
   bout::OptionsIO::create(particle_data_filename)->write(bout_output_data);
   return bout_output_data;
 }
@@ -935,9 +936,9 @@ int main(int argc, char** argv) {
     // diagnose the initial condition
     std::string particle_data_filename =
         fmt::format("{}/bout_particle_moments_{}.nc", get_restart_output_dir(), mpi_rank);
-    Options bout_output_data =
-        initialise_diagnostics(neutral_density, ion_density, dg0, A_particle_group,
-                               neso_mesh, h_project1, particle_data_filename);
+    Options bout_output_data = initialise_diagnostics(
+        bout_mesh, neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
+        h_project1, particle_data_filename);
     // mass for conservation check
     Field2D total_density = neutral_density + ion_density;
     double total_mass_initial = calculate_total_mass(total_density, neso_mesh);
