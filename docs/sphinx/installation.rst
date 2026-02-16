@@ -3,7 +3,7 @@
 Installation
 ===============
 
-Hermes-3 can be installed using CMake or Spack. Using CMake is a more manual process 
+Hermes-3 can be installed using CMake or spack. Using CMake is a more manual process 
 which requires you to provide all of the dependencies yourself, but it has been used
 extensively and the documentation provides a module list for several HPC systems.
 
@@ -301,7 +301,8 @@ version, the instructions below also allow you to compile BOUT++ and Hermes-3 as
 development workflow, i.e. using any changes you have made to the code in the working tree of your
 local repository.
 
-These instructions were last tested using Ubuntu 22.04.1 and spack version 0.23.1.
+These instructions were last tested using Ubuntu 22.04.1 and spack version 1.1.0.
+Spack versions prior to 1.0.0 are not compatible with our package files and are no longer supported.
 The default environment configuration assumes you have gcc installed.
 
 .. _sec-hermes-install-spack:
@@ -327,7 +328,7 @@ version v1.1.0 has been tested:
    git clone -c feature.manyFiles=true --depth=2 https://github.com/spack/spack.git -b v1.1.0
 
 .. important::
-   If you have an existing Spack installation of a version before v1.0.0, you will need to uninstall it first.
+   If you have an existing spack installation of a version before v1.0.0, you will need to uninstall it first.
    Do this by uninstalling all packages and deleting the spack directory:
 
    .. code-block:: bash
@@ -368,10 +369,33 @@ and edit it to include
          - $spack/var/spack/stage
          - $user_cache_path/stage
 
+To add gcc to your user-level package list, and register it as a compiler that spack can use, run
 
+.. code-block:: bash
+
+   spack compiler find gcc
+
+If you don't do this, the below instructions should still work, but spack will modify the (version-controlled)
+environment file, spack.yaml, to include the gcc installation details.
+
+.. important::
+   Version 1.1.0 of spack sets the built-in package repository to version `releases/v2025.11`.
+   The PETSc package in that version has a bug, related to the Hypre dependency, which causes the installation of BOUT++ to fail.
+   To work around this you can use the `develop` version of the spack-packages repo instead.
+   Edit $SPACK_ROOT/etc/spack/defaults/base/repos.yaml as follows:
+
+   .. code-block:: yaml
+
+      repos:
+         builtin:
+            git: https://github.com/spack/spack-packages.git branch: develop # branch: releases/v2025.11
+
+   and then run `spack repo update`.
+
+   This workaround should not be required when using spack versions newer than 1.1.0.
 
 Install Hermes-3 and dependencies
-~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The following instructions assume you have already git-cloned Hermes-3 and are in the root directory
 of the repository.
@@ -381,16 +405,16 @@ repository checked out:
 
 .. code-block:: bash
 
-   git submodule update --init
+   git submodule update --init --recursive
 
-Then activate the Spack environment described in ``spack.yaml`` by using the wrapper script: 
+Then activate the spack environment described in ``spack.yaml`` by using the wrapper script: 
 
 .. code-block:: bash
 
    . activate_h3env
 
 This file provides some useful bash functions and aliases, but it's also possible to use standard
-Spack commands to activate the environment. You should see your prompt change to ``[hermes-3]``, 
+spack commands to activate the environment. You should see your prompt change to ``[hermes-3]``, 
 indicating that the spack environment is active.
 
 .. note::
@@ -414,12 +438,11 @@ To install Hermes-3 and all of its dependencies:
 
 where the ``-j`` argument controls the number of parallel processes used to build packages.
 
-This initial install takes some time to complete, because spack builds a large number of low-level
-packages. It's possible to speed things up by defining a `packages.yaml
-<https://spack.readthedocs.io/en/latest/packages_yaml.html>`_  that points to 'external' (system)
-package versions, but unless storage space is a big concern, letting spack build its own versions is
-usually the most trouble-free approach. This step rarely need to be repeated in its entirety unless
-moving to another version of the same compiler, or switching to a different version of spack itself.
+This initial install takes some time to complete, because spack builds a large number of low-level packages. It's
+possible to speed things up by adding system-installed packages to your `packages.yaml
+<https://spack.readthedocs.io/en/latest/packages_yaml.html>`_  file, but unless storage space is a big concern, letting
+spack build its own versions is usually the most trouble-free approach. This step rarely need to be repeated in its
+entirety unless moving to another version of the same compiler, or switching to a different version of spack itself.
 
 The location in which spack builds packages is set via your user configuration options (see
 :ref:`sec-hermes-install-spack`), but for convenience, the environment wrapper script automatically generates links to
@@ -430,16 +453,17 @@ or `spack uninstall` command is run.
 
 
 Changing Hermes-3 and BOUT++ versions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Sometimes, you may want to change the version of either Hermes-3 or BOUT++. They are included in
-the Spack environment as `Develop` modules, which means they are compiled from their local directories.
+the spack environment as `develop` modules, which means they are compiled from their local directories.
 To change the version, simply check out a different commit in either your Hermes-3 repo or the
 BOUT++ submodule in `external/BOUT-dev` and run `spack install` again.
 
 .. tip::
-   This method does not allow a custom build directory, and so your previous build is typically overwritten.
-   In order to compile many different builds, you should compile using CMake directly, as described below.
+   It is possible to set a build directory with, e.g. `spack develop -p . --build-directory ./builds/mybuild hermes-3`,
+   but this modifies spack.yaml and is a bit awkward if you need to switch between builds frequently. A more
+   straightforward approach is to use CMake directly, as described below.
 
 .. .. _sec-hermes-cmake-in-spackenv:
 Developing Hermes-3 and BOUT++ in the Spack environment
@@ -527,15 +551,15 @@ then (re-)install dependencies as necessary:
    automatically.
 
 Using Spack in HPC environments
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You should be able to use Spack on any HPC system by cloning the Spack repository and following the 
+You should be able to use spack on any HPC system by cloning the spack repository and following the 
 instructions as normal. However, many HPC systems have module environments compiled in a way which
-is optimised for that system. In order to take advantage of this, you can configure Spack to use
+is optimised for that system. In order to take advantage of this, you can configure spack to use
 the system modules as 'external' packages. You can also use ``spack external find`` to automatically
-detect any enabled modules and make them available in the Spack environment.
-See the `Spack HPC tutorial <https://spack-tutorial.readthedocs.io/en/latest/tutorial_modules.html>`_
-for more information on using Spack in HPC environments.
+detect any enabled modules and make them available in the spack environment.
+See the `spack HPC tutorial <https://spack-tutorial.readthedocs.io/en/latest/tutorial_modules.html>`_
+for more information on using spack in HPC environments.
 
 
 Useful spack commands/tips

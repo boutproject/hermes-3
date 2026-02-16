@@ -16,6 +16,9 @@ public:
     for (const auto& v : f3d) {
       state[v.name] = *(v.var);
     }
+    for (const auto& v : f2d) {
+      state[v.name] = *(v.var);
+    }
     return state;
   }
 
@@ -23,6 +26,9 @@ public:
   Options getTimeDerivs() const {
     Options ddts;
     for (const auto& v : f3d) {
+      ddts[v.name] = *(v.F_var);
+    }
+    for (const auto& v : f2d) {
       ddts[v.name] = *(v.F_var);
     }
     return ddts;

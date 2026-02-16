@@ -1,0 +1,198 @@
+#
+
+nout = 5                     # Number of output timesteps
+timestep = 0.0001        
+
+MZ = 1
+NXPE = 1
+
+
+tnorm_setting = 100 
+core_ti = 1500 / tnorm_setting   
+core_ne = 7e19 / hermes:Nnorm 
+
+initial_ti = core_ti * 0.1
+initial_ne = core_ne * 1
+
+initial_pi = initial_ti * initial_ne
+ 
+
+[input]
+error_on_unused_options = true    # Prevents crash from custom inputs
+
+[mesh]
+file = "grid_test2.nc"
+
+[mesh:paralleltransform]
+type = shifted
+
+[solver]
+type = pvode
+mxstep = 1e9
+
+[hermes]
+components = (d+, d, e,
+              sheath_boundary_simple, braginskii_collisions, braginskii_friction,
+              braginskii_heat_exchange, reactions, electron_force_balance,
+              braginskii_conduction, recycling)
+
+Nnorm = 1e17  # Reference density [m^-3]
+Bnorm = 1   # Reference magnetic field [T]
+Tnorm = tnorm_setting   # Reference temperature [eV]
+qe = 1.60218e-19
+Mp = 1.67262e-27
+Cs0 = sqrt(qe * Tnorm / Mp)
+Omega_ci = qe * Bnorm / Mp
+rho_s0 = Cs0 / Omega_ci
+
+[braginskii_collisions]
+diagnose = true
+electron_electron = true
+ion_ion = true
+electron_ion = true
+
+# EN
+electron_neutral = false
+
+# IN
+ion_neutral = false
+
+# NN
+neutral_neutral = false
+
+################################################################
+# Ions
+
+[d+]
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
+
+AA = 2
+charge = 1
+
+thermal_conduction = true
+kappa_limit_alpha = -1 # No flux limiter for ions
+conduction_collisions_mode = braginskii
+
+recycle_as = d
+target_recycle = true
+target_recycle_multiplier = 1
+target_recycle_energy = 3.5
+
+sol_recycle = true
+sol_recycle_multiplier = 1
+sol_recycle_energy = 3.5
+
+pfr_recycle = true
+pfr_recycle_multiplier = 1
+pfr_recycle_energy = 3.5
+
+neutral_pump = true
+pump_recycle_multiplier = 0.968   
+
+target_fast_recycle_energy_factor = 0.48
+target_fast_recycle_fraction = 0.80
+
+anomalous_nu = 0.2
+diagnose = true
+
+[Nd+]
+
+function = initial_ne
+bndry_sol = decaylength(0.03 / hermes:rho_s0)
+bndry_pf = decaylength(0.03 / hermes:rho_s0)
+bndry_all = neumann   # All boundaries neumann
+
+[Pd+]
+
+function = initial_pi
+bndry_sol = decaylength(0.03 / hermes:rho_s0)
+bndry_pf = decaylength(0.03 / hermes:rho_s0)
+bndry_all = neumann   # All boundaries neumann
+
+################################################################
+# Neutrals
+
+[d]
+type = neutral_mixed, neutral_boundary
+flux_limit = true
+
+AA = 2
+diagnose = true
+output_ddt = true
+precondition = true
+diffusion_collisions_mode = afn
+
+neutral_boundary_sol = true
+neutral_boundary_pfr = true
+neutral_boundary_upper_y = true
+neutral_boundary_lower_y = true
+
+target_energy_refl_factor = 0.75
+sol_energy_refl_factor = 0.67
+pfr_energy_refl_factor = 0.67
+
+target_fast_refl_fraction = 0.80
+sol_fast_refl_fraction = 0.70
+pfr_fast_refl_fraction = 0.70
+
+[Pd]
+bndry_sol = neumann  # This prevents advection of density or energy out of the SOL
+bndry_core = free_o3  # This allows density and energy advection out of core
+bndry_all = neumann
+
+[Nd]
+bndry_sol = neumann 
+bndry_core = free_o3  # This allows density and energy advection out of core
+bndry_all = neumann
+
+[Td]
+bndry_sol = neumann  
+bndry_all = neumann
+
+[Dnnd]
+bndry_all = neumann
+
+
+################################################################
+# Electrons
+
+[e]
+# Set electron density from quasineutrality,
+# and parallel flow from ion flow, assuming no currents
+type = quasineutral, evolve_pressure, zero_current, anomalous_diffusion
+
+AA = 1/1836
+charge = -1
+thermal_conduction = true
+kappa_limit_alpha = 0.2
+conduction_collisions_mode = braginskii
+
+anomalous_nu = 0.2
+diagnose = true
+
+[Pe]
+function = initial_pi
+# bndry_core = dirichlet(core_pi) # Now there is a source
+bndry_sol = decaylength(0.03 / hermes:rho_s0)
+bndry_pf = decaylength(0.03 / hermes:rho_s0)
+bndry_all = neumann   # All other boundaries low density
+
+################################################################
+[sheath_boundary_simple]
+gamma_i = 2.5
+gamma_e = 4.5
+
+[recycling]
+
+species = d+
+
+[reactions]
+
+diagnose = true
+
+type = (
+        d + e -> d+ + 2e,     # Deuterium ionisation
+        d+ + e -> d,          # Deuterium recombination
+        d + d+ -> d+ + d,     # Charge exchange
+       )
+

@@ -347,6 +347,8 @@ def run_neutral_mixed_manufactured_solutions_test(test_input):
    neutral_conduction = {neutral_conduction}
    neutral_viscosity = {neutral_viscosity}
    normalise_sources = false
+   nonorthogonal_operators = true
+
    [Nd]
 
    function = {Nd_string}
