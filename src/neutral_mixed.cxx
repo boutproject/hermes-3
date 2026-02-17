@@ -390,7 +390,7 @@ void NeutralMixed::finally(const Options& state) {
     } else {
       ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
     }
-    ddt(Pn) -= (2. / 3) * Vn * Grad_par(Pn);
+    ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
   } else {
     ddt(Pn) = 0.0;
   }
