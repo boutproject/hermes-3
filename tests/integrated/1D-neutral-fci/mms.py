@@ -63,7 +63,7 @@ viscosity_source = (rho_s**2)* ( DDX(eta_n * DDX(Vn)) + DDZ(eta_n * DDZ(Vn)) + D
 
 dNndt = -Div_par(Nn * Vn) * rho_s
 DNVndt = (-AA * Div_par(NVn * Vn) - Grad_par(Pn)) * rho_s + viscosity_source
-dPndt = (-(5.0 / 3.0) * Div_par(Pn * Vn) - (2.0 / 3.0) * Vn * Grad_par(Pn)) * rho_s + (2.0 / 3.0) * (rho_s**2)*(DDY(kappa_n*DDY(Tn)) + DDX(kappa_n*DDX(Tn)) + DDZ(kappa_n*DDZ(Tn))) - (2.0/3.0) * Vn * viscosity_source
+dPndt = (-(5.0 / 3.0) * Div_par(Pn * Vn) + (2.0 / 3.0) * Vn * Grad_par(Pn)) * rho_s + (2.0 / 3.0) * (rho_s**2)*(DDY(kappa_n*DDY(Tn)) + DDX(kappa_n*DDX(Tn)) + DDZ(kappa_n*DDZ(Tn))) - (2.0/3.0) * Vn * viscosity_source
 
 
 
