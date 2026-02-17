@@ -81,7 +81,6 @@ private:
                               ///<
                               ///< velocity
 
-
   // TODO: debug variables to be removed
   Field3D debug_ion_energy_flow;
   Field3D debug;
