@@ -489,6 +489,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
   set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
 
   // Add the total sheath power flux to the tracker of y power flows
+  // WARNING: this is only the additional source and is missing advection
   add(electrons["energy_flow_ylow"], fromFieldAligned(electron_sheath_power_ylow));
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
