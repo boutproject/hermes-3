@@ -1,0 +1,70 @@
+nout = 50
+timestep = 0.1
+
+
+
+
+
+minvalue= (-2.0+0.5) / (nx - 2*2)
+maxvalue= (nx-3+0.5) / (nx - 2*2)
+xmax = 0.4
+xmin = 0.2
+xl = (xmax - xmin)*(x-minvalue)/(maxvalue-minvalue) + xmin
+yl = y
+zl = z
+
+
+[input]
+
+error_on_unused_options = false
+
+[mesh]
+
+extrapolate_y = false
+
+[mesh:paralleltransform]
+type = fci
+
+[mesh]
+
+symmetricGlobalX = true
+
+[solver]
+mxstep = 10000
+rtol = 1e-8
+atol = 1e-12
+mms = true  # Run with MMS sources and output diagnostics
+mms_initialise = true
+cvode_max_order = 3
+type = cvode
+
+
+[hermes]
+components = h+
+
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[h+]  # Ions
+type = evolve_density, anomalous_diffusion_3d
+charge = 1.0
+AA = 1.0
+
+mms = true
+
+anomalous_D = 1.0 
+use_finite_difference = true
+
+[Nh+]
+
+
+
+solution = 1. - 0.5*cos(0.5 - yl)*sin(31.41592653589793*(-0.2 + xl))*sin(0.1 - 4*zl)
+source = -1.0438816894489344e-8*((-15.707963267948966*cos(31.41592653589793*(-0.2 + xl))*cos(0.5 - yl)*sin(0.1 - 4*zl))/xl + 493.48022005446785*cos(0.5 - yl)*sin(31.41592653589793*(-0.2 + xl))*sin(0.1 - 4*zl) + (8.*cos(0.5 - yl)*sin(31.41592653589793*(-0.2 + xl))*sin(0.1 - 4*zl))/power(xl,2))
+
+
+
+
+bndry_all = dirichlet_o2(`Nh+:solution`)
