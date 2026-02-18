@@ -27,7 +27,7 @@ ImmersedBoundary::ImmersedBoundary() {
   ASSERT0(mesh->get(num_bounds,          "nb") == 0);
   ASSERT0(mesh->get(mid_pts,        "mid_pts") == 0);
   ASSERT0(mesh->get(bnorms,          "bnorms") == 0);
-  ASSERT0(mesh->get(bd_len,          "bd_len") == 0);
+  ASSERT0(mesh->get(bd_area,        "bd_area") == 0);
   ASSERT0(mesh->get(s1,                  "s1") == 0);
   ASSERT0(mesh->get(s2,                  "s2") == 0);
   ASSERT0(mesh->get(bweights,      "bweights") == 0);
@@ -76,7 +76,7 @@ ImmersedBoundary::ImmersedBoundary() {
     }
   }
 
-  //IMM_BNDRY_TODO: Need upsert just to replace RGN_NOBNDRY if considered worthwhile.
+  //IMM_BNDRY_TODO: Only need upsert to replace RGN_NOBNDRY if considered worthwhile.
   //FV operators work on +x/+z faces only so subset of ghosts here.
   mesh->upsertRegion3D("RGN_dagp_fv_xbndry",   Region<Ind3D>(xbndry_indices));
   mesh->upsertRegion3D("RGN_dagp_fv_zbndry",   Region<Ind3D>(zbndry_indices));
@@ -193,8 +193,7 @@ void ImmersedBoundary::ComputeBoundaryFluxes(const Field3D& a, const Field3D& f,
     }
 
     //Flux assumes normal is outward for dfdn.
-    const BoutReal depthFac = 1.0; //IMM_BNDRY_TODO: Use toroidal curvature (at cell center?).
-    const auto bdy_flux = -a[i] * bd_len[b] * depthFac * dfdn;
+    const auto bdy_flux = -a[i] * bd_area[b] * dfdn;
     result[i] -= bdy_flux;
   }
 }
@@ -298,13 +297,11 @@ void ImmersedBoundary::SetBoundary(Field3D& f) {
     //NOTE: This is "Gauss–Seidel-like" because we update f in-place as we sweep.
     BOUT_FOR(i, f.getRegion("RGN_IMM_BNDRY_GST")) {
       const auto gid = ghost_ids[i];
-      if (gid >= 0) {
-        //If first iteration or more than 1 ghost (GS iteration to converge).
-        if (it == 0 || (it > 0 && ghost_count[gid] > 1)) {
-          const auto image_val = GetImageValue(f, gid, bc_val, bc_type);
-          const auto ghost_val = GetGhostValue(image_val, gid, bc_val, bc_type);
-          f[i] = ghost_val;
-        }
+      //If first iteration or more than 1 ghost (GS iteration to converge).
+      if (it == 0 || (it > 0 && ghost_count[gid] > 1)) {
+        const auto image_val = GetImageValue(f, gid, bc_val, bc_type);
+        const auto ghost_val = GetGhostValue(image_val, gid, bc_val, bc_type);
+        f[i] = ghost_val;
       }
     }
   }

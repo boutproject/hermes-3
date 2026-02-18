@@ -59,7 +59,7 @@ private:
   BoutReal s1 = 0;
   BoutReal s2 = 0;
   Array<BoutReal> bds;
-  Array<BoutReal> bd_len;
+  Array<BoutReal> bd_area;
   Matrix<BoutReal> mid_pts;
   Matrix<BoutReal> bnorms;
   Matrix<BoutReal> bbase_inds;

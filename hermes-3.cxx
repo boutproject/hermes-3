@@ -166,10 +166,32 @@ private:
   std::shared_ptr<FieldGenerator> gen; // Generator
 };
 
+//IMM_BNDRY_TODO: Get normalized z coord working with evolving variables.
+// A 'zn' field. A version of 'z' index normalised between 0 and 1 on Z boundaries
+  class FieldZnorm : public FieldGenerator {
+  public:
+    FieldGeneratorPtr clone(const std::list<FieldGeneratorPtr> UNUSED(args)) override {
+      return std::make_shared<FieldZnorm>();
+    }
+
+    double generate(const bout::generator::Context& ctx) override {
+      double zind = (ctx.z() / TWOPI) * mesh->GlobalNz; // Global Z index
+      int zbndry = mesh->zstart; // Number of Z boundary cells
+      // 0 and 1 should be on the boundaries                  
+      double zlower = static_cast<double>(zbndry) - 0.5; // Z index of lower boundary
+      double zupper = static_cast<double>(mesh->GlobalNz - zbndry) - 0.5; // Z index of upper boundary
+      return (zind - zlower) / (zupper - zlower);
+    }
+
+    std::string str() const override { return "zn"; }
+  };
+
 int Hermes::init(bool restarting) {
 
   auto &options = Options::root()["hermes"];
-  
+
+  FieldFactory::get()->addGenerator("zn", std::make_shared<FieldZnorm>());
+
   output.write("\nGit Version of Hermes: {:s}\n", hermes::version::revision);
   options["revision"] = hermes::version::revision;
   options["revision"].setConditionallyUsed();
