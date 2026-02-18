@@ -24,6 +24,7 @@ archive_path = "MMS_Circle_fci_XZ.tar.xz"
 try:
   with tarfile.open(gridpath + archive_path, "r:xz") as tar:
     tar.extractall(path=gridpath)
+    print("Successfully extracted the grids!")
 except:
   raise FileNotFoundError("Could not fine mms slab y file to extract")
 
