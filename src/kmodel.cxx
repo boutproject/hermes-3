@@ -28,7 +28,6 @@ BoutReal floor(BoutReal value, BoutReal min) {
 }
 
 Kmodel::Kmodel(std::string name, Options& alloptions, Solver* solver) {
-  AUTO_TRACE();
 
   solver->add(k, "k");
 
@@ -80,14 +79,12 @@ Kmodel::Kmodel(std::string name, Options& alloptions, Solver* solver) {
 }
 
 void Kmodel::transform(Options& state) {
-  AUTO_TRACE();
 
   auto& fields = state["fields"];
   Options& allspecies = state["species"];
 
   bool upwind = false;
 
-  AUTO_TRACE();
   auto coord = mesh->getCoordinates();
 
   k.applyBoundary();
@@ -223,7 +220,6 @@ void Kmodel::finally(const Options& state) {
 
 
 void Kmodel::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
 
   auto Nnorm = get<BoutReal>(state["Nnorm"]);

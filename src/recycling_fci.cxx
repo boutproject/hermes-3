@@ -11,7 +11,6 @@
 using bout::globals::mesh;
 
 RecyclingFCI::RecyclingFCI(std::string name, Options& alloptions, Solver*) {
-  AUTO_TRACE();
 
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
@@ -156,7 +155,6 @@ RecyclingFCI::RecyclingFCI(std::string name, Options& alloptions, Solver*) {
 }
 
 void RecyclingFCI::transform(Options& state) {
-  AUTO_TRACE();
 
   // Get metric tensor components
   Coordinates* coord = mesh->getCoordinates();
@@ -255,7 +253,6 @@ void RecyclingFCI::transform(Options& state) {
 }
 
 void RecyclingFCI::outputVars(Options& state) {
-  AUTO_TRACE();
 
   if (neutral_pump) {
     // Save the pump mask as a time-independent field

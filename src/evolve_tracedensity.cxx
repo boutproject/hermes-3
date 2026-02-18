@@ -15,7 +15,6 @@ using bout::globals::mesh;
 
 EvolveTraceDensity::EvolveTraceDensity(std::string name, Options& alloptions, Solver* solver)
     : name(name) {
-  AUTO_TRACE();
 
   auto& options = alloptions[name];
 
@@ -121,7 +120,6 @@ EvolveTraceDensity::EvolveTraceDensity(std::string name, Options& alloptions, So
 }
 
 void EvolveTraceDensity::transform(Options& state) {
-  AUTO_TRACE();
 
   tN.applyBoundary();
   mesh->communicate(tN);
@@ -144,7 +142,6 @@ void EvolveTraceDensity::transform(Options& state) {
 }
 
 void EvolveTraceDensity::finally(const Options& state) {
-  AUTO_TRACE();
 
   auto& species = state["species"][name];
 
