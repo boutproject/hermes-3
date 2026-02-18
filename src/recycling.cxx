@@ -178,9 +178,6 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
                        .withDefault<bool>(false);
   }
 
-  if (target_recycle) {
-    setPermissions(readIfSet("species:{from}:energy_flow_ylow"));
-  }
   if (sol_recycle or pfr_recycle) {
     setPermissions(readIfSet("species:{from}:energy_flow_xlow"));
     setPermissions(readIfSet("species:{from}:particle_flow_xlow"));
@@ -239,16 +236,6 @@ void Recycling::transform_impl(GuardedOptions& state) {
       if (!has_sheath_boundary_simple and (channel.target_fast_recycle_fraction > 0.0)) {
         throw BoutException(
             "Currently only sheath_boundary_simple is supported for fast recycling.");
-      }
-
-      if (has_sheath_boundary_simple) {
-        // Fast recycling needs to know how much energy the "from" species is losing to
-        // the boundary
-        if (species_from.isSet("energy_flow_ylow")) {
-          energy_flow_ylow = get<Field3D>(species_from["energy_flow_ylow"]);
-        } else {
-          energy_flow_ylow = 0.0;
-        }
       }
 
       channel.target_recycle_density_source = 0.0;
@@ -471,7 +458,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
       // Flow out of domain is positive in the positive coordinate direction
       Field3D radial_particle_outflow = particle_flow_xlow;
-      Field3D radial_energy_outflow = energy_flow_xlow;
+      Field3D radial_energy_outflow = f;
 
       if (mesh->lastX()) { // Only do this for the processor which has the edge region
         for (int iy = 0; iy < mesh->LocalNy; iy++) {

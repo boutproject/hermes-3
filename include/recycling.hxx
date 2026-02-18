@@ -72,7 +72,7 @@ private:
 
   Field3D density_source,
       energy_source; ///< Recycling particle and energy sources for all locations
-  Field3D energy_flow_ylow, energy_flow_xlow; ///< Cell edge fluxes used for calculating
+  Field3D energy_flow_xlow; ///< Cell edge fluxes used for calculating
                                               ///<
                                               ///< fast recycling energy source
   Field3D particle_flow_xlow; ///< Radial wall particle fluxes for recycling calc. No need
