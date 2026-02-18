@@ -48,6 +48,10 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
     .doc("Include input for major radius R when using bounce frequency modification to viscosity")
     .withDefault(2.0);
 
+  heating = options["heating"]
+    .doc("Viscous heating. Turn off at beginning of simulations")
+    .withDefault(true);
+  
   if (perpendicular) {
     // Read curvature vector
     try {
@@ -235,7 +239,9 @@ void IonViscosity::transform(Options& state) {
         sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB.asField3DParallel() * V, dummy);
 
     add(species["momentum_source"], div_Pi_cipar);
-    subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+    if (heating) {
+      subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+    }
 
     if (!perpendicular) {
       if (diagnose) {

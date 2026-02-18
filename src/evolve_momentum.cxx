@@ -46,12 +46,24 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
                    .doc("Include ExB advection?")
                    .withDefault<bool>(true);
 
+  scale_ExB = options["scale_ExB"]
+                   .doc("Scale ExB flow?")
+                   .withDefault<BoutReal>(1.0);
+  
   poloidal_flows = options["poloidal_flows"]
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
+
+  const Options& units = alloptions["units"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Lnorm = units["meters"];
+  hyper_nv = options["hyper_nv"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
+
+
+  
   V.setBoundary(std::string("V") + name);
 
   diagnose = options["diagnose"]
@@ -100,6 +112,10 @@ void EvolveMomentum::transform(Options& state) {
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   NV.applyBoundary();
+  mesh->communicate(NV);
+  NV.applyParallelBoundary();
+
+  
   V = NV / (AA * Nlim);
   V.name = Vname;
   mesh->communicate(V);
@@ -156,7 +172,7 @@ void EvolveMomentum::finally(const Options& state) {
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
       if (exb_advection) {
-        ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+        ddt(NV) = -scale_ExB * Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
                                          true) * bracket_factor; // ExB drift
       } else {
         ddt(NV) = 0.0;
@@ -255,6 +271,12 @@ void EvolveMomentum::finally(const Options& state) {
     ddt(NV) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(NV);
   }
 
+  if (hyper_nv > 0) {
+    // Form of hyper-viscosity                                                                                                                                                                                    
+    ddt(NV) += hyperdiffusion(hyper_nv, NV);
+  }
+  
+
   // Other sources/sinks
   if (species.isSet("momentum_source")) {
     ddt(NV) += setName(get<Field3D>(species["momentum_source"]), "momentum_source {}", momentum_source.name);
@@ -315,8 +337,7 @@ void EvolveMomentum::outputVars(Options& state) {
        {"species", name},
        {"source", "evolve_momentum"}});
 
-  if (diagnose) {
-    set_with_attrs(state[std::string("V") + name], V,
+  set_with_attrs(state[std::string("V") + name], V,
                    {{"time_dimension", "t"},
                     {"units", "m / s"},
                     {"conversion", Cs0},
@@ -325,6 +346,7 @@ void EvolveMomentum::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
 
+  if (output_ddt || diagnose) {
     set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NV),
                    {{"time_dimension", "t"},
                     {"units", "kg m^-2 s^-2"},
@@ -332,6 +354,10 @@ void EvolveMomentum::outputVars(Options& state) {
                     {"long_name", std::string("Rate of change of ") + name + " momentum"},
                     {"species", name},
                     {"source", "evolve_momentum"}});
+  }
+
+  
+  if (diagnose) {
 
     if (momentum_source.isAllocated()) {
       set_with_attrs(state[std::string("SNV") + name], momentum_source,
@@ -367,5 +393,7 @@ void EvolveMomentum::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
+
+    
   }
 }

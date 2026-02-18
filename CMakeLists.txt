@@ -60,16 +60,19 @@ set(HERMES_SOURCES
     src/ionisation.cxx
     src/radiation.cxx
     src/div_ops.cxx
+    src/fci_gridcheck.cxx
     src/neutral_mixed.cxx
     src/neutral_full_velocity.cxx
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
     src/electron_viscosity.cxx
     src/evolve_density.cxx
+    src/evolve_tracedensity.cxx
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
     src/isothermal.cxx
+    src/adhoc_potential.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
     src/diamagnetic_drift_fci.cxx
@@ -88,7 +91,9 @@ set(HERMES_SOURCES
     src/anomalous_diffusion.cxx
     src/anomalous_diffusion_3d.cxx
     src/binormal_stpm.cxx
+    src/kmodel.cxx
     src/recycling.cxx
+    src/recycling_fci.cxx
     src/adas_reaction.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
@@ -110,6 +115,7 @@ set(HERMES_SOURCES
     include/adas_reaction.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
+    include/fci_gridcheck.hxx
     include/amjuel_helium.hxx
     include/amjuel_hydrogen.hxx
     include/amjuel_reaction.hxx
@@ -119,6 +125,8 @@ set(HERMES_SOURCES
     include/binormal_stpm.hxx
     include/collisions.hxx
     include/component.hxx
+    include/adhoc_potential.hxx
+    include/kmodel.hxx
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/diamagnetic_drift_fci.hxx
@@ -127,6 +135,7 @@ set(HERMES_SOURCES
     include/electron_force_balance.hxx
     include/electron_viscosity.hxx
     include/evolve_density.hxx
+    include/evolve_tracedensity.hxx
     include/evolve_energy.hxx
     include/evolve_momentum.hxx
     include/evolve_pressure.hxx
@@ -151,6 +160,7 @@ set(HERMES_SOURCES
     include/reaction.hxx
     include/recalculate_metric.hxx
     include/recycling.hxx
+    include/recycling_fci.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
     include/sheath_boundary_parallel.hxx
@@ -268,7 +278,6 @@ add_custom_command(TARGET setup-examples PRE_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory
                    ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
 
-
 if(HERMES_TESTS)
   enable_testing()
 
@@ -333,12 +342,17 @@ if(HERMES_TESTS)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
-  hermes_add_integrated_test(1D-recycling)
+  hermes_add_integrated_test(1D-recycling
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(diffusion)
   hermes_add_integrated_test(evolve_density)
   hermes_add_integrated_test(neutral_mixed)
   hermes_add_integrated_test(vorticity
     CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-neutral-perpdiffusion-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-neutral-perpdiffusion-conduction-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave
@@ -346,6 +360,8 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(alfven-wave
     CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-density-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-neutral-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
@@ -365,7 +381,14 @@ if(HERMES_TESTS)
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(collfreq-braginskii-afn)
   hermes_add_integrated_test(collfreq-multispecies)
+  hermes_add_integrated_test(fci-example-1
+    REQUIRES BOUT_ENABLE_METRIC_3D
+    DOWNLOAD https://zenodo.org/records/17571607/files/W7X-conf0-36x8x128.fci.nc?download=1
+    DOWNLOAD_NAME grid.fci.nc
+  )
 
+
+  
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)

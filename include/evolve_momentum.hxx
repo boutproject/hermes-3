@@ -49,10 +49,12 @@ private:
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
   BoutReal pressure_floor;
   bool low_p_diffuse_perp; ///< Cross-field diffusion at low pressure?
+  BoutReal scale_ExB;
 
   BoutReal hyper_z;  ///< Hyper-diffusion
-
+  BoutReal hyper_nv;
   std::string Vname;
+  bool output_ddt;
   bool diagnose; ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D flow_xlow, flow_ylow; ///< Momentum flow diagnostics

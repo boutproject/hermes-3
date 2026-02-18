@@ -62,6 +62,7 @@ private:
   BoutReal bounce_frequency_q95; ///< Input q95 for when including bounce frequency change
   BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce frequency change
   BoutReal bounce_frequency_R; ///< Input major radius
+  bool heating;
   bool diagnose; ///< Output additional diagnostics?
   
   /// Per-species diagnostics

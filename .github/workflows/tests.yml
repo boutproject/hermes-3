@@ -32,7 +32,11 @@ jobs:
         config:
           - name: "CMake default options"
             os: ubuntu-latest
-            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DHERMES_COVERAGE=ON"
+            configure_options: ""
+
+          - name: "3D Metrics"
+            os: ubuntu-latest
+            configure_options: "-DBOUT_ENABLE_METRIC_3D=ON"
         build_type:
           - cmake_build_type: Debug
             test_type: unit
@@ -63,14 +67,19 @@ jobs:
                  libopenmpi-dev
                  liblapack-dev
                  libparpack2-dev
+                 petsc-dev
 
       - uses: actions/checkout@v5
         with:
           submodules: true
 
       - name: Build
-        run: cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE  $BOUT_CONFIGURE_OPTIONS &&
-             cmake --build build -j4
+        run: |
+          cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+                           -DHERMES_ERROR_ON_WARNINGS=ON \
+                           -DHERMES_COVERAGE=ON \
+                           $BOUT_CONFIGURE_OPTIONS
+          cmake --build build -j4
 
       - name: Install pip packages
         run: |

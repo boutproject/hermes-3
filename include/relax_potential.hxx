@@ -71,14 +71,14 @@ private:
                                  // (Boussinesq approximation)
   bool poloidal_flows;           ///< Include poloidal ExB flow?
   bool bndry_flux;               ///< Allow flows through radial boundaries?
-
+  bool diamagnetic_bracketform;
   bool sheath_boundary; ///< Set outer boundary to j=0?
-
+  bool floating_boundary;
   Coordinates::FieldMetric Bsq;      ///< SQ(coord->Bxy)
   VectorMetric Curlb_B; ///< Curvature vector Curl(b/B)
-
+  BoutReal scale_ExB;
   BoutReal lambda_1, lambda_2;  ///< Relaxation parameters
-
+  bool disable_ddt;
   Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
     if (a.isFci()) {
       return (*dagp)(a, b, false);
@@ -86,8 +86,13 @@ private:
     return FV::Div_a_Grad_perp(a, b);
   }
 
+  Field3D logB;
   Field3D viscosity; /// Kinematic viscosity
+  Field3D viscosity_core;
+  Field3D viscosity_par;
+  Field3D ones;
   bool phi_dissipation; /// Parallel dissipation of potential
+  BoutReal vort_timedissipation;
 
   Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
