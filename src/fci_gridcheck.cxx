@@ -39,9 +39,7 @@ FCIGridcheck::FCIGridcheck(std::string name, Options &alloptions, Solver *) {
 }
 
 
-void FCIGridcheck::transform(Options &state) {
-  AUTO_TRACE();
-}
+void FCIGridcheck::transform(Options &state) {}
 
 
 void FCIGridcheck::outputVars(Options& state) {

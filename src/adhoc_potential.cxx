@@ -8,7 +8,6 @@
 using bout::globals::mesh;
 
 AdhocPotential::AdhocPotential(std::string name, Options &alloptions, Solver *UNUSED(solver)){
-  AUTO_TRACE();
   Options& options = alloptions[name];
   lambda =
       options["lambda"].doc("Sets the coefficient for phi = lambda * Te, default is 3.0, if negative calculate it urself").withDefault<BoutReal>(3.0);
@@ -16,7 +15,6 @@ AdhocPotential::AdhocPotential(std::string name, Options &alloptions, Solver *UN
 }
 
 void AdhocPotential::transform(Options &state) {
-  AUTO_TRACE();
   auto& fields = state["fields"];
   Options& allspecies = state["species"];
 
@@ -41,7 +39,6 @@ void AdhocPotential::transform(Options &state) {
 }
 
 void AdhocPotential::outputVars(Options& state) {
-  AUTO_TRACE();
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Lnorm = get<BoutReal>(state["rho_s0"]);
     set_with_attrs(state["phi"], phi_adhoc,
