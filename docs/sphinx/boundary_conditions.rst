@@ -326,6 +326,14 @@ The recycled heat flux is:
 Where :math:`R` is the recycle multiplier, :math:`R_{f}` is the fast reflection fraction, :math:`\alpha_{E}` is the energy reflection factor,
 :math:`\Gamma_{E_{i}}^{sheath}` is the incident heat flux from the sheath boundary condition, :math:`T_{R}` is the recycle energy and :math:`\Gamma_{N_{i}}` is the incident ion flux.
 
+.. warning::
+   Fast recycling is currently only compatible with `sheath_boundary_simple` and not `sheath_boundary`
+   or `sheath_boundary_insulating`. This is due to `sheath_boundary` and `sheath_boundary_insulating` 
+   not featuring a sheath ion heat transmission coefficient setting, which is necessary to recalculate
+   the sheath incident ion heat flux for fast recycling. 
+   This will be resolved in the near-term when all three sheath boundary conditions are merged and feature
+   a consistent user options set.
+
 :math:`R_{f}` and :math:`\alpha_{E}` can be set as in the below example. They can also be set to different values for the SOL and PFR by replacing
 the word "target" with either "sol" or "pfr".
 
@@ -343,11 +351,12 @@ the word "target" with either "sol" or "pfr".
 Neutral pump
 ^^^^^^^^^^^^^^^
 
-The recycling component also features a neutral pump which is currently implemented for 
-the SOL and PFR edges only, and so is not available in 1D. The pump is a region of the wall
-which facilitates particle loss by incomplete recycling and neutral absorption. 
+The recycling component also features a neutral pump which has now been implemented for the SOL, PFR
+as well as the target. The pump is a region of the wall which facilitates particle loss by incomplete 
+recycling and neutral absorption. 
 
-The pump requires wall recycling to be enabled on the relevant wall region.
+.. warning::
+   The pump requires wall recycling to be enabled on the relevant wall region.
 
 The particle loss rate :math:`\Gamma_{N_{n}}` is the sum of the incident ions that are not recycled and the 
 incident neutrals which are not reflected, both of which are controlled by the pump multiplier :math:`M_{p}` 
@@ -375,7 +384,7 @@ The heat loss rate :math:`\Gamma_{E_{n}}` is calculated as:
 
 Where the incident heat flux is for a static maxwellian in 1D (see Stangeby p.69, eqn 2.30).
 
-The pump will be placed in any cell that
+A cell must satisfy the following conditions to be considered part of the pump:
  1. Is the final domain cell before the guard cells
  2. Is on the SOL or PFR edge
  3. Has a `is_pump` value of 1
@@ -384,8 +393,10 @@ The field `is_pump` must be created by the user and added to the grid file as a 
 
 Diagnostic variables
 ^^^^^^^^^^^^^^^
-Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, the pump as well as the SOL and PFR which are grouped together as `wall`.
-as well as the pump. In addition, the field `is_pump` is saved to help in plotting the pump location.
+Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, and the 
+SOL/PFR region (grouped together as `wall`, e.g. `Sd_wall_recycle`). The pump diagnostics are provided in the form
+of neutral particle and energy losses due to the pump, e.g. `Sd_pump` and `Ed_pump`.
+In addition, the 2D field definining the pump location (`is_pump`) is saved as a diagnostic for convenience.
 
 
 .. doxygenstruct:: Recycling
