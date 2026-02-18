@@ -232,8 +232,6 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
     channel.pump_density_source = 0;
     channel.pump_energy_source = 0;
-    debug_ion_energy_flow = zeroFrom(Nn);
-    debug = zeroFrom(Nn);
 
     // Recycling at the divertor target plates
     if (target_recycle) {
@@ -375,8 +373,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
           // Flow of recycled neutrals into domain [s-1]
           BoutReal recycle_particle_flow = multiplier * flux * daparsheath;
-
-          debug[i] = multiplier * flux * daparsheath;
+      
 
           // Reproduce sheath advected energy flux from evolve_pressure
           BoutReal nisheath = (N[i] + N[ig]) * 0.5;
@@ -739,21 +736,6 @@ void Recycling::outputVars(Options& state) {
     auto Tnorm = get<BoutReal>(state["Tnorm"]);
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
-    set_with_attrs(state[std::string("debug")], debug,
-                   {{"time_dimension", "t"},
-                    {"units", "-"},
-                    {"conversion", 1},
-                    {"standard_name", std::string("debug variable")},
-                    {"long_name", std::string("debug variable")},
-                    {"source", "recycling"}});
-
-    set_with_attrs(state[std::string("debug_ion_energy_flow")], debug_ion_energy_flow,
-                   {{"time_dimension", "t"},
-                    {"units", "-"},
-                    {"conversion", 1},
-                    {"standard_name", std::string("debug variable")},
-                    {"long_name", std::string("debug variable")},
-                    {"source", "recycling"}});
 
     for (const auto& channel : channels) {
 

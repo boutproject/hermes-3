@@ -81,10 +81,9 @@ private:
                               ///<
                               ///< velocity
 
-  // TODO: debug variables to be removed
-  Field3D debug_ion_energy_flow;
-  Field3D debug;
-  Field2D is_pump; ///< 1 = pump, 0 = no pump. Works only in SOL/PFR. Provided by user in
+
+
+  Field2D is_pump; ///< 1 = pump, 0 = no pump. Provided by user in
                    ///<
                    ///< grid file.
   /// Inputs
