@@ -31,8 +31,8 @@ struct Vorticity : public Component {
   ///     Include ion diamagnetic drift in polarisation current?
   ///   - exb_advection: bool, default true
   ///     Include ExB advection (nonlinear term)?
-  ///   - hyper_z: float, default -1.0
-  ///     Hyper-viscosity in Z. < 0 means off
+  ///   - hyper: float, default -1.0
+  ///     Hyper-viscosity. < 0 means off
   ///   - laplacian: subsection
   ///     Options for the Laplacian phi solver
   ///   - phi_boundary_relax: bool, default false
@@ -124,7 +124,6 @@ private:
   bool collisional_friction; ///< Damping of vorticity due to collisional friction
 
   bool sheath_boundary; ///< Set outer boundary to j=0?
-
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
   bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
@@ -138,14 +137,17 @@ private:
   bool split_n0; // Split phi into n=0 and n!=0 components
   std::unique_ptr<LaplaceXY> laplacexy; // Laplacian solver in X-Y (n=0)
 
+  Field3D logB;
+  bool diamagnetic_bracketform;
   Field3D Bsq; // SQ(coord->Bxy)
   VectorMetric Curlb_B; // Curvature vector Curl(b/B)
-  BoutReal hyper_z; ///< Hyper-viscosity in Z
+  BoutReal hyper; ///< Hyper-viscosity in Z
   Field3D viscosity; ///< Kinematic viscosity
-
+  Field3D viscosity_par;
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
+  bool output_ddt;
   bool diagnose; ///< Output additional diagnostics?
 
   YBoundary yboundary;

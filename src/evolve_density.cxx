@@ -20,6 +20,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   auto& options = alloptions[name];
 
+  
+  
   bndry_flux = options["bndry_flux"]
                    .doc("Allow flows through radial boundaries")
                    .withDefault<bool>(true);
@@ -28,6 +30,14 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Include ExB advection?")
                    .withDefault<bool>(true);
 
+  scale_ExB = options["scale_ExB"]
+                   .doc("Scale ExB flow?")
+                   .withDefault<BoutReal>(1.0);
+
+  output_ddt = options["output_ddt"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(false);
+  
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
@@ -46,6 +56,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   pressure_floor = density_floor * temperature_floor;
 
+  
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
@@ -57,6 +68,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .withDefault<bool>(false);
 
   isMMS = options["mms"].withDefault<bool>(false);
+
+  dissipative = options["dissipative"]
+    .doc("Use dissipative parallel flow with Lax flux")
+    .withDefault<bool>(false);
 
   if (evolve_log) {
     // Evolve logarithm of density
@@ -88,7 +103,12 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Lnorm = units["meters"];
 
+  n_lowsource = options["n_lowsource"].withDefault(-1.0) / Nnorm;
+  lowsource_scale = options["lowsource_scale"].withDefault(1e-6) * Omega_ci;
+  
+  
   auto& n_options = alloptions[std::string("N") + name];
   source_time_dependent = n_options["source_time_dependent"]
     .doc("Use a time-dependent source?")
@@ -98,9 +118,14 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     .doc("Zero the source outside the closed field-line region?")
     .withDefault<bool>(false);
 
+  hyper_n = options["hyper_n"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
+  
   source_normalisation = Nnorm * Omega_ci;
   time_normalisation = 1./Omega_ci;
 
+  adapt_source = n_options["adapt_source"].doc("Adaptive source for density").withDefault(-1.0) / (Nnorm);
+
+  
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
   source = 0.0;
@@ -156,8 +181,9 @@ void EvolveDensity::transform(Options& state) {
     // Evolving logN, but most calculations use N
     N = exp(logN);
   }
-
+  N.applyBoundary();
   mesh->communicate(N);
+  N.applyParallelBoundary();
 
   if (neumann_boundary_average_z) {
     // Take Z (usually toroidal) average and apply as X (radial) boundary condition
@@ -231,6 +257,8 @@ void EvolveDensity::transform(Options& state) {
     BoutReal time = get<BoutReal>(state["time"]);
     BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
     final_source = source * source_prefactor;
+  } else if (adapt_source > 0.0) {
+    final_source = adaptive_sourceterm(N ,source, adapt_source, 0.02);
   } else {
     final_source = source;
   }
@@ -257,7 +285,7 @@ void EvolveDensity::finally(const Options& state) {
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(N) = -Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
+    ddt(N) = -scale_ExB * Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
                                     true) * bracket_factor; // ExB drift
   } else {
     ddt(N) = 0.0;
@@ -278,9 +306,9 @@ void EvolveDensity::finally(const Options& state) {
       BoutReal AA = get<BoutReal>(species["AA"]);
       fastest_wave = sqrt(T / AA);
     }
-
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
-
+    
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow, false, dissipative);
+    
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
@@ -312,11 +340,22 @@ void EvolveDensity::finally(const Options& state) {
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 
+  if (hyper_n > 0.0) {
+    // Form of hyper-viscosity  
+    ddt(N) += hyperdiffusion(hyper_n, N);
+  }
+  
   // Collect the external source from above with all the sources from
   // elsewhere (collisions, reactions, etc) for diagnostics
   Sn = get<Field3D>(species["density_source"]);
+  
   ddt(N) += Sn;
-
+  
+  if (n_lowsource > 0.0) {
+    lowsource_term = low_sourceterm(N, n_lowsource, lowsource_scale);
+    ddt(N) += lowsource_term;
+  } 
+  
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     ddt(N) *= get<Field3D>(state["scale_timederivs"]);
@@ -367,7 +406,24 @@ void EvolveDensity::outputVars(Options& state) {
                                                 {"species", name},
                                                 {"source", "evolve_density"}});
 
-  if (diagnose) {
+  set_with_attrs(state[std::string("S") + name + std::string("_src")], final_source,
+                   {{"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "external density source"},
+                    {"long_name", name + " external number density source"},
+                    {"species", name},
+                    {"source", "evolve_density"}});
+
+  if (n_lowsource > 0.0 && diagnose) {
+    set_with_attrs(state[std::string("S") + name + std::string("_lowsrc")], lowsource_term,
+		 {{"time_dimension", "t"},
+		  {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},                    
+                    {"species", name},
+                    {"source", "evolve_density"}});
+
+  }
+  if (output_ddt || diagnose) {
     set_with_attrs(
         state[std::string("ddt(N") + name + std::string(")")], ddt(N),
         {{"time_dimension", "t"},
@@ -376,7 +432,10 @@ void EvolveDensity::outputVars(Options& state) {
          {"long_name", std::string("Rate of change of ") + name + " number density"},
          {"species", name},
          {"source", "evolve_density"}});
+  }
 
+  if (diagnose) {
+    
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
                     {"units", "m^-3 s^-1"},
@@ -386,14 +445,6 @@ void EvolveDensity::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_density"}});
 
-    set_with_attrs(state[std::string("S") + name + std::string("_src")], final_source,
-                   {{"time_dimension", "t"},
-                    {"units", "m^-3 s^-1"},
-                    {"conversion", Nnorm * Omega_ci},
-                    {"standard_name", "external density source"},
-                    {"long_name", name + " external number density source"},
-                    {"species", name},
-                    {"source", "evolve_density"}});
 
     // If fluxes have been set then add them to the output
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);

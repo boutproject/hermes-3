@@ -36,6 +36,15 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
                         .doc("Include neutral-neutral elastic collisions?")
                         .withDefault<bool>(true);
 
+  momentum_factor = options["momentum_factor"]
+                        .doc("Enhancement factor for momentum transfer")
+                        .withDefault<BoutReal>(1.0);
+
+  energy_factor = options["energy_factor"]
+			.doc("Enhancement factor for energy transfer")
+                        .withDefault<BoutReal>(1.0);
+  
+  
   frictional_heating = options["frictional_heating"]
     .doc("Include R dot v heating term as energy source?")
     .withDefault<bool>(true);
@@ -99,7 +108,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
                                     : 0.0;
 
       // F12 is the force on species 1 due to species 2 (normalised)
-      const Field3D F12 = momentum_coefficient * nu_12 * A1 * density1 * (velocity2 - velocity1);
+      const Field3D F12 = momentum_factor * momentum_coefficient * nu_12 * A1 * density1 * (velocity2 - velocity1);
 
       add(species1["momentum_source"], F12);
       subtract(species2["momentum_source"], F12);
@@ -150,7 +159,7 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
       const Field3D temperature2 = GET_NOBOUNDARY(Field3D, species2["temperature"]);
 
       const Field3D Q12 =
-          nu_12 * 3. * density1 * (A1 / (A1 + A2)) * (temperature2 - temperature1);
+          energy_factor * nu_12 * 3. * density1 * (A1 / (A1 + A2)) * (temperature2 - temperature1);
 
       add(species1["energy_source"], Q12);
       subtract(species2["energy_source"], Q12);

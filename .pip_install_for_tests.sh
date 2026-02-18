@@ -18,4 +18,3 @@ do
         pip3 install --user $package
     fi
 done
-

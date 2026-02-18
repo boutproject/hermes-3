@@ -100,6 +100,9 @@ private:
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
   bool damp_p_nt; ///< Damp P - N*T. Active when P < 0 or N < density_floor
+  bool dissipative; ///< Use dissipative laxflux in parallel divergence
+
+  BoutReal scale_ExB;
 
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 
@@ -109,9 +112,12 @@ private:
   Field3D Sp;     ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
 
+  BoutReal adapt_source;
+  
   BoutReal hyper_z; ///< Hyper-diffusion
   BoutReal hyper_z_T; ///< 4th-order dissipation in T
-
+  BoutReal hyper_p;
+  bool output_ddt;
   bool diagnose; ///< Output additional diagnostics?
   bool enable_precon; ///< Enable preconditioner?
   BoutReal source_normalisation; ///< Normalisation factor [Pa/s]
@@ -124,6 +130,7 @@ private:
   Field3D flow_ylow_advection;    ///< Advection energy flow diagnostics
   Field3D flow_ylow_viscous_heating; ///< Flow of kinetic energy due to numerical viscosity
 
+  Field3D T_up, T_down;
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity

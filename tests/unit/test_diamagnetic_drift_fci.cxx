@@ -1,23 +1,25 @@
 #include "gtest/gtest.h"
 
-#include "test_extras.hxx" // FakeMesh
+#include "test_extras.hxx"
 #include "fake_mesh_fixture.hxx"
 
 #include "../../include/diamagnetic_drift_fci.hxx"
 
-/// Global mesh                                                                                                                                                                                            
+/// Global mesh
+
 namespace bout{
 namespace globals{
 extern Mesh *mesh;
-} // namespace globals                                                                                                                                                                                     
-} // namespace bout                                                                                                                                                                                        
+} // namespace globals
+} // namespace bout
 
-// The unit tests use the global mesh                                                                                                                                                                      
+// The unit tests use the global mesh
+
 using namespace bout::globals;
 
-#include <bout/field_factory.hxx>  // For generating functions                                                                                                                                             
+#include <bout/field_factory.hxx>  // For generating functions
 
-// Reuse the "standard" fixture for FakeMesh                                                                                                                                                               
+// Reuse the "standard" fixture for FakeMesh
 using DiamagneticDriftFCITest = FakeMeshFixture;
 
 TEST_F(DiamagneticDriftFCITest, CreateComponent) {
@@ -27,7 +29,7 @@ TEST_F(DiamagneticDriftFCITest, CreateComponent) {
   options["units"]["Tesla"] = 1.0;
 
   mesh->getCoordinates()->Bxy = 1.0;
-  
+
   DiamagneticDriftFCI component("test", options, nullptr);
 }
 

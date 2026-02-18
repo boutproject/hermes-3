@@ -46,6 +46,10 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f,
                                     bool bndry_flux = true, bool poloidal = false,
                                     bool positive = false);
 
+const Field3D adaptive_sourceterm(const Field3D& thisfield ,const Field3D& sourceterm, const BoutReal maximum, const BoutReal overshoot);
+
+const Field3D hyperdiffusion(const BoutReal a, const Field3D& b);
+
 /// This version has an extra coefficient 'g' that is linearly interpolated
 /// onto cell faces
 const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D& f,
@@ -86,51 +90,9 @@ Field3D Div_a_Grad_perp_curv(const Field3D& b, const Field3D& a);
  */
 const Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x);
 
+const Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor);
+
 namespace FV {
-
-/// Superbee limiter
-///
-/// This corresponds to the limiter function
-///    φ(r) = max(0, min(2r, 1), min(r,2)
-///
-/// The value at cell right (i.e. i + 1/2) is:
-///
-///   n.R = n.c - φ(r) (n.c - (n.p + n.c)/2)
-///       = n.c + φ(r) (n.p - n.c)/2
-///
-/// Four regimes:
-///  a) r < 1/2 -> φ(r) = 2r
-///     n.R = n.c + gL
-///  b) 1/2 < r < 1 -> φ(r) = 1
-///     n.R = n.c + gR/2
-///  c) 1 < r < 2 -> φ(r) = r
-///     n.R = n.c + gL/2
-///  d) 2 < r  -> φ(r) = 2
-///     n.R = n.c + gR
-///
-///  where the left and right gradients are:
-///   gL = n.c - n.m
-///   gR = n.p - n.c
-///
-// struct Superbee {
-//   void operator()(Stencil1D& n) {
-//     BoutReal gL = n.c - n.L;
-//     BoutReal gR = n.R - n.c;
-
-//     // r = gL / gR
-//     // Limiter is φ(r)
-//     if (gL * gR < 0) {
-//       // Different signs => Zero gradient
-//       n.L = n.R = n.c;
-//     } else {
-//       BoutReal sign = SIGN(gL);
-//       gL = fabs(gL);
-//       gR = fabs(gR);
-//       BoutReal half_slope = sign * BOUTMAX(BOUTMIN(gL, 0.5 * gR), BOUTMIN(gR, 0.5 *
-//       gL)); n.L = n.c - half_slope; n.R = n.c + half_slope;
-//     }
-//   }
-// };
 
 // Calculates viscous heating due to numerical momentum fluxes
 // and flow of kinetic energy (in flow_ylow)
