@@ -49,6 +49,8 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
   AUTO_TRACE();
 
   Options& options = alloptions[name];
+  const Options& units = alloptions["units"];
+  const BoutReal Tnorm = units["eV"];
 
   Ge = options["secondary_electron_coef"]
            .doc("Effective secondary electron emission coefficient")
@@ -57,6 +59,10 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
   if ((Ge < 0.0) or (Ge > 1.0)) {
     throw BoutException("Secondary electron emission must be between 0 and 1 ({:e})", Ge);
   }
+
+  SEE_Te = options["secondary_electron_temp"]
+    .doc("Temperature of secondary electrons [eV]")
+    .withDefault(1.0) / Tnorm;
 
   sin_alpha = options["sin_alpha"]
                   .doc("Sin of the angle between magnetic field line and wall surface. "
@@ -74,9 +80,6 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*) {
       options["always_set_phi"]
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
-
-  const Options& units = alloptions["units"];
-  const BoutReal Tnorm = units["eV"];
 
   // Read wall voltage, convert to normalised units
   wall_potential = options["wall_potential"]
@@ -311,27 +314,43 @@ void SheathBoundary::transform(Options& state) {
         Te[im] = limitFree(Te[ip], Te[i]);
         Pe[im] = limitFree(Pe[ip], Pe[i]);
 
-        // Free boundary potential linearly extrapolated
-        phi[im] = 2 * phi[i] - phi[ip];
-
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
+	const BoutReal tesheath_floor = floor(tesheath, 1e-5);
         const BoutReal phi_wall = wall_potential[i];
 
-        const BoutReal phisheath =
-            floor_potential ? floor(0.5 * (phi[im] + phi[i]),
-                                    phi_wall) // Electron saturation at phi = phi_wall
-                            : 0.5 * (phi[im] + phi[i]);
+	// Electric field at the sheath entrance.
+	// - When the potential is close to the floating potential,
+	//   the potential near the sheath entrance is smooth and can
+	//   be extrapolated from the presheath gradient.
+	// - Far from this equilibrium, the electric field should
+	//   reflect the potential difference between plasma and wall
+	//
+	// E|| = (1 - α) E||,extrap + α (phi - phi,wall) / dy
+	//
+	// where α is a blending parameter that switches on when the
+	// deviation from floating potential is large:
+	//
+	// α = tanh(|phi,wall - phi,float| / Te)
+	//
+	// This enables the plasma momentum to respond to plasma potential
+	// changes, through the parallel electric field.
+
+	const BoutReal alpha = std::tanh(std::fabs(phi[i] - 2.8 * tesheath) / tesheath_floor);
+	phi[im] = alpha * phi_wall + (1. - alpha) * (2 * phi[i] - phi[ip]);
+
+        const BoutReal phisheath = 0.5 * (phi[im] + phi[i]);
 
         // Electron sheath heat transmission
         const BoutReal gamma_e =
-            floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
+	  floor(2 / (1. - Ge) + std::max(phisheath - phi_wall, 0.0) / tesheath_floor, 0.0);
 
-        // Electron velocity into sheath (< 0)
-        const BoutReal vesheath = (tesheath < 1e-10)
-                                      ? 0.0
-                                      : -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
-                                            * exp(-(phisheath - phi_wall) / tesheath);
+        // Electron velocity into sheath
+        const BoutReal vesheath = 
+	  // Outgoing electrons (< 0)
+	  - sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-std::max(phisheath - phi_wall, 0.0) / tesheath_floor)
+	  // Incoming electrons emitted or reflected from the wall
+	  + Ge * sqrt(SEE_Te / (TWOPI * Me)) * exp(-std::max(phi_wall - phisheath, 0.0) / SEE_Te);
 
         Ve[im] = 2 * vesheath - Ve[i];
         NVe[im] = 2. * Me * nesheath * vesheath - NVe[i];
@@ -380,26 +399,28 @@ void SheathBoundary::transform(Options& state) {
         Te[ip] = limitFree(Te[im], Te[i]);
         Pe[ip] = limitFree(Pe[im], Pe[i]);
 
-        // Free boundary potential linearly extrapolated
-        phi[ip] = 2 * phi[i] - phi[im];
-
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]); // electron temperature
+	const BoutReal tesheath_floor = floor(tesheath, 1e-5);
         const BoutReal phi_wall = wall_potential[i];
-        const BoutReal phisheath =
-            floor_potential ? floor(0.5 * (phi[ip] + phi[i]),
-                                    phi_wall) // Electron saturation at phi = phi_wall
-                            : 0.5 * (phi[ip] + phi[i]);
+
+	// Electric field blends the pre-sheath electric field
+	// with the plasma-wall potential difference
+	const BoutReal alpha = std::tanh(std::fabs(phi[i] - 2.8 * tesheath) / tesheath_floor);
+	phi[ip] = alpha * phi_wall + (1. - alpha) * (2 * phi[i] - phi[im]);
+
+        const BoutReal phisheath = 0.5 * (phi[ip] + phi[i]);
 
         // Electron sheath heat transmission
         const BoutReal gamma_e =
-            floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
+	  floor(2 / (1. - Ge) + std::max(phisheath - phi_wall, 0.0) / tesheath_floor, 0.0);
 
-        // Electron velocity into sheath (> 0)
-        const BoutReal vesheath = (tesheath < 1e-10)
-                                      ? 0.0
-                                      : sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
-                                            * exp(-(phisheath - phi_wall) / tesheath);
+        // Electron velocity into sheath
+        const BoutReal vesheath =
+	  // Outgoing electrons (> 0)
+	  sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-std::max(phisheath - phi_wall, 0.0) / tesheath_floor)
+	  // Incoming electrons
+	  - Ge * sqrt(SEE_Te / (TWOPI * Me)) * exp(-std::max(phi_wall - phisheath, 0.0) / SEE_Te);
 
         Ve[ip] = 2 * vesheath - Ve[i];
         NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
@@ -554,7 +575,8 @@ void SheathBoundary::transform(Options& state) {
           // Ion sheath heat transmission coefficient
           const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath;
 
-          const BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
+          const BoutReal visheath = std::min(-sqrt(C_i_sq), // Negative -> into sheath
+					     Vi[i]);        // Allow supersonic flow
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
@@ -629,7 +651,8 @@ void SheathBoundary::transform(Options& state) {
 
           const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath; // + Δγ
 
-          const BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
+          const BoutReal visheath = std::max(sqrt(C_i_sq), // Positive -> into sheath
+					     Vi[i]); // Allow supersonic flow
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
