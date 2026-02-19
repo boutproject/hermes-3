@@ -427,7 +427,7 @@ void NeutralMixed::finally(const Options& state) {
       ddt(Nn) =
 	- FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed, pf_adv_par_ylow); // Parallel advection
     } else {
-      ddt(Nn) = -Div_par(Nn * Vn);
+      ddt(Nn) = -Div_par(Nn.asField3DParallel() * Vn);
     }
   } else {
     ddt(Nn) = 0.0;
@@ -459,7 +459,7 @@ void NeutralMixed::finally(const Options& state) {
     if (!isMMS) {
       ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection
     } else {
-      ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
+      ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn.asField3DParallel() * Vn);
     }
     // TODO(dave) check sign
     ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
@@ -528,7 +528,7 @@ void NeutralMixed::finally(const Options& state) {
     if (!isMMS) {
       ddt(NVn) = -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed);             // Momentum flow
     } else {
-      ddt(NVn) = -Div_par(NVn * Vn);
+      ddt(NVn) = -Div_par(NVn.asField3DParallel() * Vn);
     }
 
     ddt(NVn) -= Grad_par(Pn);                                 // Pressure gradient
