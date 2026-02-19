@@ -61,7 +61,7 @@ for ny in nxlist:
     shell("rm data/BOUT.dmp.*.nc")
     
     # Command to run
-    cmd = "./hermes-3 "+args
+    cmd = "../../../hermes-3 " + args
     # Launch using MPI
     s, out = launch(cmd, nproc=nproc, pipe=True)
 
