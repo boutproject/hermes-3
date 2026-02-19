@@ -217,10 +217,12 @@ void NeutralMixed::transform(Options& state) {
   Tn = Pn.asField3DParallel() / Nnlim;
 
   Vn = NVn / (AA * Nnlim.asField3DParallel());
-  Vn.applyBoundary("neumann");
+  // TODO(dave) do we need this call?
+  //Vn.applyBoundary("neumann");
 
   Pnlim = softFloor(Pn.asField3DParallel(), pressure_floor);
-  Pnlim.applyBoundary();
+  // TODO(dave) do we need this call?
+  // Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
@@ -437,11 +439,7 @@ void NeutralMixed::finally(const Options& state) {
 				     pf_adv_perp_ylow);    // Perpendicular advection
   } else {
     bool upwind = false;
-    if (! false) {
-      ddt(Nn) += (*dagp)(DnnNn, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
-    } else {
-      ddt(Nn) += Div_a_Grad_perp_curv(DnnNn, logPnlim);
-    }
+    ddt(Nn) += (*dagp)(DnnNn, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
   }
 
   
