@@ -97,7 +97,7 @@ if verbose:
 # Load case
 ds = xhermes.open_hermesdataset(
     datapath=output_path,
-    gridfilepath=this_dir / "grid_test2.nc",
+    gridfilepath=this_dir / "grid_test2_allpump.nc",
     keep_yboundaries=True,
     keep_xboundaries=True,
     geometry="toroidal",
