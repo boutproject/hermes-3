@@ -11,8 +11,10 @@ project(hermes-3 LANGUAGES CXX C)
 # Extra CMake scripts in cmake/ subdirectory
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
-option(HERMES_UPDATE_GIT_SUBMODULE "Check submodules are up-to-date during build" ON)
-# Adapted from https://cliutils.gitlab.io/modern-cmake/chapters/projects/submodule.html
+option(HERMES_UPDATE_GIT_SUBMODULE
+       "Check submodules are up-to-date during build" ON)
+# Adapted from
+# https://cliutils.gitlab.io/modern-cmake/chapters/projects/submodule.html
 # Update submodules as needed
 function(hermes_update_submodules)
   if(NOT HERMES_UPDATE_GIT_SUBMODULE)
@@ -21,11 +23,16 @@ function(hermes_update_submodules)
   find_package(Git QUIET)
   if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
     message(STATUS "Submodule update")
-    execute_process(COMMAND ${GIT_EXECUTABLE} -c submodule.recurse=false submodule update --init --recursive
+    execute_process(
+      COMMAND ${GIT_EXECUTABLE} -c submodule.recurse=false submodule update
+              --init --recursive
       WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
       RESULT_VARIABLE GIT_SUBMOD_RESULT)
     if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-      message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+      message(
+        FATAL_ERROR
+          "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules"
+      )
     endif()
   endif()
 endfunction()
@@ -43,8 +50,11 @@ message(STATUS "Git revision: ${HERMES_REVISION}")
 option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
   set(BOUT_BUILD_EXAMPLES, OFF) # Don't create example makefiles
-  set(HERMES_BOUT_SRC "external/BOUT-dev" CACHE STRING "Directory of BOUT++ dir")
-  add_subdirectory(${HERMES_BOUT_SRC} ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev SYSTEM)
+  set(HERMES_BOUT_SRC
+      "external/BOUT-dev"
+      CACHE STRING "Directory of BOUT++ dir")
+  add_subdirectory(${HERMES_BOUT_SRC}
+                   ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev SYSTEM)
 else()
   find_package(bout++ REQUIRED)
 endif()
@@ -168,8 +178,7 @@ set(HERMES_SOURCES
     include/zero_current.hxx
     include/transform.hxx
     include/fixed_fraction_radiation.hxx
-    include/simple_pump.hxx
-    )
+    include/simple_pump.hxx)
 
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
@@ -179,11 +188,11 @@ target_link_libraries(hermes-3-lib PRIVATE bout++::bout++)
 target_compile_features(hermes-3-lib PUBLIC cxx_std_17)
 set_target_properties(hermes-3-lib PROPERTIES CXX_EXTENSIONS OFF)
 
-target_include_directories(hermes-3-lib PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-  )
+target_include_directories(
+  hermes-3-lib
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+         $<INSTALL_INTERFACE:include>)
 
 # Have hermes-3-lib look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3-lib PROPERTIES BUILD_RPATH "$ORIGIN")
@@ -191,50 +200,50 @@ set_target_properties(hermes-3-lib PROPERTIES BUILD_RPATH "$ORIGIN")
 enable_sanitizers(hermes-3-lib)
 
 # The main executable target
-add_executable(hermes-3
-               hermes-3.cxx
-               ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
+add_executable(hermes-3 hermes-3.cxx
+                        ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
 
 target_link_libraries(hermes-3 PRIVATE bout++::bout++ hermes-3-lib)
 
-target_include_directories(hermes-3 PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-  )
+target_include_directories(
+  hermes-3
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+         $<INSTALL_INTERFACE:include>)
 
 # Have hermes-3 look for dynamic libs in ./ before searching elsewhere
 set_target_properties(hermes-3 PROPERTIES BUILD_RPATH "$ORIGIN")
 
-option(HERMES_ENABLE_WARNINGS "Enable compiler warnings" ${PROJECT_IS_TOP_LEVEL})
+option(HERMES_ENABLE_WARNINGS "Enable compiler warnings"
+       ${PROJECT_IS_TOP_LEVEL})
 option(HERMES_ERROR_ON_WARNINGS "Enable compiler warnings" OFF)
 include(CompilerWarnings)
 add_library(hermes_warnings INTERFACE)
-hermes_set_project_warnings(hermes_warnings ${HERMES_ERROR_ON_WARNINGS} "" "" "" "")
+hermes_set_project_warnings(hermes_warnings ${HERMES_ERROR_ON_WARNINGS} "" ""
+                            "" "")
 
-if (HERMES_ENABLE_WARNINGS)
+if(HERMES_ENABLE_WARNINGS)
   target_link_libraries(hermes-3-lib PRIVATE hermes_warnings)
   target_link_libraries(hermes-3 PRIVATE hermes_warnings)
 endif()
 
-# Build the file containing just the commit hash
-# This will be rebuilt on every commit!
-configure_file(
-  "${PROJECT_SOURCE_DIR}/include/revision.hxx.in"
-  "${PROJECT_BINARY_DIR}/include/revision.hxx")
+# Build the file containing just the commit hash This will be rebuilt on every
+# commit!
+configure_file("${PROJECT_SOURCE_DIR}/include/revision.hxx.in"
+               "${PROJECT_BINARY_DIR}/include/revision.hxx")
 
 # Once built, copy the data and test directories
-option(HERMES_COPY_EXAMPLES_TO_BUILD "Copy the examples to the build directory" ON)
+option(HERMES_COPY_EXAMPLES_TO_BUILD "Copy the examples to the build directory"
+       ON)
 
-option(HERMES_COPY_JSON_DATABASE_TO_BUILD "Copy the json database to the build directory" ON)
+option(HERMES_COPY_JSON_DATABASE_TO_BUILD
+       "Copy the json database to the build directory" ON)
 
 if(HERMES_COPY_EXAMPLES_TO_BUILD OR HERMES_COPY_JSON_DATABASE_TO_BUILD)
   add_custom_target(setup-examples ALL)
 else()
   add_custom_target(setup-examples)
 endif()
-
-
 
 # Tests
 option(HERMES_COPY_TESTS_TO_BUILD "Copy the tests to the build directory" ON)
@@ -245,21 +254,24 @@ else()
   add_custom_target(setup-test)
 endif()
 
-
-
 # copy the data and test directories
-add_custom_command(TARGET setup-examples PRE_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/examples $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+add_custom_command(
+  TARGET setup-examples
+  PRE_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples
+          $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
 
-add_custom_command(TARGET setup-examples PRE_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/json_database $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+add_custom_command(
+  TARGET setup-examples
+  PRE_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/json_database
+          $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
 
-add_custom_command(TARGET setup-test PRE_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory
-                   ${CMAKE_SOURCE_DIR}/tests $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
-
+add_custom_command(
+  TARGET setup-test
+  PRE_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/tests
+          $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
 
 if(HERMES_TESTS)
   enable_testing()
@@ -268,31 +280,37 @@ if(HERMES_TESTS)
   function(hermes_add_integrated_test TESTNAME)
     set(oneValueArgs DOWNLOAD DOWNLOAD_NAME)
     set(multiValueArgs REQUIRES CONFLICTS)
-    cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+    cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}"
+                          "${multiValueArgs}" ${ARGN})
 
-    foreach (REQUIREMENT IN LISTS HERMES_TEST_OPTIONS_REQUIRES)
-      if (NOT ${REQUIREMENT})
-        message(STATUS "Not building test ${TESTNAME}, requirement not met: ${REQUIREMENT}")
+    foreach(REQUIREMENT IN LISTS HERMES_TEST_OPTIONS_REQUIRES)
+      if(NOT ${REQUIREMENT})
+        message(
+          STATUS
+            "Not building test ${TESTNAME}, requirement not met: ${REQUIREMENT}"
+        )
         return()
       endif()
     endforeach()
 
-    foreach (CONFLICT IN LISTS HERMES_TEST_OPTIONS_CONFLICTS)
-      if (${CONFLICT})
-        message(STATUS "Not building test ${TESTNAME}, conflicts with: ${CONFLICT}")
+    foreach(CONFLICT IN LISTS HERMES_TEST_OPTIONS_CONFLICTS)
+      if(${CONFLICT})
+        message(
+          STATUS "Not building test ${TESTNAME}, conflicts with: ${CONFLICT}")
         return()
       endif()
       message(STATUS "CONFLICT ${CONFLICT} ${${CONFLICT}}")
     endforeach()
 
-
     if(HERMES_COPY_TESTS_TO_BUILD)
       set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
-      # Make copies of the test exec and input file in the build directory and keep them up to date
+      # Make copies of the test exec and input file in the build directory and
+      # keep them up to date
       configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
-      configure_file(${INT_TEST_SRC}/data/BOUT.inp ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+      configure_file(${INT_TEST_SRC}/data/BOUT.inp
+                     ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
     else()
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
@@ -303,20 +321,25 @@ if(HERMES_TESTS)
       COMMAND runtest)
     set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
 
-    if (HERMES_TEST_OPTIONS_DOWNLOAD)
-      if (NOT HERMES_TEST_OPTIONS_DOWNLOAD_NAME)
+    if(HERMES_TEST_OPTIONS_DOWNLOAD)
+      if(NOT HERMES_TEST_OPTIONS_DOWNLOAD_NAME)
         message(FATAL_ERROR "We need DOWNLOAD_NAME if we should DOWNLOAD!")
       endif()
-      file(REAL_PATH ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME} DOWNLOAD_DEST_PATH BASE_DIRECTORY ${INT_TEST_DEST})
-      add_custom_command(OUTPUT ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
-                         COMMAND wget -nv ${HERMES_TEST_OPTIONS_DOWNLOAD} -O ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
-                         WORKING_DIRECTORY ${INT_TEST_DEST}
-                         COMMENT "Downloading test data to ${DOWNLOAD_DEST_PATH}")
-      # Custom target to run download command; use sanitised absolute path for the target name
+      file(REAL_PATH ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME} DOWNLOAD_DEST_PATH
+           BASE_DIRECTORY ${INT_TEST_DEST})
+      add_custom_command(
+        OUTPUT ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+        COMMAND wget -nv ${HERMES_TEST_OPTIONS_DOWNLOAD} -O
+                ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+        WORKING_DIRECTORY ${INT_TEST_DEST}
+        COMMENT "Downloading test data to ${DOWNLOAD_DEST_PATH}")
+      # Custom target to run download command; use sanitised absolute path for
+      # the target name
       string(REPLACE "/" "_" DOWNLOAD_TARGET_NAME ${DOWNLOAD_DEST_PATH})
-      add_custom_target(${DOWNLOAD_TARGET_NAME} ALL
-                        DEPENDS ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
-                        DEPENDS setup-test)
+      add_custom_target(
+        ${DOWNLOAD_TARGET_NAME} ALL
+        DEPENDS ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+        DEPENDS setup-test)
     endif()
   endfunction()
 
@@ -341,44 +364,49 @@ if(HERMES_TESTS)
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)
     if(NOT PACKAGE_TESTS)
-      # Not running BOUT++ tests
-      # Since BOUT++ includes googletest, adding it again causes errors
+      # Not running BOUT++ tests Since BOUT++ includes googletest, adding it
+      # again causes errors
       add_subdirectory(external/googletest)
     endif()
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
 
-    add_executable(hermes_unit_tests
-                   tests/unit/main.cxx
-                   ${TEST_SOURCES})
+    add_executable(hermes_unit_tests tests/unit/main.cxx ${TEST_SOURCES})
 
     target_link_libraries(hermes_unit_tests PRIVATE hermes_warnings)
 
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
     set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
-    target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
-    # Have hermes_unit_tests look for dynamic libs in ./ before searching elsewhere
+    target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++
+                                                    hermes-3-lib)
+    # Have hermes_unit_tests look for dynamic libs in ./ before searching
+    # elsewhere
     set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
   endif()
-  
-# Method of manufactured solutions (MMS) tests of operators
+
+  # Method of manufactured solutions (MMS) tests of operators
   option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
   if(HERMES_DIVOPS_MMS_TESTS)
-    #TEST_SOURCES=
-    add_executable(hermes_mms_operator_tests
-                   tests/mms_operator/main.cxx)
-                   #${TEST_SOURCES})
-    target_link_libraries(hermes_mms_operator_tests PRIVATE gtest bout++::bout++ hermes-3-lib)
-    add_test(NAME differential_operators_mms_orthogonal
-           WORKING_DIRECTORY tests/mms_operator/
-           COMMAND python3 orthogonal_test.py)
-    set_tests_properties(differential_operators_mms_orthogonal PROPERTIES LABELS integration)
-    add_test(NAME differential_operators_mms_nonorthogonal
-           WORKING_DIRECTORY tests/mms_operator/
-           COMMAND python3 nonorthogonal_test.py)
-    set_tests_properties(differential_operators_mms_nonorthogonal PROPERTIES LABELS integration)
-    add_test(NAME rhs_mms_neutral_mixed
-           WORKING_DIRECTORY tests/mms_operator/
-           COMMAND python3 neutral_mixed_ddt_test.py)
+    # TEST_SOURCES=
+    add_executable(hermes_mms_operator_tests tests/mms_operator/main.cxx)
+    # ${TEST_SOURCES})
+    target_link_libraries(hermes_mms_operator_tests
+                          PRIVATE gtest bout++::bout++ hermes-3-lib)
+    add_test(
+      NAME differential_operators_mms_orthogonal
+      WORKING_DIRECTORY tests/mms_operator/
+      COMMAND python3 orthogonal_test.py)
+    set_tests_properties(differential_operators_mms_orthogonal
+                         PROPERTIES LABELS integration)
+    add_test(
+      NAME differential_operators_mms_nonorthogonal
+      WORKING_DIRECTORY tests/mms_operator/
+      COMMAND python3 nonorthogonal_test.py)
+    set_tests_properties(differential_operators_mms_nonorthogonal
+                         PROPERTIES LABELS integration)
+    add_test(
+      NAME rhs_mms_neutral_mixed
+      WORKING_DIRECTORY tests/mms_operator/
+      COMMAND python3 neutral_mixed_ddt_test.py)
     set_tests_properties(rhs_mms_neutral_mixed PROPERTIES LABELS integration)
   endif()
 endif()
@@ -386,23 +414,29 @@ endif()
 # Compile-time options
 
 set(SLOPE_LIMITERS MinMod MC Upwind Superbee)
-set(HERMES_SLOPE_LIMITER MC CACHE STRING "Set advection slope limiter")
+set(HERMES_SLOPE_LIMITER
+    MC
+    CACHE STRING "Set advection slope limiter")
 set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
 message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")
 
 # Generate the build config header
 
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx")
   # If we do in source builds, this is fine
-  if (NOT ${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
-    message(FATAL_ERROR "Generated hermes_build_config.hxx header already exists; please remove '${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx' before continuing")
+  if(NOT ${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
+    message(
+      FATAL_ERROR
+        "Generated hermes_build_config.hxx header already exists; please remove '${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx' before continuing"
+    )
   endif()
 endif()
 
-configure_file(include/hermes_build_config.hxx.in include/hermes_build_config.hxx)
+configure_file(include/hermes_build_config.hxx.in
+               include/hermes_build_config.hxx)
 
 # Installation
-if (BUILD_SHARED_LIBS)
+if(BUILD_SHARED_LIBS)
   install(TARGETS hermes-3 hermes-3-lib)
 else()
   install(TARGETS hermes-3)

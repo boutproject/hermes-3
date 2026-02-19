@@ -1,0 +1,4 @@
+# Don't format any code in submodules
+extend-exclude = ["external"]
+# Include runtest scripts
+extend-include = ["**/runtest"]
