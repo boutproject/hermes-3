@@ -30,7 +30,7 @@ for var in varnames:
     results[var] = {"l2": [], "inf": []}
 
 for ny in nylist:
-    args = "mesh:file={gridname(ny)} nout={nout} timestep={timestep}"
+    args = f"mesh:file={gridname(ny)} nout={nout} timestep={timestep}"
 
     print("Running with " + args)
 
