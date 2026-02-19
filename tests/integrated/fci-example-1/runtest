@@ -3,11 +3,11 @@
 # Simple test to make sure the simulation runs stable
 #
 
-from boututils.run_wrapper import shell_safe, launch_safe, getmpirun
+from boututils.run_wrapper import launch_safe
 
 # Launch using MPI
 launch_safe(
-    f"../../../hermes-3 nout=1 timestep=20 solver:mxstep=50 mesh:file=grid.fci.nc",
+    "../../../hermes-3 nout=1 timestep=20 solver:mxstep=50 mesh:file=grid.fci.nc",
     nproc=1,
     pipe=True,
 )
