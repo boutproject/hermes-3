@@ -217,18 +217,15 @@ void NeutralMixed::transform(Options& state) {
     Pn.clearParallelSlices();
     NVn.clearParallelSlices();
   }
-  
-  Nn = floor(Nn, 0.0);
-  Pn = floor(Pn, 0.0);
 
   // Nnlim Used where division by neutral density is needed
-  Nnlim = softFloor(Nn, density_floor);
-  Tn = Pn / Nnlim;
-  
-  Vn = NVn / (AA * Nnlim);
+  Nnlim = softFloor(Nn.asField3DParallel(), density_floor);
+  Tn = Pn.asField3DParallel() / Nnlim;
+
+  Vn = NVn / (AA * Nnlim.asField3DParallel());
   Vn.applyBoundary("neumann");
 
-  Pnlim = softFloor(Pn, pressure_floor);
+  Pnlim = softFloor(Pn.asField3DParallel(), pressure_floor);
   Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
@@ -277,7 +274,7 @@ void NeutralMixed::finally(const Options& state) {
   // Field3D logNn = log(Nn);
   // Field3D logTn = log(Tn);
 
-  logPnlim = log(Pnlim);
+  logPnlim = log(Pnlim.asField3DParallel());
 
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
@@ -388,9 +385,9 @@ void NeutralMixed::finally(const Options& state) {
   
   
   // Neutral diffusion parameters have the same boundary condition as Dnn
-  DnnNn = Dnn * Nnlim;
-  DnnPn = Dnn * Pnlim;
-  DnnNVn = Dnn * NVn;
+  DnnNn = Dnn.asField3DParallel() * Nnlim;
+  DnnPn = Dnn.asField3DParallel() * Pnlim;
+  DnnNVn = Dnn.asField3DParallel() * NVn;
 
   if (!isMMS) {
     yboundary.iter_pnts([&](auto& pnt) {
@@ -418,7 +415,7 @@ void NeutralMixed::finally(const Options& state) {
   // Heat conductivity 
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
   //       where nu is the collision frequency used in Dnn
-  kappa_n = (5. / 2) * DnnNn;
+  kappa_n = (5. / 2) * DnnNn.asField3DParallel();
 
   // Viscosity
   // Relationship between heat conduction and viscosity for neutral
