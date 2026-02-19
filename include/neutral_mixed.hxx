@@ -56,15 +56,11 @@ private:
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
   bool disable_Dnn;
-  BoutReal temperature_floor;
   bool sheath_ydown, sheath_yup;
 
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal temperature_floor;
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
-  bool freeze_low_density; ///< Freeze evolution in low density regions?
-
-  
 
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?

@@ -356,7 +356,6 @@ void RelaxPotential::finally(const Options& state) {
   }
 
   // Viscosity
-  Field3D flow_xlow,flow_zlow;
   ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
   // TODO(dave) Why is viscosity_core not in the operator?
   ddt(Vort) += viscosity_core * Div_a_Grad_perp(ones, Vort);

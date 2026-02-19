@@ -1,10 +1,11 @@
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/field_factory.hxx>
-#include <bout/output_bout_types.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field_factory.hxx>
+#include <bout/fv_ops.hxx>
 #include <bout/initialprofiles.hxx>
+#include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_tracedensity.hxx"
@@ -110,7 +111,7 @@ EvolveTraceDensity::EvolveTraceDensity(std::string name, Options& alloptions, So
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
   } else {
     // Clebsch coordinate system
     bracket_factor = 1.0;
@@ -176,9 +177,10 @@ void EvolveTraceDensity::finally(const Options& state) {
       BoutReal AA = get<BoutReal>(species["AA"]);
       fastest_wave = sqrt(T / AA);
     }
-    
-    ddt(tN) -= FV::Div_par_mod<hermes::Limiter>(tN, V, fastest_wave, flow_ylow, false, dissipative);
-    
+
+    ddt(tN) -=
+        FV::Div_par_mod<hermes::Limiter>(tN, V, fastest_wave, flow_ylow, dissipative);
+
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);

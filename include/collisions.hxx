@@ -72,7 +72,8 @@ private:
   /// nu_12    normalised frequency
   /// momentum_coefficient   Leading coefficient on parallel friction
   ///                        e.g 0.51 for electron-ion with Zi=1
-  void collide(Options &species1, Options &species2, const Field3D &nu_12, BoutReal momentum_coefficient, BoutReal momfac, BoutReal enfac);
+  void collide(Options& species1, Options& species2, const Field3D& nu_12,
+               BoutReal momentum_coefficient);
 };
 
 namespace {
