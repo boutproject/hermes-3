@@ -922,7 +922,7 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
     }
   }
   // Check if we need to transform back
-  if (f.hasParallelSlices() && a.hasParallelSlices()) {
+  if (f.isFci()) {
     result += yzresult;
   } else {
     result += fromFieldAligned(yzresult);
