@@ -24,7 +24,7 @@ jobs:
 
           - name: "3D Metrics"
             os: ubuntu-latest
-            configure_options: "-DBOUT_ENABLE_METRIC_3D=ON"
+            configure_options: "-DBOUT_ENABLE_METRIC_3D=ON -DBOUT_DOWNLOAD_SUNDIALS=ON"
 
     steps:
       - name: Job information
