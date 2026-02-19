@@ -360,7 +360,6 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
           // Flow of recycled neutrals into domain [s-1]
           BoutReal recycle_particle_flow = multiplier * flux * daparsheath;
-      
 
           // Reproduce sheath advected energy flux from evolve_pressure
           BoutReal nisheath = (N[i] + N[ig]) * 0.5;
@@ -722,7 +721,6 @@ void Recycling::outputVars(Options& state) {
     auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
     auto Tnorm = get<BoutReal>(state["Tnorm"]);
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
-
 
     for (const auto& channel : channels) {
 

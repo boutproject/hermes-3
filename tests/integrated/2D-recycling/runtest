@@ -19,8 +19,8 @@ of the recycling calculation for development reasons.
 """
 
 verbose = False
-plot = False    
-debug = False   # Do not download files or run test
+plot = False
+debug = False  # Do not download files or run test
 rtol = 1e-6
 atol = 1e-8
 
@@ -181,6 +181,7 @@ for param in params:
 def floor(value, min):
     return np.maximum(value, min)
 
+
 def at_sheath(f, i, g):
     """
     Linear interpolation between final and guard cell.
@@ -220,7 +221,7 @@ def reconstruct_target_recycle(name):
     ### Indexing
     xslice = slice(3, -3)
     i_index = xhermes.slice_poloidal(ds, name)
-    
+
     # i = final domain cell
     # g = guard cell
     # s = second to final cell
@@ -276,18 +277,22 @@ def reconstruct_target_recycle(name):
         + recycle_particle_flow * (1 - target_fast_recycle_fraction) * target_energy
     )
 
-    nnguard = d["Nd"][i]**2 / Nnlim[s]
-    tnguard = d["Td"][i]**2 / Tnlim[s]
+    nnguard = d["Nd"][i] ** 2 / Nnlim[s]
+    tnguard = d["Td"][i] ** 2 / Tnlim[s]
 
     nnsheath = 0.5 * (d["Nd"][i] + nnguard)
     tnsheath = 0.5 * (d["Td"][i] + tnguard)
     v_th = 0.25 * np.sqrt(8 * tnsheath / (np.pi * Mi))
 
     pump_neutral_particle_flow = v_th * nnsheath * daparsheath
-    pump_neutral_particle_sink = pump_neutral_particle_flow / volume * (1-target_multiplier)
+    pump_neutral_particle_sink = (
+        pump_neutral_particle_flow / volume * (1 - target_multiplier)
+    )
 
-    pump_neutral_energy_flow = 2 * tnsheath * v_th * nnsheath * daparsheath; 
-    pump_neutral_energy_sink = pump_neutral_energy_flow / volume * (1-target_multiplier)
+    pump_neutral_energy_flow = 2 * tnsheath * v_th * nnsheath * daparsheath
+    pump_neutral_energy_sink = (
+        pump_neutral_energy_flow / volume * (1 - target_multiplier)
+    )
 
     target_recycle_density_source = recycle_particle_flow / volume
     target_recycle_energy_source = recycle_energy_flow / volume
@@ -298,8 +303,14 @@ def reconstruct_target_recycle(name):
     # Change this to whatever you want to debug.
     debug = d["Td"][s]
 
-    return reg, target_recycle_density_source, target_recycle_energy_source, \
-                target_pump_density_source, target_pump_energy_source, debug
+    return (
+        reg,
+        target_recycle_density_source,
+        target_recycle_energy_source,
+        target_pump_density_source,
+        target_pump_energy_source,
+        debug,
+    )
 
 
 def plot_result(ax, xplot, sim_result, calc_result, title):
@@ -309,8 +320,9 @@ def plot_result(ax, xplot, sim_result, calc_result, title):
     ax2 = ax.twinx()
     ax2.plot(xplot, calc_result / sim_result, lw=1, c="blue")
     ax2.set_ylabel("Calc/sim ratio", color="blue")
-    ax.set_title(title, fontsize = "small")
+    ax.set_title(title, fontsize="small")
     ax.legend(fontsize="x-small")
+
 
 # -------------------------------------------------------------------------------#
 ### Test
@@ -331,10 +343,14 @@ expected_pump_energy_source = {}
 debug = {}
 
 for side in ["upper", "lower"]:
-
-    reg[side], target_recycle_density_source[side], target_recycle_energy_source[side], \
-     target_pump_density_source[side], target_pump_energy_source[side], debug[side] = (
-    reconstruct_target_recycle(f"outer_{side}_target"))
+    (
+        reg[side],
+        target_recycle_density_source[side],
+        target_recycle_energy_source[side],
+        target_pump_density_source[side],
+        target_pump_energy_source[side],
+        debug[side],
+    ) = reconstruct_target_recycle(f"outer_{side}_target")
 
     expected_recycle_density_source[side] = reg[side]["Sd_target_recycle"]
     expected_recycle_energy_source[side] = reg[side]["Ed_target_recycle"]
@@ -344,12 +360,11 @@ for side in ["upper", "lower"]:
 
 ### Plotting
 if plot:
-    fig, axes = plt.subplots(2,4, figsize=(12,7), dpi=100)
+    fig, axes = plt.subplots(2, 4, figsize=(12, 7), dpi=100)
 
     for i, side in enumerate(["lower", "upper"]):
-
         plot_result(
-            axes[i,0],
+            axes[i, 0],
             reg[side]["x"].values,
             sim_result=expected_recycle_density_source[side],
             calc_result=target_recycle_density_source[side],
@@ -357,7 +372,7 @@ if plot:
         )
 
         plot_result(
-            axes[i,1],
+            axes[i, 1],
             reg[side]["x"].values,
             sim_result=expected_recycle_energy_source[side],
             calc_result=target_recycle_energy_source[side],
@@ -365,7 +380,7 @@ if plot:
         )
 
         plot_result(
-            axes[i,2],
+            axes[i, 2],
             reg[side]["x"].values,
             sim_result=expected_pump_density_source[side],
             calc_result=target_pump_density_source[side],
@@ -373,7 +388,7 @@ if plot:
         )
 
         plot_result(
-            axes[i,3],
+            axes[i, 3],
             reg[side]["x"].values,
             sim_result=expected_pump_energy_source[side],
             calc_result=target_pump_energy_source[side],
