@@ -277,9 +277,6 @@ void NeutralMixed::finally(const Options& state) {
 
   Field3D Tnlim = softFloor(Tn, temperature_floor);
 
-  BoutReal neutral_lmax =
-    0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
-
   Field3D Rnn =
     sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
