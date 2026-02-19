@@ -656,7 +656,7 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) = 0.0;
   }
 
-  if (diagnose) {
+  if (diagnose && T.isFci()) {
     T_up = 0.0;
     T_down = 0.0;
 
@@ -739,23 +739,25 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    set_with_attrs(state[std::string("Tup") + name], T_up,
-                   {{"time_dimension", "t"},
-                    {"units", "eV"},
-                    {"conversion", Tnorm},
-                    {"standard_name", "temperature"},
-                    {"long_name", name + " temperature"},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+    if (T.isFci()) {
+      set_with_attrs(state[std::string("Tup") + name], T_up,
+                     {{"time_dimension", "t"},
+                      {"units", "eV"},
+                      {"conversion", Tnorm},
+                      {"standard_name", "temperature"},
+                      {"long_name", name + " temperature"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
 
-    set_with_attrs(state[std::string("Tdown") + name], T_down,
-                   {{"time_dimension", "t"},
-                    {"units", "eV"},
-                    {"conversion", Tnorm},
-                    {"standard_name", "temperature"},
-                    {"long_name", name + " temperature"},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+      set_with_attrs(state[std::string("Tdown") + name], T_down,
+                     {{"time_dimension", "t"},
+                      {"units", "eV"},
+                      {"conversion", Tnorm},
+                      {"standard_name", "temperature"},
+                      {"long_name", name + " temperature"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+    }
 
     set_with_attrs(state[std::string("SP") + name], Sp,
                    {{"time_dimension", "t"},
