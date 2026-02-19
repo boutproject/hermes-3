@@ -117,7 +117,7 @@ if verbose:
 ### Load case
 ds = xhermes.open_hermesdataset(
     datapath=output_path,
-    inputfilepath = this_dir / "data" / "BOUT.inp",
+    inputfilepath=this_dir / "data" / "BOUT.inp",
     gridfilepath=this_dir / "grid_test2.nc",
     keep_yboundaries=True,
     keep_xboundaries=True,
@@ -176,11 +176,13 @@ def at_sheath(f, i, g):
     """
     return 0.5 * (f[i] + f[g])
 
+
 # -------------------------------------------------------------------------------#
 ### Reproduce upper target recycling
 # Using domain region at target, excluding guard cells and last domain cells
 # as to not include SOL/PFR recycling
 # -------------------------------------------------------------------------------#
+
 
 def reconstruct_target_recycle(name):
     """
@@ -272,6 +274,7 @@ def plot_result(ax, xplot, sim_result, calc_result, title):
     ax.set_title(title)
     ax.legend(fontsize="x-small")
 
+
 # -------------------------------------------------------------------------------#
 ### Test outer lower target
 # -------------------------------------------------------------------------------#
@@ -290,8 +293,12 @@ reg, target_recycle_density_source, target_recycle_energy_source, debug = (
 expected_density_source = reg["Sd_target_recycle"]
 expected_energy_source = reg["Ed_target_recycle"]
 
-np.testing.assert_allclose(target_recycle_density_source, expected_density_source, rtol=rtol,atol=atol)
-np.testing.assert_allclose(target_recycle_energy_source, expected_energy_source, rtol=rtol,atol=atol)
+np.testing.assert_allclose(
+    target_recycle_density_source, expected_density_source, rtol=rtol, atol=atol
+)
+np.testing.assert_allclose(
+    target_recycle_energy_source, expected_energy_source, rtol=rtol, atol=atol
+)
 
 if plot:
     fig, axes = plt.subplots(1, 2, figsize=(7, 3), dpi=100)
@@ -325,8 +332,12 @@ reg, target_recycle_density_source, target_recycle_energy_source, debug = (
 expected_density_source = reg["Sd_target_recycle"]
 expected_energy_source = reg["Ed_target_recycle"]
 
-np.testing.assert_allclose(target_recycle_density_source, expected_density_source, rtol=rtol,atol=atol)
-np.testing.assert_allclose(target_recycle_energy_source, expected_energy_source, rtol=rtol,atol=atol)
+np.testing.assert_allclose(
+    target_recycle_density_source, expected_density_source, rtol=rtol, atol=atol
+)
+np.testing.assert_allclose(
+    target_recycle_energy_source, expected_energy_source, rtol=rtol, atol=atol
+)
 
 if plot:
     fig, axes = plt.subplots(1, 2, figsize=(7, 3), dpi=100)
@@ -349,4 +360,3 @@ if plot:
 
     fig.tight_layout()
     fig.savefig("target_recycle_test_outer_upper.png", bbox_inches="tight")
-
