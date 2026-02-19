@@ -35,8 +35,7 @@ except:
 def gridname(nx):                                                                                                                                    
   return gridpath + f"Axial_circular_{nx}_{int(4*nx)}_0.2_0.4.fci.grid.nc.coordinates"
 
-# Link to the executable
-shell("ln -s ../../../build/hermes-3 hermes-3")
+
 
 # List of NY values to use
 #nxlist = [36, 68, 132, 260] #, 640, 1280, 2560, 5120]
