@@ -99,6 +99,24 @@ void MC(Stencil1D& n) {
   n.R = n.c + 0.5 * slope;
 }
 
+const Field3D hyperdiffusion(const BoutReal a, const Field3D& b) {
+  auto* coord = mesh->getCoordinates();
+  Field3D result = -a * (D4DX4(b) / SQ(coord->g_11) + D4DZ4(b) / SQ(coord->g_33));
+  return result;
+}
+
+const Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue,
+                             const BoutReal scalefactor) {
+  Field3D result = 0.0;
+  BOUT_FOR(i, f.getRegion("RGN_NOY")) {
+    BoutReal diff = f[i] - lowvalue;
+    if (diff < 0.0) {
+      result[i] = -diff / scalefactor;
+    }
+  }
+  return result;
+}
+
 /* ***USED***
  *  Div (n * b x Grad(f)/B)
  *
@@ -421,6 +439,18 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bnd
   }
 
   return result;
+}
+
+const Field3D adaptive_sourceterm(const Field3D& thisfield, const Field3D& sourceterm,
+                                  const BoutReal maximum, const BoutReal overshoot) {
+  Field2D averaged = DC(thisfield);
+  BoutReal thismax = max(averaged);
+  if (thismax > maximum) {
+    BoutReal ratio = floor((thismax - maximum) / overshoot, 0.0);
+    return sourceterm * exp(-ratio);
+  } else {
+    return sourceterm;
+  }
 }
 
 const Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs, bool xflux) {

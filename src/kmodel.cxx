@@ -8,6 +8,7 @@
 #include <bout/fv_ops.hxx>
 #include <bout/invert/laplacexy.hxx>
 #include <bout/invert_laplace.hxx>
+#include <bout/solver.hxx>
 #include <bout/version.hxx>
 #include <bout/yboundary_regions.hxx>
 
@@ -50,7 +51,7 @@ Kmodel::Kmodel(std::string name, Options& alloptions, Solver* solver) {
 
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
   } else {
     bracket_factor = 1.0;
   }
@@ -200,7 +201,8 @@ void Kmodel::finally(const Options& state) {
     }
       
     Field3D flow_ylow;
-    ddt(k) -= FV::Div_par_mod<hermes::Limiter>(klim, V, fastest_wave, flow_ylow, false, dissipative);
+    ddt(k) -=
+        FV::Div_par_mod<hermes::Limiter>(klim, V, fastest_wave, flow_ylow, dissipative);
   }
 
   if (species.isSet("pressure")) {
