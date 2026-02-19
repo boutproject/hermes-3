@@ -458,7 +458,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
       // Flow out of domain is positive in the positive coordinate direction
       Field3D radial_particle_outflow = particle_flow_xlow;
-      Field3D radial_energy_outflow = f;
+      Field3D radial_energy_outflow = energy_flow_xlow;
 
       if (mesh->lastX()) { // Only do this for the processor which has the edge region
         for (int iy = 0; iy < mesh->LocalNy; iy++) {
