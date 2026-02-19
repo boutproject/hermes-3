@@ -187,12 +187,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     DnnNn.setBoundary(std::string("Dnn") + name);
     DnnPn.setBoundary(std::string("Dnn") + name);
     DnnNVn.setBoundary(std::string("Dnn") + name);
-
-    // Product of Dnn and another parameter has same BC as Dnn - see eqns to see why this is
-    // necessary
-    DnnNn.setBoundary(std::string("Dnn") + name);
-    DnnPn.setBoundary(std::string("Dnn") + name);
-    DnnNVn.setBoundary(std::string("Dnn") + name);
   }
   if (Nn.isFci()) {
     dagp = FCI::getDagp_fv(alloptions, mesh);
