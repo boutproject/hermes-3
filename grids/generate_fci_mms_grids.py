@@ -48,7 +48,7 @@ for folder, nx, ny, nz in todo:
     )
 
     qq = rectangle.metric()
-    maps = zoidberg.make_maps(rectangle, magnetic_field, nslice=2)
+    maps = zoidberg.make_maps(rectangle, magnetic_field, nslice=1)
 
     with zoidberg.zoidberg.MapWriter(fn) as mw:
         mw.add_grid_field(rectangle, magnetic_field)
