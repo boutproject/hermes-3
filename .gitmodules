@@ -11,6 +11,7 @@
 [submodule "Reactions"]
 	path = external/Reactions
 	url = https://github.com/UKAEA-Edge-Code/VANTAGE-Reactions.git
+	ignore = dirty
 [submodule "external/xhermes"]
 	path = external/xhermes
 	url = git@github.com:boutproject/xhermes
