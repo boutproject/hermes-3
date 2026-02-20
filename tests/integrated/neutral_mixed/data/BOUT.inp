@@ -23,6 +23,9 @@ components = h
 
 [h]
 type = neutral_mixed
+flux_limit = 0.2
+neutral_viscosity = true
+neutral_conduction = true
 
 [Nh]
 
