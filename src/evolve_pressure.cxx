@@ -190,7 +190,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
 
-  dissipative = options["dissipative"].doc("Use dissipative parallel flow with Lax flux").withDefault<bool>(false);
+  dissipative = options["dissipative"].doc("Use dissipative parallel flow with Lax flux").withDefault<bool>(true);
 
   BoutReal default_kappa; // default conductivity, changes depending on species
   switch(identifySpeciesType(name)) {
