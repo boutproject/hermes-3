@@ -71,7 +71,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   dissipative = options["dissipative"]
     .doc("Use dissipative parallel flow with Lax flux")
-    .withDefault<bool>(false);
+    .withDefault<bool>(true);
 
   if (evolve_log) {
     // Evolve logarithm of density
