@@ -55,6 +55,12 @@ jobs:
         with:
           submodules: true
 
+      - name: Install pip packages
+        run: |
+          ./.pip_install_for_tests.sh 'netcdf4~=1.5' boutdata boututils git+https://github.com/boutproject/xhermes git+https://github.com/boutproject/zoidberg@better-metric
+          # Add the pip install location to the runner's PATH
+          echo ~/.local/bin >> $GITHUB_PATH
+
       - name: Build
         run: |
           cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
@@ -63,14 +69,10 @@ jobs:
                            $BOUT_CONFIGURE_OPTIONS
           cmake --build build -j4
 
-      - name: Install pip packages
-        run: |
-          ./.pip_install_for_tests.sh 'netcdf4~=1.5' boutdata boututils git+https://github.com/boutproject/xhermes git+https://github.com/boutproject/zoidberg@better-metric
-          # Add the pip install location to the runner's PATH
-          echo ~/.local/bin >> $GITHUB_PATH
       - name: Run tests
         run: cd build &&
              ctest --output-on-failure --timeout 300 -L $TEST_TYPE
+
       - name: Upload test coverage data
         uses: codecov/codecov-action@v5
         with:
