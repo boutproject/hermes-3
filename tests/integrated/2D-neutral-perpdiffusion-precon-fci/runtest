@@ -10,7 +10,7 @@ gridpath = "../../../../grids/mms_slab_fci_xz/"
 
 
 def gridname(nx):
-    return gridpath + f"MMS_straight_slab_{nx}_4_{nx-4}.fci.grid.nc"
+    return gridpath + f"MMS_straight_slab_{nx}_1_{nx-4}.fci.grid.nc"
 
 
 # List of NY values to use
