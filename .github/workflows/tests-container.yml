@@ -43,7 +43,8 @@ jobs:
                               -DPACKAGE_TESTS=OFF \
                               -DCMAKE_PREFIX_PATH=/usr/local \
                               -DHERMES_ERROR_ON_WARNINGS=ON \
-                              -DHERMES_BUILD_BOUT=OFF
+                              -DHERMES_BUILD_BOUT=OFF \
+                              -DCMAKE_BUILD_TYPE=RelWithDebInfo
           make -C build -j 2 VERBOSE=1
 
       - name: Run test
