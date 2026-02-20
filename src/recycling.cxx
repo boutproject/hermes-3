@@ -260,7 +260,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
           // If cell is a pump, overwrite multiplier with pump multiplier
           BoutReal multiplier = channel.target_multiplier;
-          if ((is_pump[i] == 1.0) and (neutral_pump)) {
+          if ((is_pump[i] > 0.5) and (neutral_pump)) {
             multiplier = channel.pump_multiplier;
           }
 
@@ -288,7 +288,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
           BoutReal pump_neutral_energy_sink = 0.0;
 
           // These are additional to particle sinks due to recycling
-          if ((is_pump[i] == 1.0) and (neutral_pump)) {
+          if ((is_pump[i] > 0.5) and (neutral_pump)) {
 
             // Free boundary condition on Nn, Tn
             // Used in this component only
@@ -354,7 +354,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
           // If cell is a pump, overwrite multiplier with pump multiplier
           BoutReal multiplier = channel.target_multiplier;
-          if ((is_pump[i] == 1.0) and (neutral_pump)) {
+          if ((is_pump[i] > 0.5) and (neutral_pump)) {
             multiplier = channel.pump_multiplier;
           }
 
@@ -382,7 +382,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
           BoutReal pump_neutral_energy_sink = 0.0;
 
           // These are additional to particle sinks due to recycling
-          if ((is_pump[i] == 1.0) and (neutral_pump)) {
+          if ((is_pump[i] > 0.5) and (neutral_pump)) {
 
             // Free boundary condition on Nn, Tn
             // Used in this component only
