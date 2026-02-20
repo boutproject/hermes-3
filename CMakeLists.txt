@@ -342,8 +342,7 @@ if(HERMES_TESTS)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
-  hermes_add_integrated_test(1D-recycling
-    CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-recycling)
   hermes_add_integrated_test(diffusion)
   hermes_add_integrated_test(evolve_density)
   hermes_add_integrated_test(neutral_mixed)
