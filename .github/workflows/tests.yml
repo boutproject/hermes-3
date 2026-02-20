@@ -15,41 +15,30 @@ defaults:
 
 jobs:
   cmake_tests:
-    name: ${{ matrix.config.name }}, ${{ matrix.build_type.test_type }} tests
-    runs-on: ${{ matrix.config.os }}
+    name: ${{ matrix.configure_options }}, ${{ matrix.test_type }} tests
+    runs-on: ubuntu-latest
     env:
-      OMP_NUM_THREADS: ${{ matrix.config.omp_num_threads }}
+      OMP_NUM_THREADS: 1
       PYTHONPATH: ${{ github.workspace }}/tools/pylib
       OMPI_MCA_rmaps_base_oversubscribe: yes
       MPIRUN: mpiexec -np
       LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
-      BOUT_CONFIGURE_OPTIONS: ${{ matrix.config.configure_options }}
-      BUILD_TYPE: ${{ matrix.build_type.cmake_build_type }}
-      TEST_TYPE: ${{ matrix.build_type.test_type }}
+      BOUT_CONFIGURE_OPTIONS: ${{ matrix.configure_options }}
+      BUILD_TYPE: RelWithDebInfo
+      TEST_TYPE: ${{ matrix.test_type }}
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - name: "CMake default options"
-            os: ubuntu-latest
-            configure_options: ""
+        test_type: ['unit', 'integration']
+        configure_options: ["-DBOUT_ENABLE_METRIC_3D=ON -DBOUT_DOWNLOAD_SUNDIALS=ON", ""]
 
-          - name: "3D Metrics"
-            os: ubuntu-latest
-            configure_options: "-DBOUT_ENABLE_METRIC_3D=ON"
-        build_type:
-          - cmake_build_type: Debug
-            test_type: unit
-          - cmake_build_type: Release
-            test_type: integration
 
     steps:
       - name: Job information
         run: |
-          echo Build: ${{ matrix.config.name }}, ${{ matrix.config.os }}
-          echo Configure options: ${{ matrix.config.configure_options }}
-          echo Build type: ${{ matrix.build_type.cmake_build_type }}
-          echo Tests to run: ${{ matrix.build_type.test_type }}
+          echo Build: ${{ matrix.test_type }}
+          echo Configure options: ${{ matrix.configure_options }}
+          echo Tests to run: ${{ matrix.test_type }}
 
       - name: Install dependencies
         run: sudo apt update &&
@@ -93,4 +82,4 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          flags: ${{ matrix.build_type.test_type }}
+          flags: ${{ matrix.test_type }}

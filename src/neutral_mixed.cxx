@@ -461,7 +461,6 @@ void NeutralMixed::finally(const Options& state) {
     } else {
       ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn.asField3DParallel() * Vn);
     }
-    // TODO(dave) check sign
     ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
   } else {
     ddt(Pn) = 0.0;

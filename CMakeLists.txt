@@ -340,7 +340,8 @@ if(HERMES_TESTS)
 
     set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
   endfunction()
-
+  hermes_add_integrated_test(2D-circular-anomalous-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-fluid)
   hermes_add_integrated_test(1D-recycling)
   hermes_add_integrated_test(diffusion)
