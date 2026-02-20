@@ -417,7 +417,7 @@ void NeutralMixed::finally(const Options& state) {
   // Transport Processes in Gases", 1972
   // eta_n = (2. / 5) * m_n * kappa_n;
   //
-  eta_n = AA * (2. / 5) * kappa_n;
+  eta_n = AA * (2. / 5) * kappa_n.asField3DParallel();
 
   /////////////////////////////////////////////////////
   // Neutral density
