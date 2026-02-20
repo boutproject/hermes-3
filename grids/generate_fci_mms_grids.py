@@ -17,7 +17,7 @@ folder = "mms_slab_fci_y/"
 for scale in 1, 2, 4, 8:
     nx = 2 + 4  # 4 Guard cells
     ny = 16 * scale
-    nz = 4
+    nz = 1
     todo.append((folder, nx, ny, nz))
 
 force = "-f" in sys.argv or "--force" in sys.argv
