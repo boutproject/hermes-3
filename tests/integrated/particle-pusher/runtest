@@ -21,7 +21,7 @@ def particle_push_input(nx=40, ny=36, dt=0.005, nsteps=1,
   # run a simulation with this file using
   # $ OMP_NUM_THREADS=1 mpirun -np 8 ./bout-particle-push -d particle-push-slab
   # postprocess with 
-  # $ python3 path/to/the/particle_animater.py hypnotoad_dmplex_mesh_output.h5 traj_reflection_dmplex_example.h5part
+  # $ python3 path/to/the/particle_animater.py dmplex_mesh_data.h5 particle_trajectories.h5part
   [mesh]
   # Uses the full cxx implementation of DMPlex
   # calculation to interface to NESO-Particles,
@@ -105,7 +105,7 @@ def test_particle_push(file, nsteps = 10, remove_threshold = 0.0, merge_threshol
   s, out = launch_safe(cmd, nproc=nproc, mthread=1, pipe=True)
   # variable to determine if test passed
   success = True
-  particle_positions_file_path = "traj_reflection_dmplex_example.h5part"
+  particle_positions_file_path = r"particle-push-slab-test/particle_trajectories.h5part"
   particle_positions = load_particle_data(particle_positions_file_path)
   nsteps_out = len(particle_positions)
   # number of steps the same
@@ -115,7 +115,7 @@ def test_particle_push(file, nsteps = 10, remove_threshold = 0.0, merge_threshol
   nparticles_N, _ = np.shape(particle_positions[-1])
   success = success and (nparticles_0 == nparticles_N)
   # check the mass diagnostic
-  ncfile_path = "bout_particle_moments_0.nc"
+  ncfile_path = r"particle-push-slab-test/BOUT.dmp.0.nc"
   ncdataset = nc.Dataset(ncfile_path, mode='r')
   total_mass = np.copy(ncdataset.variables["total_mass"][:])
   total_ion_mass = np.copy(ncdataset.variables["total_ion_mass"][:])

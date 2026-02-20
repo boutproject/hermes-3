@@ -220,7 +220,7 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
       Options::root()["mesh"]["dmplex_name"].withDefault("hypnotoad_dmplex_mesh");
   std::string dmplex_h5_filename =
       Options::root()["mesh"]["dmplex_h5_filename"].withDefault(
-          "hypnotoad_dmplex_mesh_output.h5");
+          "dmplex_mesh_data.h5");
   dmplex_h5_filename = make_output_path(dmplex_h5_filename);
   output << fmt::format("Using option use_cxx_ivertex = {}", use_cxx_ivertex)
          << std::endl;
@@ -1005,7 +1005,7 @@ int main(int argc, char** argv) {
       }
     };
     // uncomment to write a trajectory
-    H5Part h5part(make_output_path("traj_reflection_dmplex_example.h5part"),
+    H5Part h5part(make_output_path("particle_trajectories.h5part"),
                   A_particle_group, Sym<REAL>("POSITION"), Sym<REAL>("VELOCITY"));
 
     // allocate buffer vector for scalar projection/evaluation of NESO-Particles
