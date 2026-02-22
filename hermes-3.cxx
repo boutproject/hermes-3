@@ -356,7 +356,12 @@ int Hermes::init(bool restarting) {
 	coord->cellarea_yup = coord->J_perp * coord->dx * coord->dz * coord->Bxy / coord->By_cell_yhigh;
         coord->cellarea_ydown = coord->J_perp * coord->dx * coord->dz * coord->Bxy / coord->By_cell_ylow;
 	coord->cellvolume = coord->J * coord->dx * coord->dy * coord->dz;
-	
+
+	BOUT_FOR(i, coord->Bxy.getRegion("RGN_NOBNDRY")) {
+          ASSERT0(coord->cellarea_yup[i] > 0.0);
+	  ASSERT0(coord->cellarea_ydown[i] > 0.0);
+	  ASSERT0(coord->cellvolume[i] > 0.0);
+        }
 	
       } else {
 	coord->dx /= rho_s0 * rho_s0 * Bnorm;
