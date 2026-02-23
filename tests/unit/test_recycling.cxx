@@ -109,17 +109,16 @@ TEST_F(RecyclingTest, TargetPumpSource) {
   state["species"]["d"]["pressure"] = 1.0;
 
   static_cast<FakeMesh*>(mesh)->setGridDataSource(
-    new FakeGridDataSource({{"is_pump", 1.0}}));
+      new FakeGridDataSource({{"is_pump", 1.0}}));
 
   Recycling component("test", options, nullptr);
   component.declareAllSpecies({"d+", "d"});
   component.transform(state);
 
-
   Options outputs = {
-    {"Tnorm", 1.0},
-    {"Nnorm", 1.0},
-    {"Omega_ci", 1.0},
+      {"Tnorm", 1.0},
+      {"Nnorm", 1.0},
+      {"Omega_ci", 1.0},
   };
 
   component.outputVars(outputs);
@@ -141,6 +140,3 @@ TEST_F(RecyclingTest, TargetPumpSource) {
     }
   }
 }
-
-
-
