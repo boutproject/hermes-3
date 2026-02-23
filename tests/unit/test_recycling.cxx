@@ -80,3 +80,67 @@ TEST_F(RecyclingTest, RecycleSourceChange) {
     }
   }
 }
+
+// Test that enabling the pump leads to a non-zero pump neutral sink
+// on targets
+TEST_F(RecyclingTest, TargetPumpSource) {
+  Options options;
+  options["units"]["eV"] = 1.0;
+  options["test"]["species"] = "d+";
+  options["d+"]["recycle_as"] = "d";
+  options["d+"]["target_recycle"] = true;
+  options["d+"]["neutral_pump"] = true;
+  options["d+"]["pump_recycle_multiplier"] = 0.5;
+  options["d+"]["diagnose"] = true;
+  options["d"]["diagnose"] = true;
+
+  Options state;
+
+  state["species"]["d+"]["AA"] = 2.0;
+  state["species"]["d+"]["density"] = 1.0;
+  state["species"]["d+"]["velocity"] = 1.0;
+  state["species"]["d+"]["temperature"] = 1.0;
+  state["species"]["d+"]["pressure"] = 1.0;
+
+  state["species"]["d"]["AA"] = 2.0;
+  state["species"]["d"]["density"] = 1.0;
+  state["species"]["d"]["velocity"] = 1.0;
+  state["species"]["d"]["temperature"] = 1.0;
+  state["species"]["d"]["pressure"] = 1.0;
+
+  static_cast<FakeMesh*>(mesh)->setGridDataSource(
+    new FakeGridDataSource({{"is_pump", 1.0}}));
+
+  Recycling component("test", options, nullptr);
+  component.declareAllSpecies({"d+", "d"});
+  component.transform(state);
+
+
+  Options outputs = {
+    {"Tnorm", 1.0},
+    {"Nnorm", 1.0},
+    {"Omega_ci", 1.0},
+  };
+
+  component.outputVars(outputs);
+
+  ASSERT_TRUE(outputs.isSet("Sd_pump"));
+  ASSERT_TRUE(outputs.isSet("Ed_pump"));
+
+  auto pump_density_source = get<Field3D>(outputs["Sd_pump"]);
+  auto pump_energy_source = get<Field3D>(outputs["Ed_pump"]);
+  auto is_pump = get<Field3D>(outputs["is_pump"]);
+
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < mesh->LocalNz; jz++) {
+
+      auto i = indexAt(pump_density_source, r.ind, mesh->yend, jz);
+
+      ASSERT_LT(pump_density_source[i], 0.0);
+      ASSERT_LT(pump_energy_source[i], 0.0);
+    }
+  }
+}
+
+
+
