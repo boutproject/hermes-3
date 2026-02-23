@@ -256,6 +256,12 @@ Recycling has been implemented at the target, the SOL edge and the PFR edge.
 Each is off by default and must be activated with a separate flag. Each can be 
 assigned a separate recycle multiplier and recycle energy. 
 
+.. warning::
+   For recycling and pumping to work, there must be some incident particle flow on the wall.
+   Example setups where there is no flow to the boundary include the use of `noflow_boundary` for the 
+   targets, and `Neumann` boundary conditions for the radial boundaries.
+
+
 Configuring thermal recycling
 ^^^^^^^^^^^^^^^
 
@@ -352,25 +358,29 @@ Neutral pump
 ^^^^^^^^^^^^^^^
 
 The recycling component also features a neutral pump which has now been implemented for the SOL, PFR
-as well as the target. The pump is a region of the wall which facilitates particle loss by incomplete 
-recycling and neutral absorption. 
+as well as the target. The pump represents a solid surface which can absorb both plasma and neutrals,
+and so cannot be set up without recycling being enabled on the host boundary. When the pump is enabled,
+on a recycling surface:
+
+- The recycling fraction in the pump region is set to the pump multiplier
+- In addition to recycling, there is now an additional sink of neutrals
 
 .. warning::
    The pump requires wall recycling to be enabled on the relevant wall region.
 
-The particle loss rate :math:`\Gamma_{N_{n}}` is the sum of the incident ions that are not recycled and the 
-incident neutrals which are not reflected, both of which are controlled by the pump multiplier :math:`M_{p}` 
-which is set by the `pump_multiplier` option in the input file. The unrecycled ion flux :math:`\Gamma_{N_{i}}^{unrecycled}` is calculated using the recycling
-model and allows for either thermal or fast recycling, but with the difference that the `pump_multiplier` replaces the `recycle_multiplier`. 
+The additional neutral sink due to the pump :math:`\Gamma_{N_{n}}^{loss}` 
+is calculated by multiplying the incident neutral flux :math:`\Gamma_{N_{n}}^{incident}` by the fraction 
+of neutrals which are not reflected :math:`(1-M_{p})`. The pump multiplier also affects the ions
+by overriding the ion recycle multiplier on that surface.
 
 .. math::
 
    \begin{aligned}
-   \Gamma_{N_{n}} &= \Gamma_{N_{i}}^{unrecycled} + M_{p} \times \Gamma_{N_{n}}^{incident} \\
+   \Gamma_{N_{n}}^{loss} &= (1 - M_{p}) \times \Gamma_{N_{n}}^{incident} \\
    \Gamma_{N_{n}}^{incident} &= N_{n} v_{th} = N_{n} \frac{1}{4} \sqrt{\frac{8 T_{n}}{\pi m_{n}}} \\
    \end{aligned}
 
-Where the thermal velocity formulation is for a static maxwellian in 1D (see Stangeby p.64, eqns 2.21, 2.24) 
+The thermal velocity formulation is for a static maxwellian in 1D (see Stangeby p.64, eqns 2.21, 2.24) 
 and the temperature is in `eV`.
 
 The heat loss rate :math:`\Gamma_{E_{n}}` is calculated as:
@@ -378,7 +388,7 @@ The heat loss rate :math:`\Gamma_{E_{n}}` is calculated as:
 .. math::
 
    \begin{aligned}
-   \Gamma_{E_{n}} &= \Gamma_{E_{i}}^{unrecycled}  + M_{p} \times \Gamma_{E_{n}}^{incident} \\
+   \Gamma_{E_{n}}^{loss} &= (1 - M_{p}) \times \Gamma_{E_{n}}^{incident} \\
    \Gamma_{E_{n}}^{incident} &= \gamma T_{n} N_{n} v_{th} = 2 T_{n} N_{n} \frac{1}{4} \sqrt{\frac{8 T_{n}}{\pi m_{n}}} \\
    \end{aligned}
 
@@ -391,12 +401,15 @@ A cell must satisfy the following conditions to be considered part of the pump:
 
 The field `is_pump` must be created by the user and added to the grid file as a `Field2D`.
 
-Diagnostic variables
+Diagnostic variables and settings
 ^^^^^^^^^^^^^^^
 Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, and the 
 SOL/PFR region (grouped together as `wall`, e.g. `Sd_wall_recycle`). The pump diagnostics are provided in the form
-of neutral particle and energy losses due to the pump, e.g. `Sd_pump` and `Ed_pump`.
-In addition, the 2D field definining the pump location (`is_pump`) is saved as a diagnostic for convenience.
+of neutral particle and energy losses due to the pump, e.g. `Sd_pump` and `Ed_pump`, which correspond to 
+:math:`\Gamma_{N_{n}}^{loss}` and :math:`\Gamma_{E_{n}}^{loss}` respectively. The pump recycle multiplier is 
+set by the `pump_multiplier` option, and recycling coefficients by `target_recycle_multiplier`, etc.
+The pump and recycling surfaces can be enabled or disabled using `target_recycle`, `sol_recycle`, `pfr_recycle`
+and `neutral_pump` flags.
 
 
 .. doxygenstruct:: Recycling
