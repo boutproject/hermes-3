@@ -4,6 +4,7 @@
 #include "bout/output.hxx"
 #include "bout/petsclib.hxx"
 #include <bout/field_factory.hxx>
+#include "bout-particle-push.hxx"
 #include <algorithm>
 #include <cmath>
 #include <fmt/core.h>
@@ -893,12 +894,29 @@ int main(int argc, char** argv) {
     // make pointer to projection object
     auto dg0 = std::make_shared<PetscInterface::DMPlexProjectEvaluateDG>(
         neso_mesh, sycl_target, "DG", 0);
+
+    // Ionisation reaction
+    // ------------------------------------------------------------------------------
+
     const REAL iz_rate = Options::root()["VANTAGE_reactions"]["iz_rate"].withDefault(1.0);
     auto iz_rate_data = FixedRateData(iz_rate);
     main_species.set_id(0);
     auto ionisation_reaction = ElectronImpactIonisation<FixedRateData, FixedRateData>(
         A_particle_group->sycl_target, iz_rate_data, iz_rate_data, main_species,
         electron_species);
+
+    // Recombination reaction
+    // ------------------------------------------------------------------------------
+
+    const BoutReal rec_markers_per_cell =
+        Options::root()["VANTAGE_reactions"]["rec_markers_per_cell"].withDefault(1000);
+    const BoutReal rec_rate =
+        Options::root()["VANTAGE_reactions"]["rec_rate"].withDefault(1.0);
+    auto rec_rate_data = FixedRateData(rec_rate);
+
+    // Numerical settings: weight, std_dev, species_id
+    ParticleSet maxwellian_markers = uniform_cellwise_maxwellian<2>(
+        sycl_target, neso_mesh, particle_spec, rec_markers_per_cell, 1.0, 0.5, -1);
 
     // Reaction controllers
     const REAL remove_threshold =
