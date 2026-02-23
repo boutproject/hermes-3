@@ -178,9 +178,6 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
                        .withDefault<bool>(false);
   }
 
-  if (target_recycle) {
-    setPermissions(readIfSet("species:{from}:energy_flow_ylow"));
-  }
   if (sol_recycle or pfr_recycle) {
     setPermissions(readIfSet("species:{from}:energy_flow_xlow"));
     setPermissions(readIfSet("species:{from}:particle_flow_xlow"));
@@ -230,22 +227,15 @@ void Recycling::transform_impl(GuardedOptions& state) {
                         ? getNonFinal<Field3D>(species_to["energy_source"])
                         : 0.0;
 
+    channel.pump_density_source = 0;
+    channel.pump_energy_source = 0;
+
     // Recycling at the divertor target plates
     if (target_recycle) {
 
       if (!has_sheath_boundary_simple and (channel.target_fast_recycle_fraction > 0.0)) {
         throw BoutException(
             "Currently only sheath_boundary_simple is supported for fast recycling.");
-      }
-
-      if (has_sheath_boundary_simple) {
-        // Fast recycling needs to know how much energy the "from" species is losing to
-        // the boundary
-        if (species_from.isSet("energy_flow_ylow")) {
-          energy_flow_ylow = get<Field3D>(species_from["energy_flow_ylow"]);
-        } else {
-          energy_flow_ylow = 0.0;
-        }
       }
 
       channel.target_recycle_density_source = 0.0;
@@ -258,6 +248,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
           auto i = indexAt(Nn, r.ind, mesh->ystart, jz); // Final domain cell
           auto ig = i.ym();                              // First guard cell
+          auto is = i.yp();                              // Second to last domain cell
 
           // Reproduce sheath advected particle flux from evolve_density
           BoutReal flux = -0.5 * (N[i] + N[ig]) * 0.5 * (V[i] + V[ig]);
@@ -267,12 +258,14 @@ void Recycling::transform_impl(GuardedOptions& state) {
                                  * (dx[i] + dx[ig]) * 0.5 * (dz[i] + dz[ig]);
           BoutReal volume = J[i] * dx[i] * dy[i] * dz[i];
 
-          // Flow of recycled neutrals into domain [s-1]
-          BoutReal flow = channel.target_multiplier * flux * daparsheath;
+          // If cell is a pump, overwrite multiplier with pump multiplier
+          BoutReal multiplier = channel.target_multiplier;
+          if ((is_pump[i] > 0.5) and (neutral_pump)) {
+            multiplier = channel.pump_multiplier;
+          }
 
-          // Calculate sources in the final cell [m^-3 s^-1]
-          channel.target_recycle_density_source[i] += flow / volume; // For diagnostic
-          density_source[i] += flow / volume;                        // For use in solver
+          // Flow of recycled neutrals into domain [s-1]
+          BoutReal recycle_particle_flow = multiplier * flux * daparsheath;
 
           // Reproduce sheath advected energy flux from evolve_pressure
           BoutReal nisheath = (N[i] + N[ig]) * 0.5;
@@ -284,16 +277,59 @@ void Recycling::transform_impl(GuardedOptions& state) {
           // Blend fast (ion energy) and thermal (constant energy) recycling
           // Calculate returning neutral heat flow in [W]
           BoutReal recycle_energy_flow =
-              // Fast recycling part
-              sheath_ion_heat_flow * channel.target_multiplier
+              sheath_ion_heat_flow * multiplier
                   * channel.target_fast_recycle_energy_factor
-                  * channel.target_fast_recycle_fraction
-              // Thermal recycling part
-              + flow * (1 - channel.target_fast_recycle_fraction) * channel.target_energy;
+                  * channel.target_fast_recycle_fraction // Fast recycling part
+              + recycle_particle_flow * (1 - channel.target_fast_recycle_fraction)
+                    * channel.target_energy; // Thermal recycling part
 
-          // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
+          // Calculate neutral pump neutral sinks due to neutral impingement
+          BoutReal pump_neutral_particle_sink = 0.0;
+          BoutReal pump_neutral_energy_sink = 0.0;
+
+          // These are additional to particle sinks due to recycling
+          if ((is_pump[i] > 0.5) and (neutral_pump)) {
+
+            // Free boundary condition on Nn, Tn
+            // Used in this component only
+            BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
+            BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
+
+            // Calculate wall conditions
+            BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
+            BoutReal tnsheath = 0.5 * (Tn[i] + tnguard);
+            BoutReal v_th =
+                0.25 * sqrt(8 * tnsheath / (PI * AAn)); // Stangeby p.69 eqns. 2.21, 2.24
+
+            // Calculate particle and energy fluxes of neutrals hitting the pump
+            // Assume thermal velocity greater than perpendicular velocity and use it for
+            // flux calc
+            BoutReal pump_neutral_particle_flow = v_th * nnsheath * daparsheath; // [s^-1]
+            pump_neutral_particle_sink = pump_neutral_particle_flow / volume
+                                         * (1 - multiplier); // Particle sink [s^-1 m^-3]
+
+            BoutReal pump_neutral_energy_flow =
+                2.0 * tnsheath * v_th * nnsheath * daparsheath; // [W]
+            pump_neutral_energy_sink =
+                pump_neutral_energy_flow / volume * (1 - multiplier); // heatsink [W m^-3]
+
+            // Divide flows by volume to get sources
+            // Save to pump diagnostic
+            channel.pump_density_source[i] = -pump_neutral_particle_sink;
+            channel.pump_energy_source[i] = -pump_neutral_energy_sink;
+          }
+
+          // Put recycling sources into diagnostic
+          // (pump sink is a separate diagnostic).
+          // Put both recycling and neutral sources into state
+          channel.target_recycle_density_source[i] +=
+              recycle_particle_flow / volume; // [m^-3 s^-1] For diagnostic
+          density_source[i] +=
+              recycle_particle_flow / volume
+              - pump_neutral_particle_sink; // [m^-3 s^-1] For use in solver
+
           channel.target_recycle_energy_source[i] += recycle_energy_flow / volume;
-          energy_source[i] += recycle_energy_flow / volume;
+          energy_source[i] += recycle_energy_flow / volume - pump_neutral_energy_sink;
         }
       }
 
@@ -302,9 +338,10 @@ void Recycling::transform_impl(GuardedOptions& state) {
       for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
 
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-
+          // Flux through surface [normalised m^-2 s^-1], should be positive
           auto i = indexAt(Nn, r.ind, mesh->yend, jz); // Final domain cell
           auto ig = i.yp();                            // First guard cell
+          auto is = i.ym();                            // Second to last domain cell
 
           // Reproduce sheath advected particle flux from evolve_density
           BoutReal flux = 0.5 * (N[i] + N[ig]) * 0.5 * (V[i] + V[ig]);
@@ -312,14 +349,17 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
           BoutReal daparsheath = (J[i] + J[ig]) / (sqrt(g_22[i]) + sqrt(g_22[ig])) * 0.5
                                  * (dx[i] + dx[ig]) * 0.5 * (dz[i] + dz[ig]);
+
           BoutReal volume = J[i] * dx[i] * dy[i] * dz[i];
 
-          // Flow of recycled neutrals into domain [s-1]
-          BoutReal flow = channel.target_multiplier * flux * daparsheath;
+          // If cell is a pump, overwrite multiplier with pump multiplier
+          BoutReal multiplier = channel.target_multiplier;
+          if ((is_pump[i] > 0.5) and (neutral_pump)) {
+            multiplier = channel.pump_multiplier;
+          }
 
-          // Calculate sources in the final cell [m^-3 s^-1]
-          channel.target_recycle_density_source[i] += flow / volume; // For diagnostic
-          density_source[i] += flow / volume;                        // For use in solver
+          // Flow of recycled neutrals into domain [s-1]
+          BoutReal recycle_particle_flow = multiplier * flux * daparsheath;
 
           // Reproduce sheath advected energy flux from evolve_pressure
           BoutReal nisheath = (N[i] + N[ig]) * 0.5;
@@ -331,16 +371,59 @@ void Recycling::transform_impl(GuardedOptions& state) {
           // Blend fast (ion energy) and thermal (constant energy) recycling
           // Calculate returning neutral heat flow in [W]
           BoutReal recycle_energy_flow =
-              // Fast recycling part
-              sheath_ion_heat_flow * channel.target_multiplier
+              sheath_ion_heat_flow * multiplier
                   * channel.target_fast_recycle_energy_factor
-                  * channel.target_fast_recycle_fraction
-              // Thermal recycling part
-              + flow * (1 - channel.target_fast_recycle_fraction) * channel.target_energy;
+                  * channel.target_fast_recycle_fraction // Fast recycling part
+              + recycle_particle_flow * (1 - channel.target_fast_recycle_fraction)
+                    * channel.target_energy; // Thermal recycling part
 
-          // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
+          // Calculate neutral pump neutral sinks due to neutral impingement
+          BoutReal pump_neutral_particle_sink = 0.0;
+          BoutReal pump_neutral_energy_sink = 0.0;
+
+          // These are additional to particle sinks due to recycling
+          if ((is_pump[i] > 0.5) and (neutral_pump)) {
+
+            // Free boundary condition on Nn, Tn
+            // Used in this component only
+            BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
+            BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
+
+            // Calculate wall conditions
+            BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
+            BoutReal tnsheath = 0.5 * (Tn[i] + tnguard);
+            BoutReal v_th =
+                0.25 * sqrt(8 * tnsheath / (PI * AAn)); // Stangeby p.69 eqns. 2.21, 2.24
+
+            // Calculate particle and energy fluxes of neutrals hitting the pump
+            // Assume thermal velocity greater than perpendicular velocity and use it for
+            // flux calc
+            BoutReal pump_neutral_particle_flow = v_th * nnsheath * daparsheath; // [s^-1]
+            pump_neutral_particle_sink = pump_neutral_particle_flow / volume
+                                         * (1 - multiplier); // Particle sink [s^-1 m^-3]
+
+            BoutReal pump_neutral_energy_flow =
+                2.0 * tnsheath * v_th * nnsheath * daparsheath; // [W]
+            pump_neutral_energy_sink =
+                pump_neutral_energy_flow / volume * (1 - multiplier); // heatsink [W m^-3]
+
+            // Divide flows by volume to get sources
+            // Save to pump diagnostic
+            channel.pump_density_source[i] = -pump_neutral_particle_sink;
+            channel.pump_energy_source[i] = -pump_neutral_energy_sink;
+          }
+
+          // Put recycling sources into diagnostic
+          // (pump sink is a separate diagnostic).
+          // Put both recycling and neutral sources into state
+          channel.target_recycle_density_source[i] +=
+              recycle_particle_flow / volume; // [m^-3 s^-1] For diagnostic
+          density_source[i] +=
+              recycle_particle_flow / volume
+              - pump_neutral_particle_sink; // [m^-3 s^-1] For use in solver
+
           channel.target_recycle_energy_source[i] += recycle_energy_flow / volume;
-          energy_source[i] += recycle_energy_flow / volume;
+          energy_source[i] += recycle_energy_flow / volume - pump_neutral_energy_sink;
         }
       }
     }
@@ -351,8 +434,6 @@ void Recycling::transform_impl(GuardedOptions& state) {
       // Initialise counters of pump recycling fluxes
       channel.wall_recycle_density_source = 0;
       channel.wall_recycle_energy_source = 0;
-      channel.pump_density_source = 0;
-      channel.pump_energy_source = 0;
 
       if (species_from.isSet("energy_flow_xlow")) {
         energy_flow_xlow = get<Field3D>(species_from["energy_flow_xlow"]);
@@ -469,10 +550,9 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
               // Divide flows by volume to get sources
               // Save to pump diagnostic
-              channel.pump_density_source(mesh->xend, iy, iz) +=
-                  recycle_particle_flow / volume - pump_neutral_particle_sink;
-              channel.pump_energy_source(mesh->xend, iy, iz) +=
-                  recycle_energy_flow / volume - pump_neutral_energy_sink;
+              channel.pump_density_source(mesh->xend, iy, iz) =
+                  -pump_neutral_particle_sink;
+              channel.pump_energy_source(mesh->xend, iy, iz) = -pump_neutral_energy_sink;
 
             } else {
               // Save to wall diagnostic (pump sinks are 0 if not on pump)
@@ -595,10 +675,10 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
                 // Divide flows by volume to get sources
                 // Save to pump diagnostic
-                channel.pump_density_source(mesh->xstart, iy, iz) +=
-                    recycle_particle_flow / volume - pump_neutral_particle_sink;
-                channel.pump_energy_source(mesh->xstart, iy, iz) +=
-                    recycle_energy_flow / volume - pump_neutral_energy_sink;
+                channel.pump_density_source(mesh->xstart, iy, iz) =
+                    -pump_neutral_particle_sink;
+                channel.pump_energy_source(mesh->xstart, iy, iz) =
+                    -pump_neutral_energy_sink;
 
               } else {
                 // Save to wall diagnostic (pump sinks are 0 if not on pump)

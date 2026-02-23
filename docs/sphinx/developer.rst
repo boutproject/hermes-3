@@ -909,13 +909,13 @@ of the script.
 ~~~~~~~~~~~~~~
 
 This test uses the same restart file as 2D-production, but tests target recycling by reproducing the relevant
-recycling.cxx section in Python. It compares the source of recycled neutral density and energy between
+recycling.cxx section in Python. It compares the source of recycled neutral density and energy as well as 
+the pumped neutral density and energy sources between
 the calculation and the reference simulation. In the future, this test will be extended to radial recycling.
 
-The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
-of the script.
+This test is a reproduction of C++ code, and therefore there is no golden answer reference to update.
 
-This test also plots results and can be used to help with developing the recycling component. There
+This test plots results and can be used to help with developing the recycling component. There
 is a `plot` flag near the beginning of the file. 
 
 1D fluid (MMS)
