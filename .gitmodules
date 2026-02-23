@@ -13,13 +13,13 @@
   url = https://github.com/UKAEA-Edge-Code/VANTAGE-Reactions.git
 [submodule "external/xhermes"]
 	path = external/xhermes
-	url = git@github.com:boutproject/xhermes
+	url = https://github.com/boutproject/xhermes.git
 	ignore = dirty
 [submodule "external/xbout"]
 	path = external/xbout
-	url = git@github.com:boutproject/xbout
+	url = https://github.com/boutproject/xBOUT.git
 	ignore = dirty
 [submodule "external/boutdata"]
 	path = external/boutdata
-	url = git@github.com:boutproject/boutdata.git
+	url = https://github.com/boutproject/boutdata.git
 	ignore = dirty
