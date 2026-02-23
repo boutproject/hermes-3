@@ -366,7 +366,7 @@ on a recycling surface:
 - In addition to recycling, there is now an additional sink of neutrals
 
 .. warning::
-   The pump requires wall recycling to be enabled on the relevant wall region.
+   The pump requires recycling to be enabled on the relevant boundary region.
 
 The additional neutral sink due to the pump :math:`\Gamma_{N_{n}}^{loss}` 
 is calculated by multiplying the incident neutral flux :math:`\Gamma_{N_{n}}^{incident}` by the fraction 
@@ -403,13 +403,18 @@ The field `is_pump` must be created by the user and added to the grid file as a 
 
 Diagnostic variables and settings
 ^^^^^^^^^^^^^^^
+
+.. note::
+   All recycling settings are in the ion header (e.g. `[d+]`), including pump settings.
+
 Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, and the 
 SOL/PFR region (grouped together as `wall`, e.g. `Sd_wall_recycle`). The pump diagnostics are provided in the form
 of neutral particle and energy losses due to the pump, e.g. `Sd_pump` and `Ed_pump`, which correspond to 
 :math:`\Gamma_{N_{n}}^{loss}` and :math:`\Gamma_{E_{n}}^{loss}` respectively. The pump recycle multiplier is 
 set by the `pump_multiplier` option, and recycling coefficients by `target_recycle_multiplier`, etc.
 The pump and recycling surfaces can be enabled or disabled using `target_recycle`, `sol_recycle`, `pfr_recycle`
-and `neutral_pump` flags.
+and `neutral_pump` flags. 
+
 
 
 .. doxygenstruct:: Recycling
