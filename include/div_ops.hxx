@@ -613,13 +613,9 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
       // Divergencefree B leads to A1 * B1 = A2 * B2 -> A2 = A1 * B1 / B2
       
       if (dissipative) {
-      result[i] = (0.5 * (f_in[i] * (v_in[i] + amax) +
-                          f_up[iyp] * (v_up[iyp] - amax))
-                   * coord->cellarea_yup[i] -
-                   0.5 * (f_in[i] * (v_in[i] - amax) +
-                          f_down[iym] * (v_down[iym] + amax))
-                   * coord->cellarea_ydown[i])
-		   / ( coord->cellvolume[i]);
+	BoutReal flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cellarea_yup[i];
+	BoutReal flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cellarea_ydown[i];
+	result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
       } else {
       
       result[i] = (0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp])
