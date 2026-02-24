@@ -84,6 +84,8 @@
 #include <bout/field_factory.hxx>
 
 #include "include/recalculate_metric.hxx"
+#include "bout/boundary_iterator.hxx"
+#include <bout/yboundary_regions.hxx>
 
 #if !BOUT_USE_METRIC_3D
 // For standard 2D metrics,
@@ -362,8 +364,27 @@ int Hermes::init(bool restarting) {
 	  ASSERT0(coord->cellarea_ydown[i] > 0.0);
 	  ASSERT0(coord->cellvolume[i] > 0.0);
         }
+
+	Field3D tmp_has_bndry_up = false;
+	Field3D tmp_has_bndry_down = false;	  
+
 	
-      } else {
+	yboundary.init(options);
+	yboundary.iter_pnts([&](auto& pnt) {
+	  const auto& i = pnt.ind();
+	  if (pnt.dir > 0.0) {
+	    tmp_has_bndry_up[i] = true;
+	  } else if (pnt.dir < 0.0) {
+	    tmp_has_bndry_down[i] = true;
+	  }
+	});
+
+	coord->has_bndry_yup = tmp_has_bndry_up;
+	coord->has_bndry_ydown = tmp_has_bndry_down;
+
+	
+	
+      } else { // NOT FCI
 	coord->dx /= rho_s0 * rho_s0 * Bnorm;
 	coord->Bxy /= Bnorm;
 	// Metric is in grid file - just need to normalise
