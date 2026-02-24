@@ -249,7 +249,7 @@ SNB nonlocal heat flux
 
 Calculates the divergence of the electron heat flux using the
 Shurtz-Nicolai-Busquet (SNB) model. Uses the BOUT++ implementation which is
-`documented here <https://bout-dev.readthedocs.io/en/latest/user_docs/nonlocal.html?#snb-model>`_.
+`documented here <https://bout-dev.readthedocs.io/en/latest/user_docs/nonlocal.html?#snb-model>`__.
 
 .. doxygenstruct:: SNBConduction
    :members:
@@ -383,7 +383,7 @@ using flows already calculated for other species. It is used like `quasineutral`
 
    [hermes]
    components = h+, ..., e, ...   # Note: e after all other species
-   
+
    [e]
    type = ..., zero_current,... # Set e:velocity
 

@@ -553,7 +553,7 @@ Applying sources using the input file
 The simplest way to implement a source in one of the Hermes-3 equations is through the input file.
 This is done by defining an array representing values of the source across the entire domain
 using the BOUT++ input file syntax (see `BOUT++ documentation
-<https://bout-dev.readthedocs.io/en/latest/user_docs/bout_options.html>`_).
+<https://bout-dev.readthedocs.io/en/latest/user_docs/bout_options.html>`__).
 
 Sources are available for the density, pressure and momentum equations, and are prescribed under 
 a header corresponding to the chosen equation and species.

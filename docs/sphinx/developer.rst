@@ -26,9 +26,9 @@ Compiling documentation
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 The Hermes-3 documentation is built using `Sphinx <https:
-//www.sphinx-doc.org/en/master/usage/installation.html>`_ and 
-`Doxygen <https://www.doxygen.nl/index.html>`_. It's written in 
-`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`_, 
+//www.sphinx-doc.org/en/master/usage/installation.html>`__ and 
+`Doxygen <https://www.doxygen.nl/index.html>`__. It's written in 
+`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`__, 
 which is a markup language similar to Markdown. Doxygen generates automatic 
 documentation based on the C++ code, while Sphinx handles everything else.
 
@@ -72,7 +72,7 @@ Editing documentation is much easier if you can compile it locally using the fol
 6. **Open the generated HTML files**, either by double clicking on the file in your
    browser, or some other way. If you use VS Code locally or on a remote
    machine through SSH, you can use the extension `Live Preview <https:
-   //marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`_ which
+   //marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`__ which
    can stream it to your browser.
 
 Debugging: running for one iteration
@@ -140,7 +140,7 @@ Note that there are multiple ways to print out values in C++, and both ``std::st
 Debugging: segmentation faults
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-`Segmentation faults <https://thelinuxcode.com/segmentation-fault-cpp/>`_ can be frustrating because
+`Segmentation faults <https://thelinuxcode.com/segmentation-fault-cpp/>`__ can be frustrating because
 they give very little verbosity. In practice, the most common cause is trying to access a variable
 that hasn't been initialised yet. The easiest way to debug this is to carefully review the new lines of 
 code to make sure all variables exist and have been declared and initialised. If this is tricky,
@@ -148,14 +148,14 @@ another simple way is to comment out large parts of the code until the segmentat
 helping to narrow down its location. 
 
 While the above methods are very simple and can be effective, debugging tools such as 
-`gdb <https://sourceware.org/gdb/>`_ or `valgrind <https://valgrind.org/>`_ can be used to find 
+`gdb <https://sourceware.org/gdb/>`__ or `valgrind <https://valgrind.org/>`__ can be used to find 
 the segmentation fault as well.
 
 Debugging: compiling in debug mode
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This can be a useful way to catch errors. Please see the
-`relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`_ 
+`relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`__ 
 in the BOUT++ documentation.
 
 Header vs. implementation files
@@ -166,8 +166,8 @@ The convention of what should be in each one is not consistent in Hermes-3 at
 the moment. The most common standard is for the header file to contain all of the
 variable and class declarations and the implementation file to contain the rest.
 An example of this is in the ``evolve_density`` component - see the
-`implementation file <https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`_
-and the `header file <https://github.com/boutproject/hermes-3/blob/master/include/evolve_density.hxx>`_.
+`implementation file <https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`__
+and the `header file <https://github.com/boutproject/hermes-3/blob/master/include/evolve_density.hxx>`__.
 
 
 
@@ -178,7 +178,7 @@ Hermes-3 casts its variables in a variety of BOUT++ classes. Floats are
 usually represented as ``BoutReal``, and fields as ``Field3D``. Note that
 Hermes-3 always runs "in 3D" - when configured in 1D, the x and z dimensions
 are of unit length. See relevant `BOUT++ docs 
-<https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`_ 
+<https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`__ 
 for more info. There is also a data type called ``Options`` which is equivalent
 to a Python dictionary with extra functionality, and is used to store input
 options, the entire simulation state and many other data. Finally,
@@ -198,7 +198,7 @@ This is simple and uses the following syntax:
                      .withDefault<bool>(true);
 
 See `this real world example 
-<https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`_.
+<https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`__.
 
 The variable must also be declared in the corresponding header file.
 
@@ -337,7 +337,7 @@ These functions take a second argument which tells you where they were set, whic
 They are wrapped into additional functions, ``GET_VALUE`` and ``GET_NOBOUNDARY`` which automatically
 include this argument.
 
-Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`_ 
+Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`__ 
 for more details.
 
 
@@ -346,7 +346,7 @@ Looping over cells
 
 BOUT++ provides a really easy way to loop over the domain using ``BOUT_FOR`` and
 similar loops, see `BOUT++ docs <https://bout-dev.readthedocs
-.io/en/stable/developer_docs/data_types.html#iterating-over-fields>`_.
+.io/en/stable/developer_docs/data_types.html#iterating-over-fields>`__.
 
 There is a way to way to tell if you are in the core or not. The ``mesh`` object
 has a function to indicate if the coordinate is in a periodic region or not.
@@ -378,7 +378,7 @@ Code structure
 
 
 A hermes-3 model, like all `BOUT++ models
-<https://bout-dev.readthedocs.io/en/latest/user_docs/physics_models.htmlject.github.io/>`_,
+<https://bout-dev.readthedocs.io/en/latest/user_docs/physics_models.htmlject.github.io/>`__,
 is an implementation of a set of Ordinary Differential Equations
 (ODEs). The time integration solver drives the simulation, calling the
 `Hermes::rhs` function to calculate the time-derivatives of all the
@@ -421,8 +421,8 @@ and other components have their configuration options e.g. for reactions:
          )
 
 In terms of design patterns, the method used here is essentially a combination
-of the `Encapsulate Context <https://accu.org/journals/overload/12/63/kelly_246/>`_
-and `Command <https://en.wikipedia.org/wiki/Command_pattern>`_ patterns.
+of the `Encapsulate Context <https://accu.org/journals/overload/12/63/kelly_246/>`__
+and `Command <https://en.wikipedia.org/wiki/Command_pattern>`__ patterns.
 
 
 Simulation state
@@ -871,9 +871,9 @@ Tests
 --------------
 
 The specification of the Toro tests used here is taken from
-`Walker (2012) <https://doi.org/10.1371/journal.pone.0039999>`_,
+`Walker (2012) <https://doi.org/10.1371/journal.pone.0039999>`__,
 originally from Toro's book `Riemann Solvers and Numerical Methods for
-Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`_.
+Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`__.
 
 1D-recycling-dthe
 ~~~~~~~~~~~~~~~~~
@@ -975,7 +975,7 @@ Toro test 1
 ``tests/integrated/toro-1``
 
 Toro's test problem #1, from `Riemann Solvers and Numerical Methods
-for Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`_
+for Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`__
 is a variation of Sod's shock tube problem. The left state is moving
 into the right, increasing the speed of the resulting shock. Left
 state :math:`\left(\rho_L, u_L, p_L\right) = \left(1.0, 0.75,

@@ -6,7 +6,7 @@ Executing simulations
 
 Running Hermes-3 is done in the same way as any BOUT++ simulation.
 Please refer to the relevant `BOUT++ documentation 
-<https://bout-dev.readthedocs.io/en/stable/user_docs/running_bout.html>`_
+<https://bout-dev.readthedocs.io/en/stable/user_docs/running_bout.html>`__
 for details, or see below for a simple example.
 
 This command runs the simulation "1D-threshold" using 4 processors:
@@ -36,7 +36,7 @@ decomposition is hardcoded, and it is not possible to run in serial. Since each
 rank must contain the same number of grid cells, the simulation can only run
 on a certain number of processors. The way to calculate this number is rather
 obscure but covered in the `BOUT++ documentation 
-<https://bout-dev.readthedocs.io/en/stable/user_docs/input_grids.html#advanced>`_. 
+<https://bout-dev.readthedocs.io/en/stable/user_docs/input_grids.html#advanced>`__. 
 
 Output files
 ------------

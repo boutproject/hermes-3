@@ -9,7 +9,7 @@ Solvers
 
 While Hermes-3 has access to any solver within BOUT++ (`see the long
 list in the documentation <https://
-bout-dev.readthedocs.io/en/stable/user_docs/time_integration.html>`_), 
+bout-dev.readthedocs.io/en/stable/user_docs/time_integration.html>`__), 
 the development and optimisation efforts focuses on two solvers:
 
 CVODE
@@ -20,17 +20,17 @@ CVODE
    an adaptive order algorithm and will try to go as high order
    in time as possible and take long timesteps. Please
    see the `developer page <https://computing.llnl.gov/
-   projects/sundials/cvode>`_ for details. CVODE is required for 3D
+   projects/sundials/cvode>`__ for details. CVODE is required for 3D
    turbulence simulations and currently gives better results in 2D 
    simulations. `The BOUT++ implementation is here. <https
-   ://github.com/mikekryjak/BOUT-dev/blob/master/src/solver/impls/cvode/cvode.cxx>`_
+   ://github.com/mikekryjak/BOUT-dev/blob/master/src/solver/impls/cvode/cvode.cxx>`__
 
 beuler
    A first-order in time implementation of the backward Euler method.
-   This is implemented using the `SNES <https://petsc.org/release/manual/snes/>`_ 
-   nonlinear solver in `PETSc <https://petsc.org/release/>`_, and 
+   This is implemented using the `SNES <https://petsc.org/release/manual/snes/>`__ 
+   nonlinear solver in `PETSc <https://petsc.org/release/>`__, and 
    currently uses a GMRES linear solver and an ILU-type preconditioner
-   in `hypre <https://hypre.readthedocs.io/en/latest/ch-intro.html>`_. 
+   in `hypre <https://hypre.readthedocs.io/en/latest/ch-intro.html>`__. 
    The algebraic preconditioner allows for extreme speedups over CVODE,
    and can already be used in 1D with good results. 2D performance is
    highly mixed and still in development. 3D use is not feasible as the 
@@ -38,9 +38,9 @@ beuler
    Due to its first order nature, it will be less accurate for time-dependent
    problems, and it is mostly intended to solve for steady-state problems.
    `The BOUT++ implementation is here. <https://github.com/mikekryjak/
-   BOUT-dev/blob/master/src/solver/impls/snes/snes.cxx>`_. See the 
+   BOUT-dev/blob/master/src/solver/impls/snes/snes.cxx>`__. See the 
    higher level BOUT++ PETSc implementation `here <https://github.com
-   /mikekryjak/BOUT-dev/blob/master/src/solver/impls/petsc/petsc.cxx>`_.
+   /mikekryjak/BOUT-dev/blob/master/src/solver/impls/petsc/petsc.cxx>`__.
 
 Both CVODE and beuler have an adaptive timestepper and will take as long a 
 timestep as the Newton iteration failure rate will allow.
@@ -71,7 +71,7 @@ mxorder = 3
    for preventing the solver from getting "stuck" at high order with a
    small timestep. You can alternatively set ``stablimdet = true`` to
    enable automatic `stability limit detection <https://sundials.readthedocs
-   .io/en/latest/cvode/Mathematics_link.html#cvode-mathematics-stablimit>`_ 
+   .io/en/latest/cvode/Mathematics_link.html#cvode-mathematics-stablimit>`__ 
    to prevent this.
 
 atol = 1e-7

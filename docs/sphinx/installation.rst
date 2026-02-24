@@ -27,16 +27,16 @@ multiple builds available at the same time.
 If you make changes to the code, you can skip straight to the build stage to save time.
 Only modified files will be recompiled.
 
-Hermes-3 is built using `CMake <https://cmake.org>`_. During configuration `BOUT++
-<https://github.com/boutproject/BOUT-dev/>`_ will be automatically
+Hermes-3 is built using `CMake <https://cmake.org>`__. During configuration `BOUT++
+<https://github.com/boutproject/BOUT-dev/>`__ will be automatically
 downloaded as a submodule, together with some dependencies. The correct version 
-of `netCDF <https://www.unidata.ucar.edu/software/netcdf/>`_ is downloaded 
+of `netCDF <https://www.unidata.ucar.edu/software/netcdf/>`__ is downloaded 
 and compiled automatically for convenience. `FFTW
-<https://www.fftw.org/>`_ is assumed to be installed already. 
+<https://www.fftw.org/>`__ is assumed to be installed already. 
 
-Hermes-3 uses two solvers: `SUNDIALS <https://computing.llnl.gov/projects/sundials>`_ `cvode` for
+Hermes-3 uses two solvers: `SUNDIALS <https://computing.llnl.gov/projects/sundials>`__ `cvode` for
 time-dependent simulations and the faster `PETSc
-<https://petsc.org>`_ `beuler` for steady-state transport problems. While SUNDIALS
+<https://petsc.org>`__ `beuler` for steady-state transport problems. While SUNDIALS
 can be downloaded and installed automatically, PETSc requires manual installation.
 
 Installing with SUNDIALS (cvode) only
@@ -131,7 +131,7 @@ any previously generated build directories.
 Dependencies
 ~~~~~~~~~~~~
 Since Hermes-3 heavily relies on BOUT++, the `BOUT++ documentation on installation and
-dependencies <https://bout-dev.readthedocs.io/en/stable/user_docs/quickstart.html#prerequisites>`_ 
+dependencies <https://bout-dev.readthedocs.io/en/stable/user_docs/quickstart.html#prerequisites>`__ 
 contains a lot of useful information. Below is a selection of working module lists
 for several HPC systems. It is recommended you start with a clean module environment 
 by executing `module purge` first.
@@ -216,7 +216,7 @@ Slope (flux) limiter settings
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Advection operators in Hermes-3 use slope limiters, also called `flux
-limiters <https://en.wikipedia.org/wiki/Flux_limiter>`_ to suppress
+limiters <https://en.wikipedia.org/wiki/Flux_limiter>`__ to suppress
 spurious numerical oscillations near sharp features, while converging
 at 2nd-order in smooth regions. In general there is a trade-off
 between suppression of numerical oscillations and dissipation: Too
@@ -241,7 +241,7 @@ lead to over-dissipation, but greater robustness.
 
 Compiling in debug mode
 ~~~~~~~~~~~~~~~~~~~~~~~
-Please see the `relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`_ 
+Please see the `relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`__ 
 in the BOUT++ documentation.
 
 
@@ -260,7 +260,7 @@ CMake the path to the BOUT++ `build` directory e.g.
 The version of BOUT++ required by Hermes-3 is periodically updated, and is usually derived 
 from a commit on the `next` branch of BOUT++. The up to date commit can be found in the 
 `"external" directory of the Hermes-3 repo 
-<https://github.com/bendudson/hermes-3/tree/master/external>`_.
+<https://github.com/bendudson/hermes-3/tree/master/external>`__.
 
 
 Custom configuration of CMake
@@ -268,7 +268,7 @@ Custom configuration of CMake
 
 The CMake configuration can be customised: See the `BOUT++
 documentation
-<https://bout-dev.readthedocs.io/en/latest/user_docs/installing.html#cmake>`_
+<https://bout-dev.readthedocs.io/en/latest/user_docs/installing.html#cmake>`__
 for examples of using `cmake` arguments, or edit the compile options
 interactively before building:
 
@@ -291,11 +291,11 @@ workaround is to compile with the CMake flag `-DBOUT_IGNORE_CONDA_ENV=ON`.
 Using Spack
 -----------
 
-In this section we describe how to build Hermes-3 using `spack <https://spack.io/>`_ to manage the
+In this section we describe how to build Hermes-3 using `spack <https://spack.io/>`__ to manage the
 installation of standard packages to your local environment. By default, dependencies like NetCDF4,
 PETSc and SUNDIALS will be installed automatically, as required, but note that it's also possible to
 `use your own versions of packages
-<https://spack.readthedocs.io/en/latest/packages_yaml.html#external-packages>`_ (either
+<https://spack.readthedocs.io/en/latest/packages_yaml.html#external-packages>`__ (either
 system-installed or locally-built). While spack *can* be used to build Hermes-3 at a particular
 version, the instructions below also allow you to compile BOUT++ and Hermes-3 as part of a
 development workflow, i.e. using any changes you have made to the code in the working tree of your
@@ -311,7 +311,7 @@ Install Spack
 ~~~~~~~~~~~~~
 
 Instructions for installing spack on a variety of operating systems can be found in the `spack docs
-<https://spack.readthedocs.io/en/latest/getting_started.html#installation>`_. The commands below
+<https://spack.readthedocs.io/en/latest/getting_started.html#installation>`__. The commands below
 should work for most Debian-based Linux distributions. First, install some prerequisites, e.g for
 Ubuntu:
 
@@ -422,13 +422,13 @@ indicating that the spack environment is active.
    The wrapper script runs ``spacktivate . -p -v gcc`` to load a 'view' when activating the
    environment. If you choose not to use the wrapper, you'll need to run a similar command in order
    for the instructions below to work. For more info on views, see the `spack documentation
-   <https://spack.readthedocs.io/en/latest/environments.html#environment-views>`_.
+   <https://spack.readthedocs.io/en/latest/environments.html#environment-views>`__.
 
 .. note:: 
 
    If you've run ``spack install`` in this environment before, it's advisable to run ``spack
    concretize -f`` at this point to ensure the concretized 'spec' is up to date. See the `spack docs
-   <https://spack.readthedocs.io/en/latest/environments.html>`_ for more details.
+   <https://spack.readthedocs.io/en/latest/environments.html>`__ for more details.
 
 To install Hermes-3 and all of its dependencies:
 
@@ -440,7 +440,7 @@ where the ``-j`` argument controls the number of parallel processes used to buil
 
 This initial install takes some time to complete, because spack builds a large number of low-level packages. It's
 possible to speed things up by adding system-installed packages to your `packages.yaml
-<https://spack.readthedocs.io/en/latest/packages_yaml.html>`_  file, but unless storage space is a big concern, letting
+<https://spack.readthedocs.io/en/latest/packages_yaml.html>`__  file, but unless storage space is a big concern, letting
 spack build its own versions is usually the most trouble-free approach. This step rarely need to be repeated in its
 entirety unless moving to another version of the same compiler, or switching to a different version of spack itself.
 
@@ -522,7 +522,7 @@ To see which `variants` of Hermes-3 and BOUT++ are available, run
 .. tip::
    If you know that CMake functionality exists in BOUT++ or hermes-3 which is not configurable via
    their respective spack packages, you can `create an issue in the package
-   repository <https://github.com/boutproject/BOUT-spack/issues/new/choose>`_ to request that the
+   repository <https://github.com/boutproject/BOUT-spack/issues/new/choose>`__ to request that the
    option(s) be added.
 
 By default, the top-level 'spec' in the environment is ``hermes-3%gcc ^boutpp+petsc+sundials ^petsc+hypre+mumps``,
@@ -558,7 +558,7 @@ instructions as normal. However, many HPC systems have module environments compi
 is optimised for that system. In order to take advantage of this, you can configure spack to use
 the system modules as 'external' packages. You can also use ``spack external find`` to automatically
 detect any enabled modules and make them available in the spack environment.
-See the `spack HPC tutorial <https://spack-tutorial.readthedocs.io/en/latest/tutorial_modules.html>`_
+See the `spack HPC tutorial <https://spack-tutorial.readthedocs.io/en/latest/tutorial_modules.html>`__
 for more information on using spack in HPC environments.
 
 
