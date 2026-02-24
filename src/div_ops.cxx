@@ -2104,6 +2104,14 @@ const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
 
       BoutReal flux_down = c * coord->cellarea_ydown[i] * gradient ;
 
+      if (coord->has_bndry_yup[i] == true) {
+	flux_up = 0.0;
+      }
+      if (coord->has_bndry_ydown[i] == true) {
+	flux_down = 0.0;
+      }
+      
+      
       result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
     }
 
