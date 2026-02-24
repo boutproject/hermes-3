@@ -18,9 +18,7 @@ def gridname(nx):
 
 
 # List of NY values to use
-nxlist = [16, 32, 64]
-nout = 10
-timestep = 1e5 / nout
+nxlist = [32, 64]
 
 nproc = 1
 
