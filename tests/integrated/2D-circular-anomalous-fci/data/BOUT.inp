@@ -54,7 +54,6 @@ AA = 1.0
 mms = true
 
 anomalous_D = 1.0 
-use_finite_difference = true
 
 [Nh+]
 
