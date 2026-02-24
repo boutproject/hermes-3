@@ -783,7 +783,14 @@ int main(int argc, char** argv) {
   // get data from BOUT.inp to assign particle weights as a fn of x,y
   auto& opt = Options::root();
   Field2D initial_neutral_density{bout_mesh};
-  initial_neutral_density = opt["mesh"]["initial_neutral_density"].as<Field2D>();
+  initial_neutral_density = opt["VANTAGE_reactions"]["initial_neutral_density"].as<Field2D>();
+
+  T = opt["VANTAGE_reactions"]["T"].as<Field2D>().withDefault(1.0);
+  N = opt["VANTAGE_reactions"]["N"].as<Field2D>().withDefault(1.0);
+  Vx = opt["VANTAGE_reactions"]["Vx"].as<Field2D>().withDefault(0.0);
+  Vy = opt["VANTAGE_reactions"]["Vy"].as<Field2D>().withDefault(0.0);
+  vector<Field2D> V = {Vx, Vy};
+
   /*
    *
    *
@@ -907,6 +914,9 @@ int main(int argc, char** argv) {
 
     // Recombination reaction
     // ------------------------------------------------------------------------------
+    // Create Maxwellian distribution of recombination markers according to fluid properties
+    // Add them to a new particle group representing the markers
+    // 
 
     const BoutReal rec_markers_per_cell =
         Options::root()["VANTAGE_reactions"]["rec_markers_per_cell"].withDefault(1000);
@@ -914,11 +924,36 @@ int main(int argc, char** argv) {
         Options::root()["VANTAGE_reactions"]["rec_rate"].withDefault(1.0);
     auto rec_rate_data = FixedRateData(rec_rate);
 
-    // Numerical settings: weight, std_dev, species_id
-    ParticleSet maxwellian_markers = uniform_cellwise_maxwellian<2>(
+    // Set initial kinetic values and add to marker particle group
+    // Numerical settings: weight, stdev, species ID
+    ParticleSet maxwellian_markers = uniform_cellwise_maxwellian<ndim>(
         sycl_target, neso_mesh, particle_spec, rec_markers_per_cell, 1.0, 0.5, -1);
 
-    // Reaction controllers
+    marker_group->add_particles_local(maxwellian_markers);
+
+    // Set initial fluid values
+    particle_loop(
+      "set init fluid values", marker_group,
+      [=](auto n, auto T, auto ne, auto Te, auto speed) {
+        n.at(0) = N;
+        ne.at(0) = N;
+        T.at(0) = T;
+        Te.at(0) = T;
+
+        for (int i = 0; i < ndim; i++) {
+          speed.at(i) = V[i];
+        }
+      },
+      Access::write(Sym<REAL>("FLUID_DENSITY")),
+      Access::write(Sym<REAL>("FLUID_TEMPERATURE")),
+      Access::write(Sym<REAL>("ELECTRON_DENSITY")),
+      Access::write(Sym<REAL>("ELECTRON_TEMPERATURE")),
+      Access::write(Sym<REAL>("FLUID_FLOW_SPEED")))
+      ->execute();
+
+    // Wrappers & controllers
+    // ------------------------------------------------------------------------------
+
     const REAL remove_threshold =
         Options::root()["VANTAGE_reactions"]["remove_threshold"].withDefault(1.0e-10);
     const REAL merge_threshold =
@@ -956,6 +991,9 @@ int main(int argc, char** argv) {
     reaction_controller.add_reaction(
         std::make_shared<decltype(ionisation_reaction)>(ionisation_reaction));
 
+    // Boundary handling
+    // ------------------------------------------------------------------------------
+
     // Create the boundary interaction objects
     std::map<PetscInt, std::vector<PetscInt>> boundary_groups;
     // boundary_groups[1] = {100, 200};
@@ -972,6 +1010,10 @@ int main(int argc, char** argv) {
                             Sym<REAL>("TSP"), b2d->previous_position_sym);
       }
     };
+
+    // Advection & rest of code
+    // ------------------------------------------------------------------------------
+
     auto lambda_apply_timestep_reset = [&](auto aa) {
       particle_loop(
           aa,
