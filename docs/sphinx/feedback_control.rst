@@ -106,7 +106,7 @@ actuator type, and configure the PID controller parameters (gain,
 integral time, derivative time). The input for a minimum working example
 would be something like
 
-::
+.. code-block:: ini
 
    [hermes]
    components = (d+, d, e, detachment_controller, ...)

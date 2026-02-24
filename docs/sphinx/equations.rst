@@ -559,11 +559,11 @@ and neglecting parallel gradients of velocity gives:
    \Pi_{ci} \simeq 0.96 p_i\tau_i \left[ \frac{RB_{\zeta}}{B}F\left(\psi\right) - V_{||i} \right]\partial_{||}\ln B
 
    
-**Notes** and implementation details:
-- The magnitude of :math:`\Pi_{ci\perp}` and :math:`\Pi_{ci||}` are individually
-  limited to be less than or equal to the scalar pressure :math:`Pi` (though can have
-  opposite sign). The reasoning is that if these off-diagonal terms become large then
-  the model is likely breaking down. Occasionally happens in low-density regions.
+.. note::
+   Implementation details: The magnitude of :math:`\Pi_{ci\perp}` and :math:`\Pi_{ci||}` are
+   individually limited to be less than or equal to the scalar pressure :math:`Pi` (though can have
+   opposite sign). The reasoning is that if these off-diagonal terms become large then the model is
+   likely breaking down. Occasionally happens in low-density regions.
 
    
 .. doxygenstruct:: BraginskiiIonViscosity
@@ -713,6 +713,7 @@ gradient replacing the density gradient as the flow driver, in an approach simil
 The perpendicular velocity is calculated as:
 
 .. math::
+
    \begin{aligned}
    v_{\perp} =& -D_n \frac{1}{P_n} \nabla_{\perp} p_n
    \end{aligned}

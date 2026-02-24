@@ -246,6 +246,7 @@ in the BOUT++ documentation.
 
 
 .. _sec-cmake-custom-bout-dir:
+
 Custom versions of BOUT++
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -465,7 +466,6 @@ BOUT++ submodule in `external/BOUT-dev` and run `spack install` again.
    but this modifies spack.yaml and is a bit awkward if you need to switch between builds frequently. A more
    straightforward approach is to use CMake directly, as described below.
 
-.. .. _sec-hermes-cmake-in-spackenv:
 Developing Hermes-3 and BOUT++ in the Spack environment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
