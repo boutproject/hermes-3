@@ -5,8 +5,7 @@
 
 ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, Solver*)
     : Component({readIfSet("species:{all_species}:{optional}"),
-                 readOnly("species:{all_species}:AA"),
-                 readOnly("species:e:{e_vals}"),
+                 readOnly("species:{all_species}:AA"), readOnly("species:e:{e_vals}"),
                  readWrite("species:{all_species}:{output}")}) {
   Options& options = alloptions[name];
 
