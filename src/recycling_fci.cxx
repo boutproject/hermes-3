@@ -211,7 +211,12 @@ void RecyclingFCI::transform(Options& state) {
 					fabs(pnt.ythis(V)),
 					fabs(pnt.ynext(V)),
 					fabs(pnt.yprev(V)));
-	  flux = pnt.dir * (0.5 * (pnt.ythis(N) * (pnt.ythis(V) + amax) + pnt.ynext(N) * (pnt.ynext(V) - amax)));
+	  if (pnt.dir > 0.0) {
+	    flux = pnt.dir * (0.5 * (pnt.ythis(N) * (pnt.ythis(V) + amax) + pnt.ynext(N) * (pnt.ynext(V) - amax)));
+	  } else {
+	    flux = pnt.dir * (0.5 * (pnt.ythis(N) * (pnt.ythis(V) - amax) + pnt.ynext(N) * (pnt.ynext(V) + amax)));
+	  }
+	  
 	} else {
 	  flux = pnt.dir * (0.25 * (pnt.ythis(N) + pnt.ynext(N)) * (pnt.ythis(V) + pnt.ynext(V)));
 	}
