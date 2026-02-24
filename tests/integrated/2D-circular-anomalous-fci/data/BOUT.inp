@@ -1,5 +1,5 @@
-nout = 50
-timestep = 0.1
+nout = 10
+timestep = 1e5 / nout
 
 
 
