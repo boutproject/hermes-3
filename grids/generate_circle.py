@@ -45,6 +45,9 @@ if not os.path.exists(folder):
 
 
 for nx, ny, nz, rho_1, rho_2, fn in todos:
+    if os.path.exists(fn):
+        continue
+
     R0 = 1.5
     B0 = 2.5
     Ly = 2.0 * np.pi
