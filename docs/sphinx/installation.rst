@@ -14,10 +14,10 @@ e.g. on a workstation or laptop.
 .. _sec-hermes-cmake:
 
 Using CMake
-----------
+-----------
 
 Compilation process
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 Compilation is achieved in two stages - the first is configuration where all the compile-time
 options are read in. The second is the build which results in a ready-to-use Hermes-3 installation
@@ -40,7 +40,7 @@ time-dependent simulations and the faster `PETSc
 can be downloaded and installed automatically, PETSc requires manual installation.
 
 Installing with SUNDIALS (cvode) only
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you only want to use the `cvode` solver, then the
 recommended way to build Hermes-3 links to the SUNDIALS library:
@@ -70,7 +70,7 @@ head nodes of many computing clusters.
 
 
 Installing with SUNDIALS and PETSc (beuler)
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The steady-state solver beuler requires PETSc and is often preconditioned using the `hypre`
 package, which is automatically downloaded and configured during PETSc installation.
@@ -129,7 +129,7 @@ any previously generated build directories.
 
 
 Dependencies
-~~~~~~~~~~
+~~~~~~~~~~~~
 Since Hermes-3 heavily relies on BOUT++, the `BOUT++ documentation on installation and
 dependencies <https://bout-dev.readthedocs.io/en/stable/user_docs/quickstart.html#prerequisites>`_ 
 contains a lot of useful information. Below is a selection of working module lists
@@ -213,7 +213,7 @@ Perlmutter:
 .. _sec-slope-limiter-settings:
 
 Slope (flux) limiter settings
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Advection operators in Hermes-3 use slope limiters, also called `flux
 limiters <https://en.wikipedia.org/wiki/Flux_limiter>`_ to suppress
@@ -240,14 +240,14 @@ lead to over-dissipation, but greater robustness.
 
 
 Compiling in debug mode
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 Please see the `relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`_ 
 in the BOUT++ documentation.
 
 
 .. _sec-cmake-custom-bout-dir:
 Custom versions of BOUT++
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you have already installed BOUT++ and want to use that rather than
 configure and build BOUT++ again, set ```-HERMES_BUILD_BOUT=OFF``` and pass
@@ -264,7 +264,7 @@ from a commit on the `next` branch of BOUT++. The up to date commit can be found
 
 
 Custom configuration of CMake
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The CMake configuration can be customised: See the `BOUT++
 documentation
@@ -278,7 +278,7 @@ interactively before building:
 
 
 Troubleshooting issues
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 The first step to troubleshooting compilation issues should always to delete
 build folder for a fresh compilation. This can resolve several types of issues.

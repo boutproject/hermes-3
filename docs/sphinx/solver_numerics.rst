@@ -200,7 +200,7 @@ The divergence of the flux, and so the rate of change of :math:`f` in cell
    \nabla\cdot\left(\mathbf{b} f v_{||}\right)_{i} = \frac{1}{V_i}\left[\frac{A_{i} + A_{i+1}}{2}\Gamma_{f, i+1/2} - \frac{A_{i-1} + A_{i}}{2}\Gamma_{f, i-1/2}\right]
 
 Controlling Lax flux strength with sound_speed
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. _sound_speed:
 

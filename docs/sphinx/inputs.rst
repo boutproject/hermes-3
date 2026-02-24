@@ -1,7 +1,7 @@
 .. _sec-configuration:
 
 Input and grid files
-===========
+====================
 
 Inputs
 -----------
@@ -94,7 +94,7 @@ Guard cells
 WIP
 
 Grid redistribution and interpolation
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 WIP
 
@@ -105,11 +105,11 @@ multigrid method.
 
 
 Using grids to pass inputs to Hermes-3
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 WIP
 
 Metric coefficients
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 The option ``hermes:recalculate_metric`` controls how the metric tensor is calculated. 
 By default ``recalculate_metric`` is ``false``, meaning that the metric tensor

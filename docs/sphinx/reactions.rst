@@ -45,7 +45,7 @@ should be thrown.
 
 
 Transfer channels
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
 
 Reactions typically convert species from one to another, leading to
 a transfer of mass momentum and energy. For a reaction converting
@@ -98,7 +98,7 @@ Galilean invariant. This transfer term is included in the Amjuel reactions
 and hydrogen charge exchange.
 
 Adjusting reactions
------------
+-------------------
 
 The reaction rates can be adjusted by a user-specified arbitrary multiplier. This can be useful for 
 the analysis of the impact of individual reactions. The multiplier setting must be placed under the 
@@ -139,7 +139,7 @@ Disabling the momentum transfer channel allows you to study the impact of the im
 
 
 Fixed fraction radiation model
----------------
+------------------------------
 
 In the fixed fraction radiation model, the impurity density is assumed to be a constant
 fraction of the electron density. The impurity only affects the plasma solution through
@@ -201,7 +201,7 @@ NOTE:
 
      
 Implemented reactions 
------------
+----------------------
 
 Hydrogen
 ~~~~~~~~

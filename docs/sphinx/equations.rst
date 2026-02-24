@@ -621,7 +621,7 @@ has cross-field transport. This discrepancy is due to historical reasons and wil
 .. _neutral_parallel_diffusion:
 
 1D: neutral_parallel_diffusion
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This adds diffusion to **all** neutral species (those with no or zero charge),
 because it needs to be calculated after the collision frequencies are known.
@@ -1002,7 +1002,7 @@ currents except polarisation, and `phi_pol` which is the polarisation flow poten
    :members:
 
 Stellarator cross-field transport: binormal_stpm
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This adds a term to **all** species which includes the effects of cross-field
 drifts following the stellarator two point model:
@@ -1040,7 +1040,7 @@ The diffusion coefficients `D`, `\chi` and `\nu` and field line pitch `\Theta` a
 
 
 Tokamak cross-field transport: anomalous_diffusion
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Adds cross-field diffusion of particles, momentum and energy to a species.
 

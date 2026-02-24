@@ -24,7 +24,7 @@ losses according to a far-SOL decay length, see below for details.
 Eventually, a component will be added to handle this at a higher level.
 
 Fundamental boundary conditions
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 BOUT++ provides a number of fundamental boundary conditions including:
 
@@ -86,7 +86,7 @@ as components. They may overwrite simple boundary conditions and must be set in 
 .. _sheath_boundary_simple:
 
 sheath_boundary_simple
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
 
 This is a top-level component which determines the conditions and sources at the divertor target. 
 First, density, temperature and pressure are extrapolated into the target boundary.
@@ -229,7 +229,7 @@ based on Tskhakaya 2005. As this component is more complex, the development may 
 .. _sheath_boundary_insulating:
 
 sheath_boundary_insulating
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 WIP
 
@@ -263,7 +263,7 @@ assigned a separate recycle multiplier and recycle energy.
 
 
 Configuring thermal recycling
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A simple and commonly used way to model recycling is to assume it is fully thermal,
 i.e. that every incident ion recombines into a neutral molecule and thermalises with the surface 
@@ -313,7 +313,7 @@ Each returning atom has an energy of 3.5eV:
    pfr_recycle_energy = 3.5   # Energy of recycled particles [eV]
 
 Allowing for fast recycling
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In reality, a fraction of incident ions will undergo specular reflection off the surface and 
 preserve a fraction of their energy. In the popular Monte-Carlo neutral code EIRENE, the 
@@ -402,7 +402,7 @@ A cell must satisfy the following conditions to be considered part of the pump:
 The field `is_pump` must be created by the user and added to the grid file as a `Field2D`.
 
 Diagnostic variables and settings
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. note::
    All recycling settings are in the ion header (e.g. `[d+]`), including pump settings.
@@ -470,7 +470,7 @@ The implementation is in `NoFlowBoundary`:
 .. _neutral_boundary:
 
 neutral_boundary
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
 
 Sets Y (sheath/target) boundary conditions on neutral particle
 density, temperature and pressure. A no-flow boundary condition
@@ -549,7 +549,7 @@ Sources
 -------------------
 
 Applying sources using the input file
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 The simplest way to implement a source in one of the Hermes-3 equations is through the input file.
 This is done by defining an array representing values of the source across the entire domain
 using the BOUT++ input file syntax (see `BOUT++ documentation
@@ -614,13 +614,13 @@ function which returns 1 upstream of :math:`y=mesh:y\_xpt` and 0 downstream of i
    source = `Pd+:source`  # Same as ion pressure source
 
 Applying sources using the grid file
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 The input file has limitations, and sometimes it is useful to prepare an arbitrary profile outside of BOUT++
 and import it through the grid file. In 2D, this can be done by adding an appropriate Field3D or Field2D to the
 grid netCDF file with the sources in the appropriate units.
 
 Time-dependent sources
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 Any source can be made time-dependent by adding a flag and providing a prefactor function in the input file.
 The already defined source will be multiplied by the prefactor, which is defined by a time-dependent input file function.
 

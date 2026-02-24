@@ -43,7 +43,7 @@ and `Holt 2024 <https://iopscience.iop.org/article/10.1088/1741-4326/ad4f9e/meta
 .. _1D-threshold:
 
 1D-threshold
-~~~~~~
+~~~~~~~~~~~~
 
 This simulates a similar setup to the `SD1D
 <https://github.com/boutproject/SD1D/>`_ code: A 1D domain, with a
@@ -655,7 +655,7 @@ Atomic reactions are specified as a list:
 
 
 3D Turbulence
-------------
+-------------
 
 turbulence
 ~~~~~~~~~~~~

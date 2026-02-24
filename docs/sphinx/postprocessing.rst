@@ -1,7 +1,7 @@
 .. _sec-postprocessing:
 
 Post-processing
------------
+---------------
 
 Tools
 ~~~~~~~~~~~
@@ -24,7 +24,7 @@ Please refer to the xHermes `readme <https://github.com/boutproject/xhermes?tab=
 and `examples <https://github.com/boutproject/xhermes/tree/main/examples>`_ for details.
 
 Available diagnostic variables
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 It can be problematic to record all of the diagnostic variables in the documentation
 as the code is still in active development. Thankfully, all of the diagnostics are
@@ -61,7 +61,7 @@ Alternatively, the same attributes can be seen in the source code.
 
 
 Reaction diagnostics convention
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 There are five categories of diagnostics. ``K`` is a simple reaction rate (always positive).
 ``S`` is a source of density and is positive if the ion density is increasing.
@@ -115,7 +115,7 @@ Here are the definitions of some common channels:
 .. _sec-flow-diagnostics:
 
 Flow diagnostics convention
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Hermes-3 saves a number of different flow rates at a cell boundary. The boundary is 
 located at either the "xlow" or "ylow" side (see :ref:`sec-cell-face-notation`).

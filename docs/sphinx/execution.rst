@@ -1,7 +1,7 @@
 .. _sec-execution:
 
 Executing simulations
-===========
+=====================
 
 
 Running Hermes-3 is done in the same way as any BOUT++ simulation.
@@ -28,7 +28,7 @@ And restarted while preserving previous results:
   mpirun -np 4 hermes-3/build/hermes-3 -d 1D-threshold restart append
 
 Choosing the number of processors
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When generating a grid analytically, e.g. in 1D or 2D slab models, you can choose 
 an arbitrary number of processors. When using a tokamak grid, the parallel domain
@@ -39,7 +39,7 @@ obscure but covered in the `BOUT++ documentation
 <https://bout-dev.readthedocs.io/en/stable/user_docs/input_grids.html#advanced>`_. 
 
 Output files
------------
+------------
 
 BOUT++ generates four types of output files:
 
@@ -61,7 +61,7 @@ BOUT++ generates four types of output files:
 .. _sec-execution-squashing:
 
 Squashing output
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 The multiple dump files can be "squashed" into just one, reducing file size and IO
 overhead by using `boutdata.squashoutput
@@ -69,7 +69,7 @@ overhead by using `boutdata.squashoutput
 0aaef417af092882ac295c4d84e4532e4a10e01f/src/boutdata/squashoutput.py#L16>`_.
 
 Manipulating restart files
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Restart files can be created from an arbitrary time slice of the simulation using 
 `boutdata.restart.create <https://github.com/boutproject/

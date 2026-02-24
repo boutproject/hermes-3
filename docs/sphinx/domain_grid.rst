@@ -1,10 +1,10 @@
 .. _sec-domain_grid:
 
 Domain and gridding
-===========
+===================
 
 Domain conventions
---------------
+------------------
 
 Please see the `BOUT++ topology documentation <https://bout-dev.readthedocs.io/en/stable/user_docs/input_grids.html#bout-topology>`_ for 
 a detailed guide to the topology and geometry conventions used in BOUT++ and Hermes-3. Detailed
@@ -34,7 +34,7 @@ domain cell and the guard cell centres.
 .. _sec-cell-face-notation:
 
 Cell face notation
---------------
+------------------
 
 While all evolved variables are solved at cell centres, values at cell boundaries are often needed to calculate 
 fluxes. The cell face notation is as shown in the below figure, where "low" and "up" refer to the negative
@@ -60,7 +60,7 @@ and `documentation <https://hypnotoad.readthedocs.io/en/latest/>`_.
 
 
 Grid redistribution and interpolation
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 WIP
 
@@ -71,11 +71,11 @@ multigrid method.
 
 
 Using grids to pass inputs to Hermes-3
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 WIP
 
 Metric coefficients
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 The option ``hermes:recalculate_metric`` controls how the metric tensor is calculated. 
 By default ``recalculate_metric`` is ``false``, meaning that the metric tensor

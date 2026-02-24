@@ -1,14 +1,14 @@
 .. _sec-developer:
 
 Developer manual
-==============
+================
 
 
 Developer tips
 --------------
 
 Compiling Hermes-3 quickly
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 After compiling Hermes-3 and changing something, you can avoid unnecessary recompilation of 
 unchanged files. Simply enter the build directory and do:
@@ -23,7 +23,7 @@ To stop this try adding the flag ``-DHERMES_UPDATE_GIT_SUBMODULE=OFF`` in your C
 This and other useful options can be found in ``hermes-3/CMakeLists.txt``.
 
 Compiling documentation
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 The Hermes-3 documentation is built using `Sphinx <https:
 //www.sphinx-doc.org/en/master/usage/installation.html>`_ and 
@@ -76,7 +76,7 @@ Editing documentation is much easier if you can compile it locally using the fol
    can stream it to your browser.
 
 Debugging: running for one iteration
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Any BOUT++ code can be run for just one right-hand side (RHS) iteration. This will
 run instantly for any simulation and not need any kind of solver convergence, making
@@ -91,7 +91,7 @@ This can be done by setting the following in the input file:
 The ``timestep`` setting will be ignored. 
 
 Debugging: printing values
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When debugging, it can be useful to print things out. This is simple in C++. 
 For example, if you want to print the value of the variable ``particle_flow``, do:
@@ -138,7 +138,7 @@ The output will look something like:
 Note that there are multiple ways to print out values in C++, and both ``std::string(text)`` and ``"text"`` are valid.
 
 Debugging: segmentation faults
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 `Segmentation faults <https://thelinuxcode.com/segmentation-fault-cpp/>`_ can be frustrating because
 they give very little verbosity. In practice, the most common cause is trying to access a variable
@@ -152,14 +152,14 @@ While the above methods are very simple and can be effective, debugging tools su
 the segmentation fault as well.
 
 Debugging: compiling in debug mode
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This can be a useful way to catch errors. Please see the
 `relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`_ 
 in the BOUT++ documentation.
 
 Header vs. implementation files
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 C++ allows you to split code into implementation (.cxx) and header (.hxx) files.
 The convention of what should be in each one is not consistent in Hermes-3 at
@@ -187,7 +187,7 @@ object and controls access to its contents.
 
 
 Adding new settings
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 This is simple and uses the following syntax:
 
@@ -203,7 +203,7 @@ See `this real world example
 The variable must also be declared in the corresponding header file.
 
 Adding new diagnostics
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Adding new diagnostics is also simple, provided there is already an ``outputVars``
 function set up in your component. This is usually located at the end of the
@@ -252,13 +252,13 @@ species, source
    The relevant species and component that the diagnostic is coming from
 
 What is "Options"?
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 Options is a dictionary-like class originally developed for parsing BOUT++ options.
 In Hermes-3, it is used as a general purpose dictionary.
 
 Getting/setting values
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Hermes-3 has a system to prevent quantities from being modified after they are used.
 This is important as it uses a single dictionary-like ``state`` class to hold all of 
@@ -342,7 +342,7 @@ for more details.
 
 
 Looping over cells
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 BOUT++ provides a really easy way to loop over the domain using ``BOUT_FOR`` and
 similar loops, see `BOUT++ docs <https://bout-dev.readthedocs
@@ -426,7 +426,7 @@ and `Command <https://en.wikipedia.org/wiki/Command_pattern>`_ patterns.
 
 
 Simulation state
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 
 The simulation state is passed between components, and is a tree of
@@ -609,7 +609,7 @@ all substitutions that will be performed.
 
 
 Component scheduler
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 The simulation model is created in `Hermes::init` by a call to the `ComponentScheduler`::
 
@@ -876,7 +876,7 @@ originally from Toro's book `Riemann Solvers and Numerical Methods for
 Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`_.
 
 1D-recycling-dthe
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
 
 This is a comprehensive 1D test featuring three species (deuterium tritium and helium)
 as well as all of the parallel closure terms apart from electron viscosity.
@@ -1166,7 +1166,7 @@ When collisions are neglected, we obtain the result
    :width: 60%
 
 Collision frequency selection
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 There are two simple integrated tests to make sure that the collision frequency selection is correct
 across `neutral_mixed`, `evolve_pressure`, `ion_viscosity` and `neutral_parallel_diffusion`.
