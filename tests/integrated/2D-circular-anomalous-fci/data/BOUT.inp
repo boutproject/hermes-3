@@ -5,8 +5,8 @@ timestep = 1e5 / nout
 
 
 
-minvalue= (-2.0+0.5) / (mesh:nx - 2*2)
-maxvalue= (mesh:nx-3+0.5) / (mesh:nx - 2*2)
+minvalue= (-2.0+0.5) / (nx - 2*2)
+maxvalue= (nx-3+0.5) / (nx - 2*2)
 xmax = 0.4
 xmin = 0.2
 xl = (xmax - xmin)*(x-minvalue)/(maxvalue-minvalue) + xmin

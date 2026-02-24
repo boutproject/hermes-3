@@ -29,7 +29,7 @@ for var in varnames:
     results[var] = {"l2": [], "inf": []}
 
 for nx in nxlist:
-    args = f"mesh:file={gridname(nx)}"
+    args = f"mesh:file={gridname(nx)} nx={nx}"
 
     print("Running with " + args)
 
