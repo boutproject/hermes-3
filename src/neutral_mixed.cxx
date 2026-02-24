@@ -76,6 +76,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   disable_Dnn = options["disable_Dnn"]
                    .doc("Set Dnn to 0? Useful for MMS tests")
                    .withDefault<bool>(false);
+
+  parallel_dirichlet = options["parallel_dirichlet"]
+                   .doc("Use parallel dirichlet boundary conditions for the plasma?")
+                   .withDefault<bool>(true);
   
   neutral_lmax = options["neutral_lmax"].doc("Largest distance to the target, limits diffusion").withDefault<BoutReal>(0.1) / meters;
   
@@ -226,7 +230,7 @@ void NeutralMixed::transform(Options& state) {
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
-  if (!isMMS) {
+  if (!isMMS && parallel_dirichlet) {
     TRACE("Neutral boundary conditions");
     yboundary.iter_pnts([&](auto& pnt) {
       // Free boundary (constant gradient) density
@@ -244,6 +248,14 @@ void NeutralMixed::transform(Options& state) {
       pnt.dirichlet_o2(Vn, 0.0);
       pnt.dirichlet_o2(NVn, 0.0);
     }); // end yboundary.iter_pnts()
+  } else if (!isMMS && !parallel_dirichlet){
+    TRACE("Neutral boundary conditions");
+    Nn.applyParallelBoundary("parallel_neumann_o1");
+    Tn.applyParallelBoundary("parallel_neumann_o1");
+    Pn.applyParallelBoundary("parallel_neumann_o1");
+    Pnlim.applyParallelBoundary("parallel_neumann_o1");
+    Vn.applyParallelBoundary("parallel_neumann_o1");
+    NVn.applyParallelBoundary("parallel_neumann_o1");
   }
 
   Nh_up = 0.0;
@@ -382,13 +394,18 @@ void NeutralMixed::finally(const Options& state) {
   DnnPn = Dnn.asField3DParallel() * Pnlim;
   DnnNVn = Dnn.asField3DParallel() * NVn;
 
-  if (!isMMS) {
+  if (!isMMS && parallel_dirichlet) {
     yboundary.iter_pnts([&](auto& pnt) {
       pnt.dirichlet_o2(Dnn, 0.0);
       pnt.dirichlet_o2(DnnPn, 0.0);
       pnt.dirichlet_o2(DnnNn, 0.0);
       pnt.dirichlet_o2(DnnNVn, 0.0);
     });
+  } else if (!isMMS && !parallel_dirichlet) {
+    Dnn.applyParallelBoundary("parallel_neumann_o1");
+    DnnPn.applyParallelBoundary("parallel_neumann_o1");
+    DnnNn.applyParallelBoundary("parallel_neumann_o1");
+    DnnNVn.applyParallelBoundary("parallel_neumann_o1");
   }
   
   // Sound speed appearing in Lax flux for advection terms
