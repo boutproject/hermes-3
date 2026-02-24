@@ -460,6 +460,7 @@ int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal UNUSED(delta)) {
 
 void Hermes::outputVars(Options& options) {
   AUTO_TRACE();
+  Coordinates *coord = mesh->getCoordinates();
 
   // Save the Hermes version in the output dump files
   options["HERMES_REVISION"].force(hermes::version::revision);
@@ -505,6 +506,16 @@ void Hermes::outputVars(Options& options) {
       {"standard_name", "length normalisation"},
       {"long_name", "Gyro-radius length normalisation"}
     });
+
+  set_with_attrs(options["has_bndry_yup"], coord->has_bndry_yup,
+		 {{"source", "hermes-3"}});
+
+  set_with_attrs(options["has_bndry_ydown"], coord->has_bndry_ydown,
+                 {{"source", "hermes-3"}});
+
+
+
+  
   scheduler->outputVars(options);
 }
 
