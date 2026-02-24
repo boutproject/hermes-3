@@ -286,6 +286,10 @@ if(HERMES_TESTS)
       COMMAND python3 ./generate_fci_mms_grids.py
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/grids
     )
+    add_custom_command(TARGET setup-test PRE_BUILD
+      COMMAND python3 ./generate_fci_mms_grids_circular.py
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/grids
+    )
     file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/grids ${CMAKE_CURRENT_BINARY_DIR}/grids SYMBOLIC)
   endif()
 
