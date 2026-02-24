@@ -56,7 +56,7 @@ for nx, ny, nz, rho_1, rho_2, fn in todos:
     inner = zoidberg.rzline.shaped_line(R0=R0, a=rho_1, n=nz)
     outer = zoidberg.rzline.shaped_line(R0=R0, a=rho_2, n=nz)
 
-    pol_grid = zoidberg.poloidal_grid.grid_annulus(inner, outer, nx + 4, nz)
+    pol_grid = zoidberg.poloidal_grid.grid_annulus(inner, outer, nx + 4, nz, show=False)
     pol_grids = []
     for i in range(ny):
         pol_grids.append(pol_grid)
@@ -66,9 +66,11 @@ for nx, ny, nz, rho_1, rho_2, fn in todos:
     )
     maps = zoidberg.zoidberg.make_maps(grid, field)
 
-    zoidberg.zoidberg.write_maps(grid, field, maps, gridfile=fn, metric2d=False)
+    zoidberg.zoidberg.write_maps(
+        grid, field, maps, gridfile=fn + ".tmp", metric2d=False
+    )
 
-    gf = xr.open_dataset(fn)
+    gf = xr.open_dataset(fn + ".tmp")
     cp = gf.copy(deep=True)
 
     cp["rho"] = (cp["forward_xt_prime"].dims, np.zeros(cp["forward_xt_prime"].shape))
@@ -83,8 +85,8 @@ for nx, ny, nz, rho_1, rho_2, fn in todos:
 
     for i in range(cp["theta"].shape[0]):
         for k in range(cp["theta"].shape[2]):
-            R = cp.R[i, 0, k].copy(deep=True).values
-            Z = cp.Z[i, 0, k].copy(deep=True).values
+            R = cp.R[i, 0, k].values.copy()
+            Z = cp.Z[i, 0, k].values.copy()
             thistheta = calc_divertortheta(R, Z, x0=R0)
             R_mag = np.sqrt((R - R0) ** 2 + Z**2)
             rho = (R_mag - rho_1) / (rho_2 - rho_1)
