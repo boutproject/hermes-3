@@ -1,12 +1,10 @@
 import os
 
-import zoidberg
+import zoidberg as zb
 import numpy as np
-from zoidberg.field import Slab
-import xarray as xr
 
 
-class Axial_circle(Slab):
+class Axial_circle(zb.field.Slab):
     def __init__(self, rho_1, rho_2, Lz, By):
         self.rho_1 = float(rho_1)
         self.rho_2 = float(rho_2)
@@ -53,29 +51,15 @@ for nx, ny, nz, rho_1, rho_2, fn in todos:
     R1 = rho_1 - 1.5 * dx
     R2 = rho_2 + 1.5 * dx
 
-    inner = zoidberg.rzline.shaped_line(R0=R0, a=rho_1, n=nz)
-    outer = zoidberg.rzline.shaped_line(R0=R0, a=rho_2, n=nz)
+    inner = zb.rzline.shaped_line(R0=R0, a=rho_1, n=nz)
+    outer = zb.rzline.shaped_line(R0=R0, a=rho_2, n=nz)
 
-    pol_grid = zoidberg.poloidal_grid.grid_annulus(inner, outer, nx + 4, nz, show=False)
-    pol_grids = []
-    for i in range(ny):
-        pol_grids.append(pol_grid)
+    pol_grid = zb.poloidal_grid.grid_annulus(inner, outer, nx + 4, nz, show=False)
+    pol_grids = [pol_grid for _ in range(ny)]
 
-    grid = zoidberg.grid.Grid(
+    grid = zb.grid.Grid(
         pol_grids, np.linspace(0.0, 2.0 * np.pi, ny, endpoint=False), Ly, yperiodic=True
     )
-    maps = zoidberg.zoidberg.make_maps(grid, field)
-
-    zoidberg.zoidberg.write_maps(
-        grid, field, maps, gridfile=fn + ".tmp", metric2d=False
-    )
-
-    gf = xr.open_dataset(fn + ".tmp")
-    cp = gf.copy(deep=True)
-
-    cp["rho"] = (cp["forward_xt_prime"].dims, np.zeros(cp["forward_xt_prime"].shape))
-    cp["theta"] = (cp["forward_xt_prime"].dims, np.zeros(cp["forward_xt_prime"].shape))
-    cp["phi"] = (cp["forward_xt_prime"].dims, np.zeros(cp["forward_xt_prime"].shape))
 
     def calc_divertortheta(x, z, x0=0.0):
         theta = np.array(np.arctan2(z, x - x0))
@@ -83,17 +67,24 @@ for nx, ny, nz, rho_1, rho_2, fn in todos:
 
         return theta
 
-    for i in range(cp["theta"].shape[0]):
-        for k in range(cp["theta"].shape[2]):
-            R = cp.R[i, 0, k].values.copy()
-            Z = cp.Z[i, 0, k].values.copy()
-            thistheta = calc_divertortheta(R, Z, x0=R0)
-            R_mag = np.sqrt((R - R0) ** 2 + Z**2)
-            rho = (R_mag - rho_1) / (rho_2 - rho_1)
-            cp["theta"][i, :, k] = thistheta
-            cp["rho"][i, :, k] = rho
+    with zb.zoidberg.MapWriter(fn) as mw:
+        mw.add_grid_field(grid, field)
 
-    for i in range(cp["theta"].shape[1]):
-        cp["phi"][:, i, :] = 2.0 * np.pi * i / ny
+        maps = zb.zoidberg.make_maps(grid, field)
+        mw.add_maps(maps)
 
-    cp.to_netcdf(fn)
+        # Add some additional things
+        rho = np.empty_like(maps["forward_xt_prime"])
+        theta = np.empty_like(maps["forward_xt_prime"])
+        phi = np.empty_like(maps["forward_xt_prime"])
+
+        R = maps["R"][:, 0, :]
+        Z = maps["Z"][:, 0, :]
+        thistheta = calc_divertortheta(R, Z, x0=R0)
+        R_mag = np.sqrt((R - R0) ** 2 + Z**2)
+        rho[...] = ((R_mag - rho_1) / (rho_2 - rho_1))[:, None, :]
+        theta[...] = thistheta[:, None, :]
+        phi[...] = np.linspace(0, 2 * np.pi, ny, endpoint=False)[None, :, None]
+        mw.write_dict(dict(rho=rho, theta=theta, phi=phi))
+
+        mw.add_dagp()
