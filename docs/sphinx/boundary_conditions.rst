@@ -83,7 +83,7 @@ Sheath
 Hermes-3 includes additional boundary conditions whose complexity requires their implementation
 as components. They may overwrite simple boundary conditions and must be set in the same way as other components.
 
-.. _sheath_boundary_simple:
+.. _sec-sheath_boundary_simple:
 
 sheath_boundary_simple
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -226,19 +226,21 @@ sheath_boundary
 This component is required to calculate correct sheath heat transfer coefficients considering multiple main ions
 based on Tskhakaya 2005. As this component is more complex, the development may lag behind `sheath_boundary_simple`.
 
-.. _sheath_boundary_insulating:
+.. _sec-sheath_boundary_insulating:
 
 sheath_boundary_insulating
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 WIP
 
-.. _noflow_boundary:
+.. _sec-noflow_boundary:
 
 noflow_boundary
 ^^^^^^^^^^^^^^^
 
 WIP
+
+.. _sec-recycling:
 
 Recycling
 ~~~~~~~~~
@@ -420,7 +422,7 @@ and `neutral_pump` flags.
 .. doxygenstruct:: Recycling
    :members:
       
-.. _binormal_stpm:
+.. _sec-binormal_stpm:
 
 Others
 ~~~~~~~~~~~~~~~
@@ -467,7 +469,7 @@ The implementation is in `NoFlowBoundary`:
 .. doxygenstruct:: NoFlowBoundary
    :members:
 
-.. _neutral_boundary:
+.. _sec-neutral_boundary:
 
 neutral_boundary
 ^^^^^^^^^^^^^^^^

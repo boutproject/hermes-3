@@ -4,7 +4,7 @@ Reactions
 ===========
 
 The following content gives some background to the reactions implemented in Hermes-3.
-Please see the :ref:`postprocessing` section for related diagnostics.
+Please see the :ref:`sec-postprocessing` section for related diagnostics.
 
 
 Reaction basics

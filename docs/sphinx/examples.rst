@@ -40,7 +40,7 @@ and `Holt 2024 <https://iopscience.iop.org/article/10.1088/1741-4326/ad4f9e/meta
 
 
 
-.. _1D-threshold:
+.. _sec-1D-threshold:
 
 1D-threshold
 ~~~~~~~~~~~~
@@ -83,10 +83,10 @@ The components are ion species `d+`, atoms `d`, electrons `e`:
                  recycling, reactions, electron_force_balance,
                  neutral_parallel_diffusion, braginskii_conduction)
 
-The electron velocity is set to the ion by specifying :ref:`zero_current`;
+The electron velocity is set to the ion by specifying :ref:`sec-zero_current`;
 A sheath boundary is included; Collisions are needed to be able to calculate
 heat conduction, as well as neutral diffusion rates; Recycling at the targets
-provides a source of atoms; :ref:`neutral_parallel_diffusion` simulates cross-field
+provides a source of atoms; :ref:`sec-neutral_parallel_diffusion` simulates cross-field
 diffusion in a 1D system. The electron force balance links electron pressure gradient
 with the ion momentum equation. Please see the relevant documentation pages about these
 components for further information.
@@ -212,7 +212,7 @@ at the midplane.
 These are useful for the study of the basic physics of plasma
 "blobs" / filaments, and tokamak edge turbulence. 
 
-.. _Blob2d:
+.. _sec-Blob2d:
 
 Blob2d
 ~~~~~~
@@ -243,7 +243,7 @@ The electron component consists of two types:
    type = evolve_density, isothermal
 
 
-The :ref:`evolve_density` component type evolves the electron density `Ne`. This component
+The :ref:`sec-evolve_density` component type evolves the electron density `Ne`. This component
 has several options, which are set in the same section e.g.
 
 .. code-block:: ini
@@ -258,7 +258,7 @@ and so solves the equation:
    \frac{\partial n_e}{\partial t} =& - \nabla\cdot\left(n_e\mathbf{v}_{E\times B}\right) + \nabla\cdot{\frac{1}{e}\mathbf{j}_{sh}}
    \end{aligned}
 
-The :ref:`isothermal` component type sets the temperature to be a constant, and using
+The :ref:`sec-isothermal` component type sets the temperature to be a constant, and using
 the density then sets the pressure. The constant temperature is also
 set in this `[e]` section:
 
@@ -276,7 +276,7 @@ so that the equation solved is
 
 where :math:`T_e` is the fixed electron temperature (5eV).
 
-The :ref:`vorticity` component uses the pressure to calculate the diamagnetic current,
+The :ref:`sec-vorticity` component uses the pressure to calculate the diamagnetic current,
 so must come after the `e` component. This component then calculates the potential.
 Options to control the vorticity component are set in the `[vorticity]` section.
 
@@ -287,7 +287,7 @@ Options to control the vorticity component are set in the `[vorticity]` section.
    \nabla\cdot\left(\frac{1}{B^2}\nabla_\perp\phi\right) = \omega
    \end{aligned}
 
-The `sheath_closure` component uses the potential, so must come after :ref:`vorticity`.
+The `sheath_closure` component uses the potential, so must come after :ref:`sec-vorticity`.
 Options are also set as
 
 .. code-block:: ini
@@ -305,7 +305,7 @@ This adds the equation
 
 where :math:`L_{||}` is the connection length.
 
-.. _Blob2d-Te-Ti:
+.. _sec-Blob2d-Te-Ti:
 
 Blob2D-Te-Ti
 ~~~~~~~~~~~~
@@ -346,7 +346,7 @@ using the quasineutrality of the plasma; the ion pressure (`Ph+`) is evolved.
    [h+]
    type = quasineutral, evolve_pressure
 
-The equations this solves are similar to the previous :ref:`Blob2d` case, except
+The equations this solves are similar to the previous :ref:`sec-Blob2d` case, except
 now there are pressure equations for both ions and electrons:
 
 .. math::
@@ -364,7 +364,7 @@ now there are pressure equations for both ions and electrons:
 2D-drift-plane-turbulence-te-ti
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A 2D turbulence simulation, similar to the :ref:`Blob2d-Te-Ti` case, but with
+A 2D turbulence simulation, similar to the :ref:`sec-Blob2d-Te-Ti` case, but with
 extra source and sink terms, so that a statistical steady state of
 source-driven turbulence can be reached.
 
@@ -406,7 +406,7 @@ and radially localised sources are added in the `[Ne]`, `[Pe]`, and `[Ph+]`
 sections.
 
 The equations this solves are the same as the previous
-:ref:`Blob2d-Te-Ti` case, except wih extra source and sink terms. In
+:ref:`sec-Blob2d-Te-Ti` case, except wih extra source and sink terms. In
 SI units (except temperatures in eV) the equations are:
 
 .. math::

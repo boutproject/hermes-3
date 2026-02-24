@@ -29,7 +29,7 @@ Species density
 The density of a species can be calculated in several different ways,
 and are usually needed by other components.
 
-.. _fixed_density:
+.. _sec-fixed_density:
 
 fixed_density
 ~~~~~~~~~~~~~
@@ -53,7 +53,7 @@ The implementation is in the `FixedDensity` class:
 .. doxygenstruct:: FixedDensity
    :members:
 
-.. _evolve_density:
+.. _sec-evolve_density:
 
 evolve_density
 ~~~~~~~~~~~~~~
@@ -114,7 +114,7 @@ This sets the density of a species to a fraction of the electron density.
 .. doxygenstruct:: FixedFractionIons
    :members:
 
-.. _quasineutral:
+.. _sec-quasineutral:
 
 quasineutral
 ~~~~~~~~~~~~
@@ -130,7 +130,7 @@ makes sense to use this component for species with a non-zero charge.
 Species pressure and temperature
 --------------------------------
 
-.. _isothermal:
+.. _sec-isothermal:
 
 isothermal
 ~~~~~~~~~~
@@ -175,7 +175,7 @@ variable.
 .. doxygenstruct:: FixedTemperature
    :members:
 
-.. _evolve_pressure:
+.. _sec-evolve_pressure:
 
 evolve_pressure
 ~~~~~~~~~~~~~~~
@@ -184,7 +184,7 @@ Evolves the pressure in time. This pressure is named `P<species>` where `<specie
 is the short name of the evolving species e.g. `Pe`.
 
 Parallel conduction is included if the global
-:ref:`braginskii_conduction` component has been used.
+:ref:`sec-braginskii_conduction` component has been used.
 
 If the component option ``diagnose = true`` then additional fields
 will be saved to the dump files: The species temperature ``T + name``
@@ -213,7 +213,7 @@ The implementation is in `EvolvePressure`:
 .. doxygenstruct:: EvolvePressure
    :members:
 
-.. _evolve_energy:
+.. _sec-evolve_energy:
 
 evolve_energy
 ~~~~~~~~~~~~~
@@ -283,22 +283,22 @@ disabled.
 .. doxygenstruct:: SimpleConduction
    :members:
 
-.. _braginskii_conduction:
+.. _sec-braginskii_conduction:
 
 braginskii_conduction
 ~~~~~~~~~~~~~~~~~~~~~
 
 This is a global component that calculates the parallel thermal
-conduction for all species that use :ref:`evolve_pressure` or
-:ref:`evolve_energy`, storing it in `energy_source`. If this is not
+conduction for all species that use :ref:`sec-evolve_pressure` or
+:ref:`sec-evolve_energy`, storing it in `energy_source`. If this is not
 desired for a particular species then it can be turned off by setting
 `thermal_conduction = false` in the input options for that species.
 
 This component requires a collision time to have been calculated
-(i.e., with the :ref:`Braginskii Collisions` component). It is
+(i.e., with the :ref:`sec-collisions` component). It is
 recommended that this be one of the last component to run, to ensure density,
 pressure, and temperature have their final values. However, it must be
-run before :ref:`Recycling`, as that component will need to use the
+run before :ref:`sec-recycling`, as that component will need to use the
 `energy_flow_ylow` value, to which conduction contributes.
 
 The choice of collision frequency used for conduction is set by the
@@ -312,7 +312,7 @@ mode.
 .. math::
     \nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right)
 
-.. doxygenstruct:: BarginskiiConduction
+.. doxygenstruct:: BraginskiiConduction
    :members:
 
 
@@ -350,7 +350,7 @@ file, and then the ``velocity`` option in the ``[e]`` section:
    :members:
 
 
-.. _evolve_momentum:
+.. _sec-evolve_momentum:
 
 evolve_momentum
 ~~~~~~~~~~~~~~~
@@ -371,7 +371,7 @@ The implementation is in ``EvolveMomentum``:
    :members:
 
 
-.. _zero_current:
+.. _sec-zero_current:
 
 zero_current
 ~~~~~~~~~~~~
@@ -417,7 +417,7 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
-.. _braginskii_electron_viscosity:
+.. _sec-braginskii_electron_viscosity:
 
 braginskii_electron_viscosity
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -446,7 +446,7 @@ and all other species therefore need to be calculated before this component is r
 .. doxygenstruct:: BraginskiiElectronViscosity
    :members:
 
-.. _braginskii_ion_viscosity:
+.. _sec-braginskii_ion_viscosity:
 
 braginskii_ion_viscosity
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -569,7 +569,7 @@ and neglecting parallel gradients of velocity gives:
 .. doxygenstruct:: BraginskiiIonViscosity
    :members:
 
-.. _braginskii_thermal_force:
+.. _sec-braginskii_thermal_force:
 
 braginskii_thermal_force
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -618,7 +618,7 @@ In 2D, all of this functionality is implemented in one component called `neutral
 has cross-field transport. This discrepancy is due to historical reasons and will be refactored.
 
 
-.. _neutral_parallel_diffusion:
+.. _sec-neutral_parallel_diffusion:
 
 1D: neutral_parallel_diffusion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -665,7 +665,7 @@ it is recommended to set `dneut` according to the field line pitch at the target
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
 
-.. _neutral_mixed:
+.. _sec-neutral_mixed:
 
 2D/3D: neutral_mixed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1091,7 +1091,7 @@ Electromagnetic fields
 These are components which calculate the electric and/or magnetic
 fields.
 
-.. _vorticity:
+.. _sec-vorticity:
 
 vorticity
 ~~~~~~~~~
@@ -1237,7 +1237,7 @@ the potential in time as a diffusion equation.
 .. doxygenstruct:: RelaxPotential
    :members:
 
-.. _electromagnetic:
+.. _sec-electromagnetic:
 
 electromagnetic
 ~~~~~~~~~~~~~~~

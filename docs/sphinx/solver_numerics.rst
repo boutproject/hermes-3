@@ -202,7 +202,7 @@ The divergence of the flux, and so the rate of change of :math:`f` in cell
 Controlling Lax flux strength with sound_speed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. _sound_speed:
+.. _sec-sound_speed:
 
 **sound_speed**
 

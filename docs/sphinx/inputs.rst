@@ -1,4 +1,4 @@
-.. _sec-configuration:
+.. _sec-inputs:
 
 Input and grid files
 ====================
