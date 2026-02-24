@@ -143,7 +143,7 @@ highlight_language = "cpp"
 numfig = True
 
 # The default role for text marked up `like this`
-default_role = "code"
+default_role = "any"
 
 # Handle multiple parameters on one line correctly (in Python docs)
 napoleon_use_param = False
