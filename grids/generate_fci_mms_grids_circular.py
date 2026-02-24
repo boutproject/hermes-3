@@ -1,8 +1,9 @@
+import os
+
 import zoidberg
 import numpy as np
 from zoidberg.field import Slab
 import xarray as xr
-import matplotlib.pyplot as plt
 
 
 class Axial_circle(Slab):
@@ -13,18 +14,12 @@ class Axial_circle(Slab):
         self.By = float(By)
 
     def Bxfunc(self, x, z, phi):
-        theta = np.arctan2(z, x)
-        r = np.sqrt(np.power(x, 2) + np.power(z, 2))
         return np.zeros(x.shape)
 
     def Bzfunc(self, x, z, phi):
-        theta = np.arctan2(z, x)
-        r = np.sqrt(np.power(x, 2) + np.power(z, 2))
         return np.zeros(x.shape)
 
     def Byfunc(self, x, z, phi):
-        theta = np.arctan2(z, x)
-        r = np.sqrt(np.power(x, 2) + np.power(z, 2))
         return np.full(x.shape, self.By)
 
 
