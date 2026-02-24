@@ -42,12 +42,13 @@ private:
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
-
+  bool isMMS;
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   Field3D Dnn; ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnNVn;
-
+  bool disable_Dnn;
+  BoutReal temperature_floor;
   bool sheath_ydown, sheath_yup;
 
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
@@ -56,12 +57,15 @@ private:
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
+  bool parallel_dirichlet;
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
-  
-  Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
+  bool freeze_low_density;
+  bool use_finite_difference;
+  Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
+  BoutReal neutral_lmax;
   bool precondition {true}; ///< Enable preconditioner?
   bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
@@ -73,6 +77,8 @@ private:
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
 
+  Field3D Nh_up, Nh_down;
+  
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
   Field3D mf_adv_perp_xlow, mf_adv_perp_ylow, mf_adv_par_ylow;

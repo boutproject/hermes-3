@@ -48,6 +48,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                       .doc("Simplify nonlinear ExB advection form?")
                       .withDefault<bool>(true);
 
+  output_ddt = options["output_ddt"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(false);
+  
   diamagnetic =
       options["diamagnetic"].doc("Include diamagnetic current?").withDefault<bool>(true);
 
@@ -92,7 +96,17 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     / (Lnorm * Lnorm * Omega_ci);
   viscosity.applyBoundary("dirichlet");
 
-  hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
+  
+  viscosity_par = options["viscosity_par"]
+    .doc("Kinematic viscosity [m^2/s]")
+    .withDefault<BoutReal>(0.0)
+    / (Lnorm * Lnorm * Omega_ci);
+  viscosity_par.applyBoundary("neumann");
+  mesh->communicate(viscosity_par);
+  viscosity_par.applyParallelBoundary("parallel_neumann_o1");
+
+  
+  hyper = options["hyper"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
 
   // Numerical dissipation terms
   // These are required to suppress parallel zig-zags in
@@ -235,6 +249,13 @@ void Vorticity::transform(Options& state) {
   phi.name = "phi";
   auto& fields = state["fields"];
 
+  Vort.applyBoundary();
+
+  mesh->communicate(Vort);
+
+  Vort.applyParallelBoundary();
+
+  
   // Set the boundary of phi. Both 2D and 3D fields are kept, though the 3D field
   // is constant in Z. This is for efficiency, to reduce the number of conversions.
   // Note: For now the boundary values are all at the midpoint,
@@ -475,11 +496,9 @@ void Vorticity::transform(Options& state) {
     const auto tosolve = Vort * (Bsq / average_atomic_mass);
     checkData(tosolve);
     checkData(phi_plus_pi);
-    //output.write("WE ARE SOLVING!!!!\n");
     try {
       phi = phiSolver->solve(tosolve, phi_plus_pi) - Pi_hat;
     } catch (const BoutException& e) {
-      output.write("WE ARE DEBUGGING!!!!\n");
       Options debug;
       debug["tosolve"] = tosolve;
       debug["guess"] = phi_plus_pi;
@@ -487,7 +506,6 @@ void Vorticity::transform(Options& state) {
       debug["Bsq"] = Bsq;
       debug["Pi_hat"] = Pi_hat;
       mesh->outputVars(debug);
-      //debug["BOUT_VERSION"].force(bout::version::as_double);
       const std::string outname =
         fmt::format("{}/BOUT.debug_vorticity.{}.nc",
                     Options::root()["datadir"].withDefault<std::string>("data"),
@@ -755,6 +773,9 @@ void Vorticity::finally(const Options& state) {
   // Viscosity
   ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
 
+  Field3D dummy;
+  ddt(Vort) += Div_par_K_Grad_par_mod(viscosity_par, Vort, dummy);
+  
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
@@ -768,10 +789,10 @@ void Vorticity::finally(const Options& state) {
     ddt(Vort) -= FV::Div_par(-phi, 0.0, sound_speed);
   }
 
-  if (hyper_z > 0) {
+  if (hyper > 0) {
     // Form of hyper-viscosity to suppress zig-zags in Z
-    auto* coord = Vort.getCoordinates();
-    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+    
+    ddt(Vort) += hyperdiffusion(hyper, Vort);
   }
 
   if (phi_sheath_dissipation) {
@@ -835,14 +856,17 @@ void Vorticity::outputVars(Options& state) {
                   {"long_name", "plasma potential"},
                   {"source", "vorticity"}});
 
-  if (diagnose) {
+  if (output_ddt || diagnose) {
     set_with_attrs(state["ddt(Vort)"], ddt(Vort),
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},
                     {"conversion", SI::qe * Nnorm * Omega_ci},
                     {"long_name", "Rate of change of vorticity"},
                     {"source", "vorticity"}});
-
+  }
+  
+  if (diagnose) {
+    
     if (diamagnetic) {
       set_with_attrs(state["DivJdia"], DivJdia,
                      {{"time_dimension", "t"},

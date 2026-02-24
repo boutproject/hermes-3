@@ -39,6 +39,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                         .doc("Evolve parallel neutral momentum?")
                         .withDefault<bool>(true);
 
+  isMMS = options["isMMS"]
+                        .doc("Is this MMS? If yes, stop sources and sinks")
+                        .withDefault<bool>(false);
+  
   if (evolve_momentum) {
     solver->add(NVn, std::string("NV") + name);
   } else {
@@ -61,11 +65,28 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e-8);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  use_finite_difference = options["use_finite_difference"]
+                   .doc("Use finite difference for perpendicular diffusion?")
+                   .withDefault<bool>(false);
+
+  disable_Dnn = options["disable_Dnn"]
+                   .doc("Set Dnn to 0? Useful for MMS tests")
+                   .withDefault<bool>(false);
+
+  parallel_dirichlet = options["parallel_dirichlet"]
+                   .doc("Use parallel dirichlet boundary conditions for the plasma?")
+                   .withDefault<bool>(true);
+  
+  neutral_lmax = options["neutral_lmax"].doc("Largest distance to the target, limits diffusion").withDefault<BoutReal>(0.1) / meters;
+  
+  temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+  
+  pressure_floor = density_floor * temperature_floor;
 
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
-                     .withDefault<bool>(true);
+                     .withDefault<bool>(false);
 
   lax_flux = options["lax_flux"]
                      .doc("Enable stabilising lax flux?")
@@ -74,7 +95,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   flux_limit =
       options["flux_limit"]
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
-          .withDefault(0.2);
+          .withDefault(-1.0);
 
   diffusion_limit = options["diffusion_limit"]
                         .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
@@ -83,18 +104,18 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   neutral_viscosity = options["neutral_viscosity"]
                           .doc("Include neutral gas viscosity?")
-                          .withDefault<bool>(true);
+                          .withDefault<bool>(false);
 
   neutral_conduction = options["neutral_conduction"]
                           .doc("Include neutral gas heat conduction?")
-                          .withDefault<bool>(true);
+                          .withDefault<bool>(false);
 
+  freeze_low_density = options["freeze_low_density"]
+    .doc("Freeze evolution in low density regions?")
+    .withDefault<bool>(false);
+  
   if (precondition) {
-    inv = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
-
-    inv->setInnerBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
-    inv->setOuterBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
-
+    inv = Laplacian::create(&options["precon_laplace"]);
     inv->setCoefA(1.0);
   }
 
@@ -132,33 +153,34 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   // Set boundary condition defaults: Neumann for all but the diffusivity.
   // The dirichlet on diffusivity ensures no radial flux.
   // NV and V are ignored as they are hardcoded in the parallel BC code.
-  alloptions[std::string("Dnn") + name]["bndry_all"] =
+  if (!isMMS) {
+    alloptions[std::string("Dnn") + name]["bndry_all"] =
       alloptions[std::string("Dnn") + name]["bndry_all"].withDefault("dirichlet");
-  alloptions[std::string("T") + name]["bndry_all"] =
+    alloptions[std::string("T") + name]["bndry_all"] =
       alloptions[std::string("T") + name]["bndry_all"].withDefault("neumann");
-  alloptions[std::string("P") + name]["bndry_all"] =
+    alloptions[std::string("P") + name]["bndry_all"] =
       alloptions[std::string("P") + name]["bndry_all"].withDefault("neumann");
-  alloptions[std::string("N") + name]["bndry_all"] =
+    alloptions[std::string("N") + name]["bndry_all"] =
       alloptions[std::string("N") + name]["bndry_all"].withDefault("neumann");
 
-  // Pick up BCs from input file
-  Dnn.setBoundary(std::string("Dnn") + name);
-  Tn.setBoundary(std::string("T") + name);
-  Pn.setBoundary(std::string("P") + name);
-  Nn.setBoundary(std::string("N") + name);
+    // Pick up BCs from input file
+    Dnn.setBoundary(std::string("Dnn") + name);
+    Tn.setBoundary(std::string("T") + name);
+    Pn.setBoundary(std::string("P") + name);
+    Nn.setBoundary(std::string("N") + name);
 
-  // All floored versions of variables get the same boundary as the original
-  Tnlim.setBoundary(std::string("T") + name);
-  Pnlim.setBoundary(std::string("P") + name);
-  logPnlim.setBoundary(std::string("P") + name);
-  Nnlim.setBoundary(std::string("N") + name);
+    // All floored versions of variables get the same boundary as the original
+    Tnlim.setBoundary(std::string("T") + name);
+    Pnlim.setBoundary(std::string("P") + name);
+    logPnlim.setBoundary(std::string("P") + name);
+    Nnlim.setBoundary(std::string("N") + name);
 
-  // Product of Dnn and another parameter has same BC as Dnn - see eqns to see why this is
-  // necessary
-  DnnNn.setBoundary(std::string("Dnn") + name);
-  DnnPn.setBoundary(std::string("Dnn") + name);
-  DnnNVn.setBoundary(std::string("Dnn") + name);
-
+    // Product of Dnn and another parameter has same BC as Dnn - see eqns to see why this is
+    // necessary
+    DnnNn.setBoundary(std::string("Dnn") + name);
+    DnnPn.setBoundary(std::string("Dnn") + name);
+    DnnNVn.setBoundary(std::string("Dnn") + name);
+  }
   if (Nn.isFci()) {
     dagp = FCI::getDagp_fv(alloptions, mesh);
   }
@@ -167,8 +189,17 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 void NeutralMixed::transform(Options& state) {
   AUTO_TRACE();
 
+  Nn.applyBoundary();
+  Pn.applyBoundary();
+  NVn.applyBoundary();
+  
   mesh->communicate(Nn, Pn, NVn);
 
+  Nn.applyParallelBoundary();
+  Pn.applyParallelBoundary();
+  NVn.applyParallelBoundary();
+
+  
   if (!Nn.isFci()) {
     Nn.clearParallelSlices();
     Pn.clearParallelSlices();
@@ -180,38 +211,46 @@ void NeutralMixed::transform(Options& state) {
 
   // Nnlim Used where division by neutral density is needed
   Nnlim = floor(Nn, density_floor);
+  
   Tn = Pn / Nnlim;
-  Tn.applyBoundary();
-
+  
   Vn = NVn / (AA * Nnlim);
-  Vnlim = Vn;
-
-  Vn.applyBoundary("neumann");
-  Vnlim.applyBoundary("neumann");
-
+  
   Pnlim = floor(Pn, pressure_floor);
-  Pnlim.applyBoundary();
+
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
-  TRACE("Neutral boundary conditions");
-  yboundary.iter_pnts([&](auto& pnt) {
-    // Free boundary (constant gradient) density
-    pnt.dirichlet_o2(Nn, pnt.extrapolate_sheath_o2(Nn));
+  if (!isMMS && parallel_dirichlet) {
+    TRACE("Neutral boundary conditions");
+    yboundary.iter_pnts([&](auto& pnt) {
+      // Free boundary (constant gradient) density
+      pnt.dirichlet_o2(Nn, pnt.extrapolate_sheath_o2(Nn));
 
-    // Zero gradient temperature, heat flux added later
-    pnt.neumann_o2(Tn,0.0);
+      // Zero gradient temperature, heat flux added later
+      pnt.neumann_o2(Tn,0.0);
 
-    // Zero-gradient pressure
-    pnt.neumann_o1(Pn,0.0);
-    pnt.neumann_o1(Pnlim,0.0);
+      // Zero-gradient pressure
+      pnt.neumann_o1(Pn,0.0);
+      pnt.neumann_o1(Pnlim,0.0);
     
-    // No flow into wall
-    pnt.dirichlet_o2(Vn,0.0); 
-    pnt.dirichlet_o2(Vnlim,0.0);
-    pnt.dirichlet_o2(NVn,0.0);
+      // No flow into wall
+      pnt.dirichlet_o2(Vn,0.0); 
+      pnt.dirichlet_o2(NVn,0.0);
     
-  }); // end yboundary.iter_pnts()
+    }); // end yboundary.iter_pnts()
+  } else if (!isMMS && !parallel_dirichlet){
+    TRACE("Neutral boundary conditions");
+    Nn.applyParallelBoundary("parallel_neumann_o1");
+    Tn.applyParallelBoundary("parallel_neumann_o1");
+    Pn.applyParallelBoundary("parallel_neumann_o1");
+    Pnlim.applyParallelBoundary("parallel_neumann_o1");
+    Vn.applyParallelBoundary("parallel_neumann_o1");
+    NVn.applyParallelBoundary("parallel_neumann_o1");
+  }
+
+  Nh_up = 0.0;
+  Nh_down = 0.0;
   
   // Set values in the state
   auto& localstate = state["species"][name];
@@ -236,70 +275,75 @@ void NeutralMixed::finally(const Options& state) {
   // Field3D logTn = log(Tn);
 
   logPnlim = log(Pnlim);
-  logPnlim.applyBoundary();
 
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
   //
   //
-  BoutReal neutral_lmax =
-      0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
 
+  Field3D Tnlim = floor(Tn, temperature_floor);
+  
   Field3D Rnn =
-    sqrt(floor(Tn, 1e-5) / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+    sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
   if (localstate.isSet("collision_frequency")) {
     // Dnn = Vth^2 / sigma
-    Dnn = (Tn / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+    Dnn = (Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
   } else {
-    Dnn = (Tn / AA) / Rnn;
+    Dnn = (Tnlim / AA) / Rnn;
   }
 
   if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax = flux_limit * sqrt(Tn / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
     BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]); }
   }
 
   if (diffusion_limit > 0.0) {
     // Impose an upper limit on the diffusion coefficient
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = BOUTMIN(Dnn[i], diffusion_limit);
+      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
     }
   }
-
-  Dnn.applyBoundary();
-  mesh->communicate(Dnn);
-  if (!Dnn.isFci()) {
-    Dnn.clearParallelSlices();
+  
+  if (disable_Dnn) {
+    Dnn = 0.0;
   }
+  
+  Dnn.applyBoundary("neumann");
+  mesh->communicate(Dnn);
+  Dnn.applyParallelBoundary("parallel_neumann_o1");
+  
+  
   
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
   DnnPn = Dnn * Pnlim;
   DnnNVn = Dnn * NVn;
 
-  DnnPn.applyBoundary();
-  DnnNn.applyBoundary();
-  DnnNVn.applyBoundary();
-
-
-  if (DnnNn.isFci()){
-    mesh->communicate(DnnNn);
+  if (!isMMS && parallel_dirichlet) {
+    yboundary.iter_pnts([&](auto& pnt) {
+      pnt.dirichlet_o2(Dnn, 0.0);
+      pnt.dirichlet_o2(DnnPn, 0.0);
+      pnt.dirichlet_o2(DnnNn, 0.0);
+      pnt.dirichlet_o2(DnnNVn, 0.0);
+    });
+  } else if (!isMMS && !parallel_dirichlet) {
+    Dnn.applyParallelBoundary("parallel_neumann_o1");
+    DnnPn.applyParallelBoundary("parallel_neumann_o1");
+    DnnNn.applyParallelBoundary("parallel_neumann_o1");
+    DnnNVn.applyParallelBoundary("parallel_neumann_o1");
   }
-  
-  yboundary.iter_pnts([&](auto& pnt) {
-    pnt.dirichlet_o2(Dnn, 0.0);
-    pnt.dirichlet_o2(DnnPn, 0.0);
-    pnt.dirichlet_o2(DnnNn, 0.0);
-    pnt.dirichlet_o2(DnnNVn, 0.0);
-  });
   
   // Sound speed appearing in Lax flux for advection terms
   sound_speed = 0;
   if (lax_flux) {
     sound_speed = sqrt(Tn * (5. / 3) / AA);
+  }
+
+  if (isMMS) {
+    sound_speed = 0.0;
   }
 
   // Heat conductivity 
@@ -319,80 +363,122 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
+  if (evolve_momentum) {
+    if (!isMMS){
+      ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, true);
+    } else {
+      ddt(Nn) = -Div_par(Nn * Vn);
+    }
+  } else {
+    ddt(Nn) = 0.0;
+  }
 
-  ddt(Nn) =
-    - FV::Div_par_mod<ParLimiter>(
-                  Nn, Vn, sound_speed, pf_adv_par_ylow) // Parallel advection
-                  
-    + Div_a_Grad_perp_flows(DnnNn, logPnlim,
-                                   pf_adv_perp_xlow,
-                                   pf_adv_perp_ylow);    // Perpendicular advection
-    ;
+  
+  if (!Nn.isFci()) {
+    
+    ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    
+  } else {
+    
+    bool upwind = false;
+    if (!use_finite_difference) {
+      ddt(Nn) += (*dagp)(DnnNn, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
+    } else {
+      ddt(Nn) += Div_a_Grad_perp_curv(DnnNn, logPnlim);
+    }
+  }
 
+  
   Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
     Sn += get<Field3D>(localstate["density_source"]);
   }
-  ddt(Nn) += Sn; // Always add density_source
-
+  if (!isMMS) {
+    ddt(Nn) += Sn; // Always add density_source
+  }
+  
   /////////////////////////////////////////////////////
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = - FV::Div_par_mod<ParLimiter>(               // Parallel advection
-                    Pn, Vn, sound_speed, ef_adv_par_ylow)
-
-            - (2. / 3) * Pn * Div_par(Vn)                // Compression
-            + (5. / 3) * Div_a_Grad_perp_flows(          // Perpendicular advection
-
-                    DnnPn, logPnlim,
-                    ef_adv_perp_xlow, ef_adv_perp_ylow)  
-     ;
-
-  // The factor here is 5/2 as we're advecting internal energy and pressure.
-  ef_adv_par_ylow  *= 5/2;
-  ef_adv_perp_xlow *= 5/2; 
-  ef_adv_perp_ylow *= 5/2;
-
-  if (neutral_conduction) {
-    ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(
-                    kappa_n, Tn,                            // Perpendicular conduction
-                    ef_cond_perp_xlow, ef_cond_perp_ylow)
-
-            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn,           // Parallel conduction 
-                      ef_cond_par_ylow,        
-                      false)  // No conduction through target boundary
-      ;
+  if (evolve_momentum) {
+    if (!isMMS) {
+      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection
+    } else {
+      ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
+    }
+    ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
+  } else {
+    ddt(Pn) = 0.0;
+  }
+  
+  if (!Pn.isFci()) {                                                                     // Perpendicular advection
+    ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
+  } else {
+    bool upwind = false;
+    if (!use_finite_difference) { 
+      ddt(Pn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+    } else {
+      ddt(Pn) += (5.0 / 3.0) * Div_a_Grad_perp_curv(DnnPn, logPnlim);
+    }
   }
 
-  // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-  ef_cond_perp_xlow *= 3/2;
-  ef_cond_perp_ylow *= 3/2;
-  ef_cond_par_ylow *= 3/2;
+  // The factor here is 5/2 as we're advecting internal energy and pressure.
+  //ef_adv_par_ylow  *= 5/2;
+  //ef_adv_perp_xlow *= 5/2; 
+  //ef_adv_perp_ylow *= 5/2;
+
+  if (neutral_conduction) {
+    ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
+    
+    if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
+      ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
+    } else {
+      bool upwind = false;
+      if (!use_finite_difference) {
+	ddt(Pn) += (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+      } else {
+	ddt(Pn) += (2.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
+      }
+    }
+    // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
+    //ef_cond_perp_xlow *= 3/2;
+    //ef_cond_perp_ylow *= 3/2;
+    //ef_cond_par_ylow *= 3/2;
+  }
   
   Sp = pressure_source;
   if (localstate.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
   }
-  ddt(Pn) += Sp;
-
+  if (!isMMS) {
+    ddt(Pn) += Sp;
+  }
+  
   if (evolve_momentum) {
 
     /////////////////////////////////////////////////////
     // Neutral momentum
     TRACE("Neutral momentum");
+    if (!isMMS) {
+      ddt(NVn) = -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed);             // Momentum flow
+    } else {
+      ddt(NVn) = -Div_par(NVn * Vn);
+    }
 
-    ddt(NVn) =
-        -AA * FV::Div_par_fvv<ParLimiter>(             // Momentum flow
-              Nnlim, Vn, sound_speed)                  
-
-        - Grad_par(Pn)                                 // Pressure gradient
-        
-        + Div_a_Grad_perp_flows(DnnNVn, logPnlim,
-                                     mf_adv_perp_xlow,
-                                     mf_adv_perp_ylow) // Perpendicular advection
-      ;
-
+    ddt(NVn) -= Grad_par(Pn);                                 // Pressure gradient
+      
+    if (!NVn.isFci()) {                                                                     // Perpendicular advection
+      ddt(NVn) += Div_a_Grad_perp_flows(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow);
+    } else {
+      bool upwind = false;
+      if (!use_finite_difference) {
+	ddt(NVn) += (*dagp)(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind);
+      } else {
+	ddt(NVn) += Div_a_Grad_perp_curv(DnnNVn, logPnlim);
+      }
+    }
+    
     if (neutral_viscosity) {
       // NOTE: The following viscosity terms are not (yet) balanced
       //       by a viscous heating term
@@ -403,17 +489,19 @@ void NeutralMixed::finally(const Options& state) {
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = AA * Div_a_Grad_perp_flows(
-                                eta_n, Vn,              // Perpendicular viscosity
-                                mf_visc_perp_xlow,
-                                mf_visc_perp_ylow)    
-                              
-                              + AA * Div_par_K_Grad_par_mod(               // Parallel viscosity 
-                                eta_n, Vn,
-                                mf_visc_par_ylow,
-                                false) // No viscosity through target boundary
-                          ;
-
+      Field3D viscosity_source = Div_par_K_Grad_par_mod(eta_n , Vn , mf_visc_par_ylow , false); // Parallel viscosity
+      
+      if (!NVn.isFci()) {                                                                     // Perpendicular advection                                                                                          
+	viscosity_source += Div_a_Grad_perp_flows(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow);
+      } else {
+	bool upwind = false;
+	if (!use_finite_difference) {
+	  viscosity_source += (*dagp)(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow, upwind);
+	} else {
+	  viscosity_source += Div_a_Grad_perp_curv(eta_n, Vn);
+	}
+      }
+      
       ddt(NVn) += viscosity_source;
       ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
     }
@@ -431,6 +519,8 @@ void NeutralMixed::finally(const Options& state) {
   }
 
 
+  //--------------------------------------------------------------------------------------------------------------------------------
+
   BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
     if ((Pn[i] < pressure_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
       ddt(Pn)[i] = 0.0;
@@ -440,6 +530,57 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
+  if (freeze_low_density) {
+    // Apply a factor to time derivatives in low density regions.
+    // Keep the sources and sinks, so that temperature and flow
+    // equilibriates with the plasma through collisions.
+
+    Field3D Nn_s, Pn_s, NVn_s;
+    if (localstate.isSet("density_source")) {
+      Nn_s = get<Field3D>(localstate["density_source"]);
+    } else {
+      Nn_s = 0.0;
+    }
+    if (localstate.isSet("energy_source")) {
+      Pn_s = (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    } else {
+      Pn_s = 0.0;
+    }
+    if (localstate.isSet("momentum_source")) {
+      NVn_s = get<Field3D>(localstate["momentum_source"]);
+    } else {
+      NVn_s = 0.0;
+    }
+
+
+    BOUT_FOR(i, Pn.getRegion("RGN_NOY")) {
+      // Local average density.
+      // The purpose is to turn on evolution when nearby cells contain significant density.
+      const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
+      const BoutReal factor = exp(- density_floor / meanNn);
+      ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
+      ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
+      ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
+    }
+  }
+
+
+
+  if (diagnose) {
+
+    Nh_up = 0.0;
+    Nh_down = 0.0;
+
+    BOUT_FOR(i, Nn.getRegion("RGN_NOY")){
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+      Nh_up[i] = Nn.yup()[iyp];
+      Nh_down[i] = Nn.ydown()[iym];
+    }
+    
+  }
+  
+  
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
@@ -517,6 +658,17 @@ void NeutralMixed::outputVars(Options& state) {
                     {"source", "neutral_mixed"}});
   }
   if (diagnose) {
+
+    set_with_attrs(state[std::string("Nh_up")], Nh_up,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"source", "neutral_mixed"}});
+
+    set_with_attrs(state[std::string("Nh_down")], Nh_down,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"source", "neutral_mixed"}});
+    
     set_with_attrs(state[std::string("T") + name], Tn,
                    {{"time_dimension", "t"},
                     {"units", "eV"},
@@ -742,21 +894,17 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   if (!precondition) {
     return;
   }
+  const auto& species = state["species"][name];
+  const Field3D N = get<Field3D>(species["density"]);
 
-  // Neutral gas diffusion
-  // Solve (1 - gamma*Dnn*Delp2)^{-1}
-
-  Field3D coef = -gamma * Dnn;
-
-  if (state.isSet("scale_timederivs")) {
-    coef *= get<Field3D>(state["scale_timederivs"]);
-  }
+  // Set the coefficient in Div_par( B * Grad_par )
+  Field3D coef = - gamma * Dnn;
 
   inv->setCoefD(coef);
+  Field3D dT = ddt(Pn);
+  dT.applyBoundary("neumann");
+  mesh->communicate(dT);
+  Field3D dummy = 0.0;
+  ddt(Pn) = inv->solve(dT, ddt(Pn));
 
-  ddt(Nn) = inv->solve(ddt(Nn));
-  if (evolve_momentum) {
-    ddt(NVn) = inv->solve(ddt(NVn));
-  }
-  ddt(Pn) = inv->solve(ddt(Pn));
 }

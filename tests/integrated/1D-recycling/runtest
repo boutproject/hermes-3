@@ -10,7 +10,7 @@ try:
 except:
   pass
 
-from boututils.run_wrapper import shell, launch, getmpirun
+from boututils.run_wrapper import shell, launch_safe, getmpirun
 from boutdata.collect import collect
 
 from numpy import sqrt, max, abs, mean, array, log, concatenate
@@ -24,7 +24,7 @@ success = True
 
 path = "data"
 
-s, out = launch("./hermes-3 -d " + path, nproc=1, pipe=True)
+s, out = launch_safe("./hermes-3 -d " + path, nproc=1, pipe=True)
 
 # Save output to log file
 with open("run.log", "w") as f:

@@ -33,18 +33,29 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
+  output_ddt = options["output_ddt"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(false);
+  
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
     .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
 
+  
   low_T_diffuse_perp = options["low_T_diffuse_perp"].doc("Add cross-field diffusion at low temperature?")
     .withDefault<bool>(false);
 
   pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
+  scale_ExB = options["scale_ExB"]
+                   .doc("Scale ExB flow?")
+                   .withDefault<BoutReal>(1.0);
+  
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
 
+  isMMS = options["mms"].withDefault<bool>(false);
+  
   if (evolve_log) {
     // Evolve logarithm of pressure
     solver->add(logP, std::string("logP") + name);
@@ -100,10 +111,19 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Lnorm = units["meters"];
+  hyper_p = options["hyper_p"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
 
+  
   auto& p_options = alloptions[std::string("P") + name];
   source_normalisation = SI::qe * Nnorm * Tnorm * Omega_ci;   // [Pa/s] or [W/m^3] if converted to energy
   time_normalisation = 1./Omega_ci;   // [s]
+
+  adapt_source = p_options["adapt_source"].doc("Adaptive source to pin temperature to value, given as electronvolt")
+    .withDefault<BoutReal>(-1.0) / (Tnorm);
+  
+  disable_ddt = p_options["disable_ddt"]
+    .withDefault<bool>(false);
   
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
@@ -161,6 +181,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
 
+  dissipative = options["dissipative"].doc("Use dissipative parallel flow with Lax flux").withDefault<bool>(false);
 
   BoutReal default_kappa; // default conductivity, changes depending on species
   switch(identifySpeciesType(name)) {
@@ -207,8 +228,10 @@ void EvolvePressure::transform(Options& state) {
     // Evolving logP, but most calculations use P
     P = exp(logP);
   }
-
+  
+  P.applyBoundary();
   mesh->communicate(P);
+  P.applyParallelBoundary();
 
   if (neumann_boundary_average_z) {
     // Take Z (usually toroidal) average and apply as X (radial) boundary condition
@@ -263,6 +286,8 @@ void EvolvePressure::transform(Options& state) {
   }
 
   set(species["pressure"], Pfloor);
+  mesh->communicate(T);
+  T.applyParallelBoundary("parallel_neumann_o1");
   set(species["temperature"], T);
 }
 
@@ -290,7 +315,7 @@ void EvolvePressure::finally(const Options& state) {
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
+    ddt(P) = -scale_ExB * Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
   } else {
     ddt(P) = 0.0;
   }
@@ -309,8 +334,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
-
+      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative);
       // Work done. This balances energetically a term in the momentum equation
       ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
 
@@ -319,7 +343,7 @@ void EvolvePressure::finally(const Options& state) {
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
+      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative);
 
       ddt(P) += (2. / 3) * V * Grad_par(P);
     }
@@ -374,7 +398,9 @@ void EvolvePressure::finally(const Options& state) {
   if (thermal_conduction) {
 
     // Calculate ion collision times
-    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    //const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);                                                                                                                                                                                  
+
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
     // Parallel heat conduction
@@ -458,6 +484,11 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) -= hyper_z_T * D4DZ4_Index(T);
   }
 
+  if (hyper_p > 0) {
+    // Form of hyper-viscosity                                                                                                                                                                                    
+    ddt(P) += hyperdiffusion(hyper_p, P);
+  }
+
   //////////////////////
   // Other sources
 
@@ -466,10 +497,18 @@ void EvolvePressure::finally(const Options& state) {
     BoutReal time = get<BoutReal>(state["time"]);
     BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
     final_source = source * source_prefactor;
+  } else if (adapt_source > 0.0) {
+    final_source = adaptive_sourceterm(T ,source, adapt_source, 0.05);
   } else {
     final_source = source;
   }
 
+
+  if (isMMS) {
+    final_source = 0.0;
+  }
+
+  
   Sp = final_source;
   if (species.isSet("energy_source")) {
     Sp += (2. / 3) * get<Field3D>(species["energy_source"]); // For diagnostic output
@@ -513,6 +552,26 @@ void EvolvePressure::finally(const Options& state) {
       flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
   }
+
+
+  if (diagnose) {
+    T_up = 0.0;
+    T_down = 0.0;
+
+    BOUT_FOR(i, T.getRegion("RGN_NOY")){
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+      T_up[i] = T.yup()[iyp];
+      T_down[i] = T.ydown()[iym];
+    }
+    
+  }
+  
+  if (disable_ddt){
+    ddt(P) = 0.0;
+  }
+
+  
 }
 
 void EvolvePressure::outputVars(Options& state) {
@@ -537,6 +596,27 @@ void EvolvePressure::outputVars(Options& state) {
                                                 {"species", name},
                                                 {"source", "evolve_pressure"}});
 
+  
+  set_with_attrs(state[std::string("P") + name + std::string("_src")], final_source,
+                   {{"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+
+  if (output_ddt || diagnose) {
+    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(P),
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", std::string("Rate of change of ") + name + " pressure"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+  }
+
+  
   if (diagnose) {
     if (thermal_conduction) {
       set_with_attrs(state[std::string("kappa_par_") + name], kappa_par,
@@ -556,11 +636,21 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(P),
+    set_with_attrs(state[std::string("Tup") + name], T_up,
                    {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
-                    {"conversion", Pnorm * Omega_ci},
-                    {"long_name", std::string("Rate of change of ") + name + " pressure"},
+                    {"units", "eV"},
+                    {"conversion", Tnorm},
+                    {"standard_name", "temperature"},
+                    {"long_name", name + " temperature"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    set_with_attrs(state[std::string("Tdown") + name], T_down,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"conversion", Tnorm},
+                    {"standard_name", "temperature"},
+                    {"long_name", name + " temperature"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
@@ -573,14 +663,6 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    set_with_attrs(state[std::string("P") + name + std::string("_src")], final_source,
-                   {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
-                    {"conversion", Pnorm * Omega_ci},
-                    {"standard_name", "pressure source"},
-                    {"long_name", name + " pressure source"},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
 
     if (flow_xlow.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,

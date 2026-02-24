@@ -40,19 +40,21 @@ private:
   Field3D V;            ///< Species parallel velocity
 
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
-
+  bool disable_ddt;
   bool bndry_flux;      // Allow flows through boundaries?
   bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;  // Include ExB flow in Y direction?
-
+  bool isMMS;
   BoutReal density_floor;
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
   BoutReal pressure_floor;
   bool low_p_diffuse_perp; ///< Cross-field diffusion at low pressure?
+  BoutReal scale_ExB;
 
   BoutReal hyper_z;  ///< Hyper-diffusion
-
+  BoutReal hyper_nv;
   std::string Vname;
+  bool output_ddt;
   bool diagnose; ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D flow_xlow, flow_ylow; ///< Momentum flow diagnostics

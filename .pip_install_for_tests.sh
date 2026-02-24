@@ -3,8 +3,8 @@
 set -e
 
 export PATH=${HOME}/.local/bin:${PATH}
-pip3 install --user --upgrade pip~=20.0 setuptools~=46.1
-pip3 install --user --upgrade scipy~=1.4 numpy~=1.18
+pip3 install --user --upgrade pip setuptools
+pip3 install --user --upgrade scipy numpy
 for package in $@
 do
     if test $package == "cython"
@@ -20,8 +20,4 @@ do
 done
 
 # Install Hermes-3
-git clone https://github.com/boutproject/xhermes.git
-cd xhermes
-pip3 install --user .
-cd ..
-
+pip3 install --user git+https://github.com/boutproject/xhermes.git

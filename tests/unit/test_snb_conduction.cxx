@@ -14,6 +14,8 @@ extern Mesh *mesh;
 // The unit tests use the global mesh
 using namespace bout::globals;
 
+#if not BOUT_USE_METRIC_3D
+
 #include <bout/field_factory.hxx>  // For generating functions
 
 // Reuse the "standard" fixture for FakeMesh
@@ -43,3 +45,5 @@ TEST_F(SNBConductionTest, Transform) {
     ASSERT_LT(abs(source[i]), 1e-20);
   }
 }
+
+#endif

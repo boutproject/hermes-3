@@ -50,7 +50,7 @@ private:
   Field3D anomalous_D; ///< Anomalous density diffusion coefficient
   Field3D anomalous_chi; ///< Anomalous thermal diffusion coefficient
   Field3D anomalous_nu; ///< Anomalous momentum diffusion coefficient
-
+  bool use_finite_difference;
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
   std::shared_ptr<FCI::dagp_fv> dagp;
 

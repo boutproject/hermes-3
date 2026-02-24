@@ -31,6 +31,7 @@
 #include <bout/mesh.hxx>
 #include <bout/output.hxx>
 #include <bout/utils.hxx>
+#include "../include/hermes_utils.hxx"
 
 #include <cmath>
 
@@ -212,6 +213,25 @@ void XPPM(Stencil1D& n, const BoutReal h) {
     }
   }
 }
+
+const Field3D hyperdiffusion(const BoutReal a, const Field3D& b) {
+  auto *coord = mesh->getCoordinates();
+  Field3D result = -a * (D4DX4(b)/SQ(coord->g_11) + D4DZ4(b)/SQ(coord->g_33));
+  return result;
+}
+
+
+const Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor){
+  Field3D result = 0.0;
+  BOUT_FOR(i, f.getRegion("RGN_NOY")){
+    BoutReal diff = f[i] - lowvalue;
+    if (diff < 0.0){
+      result[i] = -diff/scalefactor;
+    }
+  }
+  return result;
+}
+
 
 /* ***USED***
  *  Div (n * b x Grad(f)/B)
@@ -544,6 +564,20 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bnd
 
   return result;
 }
+
+
+const Field3D adaptive_sourceterm(const Field3D& thisfield ,const Field3D& sourceterm, const BoutReal maximum, const BoutReal overshoot){
+  Field2D averaged = DC(thisfield);
+  BoutReal thismax = max(averaged);
+  if (thismax>maximum){
+    BoutReal ratio = floor((thismax - maximum)/overshoot,0.0);
+    return sourceterm * exp(-ratio);	
+  } else {
+    return sourceterm;
+  }
+}
+
+
 
 /// *** USED ***
 const Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs, bool xflux) {
@@ -1024,6 +1058,18 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
 
   return result;
 }
+
+
+Field3D Div_a_Grad_perp_curv(const Field3D& b, const Field3D& a){
+  auto *coord = mesh->getCoordinates();
+  Field3D tmp = (DDX(coord->J * coord->g11*b)*DDX(a) + coord->J * coord->g11 * b * D2DX2(a))/coord->J;
+  tmp += (DDZ(coord->J * coord->g33 * b)*DDZ(a) + coord->J * coord->g33 * b * D2DZ2(a))/coord->J;
+  tmp += (DDX(coord->J * coord->g13 * b)*DDZ(a) + coord->J * coord->g13 * b * D2DXDZ(a) * 2.0 + DDZ(coord->J * coord->g13 * b)*DDX(a))/coord->J;
+  return tmp; 
+}
+
+
+
 
 // Div ( a Grad_perp(f) )  -- diffusion
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
@@ -1731,11 +1777,13 @@ std::shared_ptr<dagp_fv> getDagp_fv(Options& alloptions, Mesh* mesh) {
 
 dagp_fv::dagp_fv(Mesh& mesh)
     : fac_XX(&mesh), fac_XZ(&mesh), fac_ZX(&mesh), fac_ZZ(&mesh), volume(&mesh) {
-  ASSERT0(mesh.get(fac_XX, "dagp_fv_XX") == 0);
-  ASSERT0(mesh.get(fac_XZ, "dagp_fv_XZ") == 0);
-  ASSERT0(mesh.get(fac_ZX, "dagp_fv_ZX") == 0);
-  ASSERT0(mesh.get(fac_ZZ, "dagp_fv_ZZ") == 0);
-  ASSERT0(mesh.get(volume, "dagp_fv_volume") == 0);
+  ASSERT0(mesh.get(fac_XX, "dagp_fv_XX", 0.0, false) == 0);
+  ASSERT0(mesh.get(fac_XZ, "dagp_fv_XZ", 0.0, false) == 0);
+  ASSERT0(mesh.get(fac_ZX, "dagp_fv_ZX", 0.0, false) == 0);
+  ASSERT0(mesh.get(fac_ZZ, "dagp_fv_ZZ", 0.0, false) == 0);
+  ASSERT0(volume.hasParallelSlices() == false);
+  ASSERT0(mesh.get(volume, "dagp_fv_volume", 0.0, false) == 0);
+  ASSERT0(volume.hasParallelSlices() == false);
   volume.setRegion("RGN_NOBNDRY");
   if (!mesh.hasRegion3D("RGN_dapg_fv_xbndry")) {
     mesh.addRegion("RGN_dapg_fv_xbndry",
