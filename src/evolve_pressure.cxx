@@ -427,17 +427,18 @@ void EvolvePressure::finally(const Options& state) {
       kappa_par.applyBoundary("neumann");
       mesh->communicate(kappa_par);
 
-    } else if (kappa_par.isFci()) {
+    }
+
+
+    if (kappa_par.isFci()) {
       kappa_par.applyBoundary("neumann");
       mesh->communicate(kappa_par);
-      //kappa_par.applyParallelBoundary("parallel_dirichlet_o2");
-      //T.applyParallelBoundary("parallel_neumann_o2");
+      kappa_par.applyParallelBoundary("parallel_neumann_o1");
     }
 
     yboundary.iter([&](auto& region) {
       for (auto& pnt : region) {
-	pnt.ynext(kappa_par) = - kappa_par[pnt.ind()];
-	pnt.ynext(T) = T[pnt.ind()];
+	pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
       }
     });
 
