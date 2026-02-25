@@ -186,7 +186,6 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                                   fabs(v_up[iyp]),
                                   fabs(v_down[iym]));
 
-
       result[i] = B[i] * (
                           (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
                           - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
