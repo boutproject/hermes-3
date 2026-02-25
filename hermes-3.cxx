@@ -507,12 +507,13 @@ void Hermes::outputVars(Options& options) {
       {"long_name", "Gyro-radius length normalisation"}
     });
 
-  set_with_attrs(options["has_bndry_yup"], coord->has_bndry_yup,
-		 {{"source", "hermes-3"}});
+  if (mesh->isFci()) {
+    set_with_attrs(options["has_bndry_yup"], coord->has_bndry_yup,
+		   {{"source", "hermes-3"}});
 
-  set_with_attrs(options["has_bndry_ydown"], coord->has_bndry_ydown,
-                 {{"source", "hermes-3"}});
-
+    set_with_attrs(options["has_bndry_ydown"], coord->has_bndry_ydown,
+		   {{"source", "hermes-3"}});
+  }
 
 
   
