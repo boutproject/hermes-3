@@ -84,6 +84,8 @@
 #include <bout/field_factory.hxx>
 
 #include "include/recalculate_metric.hxx"
+#include "bout/boundary_iterator.hxx"
+#include <bout/yboundary_regions.hxx>
 
 #if !BOUT_USE_METRIC_3D
 // For standard 2D metrics,
@@ -268,10 +270,17 @@ int Hermes::init(bool restarting) {
 
         // dx,dy and dz are dimensionless,
         // so J has SI units of volume. Divide by volume to normalise.
+
+
+	// try loading J from the grid, otherwise use the one calculated from the metric coefficients
+	Field3D Jtmp = 0.0;
+	if (mesh->get(Jtmp, "J_new")==0){
+	  mesh->communicate(Jtmp);
+	  coord->J = Jtmp;
+	} 
+	
 	coord->J /= rho_s0 * rho_s0 * rho_s0;
-
-	coord->Bxy /= Bnorm;
-
+     	
 	coord->g_11 /= SQ(rho_s0);
 	coord->g_22 /= SQ(rho_s0);
 	coord->g_33 /= SQ(rho_s0);
@@ -279,11 +288,64 @@ int Hermes::init(bool restarting) {
 	coord->g_13 /= SQ(rho_s0);
 	coord->g_23 /= SQ(rho_s0);
 
+	coord->J_perp = sqrt(coord->g_11 * coord->g_33 - coord->g_13 * coord->g_13);
+	
+	// try loading g_22 at the lower and upper cell interface from the grid, otherwise caluculate from the mean of the two cellcentered ones                                                           
+        Field3D loadtmp = 0.0;
+        if (mesh->get(loadtmp, "g_22_cell_ylow")==0) {
+          coord->g_22_cell_ylow = loadtmp / SQ(rho_s0);
+        } else {
+          coord->g_22_cell_ylow = 0.0;
+          BOUT_FOR(i, coord->J.getRegion("RGN_NOY")) {
+            const auto iym = i.ym();
+            coord->g_22_cell_ylow[i] = 0.5 * (coord->g_22[i] + coord->g_22.ydown()[iym]);
+          }
+        }
+
+        loadtmp = 0.0;
+        if (mesh->get(loadtmp, "g_22_cell_yhigh")==0) {
+          coord->g_22_cell_yhigh = loadtmp / SQ(rho_s0);
+        } else {
+          coord->g_22_cell_yhigh = 0.0;
+          BOUT_FOR(i, coord->J.getRegion("RGN_NOY")) {
+            const auto iyp = i.yp();
+            coord->g_22_cell_yhigh[i] = 0.5 * (coord->g_22[i] + coord->g_22.yup()[iyp]);
+          }
+        }			
+
         // Need yup/down fields on Bxy
+
+	coord->Bxy /= Bnorm;
+	
         coord->Bxy.applyBoundary("neumann_o2");
         mesh->communicate(coord->Bxy);
         coord->Bxy.applyParallelBoundary("parallel_neumann_o2");
 
+
+	// Try loading the B field and the upper and lower interface, otherwise calculate from the mean of the two cellcentered values
+	loadtmp = 0.0;
+	if (mesh->get(loadtmp, "By_cell_yhigh")==0) {
+	  coord->By_cell_yhigh = loadtmp / Bnorm;
+        } else {
+          coord->By_cell_yhigh = 0.0;
+          BOUT_FOR(i, coord->J.getRegion("RGN_NOY")) {
+            const auto iyp = i.yp();
+            coord->By_cell_yhigh[i] = 0.5 * (coord->Bxy[i] + coord->Bxy.yup()[iyp]);
+          }
+        }
+
+	loadtmp = 0.0;
+	if (mesh->get(loadtmp, "By_cell_ylow")==0) {
+          coord->By_cell_ylow = loadtmp / Bnorm;
+        } else {
+          coord->By_cell_ylow = 0.0;
+          BOUT_FOR(i, coord->J.getRegion("RGN_NOY")) {
+            const auto iym = i.ym();
+            coord->By_cell_ylow[i] = 0.5 * (coord->Bxy[i] + coord->Bxy.ydown()[iym]);
+          }
+        }
+
+	
         BOUT_FOR(i, coord->Bxy.getRegion("RGN_NOBNDRY")) {
           if (fabs(coord->Bxy.yup()[i]) < 1e-3) {
             coord->Bxy.yup()[i] = coord->Bxy[i];
@@ -292,7 +354,37 @@ int Hermes::init(bool restarting) {
             coord->Bxy.ydown()[i] = coord->Bxy[i];
           }
         }
-      } else {
+
+	coord->cellarea_yup = coord->J_perp * coord->dx * coord->dz * coord->Bxy / coord->By_cell_yhigh;
+        coord->cellarea_ydown = coord->J_perp * coord->dx * coord->dz * coord->Bxy / coord->By_cell_ylow;
+	coord->cellvolume = coord->J * coord->dx * coord->dy * coord->dz;
+
+	BOUT_FOR(i, coord->Bxy.getRegion("RGN_NOBNDRY")) {
+          ASSERT0(coord->cellarea_yup[i] > 0.0);
+	  ASSERT0(coord->cellarea_ydown[i] > 0.0);
+	  ASSERT0(coord->cellvolume[i] > 0.0);
+        }
+
+	Field3D tmp_has_bndry_up = false;
+	Field3D tmp_has_bndry_down = false;	  
+
+	
+	yboundary.init(options);
+	yboundary.iter_pnts([&](auto& pnt) {
+	  const auto& i = pnt.ind();
+	  if (pnt.dir > 0.0) {
+	    tmp_has_bndry_up[i] = true;
+	  } else if (pnt.dir < 0.0) {
+	    tmp_has_bndry_down[i] = true;
+	  }
+	});
+
+	coord->has_bndry_yup = tmp_has_bndry_up;
+	coord->has_bndry_ydown = tmp_has_bndry_down;
+
+	
+	
+      } else { // NOT FCI
 	coord->dx /= rho_s0 * rho_s0 * Bnorm;
 	coord->Bxy /= Bnorm;
 	// Metric is in grid file - just need to normalise
@@ -368,6 +460,7 @@ int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal UNUSED(delta)) {
 
 void Hermes::outputVars(Options& options) {
   AUTO_TRACE();
+  Coordinates *coord = mesh->getCoordinates();
 
   // Save the Hermes version in the output dump files
   options["HERMES_REVISION"].force(hermes::version::revision);
@@ -413,6 +506,17 @@ void Hermes::outputVars(Options& options) {
       {"standard_name", "length normalisation"},
       {"long_name", "Gyro-radius length normalisation"}
     });
+
+  if (mesh->isFci()) {
+    set_with_attrs(options["has_bndry_yup"], coord->has_bndry_yup,
+		   {{"source", "hermes-3"}});
+
+    set_with_attrs(options["has_bndry_ydown"], coord->has_bndry_ydown,
+		   {{"source", "hermes-3"}});
+  }
+
+
+  
   scheduler->outputVars(options);
 }
 

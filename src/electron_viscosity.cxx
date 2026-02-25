@@ -61,7 +61,7 @@ void ElectronViscosity::transform(Options& state) {
   // Save term for output diagnostic
   // viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
   Field3D dummy;
-  viscosity = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy, false);
+  viscosity = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy, true);
   add(species["momentum_source"], viscosity);
 }
 
