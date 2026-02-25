@@ -84,6 +84,8 @@
 #include <bout/field_factory.hxx>
 
 #include "include/recalculate_metric.hxx"
+#include "bout/boundary_iterator.hxx"
+#include <bout/yboundary_regions.hxx>
 
 #if !BOUT_USE_METRIC_3D
 // For standard 2D metrics,
@@ -362,8 +364,27 @@ int Hermes::init(bool restarting) {
 	  ASSERT0(coord->cellarea_ydown[i] > 0.0);
 	  ASSERT0(coord->cellvolume[i] > 0.0);
         }
+
+	Field3D tmp_has_bndry_up = false;
+	Field3D tmp_has_bndry_down = false;	  
+
 	
-      } else {
+	yboundary.init(options);
+	yboundary.iter_pnts([&](auto& pnt) {
+	  const auto& i = pnt.ind();
+	  if (pnt.dir > 0.0) {
+	    tmp_has_bndry_up[i] = true;
+	  } else if (pnt.dir < 0.0) {
+	    tmp_has_bndry_down[i] = true;
+	  }
+	});
+
+	coord->has_bndry_yup = tmp_has_bndry_up;
+	coord->has_bndry_ydown = tmp_has_bndry_down;
+
+	
+	
+      } else { // NOT FCI
 	coord->dx /= rho_s0 * rho_s0 * Bnorm;
 	coord->Bxy /= Bnorm;
 	// Metric is in grid file - just need to normalise
@@ -439,6 +460,7 @@ int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal UNUSED(delta)) {
 
 void Hermes::outputVars(Options& options) {
   AUTO_TRACE();
+  Coordinates *coord = mesh->getCoordinates();
 
   // Save the Hermes version in the output dump files
   options["HERMES_REVISION"].force(hermes::version::revision);
@@ -484,6 +506,17 @@ void Hermes::outputVars(Options& options) {
       {"standard_name", "length normalisation"},
       {"long_name", "Gyro-radius length normalisation"}
     });
+
+  if (mesh->isFci()) {
+    set_with_attrs(options["has_bndry_yup"], coord->has_bndry_yup,
+		   {{"source", "hermes-3"}});
+
+    set_with_attrs(options["has_bndry_ydown"], coord->has_bndry_ydown,
+		   {{"source", "hermes-3"}});
+  }
+
+
+  
   scheduler->outputVars(options);
 }
 
