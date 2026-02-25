@@ -78,7 +78,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   bndry_flux = options["bndry_flux"]
                    .doc("Allow flows through radial boundaries")
-                   .withDefault<bool>(false);
+                   .withDefault<bool>(true);
 
   exb_advection = options["exb_advection"]
                    .doc("Include ExB advection?")
@@ -438,7 +438,7 @@ void EvolvePressure::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, bndry_flux);
+    ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
     if (    flow_ylow_conduction.isAllocated()) {
       if (flow_ylow.isAllocated()) {
 	flow_ylow += flow_ylow_conduction;
