@@ -134,7 +134,7 @@ Since Hermes-3 heavily relies on BOUT++, the `BOUT++ documentation on installati
 dependencies <https://bout-dev.readthedocs.io/en/stable/user_docs/quickstart.html#prerequisites>`__ 
 contains a lot of useful information. Below is a selection of working module lists
 for several HPC systems. It is recommended you start with a clean module environment 
-by executing `module purge` first.
+by executing :command:`module purge` first.
 
 YPI Workstations:
 
@@ -286,7 +286,7 @@ build folder for a fresh compilation. This can resolve several types of issues.
 
 There have also been several reported issues due to Conda (e.g. making 
 BOUT++ pick up the Conda MPI installation instead of the module one). A 
-workaround is to compile with the CMake flag `-DBOUT_IGNORE_CONDA_ENV=ON`.
+workaround is to compile with the CMake flag :code:`-DBOUT_IGNORE_CONDA_ENV=ON`.
 
 
 Using Spack
@@ -380,9 +380,9 @@ If you don't do this, the below instructions should still work, but spack will m
 environment file, spack.yaml, to include the gcc installation details.
 
 .. important::
-   Version 1.1.0 of spack sets the built-in package repository to version `releases/v2025.11`.
+   Version 1.1.0 of spack sets the built-in package repository to version ``releases/v2025.11``.
    The PETSc package in that version has a bug, related to the Hypre dependency, which causes the installation of BOUT++ to fail.
-   To work around this you can use the `develop` version of the spack-packages repo instead.
+   To work around this you can use the ``develop`` version of the spack-packages repo instead.
    Edit $SPACK_ROOT/etc/spack/defaults/base/repos.yaml as follows:
 
    .. code-block:: yaml
@@ -391,7 +391,7 @@ environment file, spack.yaml, to include the gcc installation details.
          builtin:
             git: https://github.com/spack/spack-packages.git branch: develop # branch: releases/v2025.11
 
-   and then run `spack repo update`.
+   and then run :command:`spack repo update`.
 
    This workaround should not be required when using spack versions newer than 1.1.0.
 
@@ -447,22 +447,22 @@ entirety unless moving to another version of the same compiler, or switching to 
 
 The location in which spack builds packages is set via your user configuration options (see
 :ref:`sec-hermes-install-spack`), but for convenience, the environment wrapper script automatically generates links to
-the BOUT++ and hermes-3 builds in `./builds/spack/boutpp/[hash]` and `./builds/spack/hermes-3/[hash]` respectively,
-(where `[hash]` is a label that spack assigns). CMake and compiler output can be found in the spack log files, and the
-the build itself in a subdirectory `spack-build-[hash]`. Build directory links are updated every time a `spack install`
-or `spack uninstall` command is run.
+the BOUT++ and hermes-3 builds in ``./builds/spack/boutpp/[hash]`` and ``./builds/spack/hermes-3/[hash]`` respectively,
+(where ``[hash]`` is a label that spack assigns). CMake and compiler output can be found in the spack log files, and the
+the build itself in a subdirectory ``spack-build-[hash]``. Build directory links are updated every time a ``spack install``
+or ``spack uninstall`` command is run.
 
 
 Changing Hermes-3 and BOUT++ versions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Sometimes, you may want to change the version of either Hermes-3 or BOUT++. They are included in
-the spack environment as `develop` modules, which means they are compiled from their local directories.
+the spack environment as ``develop`` modules, which means they are compiled from their local directories.
 To change the version, simply check out a different commit in either your Hermes-3 repo or the
-BOUT++ submodule in `external/BOUT-dev` and run `spack install` again.
+BOUT++ submodule in :file:`external/BOUT-dev` and run :command:`spack install` again.
 
 .. tip::
-   It is possible to set a build directory with, e.g. `spack develop -p . --build-directory ./builds/mybuild hermes-3`,
+   It is possible to set a build directory with, e.g. :command:`spack develop -p . --build-directory ./builds/mybuild hermes-3`,
    but this modifies spack.yaml and is a bit awkward if you need to switch between builds frequently. A more
    straightforward approach is to use CMake directly, as described below.
 

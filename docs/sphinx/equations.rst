@@ -85,18 +85,18 @@ other processes that nay be included, including drift terms
 
 Notes:
 
-1. The density will be saved in the output file as `N` + species
-   label, e.g `Nd` in the above example.
-2. If `diagnose=true` is set in the species options then the net
-   source :math:`S_n` is saved as `SN` + species, e.g. `SNd`; the
-   external source is saved as `S` + species + `_src` e.g. `Sd_src`.
-   The time derivative of density is saved as `ddt(N` + species + `)`
-   e.g. `ddt(Nd)`.
+1. The density will be saved in the output file as ``N`` + species
+   label, e.g ``Nd`` in the above example.
+2. If ``diagnose=true`` is set in the species options then the net
+   source :math:`S_n` is saved as ``SN`` + species, e.g. ``SNd``; the
+   external source is saved as ``S`` + species + ``_src`` e.g. ``Sd_src``.
+   The time derivative of density is saved as ``ddt(N`` + species + ``)``
+   e.g. ``ddt(Nd)``.
 3. The density source can be set in the input mesh file as a field
-   `S` + species + `_src` e.g. `Sd_src`. This can be overridden by
+   ``S`` + species + ``_src`` e.g. ``Sd_src``. This can be overridden by
    specifying the source in the input options.
-4. The `poloidal_flows` switch controls whether the X-Y components of
-   the ExB flow are included (default is true). If set to `false` then
+4. The ``poloidal_flows`` switch controls whether the X-Y components of
+   the ExB flow are included (default is true). If set to ``false`` then
    ExB flows are only in the X-Z plane.
 
 The implementation is in the `EvolveDensity` class:
@@ -180,8 +180,8 @@ variable.
 evolve_pressure
 ~~~~~~~~~~~~~~~
 
-Evolves the pressure in time. This pressure is named `P<species>` where `<species>`
-is the short name of the evolving species e.g. `Pe`.
+Evolves the pressure in time. This pressure is named ``P<species>`` where ``<species>``
+is the short name of the evolving species e.g. ``Pe``.
 
 Parallel conduction is included if the global
 :ref:`sec-braginskii_conduction` component has been used.
@@ -237,9 +237,9 @@ that sets the velocity, such as `evolve_momentum`:
    [d]
    type = ..., evolve_momentum, evolve_energy
 
-The energy density will be saved as `E<species>` (e.g `Ed`) and the
-pressure as `P<species>` (e.g. `Pd`). Additional diagnostics, such as the
-temperature, can be saved by setting the option `diagnose = true`.
+The energy density will be saved as ``E<species>`` (e.g ``Ed``) and the
+pressure as ``P<species>`` (e.g. ``Pd``). Additional diagnostics, such as the
+temperature, can be saved by setting the option ``diagnose = true``.
 
 .. doxygenstruct:: EvolveEnergy
    :members:
@@ -292,7 +292,7 @@ This is a global component that calculates the parallel thermal
 conduction for all species that use :ref:`sec-evolve_pressure` or
 :ref:`sec-evolve_energy`, storing it in `energy_source`. If this is not
 desired for a particular species then it can be turned off by setting
-`thermal_conduction = false` in the input options for that species.
+:code:`thermal_conduction = false` in the input options for that species.
 
 This component requires a collision time to have been calculated
 (i.e., with the :ref:`sec-collisions` component). It is
@@ -358,7 +358,7 @@ evolve_momentum
 Evolves the momentum `NV<species>` in time. The evolving quantity includes the atomic
 mass number, so should be divided by `AA` to obtain the particle flux.
 
-If the component option ``diagnose = true`` then additional fields
+If the component option :code:`diagnose = true` then additional fields
 will be saved to the dump files: The velocity ``V + name``
 (e.g. ``Vd+`` or ``Ve``), the time derivative ``ddt(NV + name)``
 (e.g. ``ddt(NVd+)`` or ``ddt(NVe)``), and the source of momentum
@@ -654,13 +654,13 @@ The diffusion coefficient is in :math:`m^2/s` and is calculated as
 
    D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{eT_n}{m_{n} \nu}
 
-where `m_{n}` is the neutral species mass in kg and :math:`\nu` is the collision
+where ``m_{n}`` is the neutral species mass in kg and :math:`\nu` is the collision
 frequency (by default, this sums up all of the enabled neutral collisions from 
 the collisions component as well as the charge exchange rate).
 The factor :math:`B / B_{pol}` is the projection of the cross-field
-direction on the parallel transport, and is the `dneut` input setting. Currently, the recommended
+direction on the parallel transport, and is the ``dneut`` input setting. Currently, the recommended
 use case for this component is to represent the neutrals diffusing orthogonal to the target wall, and
-it is recommended to set `dneut` according to the field line pitch at the target.
+it is recommended to set ``dneut`` according to the field line pitch at the target.
 
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
@@ -879,18 +879,18 @@ viscosity.
 The advection of momentum :math:`\mathbf{v}\cdot\nabla\mathbf{v}` is
 controlled by these settings:
 
-#. `momentum_advection` is `false` by default, disabling this
+#. `momentum_advection` is ``false`` by default, disabling this
    nonlinear advection term. This keeps the inertia in the time
    derivative, but neglects the neutral dynamic pressure in the
    momentum balance.
    
-#. `toroidal_flow` is `true` by default, which includes the toroidal
+#. `toroidal_flow` is ``true`` by default, which includes the toroidal
    (:math:`z`) component of the neutral flow. Importantly, this allows
    the parallel and poloidal flows to evolve independently: The
    parallel flow can follow the plasma towards the target, while the
    poloidal flow can be away from the target.
 
-#. `curved_torus` is `true` by default, and is only active when both
+#. `curved_torus` is ``true`` by default, and is only active when both
    `momentum_advection` and `toroidal_flow` are enabled. Neutrals
    travel in straight lines in real space, so toroidal flow is
    converted to radial flow. This appears in the :math:`v_r` and
@@ -955,7 +955,7 @@ but form 0 doesn't produce flows through boundaries. This is an approach that UE
 
 However, Form 1 is nice because the flow velocity depends on the temperature, not the pressure gradient. 
 This usually makes it better behaved numerically. To make the most of both, the `diamagnetic_drift` component allows the forms to be mixed
-using the ``diamag_form`` setting. For example, the `tcv-x21` example blends it such that form 0 is at the boundary:
+using the ``diamag_form`` setting. For example, the :code:`tcv-x21` example blends it such that form 0 is at the boundary:
 
 .. code-block:: ini
 
@@ -986,7 +986,7 @@ This component needs to be run after all other currents have been
 calculated.  It marks currents as used, so out-of-order modifications
 should raise errors.
 
-See the `examples/blob2d-vpol` example, which contains:
+See the :file:`examples/blob2d-vpol` example, which contains:
 
 .. code-block:: ini
 
@@ -996,7 +996,7 @@ See the `examples/blob2d-vpol` example, which contains:
    [polarisation_drift]
    diagnose = true
 
-Setting `diagnose = true` saves `DivJ` to the dump files with the divergence of all
+Setting ``diagnose = true`` saves `DivJ` to the dump files with the divergence of all
 currents except polarisation, and `phi_pol` which is the polarisation flow potential.
 
 .. doxygenstruct:: PolarisationDrift

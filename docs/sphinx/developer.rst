@@ -516,10 +516,10 @@ A common need is to add or subtract values from fields, such as density sources:
   
 Notes:
 
-- When checking if a subsection exists, use `option.isSection`, since `option.isSet`
+- When checking if a subsection exists, use ``option.isSection``, since ``option.isSet``
   is false if it is a section and not a value.
-- The species name convention is that the charge state is last, after the `+` or `-`
-  sign: `n2+` is a singly charged nitrogen molecule, while `n+2` is a +2 charged
+- The species name convention is that the charge state is last, after the ``+`` or ``-``
+  sign: ``n2+`` is a singly charged nitrogen molecule, while ``n+2`` is a +2 charged
   nitrogen atom.
 
   
@@ -575,8 +575,8 @@ Inputs to the component constructors are:
 
 The `name` is a string labelling the instance. The `alloptions` tree contains at least:
 
-* `alloptions[name]` options for this instance
-* `alloptions['units']`
+* ``alloptions[name]`` options for this instance
+* ``alloptions['units']``
 
 
 Component Permissions

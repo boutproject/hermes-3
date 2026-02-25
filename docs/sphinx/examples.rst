@@ -72,7 +72,7 @@ function of index:
 where `dymin` is 0.1 here, and sets the smallest grid spacing (at the
 target) as a fraction of the average grid spacing.
 
-The components are ion species `d+`, atoms `d`, electrons `e`:
+The components are ion species ``d+``, atoms ``d``, electrons ``e``:
 
 .. code-block:: ini
 
@@ -260,7 +260,7 @@ and so solves the equation:
 
 The :ref:`sec-isothermal` component type sets the temperature to be a constant, and using
 the density then sets the pressure. The constant temperature is also
-set in this `[e]` section:
+set in this ``[e]`` section:
 
 .. code-block:: ini
 
@@ -278,7 +278,7 @@ where :math:`T_e` is the fixed electron temperature (5eV).
 
 The :ref:`sec-vorticity` component uses the pressure to calculate the diamagnetic current,
 so must come after the `e` component. This component then calculates the potential.
-Options to control the vorticity component are set in the `[vorticity]` section.
+Options to control the vorticity component are set in the ``[vorticity]`` section.
 
 .. math::
 
@@ -339,7 +339,7 @@ The electron component evolves density (saved as `Ne`) and pressure
 
 
 The ion component sets the ion density from the electron density, by
-using the quasineutrality of the plasma; the ion pressure (`Ph+`) is evolved.
+using the quasineutrality of the plasma; the ion pressure (``Ph+``) is evolved.
 
 .. code-block:: ini
    
@@ -386,7 +386,7 @@ The electron component evolves density (saved as `Ne`) and pressure
 
 
 The ion component sets the ion density from the electron density, by
-using the quasineutrality of the plasma; the ion pressure (`Ph+`) is evolved.
+using the quasineutrality of the plasma; the ion pressure (``Ph+``) is evolved.
 
 .. code-block:: ini
 
@@ -402,7 +402,7 @@ The sheath closure now specifies that additional sink terms should be added
     potential_offset = 0.0  # Potential at which sheath current is zero
     sinks = true
 
-and radially localised sources are added in the `[Ne]`, `[Pe]`, and `[Ph+]`
+and radially localised sources are added in the ``[Ne]``, ``[Pe]``, and ``[Ph+]``
 sections.
 
 The equations this solves are the same as the previous
@@ -452,8 +452,8 @@ These are transport simulations, where the cross-field transport is given
 by diffusion, and fluid-like equations are used for the parallel dynamics
 (as in the 1D flux tube cases).
 
-The input settings (in BOUT.inp) are set to read the grid from a file `tokamak.nc`.
-This is linked to a default file `compass-36x48.grd.nc`, a COMPASS-like lower single
+The input settings (in BOUT.inp) are set to read the grid from a file :file:`tokamak.nc`.
+This is linked to a default file :file:`compass-36x48.grd.nc`, a COMPASS-like lower single
 null tokamak equilibrium. Due to the way that BOUT++ uses communications between
 processors to implement branch cuts, these simulations require a multiple of 6 processors.
 You don't usually need 6 physical cores to run these cases, if MPI over-subscription
@@ -462,7 +462,7 @@ is enabled.
 heat-transport
 ~~~~~~~~~~~~~~
 
-In `examples/tokamak/heat-transport`, this evolves only electron pressure with
+In :file:`examples/tokamak/heat-transport`, this evolves only electron pressure with
 a fixed density. It combines cross-field diffusion with parallel heat conduction
 and a sheath boundary condition.
 
@@ -475,10 +475,10 @@ From the build directory:
    cd examples/tokamak
    mpirun -np 6 ../../hermes-3 -d heat-transport
 
-That will read the grid from `tokamak.nc`, which by default links to
-the `compass-36x48.grd.nc` file.
+That will read the grid from :file:`tokamak.nc`, which by default links to
+the :file:`compass-36x48.grd.nc` file.
 
-The components of the model are given in `heat-transport/BOUT.inp`:
+The components of the model are given in :file:`heat-transport/BOUT.inp`:
 
 .. code-block:: ini
 
@@ -601,7 +601,7 @@ Warning
    If you are interested in 2D transport simulations, consider starting 
    with the much simpler ``recycling`` example (not yet in documentation)
    
-The `recycling-dthene` example includes cross-field diffusion,
+The ``recycling-dthene`` example includes cross-field diffusion,
 parallel flow and heat conduction, collisions between species, sheath
 boundary conditions and recycling. It simulates the density, parallel
 flow and pressure of the electrons; ion species D+, T+, He+, Ne+; and

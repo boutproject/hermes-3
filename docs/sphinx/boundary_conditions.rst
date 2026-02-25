@@ -41,23 +41,23 @@ The boundary conditions can also be applied over a finite width as well as relax
 These boundary conditions are implemented in BOUT++, and therefore have no access to
 the normalisations within Hermes-3 and so must be used in normalised units.
 Please see the `BOUT++ documentation
-<https://bout-dev.readthedocs.io/en/latest/user_docs/boundary_options.html>`_ for more detail, 
+<https://bout-dev.readthedocs.io/en/latest/user_docs/boundary_options.html>`__ for more detail, 
 including the full list of boundary conditions and more guidance on their use.
 In case the documentation is incomplete or insufficient, please refer to the 
 `BOUT++ boundary condition code
-<https://github.com/boutproject/BOUT-dev/blob/cbd197e78f7d52721188badfd7c38a0a540a82bd/src/mesh/boundary_standard.cxx>`_
+<https://github.com/boutproject/BOUT-dev/blob/cbd197e78f7d52721188badfd7c38a0a540a82bd/src/mesh/boundary_standard.cxx>`__
 .
 
 
 Currently, there is only one additional simple boundary condition implemented in Hermes-3.
-`decaylength(x)` sets the boundary according to a user-set radial decay length. 
+:code:`decaylength(x)` sets the boundary according to a user-set radial decay length. 
 This is a commonly used setting for plasma density and pressure in the tokamak SOL boundary in 2D and 3D but is not applicable in 1D.
 Note that this must be provided in normalised units just like the BOUT++ simple boundary conditions.
 
 The below example for a 2D tokamak simulation sets the electron density to a constant value of :math:`1e20^{-3}` in the core and
-sets a decay length of 3mm in the SOL and PFR regions, while setting the remaining boundaries to `neumann`.
+sets a decay length of 3mm in the SOL and PFR regions, while setting the remaining boundaries to ``neumann``.
 Example settings of the fundamental normalisation factors and the calculation of the derived ones is provided
-in the `hermes` component which can be accessed by using the `hermes:` prefix in any other component in the input file.
+in the ``hermes`` component which can be accessed by using the ``hermes:`` prefix in any other component in the input file.
 
 .. code-block:: ini
 
@@ -208,14 +208,14 @@ end of the domain, where `lower` and `upper` refer to the start and end of the p
    upper_y = true
 
 It can be useful to run the code without neutrals/recycling in order to simplify the physics, e.g. for debugging.
-However, just disabling `recycling` would result in mach flows throughout the whole domain due to the lack of the
-neutral source. To avoid this, you can set `no_flow = true` under `sheath_boundary_simple`. This will set the ion 
-velocity to zero for the particle flux but will keep it at the :math: `v_i \geq c_{bohm}` condition for the heat flux.
+However, just disabling ``recycling`` would result in mach flows throughout the whole domain due to the lack of the
+neutral source. To avoid this, you can set ``no_flow = true`` under ``sheath_boundary_simple``. This will set the ion 
+velocity to zero for the particle flux but will keep it at the :math:`v_i \geq c_{bohm}` condition for the heat flux.
 
 By default, the Bohm condition is imposed on the target by the Lax flux. This allows the code to have a small amount 
 of slack, resulting in a not-perfectly-exact setting but a smoother and more stable solution. For debugging, you can
-disable this behaviour and fix the Bohm condition explicitly. This can be done by setting `fix_momentum_boundary_flux` 
-to `true` in the `evolve_pressure` component. Note that this has been observed to increase numerical oscillations near
+disable this behaviour and fix the Bohm condition explicitly. This can be done by setting ``fix_momentum_boundary_flux`` 
+to ``true`` in the `evolve_pressure` component. Note that this has been observed to increase numerical oscillations near
 the boundary and is not recommended.
 
 .. _sheath_boundary:
@@ -284,10 +284,10 @@ the corresponding section for the options `recycle_as`, `recycle_multiplier`
 and `recycle_energy` for each of the three implemented boundaries. Note that 
 the resulting recycling source is a simple
 multiplication of the outgoing species flow and the multiplier factor.
-This means that recycling `d+` ions into `d2` molecules would require a multiplier 
+This means that recycling ``d+`` ions into ``d2`` molecules would require a multiplier 
 of 0.5 to maintain a particle balance in the simulation.
 
-For example, recycling `d+` ions into `d` atoms with a recycling fraction
+For example, recycling ``d+`` ions into ``d`` atoms with a recycling fraction
 of 0.95 at the target and 1.0 at the SOL and PFR edges. 
 Each returning atom has an energy of 3.5eV:
 
@@ -407,7 +407,7 @@ Diagnostic variables and settings
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. note::
-   All recycling settings are in the ion header (e.g. `[d+]`), including pump settings.
+   All recycling settings are in the ion header (e.g. ``[d+]``), including pump settings.
 
 Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, and the 
 SOL/PFR region (grouped together as `wall`, e.g. `Sd_wall_recycle`). The pump diagnostics are provided in the form
@@ -439,9 +439,9 @@ on y (parallel) boundaries.
   `momentum` if they are set.
 
 By default both yup and ydown boundaries are set, but can be turned
-off by setting `noflow_lower_y` or `noflow_upper_y` to `false`.
+off by setting `noflow_lower_y` or `noflow_upper_y` to ``false``.
 
-Example: To set no-flow boundary condition on an ion `d+` at the lower
+Example: To set no-flow boundary condition on an ion ``d+`` at the lower
 y boundary, with a sheath boundary at the upper y boundary:
 
 .. code-block:: ini

@@ -118,7 +118,7 @@ by putting in the BOUT.inp options file:
    log_view = true
 
 This section can also be used to set other PETSc flags, just omitting
-the leading `-` from the PETSc option.
+the leading ``-`` from the PETSc option.
 
    
 

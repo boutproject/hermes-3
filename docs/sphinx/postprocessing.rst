@@ -86,17 +86,17 @@ is positive if the ion energy is increasing.
 
 Charge exchange can be slightly complicated:
 
-For two species `a` and `b`, the channel `Fab_cx` is a source of momentum for species `a` due to
-charge exchange with species `b`. There are corresponding sinks for
+For two species ``a`` and ``b``, the channel ``Fab_cx`` is a source of momentum for species ``a`` due to
+charge exchange with species ``b``. There are corresponding sinks for
 the products of the charge exchange reaction which are not saved.
 
-For example,reaction `d + t+ -> d+ + t` will save the following
+For example,reaction ``d + t+ -> d+ + t`` will save the following
 forces (momentum sources):
-- `Fdt+_cx` is a source of momentum for deuterium atoms `d` and sink of momentum for deuterium ions `d+`.
-- `Ft+d_cx` is a source of momentum for tritium ions `t+` and sink of momentum for tritium atoms `t`.
+- ``Fdt+_cx`` is a source of momentum for deuterium atoms ``d`` and sink of momentum for deuterium ions ``d+``.
+- ``Ft+d_cx`` is a source of momentum for tritium ions ``t+`` and sink of momentum for tritium atoms ``t``.
 
 The reason for this convention is the existence of the inverse reactions:
-`t + d+ -> t+ + d` outputs diagnostics `Ftd+_cx` and `Fd+t_cx`.
+``t + d+ -> t+ + d`` outputs diagnostics ``Ftd+_cx`` and ``Fd+t_cx``.
 
 Here are the definitions of some common channels:
 
