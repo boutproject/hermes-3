@@ -3,7 +3,7 @@
 Installation
 ===============
 
-Hermes-3 can be installed using CMake or Spack. Using CMake is a more manual process 
+Hermes-3 can be installed using CMake or spack. Using CMake is a more manual process 
 which requires you to provide all of the dependencies yourself, but it has been used
 extensively and the documentation provides a module list for several HPC systems.
 
@@ -14,10 +14,10 @@ e.g. on a workstation or laptop.
 .. _sec-hermes-cmake:
 
 Using CMake
-----------
+-----------
 
 Compilation process
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 Compilation is achieved in two stages - the first is configuration where all the compile-time
 options are read in. The second is the build which results in a ready-to-use Hermes-3 installation
@@ -27,20 +27,20 @@ multiple builds available at the same time.
 If you make changes to the code, you can skip straight to the build stage to save time.
 Only modified files will be recompiled.
 
-Hermes-3 is built using `CMake <https://cmake.org>`_. During configuration `BOUT++
-<https://github.com/boutproject/BOUT-dev/>`_ will be automatically
+Hermes-3 is built using `CMake <https://cmake.org>`__. During configuration `BOUT++
+<https://github.com/boutproject/BOUT-dev/>`__ will be automatically
 downloaded as a submodule, together with some dependencies. The correct version 
-of `netCDF <https://www.unidata.ucar.edu/software/netcdf/>`_ is downloaded 
+of `netCDF <https://www.unidata.ucar.edu/software/netcdf/>`__ is downloaded 
 and compiled automatically for convenience. `FFTW
-<https://www.fftw.org/>`_ is assumed to be installed already. 
+<https://www.fftw.org/>`__ is assumed to be installed already. 
 
-Hermes-3 uses two solvers: `SUNDIALS <https://computing.llnl.gov/projects/sundials>`_ `cvode` for
+Hermes-3 uses two solvers: `SUNDIALS <https://computing.llnl.gov/projects/sundials>`__ `cvode` for
 time-dependent simulations and the faster `PETSc
-<https://petsc.org>`_ `beuler` for steady-state transport problems. While SUNDIALS
+<https://petsc.org>`__ `beuler` for steady-state transport problems. While SUNDIALS
 can be downloaded and installed automatically, PETSc requires manual installation.
 
 Installing with SUNDIALS (cvode) only
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you only want to use the `cvode` solver, then the
 recommended way to build Hermes-3 links to the SUNDIALS library:
@@ -70,7 +70,7 @@ head nodes of many computing clusters.
 
 
 Installing with SUNDIALS and PETSc (beuler)
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The steady-state solver beuler requires PETSc and is often preconditioned using the `hypre`
 package, which is automatically downloaded and configured during PETSc installation.
@@ -129,12 +129,12 @@ any previously generated build directories.
 
 
 Dependencies
-~~~~~~~~~~
+~~~~~~~~~~~~
 Since Hermes-3 heavily relies on BOUT++, the `BOUT++ documentation on installation and
-dependencies <https://bout-dev.readthedocs.io/en/stable/user_docs/quickstart.html#prerequisites>`_ 
+dependencies <https://bout-dev.readthedocs.io/en/stable/user_docs/quickstart.html#prerequisites>`__ 
 contains a lot of useful information. Below is a selection of working module lists
 for several HPC systems. It is recommended you start with a clean module environment 
-by executing `module purge` first.
+by executing :command:`module purge` first.
 
 YPI Workstations:
 
@@ -213,10 +213,10 @@ Perlmutter:
 .. _sec-slope-limiter-settings:
 
 Slope (flux) limiter settings
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Advection operators in Hermes-3 use slope limiters, also called `flux
-limiters <https://en.wikipedia.org/wiki/Flux_limiter>`_ to suppress
+limiters <https://en.wikipedia.org/wiki/Flux_limiter>`__ to suppress
 spurious numerical oscillations near sharp features, while converging
 at 2nd-order in smooth regions. In general there is a trade-off
 between suppression of numerical oscillations and dissipation: Too
@@ -240,14 +240,15 @@ lead to over-dissipation, but greater robustness.
 
 
 Compiling in debug mode
-~~~~~~~~~~
-Please see the `relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`_ 
+~~~~~~~~~~~~~~~~~~~~~~~
+Please see the `relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`__ 
 in the BOUT++ documentation.
 
 
 .. _sec-cmake-custom-bout-dir:
+
 Custom versions of BOUT++
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you have already installed BOUT++ and want to use that rather than
 configure and build BOUT++ again, set ```-HERMES_BUILD_BOUT=OFF``` and pass
@@ -260,15 +261,15 @@ CMake the path to the BOUT++ `build` directory e.g.
 The version of BOUT++ required by Hermes-3 is periodically updated, and is usually derived 
 from a commit on the `next` branch of BOUT++. The up to date commit can be found in the 
 `"external" directory of the Hermes-3 repo 
-<https://github.com/bendudson/hermes-3/tree/master/external>`_.
+<https://github.com/bendudson/hermes-3/tree/master/external>`__.
 
 
 Custom configuration of CMake
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The CMake configuration can be customised: See the `BOUT++
 documentation
-<https://bout-dev.readthedocs.io/en/latest/user_docs/installing.html#cmake>`_
+<https://bout-dev.readthedocs.io/en/latest/user_docs/installing.html#cmake>`__
 for examples of using `cmake` arguments, or edit the compile options
 interactively before building:
 
@@ -278,30 +279,31 @@ interactively before building:
 
 
 Troubleshooting issues
-~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 The first step to troubleshooting compilation issues should always to delete
 build folder for a fresh compilation. This can resolve several types of issues.
 
 There have also been several reported issues due to Conda (e.g. making 
 BOUT++ pick up the Conda MPI installation instead of the module one). A 
-workaround is to compile with the CMake flag `-DBOUT_IGNORE_CONDA_ENV=ON`.
+workaround is to compile with the CMake flag :code:`-DBOUT_IGNORE_CONDA_ENV=ON`.
 
 
 Using Spack
 -----------
 
-In this section we describe how to build Hermes-3 using `spack <https://spack.io/>`_ to manage the
+In this section we describe how to build Hermes-3 using `spack <https://spack.io/>`__ to manage the
 installation of standard packages to your local environment. By default, dependencies like NetCDF4,
 PETSc and SUNDIALS will be installed automatically, as required, but note that it's also possible to
 `use your own versions of packages
-<https://spack.readthedocs.io/en/latest/packages_yaml.html#external-packages>`_ (either
+<https://spack.readthedocs.io/en/latest/packages_yaml.html#external-packages>`__ (either
 system-installed or locally-built). While spack *can* be used to build Hermes-3 at a particular
 version, the instructions below also allow you to compile BOUT++ and Hermes-3 as part of a
 development workflow, i.e. using any changes you have made to the code in the working tree of your
 local repository.
 
-These instructions were last tested using Ubuntu 22.04.1 and spack version 0.23.1.
+These instructions were last tested using Ubuntu 22.04.1 and spack version 1.1.0.
+Spack versions prior to 1.0.0 are not compatible with our package files and are no longer supported.
 The default environment configuration assumes you have gcc installed.
 
 .. _sec-hermes-install-spack:
@@ -310,7 +312,7 @@ Install Spack
 ~~~~~~~~~~~~~
 
 Instructions for installing spack on a variety of operating systems can be found in the `spack docs
-<https://spack.readthedocs.io/en/latest/getting_started.html#installation>`_. The commands below
+<https://spack.readthedocs.io/en/latest/getting_started.html#installation>`__. The commands below
 should work for most Debian-based Linux distributions. First, install some prerequisites, e.g for
 Ubuntu:
 
@@ -327,7 +329,7 @@ version v1.1.0 has been tested:
    git clone -c feature.manyFiles=true --depth=2 https://github.com/spack/spack.git -b v1.1.0
 
 .. important::
-   If you have an existing Spack installation of a version before v1.0.0, you will need to uninstall it first.
+   If you have an existing spack installation of a version before v1.0.0, you will need to uninstall it first.
    Do this by uninstalling all packages and deleting the spack directory:
 
    .. code-block:: bash
@@ -368,10 +370,33 @@ and edit it to include
          - $spack/var/spack/stage
          - $user_cache_path/stage
 
+To add gcc to your user-level package list, and register it as a compiler that spack can use, run
 
+.. code-block:: bash
+
+   spack compiler find gcc
+
+If you don't do this, the below instructions should still work, but spack will modify the (version-controlled)
+environment file, spack.yaml, to include the gcc installation details.
+
+.. important::
+   Version 1.1.0 of spack sets the built-in package repository to version ``releases/v2025.11``.
+   The PETSc package in that version has a bug, related to the Hypre dependency, which causes the installation of BOUT++ to fail.
+   To work around this you can use the ``develop`` version of the spack-packages repo instead.
+   Edit $SPACK_ROOT/etc/spack/defaults/base/repos.yaml as follows:
+
+   .. code-block:: yaml
+
+      repos:
+         builtin:
+            git: https://github.com/spack/spack-packages.git branch: develop # branch: releases/v2025.11
+
+   and then run :command:`spack repo update`.
+
+   This workaround should not be required when using spack versions newer than 1.1.0.
 
 Install Hermes-3 and dependencies
-~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The following instructions assume you have already git-cloned Hermes-3 and are in the root directory
 of the repository.
@@ -381,16 +406,16 @@ repository checked out:
 
 .. code-block:: bash
 
-   git submodule update --init
+   git submodule update --init --recursive
 
-Then activate the Spack environment described in ``spack.yaml`` by using the wrapper script: 
+Then activate the spack environment described in ``spack.yaml`` by using the wrapper script: 
 
 .. code-block:: bash
 
    . activate_h3env
 
 This file provides some useful bash functions and aliases, but it's also possible to use standard
-Spack commands to activate the environment. You should see your prompt change to ``[hermes-3]``, 
+spack commands to activate the environment. You should see your prompt change to ``[hermes-3]``, 
 indicating that the spack environment is active.
 
 .. note::
@@ -398,13 +423,13 @@ indicating that the spack environment is active.
    The wrapper script runs ``spacktivate . -p -v gcc`` to load a 'view' when activating the
    environment. If you choose not to use the wrapper, you'll need to run a similar command in order
    for the instructions below to work. For more info on views, see the `spack documentation
-   <https://spack.readthedocs.io/en/latest/environments.html#environment-views>`_.
+   <https://spack.readthedocs.io/en/latest/environments.html#environment-views>`__.
 
 .. note:: 
 
    If you've run ``spack install`` in this environment before, it's advisable to run ``spack
    concretize -f`` at this point to ensure the concretized 'spec' is up to date. See the `spack docs
-   <https://spack.readthedocs.io/en/latest/environments.html>`_ for more details.
+   <https://spack.readthedocs.io/en/latest/environments.html>`__ for more details.
 
 To install Hermes-3 and all of its dependencies:
 
@@ -414,34 +439,33 @@ To install Hermes-3 and all of its dependencies:
 
 where the ``-j`` argument controls the number of parallel processes used to build packages.
 
-This initial install takes some time to complete, because spack builds a large number of low-level
-packages. It's possible to speed things up by defining a `packages.yaml
-<https://spack.readthedocs.io/en/latest/packages_yaml.html>`_  that points to 'external' (system)
-package versions, but unless storage space is a big concern, letting spack build its own versions is
-usually the most trouble-free approach. This step rarely need to be repeated in its entirety unless
-moving to another version of the same compiler, or switching to a different version of spack itself.
+This initial install takes some time to complete, because spack builds a large number of low-level packages. It's
+possible to speed things up by adding system-installed packages to your `packages.yaml
+<https://spack.readthedocs.io/en/latest/packages_yaml.html>`__  file, but unless storage space is a big concern, letting
+spack build its own versions is usually the most trouble-free approach. This step rarely need to be repeated in its
+entirety unless moving to another version of the same compiler, or switching to a different version of spack itself.
 
 The location in which spack builds packages is set via your user configuration options (see
 :ref:`sec-hermes-install-spack`), but for convenience, the environment wrapper script automatically generates links to
-the BOUT++ and hermes-3 builds in `./builds/spack/boutpp/[hash]` and `./builds/spack/hermes-3/[hash]` respectively,
-(where `[hash]` is a label that spack assigns). CMake and compiler output can be found in the spack log files, and the
-the build itself in a subdirectory `spack-build-[hash]`. Build directory links are updated every time a `spack install`
-or `spack uninstall` command is run.
+the BOUT++ and hermes-3 builds in ``./builds/spack/boutpp/[hash]`` and ``./builds/spack/hermes-3/[hash]`` respectively,
+(where ``[hash]`` is a label that spack assigns). CMake and compiler output can be found in the spack log files, and the
+the build itself in a subdirectory ``spack-build-[hash]``. Build directory links are updated every time a ``spack install``
+or ``spack uninstall`` command is run.
 
 
 Changing Hermes-3 and BOUT++ versions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Sometimes, you may want to change the version of either Hermes-3 or BOUT++. They are included in
-the Spack environment as `Develop` modules, which means they are compiled from their local directories.
+the spack environment as ``develop`` modules, which means they are compiled from their local directories.
 To change the version, simply check out a different commit in either your Hermes-3 repo or the
-BOUT++ submodule in `external/BOUT-dev` and run `spack install` again.
+BOUT++ submodule in :file:`external/BOUT-dev` and run :command:`spack install` again.
 
 .. tip::
-   This method does not allow a custom build directory, and so your previous build is typically overwritten.
-   In order to compile many different builds, you should compile using CMake directly, as described below.
+   It is possible to set a build directory with, e.g. :command:`spack develop -p . --build-directory ./builds/mybuild hermes-3`,
+   but this modifies spack.yaml and is a bit awkward if you need to switch between builds frequently. A more
+   straightforward approach is to use CMake directly, as described below.
 
-.. .. _sec-hermes-cmake-in-spackenv:
 Developing Hermes-3 and BOUT++ in the Spack environment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -498,7 +522,7 @@ To see which `variants` of Hermes-3 and BOUT++ are available, run
 .. tip::
    If you know that CMake functionality exists in BOUT++ or hermes-3 which is not configurable via
    their respective spack packages, you can `create an issue in the package
-   repository <https://github.com/boutproject/BOUT-spack/issues/new/choose>`_ to request that the
+   repository <https://github.com/boutproject/BOUT-spack/issues/new/choose>`__ to request that the
    option(s) be added.
 
 By default, the top-level 'spec' in the environment is ``hermes-3%gcc ^boutpp+petsc+sundials ^petsc+hypre+mumps``,
@@ -527,15 +551,15 @@ then (re-)install dependencies as necessary:
    automatically.
 
 Using Spack in HPC environments
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You should be able to use Spack on any HPC system by cloning the Spack repository and following the 
+You should be able to use spack on any HPC system by cloning the spack repository and following the 
 instructions as normal. However, many HPC systems have module environments compiled in a way which
-is optimised for that system. In order to take advantage of this, you can configure Spack to use
+is optimised for that system. In order to take advantage of this, you can configure spack to use
 the system modules as 'external' packages. You can also use ``spack external find`` to automatically
-detect any enabled modules and make them available in the Spack environment.
-See the `Spack HPC tutorial <https://spack-tutorial.readthedocs.io/en/latest/tutorial_modules.html>`_
-for more information on using Spack in HPC environments.
+detect any enabled modules and make them available in the spack environment.
+See the `spack HPC tutorial <https://spack-tutorial.readthedocs.io/en/latest/tutorial_modules.html>`__
+for more information on using spack in HPC environments.
 
 
 Useful spack commands/tips

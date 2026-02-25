@@ -39,7 +39,7 @@ def check_value(name, val, target, **kws):
         # On failure, report the effective abs tolerance used by isclose
         atol_eff = kws["atol"] + kws["rtol"] * abs(target)
         print(
-            f"Expected\n {target-atol_eff} < {name} < {target+atol_eff}\nBut actual value was\n {val}"
+            f"Expected\n {target - atol_eff} < {name} < {target + atol_eff}\nBut actual value was\n {val}"
         )
     return success
 
