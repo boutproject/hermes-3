@@ -19,7 +19,7 @@
 /// Important: If evolving electron pressure, disable thermal
 /// conduction or that will continue to add Spitzer heat conduction.
 ///
-/// .. code-block:: cpp
+/// \code{ini}
 ///     [hermes]
 ///     components = e, ..., collisions, snb_conduction
 ///
@@ -29,6 +29,7 @@
 ///
 ///     [snb_conduction]
 ///     diagnose = true # Saves heat flux diagnostics
+/// \endcode
 ///
 /// # Useful references:
 ///
