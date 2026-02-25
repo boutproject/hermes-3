@@ -277,13 +277,6 @@ void EvolvePressure::transform(Options& state) {
   T = Pfloor / floor(N, density_floor);
   Pfloor = N * T; // Ensure consistency
 
-  if (T.isFci()) {
-    // Note: Communicating and interpolating rather than
-    //       using T calculation in the yup/down cells.
-    mesh->communicate(T);
-    T.applyBoundary();
-    T.applyParallelBoundary();
-  }
 
   set(species["pressure"], Pfloor);
   mesh->communicate(T);
