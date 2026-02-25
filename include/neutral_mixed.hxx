@@ -72,7 +72,6 @@ private:
   Field3D kappa_n_perp, eta_n_perp; ///< Neutral conduction and viscosity
   Field3D kappa_n_par, eta_n_par; ///< Neutral conduction and viscosity
 
-  BoutReal neutral_lmax;
 
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
   bool precondition{true};        ///< Enable preconditioner?

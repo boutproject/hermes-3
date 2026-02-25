@@ -30,8 +30,10 @@ struct ZeroCurrent : public Component {
 private:
   std::string name; ///< Name of this species
   BoutReal charge;  ///< The charge of this species
+  BoutReal atomic_mass; // Atomic mass
 
   Field3D velocity; ///< Species velocity (for writing to output)
+  Field3D momentum; ///< Species momentum (for writing to output)
   
   /// Required inputs
   /// - species
@@ -49,22 +51,6 @@ private:
   ///     - velocity
   /// 
   void transform_impl(GuardedOptions& state) override;
-
-  void finally(const Options &state) override {
-    // Get the velocity with boundary condition applied.
-    // This is for output only
-    velocity = get<Field3D>(state["species"][name]["velocity"]);
-  }
-
-  void outputVars(Options &state) override;
-private:
-  std::string name; ///< Name of this species
-  BoutReal charge;  ///< The charge of this species
-  BoutReal atomic_mass; // Atomic mass
-
-  Field3D velocity; ///< Species velocity (for writing to output)
-  Field3D momentum; ///< Species momentum (for writing to output)
-
 };
 
 namespace {

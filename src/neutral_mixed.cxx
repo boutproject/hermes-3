@@ -429,11 +429,6 @@ void NeutralMixed::finally(const Options& state) {
       Dnn = (Tnlim / AA) / Rnn;
     }
   }
-    // Dnn = Vth^2 / sigma
-    Dnn = (Tnlim / AA) / (nu + Rnn);
-  } else {
-    Dnn = (Tnlim / AA) / Rnn;
-  }
 
 
   // Heat conductivity 
