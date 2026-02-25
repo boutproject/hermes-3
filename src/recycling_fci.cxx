@@ -254,9 +254,6 @@ void RecyclingFCI::transform(Options& state) {
 
     }
 
-    density_source.clearParallelSlices();
-    energy_source.clearParallelSlices();
-    
     // Put the updated sources back into the state
     set<Field3D>(species_to["density_source"], density_source);
     set<Field3D>(species_to["energy_source"], energy_source);
