@@ -37,8 +37,8 @@ private:
   Field3D Tn;                     ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
 
-  Field3D NVn_err;       ///< Difference from momentum as input from solver
-  Field3D NVn_solver;    ///< Momentum as calculated in the solver
+  Field3D NVn_err;    ///< Difference from momentum as input from solver
+  Field3D NVn_solver; ///< Momentum as calculated in the solver
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
@@ -47,12 +47,13 @@ private:
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
   Field3D nu;                    ///< Collisionality to use for diffusion
   Field3D nu_pseudo_mfp;         ///< Pseudo-collision frequency based on mean free path
-  Field3D nu_total;              ///< Total collision frequency used for diffusion, including pseudo-collisions
-  Field3D Dnn, Dnn_unlimited, Dmax;                   ///< Diffusion coefficient
+  Field3D nu_total; ///< Total collision frequency used for diffusion, including
+                    ///< pseudo-collisions
+  Field3D Dnn, Dnn_unlimited, Dmax;    ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   Field3D kappa_n_unlimited, kappa_n_max_par, kappa_n_max_perp;
-  BoutReal flux_limit;                 ///< Diffusive flux limit
-  BoutReal diffusion_limit;            ///< Maximum diffusion coefficient
+  BoutReal flux_limit;      ///< Diffusive flux limit
+  BoutReal diffusion_limit; ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;
 
   Field3D debug; ///< Debug variable FIXME: remove
@@ -73,11 +74,10 @@ private:
   bool evolve_momentum;    ///< Evolve parallel momentum?
   bool normalise_sources;  ///< Normalise input sources?
 
-  Field3D kappa_n, eta_n_unlimited; ///< Neutral conduction and viscosity
-  Field3D kappa_n_perp, eta_n_perp; ///< Neutral conduction and viscosity
-  Field3D kappa_n_par, eta_n_par; ///< Neutral conduction and viscosity
+  Field3D kappa_n, eta_n_unlimited;      ///< Neutral conduction and viscosity
+  Field3D kappa_n_perp, eta_n_perp;      ///< Neutral conduction and viscosity
+  Field3D kappa_n_par, eta_n_par;        ///< Neutral conduction and viscosity
   Field3D eta_n_max_par, eta_n_max_perp; ///< Viscosity reduction factor for flux-limiting
-
 
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
   bool precondition{true};        ///< Enable preconditioner?

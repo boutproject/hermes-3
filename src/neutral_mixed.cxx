@@ -93,8 +93,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
           .withDefault(0.2);
 
-  neutral_lmax = options["neutral_lmax"].doc("Maximum length scale due to the present of walls.")
-    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["meters"]); // Normalised length
+  neutral_lmax = options["neutral_lmax"]
+                     .doc("Maximum length scale due to the present of walls.")
+                     .withDefault<BoutReal>(0.1)
+                 / get<BoutReal>(alloptions["units"]["meters"]); // Normalised length
 
   diffusion_limit = options["diffusion_limit"]
                         .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
@@ -131,8 +133,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   }
 
   zero_timederivs = options["zero_timederivs"]
-                          .doc("Set the time derivatives to zero?")
-                          .withDefault<bool>(false);
+                        .doc("Set the time derivatives to zero?")
+                        .withDefault<bool>(false);
 
   // Optionally output time derivatives
   output_ddt =
@@ -213,8 +215,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnNVn.setBoundary(std::string("Dnn") + name);
 
-  kappa_n_perp = 0.0, eta_n_perp = 0.0;                   
-  kappa_n_par = 0.0, eta_n_par = 0.0; 
+  kappa_n_perp = 0.0, eta_n_perp = 0.0;
+  kappa_n_par = 0.0, eta_n_par = 0.0;
 
   substitutePermissions("name", {name});
   substitutePermissions(
@@ -241,7 +243,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   Vn.applyBoundary("neumann");
 
   // NVn.applyBoundary();
-  NVn_solver = NVn; // Save the momentum as calculated by the solver
+  NVn_solver = NVn;   // Save the momentum as calculated by the solver
   NVn = AA * Nn * Vn; // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
   NVn_err = NVn - NVn_solver; // This is used in the finally() function
@@ -249,7 +251,6 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
 
   Pnlim = softFloor(Pn, pressure_floor);
   Pnlim.applyBoundary();
-
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
@@ -364,8 +365,7 @@ void NeutralMixed::finally(const Options& state) {
     if (collision_names.empty()) { // Calculate only once - at the beginning
 
       if (diffusion_collisions_mode == "afn") {
-        for (const auto& collision :
-              localstate["collision_frequencies"].getChildren()) {
+        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
 
@@ -380,8 +380,7 @@ void NeutralMixed::finally(const Options& state) {
         }
         // Multispecies mode: all collisions and CX are included
       } else if (diffusion_collisions_mode == "multispecies") {
-        for (const auto& collision :
-              localstate["collision_frequencies"].getChildren()) {
+        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.second.name();
 
@@ -424,7 +423,6 @@ void NeutralMixed::finally(const Options& state) {
     nu = 0.0;
   }
 
-
   nu_total = nu + nu_pseudo_mfp;
   if (collisionality_override > 0.0) {
     nu_total = collisionality_override;
@@ -433,10 +431,9 @@ void NeutralMixed::finally(const Options& state) {
   // Dnn = Vth^2 / nu_total
   Dnn_unlimited = (Tnlim / AA) / nu_total;
 
-
   debug = nu;
 
-  // Heat conductivity 
+  // Heat conductivity
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
   //       where nu is the collision frequency used in Dnn
   kappa_n_unlimited = (5. / 2) * Dnn_unlimited * Nnlim;
@@ -455,8 +452,8 @@ void NeutralMixed::finally(const Options& state) {
 
   if (flux_limit > 0.0) {
     // Thermal velocity of neutrals
-    Field3D Vnth = sqrt(Tnlim / AA); 
-    
+    Field3D Vnth = sqrt(Tnlim / AA);
+
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
     Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
@@ -464,22 +461,28 @@ void NeutralMixed::finally(const Options& state) {
       Dnn[i] = Dnn_unlimited[i] * Dmax[i] / (Dnn_unlimited[i] + Dmax[i]);
     }
 
-    kappa_n_max_perp = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_perp(Tn))/Tnlim + 1. / neutral_lmax);
-    kappa_n_max_par = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_par(Tn))/Tnlim + 1. / neutral_lmax);
+    kappa_n_max_perp = flux_limit * (3.0 / 2.0 * Vnth * Nnlim)
+                       / (abs(Grad_perp(Tn)) / Tnlim + 1. / neutral_lmax);
+    kappa_n_max_par = flux_limit * (3.0 / 2.0 * Vnth * Nnlim)
+                      / (abs(Grad_par(Tn)) / Tnlim + 1. / neutral_lmax);
 
     debug = abs(Grad_par(Tn));
 
     BOUT_FOR(i, kappa_n_unlimited.getRegion("RGN_NOBNDRY")) {
-      kappa_n_perp[i] = kappa_n_unlimited[i] * kappa_n_max_perp[i] / (kappa_n_unlimited[i] + kappa_n_max_perp[i]);
-      kappa_n_par[i] = kappa_n_unlimited[i] * kappa_n_max_par[i] / (kappa_n_unlimited[i] + kappa_n_max_par[i]);
+      kappa_n_perp[i] = kappa_n_unlimited[i] * kappa_n_max_perp[i]
+                        / (kappa_n_unlimited[i] + kappa_n_max_perp[i]);
+      kappa_n_par[i] = kappa_n_unlimited[i] * kappa_n_max_par[i]
+                       / (kappa_n_unlimited[i] + kappa_n_max_par[i]);
     }
 
     eta_n_max_perp = flux_limit * Pnlim / abs(Grad_perp(Vn));
     eta_n_max_par = flux_limit * Pnlim / abs(Grad_par(Vn));
-    
+
     BOUT_FOR(i, eta_n_unlimited.getRegion("RGN_NOBNDRY")) {
-      eta_n_perp[i] = eta_n_unlimited[i] * eta_n_max_perp[i] / (eta_n_unlimited[i] + eta_n_max_perp[i]);
-      eta_n_par[i] = eta_n_unlimited[i] * eta_n_max_par[i] / (eta_n_unlimited[i] + eta_n_max_par[i]);
+      eta_n_perp[i] = eta_n_unlimited[i] * eta_n_max_perp[i]
+                      / (eta_n_unlimited[i] + eta_n_max_perp[i]);
+      eta_n_par[i] =
+          eta_n_unlimited[i] * eta_n_max_par[i] / (eta_n_unlimited[i] + eta_n_max_par[i]);
     }
 
   } else {
@@ -526,7 +529,6 @@ void NeutralMixed::finally(const Options& state) {
   eta_n_par.clearParallelSlices();
   eta_n_par.applyBoundary("neumann");
 
-
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
   DnnPn = Dnn * Pnlim;
@@ -543,7 +545,7 @@ void NeutralMixed::finally(const Options& state) {
         DnnNn(r.ind, mesh->ystart - 1, jz) = -DnnNn(r.ind, mesh->ystart, jz);
         DnnPn(r.ind, mesh->ystart - 1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
         DnnNVn(r.ind, mesh->ystart - 1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
-  
+
         // Neumann BC for the transport coef
         // NOTE: Do we need that?
         auto i = indexAt(kappa_n_par, r.ind, mesh->ystart, jz);
@@ -635,9 +637,9 @@ void NeutralMixed::finally(const Options& state) {
 
     // Perpendicular conduction
     if (nonorthogonal_operators) {
-      ddt(Pn) +=
-          (2. / 3)
-          * Div_a_Grad_perp_nonorthog(kappa_n_perp, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      ddt(Pn) += (2. / 3)
+                 * Div_a_Grad_perp_nonorthog(kappa_n_perp, Tn, ef_cond_perp_xlow,
+                                             ef_cond_perp_ylow);
     } else {
       ddt(Pn) +=
           (2. / 3)
@@ -693,8 +695,8 @@ void NeutralMixed::finally(const Options& state) {
 
       // Perpendicular viscosity
       if (nonorthogonal_operators) {
-        viscosity_source +=
-            Div_a_Grad_perp_nonorthog(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
+        viscosity_source += Div_a_Grad_perp_nonorthog(eta_n_perp, Vn, mf_visc_perp_xlow,
+                                                      mf_visc_perp_ylow);
       } else {
         viscosity_source +=
             Div_a_Grad_perp_flows(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
@@ -719,7 +721,7 @@ void NeutralMixed::finally(const Options& state) {
   const Options& allspecies = state["species"];
 
   for (auto& kv : allspecies.getChildren()) {
-    // NOTE:: This is only true for d+ ions. How do we generalize? 
+    // NOTE:: This is only true for d+ ions. How do we generalize?
     //        How do we include the perpendicular ion velocity from other drifts?
 
     const Options& species = kv.second;
@@ -745,15 +747,19 @@ void NeutralMixed::finally(const Options& state) {
         Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
       }
 
-      ddt(Nn) += Div_a_Grad_perp_upwind (Nn * anomalous_D / softFloor(Ni,density_floor), Ni2D);
-      //NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the equilibrium value of Nn.
+      ddt(Nn) +=
+          Div_a_Grad_perp_upwind(Nn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+      // NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the equilibrium
+      // value of Nn.
 
-      ddt(Pn) += (5. / 3) * Div_a_Grad_perp_upwind ( Pn * anomalous_D / softFloor(Ni,density_floor), Ni2D);         
+      ddt(Pn) +=
+          (5. / 3)
+          * Div_a_Grad_perp_upwind(Pn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
 
       if (evolve_momentum) {
-        ddt(NVn) += Div_a_Grad_perp_upwind (NVn * anomalous_D / softFloor(Ni,density_floor), Ni2D);
+        ddt(NVn) += Div_a_Grad_perp_upwind(
+            NVn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
       }
-
     }
   }
 
@@ -765,7 +771,7 @@ void NeutralMixed::finally(const Options& state) {
   // Ste time derivatives to zero
   if (zero_timederivs) {
 
-    Field3D zero {0.0};
+    Field3D zero{0.0};
     zero.splitParallelSlices();
     zero.yup() = 0.0;
     zero.ydown() = 0.0;
@@ -947,13 +953,15 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "collision frequency"},
                     {"long_name", name + " MFP limit pseudo-collisionality"},
                     {"source", "neutral_mixed"}});
-    set_with_attrs(state[fmt::format("K{}_Dnn_coll", name)], nu_total,
-                   {{"time_dimension", "t"},
-                    {"units", "s^-1"},
-                    {"conversion", Omega_ci},
-                    {"standard_name", "collision frequency"},
-                    {"long_name", name + " total collision frequency used in neutral diffusion coefficient"},
-                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[fmt::format("K{}_Dnn_coll", name)], nu_total,
+        {{"time_dimension", "t"},
+         {"units", "s^-1"},
+         {"conversion", Omega_ci},
+         {"standard_name", "collision frequency"},
+         {"long_name",
+          name + " total collision frequency used in neutral diffusion coefficient"},
+         {"source", "neutral_mixed"}});
     set_with_attrs(state[fmt::format("kappa_{}_unlimited", name)], kappa_n_unlimited,
                    {{"time_dimension", "t"},
                     {"units", "W / m / eV"},
