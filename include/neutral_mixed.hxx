@@ -53,6 +53,8 @@ private:
   BoutReal diffusion_limit;            ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;
 
+  Field3D debug; ///< Debug variable FIXME: remove
+
   bool sheath_ydown, sheath_yup;
 
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.

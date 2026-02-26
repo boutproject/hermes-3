@@ -250,6 +250,8 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   Pnlim = softFloor(Pn, pressure_floor);
   Pnlim.applyBoundary();
 
+  debug = 0.0;
+
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
   TRACE("Neutral boundary conditions");
@@ -357,82 +359,84 @@ void NeutralMixed::finally(const Options& state) {
   // Pseudo-collisionality representing domain size based neutral MFP limit
   nu_pseudo_mfp = sqrt(Tnlim / AA) / neutral_lmax;
 
-    if (localstate.isSet("collision_frequency")) {
-      // Collisionality
-      // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
-      if (collision_names.empty()) { // Calculate only once - at the beginning
+  if (localstate.isSet("collision_frequency")) {
+    // Collisionality
+    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+    if (collision_names.empty()) { // Calculate only once - at the beginning
 
-        if (diffusion_collisions_mode == "afn") {
-          for (const auto& collision :
-               localstate["collision_frequencies"].getChildren()) {
+      if (diffusion_collisions_mode == "afn") {
+        for (const auto& collision :
+              localstate["collision_frequencies"].getChildren()) {
 
-            std::string collision_name = collision.second.name();
+          std::string collision_name = collision.second.name();
 
-            if ( // Charge exchange
-                (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
-                // Ionisation
-                (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) or
-                // Neutral-neutral collisions
-                (collisionSpeciesMatch(collision_name, name, name, "coll", "exact"))) {
-              collision_names.push_back(collision_name);
-            }
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
+              // Ionisation
+              (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) or
+              // Neutral-neutral collisions
+              (collisionSpeciesMatch(collision_name, name, name, "coll", "exact"))) {
+            collision_names.push_back(collision_name);
           }
-          // Multispecies mode: all collisions and CX are included
-        } else if (diffusion_collisions_mode == "multispecies") {
-          for (const auto& collision :
-               localstate["collision_frequencies"].getChildren()) {
+        }
+        // Multispecies mode: all collisions and CX are included
+      } else if (diffusion_collisions_mode == "multispecies") {
+        for (const auto& collision :
+              localstate["collision_frequencies"].getChildren()) {
 
-            std::string collision_name = collision.second.name();
+          std::string collision_name = collision.second.name();
 
-            if ( // Charge exchange
-                (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
-                // Any collision (en, in, ee, ii, nn)
-                (collisionSpeciesMatch(collision_name, name, "", "coll", "partial"))) {
-              collision_names.push_back(collision_name);
-            }
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
+              // Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(collision_name, name, "", "coll", "partial"))) {
+            collision_names.push_back(collision_name);
           }
-
-        } else {
-          throw BoutException("\ndiffusion_collisions_mode for {:s} must be either "
-                              "multispecies or braginskii",
-                              name);
         }
 
-        if (collision_names.empty()) {
-          throw BoutException("\tNo collisions found for {:s} in neutral_mixed for "
-                              "selected collisions mode",
-                              name);
-        }
-
-        // Write chosen collisions to log file
-        output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ", name,
-                          diffusion_collisions_mode);
-        for (const auto& collision : collision_names) {
-          output_info.write("{:s} ", collision);
-        }
-        output_info.write("\n");
+      } else {
+        throw BoutException("\ndiffusion_collisions_mode for {:s} must be either "
+                            "multispecies or braginskii",
+                            name);
       }
 
-      // Collect the collisionalities based on list of names
-      nu = 0;
-      for (const auto& collision_name : collision_names) {
-        nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in neutral_mixed for "
+                            "selected collisions mode",
+                            name);
       }
+
+      // Write chosen collisions to log file
+      output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ", name,
+                        diffusion_collisions_mode);
+      for (const auto& collision : collision_names) {
+        output_info.write("{:s} ", collision);
+      }
+      output_info.write("\n");
+    }
+
+    // Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
+    }
 
   } else {
     nu = 0.0;
   }
-
+  
   Field3D nu_total;
   if (collisionality_override > 0.0) {
     nu_total = collisionality_override;
-    } else {
+  } else {
     nu_total = nu + nu_pseudo_mfp;
   }
-
+  
   // Dnn = Vth^2 / nu_total
   Dnn_unlimited = (Tnlim / AA) / nu_total;
 
+
+  debug = nu;
 
   // Heat conductivity 
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
@@ -896,6 +900,13 @@ void NeutralMixed::outputVars(Options& state) {
                     {"source", "neutral_mixed"}});
   }
   if (diagnose) {
+    set_with_attrs(state["debug"], debug,
+                   {{"time_dimension", "t"},
+                    {"units", "-"},
+                    {"conversion", 1},
+                    {"standard_name", "debug"},
+                    {"long_name", "debug"},
+                    {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("T") + name], Tn,
                    {{"time_dimension", "t"},
                     {"units", "eV"},
