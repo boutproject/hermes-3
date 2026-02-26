@@ -354,11 +354,11 @@ void NeutralMixed::finally(const Options& state) {
   //
   //
 
-  Field3D Rnn = sqrt(Tnlim / AA)
-                / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+  // Pseudo-collisionality representing domain size based neutral MFP limit
+  nu_pseudo_mfp = sqrt(Tnlim / AA) / neutral_lmax;
   if (collisionality_override > 0.0) {
     // user has set an override for collision frequency
-    Dnn = (Tn / AA) / collisionality_override;
+    Dnn_unlimited = (Tn / AA) / collisionality_override;
   } else {
     if (localstate.isSet("collision_frequency")) {
       // Collisionality
@@ -424,9 +424,9 @@ void NeutralMixed::finally(const Options& state) {
 
 
       // Dnn = Vth^2 / sigma
-      Dnn = (Tnlim / AA) / (nu + Rnn);
+      Dnn_unlimited = (Tnlim / AA) / (nu + nu_pseudo_mfp);
     } else {
-      Dnn = (Tnlim / AA) / Rnn;
+      Dnn_unlimited = (Tnlim / AA) / nu_pseudo_mfp;
     }
   }
 
@@ -434,7 +434,7 @@ void NeutralMixed::finally(const Options& state) {
   // Heat conductivity 
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
   //       where nu is the collision frequency used in Dnn
-  kappa_n = (5. / 2) * Dnn * Nnlim;
+  kappa_n = (5. / 2) * Dnn_unlimited * Nnlim;
 
   // Viscosity
   // Relationship between heat conduction and viscosity for neutral
@@ -445,6 +445,8 @@ void NeutralMixed::finally(const Options& state) {
   //
   eta_n = AA * (2. / 5) * kappa_n;
 
+  Dnn = emptyFrom(Dnn_unlimited);
+  Dmax = emptyFrom(Dnn_unlimited);
 
   if (flux_limit > 0.0) {
     // Thermal velocity of neutrals
@@ -452,9 +454,9 @@ void NeutralMixed::finally(const Options& state) {
     
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
+    Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
+      Dnn[i] = Dnn_unlimited[i] * Dmax[i] / (Dnn_unlimited[i] + Dmax[i]);
     }
 
     Field3D kappa_n_max_perp = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_perp(Tn))/Tnlim + 1. / neutral_lmax);
@@ -472,6 +474,9 @@ void NeutralMixed::finally(const Options& state) {
       eta_n_par[i] = eta_n[i] * viscosity_factor_par[i];
     }
 
+  } else {
+    Dnn = Dnn_unlimited;
+    Dmax = -1.0;
   }
 
   if (diffusion_limit > 0.0) {
@@ -901,6 +906,27 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", Cs0 * Cs0 / Omega_ci},
                     {"standard_name", "diffusion coefficient"},
                     {"long_name", name + " diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("Dnn{}_unlimited", name)], Dnn_unlimited,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " unlimited diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("Dnn{}_max", name)], Dmax,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " maximum diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("K{}_mfp_pseudo_coll", name)], nu_pseudo_mfp,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", Omega_ci},
+                    {"standard_name", "collision frequency"},
+                    {"long_name", name + " MFP limit pseudo-collisionality"},
                     {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
