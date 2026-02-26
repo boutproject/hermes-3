@@ -47,6 +47,7 @@ private:
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
   Field3D nu;                    ///< Collisionality to use for diffusion
   Field3D nu_pseudo_mfp;         ///< Pseudo-collision frequency based on mean free path
+  Field3D nu_total;              ///< Total collision frequency used for diffusion, including pseudo-collisions
   Field3D Dnn, Dnn_unlimited, Dmax;                   ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   BoutReal flux_limit;                 ///< Diffusive flux limit

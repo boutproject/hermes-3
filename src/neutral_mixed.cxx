@@ -424,14 +424,13 @@ void NeutralMixed::finally(const Options& state) {
   } else {
     nu = 0.0;
   }
-  
-  Field3D nu_total;
+
+
+  nu_total = nu + nu_pseudo_mfp;
   if (collisionality_override > 0.0) {
     nu_total = collisionality_override;
-  } else {
-    nu_total = nu + nu_pseudo_mfp;
   }
-  
+
   // Dnn = Vth^2 / nu_total
   Dnn_unlimited = (Tnlim / AA) / nu_total;
 
@@ -941,6 +940,13 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", Omega_ci},
                     {"standard_name", "collision frequency"},
                     {"long_name", name + " MFP limit pseudo-collisionality"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("K{}_Dnn_coll", name)], nu_total,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", Omega_ci},
+                    {"standard_name", "collision frequency"},
+                    {"long_name", name + " total collision frequency used in neutral diffusion coefficient"},
                     {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
