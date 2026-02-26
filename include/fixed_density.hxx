@@ -30,15 +30,16 @@ struct FixedDensity : public Component {
     N = options["density"].as<Field3D>() / Nnorm;
 
     // Initilize the Field3D N from 2D profiles stored in the mesh file.
-    initialize_from_mesh = options["initialize_from_mesh"]
-      .doc("Initilize field from 2D profiles stored in the mesh file?")
-      .withDefault<bool>(false);
+    initialize_from_mesh =
+        options["initialize_from_mesh"]
+            .doc("Initilize field from 2D profiles stored in the mesh file?")
+            .withDefault<bool>(false);
 
     if (initialize_from_mesh) {
       // Try to read the initial field from the mesh
       mesh->get(N, std::string("N") + name + "_init"); // Units: [m^-3/s]
-      N /= Nnorm; // Normalization
-    }    
+      N /= Nnorm;                                      // Normalization
+    }
 
     substitutePermissions("name", {name});
     substitutePermissions("vars", {"AA", "charge", "density"});
@@ -65,8 +66,8 @@ private:
 
   Field3D N; ///< Species density (normalised)
 
-  bool initialize_from_mesh;  ///< Initilize the Field3D N from 2D profiles stored in the mesh file. 
-
+  bool initialize_from_mesh; ///< Initilize the Field3D N from 2D profiles stored in the
+                             ///< mesh file.
 
   /// Sets in the state the density, mass and charge of the species
   ///

@@ -165,14 +165,15 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .withDefault<bool>(true);
 
   // Initilize the Field3D P from 2D profiles stored in the mesh file.
-  initialize_from_mesh = p_options["initialize_from_mesh"]
-    .doc("Initilize field from 2D profiles stored in the mesh file?")
-    .withDefault<bool>(false);
+  initialize_from_mesh =
+      p_options["initialize_from_mesh"]
+          .doc("Initilize field from 2D profiles stored in the mesh file?")
+          .withDefault<bool>(false);
 
   if (initialize_from_mesh) {
-  // Try to read the initial field from the mesh
+    // Try to read the initial field from the mesh
     mesh->get(P, std::string("P") + name + "_init"); // Units: Pascal [Pa]
-    P /= Pnorm; // Normalization
+    P /= Pnorm;                                      // Normalization
   }
 
   if (source_time_dependent) {

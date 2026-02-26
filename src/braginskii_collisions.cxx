@@ -59,13 +59,10 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
                       .doc("User-set arbitrary multiplier on electron-ion collision rate")
                       .withDefault<BoutReal>(1.0);
 
-  density_floor = options["density_floor"]
-                      .doc("Minimum density floor")
-                      .withDefault(1e-8);
- 
-  diagnose = options["diagnose"]
-                .doc("Output additional diagnostics?")
-                .withDefault<bool>(false);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-8);
+
+  diagnose =
+      options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
   setPermissions(readOnly("species:{electrons}:temperature", Regions::Interior));
   setPermissions(readOnly("species:{electrons}:density", Regions::Interior));

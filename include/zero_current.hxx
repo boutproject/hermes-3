@@ -34,7 +34,7 @@ private:
 
   Field3D velocity; ///< Species velocity (for writing to output)
   Field3D momentum; ///< Species momentum (for writing to output)
-  
+
   /// Required inputs
   /// - species
   ///   - <name>
