@@ -356,10 +356,7 @@ void NeutralMixed::finally(const Options& state) {
 
   // Pseudo-collisionality representing domain size based neutral MFP limit
   nu_pseudo_mfp = sqrt(Tnlim / AA) / neutral_lmax;
-  if (collisionality_override > 0.0) {
-    // user has set an override for collision frequency
-    Dnn_unlimited = (Tn / AA) / collisionality_override;
-  } else {
+
     if (localstate.isSet("collision_frequency")) {
       // Collisionality
       // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
@@ -422,13 +419,19 @@ void NeutralMixed::finally(const Options& state) {
         nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
       }
 
-
-      // Dnn = Vth^2 / sigma
-      Dnn_unlimited = (Tnlim / AA) / (nu + nu_pseudo_mfp);
-    } else {
-      Dnn_unlimited = (Tnlim / AA) / nu_pseudo_mfp;
-    }
+  } else {
+    nu = 0.0;
   }
+
+  Field3D nu_total;
+  if (collisionality_override > 0.0) {
+    nu_total = collisionality_override;
+    } else {
+    nu_total = nu + nu_pseudo_mfp;
+  }
+
+  // Dnn = Vth^2 / nu_total
+  Dnn_unlimited = (Tnlim / AA) / nu_total;
 
 
   // Heat conductivity 
