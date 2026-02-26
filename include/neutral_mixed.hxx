@@ -76,7 +76,7 @@ private:
   Field3D kappa_n, eta_n_unlimited; ///< Neutral conduction and viscosity
   Field3D kappa_n_perp, eta_n_perp; ///< Neutral conduction and viscosity
   Field3D kappa_n_par, eta_n_par; ///< Neutral conduction and viscosity
-  Field3D eta_factor_par, eta_factor_perp; ///< Viscosity reduction factor for flux-limiting
+  Field3D eta_n_max_par, eta_n_max_perp; ///< Viscosity reduction factor for flux-limiting
 
 
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?

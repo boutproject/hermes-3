@@ -474,11 +474,12 @@ void NeutralMixed::finally(const Options& state) {
       kappa_n_par[i] = kappa_n_unlimited[i] * kappa_n_max_par[i] / (kappa_n_unlimited[i] + kappa_n_max_par[i]);
     }
 
-    eta_factor_perp = 1.0 / (1.0 + eta_n_unlimited * abs(Grad_perp(Vn)) / (flux_limit * Pnlim)); 
-    eta_factor_par = 1.0 / (1.0 + eta_n_unlimited * abs(Grad_par(Vn)) / (flux_limit * Pnlim)); 
+    eta_n_max_perp = flux_limit * Pnlim / abs(Grad_perp(Vn));
+    eta_n_max_par = flux_limit * Pnlim / abs(Grad_par(Vn));
+    
     BOUT_FOR(i, eta_n_unlimited.getRegion("RGN_NOBNDRY")) {
-      eta_n_perp[i] = eta_n_unlimited[i] * eta_factor_perp[i];
-      eta_n_par[i] = eta_n_unlimited[i] * eta_factor_par[i];
+      eta_n_perp[i] = eta_n_unlimited[i] * eta_n_max_perp[i] / (eta_n_unlimited[i] + eta_n_max_perp[i]);
+      eta_n_par[i] = eta_n_unlimited[i] * eta_n_max_par[i] / (eta_n_unlimited[i] + eta_n_max_par[i]);
     }
 
   } else {
@@ -1009,19 +1010,19 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "viscosity"},
                     {"long_name", name + " parallel viscosity"},
                     {"source", "neutral_mixed"}});
-    set_with_attrs(state[fmt::format("eta_factor_{}_perp", name)], eta_factor_perp,
+    set_with_attrs(state[fmt::format("eta_max_{}_perp", name)], eta_n_max_perp,
                    {{"time_dimension", "t"},
-                    {"units", "-"},
-                    {"conversion", 1},
-                    {"standard_name", "viscosity factor"},
-                    {"long_name", name + " perpendicular viscosity factor"},
+                    {"units", "Pa s"},
+                    {"conversion", Pnorm / Omega_ci},
+                    {"standard_name", "viscosity"},
+                    {"long_name", name + " maximum perpendicular viscosity"},
                     {"source", "neutral_mixed"}});
-    set_with_attrs(state[fmt::format("eta_factor_{}_par", name)], eta_factor_par,
+    set_with_attrs(state[fmt::format("eta_max_{}_par", name)], eta_n_max_par,
                    {{"time_dimension", "t"},
-                    {"units", "-"},
-                    {"conversion", 1},
-                    {"standard_name", "viscosity factor"},
-                    {"long_name", name + " parallel viscosity factor"},
+                    {"units", "Pa s"},
+                    {"conversion", Pnorm / Omega_ci},
+                    {"standard_name", "viscosity"},
+                    {"long_name", name + " maximum parallel viscosity"},
                     {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
