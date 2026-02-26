@@ -50,6 +50,7 @@ private:
   Field3D nu_total;              ///< Total collision frequency used for diffusion, including pseudo-collisions
   Field3D Dnn, Dnn_unlimited, Dmax;                   ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
+  Field3D kappa_n_unlimited, kappa_n_max_par, kappa_n_max_perp;
   BoutReal flux_limit;                 ///< Diffusive flux limit
   BoutReal diffusion_limit;            ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;
@@ -72,9 +73,10 @@ private:
   bool evolve_momentum;    ///< Evolve parallel momentum?
   bool normalise_sources;  ///< Normalise input sources?
 
-  Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
+  Field3D kappa_n, eta_n_unlimited; ///< Neutral conduction and viscosity
   Field3D kappa_n_perp, eta_n_perp; ///< Neutral conduction and viscosity
   Field3D kappa_n_par, eta_n_par; ///< Neutral conduction and viscosity
+  Field3D eta_factor_par, eta_factor_perp; ///< Viscosity reduction factor for flux-limiting
 
 
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?

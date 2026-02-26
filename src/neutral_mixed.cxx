@@ -250,7 +250,6 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   Pnlim = softFloor(Pn, pressure_floor);
   Pnlim.applyBoundary();
 
-  debug = 0.0;
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
@@ -440,7 +439,7 @@ void NeutralMixed::finally(const Options& state) {
   // Heat conductivity 
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
   //       where nu is the collision frequency used in Dnn
-  kappa_n = (5. / 2) * Dnn_unlimited * Nnlim;
+  kappa_n_unlimited = (5. / 2) * Dnn_unlimited * Nnlim;
 
   // Viscosity
   // Relationship between heat conduction and viscosity for neutral
@@ -449,7 +448,7 @@ void NeutralMixed::finally(const Options& state) {
   // Transport Processes in Gases", 1972
   // eta_n = (2. / 5) * m_n * kappa_n;
   //
-  eta_n = AA * (2. / 5) * kappa_n;
+  eta_n_unlimited = AA * (2. / 5) * kappa_n_unlimited;
 
   Dnn = emptyFrom(Dnn_unlimited);
   Dmax = emptyFrom(Dnn_unlimited);
@@ -465,24 +464,30 @@ void NeutralMixed::finally(const Options& state) {
       Dnn[i] = Dnn_unlimited[i] * Dmax[i] / (Dnn_unlimited[i] + Dmax[i]);
     }
 
-    Field3D kappa_n_max_perp = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_perp(Tn))/Tnlim + 1. / neutral_lmax);
-    Field3D kappa_n_max_par = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_par(Tn))/Tnlim + 1. / neutral_lmax);
+    kappa_n_max_perp = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_perp(Tn))/Tnlim + 1. / neutral_lmax);
+    kappa_n_max_par = flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_par(Tn))/Tnlim + 1. / neutral_lmax);
 
-    BOUT_FOR(i, kappa_n.getRegion("RGN_NOBNDRY")) {
-      kappa_n_perp[i] = kappa_n[i] * kappa_n_max_perp[i] / (kappa_n[i] + kappa_n_max_perp[i]);
-      kappa_n_par[i] = kappa_n[i] * kappa_n_max_par[i] / (kappa_n[i] + kappa_n_max_par[i]);
+    debug = abs(Grad_par(Tn));
+
+    BOUT_FOR(i, kappa_n_unlimited.getRegion("RGN_NOBNDRY")) {
+      kappa_n_perp[i] = kappa_n_unlimited[i] * kappa_n_max_perp[i] / (kappa_n_unlimited[i] + kappa_n_max_perp[i]);
+      kappa_n_par[i] = kappa_n_unlimited[i] * kappa_n_max_par[i] / (kappa_n_unlimited[i] + kappa_n_max_par[i]);
     }
 
-    Field3D viscosity_factor_perp = 1.0 / (1.0 + eta_n * abs(Grad_perp(Vn)) / (flux_limit * Pnlim)); 
-    Field3D viscosity_factor_par = 1.0 / (1.0 + eta_n * abs(Grad_par(Vn)) / (flux_limit * Pnlim)); 
-    BOUT_FOR(i, eta_n.getRegion("RGN_NOBNDRY")) {
-      eta_n_perp[i] = eta_n[i] * viscosity_factor_perp[i];
-      eta_n_par[i] = eta_n[i] * viscosity_factor_par[i];
+    eta_factor_perp = 1.0 / (1.0 + eta_n_unlimited * abs(Grad_perp(Vn)) / (flux_limit * Pnlim)); 
+    eta_factor_par = 1.0 / (1.0 + eta_n_unlimited * abs(Grad_par(Vn)) / (flux_limit * Pnlim)); 
+    BOUT_FOR(i, eta_n_unlimited.getRegion("RGN_NOBNDRY")) {
+      eta_n_perp[i] = eta_n_unlimited[i] * eta_factor_perp[i];
+      eta_n_par[i] = eta_n_unlimited[i] * eta_factor_par[i];
     }
 
   } else {
     Dnn = Dnn_unlimited;
     Dmax = -1.0;
+    kappa_n_perp = kappa_n_unlimited;
+    kappa_n_par = kappa_n_unlimited;
+    kappa_n_max_perp = -1.0;
+    kappa_n_max_par = -1.0;
   }
 
   if (diffusion_limit > 0.0) {
@@ -496,9 +501,9 @@ void NeutralMixed::finally(const Options& state) {
   Dnn.clearParallelSlices();
   Dnn.applyBoundary();
 
-  mesh->communicate(kappa_n);
-  kappa_n.clearParallelSlices();
-  kappa_n.applyBoundary("neumann");
+  mesh->communicate(kappa_n_unlimited);
+  kappa_n_unlimited.clearParallelSlices();
+  kappa_n_unlimited.applyBoundary("neumann");
 
   mesh->communicate(kappa_n_perp);
   kappa_n_perp.clearParallelSlices();
@@ -508,9 +513,9 @@ void NeutralMixed::finally(const Options& state) {
   kappa_n_par.clearParallelSlices();
   kappa_n_par.applyBoundary("neumann");
 
-  mesh->communicate(eta_n);
-  eta_n.clearParallelSlices();
-  eta_n.applyBoundary("neumann");
+  mesh->communicate(eta_n_unlimited);
+  eta_n_unlimited.clearParallelSlices();
+  eta_n_unlimited.applyBoundary("neumann");
 
   mesh->communicate(eta_n_perp);
   eta_n_perp.clearParallelSlices();
@@ -947,6 +952,76 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", Omega_ci},
                     {"standard_name", "collision frequency"},
                     {"long_name", name + " total collision frequency used in neutral diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappa_{}_unlimited", name)], kappa_n_unlimited,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"standard_name", "conductivity"},
+                    {"long_name", name + " unlimited conductivity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappamax_{}_perp", name)], kappa_n_max_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"standard_name", "conductivity"},
+                    {"long_name", name + " maximum perpendicular conductivity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappamax_{}_par", name)], kappa_n_max_par,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"standard_name", "conductivity"},
+                    {"long_name", name + " maximum parallel conductivity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappa_{}_perp", name)], kappa_n_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"standard_name", "conductivity"},
+                    {"long_name", name + " perpendicular conductivity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappa_{}_par", name)], kappa_n_par,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"standard_name", "conductivity"},
+                    {"long_name", name + " parallel conductivity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_{}_unlimited", name)], eta_n_unlimited,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", Pnorm / Omega_ci},
+                    {"standard_name", "viscosity"},
+                    {"long_name", name + " unlimited viscosity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_{}_perp", name)], eta_n_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", Pnorm / Omega_ci},
+                    {"standard_name", "viscosity"},
+                    {"long_name", name + " perpendicular viscosity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_{}_par", name)], eta_n_par,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", Pnorm / Omega_ci},
+                    {"standard_name", "viscosity"},
+                    {"long_name", name + " parallel viscosity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_factor_{}_perp", name)], eta_factor_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "-"},
+                    {"conversion", 1},
+                    {"standard_name", "viscosity factor"},
+                    {"long_name", name + " perpendicular viscosity factor"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_factor_{}_par", name)], eta_factor_par,
+                   {{"time_dimension", "t"},
+                    {"units", "-"},
+                    {"conversion", 1},
+                    {"standard_name", "viscosity factor"},
+                    {"long_name", name + " parallel viscosity factor"},
                     {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
