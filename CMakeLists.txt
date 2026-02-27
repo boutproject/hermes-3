@@ -300,6 +300,8 @@ if(HERMES_TESTS)
   endfunction()
   hermes_add_integrated_test(2D-circular-anomalous-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-sheathtest-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-fluid)
   hermes_add_integrated_test(1D-recycling
     CONFLICTS BOUT_ENABLE_METRIC_3D)
