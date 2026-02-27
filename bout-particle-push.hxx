@@ -6,6 +6,58 @@
 using namespace NESO::Particles;
 using namespace VANTAGE::Reactions;
 
+/**
+ * @brief Function to calculate cell volumes.
+ * 
+ * @param sycl_target SYCLTargetSharedPtr to use for communication.
+ * @param mesh object.
+ * 
+ */
+
+
+inline auto calc_V_tot_local(SYCLTargetSharedPtr sycl_target,
+                             std::shared_ptr<PetscInterface::DMPlexInterface> mesh,
+                             std::map<std::string, double> &norms) {
+  auto num_cells = mesh->get_cell_count();
+
+  std::vector<REAL> V_cells;
+  REAL V_tot_local = 0.0;
+  REAL V_tot_global;
+  for (int cellx = 0; cellx < num_cells; cellx++) {
+    // No normalisation needed unlike in the demo app, our grid is in physical units
+    const REAL V_cell = mesh->dmh->get_cell_volume(cellx) * norms["length"] * norms["length"];
+    V_cells.push_back(V_cell);
+    V_tot_local += V_cell;
+  }
+
+  MPI_Allreduce(&V_tot_local, &V_tot_global, 1, MPI_DOUBLE, MPI_SUM,
+                sycl_target->comm_pair.comm_parent);
+
+  const int rank = sycl_target->comm_pair.rank_parent;
+
+  if (rank == 0) {
+    std::cout << "Length_norm: " << norms["length"] << std::endl;
+    std::cout << "V_tot_global: " << V_tot_global << std::endl;
+  }
+
+  return std::tuple(V_tot_local, V_tot_global, V_cells);
+}
+
+
+/**
+ * @brief Function to calculate particle positions and velocities from a Maxwellian.
+ * 
+ * @param sycl_target SYCLTargetSharedPtr to use for communication.
+ * @param mesh object.
+ * @param particle_spec ParticleSpec to use for the returned ParticleSet.
+ * @param npart_per_cell Number of particles to create per cell.
+ * @param weight Weight to assign to each particle.
+ * @param std_dev Standard deviation of the Maxwellian distribution to sample
+ * velocities from.
+ * @param species_id Integer to assign to the "INTERNAL_STATE" property of each
+ * particle.
+ */
+
 template <size_t ndim>
 inline ParticleSet uniform_cellwise_maxwellian(
     SYCLTargetSharedPtr sycl_target, std::shared_ptr<PetscInterface::DMPlexInterface> mesh,

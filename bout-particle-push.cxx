@@ -785,11 +785,11 @@ int main(int argc, char** argv) {
   Field2D initial_neutral_density{bout_mesh};
   initial_neutral_density = opt["VANTAGE_reactions"]["initial_neutral_density"].as<Field2D>();
 
-  T = opt["VANTAGE_reactions"]["T"].as<Field2D>().withDefault(1.0);
-  N = opt["VANTAGE_reactions"]["N"].as<Field2D>().withDefault(1.0);
-  Vx = opt["VANTAGE_reactions"]["Vx"].as<Field2D>().withDefault(0.0);
-  Vy = opt["VANTAGE_reactions"]["Vy"].as<Field2D>().withDefault(0.0);
-  vector<Field2D> V = {Vx, Vy};
+  BoutReal T_background = opt["VANTAGE_reactions"]["T_background"].withDefault(1.0);
+  BoutReal N_background = opt["VANTAGE_reactions"]["N_background"].withDefault(1.0);
+  BoutReal Vx_background = opt["VANTAGE_reactions"]["Vx_background"].withDefault(0.0);
+  BoutReal Vy_background = opt["VANTAGE_reactions"]["Vy_background"].withDefault(0.0);
+  std::vector<BoutReal> V_background = {Vx_background, Vy_background};
 
   /*
    *
@@ -834,6 +834,15 @@ int main(int argc, char** argv) {
         Options::root()["neso_particles"]["cell_centre_absolute_tolerance"].withDefault(1.0e-12),
         Options::root()["neso_particles"]["cell_centre_relative_tolerance"].withDefault(0.0));
     }
+
+    // Normalisation! FIXME: Need to normalise the dmplex, and then set these
+    // to Hermes-3 normalisation.
+
+    // Put into the options tree, so quantities can be normalised
+    // when creating components
+    std::map<std::string, double> norms;
+    norms["length"] = 1.0;
+
     // create a Reactions particle spec
     auto particle_spec_builder = ParticleSpecBuilder(ndim);
     auto electron_species = Species("ELECTRON");
@@ -848,7 +857,12 @@ int main(int argc, char** argv) {
         Properties<REAL>(fluid_species,
                          std::vector<int>{default_properties.source_momentum}),
         ndim);
-    ParticleSpec additional_props{ParticleProp(Sym<REAL>("TSP"), 2)};
+    ParticleSpec additional_props{ParticleProp(Sym<REAL>("TSP"), 2),
+                                  ParticleProp(Sym<REAL>("FLUID_DENSITY"), 1),
+                                  ParticleProp(Sym<REAL>("FLUID_FLOW_SPEED"), ndim),
+                                  ParticleProp(Sym<REAL>("FLUID_TEMPERATURE"), 1),
+                                  ParticleProp(Sym<INT>("N_CELL"), 1)};
+
     particle_spec_builder.add_particle_spec(additional_props);
     ParticleSpec particle_spec = particle_spec_builder.get_particle_spec();
 
@@ -914,42 +928,72 @@ int main(int argc, char** argv) {
 
     // Recombination reaction
     // ------------------------------------------------------------------------------
-    // Create Maxwellian distribution of recombination markers according to fluid properties
-    // Add them to a new particle group representing the markers
-    // 
+    // Create Maxwellian distribution of recombination markers according to fluid
+    // properties Add them to a new particle group representing the markers
+    //
 
+    // Options and constants
     const BoutReal rec_markers_per_cell =
         Options::root()["VANTAGE_reactions"]["rec_markers_per_cell"].withDefault(1000);
     const BoutReal rec_rate =
         Options::root()["VANTAGE_reactions"]["rec_rate"].withDefault(1.0);
     auto rec_rate_data = FixedRateData(rec_rate);
 
-    // Set initial kinetic values and add to marker particle group
+    // Make new particle group just for the markers
+    auto marker_group =
+        std::make_shared<ParticleGroup>(domain, particle_spec, sycl_target);
+
+    // Give particle group initial kinetic values (positions and velocities)
     // Numerical settings: weight, stdev, species ID
     ParticleSet maxwellian_markers = uniform_cellwise_maxwellian<ndim>(
         sycl_target, neso_mesh, particle_spec, rec_markers_per_cell, 1.0, 0.5, -1);
 
     marker_group->add_particles_local(maxwellian_markers);
 
-    // Set initial fluid values
+    // Give particle group initial fluid values: markers will contain background
+    // plasma properties
+    // In demo app: contained in set_init_fluid_values
     particle_loop(
-      "set init fluid values", marker_group,
-      [=](auto n, auto T, auto ne, auto Te, auto speed) {
-        n.at(0) = N;
-        ne.at(0) = N;
-        T.at(0) = T;
-        Te.at(0) = T;
+        "set init fluid values", marker_group,
+        [=](auto n, auto T, auto ne, auto Te, auto speed) {
+          n.at(0) = N_background;
+          ne.at(0) = N_background;
+          T.at(0) = T_background;
+          Te.at(0) = T_background;
 
-        for (int i = 0; i < ndim; i++) {
-          speed.at(i) = V[i];
-        }
-      },
-      Access::write(Sym<REAL>("FLUID_DENSITY")),
-      Access::write(Sym<REAL>("FLUID_TEMPERATURE")),
-      Access::write(Sym<REAL>("ELECTRON_DENSITY")),
-      Access::write(Sym<REAL>("ELECTRON_TEMPERATURE")),
-      Access::write(Sym<REAL>("FLUID_FLOW_SPEED")))
-      ->execute();
+          for (int i = 0; i < ndim; i++) {
+            speed.at(i) = V_background[i];
+          }
+        },
+        Access::write(Sym<REAL>("FLUID_DENSITY")),
+        Access::write(Sym<REAL>("FLUID_TEMPERATURE")),
+        Access::write(Sym<REAL>("ELECTRON_DENSITY")),
+        Access::write(Sym<REAL>("ELECTRON_TEMPERATURE")),
+        Access::write(Sym<REAL>("FLUID_FLOW_SPEED")))
+        ->execute();
+
+    // Calculate marker weights
+
+    // Get the total volume of the rank, total volume of domain and array of cell
+    auto [V_tot_local, V_tot_global, V_cells] =
+        calc_V_tot_local(marker_group->sycl_target, neso_mesh, norms);
+
+    output << "\n***********************************************\n";
+    output << fmt::format("Total volume on rank {} is {} \n", mpi_rank, V_tot_local);
+    output << fmt::format("Total volume globally is {} \n", V_tot_global);
+    output << "***********************************************\n\n";
+
+    
+    // Add particle property: number of particles in the local cell
+    for (int cellx = 0; cellx < marker_group->domain->mesh->get_cell_count(); cellx++)
+    {
+      int n_part_cell = marker_group->get_npart_cell(cellx);
+      particle_loop(
+          "Update N_CELL prop", marker_group,
+          [=](auto n_cell_prop) { n_cell_prop.at(0) = n_part_cell; },
+          Access::write(Sym<INT>("N_CELL")))
+          ->execute(cellx);
+    }
 
     // Wrappers & controllers
     // ------------------------------------------------------------------------------
