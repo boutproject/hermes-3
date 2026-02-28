@@ -14,7 +14,7 @@ from boututils.run_wrapper import shell, launch_safe, getmpirun
 from boutdata.collect import collect
 
 from numpy import sqrt, max, abs, mean, array, log, concatenate
-
+import numpy as np
 import tarfile
 
 gridpath = "../../../../grids/mms_slab_fci_y_BC/"
@@ -32,8 +32,8 @@ def gridname(ny):
 
 
 ny = 128
-nout = 100
-timestep = 1e6 / nout
+nout = 10
+timestep = 1e7 / nout
 
 nproc = 1
 
@@ -61,10 +61,37 @@ f = open("run.log." + str(ny), "w")
 f.write(out)
 f.close()
 
-
-pressure = collect( "Ph+", tind=[nout, nout], path="data", info=False)
-
 success = True
+
+Pi = np.mean(collect( "Ph+", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
+Pe = np.mean(collect( "Pe", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
+Ni = np.mean(collect( "Nh+", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
+
+if np.max(Ni) > 20.05 or np.max(Ni) < 20.00:
+    success = False
+
+if np.max(Pe) > 605.0 or np.max(Pe) < 600.0:
+    success = False
+
+if np.max(Pi) > 605.0 or np.max(Pi) < 600.0:
+    success = False
+    
+tol = 1e-3
+    
+for var in (Pe,Pi,Ni):
+    if abs(var[0] - var[-1]) > tol:
+        success = False
+
+if abs(Ni[0] - 8.41558732) > tol:
+    success = False
+
+if abs(Pi[0] - 159.94447363) > tol:
+    success = False
+
+if abs(Pe[0] - 85.7320942) > tol:
+    success = False
+
+
 if success:
     print(" => Test passed")
     exit(0)
