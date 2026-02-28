@@ -30,7 +30,7 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
 
 
   anomalous_D_par = 0.0;
-  include_D_par = (mesh->get(anomalous_D, std::string("D_par_") + name) == 0)
+  include_D_par = (mesh->get(anomalous_D_par, std::string("D_par_") + name) == 0)
               || options.isSet("anomalous_D_par");
   anomalous_D_par = options["anomalous_D_par"]
                     .doc("Anomalous parallel particle diffusion coefficient [m^2/s]")
