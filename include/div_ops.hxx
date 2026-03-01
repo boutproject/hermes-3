@@ -580,7 +580,7 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
 template <typename CellEdges = MC>
 Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in,
-		    Field3D &flow_ylow, bool fixflux = true, bool dissipative = false) {
+		    Field3D &flow_ylow, bool fixflux = true, bool dissipative = false, bool bndry_flux = true) {
 
   Coordinates* coord = f_in.getCoordinates();
 
@@ -610,10 +610,12 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                                     fabs(v_up[iyp]),
                                     fabs(v_down[iym]));
       // Divergencefree B leads to A1 * B1 = A2 * B2 -> A2 = A1 * B1 / B2
-      
+      BoutReal flux_up = 0.0;
+      BoutReal flux_down = 0.0;
       if (dissipative) {
-	BoutReal flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cellarea_yup[i];
-	BoutReal flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cellarea_ydown[i];
+
+	flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cellarea_yup[i];
+        flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cellarea_ydown[i];
 
 	if (coord->has_bndry_yup[i] == true) {
 	  flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
@@ -621,16 +623,24 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 	if (coord->has_bndry_ydown[i] == true) {
 	  flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
 	}
-	
-	result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
+        
       } else {
-      
-      result[i] = (0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp])
-                   * coord->cellarea_yup[i] -
-                   0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym])
-                   * coord->cellarea_ydown[i])
-        / ( coord->cellvolume[i]);
+
+	flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
+	flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
+
       }
+
+      if (coord->has_bndry_yup[i] == true && bndry_flux == false) {
+	flux_up = 0.0;
+      }
+
+      if (coord->has_bndry_ydown[i] == true && bndry_flux == false) {
+	flux_down = 0.0;
+      }
+      
+      result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
+      
     }
     return result;
   }
