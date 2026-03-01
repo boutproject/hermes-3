@@ -50,7 +50,7 @@ private:
   bool disable_Dnn;
   BoutReal temperature_floor;
   bool sheath_ydown, sheath_yup;
-
+  bool dissipative;
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
 

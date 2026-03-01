@@ -65,6 +65,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e-8);
 
+  dissipative = options["dissipative"]
+                 .doc("Use strong dissipation in parallel divergence?")
+                 .withDefault(true);
+  
   use_finite_difference = options["use_finite_difference"]
                    .doc("Use finite difference for perpendicular diffusion?")
                    .withDefault<bool>(false);
@@ -365,7 +369,7 @@ void NeutralMixed::finally(const Options& state) {
   TRACE("Neutral density");
   if (evolve_momentum) {
     if (!isMMS){
-      ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, true);
+      ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative);
     } else {
       ddt(Nn) = -Div_par(Nn * Vn);
     }
@@ -403,7 +407,7 @@ void NeutralMixed::finally(const Options& state) {
 
   if (evolve_momentum) {
     if (!isMMS) {
-      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection
+      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
     } else {
       ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
     }
