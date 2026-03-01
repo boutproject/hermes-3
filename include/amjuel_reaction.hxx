@@ -94,12 +94,12 @@ protected:
         to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
     // Calculate reaction rate using cell averaging. Optionally scale by multiplier
-    reaction_rate = cellAverage(
-        [&](BoutReal ne, BoutReal n1, BoutReal te) {
-          return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-                 / FreqNorm * rate_multiplier;
-        },
-        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
+
+    reaction_rate =  0.0;
+    BOUT_FOR(i, Ne.getRegion("RGN_NOY")){
+      reaction_rate[i] = Ne[i] * N1[i] * evaluate(rate_coefs, Te[i] * Tnorm, Ne[i] * Nnorm) * Nnorm / FreqNorm * rate_multiplier;
+    }
+    
 
     // Particles
     // For ionisation, "from_ion" is the neutral and "to_ion" is the ion
@@ -156,13 +156,14 @@ protected:
     add(to_ion["energy_source"], energy_exchange);
 
     // Electron energy loss (radiation, ionisation potential)
-    energy_loss = cellAverage(
-        [&](BoutReal ne, BoutReal n1, BoutReal te) {
-          return ne * n1 * evaluate(radiation_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-                 / (Tnorm * FreqNorm) * radiation_multiplier;
-        },
-        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
+    energy_loss =  0.0;
+    BOUT_FOR(i, Ne.getRegion("RGN_NOY")){
+      energy_loss[i] = Ne[i] * N1[i] * evaluate(radiation_coefs, Te[i] * Tnorm, Ne[i] * Nnorm) * Nnorm / (Tnorm * FreqNorm) * radiation_multiplier;
+    }
+
+    
+    
     // Loss is reduced by heating
     energy_loss -= (electron_heating / Tnorm) * reaction_rate * radiation_multiplier;
 
