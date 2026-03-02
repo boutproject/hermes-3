@@ -217,6 +217,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     // Clebsch coordinate system
     bracket_factor = 1.0;
   }
+
+  T.setBoundary(fmt::format("T{}", name));
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -274,6 +276,7 @@ void EvolvePressure::transform(Options& state) {
   Field3D Pfloor = floor(P, 0.0);
   T = Pfloor / floor(N, density_floor);
   Pfloor = N * T; // Ensure consistency
+
 
   set(species["pressure"], Pfloor);
   mesh->communicate(T);
@@ -421,8 +424,11 @@ void EvolvePressure::finally(const Options& state) {
       kappa_par = kappa_par / (1. + abs(q_SH / floor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
+      kappa_par.applyBoundary("neumann");
       mesh->communicate(kappa_par);
+
     }
+
 
     if (kappa_par.isFci()) {
       kappa_par.applyBoundary("neumann");
@@ -524,7 +530,8 @@ void EvolvePressure::finally(const Options& state) {
 #if CHECKLEVEL >= 1
   for (auto& i : P.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(P)[i])) {
-      throw BoutException("ddt(P{}) non-finite at {}. Sp={}\n", name, i, Sp[i]);
+      throw BoutException("ddt(P{}) non-finite at {}. Sp={}. P {} N {} T {} Tup {} Tdown {}\n", name, i, Sp[i], P[i], N[i], T[i],
+			  T.yup()[i.yp()], T.ydown()[i.ym()]);
     }
   }
 #endif

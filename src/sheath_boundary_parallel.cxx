@@ -300,12 +300,16 @@ void SheathBoundaryParallel::transform(Options &state) {
                      * nesheath * vesheath;
 
       // Multiply by cell area to get power
-      const BoutReal flux =
-          q * (pnt.ythis(coord->J) + pnt.ynext(coord->J))
-          / (sqrt(pnt.ythis(coord->g_22)) + sqrt(pnt.ynext(coord->g_22)));
+      BoutReal flux = 0.0;
+
+      if (pnt.dir < 0.0) {
+	flux = q * coord->cellarea_ydown[i];
+      } else {
+	flux = q * coord->cellarea_yup[i];
+      }
 
       // Divide by volume of cell to get energy loss rate (sign depending on vesheath)
-      const BoutReal power = flux / (coord->dy[pnt.ind()] * pnt.ythis(coord->J));
+      const BoutReal power = flux / coord->cellvolume[i];
 
 #if CHECKLEVEL >= 1
       if (!std::isfinite(power)) {
@@ -390,7 +394,7 @@ void SheathBoundaryParallel::transform(Options &state) {
     iter_regions([&](auto& region) {
       for (const auto& pnt : region) {
 
-        // auto i = pnt.ind();
+        auto i = pnt.ind();
 
         // Free gradient of log electron density and temperature
         // This ensures that the guard cell values remain positive
@@ -472,12 +476,17 @@ void SheathBoundaryParallel::transform(Options &state) {
 	}
 
 	// Multiply by cell area to get power
-        const BoutReal flux =
-            q * (pnt.ythis(coord->J) + pnt.ynext(coord->J))
-            / (sqrt(pnt.ythis(coord->g_22)) + sqrt(pnt.ynext(coord->g_22)));
+	BoutReal flux = 0.0;
 
+	if (pnt.dir < 0.0) {
+	  flux = q * coord->cellarea_ydown[i];
+	} else {
+	  flux = q * coord->cellarea_yup[i];
+	}
+	
+	
         // Divide by volume of cell to get energy loss rate (sign depending on vesheath)
-        const BoutReal power = flux / (coord->dy[pnt.ind()] * pnt.ythis(coord->J));
+        const BoutReal power = flux / coord->cellvolume[i];
 
         ASSERT1(std::isfinite(power));
         ASSERT2(power * pnt.dir >= 0.0);

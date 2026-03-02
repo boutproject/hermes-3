@@ -186,7 +186,6 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                                   fabs(v_up[iyp]),
                                   fabs(v_down[iym]));
 
-
       result[i] = B[i] * (
                           (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
                           - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
@@ -610,23 +609,27 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                                     fabs(v_in[i]),
                                     fabs(v_up[iyp]),
                                     fabs(v_down[iym]));
+      // Divergencefree B leads to A1 * B1 = A2 * B2 -> A2 = A1 * B1 / B2
+      
       if (dissipative) {
-      result[i] = (0.5 * (f_in[i] * (v_in[i] + amax) +
-                          f_up[iyp] * (v_up[iyp] - amax))
-                   * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
-                   -
-                   0.5 * (f_in[i] * (v_in[i] - amax) +
-                          f_down[iym] * (v_down[iym] + amax))
-                   * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
-		   / (coord->dy[i] * coord->J[i]);
+	BoutReal flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cellarea_yup[i];
+	BoutReal flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cellarea_ydown[i];
+
+	if (coord->has_bndry_yup[i] == true) {
+	  flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
+	}
+	if (coord->has_bndry_ydown[i] == true) {
+	  flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
+	}
+	
+	result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
       } else {
       
       result[i] = (0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp])
-                   * (coord->J[i] + coord->J.yup()[iyp]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.yup()[iyp]))
-                   -
-                    0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym])
-                   * (coord->J[i] + coord->J.ydown()[iym]) / (sqrt(coord->g_22[i]) + sqrt(coord->g_22.ydown()[iym])))
-        / (coord->dy[i] * coord->J[i]);
+                   * coord->cellarea_yup[i] -
+                   0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym])
+                   * coord->cellarea_ydown[i])
+        / ( coord->cellvolume[i]);
       }
     }
     return result;
