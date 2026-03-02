@@ -52,7 +52,12 @@ private:
   Field3D Dnn, Dnn_unlimited, Dmax;    ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   Field3D kappa_n_unlimited, kappa_n_max_par, kappa_n_max_perp;
-  BoutReal flux_limit;      ///< Diffusive flux limit
+  BoutReal flux_limit_adv;      ///< Diffusive flux limit
+  BoutReal flux_limit_cond_par; ///< Limit for parallel conductive flux
+  BoutReal flux_limit_cond_perp;   ///< Limit for perpendicular conductive flux
+  BoutReal flux_limit_visc_par; ///< Limit for parallel viscous flux
+  BoutReal flux_limit_visc_perp;   ///< Limit for perpendicular viscous flux
+
   BoutReal diffusion_limit; ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;
 

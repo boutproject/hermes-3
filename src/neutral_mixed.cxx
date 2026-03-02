@@ -98,10 +98,44 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     }
   }
 
-  flux_limit =
+  // Guard against accidentally setting flux_limit = true (parses as 1.0)
+  if (options.isSet("flux_limit")) {
+    const std::string raw = options["flux_limit"].as<std::string>();
+    if (raw == "true" || raw == "false") {
+      throw BoutException(
+          "flux_limit is no longer a boolean setting. Please use a numeric value.",
+          raw);
+    }
+  }
+
+  flux_limit_adv =
       options["flux_limit"]
-          .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
+          .doc("Limit advective fluxes to fraction of thermal speed. <=0 means no limits applied.")
           .withDefault(0.2);
+
+  flux_limit_cond_perp =
+      options["flux_limit_cond_perp"]
+          .doc("Limit perpendicular conductive fluxes to fraction of free-streaming. "
+               "Defaults to same as advection limiter.")
+          .withDefault(flux_limit_adv);
+
+  flux_limit_cond_par =
+      options["flux_limit_cond_par"]
+          .doc("Limit parallel conductive fluxes to fraction of free-streaming. Defaults "
+               "to same as perpendicular conduction limiter value.")
+          .withDefault(flux_limit_cond_perp);
+
+  flux_limit_visc_perp =
+      options["flux_limit_visc_perp"]
+          .doc("Limit perpendicular viscous fluxes to fraction of free-streaming. "
+               "Defaults to same as advection limiter value.")
+          .withDefault(flux_limit_adv);
+
+  flux_limit_visc_par =
+      options["flux_limit_visc_par"]
+          .doc("Limit parallel viscous fluxes to fraction of free-streaming. Defaults to "
+               "same as perpendicular viscous limiter value.")
+          .withDefault(flux_limit_visc_perp);
 
   neutral_lmax = options["neutral_lmax"]
                      .doc("Maximum length scale due to the present of walls.")
@@ -470,7 +504,7 @@ void NeutralMixed::finally(const Options& state) {
   Dnn = emptyFrom(Dnn_unlimited);
   Dmax = emptyFrom(Dnn_unlimited);
 
-  if (flux_limit > 0.0) {
+  if (flux_limit_adv > 0.0) {
     // Thermal velocity of neutrals
     // Old formulation: 3D thermal speed for advection, that times 3/2 for heat flux
     // New formulation: 1D particle flow in 3D maxwellian, 1D heat flow in 3D Maxwellian
@@ -492,22 +526,22 @@ void NeutralMixed::finally(const Options& state) {
     // which is legacy behaviour and double counting.
     // eta_max never had neutral_lmax added so is omitted
     if (double_count_lmax) {
-      Dmax = flux_limit * Vnth_pf / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
-      kappa_n_max_perp = flux_limit * (Vnth_hf * Nnlim)
+      Dmax = flux_limit_adv * Vnth_pf / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
+      kappa_n_max_perp = flux_limit_cond_perp * (Vnth_hf * Nnlim)
                          / (abs(Grad_perp(Tn)) / Tnlim + 1. / neutral_lmax);
-      kappa_n_max_par = flux_limit * (Vnth_hf * Nnlim)
+      kappa_n_max_par = flux_limit_cond_par * (Vnth_hf * Nnlim)
                         / (abs(Grad_par(Tn)) / Tnlim + 1. / neutral_lmax);
 
     } else {
-      Dmax = flux_limit * Vnth_pf / (abs(Grad_perp(logPnlim)));
+      Dmax = flux_limit_adv * Vnth_pf / (abs(Grad_perp(logPnlim)));
       kappa_n_max_perp =
-          flux_limit * (Vnth_hf * Nnlim) / (abs(Grad_perp(Tn)) / Tnlim);
+          flux_limit_cond_perp * (Vnth_hf * Nnlim) / (abs(Grad_perp(Tn)) / Tnlim);
       kappa_n_max_par =
-          flux_limit * (Vnth_hf * Nnlim) / (abs(Grad_par(Tn)) / Tnlim);
+          flux_limit_cond_par * (Vnth_hf * Nnlim) / (abs(Grad_par(Tn)) / Tnlim);
     }
     
-    eta_n_max_perp = flux_limit * Pnlim / abs(Grad_perp(Vn));
-    eta_n_max_par = flux_limit * Pnlim / abs(Grad_par(Vn));
+    eta_n_max_perp = flux_limit_visc_perp * Pnlim / abs(Grad_perp(Vn));
+    eta_n_max_par = flux_limit_visc_par * Pnlim / abs(Grad_par(Vn));
 
     // Apply limits
     static auto apply_limiter = [](BoutReal unlimited, BoutReal max) -> BoutReal {
@@ -527,11 +561,13 @@ void NeutralMixed::finally(const Options& state) {
 
   } else {
     Dnn = Dnn_unlimited;
-    Dmax = -1.0;
+    Dmax = Dnn_unlimited;
     kappa_n_perp = kappa_n_unlimited;
     kappa_n_par = kappa_n_unlimited;
-    kappa_n_max_perp = -1.0;
-    kappa_n_max_par = -1.0;
+    kappa_n_max_perp = kappa_n_unlimited;
+    kappa_n_max_par = kappa_n_unlimited;
+    eta_n_max_perp = eta_n_unlimited;
+    eta_n_max_par = eta_n_unlimited;
   }
 
   if (diffusion_limit > 0.0) {
