@@ -97,7 +97,12 @@ protected:
 
     reaction_rate =  0.0;
     BOUT_FOR(i, Ne.getRegion("RGN_NOY")){
-      reaction_rate[i] = Ne[i] * N1[i] * evaluate(rate_coefs, Te[i] * Tnorm, Ne[i] * Nnorm) * Nnorm / FreqNorm * rate_multiplier;
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+      BoutReal avgNe = (4.0 * Ne[i] + Ne.ydown()[iym] + Ne.yup()[iyp]) / 6.0;
+      BoutReal avgN1 = (4.0 * N1[i] + N1.ydown()[iym] + N1.yup()[iyp]) / 6.0;
+      BoutReal avgTe = (4.0 * Te[i] + Te.ydown()[iym] + Te.yup()[iyp]) / 6.0;
+      reaction_rate[i] = avgNe * avgN1 * evaluate(rate_coefs, avgTe * Tnorm, avgNe * Nnorm) * Nnorm / FreqNorm * rate_multiplier;
     }
     
 
@@ -159,7 +164,12 @@ protected:
 
     energy_loss =  0.0;
     BOUT_FOR(i, Ne.getRegion("RGN_NOY")){
-      energy_loss[i] = Ne[i] * N1[i] * evaluate(radiation_coefs, Te[i] * Tnorm, Ne[i] * Nnorm) * Nnorm / (Tnorm * FreqNorm) * radiation_multiplier;
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+      BoutReal avgNe = (4.0 * Ne[i] + Ne.ydown()[iym] + Ne.yup()[iyp]) / 6.0;
+      BoutReal avgN1 = (4.0 * N1[i] + N1.ydown()[iym] + N1.yup()[iyp]) / 6.0;
+      BoutReal avgTe = (4.0 * Te[i] + Te.ydown()[iym] + Te.yup()[iyp]) / 6.0;
+      energy_loss[i] = avgNe * avgN1 * evaluate(radiation_coefs, avgTe * Tnorm, avgNe * Nnorm) * Nnorm / (Tnorm * FreqNorm) * radiation_multiplier;
     }
 
     
