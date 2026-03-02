@@ -185,22 +185,24 @@ void AmjuelReaction::transform_additional(GuardedOptions& state,
     }
   }
 
-  // Electron energy loss (radiation, ionisation potential)
-  const Field3D& n_e = electron["density"].GetRef<Field3D>();
-  auto region_no_bndry = n_e.getRegion("RGN_NOBNDRY");
+  if (this->includes_sigma_v_e) {
+    // Electron energy loss (radiation, ionisation potential)
+    const Field3D& n_e = electron["density"].GetRef<Field3D>();
+    auto region_no_bndry = n_e.getRegion("RGN_NOBNDRY");
 
-  Field3D energy_loss = cellAverage(
-      [&](BoutReal nrh, BoutReal ne, BoutReal te) {
-        return nrh * ne * eval_sigma_vE_nT(te * Tnorm, ne * Nnorm) * Nnorm
-               / (Tnorm * FreqNorm) * radiation_multiplier;
-      },
-      region_no_bndry)(n_rh, n_e, T_e);
+    Field3D energy_loss = cellAverage(
+        [&](BoutReal nrh, BoutReal ne, BoutReal te) {
+          return nrh * ne * eval_sigma_vE_nT(te * Tnorm, ne * Nnorm) * Nnorm
+                 / (Tnorm * FreqNorm) * radiation_multiplier;
+        },
+        region_no_bndry)(n_rh, n_e, T_e);
 
-  // Loss is reduced by heating
-  energy_loss -= (amjuel_data.electron_heating / Tnorm) * rate * radiation_multiplier;
+    // Loss is reduced by heating
+    energy_loss -= (amjuel_data.electron_heating / Tnorm) * rate * radiation_multiplier;
 
-  update_source<subtract<Field3D>>(state, "e", ReactionDiagnosticType::energy_loss,
-                                   energy_loss);
+    update_source<subtract<Field3D>>(state, "e", ReactionDiagnosticType::energy_loss,
+                                     energy_loss);
+  }
 
   // Collision frequencies [s^-1]
 
