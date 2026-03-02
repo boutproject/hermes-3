@@ -1,7 +1,6 @@
 nout = 50
 timestep = 0.1
 
-
 [mesh]
 
 extrapolate_y = false 
@@ -9,6 +8,9 @@ extrapolate_y = false
 [mesh:paralleltransform]
 type = fci
 
+[input]
+
+error_on_unused_options = false
 
 [solver]
 mxstep = 10000
@@ -18,31 +20,49 @@ type = cvode
 
 
 [hermes]
-components = h+, e, collisions, sound_speed, sheath_boundary_parallel, ion_viscosity
+components = h+, e, h, collisions, sound_speed, sheath_boundary_parallel, ion_viscosity, recycling_fci
 
 
 Nnorm = 1e18
 Bnorm = 1
 Tnorm = 5
 
+[collisions]
+electron_ion = true
+neutral_neutral = false
+ion_neutral = false
+electron_neutral = true
+
+[recycling_fci]
+species = h+
+
 
 [h+]  # Ions
-type = evolve_density, evolve_momentum, evolve_pressure
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion_3d
 
 charge = 1.0
 AA = 1.0
 
+diagnose = true
+
 thermal_conduction = true  # in evolve_pressure
 p_div_v = true
 
-dissipative = true
+dissipative = false
+
+recycle_as = h
+target_recycle_multiplier = 0.99
+target_recycle = true
+
+anomalous_D_par = 1e3
 
 [Nh+]
 function =  (1e19 / `hermes`:Nnorm)
 
 flux = 1e23
 
-adapt_source = 2e19
+adapt_source = 2e17
+
 
 source = flux * gauss(y - pi, 0.25)
 
@@ -57,7 +77,7 @@ bndry_par_all = parallel_neumann_o1
 [Ph+]
 function = (10.0 / `hermes`:Tnorm) * `Nh+`:function
 
-adapt_source = 150.0
+adapt_source = 50.0
 
 heating = 1e7
 T_source = heating / (`Nh+`:flux * 1.602e-19 * 1.5)
@@ -78,13 +98,60 @@ AA = 1.0 / 1836.0
 thermal_conduction = true  # in evolve_pressure
 p_div_v = true
 
-dissipative = true
+dissipative = false
 
 [Pe]
 
-adapt_source = 150.0
+adapt_source = 50.0
 
 function = `Ph+`:function
 source = `Ph+`:source
 bndry_all = neumann
 bndry_par_all = parallel_neumann_o1
+
+
+[h]
+
+type = neutral_mixed, anomalous_diffusion_3d
+
+AA = 1
+
+
+
+evolve_momentum = false
+
+neutral_conduction = true
+neutral_viscosity = true
+
+neutral_lmax = 0.05
+precondition = true
+
+dissipative = false
+
+density_floor = 1e-6
+
+parallel_dirichlet = true
+
+diagnose = true
+
+[Nh]
+
+function = 1e-6
+source = 0.0
+bndry_all = neumann   # All other boundaries low density
+bndry_par_all = parallel_neumann_o1
+bndry_xout = neumann
+bndry_xin = neumann
+
+[NVh]
+bndry_all = neumann
+bndry_xin = neumann
+bndry_par_all = parallel_neumann_o1
+
+[Ph]
+
+Teprofile = 10 / `hermes:Tnorm`
+function = `Nh`:function * Teprofile
+
+bndry_par_all = parallel_neumann_o1
+bndry_all = neumann

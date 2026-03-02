@@ -17,8 +17,8 @@ from numpy import sqrt, max, abs, mean, array, log, concatenate
 import numpy as np
 import tarfile
 
-gridpath = "../../../../grids/mms_slab_fci_y_BC/"
-archive_path = "MMS_Slab_fci_y_BC.tar.xz"
+gridpath = "../../../../grids/straight_slab_120m/"
+archive_path = "Straight_slab_120m.xz"
 
 try:
     with tarfile.open(gridpath + archive_path, "r:xz") as tar:
@@ -31,9 +31,9 @@ def gridname(ny):
     return gridpath + f"MMS_straight_slab_8_{ny}_4_True.fci.grid.nc"
 
 
-ny = 128
-nout = 10
-timestep = 1e7 / nout
+ny = 256
+nout = 250
+timestep = 1e6 / nout
 
 nproc = 1
 
