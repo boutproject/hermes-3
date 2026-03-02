@@ -298,6 +298,8 @@ if(HERMES_TESTS)
 	DEPENDS setup-test)
     endif()
   endfunction()
+  hermes_add_integrated_test(1D-sheathtest-recycling-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-circular-anomalous-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-sheathtest-fci
