@@ -237,7 +237,7 @@ void RecyclingFCI::transform(Options& state) {
 	  TRACE("Calculating density sources in recycling_fci");
 
 	  // Calculate sources in the final cell [m^-3 s^-1]                                                                                                                                                                                                                        
-	  // pnt.ythis(channel.target_recycle_density_source) += flow / coord->cellvolume[i];    // For diagnostic                                                                                                                                                                   
+	  pnt.ythis(channel.target_recycle_density_source) += flow / coord->cellvolume[i];    // For diagnostic                                                                                                                                                                   
 	  density_source[i] += flow / coord->cellvolume[i];         // For use in solver                                                                                                                                                                                  
 
 	  BoutReal recycle_energy_flow = flow  * channel.target_energy;   // Thermal recycling par                                                                                                                                                                                  
@@ -245,7 +245,7 @@ void RecyclingFCI::transform(Options& state) {
 	  // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]                                                                                                                                                                                                    
 	  TRACE("Calculating energy sources in recycling_fci");
 
-	  // pnt.ythis(channel.target_recycle_energy_source) += recycle_energy_flow / coord->cellvolume[i];
+	  pnt.ythis(channel.target_recycle_energy_source) += recycle_energy_flow / coord->cellvolume[i];
 	  energy_source[i] += recycle_energy_flow / coord->cellvolume[i];
 
 	} // Ent pnt.abs_offset
