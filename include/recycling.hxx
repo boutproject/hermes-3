@@ -32,13 +32,13 @@ private:
     /// Flux multiplier (recycling fraction).
     /// Combination of recycling fraction and species change e.g h+ -> h2 results in 0.5
     /// multiplier
-    BoutReal target_multiplier, sol_multiplier, pfr_multiplier, pump_multiplier;
+    BoutReal target_multiplier, sol_multiplier, pfr_multiplier, core_multiplier, pump_multiplier;
     BoutReal target_energy, sol_energy,
         pfr_energy; ///< Energy of recycled particle (normalised to Tnorm)
     BoutReal target_fast_recycle_fraction, pfr_fast_recycle_fraction,
-        sol_fast_recycle_fraction; ///< Fraction of ions undergoing fast reflection
+        sol_fast_recycle_fraction, core_fast_recycle_fraction; ///< Fraction of ions undergoing fast reflection
     BoutReal target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor,
-        pfr_fast_recycle_energy_factor; ///< Fraction of energy retained by fast recycled
+        pfr_fast_recycle_energy_factor, core_fast_recycle_energy_factor; ///< Fraction of energy retained by fast recycled
                                         ///< neutrals
 
     // Recycling particle and energy sources for the different sources of recycling
@@ -59,7 +59,7 @@ private:
 
   std::vector<RecycleChannel> channels; // Recycling channels
 
-  bool target_recycle{false}, sol_recycle{false}, pfr_recycle{false},
+  bool target_recycle{false}, sol_recycle{false}, pfr_recycle{false}, core_recycle{false},
       neutral_pump{false}; ///< Flags for enabling recycling in different regions
   bool diagnose;           ///< Save additional post-processing variables?
   bool has_sheath_boundary_simple{

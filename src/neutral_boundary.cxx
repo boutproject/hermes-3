@@ -58,6 +58,11 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
           .doc("Fraction of neutrals that are undergoing fast reflection at the pfr")
           .withDefault<BoutReal>(0.8);
 
+    core_fast_refl_fraction =
+      options["core_fast_refl_fraction"]
+          .doc("Fraction of neutrals that are undergoing fast reflection at the core(fcfs for dipole)")
+          .withDefault<BoutReal>(0.8);
+
   substitutePermissions("name", {name});
   substitutePermissions("outputs", {"density", "temperature", "pressure"});
   substitutePermissions("conditional_outputs", {"velocity", "momentum"});
