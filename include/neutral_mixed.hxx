@@ -52,16 +52,14 @@ private:
   Field3D Dnn, Dnn_unlimited, Dmax;    ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   Field3D kappa_n_unlimited, kappa_n_max_par, kappa_n_max_perp;
-  BoutReal flux_limit_adv;      ///< Diffusive flux limit
-  BoutReal flux_limit_cond_par; ///< Limit for parallel conductive flux
-  BoutReal flux_limit_cond_perp;   ///< Limit for perpendicular conductive flux
-  BoutReal flux_limit_visc_par; ///< Limit for parallel viscous flux
-  BoutReal flux_limit_visc_perp;   ///< Limit for perpendicular viscous flux
+  BoutReal flux_limit_adv;       ///< Diffusive flux limit
+  BoutReal flux_limit_cond_par;  ///< Limit for parallel conductive flux
+  BoutReal flux_limit_cond_perp; ///< Limit for perpendicular conductive flux
+  BoutReal flux_limit_visc_par;  ///< Limit for parallel viscous flux
+  BoutReal flux_limit_visc_perp; ///< Limit for perpendicular viscous flux
 
   BoutReal diffusion_limit; ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;
-
-  
 
   bool sheath_ydown, sheath_yup;
 
@@ -80,8 +78,8 @@ private:
   bool normalise_sources;  ///< Normalise input sources?
 
   // Temporary variables
-  Field3D debug; ///< Debug variable FIXME: remove
-  bool double_count_lmax;  ///< Include neutral_lmax in Dmax and kappa_max as well as Dnn?
+  Field3D debug;          ///< Debug variable FIXME: remove
+  bool double_count_lmax; ///< Include neutral_lmax in Dmax and kappa_max as well as Dnn?
   bool legacy_thermal_speed; ///< Use legacy definition of thermal speed in flux limiter?
 
   Field3D kappa_n, eta_n_unlimited;      ///< Neutral conduction and viscosity

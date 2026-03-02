@@ -93,8 +93,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     const std::string raw = options["flux_limit"].as<std::string>();
     if (raw == "true" || raw == "false") {
       throw BoutException(
-          "flux_limit is no longer a boolean setting. Please use a numeric value.",
-          raw);
+          "flux_limit is no longer a boolean setting. Please use a numeric value.", raw);
     }
   }
 
@@ -103,15 +102,14 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     const std::string raw = options["flux_limit"].as<std::string>();
     if (raw == "true" || raw == "false") {
       throw BoutException(
-          "flux_limit is no longer a boolean setting. Please use a numeric value.",
-          raw);
+          "flux_limit is no longer a boolean setting. Please use a numeric value.", raw);
     }
   }
 
-  flux_limit_adv =
-      options["flux_limit"]
-          .doc("Limit advective fluxes to fraction of thermal speed. <=0 means no limits applied.")
-          .withDefault(0.2);
+  flux_limit_adv = options["flux_limit"]
+                       .doc("Limit advective fluxes to fraction of thermal speed. <=0 "
+                            "means no limits applied.")
+                       .withDefault(0.2);
 
   flux_limit_cond_perp =
       options["flux_limit_cond_perp"]
@@ -182,13 +180,15 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   // FIXME: Temporary options to enable legacy behaviour. Will be removed.
 
-  double_count_lmax = options["double_count_lmax"]
-                           .doc("Include neutral_lmax in Dmax and kappa_max as well as Dnn?")
-                           .withDefault<bool>(true);
+  double_count_lmax =
+      options["double_count_lmax"]
+          .doc("Include neutral_lmax in Dmax and kappa_max as well as Dnn?")
+          .withDefault<bool>(true);
 
-  legacy_thermal_speed = options["legacy_thermal_speed"]
-                             .doc("Use legacy definition of thermal speed in flux limiter?")
-                             .withDefault<bool>(true);
+  legacy_thermal_speed =
+      options["legacy_thermal_speed"]
+          .doc("Use legacy definition of thermal speed in flux limiter?")
+          .withDefault<bool>(true);
 
   // Optionally output time derivatives
   output_ddt =
@@ -539,7 +539,7 @@ void NeutralMixed::finally(const Options& state) {
       kappa_n_max_par =
           flux_limit_cond_par * (Vnth_hf * Nnlim) / (abs(Grad_par(Tn)) / Tnlim);
     }
-    
+
     eta_n_max_perp = flux_limit_visc_perp * Pnlim / abs(Grad_perp(Vn));
     eta_n_max_par = flux_limit_visc_par * Pnlim / abs(Grad_par(Vn));
 
@@ -549,15 +549,14 @@ void NeutralMixed::finally(const Options& state) {
     };
 
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-        Dnn[i]        = apply_limiter(Dnn_unlimited[i],   Dmax[i]);
-        kappa_n_perp[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i]);
-        kappa_n_par[i]  = apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i]);
-        eta_n_perp[i]   = apply_limiter(eta_n_unlimited[i],   eta_n_max_perp[i]);
-        eta_n_par[i]    = apply_limiter(eta_n_unlimited[i],   eta_n_max_par[i]);
+      Dnn[i] = apply_limiter(Dnn_unlimited[i], Dmax[i]);
+      kappa_n_perp[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i]);
+      kappa_n_par[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i]);
+      eta_n_perp[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i]);
+      eta_n_par[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_par[i]);
     }
 
     debug = abs(Grad_par(Tn));
-
 
   } else {
     Dnn = Dnn_unlimited;
