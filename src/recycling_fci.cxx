@@ -201,7 +201,7 @@ void RecyclingFCI::transform(Options& state) {
 
 
 
-      
+      bndry_counter = 0.0;
       // Y boundaries
       yboundary.iter_pnts([&](auto& pnt) {
 	// BoutReal flux = pnt.dir * pnt.interpolate_sheath_o1(N) * pnt.interpolate_sheath_o1(V);
@@ -209,7 +209,7 @@ void RecyclingFCI::transform(Options& state) {
 	const auto& i = pnt.ind();
 
 	if (pnt.abs_offset() == 1) {
-
+	  bndry_counter[i] += 1.0;
 	  
 	  TRACE("Calculating flux in recycling_fci");
 	  BoutReal flux = 0.0;
@@ -303,6 +303,10 @@ void RecyclingFCI::outputVars(Options& state) {
                         {"source", "recycling"}});
       }
 
+      set_with_attrs(state[std::string("Bndry_counter")],
+		     bndry_counter,
+		     {{"time_dimension", "t"}});
+      
       // Wall recycling
       if ((sol_recycle) or (pfr_recycle)) {
         set_with_attrs(state[{std::string("S") + channel.to + std::string("_wall_recycle")}],
