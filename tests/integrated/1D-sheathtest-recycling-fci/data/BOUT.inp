@@ -20,7 +20,7 @@ type = cvode
 
 
 [hermes]
-components = h+, e, h, collisions, sound_speed, sheath_boundary_parallel, ion_viscosity, recycling_fci
+components = h+, e, h, collisions, sound_speed, sheath_boundary_parallel, reactions, ion_viscosity, recycling_fci
 
 
 Nnorm = 1e18
@@ -51,17 +51,17 @@ p_div_v = true
 dissipative = false
 
 recycle_as = h
-target_recycle_multiplier = 0.99
+target_recycle_multiplier = 0.08
 target_recycle = true
 
-anomalous_D_par = 1e3
+anomalous_D_par = 1e4
 
 [Nh+]
 function =  (1e19 / `hermes`:Nnorm)
 
 flux = 1e23
 
-adapt_source = 2e17
+adapt_source = 2e19
 
 
 source = flux * gauss(y - pi, 0.25)
@@ -116,9 +116,9 @@ type = neutral_mixed, anomalous_diffusion_3d
 
 AA = 1
 
+anomalous_D_par = 1e6
 
-
-evolve_momentum = false
+evolve_momentum = true
 
 neutral_conduction = true
 neutral_viscosity = true
@@ -130,7 +130,7 @@ dissipative = false
 
 density_floor = 1e-6
 
-parallel_dirichlet = true
+parallel_dirichlet = false
 
 diagnose = true
 
@@ -155,3 +155,9 @@ function = `Nh`:function * Teprofile
 
 bndry_par_all = parallel_neumann_o1
 bndry_all = neumann
+
+[reactions]
+type = (
+        h + e -> h+ + 2e,     # Deuterium ionisation
+        #h + h+ -> h+ + h,     # Charge exchange
+       )

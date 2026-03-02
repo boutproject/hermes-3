@@ -32,7 +32,7 @@ def gridname(ny):
 
 
 ny = 256
-nout = 250
+nout = 100
 timestep = 1e6 / nout
 
 nproc = 1
