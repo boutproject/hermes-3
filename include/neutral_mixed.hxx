@@ -56,7 +56,7 @@ private:
   BoutReal diffusion_limit; ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;
 
-  Field3D debug; ///< Debug variable FIXME: remove
+  
 
   bool sheath_ydown, sheath_yup;
 
@@ -73,7 +73,11 @@ private:
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum;    ///< Evolve parallel momentum?
   bool normalise_sources;  ///< Normalise input sources?
+
+  // Temporary variables
+  Field3D debug; ///< Debug variable FIXME: remove
   bool double_count_lmax;  ///< Include neutral_lmax in Dmax and kappa_max as well as Dnn?
+  bool legacy_thermal_speed; ///< Use legacy definition of thermal speed in flux limiter?
 
   Field3D kappa_n, eta_n_unlimited;      ///< Neutral conduction and viscosity
   Field3D kappa_n_perp, eta_n_perp;      ///< Neutral conduction and viscosity

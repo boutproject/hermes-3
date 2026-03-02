@@ -142,6 +142,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                            .doc("Include neutral_lmax in Dmax and kappa_max as well as Dnn?")
                            .withDefault<bool>(true);
 
+  legacy_thermal_speed = options["legacy_thermal_speed"]
+                             .doc("Use legacy definition of thermal speed in flux limiter?")
+                             .withDefault<bool>(true);
+
   // Optionally output time derivatives
   output_ddt =
       options["output_ddt"].doc("Save derivatives to output?").withDefault<bool>(false);
@@ -458,30 +462,42 @@ void NeutralMixed::finally(const Options& state) {
 
   if (flux_limit > 0.0) {
     // Thermal velocity of neutrals
-    Field3D Vnth = sqrt(Tnlim / AA);
+    // Old formulation: 3D thermal speed for advection, that times 3/2 for heat flux
+    // New formulation: 1D particle flow in 3D maxwellian, 1D heat flow in 3D Maxwellian
+    // See Stangeby
 
-    
+    Field3D Vnth_pf = 0.0;
+    Field3D Vnth_hf = 0.0;
+
+    if (legacy_thermal_speed) {
+      Vnth_pf = sqrt(Tnlim / AA);
+      Vnth_hf = 3.0 / 2.0 * Vnth_pf;
+    } else {
+      Vnth_pf = 0.25 * sqrt(8.0 * Tnlim / (PI * AA));
+      Vnth_hf = sqrt(2.0 * Tnlim / (PI * AA));
+    }
+
     // Calculate maximum diffusivities
+    // double_count_lmax includes neutral_lmax also in the maximum Dnn and kappa,
+    // which is legacy behaviour and double counting.
+    // eta_max never had neutral_lmax added so is omitted
     if (double_count_lmax) {
-      Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
-      kappa_n_max_perp = flux_limit * (3.0 / 2.0 * Vnth * Nnlim)
+      Dmax = flux_limit * Vnth_pf / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
+      kappa_n_max_perp = flux_limit * (Vnth_hf * Nnlim)
                          / (abs(Grad_perp(Tn)) / Tnlim + 1. / neutral_lmax);
-      kappa_n_max_par = flux_limit * (3.0 / 2.0 * Vnth * Nnlim)
+      kappa_n_max_par = flux_limit * (Vnth_hf * Nnlim)
                         / (abs(Grad_par(Tn)) / Tnlim + 1. / neutral_lmax);
 
     } else {
-      Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)));
+      Dmax = flux_limit * Vnth_pf / (abs(Grad_perp(logPnlim)));
       kappa_n_max_perp =
-          flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_perp(Tn)) / Tnlim);
+          flux_limit * (Vnth_hf * Nnlim) / (abs(Grad_perp(Tn)) / Tnlim);
       kappa_n_max_par =
-          flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_par(Tn)) / Tnlim);
+          flux_limit * (Vnth_hf * Nnlim) / (abs(Grad_par(Tn)) / Tnlim);
     }
     
-
-    // Eta_max never had neutral_lmax added 
     eta_n_max_perp = flux_limit * Pnlim / abs(Grad_perp(Vn));
     eta_n_max_par = flux_limit * Pnlim / abs(Grad_par(Vn));
-
 
     // Apply limits
     static auto apply_limiter = [](BoutReal unlimited, BoutReal max) -> BoutReal {
