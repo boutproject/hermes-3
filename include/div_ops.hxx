@@ -588,6 +588,7 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
     // Use mid-point (cell boundary) averages
     if (flow_ylow.isAllocated()) {
       flow_ylow = emptyFrom(flow_ylow);
+      flow_ylow = 0.0;
     }
 
     ASSERT1(f_in.hasParallelSlices());
@@ -637,6 +638,14 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 
       if (coord->has_bndry_ydown[i] == true && bndry_flux == false) {
 	flux_down = 0.0;
+      }
+
+      if (coord->has_bndry_yup[i] == true && flow_ylow.isAllocated()) {
+	flow_ylow[i] = flux_up / coord->cellvolume[i];
+      }
+
+      if (coord->has_bndry_ydown[i] == true && flow_ylow.isAllocated()) {
+        flow_ylow[i] =	flux_down / coord->cellvolume[i];
       }
       
       result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
