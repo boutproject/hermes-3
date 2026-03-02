@@ -136,6 +136,12 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                         .doc("Set the time derivatives to zero?")
                         .withDefault<bool>(false);
 
+  // FIXME: Temporary options to enable legacy behaviour. Will be removed.
+
+  double_count_lmax = options["double_count_lmax"]
+                           .doc("Include neutral_lmax in Dmax and kappa_max as well as Dnn?")
+                           .withDefault<bool>(true);
+
   // Optionally output time derivatives
   output_ddt =
       options["output_ddt"].doc("Save derivatives to output?").withDefault<bool>(false);
@@ -454,36 +460,44 @@ void NeutralMixed::finally(const Options& state) {
     // Thermal velocity of neutrals
     Field3D Vnth = sqrt(Tnlim / AA);
 
-    // Apply flux limit to diffusion,
-    // using the local thermal speed and pressure gradient magnitude
-    Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn_unlimited[i] * Dmax[i] / (Dnn_unlimited[i] + Dmax[i]);
+    
+    // Calculate maximum diffusivities
+    if (double_count_lmax) {
+      Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
+      kappa_n_max_perp = flux_limit * (3.0 / 2.0 * Vnth * Nnlim)
+                         / (abs(Grad_perp(Tn)) / Tnlim + 1. / neutral_lmax);
+      kappa_n_max_par = flux_limit * (3.0 / 2.0 * Vnth * Nnlim)
+                        / (abs(Grad_par(Tn)) / Tnlim + 1. / neutral_lmax);
+
+    } else {
+      Dmax = flux_limit * Vnth / (abs(Grad_perp(logPnlim)));
+      kappa_n_max_perp =
+          flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_perp(Tn)) / Tnlim);
+      kappa_n_max_par =
+          flux_limit * (3.0 / 2.0 * Vnth * Nnlim) / (abs(Grad_par(Tn)) / Tnlim);
     }
+    
 
-    kappa_n_max_perp = flux_limit * (3.0 / 2.0 * Vnth * Nnlim)
-                       / (abs(Grad_perp(Tn)) / Tnlim + 1. / neutral_lmax);
-    kappa_n_max_par = flux_limit * (3.0 / 2.0 * Vnth * Nnlim)
-                      / (abs(Grad_par(Tn)) / Tnlim + 1. / neutral_lmax);
-
-    debug = abs(Grad_par(Tn));
-
-    BOUT_FOR(i, kappa_n_unlimited.getRegion("RGN_NOBNDRY")) {
-      kappa_n_perp[i] = kappa_n_unlimited[i] * kappa_n_max_perp[i]
-                        / (kappa_n_unlimited[i] + kappa_n_max_perp[i]);
-      kappa_n_par[i] = kappa_n_unlimited[i] * kappa_n_max_par[i]
-                       / (kappa_n_unlimited[i] + kappa_n_max_par[i]);
-    }
-
+    // Eta_max never had neutral_lmax added 
     eta_n_max_perp = flux_limit * Pnlim / abs(Grad_perp(Vn));
     eta_n_max_par = flux_limit * Pnlim / abs(Grad_par(Vn));
 
-    BOUT_FOR(i, eta_n_unlimited.getRegion("RGN_NOBNDRY")) {
-      eta_n_perp[i] = eta_n_unlimited[i] * eta_n_max_perp[i]
-                      / (eta_n_unlimited[i] + eta_n_max_perp[i]);
-      eta_n_par[i] =
-          eta_n_unlimited[i] * eta_n_max_par[i] / (eta_n_unlimited[i] + eta_n_max_par[i]);
+
+    // Apply limits
+    static auto apply_limiter = [](BoutReal unlimited, BoutReal max) -> BoutReal {
+      return unlimited * max / (unlimited + max);
+    };
+
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+        Dnn[i]        = apply_limiter(Dnn_unlimited[i],   Dmax[i]);
+        kappa_n_perp[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i]);
+        kappa_n_par[i]  = apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i]);
+        eta_n_perp[i]   = apply_limiter(eta_n_unlimited[i],   eta_n_max_perp[i]);
+        eta_n_par[i]    = apply_limiter(eta_n_unlimited[i],   eta_n_max_par[i]);
     }
+
+    debug = abs(Grad_par(Tn));
+
 
   } else {
     Dnn = Dnn_unlimited;
