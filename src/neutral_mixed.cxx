@@ -369,7 +369,7 @@ void NeutralMixed::finally(const Options& state) {
   TRACE("Neutral density");
   if (evolve_momentum) {
     if (!isMMS){
-      ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative);
+      ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
     } else {
       ddt(Nn) = -Div_par(Nn * Vn);
     }
