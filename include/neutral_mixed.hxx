@@ -60,6 +60,8 @@ private:
 
   BoutReal diffusion_limit; ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;
+  BoutReal flux_limiter_sharpness; ///< Sharpness of flux limiter transition
+  bool legacy_limiter_form; ///< Use legacy form of flux limiter rather than SOLPS-style
 
   bool sheath_ydown, sheath_yup;
 

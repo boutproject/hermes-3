@@ -124,8 +124,13 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                "same as perpendicular viscous limiter value.")
           .withDefault(flux_limit_visc_perp);
 
+  flux_limiter_sharpness = options["flux_limiter_sharpness"]
+                             .doc("Sharpness of flux limiter transition. Only used if "
+                                  "legacy_limiter_form is false. Default is 2.0")
+                             .withDefault(2.0);
+
   neutral_lmax = options["neutral_lmax"]
-                     .doc("Maximum length scale due to the present of walls.")
+                     .doc("Maximum length scale due to the presence of walls.")
                      .withDefault<BoutReal>(0.1)
                  / get<BoutReal>(alloptions["units"]["meters"]); // Normalised length
 
@@ -145,7 +150,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   collisionality_override =
       options["collisionality_override"]
           .doc(
-              "Paramter for overriding the neutral collision frequency in Dn for testing")
+              "Parameter for overriding the neutral collision frequency in Dn for testing")
           .withDefault(-1.0);
 
   normalise_sources = options["normalise_sources"]
@@ -178,6 +183,12 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
       options["legacy_thermal_speed"]
           .doc("Use legacy definition of thermal speed in flux limiter?")
           .withDefault<bool>(true);
+
+  legacy_limiter_form =
+      options["legacy_limiter_form"]
+          .doc("Use legacy form of flux limiter rather than SOLPS-style with sharpness parameter?")
+          .withDefault<bool>(true);
+
 
   // Optionally output time derivatives
   output_ddt =
@@ -533,16 +544,32 @@ void NeutralMixed::finally(const Options& state) {
     eta_n_max_par = flux_limit_visc_par * Pnlim / abs(Grad_par(Vn));
 
     // Apply limits
-    static auto apply_limiter = [](BoutReal unlimited, BoutReal max) -> BoutReal {
-      return unlimited * max / (unlimited + max);
+    static auto apply_limiter = [](BoutReal unlimited, BoutReal max,
+                                   BoutReal flux_limiter_sharpness,
+                                   bool legacy_limiter_form) -> BoutReal {
+      if (legacy_limiter_form) {
+
+        // Simple harmonic average
+        return unlimited * max / (unlimited + max);
+      } else {
+        // SOLPS style limiter
+        return unlimited
+               * pow(1.0 + pow(unlimited / max, flux_limiter_sharpness),
+                     -1.0 / flux_limiter_sharpness);
+      }
     };
 
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = apply_limiter(Dnn_unlimited[i], Dmax[i]);
-      kappa_n_perp[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i]);
-      kappa_n_par[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i]);
-      eta_n_perp[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i]);
-      eta_n_par[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_par[i]);
+      Dnn[i] = apply_limiter(Dnn_unlimited[i], Dmax[i], flux_limiter_sharpness,
+                             legacy_limiter_form);
+      kappa_n_perp[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i],
+                                      flux_limiter_sharpness, legacy_limiter_form);
+      kappa_n_par[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i],
+                                     flux_limiter_sharpness, legacy_limiter_form);
+      eta_n_perp[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i],
+                                    flux_limiter_sharpness, legacy_limiter_form);
+      eta_n_par[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_par[i],
+                                   flux_limiter_sharpness, legacy_limiter_form);
     }
 
     debug = abs(Grad_par(Tn));
