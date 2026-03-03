@@ -181,12 +181,14 @@ void Reaction::outputVars(Options& state) {
   }
 }
 
+///
 void Reaction::set_energy_channel_weight(const std::string& reactant_name,
                                          const std::string& product_name,
                                          BoutReal weight) {
   this->energy_channels[reactant_name][product_name] = weight;
 }
 
+///
 void Reaction::set_momentum_channel_weight(const std::string& reactant_name,
                                            const std::string& product_name,
                                            BoutReal weight) {
