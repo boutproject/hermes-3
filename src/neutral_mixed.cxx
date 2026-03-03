@@ -95,15 +95,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     }
   }
 
-  // Guard against accidentally setting flux_limit = true (parses as 1.0)
-  if (options.isSet("flux_limit")) {
-    const std::string raw = options["flux_limit"].as<std::string>();
-    if (raw == "true" || raw == "false") {
-      throw BoutException(
-          "flux_limit is no longer a boolean setting. Please use a numeric value.", raw);
-    }
-  }
-
   flux_limit_adv = options["flux_limit"]
                        .doc("Limit advective fluxes to fraction of thermal speed. <=0 "
                             "means no limits applied.")
