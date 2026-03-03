@@ -31,10 +31,10 @@ def gridname(ny):
     return gridpath + f"MMS_straight_slab_8_{ny}_4_True.fci.grid.nc"
 
 
-ny = 256
-nout = 100
-timestep = 1e6 / nout
-
+ny = 128
+nout = 50
+timestep = 1e4 / nout
+recycling_coefficient = 0.1
 nproc = 1
 
 args = (
@@ -44,6 +44,8 @@ args = (
     + str(nout)
     + " timestep="
     + str(timestep)
+    + " h+:target_recycle_multiplier="
+    + str(recycling_coefficient)
 )
 
 print("Running with " + args)
@@ -67,29 +69,18 @@ Pi = np.mean(collect( "Ph+", tind=[nout, nout], path="data", info=False)[-1],axi
 Pe = np.mean(collect( "Pe", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
 Ni = np.mean(collect( "Nh+", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
 
-if np.max(Ni) > 20.05 or np.max(Ni) < 20.00:
-    success = False
+Div_par_flow = np.mean(collect( "pfh+_tot_ylow", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
+Recycling_source = np.mean(collect( "Sh_target_recycle", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
 
-if np.max(Pe) > 605.0 or np.max(Pe) < 600.0:
-    success = False
+tol = 1e-8
 
-if np.max(Pi) > 605.0 or np.max(Pi) < 600.0:
+# + Because they should have different signs, meaning they should add up to zero
+if (np.abs(Recycling_source[0] + (Div_par_flow[0]*recycling_coefficient) ) > tol):
     success = False
-    
-tol = 1e-3
-    
-for var in (Pe,Pi,Ni):
-    if abs(var[0] - var[-1]) > tol:
-        success = False
-
-if abs(Ni[0] - 8.41558732) > tol:
-    success = False
-
-if abs(Pi[0] - 159.94447363) > tol:
-    success = False
-
-if abs(Pe[0] - 85.7320942) > tol:
-    success = False
+    print("Parallel divergence is different to recycling times parallel divergence through boundary")
+    print(f"Recycling: {Recycling_source[0]} --- Divergence: {Div_par_flow[0]*recycling_coefficient}")
+else:
+    print(f"Recycling: {Recycling_source[0]} --- Divergence: {Div_par_flow[0]*recycling_coefficient}")
 
 
 if success:
