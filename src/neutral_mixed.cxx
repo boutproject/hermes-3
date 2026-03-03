@@ -147,6 +147,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                            .doc("Include neutral gas heat conduction?")
                            .withDefault<bool>(true);
 
+  perp_ion_coupling = options["perp_ion_coupling"]
+                           .doc("Include coupling to ion perpendicular velocity?")
+                           .withDefault<bool>(true);
+
   collisionality_override =
       options["collisionality_override"]
           .doc(
@@ -809,47 +813,51 @@ void NeutralMixed::finally(const Options& state) {
 
   // Add the contribution of ion perp velocity (i.e. anomalous transport)
   // See eq 20 and 21 by Horsten et al., (2017)
-  const Options& allspecies = state["species"];
+  if (perp_ion_coupling) {
 
-  for (auto& kv : allspecies.getChildren()) {
-    // NOTE:: This is only true for d+ ions. How do we generalize?
-    //        How do we include the perpendicular ion velocity from other drifts?
+    
+    const Options& allspecies = state["species"];
 
-    const Options& species = kv.second;
+    for (auto& kv : allspecies.getChildren()) {
+      // NOTE:: This is only true for d+ ions. How do we generalize?
+      //        How do we include the perpendicular ion velocity from other drifts?
 
-    if ((kv.first == "e") or !species.isSet("charge")
-        or (fabs(get<BoutReal>(species["charge"])) < 1e-5)) {
-      continue; // Skip electrons and non-charged ions
-    }
+      const Options& species = kv.second;
 
-    // sources/sinks due to anomalous transport
-    if (species.isSet("anomalous_D")) {
-      const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
-
-      const Field3D Ni = get<Field3D>(species["density"]);
-      Field2D Ni2D = DC(Ni);
-
-      // Apply Neumann Y boundary condition, so no additional flux into boundary
-      // Note: Not setting radial (X) boundaries since those set radial fluxes
-      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-        Ni2D(r.ind, mesh->ystart - 1) = Ni2D(r.ind, mesh->ystart);
-      }
-      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-        Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
+      if ((kv.first == "e") or !species.isSet("charge")
+          or (fabs(get<BoutReal>(species["charge"])) < 1e-5)) {
+        continue; // Skip electrons and non-charged ions
       }
 
-      ddt(Nn) +=
-          Div_a_Grad_perp_upwind(Nn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
-      // NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the equilibrium
-      // value of Nn.
+      // sources/sinks due to anomalous transport
+      if (species.isSet("anomalous_D")) {
+        const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
 
-      ddt(Pn) +=
-          (5. / 3)
-          * Div_a_Grad_perp_upwind(Pn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        const Field3D Ni = get<Field3D>(species["density"]);
+        Field2D Ni2D = DC(Ni);
 
-      if (evolve_momentum) {
-        ddt(NVn) += Div_a_Grad_perp_upwind(
-            NVn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        // Apply Neumann Y boundary condition, so no additional flux into boundary
+        // Note: Not setting radial (X) boundaries since those set radial fluxes
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          Ni2D(r.ind, mesh->ystart - 1) = Ni2D(r.ind, mesh->ystart);
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
+        }
+
+        ddt(Nn) +=
+            Div_a_Grad_perp_upwind(Nn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        // NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the equilibrium
+        // value of Nn.
+
+        ddt(Pn) +=
+            (5. / 3)
+            * Div_a_Grad_perp_upwind(Pn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+
+        if (evolve_momentum) {
+          ddt(NVn) += Div_a_Grad_perp_upwind(
+              NVn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        }
       }
     }
   }
