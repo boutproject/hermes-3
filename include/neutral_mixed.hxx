@@ -61,7 +61,6 @@ private:
   BoutReal diffusion_limit; ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;
   BoutReal flux_limiter_sharpness; ///< Sharpness of flux limiter transition
-  
 
   bool sheath_ydown, sheath_yup;
 
@@ -78,14 +77,13 @@ private:
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum;    ///< Evolve parallel momentum?
   bool normalise_sources;  ///< Normalise input sources?
-  bool perp_ion_coupling; ///< Include coupling to ion perpendicular velocity?
+  bool perp_ion_coupling;  ///< Include coupling to ion perpendicular velocity?
 
   // Temporary variables
   Field3D debug;          ///< Debug variable FIXME: remove
   bool double_count_lmax; ///< Include neutral_lmax in Dmax and kappa_max as well as Dnn?
   bool legacy_thermal_speed; ///< Use legacy definition of thermal speed in flux limiter?
-  bool legacy_limiter_form; ///< Use legacy form of flux limiter rather than SOLPS-style
-
+  bool legacy_limiter_form;  ///< Use legacy form of flux limiter rather than SOLPS-style
 
   Field3D kappa_n, eta_n_unlimited;      ///< Neutral conduction and viscosity
   Field3D kappa_n_perp, eta_n_perp;      ///< Neutral conduction and viscosity

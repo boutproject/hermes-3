@@ -125,9 +125,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .withDefault(flux_limit_visc_perp);
 
   flux_limiter_sharpness = options["flux_limiter_sharpness"]
-                             .doc("Sharpness of flux limiter transition. Only used if "
-                                  "legacy_limiter_form is false. Default is 2.0")
-                             .withDefault(2.0);
+                               .doc("Sharpness of flux limiter transition. Only used if "
+                                    "legacy_limiter_form is false. Default is 2.0")
+                               .withDefault(2.0);
 
   neutral_lmax = options["neutral_lmax"]
                      .doc("Maximum length scale due to the presence of walls.")
@@ -148,14 +148,13 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                            .withDefault<bool>(true);
 
   perp_ion_coupling = options["perp_ion_coupling"]
-                           .doc("Include coupling to ion perpendicular velocity?")
-                           .withDefault<bool>(true);
+                          .doc("Include coupling to ion perpendicular velocity?")
+                          .withDefault<bool>(true);
 
-  collisionality_override =
-      options["collisionality_override"]
-          .doc(
-              "Parameter for overriding the neutral collision frequency in Dn for testing")
-          .withDefault(-1.0);
+  collisionality_override = options["collisionality_override"]
+                                .doc("Parameter for overriding the neutral collision "
+                                     "frequency in Dn for testing")
+                                .withDefault(-1.0);
 
   normalise_sources = options["normalise_sources"]
                           .doc("Normalise input sources?")
@@ -188,11 +187,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .doc("Use legacy definition of thermal speed in flux limiter?")
           .withDefault<bool>(true);
 
-  legacy_limiter_form =
-      options["legacy_limiter_form"]
-          .doc("Use legacy form of flux limiter rather than SOLPS-style with sharpness parameter?")
-          .withDefault<bool>(true);
-
+  legacy_limiter_form = options["legacy_limiter_form"]
+                            .doc("Use legacy form of flux limiter rather than "
+                                 "SOLPS-style with sharpness parameter?")
+                            .withDefault<bool>(true);
 
   // Optionally output time derivatives
   output_ddt =
@@ -815,7 +813,6 @@ void NeutralMixed::finally(const Options& state) {
   // See eq 20 and 21 by Horsten et al., (2017)
   if (perp_ion_coupling) {
 
-    
     const Options& allspecies = state["species"];
 
     for (auto& kv : allspecies.getChildren()) {
@@ -847,12 +844,12 @@ void NeutralMixed::finally(const Options& state) {
 
         ddt(Nn) +=
             Div_a_Grad_perp_upwind(Nn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
-        // NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the equilibrium
-        // value of Nn.
+        // NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the
+        // equilibrium value of Nn.
 
-        ddt(Pn) +=
-            (5. / 3)
-            * Div_a_Grad_perp_upwind(Pn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        ddt(Pn) += (5. / 3)
+                   * Div_a_Grad_perp_upwind(
+                       Pn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
 
         if (evolve_momentum) {
           ddt(NVn) += Div_a_Grad_perp_upwind(
