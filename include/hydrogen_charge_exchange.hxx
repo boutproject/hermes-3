@@ -9,74 +9,69 @@
 #include "reaction.hxx"
 
 /**
-* @brief Reaction component to handle Hydrogen isotope charge exchange.
-*        p + H(1s) -> H(1s) + p
-*        Templated on a char to allow 'h', 'd' and 't' to be treated with the same code
-*
-* @warning If this reaction is included then ion_neutral collisions should probably be
-disabled in the `collisions` component, to avoid double-counting.
+* @brief Reaction component to handle Hydrogen charge exchange.
 *
 * @tparam Isotope1 The isotope ('h', 'd' or 't') of the reactant atom
 * @tparam Isotope2 The isotope ('h', 'd' or 't') of the reactant ion
 *
-* i.e.
-* atomR    +   ionR    ->   ionP     +    atomP
-* Isotope1 + Isotope2+ -> Isotope1+  +  Isotope2
-*
 * @details
-* Calculate the charge exchange cross-section for a reaction
-*   atomR + ionR -> atomP + ionP
-*   and handle (via Reaction::transform_impl) transfer of mass, momentum and energy from:
-*   atomR -> ionP, ionR -> atomP
+* Implements reactions between Hydrogen isotopes of the form
+* `Isotope1 + Isotope2+ -> Isotope1+ + Isotope2` where `Isotope1` and `Isotope2` are char
+template parameters ('h', 'd' or 't').
 *
-* Assumes that both atomR and ionR have:
+* Rate coefficients are computed from **Amjuel H.3 3.1.8 (p43)** *p + H(1s) -> H(1s) + p*,
+using an effective temperature; see RateHelper::calc_Teff.
+*
+* Handles transfer of mass, momentum and energy from
+`Isotope1` to `Isotope1+` and `Isotope2+` to `Isotope2` (via Reaction::transform_impl).
+* HydrogenChargeExchange::transform_additional then also adds frictional heating to the
+energy source and sets CX collision frequencies for `Isotope1` and `Isotope2+`, which are
+calculated in `Reaction::transform` via the `RateHelper` class.
+*
+* **Inputs and outputs**
+*
+* It is assumed that both reactants have:
 *   - AA
 *   - density
 *   - velocity
 *   - temperature
 *
-* Rate coefficients are computed from Reaction 3.1.8 from Amjuel (p43) using an effective
-* temperature; see RateHelper::calc_Teff.
-*
-* Sets in all species (via Reaction::transform_impl and transform_additional):
-*   - density_source     [If atomR != atomP or ionR != ionP]
+* The component sets, in all species:
+*   - density_source     (If `Isotope1` != `Isotope2`)
 *   - momentum_source
 *   - energy_source
 *
-* Most of the source terms are handled by the Reaction base class.
-* The transform_additional method in this class is used to add frictional heating to the
-* energy source. transform_additional also sets collision_frequencies for atomR and ionR,
-* which are calculated in Reaction::transform via the RateHelper class.
+* **Diagnostics**
 *
-* Diagnostics
-* -----------
+* If `diagnose = true` is set in the options, then the following diagnostics are saved:
+*   - `F<Isotope1><Isotope2>+_cx` (e.g. Fhd+_cx): the momentum added to `Isotope1` atoms
+due to charge exchange with `Isotope2` ions. There is a corresponding loss of momentum for
+the `Isotope1` ions:
+*       - `d/dt(NVh)  = ... + Fhd+_cx`   (Atom momentum source)
+*       - `d/dt(NVh+) = ... - Fhd+_cx`   (Ion momentum sink)
+*   - `E<Isotope1><Isotope2>+_cx`: the energy added to `Isotope1` atoms due to charge
+exchange with `Isotope2` ions. This contributes to two pressure equations
+*       - `d/dt(3/2 Ph)  = ... + Ehd+_cx` (Atom energy source)
+*       - `d/dt(3/2 Ph+) = ... - Ehd+_cx` (Ion energy sink)
 *
-* If diagnose = true is set in the options, then the following diagnostics are saved:
-*   - F<Isotope1><Isotope2>+_cx  (e.g. Fhd+_cx) the momentum added to Isotope1 atoms due
-*                                due to charge exchange with Isotope2 ions.
-*                                There is a corresponding loss of momentum for the
-*                                Isotope1 ions d/dt(NVh)  = ... + Fhd+_cx   // Atom
-*                                momentum source d/dt(NVh+) = ... - Fhd+_cx   // Ion
-*                                momentum sink
-*   - E<Isotope1><Isotope2>+_cx  Energy added to Isotope1 atoms due to charge exchange
-*   with
-*                                Isotope2 ions. This contributes to two pressure
-*                                equations d/dt(3/2 Ph)  = ... + Ehd+_cx d/dt(3/2 Ph+) =
-*                                ... - Ehd+_cx
+* If `Isotope1 != Isotope2` then there is also the source of energy for `Isotope2` atoms
+and a source of particles:
+*   - `F<Isotope2>+<Isotope1>_cx`: Source of momentum for `Isotope2` ions, sink for
+`Isotope2` atoms
+*   - `E<Isotope2>+<Isotope1>_cx`: Source of energy for `Isotope2` ions, sink for
+`Isotope2` atoms
+*   - `S<Isotope1><Isotope2>+_cx`: Source of `Isotope1` atoms due to charge exchange with
+`Isotope2` ions
 *
-* If Isotope1 != Isotope2 then there is also the source of energy for Isotope2 atoms
-* and a source of particles:
-*   - F<Isotope2>+<Isotope1>_cx  Source of momentum for Isotope2 ions, sink for Isotope2
-*   atoms
-*   - E<Isotope2>+<Isotope1>_cx  Source of energy for Isotope2 ions, sink for Isotope2
-*   atoms
-*   - S<Isotope1><Isotope2>+_cx  Source of Isotope1 atoms due to charge exchange with
-*   Isotope2 ions
-*                                Note: S<Isotope2><Isotope1>+_cx =
-*                                -S<Isotope1><Isotope2>+_cx For example Shd+_cx
-*                                contributes to four density equations: d/dt(Nh)  = ...
-*                                + Shd+_cx d/dt(Nh+) = ... - Shd+_cx d/dt(Nd)  = ... -
-*                                Shd+_cx d/dt(Nd+) = ... + Shd+_cx
+* *N.B.* `S<Isotope2><Isotope1>+_cx = -S<Isotope1><Isotope2>+_cx`.
+* For example, `Shd+_cx` contributes to four density equations:
+* - `d/dt(Nh)  = ... + Shd+_cx`
+* - `d/dt(Nh+) = ... - Shd+_cx`
+* - `d/dt(Nd)  = ... - Shd+_cx`
+* - `d/dt(Nd+) = ... + Shd+_cx`
+*
+* @warning If this reaction is included then ion_neutral collisions should probably be
+disabled in the `collisions` component, to avoid double-counting.
 */
 
 template <char Isotope1, char Isotope2>
