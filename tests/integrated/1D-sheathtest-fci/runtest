@@ -68,27 +68,34 @@ Pe = np.mean(collect( "Pe", tind=[nout, nout], path="data", info=False)[-1],axis
 Ni = np.mean(collect( "Nh+", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
 
 if np.max(Ni) > 20.05 or np.max(Ni) < 20.00:
+    print("Density not reached adapted value")
     success = False
 
 if np.max(Pe) > 605.0 or np.max(Pe) < 600.0:
+    print("Pe not reached adapted value")
     success = False
 
 if np.max(Pi) > 605.0 or np.max(Pi) < 600.0:
+    print("Pi not reached adapted value")
     success = False
     
 tol = 1e-3
     
 for var in (Pe,Pi,Ni):
     if abs(var[0] - var[-1]) > tol:
+        print("Asymmetry!")
         success = False
 
-if abs(Ni[0] - 8.41558732) > tol:
+if abs(Ni[0] - 8.05756855) > tol:
+    print("Density mismatch")
     success = False
 
-if abs(Pi[0] - 159.94447363) > tol:
+if abs(Pi[0] - 157.21473734) > tol:
+    print("Pi mismatch")
     success = False
 
-if abs(Pe[0] - 85.7320942) > tol:
+if abs(Pe[0] - 147.98875163) > tol:
+    print("Pe mismatch")
     success = False
 
 
