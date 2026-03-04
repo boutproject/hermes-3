@@ -895,7 +895,6 @@ For a configuration
 
 the stoichiometric matrix would be:
 
-
 .. _fig-stoichiometric_matrix_eg:
 .. figure:: figs/stoichiometric_matrix_eg.*
    :alt: Example of a stoichiometric matrix for the reactions configured in :numref:code-reactions_config_eg
@@ -1011,6 +1010,7 @@ outgoing neutral:
    exactly, but in future they could be made configurable to allow users to experiment with tuning
    the contribution of particular species to reaction source terms.
 
+
 Source term calculation
 ```````````````````````
 
@@ -1038,6 +1038,7 @@ over the species population changes provided by :code:`ReactionParser`.
    \rightarrow \textrm{b} + \textrm{a}` into :math:`\textrm{a} + \textrm{b} \rightarrow \textrm{b}'
    + \textrm{a}'`, allowing the momentum and energy transfer to be computed as usual, before mapping
    sources back to the correct species.
+
 
 Adding new reaction subclasses
 ``````````````````````````````
@@ -1069,6 +1070,10 @@ Any sources associated with the reaction that are not captured by
    Subclasses that inherit from `AmjuelReaction` need only specify the name of a json file (in
    :file:`./json_database`) at construction. Amjuel coefficients will then be read and the rate
    calculated accordingly.
+
+
+Adding new reaction diagnostics
+```````````````````````````````
 
 New diagnostics are configured by making calls to `add_diagnostic<Reaction::add_diagnostic>` in the
 subclass constructor; e.g. for a density source associated with the neutral reactant in charge
