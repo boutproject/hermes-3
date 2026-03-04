@@ -32,8 +32,8 @@ def gridname(ny):
 
 
 ny = 128
-nout = 50
-timestep = 1e4 / nout
+nout = 10
+timestep = 1e5 / nout
 recycling_coefficient = 0.1
 nproc = 1
 
