@@ -973,19 +973,17 @@ are proportional to the total momentum and energy of all consumed reactants (:ma
 energy between products. The default is to weight by mass for momentum, and by population change
 (number) for energy, that is
 
-.. _eqn-reactions_momentum_splitting:
 .. math::
-   \begin{align*}
+   \begin{aligned}
       S_{G,s} &= \frac{\Delta M_s}{\Delta M}             \\
                &= \frac{C_s m_s}{\sum_{p'}\left(C_{p'} m_{p'}\right)}
-   \end{align*}
+   \end{aligned}
 
-.. _fig-reactions_energy_splitting_eqn:
 .. math::
-   \begin{align*}
+   \begin{aligned}
      S_{W,s} &= \frac{\Delta N_s}{\Delta N}             \\
              &= \frac{C_s}{\sum_{p'}C_{p'}}
-   \end{align*}
+   \end{aligned}
 
 where :math:`m` are species masses, :math:`C` are population changes and subscripts :math:`s` and
 :math:`p'` refer to the target species and to a *produced* species (:math:`C > 0`) respectively.
