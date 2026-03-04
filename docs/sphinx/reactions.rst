@@ -49,38 +49,38 @@ Transfer channels
 
 Reactions typically convert species from one to another, leading to
 a transfer of mass momentum and energy. For a reaction converting
-species :math:`a` to species :math:`b` at rate :math:`R` (units
+species :math:`a` to species :math:`b` at rate :math:`S` (units
 of events per second per volume) we have transfers:
 
 .. math::
 
    \begin{aligned}
-   \frac{\partial}{\partial t} n_a =& \ldots - R \\
-   \frac{\partial}{\partial t} n_b =& \ldots + R \\
+   \frac{\partial}{\partial t} n_a =& \ldots - S \\
+   \frac{\partial}{\partial t} n_b =& \ldots + S \\
    \frac{\partial}{\partial t}\left( m n_a u_a\right) =& \ldots + F_{ab} \\
    \frac{\partial}{\partial t}\left( m n_a u_a\right) =& \ldots + F_{ba} \\
-   \frac{\partial}{\partial t}\left( \frac{3}{2} p_a \right) =& \ldots - F_{ab}u_a + W_{ab} - \frac{1}{2}mRu_a^2 \\
-   \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + W_{ba} + \frac{1}{2}mRu_b^2
+   \frac{\partial}{\partial t}\left( \frac{3}{2} p_a \right) =& \ldots - F_{ab}u_a + E_{ab} - \frac{1}{2}mSu_a^2 \\
+   \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + E_{ba} + \frac{1}{2}mSu_b^2
    \end{aligned}
    
 where both species have the same mass: :math:`m_a = m_b = m`. In the
 pressure equations the :math:`-F_{ab}u_a` comes from splitting the
-kinetic and thermal energies; :math:`W_{ab}=-W_{ba}` is the energy
+kinetic and thermal energies; :math:`E_{ab}=-E_{ba}` is the energy
 transfer term that we need to find; The final term balances the loss
 of kinetic energy at fixed momentum due to a particle source or
 sink.
 
-The momentum transfer :math:`F_{ab}=-F{ba}` is the momentum carried
-by the converted ions: :math:`F_{ab}=-m R u_a`. To find
-:math:`W_{ab}` we note that for :math:`p_a = 0` the change in pressure
-must go to zero: :math:`-F_{ab}u_a + W_{ab} -\frac{1}{2}mRu_a^2 = 0`.
+The momentum transfer :math:`F_{ab}=-F_{ba}` is the momentum carried
+by the converted ions: :math:`F_{ab}=-m S u_a`. To find
+:math:`E_{ab}` we note that for :math:`p_a = 0` the change in pressure
+must go to zero: :math:`-F_{ab}u_a + E_{ab} -\frac{1}{2}mSu_a^2 = 0`.
 
 .. math::
 
    \begin{aligned}
-   W_{ab} =& F_{ab}u_a + \frac{1}{2}mRu_a^2 \\
-   =& - mR u_a^2 + \frac{1}{2}mRu_a^2\\
-   =& -\frac{1}{2}mRu_a^2
+   E_{ab} =& F_{ab}u_a + \frac{1}{2}mSu_a^2 \\
+   =& - mS u_a^2 + \frac{1}{2}mSu_a^2\\
+   =& -\frac{1}{2}mSu_a^2
    \end{aligned}
 
 Substituting into the above gives:
@@ -88,9 +88,9 @@ Substituting into the above gives:
 .. math::
 
    \begin{aligned}
-   \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + W_{ba} + \frac{1}{2}mRu_b^2 \\
-   =& \ldots - mRu_au_b + \frac{1}{2}mRu_a^2 + \frac{1}{2}mRu_a^2 \\
-   =& \ldots + \frac{1}{2}mR\left(u_a - u_b\right)^2
+   \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + E_{ba} + \frac{1}{2}mSu_b^2 \\
+   =& \ldots - mSu_au_b + \frac{1}{2}mSu_a^2 + \frac{1}{2}mSu_a^2 \\
+   =& \ldots + \frac{1}{2}mS\left(u_a - u_b\right)^2
    \end{aligned}
 
 This has the property that the change in pressure of both species is

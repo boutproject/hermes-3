@@ -931,7 +931,7 @@ in `Reaction::transform_impl`.
 The reaction rate is calculated as
 
 .. math::
-   R &= M \langle\sigma_v\rangle \\
+   K &= M \langle\sigma_v\rangle \\
      &= \prod_{r} n_r \langle\sigma_v\rangle
 
 where :math:`\langle\sigma_v\rangle` is the reaction cross section and :math:`M` is called the *mass
@@ -941,48 +941,48 @@ The density source for a species :math:`s` follows directly from the rate:
 
 .. _fig-reactions_dens_src_eqn:
 .. math::
-   \frac{\partial n_s}{\partial t} = C_s R
+   F = C_s K
 
 where :math:`C_s` is the population change for species :math:`s` (from the stoichiometric matrix)
-and :math:`R` is the reaction rate calculated above. The momentum (:math:`G`) and energy (:math:`W`)
-sources associated with population change of a species depend on whether the reaction in question is
-a net consumer (:math:`C_s < 0`) or a net producer (:math:`C_s > 0`) of the species:
+and :math:`K` is the reaction rate calculated above. The momentum source (:math:`F`) and energy
+source (:math:`E`) associated with population change of a species depend on whether the reaction in
+question is a net consumer (:math:`C_s < 0`) or a net producer (:math:`C_s > 0`) of the species:
 
 .. math::
-   \frac{\partial G_s}{\partial t} =
+   F =
       \begin{cases}
-         C_s R G_s                                      & \textrm{for}\ C_s < 0 \\
-         S_{G,s} R \sum_{r'} \left(-C_{r'}G_{r'}\right) & \textrm{for}\ C_s > 0 \\
+         C_s K (NV)_s                                      & \textrm{for}\ C_s < 0 \\
+         f_{NV,s} K \sum_{r'} -C_{r'}(NV)_{r'} & \textrm{for}\ C_s > 0 \\
          0                                              & \textrm{otherwise}    \\
       \end{cases}
 
 .. math::
-   \frac{\partial W_s}{\partial t} =
+   E =
       \begin{cases}
-         C_s R W_s                                      & \textrm{for}\ C_s < 0 \\
-         S_{W,s} R \sum_{r'} \left(-C_{r'}W_{r'}\right) & \textrm{for}\ C_s > 0 \\
-         0                                              & \textrm{otherwise}    \\
+         C_s K \mathcal{E}_s                                                & \textrm{for}\ C_s < 0 \\
+         f_{\mathcal{E},s} K \sum_{r'} -C_{r'}\mathcal{E}_{r'} & \textrm{for}\ C_s > 0 \\
+         0                                                                  & \textrm{otherwise}    \\
       \end{cases}
 
 If the species is consumed, it has negative sources proportional to its current momentum
-(:math:`G_s`) and energy (:math:`W_s`). If the species is produced, it has positive sources, which
+(:math:`{NV}_s`) and energy (:math:`\mathcal{E}_s`). If the species is produced, it has positive sources, which
 are proportional to the total momentum and energy of all consumed reactants (:math:`r'`; implying
 :math:`C_r < 0`).
 
-:math:`S_{G,s}` and :math:`S_{W,s}` are weights / splitting factors used to distribute momentum and
+:math:`f_{NV,s}` and :math:`f_{\mathcal{E},s}` are weights / splitting factors used to distribute momentum and
 energy between products. The default is to weight by mass for momentum, and by population change
 (number) for energy, that is
 
 .. math::
    \begin{aligned}
-      S_{G,s} &= \frac{\Delta M_s}{\Delta M}             \\
-               &= \frac{C_s m_s}{\sum_{p'}\left(C_{p'} m_{p'}\right)}
+      f_{NV,s} &= \frac{\Delta M_s}{\Delta M} \\
+              &= \frac{C_s m_s}{\sum_{p'}C_{p'} m_{p'}}
    \end{aligned}
 
 .. math::
    \begin{aligned}
-     S_{W,s} &= \frac{\Delta N_s}{\Delta N}             \\
-             &= \frac{C_s}{\sum_{p'}C_{p'}}
+     f_{\mathcal{E},s} &= \frac{\Delta N_s}{\Delta N} \\
+                       &= \frac{C_s}{\sum_{p'}C_{p'}}
    \end{aligned}
 
 where :math:`m` are species masses, :math:`C` are population changes and subscripts :math:`s` and
