@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import shutil
 import zipfile
 import hashlib
+import os
 from pathlib import Path
 import urllib.request
 import xhermes
@@ -94,7 +95,11 @@ if not debug:
     if not Path("hermes-3").is_file():
         shell("ln -s ../../../hermes-3 hermes-3")
 
-    runcmd = getmpirun().split(" ")[0] + " --oversubscribe -np"
+    runcmd = getmpirun().split(" ")[0] + " -np"
+
+    # Allow oversubscription for OpenMPI via env var (silently ignored by MPICH,
+    # which does not enforce slot limits and does not support --oversubscribe)
+    os.environ["OMPI_MCA_rmaps_base_oversubscribe"] = "yes"
 
     s, out = launch_safe("./hermes-3 -d data", runcmd=runcmd, nproc=10, pipe=True)
 
