@@ -32,7 +32,7 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
 
 void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   GuardedOptions allspecies = state["species"];
-  
+  GuardedOptions electrons = allspecies["e"];
   // Particle diffusion coefficient
   // The only term here comes from the resistive drift
 
