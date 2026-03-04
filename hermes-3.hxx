@@ -29,7 +29,7 @@ class Hermes;
 #include "include/component_scheduler.hxx"
 
 #include <bout/yboundary_regions.hxx>
-extern YBoundary yboundary;
+
 
 class Hermes : public PhysicsModel {
 public:
@@ -49,7 +49,7 @@ protected:
 private:
   /// Organises and schedules model components
   std::unique_ptr<ComponentScheduler> scheduler;
-
+  YBoundary yboundary;
   /// Stores the dimensional units
   Options units;
 

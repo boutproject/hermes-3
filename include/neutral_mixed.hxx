@@ -11,7 +11,7 @@
 #include "component.hxx"
 #include <bout/yboundary_regions.hxx>
 
-extern YBoundary yboundary;
+
 
 /// Evolve density, parallel momentum and pressure
 /// for a neutral gas species with cross-field diffusion
@@ -36,7 +36,7 @@ struct NeutralMixed : public Component {
   void precon(const Options &state, BoutReal gamma) override;
 private:
   std::string name;  ///< Species name
-  
+  YBoundary yboundary;
   std::shared_ptr<FCI::dagp_fv> dagp;
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity

@@ -5,7 +5,7 @@
 #include "component.hxx"
 #include <bout/yboundary_regions.hxx>
 
-extern YBoundary yboundary;
+
 
 /// Convert fluxes of species at boundaries
 ///
@@ -42,7 +42,7 @@ struct RecyclingFCI : public Component {
   void outputVars(Options &state) override;
 
 private:
-
+  YBoundary yboundary;
   struct RecycleChannel {
     std::string from; ///< The species name to recycle
     std::string to;   ///< Species to recycle to
