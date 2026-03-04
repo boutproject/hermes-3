@@ -945,7 +945,7 @@ The density source for a species :math:`s` follows directly from the rate:
 
 where :math:`C_s` is the population change for species :math:`s` (from the stoichiometric matrix)
 and :math:`K` is the reaction rate calculated above. The momentum source (:math:`F`) and energy
-source (:math:`E`) associated with population change of a species depend on whether the reaction in
+source (:math:`E`) associated with a species population change depend on whether the reaction in
 question is a net consumer (:math:`C_s < 0`) or a net producer (:math:`C_s > 0`) of the species:
 
 .. math::

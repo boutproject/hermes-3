@@ -261,7 +261,7 @@ ionisation is calculated using the AMJUEL rate H.10 2.1.5. The equivalent rate
 for recombination is H.10 2.1.8.
 
 The code to calculate the charge exchange rates is in
-:file:`hydrogen_charge_exchange.[ch]xx`. This implements reaction H.3 3.1.8 from
+:file:`hydrogen_charge_exchange.hxx`. This implements reaction H.3 3.1.8 from
 Amjuel (p43), scaled to different isotope masses and finite neutral
 particle temperatures by using the effective temperature (Amjuel p43):
 
@@ -273,7 +273,7 @@ particle temperatures by using the effective temperature (Amjuel p43):
 The effective hydrogenic ionisation rates are calculated using Amjuel
 reaction H.4 2.1.5, by D.Reiter, K.Sawada and T.Fujimoto (2016).
 Effective recombination rates, which combine radiative and 3-body contributions,
-are calculated using Amjuel reaction 2.1.8. 
+are calculated using Amjuel reaction 2.1.8.
 
 .. doxygenstruct:: HydrogenChargeExchange
    :members:
