@@ -826,6 +826,7 @@ int main(int argc, char** argv) {
     const int npart_per_cell =
         Options::root()["VANTAGE_reactions"]["npart_per_cell"].withDefault(1);
 
+
     // Plasma parameters
     const BoutReal T_background = opt["VANTAGE_reactions"]["T_background"].withDefault(1.0);
     const BoutReal N_background = opt["VANTAGE_reactions"]["N_background"].withDefault(1.0);
@@ -833,10 +834,17 @@ int main(int argc, char** argv) {
     const BoutReal Vy_background = opt["VANTAGE_reactions"]["Vy_background"].withDefault(0.0);
     const std::vector<BoutReal> V_background = {Vx_background, Vy_background};
 
+    // Reaction rates
+    const REAL iz_rate = Options::root()["VANTAGE_reactions"]["iz_rate"].withDefault(1.0);
+    const REAL rec_rate = Options::root()["VANTAGE_reactions"]["rec_rate"].withDefault(1.0);
+
     // Other settings
     const int ndim = 2;
     const REAL dt = Options::root()["neso_particles"]["dt"].withDefault(0.01);
     const int nsteps = Options::root()["neso_particles"]["nsteps"].withDefault(10);
+    const int rng_samples = Options::root()["VANTAGE_reactions"]["rng_samples"]
+                                .docs("Number of RNG samples to prepare per-particle")
+                                .withDefault(40);
     
     BoutReal sim_time = 0.0;
     Field2D ion_density = Field2D(0.0, bout_mesh);
