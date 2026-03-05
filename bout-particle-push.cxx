@@ -834,17 +834,20 @@ int main(int argc, char** argv) {
     const BoutReal Vy_background = opt["VANTAGE_reactions"]["Vy_background"].withDefault(0.0);
     const std::vector<BoutReal> V_background = {Vx_background, Vy_background};
 
-    // Reaction rates
+    // Reaction settings
     const REAL iz_rate = Options::root()["VANTAGE_reactions"]["iz_rate"].withDefault(1.0);
     const REAL rec_rate = Options::root()["VANTAGE_reactions"]["rec_rate"].withDefault(1.0);
+    const BoutReal rec_markers_per_cell =
+        Options::root()["VANTAGE_reactions"]["rec_markers_per_cell"].withDefault(1000);
 
     // Other settings
     const int ndim = 2;
     const REAL dt = Options::root()["neso_particles"]["dt"].withDefault(0.01);
     const int nsteps = Options::root()["neso_particles"]["nsteps"].withDefault(10);
     const int rng_samples = Options::root()["VANTAGE_reactions"]["rng_samples"]
-                                .docs("Number of RNG samples to prepare per-particle")
+                                .doc("Number of RNG samples to prepare per-particle")
                                 .withDefault(40);
+    
 
     BoutReal sim_time = 0.0;
     Field2D ion_density = Field2D(0.0, bout_mesh);
@@ -968,11 +971,7 @@ int main(int argc, char** argv) {
     //
 
     // Options and constants
-    const BoutReal rec_markers_per_cell =
-        Options::root()["VANTAGE_reactions"]["rec_markers_per_cell"].withDefault(1000);
-    const BoutReal rec_rate =
-        Options::root()["VANTAGE_reactions"]["rec_rate"].withDefault(1.0);
-    auto rec_rate_data = FixedRateData(rec_rate);
+    
 
     // Make new particle group just for the markers
     auto marker_group =
