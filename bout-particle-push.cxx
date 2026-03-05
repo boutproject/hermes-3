@@ -782,14 +782,7 @@ int main(int argc, char** argv) {
   output << "Begin particle push \n";
   // get data from BOUT.inp to assign particle weights as a fn of x,y
   auto& opt = Options::root();
-  Field2D initial_neutral_density{bout_mesh};
-  initial_neutral_density = opt["VANTAGE_reactions"]["initial_neutral_density"].as<Field2D>();
 
-  BoutReal T_background = opt["VANTAGE_reactions"]["T_background"].withDefault(1.0);
-  BoutReal N_background = opt["VANTAGE_reactions"]["N_background"].withDefault(1.0);
-  BoutReal Vx_background = opt["VANTAGE_reactions"]["Vx_background"].withDefault(0.0);
-  BoutReal Vy_background = opt["VANTAGE_reactions"]["Vy_background"].withDefault(0.0);
-  std::vector<BoutReal> V_background = {Vx_background, Vy_background};
 
   /*
    *
@@ -806,11 +799,24 @@ int main(int argc, char** argv) {
    *
    */
   {
-    const int ndim = 2;
+    // Initial neutral parameters
+    Field2D initial_neutral_density{bout_mesh};
+    initial_neutral_density = opt["mesh"]["initial_neutral_density"].as<Field2D>();
     const int npart_per_cell =
-        Options::root()["neso_particles"]["npart_per_cell"].withDefault(1);
+        Options::root()["VANTAGE_reactions"]["npart_per_cell"].withDefault(1);
+
+    // Plasma parameters
+    const BoutReal T_background = opt["VANTAGE_reactions"]["T_background"].withDefault(1.0);
+    const BoutReal N_background = opt["VANTAGE_reactions"]["N_background"].withDefault(1.0);
+    const BoutReal Vx_background = opt["VANTAGE_reactions"]["Vx_background"].withDefault(0.0);
+    const BoutReal Vy_background = opt["VANTAGE_reactions"]["Vy_background"].withDefault(0.0);
+    const std::vector<BoutReal> V_background = {Vx_background, Vy_background};
+
+    // Other settings
+    const int ndim = 2;
     const REAL dt = Options::root()["neso_particles"]["dt"].withDefault(0.01);
     const int nsteps = Options::root()["neso_particles"]["nsteps"].withDefault(10);
+    
     BoutReal sim_time = 0.0;
     Field2D ion_density = Field2D(0.0, bout_mesh);
     Field2D neutral_density = Field2D(0.0, bout_mesh);
