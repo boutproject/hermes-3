@@ -799,6 +799,28 @@ int main(int argc, char** argv) {
    *
    */
   {
+
+    // Normalisations
+    //  TODO: Implement real normalisation consistent with Hermes-3
+    //  TODO: Normalise DMPlex
+    //  rho_s0: length [m]
+    //  Nnorm: density [m^-3]
+    //  N_w: neutral particle density per unit weight [m^-3 (??)]
+
+    // Map needed to pass all norms to functions
+    std::map<std::string, BoutReal> norms = {
+        {"rho_s0", 1.0},
+        {"Nnorm", 1.0},
+        {"N_w",
+         Options::root()["neso_particles"]["N_w"]
+             .doc("Normalisation parameter: neutral particle density per unit weight")
+             .withDefault(2.0)}};
+
+    // Also unpack for use in this scope.
+    const BoutReal rho_s0 = norms["rho_s0"];
+    const BoutReal Nnorm = norms["Nnorm"];
+    const BoutReal N_w = norms["N_w"];
+
     // Initial neutral parameters
     Field2D initial_neutral_density{bout_mesh};
     initial_neutral_density = opt["mesh"]["initial_neutral_density"].as<Field2D>();
@@ -841,13 +863,7 @@ int main(int argc, char** argv) {
         Options::root()["neso_particles"]["cell_centre_relative_tolerance"].withDefault(0.0));
     }
 
-    // Normalisation! FIXME: Need to normalise the dmplex, and then set these
-    // to Hermes-3 normalisation.
 
-    // Put into the options tree, so quantities can be normalised
-    // when creating components
-    std::map<std::string, double> norms;
-    norms["length"] = 1.0;
 
     // create a Reactions particle spec
     auto particle_spec_builder = ParticleSpecBuilder(ndim);
@@ -983,11 +999,6 @@ int main(int argc, char** argv) {
     // Get the total volume of the rank, total volume of domain and array of cell
     auto [V_tot_local, V_tot_global, V_cells] =
         calc_V_tot_local(marker_group->sycl_target, neso_mesh, norms);
-
-    output << "\n***********************************************\n";
-    output << fmt::format("Total volume on rank {} is {} \n", mpi_rank, V_tot_local);
-    output << fmt::format("Total volume globally is {} \n", V_tot_global);
-    output << "***********************************************\n\n";
 
     
     // Add particle property: number of particles in the local cell
