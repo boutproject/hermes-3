@@ -319,12 +319,12 @@ void NeutralMixed::finally(const Options& state) {
   mesh->communicate(Dnn);
   Dnn.applyParallelBoundary("parallel_neumann_o1");
   
-  
+  Dnn = floor(Dnn, 1e-10);
   
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
   DnnPn = Dnn * Pnlim;
-  DnnNVn = Dnn * NVn;
+  DnnNVn = Dnn * Nnlim * Vn;
 
   if (!isMMS && parallel_dirichlet) {
     yboundary.iter_pnts([&](auto& pnt) {
@@ -343,7 +343,7 @@ void NeutralMixed::finally(const Options& state) {
   // Sound speed appearing in Lax flux for advection terms
   sound_speed = 0;
   if (lax_flux) {
-    sound_speed = sqrt(Tn * (5. / 3) / AA);
+    sound_speed = sqrt(Tnlim * (5. / 3) / AA);
   }
 
   if (isMMS) {
