@@ -523,16 +523,6 @@ void NeutralMixed::finally(const Options& state) {
   }
 
 
-  //--------------------------------------------------------------------------------------------------------------------------------
-
-  BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
-    if ((Pn[i] < pressure_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
-      ddt(Pn)[i] = 0.0;
-    }
-    if ((Nn[i] < density_floor * 1e-2) && (ddt(Nn)[i] < 0.0)) {
-      ddt(Nn)[i] = 0.0;
-    }
-  }
 
   if (freeze_low_density) {
     // Apply a factor to time derivatives in low density regions.
