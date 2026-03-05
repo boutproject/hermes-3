@@ -1,8 +1,9 @@
 # Build as "hermes-3-builder"
 # with sudo docker build -f docker/hermes-3-builder.dockerfile -t hermes-3-builder .
 
-# Base image is ubuntu 24.04 with spack 1.0 installed
-FROM spack/ubuntu-noble:1.0 AS builder
+# Use a spack image with a pinned SHA - currently points to develop between the 1.1 and 1.2 releases.
+# N.B. The spack 1.1 release has a bug in the PETSc package that causes this build to fail 
+FROM spack/ubuntu-noble@sha256:d7784a53424fda1c528d8afe837841a6947e46b55fd4380779656d4b276f63a0 AS builder
 # Make sure that spack is available if we need to launch a terminal in the image
 RUN spack_path=$(which spack) && \
     echo "alias spack=\"${spack_path}\"" >> /root/.bashrc
