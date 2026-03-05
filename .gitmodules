@@ -24,3 +24,6 @@
 	path = external/boutdata
 	url = git@github.com:boutproject/boutdata.git
 	ignore = dirty
+[submodule "external/NESO-RNG-Toolkit"]
+	path = external/NESO-RNG-Toolkit
+	url = https://github.com/ExCALIBUR-NEPTUNE/NESO-RNG-Toolkit.git

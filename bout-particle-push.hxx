@@ -1,6 +1,7 @@
 #pragma once
 #include "bout/bout.hxx"
 #include <neso_particles.hpp>
+#include <neso_rng_toolkit.hpp>
 #include <reactions/reactions.hpp>
 
 using namespace NESO::Particles;
