@@ -1012,6 +1012,31 @@ int main(int argc, char** argv) {
           ->execute(cellx);
     }
 
+    const int num_cells = marker_group->domain->mesh->get_cell_count();
+    NESOASSERT((V_cells.size() == num_cells),
+             "Number elements in V_Cells doesn't match the number of cells in "
+             "domain.");
+
+    // Calculate weight for each marker particle
+    // based on FLUID_DENSITY and N_CELL properties contained in same particle.
+    // TODO: implement normalisation. dens_norm is currently 1. 
+    for (int cellx = 0; cellx < num_cells; cellx++) {
+      REAL V_cell = V_cells[cellx];
+      particle_loop(
+          "Update weight of ions", marker_group,
+          [=](auto n_cell_prop, auto ion_dens_prop, auto weight_prop) {
+            auto updated_weight = (ion_dens_prop.at(0) * Nnorm * V_cell) /
+                                  (N_w * n_cell_prop.at(0));
+            weight_prop.at(0) = updated_weight;
+          },
+          Access::read(Sym<INT>("N_CELL")),
+          Access::read(Sym<REAL>("FLUID_DENSITY")),
+          Access::write(Sym<REAL>("WEIGHT")))
+          ->execute(cellx);
+    }
+
+
+
     // Wrappers & controllers
     // ------------------------------------------------------------------------------
 
