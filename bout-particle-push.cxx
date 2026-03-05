@@ -1059,7 +1059,7 @@ int main(int argc, char** argv) {
     
     auto recomb_data_calc_sampler =
       FilteredMaxwellianSampler<2, decltype(constant_rate_cross_section)>(
-          1 / (marker_species.get_mass() * Tnorm),
+          1 / (recomb_species.get_mass() * Tnorm),
           constant_rate_cross_section, rng_kernel);
 
     // Container for objects allowing calculation of parameters within
