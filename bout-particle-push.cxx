@@ -782,7 +782,7 @@ int main(int argc, char** argv) {
   output << "Begin particle push \n";
   // get data from BOUT.inp to assign particle weights as a fn of x,y
   auto& opt = Options::root();
-
+  
 
   /*
    *
@@ -845,7 +845,7 @@ int main(int argc, char** argv) {
     const int rng_samples = Options::root()["VANTAGE_reactions"]["rng_samples"]
                                 .docs("Number of RNG samples to prepare per-particle")
                                 .withDefault(40);
-    
+
     BoutReal sim_time = 0.0;
     Field2D ion_density = Field2D(0.0, bout_mesh);
     Field2D neutral_density = Field2D(0.0, bout_mesh);
@@ -870,7 +870,7 @@ int main(int argc, char** argv) {
         Options::root()["neso_particles"]["cell_centre_relative_tolerance"].withDefault(0.0));
     }
 
-
+    
 
     // create a Reactions particle spec
     auto particle_spec_builder = ParticleSpecBuilder(ndim);
@@ -987,7 +987,7 @@ int main(int argc, char** argv) {
 
     // Give particle group initial fluid values: markers will contain background
     // plasma properties
-    // In demo app: contained in set_init_fluid_values
+    // From demo app "set_init_fluid_values"
     particle_loop(
         "set init fluid values", marker_group,
         [=](auto n, auto T, auto ne, auto Te, auto speed) {
@@ -1015,6 +1015,7 @@ int main(int argc, char** argv) {
 
     
     // Add particle property: number of particles in the local cell
+    // From demo app: "distribute_n_part_cell"
     for (int cellx = 0; cellx < marker_group->domain->mesh->get_cell_count(); cellx++)
     {
       int n_part_cell = marker_group->get_npart_cell(cellx);
@@ -1085,8 +1086,8 @@ int main(int argc, char** argv) {
       sycl_target, recomb_species.get_id(), recomb_out_states,
       recomb_data, recomb_reaction_kernel, recomb_data_calc_obj);
 
-
-
+    
+    
     // Wrappers & controllers
     // ------------------------------------------------------------------------------
 
