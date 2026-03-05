@@ -803,15 +803,13 @@ int main(int argc, char** argv) {
     // Normalisations
     //  TODO: Implement real normalisation consistent with Hermes-3
     //  TODO: Normalise DMPlex
-    //  rho_s0: length [m]
-    //  Nnorm: density [m^-3]
-    //  N_w: neutral particle density per unit weight [m^-3 (??)]
 
     // Map needed to pass all norms to functions
     std::map<std::string, BoutReal> norms = {
-        {"rho_s0", 1.0},
-        {"Nnorm", 1.0},
-        {"N_w",
+        {"rho_s0", 1.0}, // [m]
+        {"Nnorm", 1.0},  // [m^-3]
+        {"Tnorm", 1.0},  // [eV]
+        {"N_w",          // [m^-3?? ]
          Options::root()["neso_particles"]["N_w"]
              .doc("Normalisation parameter: neutral particle density per unit weight")
              .withDefault(2.0)}};
@@ -819,6 +817,7 @@ int main(int argc, char** argv) {
     // Also unpack for use in this scope.
     const BoutReal rho_s0 = norms["rho_s0"];
     const BoutReal Nnorm = norms["Nnorm"];
+    const BoutReal Tnorm = norms["Tnorm"];
     const BoutReal N_w = norms["N_w"];
 
     // Initial neutral parameters
