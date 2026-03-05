@@ -95,3 +95,35 @@ inline ParticleSet uniform_cellwise_maxwellian(
 
   return maxwellian;
 }
+
+/**
+ * @brief create an RNG kernel to use for sampling velocity distributions
+ * in recombination and charge exchange. 
+ */
+
+inline auto get_uniform_rng_kernel(SYCLTargetSharedPtr sycl_target,
+                                   std::size_t n_samples,
+                                   std::uint64_t root_seed = 141351) {
+
+  const int rank = sycl_target->comm_pair.rank_parent;
+
+  std::uint64_t seed = NESO::RNGToolkit::create_seeds(
+      sycl_target->comm_pair.size_parent, rank, root_seed);
+
+  auto rng_normal = NESO::RNGToolkit::create_rng<REAL>(
+      NESO::RNGToolkit::Distribution::Uniform<REAL>{
+          NESO::RNGToolkit::Distribution::next_value(0.0), 1.0},
+      seed, sycl_target->device, sycl_target->device_index);
+
+  // Create an interface between NESO-RNG-Toolkit and NESO-Particles KernelRNG
+  auto rng_interface =
+      make_rng_generation_function<GenericDeviceRNGGenerationFunction, REAL>(
+          [=](REAL *d_ptr, const std::size_t num_samples) -> int {
+            return rng_normal->get_samples(d_ptr, num_samples);
+          });
+
+  auto rng_kernel =
+      host_atomic_block_kernel_rng<REAL>(rng_interface, n_samples);
+
+  return rng_kernel;
+}

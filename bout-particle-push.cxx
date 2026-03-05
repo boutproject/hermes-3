@@ -945,10 +945,16 @@ int main(int argc, char** argv) {
     auto dg0 = std::make_shared<PetscInterface::DMPlexProjectEvaluateDG>(
         neso_mesh, sycl_target, "DG", 0);
 
+    // RNG kernel
+    // Used for sampling from velocity distribution for REC/CX
+    // ------------------------------------------------------------------------------
+
+    auto rng_kernel = get_uniform_rng_kernel(sycl_target, rng_samples);
+
     // Ionisation reaction
     // ------------------------------------------------------------------------------
 
-    const REAL iz_rate = Options::root()["VANTAGE_reactions"]["iz_rate"].withDefault(1.0);
+    
     auto iz_rate_data = FixedRateData(iz_rate);
     main_species.set_id(0);
     auto ionisation_reaction = ElectronImpactIonisation<FixedRateData, FixedRateData>(
@@ -1042,6 +1048,43 @@ int main(int argc, char** argv) {
           ->execute(cellx);
     }
 
+    // Define marker species and reaction rates
+    auto recomb_species = Species("ION", 1.0, 0.0, -1);
+    auto recomb_data = FixedRateData(rec_rate);
+    auto recomb_energy_data = FixedRateData(rec_rate); //TODO: make this separate
+
+    // This sampler will calculate marker momentum from fluid plasma conditions
+    // TODO: Do I need a separate rng kernel?
+    auto constant_rate_cross_section = ConstantRateCrossSection(1.0);
+    
+    auto recomb_data_calc_sampler =
+      FilteredMaxwellianSampler<2, decltype(constant_rate_cross_section)>(
+          1 / (marker_species.get_mass() * Tnorm),
+          constant_rate_cross_section, rng_kernel);
+
+    // Container for objects allowing calculation of parameters within
+    // the recombination kernel: sampled velocity and the radiation 
+    // energy loss source. Must be in this order.
+    auto recomb_data_calc_obj =
+      DataCalculator<decltype(recomb_energy_data),
+                     decltype(recomb_data_calc_sampler)>(
+          recomb_energy_data, recomb_data_calc_sampler);
+
+    BoutReal normalised_potential_energy = 1.0;  //TODO: units
+    auto recomb_reaction_kernel = RecombReactionKernels<2>(
+        recomb_species, electron_species, normalised_potential_energy);
+
+    // Set neutrals to be products of recombination
+    const int out_state = main_species.get_id();
+    std::array<int, 1> recomb_out_states = {out_state};
+
+    // Create reaction object
+    auto recomb_reaction = LinearReactionBase<1, decltype(recomb_data),
+                                            decltype(recomb_reaction_kernel),
+                                            decltype(recomb_data_calc_obj)>(
+      sycl_target, recomb_species.get_id(), recomb_out_states,
+      recomb_data, recomb_reaction_kernel, recomb_data_calc_obj);
+
 
 
     // Wrappers & controllers
@@ -1079,10 +1122,16 @@ int main(int argc, char** argv) {
     std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms =
         std::vector{accumulator_real_transform_wrapper, merge_wrapper, remove_wrapper};
 
+    // Ionisation reaction controller
     auto reaction_controller = ReactionController(parent_transforms, child_transforms);
-    // add ionisation to the controller
     reaction_controller.add_reaction(
         std::make_shared<decltype(ionisation_reaction)>(ionisation_reaction));
+
+    // Separate recombination controller
+    auto recombination_controller = ReactionController(
+      std::vector<std::shared_ptr<TransformationWrapper>>{}, child_transforms);
+    recombination_controller.add_reaction(
+        std::make_shared<decltype(recomb_reaction)>(recomb_reaction));
 
     // Boundary handling
     // ------------------------------------------------------------------------------
