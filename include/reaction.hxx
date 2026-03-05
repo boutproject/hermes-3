@@ -7,12 +7,15 @@
 #include "reaction_diagnostic.hxx"
 #include "reaction_parser.hxx"
 
-using OPTYPE = GuardedOptions &&(GuardedOptions&&, Field3D);
+using OPTYPE = GuardedOptions && (GuardedOptions&&, Field3D);
 
 /**
- * @brief Temporary struct to use as a base class for all reactions components. Ensures
- * reaction strings are paired up correctly with component classes. Can be removed when
- * all reaction classes have been refactored to inherit from Reaction.
+ * @brief Temporary struct to use as a base class for all reactions components.
+ *
+ * @details Ensures reaction strings are paired up correctly with component classes.
+ *
+ * @todo Remove this when all reaction classes have been refactored to inherit from
+ * Reaction.
  */
 struct ReactionBase : public Component {
   ReactionBase(Permissions&& permissions)
@@ -29,17 +32,24 @@ protected:
 /**
  * @brief Struct intended to act as a base for all reactions.
  *
+ * @details Note that several parameterisations are possible when providing reaction rate
+ * data; subclasses are expected to (re-)implement one or more of eval_sigma_v_ET,
+ * eval_sigma_v_nT and eval_sigma_v_T. Subclasses that have an associated electron energy
+ * loss rate are expected to implement eval_sigma_vE_nT. Subclasses that DO NOT have an
+ * associated electron energy loss rate should set includes_sigma_v_e=false.
+ *
  */
 struct Reaction : public ReactionBase {
   Reaction(std::string name, Options& alloptions);
 
-  void outputVars(Options& state) override final;
+  void outputVars(Options& state) final;
 
 protected:
   /// Reaction string parser
   std::unique_ptr<ReactionParser> parser;
 
-  /// Normalisations, extracted from input options
+  /// Units and normalisations extracted to member vars for convenience
+  Options& units;
   BoutReal Tnorm, Nnorm, FreqNorm;
 
   /// Rate multipliers, extracted from input options
@@ -52,9 +62,22 @@ protected:
   std::multimap<std::pair<std::string, ReactionDiagnosticType>, ReactionDiagnostic>
       diagnostics;
 
+  /// Whether to use parallel averaging when calculating reaction rates
+  /// (Default to true)
+  bool do_parallel_averaging = true;
+
   /// Whether or not reaction data includes <sigma v E>
-  /// (Default to true as a reminder to override eval_sigma_v_E)
+  /// (Default to true as a reminder to override eval_sigma_vE_nT)
   bool includes_sigma_v_e = true;
+
+  /**
+   * @brief Get the type of parameters expected by the rate calculation.
+   * @details Allow the rate parameter types to be provided after construction
+   * (e.g. after subclasses have read that information from file) by forcing subclasses to
+   * implement this function, rather than storing the types as a Reaction member variable.
+   * @return RateParamsTypes the rate params type
+   */
+  virtual RateParamsTypes get_rate_params_type() const = 0;
 
   /**
    * @brief Add a new entry in this Reaction's diagnostic (multi)map. The (non-unique) Key
@@ -84,7 +107,7 @@ protected:
    *
    * @param state Current sim state
    */
-  void calc_weightsums(GuardedOptions & state);
+  void init_channel_weights(GuardedOptions& state);
 
   /**
    * @brief Evaluate <sigma . v . E> at a particular density and temperature
@@ -94,38 +117,82 @@ protected:
    * @param n a density
    * @return BoutReal the electron energy loss rate
    */
-  virtual BoutReal eval_sigma_v_E([[maybe_unused]] BoutReal T,
-                                  [[maybe_unused]] BoutReal n) {
+  virtual BoutReal eval_sigma_vE_nT([[maybe_unused]] BoutReal T,
+                                    [[maybe_unused]] BoutReal n) {
     if (this->includes_sigma_v_e) {
       throw BoutException(
-          "eval_sigma_v_E() needs to be implemented by Reaction instances "
+          "eval_sigma_vE_nT() needs to be implemented by Reaction instances "
           "which set includes_sigma_v_e=true");
     } else {
       throw BoutException(
-          "eval_sigma_v_E() was called despite having set includes_sigma_v_e=false!");
+          "eval_sigma_vE_nT() was called despite having set includes_sigma_v_e=false!");
     }
     return -1;
   };
 
   /**
-   * @brief Evaluate <sigma.v> at a particular density and temperature
-   * (Subclasses MUST define)
+   * @brief Evaluate <sigma.v> at a particular energy and temperature. Rate args are only
+   * known at runtime, so need to provide a default implementation that throws and let
+   * subclasses decide whether to override.
+   *
+   * @param E a density
+   * @param T a temperature
+   * @return BoutReal <sigma.v>(E,T)
+   */
+  virtual BoutReal eval_sigma_v_ET([[maybe_unused]] BoutReal E,
+                                   [[maybe_unused]] BoutReal T) {
+    throw BoutException("Trying to call eval_sigma_v_nT but the Reaction subclass hasn't "
+                        "implemented it!");
+  }
+  /**
+   * @brief Evaluate <sigma.v> at a particular density and temperature. Rate args are only
+   * known at runtime, so need to provide a default implementation that throws and let
+   * subclasses decide whether to override.
+   *
+   * @param T a temperature
+   * @return BoutReal <sigma.v>(T)
+   */
+  virtual BoutReal eval_sigma_v_T([[maybe_unused]] BoutReal T) {
+    throw BoutException("Trying to call eval_sigma_v_T but the Reaction subclass hasn't "
+                        "implemented it!");
+  }
+
+  /**
+   * @brief Evaluate <sigma.v> at a particular density and temperature. Rate args are only
+   * known at runtime, so need to provide a default implementation that throws and let
+   * subclasses decide whether to override.
    *
    * @param T a temperature
    * @param n a density
    * @return BoutReal <sigma.v>(n,T)
    */
-  virtual BoutReal eval_sigma_v(BoutReal T, BoutReal n) = 0;
+  virtual BoutReal eval_sigma_v_nT([[maybe_unused]] BoutReal T,
+                                   [[maybe_unused]] BoutReal n) {
+    throw BoutException("Trying to call eval_sigma_v_nT but the Reaction subclass hasn't "
+                        "implemented it!");
+  }
 
   /**
    * @brief A hook with which subclasses can perform additional transform tasks, over and
    * above those implemented in Reaction::transform. (Subclasses MAY define)
    *
    * @param state
-   * @param reaction_rate
+   * @param rate_calc_results
    */
   virtual void transform_additional([[maybe_unused]] GuardedOptions& state,
-                                    [[maybe_unused]] Field3D& reaction_rate) {}
+                                    [[maybe_unused]] const RateData& rate_calc_results) {}
+
+  /**
+   * @brief Update both a species source term and the corresponding diagnostics (if any
+   * exist and if diagnostics are enabled), determining the key in the state from the
+   * type. See alternative form of update_source for further details.
+   */
+  template <OPTYPE operation>
+  void update_source(GuardedOptions& state, const std::string& sp_name,
+                     ReactionDiagnosticType type, const Field3D& fld) {
+
+    update_source<operation>(state, sp_name, type, state_labels.at(type), fld);
+  }
 
   /**
    * @brief Update both a species source term and the corresponding diagnostics (if any
@@ -136,13 +203,15 @@ protected:
    * @param state the state to update
    * @param sp_name the species to update
    * @param type the type of source/diagnostic to update
+   * @param lbl label/key for the field in the state object, i.e.
+   * state["species"][sp_name][lbl]
    * @param fld the field used in the update
    */
   template <OPTYPE operation>
   void update_source(GuardedOptions& state, const std::string& sp_name,
-                     ReactionDiagnosticType type, Field3D& fld) {
+                     ReactionDiagnosticType type, const std::string& lbl, const Field3D& fld) {
     // Update species data
-    operation(state["species"][sp_name][state_labels.at(type)], fld);
+    operation(state["species"][sp_name][lbl], fld);
 
     if (this->diagnose) {
       // Update corresponding diagnostic(s) (if any exist)
@@ -151,18 +220,38 @@ protected:
         Field3D diag_src_fld = match->second.transform(fld);
         // Apply the update to the diagnostic field in the state, then copy it to the
         // diagnostic
-        operation(state[match->second.name], diag_src_fld);
-        match->second.set_data(getNonFinal<Field3D>(state[match->second.name]));
+        operation(state[match->second.get_name()], diag_src_fld);
+        match->second.set_data(getNonFinal<Field3D>(state[match->second.get_name()]));
       }
     }
   }
 
-private:
-  /// Sum of weights to use when calculating energy source due to population change
-  BoutReal energy_weightsum;
+  /**
+   * @brief Specify what fraction of a reactant's energy is transferred to a particular
+   * product.
+   *
+   * @param reactant_name Name of the reactant species.
+   * @param product_name Name of the product species.
+   * @param weight Fraction of the energy to transfer.
+   */
+  void set_energy_channel_weight(const std::string& reactant_name,
+                                 const std::string& product_name, BoutReal weight);
 
-  /// Sum of weights to use when calculating momentum source due to population change
-  BoutReal momentum_weightsum;
+  /**
+   * @brief Specify what fraction of a reactant's momentum is transferred to a particular
+   * product.
+   *
+   * @param reactant_name Name of the reactant species.
+   * @param product_name Name of the product species.
+   * @param weight Fraction of the momentum to transfer.
+   */
+  void set_momentum_channel_weight(const std::string& reactant_name,
+                                   const std::string& product_name, BoutReal weight);
+
+private:
+  // Channels to determine how momentum and energy are distributed to product species
+  std::map<std::string, std::map<std::string, BoutReal>> energy_channels;
+  std::map<std::string, std::map<std::string, BoutReal>> momentum_channels;
 
   /// Label to use for this reaction in a state / Options object
   const std::string name;
