@@ -203,8 +203,6 @@ void Reaction::set_momentum_channel_weight(const std::string& reactant_name,
  * @param state
  */
 void Reaction::transform_impl(GuardedOptions& state) {
-
-  Field3D momentum_exchange, energy_exchange, energy_loss;
   zero_diagnostics(state);
 
   // Get the species name(s) of reactants, heavy reactants and products
@@ -271,8 +269,6 @@ void Reaction::transform_impl(GuardedOptions& state) {
 
   // Population change-driven sources for all species other than electrons
   init_channel_weights(state);
-  momentum_exchange = 0.0;
-  energy_exchange = 0.0;
   Field3D momentum_source, energy_source;
   for (const auto& [sp_name, pop_change_s] : this->parser->get_mom_energy_pop_changes()) {
     // No momentum, energy source for electrons due to pop change
@@ -291,7 +287,6 @@ void Reaction::transform_impl(GuardedOptions& state) {
     } else if (pop_change_s > 0) {
       // Species with net gain receive a proportion of the momentum and energy lost by
       // consumed reactants. See init_channel_weights() for default splitting factors.
-      momentum_exchange = energy_exchange = 0;
       for (auto& rsp_name : heavy_reactant_species) {
         // All consumed (net loss) reactants can contribute
         int pop_change_r = this->parser->pop_change_reactant(rsp_name);
@@ -307,8 +302,6 @@ void Reaction::transform_impl(GuardedOptions& state) {
                            * get<Field3D>(state["species"][rsp_name]["temperature"]);
         }
       }
-      momentum_exchange += momentum_source;
-      energy_exchange += energy_source;
     } else {
       // No pop change
       continue;
