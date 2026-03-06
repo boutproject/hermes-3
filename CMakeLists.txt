@@ -85,7 +85,9 @@ set(HERMES_SOURCES
     src/relax_potential.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
+    src/sheath_boundary_perp.cxx
     src/sheath_boundary_simple.cxx
+    src/sheath_boundary_simple_perp.cxx
     src/sheath_boundary_insulating.cxx
     src/snb_conduction.cxx
     src/fixed_fraction_ions.cxx
@@ -159,7 +161,9 @@ set(HERMES_SOURCES
     include/recycling.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
+    include/sheath_boundary_perp.hxx
     include/sheath_boundary_simple.hxx
+    include/sheath_boundary_simple_perp.hxx
     include/sheath_boundary_insulating.hxx
     include/simple_conduction.hxx
     include/snb_conduction.hxx
