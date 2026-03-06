@@ -256,7 +256,7 @@ void Reaction::transform_impl(GuardedOptions& state) {
   transform_additional(state, rate_calc_results);
 
   // Use the stoichiometric values to set density sources for all species
-  Field3D density_source;
+  Field3D density_source(0.0);
   for (const auto& sp_name : this->parser->get_species()) {
     int pop_change = this->parser->pop_change(sp_name);
     if (pop_change != 0) {
