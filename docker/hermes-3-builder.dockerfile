@@ -1,9 +1,7 @@
 # Build as "hermes-3-builder"
 # with sudo docker buildx build --platform linux/amd64 -f docker/hermes-3-builder.dockerfile -t hermes-3-builder .
 
-# Use a spack image with a pinned SHA, to reduce the amount of time required to rebuild the image.
-# N.b. this SHA works for both linux/amd64 and linux/arm64 builds.
-FROM spack/ubuntu-noble@sha256:e1bd3cf0079aeee981aba9341ba581e246747f7d0d1b55ff2bc63577c6911377 AS builder
+FROM spack/ubuntu-noble AS builder
 # Make sure that spack is available if we need to launch a terminal in the image
 RUN spack_path=$(which spack) && \
     echo "alias spack=\"${spack_path}\"" >> /root/.bashrc
