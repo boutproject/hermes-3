@@ -1,7 +1,7 @@
 # Build as "hermes-3-builder"
 # with sudo docker buildx build --platform linux/amd64 -f docker/hermes-3-builder.dockerfile -t hermes-3-builder .
 
-FROM spack/ubuntu-noble:sha256:d7784a53424fda1c528d8afe837841a6947e46b55fd4380779656d4b276f63a0 AS builder
+FROM spack/ubuntu-noble@sha256:d7784a53424fda1c528d8afe837841a6947e46b55fd4380779656d4b276f63a0 AS builder
 # Make sure that spack is available if we need to launch a terminal in the image
 RUN spack_path=$(which spack) && \
     echo "alias spack=\"${spack_path}\"" >> /root/.bashrc
