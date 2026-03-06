@@ -213,8 +213,9 @@ void Reaction::transform_impl(GuardedOptions& state) {
   std::vector<std::string> heavy_product_species =
       parser->get_species(species_filter::heavy, species_filter::products);
 
-  // First reactant; just used to get region
-  Field3D first_reactant = get<Field3D>(state["species"][reactant_names[0]]["density"]);
+  // All reaction sources are computed in interior region only
+  Region<Ind3D> rng_nobndry = get<Field3D>(state["species"][reactant_names[0]]["density"])
+                                  .getRegion("RGN_NOBNDRY");
 
   // Create rate helper and compute reaction rate, collision frequencies
   RateData rate_calc_results;
@@ -227,8 +228,8 @@ void Reaction::transform_impl(GuardedOptions& state) {
                         / FreqNorm * rate_multiplier;
       return result;
     };
-    auto rate_helper = RateHelper<RateParamsTypes::nT>(
-        state, units, reactant_names, first_reactant.getRegion("RGN_NOBNDRY"));
+    auto rate_helper =
+        RateHelper<RateParamsTypes::nT>(state, units, reactant_names, rng_nobndry);
     rate_calc_results = rate_helper.calc_rates(calc_rate, this->do_parallel_averaging);
   } else if (rate_params_type == RateParamsTypes::T) {
     OneDRateFunc calc_rate = [&](BoutReal mass_action, BoutReal Teff) {
@@ -237,12 +238,12 @@ void Reaction::transform_impl(GuardedOptions& state) {
       return result;
     };
 
-    auto rate_helper = RateHelper<RateParamsTypes::T>(
-        state, units, reactant_names, first_reactant.getRegion("RGN_NOBNDRY"));
+    auto rate_helper =
+        RateHelper<RateParamsTypes::T>(state, units, reactant_names, rng_nobndry);
 
     rate_calc_results = rate_helper.calc_rates(calc_rate, this->do_parallel_averaging);
   } else {
-    throw BoutException("Unhandled RateParamsTypes in Reaction::transform()");
+    throw BoutException("Unhandled RateParamsTypes in Reaction::transform_impl()");
   }
 
   // Set collision frequencies
