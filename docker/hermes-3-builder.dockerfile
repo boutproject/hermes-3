@@ -1,9 +1,9 @@
 # Build as "hermes-3-builder"
-# with sudo docker build -f docker/hermes-3-builder.dockerfile -t hermes-3-builder .
+# with sudo docker buildx build --platform linux/amd64 -f docker/hermes-3-builder.dockerfile -t hermes-3-builder .
 
-# Use a spack image with a pinned SHA - currently points to develop between the 1.1 and 1.2 releases.
-# N.B. The spack 1.1 release has a bug in the PETSc package that causes this build to fail 
-FROM spack/ubuntu-noble@sha256:d7784a53424fda1c528d8afe837841a6947e46b55fd4380779656d4b276f63a0 AS builder
+# Use a spack image with a pinned SHA, to reduce the amount of time required to rebuild the image.
+# N.b. this SHA works for both linux/amd64 and linux/arm64 builds.
+FROM spack/ubuntu-noble@sha256:e1bd3cf0079aeee981aba9341ba581e246747f7d0d1b55ff2bc63577c6911377 AS builder
 # Make sure that spack is available if we need to launch a terminal in the image
 RUN spack_path=$(which spack) && \
     echo "alias spack=\"${spack_path}\"" >> /root/.bashrc
@@ -24,7 +24,7 @@ COPY docker/image_ingredients/spack.yaml /opt/spack-environment/spack.yaml
 
 # Install the software
 WORKDIR /opt/spack-environment
-RUN spack env activate . && spack install --fail-fast
+RUN spack --env . install --fail-fast
 
 # Make an 'entrypoint.sh' script which activates the spack environment
 RUN spack env activate --sh -d . > activate.sh
