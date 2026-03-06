@@ -27,6 +27,11 @@ COPY docker/image_ingredients/spack.yaml /opt/spack-environment/spack.yaml
 # Install the software
 WORKDIR /opt/spack-environment
 RUN spack buildcache keys --install --trust
+# Check that the spack environment can be solved
+RUN spack --env . concretize
+# Check that spack can download all of the necessary components
+RUN spack --env . fetch
+# Actually install everything
 RUN spack --env . install --fail-fast
 
 # Make an 'entrypoint.sh' script which activates the spack environment
