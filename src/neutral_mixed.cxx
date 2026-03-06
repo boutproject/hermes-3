@@ -80,6 +80,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   parallel_dirichlet = options["parallel_dirichlet"]
                    .doc("Use parallel dirichlet boundary conditions for the plasma?")
                    .withDefault<bool>(true);
+
+  n_lowsource = options["n_lowsource"].withDefault(-1.0) / Nnorm;
+  T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
+  lowsource_scale = options["lowsource_scale"].withDefault(1e-5) * Omega_ci;
   
   neutral_lmax = options["neutral_lmax"].doc("Largest distance to the target, limits diffusion").withDefault<BoutReal>(0.1) / meters;
   
@@ -400,6 +404,11 @@ void NeutralMixed::finally(const Options& state) {
   if (!isMMS) {
     ddt(Nn) += Sn; // Always add density_source
   }
+
+  if (n_lowsource > 0.0) {
+    ddt(Nn) += low_sourceterm(Nn, n_lowsource, lowsource_scale);
+  } 
+  
   
   /////////////////////////////////////////////////////
   // Neutral pressure
@@ -457,6 +466,10 @@ void NeutralMixed::finally(const Options& state) {
   }
   if (!isMMS) {
     ddt(Pn) += Sp;
+  }
+
+  if (T_lowsource > 0.0) {
+    ddt(Pn) += low_sourceterm(Tn, T_lowsource, lowsource_scale);
   }
   
   if (evolve_momentum) {

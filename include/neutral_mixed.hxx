@@ -44,7 +44,7 @@ private:
   Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
   bool isMMS;
   BoutReal AA; ///< Atomic mass (proton = 1)
-
+  BoutReal n_lowsource, T_lowsource, lowsource_scale;
   Field3D Dnn; ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnNVn;
   bool disable_Dnn;
