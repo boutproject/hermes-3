@@ -6,7 +6,7 @@ on:
   push:
     branches:
       - 'master'
-  
+
   workflow_dispatch:  # Allows manual triggering
 
 env:
@@ -15,24 +15,25 @@ env:
   DOCKERFILE: docker/hermes-3.dockerfile
 
 jobs:
+  # Linux (amd64) and Mac (arm64) builds run as separate independent jobs.
+  # If one fails, the other can still complete (fail-fast: false).
 
-  build-final-image:
-
+  build:
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # Set up BuildKit Docker container builder to be able to build
-      # multi-platform images and export cache
-      # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
 
       - name: Log in to registry ${{ env.REGISTRY }}
         uses: docker/login-action@v3
@@ -41,30 +42,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Extract metadata (tags, labels) for Docker
-      # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # set "latest" tag
             type=raw,value=latest,enable={{is_default_branch}}
-            # whichever workflow runs last will be tagged as edge
             type=raw,value=edge
-            # short sha tag
             type=sha,enable={{is_default_branch}}
-            # tag with semantic version
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            # tag with branch name
             type=ref,event=branch,enable={{is_default_branch}}
 
-      # Build and push Docker image with Buildx
-      # https://github.com/docker/build-push-action
-      - name: Build and push Docker image
-        id: build-and-push
+      - name: Build and push Docker image (${{ matrix.platform }})
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -72,7 +63,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-  
