@@ -6,8 +6,12 @@ FROM spack/ubuntu-noble AS builder
 RUN spack_path=$(which spack) && \
     echo "alias spack=\"${spack_path}\"" >> /root/.bashrc
 
-# Copy in the global spack configuration file
+# Copy in the global spack configuration files
 COPY docker/image_ingredients/spack_config.yaml /root/.spack/config.yaml
+COPY docker/image_ingredients/spack_mirrors.yaml /root/.spack/mirrors.yaml
+
+# Install and trust keys for binary cache mirrors (required to use pre-built packages)
+RUN spack buildcache keys --install --trust
 
 # Install OS packages needed to build the software
 RUN apt-get -yqq update && apt-get -yqq upgrade \
@@ -22,6 +26,7 @@ COPY docker/image_ingredients/spack.yaml /opt/spack-environment/spack.yaml
 
 # Install the software
 WORKDIR /opt/spack-environment
+RUN spack buildcache keys --install --trust
 RUN spack --env . install --fail-fast
 
 # Make an 'entrypoint.sh' script which activates the spack environment

@@ -1,8 +1,4 @@
 # Global configuration for spack. Save as ~/.spack/config.yaml
-spack:
-  config:
-    install_tree:
-      root: /opt/software
-  mirrors:
-    binary_mirror: https://binaries.spack.io/develop
-    e4s: https://cache.e4s.io
+config:
+  install_tree:
+    root: /opt/software

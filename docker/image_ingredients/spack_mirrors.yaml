@@ -1,0 +1,4 @@
+# Spack mirrors for binary caches. Save as ~/.spack/mirrors.yaml
+mirrors:
+  binary_mirror: https://binaries.spack.io/releases/v1.0
+  e4s: https://cache.e4s.io
