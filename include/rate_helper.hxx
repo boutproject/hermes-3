@@ -329,11 +329,20 @@ private:
                                           const CellData& mass_actions) {
     const auto& dens = *this->reactant_densities.at(reactant_name);
     CellData result = mass_actions;
-    result.centre /= dens[i];
-    if (do_averaging) {
-      result.left /= cellLeft<hermes::Limiter>(dens[i], dens[ym], dens[yp]);
-      result.right /= cellRight<hermes::Limiter>(dens[i], dens[ym], dens[yp]);
+
+    if (result.centre > 0) {
+      result.centre /= dens[i];
     }
+
+    if (do_averaging) {
+      if (result.left > 0) {
+        result.left /= cellLeft<hermes::Limiter>(dens[i], dens[ym], dens[yp]);
+      }
+      if (result.right > 0) {
+        result.right /= cellRight<hermes::Limiter>(dens[i], dens[ym], dens[yp]);
+      }
+    }
+
     return result;
   }
 
