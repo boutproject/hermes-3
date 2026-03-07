@@ -538,6 +538,11 @@ A cell must satisfy the following conditions to be considered part of the pump:
 
 The field `is_pump` must be created by the user and added to the grid file as a `Field2D`.
 
+Core recycling 
+
+The core recycling implementation is intended to be used for a dipole configuration with a magnet embedded within the plasma, such that the inner boundary is the first close flux surface in contact with the magnet PFC.
+Current implentation of the core recycling assumes that fcfs is the surface of the magnet and handling of limited regions will be added later. 
+
 Diagnostic variables and settings
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
