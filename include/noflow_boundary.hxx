@@ -15,6 +15,13 @@ struct NoFlowBoundary : public Component {
     noflow_upper_y = options["noflow_upper_y"]
                          .doc("No-flow boundary on upper y?")
                          .withDefault<bool>(true);
+    noflow_inner_x = options["noflow_lower_y"]
+                         .doc("No-flow boundary on inner x?")
+                         .withDefault<bool>(false);
+    noflow_outer_x = options["noflow_upper_y"]
+                         .doc("No-flow boundary on outer x?")
+                         .withDefault<bool>(false);
+
     substitutePermissions("name", {name});
     substitutePermissions("variables",
                           {"density", "temperature", "pressure", "velocity", "momentum"});
@@ -24,6 +31,8 @@ private:
   std::string name;    ///<
   bool noflow_lower_y; ///< No-flow boundary on lower y?
   bool noflow_upper_y; ///< No-flow boundary on upper y?
+  bool noflow_inner_x; ///< No-flow boundary on inner x?
+  bool noflow_outer_x; ///< No-flow boundary on outer x?
 
   /// Inputs
   ///  - species
