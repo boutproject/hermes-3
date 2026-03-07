@@ -34,7 +34,8 @@ struct SheathBoundaryPerp : public Component {
 private:
   BoutReal Ge; // Secondary electron emission coefficient
   Field3D sin_alpha; // sin of angle between magnetic field and wall.
-  
+  Field3D cs_factor; // Multiplying factor for sound speed calculation
+
   bool inner_x; // Boundary on inner x?
   bool outer_x; // Boundary on outer x?
   
