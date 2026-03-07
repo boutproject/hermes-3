@@ -62,13 +62,13 @@ SheathBoundarySimplePerp::SheathBoundarySimplePerp(std::string name, Options& al
           readIfSet("species:e:{e_whole_domain}"),
           writeBoundary("species:e:{e_boundary}"),
           readWrite("species:e:energy_source"),
-          readWrite("species:e:energy_flow_ylow"),
+          readWrite("species:e:energy_flow_xlow"),
           writeBoundaryIfSet("species:e:{e_optional}"),
           writeBoundaryReadInteriorIfSet("species:e:pressure"),
           readIfSet("species:{all_species}:charge"),
           readOnly("species:{ions}:AA"),
           readWrite("species:{ions}:energy_source"),
-          readWrite("species:{ions}:energy_flow_ylow"),
+          readWrite("species:{ions}:energy_flow_xlow"),
           writeBoundary("species:{ions}:{ion_boundary}"),
           writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
           writeBoundaryIfSet("species:{ions}:{ion_optional}"),
@@ -214,12 +214,13 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
         ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
         : zeroFrom(Ni);
 
-      if (inner_x) {
+      if (inner_x && mesh->firstX()) {
         // Sum values, put result in mesh->xstart
 
-        for (RangeIterator r = mesh->iterateBndryLowerX(); !r.isDone(); r++) {
+        //for (RangeIterator r = mesh->iterateBndryLowerX(); !r.isDone(); r++) {
+        for (int iy = 0; iy < mesh->LocalNy; iy++) {
           for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            auto i = indexAt(Ni, mesh->xstart, r.ind, jz);
+            auto i = indexAt(Ni, mesh->xstart, iy, jz);
             auto ip = i.xp();
 
             // Free gradient of log density and temperature
@@ -247,12 +248,13 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
         }
       }
 
-      if (outer_x) {
+      if (outer_x && mesh->lastX()) {
         // Sum values, put results in mesh->xend
 
-        for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+        //for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+        for (int iy = 0; iy < mesh->LocalNy; iy++) {
           for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            auto i = indexAt(Ni, mesh->xend, r.ind, jz);
+            auto i = indexAt(Ni, mesh->xend, iy, jz);
             auto im = i.xm();
 
             const BoutReal Ni_ip = limitFree(Ni[im], Ni[i], density_boundary_mode);
@@ -280,11 +282,12 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
 
     // ion_sum now contains the ion current, sum Z_i n_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
-    if (lower_y) {
-      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    if (inner_x && mesh->firstX()) {
+      //for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++)  { // TODO: that is not going to work with SOL geometry, need to loop over the actual boundary points  
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(phi, r.ind, mesh->ystart, jz);
-          auto ip = i.yp();
+          auto i = indexAt(phi, mesh->xstart, iy, jz);
+          auto ip = i.xp();
 
           const BoutReal Ne_im = limitFree(Ne[ip], Ne[i], density_boundary_mode);
           const BoutReal Te_im = limitFree(Te[ip], Te[i], temperature_boundary_mode);
@@ -303,15 +306,15 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
           const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
 
-          phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
+          phi[i.xp()] = phi[i.xm()] = phi[i]; // Constant into sheath
         }
       }
     }
 
-    if (outer_x) {
-      for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+    if (outer_x && mesh->lastX()) {
+        for (int iy = 0; iy < mesh->LocalNy; iy++)  { // TODO: that is not going to work with SOL geometry, need to loop over the actual boundary points
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(phi, mesh->xend, r.ind, jz);
+          auto i = indexAt(phi, mesh->xend, iy, jz);
           auto im = i.xm();
 
           const BoutReal Ne_ip = limitFree(Ne[im], Ne[i], density_boundary_mode);
@@ -347,10 +350,11 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
 
   hflux_e = zeroFrom(electron_energy_source); // sheath heat flux for diagnostics
 
-  if (inner_x) {
-    for (RangeIterator r = mesh->iterateBndryLowerX(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(Ne, mesh->xstart, r.ind, jz);
+  if (inner_x && mesh->firstX()) {
+   // for (RangeIterator r = mesh->iterateBndryLowerX(); !r.isDone(); r++) {
+        for (int iy = 0; iy < mesh->LocalNy; iy++)  { // TODO: that is not going to work with SOL geometry, need to loop over the actual boundary points
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+        auto i = indexAt(Ne, mesh->xstart, iy, jz);
         auto ip = i.xp();
         auto im = i.xm();
 
@@ -409,13 +413,14 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
       }
     }
   }
-  if (outer_x) {
+  if (outer_x && mesh->lastX()) {
     // This is essentially the same as at the lower x boundary
     // except xstart -> xend, ip <-> im
     //
-    for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+    //for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+    for (int iy = 0; iy < mesh->LocalNy; iy++)  { // TODO: that is not going to work with SOL geometry, need to loop over the actual boundary points
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(Ne, mesh->xend, r.ind, jz);
+        auto i = indexAt(Ne, mesh->xend, iy, jz);
         auto ip = i.xp();
         auto im = i.xm();
 
@@ -490,7 +495,7 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
 
   // Add the total sheath power flux to the tracker of y power flows
   // WARNING: this is only the additional source and is missing advection
-  add(electrons["energy_flow_ylow"], fromFieldAligned(electron_sheath_power_ylow));
+  add(electrons["energy_flow_xlow"], fromFieldAligned(electron_sheath_power_xlow));
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
     Ve.clearParallelSlices();
@@ -557,10 +562,10 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
     // Field to capture total sheath heat flux for diagnostics
     Field3D ion_sheath_power_xlow = zeroFrom(Ne);
 
-    if (inner_x) {
-      for (RangeIterator r = mesh->iterateBndryLowerX(); !r.isDone(); r++) {
+    if (inner_x && mesh->firstX()) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(Ne, mesh->xstart, r.ind, jz);
+          auto i = indexAt(Ne, mesh->xstart, iy, jz);
           auto ip = i.xp();
           auto im = i.xm();
 
@@ -619,13 +624,15 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
         }
       }
     }
-    if (outer_x) {
+    if (outer_x && mesh->lastX()) {
       // Note: This is essentially the same as the lower boundary,
       // but with directions reversed e.g. xstart -> xend, ip <-> im
       //
-      for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+      //for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++)  { // TODO: that is not going to work with SOL geometry, need to loop over the actual boundary points
+
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(Ne, mesh->xend, r.ind,  jz);
+          auto i = indexAt(Ne, mesh->xend, iy,  jz);
           auto ip = i.xp();
           auto im = i.xm();
 

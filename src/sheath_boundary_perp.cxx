@@ -76,6 +76,11 @@ SheathBoundaryPerp::SheathBoundaryPerp(std::string name, Options& alloptions, So
                        "Should be between 0 and 1")
     .withDefault(Field3D(1.0));
 
+  cs_factor = options["cs_factor"]
+                  .doc("Multiplying factor for sound speed calculation. "
+                       "Used to adjust sheath heat transmission and particle flow")
+    .withDefault(Field3D(1.0));
+
   if ((min(sin_alpha) < 0.0) or (max(sin_alpha) > 1.0)) {
     throw BoutException("Range of sin_alpha must be between 0 and 1");
   }
@@ -85,7 +90,7 @@ SheathBoundaryPerp::SheathBoundaryPerp(std::string name, Options& alloptions, So
 
   always_set_phi =
       options["always_set_phi"]
-          .doc("Always set phi field? Default is to only modify if already set")
+          .doc("Always set phi field? Defafult is to only modify if already set")
           .withDefault<bool>(false);
 
   const Options& units = alloptions["units"];
@@ -186,12 +191,12 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
                                      ? get<BoutReal>(species["adiabatic"])
                                      : 5. / 3; // Ratio of specific heats (ideal gas)
 
-      if (inner_x) {
+      if (inner_x && mesh->firstX()) {
         // Sum values, put result in mesh->xstart
 
-        for (RangeIterator r = mesh->iterateBndryLowerX(); !r.isDone(); r++) {
+        for (int iy = 0; iy < mesh->LocalNy; iy++) {
           for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            auto i = indexAt(Ni, mesh->xstart,r.ind, jz);
+            auto i = indexAt(Ni, mesh->xstart, iy, jz);
             auto ip = i.xp();
 
             // Free boundary extrapolate ion concentration
@@ -222,17 +227,18 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
                 (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0., 100.);
 
             // Note: Vzi = C_i * sin(α)
-            ion_sum[i] += s_i * Zi * sin_alpha[ip] * sqrt(C_i_sq);
+            ion_sum[i] += s_i * Zi * cs_factor[ip] * sin_alpha[ip] * sqrt(C_i_sq);
           }
         }
       }
 
-      if (outer_x) {
+      if (outer_x && mesh->lastX()) {
         // Sum values, put results in mesh->xend
 
-        for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
-          for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            auto i = indexAt(Ni, mesh->xend, r.ind,  jz);
+       // for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++)  { // TODO: that is not going to work with SOL geometry, need to loop over the actual boundary points
+       for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            auto i = indexAt(Ni, mesh->xend, iy,  jz);
             auto im = i.xm();
 
             BoutReal s_i =
@@ -258,7 +264,7 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
             BoutReal C_i_sq = std::clamp(
                 (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0., 100.);
 
-            ion_sum[i] += s_i * Zi * sin_alpha[im] * sqrt(C_i_sq);
+            ion_sum[i] += s_i * Zi * cs_factor[im] * sin_alpha[im] * sqrt(C_i_sq);
           }
         }
       }
@@ -268,10 +274,10 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
 
     // ion_sum now contains  sum  s_i Z_i C_i over all ion species
     // at mesh->xstart and mesh->xend indices
-    if (inner_x) {
-      for (RangeIterator r = mesh->iterateBndryLowerX(); !r.isDone(); r++) {
+    if (inner_x && mesh->firstX()) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++)  { // TODO: that is not going to work with SOL geometry, need to loop over the actual boundary points
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(phi, mesh->xstart, r.ind, jz);
+          auto i = indexAt(phi, mesh->xstart, iy, jz);
 
           if (Te[i] <= 0.0) {
             phi[i] = 0.0;
@@ -287,10 +293,11 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
       }
     }
 
-    if (outer_x) {
-      for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+    if (outer_x && mesh->lastX()) {
+      //for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++)  { // TODO: that is not going to work with SOL geometry, need to loop over the actual boundary points
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(phi, mesh->xend, r.ind, jz);
+          auto i = indexAt(phi, mesh->xend, iy, jz);
 
           if (Te[i] <= 0.0) {
             phi[i] = 0.0;
@@ -315,10 +322,11 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
           ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
           : zeroFrom(Ne);
 
-  if (inner_x) {
-    for (RangeIterator r = mesh->iterateBndryLowerX(); !r.isDone(); r++) {
+  if (inner_x && mesh->firstX()) {
+   // for (RangeIterator r = mesh->iterateBndryLowerX(); !r.isDone(); r++) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++)  { // TODO: that is not going to work with SOL geometry, need to loop over the actual boundary points
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(Ne, mesh->xstart, r.ind, jz);
+        auto i = indexAt(Ne, mesh->xstart, iy, jz);
         auto ip = i.xp();
         auto im = i.xm();
 
@@ -366,10 +374,10 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
 
         // Multiply by cell area to get power
         BoutReal flux = q * (coord->J[i] + coord->J[im])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+                        / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[im]));
 
         // Divide by volume of cell to get energy loss rate (< 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+        BoutReal power = flux / (coord->dx[i] * coord->J[i]);
 
 #if CHECKLEVEL >= 1
         if (!std::isfinite(power)) {
@@ -435,10 +443,10 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
         q = std::max(q, 0.0);
         // Multiply by cell area to get power
         BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
+                        / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[ip]));
 
         // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+        BoutReal power = flux / (coord->dx[i] * coord->J[i]);
 #if CHECKLEVEL >= 1
         if (!std::isfinite(power)) {
           throw BoutException(
@@ -593,10 +601,10 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->J[i] + coord->J[im])
-                          / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+                          / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[im]));
 
           // Divide by volume of cell to get energy loss rate (< 0)
-          BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          BoutReal power = flux / (coord->dx[i] * coord->J[i]);
           ASSERT1(std::isfinite(power));
           ASSERT2(power <= 0.0);
 
@@ -604,13 +612,14 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
         }
       }
     }
-    if (outer_x) {
+    if (outer_x && mesh->lastX()) { // Only do this for the processor which has the edge region
       // Note: This is essentially the same as the lower boundary,
       // but with directions reversed e.g. xstart -> xend, ip <-> im
       //
-      for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) {
+      // for (RangeIterator r = mesh->iterateBndryUpperX(); !r.isDone(); r++) { // That what should be done
+      for (int iy = 0; iy < mesh->LocalNy; iy++)  { // TODO: that is not going to work with SOL geometry, need to loop over the actual boundary points
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          auto i = indexAt(Ne, mesh->xend, r.ind, jz);
+          auto i = indexAt(Ne, mesh->xend, iy, jz);
           auto ip = i.xp();
           auto im = i.xm();
 
@@ -669,10 +678,10 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
 
           // Multiply by cell area to get power
           BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                          / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
+                          / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[ip]));
 
           // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          BoutReal power = flux / (coord->dx[i] * coord->J[i]);
           ASSERT1(std::isfinite(power));
           ASSERT2(power >= 0.0);
 
