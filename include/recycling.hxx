@@ -35,7 +35,7 @@ private:
     /// Combination of recycling fraction and species change e.g h+ -> h2 results in 0.5
     /// multiplier
     BoutReal target_multiplier, sol_multiplier, pfr_multiplier, core_multiplier, pump_multiplier;
-    BoutReal target_energy, sol_energy,
+    BoutReal target_energy, sol_energy, core_energy,
         pfr_energy; ///< Energy of recycled particle (normalised to Tnorm)
     BoutReal target_fast_recycle_fraction, pfr_fast_recycle_fraction,
         sol_fast_recycle_fraction, core_fast_recycle_fraction; ///< Fraction of ions undergoing fast reflection
@@ -49,6 +49,10 @@ private:
     Field3D target_recycle_density_source = 0.0;
     /// Recycling energy source for target recycling
     Field3D target_recycle_energy_source = 0.0;
+    /// Recycling density source for core recycling
+    Field3D core_recycle_density_source = 0.0;
+    /// Recycling energy source for core recycling
+    Field3D core_recycle_energy_source = 0.0;
     /// Recycling density source for pfr + sol recycling
     Field3D wall_recycle_density_source = 0.0;
     /// Recycling energy source for pfr + sol recycling
@@ -66,11 +70,14 @@ private:
   bool diagnose;           ///< Save additional post-processing variables?
   bool has_sheath_boundary_simple{
       false}; ///< Whether sheath_boundary_simple component is available
+  bool has_sheath_boundary_simple_perp{
+      false}; ///< Whether sheath_boundary_simple component is available
 
   BoutReal density_floor,
       pressure_floor; ///< minimum values for Nn, Pn to avoid divide by zero
 
   BoutReal gamma_i; /// Sheath heat transmission coefficient
+  BoutReal gamma_i_perp; /// Sheath heat transmission coefficient
 
   Field3D density_source,
       energy_source;          ///< Recycling particle and energy sources for all locations

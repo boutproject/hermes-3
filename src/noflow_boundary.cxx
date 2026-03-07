@@ -51,6 +51,30 @@ void NoFlowBoundary::transform_impl(GuardedOptions& state) {
       }
     }
 
+        if (noflow_inner_x) {
+      //for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          auto i = indexAt(var, mesh->xstart, iy, jz);
+          auto im = i.xm();
+
+          var[im] = var[i];
+        }
+      }
+    }
+
+    if (noflow_outer_x) {
+      //for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          auto i = indexAt(var, mesh->xend, iy, jz);
+          auto ip = i.xp();
+
+          var[ip] = var[i];
+        }
+      }
+    }
+
     // Promise that we're only modifying the boundary
     setBoundary<Field3D>(species[field], var);
   }
@@ -82,6 +106,31 @@ void NoFlowBoundary::transform_impl(GuardedOptions& state) {
           auto ip = i.yp();
 
           var[ip] = -var[i];
+        }
+      }
+    }
+
+        if (noflow_inner_x) {
+      //for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++) {
+
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          auto i = indexAt(var, mesh->xstart, iy, jz);
+          auto im = i.xm();
+
+          var[im] = - var[i];
+        }
+      }
+    }
+
+    if (noflow_outer_x) {
+      //for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int iy = 0; iy < mesh->LocalNy; iy++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          auto i = indexAt(var, mesh->xend, iy, jz);
+          auto ip = i.xp();
+
+          var[ip] = - var[i];
         }
       }
     }
