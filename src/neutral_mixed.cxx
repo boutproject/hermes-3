@@ -214,8 +214,8 @@ void NeutralMixed::transform(Options& state) {
     NVn.clearParallelSlices();
   }
   
-  Nn = floor(Nn, 0.0);
-  Pn = floor(Pn, 0.0);
+  Nn = floor(Nn, 1e-3 * density_floor);
+  Pn = floor(Pn, 1e-3 * pressure_floor);
 
   // Nnlim Used where division by neutral density is needed
   Nnlim = floor(Nn, density_floor);
