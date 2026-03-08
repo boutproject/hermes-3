@@ -96,6 +96,17 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     / (Lnorm * Lnorm * Omega_ci);
   viscosity.applyBoundary("dirichlet");
 
+  BoutReal tmp_viscosity = options["viscosity"]
+    .doc("Kinematic viscosity [m^2/s]")
+    .withDefault<BoutReal>(0.0);
+
+  if (tmp_viscosity>0.0) {
+    has_viscosity = true;
+  } else {
+    has_viscosity = false;
+  }
+
+
   
   viscosity_par = options["viscosity_par"]
     .doc("Kinematic viscosity [m^2/s]")
@@ -105,6 +116,16 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   mesh->communicate(viscosity_par);
   viscosity_par.applyParallelBoundary("parallel_neumann_o1");
 
+  
+  BoutReal tmp_viscosity_par = options["viscosity_par"]
+    .doc("Kinematic viscosity [m^2/s]")
+    .withDefault<BoutReal>(0.0);
+
+  if (tmp_viscosity_par>0.0) {
+    has_viscosity_par = true;
+  } else {
+    has_viscosity_par =  false;
+  }
   
   hyper = options["hyper"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
 
@@ -771,11 +792,16 @@ void Vorticity::finally(const Options& state) {
   }
 
   // Viscosity
-  ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
+  if (has_viscosity) {
+    ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
+  }
 
   Field3D dummy;
-  ddt(Vort) += Div_par_K_Grad_par_mod(viscosity_par, Vort, dummy);
-  
+
+  if (has_viscosity_par) { 
+    ddt(Vort) += Div_par_K_Grad_par_mod(viscosity_par, Vort, dummy);
+  }
+    
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
