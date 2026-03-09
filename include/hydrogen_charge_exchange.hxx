@@ -202,8 +202,8 @@ struct HydrogenChargeExchange : public AmjuelReaction {
 
       // Always add CX collision frequency
       add_diagnostic(atomR, fmt::format("K{:s}{:s}_cx", atomR, ionR),
-          fmt::format("Collision frequency of CX of {:s} and {:s} producing "
-                      "{:s} and {:s}. Note Kab != Kba",
+                     fmt::format("Collision frequency of CX of {:s} and {:s} producing "
+                                 "{:s} and {:s}. Note Kab != Kba",
                                  atomR, ionP, ionR, atomP),
                      ReactionDiagnosticType::collision_freq, "hydrogen_charge_exchange",
                      identity);

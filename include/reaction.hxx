@@ -209,7 +209,8 @@ protected:
    */
   template <OPTYPE operation>
   void update_source(GuardedOptions& state, const std::string& sp_name,
-                     ReactionDiagnosticType type, const std::string& lbl, const Field3D& fld) {
+                     ReactionDiagnosticType type, const std::string& lbl,
+                     const Field3D& fld) {
     // Update species data
     operation(state["species"][sp_name][lbl], fld);
 
