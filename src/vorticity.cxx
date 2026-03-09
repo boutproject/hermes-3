@@ -76,7 +76,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   average_atomic_mass = options["average_atomic_mass"]
                             .doc("Weighted average atomic mass, for polarisation current "
                                  "(Boussinesq approximation)")
-                            .withDefault<BoutReal>(2.0); // Deuterium
+                            .withDefault<BoutReal>(1.0); // Deuterium
 
   bndry_flux = options["bndry_flux"]
                    .doc("Allow flows through radial boundaries")
