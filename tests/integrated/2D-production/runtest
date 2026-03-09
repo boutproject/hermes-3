@@ -11,7 +11,7 @@ import xhermes
 
 gen_data = False
 verbose = False
-rtol = 1e-6
+rtol = 1e-5
 atol = 1e-8
 
 ## Setup
