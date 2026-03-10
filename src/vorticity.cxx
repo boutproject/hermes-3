@@ -188,8 +188,14 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
 
   if (constraint) {
     // phi = phiSolver->solve(Vort * (SQ(coord->Bxy) / average_atomic_mass)); //NOTE: get initial value based on P?
+
+    // Implicit Phi solve using IDA and other solvers that support constraints.
+    if (!solver->constraints()) {
+      throw BoutException("Cannot constrain. Run again with phi_constraint=false.\n");
+    }
+    
     // Add phi equation as a constraint
-    solver->constraint(phi, ddt(phi), "phi");
+    solver->constraint(phi, ddt(phi), "phi");    
   }
 
   // Read curvature vector
