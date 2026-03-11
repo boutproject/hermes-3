@@ -1,14 +1,14 @@
 .. _sec-developer:
 
 Developer manual
-==============
+================
 
 
 Developer tips
 --------------
 
 Compiling Hermes-3 quickly
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 After compiling Hermes-3 and changing something, you can avoid unnecessary recompilation of 
 unchanged files. Simply enter the build directory and do:
@@ -23,12 +23,12 @@ To stop this try adding the flag ``-DHERMES_UPDATE_GIT_SUBMODULE=OFF`` in your C
 This and other useful options can be found in ``hermes-3/CMakeLists.txt``.
 
 Compiling documentation
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 The Hermes-3 documentation is built using `Sphinx <https:
-//www.sphinx-doc.org/en/master/usage/installation.html>`_ and 
-`Doxygen <https://www.doxygen.nl/index.html>`_. It's written in 
-`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`_, 
+//www.sphinx-doc.org/en/master/usage/installation.html>`__ and 
+`Doxygen <https://www.doxygen.nl/index.html>`__. It's written in 
+`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`__, 
 which is a markup language similar to Markdown. Doxygen generates automatic 
 documentation based on the C++ code, while Sphinx handles everything else.
 
@@ -72,11 +72,11 @@ Editing documentation is much easier if you can compile it locally using the fol
 6. **Open the generated HTML files**, either by double clicking on the file in your
    browser, or some other way. If you use VS Code locally or on a remote
    machine through SSH, you can use the extension `Live Preview <https:
-   //marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`_ which
+   //marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`__ which
    can stream it to your browser.
 
 Debugging: running for one iteration
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Any BOUT++ code can be run for just one right-hand side (RHS) iteration. This will
 run instantly for any simulation and not need any kind of solver convergence, making
@@ -91,7 +91,7 @@ This can be done by setting the following in the input file:
 The ``timestep`` setting will be ignored. 
 
 Debugging: printing values
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When debugging, it can be useful to print things out. This is simple in C++. 
 For example, if you want to print the value of the variable ``particle_flow``, do:
@@ -138,9 +138,9 @@ The output will look something like:
 Note that there are multiple ways to print out values in C++, and both ``std::string(text)`` and ``"text"`` are valid.
 
 Debugging: segmentation faults
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-`Segmentation faults <https://thelinuxcode.com/segmentation-fault-cpp/>`_ can be frustrating because
+`Segmentation faults <https://thelinuxcode.com/segmentation-fault-cpp/>`__ can be frustrating because
 they give very little verbosity. In practice, the most common cause is trying to access a variable
 that hasn't been initialised yet. The easiest way to debug this is to carefully review the new lines of 
 code to make sure all variables exist and have been declared and initialised. If this is tricky,
@@ -148,26 +148,26 @@ another simple way is to comment out large parts of the code until the segmentat
 helping to narrow down its location. 
 
 While the above methods are very simple and can be effective, debugging tools such as 
-`gdb <https://sourceware.org/gdb/>`_ or `valgrind <https://valgrind.org/>`_ can be used to find 
+`gdb <https://sourceware.org/gdb/>`__ or `valgrind <https://valgrind.org/>`__ can be used to find 
 the segmentation fault as well.
 
 Debugging: compiling in debug mode
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This can be a useful way to catch errors. Please see the
-`relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`_ 
+`relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`__ 
 in the BOUT++ documentation.
 
 Header vs. implementation files
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 C++ allows you to split code into implementation (.cxx) and header (.hxx) files.
 The convention of what should be in each one is not consistent in Hermes-3 at
 the moment. The most common standard is for the header file to contain all of the
 variable and class declarations and the implementation file to contain the rest.
 An example of this is in the ``evolve_density`` component - see the
-`implementation file <https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`_
-and the `header file <https://github.com/boutproject/hermes-3/blob/master/include/evolve_density.hxx>`_.
+`implementation file <https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`__
+and the `header file <https://github.com/boutproject/hermes-3/blob/master/include/evolve_density.hxx>`__.
 
 
 
@@ -178,7 +178,7 @@ Hermes-3 casts its variables in a variety of BOUT++ classes. Floats are
 usually represented as ``BoutReal``, and fields as ``Field3D``. Note that
 Hermes-3 always runs "in 3D" - when configured in 1D, the x and z dimensions
 are of unit length. See relevant `BOUT++ docs 
-<https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`_ 
+<https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`__ 
 for more info. There is also a data type called ``Options`` which is equivalent
 to a Python dictionary with extra functionality, and is used to store input
 options, the entire simulation state and many other data. Finally,
@@ -187,7 +187,7 @@ object and controls access to its contents.
 
 
 Adding new settings
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 This is simple and uses the following syntax:
 
@@ -198,12 +198,12 @@ This is simple and uses the following syntax:
                      .withDefault<bool>(true);
 
 See `this real world example 
-<https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`_.
+<https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`__.
 
 The variable must also be declared in the corresponding header file.
 
 Adding new diagnostics
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Adding new diagnostics is also simple, provided there is already an ``outputVars``
 function set up in your component. This is usually located at the end of the
@@ -252,13 +252,13 @@ species, source
    The relevant species and component that the diagnostic is coming from
 
 What is "Options"?
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 Options is a dictionary-like class originally developed for parsing BOUT++ options.
 In Hermes-3, it is used as a general purpose dictionary.
 
 Getting/setting values
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Hermes-3 has a system to prevent quantities from being modified after they are used.
 This is important as it uses a single dictionary-like ``state`` class to hold all of 
@@ -337,16 +337,16 @@ These functions take a second argument which tells you where they were set, whic
 They are wrapped into additional functions, ``GET_VALUE`` and ``GET_NOBOUNDARY`` which automatically
 include this argument.
 
-Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`_ 
+Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`__ 
 for more details.
 
 
 Looping over cells
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 BOUT++ provides a really easy way to loop over the domain using ``BOUT_FOR`` and
 similar loops, see `BOUT++ docs <https://bout-dev.readthedocs
-.io/en/stable/developer_docs/data_types.html#iterating-over-fields>`_.
+.io/en/stable/developer_docs/data_types.html#iterating-over-fields>`__.
 
 There is a way to way to tell if you are in the core or not. The ``mesh`` object
 has a function to indicate if the coordinate is in a periodic region or not.
@@ -378,7 +378,7 @@ Code structure
 
 
 A hermes-3 model, like all `BOUT++ models
-<https://bout-dev.readthedocs.io/en/latest/user_docs/physics_models.htmlject.github.io/>`_,
+<https://bout-dev.readthedocs.io/en/latest/user_docs/physics_models.htmlject.github.io/>`__,
 is an implementation of a set of Ordinary Differential Equations
 (ODEs). The time integration solver drives the simulation, calling the
 `Hermes::rhs` function to calculate the time-derivatives of all the
@@ -421,12 +421,12 @@ and other components have their configuration options e.g. for reactions:
          )
 
 In terms of design patterns, the method used here is essentially a combination
-of the `Encapsulate Context <https://accu.org/journals/overload/12/63/kelly_246/>`_
-and `Command <https://en.wikipedia.org/wiki/Command_pattern>`_ patterns.
+of the `Encapsulate Context <https://accu.org/journals/overload/12/63/kelly_246/>`__
+and `Command <https://en.wikipedia.org/wiki/Command_pattern>`__ patterns.
 
 
 Simulation state
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 
 The simulation state is passed between components, and is a tree of
@@ -516,10 +516,10 @@ A common need is to add or subtract values from fields, such as density sources:
   
 Notes:
 
-- When checking if a subsection exists, use `option.isSection`, since `option.isSet`
+- When checking if a subsection exists, use ``option.isSection``, since ``option.isSet``
   is false if it is a section and not a value.
-- The species name convention is that the charge state is last, after the `+` or `-`
-  sign: `n2+` is a singly charged nitrogen molecule, while `n+2` is a +2 charged
+- The species name convention is that the charge state is last, after the ``+`` or ``-``
+  sign: ``n2+`` is a singly charged nitrogen molecule, while ``n+2`` is a +2 charged
   nitrogen atom.
 
   
@@ -575,8 +575,8 @@ Inputs to the component constructors are:
 
 The `name` is a string labelling the instance. The `alloptions` tree contains at least:
 
-* `alloptions[name]` options for this instance
-* `alloptions['units']`
+* ``alloptions[name]`` options for this instance
+* ``alloptions['units']``
 
 
 Component Permissions
@@ -609,7 +609,7 @@ all substitutions that will be performed.
 
 
 Component scheduler
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 The simulation model is created in `Hermes::init` by a call to the `ComponentScheduler`::
 
@@ -871,12 +871,12 @@ Tests
 --------------
 
 The specification of the Toro tests used here is taken from
-`Walker (2012) <https://doi.org/10.1371/journal.pone.0039999>`_,
+`Walker (2012) <https://doi.org/10.1371/journal.pone.0039999>`__,
 originally from Toro's book `Riemann Solvers and Numerical Methods for
-Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`_.
+Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`__.
 
 1D-recycling-dthe
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
 
 This is a comprehensive 1D test featuring three species (deuterium tritium and helium)
 as well as all of the parallel closure terms apart from electron viscosity.
@@ -909,13 +909,13 @@ of the script.
 ~~~~~~~~~~~~~~
 
 This test uses the same restart file as 2D-production, but tests target recycling by reproducing the relevant
-recycling.cxx section in Python. It compares the source of recycled neutral density and energy between
+recycling.cxx section in Python. It compares the source of recycled neutral density and energy as well as 
+the pumped neutral density and energy sources between
 the calculation and the reference simulation. In the future, this test will be extended to radial recycling.
 
-The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
-of the script.
+This test is a reproduction of C++ code, and therefore there is no golden answer reference to update.
 
-This test also plots results and can be used to help with developing the recycling component. There
+This test plots results and can be used to help with developing the recycling component. There
 is a `plot` flag near the beginning of the file. 
 
 1D fluid (MMS)
@@ -975,7 +975,7 @@ Toro test 1
 ``tests/integrated/toro-1``
 
 Toro's test problem #1, from `Riemann Solvers and Numerical Methods
-for Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`_
+for Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`__
 is a variation of Sod's shock tube problem. The left state is moving
 into the right, increasing the speed of the resulting shock. Left
 state :math:`\left(\rho_L, u_L, p_L\right) = \left(1.0, 0.75,
@@ -1166,7 +1166,7 @@ When collisions are neglected, we obtain the result
    :width: 60%
 
 Collision frequency selection
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 There are two simple integrated tests to make sure that the collision frequency selection is correct
 across `neutral_mixed`, `evolve_pressure`, `ion_viscosity` and `neutral_parallel_diffusion`.

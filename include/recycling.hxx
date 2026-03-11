@@ -72,12 +72,17 @@ private:
 
   Field3D density_source,
       energy_source; ///< Recycling particle and energy sources for all locations
-  Field3D energy_flow_ylow, energy_flow_xlow; ///< Cell edge fluxes used for calculating
-                                              ///< fast recycling energy source
+  Field3D energy_flow_xlow;   ///< Cell edge fluxes used for calculating
+                              ///<
+                              ///< fast recycling energy source
   Field3D particle_flow_xlow; ///< Radial wall particle fluxes for recycling calc. No need
+                              ///<
                               ///< to get poloidal from here, it's calculated from sheath
+                              ///<
                               ///< velocity
-  Field2D is_pump; ///< 1 = pump, 0 = no pump. Works only in SOL/PFR. Provided by user in
+
+  Field2D is_pump; ///< 1 = pump, 0 = no pump. Provided by user in
+                   ///<
                    ///< grid file.
   /// Inputs
   ///
