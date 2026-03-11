@@ -86,12 +86,53 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   lax_flux =
       options["lax_flux"].doc("Enable stabilising lax flux?").withDefault<bool>(true);
 
-  neutral_lmax = 0.1 / meters; // Normalised length
+  // Guard against accidentally setting flux_limit = true (parses as 1.0)
+  if (options.isSet("flux_limit")) {
+    const std::string raw = options["flux_limit"].as<std::string>();
+    if (raw == "true" || raw == "false") {
+      throw BoutException(
+          "flux_limit is no longer a boolean setting. Please use a numeric value.", raw);
+    }
+  }
 
-  flux_limit =
-      options["flux_limit"]
-          .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
-          .withDefault(0.2);
+  flux_limit_adv = options["flux_limit"]
+                       .doc("Limit advective fluxes to fraction of thermal speed. <=0 "
+                            "means no limits applied.")
+                       .withDefault(0.2);
+
+  flux_limit_cond_perp =
+      options["flux_limit_cond_perp"]
+          .doc("Limit perpendicular conductive fluxes to fraction of free-streaming. "
+               "Defaults to same as advection limiter.")
+          .withDefault(flux_limit_adv);
+
+  flux_limit_cond_par =
+      options["flux_limit_cond_par"]
+          .doc("Limit parallel conductive fluxes to fraction of free-streaming. Defaults "
+               "to same as perpendicular conduction limiter value.")
+          .withDefault(flux_limit_cond_perp);
+
+  flux_limit_visc_perp =
+      options["flux_limit_visc_perp"]
+          .doc("Limit perpendicular viscous fluxes to fraction of free-streaming. "
+               "Defaults to same as advection limiter value.")
+          .withDefault(flux_limit_adv);
+
+  flux_limit_visc_par =
+      options["flux_limit_visc_par"]
+          .doc("Limit parallel viscous fluxes to fraction of free-streaming. Defaults to "
+               "same as perpendicular viscous limiter value.")
+          .withDefault(flux_limit_visc_perp);
+
+  flux_limiter_sharpness = options["flux_limiter_sharpness"]
+                               .doc("Sharpness of flux limiter transition. Only used if "
+                                    "legacy_limiter_form is false. Default is 2.0")
+                               .withDefault(2.0);
+
+  neutral_lmax = options["neutral_lmax"]
+                     .doc("Maximum length scale due to the presence of walls.")
+                     .withDefault<BoutReal>(0.1)
+                 / get<BoutReal>(alloptions["units"]["meters"]); // Normalised length
 
   diffusion_limit = options["diffusion_limit"]
                         .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
@@ -106,11 +147,14 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                            .doc("Include neutral gas heat conduction?")
                            .withDefault<bool>(true);
 
-  collisionality_override =
-      options["collisionality_override"]
-          .doc(
-              "Paramter for overriding the neutral collision frequency in Dn for testing")
-          .withDefault(-1.0);
+  perp_ion_coupling = options["perp_ion_coupling"]
+                          .doc("Include coupling to ion perpendicular velocity?")
+                          .withDefault<bool>(true);
+
+  collisionality_override = options["collisionality_override"]
+                                .doc("Parameter for overriding the neutral collision "
+                                     "frequency in Dn for testing")
+                                .withDefault(-1.0);
 
   normalise_sources = options["normalise_sources"]
                           .doc("Normalise input sources?")
@@ -126,6 +170,27 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     inv->setInnerBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
     inv->setOuterBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
   }
+
+  zero_timederivs = options["zero_timederivs"]
+                        .doc("Set the time derivatives to zero?")
+                        .withDefault<bool>(false);
+
+  // FIXME: Temporary options to enable legacy behaviour. Will be removed.
+
+  double_count_lmax =
+      options["double_count_lmax"]
+          .doc("Include neutral_lmax in Dmax and kappa_max as well as Dnn?")
+          .withDefault<bool>(true);
+
+  legacy_thermal_speed =
+      options["legacy_thermal_speed"]
+          .doc("Use legacy definition of thermal speed in flux limiter?")
+          .withDefault<bool>(true);
+
+  legacy_limiter_form = options["legacy_limiter_form"]
+                            .doc("Use legacy form of flux limiter rather than "
+                                 "SOLPS-style with sharpness parameter?")
+                            .withDefault<bool>(true);
 
   // Optionally output time derivatives
   output_ddt =
@@ -206,6 +271,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnNVn.setBoundary(std::string("Dnn") + name);
 
+  kappa_n_perp = 0.0, eta_n_perp = 0.0;
+  kappa_n_par = 0.0, eta_n_par = 0.0;
+
   substitutePermissions("name", {name});
   substitutePermissions(
       "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
@@ -229,6 +297,16 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
 
   Vn = NVn / (AA * Nnlim);
   Vn.applyBoundary("neumann");
+
+  // NVn.applyBoundary();
+  NVn_solver = NVn;   // Save the momentum as calculated by the solver
+  NVn = AA * Nn * Vn; // Re-calculate consistent with V and N
+  // Note: Now NV and NV_solver will differ when N < density_floor
+  NVn_err = NVn - NVn_solver; // This is used in the finally() function
+  NVn.applyBoundary();
+
+  Pnlim = softFloor(Pn, pressure_floor);
+  Pnlim.applyBoundary();
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
@@ -334,88 +412,179 @@ void NeutralMixed::finally(const Options& state) {
   //
   //
 
-  Field3D Rnn = sqrt(Tnlim / AA)
-                / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
-  if (collisionality_override > 0.0) {
-    // user has set an override for collision frequency
-    Dnn = (Tn / AA) / collisionality_override;
+  // Pseudo-collisionality representing domain size based neutral MFP limit
+  nu_pseudo_mfp = sqrt(Tnlim / AA) / neutral_lmax;
+
+  if (localstate.isSet("collision_frequency")) {
+    // Collisionality
+    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+    if (collision_names.empty()) { // Calculate only once - at the beginning
+
+      if (diffusion_collisions_mode == "afn") {
+        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
+              // Ionisation
+              (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) or
+              // Neutral-neutral collisions
+              (collisionSpeciesMatch(collision_name, name, name, "coll", "exact"))) {
+            collision_names.push_back(collision_name);
+          }
+        }
+        // Multispecies mode: all collisions and CX are included
+      } else if (diffusion_collisions_mode == "multispecies") {
+        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+
+          std::string collision_name = collision.second.name();
+
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
+              // Any collision (en, in, ee, ii, nn)
+              (collisionSpeciesMatch(collision_name, name, "", "coll", "partial"))) {
+            collision_names.push_back(collision_name);
+          }
+        }
+
+      } else {
+        throw BoutException("\ndiffusion_collisions_mode for {:s} must be either "
+                            "multispecies or braginskii",
+                            name);
+      }
+
+      if (collision_names.empty()) {
+        throw BoutException("\tNo collisions found for {:s} in neutral_mixed for "
+                            "selected collisions mode",
+                            name);
+      }
+
+      // Write chosen collisions to log file
+      output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ", name,
+                        diffusion_collisions_mode);
+      for (const auto& collision : collision_names) {
+        output_info.write("{:s} ", collision);
+      }
+      output_info.write("\n");
+    }
+
+    // Collect the collisionalities based on list of names
+    nu = 0;
+    for (const auto& collision_name : collision_names) {
+      nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
+    }
+
   } else {
-    if (localstate.isSet("collision_frequency")) {
-      // Collisionality
-      // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
-      if (collision_names.empty()) { // Calculate only once - at the beginning
-
-        if (diffusion_collisions_mode == "afn") {
-          for (const auto& collision :
-               localstate["collision_frequencies"].getChildren()) {
-
-            std::string collision_name = collision.second.name();
-
-            if ( // Charge exchange
-                (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
-                // Ionisation
-                (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) or
-                // Neutral-neutral collisions
-                (collisionSpeciesMatch(collision_name, name, name, "coll", "exact"))) {
-              collision_names.push_back(collision_name);
-            }
-          }
-          // Multispecies mode: all collisions and CX are included
-        } else if (diffusion_collisions_mode == "multispecies") {
-          for (const auto& collision :
-               localstate["collision_frequencies"].getChildren()) {
-
-            std::string collision_name = collision.second.name();
-
-            if ( // Charge exchange
-                (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
-                // Any collision (en, in, ee, ii, nn)
-                (collisionSpeciesMatch(collision_name, name, "", "coll", "partial"))) {
-              collision_names.push_back(collision_name);
-            }
-          }
-
-        } else {
-          throw BoutException("\ndiffusion_collisions_mode for {:s} must be either "
-                              "multispecies or braginskii",
-                              name);
-        }
-
-        if (collision_names.empty()) {
-          throw BoutException("\tNo collisions found for {:s} in neutral_mixed for "
-                              "selected collisions mode",
-                              name);
-        }
-
-        // Write chosen collisions to log file
-        output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ", name,
-                          diffusion_collisions_mode);
-        for (const auto& collision : collision_names) {
-          output_info.write("{:s} ", collision);
-        }
-        output_info.write("\n");
-      }
-
-      // Collect the collisionalities based on list of names
-      nu = 0;
-      for (const auto& collision_name : collision_names) {
-        nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
-      }
-
-      // Dnn = Vth^2 / sigma
-      Dnn = (Tnlim / AA) / (nu + Rnn);
-    } else {
-      Dnn = (Tnlim / AA) / Rnn;
-    }
+    nu = 0.0;
   }
-  if (flux_limit > 0.0) {
-    // Apply flux limit to diffusion,
-    // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax =
-        flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
+
+  nu_total = nu + nu_pseudo_mfp;
+  if (collisionality_override > 0.0) {
+    nu_total = collisionality_override;
+  }
+
+  // Dnn = Vth^2 / nu_total
+  Dnn_unlimited = (Tnlim / AA) / nu_total;
+
+  debug = nu;
+
+  // Heat conductivity
+  // Note: This is kappa_n = (5/2) * Pn / (m * nu)
+  //       where nu is the collision frequency used in Dnn
+  kappa_n_unlimited = (5. / 2) * Dnn_unlimited * Nnlim;
+
+  // Viscosity
+  // Relationship between heat conduction and viscosity for neutral
+  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+  // Transport Processes in Gases", 1972
+  // eta_n = (2. / 5) * m_n * kappa_n;
+  //
+  eta_n_unlimited = AA * (2. / 5) * kappa_n_unlimited;
+
+  Dnn = emptyFrom(Dnn_unlimited);
+  Dmax = emptyFrom(Dnn_unlimited);
+
+  if (flux_limit_adv > 0.0) {
+    // Thermal velocity of neutrals
+    // Old formulation: 3D thermal speed for advection, that times 3/2 for heat flux
+    // New formulation: 1D particle flow in 3D maxwellian, 1D heat flow in 3D Maxwellian
+    // See Stangeby
+
+    Field3D Vnth_pf = 0.0;
+    Field3D Vnth_hf = 0.0;
+
+    if (legacy_thermal_speed) {
+      Vnth_pf = sqrt(Tnlim / AA);
+      Vnth_hf = 3.0 / 2.0 * Vnth_pf;
+    } else {
+      Vnth_pf = 0.25 * sqrt(8.0 * Tnlim / (PI * AA));
+      Vnth_hf = sqrt(2.0 * Tnlim / (PI * AA));
     }
+
+    // Calculate maximum diffusivities
+    // double_count_lmax includes neutral_lmax also in the maximum Dnn and kappa,
+    // which is legacy behaviour and double counting.
+    // eta_max never had neutral_lmax added so is omitted
+    if (double_count_lmax) {
+      Dmax = flux_limit_adv * Vnth_pf / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
+      kappa_n_max_perp = flux_limit_cond_perp * (Vnth_hf * Nnlim)
+                         / (abs(Grad_perp(Tn)) / Tnlim + 1. / neutral_lmax);
+      kappa_n_max_par = flux_limit_cond_par * (Vnth_hf * Nnlim)
+                        / (abs(Grad_par(Tn)) / Tnlim + 1. / neutral_lmax);
+
+    } else {
+      Dmax = flux_limit_adv * Vnth_pf / (abs(Grad_perp(logPnlim)));
+      kappa_n_max_perp =
+          flux_limit_cond_perp * (Vnth_hf * Nnlim) / (abs(Grad_perp(Tn)) / Tnlim);
+      kappa_n_max_par =
+          flux_limit_cond_par * (Vnth_hf * Nnlim) / (abs(Grad_par(Tn)) / Tnlim);
+    }
+
+    eta_n_max_perp = flux_limit_visc_perp * Pnlim / abs(Grad_perp(Vn));
+    eta_n_max_par = flux_limit_visc_par * Pnlim / abs(Grad_par(Vn));
+
+    // Apply limits
+    static auto apply_limiter = [](BoutReal unlimited, BoutReal max,
+                                   BoutReal flux_limiter_sharpness,
+                                   bool legacy_limiter_form) -> BoutReal {
+      if (legacy_limiter_form) {
+
+        // Simple harmonic average
+        return unlimited * max / (unlimited + max);
+      } else {
+        // SOLPS style limiter
+        return unlimited
+               * pow(1.0 + pow(unlimited / max, flux_limiter_sharpness),
+                     -1.0 / flux_limiter_sharpness);
+      }
+    };
+
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = apply_limiter(Dnn_unlimited[i], Dmax[i], flux_limiter_sharpness,
+                             legacy_limiter_form);
+      kappa_n_perp[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i],
+                                      flux_limiter_sharpness, legacy_limiter_form);
+      kappa_n_par[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i],
+                                     flux_limiter_sharpness, legacy_limiter_form);
+      eta_n_perp[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i],
+                                    flux_limiter_sharpness, legacy_limiter_form);
+      eta_n_par[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_par[i],
+                                   flux_limiter_sharpness, legacy_limiter_form);
+    }
+
+    debug = abs(Grad_par(Tn));
+
+  } else {
+    Dnn = Dnn_unlimited;
+    Dmax = Dnn_unlimited;
+    kappa_n_perp = kappa_n_unlimited;
+    kappa_n_par = kappa_n_unlimited;
+    kappa_n_max_perp = kappa_n_unlimited;
+    kappa_n_max_par = kappa_n_unlimited;
+    eta_n_max_perp = eta_n_unlimited;
+    eta_n_max_par = eta_n_unlimited;
   }
 
   if (diffusion_limit > 0.0) {
@@ -428,6 +597,30 @@ void NeutralMixed::finally(const Options& state) {
   mesh->communicate(Dnn);
   Dnn.clearParallelSlices();
   Dnn.applyBoundary();
+
+  mesh->communicate(kappa_n_unlimited);
+  kappa_n_unlimited.clearParallelSlices();
+  kappa_n_unlimited.applyBoundary("neumann");
+
+  mesh->communicate(kappa_n_perp);
+  kappa_n_perp.clearParallelSlices();
+  kappa_n_perp.applyBoundary("neumann");
+
+  mesh->communicate(kappa_n_par);
+  kappa_n_par.clearParallelSlices();
+  kappa_n_par.applyBoundary("neumann");
+
+  mesh->communicate(eta_n_unlimited);
+  eta_n_unlimited.clearParallelSlices();
+  eta_n_unlimited.applyBoundary("neumann");
+
+  mesh->communicate(eta_n_perp);
+  eta_n_perp.clearParallelSlices();
+  eta_n_perp.applyBoundary("neumann");
+
+  mesh->communicate(eta_n_par);
+  eta_n_par.clearParallelSlices();
+  eta_n_par.applyBoundary("neumann");
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
@@ -445,6 +638,13 @@ void NeutralMixed::finally(const Options& state) {
         DnnNn(r.ind, mesh->ystart - 1, jz) = -DnnNn(r.ind, mesh->ystart, jz);
         DnnPn(r.ind, mesh->ystart - 1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
         DnnNVn(r.ind, mesh->ystart - 1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
+
+        // Neumann BC for the transport coef
+        // NOTE: Do we need that?
+        auto i = indexAt(kappa_n_par, r.ind, mesh->ystart, jz);
+        auto im = i.ym();
+        kappa_n_par[im] = kappa_n_par[i];
+        eta_n_par[im] = eta_n_par[i];
       }
     }
   }
@@ -456,6 +656,13 @@ void NeutralMixed::finally(const Options& state) {
         DnnNn(r.ind, mesh->yend + 1, jz) = -DnnNn(r.ind, mesh->yend, jz);
         DnnPn(r.ind, mesh->yend + 1, jz) = -DnnPn(r.ind, mesh->yend, jz);
         DnnNVn(r.ind, mesh->yend + 1, jz) = -DnnNVn(r.ind, mesh->yend, jz);
+
+        // Neumann BC for the transport coef
+        // NOTE: Do we need that?
+        auto i = indexAt(kappa_n_par, r.ind, mesh->yend, jz);
+        auto ip = i.yp();
+        kappa_n_par[ip] = kappa_n_par[i];
+        eta_n_par[ip] = eta_n_par[i];
       }
     }
   }
@@ -469,20 +676,6 @@ void NeutralMixed::finally(const Options& state) {
       sound_speed = sqrt(Tn * (5. / 3) / AA);
     }
   }
-
-  // Heat conductivity
-  // Note: This is kappa_n = (5/2) * Pn / (m * nu)
-  //       where nu is the collision frequency used in Dnn
-  kappa_n = (5. / 2) * DnnNn;
-
-  // Viscosity
-  // Relationship between heat conduction and viscosity for neutral
-  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
-  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
-  // Transport Processes in Gases", 1972
-  // eta_n = (2. / 5) * m_n * kappa_n;
-  //
-  eta_n = AA * (2. / 5) * kappa_n;
 
   /////////////////////////////////////////////////////
   // Neutral density
@@ -531,19 +724,19 @@ void NeutralMixed::finally(const Options& state) {
 
   if (neutral_conduction) {
     ddt(Pn) += (2. / 3)
-               * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction
+               * Div_par_K_Grad_par_mod(kappa_n_par, Tn, // Parallel conduction
                                         ef_cond_par_ylow,
                                         false); // No conduction through target boundary
 
     // Perpendicular conduction
     if (nonorthogonal_operators) {
-      ddt(Pn) +=
-          (2. / 3)
-          * Div_a_Grad_perp_nonorthog(kappa_n, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      ddt(Pn) += (2. / 3)
+                 * Div_a_Grad_perp_nonorthog(kappa_n_perp, Tn, ef_cond_perp_xlow,
+                                             ef_cond_perp_ylow);
     } else {
       ddt(Pn) +=
           (2. / 3)
-          * Div_a_Grad_perp_flows(kappa_n, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+          * Div_a_Grad_perp_flows(kappa_n_perp, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
     }
 
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
@@ -589,17 +782,17 @@ void NeutralMixed::finally(const Options& state) {
       // eta_n = (2. / 5) * kappa_n;
 
       Field3D viscosity_source = Div_par_K_Grad_par_mod( // Parallel viscosity
-          eta_n, Vn, mf_visc_par_ylow,
+          eta_n_par, Vn, mf_visc_par_ylow,
           false) // No viscosity through target boundary
           ;
 
       // Perpendicular viscosity
       if (nonorthogonal_operators) {
-        viscosity_source +=
-            Div_a_Grad_perp_nonorthog(eta_n, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
+        viscosity_source += Div_a_Grad_perp_nonorthog(eta_n_perp, Vn, mf_visc_perp_xlow,
+                                                      mf_visc_perp_ylow);
       } else {
         viscosity_source +=
-            Div_a_Grad_perp_flows(eta_n, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
+            Div_a_Grad_perp_flows(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
       }
 
       ddt(NVn) += viscosity_source;
@@ -614,6 +807,77 @@ void NeutralMixed::finally(const Options& state) {
   } else {
     ddt(NVn) = 0;
     Snv = 0;
+  }
+
+  // Add the contribution of ion perp velocity (i.e. anomalous transport)
+  // See eq 20 and 21 by Horsten et al., (2017)
+  if (perp_ion_coupling) {
+
+    const Options& allspecies = state["species"];
+
+    for (auto& kv : allspecies.getChildren()) {
+      // NOTE:: This is only true for d+ ions. How do we generalize?
+      //        How do we include the perpendicular ion velocity from other drifts?
+
+      const Options& species = kv.second;
+
+      if ((kv.first == "e") or !species.isSet("charge")
+          or (fabs(get<BoutReal>(species["charge"])) < 1e-5)) {
+        continue; // Skip electrons and non-charged ions
+      }
+
+      // sources/sinks due to anomalous transport
+      if (species.isSet("anomalous_D")) {
+        const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
+
+        const Field3D Ni = get<Field3D>(species["density"]);
+        Field2D Ni2D = DC(Ni);
+
+        // Apply Neumann Y boundary condition, so no additional flux into boundary
+        // Note: Not setting radial (X) boundaries since those set radial fluxes
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          Ni2D(r.ind, mesh->ystart - 1) = Ni2D(r.ind, mesh->ystart);
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
+        }
+
+        ddt(Nn) +=
+            Div_a_Grad_perp_upwind(Nn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        // NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the
+        // equilibrium value of Nn.
+
+        ddt(Pn) += (5. / 3)
+                   * Div_a_Grad_perp_upwind(
+                       Pn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+
+        if (evolve_momentum) {
+          ddt(NVn) += Div_a_Grad_perp_upwind(
+              NVn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        }
+      }
+    }
+  }
+
+  // If N < density_floor then NV and NV_solver may differ
+  // -> Add term to force NV_solver towards NV
+  // Note: This correction is calculated in transform()
+  ddt(NVn) += NVn_err;
+
+  // Ste time derivatives to zero
+  if (zero_timederivs) {
+
+    Field3D zero{0.0};
+    zero.splitParallelSlices();
+    zero.yup() = 0.0;
+    zero.ydown() = 0.0;
+
+    ddt(Nn) = zero;
+    ddt(Pn) = zero;
+    if (evolve_momentum) {
+      ddt(NVn) = zero;
+    }
+    return;
   }
 
   // Scale time derivatives
@@ -658,6 +922,13 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
     }
   }
+
+  // NOTE: Do we need to do that?
+  // Restore NV to the value returned by the solver
+  // so that restart files contain the correct values
+  // Note: Copy boundary condition so dump file has correct boundary.
+  NVn_solver.setBoundaryTo(NVn);
+  NVn = NVn_solver;
 
 #if CHECKLEVEL >= 1
   for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
@@ -736,6 +1007,13 @@ void NeutralMixed::outputVars(Options& state) {
                     {"source", "neutral_mixed"}});
   }
   if (diagnose) {
+    set_with_attrs(state["debug"], debug,
+                   {{"time_dimension", "t"},
+                    {"units", "-"},
+                    {"conversion", 1},
+                    {"standard_name", "debug"},
+                    {"long_name", "debug"},
+                    {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("T") + name], Tn,
                    {{"time_dimension", "t"},
                     {"units", "eV"},
@@ -749,6 +1027,106 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", Cs0 * Cs0 / Omega_ci},
                     {"standard_name", "diffusion coefficient"},
                     {"long_name", name + " diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("Dnn{}_unlimited", name)], Dnn_unlimited,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " unlimited diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("Dnn_max_{}", name)], Dmax,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " maximum diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("K{}_mfp_pseudo_coll", name)], nu_pseudo_mfp,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", Omega_ci},
+                    {"standard_name", "collision frequency"},
+                    {"long_name", name + " MFP limit pseudo-collisionality"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[fmt::format("K{}_Dnn_coll", name)], nu_total,
+        {{"time_dimension", "t"},
+         {"units", "s^-1"},
+         {"conversion", Omega_ci},
+         {"standard_name", "collision frequency"},
+         {"long_name",
+          name + " total collision frequency used in neutral diffusion coefficient"},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappa_{}_unlimited", name)], kappa_n_unlimited,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"standard_name", "conductivity"},
+                    {"long_name", name + " unlimited conductivity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappa_max_{}_perp", name)], kappa_n_max_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"standard_name", "conductivity"},
+                    {"long_name", name + " maximum perpendicular conductivity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappa_max_{}_par", name)], kappa_n_max_par,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"standard_name", "conductivity"},
+                    {"long_name", name + " maximum parallel conductivity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappa_{}_perp", name)], kappa_n_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"standard_name", "conductivity"},
+                    {"long_name", name + " perpendicular conductivity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappa_{}_par", name)], kappa_n_par,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"standard_name", "conductivity"},
+                    {"long_name", name + " parallel conductivity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_{}_unlimited", name)], eta_n_unlimited,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", Pnorm / Omega_ci},
+                    {"standard_name", "viscosity"},
+                    {"long_name", name + " unlimited viscosity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_{}_perp", name)], eta_n_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", Pnorm / Omega_ci},
+                    {"standard_name", "viscosity"},
+                    {"long_name", name + " perpendicular viscosity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_{}_par", name)], eta_n_par,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", Pnorm / Omega_ci},
+                    {"standard_name", "viscosity"},
+                    {"long_name", name + " parallel viscosity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_max_{}_perp", name)], eta_n_max_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", Pnorm / Omega_ci},
+                    {"standard_name", "viscosity"},
+                    {"long_name", name + " maximum perpendicular viscosity"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_max_{}_par", name)], eta_n_max_par,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", Pnorm / Omega_ci},
+                    {"standard_name", "viscosity"},
+                    {"long_name", name + " maximum parallel viscosity"},
                     {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},

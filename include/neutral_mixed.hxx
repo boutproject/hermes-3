@@ -37,17 +37,30 @@ private:
   Field3D Tn;                     ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
 
+  Field3D NVn_err;    ///< Difference from momentum as input from solver
+  Field3D NVn_solver; ///< Momentum as calculated in the solver
+
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
   std::string
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
   Field3D nu;                    ///< Collisionality to use for diffusion
-  Field3D Dnn;                   ///< Diffusion coefficient
+  Field3D nu_pseudo_mfp;         ///< Pseudo-collision frequency based on mean free path
+  Field3D nu_total; ///< Total collision frequency used for diffusion, including
+                    ///< pseudo-collisions
+  Field3D Dnn, Dnn_unlimited, Dmax;    ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
-  BoutReal flux_limit;                 ///< Diffusive flux limit
-  BoutReal diffusion_limit;            ///< Maximum diffusion coefficient
+  Field3D kappa_n_unlimited, kappa_n_max_par, kappa_n_max_perp;
+  BoutReal flux_limit_adv;       ///< Diffusive flux limit
+  BoutReal flux_limit_cond_par;  ///< Limit for parallel conductive flux
+  BoutReal flux_limit_cond_perp; ///< Limit for perpendicular conductive flux
+  BoutReal flux_limit_visc_par;  ///< Limit for parallel viscous flux
+  BoutReal flux_limit_visc_perp; ///< Limit for perpendicular viscous flux
+
+  BoutReal diffusion_limit; ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;
+  BoutReal flux_limiter_sharpness; ///< Sharpness of flux limiter transition
 
   bool sheath_ydown, sheath_yup;
 
@@ -64,8 +77,18 @@ private:
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum;    ///< Evolve parallel momentum?
   bool normalise_sources;  ///< Normalise input sources?
+  bool perp_ion_coupling;  ///< Include coupling to ion perpendicular velocity?
 
-  Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
+  // Temporary variables
+  Field3D debug;          ///< Debug variable FIXME: remove
+  bool double_count_lmax; ///< Include neutral_lmax in Dmax and kappa_max as well as Dnn?
+  bool legacy_thermal_speed; ///< Use legacy definition of thermal speed in flux limiter?
+  bool legacy_limiter_form;  ///< Use legacy form of flux limiter rather than SOLPS-style
+
+  Field3D kappa_n, eta_n_unlimited;      ///< Neutral conduction and viscosity
+  Field3D kappa_n_perp, eta_n_perp;      ///< Neutral conduction and viscosity
+  Field3D kappa_n_par, eta_n_par;        ///< Neutral conduction and viscosity
+  Field3D eta_n_max_par, eta_n_max_perp; ///< Viscosity reduction factor for flux-limiting
 
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
   bool precondition{true};        ///< Enable preconditioner?
@@ -76,6 +99,8 @@ private:
   Field3D density_source, pressure_source, momentum_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
+
+  bool zero_timederivs; ///< Set the time derivatives to zero?
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
