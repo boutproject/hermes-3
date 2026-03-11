@@ -875,8 +875,11 @@ reactions involving hydrogenic isotopes use the new framework, whilst reactions 
 isotopes use their own set of classes. The intent is that all reaction classes in the code will
 eventually be migrated to the new framework.
 
-A core part of the approach is to convert reaction strings into a stoichiometric matrix.
-Stoichiometric matrices specify the population changes associated with a *mechanism* or system of
+The stoichiometry matrix 
+````````````````````````
+
+A core part of the approach is to convert reaction strings into a stoichiometry matrix.
+stoichiometry matrices specify the population changes associated with a *mechanism* or system of
 reactions, with each column corresponding to a reaction and each row to a species.
 
 For a configuration
@@ -893,11 +896,11 @@ For a configuration
           he+ + e -> he,      # R4
          )
 
-the stoichiometric matrix would be:
+the stoichiometry matrix would be:
 
-.. _fig-stoichiometric_matrix_eg:
-.. figure:: figs/stoichiometric_matrix_eg.*
-   :alt: Example of a stoichiometric matrix for the reactions configured in :numref:code-reactions_config_eg
+.. _fig-stoichiometry_matrix_eg:
+.. figure:: figs/stoichiometry_matrix_eg.*
+   :alt: Example of a stoichiometry matrix for the reactions configured in :numref:code-reactions_config_eg
 
 In the `Reaction` base class, the constructor instantiates a `ReactionParser`, which assembles one
 column of this matrix from the reaction string.
@@ -943,7 +946,7 @@ The density source for a species :math:`s` follows directly from the rate:
 .. math::
    S = C_s K
 
-where :math:`C_s` is the population change for species :math:`s` (from the stoichiometric matrix)
+where :math:`C_s` is the population change for species :math:`s` (from the stoichiometry matrix)
 and :math:`K` is the reaction rate calculated above. The momentum source (:math:`F`) and energy
 source (:math:`E`) associated with a species population change depend on whether the reaction in
 question is a net consumer (:math:`C_s < 0`) or a net producer (:math:`C_s > 0`) of the species:
