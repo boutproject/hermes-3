@@ -941,7 +941,7 @@ The density source for a species :math:`s` follows directly from the rate:
 
 .. _fig-reactions_dens_src_eqn:
 .. math::
-   F = C_s K
+   S = C_s K
 
 where :math:`C_s` is the population change for species :math:`s` (from the stoichiometric matrix)
 and :math:`K` is the reaction rate calculated above. The momentum source (:math:`F`) and energy
