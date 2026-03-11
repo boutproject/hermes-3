@@ -143,6 +143,8 @@ private:
   BoutReal hyper; ///< Hyper-viscosity in Z
   Field3D viscosity; ///< Kinematic viscosity
   Field3D viscosity_par;
+
+  bool has_viscosity_par, has_viscosity;
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 

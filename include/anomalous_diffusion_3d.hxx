@@ -47,9 +47,11 @@ private:
 
   bool diagnose; ///< Outputting diagnostics?
   bool include_D, include_chi, include_nu; ///< Which terms should be included?
+  bool include_D_par;
   Field3D anomalous_D; ///< Anomalous density diffusion coefficient
   Field3D anomalous_chi; ///< Anomalous thermal diffusion coefficient
   Field3D anomalous_nu; ///< Anomalous momentum diffusion coefficient
+  Field3D anomalous_D_par;
   bool use_finite_difference;
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
   std::shared_ptr<FCI::dagp_fv> dagp;

@@ -65,6 +65,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e-8);
 
+  dissipative = options["dissipative"]
+                 .doc("Use strong dissipation in parallel divergence?")
+                 .withDefault(true);
+  
   use_finite_difference = options["use_finite_difference"]
                    .doc("Use finite difference for perpendicular diffusion?")
                    .withDefault<bool>(false);
@@ -76,6 +80,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   parallel_dirichlet = options["parallel_dirichlet"]
                    .doc("Use parallel dirichlet boundary conditions for the plasma?")
                    .withDefault<bool>(true);
+
+  n_lowsource = options["n_lowsource"].withDefault(-1.0) / Nnorm;
+  T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
+  lowsource_scale = options["lowsource_scale"].withDefault(1e-5) * Omega_ci;
   
   neutral_lmax = options["neutral_lmax"].doc("Largest distance to the target, limits diffusion").withDefault<BoutReal>(0.1) / meters;
   
@@ -206,8 +214,8 @@ void NeutralMixed::transform(Options& state) {
     NVn.clearParallelSlices();
   }
   
-  Nn = floor(Nn, 0.0);
-  Pn = floor(Pn, 0.0);
+  Nn = floor(Nn, 1e-3 * density_floor);
+  Pn = floor(Pn, 1e-3 * pressure_floor);
 
   // Nnlim Used where division by neutral density is needed
   Nnlim = floor(Nn, density_floor);
@@ -315,12 +323,12 @@ void NeutralMixed::finally(const Options& state) {
   mesh->communicate(Dnn);
   Dnn.applyParallelBoundary("parallel_neumann_o1");
   
-  
+  Dnn = floor(Dnn, 1e-10);
   
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
   DnnPn = Dnn * Pnlim;
-  DnnNVn = Dnn * NVn;
+  DnnNVn = Dnn * Nnlim * Vn;
 
   if (!isMMS && parallel_dirichlet) {
     yboundary.iter_pnts([&](auto& pnt) {
@@ -339,7 +347,7 @@ void NeutralMixed::finally(const Options& state) {
   // Sound speed appearing in Lax flux for advection terms
   sound_speed = 0;
   if (lax_flux) {
-    sound_speed = sqrt(Tn * (5. / 3) / AA);
+    sound_speed = sqrt(Tnlim * (5. / 3) / AA);
   }
 
   if (isMMS) {
@@ -365,7 +373,7 @@ void NeutralMixed::finally(const Options& state) {
   TRACE("Neutral density");
   if (evolve_momentum) {
     if (!isMMS){
-      ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, true);
+      ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
     } else {
       ddt(Nn) = -Div_par(Nn * Vn);
     }
@@ -396,6 +404,11 @@ void NeutralMixed::finally(const Options& state) {
   if (!isMMS) {
     ddt(Nn) += Sn; // Always add density_source
   }
+
+  if (n_lowsource > 0.0) {
+    ddt(Nn) += low_sourceterm(Nn, n_lowsource, lowsource_scale);
+  } 
+  
   
   /////////////////////////////////////////////////////
   // Neutral pressure
@@ -403,7 +416,7 @@ void NeutralMixed::finally(const Options& state) {
 
   if (evolve_momentum) {
     if (!isMMS) {
-      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, true);      // Parallel advection
+      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
     } else {
       ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
     }
@@ -453,6 +466,10 @@ void NeutralMixed::finally(const Options& state) {
   }
   if (!isMMS) {
     ddt(Pn) += Sp;
+  }
+
+  if (T_lowsource > 0.0) {
+    ddt(Pn) += low_sourceterm(Tn, T_lowsource, lowsource_scale);
   }
   
   if (evolve_momentum) {
@@ -519,16 +536,6 @@ void NeutralMixed::finally(const Options& state) {
   }
 
 
-  //--------------------------------------------------------------------------------------------------------------------------------
-
-  BOUT_FOR(i, Pn.getRegion("RGN_ALL")) {
-    if ((Pn[i] < pressure_floor * 1e-2) && (ddt(Pn)[i] < 0.0)) {
-      ddt(Pn)[i] = 0.0;
-    }
-    if ((Nn[i] < density_floor * 1e-2) && (ddt(Nn)[i] < 0.0)) {
-      ddt(Nn)[i] = 0.0;
-    }
-  }
 
   if (freeze_low_density) {
     // Apply a factor to time derivatives in low density regions.

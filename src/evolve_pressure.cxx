@@ -54,6 +54,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
 
+  
+
   isMMS = options["mms"].withDefault<bool>(false);
   
   if (evolve_log) {
@@ -113,6 +115,9 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
   const BoutReal Lnorm = units["meters"];
   hyper_p = options["hyper_p"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
+
+  T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
+  lowsource_scale = options["lowsource_scale"].withDefault(1e-6) * Omega_ci;
 
   
   auto& p_options = alloptions[std::string("P") + name];
@@ -386,6 +391,12 @@ void EvolvePressure::finally(const Options& state) {
     Field3D Plim = floor(P, 1e-3 * pressure_floor);
     ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
   }
+
+
+  if (T_lowsource > 0.0) {
+    ddt(P) += low_sourceterm(T, T_lowsource, lowsource_scale);
+  } 
+  
 
   // Parallel heat conduction
   if (thermal_conduction) {
