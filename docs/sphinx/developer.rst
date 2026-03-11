@@ -669,6 +669,8 @@ in `group1`, and then `component3`.
    :members:
 
 
+.. _sec-permissions:
+
 Permissions
 ~~~~~~~~~~~~~~
 
@@ -871,9 +873,37 @@ Reactions
 ~~~~~~~~~
 
 The code for handling reactions was significantly refactored after version 1.4.0. Currently,
-reactions involving hydrogenic isotopes use the new framework, whilst reactions involving impurity
-isotopes use their own set of classes. The intent is that all reaction classes in the code will
-eventually be migrated to the new framework.
+reactions involving Hydrogen and Helium isotopes use the new framework, whilst reactions involving
+impurity isotopes use their own set of classes. The intent is that all reaction classes in the code
+will eventually be migrated to the new framework.
+
+Executive summary
+`````````````````
+
+The hierarchy of classes in the framework is:
+
+- `Reaction`
+
+  - `AmjuelReaction`
+
+    - `AmjuelHydIsotopeReaction`
+
+      - `AmjuelHydIonisationIsotope`
+      - `AmjuelHydRecombinationIsotope`
+
+    - `HydrogenChargeExchange`
+    - `AmjuelHeIonisation01`
+    - `AmjuelHeRecombination10`
+
+Most reaction source term contributions are handled in the the :code:`transform_impl` method of the
+base :code:`Reaction` class. For now, all of these reactions use rate data from Amjuel, which is
+read, via the `AmjuelData` class, in the :code:`AmjuelReaction` constructor. Subclasses of
+:code:`AmjuelReaction` set up appropriate diagnostics and :ref:`Permissions<sec-permissions>` for
+particular reactions in their constructors and some implement a :code:`transform_additional` method
+to include source term contributions that aren't captured by :code:`Reaction::transform_impl`.
+
+The following subsections describe the general approach used to compute reaction sources and provide
+guidance to developers on adding new subclasses to handle particular reactions.
 
 The stoichiometry matrix 
 ````````````````````````
