@@ -28,6 +28,9 @@ class Hermes;
 
 #include "include/component_scheduler.hxx"
 
+#include <bout/yboundary_regions.hxx>
+extern YBoundary yboundary;
+
 class Hermes : public PhysicsModel {
 public:
   virtual ~Hermes() {}
