@@ -1,7 +1,7 @@
 .. _sec-postprocessing:
 
 Post-processing
------------
+---------------
 
 Tools
 ~~~~~~~~~~~
@@ -24,7 +24,7 @@ Please refer to the xHermes `readme <https://github.com/boutproject/xhermes?tab=
 and `examples <https://github.com/boutproject/xhermes/tree/main/examples>`_ for details.
 
 Available diagnostic variables
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 It can be problematic to record all of the diagnostic variables in the documentation
 as the code is still in active development. Thankfully, all of the diagnostics are
@@ -61,7 +61,7 @@ Alternatively, the same attributes can be seen in the source code.
 
 
 Reaction diagnostics convention
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 There are five categories of diagnostics. ``K`` is a simple reaction rate (always positive).
 ``S`` is a source of density and is positive if the ion density is increasing.
@@ -86,17 +86,17 @@ is positive if the ion energy is increasing.
 
 Charge exchange can be slightly complicated:
 
-For two species `a` and `b`, the channel `Fab_cx` is a source of momentum for species `a` due to
-charge exchange with species `b`. There are corresponding sinks for
+For two species ``a`` and ``b``, the channel ``Fab_cx`` is a source of momentum for species ``a`` due to
+charge exchange with species ``b``. There are corresponding sinks for
 the products of the charge exchange reaction which are not saved.
 
-For example,reaction `d + t+ -> d+ + t` will save the following
+For example,reaction ``d + t+ -> d+ + t`` will save the following
 forces (momentum sources):
-- `Fdt+_cx` is a source of momentum for deuterium atoms `d` and sink of momentum for deuterium ions `d+`.
-- `Ft+d_cx` is a source of momentum for tritium ions `t+` and sink of momentum for tritium atoms `t`.
+- ``Fdt+_cx`` is a source of momentum for deuterium atoms ``d`` and sink of momentum for deuterium ions ``d+``.
+- ``Ft+d_cx`` is a source of momentum for tritium ions ``t+`` and sink of momentum for tritium atoms ``t``.
 
 The reason for this convention is the existence of the inverse reactions:
-`t + d+ -> t+ + d` outputs diagnostics `Ftd+_cx` and `Fd+t_cx`.
+``t + d+ -> t+ + d`` outputs diagnostics ``Ftd+_cx`` and ``Fd+t_cx``.
 
 Here are the definitions of some common channels:
 
@@ -115,7 +115,7 @@ Here are the definitions of some common channels:
 .. _sec-flow-diagnostics:
 
 Flow diagnostics convention
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Hermes-3 saves a number of different flow rates at a cell boundary. The boundary is 
 located at either the "xlow" or "ylow" side (see :ref:`sec-cell-face-notation`).

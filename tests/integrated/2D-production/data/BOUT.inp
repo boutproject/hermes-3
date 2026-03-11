@@ -21,7 +21,7 @@ initial_pi = initial_ti * initial_ne
 error_on_unused_options = true    # Prevents crash from custom inputs
 
 [mesh]
-file = "grid_test2.nc"
+file = "grid_test2_allpump.nc"
 
 [mesh:paralleltransform]
 type = shifted

@@ -16,29 +16,29 @@ calculated in the ``Collisions`` component.
 
 **Conduction:** 
 Parallel conduction for all species is implemented in the
-:ref:`braginskii_conduction` component.
+:ref:`sec-braginskii_conduction` component.
 
 **Viscosity:**
 Parallel and perpendicular viscosity for ions is in the 
-:ref:`braginskii_ion_viscosity` top-level component. The parallel viscosity for 
-electrons is in :ref:`braginskii_electron_viscosity`.
+:ref:`sec-braginskii_ion_viscosity` top-level component. The parallel viscosity for 
+electrons is in :ref:`sec-braginskii_electron_viscosity`.
 
 **Thermal force:**
-Thermal force is implemented here: :ref:`braginskii_thermal_force`.
+Thermal force is implemented here: :ref:`sec-braginskii_thermal_force`.
 
 **Friction force/heating:**
 The frictional momentum and energy sources are calculated in the top-level
-:ref:`braginskii_friction` component.
+:ref:`sec-braginskii_friction` component.
 
 **Thermal equilibration:**
 Thermal transfers are calculated in the
-:ref:`braginskii_heat_exchange` top-level component.
+:ref:`sec-braginskii_heat_exchange` top-level component.
 
 **Neutral diffusion:**
 The parallel projection of diffusion from the wall in 1D
-is captured in the :ref:`neutral_parallel_diffusion` top-level component, while 
+is captured in the :ref:`sec-neutral_parallel_diffusion` top-level component, while 
 both parallel Braginskii transport and perpendicular pressure-diffusion for 2D/3D 
-are captured in the :ref:`neutral_mixed` species-level component. 
+are captured in the :ref:`sec-neutral_mixed` species-level component. 
    
 
 
@@ -253,7 +253,7 @@ The implementation is in `BraginskiiCollisions`:
    :members:
 
 
-.. _braginskii_friction:
+.. _sec-braginskii_friction:
 
 Braginskii Friction
 ~~~~~~~~~~~~~~~~~~~
@@ -339,7 +339,7 @@ The implementation is in `BraginskiiFriction`:
    :members:
 
 
-.. _braginskii_heat_exchange:
+.. _sec-braginskii_heat_exchange:
 
 Braginskii Heat Exchange
 ~~~~~~~~~~~~~~~~~~~~~~~~

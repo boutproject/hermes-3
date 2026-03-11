@@ -38,17 +38,18 @@ def check_value(name, val, target, **kws):
         # On failure, report the effective abs tolerance used by isclose
         atol_eff = kws["atol"] + kws["rtol"] * abs(target)
         print(
-            f"Expected\n {target-atol_eff} < {name} < {target+atol_eff}\nBut actual value was\n {val}"
+            f"Expected\n {target - atol_eff} < {name} < {target + atol_eff}\nBut actual value was\n {val}"
         )
     return success
 
 
-def check_ULPs_diff(name,val,target, maxulps):
-    nulps = nulp_diff(val,target)
+def check_ULPs_diff(name, val, target, maxulps):
+    nulps = nulp_diff(val, target)
     success = nulps <= maxulps
     if not success:
         print(
-            f'{name} differs from reference data by {nulps} ULPs (max allowed is {maxulps})\n Value = {val}\n Reference = {target}')
+            f"{name} differs from reference data by {nulps} ULPs (max allowed is {maxulps})\n Value = {val}\n Reference = {target}"
+        )
     return success
 
 
