@@ -273,7 +273,7 @@ int Hermes::init(bool restarting) {
 
 
 	// try loading J from the grid, otherwise use the one calculated from the metric coefficients
-	Field3D Jtmp = 0.0;
+	Coordinates::FieldMetric Jtmp = 0.0;
 	if (mesh->get(Jtmp, "J_new")==0){
 	  mesh->communicate(Jtmp);
 	  coord->J = Jtmp;
@@ -291,7 +291,7 @@ int Hermes::init(bool restarting) {
 	coord->J_perp = sqrt(coord->g_11 * coord->g_33 - coord->g_13 * coord->g_13);
 	
 	// try loading g_22 at the lower and upper cell interface from the grid, otherwise caluculate from the mean of the two cellcentered ones                                                           
-        Field3D loadtmp = 0.0;
+        Coordinates::FieldMetric loadtmp = 0.0;
         if (mesh->get(loadtmp, "g_22_cell_ylow")==0) {
           coord->g_22_cell_ylow = loadtmp / SQ(rho_s0);
         } else {
