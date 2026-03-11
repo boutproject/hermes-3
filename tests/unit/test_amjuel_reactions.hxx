@@ -79,11 +79,10 @@ public:
  * @tparam Isotope2
  */
 template <char Isotope1, char Isotope2>
-class AmjuelCXTest
-    : public CXReactionTest<HydrogenIsotopeChargeExchange<Isotope1, Isotope2>> {
+class AmjuelCXTest : public CXReactionTest<HydrogenChargeExchange<Isotope1, Isotope2>> {
 public:
   AmjuelCXTest(std::string lbl, std::string reaction_str)
-      : CXReactionTest<HydrogenIsotopeChargeExchange<Isotope1, Isotope2>>(
+      : CXReactionTest<HydrogenChargeExchange<Isotope1, Isotope2>>(
           lbl, reaction_str, {Isotope1}, {Isotope2, '+'}, {Isotope2}, {Isotope1, '+'}) {}
 };
 
