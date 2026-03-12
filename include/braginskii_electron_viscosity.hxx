@@ -39,7 +39,7 @@ private:
 
   BoutReal density_floor;
   BoutReal pressure_floor; ///< When non-zero pressure is needed
-  
+
   /// Inputs
   /// - species
   ///   - e

@@ -50,8 +50,9 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-8);
 
-  BoutReal temperature_floor = options["temperature_floor"].doc("Low temperature scale")
-    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+  BoutReal temperature_floor =
+      options["temperature_floor"].doc("Low temperature scale").withDefault<BoutReal>(0.1)
+      / get<BoutReal>(alloptions["units"]["eV"]);
 
   pressure_floor = density_floor * temperature_floor;
 
@@ -277,7 +278,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         // SOLPS-style flux limiter
         // Values of alpha ~ 0.5 typically
 
-        const Field3D q_cl = eta * abs(Grad_par(V));   // Collisional value
+        const Field3D q_cl = eta * abs(Grad_par(V)); // Collisional value
         const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
         eta = eta / (1. + (q_cl / q_fl));

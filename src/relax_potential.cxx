@@ -858,7 +858,6 @@ void RelaxPotential::finally(const Options& state) {
     }
   }
 #endif
-
 }
 
 void RelaxPotential::outputVars(Options& state) {

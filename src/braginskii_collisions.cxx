@@ -59,9 +59,7 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
                       .doc("User-set arbitrary multiplier on electron-ion collision rate")
                       .withDefault<BoutReal>(1.0);
 
-  density_floor = options["density_floor"]
-                      .doc("Minimum density floor")
-                      .withDefault(1e-8);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-8);
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
@@ -148,7 +146,8 @@ void BraginskiiCollisions::collide(GuardedOptions& species1, GuardedOptions& spe
     const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]);
 
     const Field3D nu = filledFrom(nu_12, [&](auto& i) {
-      return nu_12[i] * (A1 / A2) * softFloor(density1[i], density_floor) / softFloor(density2[i], density_floor);
+      return nu_12[i] * (A1 / A2) * softFloor(density1[i], density_floor)
+             / softFloor(density2[i], density_floor);
     });
 
     add(species2["collision_frequency"], nu); // Total collision frequency

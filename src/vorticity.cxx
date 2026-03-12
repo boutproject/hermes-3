@@ -4,10 +4,10 @@
 #include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/invert/laplacexy.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/fv_ops.hxx>
+#include <bout/invert/laplacexy.hxx>
 #include <bout/invert_laplace.hxx>
 #include <bout/output_bout_types.hxx>
 
@@ -910,7 +910,6 @@ void Vorticity::finally(const Options& state) {
     }
   }
 #endif
-
 }
 
 void Vorticity::outputVars(Options& state) {
