@@ -26,7 +26,7 @@ inline auto calc_V_tot_local(SYCLTargetSharedPtr sycl_target,
   REAL V_tot_global;
   for (int cellx = 0; cellx < num_cells; cellx++) {
     // No normalisation needed unlike in the demo app, our grid is in physical units
-    const REAL V_cell = mesh->dmh->get_cell_volume(cellx) * norms["length"] * norms["length"];
+    const REAL V_cell = mesh->dmh->get_cell_volume(cellx) * norms["rho_s0"] * norms["rho_s0"];
     V_cells.push_back(V_cell);
     V_tot_local += V_cell;
   }
@@ -37,7 +37,7 @@ inline auto calc_V_tot_local(SYCLTargetSharedPtr sycl_target,
   const int rank = sycl_target->comm_pair.rank_parent;
 
   if (rank == 0) {
-    std::cout << "Length_norm: " << norms["length"] << std::endl;
+    std::cout << "Length_norm: " << norms["rho_s0"] << std::endl;
     std::cout << "V_tot_global: " << V_tot_global << std::endl;
   }
 
