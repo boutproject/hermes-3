@@ -7,6 +7,7 @@
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/output_bout_types.hxx>
 
 using bout::globals::mesh;
 
@@ -843,6 +844,20 @@ void RelaxPotential::finally(const Options& state) {
 
     ddt(phi1) = lambda_1 * (phi_vort - Vort);
   }
+
+#if CHECKLEVEL >= 1
+  for (auto& i : Vort.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(Vort)[i])) {
+      throw BoutException("ddt(Vort) non-finite at {}\n", i);
+    }
+  }
+
+  for (auto& i : phi1.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(phi1)[i])) {
+      throw BoutException("ddt(phi1) non-finite at {}\n", i);
+    }
+  }
+#endif
 }
 
 void RelaxPotential::outputVars(Options& state) {

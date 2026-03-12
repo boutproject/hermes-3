@@ -105,7 +105,6 @@ void BraginskiiFriction::transform_impl(GuardedOptions& state) {
       }
 
       const Field3D nu = GET_VALUE(Field3D, species1["collision_frequencies"][coll_name]);
-      const Field3D density2 = GET_VALUE(Field3D, species2["density"]);
       const Field3D velocity2 = species2.isSet("velocity")
                                     ? GET_NOBOUNDARY(Field3D, species2["velocity"])
                                     : 0.0;
