@@ -48,6 +48,13 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                         .doc("Viscosity flux limiter coefficient. <0 = turned off")
                         .withDefault(-1.0);
 
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-8);
+
+  BoutReal temperature_floor = options["temperature_floor"].doc("Low temperature scale")
+    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+
+  pressure_floor = density_floor * temperature_floor;
+
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
@@ -83,8 +90,6 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                            .doc("Include input for major radius R when using bounce "
                                 "frequency modification to viscosity")
                            .withDefault(2.0);
-
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   if (perpendicular) {
     // Read curvature vector
@@ -230,7 +235,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     }
 
     const Field3D tau = 1. / nu;
-    const Field3D P = get<Field3D>(species["pressure"]);
+    const Field3D P = floor(get<Field3D>(species["pressure"]), pressure_floor);
     const Field3D T = get<Field3D>(species["temperature"]);
     const Field3D N = get<Field3D>(species["density"]);
 
@@ -272,10 +277,10 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         // SOLPS-style flux limiter
         // Values of alpha ~ 0.5 typically
 
-        const Field3D q_cl = eta * Grad_par(V);   // Collisional value
+        const Field3D q_cl = eta * abs(Grad_par(V));   // Collisional value
         const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
-        eta = eta / (1. + abs(q_cl / q_fl));
+        eta = eta / (1. + (q_cl / q_fl));
 
         eta.getMesh()->communicate(eta);
         eta.applyBoundary("neumann");

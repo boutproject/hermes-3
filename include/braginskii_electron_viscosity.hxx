@@ -37,6 +37,9 @@ private:
   bool diagnose;            ///< Output viscosity diagnostic?
   Field3D viscosity;        ///< The viscosity momentum source
 
+  BoutReal density_floor;
+  BoutReal pressure_floor; ///< When non-zero pressure is needed
+  
   /// Inputs
   /// - species
   ///   - e
