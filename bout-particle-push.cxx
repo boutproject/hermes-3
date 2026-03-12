@@ -1049,7 +1049,7 @@ int main(int argc, char** argv) {
     }
 
     // Define marker species and reaction rates
-    auto recomb_species = Species("ION", 1.0, 0.0, -1);
+    auto recomb_species = Species("ION", 1.0, 0.0, -1);  //TODO: better as marker_species
     auto recomb_data = FixedRateData(rec_rate);
     auto recomb_energy_data = FixedRateData(rec_rate); //TODO: make this separate
 
