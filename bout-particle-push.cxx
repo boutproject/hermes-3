@@ -1239,6 +1239,7 @@ int main(int argc, char** argv) {
       lambda_apply_timestep(static_particle_sub_group(A_particle_group));
       // apply reactions
       reaction_controller.apply(A_particle_group, dt, ControllerMode::standard_mode);
+      recombination_controller.apply(marker_group, dt, A_particle_group);
       // uncomment to write a trajectory
       h5part.write();
       // uncomment to print particle info
