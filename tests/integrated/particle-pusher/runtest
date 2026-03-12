@@ -9,6 +9,8 @@ import numpy as np
 from petsc4py import PETSc
 import netCDF4 as nc
 
+verbose = False
+
 # Link to the executable
 shell("ln -s ../../../bout-particle-push bout-particle-push")
 # make the run directory
@@ -16,7 +18,7 @@ shell("mkdir particle-push-slab-test")
 
 # A function to define the BOUT.inp file contents
 def particle_push_input(nx=40, ny=36, dt=0.005, nsteps=1,
-      iz_rate=0.0, remove_threshold=0.0, merge_threshold=0.0):
+      iz_rate=0.0, rec_rate=0.0, remove_threshold=0.0, merge_threshold=0.0):
   input_file_string = f"""
   # run a simulation with this file using
   # $ OMP_NUM_THREADS=1 mpirun -np 8 ./bout-particle-push -d particle-push-slab
@@ -65,6 +67,7 @@ def particle_push_input(nx=40, ny=36, dt=0.005, nsteps=1,
   remove_threshold = {remove_threshold}
   merge_threshold = {merge_threshold}
   iz_rate = {iz_rate}
+  rec_rate = {rec_rate}
   """
   return input_file_string
 
@@ -93,48 +96,83 @@ def load_particle_data(file_path):
           particle_positions.append(pdata)
   return particle_positions
 
-def test_particle_push(file, nsteps = 10, remove_threshold = 0.0, merge_threshold = 0.0, iz_rate = 0.0):
+def test_particle_push(file, mode, nsteps = 10, remove_threshold = 0.0, merge_threshold = 0.0, iz_rate = 0.0, rec_rate = 0.0):
   with open(file,"w") as file:
     file.write(particle_push_input(nx=40, ny=36, dt=0.005, nsteps=nsteps,
-        iz_rate=iz_rate, remove_threshold=remove_threshold, merge_threshold=remove_threshold))
-
+        iz_rate=iz_rate, rec_rate=rec_rate, remove_threshold=remove_threshold, merge_threshold=merge_threshold))
+  """
+  Test mode can be:
+  - advection: ionisation and recombination rates are 0. Particle count is checked to be conserved.
+  - ionisation: ionisation rate > 0, recombination rate = 0. Particle count should increase
+  - recombination: ionisation rate = 0, recombination rate > 0. Particle count should decrease
+  """
   # Command to run
   cmd = "./bout-particle-push -d particle-push-slab-test"
   nproc = 1
   # Launch using MPI
   s, out = launch_safe(cmd, nproc=nproc, mthread=1, pipe=True)
-  # variable to determine if test passed
-  success = True
+
   particle_positions_file_path = r"particle-push-slab-test/particle_trajectories.h5part"
   particle_positions = load_particle_data(particle_positions_file_path)
   nsteps_out = len(particle_positions)
+
   # number of steps the same
-  success = success and (nsteps == nsteps_out)
+  np.testing.assert_equal(
+     nsteps, nsteps_out, 
+     err_msg=f"Number of steps in output ({nsteps_out}) does not match expected ({nsteps}) for {mode} test")
+  
   # number of markers (or super particles) conserved
   nparticles_0, _ = np.shape(particle_positions[0])
   nparticles_N, _ = np.shape(particle_positions[-1])
-  success = success and (nparticles_0 == nparticles_N)
+  if mode == "advection":
+     np.testing.assert_equal(
+        nparticles_0, nparticles_N,
+        err_msg=f"Number of particles not conserved in advection test: {nparticles_0} at start, {nparticles_N} at end")
+
+
   # check the mass diagnostic
   ncfile_path = r"particle-push-slab-test/BOUT.dmp.0.nc"
   ncdataset = nc.Dataset(ncfile_path, mode='r')
   total_mass = np.copy(ncdataset.variables["total_mass"][:])
   total_ion_mass = np.copy(ncdataset.variables["total_ion_mass"][:])
   total_neutral_mass = np.copy(ncdataset.variables["total_neutral_mass"][:])
+  
   # total mass should always be conserved
-  success = success and np.abs(total_mass[0] - total_mass[-1]) < 1.0e-11
+  np.testing.assert_allclose(total_mass[0], total_mass[-1], atol = 1.0e-11, 
+                             err_msg=f"Total mass not conserved in {mode} test: {total_mass[0]} at start, {total_mass[-1]} at end")
+
   # if we ionise particles there should be mass exchange between neutral and ion
-  if iz_rate > 0.0:
-    success = success and total_ion_mass[0] < total_ion_mass[-1]
-    success = success and total_neutral_mass[0] > total_neutral_mass[-1]
-  return success
+  if mode == "ionisation":
+      np.testing.assert_array_less(
+          total_ion_mass[0], total_ion_mass[-1],
+          err_msg=f"Ion mass did not increase in ionisation test: {total_ion_mass[0]} at start, {total_ion_mass[-1]} at end")
+      np.testing.assert_array_less(
+          total_neutral_mass[-1], total_neutral_mass[0],
+          err_msg=f"Neutral mass did not decrease in ionisation test: {total_neutral_mass[0]} at start, {total_neutral_mass[-1]} at end")
+      
+  # Recombination is the opposite
+  if mode == "recombination":
+      np.testing.assert_array_less(
+          total_ion_mass[-1], total_ion_mass[0],
+          err_msg=f"Ion mass did not decrease in recombination test: {total_ion_mass[0]} at start, {total_ion_mass[-1]} at end")
+      np.testing.assert_array_less(
+          total_neutral_mass[0], total_neutral_mass[-1],
+          err_msg=f"Neutral mass did not increase in recombination test: {total_neutral_mass[0]} at start, {total_neutral_mass[-1]} at end")
+
 
 file = "particle-push-slab-test/BOUT.inp"
-success = True
-success = success and test_particle_push(file, nsteps = 10, remove_threshold = 1.0e-10, merge_threshold = 1.0e-6, iz_rate = 0.01)
 
-if success:
-  print(" => Test passed")
-  exit(0)
-else:
-  print(" => Test failed")
-  exit(1)
+test_particle_push(file, "advection", nsteps = 10, remove_threshold = 1.0e-10, merge_threshold = 1.0e-6, iz_rate = 0.00, rec_rate = 0.00)
+if verbose:
+   print("Advection test passed")
+
+test_particle_push(file, "ionisation", nsteps = 10, remove_threshold = 1.0e-10, merge_threshold = 1.0e-6, iz_rate = 0.01, rec_rate = 0.00)
+if verbose:
+   print("Ionisation test passed")
+
+test_particle_push(file, "recombination", nsteps = 10, remove_threshold = 1.0e-10, merge_threshold = 1.0e-6, iz_rate = 0.00, rec_rate = 0.01)
+if verbose:
+   print("Recombination test passed")
+
+print(" => Test passed")
+
