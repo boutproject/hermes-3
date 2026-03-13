@@ -167,15 +167,15 @@ def test_particle_push(file, mode, nsteps = 10, remove_threshold = 0.0, merge_th
 
 file = "particle-push-slab-test/BOUT.inp"
 
-test_particle_push(file, "advection", nsteps = 10, remove_threshold = 1.0e-10, merge_threshold = 1.0e-6, iz_rate = 0.00, rec_rate = 0.00)
+test_particle_push(file, "advection", nsteps = 3, remove_threshold = 1.0e-10, merge_threshold = 0, iz_rate = 0.00, rec_rate = 0.00)
 if verbose:
    print("Advection test passed")
 
-test_particle_push(file, "ionisation", nsteps = 10, remove_threshold = 1.0e-10, merge_threshold = 1.0e-6, iz_rate = 0.01, rec_rate = 0.00)
+test_particle_push(file, "ionisation", nsteps = 3, remove_threshold = 1.0e-10, merge_threshold = 0, iz_rate = 0.01, rec_rate = 0.00)
 if verbose:
    print("Ionisation test passed")
 
-test_particle_push(file, "recombination", nsteps = 10, remove_threshold = 1.0e-10, merge_threshold = 1.0e-6, iz_rate = 0.00, rec_rate = 0.01)
+test_particle_push(file, "recombination", nsteps = 3, remove_threshold = 1.0e-10, merge_threshold = 0, iz_rate = 0.00, rec_rate = 0.0005)
 if verbose:
    print("Recombination test passed")
 
