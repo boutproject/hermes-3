@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import xbout
 import argparse
 from pathlib import Path
@@ -14,24 +16,38 @@ def plot(case_path):
         info=False,
     )
 
-    fig, axes = plt.subplots(1,2, figsize = (6,3))
+    fig, axes = plt.subplots(1, 3, figsize=(9, 3))
 
     dv = ds["dx"] * ds["dy"] * ds["dz"] * ds["J"]
-    Ntot = (ds["neutral_density"] * dv).sum(("x", "y"))
-    Navg = ds["neutral_density"].mean(("x", "y"))
+    Nn_tot = (ds["neutral_density"] * dv).sum(("x", "y"))
+    Nn_avg = ds["neutral_density"].mean(("x", "y"))
+    Ni_avg = ds["ion_density"].mean(("x", "y"))
 
     ax = axes[0]
-    Ntot.plot(ax = ax, marker = "o")
-    ax.set_xlabel("time")
-    ax.set_ylabel("Total particle count")
+    Ni_avg.plot(ax=ax, marker="o")
+    ax.set_ylabel("Normalised density")
+    ax.set_title("Mean ion density")
     
     ax = axes[1]
-    Navg.plot(ax = ax, marker = "o")
-    ax.set_ylabel("Mean density")
+    Nn_avg.plot(ax=ax, marker="o")
+    ax.set_ylabel("Normalised density")
     ax.set_title("Mean particle density")
 
+    ax = axes[2]
+    ds["total_ion_mass"].plot(ax=ax, marker="o", c="coral", label="total_ion_mass")
+    ds["total_neutral_mass"].plot(
+        ax=ax, marker="d", c="skyblue", label="total_neutral_mass"
+    )
+    ds["total_mass"].plot(
+        ax=ax, marker="v", c="black", alpha=0.3, lw=3, label="total_mass"
+    )
+    ax.legend(fontsize="x-small")
+    ax.set_ylabel("-")
+    ax.set_title("Density volume integrals")
+
+
     for ax in axes:
-        ax.set_title("Particle count")
+        ax.set_xlabel("time")
 
     fig.tight_layout()
     fig.savefig(f"density_history_{case_path.name}.png")
