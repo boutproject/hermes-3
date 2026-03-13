@@ -136,10 +136,11 @@ def test_particle_push(file, mode, nsteps = 10, remove_threshold = 0.0, merge_th
 
   # check the mass diagnostic
   ncfile_path = r"particle-push-slab-test/BOUT.dmp.0.nc"
-  ncdataset = nc.Dataset(ncfile_path, mode='r')
-  total_mass = np.copy(ncdataset.variables["total_mass"][:])
-  total_ion_mass = np.copy(ncdataset.variables["total_ion_mass"][:])
-  total_neutral_mass = np.copy(ncdataset.variables["total_neutral_mass"][:])
+  
+  with nc.Dataset(ncfile_path, mode='r') as ncdataset:
+    total_mass = np.copy(ncdataset.variables["total_mass"][:])
+    total_ion_mass = np.copy(ncdataset.variables["total_ion_mass"][:])
+    total_neutral_mass = np.copy(ncdataset.variables["total_neutral_mass"][:])
   
   # total mass should always be conserved
   np.testing.assert_allclose(total_mass[0], total_mass[-1], atol = 1.0e-11, 
