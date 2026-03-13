@@ -835,11 +835,11 @@ int main(int argc, char** argv) {
 
 
     // Plasma parameters
-    const BoutReal T_background = opt["VANTAGE_reactions"]["T_background"].withDefault(1.0);
-    const BoutReal N_background = opt["VANTAGE_reactions"]["N_background"].withDefault(1.0);
-    const BoutReal Vx_background = opt["VANTAGE_reactions"]["Vx_background"].withDefault(0.0);
-    const BoutReal Vy_background = opt["VANTAGE_reactions"]["Vy_background"].withDefault(0.0);
-    const std::vector<BoutReal> V_background = {Vx_background, Vy_background};
+    const BoutReal background_ion_temperature = opt["VANTAGE_reactions"]["background_ion_temperature"].withDefault(1.0);
+    const BoutReal background_ion_density = opt["VANTAGE_reactions"]["background_ion_density"].withDefault(1.0);
+    const BoutReal background_ion_Vx = opt["VANTAGE_reactions"]["background_ion_Vx"].withDefault(0.0);
+    const BoutReal background_ion_Vy = opt["VANTAGE_reactions"]["background_ion_Vy"].withDefault(0.0);
+    const std::vector<BoutReal> V_background = {background_ion_Vx, background_ion_Vy};
 
     // Reaction settings
     const REAL iz_rate = Options::root()["VANTAGE_reactions"]["iz_rate"].withDefault(1.0);
@@ -857,7 +857,7 @@ int main(int argc, char** argv) {
     
 
     BoutReal sim_time = 0.0;
-    Field2D ion_density = Field2D(N_background, bout_mesh);
+    Field2D ion_density = Field2D(background_ion_density, bout_mesh);
     Field2D neutral_density = Field2D(0.0, bout_mesh);
     // Create a mesh interface from the DM
     auto neso_mesh =
@@ -997,10 +997,10 @@ int main(int argc, char** argv) {
     particle_loop(
         "set init fluid values", marker_group,
         [=](auto n, auto T, auto ne, auto Te, auto speed) {
-          n.at(0) = N_background;
-          ne.at(0) = N_background;
-          T.at(0) = T_background;
-          Te.at(0) = T_background;
+          n.at(0) = background_ion_density;
+          ne.at(0) = background_ion_density;
+          T.at(0) = background_ion_temperature;
+          Te.at(0) = background_ion_temperature;
 
           for (int i = 0; i < ndim; i++) {
             speed.at(i) = V_background[i];
