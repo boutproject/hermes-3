@@ -97,15 +97,19 @@ def load_particle_data(file_path):
   return particle_positions
 
 def test_particle_push(file, mode, nsteps = 10, remove_threshold = 0.0, merge_threshold = 0.0, iz_rate = 0.0, rec_rate = 0.0):
-  with open(file,"w") as file:
-    file.write(particle_push_input(nx=40, ny=36, dt=0.005, nsteps=nsteps,
-        iz_rate=iz_rate, rec_rate=rec_rate, remove_threshold=remove_threshold, merge_threshold=merge_threshold))
   """
+  Set up particle push test and pass settings to the input file. 
+  
   Test mode can be:
   - advection: ionisation and recombination rates are 0. Particle count is checked to be conserved.
   - ionisation: ionisation rate > 0, recombination rate = 0. Particle count should increase
   - recombination: ionisation rate = 0, recombination rate > 0. Particle count should decrease
   """
+
+  with open(file,"w") as file:
+    file.write(particle_push_input(nx=40, ny=36, dt=0.005, nsteps=nsteps,
+        iz_rate=iz_rate, rec_rate=rec_rate, remove_threshold=remove_threshold, merge_threshold=merge_threshold))
+
   # Command to run
   cmd = "./bout-particle-push -d particle-push-slab-test"
   nproc = 1
