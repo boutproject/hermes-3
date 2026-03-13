@@ -119,7 +119,7 @@ def test_particle_push(file, mode, nsteps = 10, remove_threshold = 0.0, merge_th
   # number of steps the same
   np.testing.assert_equal(
      nsteps, nsteps_out, 
-     err_msg=f"Number of steps in output ({nsteps_out}) does not match expected ({nsteps}) for {mode} test")
+     err_msg=f"Number of steps in outputdoes not match expected for {mode} test")
   
   # number of markers (or super particles) conserved
   nparticles_0, _ = np.shape(particle_positions[0])
@@ -127,7 +127,7 @@ def test_particle_push(file, mode, nsteps = 10, remove_threshold = 0.0, merge_th
   if mode == "advection":
      np.testing.assert_equal(
         nparticles_0, nparticles_N,
-        err_msg=f"Number of particles not conserved in advection test: {nparticles_0} at start, {nparticles_N} at end")
+        err_msg="Number of particles not conserved in advection test")
 
 
   # check the mass diagnostic
@@ -139,25 +139,25 @@ def test_particle_push(file, mode, nsteps = 10, remove_threshold = 0.0, merge_th
   
   # total mass should always be conserved
   np.testing.assert_allclose(total_mass[0], total_mass[-1], atol = 1.0e-11, 
-                             err_msg=f"Total mass not conserved in {mode} test: {total_mass[0]} at start, {total_mass[-1]} at end")
+                             err_msg=f"Total mass not conserved in {mode} test")
 
   # if we ionise particles there should be mass exchange between neutral and ion
   if mode == "ionisation":
       np.testing.assert_array_less(
           total_ion_mass[0], total_ion_mass[-1],
-          err_msg=f"Ion mass did not increase in ionisation test: {total_ion_mass[0]} at start, {total_ion_mass[-1]} at end")
+          err_msg="Ion mass did not increase in ionisation test")
       np.testing.assert_array_less(
           total_neutral_mass[-1], total_neutral_mass[0],
-          err_msg=f"Neutral mass did not decrease in ionisation test: {total_neutral_mass[0]} at start, {total_neutral_mass[-1]} at end")
+          err_msg="Neutral mass did not decrease in ionisation test")
       
   # Recombination is the opposite
   if mode == "recombination":
       np.testing.assert_array_less(
           total_ion_mass[-1], total_ion_mass[0],
-          err_msg=f"Ion mass did not decrease in recombination test: {total_ion_mass[0]} at start, {total_ion_mass[-1]} at end")
+          err_msg="Ion mass did not decrease in recombination test")
       np.testing.assert_array_less(
           total_neutral_mass[0], total_neutral_mass[-1],
-          err_msg=f"Neutral mass did not increase in recombination test: {total_neutral_mass[0]} at start, {total_neutral_mass[-1]} at end")
+          err_msg="Neutral mass did not increase in recombination test")
 
 
 file = "particle-push-slab-test/BOUT.inp"
