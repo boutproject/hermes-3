@@ -850,7 +850,7 @@ int main(int argc, char** argv) {
     
 
     BoutReal sim_time = 0.0;
-    Field2D ion_density = Field2D(0.0, bout_mesh);
+    Field2D ion_density = Field2D(N_background, bout_mesh);
     Field2D neutral_density = Field2D(0.0, bout_mesh);
     // Create a mesh interface from the DM
     auto neso_mesh =
