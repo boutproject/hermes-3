@@ -507,14 +507,15 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
   return dm;
 }
 
-void extract_ionised_density_in_place(
+void update_ion_density_in_place(
     Field2D& density, std::shared_ptr<CellwiseAccumulator<double>>& accumulator_transform,
     std::shared_ptr<ParticleGroup>& A_particle_group,
-    std::shared_ptr<TransformationStrategy>& source_zeroer,
+    std::shared_ptr<TransformationStrategy>& ion_source_density_zeroer,
     std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh) {
   Mesh* bout_mesh = density.getMesh();
   std::vector<CellData<double>> accumulated_1d =
       accumulator_transform->get_cell_data("ION_SOURCE_DENSITY");
+
   PetscInt ic = 0;
   for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
     for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
@@ -525,15 +526,12 @@ void extract_ionised_density_in_place(
   }
   // this fills internal guards
   bout_mesh->communicate(density);
-  // apply boundary conditions to fill external guards
-  // density.applyBoundary();
-  // extrapolate -> Neumann
 
   // Now set the property to zero in the accumulator buffer, ready for the next timestep.
   // Note that this does not zero the data in the original particle group
   accumulator_transform->zero_buffer("ION_SOURCE_DENSITY");
   // set the sources to zero on the particle group read for the next timestep
-  source_zeroer->transform(std::make_shared<ParticleSubGroup>(A_particle_group));
+  ion_source_density_zeroer->transform(std::make_shared<ParticleSubGroup>(A_particle_group));
 }
 
 void calculate_density_in_place(
@@ -561,16 +559,25 @@ void calculate_density_in_place(
 void calculate_fluid_moments_in_place(
     Field2D& neutral_density, Field2D& ion_density,
     std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
-    std::shared_ptr<ParticleGroup>& A_particle_group, std::vector<double>& h_project1,
-    std::shared_ptr<CellwiseAccumulator<double>>& accumulator_transform,
-    std::shared_ptr<TransformationStrategy>& source_zeroer,
+    std::shared_ptr<ParticleGroup>& A_particle_group, 
+    std::shared_ptr<ParticleGroup>& marker_group, 
+    std::vector<double>& h_project1,
+    std::shared_ptr<CellwiseAccumulator<double>>& accumulator_transform_iz,
+    std::shared_ptr<CellwiseAccumulator<double>>& accumulator_transform_rec,
+    std::shared_ptr<TransformationStrategy>& ion_source_density_zeroer,
     std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh) {
   // calculate all of the fluid moments required for the moment, from data in
   // the particle group. Set to zero any particle properties needed in preparation
   // for the next time step.
   calculate_density_in_place(neutral_density, dg0, A_particle_group, h_project1);
-  extract_ionised_density_in_place(ion_density, accumulator_transform, A_particle_group,
-                                   source_zeroer, neso_mesh);
+
+  // Update ion_density with ionisation ION_DENSITY_SOURCE
+  update_ion_density_in_place(ion_density, accumulator_transform_iz, A_particle_group,
+                                   ion_source_density_zeroer, neso_mesh);
+
+  // Update ion_density with recombination ION_DENSITY_SOURCE
+  update_ion_density_in_place(ion_density, accumulator_transform_rec, marker_group,
+                                   ion_source_density_zeroer, neso_mesh);
 }
 
 double calculate_total_mass(Field2D& density,
@@ -1108,28 +1115,39 @@ int main(int argc, char** argv) {
                 Sym<REAL>("WEIGHT"), merge_threshold)},
         make_transformation_strategy<MergeTransformationStrategy<ndim>>());
 
-    auto accumulator_transform = std::make_shared<CellwiseAccumulator<REAL>>(
+    // Ionisation reaction transforms and controller 
+    auto accumulator_transform_iz = std::make_shared<CellwiseAccumulator<REAL>>(
         A_particle_group, std::vector<std::string>{"ION_SOURCE_DENSITY"});
-    // std::vector<CellData<double>> accumulated_1d =
-    // accumulator_transform->get_cell_data("ION_SOURCE_DENSITY");
+
     auto accumulator_real_transform_wrapper = std::make_shared<TransformationWrapper>(
-        std::dynamic_pointer_cast<TransformationStrategy>(accumulator_transform));
-    auto source_zeroer = make_transformation_strategy<ParticleDatZeroer<REAL>>(
+        std::dynamic_pointer_cast<TransformationStrategy>(accumulator_transform_iz));
+
+    auto ion_source_density_zeroer = make_transformation_strategy<ParticleDatZeroer<REAL>>(
         std::vector<std::string>{"ION_SOURCE_DENSITY"});
 
     std::vector<std::shared_ptr<TransformationWrapper>> child_transforms =
         std::vector{merge_wrapper, remove_wrapper};
-    std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms =
+    std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms_iz =
         std::vector{accumulator_real_transform_wrapper, merge_wrapper, remove_wrapper};
 
-    // Ionisation reaction controller
-    auto reaction_controller = ReactionController(parent_transforms, child_transforms);
+    auto reaction_controller = ReactionController(parent_transforms_iz, child_transforms);
     reaction_controller.add_reaction(
         std::make_shared<decltype(ionisation_reaction)>(ionisation_reaction));
 
-    // Separate recombination controller
+    // Recombination transforms and controller
+
+    auto accumulator_transform_rec = std::make_shared<CellwiseAccumulator<REAL>>(
+        marker_group, std::vector<std::string>{"ION_SOURCE_DENSITY"});
+
+    auto recomb_accumulator_transform_wrapper = std::make_shared<TransformationWrapper>(
+        std::dynamic_pointer_cast<TransformationStrategy>(accumulator_transform_rec));
+
+    std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms_rec =
+        std::vector{accumulator_real_transform_wrapper, merge_wrapper, remove_wrapper};
+
     auto recombination_controller = ReactionController(
-      std::vector<std::shared_ptr<TransformationWrapper>>{}, child_transforms);
+        parent_transforms_rec, child_transforms);
+
     recombination_controller.add_reaction(
         std::make_shared<decltype(recomb_reaction)>(recomb_reaction));
 
@@ -1217,8 +1235,13 @@ int main(int argc, char** argv) {
     set_initial_particle_weights(initial_neutral_density, dg0, A_particle_group,
                                  neso_mesh, h_project1);
     // update fluid moments
-    calculate_fluid_moments_in_place(neutral_density, ion_density, dg0, A_particle_group,
-                                     h_project1, accumulator_transform, source_zeroer,
+    calculate_fluid_moments_in_place(neutral_density, ion_density, dg0,
+                                     A_particle_group,
+                                     marker_group,
+                                     h_project1, 
+                                     accumulator_transform_iz, 
+                                     accumulator_transform_rec,
+                                     ion_source_density_zeroer,
                                      neso_mesh);
     // diagnose the initial condition
     std::string particle_data_filename = make_output_path(
@@ -1246,8 +1269,13 @@ int main(int argc, char** argv) {
       // A_particle_group->print(Sym<REAL>("POSITION"), Sym<INT>("ID"),
       // Sym<REAL>("WEIGHT"), Sym<REAL>("ION_SOURCE_DENSITY")); update fluid moments
       calculate_fluid_moments_in_place(neutral_density, ion_density, dg0,
-                                       A_particle_group, h_project1,
-                                       accumulator_transform, source_zeroer, neso_mesh);
+                                      A_particle_group,
+                                      marker_group,
+                                      h_project1, 
+                                      accumulator_transform_iz, 
+                                      accumulator_transform_rec,
+                                      ion_source_density_zeroer,
+                                      neso_mesh);
       // diagnose timestep stepx
       update_diagnostics(neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
                          h_project1, bout_output_data, particle_data_filename, sim_time);
