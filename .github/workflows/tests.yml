@@ -56,10 +56,10 @@ jobs:
 
       - name: Install pip packages
         run: |
-	  ./.pip_install_for_tests.sh 'netcdf4~=1.5' 'boutdata==0.3.0' boututils
-	  python -m pip install git+https://github.com/boutproject/zoidberg@better-metric
+	     ./.pip_install_for_tests.sh 'netcdf4~=1.5' 'boutdata==0.3.0' boututils
+	     python -m pip install git+https://github.com/boutproject/zoidberg@better-metric
 	  
-          # Add the pip install location to the runner's PATH
+		# Add the pip install location to the runner's PATH
           echo ~/.local/bin >> $GITHUB_PATH
       - name: Build and run tests
         run: cmake . -B build $BOUT_CONFIGURE_OPTIONS -DPACKAGE_TESTS=OFF -DBOUT_USE_PETSC=ON &&
