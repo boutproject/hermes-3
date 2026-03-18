@@ -33,7 +33,7 @@ gridpath = "../../../../grids/mms_axial_circular_fci/"
 #  return gridpath + f"circular_{int(nx+4)}_{4}_{int(nx*8)}.nc"
 
 def gridname(nx):                                                                     
-  return gridpath + f"Axial_circular_q_{int(nx)}_{int(4*nx)}_0.4_0.6_3.0_3.5.fci.grid.nc"
+  return gridpath + f"Axial_circular_q_{int(nx)}_{int(4*nx)}_0.4_0.6_3.0_0.0.fci.grid.nc"
 
 
 # List of NY values to use

@@ -35,8 +35,7 @@ LaplacePerpMmsSol[f_,r_, p_, z_, t_] =  d2dx2[f, r, p, z, t] + d2dy2[f, r, p, z,
 
 LaplacePerp[f_,r_,p_,z_,t_] = D[f[r,p,z,t],{r,2}] + D[f[r,p,z,t],r]/r + 1.0/(r*r)*D[f[r,p,z,t],{p,2}];
 
-d2dpar2[f_, x_, z_, y_, t_] = Dpar * ((D[D[f[x, z, y, t], y], y] + 2/q[x]*D[D[f[x, z, y, t], y], z] + 
-     1/q[x]^2*D[D[f[x, z, y, t], z], z])/absb[x]^2);
+
   
 xn[x_] = (x-xmin)/(xmax-xmin);  
     

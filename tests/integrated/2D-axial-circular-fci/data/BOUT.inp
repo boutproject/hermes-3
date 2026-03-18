@@ -31,7 +31,7 @@ symmetricGlobalX = true
 
 [solver]
 mxstep = 10000
-rtol = 1e-8
+rtol = 1e-6
 atol = 1e-12
 mms = true  # Run with MMS sources and output diagnostics
 mms_initialise = true
@@ -54,7 +54,7 @@ AA = 1.0
 mms = true
 
 anomalous_D = 1.0
-anomalous_D_par = 1e5
+anomalous_D_par = 2000
 
 use_finite_difference = true
 
@@ -62,6 +62,6 @@ use_finite_difference = true
 
 solution = 1. - 0.5*cos(0.5 - yl)*sin(31.41592653589794*(-0.4 + xl))*sin(0.1 - 4*zl)
 
-source = -1.0438816894489344e-8*((-15.70796326794897*cos(31.41592653589794*(-0.4 + xl))*cos(0.5 - yl)*sin(0.1 - 4*zl))/xl + 493.4802200544682*cos(0.5 - yl)*sin(31.41592653589794*(-0.4 + xl))*sin(0.1 - 4*zl) + (8.*cos(0.5 - yl)*sin(31.41592653589794*(-0.4 + xl))*sin(0.1 - 4*zl))/power(xl,2)) - (0.0010438816894489343*((4.*cos(0.1 - 4*zl)*sin(31.41592653589794*(-0.4 + xl))*sin(0.5 - yl))/(3. + 3.5*xl) + 0.5*cos(0.5 - yl)*sin(31.41592653589794*(-0.4 + xl))*sin(0.1 - 4*zl) + (8.*cos(0.5 - yl)*sin(31.41592653589794*(-0.4 + xl))*sin(0.1 - 4*zl))/power(3. + 3.5*xl,2)))/(1 + power(xl,2)/power(3. + 3.5*xl,2))
+source = (-0.000020877633788978686*(1.3333333333333333*cos(0.1 - 4*zl)*sin(31.41592653589794*(-0.4 + xl))*sin(0.5 - yl) + 1.3888888888888888*cos(0.5 - yl)*sin(31.41592653589794*(-0.4 + xl))*sin(0.1 - 4*zl)))/(1 + 0.1111111111111111*power(xl,2)) - 1.0438816894489344e-8*((-15.70796326794897*cos(31.41592653589794*(-0.4 + xl))*cos(0.5 - yl)*sin(0.1 - 4*zl))/xl + 493.4802200544682*cos(0.5 - yl)*sin(31.41592653589794*(-0.4 + xl))*sin(0.1 - 4*zl) + (8.*cos(0.5 - yl)*sin(31.41592653589794*(-0.4 + xl))*sin(0.1 - 4*zl))/power(xl,2))
 
 bndry_all = dirichlet_o2(`Nh+:solution`)
