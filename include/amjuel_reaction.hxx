@@ -94,12 +94,27 @@ protected:
         to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
     // Calculate reaction rate using cell averaging. Optionally scale by multiplier
-    reaction_rate = cellAverage(
-        [&](BoutReal ne, BoutReal n1, BoutReal te) {
-          return ne * n1 * evaluate(rate_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-                 / FreqNorm * rate_multiplier;
-        },
-        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
+
+    reaction_rate =  0.0;
+    BOUT_FOR(i, Ne.getRegion("RGN_NOY")){
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+      BoutReal avgNe = 0.0;
+      BoutReal avgN1 = 0.0;
+      BoutReal avgTe = 0.0;
+      if (Ne.isFci()) {
+	avgNe = (4.0 * Ne[i] + Ne.ydown()[iym] + Ne.yup()[iyp]) / 6.0;
+	avgN1 = (4.0 * N1[i] + N1.ydown()[iym] + N1.yup()[iyp]) / 6.0;
+	avgTe = (4.0 * Te[i] + Te.ydown()[iym] + Te.yup()[iyp]) / 6.0;
+      } else {
+	avgNe = Ne[i];
+	avgN1 = N1[i];
+	avgTe = Te[i];
+      }
+      
+      reaction_rate[i] = avgNe * avgN1 * evaluate(rate_coefs, avgTe * Tnorm, avgNe * Nnorm) * Nnorm / FreqNorm * rate_multiplier;
+    }
+    
 
     // Particles
     // For ionisation, "from_ion" is the neutral and "to_ion" is the ion
@@ -156,13 +171,28 @@ protected:
     add(to_ion["energy_source"], energy_exchange);
 
     // Electron energy loss (radiation, ionisation potential)
-    energy_loss = cellAverage(
-        [&](BoutReal ne, BoutReal n1, BoutReal te) {
-          return ne * n1 * evaluate(radiation_coefs, te * Tnorm, ne * Nnorm) * Nnorm
-                 / (Tnorm * FreqNorm) * radiation_multiplier;
-        },
-        Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 
+    energy_loss =  0.0;
+    BOUT_FOR(i, Ne.getRegion("RGN_NOY")){
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+      BoutReal avgNe = 0.0;
+      BoutReal avgN1 = 0.0;
+      BoutReal avgTe = 0.0;
+      if (Ne.isFci()) {
+        avgNe = (4.0 * Ne[i] + Ne.ydown()[iym] + Ne.yup()[iyp]) / 6.0;
+        avgN1 = (4.0 * N1[i] + N1.ydown()[iym] + N1.yup()[iyp]) / 6.0;
+        avgTe = (4.0 * Te[i] + Te.ydown()[iym] + Te.yup()[iyp]) / 6.0;
+      }	else {
+	avgNe =	Ne[i];
+        avgN1 =	N1[i];
+        avgTe =	Te[i];
+      }
+      energy_loss[i] = avgNe * avgN1 * evaluate(radiation_coefs, avgTe * Tnorm, avgNe * Nnorm) * Nnorm / (Tnorm * FreqNorm) * radiation_multiplier;
+    }
+
+    
+    
     // Loss is reduced by heating
     energy_loss -= (electron_heating / Tnorm) * reaction_rate * radiation_multiplier;
 

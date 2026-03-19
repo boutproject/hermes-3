@@ -6,8 +6,6 @@
 
 #include <bout/yboundary_regions.hxx>
 
-extern YBoundary yboundary;
-
 /// Boundary condition at the wall in Y
 ///
 /// This is a collective component, because it couples all charged species
@@ -90,7 +88,7 @@ private:
   bool floor_potential; ///< Apply floor to sheath potential?
 
   bool legacy_match{true};
-
+  YBoundary yboundary;
   bool sheath_extrapolate; ///< Extrapolate values into sheath?
   
   Field3D fromFieldAligned(const Field3D& f) {

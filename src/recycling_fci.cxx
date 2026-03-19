@@ -201,7 +201,7 @@ void RecyclingFCI::transform(Options& state) {
 
 
 
-      
+      bndry_counter = 0.0;
       // Y boundaries
       yboundary.iter_pnts([&](auto& pnt) {
 	// BoutReal flux = pnt.dir * pnt.interpolate_sheath_o1(N) * pnt.interpolate_sheath_o1(V);
@@ -209,7 +209,7 @@ void RecyclingFCI::transform(Options& state) {
 	const auto& i = pnt.ind();
 
 	if (pnt.abs_offset() == 1) {
-
+	  bndry_counter[i] += 1.0;
 	  
 	  TRACE("Calculating flux in recycling_fci");
 	  BoutReal flux = 0.0;
@@ -237,7 +237,7 @@ void RecyclingFCI::transform(Options& state) {
 	  TRACE("Calculating density sources in recycling_fci");
 
 	  // Calculate sources in the final cell [m^-3 s^-1]                                                                                                                                                                                                                        
-	  // pnt.ythis(channel.target_recycle_density_source) += flow / coord->cellvolume[i];    // For diagnostic                                                                                                                                                                   
+	  pnt.ythis(channel.target_recycle_density_source) += flow / coord->cellvolume[i];    // For diagnostic                                                                                                                                                                   
 	  density_source[i] += flow / coord->cellvolume[i];         // For use in solver                                                                                                                                                                                  
 
 	  BoutReal recycle_energy_flow = flow  * channel.target_energy;   // Thermal recycling par                                                                                                                                                                                  
@@ -245,7 +245,7 @@ void RecyclingFCI::transform(Options& state) {
 	  // Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]                                                                                                                                                                                                    
 	  TRACE("Calculating energy sources in recycling_fci");
 
-	  // pnt.ythis(channel.target_recycle_energy_source) += recycle_energy_flow / coord->cellvolume[i];
+	  pnt.ythis(channel.target_recycle_energy_source) += recycle_energy_flow / coord->cellvolume[i];
 	  energy_source[i] += recycle_energy_flow / coord->cellvolume[i];
 
 	} // Ent pnt.abs_offset
@@ -303,6 +303,10 @@ void RecyclingFCI::outputVars(Options& state) {
                         {"source", "recycling"}});
       }
 
+      set_with_attrs(state[std::string("Bndry_counter")],
+		     bndry_counter,
+		     {{"time_dimension", "t"}});
+      
       // Wall recycling
       if ((sol_recycle) or (pfr_recycle)) {
         set_with_attrs(state[{std::string("S") + channel.to + std::string("_wall_recycle")}],
