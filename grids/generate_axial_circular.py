@@ -85,7 +85,7 @@ for scale in [1,2]:
     maps["backward_xt_prime"][-3,:,:] = float(nx+4-3)
 
     with zoidberg.zoidberg.MapWriter(fn) as mw:
-        mw.add_grid_field(rectangle, magnetic_field)
+        mw.add_grid_field(pol_grids, field)
         mw.add_maps(maps)
         mw.add_dagp()
 
