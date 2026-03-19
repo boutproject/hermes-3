@@ -43,6 +43,9 @@ public:
   // VANTAGE source
   void update_source(const std::string& hermes_source_name);
 
+  // Return data for a given Hermes-3 source name
+  Field2D get_data(const std::string& hermes_source_name);
+
       private : std::map<std::string, VantageSource> sources;
   std::shared_ptr<PetscInterface::DMPlexInterface> neso_mesh;
 };

@@ -800,6 +800,11 @@ void VantageSourceManager::add_source(
   this->sources[hermes_source_name] = source;
 }
 
+// Return source data
+Field2D VantageSourceManager::get_data(const std::string& hermes_source_name) {
+  return this->sources[hermes_source_name].source_data;
+}
+
 // Update the source from VANTAGE and reset the VANTAGE data/accumulator
 void VantageSourceManager::update_source(const std::string& hermes_source_name) {
   VantageSource& source = this->sources[hermes_source_name];
