@@ -61,6 +61,7 @@ option(HERMES_USE_VANTAGE "Build Hermes with VANTAGE" OFF)
 if(HERMES_USE_VANTAGE)
   find_package(NESO-Particles REQUIRED)
   find_sycl_if_required()
+  find_package(NESO-RNG-Toolkit REQUIRED)
   find_package(VANTAGE-Reactions REQUIRED)
 endif()
 include("./cmake/Sanitizers.cmake")
@@ -269,7 +270,7 @@ if(HERMES_USE_VANTAGE)
   add_executable(bout-particle-push
                 bout-particle-push.cxx
                 ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
-  target_link_libraries(bout-particle-push PUBLIC bout++::bout++ VANTAGE-Reactions::VANTAGE-Reactions)
+  target_link_libraries(bout-particle-push PUBLIC bout++::bout++ VANTAGE-Reactions::VANTAGE-Reactions NESO-RNG-Toolkit::NESO-RNG-Toolkit)
   add_sycl_to_target(TARGET bout-particle-push SOURCES bout-particle-push.cxx)
 endif()
 

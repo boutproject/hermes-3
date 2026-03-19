@@ -10,7 +10,8 @@
 	url = https://github.com/boutproject/BOUT-spack.git
 [submodule "Reactions"]
 	path = external/Reactions
-  url = https://github.com/UKAEA-Edge-Code/VANTAGE-Reactions.git
+	url = https://github.com/UKAEA-Edge-Code/VANTAGE-Reactions.git
+	ignore = dirty
 [submodule "external/xhermes"]
 	path = external/xhermes
 	url = https://github.com/boutproject/xhermes.git
@@ -23,3 +24,6 @@
 	path = external/boutdata
 	url = https://github.com/boutproject/boutdata.git
 	ignore = dirty
+[submodule "external/NESO-RNG-Toolkit"]
+	path = external/NESO-RNG-Toolkit
+	url = https://github.com/ExCALIBUR-NEPTUNE/NESO-RNG-Toolkit.git

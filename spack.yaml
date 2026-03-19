@@ -5,7 +5,7 @@
 spack:
   # add package specs to the `specs` list
   specs:
-  - hermes-3+vantagereactions ^boutpp+petsc+sundials ^petsc+hypre+mumps ^py-numpy@1.26.4 ^vantage.vantagereactions~enable_tests
+  - hermes-3+vantagereactions ^boutpp+petsc+sundials ^petsc+hypre+mumps ^py-numpy@1.26.4 ^vantage.vantagereactions~enable_tests ^neso-rng-toolkit
     ^neso.neso-particles~nvcxx+petsc~build_tests ^openblas ^neso.adaptivecpp ^hdf5 %gcc
   - cmake
   - py-meshio
@@ -47,6 +47,9 @@ spack:
     neso-particles:
       path: ./external/Reactions/neso-particles
       spec: neso-particles@working
+    neso-rng-toolkit:
+      path: ./external/NESO-RNG-Toolkit
+      spec: neso-rng-toolkit@working
     py-xhermes:
       path: ./external/xhermes
       spec: py-xhermes
