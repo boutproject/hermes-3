@@ -1190,8 +1190,8 @@ int main(int argc, char** argv) {
     reaction_controller.add_reaction(
         std::make_shared<decltype(ionisation_reaction)>(ionisation_reaction));
 
-    // source_manager.add_source("Siz", "ION_SOURCE_DENSITY", accumulator_transform_iz,
-    //                           A_particle_group, ion_source_density_zeroer);
+    source_manager.add_source("Siz", "ION_SOURCE_DENSITY", accumulator_transform_iz,
+                              A_particle_group, ion_source_density_zeroer);
 
     // Recombination transforms and controller
 
@@ -1209,6 +1209,9 @@ int main(int argc, char** argv) {
 
     recombination_controller.add_reaction(
         std::make_shared<decltype(recomb_reaction)>(recomb_reaction));
+
+    source_manager.add_source("Srec", "ION_SOURCE_DENSITY", accumulator_transform_rec,
+                              marker_group, ion_source_density_zeroer);
 
     // Boundary handling
     // ------------------------------------------------------------------------------
@@ -1294,14 +1297,20 @@ int main(int argc, char** argv) {
     set_initial_particle_weights(initial_neutral_density, dg0, A_particle_group,
                                  neso_mesh, h_project1);
     // update fluid moments
-    calculate_fluid_moments_in_place(neutral_density, ion_density, dg0,
-                                     A_particle_group,
-                                     marker_group,
-                                     h_project1, 
-                                     accumulator_transform_iz, 
-                                     accumulator_transform_rec,
-                                     ion_source_density_zeroer,
-                                     neso_mesh);
+    // calculate_fluid_moments_in_place(neutral_density, ion_density, dg0,
+    //                                  A_particle_group,
+    //                                  marker_group,
+    //                                  h_project1, 
+    //                                  accumulator_transform_iz, 
+    //                                  accumulator_transform_rec,
+    //                                  ion_source_density_zeroer,
+    //                                  neso_mesh);
+
+    // Calculate neutral density and sources for initial condition
+    calculate_density_in_place(neutral_density, dg0, A_particle_group, h_project1);
+    source_manager.update_source("Siz"); // TODO: do all sources at once
+    source_manager.update_source("Srec");
+    
     // diagnose the initial condition
     std::string particle_data_filename = make_output_path(
         fmt::format("{}/BOUT.dmp.{}.nc", get_restart_output_dir(), mpi_rank));
@@ -1327,14 +1336,24 @@ int main(int argc, char** argv) {
       // uncomment to print particle info
       // A_particle_group->print(Sym<REAL>("POSITION"), Sym<INT>("ID"),
       // Sym<REAL>("WEIGHT"), Sym<REAL>("ION_SOURCE_DENSITY")); update fluid moments
-      calculate_fluid_moments_in_place(neutral_density, ion_density, dg0,
-                                      A_particle_group,
-                                      marker_group,
-                                      h_project1, 
-                                      accumulator_transform_iz, 
-                                      accumulator_transform_rec,
-                                      ion_source_density_zeroer,
-                                      neso_mesh);
+      // calculate_fluid_moments_in_place(neutral_density, ion_density, dg0,
+      //                                 A_particle_group,
+      //                                 marker_group,
+      //                                 h_project1, 
+      //                                 accumulator_transform_iz, 
+      //                                 accumulator_transform_rec,
+      //                                 ion_source_density_zeroer,
+      //                                 neso_mesh);
+
+      calculate_density_in_place(neutral_density, dg0, A_particle_group, h_project1);
+      source_manager.update_source("Siz"); // TODO: do all sources at once
+      source_manager.update_source("Srec");
+      Field2D Siz = source_manager.get_data("Siz");
+      Field2D Srec = source_manager.get_data("Srec");
+
+      // "Solve" density
+      ion_density += Siz + Srec;   // FIXME: Shouldn't this be multiplied by the timestep?
+
       // diagnose timestep stepx
       update_diagnostics(neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
                          h_project1, bout_output_data, particle_data_filename, sim_time);
