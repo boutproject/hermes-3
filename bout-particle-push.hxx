@@ -7,6 +7,46 @@
 using namespace NESO::Particles;
 using namespace VANTAGE::Reactions;
 
+// @brief Data struct to hold information about a reaction source.
+// @param reaction_name Name of the reaction, e.g. "ionistaion"
+// @param source_name Name of the source, e.g. Siz (ion density source due to ionisation).
+// @param accumulator CellwiseAccumulator to use to accumulate the source term for this
+// reaction.
+// @param particle_group ParticleGroup to which this source applies.
+// @param zeroer TransformationStrategy to use to zero the source term dat after
+// accumulation.
+struct VantageSource {
+  std::string hermes_source_name;
+  std::string vantage_source_name;
+  std::shared_ptr<CellwiseAccumulator<REAL>> accumulator;
+  std::shared_ptr<ParticleGroup> particle_group;
+  std::shared_ptr<TransformationStrategy> zeroer;
+  Field2D source_data;
+};
+
+//
+class VantageSourceManager {
+public:
+  VantageSourceManager(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
+                       Mesh* bout_mesh);
+
+  Mesh* bout_mesh;
+
+  // Register new source
+  void add_source(const std::string& hermes_source_name,
+                  const std::string& vantage_source_name,
+                  std::shared_ptr<CellwiseAccumulator<REAL>> accumulator,
+                  std::shared_ptr<ParticleGroup> particle_group,
+                  std::shared_ptr<TransformationStrategy> zeroer);
+
+  // Update the Hermes-3 source field using the accumulated data from corresponding
+  // VANTAGE source
+  void update_source(const std::string& hermes_source_name);
+
+      private : std::map<std::string, VantageSource> sources;
+  std::shared_ptr<PetscInterface::DMPlexInterface> neso_mesh;
+};
+
 /**
  * @brief Function to calculate cell volumes.
  * 
@@ -43,7 +83,6 @@ inline auto calc_V_tot_local(SYCLTargetSharedPtr sycl_target,
 
   return std::tuple(V_tot_local, V_tot_global, V_cells);
 }
-
 
 /**
  * @brief Function to calculate particle positions and velocities from a Maxwellian.

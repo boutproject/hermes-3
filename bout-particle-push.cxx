@@ -774,6 +774,56 @@ void check_mass_conservation(double total_mass_final, double total_mass_initial,
                          "setting [neso_particles] test_mass_conservation = false",
                          total_mass_initial, total_mass_final));
 }
+
+VantageSourceManager::VantageSourceManager(
+    std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh, Mesh* bout_mesh) {
+
+  // Store DMPlex and BOUT++ mesh
+  this->neso_mesh = neso_mesh;
+  this->bout_mesh = bout_mesh;
+}
+
+// Register new source with the manager and initialise its data
+void VantageSourceManager::add_source(
+    const std::string& hermes_source_name, const std::string& vantage_source_name,
+    std::shared_ptr<CellwiseAccumulator<REAL>> accumulator,
+    std::shared_ptr<ParticleGroup> particle_group,
+    std::shared_ptr<TransformationStrategy> zeroer) {
+
+  Field2D source_data{bout_mesh};
+  source_data = 0.0;
+
+  VantageSource source{
+      hermes_source_name, vantage_source_name, accumulator, particle_group, zeroer,
+      source_data};
+
+  this->sources[hermes_source_name] = source;
+}
+
+// Update the source from VANTAGE and reset the VANTAGE data/accumulator
+void VantageSourceManager::update_source(const std::string& hermes_source_name) {
+  VantageSource& source = this->sources[hermes_source_name];
+
+  std::vector<CellData<double>> accumulated_1d =
+      source.accumulator->get_cell_data(source.vantage_source_name);
+
+  PetscInt ic = 0;
+  for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
+    for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
+      source.source_data(ix, iy) =
+          accumulated_1d[ic]->at(0, 0) / neso_mesh->dmh->get_cell_volume(ic);
+      ic++;
+    }
+  }
+
+  // Fill internal guards
+  bout_mesh->communicate(source.source_data);
+  // Reset the accumulator object
+  source.accumulator->zero_buffer(source.vantage_source_name);
+  // Reset the accumulated source data on the particle
+  source.zeroer->transform(std::make_shared<ParticleSubGroup>(source.particle_group));
+}
+
 int main(int argc, char** argv) {
   // initialise_mpi(&argc, &argv);
   // attempt to call BOUT to
@@ -880,7 +930,6 @@ int main(int argc, char** argv) {
         Options::root()["neso_particles"]["cell_centre_relative_tolerance"].withDefault(0.0));
     }
 
-    
 
     // create a Reactions particle spec
     auto particle_spec_builder = ParticleSpecBuilder(ndim);
@@ -1097,6 +1146,8 @@ int main(int argc, char** argv) {
     // Wrappers & controllers
     // ------------------------------------------------------------------------------
 
+    VantageSourceManager source_manager(neso_mesh, bout_mesh);
+
     const REAL remove_threshold =
         Options::root()["VANTAGE_reactions"]["remove_threshold"].withDefault(1.0e-10);
     const REAL merge_threshold =
@@ -1133,6 +1184,9 @@ int main(int argc, char** argv) {
     auto reaction_controller = ReactionController(parent_transforms_iz, child_transforms);
     reaction_controller.add_reaction(
         std::make_shared<decltype(ionisation_reaction)>(ionisation_reaction));
+
+    // source_manager.add_source("Siz", "ION_SOURCE_DENSITY", accumulator_transform_iz,
+    //                           A_particle_group, ion_source_density_zeroer);
 
     // Recombination transforms and controller
 
