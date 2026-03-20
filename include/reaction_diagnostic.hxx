@@ -17,7 +17,7 @@ BOUT_ENUM_CLASS(ReactionDiagnosticType, collision_freq, density_src, energy_src,
 
 std::string toString(ReactionDiagnosticType diag_type);
 
-static const std::map<ReactionDiagnosticType, std::string> state_labels = {
+static const std::map<ReactionDiagnosticType, std::string> sp_data_keys = {
     {ReactionDiagnosticType::collision_freq, "collision_frequency"},
     {ReactionDiagnosticType::density_src, "density_source"},
     {ReactionDiagnosticType::energy_src, "energy_source"},

@@ -189,9 +189,10 @@ protected:
    */
   template <OPTYPE operation>
   void update_source(GuardedOptions& state, const std::string& sp_name,
-                     ReactionDiagnosticType type, const Field3D& fld) {
+                     ReactionDiagnosticType type, const Field3D& update_with_field) {
 
-    update_source<operation>(state, sp_name, type, state_labels.at(type), fld);
+    update_source<operation>(state, sp_name, type, sp_data_keys.at(type),
+                             update_with_field);
   }
 
   /**
@@ -201,24 +202,24 @@ protected:
    * @tparam operation function to call on the state to update the source term and
    * the diagnostic. Either Component::add, Component::subtract or Component::set
    * @param state the state to update
-   * @param sp_name the species to update
+   * @param sp_name the name of the species to update
    * @param type the type of source/diagnostic to update
-   * @param lbl label/key for the field in the state object, i.e.
-   * state["species"][sp_name][lbl]
-   * @param fld the field used in the update
+   * @param sp_data_key label/key for the field in the state object, i.e.
+   * state["species"][sp_name][sp_data_key]
+   * @param update_with_field the field used in the update
    */
   template <OPTYPE operation>
   void update_source(GuardedOptions& state, const std::string& sp_name,
-                     ReactionDiagnosticType type, const std::string& lbl,
-                     const Field3D& fld) {
+                     ReactionDiagnosticType type, const std::string& sp_data_key,
+                     const Field3D& update_with_field) {
     // Update species data
-    operation(state["species"][sp_name][lbl], fld);
+    operation(state["species"][sp_name][sp_data_key], update_with_field);
 
     if (this->diagnose) {
       // Update corresponding diagnostic(s) (if any exist)
       auto matches = this->diagnostics.equal_range(std::make_pair(sp_name, type));
       for (auto match = matches.first; match != matches.second; match++) {
-        Field3D diag_src_fld = match->second.transform(fld);
+        Field3D diag_src_fld = match->second.transform(update_with_field);
         // Apply the update to the diagnostic field in the state, then copy it to the
         // diagnostic
         operation(state[match->second.get_name()], diag_src_fld);
