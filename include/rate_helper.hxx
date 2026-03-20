@@ -92,9 +92,6 @@ struct RateHelper {
     if constexpr (RateParamsType == RateParamsTypes::ET) {
       static_assert(dependent_false<RateParamsType>,
                     "RateParamsTypes::ET not implemented");
-      // add_rate_param("e:density", get<Field3D>(state["species"]["e:density"]));
-      // Field3D energy = ;
-      // add_rate_param("e:energy", energy);
     } else if constexpr (RateParamsType == RateParamsTypes::nT) {
       for (auto field_lbl : {"e:density", "e:temperature"}) {
         add_rate_param(field_lbl, state["species"][field_lbl].template GetRef<Field3D>());
