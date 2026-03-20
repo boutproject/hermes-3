@@ -1030,10 +1030,25 @@ reaction subclass. For example, for charge exchange, to specify that momentum an
 transferred only from the incoming neutral to the outgoing ion and from the incoming ion to the
 outgoing neutral:
 
-.. _fig-reactions_setting_mom_energy_channels:
-.. figure:: figs/reactions_setting_mom_energy_channels.*
-   :alt: Example of overriding default momentum and energy splitting factors for charge exchange.
-   :scale: 80
+.. code-block:: cpp
+
+   // Incoming neutral energy => outgoing ion
+   this->set_energy_channel_weight(atomR, ionP, 1.0);
+   this->set_energy_channel_weight(atomR, atomP, 0.0);
+   // Incoming ion energy => outgoing neutral
+   this->set_energy_channel_weight(ionR, ionP, 0.0);
+   this->set_energy_channel_weight(ionR, atomP, 1.0);
+
+   // Incoming neutral momentum => outgoing ion
+   this->set_momentum_channel_weight(atomR, ionP, 1.0);
+   this->set_momentum_channel_weight(atomR, atomP, 0.0);
+   // Incoming ion momentum => outgoing neutral
+   this->set_momentum_channel_weight(ionR, ionP, 0.0);
+   if (this->no_neutral_cx_mom_gain) {
+      this->set_momentum_channel_weight(ionR, atomP, 0.0);
+   } else {
+     this->set_momentum_channel_weight(ionR, atomP, 1.0);
+   }  
 
 .. note::
    So-called `participation factors<Reaction::pfactors>` are included in all source term
@@ -1110,10 +1125,13 @@ New diagnostics are configured by making calls to `add_diagnostic<Reaction::add_
 subclass constructor; e.g. for a density source associated with the neutral reactant in charge
 exchange:
 
-.. _fig-reactions_add_diagnostic_call:
-.. figure:: figs/reactions_add_diagnostic_call.*
-   :alt: Example of adding a diagnostic for a reaction.
-   :scale: 80
+.. code-block:: cpp
+   :caption: Example of adding a diagnostic for a reaction.
+
+   add_diagnostic(atomR, fmt::format("S{:s}{:s}_cx", atomR, ionR),
+            fmt::format("Particle transfer to {:s} from {:s} due to CX with {:s}", atomR, ionP, ionR),
+            ReactionDiagnosticType::density_src, "hydrogen_charge_exchange", identity,
+            "particle transfer");
 
 Here :code:`atomR` is the name of the neutral reactant, :code:`ionR` is the name of the ion reactant
 and :code:`ionP` is the name of the ion product. 
