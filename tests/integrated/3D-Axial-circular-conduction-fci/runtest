@@ -40,11 +40,11 @@ def gridname(nx):
 #nxlist = [36, 68, 132, 260] #, 640, 1280, 2560, 5120]
 nxlist = [16,32]
 nout = 10
-timestep = 1e5 / nout
+timestep = 1e6 / nout
 
 nproc = 1
 
-varnames = ["Nh+"]
+varnames = ["Ph+"]
 
 results = {}
 for var in varnames:

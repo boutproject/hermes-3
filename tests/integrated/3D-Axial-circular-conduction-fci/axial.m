@@ -47,20 +47,18 @@ d2dpar2[f_, x_, z_, y_, t_] = (D[D[f[x, z, y, t], y], y] + 2/q[x]*D[D[f[x, z, y,
 Define normalised rho and MMS solution in terms of mode numbers \
 given above
 *)
-MmsDens[x_, z_, y_, t_] = amp*Sin[2.0*Pi*kx*xn[x]]*Sin[kz*z - phz]*Cos[ky*y- phy]+offset;
-MmsUpar[x_, z_, y_, t_]=1;
+MmsN[x_, z_, y_, t_] = N0/Nnorm;
+MmsT[x_, z_, y_, t_] = (Tamp*Sin[2.0*Pi*kx*xn[x]]*Sin[kz*z - phz]*Cos[ky*y- phy]+T0)/Tnorm;
+MmsP[x_, z_, y_, t_] = MmsN[x,z,y,t]*MmsT[x,z,y,t];
 rhos = 0.0002284697436697996
-Bnorm = 1.0
 qe = 1.60217663*^-19
 Me = 9.1093837*^-31
 e0 = 8.85418781*^-12
 Omegaci = qe * Bnorm / (1836.0*Me)
 
 
-pflux[x_, z_, y_, t_]=MmsDens[x, z, y, t];
-(*Smms[x_, z_, y_, t_]=D[MmsDens[x,z,y,t],t]-d2dpar2[MmsDens,x,z,y,t]-Laplaceperpe[MmsDens,x,z,y,t];*)
-Smms[x_, z_, y_, t_]=D[MmsDens[x,z,y,t],t]-Dperp/(rhos*rhos*Omegaci) * LaplacePerp[MmsDens,x,z,y,t] * (rhos*rhos)-
-					Dpar/(rhos*rhos*Omegaci)*d2dpar2[MmsDens,x,z,y,t]* (rhos*rhos);
+Smms[x_, z_, y_, t_]=D[MmsP[x,z,y,t],t]-(2.0 / 3.0) * Chiperp/(rhos*rhos*Omegaci) * MmsN[x,z,y,t] * LaplacePerp[MmsT,x,z,y,t] * (rhos*rhos)-
+					Chipar/(rhos*rhos*Omegaci)*d2dpar2[MmsP,x,z,y,t]* (rhos*rhos);
 
 
 Print["Finished MMS Terms"];
