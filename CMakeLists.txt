@@ -306,6 +306,8 @@ if(HERMES_TESTS)
 	DEPENDS setup-test)
     endif()
   endfunction()
+  hermes_add_integrated_test(3D-Axial-circular-conduction-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-axial-circular-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-vorticity-inversion-fci
