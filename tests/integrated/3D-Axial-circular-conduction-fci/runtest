@@ -44,7 +44,7 @@ timestep = 1e4 / nout
 
 nproc = 1
 
-varnames = ["Ph+"]
+varnames = ["Pe"]
 
 results = {}
 for var in varnames:
