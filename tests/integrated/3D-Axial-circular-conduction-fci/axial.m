@@ -39,6 +39,8 @@ LaplacePerp[f_,r_,p_,z_,t_] = D[f[r,p,z,t],{r,2}] + D[f[r,p,z,t],r]/r + 1.0/(r*r
   
 xn[x_] = (x-xmin)/(xmax-xmin);  
     
+
+divparkgradparb[f_,h_, x_, z_, y_, t_]=pgrad[];
 d2dpar2[f_, x_, z_, y_, t_] = (D[D[f[x, z, y, t], y], y] + 2/q[x]*D[D[f[x, z, y, t], y], z] +  1/q[x]^2*D[D[f[x, z, y, t], z], z])/absb[x]^2;
     
 
@@ -56,9 +58,25 @@ Me = 9.1093837*^-31
 e0 = 8.85418781*^-12
 Omegaci = qe * Bnorm / (1836.0*Me)
 
+logN[x_, z_, y_, t_]=Log[MmsN[x,z,y,t]*Nnorm];
+logT[x_, z_, y_, t_]=Log[MmsT[x,z,y,t]*Tnorm];
+
+coulog[x_, z_, y_, t_]=30.4 - 0.5*logN[x,z,y,t]+(5.0/4.0)*logT[x,z,y,t]-Sqrt[1.0/(10^5)+(1.0/16.0)*(logT[x,z,y,t]-2.0)^2];
+vsq[x_, z_, y_, t_] = 2.0 * MmsT[x,z,y,t]*Tnorm * qe / Me;
+
+nu[x_, z_, y_, t_] = ((qe^4)*MmsN[x, z, y, t]*Nnorm * coulog[x, z, y, t] * 2.0 /(3.0 *((Pi*2.0*vsq[x,z,y,t])^1.5)*((e0*Me)^2)))/Omegaci;
+
+tau[x_, z_, y_, t_] = 1.0 / nu[x,z,y,t];
+
+kappa[x_, z_, y_, t_] = (3.16/Sqrt[2.0])*MmsP[x,z,y,t]*tau[x,z,y,t]/AA;
+
+qpar[x_, z_, y_, t_]=kappa[x,z,y,t]*pgrad[MmsT,x,z,y,t];
+divqpar[x_, z_, y_, t_]=pgrad[qpar,x,z,y,t];
+
 
 Smms[x_, z_, y_, t_]=D[MmsP[x,z,y,t],t]-(2.0 / 3.0) * Chiperp/(rhos*rhos*Omegaci) * MmsN[x,z,y,t] * LaplacePerp[MmsT,x,z,y,t] * (rhos*rhos)-
-					Chipar/(rhos*rhos*Omegaci)*d2dpar2[MmsP,x,z,y,t]* (rhos*rhos);
+					Chipar/(rhos*rhos*Omegaci)*d2dpar2[MmsP,x,z,y,t]* (rhos*rhos)-
+					(2.0/3.0)*divqpar[x,z,y,t]*(rhos*rhos);
 
 
 Print["Finished MMS Terms"];
