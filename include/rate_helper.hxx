@@ -211,8 +211,8 @@ struct RateHelper {
             if (do_averaging) {
               // Compute averaged rate, collision frequencies and store in result
               auto Ji = J[i];
-              auto Jm = J[i.ym()];
-              auto Jp = J[i.yp()];
+              auto Jm = J.yup()[i.ym()];
+              auto Jp = J.ydown()[i.yp()];
 
               result.rate[i] = 4. / 6 * cell_data["rate"].centre
                                + (Ji + Jm) / (12. * Ji) * cell_data["rate"].left
