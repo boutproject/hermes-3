@@ -315,9 +315,9 @@ private:
    * @param mass_actions pre-computed mass action factor
    * @return CellData struct containing centre, left, and right values
    */
-  CellData compute_collision_freq_density(Ind3D i, bool do_averaging,
-                                          const std::string& reactant_name,
-                                          const CellData& mass_actions) {
+  inline CellData compute_collision_freq_density(Ind3D i, bool do_averaging,
+                                                 const std::string& reactant_name,
+                                                 const CellData& mass_actions) {
     auto ym = i.ym();
     auto yp = i.yp();
     const auto& dens = *this->reactant_densities.at(reactant_name);
@@ -347,7 +347,7 @@ private:
    * @param do_averaging whether to compute left and right values
    * @return CellData struct containing centre, left, and right mass action factors
    */
-  CellData compute_mass_actions(Ind3D i, bool do_averaging) {
+  inline CellData compute_mass_actions(Ind3D i, bool do_averaging) {
     auto ym = i.ym();
     auto yp = i.yp();
     CellData result{1, 1, 1};
@@ -369,7 +369,8 @@ private:
    * @param do_averaging whether to compute left and right values
    * @return CellData struct containing centre, left, and right values
    */
-  CellData compute_rate_param(const std::string& name, Ind3D i, bool do_averaging) {
+  inline CellData compute_rate_param(const std::string& name, Ind3D i,
+                                     bool do_averaging) {
     auto ym = i.ym();
     auto yp = i.yp();
     const auto& field = *this->rate_params[name];
