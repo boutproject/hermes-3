@@ -83,7 +83,8 @@ class AmjuelCXTest : public CXReactionTest<HydrogenChargeExchange<Isotope1, Isot
 public:
   AmjuelCXTest(std::string lbl, std::string reaction_str)
       : CXReactionTest<HydrogenChargeExchange<Isotope1, Isotope2>>(
-          lbl, reaction_str, {Isotope1}, {Isotope2, '+'}, {Isotope2}, {Isotope1, '+'}) {}
+            lbl, reaction_str, {Isotope1}, {Isotope2, '+'}, {Isotope2}, {Isotope1, '+'}) {
+  }
 };
 
 class HHpCXTest : public AmjuelCXTest<'h', 'h'> {
