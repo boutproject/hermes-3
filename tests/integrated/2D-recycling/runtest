@@ -68,7 +68,7 @@ if not debug:
 
     t_download = time()
     if verbose:
-        print(f"2D-Recycling test: download took {t_download-t0:.2f} seconds")
+        print(f"2D-Recycling test: download took {t_download - t0:.2f} seconds")
 
     # Rename temp file with the correct name
     tmp_path.replace(zipfile_path)
@@ -96,8 +96,9 @@ if not debug:
 
     t_extract = time()
     if verbose:
-        print(f"2D-Recycling test: zip extraction took {t_extract-t_download:.2f} seconds")
-
+        print(
+            f"2D-Recycling test: zip extraction took {t_extract - t_download:.2f} seconds"
+        )
 
     ## Run test
     if not Path("hermes-3").is_file():
@@ -118,7 +119,7 @@ if not debug:
 
     t_run = time()
     if verbose:
-        print(f"2D-Recycling test: simulation took {t_run-t_extract:.2f}") 
+        print(f"2D-Recycling test: simulation took {t_run - t_extract:.2f}")
 
 ##########################################################################
 # Load case and perform test

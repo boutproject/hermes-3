@@ -57,11 +57,10 @@ with urllib.request.urlopen(url, timeout=60) as response:
 
 t_download = time()
 if verbose:
-    print(f"2D-Production test: download took {t_download-t0:.2f} seconds")
+    print(f"2D-Production test: download took {t_download - t0:.2f} seconds")
 
 # Rename temp file with the correct name
 tmp_path.replace(zipfile_path)
-
 
 
 with zipfile.ZipFile(zipfile_path, "r") as zf:
@@ -87,7 +86,9 @@ if file_hash != expected_hash:
 
 t_extract = time()
 if verbose:
-    print(f"2D-Production test: zip extraction took {t_extract-t_download:.2f} seconds")
+    print(
+        f"2D-Production test: zip extraction took {t_extract - t_download:.2f} seconds"
+    )
 
 ## Run test
 if not Path("hermes-3").is_file():
@@ -108,7 +109,7 @@ if s != 0:
 
 t_run = time()
 if verbose:
-    print(f"2D-Production test: simulation took {t_run-t_extract:.2f} seconds")
+    print(f"2D-Production test: simulation took {t_run - t_extract:.2f} seconds")
 
 # Load case
 ds = xhermes.open_hermesdataset(
