@@ -21,7 +21,7 @@ It mirrors the code in recycling.cxx. It's written in a way to allow easy debugg
 of the recycling calculation for development reasons.
 """
 
-verbose = False
+verbose = True
 plot = False
 debug = False  # Do not download files or run test
 rtol = 1e-6

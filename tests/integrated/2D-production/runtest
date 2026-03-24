@@ -13,7 +13,7 @@ from time import time
 t0 = time()
 
 gen_data = False
-verbose = False
+verbose = True
 rtol = 1e-6
 atol = 1e-8
 
