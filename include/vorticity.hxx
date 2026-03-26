@@ -2,12 +2,13 @@
 #ifndef VORTICITY_H
 #define VORTICITY_H
 
+#include <bout/invert_laplace.hxx>
+#include <bout/invert/laplacexy.hxx>
 #include <bout/vector2d.hxx>
 
 #include "component.hxx"
 
-class LaplaceXY;
-class Laplacian;
+#include <memory>
 
 /// Evolve electron density in time
 /// 
@@ -133,7 +134,7 @@ private:
   bool phi_core_averagey; ///< Average phi core boundary in Y?
   
   bool split_n0; // Split phi into n=0 and n!=0 components
-  LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
+  std::unique_ptr<LaplaceXY> laplacexy; // Laplacian solver in X-Y (n=0)
 
   Field2D Bsq; // SQ(coord->Bxy)
   Vector2D Curlb_B; // Curvature vector Curl(b/B)

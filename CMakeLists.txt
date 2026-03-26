@@ -57,7 +57,6 @@ set(HERMES_SOURCES
     src/component.cxx
     src/component_scheduler.cxx
     src/ionisation.cxx
-    src/radiation.cxx
     src/div_ops.cxx
     src/neutral_mixed.cxx
     src/neutral_full_velocity.cxx
@@ -140,7 +139,6 @@ set(HERMES_SOURCES
     include/noflow_boundary.hxx
     include/polarisation_drift.hxx
     include/quasineutral.hxx
-    include/radiation.hxx
     include/reaction.hxx
     include/recalculate_metric.hxx
     include/recycling.hxx

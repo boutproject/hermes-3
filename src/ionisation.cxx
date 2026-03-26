@@ -2,6 +2,25 @@
 #include "../include/ionisation.hxx"
 #include "../include/integrate.hxx"
 
+namespace {
+// Collision rate coefficient <sigma*v> [m3/s]
+// Hydrogen rates, fitted by Hannah Willett May 2015
+// University of York
+BoutReal ionisation_rate(BoutReal T) {
+  constexpr std::array ioncoeffs = {-3.271397E1,  1.353656E1,   -5.739329,
+                                    1.563155,     -2.877056E-1, 3.482560e-2,
+                                    -2.631976E-3, 1.119544E-4,  -2.039150E-6};
+
+  const auto log_T = log(T);
+  double lograte = 0.0;
+  for (std::size_t i = 0; i < ioncoeffs.size(); i++) {
+    lograte = lograte + ioncoeffs[i] * pow(log_T, i);
+  }
+
+  return exp(lograte) * 1.0E-6;
+}
+} // namespace
+
 Ionisation::Ionisation(std::string name, Options &alloptions, Solver *) {
 
   // Get options for this component
@@ -36,7 +55,7 @@ void Ionisation::transform(Options &state) {
 
   Field3D reaction_rate = cellAverage(
       [&](BoutReal ne, BoutReal nn, BoutReal te) {
-        return ne * nn * atomic_rates.ionisation(te * Tnorm) * Nnorm / FreqNorm;
+        return ne * nn * ionisation_rate(te * Tnorm) * Nnorm / FreqNorm;
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, Nn, Te);
 
