@@ -76,6 +76,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   precondition = options["precondition"]
                      .doc("Enable preconditioning in neutral model?")
                      .withDefault<bool>(false);
+  precon_model = options["precon_model"]
+                     .doc("Preconditioner model: 0=default, 1=?, etc.")
+                     .withDefault<int>(0);
 
   lax_flux = options["lax_flux"]
                      .doc("Enable stabilising lax flux?")
@@ -108,6 +111,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
     inv->setInnerBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
     inv->setOuterBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
+
+    inv2 = std::unique_ptr<Laplacian>(Laplacian::create(&options["precon_laplace"]));
+    inv2->setInnerBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
+    inv2->setOuterBoundaryFlags(INVERT_DC_GRAD | INVERT_AC_GRAD);
   }
 
   // Optionally output time derivatives
@@ -163,6 +170,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   Pnlim.setBoundary(std::string("P") + name);
   logPnlim.setBoundary(std::string("P") + name);
   Nnlim.setBoundary(std::string("N") + name);
+  logNnlim.setBoundary(std::string("N") + name);
 
   // Product of Dnn and another parameter has same BC as Dnn - see eqns to see why this is
   // necessary
@@ -187,6 +195,7 @@ void NeutralMixed::transform(Options& state) {
   Nnlim = softFloor(Nn, density_floor);
   Tn = Pn / Nnlim;
   Tn.applyBoundary();
+  Tnlim = softFloor(Tn, temperature_floor);
 
   Vn = NVn / (AA * Nnlim);
   Vn.applyBoundary("neumann");
@@ -277,13 +286,29 @@ void NeutralMixed::finally(const Options& state) {
 
   logPnlim = log(Pnlim);
   logPnlim.applyBoundary();
+  logNnlim = log(Nnlim);
+  logNnlim.applyBoundary();
+  diff_2lnPn_lnNn = 2.0*logPnlim - logNnlim;
+
+  static int finally_count = 0;
+  finally_count++;
+  output << "finally() call count: " << finally_count << "\n";
+  
+  /// for precon_model=3, 4
+  //diff_2lnPn_lnNn = 2.0*logPnlim - logNnlim;
+  //diff_2lnPn_lnNn.applyBoundary();
+  //Field3D Tnlim_precon = softFloor(Tn, temperature_floor);
+  //DnTn = Dnn * Tnlim_precon;
+  //Dn_Tn = Dnn / Tnlim_precon;
+  //DnTn.applyBoundary("dirichlet");
+  //Dn_Tn.applyBoundary("dirichlet");
 
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
   //
   //
 
-  Field3D Tnlim = softFloor(Tn, temperature_floor);
+  //Field3D Tnlim = softFloor(Tn, temperature_floor);
 
   BoutReal neutral_lmax =
     0.1 / get<BoutReal>(state["units"]["meters"]); // Normalised length
@@ -888,84 +913,235 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
     return;
   }
 
-  Field3D DTdtN = Dnn * Tn * ddt(Nn);
-  mesh->communicate(DTdtN);
-  DTdtN.applyBoundary("dirichlet");
-
-  ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(DTdtN,
-                                                  logPnlim);
-  Field3D DNdt = ddt(Nn);
-  mesh->communicate(DNdt);
-  DNdt.applyBoundary("dirichlet");
-  //Field3D DPdt = ddt(Pn);
-  //mesh->communicate(DPdt);
-  //DPdt.applyBoundary("dirichlet");
-
-  //Field3D Tnlim = Pn / Nn;
-  Field3D Tnlim = softFloor(Tn, temperature_floor);
-
-  Field3D epsilon_3 = (5+sqrt(10.0))/3.0 * Tnlim;
-  Field3D epsilon_4 = (5-sqrt(10.0))/3.0 * Tnlim;
-  mesh->communicate(epsilon_3);
-  epsilon_3.applyBoundary("dirichlet");
-  mesh->communicate(epsilon_4);
-  epsilon_4.applyBoundary("dirichlet");
-
-  // Simplified m_X and m_Y using Tn
-  Field3D m_X = (Pn - Nn*epsilon_4) / (epsilon_3-epsilon_4);
-  Field3D m_Y = (Pn - Nn*epsilon_3) / (epsilon_4-epsilon_3);
-  ddt(m_X) = (ddt(Pn) - DNdt*epsilon_4) / (epsilon_3-epsilon_4);
-  ddt(m_Y) = (ddt(Pn) - DNdt*epsilon_3) / (epsilon_4-epsilon_3);
-  // need 2 inv? 
-  inv->setCoefA(1.0);
-  inv->setCoefD(-gamma *((5.0+sqrt(10.0))/3.0 * Dnn));
-  ddt(m_X) = inv->solve(ddt(m_X)); 
-  inv->setCoefD(-gamma *((5.0-sqrt(10.0))/3.0 * Dnn));
-  ddt(m_Y) = inv->solve(ddt(m_Y)); 
-
-  ddt(Nn) = ddt(m_X) + ddt(m_Y);
-  ddt(Pn) = ddt(m_X) * epsilon_3 + ddt(m_Y) * epsilon_4;
-  /*
-  // First matrix
-  //   ( I   0)
-  //   (-LE  I)
-
-  Field3D DTdtN = Dnn * Tn * ddt(Nn);
-  mesh->communicate(DTdtN);
-  DTdtN.applyBoundary("dirichlet");
-
-  ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(DTdtN,
-                                                  logPnlim);
-
-  // Second matrix: Invert Pshur
-  //   (E^-1   0  )
-  //   ( 0    P^-1)
+  static int precon_count = 0;
+  precon_count++;
+  output << "precon() call count: " << precon_count << "\n";
+  //int precon_model = 4;
+  // new test, 1: linearise to ddt(X),ddt(Y) with Laplace inversion only
+  // new test, 2: ? Schur matrix style, previous version
+  // new test, 3: Schur matrix style, ddt(P) and ddt(N) with Laplace_perp
+  // new test, 4: a small change to the default: logP -> 2logP - logN
   //
-  // d Laplace_perp(x) + a x + (1/c1)Grad(c2) dot Grad_perp(x) = b
-  inv->setCoefA(1 - gamma * FV::Div_a_Grad_perp(Dnn, logPnlim));
-  inv->setCoefC1(-1. / ((gamma * 5./3) * Dnn));
-  inv->setCoefC2(logPnlim);
-  inv->setCoefD((-gamma * 5./3) * Dnn);
+  if (precon_model == 0) {
+      // First matrix
+      //   ( I   0)
+      //   (-LE  I)
+      Field3D DTdtN = Dnn * Tn * ddt(Nn);
+      mesh->communicate(DTdtN);
+      DTdtN.applyBoundary("dirichlet");
 
-  //inv->setInnerBoundaryFlags(INVERT_DC_GRAD);
-  //inv->setOuterBoundaryFlags(INVERT_DC_GRAD);
+      ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(DTdtN,
+                                                      logPnlim);
 
-  ddt(Pn) = inv->solve(ddt(Pn));
-  mesh->communicate(ddt(Pn));
-  ddt(Pn).applyBoundary("dirichlet");
+      // Second matrix: Invert Pshur
+      //   (E^-1   0  )
+      //   ( 0    P^-1)
+      //
+      // d Laplace_perp(x) + a x + (1/c1)Grad(c2) dot Grad_perp(x) = b
+      inv->setCoefA(1 - gamma * FV::Div_a_Grad_perp(Dnn, logPnlim));
+      inv->setCoefC1(-1. / ((gamma * 5./3) * Dnn));
+      inv->setCoefC2(logPnlim);
+      inv->setCoefD((-gamma * 5./3) * Dnn);
+      //inv->setInnerBoundaryFlags(INVERT_DC_GRAD);
+      //inv->setOuterBoundaryFlags(INVERT_DC_GRAD);
+      ddt(Pn) = inv->solve(ddt(Pn));
+      mesh->communicate(ddt(Pn));
+      ddt(Pn).applyBoundary("dirichlet");
 
-  // Third matrix: update Nn and NVn equations
-  // ( I   E^-1U )
-  // ( 0     I   )
+      // Third matrix: update Nn and NVn equations
+      // ( I   E^-1U )
+      // ( 0     I   )
+      ddt(Nn) -= gamma * FV::Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
+  }
+  else if (precon_model == 1) {
+      // stdout
+      //for(int ix=0; ix < mesh->LocalNx ; ix++){
+      //  for(int iy=0; iy < mesh->LocalNy ; iy++){
+      //    int iz=0;
+      //      std::string string_count = std::string("for dP: (dTdtN,logPnlim) (") + std::to_string(ix) + std::string(",") + std::to_string(iy)+ std::string(",") + std::to_string(iz) + std::string(")");
+      //      output << string_count + std::string(": ") + std::to_string(DTdtN(ix,iy,iz)) +std::string(",")+std::to_string(logPnlim(ix,iy,iz)) + std::string("; ");
+      //      output << "\n";
+      //  }
+      //}
+      //output <<" after ddt(P)"<<" "<< "\n";
 
-  ddt(Nn) -= gamma * FV::Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
+      // Simplified m_X and m_Y using Tn
+
+      //Field3D Tnlim = Pn / Nn;
+      //Field3D Tnlim = softFloor(Tn, temperature_floor);
+      Field3D epsilon_3 = (5+sqrt(10.0))/3.0 * Tnlim;
+      Field3D epsilon_4 = (5-sqrt(10.0))/3.0 * Tnlim;
+      //mesh->communicate(epsilon_3);
+      //mesh->communicate(epsilon_4);
+      //epsilon_3.applyBoundary("dirichlet");
+      //epsilon_4.applyBoundary("dirichlet");
+      Field3D denom = epsilon_3 - epsilon_4; // = 2*sqrt(10)/3 * Tnlim
+      
+      // Convert (ddt(Nn), ddt(Pn)) -> (ddt_X, ddt_Y)
+      Field3D ddt_X = (ddt(Pn) - ddt(Nn)*epsilon_4) / denom;
+      Field3D ddt_Y = (ddt(Pn) - ddt(Nn)*epsilon_3) / (-denom);
+      
+      // Invert each decoupled diffusion equation
+      // need 2 inv? 
+      inv->setCoefA(1.0);
+      inv->setCoefD(-gamma * (5.0+sqrt(10.0))/3.0 * Dnn);
+      ddt_X = inv->solve(ddt_X);
+      
+      inv2->setCoefA(1.0);
+      inv2->setCoefD(-gamma * (5.0-sqrt(10.0))/3.0 * Dnn);
+      ddt_Y = inv2->solve(ddt_Y);
+      
+      // Convert back (ddt_X, ddt_Y) -> (ddt(Nn), ddt(Pn))
+      ddt(Nn) = ddt_X + ddt_Y;
+      ddt(Pn) = ddt_X * epsilon_3 + ddt_Y * epsilon_4;
+
+      ddt(Pn).applyBoundary("dirichlet");
+      // stdout
+      //Field3D tmp_DoP = DnnNVn / Pnlim;
+      //for(int ix=0; ix < mesh->LocalNx ; ix++){
+      //  for(int iy=0; iy < mesh->LocalNy ; iy++){
+      //    int iz=0;
+      //    //for(int iz=0; iz < mesh->LocalNz; iz++){
+      //      // output << "("" << ix << "Y:" << iy << "Z:" << iz << "T:" << Tn(ix, iy, iz) << "  ";
+      //      std::string string_count = std::string("tmp_DoP (") + std::to_string(ix) + std::string(",") + std::to_string(iy)+ std::string(",") + std::to_string(iz) + std::string(")");
+      //      output << string_count + std::string(": ") + std::to_string(tmp_DoP(ix,iy,iz)) +std::string(",")+std::to_string(ddt(Pn)(ix,iy,iz)) + std::string("; ");
+      //      output << "\n";
+      //    //}
+      //  }
+      //}
+  }
+  else if (precon_model == 2) {
+      // First matrix
+      //Field3D Tnlim = softFloor(Tn, temperature_floor);
+      Field3D DnTn = Dnn * Tnlim;
+      Field3D Dn_Tn = Dnn / Tnlim;
+      //mesh->communicate(DnTn);
+      //DnTn.applyBoundary("dirichlet");
+      //mesh->communicate(Dn_Tn);
+      //Dn_Tn.applyBoundary("dirichlet");
+
+      //mesh->communicate(Tnlim);
+      //Tnlim.applyBoundary("dirichlet");
+      // stdout
+      //for(int ix=0; ix < mesh->LocalNx ; ix++){
+      //  for(int iy=0; iy < mesh->LocalNy ; iy++){
+      //    int iz=0;
+      //      std::string string_count = std::string("pre (DnTn, Dn_Tn) (") + std::to_string(ix) + std::string(",") + std::to_string(iy)+ std::string(",") + std::to_string(iz) + std::string(")");
+      //      output << string_count + std::string(": ") + std::to_string(DnTn(ix,iy,iz)) +std::string(",")+std::to_string(Dn_Tn(ix,iy,iz)) + std::string("; ");
+      //      output << "\n";
+      //  }
+      //}
+      // Third matrix: update Nn and NVn equations
+      // Second matrix: Invert Pshur
+      inv->setCoefA(1.0);
+      inv->setCoefD((gamma * 5./3) * DnTn);
+      ddt(Pn) = inv->solve(ddt(Pn));
+
+      inv2->setCoefA(1.0);
+      inv2->setCoefD(-gamma * Dn_Tn);
+      ddt(Nn) = inv2->solve(ddt(Nn));
+
+      // stdout
+      //for(int ix=0; ix < mesh->LocalNx ; ix++){
+      //  for(int iy=0; iy < mesh->LocalNy ; iy++){
+      //    int iz=0;
+      //      std::string string_count = std::string("invert (ddtPn,ddtNn) (") + std::to_string(ix) + std::string(",") + std::to_string(iy)+ std::string(",") + std::to_string(iz) + std::string(")");
+      //      output << string_count + std::string(": ") + std::to_string(ddt(Pn)(ix,iy,iz)) +std::string(",")+std::to_string(ddt(Nn)(ix,iy,iz)) + std::string("; ");
+      //      output << "\n";
+      //  }
+      //}
+      // Third matrix: update Nn and NVn equations
+      mesh->communicate(ddt(Pn));
+      mesh->communicate(ddt(Nn));
+      ddt(Pn).applyBoundary("dirichlet");
+      ddt(Nn).applyBoundary("dirichlet");
+
+      //output <<" before 3rd matrix"<<" "<< "\n";
+      //ddt(Nn) -= gamma * FV::Div_a_Grad_perp(Dnn, ddt(Pn));
+      ddt(Pn) += (gamma * 10./3) * FV::Div_a_Grad_perp(Dnn, ddt(Nn)); //2m -> 8m
+      //ddt(Pn) += (gamma * 10./3) * FV::Div_a_Grad_perp(Dnn, ddt(Nn)) / (ddt(Nn) + (gamma* 5./3) * Tnlim * FV::Div_a_Grad_perp(Dnn, ddt(Nn)));
+      //output <<" after 3rd matrix"<<" "<< "\n";
+      //ddt(Nn) -= gamma * FV::Div_a_Grad_perp(Dnn, ddt(Pn));
+
+      // stdout
+      //for(int ix=0; ix < mesh->LocalNx ; ix++){
+      //  for(int iy=0; iy < mesh->LocalNy ; iy++){
+      //    int iz=0;
+      //      std::string string_count = std::string("3rd results (ddtPn,ddtNn) (") + std::to_string(ix) + std::string(",") + std::to_string(iy)+ std::string(",") + std::to_string(iz) + std::string(")");
+      //      output << string_count + std::string(": ") + std::to_string(ddt(Pn)(ix,iy,iz)) +std::string(",")+std::to_string(ddt(Nn)(ix,iy,iz)) + std::string("; ");
+      //      output << "\n";
+      //  }
+      //}
+  }
+  else if (precon_model == 3) {
+      // First matrix
+      //   ( I   0)
+      //   (-LE  I)
+      //Field3D Tnlim = softFloor(Tn, temperature_floor);
+      Field3D DnTn = Dnn * Tnlim;
+      Field3D Dn_Tn = Dnn / Tnlim;
+
+      //mesh->communicate(DnTn);
+      //mesh->communicate(Dn_Tn);
+      //DnTn.applyBoundary("dirichlet");
+      //Dn_Tn.applyBoundary("dirichlet");
+      mesh->communicate(ddt(Nn));
+      ddt(Nn).applyBoundary("dirichlet");
+      ddt(Pn) -= (gamma * 5./3) * DnTn * Laplace_perp(ddt(Nn)); 
+      //ddt(Pn) -= (gamma * 5./3) * DnTn * FV::Div_a_Grad_perp(1.0, ddt(Nn));
+      //ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(DnTn, ddt(Nn));
+      // Second matrix: Invert Pshur
+      //   (E^-1   0  )
+      //   ( 0    P^-1)
+      // d Laplace_perp(x) + a x + (1/c1)Grad(c2) dot Grad_perp(x) = b
+      inv->setCoefA(1.0);
+      inv->setCoefD(-gamma * (10./3) * Dnn);
+      ddt(Pn) = inv->solve(ddt(Pn));
+      mesh->communicate(ddt(Pn));
+      ddt(Pn).applyBoundary("dirichlet");
+      // Third matrix: update Nn and NVn equations
+      // ( I   E^-1U )
+      // ( 0     I   )
+      ddt(Nn) -= gamma * Dn_Tn * Laplace_perp(ddt(Pn)); 
+      //ddt(Nn) -= gamma * Dn_Tn * FV::Div_a_Grad_perp(1.0, ddt(Pn));
+      //ddt(Nn) -= gamma * FV::Div_a_Grad_perp(Dn_Tn, ddt(Pn));
+  }
+  else if (precon_model == 4) {
+      // First matrix
+      Field3D DTdtN = Dnn * Tn * ddt(Nn);
+      mesh->communicate(DTdtN);
+      DTdtN.applyBoundary("dirichlet");
+      //Field3D diff_2lnPn_lnNn = 2.0*logPnlim - logNnlim;
+
+      ddt(Pn) -= (gamma * 5./3) * FV::Div_a_Grad_perp(DTdtN,
+                                                      diff_2lnPn_lnNn);
+      // Second matrix: Invert Pshur
+      // d Laplace_perp(x) + a x + (1/c1)Grad(c2) dot Grad_perp(x) = b
+      //Field3D Tnlim = softFloor(Tn, temperature_floor);
+      Field3D DnTn = Dnn * Tnlim;
+      Field3D Dn_Tn = Dnn / Tnlim;
+
+      inv->setCoefA(1 - (5./3 * gamma)* FV::Div_a_Grad_perp(DnTn, diff_2lnPn_lnNn));
+      inv->setCoefC1(-1. / ((5./3 * gamma) * DnTn));
+      inv->setCoefC2(diff_2lnPn_lnNn);
+      inv->setCoefD(-gamma * Dn_Tn);
+
+      ddt(Pn) = inv->solve(ddt(Pn));
+      mesh->communicate(ddt(Pn));
+      ddt(Pn).applyBoundary("dirichlet");
+
+      // Third matrix: update Nn and NVn equations
+      ddt(Nn) -= gamma * FV::Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
+  }
+  /*
   */
-
-
+  //output <<" before ddt(NV)"<<" "<< "\n";
   if (evolve_momentum) {
     ddt(NVn) -= gamma * FV::Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
   }
-
+  //output <<" after ddt(NV)"<<" "<< "\n";
+  /*
+  */
   for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(Nn)[i])) {
       throw BoutException("Precon ddt(N{}) non-finite at {}\n", name, i);

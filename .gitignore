@@ -24,3 +24,7 @@ spack-build*
 spack.lock
 .spack-env
 views
+
+
+# saved tmp files
+/tmp_files/

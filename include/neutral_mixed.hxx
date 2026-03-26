@@ -37,7 +37,7 @@ private:
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
-  Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
+  Field3D Nnlim, Pnlim, logPnlim, logNnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
@@ -48,6 +48,7 @@ private:
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
+  Field3D Tnlim, diff_2lnPn_lnNn;//, DnTn, Dn_Tn; ///< arrays used for precon_model=3 and 4
 
   bool sheath_ydown, sheath_yup;
 
@@ -68,6 +69,8 @@ private:
   bool precon_laplacexy {false}; ///< Use LaplaceXY?
   bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
+  std::unique_ptr<Laplacian> inv2; ///< Laplacian inversion used for preconditioning
+  int precon_model;
 
   Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
