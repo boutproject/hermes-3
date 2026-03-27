@@ -1,15 +1,16 @@
 #include "test_adas_reactions.hxx"
-#include "test_amjuel_reactions.hxx"
+#include "test_cx_reactions.hxx"
+#include "test_izn_reactions.hxx"
 
 // H isotopes ionization
-TEST_F(AmjuelHIznTest, SourcesRegression) { sources_regression_test(); }
-TEST_F(AmjuelDIznTest, SourcesRegression) { sources_regression_test(); }
-TEST_F(AmjuelTIznTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(HIznTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(DIznTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(TIznTest, SourcesRegression) { sources_regression_test(); }
 
 // H isotopes recombination
-TEST_F(AmjuelHRecTest, SourcesRegression) { sources_regression_test(); }
-TEST_F(AmjuelDRecTest, SourcesRegression) { sources_regression_test(); }
-TEST_F(AmjuelTRecTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(HRecTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(DRecTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(TRecTest, SourcesRegression) { sources_regression_test(); }
 
 // H isotopes CX (non-exhaustive)
 TEST_F(HHpCXTest, SourcesRegression) { sources_regression_test(); }
@@ -20,10 +21,10 @@ TEST_F(THpCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(DTpCXTest, SourcesRegression) { sources_regression_test(); }
 
 // He ionization
-TEST_F(AmjuelHeIzn01Test, SourcesRegression) { sources_regression_test(); }
+TEST_F(HeIzn01Test, SourcesRegression) { sources_regression_test(); }
 
 // He recombination
-TEST_F(AmjuelHeRec10Test, SourcesRegression) { sources_regression_test(); }
+TEST_F(HeRec10Test, SourcesRegression) { sources_regression_test(); }
 
 // C ions ionization (non-exhaustive)
 TEST_F(ADASCIznTest, SourcesRegression) { sources_regression_test(); }

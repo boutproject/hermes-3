@@ -2,8 +2,12 @@
 #ifndef REACTION_H
 #define REACTION_H
 
+#include <map>
+#include <memory>
+
 #include "component.hxx"
 #include "rate_helper.hxx"
+#include "reaction_data.hxx"
 #include "reaction_diagnostic.hxx"
 #include "reaction_parser.hxx"
 
@@ -19,34 +23,59 @@ using OPTYPE = GuardedOptions && (GuardedOptions&&, Field3D);
  */
 struct ReactionBase : public Component {
   ReactionBase(Permissions&& permissions)
-      : Component(std::move(permissions)), inst_num(get_instance_num() + 1) {}
-  static int get_instance_num() {
-    static int instance_num{0};
-    return instance_num++;
+      : Component(std::move(permissions)), inst_num(incremented_instance_num() + 1) {}
+
+  static std::size_t incremented_instance_num() { return instance_num_ref()++; }
+
+  // Reset the instance counter; needed to avoid unit tests affecting each other!
+  static void reset_instance_counter() { instance_num_ref() = 0; }
+
+private:
+  static std::size_t& instance_num_ref() {
+    static std::size_t instance_num{0};
+    return instance_num;
   }
 
 protected:
-  int inst_num;
+  std::size_t inst_num;
 };
 
 /**
  * @brief Struct intended to act as a base for all reactions.
  *
- * @details Note that several parameterisations are possible when providing reaction rate
- * data; subclasses are expected to (re-)implement one or more of eval_sigma_v_ET,
- * eval_sigma_v_nT and eval_sigma_v_T. Subclasses that have an associated electron energy
- * loss rate are expected to implement eval_sigma_vE_nT. Subclasses that DO NOT have an
- * associated electron energy loss rate should set includes_sigma_v_e=false.
+ * @details Stores a ReactionParser for manipulating the reaction string and reads data
+ * via (a subclass of) ReactionData. Also computes generic population change source terms
+ * in `transfrom_impl` and records reaction 'channels' that can be used to override the
+ * default strategy for distributing momentum and energy between reaction products.
  *
  */
 struct Reaction : public ReactionBase {
-  Reaction(std::string name, Options& alloptions);
+  /**
+   * @brief Construct a new Reaction object
+   *
+   * @details Extract reaction data options, parse the reaction string, set some
+   * permissions and options that apply to all reactions.
+   *
+   * @param name
+   * @param options Options object
+   */
+  Reaction(std::string name, Options& options);
 
+  /**
+   * @brief Copy all diagnostics into the output, setting the appropriate metadata at the
+   * same time. Subclasses can't override - instead, they should make add_diagnostic()
+   * calls in their constructor.
+   *
+   * @param state the output state to update
+   */
   void outputVars(Options& state) final;
 
 protected:
   /// Reaction string parser
   std::unique_ptr<ReactionParser> parser;
+
+  /// Reaction data
+  std::unique_ptr<ReactionData> rate_data;
 
   /// Units and normalisations extracted to member vars for convenience
   Options& units;
@@ -62,37 +91,28 @@ protected:
   std::multimap<std::pair<std::string, ReactionDiagnosticType>, ReactionDiagnostic>
       diagnostics;
 
-  /// Whether to use parallel averaging when calculating reaction rates
-  /// (Default to true)
+  /**
+   * Whether to use parallel averaging when calculating reaction rates
+   * (Defaults to true)
+   */
   bool do_parallel_averaging = true;
 
-  /// Whether or not reaction data includes <sigma v E>
-  /// (Default to true as a reminder to override eval_sigma_vE_nT)
-  bool includes_sigma_v_e = true;
-
   /**
-   * @brief Get the type of parameters expected by the rate calculation.
-   * @details Allow the rate parameter types to be provided after construction
-   * (e.g. after subclasses have read that information from file) by forcing subclasses to
-   * implement this function, rather than storing the types as a Reaction member variable.
-   * @return RateParamsTypes the rate params type
-   */
-  virtual RateParamsTypes get_rate_params_type() const = 0;
-
-  /**
-   * @brief Add a new entry in this Reaction's diagnostic (multi)map. The (non-unique) Key
-   * is < \p sp_name, \p type >
+   * @brief Add a new reaction diagnostic.
    *
-   * @param sp_name name of the species with which to associate the diagnostic
-   * @param diag_name name of the diagnostic (also the key used when updating it in the
-   * state object)
-   * @param long_diag_name doc string to use as the diagnostic description
-   * @param type an enum that associates the diagnostic with density, momentum or energy
-   * sources
-   * @param data_source name of the associated data source (e.g. 'Amjuel H.x.y')
-   * @param transformer optional transformer function to call on field data when the
-   * diagnostic is updated
-   * @param standard_name optional 'standard_name' to use in the output file
+   * @param sp_name Species with which the diagnostic will be associated
+   * @param diag_name Label used in the output (and to store it temporarily in the state)
+   * @param diag_desc Description to use as the 'long_name' output attribute
+   * @param diag_type enum identifying the diagnostic type, also used to determine source
+   * name
+   * @param data_source Name to use as the 'source' output attribute
+   * @param standard_name Optional string to use as the 'standard_name' output attribute.
+   * Defaults to diag_name.
+   * @param transformer Optional transformer function to use when modifying the diagnostic
+   * (default is 'negate', i.e. the diagnostic has the opposite sign to the source)
+   *
+   * @details Adds a new entry in the diagnostic (multi)map. The (non-unique)
+   * key is < \p sp_name, \p type >
    */
   void add_diagnostic(const std::string& sp_name, const std::string& diag_name,
                       const std::string& long_diag_name, ReactionDiagnosticType type,
@@ -101,77 +121,36 @@ protected:
                       const std::string& standard_name = "");
 
   /**
-   * @brief Calculate weightsums used in transform(). Can't be done at construction
-   * because the species masses may not be set.
+   * @brief Set weights for any reactant => product momentum / energy channel that hasn't
+   * already been specified via set_energy_channel_weight and set_momentum_channel_weight.
    *
+   * @note Can't be done at construction because the species masses may not be set.
    *
    * @param state Current sim state
    */
   void init_channel_weights(GuardedOptions& state);
 
   /**
-   * @brief Evaluate <sigma . v . E> at a particular density and temperature
-   * (Subclasses MAY define)
+   * @brief Specify what fraction of a reactant's energy is transferred to a particular
+   * product.
    *
-   * @param T a temperature
-   * @param n a density
-   * @return BoutReal the electron energy loss rate
+   * @param reactant_name Name of the reactant species.
+   * @param product_name Name of the product species.
+   * @param weight Fraction of the energy to transfer.
    */
-  virtual BoutReal eval_sigma_vE_nT([[maybe_unused]] BoutReal T,
-                                    [[maybe_unused]] BoutReal n) {
-    if (this->includes_sigma_v_e) {
-      throw BoutException(
-          "eval_sigma_vE_nT() needs to be implemented by Reaction instances "
-          "which set includes_sigma_v_e=true");
-    } else {
-      throw BoutException(
-          "eval_sigma_vE_nT() was called despite having set includes_sigma_v_e=false!");
-    }
-    return -1;
-  };
+  void set_energy_channel_weight(const std::string& reactant_name,
+                                 const std::string& product_name, BoutReal weight);
 
   /**
-   * @brief Evaluate <sigma.v> at a particular energy and temperature. Rate args are only
-   * known at runtime, so need to provide a default implementation that throws and let
-   * subclasses decide whether to override.
+   * @brief Specify what fraction of a reactant's momentum is transferred to a particular
+   * product.
    *
-   * @param E a density
-   * @param T a temperature
-   * @return BoutReal <sigma.v>(E,T)
+   * @param reactant_name Name of the reactant species.
+   * @param product_name Name of the product species.
+   * @param weight Fraction of the momentum to transfer.
    */
-  virtual BoutReal eval_sigma_v_ET([[maybe_unused]] BoutReal E,
-                                   [[maybe_unused]] BoutReal T) {
-    throw BoutException("Trying to call eval_sigma_v_nT but the Reaction subclass hasn't "
-                        "implemented it!");
-  }
-  /**
-   * @brief Evaluate <sigma.v> at a particular density and temperature. Rate args are only
-   * known at runtime, so need to provide a default implementation that throws and let
-   * subclasses decide whether to override.
-   *
-   * @param T a temperature
-   * @return BoutReal <sigma.v>(T)
-   */
-  virtual BoutReal eval_sigma_v_T([[maybe_unused]] BoutReal T) {
-    throw BoutException("Trying to call eval_sigma_v_T but the Reaction subclass hasn't "
-                        "implemented it!");
-  }
-
-  /**
-   * @brief Evaluate <sigma.v> at a particular density and temperature. Rate args are only
-   * known at runtime, so need to provide a default implementation that throws and let
-   * subclasses decide whether to override.
-   *
-   * @param T a temperature
-   * @param n a density
-   * @return BoutReal <sigma.v>(n,T)
-   */
-  virtual BoutReal eval_sigma_v_nT([[maybe_unused]] BoutReal T,
-                                   [[maybe_unused]] BoutReal n) {
-    throw BoutException("Trying to call eval_sigma_v_nT but the Reaction subclass hasn't "
-                        "implemented it!");
-  }
-
+  void set_momentum_channel_weight(const std::string& reactant_name,
+                                   const std::string& product_name, BoutReal weight);
   /**
    * @brief A hook with which subclasses can perform additional transform tasks, over and
    * above those implemented in Reaction::transform. (Subclasses MAY define)
@@ -228,41 +207,51 @@ protected:
     }
   }
 
-  /**
-   * @brief Specify what fraction of a reactant's energy is transferred to a particular
-   * product.
-   *
-   * @param reactant_name Name of the reactant species.
-   * @param product_name Name of the product species.
-   * @param weight Fraction of the energy to transfer.
-   */
-  void set_energy_channel_weight(const std::string& reactant_name,
-                                 const std::string& product_name, BoutReal weight);
-
-  /**
-   * @brief Specify what fraction of a reactant's momentum is transferred to a particular
-   * product.
-   *
-   * @param reactant_name Name of the reactant species.
-   * @param product_name Name of the product species.
-   * @param weight Fraction of the momentum to transfer.
-   */
-  void set_momentum_channel_weight(const std::string& reactant_name,
-                                   const std::string& product_name, BoutReal weight);
-
 private:
   // Channels to determine how momentum and energy are distributed to product species
   std::map<std::string, std::map<std::string, BoutReal>> energy_channels;
   std::map<std::string, std::map<std::string, BoutReal>> momentum_channels;
 
-  /// Label to use for this reaction in a state / Options object
+  /// Label used in the state for reaction configuration.
   const std::string name;
 
-  /// Participation factors of all species
+  /// Participation factors of all species - currently set to 1!
   std::map<std::string, BoutReal> pfactors;
 
-  void zero_diagnostics(GuardedOptions& state);
+  /**
+   * @brief Extract reaction string and data type and data ID for this reaction from the
+   * input options, or set suitable defaults for the type and ID if they aren't specified.
+   *
+   * @param options
+   * @param name
+   * @param[out] reaction_str the extracted reaction string
+   * @param[out] data_type the extracted data type enum or a default if no type specified
+   * @param[out] data_id the extracted data id or a default if no id specified
+   *
+   * @details The current input file format (all reactions in a single, comma-separated
+   string) is a bit awkward, but is being preserved for now. ReactionBase sets
+   this->inst_num according to the order of instantiation for each reaction object, then
+   this function extracts the reaction string, data type and data ID using inst_num as an
+   index, setting suitable type and ID defaults if either are omitted.
+   */
+  void get_reaction_settings(Options& options, std::string& reaction_str,
+                             ReactionDataTypes& data_type, std::string& data_id);
 
+  /**
+   * @brief Add density, momentum and energy sources that apply to all reactions (e.g.
+   * those driven by species population changes), then call transform_additional() to
+   * allow subclasses to add other terms.
+   *
+   * @param state
+   */
   void transform_impl(GuardedOptions& state) override final;
+
+  /**
+   * @brief Reset the temporary values of the diagnostics stored in the state.
+   *
+   * @param state
+   */
+  void zero_diagnostics(GuardedOptions& state);
 };
+
 #endif
