@@ -49,7 +49,11 @@ protected:
     Field3D hp_temp(1.0);
     const int hr_q = SpeciesParser(this->heavy_reactant).get_charge();
     const int hp_q = SpeciesParser(this->heavy_product).get_charge();
-    Options state{{comp_name, {{"type", this->parser.get_reaction_str()}}},
+    Options state{{comp_name,
+                   {
+                       {"type", this->parser.get_reaction_str()},
+                       {"diagnose", true},
+                   }},
                   {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
                   {"species",
                    {{"e", {{"AA", 1. / 1836}, {"velocity", e_vel}}},

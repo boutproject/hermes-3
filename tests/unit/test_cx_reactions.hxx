@@ -71,7 +71,11 @@ protected:
    */
   Options generate_state() override {
     std::string comp_name = "test" + this->lbl;
-    Options state{{comp_name, {{"type", this->parser.get_reaction_str()}}},
+    Options state{{comp_name,
+                   {
+                       {"type", this->parser.get_reaction_str()},
+                       {"diagnose", true},
+                   }},
                   {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
                   {"species",
                    {{this->r1, {{"AA", 1.0}, {"charge", 0.0}}},
