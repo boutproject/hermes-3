@@ -21,11 +21,11 @@ ReactionParser::ReactionParser(const std::string& reaction_str)
   std::string P = trim(reaction_str.substr(sep_idx + sep_len));
 
   // Count species in reactants, products
-  this->reactants = count_species(R);
+  count_species(R, this->reactants, this->ordered_reactants);
   if (this->reactants.size() < 1) {
     throw BoutException("Failed to find any reactants in the reaction string");
   }
-  this->products = count_species(P);
+  count_species(P, this->products, this->ordered_products);
   if (this->products.size() < 1) {
     throw BoutException("Failed to find any products in the reaction string");
   }

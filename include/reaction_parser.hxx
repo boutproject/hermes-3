@@ -20,9 +20,8 @@ enum class species_filter {
   heavy
 };
 
-static inline std::map<std::string, int> count_species(std::string expr) {
-  // std::regex_iterator instead?
-  std::map<std::string, int> counts;
+static inline void count_species(std::string expr, std::map<std::string, int>& counts,
+                                 std::vector<std::string>& ordered_species_names) {
   const std::regex pattern("([0-9]*)([a-zA-Z]*[0-9]*\\+?\\-?[0-9]*)");
   for (auto el : strsplit(expr, ' ')) {
     if (el.compare("+") != 0) {
@@ -35,12 +34,12 @@ static inline std::map<std::string, int> count_species(std::string expr) {
       auto it = counts.find(name);
       if (it == counts.end()) {
         counts[name] = el_count;
+        ordered_species_names.push_back(name);
       } else {
         counts[name] += el_count;
       }
     }
   }
-  return counts;
 }
 
 /**
@@ -165,6 +164,30 @@ public:
   const std::multimap<std::string, int>& get_mom_energy_pop_changes() const;
 
   /**
+   * @brief Get a reactant by its position in the reaction string (first reactant at
+   * position 1)
+   *
+   * @param pos
+   * @return std::string
+   */
+  std::string get_reactant_by_position(std::size_t pos) const {
+    ASSERT0(pos >= 1 && pos <= this->ordered_reactants.size());
+    return this->ordered_reactants[pos - 1];
+  }
+
+  /**
+   * @brief Get a product by its position in the reaction string (first product at
+   * position 1)
+   *
+   * @param pos
+   * @return std::string
+   */
+  std::string get_product_by_position(std::size_t pos) const {
+    ASSERT0(pos >= 1 && pos <= this->ordered_products.size());
+    return this->ordered_products[pos - 1];
+  }
+
+  /**
    * @brief Get the overall population change of a species.
    *
    * @param sp_name the species name
@@ -207,6 +230,9 @@ private:
    *   pop. change, once with the +ve (product) pop. change.
    */
   std::multimap<std::string, int> mom_energy_stoich;
+
+  std::vector<std::string> ordered_reactants;
+  std::vector<std::string> ordered_products;
 
   /// Flag to identify reactions where LHS == RHS (e.g. symmetric CX)
   bool is_symmetric;
