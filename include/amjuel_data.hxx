@@ -25,6 +25,7 @@ public:
   AmjuelData(const std::string& data_label, Options& options,
              const std::vector<std::string> metadata_keys = {});
 
+protected:
   /**
    * @brief Evaluate <sigma . v . E> at a particular density and temperature
    *

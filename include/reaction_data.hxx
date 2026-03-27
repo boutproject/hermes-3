@@ -72,9 +72,6 @@ public:
    */
   BoutReal eval_sigma_v_ET(BoutReal E, BoutReal T);
 
-  /// @brief Subclasses provide an implementation of eval_sigma_v_ET
-  virtual BoutReal eval_sigma_v_ET_impl(BoutReal E, BoutReal T) = 0;
-
   /**
    * @brief Evaluate <sigma.v> at a particular density and temperature.
    *
@@ -85,9 +82,6 @@ public:
    * @return BoutReal <sigma.v>(T)
    */
   BoutReal eval_sigma_v_T(BoutReal T);
-
-  /// @brief Subclasses provide an implementation of eval_sigma_v_T
-  virtual BoutReal eval_sigma_v_T_impl(BoutReal T) = 0;
 
   /**
    * @brief Evaluate <sigma.v> at a particular density and temperature.
@@ -101,9 +95,6 @@ public:
    */
   BoutReal eval_sigma_v_nT(BoutReal T, BoutReal n);
 
-  /// @brief Subclasses provide an implementation of eval_sigma_v_nT
-  virtual BoutReal eval_sigma_v_nT_impl(BoutReal T, BoutReal n) = 0;
-
   /**
    * @brief Evaluate <sigma.v.E> at a particular density and temperature
    *
@@ -115,9 +106,6 @@ public:
    * @return BoutReal <sigma.v.E>(n,T)
    */
   BoutReal eval_sigma_vE_nT(BoutReal T, BoutReal n);
-
-  /// @brief Subclasses provide an implementation of eval_sigma_vE_nT
-  virtual BoutReal eval_sigma_vE_nT_impl(BoutReal T, BoutReal n) = 0;
 
   /// @brief Get a (real-valued) metadata value by key
   BoutReal get_metadata(const std::string& key) const;
@@ -138,6 +126,18 @@ protected:
   const std::string data_label;
 
   const std::vector<std::string> metadata_keys;
+
+  /// @brief Subclasses provide an implementation of eval_sigma_v_ET
+  virtual BoutReal eval_sigma_v_ET_impl(BoutReal E, BoutReal T) = 0;
+
+  /// @brief Subclasses provide an implementation of eval_sigma_v_T
+  virtual BoutReal eval_sigma_v_T_impl(BoutReal T) = 0;
+
+  /// @brief Subclasses provide an implementation of eval_sigma_v_nT
+  virtual BoutReal eval_sigma_v_nT_impl(BoutReal T, BoutReal n) = 0;
+
+  /// @brief Subclasses provide an implementation of eval_sigma_vE_nT
+  virtual BoutReal eval_sigma_vE_nT_impl(BoutReal T, BoutReal n) = 0;
 
   /**
    * @brief Allow subclasses to set metadata values.
