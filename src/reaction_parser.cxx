@@ -47,11 +47,11 @@ void ReactionParser::diff_reactants_products(const std::map<std::string, int>& R
   }
 
   // If all population changes are zero, mark as "symmetric"
-  is_symmetric = std::all_of(this->stoich.begin(), this->stoich.end(),
-                             [](const auto& entry) { return entry.second == 0; });
+  this->symmetric = std::all_of(this->stoich.begin(), this->stoich.end(),
+                                [](const auto& entry) { return entry.second == 0; });
 
   // Construct momentum-energy pop changes differently if reaction is symmetric
-  if (this->is_symmetric) {
+  if (this->symmetric) {
     this->mom_energy_stoich.insert(P.begin(), P.end());
     std::transform(
         R.begin(), R.end(),
@@ -145,12 +145,14 @@ ReactionParser::get_mom_energy_pop_changes() const {
   return this->mom_energy_stoich;
 }
 
+bool ReactionParser::is_symmetric() const { return this->symmetric; }
+
 int ReactionParser::pop_change(const std::string sp_name) const {
   return this->stoich.at(sp_name);
 }
 
 int ReactionParser::pop_change_product(const std::string sp_name) const {
-  if (this->is_symmetric) {
+  if (is_symmetric()) {
     return this->products.at(sp_name);
   } else {
     return pop_change(sp_name);
@@ -158,7 +160,7 @@ int ReactionParser::pop_change_product(const std::string sp_name) const {
 }
 
 int ReactionParser::pop_change_reactant(const std::string sp_name) const {
-  if (this->is_symmetric) {
+  if (is_symmetric()) {
     return -1 * this->reactants.at(sp_name);
   } else {
     return pop_change(sp_name);

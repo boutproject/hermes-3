@@ -188,6 +188,14 @@ public:
   }
 
   /**
+   * @brief Check if the reaction is symmetric (LHS == RHS, allowing reordering of terms).
+   *
+   * @return true if the reaction is symmetric
+   * @return false otherwise
+   */
+  bool is_symmetric() const;
+
+  /**
    * @brief Get the overall population change of a species.
    *
    * @param sp_name the species name
@@ -235,7 +243,7 @@ private:
   std::vector<std::string> ordered_products;
 
   /// Flag to identify reactions where LHS == RHS (e.g. symmetric CX)
-  bool is_symmetric;
+  bool symmetric;
 
   /**
    * @brief Util function to compute the stoichiometric 'vector' (map) by taking the
