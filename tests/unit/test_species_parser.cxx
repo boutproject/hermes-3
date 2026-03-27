@@ -15,33 +15,79 @@ TEST_F(SpeciesParserTest, ParseNeutral) {
   EXPECT_EQ(parser.get_str(), "he");
 }
 
-/// @brief Check parsing of a singly-ionised species.
-TEST_F(SpeciesParserTest, ParseSinglyIonised) {
-  SpeciesParser parser("h+");
-  EXPECT_EQ(parser.get_element(), "h");
-  EXPECT_EQ(parser.get_charge(), 1);
-  EXPECT_EQ(parser.get_str(), "h+");
+/// @brief Check parsing of various positively charged species.
+TEST_F(SpeciesParserTest, ParsePositivelyCharged) {
+  SpeciesParser parser1("h+");
+  EXPECT_EQ(parser1.get_element(), "h");
+  EXPECT_EQ(parser1.get_charge(), 1);
+  EXPECT_EQ(parser1.get_str(), "h+");
+
+  SpeciesParser parser2("He+2");
+  EXPECT_EQ(parser2.get_element(), "he");
+  EXPECT_EQ(parser2.get_charge(), 2);
+  EXPECT_EQ(parser2.get_str(), "he+2");
+
+  SpeciesParser parser3("ne+8");
+  EXPECT_EQ(parser3.get_element(), "ne");
+  EXPECT_EQ(parser3.get_charge(), 8);
+  EXPECT_EQ(parser3.get_str(), "ne+8");
 }
 
-/// @brief Check parsing of a doubly-ionised species.
-TEST_F(SpeciesParserTest, ParseDoublyIonised) {
-  SpeciesParser parser("He+2");
-  EXPECT_EQ(parser.get_element(), "he");
-  EXPECT_EQ(parser.get_charge(), 2);
-  EXPECT_EQ(parser.get_str(), "he+2");
+/// @brief Check parsing of various negatively charged species.
+TEST_F(SpeciesParserTest, ParseNegativelyCharged) {
+
+  SpeciesParser parser1("He-1");
+  EXPECT_EQ(parser1.get_element(), "he");
+  EXPECT_EQ(parser1.get_charge(), -1);
+  EXPECT_EQ(parser1.get_str(), "he-");
+
+  SpeciesParser parser2("li-2");
+  EXPECT_EQ(parser2.get_element(), "li");
+  EXPECT_EQ(parser2.get_charge(), -2);
+  EXPECT_EQ(parser2.get_str(), "li-2");
+
+  SpeciesParser parser3("ne-5");
+  EXPECT_EQ(parser3.get_element(), "ne");
+  EXPECT_EQ(parser3.get_charge(), -5);
+  EXPECT_EQ(parser3.get_str(), "ne-5");
 }
 
-// Check special case of electrons
+/// Check special case of electrons
 TEST_F(SpeciesParserTest, ParseElectron) {
+  // "e" parsed as electron
   SpeciesParser parser1("e");
   EXPECT_EQ(parser1.get_charge(), -1);
   EXPECT_EQ(parser1.get_element(), "e");
   EXPECT_EQ(parser1.get_str(), "e");
 
+  // "e-" parsed as electron
   SpeciesParser parser2("e-");
   EXPECT_EQ(parser2.get_charge(), -1);
   EXPECT_EQ(parser2.get_element(), "e");
   EXPECT_EQ(parser2.get_str(), "e");
+
+  // Charges other than -1 throw for electrons
+  ASSERT_THROW(SpeciesParser("e-2"), BoutException);
+  ASSERT_THROW(SpeciesParser("e+"), BoutException);
+}
+
+/// @brief Check that element long names are parsed correctly.
+TEST_F(SpeciesParserTest, LongNames) {
+  // Species with preset long names
+  SpeciesParser parser1("e");
+  ASSERT_EQ(parser1.long_name(), "electron");
+  SpeciesParser parser2("H");
+  ASSERT_EQ(parser2.long_name(), "hydrogen");
+  SpeciesParser parser3("h");
+  ASSERT_EQ(parser3.long_name(), "hydrogen");
+  SpeciesParser parser4("D");
+  ASSERT_EQ(parser4.long_name(), "deuterium");
+  SpeciesParser parser5("t");
+  ASSERT_EQ(parser5.long_name(), "tritium");
+
+  // Species without preset long names should return the element name
+  SpeciesParser parser6("li");
+  ASSERT_EQ(parser6.long_name(), "li");
 }
 
 /// @brief Check ionisation of a neutral species.
@@ -131,10 +177,14 @@ TEST_F(SpeciesParserTest, NoIonisationRecombinationOfElectrons) {
   EXPECT_THROW(electron.recombined(), BoutException);
 }
 
-/// @brief Check that constructor throws for invalid strings
+/// @brief Check that constructor throws for a variety of invalid strings
 TEST_F(SpeciesParserTest, InvalidStrings) {
-  EXPECT_THROW(SpeciesParser(""), BoutException);
-  EXPECT_THROW(SpeciesParser("123"), BoutException);
-  EXPECT_THROW(SpeciesParser("+"), BoutException);
-  EXPECT_THROW(SpeciesParser("+2"), BoutException);
+  ASSERT_THROW(SpeciesParser(""), BoutException);
+  ASSERT_THROW(SpeciesParser("123"), BoutException);
+  ASSERT_THROW(SpeciesParser("+"), BoutException);
+  ASSERT_THROW(SpeciesParser("+2"), BoutException);
+  ASSERT_THROW(SpeciesParser("-h"), BoutException);
+  ASSERT_THROW(SpeciesParser("%&?!"), BoutException);
+  ASSERT_THROW(SpeciesParser("he +"), BoutException);
+  ASSERT_THROW(SpeciesParser("H -"), BoutException);
 }

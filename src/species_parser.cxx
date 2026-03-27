@@ -6,10 +6,8 @@
 
 namespace {
 static std::map<std::string, std::string> long_names = {
-    {"h", "hydrogen"},
-    {"d", "deuterium"},
-    {"t", "tritium"},
-    {"he", "helium"},
+    {"e", "electron"}, {"h", "hydrogen"}, {"d", "deuterium"},
+    {"t", "tritium"},  {"he", "helium"},
 };
 
 std::string construct_species_str(std::string element, int charge) {
@@ -50,8 +48,8 @@ std::string construct_species_str(std::string element, int charge) {
 SpeciesParser::SpeciesParser(const std::string& species_str) {
 
   // Extract element name, charge and ionisation state with regex
-  // Any number preceding the species is discarded
-  std::regex pattern("([0-9]*)([a-zA-Z]*)(\\+?\\-?)([0-9]*)");
+  // Any number preceding the element is discarded
+  std::regex pattern("^([0-9]*)([a-zA-Z]{1,2})([\\+|\\-]?)([0-9]*)$");
   std::smatch matches;
   bool has_matches = std::regex_search(species_str, matches, pattern);
   // String must provide at least an element name
@@ -70,7 +68,7 @@ SpeciesParser::SpeciesParser(const std::string& species_str) {
                  ::tolower);
 
   // Extract charge, electron is a special case
-  if (this->element == "e") {
+  if (species_str == "e") {
     this->charge = -1;
   } else {
     int sign = matches[3] == "+" ? 1 : matches[3] == "-" ? -1 : 0;
@@ -78,7 +76,7 @@ SpeciesParser::SpeciesParser(const std::string& species_str) {
     this->charge = sign * num;
   }
 
-  // Species string stored discards any leading number and is always lower case
+  // Stored species string discards any leading number and is always lower case
   this->species_str = construct_species_str(this->element, this->charge);
 }
 

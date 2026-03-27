@@ -5,18 +5,24 @@
 #include <string>
 
 /**
- * @brief Class to parse species strings and extract information.
+ * @brief Class to parse species strings and extract charge information.
  *
  */
 class SpeciesParser {
 public:
   /**
-   * @brief Construct a new SpeciesParser object
-   * @details Extracts an element name and (optional) charge from the species string. Any
-   * number preceding the element is discarded.
-   *
+   * @brief Construct a new SpeciesParser object by extracting the element and charge from
+   * a species string.
+   * @details Valid string requirements:
+   * - Element name must be 1 or 2 letters and is stored in lower case.
+   * - Any integer can precede the element name, but is discarded
+   *     e.g. "2he" is parsed as "he"
+   * - A "+" or a "-", optionally followed by an integer is interpreted as the charge.
+   *     e.g. "he-1" (-1), "H" (0) or "ne+8" (+8)
+   * - Electrons are a special case and can be specified as "e" or "e-".
    *
    * @param species_str The species string to parse
+   * @throws BoutException if the string cannot be parsed or contains invalid information
    */
   SpeciesParser(const std::string& species_str);
 
