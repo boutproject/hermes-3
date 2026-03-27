@@ -107,6 +107,7 @@ set(HERMES_SOURCES
     src/detachment_controller.cxx
     src/reaction.cxx
     src/reaction_parser.cxx
+    src/species_parser.cxx
     src/transform.cxx
     src/vorticity.cxx
     include/adas_reaction.hxx
@@ -164,6 +165,7 @@ set(HERMES_SOURCES
     include/snb_conduction.hxx
     include/sheath_closure.hxx
     include/sound_speed.hxx
+    include/species_parser.hxx
     include/upstream_density_feedback.hxx
     include/temperature_feedback.hxx
     include/detachment_controller.hxx
