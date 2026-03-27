@@ -2,7 +2,7 @@
 #define TEST_ADAS_REACTIONS_H__
 
 #include "test_cx_reactions.hxx"
-#include "test_izn_reactions.hxx"
+#include "test_izn_rec_reactions.hxx"
 
 #include "../../include/adas_carbon.hxx"
 #include "../../include/adas_lithium.hxx"

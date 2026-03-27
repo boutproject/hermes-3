@@ -1,6 +1,6 @@
 #include "test_adas_reactions.hxx"
 #include "test_cx_reactions.hxx"
-#include "test_izn_reactions.hxx"
+#include "test_izn_rec_reactions.hxx"
 
 // H isotopes ionization
 TEST_F(HIznTest, SourcesRegression) { sources_regression_test(); }
