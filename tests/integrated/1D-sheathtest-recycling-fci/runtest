@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+
+from __future__ import division
+from __future__ import print_function
+
+try:
+    from builtins import str
+except:
+    pass
+
+from boututils.run_wrapper import shell, launch_safe, getmpirun
+from boutdata.collect import collect
+
+from numpy import sqrt, max, abs, mean, array, log, concatenate
+import numpy as np
+import tarfile
+
+gridpath = "../../../../grids/straight_slab_120m/"
+archive_path = "Straight_slab_120m.xz"
+
+try:
+    with tarfile.open(gridpath + archive_path, "r:xz") as tar:
+        tar.extractall(path=gridpath)
+except:
+    raise FileNotFoundError("Could not fine mms slab y file to extract")
+
+
+def gridname(ny):
+    return gridpath + f"MMS_straight_slab_8_{ny}_4_True.fci.grid.nc"
+
+
+ny = 128
+nout = 10
+timestep = 1e5 / nout
+recycling_coefficient = 0.1
+nproc = 1
+
+args = (
+    "mesh:file="
+    + gridname(ny)
+    + " nout="
+    + str(nout)
+    + " timestep="
+    + str(timestep)
+    + " h+:target_recycle_multiplier="
+    + str(recycling_coefficient)
+)
+
+print("Running with " + args)
+
+# Delete old data
+shell("rm data/BOUT.dmp.*.nc")
+
+# Command to run
+cmd = "../../../hermes-3 " + args
+# Launch using MPI
+s, out = launch_safe(cmd, nproc=nproc, pipe=True)
+
+# Save output to log file
+f = open("run.log." + str(ny), "w")
+f.write(out)
+f.close()
+
+success = True
+
+Pi = np.mean(collect( "Ph+", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
+Pe = np.mean(collect( "Pe", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
+Ni = np.mean(collect( "Nh+", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
+
+Div_par_flow = np.mean(collect( "pfh+_tot_ylow", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
+Recycling_source = np.mean(collect( "Sh_target_recycle", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
+
+tol = 1e-8
+
+# + Because they should have different signs, meaning they should add up to zero
+if (np.abs(Recycling_source[0] + (Div_par_flow[0]*recycling_coefficient) ) > tol):
+    success = False
+    print("Parallel divergence is different to recycling times parallel divergence through boundary")
+    print(f"Recycling: {Recycling_source[0]} --- Divergence: {Div_par_flow[0]*recycling_coefficient}")
+else:
+    print(f"Recycling: {Recycling_source[0]} --- Divergence: {Div_par_flow[0]*recycling_coefficient}")
+
+
+if success:
+    print(" => Test passed")
+    exit(0)
+else:
+    print(" => Test failed")
+    exit(1)

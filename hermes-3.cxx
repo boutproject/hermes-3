@@ -372,9 +372,9 @@ int Hermes::init(bool restarting) {
 	yboundary.init(options);
 	yboundary.iter_pnts([&](auto& pnt) {
 	  const auto& i = pnt.ind();
-	  if (pnt.dir > 0.0) {
+	  if (pnt.dir > 0.0 && pnt.abs_offset() == 1) {
 	    tmp_has_bndry_up[i] = true;
-	  } else if (pnt.dir < 0.0) {
+	  } else if (pnt.dir < 0.0 && pnt.abs_offset() == 1) {
 	    tmp_has_bndry_down[i] = true;
 	  }
 	});

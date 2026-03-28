@@ -86,7 +86,8 @@ private:
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
   bool disable_ddt;
   bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
-
+  BoutReal T_lowsource;
+  BoutReal lowsource_scale;
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
   bool isMMS;

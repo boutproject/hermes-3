@@ -296,7 +296,7 @@ void EvolveDensity::finally(const Options& state) {
       BoutReal AA = get<BoutReal>(species["AA"]);
       fastest_wave = sqrt(T / AA);
     }
-    
+    flow_ylow = 0.0;
     ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow, false, dissipative);
     
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -363,7 +363,7 @@ void EvolveDensity::finally(const Options& state) {
     }
   }
 #endif
-
+  /*
   if (diagnose) {
     // Save flows if they are set
 
@@ -374,6 +374,7 @@ void EvolveDensity::finally(const Options& state) {
       flow_ylow += get<Field3D>(species["particle_flow_ylow"]);
     }
   }
+  */
 
   if (disable_ddt){
     ddt(N) = 0.0;

@@ -11,7 +11,7 @@
 #include "component.hxx"
 #include <bout/yboundary_regions.hxx>
 
-extern YBoundary yboundary;
+
 
 /// Evolve density, parallel momentum and pressure
 /// for a neutral gas species with cross-field diffusion
@@ -36,7 +36,7 @@ struct NeutralMixed : public Component {
   void precon(const Options &state, BoutReal gamma) override;
 private:
   std::string name;  ///< Species name
-  
+  YBoundary yboundary;
   std::shared_ptr<FCI::dagp_fv> dagp;
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
@@ -44,13 +44,13 @@ private:
   Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
   bool isMMS;
   BoutReal AA; ///< Atomic mass (proton = 1)
-
+  BoutReal n_lowsource, T_lowsource, lowsource_scale;
   Field3D Dnn; ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnNVn;
   bool disable_Dnn;
   BoutReal temperature_floor;
   bool sheath_ydown, sheath_yup;
-
+  bool dissipative;
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
 

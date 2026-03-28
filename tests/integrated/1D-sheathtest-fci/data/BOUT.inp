@@ -1,0 +1,90 @@
+nout = 50
+timestep = 0.1
+
+
+[mesh]
+
+extrapolate_y = false 
+
+[mesh:paralleltransform]
+type = fci
+
+
+[solver]
+mxstep = 10000
+rtol = 1e-6
+atol = 1e-12
+type = cvode
+
+
+[hermes]
+components = h+, e, collisions, sound_speed, sheath_boundary_parallel, ion_viscosity
+
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+
+[h+]  # Ions
+type = evolve_density, evolve_momentum, evolve_pressure
+
+charge = 1.0
+AA = 1.0
+
+thermal_conduction = true  # in evolve_pressure
+p_div_v = true
+
+dissipative = true
+
+[Nh+]
+function =  (1e19 / `hermes`:Nnorm)
+
+flux = 1e23
+
+adapt_source = 2e19
+
+source = flux * gauss(y - pi, 0.25)
+
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+
+[NVh+]
+function = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+
+[Ph+]
+function = (10.0 / `hermes`:Tnorm) * `Nh+`:function
+
+adapt_source = 150.0
+
+heating = 1e7
+T_source = heating / (`Nh+`:flux * 1.602e-19 * 1.5)
+source =  `Nh+`:source * T_source * 1.602176634e-19
+
+
+
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+
+
+[e]  # electrons
+type = quasineutral, zero_current, evolve_pressure
+
+charge = -1.0
+AA = 1.0 / 1836.0
+
+thermal_conduction = true  # in evolve_pressure
+p_div_v = true
+
+dissipative = true
+
+[Pe]
+
+adapt_source = 150.0
+
+function = `Ph+`:function
+source = `Ph+`:source
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1

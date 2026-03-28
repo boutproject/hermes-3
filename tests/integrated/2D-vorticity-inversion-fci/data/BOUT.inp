@@ -1,0 +1,74 @@
+nout = 0
+timestep = 0.1
+
+[mesh]
+
+extrapolate_y = false 
+
+[mesh:paralleltransform]
+type = fci
+
+
+[solver]
+mxstep = 10000
+rtol = 1e-8
+atol = 1e-12
+
+[hermes]
+components = h+,e, vorticity, collisions, sound_speed
+
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[h+]  # Ions
+type = evolve_density, evolve_momentum , evolve_pressure
+charge = 1.0
+AA = 1.0
+
+[Ph+]
+function = (1.05*sin(6.28318530717959*x)*sin(2.0*z + 0.3132131) + 4.0)*(0.25*sin(12.5663706143592*x)*sin(4.0*z + 2.31312) + 1.0)
+bndry_all = free_o2
+[Nh+]
+function = 0.25*sin(12.5663706143592*x)*sin(4.0*z + 2.31312) + 1.0
+bndry_all = free_o2
+
+[NVh+]
+function = 50.0 * sin(2.0 * pi * x) * sin(2 * z) / 5.0
+bndry_all = free_o2
+
+[e]  # Ions
+type = evolve_density, evolve_pressure
+charge = -1.0
+AA = 1.0
+
+[Pe]
+function = (1.05*sin(6.28318530717959*x)*sin(2.0*z + 0.3132131) + 4.0)*(0.25*sin(12.5663706143592*x)*sin(4.0*z + 2.31312) + 1.0)
+bndry_all = free_o2
+[Ne]
+function = 0.25*sin(12.5663706143592*x)*sin(4.0*z + 2.31312) + 1.0
+bndry_all = free_o2
+
+[Vort]
+function = -0.000103035789799417*sin(6.28318530717959*x)*sin(2.0*z)
+bndry_all = free_o2
+
+[vorticity]
+
+diamagnetic = false   # Include diamagnetic current?
+diamagnetic_polarisation = false
+
+average_atomic_mass = 1.0
+
+[vorticity:laplacian]
+
+type   = petsc  # Needed if Boussinesq = false
+ksptype = gmres # Linear iterative method
+pctype = hypre
+
+inner_boundary_flags = 0
+outer_boundary_flags = 0
+
+all_terms = true
+nonuniform = true   # NOTE: Necessary to avoid numerical instability

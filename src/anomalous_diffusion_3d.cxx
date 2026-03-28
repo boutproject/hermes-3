@@ -28,6 +28,19 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
                     .withDefault(anomalous_D)
                 / diffusion_norm;
 
+
+  anomalous_D_par = 0.0;
+  include_D_par = (mesh->get(anomalous_D_par, std::string("D_par_") + name) == 0)
+              || options.isSet("anomalous_D_par");
+  anomalous_D_par = options["anomalous_D_par"]
+                    .doc("Anomalous parallel particle diffusion coefficient [m^2/s]")
+                    .withDefault(anomalous_D_par)
+                / diffusion_norm;
+
+  anomalous_D_par.applyBoundary("neumann");
+  mesh->communicate(anomalous_D_par);
+  anomalous_D_par.applyParallelBoundary("parallel_neumann_o1");
+  
   anomalous_chi = 0.0;
   include_chi = (mesh->get(anomalous_chi, std::string("chi_") + name) == 0)
                 || options.isSet("anomalous_chi");
@@ -94,6 +107,11 @@ void AnomalousDiffusion3D::transform(Options& state) {
     Field3D tN = GET_NOBOUNDARY(Field3D, species["tracedensity"]);
     add(species["tracedensity_source"], (*dagp)(anomalous_D, tN, flow_xlow, flow_zlow, upwind));
 
+  }
+
+  if (include_D_par) {
+    Field3D dummy;
+    add(species["density_source"], Div_par_K_Grad_par_mod(anomalous_D_par, N, dummy, false));
   }
   
   if (include_D) {
