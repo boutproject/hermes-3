@@ -27,7 +27,7 @@ TEST(CXReactionTest, InvalidReactionStrings) {
   }
 }
 
-/// CXReaction should accept reaction strings with reactants and products in either order
+/// @brief CXReaction should accept strings with reactants and products in either order
 TEST(CXReactionTest, OrderIndependentReactionStrs) {
   Options base_options{
       {"test", {{"data_ids", "H.2_3.1.8"}}},
@@ -48,7 +48,7 @@ TEST(CXReactionTest, OrderIndependentReactionStrs) {
   }
 }
 
-//========================== Source regression tests ==========================
+//====================== Reaction source regression tests =====================
 
 // H isotopes ionization
 TEST_F(HIznTest, SourcesRegression) { sources_regression_test(); }
@@ -68,7 +68,7 @@ TEST_F(HDpCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(THpCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(DTpCXTest, SourcesRegression) { sources_regression_test(); }
 
-/// @brief H/H+ CX with neutral momentum gain turned off
+// H/H+ CX with neutral momentum gain turned off
 TEST_F(HHpCXTest_noNeutralMomGain, SourcesRegression) { sources_regression_test(); }
 
 // He ionization
