@@ -3,8 +3,53 @@
 #include "test_izn_rec_reactions.hxx"
 
 //======================== General reaction class tests =======================
+/// @brief Test parsing of various input optionsReactionBase constructor should throw if
+/// the reaction type string is not
+TEST(ReactionTest, InputOptions) {
+  const std::string comp_name = "test";
 
-/// @brief CXReaction constructor should throw for strings that aren't valid CX reactions
+  // Base input with two reaction strings
+  Options base_input{
+      {comp_name, {{"type", "(h + h+ -> h+ + h, d + d+ -> d+ + d)"}}},
+      {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+
+  // Setting one or two data_srcs should work
+  Options valid_input1 = base_input.copy();
+  valid_input1[comp_name]["data_srcs"] = "(Amjuel)";
+  Options valid_input2 = base_input.copy();
+  valid_input2[comp_name]["data_srcs"] = "(Amjuel,Amjuel)";
+  ReactionBase::reset_instance_counter();
+  ASSERT_NO_THROW(CXReaction(comp_name, valid_input1));
+  ReactionBase::reset_instance_counter();
+  ASSERT_NO_THROW(CXReaction(comp_name, valid_input2));
+
+  // Setting num_data_srcs != (1 || num_reactions) should throw
+  Options invalid_input1 = base_input.copy();
+  invalid_input1[comp_name]["data_srcs"] = "(Amjuel,Amjuel,Amjuel)";
+  ReactionBase::reset_instance_counter();
+  ASSERT_THROW(CXReaction(comp_name, invalid_input1), BoutException);
+
+  // Setting one or two data IDs should work
+  Options valid_input3 = base_input.copy();
+  valid_input3[comp_name]["data_ids"] = "H.2_3.1.8";
+  Options valid_input4 = base_input.copy();
+  valid_input4[comp_name]["data_ids"] = "H.2_3.1.8,H.2_3.1.8";
+  ReactionBase::reset_instance_counter();
+  ASSERT_NO_THROW(CXReaction(comp_name, valid_input3));
+  ReactionBase::reset_instance_counter();
+  ASSERT_NO_THROW(CXReaction(comp_name, valid_input4));
+
+  // Setting num_data_ids != (1 || num_reactions) should throw
+  Options invalid_input2 = base_input.copy();
+  invalid_input2[comp_name]["data_ids"] = "H.2_3.1.8,H.2_3.1.8,H.2_3.1.8";
+  ReactionBase::reset_instance_counter();
+  ASSERT_THROW(CXReaction(comp_name, invalid_input2), BoutException);
+}
+
+//======================== CX reaction class tests =======================
+
+/// @brief CXReaction constructor should throw for strings that aren't valid CX
+/// reactions
 TEST(CXReactionTest, InvalidReactionStrings) {
   Options base_options{
       {"test", {{"data_ids", "H.2_3.1.8"}}},
