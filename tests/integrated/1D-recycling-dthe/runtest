@@ -38,17 +38,18 @@ def check_value(name, val, target, **kws):
         # On failure, report the effective abs tolerance used by isclose
         atol_eff = kws["atol"] + kws["rtol"] * abs(target)
         print(
-            f"Expected\n {target-atol_eff} < {name} < {target+atol_eff}\nBut actual value was\n {val}"
+            f"Expected\n {target - atol_eff} < {name} < {target + atol_eff}\nBut actual value was\n {val}"
         )
     return success
 
 
-def check_ULPs_diff(name,val,target, maxulps):
-    nulps = nulp_diff(val,target)
+def check_ULPs_diff(name, val, target, maxulps):
+    nulps = nulp_diff(val, target)
     success = nulps <= maxulps
     if not success:
         print(
-            f'{name} differs from reference data by {nulps} ULPs (max allowed is {maxulps})\n Value = {val}\n Reference = {target}')
+            f"{name} differs from reference data by {nulps} ULPs (max allowed is {maxulps})\n Value = {val}\n Reference = {target}"
+        )
     return success
 
 
@@ -126,24 +127,24 @@ ds_last = ds.isel(t=-1)
 # Check the values of various diagnostics
 # Diagnostic names and reference values (generated with -O1)
 diags_ref = {
-    "Ed+t_cx": -0.00023620535893063399,
-    "Edd+_cx": 2.9343286852402813e-05,
-    "Edt+_cx": -0.00026917215840358076,
-    "Et+d_cx": -0.0003328909005722493,
-    "Etd+_cx": -0.0002463479543128938,
-    "Ett+_cx": 1.6901539608568433e-05,
-    "Fd+t_cx": -5.942064642716903e-05,
-    "Fdd+_cx": 9.141841216238106e-05,
-    "Fdt+_cx": -1.4714592209841299e-05,
-    "Ft+d_cx": -5.178881170800972e-05,
-    "Ftd+_cx": -1.6272330148884757e-06,
-    "Ftt+_cx": 2.561818691160369e-05,
-    "Kdd+_cx": 0.009792335533604365,
-    "Kdt+_cx": 0.0061757164382375985,
-    "Ktd+_cx": 0.009413185313428586,
-    "Ktt+_cx": 0.005896736941813992,
-    "Sdt+_cx": -0.0004883584931543128,
-    "Std+_cx": -0.0004009791378759027,
+    "Ed+t_cx": -0.0002490542447005431,
+    "Edd+_cx": 2.8785761332316556e-05,
+    "Edt+_cx": -0.0002839618857038134,
+    "Et+d_cx": -0.00034731698592881935,
+    "Etd+_cx": -0.0002590812694626004,
+    "Ett+_cx": 1.7133358482616787e-05,
+    "Fd+t_cx": -6.151961236025734e-05,
+    "Fdd+_cx": 9.35356526889177e-05,
+    "Fdt+_cx": -1.4949120725598835e-05,
+    "Ft+d_cx": -5.4793789483643663e-05,
+    "Ftd+_cx": -2.287230403142589e-06,
+    "Ftt+_cx": 2.717217345060295e-05,
+    "Kdd+_cx": 0.009655661241700779,
+    "Kdt+_cx": 0.006166328476931247,
+    "Ktd+_cx": 0.009275695079636586,
+    "Ktt+_cx": 0.00588211215600712,
+    "Sdt+_cx": -0.0004984460431692231,
+    "Std+_cx": -0.0004105907027085155,
 }
 # fmt: on
 

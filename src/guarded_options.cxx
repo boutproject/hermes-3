@@ -92,6 +92,29 @@ const Options& GuardedOptions::get([[maybe_unused]] Regions region) const {
 #endif
 }
 
+template <typename T>
+const T& GuardedOptions::GetRef([[maybe_unused]] Regions region) const {
+#if CHECKLEVEL >= 1
+  const std::string name = options->str();
+  auto [permission, varname] = permissions->getHighestPermission(name, region);
+  if (permission >= PermissionTypes::ReadIfSet) {
+    if (permission == PermissionTypes::ReadIfSet && !options->isSet()) {
+      throw BoutException(
+          "Only have permission to read {} if it is already set, which it is not.", name);
+    }
+#if CHECKLEVEL >= 999
+    updateAccessRecords(*unread_variables, varname, region);
+#endif
+    // Access the value from the variant and return a const reference
+    return bout::utils::get<T>(options->value);
+  }
+  throw BoutException("Do not have read permission for {}.", name);
+#else
+  // Access the value from the variant and return a const reference
+  return bout::utils::get<T>(options->value);
+#endif
+}
+
 Options& GuardedOptions::getWritable([[maybe_unused]] Regions region) {
 #if CHECKLEVEL >= 1
   const std::string name = options->str();
@@ -117,3 +140,11 @@ bool GuardedOptions::operator==(const GuardedOptions& other) const {
 bool GuardedOptions::operator!=(const GuardedOptions& other) const {
   return !(*this == other);
 }
+// Explicit template instantiations for commonly used types
+template const Field3D& GuardedOptions::GetRef<Field3D>(Regions region) const;
+template const Field2D& GuardedOptions::GetRef<Field2D>(Regions region) const;
+template const FieldPerp& GuardedOptions::GetRef<FieldPerp>(Regions region) const;
+template const BoutReal& GuardedOptions::GetRef<BoutReal>(Regions region) const;
+template const int& GuardedOptions::GetRef<int>(Regions region) const;
+template const bool& GuardedOptions::GetRef<bool>(Regions region) const;
+template const std::string& GuardedOptions::GetRef<std::string>(Regions region) const;
