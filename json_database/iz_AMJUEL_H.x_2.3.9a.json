@@ -1,5 +1,6 @@
 {
     "info": {
+        "fit_type": "nT",
         "sigma_v_coeffs_ref": "Amjuel H.4 2.3.9a, page 161",
         "sigma_v_E_coeffs_ref": "Amjuel H.10 2.3.9a, page 293",
         "reaction_lbl": "e + he -> he+ + 2e",

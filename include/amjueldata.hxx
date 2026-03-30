@@ -41,6 +41,9 @@ private:
     nlohmann::json data;
     json_file >> data;
 
+    // Extract fit type (rate params)
+    this->fit_type = data["info"]["fit_type"];
+
     try {
       includes_sigma_v_e = data["info"]["includes_sigma_v_e"];
     } catch (nlohmann::json::type_error& e) {
@@ -51,16 +54,12 @@ private:
 
     try {
       // Extract <sigma v> coeff table
-      std::vector<std::vector<double>> sigma_v_coeffs_tmp = data["sigma_v_coeffs"];
-      this->sigma_v_coeffs = sigma_v_coeffs_tmp;
+      this->sigma_v_coeffs = data["sigma_v_coeffs"];
       if (this->includes_sigma_v_e) {
         // Extract <sigma v E> coeff table
-        std::vector<std::vector<double>> sigma_v_E_coeffs_tmp = data["sigma_v_E_coeffs"];
-        this->sigma_v_E_coeffs = sigma_v_E_coeffs_tmp;
-
+        this->sigma_v_E_coeffs = data["sigma_v_E_coeffs"];
         // Extract electron heating value
-        double electron_heating_tmp = data["electron_heating"];
-        this->electron_heating = electron_heating_tmp;
+        this->electron_heating = data["electron_heating"];
       }
     } catch (nlohmann::json::type_error& e) {
       throw BoutException(fmt::format("json file at '{:s}' doesn't contain valid Amjuel "
@@ -68,6 +67,8 @@ private:
                                       file_path.string(), e.what()));
     }
   }
+
+  std::string fit_type;
 
   // N.B. E-index varies fastest, so coefficient indices are [T][n]
   std::vector<std::vector<BoutReal>> sigma_v_coeffs;

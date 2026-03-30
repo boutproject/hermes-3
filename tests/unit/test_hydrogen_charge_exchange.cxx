@@ -1,8 +1,8 @@
 
 #include "gtest/gtest.h"
 
-#include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
+#include "test_extras.hxx" // FakeMesh
 
 #include "../../include/hydrogen_charge_exchange.hxx"
 
@@ -23,27 +23,32 @@ using namespace bout::globals;
 using HydrogenCXTest = FakeMeshFixture;
 
 TEST_F(HydrogenCXTest, CreateComponent) {
-  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  {"test", {{"type", "h + h+ -> h+ + h"}}}};
 
-  HydrogenIsotopeChargeExchange<'h', 'h'> component("test", options, nullptr);
+  HydrogenChargeExchange<'h', 'h'> component("test", options, nullptr);
 }
 
 TEST_F(HydrogenCXTest, RateAt1eV) {
-  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  {"test", {{"type", "h + h+ -> h+ + h"}}}};
 
-  HydrogenIsotopeChargeExchange<'h', 'h'> component("test", options, nullptr);
+  HydrogenChargeExchange<'h', 'h'> component("test", options, nullptr);
 
+  Field3D atom_dens(1.0), atom_temp(0.0), atom_vel(0.0);
+  Field3D ion_dens(1.0), ion_temp(1.0), ion_vel(0.0);
   Options state{{"species",
                  {{"h",
                    {{"AA", 1.0},
-                    {"density", 1.0},
-                    {"temperature", 0.0}, // cold atoms
-                    {"velocity", 0.0}}},
+                    {"density", atom_dens},
+                    {"temperature", atom_temp},
+                    {"velocity", atom_vel}}},
                   {"h+",
                    {{"AA", 1.0},
-                    {"density", 1.0},
-                    {"temperature", 1.0}, // lnT = 0.0
-                    {"velocity", 0.0}}}}}};
+                    {"density", ion_dens},
+                    {"temperature", ion_temp}, // lnT = 0.0
+                    {"velocity", ion_vel}}}}},
+                {"units", {{"eV", 1.0}}}};
 
   component.transform(state);
 

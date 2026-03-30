@@ -1,5 +1,6 @@
 {
     "info": {
+        "fit_type": "Dummy test data",
         "sigma_v_coeffs_ref": "Dummy test data",
         "sigma_v_E_coeffs_ref": "Dummy test data",
         "reaction_lbl": "Dummy test data",
