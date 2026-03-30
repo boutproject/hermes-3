@@ -15,11 +15,13 @@ TEST(CXReactionTest, InvalidReactionStrings) {
   std::string too_many_reactants = "h + d+ + t -> d + h+";
   std::string too_few_products = "h + h+ -> h+";
   std::string too_many_products = "h + h+ -> h+ + h + d";
-  std::string not_cx = "h + e -> h+ + 2e";
+  std::string invalid_cx1 = "h + d+ -> d + t+";
+  std::string invalid_cx2 = "h + d+ -> t + h+";
 
   // Test that constructor throws for each invalid reaction string
-  for (const auto& invalid_reaction_str : {too_few_reactants, too_many_reactants,
-                                           too_few_products, too_many_products, not_cx}) {
+  for (const auto& invalid_reaction_str :
+       {too_few_reactants, too_many_reactants, too_few_products, too_many_products,
+        invalid_cx1, invalid_cx2}) {
     ReactionBase::reset_instance_counter();
     Options options = base_options.copy();
     options["test"]["type"] = invalid_reaction_str;
