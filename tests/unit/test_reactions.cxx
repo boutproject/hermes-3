@@ -2,6 +2,54 @@
 #include "test_cx_reactions.hxx"
 #include "test_izn_rec_reactions.hxx"
 
+//======================== General reaction class tests =======================
+
+/// @brief CXReaction constructor should throw for strings that aren't valid CX reactions
+TEST(CXReactionTest, InvalidReactionStrings) {
+  Options base_options{
+      {"test", {{"data_ids", "H.2_3.1.8"}}},
+      {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+
+  // Invalid CX reaction strings
+  std::string too_few_reactants = "h -> h+ + h";
+  std::string too_many_reactants = "h + d+ + t -> d + h+";
+  std::string too_few_products = "h + h+ -> h+";
+  std::string too_many_products = "h + h+ -> h+ + h + d";
+  std::string not_cx = "h + e -> h+ + 2e";
+
+  // Test that constructor throws for each invalid reaction string
+  for (const auto& invalid_reaction_str : {too_few_reactants, too_many_reactants,
+                                           too_few_products, too_many_products, not_cx}) {
+    ReactionBase::reset_instance_counter();
+    Options options = base_options.copy();
+    options["test"]["type"] = invalid_reaction_str;
+    ASSERT_THROW(CXReaction("test", options), BoutException);
+  }
+}
+
+/// CXReaction should accept reaction strings with reactants and products in either order
+TEST(CXReactionTest, OrderIndependentReactionStrs) {
+  Options base_options{
+      {"test", {{"data_ids", "H.2_3.1.8"}}},
+      {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+
+  std::string DT_cx_order1 = "d + t+ -> t + d+";
+  std::string DT_cx_order2 = "d + t+ -> d+ + t";
+  std::string DT_cx_order3 = "t+ + d -> t + d+";
+  std::string DT_cx_order4 = "t+ + d -> d+ + t";
+
+  // Test that all of the strings allow construction without throwing
+  for (const auto& valid_reaction_str :
+       {DT_cx_order1, DT_cx_order2, DT_cx_order3, DT_cx_order4}) {
+    ReactionBase::reset_instance_counter();
+    Options options = base_options.copy();
+    options["test"]["type"] = valid_reaction_str;
+    ASSERT_NO_THROW(CXReaction("test", options));
+  }
+}
+
+//========================== Source regression tests ==========================
+
 // H isotopes ionization
 TEST_F(HIznTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(DIznTest, SourcesRegression) { sources_regression_test(); }
@@ -19,6 +67,9 @@ TEST_F(TTpCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(HDpCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(THpCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(DTpCXTest, SourcesRegression) { sources_regression_test(); }
+
+/// @brief H/H+ CX with neutral momentum gain turned off
+TEST_F(HHpCXTest_noNeutralMomGain, SourcesRegression) { sources_regression_test(); }
 
 // He ionization
 TEST_F(HeIzn01Test, SourcesRegression) { sources_regression_test(); }

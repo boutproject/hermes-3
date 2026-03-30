@@ -121,6 +121,17 @@ protected:
   }
 };
 
+class HHpCXTest_noNeutralMomGain : public CXReactionTest<CXReaction> {
+public:
+  HHpCXTest_noNeutralMomGain()
+      : CXReactionTest<CXReaction>("HHpCX_noNeutralMomGain", "h + h+ -> h+ + h") {}
+  virtual Options generate_state() override {
+    Options state = CXReactionTest<CXReaction>::generate_state();
+    state["testHHpCX_noNeutralMomGain"]["no_neutral_cx_mom_gain"] = true;
+    return state;
+  }
+};
+
 class HHpCXTest : public CXReactionTest<CXReaction> {
 public:
   HHpCXTest() : CXReactionTest<CXReaction>("HHpCX", "h + h+ -> h+ + h") {}
