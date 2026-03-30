@@ -60,10 +60,6 @@ SpeciesParser::SpeciesParser(const std::string& species_str) {
 
   // Store element name; always lower case
   this->element = matches[2];
-  if (this->element.empty()) {
-    throw BoutException(
-        fmt::format("Unable to extract element name from species name {}", species_str));
-  }
   std::transform(this->element.begin(), this->element.end(), this->element.begin(),
                  ::tolower);
 
