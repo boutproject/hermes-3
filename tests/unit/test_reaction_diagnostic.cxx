@@ -15,11 +15,6 @@ ReactionDiagnosticTest::make_diag(const std::string& name, const std::string& lo
                                   const std::string& source,
                                   const std::string& standard_name,
                                   std::optional<DiagnosticTransformerType> transformer) {
-  /*
-  Set up the root options with normalisation units (required by ReactionDiagnostic
-  constructor
-   */
-  set_root_state();
 
   // Use provided value if not empty/nullopt, otherwise use default
   std::string actual_name = name.empty() ? this->default_name : name;
@@ -38,22 +33,12 @@ ReactionDiagnosticTest::make_diag(const std::string& name, const std::string& lo
       transformer.has_value() ? transformer.value() : this->default_transformer;
 
   return ReactionDiagnostic(actual_name, actual_long_name, actual_type, actual_source,
-                            actual_standard_name, actual_transformer);
+                            actual_standard_name, this->units, actual_transformer);
 }
 
 ReactionDiagnostic ReactionDiagnosticTest::make_diag_with_transformer(
     const DiagnosticTransformerType& transformer) {
   return make_diag("", "", std::nullopt, "", "", transformer);
-}
-
-void ReactionDiagnosticTest::set_root_state() {
-  Options state;
-  // Set up the normalisation units required by ReactionDiagnostic constructor, values
-  // aren't important for testing.
-  state["units"]["inv_meters_cubed"] = 1e19;
-  state["units"]["eV"] = 1.0;
-  state["units"]["seconds"] = 1e-6;
-  Options::root() = state.copy();
 }
 
 // ============================================================================
@@ -77,8 +62,7 @@ TEST_F(ReactionDiagnosticTest, AddToState) {
   ReactionDiagnostic diag = default_diag();
 
   // Values expexted in the state after adding the diagnostic
-  const BoutReal expected_conversion =
-      1 / Options::root()["units"]["seconds"].as<BoutReal>();
+  const BoutReal expected_conversion = 1 / this->units["seconds"].as<BoutReal>();
   const std::string expected_long_name = this->default_long_name;
   const std::string expected_source = this->default_source;
   const std::string expected_standard_name =

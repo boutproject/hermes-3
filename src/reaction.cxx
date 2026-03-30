@@ -75,13 +75,13 @@ void Reaction::add_diagnostic(const std::string& sp_name, const std::string& dia
   std::pair<std::string, ReactionDiagnosticType> diag_key =
       std::make_pair(sp_name, diag_type);
   if (standard_name.empty()) {
-    this->diagnostics.insert(
-        std::make_pair(diag_key, ReactionDiagnostic(diag_name, diag_desc, diag_type,
-                                                    data_source, transformer)));
+    this->diagnostics.insert(std::make_pair(
+        diag_key, ReactionDiagnostic(diag_name, diag_desc, diag_type, data_source,
+                                     this->units, transformer)));
   } else {
     this->diagnostics.insert(std::make_pair(
         diag_key, ReactionDiagnostic(diag_name, diag_desc, diag_type, data_source,
-                                     standard_name, transformer)));
+                                     standard_name, this->units, transformer)));
   }
   setPermissions(readWrite(diag_name));
 }
