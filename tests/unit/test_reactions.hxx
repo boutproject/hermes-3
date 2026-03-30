@@ -199,6 +199,10 @@ protected:
     // Generate input state
     Options state = generate_state();
 
+    // For now we need to manually reset reaction instance counter in tests, otherwise
+    // Reaction component construction will fail
+    ReactionBase::reset_instance_counter();
+
     // Run reaction
     RTYPE component = RTYPE("test" + lbl, state, nullptr);
     component.transform(state);
