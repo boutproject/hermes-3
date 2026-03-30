@@ -109,7 +109,7 @@ AmjuelData::AmjuelData(const std::string& data_label, Options& options,
 
     // Extract coeff table
     this->coeffs = data["coeffs"];
-  } catch (nlohmann::json::type_error& e) {
+  } catch (std::exception& e) {
     throw BoutException(
         "Failed to extract Amjuel reaction data from json file at '{:s}'. Error was {:s}",
         file_path.string(), e.what());
