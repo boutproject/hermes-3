@@ -530,13 +530,13 @@ void NeutralMixed::finally(const Options& state) {
 
   // Perpendicular advection of pressure
   if (nonorthogonal_operators) {
-    ddt(Pn) +=
-        (5. / 3)
-        * Div_a_Grad_perp_nonorthog(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += (5. / 3)
+               * Div_a_Grad_perp_nonorthog(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow,
+                                           ef_adv_perp_ylow);
   } else {
-    ddt(Pn) +=
-        (5. / 3)
-        * Div_a_Grad_perp_flows(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += (5. / 3)
+               * Div_a_Grad_perp_flows(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow,
+                                       ef_adv_perp_ylow);
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
