@@ -1,6 +1,6 @@
 #
 
-nout = 5                     # Number of output timesteps
+nout = 1                     # Number of output timesteps
 timestep = 0.0001        
 
 MZ = 1
