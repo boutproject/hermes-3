@@ -33,11 +33,9 @@ static inline std::filesystem::path get_json_db_dir(Options& options) {
  */
 struct AmjuelReaction : public Reaction {
   AmjuelReaction(std::string name, std::string short_reaction_type,
-                 std::string amjuel_lbl, std::string from_species, std::string to_species,
-                 Options& alloptions)
+                 std::string amjuel_lbl, Options& alloptions)
       : Reaction(name, alloptions), amjuel_src(std::string("Amjuel ") + amjuel_lbl),
-        short_reaction_type(short_reaction_type), from_species(from_species),
-        to_species(to_species),
+        short_reaction_type(short_reaction_type),
         amjuel_data(get_json_db_dir(alloptions), short_reaction_type, amjuel_lbl) {
 
     this->includes_sigma_v_e = amjuel_data.includes_sigma_v_e;
@@ -60,17 +58,21 @@ protected:
   // Store some strings for use in attribute docstrings
   const std::string amjuel_src;
   const std::string short_reaction_type;
-  const std::string from_species;
-  const std::string to_species;
 
   /// Functions to calculate Amjuel rates from underlying tables
-  BoutReal eval_amjuel_fit(BoutReal T, BoutReal n,
-                           const std::vector<std::vector<BoutReal>>& coeff_table);
-  virtual BoutReal eval_sigma_v_E(BoutReal T, BoutReal n) override final;
-  virtual BoutReal eval_sigma_v(BoutReal T, BoutReal n) override final;
+  BoutReal eval_amjuel_nT_fit(BoutReal T, BoutReal n,
+                              const std::vector<std::vector<BoutReal>>& coeff_table);
+  BoutReal eval_amjuel_T_fit(BoutReal T, const std::vector<BoutReal>& coeff_table);
 
-  virtual void transform_additional(GuardedOptions& state,
-                                    Field3D& reaction_rate) override final;
+  /// Override the various rate-evaluator functions
+  BoutReal eval_sigma_vE_nT(BoutReal T, BoutReal n) final;
+  BoutReal eval_sigma_v_nT(BoutReal T, BoutReal n) final;
+  BoutReal eval_sigma_v_T(BoutReal T) final;
+
+  RateParamsTypes get_rate_params_type() const final;
+
+  void transform_additional(GuardedOptions& state,
+                            const RateData& rate_calc_results) override;
 
 private:
   /// Data object
