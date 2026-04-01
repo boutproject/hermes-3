@@ -52,6 +52,7 @@ private:
   Field2D anomalous_nu; ///< Anomalous momentum diffusion coefficient
 
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
+  bool anomalous_transport_momentum;
 };
 
 

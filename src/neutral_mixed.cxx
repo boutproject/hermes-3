@@ -41,9 +41,20 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   evolve_momentum = options["evolve_momentum"]
                         .doc("Evolve parallel neutral momentum?")
                         .withDefault<bool>(true);
+  passive_momentum = options["passive_momentum"]
+                        .doc("Evolve only neutral density, passive momentum+pressure")
+                        .withDefault<bool>(false);
+  temperature_from = options["temperature_from"]
+                .doc("Name of species to take temperature from. If not set, uses own species temperature.")
+                .withDefault<std::string>("");
 
   if (evolve_momentum) {
     solver->add(NVn, std::string("NV") + name);
+  } else if (passive_momentum) (
+        "WARNING: Not evolving neutral parallel momentum. "
+        "NVn set from diffusion + ion flow.\n");
+    NVn = 0.0;
+    Vn = 0.0;
   } else {
     output_warn.write(
         "WARNING: Not evolving neutral parallel momentum. NVn and Vn set to zero\n");
@@ -181,12 +192,20 @@ void NeutralMixed::transform(Options& state) {
   NVn.clearParallelSlices();
 
   Nn = floor(Nn, 0.0);
-  Pn = floor(Pn, 0.0);
 
   // Nnlim Used where division by neutral density is needed
   Nnlim = softFloor(Nn, density_floor);
-  Tn = Pn / Nnlim;
-  Tn.applyBoundary();
+  // Optionally take temperature from another species (e.g. Tn = Ti)
+  if (!temperature_from.empty()) {
+    Tn = GET_VALUE(Field3D, state["species"][temperature_from]["temperature"]);
+    Tn.applyBoundary();
+    Pn = Nn * Tn;
+    Pn = floor(Pn, 0.0);
+  } else {
+    Pn = floor(Pn, 0.0);
+    Tn = Pn / Nnlim;
+    Tn.applyBoundary();
+  }
 
   Vn = NVn / (AA * Nnlim);
   Vn.applyBoundary("neumann");
@@ -538,6 +557,30 @@ void NeutralMixed::finally(const Options& state) {
     } else {
       Snv = 0;
     }
+
+  } else if (passive_momentum) (
+    // NVn = Nn_eq * U                         [equilibrium flow with ions]
+    // Try to find ion species velocity from state
+    Field3D U = 0.0;
+    if (state["species"].isSet(ion_name) && state["species"][ion_name].isSet("velocity")) {
+        U = GET_VALUE(Field3D, state["species"][ion_name]["velocity"]);
+    }
+    Field3D Ne = GET_VALUE(Field3D, state["species"]["e"]["density"]);
+    Field3D Ni = GET_VALUE(Field3D, state["species"][ion_name]["density"]);
+
+    // Fetch collision frequencies; fall back to zero if not found
+    Field3D nu_cx  = 0.0;
+    Field3D nu_iz  = 0.0;
+    Field3D nu_rec = 0.0;
+
+    // Equilibrium neutral density:
+    //   Nn_eq = Ne * (Nn * nu_cx + Ne * nu_rec) / (Ne * nu_cx + Ne * nu_iz)
+    //         = Ne * (Nn * nu_cx + Ne * nu_rec) / (Ne * (nu_cx + nu_iz))
+    // Floor the denominator to avoid division by zero
+    Field3D Nn_eq = Ni * (Nnlim * nu_cx + Ne * nu_rec)
+                      / softFloor(Ni * nu_cx + Ne * nu_iz, density_floor);
+    //Field3D NVn_eq = Nn_eq * U;
+    NVn = Nn_eq * U;
 
   } else {
     ddt(NVn) = 0;

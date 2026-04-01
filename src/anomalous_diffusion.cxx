@@ -17,6 +17,10 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
 
   Options& options = alloptions[name];
 
+  // easy way to fix anomalous + EM
+  anomalous_transport_momentum = options["anomalous_transport_momentum"]
+                    .doc("Anomalous transport of parallel momentum?")
+                    .withDefault(true);
   // Set in the mesh or options (or both)
   anomalous_D = 0.0;
   include_D = (mesh->get(anomalous_D, std::string("D_") + name) == 0)
@@ -68,8 +72,10 @@ void AnomalousDiffusion::transform(Options& state) {
                         : 0.0;
   Field2D T2D = DC(T);
 
+  //const Field3D V =
+  //    species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
   const Field3D V =
-      species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
+      (anomalous_transport_momentum && species.isSet("velocity")) ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
   Field2D V2D = DC(V);
 
   if (!anomalous_sheath_flux) {

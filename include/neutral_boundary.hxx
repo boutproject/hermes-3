@@ -53,6 +53,8 @@ private:
   bool upper_y; ///< Boundary condition at upper y?
   bool sol; ///< Boundary condition at sol?
   bool pfr; ///< Boundary condition at pfr?
+
+  std::string temperature_from;
 };
 
 namespace {

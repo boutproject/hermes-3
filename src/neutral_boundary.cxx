@@ -49,6 +49,10 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
       options["pfr_fast_refl_fraction"]
           .doc("Fraction of neutrals that are undergoing fast reflection at the pfr")
           .withDefault<BoutReal>(0.8);
+
+  temperature_from = options["temperature_from"]
+                .doc("Name of species to take temperature from. If not set, uses own species temperature.")
+                .withDefault<std::string>("");
 }
 
 void NeutralBoundary::transform(Options& state) {
@@ -57,8 +61,14 @@ void NeutralBoundary::transform(Options& state) {
   const BoutReal AA = get<BoutReal>(species["AA"]);
 
   Field3D Nn = toFieldAligned(GET_NOBOUNDARY(Field3D, species["density"]));
-  Field3D Pn = toFieldAligned(GET_NOBOUNDARY(Field3D, species["pressure"]));
-  Field3D Tn = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
+  //Field3D Pn = toFieldAligned(GET_NOBOUNDARY(Field3D, species["pressure"]));
+  //Field3D Tn = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
+  Field3D Tn = temperature_from.empty()
+    ? toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]))
+    : toFieldAligned(GET_NOBOUNDARY(Field3D, state["species"][temperature_from]["temperature"]));
+  Field3D Pn = temperature_from.empty()
+    ? toFieldAligned(GET_NOBOUNDARY(Field3D, species["pressure"]))
+    : Nn * Tn;
 
   Field3D Vn = IS_SET_NOBOUNDARY(species["velocity"])
                    ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
