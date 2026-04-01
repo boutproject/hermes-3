@@ -108,14 +108,14 @@ private:
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
 
-  //Physics terms
+  //Physic terms
   Field3D ddtN_par_advection;
   Field3D ddtN_perp_diffusion;
 
   Field3D ddtPn_par_advection;
   Field3D ddtPn_work_done;
   Field3D ddtPn_perp_advection;
-  Field3D ddtPn_par_conduction;:w
+  Field3D ddtPn_par_conduction;
   Field3D ddtPn_perp_conduction;
 
   Field3D ddtNVn_par_advection;
