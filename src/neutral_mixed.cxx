@@ -702,7 +702,7 @@ void NeutralMixed::finally(const Options& state) {
 
   ddtPn_par_advection = -(5. / 3)
                 * FV::Div_par_mod<ParLimiter>( // Parallel advection
-                    Pn, Vn, sound_speed, ef_adv_par_ylow)
+                    Pn, Vn, sound_speed, ef_adv_par_ylow);
   ddtPn_work_done = (2. / 3) * Vn * Grad_par(Pn); // Work done
   ddt(Pn) = ddtPn_par_advection + ddtPn_work_done;
 
@@ -803,6 +803,113 @@ void NeutralMixed::finally(const Options& state) {
       ddt(Pn) += -(2. / 3) * Vn * (par_viscosity_source + perp_viscosity_source);
     }
     Snv = momentum_source;
+    if (localstate.isSet("momentum_source")) {
+      Snv += get<Field3D>(localstate["momentum_source"]);
+    }
+    ddt(NVn) += Snv;
+
+  } else {
+    ddt(NVn) = 0;
+    Snv = 0;
+  }
+
+  // Add the contribution of ion perp velocity (i.e. anomalous transport)
+  // See eq 20 and 21 by Horsten et al., (2017)
+  if (perp_ion_coupling) {
+
+    const Options& allspecies = state["species"];
+
+    for (auto& kv : allspecies.getChildren()) {
+      // NOTE:: This is only true for d+ ions. How do we generalize?
+      //        How do we include the perpendicular ion velocity from other drifts?
+
+      const Options& species = kv.second;
+
+      if ((kv.first == "e") or !species.isSet("charge")
+          or (fabs(get<BoutReal>(species["charge"])) < 1e-5)) {
+        continue; // Skip electrons and non-charged ions
+      }
+
+      // sources/sinks due to anomalous transport
+      if (species.isSet("anomalous_D")) {
+        const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
+
+        const Field3D Ni = get<Field3D>(species["density"]);
+        Field2D Ni2D = DC(Ni);
+
+        // Apply Neumann Y boundary condition, so no additional flux into boundary
+        // Note: Not setting radial (X) boundaries since those set radial fluxes
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          Ni2D(r.ind, mesh->ystart - 1) = Ni2D(r.ind, mesh->ystart);
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
+        }
+
+        ddt(Nn) +=
+            Div_a_Grad_perp_upwind(Nn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        // NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the
+        // equilibrium value of Nn.
+
+        ddt(Pn) += (5. / 3)
+                   * Div_a_Grad_perp_upwind(
+                       Pn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+
+        if (evolve_momentum) {
+          ddt(NVn) += Div_a_Grad_perp_upwind(
+              NVn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        }
+      }
+    }
+  }
+
+  // If N < density_floor then NV and NV_solver may differ
+  // -> Add term to force NV_solver towards NV
+  // Note: This correction is calculated in transform()
+  ddt(NVn) += NVn_err;
+
+  // Ste time derivatives to zero
+  if (zero_timederivs) {
+
+    Field3D zero{0.0};
+    zero.splitParallelSlices();
+    zero.yup() = 0.0;
+    zero.ydown() = 0.0;
+
+    ddt(Nn) = zero;
+    ddt(Pn) = zero;
+    if (evolve_momentum) {
+      ddt(NVn) = zero;
+    }
+    return;
+  }
+
+  // Scale time derivatives
+  if (state.isSet("scale_timederivs")) {
+    Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
+    ddt(Nn) *= scale_timederivs;
+    ddt(Pn) *= scale_timederivs;
+    ddt(NVn) *= scale_timederivs;
+  }
+
+  if (freeze_low_density) {
+    // Apply a factor to time derivatives in low density regions.
+    // Keep the sources and rescues, so that temperature and flow
+    // equilibriates with the plasma through collisions.
+
+    Field3D Nn_s, Pn_s, NVn_s;
+    if (localstate.isSet("density_source")) {
+      Nn_s = get<Field3D>(localstate["density_source"]);
+    } else {
+      Nn_s = 0.0;
+    }
+    if (localstate.isSet("energy_source")) {
+      Pn_s = (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    } else {
+      Pn_s = 0.0;
+    }
+    if (localstate.isSet("momentum_source")) {
+      NVn_s = get<Field3D>(localstate["momentum_source"]);
     } else {
       NVn_s = 0.0;
     }
@@ -892,15 +999,89 @@ void NeutralMixed::outputVars(Options& state) {
          {"conversion", Nnorm * Omega_ci},
          {"long_name", std::string("Rate of change of ") + name + " number density"},
          {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtN") + name + std::string("_par_advection")], ddtN_par_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"long_name", name + std::string(" density parallel advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtN") + name + std::string("_perp_diffusion")], ddtN_perp_diffusion,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"long_name", name + std::string(" density perpendicular diffusion")},
+                    {"source", "neutral_mixed"}});
+
     set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn),
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
                     {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_par_advection")], ddtPn_par_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure parallel advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_work_done")], ddtPn_work_done,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure work done")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_perp_advection")], ddtPn_perp_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure perpendicular advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_par_conduction")], ddtPn_par_conduction,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure parallel conduction")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_perp_conduction")], ddtPn_perp_conduction,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure perpendicular conduction")},
+                    {"source", "neutral_mixed"}});
+
     set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NVn),
                    {{"time_dimension", "t"},
                     {"units", "kg m^-2 s^-2"},
                     {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtNV") + name + std::string("_par_advection")], ddtNVn_par_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum parallel advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtNV") + name + std::string("_pressure_gradient")], ddtNVn_pressure_gradient,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum pressure gradient")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtNV") + name + std::string("_perp_advection")], ddtNVn_perp_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum perpendicular advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("NV") + name + std::string("_par_visc_source")], par_viscosity_source,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum parallel viscosity source")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("NV") + name + std::string("_perp_visc_source")], perp_viscosity_source,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum perpendicular viscosity source")},
                     {"source", "neutral_mixed"}});
   }
   if (diagnose) {
