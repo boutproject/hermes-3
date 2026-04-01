@@ -6,7 +6,12 @@ Reactions
 The following content gives some background to the reactions implemented in Hermes-3.
 Please see the :ref:`sec-postprocessing` section for related diagnostics.
 
+.. seealso::
 
+   For a more detailed description of how reaction source terms are handled in
+   the code, please see the :ref:`'Reactions' section of the developer
+   manual<sec-reactions-dev>`.
+   
 Reaction basics
 ------------------------------
 
