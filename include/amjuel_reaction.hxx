@@ -8,6 +8,8 @@
 #include "amjueldata.hxx"
 #include "reaction.hxx"
 
+namespace hermes {
+
 /**
  * @brief Extract the json database location from options, or fall back to a standard
  * location in the repo (relative to this header).
@@ -82,4 +84,5 @@ private:
   std::filesystem::path json_db_dir;
 };
 
+} // namespace hermes
 #endif // AMJUEL_REACTION_H
