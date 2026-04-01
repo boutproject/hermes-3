@@ -680,8 +680,9 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  ddt(Nn) = -FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed,
-                                         pf_adv_par_ylow); // Parallel advection
+  ddtN_par_advection = -FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed,
+                                         pf_adv_par_ylow);
+  ddt(Nn) = ddtN_par_advection; // Parallel advection
 
   // Perpendicular diffusion
   if (nonorthogonal_operators) {
@@ -1165,6 +1166,21 @@ void NeutralMixed::outputVars(Options& state) {
                     {"long_name", name + " pressure source"},
                     {"species", name},
                     {"source", "neutral_mixed"}});
+    // Lin add
+    set_with_attrs(state[std::string("V") + name + std::string("th_pf")], Vnth_pf,
+                 {{"time_dimension", "t"},
+                  {"units", "m / s"},
+                  {"conversion", Cs0},
+                  {"standard_name", "velocity"},
+                  {"long_name", name + " thermal velocity of neutrals for advection"},
+                  {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("V") + name + std::string("th_hf")], Vnth_hf,
+                 {{"time_dimension", "t"},
+                  {"units", "m / s"},
+                  {"conversion", Cs0},
+                  {"standard_name", "velocity"},
+                  {"long_name", name + " thermal velocity of neutrals for heat flux"},
+                  {"source", "neutral_mixed"}});
 
     ///////////////////////////////////////////////////
     // Parallel flow diagnostics
