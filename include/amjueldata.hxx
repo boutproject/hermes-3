@@ -12,6 +12,8 @@
 #include <bout/boutexception.hxx>
 #include <bout/msg_stack.hxx>
 
+namespace hermes {
+
 /**
  * @brief Handle reading and storage of Amjuel reaction data.
  *
@@ -79,4 +81,5 @@ private:
   bool includes_sigma_v_e;
 };
 
+} // namespace hermes
 #endif

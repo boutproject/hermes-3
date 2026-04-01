@@ -22,6 +22,8 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using HydrogenCXTest = FakeMeshFixture;
 
+namespace hermes {
+
 TEST_F(HydrogenCXTest, CreateComponent) {
   Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
                   {"test", {{"type", "h + h+ -> h+ + h"}}}};
@@ -65,3 +67,5 @@ TEST_F(HydrogenCXTest, RateAt1eV) {
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(state["species"]["h"]["energy_source"]),
                            (3. / 2) * exp(-18.5028) * 1e-6, "RGN_NOBNDRY"));
 }
+
+} // namespace hermes

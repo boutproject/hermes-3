@@ -1,6 +1,8 @@
 #include "amjuel_reaction.hxx"
 #include "hermes_utils.hxx"
 
+namespace hermes {
+
 /**
  * @brief Evaluate an Amjuel double polynomial fit in n and T, given a table of
  * coefficients (see page 20 of amjuel.pdf).
@@ -218,3 +220,5 @@ void AmjuelReaction::transform_additional(GuardedOptions& state,
   // update it in the state?!
   Field3D electron_frequency = rate_data.coll_freq("e");
 }
+
+} // namespace hermes

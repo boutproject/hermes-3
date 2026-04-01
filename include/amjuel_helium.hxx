@@ -4,6 +4,8 @@
 
 #include "amjuel_reaction.hxx"
 
+namespace hermes {
+
 /**
  * @brief Component for Helium ionisation (e + he -> he+ + 2e) based on Amjuel
  * reaction 2.3.9a, page 161. Not resolving metastables, only transporting ground state.
@@ -62,3 +64,5 @@ RegisterComponent<AmjuelHeRecombination10> register_recombination_10("he+ + e ->
 } // namespace
 
 #endif // AMJUEL_HELIUM_H
+
+} // namespace hermes

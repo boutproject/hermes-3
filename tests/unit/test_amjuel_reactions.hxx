@@ -6,6 +6,8 @@
 #include "../../include/amjuel_helium.hxx"
 #include "../../include/amjuel_hydrogen.hxx"
 #include "../../include/hydrogen_charge_exchange.hxx"
+
+namespace hermes {
 /**
  * @brief Base fixture for tests of AmjuelReaction subclasses.
  *
@@ -116,4 +118,5 @@ public:
   DTpCXTest() : AmjuelCXTest<'d', 't'>("DTpCX", "d + t+ -> d+ + t") {}
 };
 
+} // namespace hermes
 #endif
