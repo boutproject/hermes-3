@@ -179,14 +179,12 @@ void EvolveDensity::transform(Options& state) {
     }
   }
 
-  auto& species = state["species"][name];
   if (immBndry) {
     immBndry->SetBoundary(N);
-    //TODO: Floor plasma cells and not ghost cells.
-    set(species["density"], N); //Dont floor and zero out ghost cells...
-  } else {
-    set(species["density"], floor(N, 0.0));
   }
+
+  auto& species = state["species"][name];
+  set(species["density"], floor(N, 0.0));
   set(species["AA"], AA);                 // Atomic mass
   if (charge != 0.0) {                    // Don't set charge for neutral species
     set(species["charge"], charge);

@@ -58,9 +58,55 @@ ImmersedBoundary::ImmersedBoundary() {
   Region<Ind3D>::RegionIndices nobndrycut_indices;
   Region<Ind3D>::RegionIndices bndry_indices;
   Region<Ind3D>::RegionIndices gst_indices;
-  BOUT_FOR(i, bndry_mask.getRegion("RGN_NOBNDRY")) {
-    //Ignore guard cells in y for which cells to evolve.
+  BOUT_FOR(i, bndry_mask.getRegion("RGN_ALL")) {
+    //Handle guard cells correctly. Allow for x+-1 guard cells, for dagp operator. May need more cells eventually.
+    if (i.x() < mesh->xstart - 1 || i.x() > mesh->xend + 1) {continue;}
     if (i.y() < mesh->ystart || i.y() > mesh->yend) {continue;}
+    //TODO: Specfic MPI logic here requires MXG=4 and may still be prone to errors, communicate ghost info after computation (for every field...would be slow)?
+    //Left guard needs to evolve through +x face for MPI.
+    //TODO: Current boundary ghost logic needs to be cleaned up, adding extra corners (commented out code may be enough while all ok ghosts is probably overkill).
+    if (i.x() == mesh->xstart - 1) { //Match what div_ops does.
+      if (IsInside(i.xp())) {
+        xbndry_indices.push_back(i);
+        ////If a ghost to left of proc and needed for point to right inside proc.
+        //if (IsGhost(i)) {
+        //  gst_indices.push_back(i);
+        //}
+      }
+      
+      //Add on all ghost values which are ok...need to check nodes not ghost unnacounted for on this side of mpi...
+      if (IsGhost(i)) {
+        const auto gid = ghost_ids[i];
+        const auto indx = mesh->getLocalXIndex(image_inds(gid, 0));
+        if (indx < 0 || indx >= mesh->LocalNx-1) {continue;}
+        gst_indices.push_back(i);
+      }
+
+      ////dagp operators sometimes need corners which are ghosts out of MPI bounds.
+      //if (IsGhost(i) && (IsInside(i.zm().xp()) || IsInside(i.zp().xp()))) {
+      //  gst_indices.push_back(i);
+      //}
+
+      continue;
+    } else if (i.x() == mesh->xend + 1) {
+      
+      //Add on all ghost values which are ok...need to check nodes not ghost unnacounted for on this side of mpi...
+      if (IsGhost(i)) {
+        const auto gid = ghost_ids[i];
+        const auto indx = mesh->getLocalXIndex(image_inds(gid, 0));
+        if (indx < 0 || indx >= mesh->LocalNx-1) {continue;}
+        gst_indices.push_back(i);
+      }
+      ////If a ghost to right of proc and needed for point to left inside proc.
+      //if (IsGhost(i) && IsInside(i.xm())) {gst_indices.push_back(i);}
+
+      ////dagp operators sometimes need corners which are ghosts out of MPI bounds.
+      //if (IsGhost(i) && (IsInside(i.zm().xm()) || IsInside(i.zp().xm()))) {
+      //  gst_indices.push_back(i);
+      //}
+      continue;
+    }
+
     if (IsInside(i)) {
       nobndry_indices.push_back(i);
       if (IsCutCell(i)) {nobndrycut_indices.push_back(i);}
@@ -87,18 +133,54 @@ ImmersedBoundary::ImmersedBoundary() {
   mesh->upsertRegion3D("RGN_NO_IMM_BNDRY_CUT", Region<Ind3D>(nobndrycut_indices));
   //Non-plasma indices (including ghosts).
   mesh->upsertRegion3D("RGN_IMM_BNDRY",        Region<Ind3D>(bndry_indices));
+
+  //Check for mpi out of bounds issues with images for ghost points in given processor idx.
+  const auto proc_idx = mesh->getXProcIndex();
+  BOUT_FOR(i, mesh->getRegion("RGN_IMM_BNDRY_GST")) {
+    const auto gid = ghost_ids[i];
+    CheckInterpOkWithMPI(static_cast<int>(image_inds(gid, 0)), gid, proc_idx,
+                      "Image point is out of MPI bounds for ghost id ");
+  }
+
+  //Check for mpi out of bounds issues with interpolating at normal points perp to cut-cell boundary in given processor.
+  BOUT_FOR(i, mesh->getRegion("RGN_NO_IMM_BNDRY_CUT")) {
+    const auto bid = bound_ids[i];
+    CheckInterpOkWithMPI(static_cast<int>(bbase_inds(bid, 0)), bid, proc_idx,
+                      "Boundary normal point is out of MPI bounds for cut cell ");
+    CheckInterpOkWithMPI(static_cast<int>(bbase_inds(bid, 2)), bid, proc_idx,
+                      "Boundary normal point is out of MPI bounds for cut cell ");
+  }
+
+  //Add valid index callback for BOUT mesh to use w/o knowledge of imm_bdy class in hermes-3.
+  mesh->setValidationCallback(
+      [this](const Ind3D& ind) {
+          return this->IsInside(ind);}
+  );
 }
 
 bool ImmersedBoundary::IsGhost(const Ind3D& ind) const {
-  return ghost_ids(ind.x(),ind.y(),ind.z()) >= 0;
+  return ghost_ids[ind] >= 0;
 }
 
 bool ImmersedBoundary::IsInside(const Ind3D& ind) const {
-  return static_cast<bool>(bndry_mask(ind.x(),ind.y(),ind.z()));
+  return static_cast<bool>(bndry_mask[ind]);
 }
 
 bool ImmersedBoundary::IsCutCell(const Ind3D& ind) const {
-  return bound_ids(ind.x(),ind.y(),ind.z()) >= 0;
+  return bound_ids[ind] >= 0;
+}
+
+void ImmersedBoundary::CheckInterpOkWithMPI(const int global_indx, const int cell_id,
+                            const int proc_idx, const std::string& description) const {
+    //Convert global to local index for point of interest and check in bounds of processor.
+    //Note, only need to check x for now since z not parallelized.
+    const auto indx = mesh->getLocalXIndex(global_indx);
+    if (indx < 0 || indx >= mesh->LocalNx) {
+      std::stringstream strstm;
+      strstm << description << cell_id << " on proc " << proc_idx
+        << "." << " Increase # of guard cells in x for easy fix. " << std::endl;
+      throw BoutException(strstm.str());
+    }
 }
 
 ImmersedBoundary::BC_Info ImmersedBoundary::ReadBC(const std::string& bc_info) const {
@@ -162,10 +244,13 @@ void ImmersedBoundary::ComputeBoundaryFluxes(const Field3D& a, const Field3D& f,
     } else if (bc_type == BoundCond::DIRICHLET) {
       //Perform bilinear interpolation for points along the boundary normal, and 
       //calculate normal derivative at boundary.
-      const int ai0 = static_cast<int>(bbase_inds(b, 0));
+      const int ai0_global = static_cast<int>(bbase_inds(b, 0));
       const int aj0 = static_cast<int>(bbase_inds(b, 1));
-      const int bi0 = static_cast<int>(bbase_inds(b, 2));
+      const int bi0_global = static_cast<int>(bbase_inds(b, 2));
       const int bj0 = static_cast<int>(bbase_inds(b, 3));
+
+      const int ai0 = mesh->getLocalXIndex(ai0_global);
+      const int bi0 = mesh->getLocalXIndex(bi0_global);
 
       const BoutReal wA00 = bweights(b, 0);
       const BoutReal wA01 = bweights(b, 1);
@@ -203,8 +288,11 @@ void ImmersedBoundary::ComputeBoundaryFluxes(const Field3D& a, const Field3D& f,
 BoutReal ImmersedBoundary::GetImageValue(Field3D& f, const int gid,
             const BoutReal bc_val, const BoundCond bc_type) const {
   // Get nearby vals to image from floating point index.
-  int indx = static_cast<int>(image_inds(gid,0));
-  int indz = static_cast<int>(image_inds(gid,1));
+  // Only x mpi-parallelized at the moment.
+  const int indx_global = static_cast<int>(image_inds(gid,0));
+  const int indx = mesh->getLocalXIndex(indx_global);
+  const int indz = static_cast<int>(image_inds(gid,1));
+  
   //TODO: Need indy for ghost cells in y? Same below. Or do everything in 2d?
   //TODO: Use num_weights instead of 4, same for below where 4s used.
   auto node_vals = std::array<BoutReal, 4>{f(indx,1,indz), f(indx,1,indz+1), 
@@ -286,7 +374,6 @@ BoutReal ImmersedBoundary::GetGhostValue(const BoutReal image_val, const int gid
   }
 }
 
-//IMM_BNDRY_TODO: Get mpi working. Use global indexer to convert global to local indices. Then make Ind3Ds and use .xp(), etc.
 void ImmersedBoundary::SetBoundary(Field3D& f) {
   const auto bc_type = bc_map.at(f.name).first;
   const auto bc_val  = bc_map.at(f.name).second;
@@ -299,7 +386,7 @@ void ImmersedBoundary::SetBoundary(Field3D& f) {
       const auto gid = ghost_ids[i];
       //If first iteration or more than 1 ghost (GS iteration to converge).
       if (it == 0 || (it > 0 && ghost_count[gid] > 1)) {
-        const auto image_val = GetImageValue(f, gid, bc_val, bc_type);
+        const auto image_val = GetImageValue(f, gid, bc_val, bc_type, checked, it);
         const auto ghost_val = GetGhostValue(image_val, gid, bc_val, bc_type);
         f[i] = ghost_val;
       }

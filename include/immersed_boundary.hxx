@@ -19,6 +19,7 @@ public:
   ImmersedBoundary();
   enum class BoundCond {DIRICHLET, NEUMANN, SIZE};
   void FieldSetup(Field3D& f);
+  void FloorField(Field3D& f, const float val = 0.0) const;
   void SetBoundary(Field3D& f);
   void ComputeBoundaryFluxes(const Field3D& a, const Field3D& f, Field3D& result) const;
   bool IsInside(const Ind3D& ind) const;
@@ -74,6 +75,9 @@ private:
   const std::string bc_exception = "Invalid boundary condition specified for immersed boundary.";
   const std::string bc_key = "bndry_wall";
   std::pair<BoundCond, BoutReal> ReadBC(const std::string& bc_info) const;
+
+  void CheckInterpOkWithMPI(const int global_indx, const int cell_id, const int proc_idx,
+                      const std::string& description) const;
 
   // Solve 4x4 A x = b (A is copied by value; partial pivoting)
   // TODO: Clean up/double check this functionality.
