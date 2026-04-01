@@ -45,6 +45,9 @@ private:
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
   std::string
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
+  Field3D Vnth_pf = 0.0;
+  Field3D Vnth_hf = 0.0;
+
   Field3D nu;                    ///< Collisionality to use for diffusion
   Field3D nu_pseudo_mfp;         ///< Pseudo-collision frequency based on mean free path
   Field3D nu_total; ///< Total collision frequency used for diffusion, including
@@ -104,6 +107,22 @@ private:
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
+
+  //Physics terms
+  Field3D ddtN_par_advection;
+  Field3D ddtN_perp_diffusion;
+
+  Field3D ddtPn_par_advection;
+  Field3D ddtPn_work_done;
+  Field3D ddtPn_perp_advection;
+  Field3D ddtPn_par_conduction;:w
+  Field3D ddtPn_perp_conduction;
+
+  Field3D ddtNVn_par_advection;
+  Field3D ddtNVn_pressure_gradient;
+  Field3D ddtNVn_perp_advection;
+  Field3D par_viscosity_source;
+  Field3D perp_viscosity_source;
 
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;

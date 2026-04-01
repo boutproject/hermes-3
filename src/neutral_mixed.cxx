@@ -512,9 +512,6 @@ void NeutralMixed::finally(const Options& state) {
     // New formulation: 1D particle flow in 3D maxwellian, 1D heat flow in 3D Maxwellian
     // See Stangeby
 
-    Field3D Vnth_pf = 0.0;
-    Field3D Vnth_hf = 0.0;
-
     if (legacy_thermal_speed) {
       Vnth_pf = sqrt(Tnlim / AA);
       Vnth_hf = 3.0 / 2.0 * Vnth_pf;
@@ -686,10 +683,11 @@ void NeutralMixed::finally(const Options& state) {
 
   // Perpendicular diffusion
   if (nonorthogonal_operators) {
-    ddt(Nn) +=
-        Div_a_Grad_perp_nonorthog(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddtN_perp_diffusion = Div_a_Grad_perp_nonorthog(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddt(Nn) += ddtN_perp_diffusion;
   } else {
-    ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddtN_perp_diffusion = Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddt(Nn) += ddtN_perp_diffusion;
   }
 
   Sn = density_source; // Save for possible output
@@ -702,20 +700,21 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = -(5. / 3)
+  ddtPn_par_advection = -(5. / 3)
                 * FV::Div_par_mod<ParLimiter>( // Parallel advection
                     Pn, Vn, sound_speed, ef_adv_par_ylow)
-            + (2. / 3) * Vn * Grad_par(Pn); // Work done
+  ddtPn_work_done = (2. / 3) * Vn * Grad_par(Pn); // Work done
+  ddt(Pn) = ddtPn_par_advection + ddtPn_work_done;
 
   // Perpendicular advection of pressure
   if (nonorthogonal_operators) {
-    ddt(Pn) +=
-        (5. / 3)
+    ddtPn_perp_advection = (5. / 3)
         * Div_a_Grad_perp_nonorthog(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += ddtPn_perp_advection;
   } else {
-    ddt(Pn) +=
-        (5. / 3)
+    ddtPn_perp_advection = (5. / 3)
         * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += ddtPn_perp_advection;
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -724,20 +723,23 @@ void NeutralMixed::finally(const Options& state) {
   ef_adv_perp_ylow *= 5. / 2;
 
   if (neutral_conduction) {
-    ddt(Pn) += (2. / 3)
+    ddtPn_par_conduction = (2. / 3)
                * Div_par_K_Grad_par_mod(kappa_n_par, Tn, // Parallel conduction
                                         ef_cond_par_ylow,
                                         false); // No conduction through target boundary
+    ddt(Pn) += ddtPn_par_conduction;
 
     // Perpendicular conduction
     if (nonorthogonal_operators) {
-      ddt(Pn) += (2. / 3)
+      ddtPn_perp_conduction = (2. / 3)
                  * Div_a_Grad_perp_nonorthog(kappa_n_perp, Tn, ef_cond_perp_xlow,
                                              ef_cond_perp_ylow);
+      ddt(Pn) += ddtPn_perp_conduction;
     } else {
-      ddt(Pn) +=
-          (2. / 3)
-          * Div_a_Grad_perp_flows(kappa_n_perp, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      ddtPn_perp_conduction = (2. / 3)
+                 * Div_a_Grad_perp_flows(kappa_n_perp, Tn, ef_cond_perp_xlow,
+                                             ef_cond_perp_ylow);
+      ddt(Pn) += ddtPn_perp_conduction;
     }
 
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
@@ -758,19 +760,21 @@ void NeutralMixed::finally(const Options& state) {
     // Neutral momentum
     TRACE("Neutral momentum");
 
-    ddt(NVn) = -AA
+    ddtNVn_par_advection = -AA
                    * FV::Div_par_fvv<ParLimiter>( // Momentum flow
-                       Nnlim, Vn, sound_speed)
+                       Nnlim, Vn, sound_speed);
+    ddt(NVn) += ddtNVn_par_advection;
 
-               - Grad_par(Pn); // Pressure gradient
+    ddtNVn_pressure_gradient = -Grad_par(Pn); // Pressure gradient
+    ddt(NVn) += ddtNVn_pressure_gradient;
 
     // Perpendicular advection of momentum
     if (nonorthogonal_operators) {
-      ddt(NVn) +=
-          Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      ddtNVn_perp_advection = Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      ddt(NVn) += ddtNVn_perp_advection;
     } else {
-      ddt(NVn) +=
-          Div_a_Grad_perp_flows(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      ddtNVn_perp_advection = Div_a_Grad_perp_flows(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      ddt(NVn) += ddtNVn_perp_advection;
     }
 
     if (neutral_viscosity) {
@@ -782,131 +786,23 @@ void NeutralMixed::finally(const Options& state) {
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = Div_par_K_Grad_par_mod( // Parallel viscosity
+      par_viscosity_source = Div_par_K_Grad_par_mod( // Parallel viscosity
           eta_n_par, Vn, mf_visc_par_ylow,
           false) // No viscosity through target boundary
           ;
 
       // Perpendicular viscosity
       if (nonorthogonal_operators) {
-        viscosity_source += Div_a_Grad_perp_nonorthog(eta_n_perp, Vn, mf_visc_perp_xlow,
+        perp_viscosity_source = Div_a_Grad_perp_nonorthog(eta_n_perp, Vn, mf_visc_perp_xlow,
                                                       mf_visc_perp_ylow);
       } else {
-        viscosity_source +=
-            Div_a_Grad_perp_flows(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
+        perp_viscosity_source = Div_a_Grad_perp_flows(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
       }
 
-      ddt(NVn) += viscosity_source;
-      ddt(Pn) += -(2. / 3) * Vn * viscosity_source;
+      ddt(NVn) += par_viscosity_source + perp_viscosity_source;
+      ddt(Pn) += -(2. / 3) * Vn * (par_viscosity_source + perp_viscosity_source);
     }
     Snv = momentum_source;
-    if (localstate.isSet("momentum_source")) {
-      Snv += get<Field3D>(localstate["momentum_source"]);
-    }
-    ddt(NVn) += Snv;
-
-  } else {
-    ddt(NVn) = 0;
-    Snv = 0;
-  }
-
-  // Add the contribution of ion perp velocity (i.e. anomalous transport)
-  // See eq 20 and 21 by Horsten et al., (2017)
-  if (perp_ion_coupling) {
-
-    const Options& allspecies = state["species"];
-
-    for (auto& kv : allspecies.getChildren()) {
-      // NOTE:: This is only true for d+ ions. How do we generalize?
-      //        How do we include the perpendicular ion velocity from other drifts?
-
-      const Options& species = kv.second;
-
-      if ((kv.first == "e") or !species.isSet("charge")
-          or (fabs(get<BoutReal>(species["charge"])) < 1e-5)) {
-        continue; // Skip electrons and non-charged ions
-      }
-
-      // sources/sinks due to anomalous transport
-      if (species.isSet("anomalous_D")) {
-        const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
-
-        const Field3D Ni = get<Field3D>(species["density"]);
-        Field2D Ni2D = DC(Ni);
-
-        // Apply Neumann Y boundary condition, so no additional flux into boundary
-        // Note: Not setting radial (X) boundaries since those set radial fluxes
-        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-          Ni2D(r.ind, mesh->ystart - 1) = Ni2D(r.ind, mesh->ystart);
-        }
-        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-          Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
-        }
-
-        ddt(Nn) +=
-            Div_a_Grad_perp_upwind(Nn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
-        // NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the
-        // equilibrium value of Nn.
-
-        ddt(Pn) += (5. / 3)
-                   * Div_a_Grad_perp_upwind(
-                       Pn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
-
-        if (evolve_momentum) {
-          ddt(NVn) += Div_a_Grad_perp_upwind(
-              NVn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
-        }
-      }
-    }
-  }
-
-  // If N < density_floor then NV and NV_solver may differ
-  // -> Add term to force NV_solver towards NV
-  // Note: This correction is calculated in transform()
-  ddt(NVn) += NVn_err;
-
-  // Ste time derivatives to zero
-  if (zero_timederivs) {
-
-    Field3D zero{0.0};
-    zero.splitParallelSlices();
-    zero.yup() = 0.0;
-    zero.ydown() = 0.0;
-
-    ddt(Nn) = zero;
-    ddt(Pn) = zero;
-    if (evolve_momentum) {
-      ddt(NVn) = zero;
-    }
-    return;
-  }
-
-  // Scale time derivatives
-  if (state.isSet("scale_timederivs")) {
-    Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
-    ddt(Nn) *= scale_timederivs;
-    ddt(Pn) *= scale_timederivs;
-    ddt(NVn) *= scale_timederivs;
-  }
-
-  if (freeze_low_density) {
-    // Apply a factor to time derivatives in low density regions.
-    // Keep the sources and sinks, so that temperature and flow
-    // equilibriates with the plasma through collisions.
-
-    Field3D Nn_s, Pn_s, NVn_s;
-    if (localstate.isSet("density_source")) {
-      Nn_s = get<Field3D>(localstate["density_source"]);
-    } else {
-      Nn_s = 0.0;
-    }
-    if (localstate.isSet("energy_source")) {
-      Pn_s = (2. / 3) * get<Field3D>(localstate["energy_source"]);
-    } else {
-      Pn_s = 0.0;
-    }
-    if (localstate.isSet("momentum_source")) {
-      NVn_s = get<Field3D>(localstate["momentum_source"]);
     } else {
       NVn_s = 0.0;
     }
