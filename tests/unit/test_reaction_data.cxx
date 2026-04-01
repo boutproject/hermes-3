@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 
+namespace hermes {
+
 // Location containing a valid Amjuel json file
 static std::filesystem::path test_json_db_path =
     std::filesystem::path(__FILE__).parent_path() / "reactions";
@@ -176,3 +178,5 @@ TEST(AmjuelDataTest, ValidDataDir_Tfit) {
                  << ", skipping!";
   }
 }
+
+} // namespace hermes

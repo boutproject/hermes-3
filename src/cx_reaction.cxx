@@ -3,6 +3,8 @@
 #include "rate_helper.hxx"
 #include "species_parser.hxx"
 
+namespace hermes {
+
 ///
 CXReaction::CXReaction(std::string name, Options& alloptions, Solver*)
     : CXReaction(name, alloptions) {}
@@ -225,3 +227,5 @@ void CXReaction::transform_additional(GuardedOptions& state, const RateData& rat
   update_source<set>(state, this->r2, ReactionDiagnosticType::collision_freq,
                      r2_coll_freq_key, rate_data.coll_freq(this->r2));
 }
+
+} // namespace hermes

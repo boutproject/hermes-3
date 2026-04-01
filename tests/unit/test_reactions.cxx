@@ -2,6 +2,8 @@
 #include "test_cx_reactions.hxx"
 #include "test_izn_rec_reactions.hxx"
 
+namespace hermes {
+
 //======================== General reaction class tests =======================
 /// @brief Test parsing of various input optionsReactionBase constructor should throw if
 /// the reaction type string is not
@@ -123,6 +125,8 @@ TEST_F(HeIzn01Test, SourcesRegression) { sources_regression_test(); }
 
 // He recombination
 TEST_F(HeRec10Test, SourcesRegression) { sources_regression_test(); }
+
+} // namespace hermes
 
 // C ions ionization (non-exhaustive)
 TEST_F(ADASCIznTest, SourcesRegression) { sources_regression_test(); }

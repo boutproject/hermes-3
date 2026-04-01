@@ -5,11 +5,12 @@
 #include "species_parser.hxx"
 #include "test_reactions.hxx"
 
+namespace hermes {
+
 /**
  * @brief Class to test charge exchange reaction transforms.
  *
  */
-
 template <typename RTYPE = CXReaction>
 class CXReactionTest : public ReactionTest<RTYPE> {
 
@@ -160,5 +161,7 @@ class DTpCXTest : public CXReactionTest<CXReaction> {
 public:
   DTpCXTest() : CXReactionTest<CXReaction>("DTpCX", "d + t+ -> d+ + t") {}
 };
+
+} // namespace hermes
 
 #endif // TEST_CX_REACTIONS_H

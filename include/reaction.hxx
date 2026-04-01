@@ -11,6 +11,8 @@
 #include "reaction_diagnostic.hxx"
 #include "reaction_parser.hxx"
 
+namespace hermes {
+
 using OPTYPE = GuardedOptions && (GuardedOptions&&, Field3D);
 
 /**
@@ -253,5 +255,7 @@ private:
    */
   void zero_diagnostics(GuardedOptions& state);
 };
+
+} // namespace hermes
 
 #endif

@@ -9,6 +9,8 @@
 
 #include "reaction_data.hxx"
 
+namespace hermes {
+
 /**
  * @brief Class to handle reading from json files containing Amjuel data, storing the
  * coefficients and evaluating associated cross sections, etc.
@@ -66,5 +68,7 @@ protected:
 namespace {
 RegisterReactionData<AmjuelData> register_amjueldata("amjuel");
 }
+
+} // namespace hermes
 
 #endif

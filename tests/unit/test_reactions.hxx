@@ -30,6 +30,8 @@ extern Mesh* mesh;
 // The unit tests use the global mesh
 using namespace bout::globals;
 
+namespace hermes {
+
 /**
  * @brief Base fixture for Reaction tests.
  *
@@ -213,5 +215,7 @@ protected:
     bout::OptionsIO::create(std::string(outpath))->write(state);
   }
 };
+
+} // namespace hermes
 
 #endif

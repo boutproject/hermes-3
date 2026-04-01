@@ -11,6 +11,8 @@
 #include "integrate.hxx"
 #include "reaction_settings.hxx"
 
+namespace hermes {
+
 ///
 Reaction::Reaction(std::string name, Options& options)
     : ReactionBase({readOnly("species:{sp}:{r_val}"), readOnly("species:e:{e_val}"),
@@ -343,3 +345,5 @@ void Reaction::zero_diagnostics(GuardedOptions& state) {
     }
   }
 }
+
+} // namespace hermes

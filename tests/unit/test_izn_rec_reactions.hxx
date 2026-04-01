@@ -4,6 +4,8 @@
 
 #include "test_reactions.hxx"
 
+namespace hermes {
+
 /**
  * @brief Class to test reactions of the form heavy_species1 + <M>e -> heavy_species2 +
  * <N>e where M and N are positive integers.
@@ -126,5 +128,7 @@ class HeRec10Test : public IznRecReactionTest<RecReaction> {
 public:
   HeRec10Test() : IznRecReactionTest<RecReaction>("HeRec10", "he+ + e -> he") {}
 };
+
+} // namespace hermes
 
 #endif // TEST_IZNREC_REACTIONS_H

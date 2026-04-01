@@ -15,14 +15,14 @@
  * @tparam RTYPE The reaction class; must derive from OpenADAS.
  */
 template <typename RTYPE>
-class ADASIznRecReactionTest : public IznRecReactionTest<RTYPE> {
+class ADASIznRecReactionTest : public hermes::IznRecReactionTest<RTYPE> {
 
   static_assert(std::is_base_of<OpenADAS, RTYPE>(),
                 "Template arg to ADASReactionTest must derive from OpenADAS");
 
 public:
   ADASIznRecReactionTest(std::string lbl, std::string reaction_str)
-      : IznRecReactionTest<RTYPE>(lbl, reaction_str) {}
+      : hermes::IznRecReactionTest<RTYPE>(lbl, reaction_str) {}
 };
 
 // C izn
@@ -152,13 +152,13 @@ public:
  * @tparam RTYPE the reaction class
  */
 template <typename RTYPE>
-class ADASCXReactionTest : public CXReactionTest<RTYPE> {
+class ADASCXReactionTest : public hermes::CXReactionTest<RTYPE> {
 protected:
   ADASCXReactionTest(const std::string& lbl, const std::string& reaction_str)
-      : CXReactionTest<RTYPE>(lbl, reaction_str) {}
+      : hermes::CXReactionTest<RTYPE>(lbl, reaction_str) {}
   // Add n_e, T_e to the input state
   virtual Options generate_state() override {
-    Options state = CXReactionTest<RTYPE>::generate_state();
+    Options state = hermes::CXReactionTest<RTYPE>::generate_state();
     state["species"]["e"]["density"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(this->logn_min, this->logn_max, linfunc_axis::z), &state,
         mesh);

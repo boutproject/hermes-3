@@ -7,6 +7,8 @@
 #include "../external/json.hxx"
 #include <bout/boutexception.hxx>
 
+namespace hermes {
+
 /// @brief Helper functions for evaluating Amjuel fits.
 
 /**
@@ -136,3 +138,5 @@ BoutReal AmjuelData::eval_sigma_v_nT_impl(BoutReal T, BoutReal n) {
 BoutReal AmjuelData::eval_sigma_v_T_impl(BoutReal T) {
   return eval_amjuel_T_fit(T, this->coeffs[0]);
 }
+
+} // namespace hermes

@@ -5,6 +5,8 @@
 #include "reaction.hxx"
 #include <string>
 
+namespace hermes {
+
 /**
  * @brief `Reaction` subclass that handles charge exchange reactions.
  *
@@ -68,21 +70,22 @@ private:
   std::string p2;
 };
 
+} // namespace hermes
 namespace {
 /// Register components for symmetric HCX, one per isotope
-RegisterComponent<CXReaction> register_cx_hh("h + h+ -> h+ + h");
-RegisterComponent<CXReaction> register_cx_dd("d + d+ -> d+ + d");
-RegisterComponent<CXReaction> register_cx_tt("t + t+ -> t+ + t");
+RegisterComponent<hermes::CXReaction> register_cx_hh("h + h+ -> h+ + h");
+RegisterComponent<hermes::CXReaction> register_cx_dd("d + d+ -> d+ + d");
+RegisterComponent<hermes::CXReaction> register_cx_tt("t + t+ -> t+ + t");
 
 /// Register components for non-symmetric HCX; one per atom,ion combination
-RegisterComponent<CXReaction> register_cx_hd("h + d+ -> h+ + d");
-RegisterComponent<CXReaction> register_cx_dh("d + h+ -> d+ + h");
+RegisterComponent<hermes::CXReaction> register_cx_hd("h + d+ -> h+ + d");
+RegisterComponent<hermes::CXReaction> register_cx_dh("d + h+ -> d+ + h");
 
-RegisterComponent<CXReaction> register_cx_ht("h + t+ -> h+ + t");
-RegisterComponent<CXReaction> register_cx_th("t + h+ -> t+ + h");
+RegisterComponent<hermes::CXReaction> register_cx_ht("h + t+ -> h+ + t");
+RegisterComponent<hermes::CXReaction> register_cx_th("t + h+ -> t+ + h");
 
-RegisterComponent<CXReaction> register_cx_dt("d + t+ -> d+ + t");
-RegisterComponent<CXReaction> register_cx_td("t + d+ -> t+ + d");
+RegisterComponent<hermes::CXReaction> register_cx_dt("d + t+ -> d+ + t");
+RegisterComponent<hermes::CXReaction> register_cx_td("t + d+ -> t+ + d");
 } // namespace
 
 #endif // CX_REACTION_H

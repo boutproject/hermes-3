@@ -3,6 +3,8 @@
 #include "reaction.hxx"
 #include "reaction_settings.hxx"
 
+namespace hermes {
+
 // ============================== IznRecReaction ==============================
 ///
 IznRecReaction::IznRecReaction(std::string short_reaction_type, std::string name,
@@ -223,3 +225,5 @@ RecReaction::RecReaction(std::string name, Options& options)
           .doc("Scale the recombination radiation (incl. 3 body) rate by this factor")
           .withDefault<BoutReal>(1.0);
 }
+
+} // namespace hermes

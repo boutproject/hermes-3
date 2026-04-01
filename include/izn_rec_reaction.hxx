@@ -5,6 +5,8 @@
 #include "reaction.hxx"
 #include <string>
 
+namespace hermes {
+
 /**
  * @brief `Reaction` subclass that acts as a common base for ionisation and
  * recombination reactions.
@@ -107,29 +109,31 @@ struct RecReaction : public IznRecReaction {
       : RecReaction(name, options){};
 };
 
+} // namespace hermes
+
 namespace {
 /// Register components for Hydrogen isotope ionisation and recombination
-RegisterComponent<IznReaction> register_izn_h("h + e -> h+ + 2e");
-RegisterComponent<IznReaction> register_izn_d("d + e -> d+ + 2e");
-RegisterComponent<IznReaction> register_izn_t("t + e -> t+ + 2e");
-RegisterComponent<RecReaction> register_rec_h("h+ + e -> h");
-RegisterComponent<RecReaction> register_rec_d("d+ + e -> d");
-RegisterComponent<RecReaction> register_rec_t("t+ + e -> t");
+RegisterComponent<hermes::IznReaction> register_izn_h("h + e -> h+ + 2e");
+RegisterComponent<hermes::IznReaction> register_izn_d("d + e -> d+ + 2e");
+RegisterComponent<hermes::IznReaction> register_izn_t("t + e -> t+ + 2e");
+RegisterComponent<hermes::RecReaction> register_rec_h("h+ + e -> h");
+RegisterComponent<hermes::RecReaction> register_rec_d("d+ + e -> d");
+RegisterComponent<hermes::RecReaction> register_rec_t("t+ + e -> t");
 
 /// Register components for Helium ionisation and recombination
-RegisterComponent<IznReaction> register_izn_he("he + e -> he+ + 2e");
-RegisterComponent<RecReaction> register_rec_he("he+ + e -> he");
+RegisterComponent<hermes::IznReaction> register_izn_he("he + e -> he+ + 2e");
+RegisterComponent<hermes::RecReaction> register_rec_he("he+ + e -> he");
 
 /*
  He+ ionisation (Amjuel data would be 2.2C, page 189) is not included yet
  Currently missing energy loss / radiation data
 */
-// RegisterComponent<IznReaction> register_izn_hep("e + he+ -> he+2 + 2e");
+// RegisterComponent<hermes::IznReaction> register_izn_hep("e + he+ -> he+2 + 2e");
 
 /*
  He+2 recombination is not included yet
 */
-// RegisterComponent<RecReaction>register_rec_hep2("he+2 + e -> he+");
+// RegisterComponent<hermes::RecReaction>register_rec_hep2("he+2 + e -> he+");
 
 } // namespace
 
