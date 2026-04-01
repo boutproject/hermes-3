@@ -222,10 +222,20 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   Nn = floor(Nn, 0.0);
   Pn = floor(Pn, 0.0);
 
-  // Nnlim Used where division by neutral density is needed
+  // Nnlim is used where division by neutral density is needed
+  // The equation of state is modified at low density:
+  //
+  // e = Cv T Nlim / N    <- Specific internal energy
+  // p = N T
+  //
+  // The internal energy evolution of (N * e) is therefore
+  // evolving Pn_solver = Nlim * Tn
+  // rather than pressure Pn = Nn * Tn
   Nnlim = softFloor(Nn, density_floor);
-  Tn = Pn / Nnlim;
+  Tn = Pn / Nnlim; // Internal energy
   Tn.applyBoundary();
+  Pn_solver = Pn; // Save solver variable to restore later
+  Pn = Tn * Nn;   // Equation of state, so Pn is now pressure
 
   Vn = NVn / (AA * Nnlim);
   Vn.applyBoundary("neumann");
@@ -329,6 +339,7 @@ void NeutralMixed::finally(const Options& state) {
   Pnlim = softFloor(Pn, pressure_floor);
   logPnlim = log(Pnlim);
   logPnlim.applyBoundary();
+
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
   //
@@ -339,6 +350,7 @@ void NeutralMixed::finally(const Options& state) {
   if (collisionality_override > 0.0) {
     // user has set an override for collision frequency
     Dnn = (Tn / AA) / collisionality_override;
+
   } else {
     if (localstate.isSet("collision_frequency")) {
       // Collisionality
@@ -508,20 +520,23 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = -(5. / 3)
-                * FV::Div_par_mod<ParLimiter>( // Parallel advection
-                    Pn, Vn, sound_speed, ef_adv_par_ylow)
+  // The equation of state is modified by the density floor,
+  // so the advection of internal energy and work done are combined as:
+  Field3D e_plus_p = Nnlim * Tn + (2. / 3) * Pn;
+
+  ddt(Pn) = -FV::Div_par_mod<ParLimiter>( // Parallel advection
+                e_plus_p, Vn, sound_speed, ef_adv_par_ylow)
             + (2. / 3) * Vn * Grad_par(Pn); // Work done
 
   // Perpendicular advection of pressure
   if (nonorthogonal_operators) {
-    ddt(Pn) +=
-        (5. / 3)
-        * Div_a_Grad_perp_nonorthog(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += (5. / 3)
+               * Div_a_Grad_perp_nonorthog(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow,
+                                           ef_adv_perp_ylow);
   } else {
-    ddt(Pn) +=
-        (5. / 3)
-        * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += (5. / 3)
+               * Div_a_Grad_perp_flows(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow,
+                                       ef_adv_perp_ylow);
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -672,6 +687,9 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 #endif
+
+  // Restore solver Pn
+  Pn = Pn_solver;
 }
 
 void NeutralMixed::outputVars(Options& state) {

@@ -298,12 +298,6 @@ void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
   Nn2D = floor(Nn2D, 0.0);
   Pn2D = floor(Pn2D, 0.0);
 
-  // Non-zero floor can use a differentiable soft floor
-  Field2D Nnlim = softFloor(Nn2D, density_floor);
-
-  Tn2D = Pn2D / Nnlim;
-  Tn2D.applyBoundary("neumann");
-
   //////////////////////////////////////////////////////
   // 2D (X-Y) full velocity model
   //
@@ -346,6 +340,23 @@ void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
   //
   // V_{||n} = b dot V_n = Vn2D.y / (JB)
   Vnpar = Vn2D.y / (coord->J * coord->Bxy);
+
+  // Non-zero floor can use a differentiable soft floor
+  Field2D Nnlim = softFloor(Nn2D, density_floor);
+
+  // Equation of state at low density
+  //
+  // e = Cv T Nlim / N
+  // p = N T
+  //
+  // The internal energy evolution of (N * e) is therefore
+  // evolving Pn2D_solver = Nlim * T
+  // rather than pressure Pn2D = N * T
+
+  Tn2D = Pn2D / Nnlim;
+  Tn2D.applyBoundary("neumann");
+  Pn2D_solver = Pn2D; // Save solver variable to restore later
+  Pn2D = Tn2D * Nn2D; // Equation of state
 
   // Set values in the state
   auto localstate = state["species"][name];
@@ -624,7 +635,7 @@ void NeutralFullVelocity::finally(const Options& state) {
 
   //////////////////////////////////////////////////////
   // Neutral pressure
-  ddt(Pn2D) = -adiabatic_index * Div(Vn2D, Pn2D)
+  ddt(Pn2D) = -Div(Vn2D, Nn2D_floor * Tn2D + (adiabatic_index - 1.) * Pn2D)
               + (adiabatic_index - 1.) * (Vn2D_contravariant * GradPn2D);
 
   if (constant_transport_coef) {
@@ -724,6 +735,9 @@ void NeutralFullVelocity::finally(const Options& state) {
   // Convert back to contravariant components v^x, v^y, v^z
   ddt(Vn2D).toContravariant();
   Vn2D.toContravariant();
+
+  // Restore solver Pn2D so that restart files have the correcte value
+  Pn2D = Pn2D_solver;
 
   // Set time derivatives to zero
   if (zero_timederivs) {

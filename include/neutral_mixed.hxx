@@ -33,6 +33,7 @@ private:
   std::string name; ///< Species name
 
   Field3D Nn, Pn, NVn;            // Density, pressure and parallel momentum
+  Field3D Pn_solver;              ///< Saved to restore in finally
   Field3D Vn;                     ///< Neutral parallel velocity
   Field3D Tn;                     ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
