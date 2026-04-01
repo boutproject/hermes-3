@@ -7,6 +7,8 @@
 #include "reaction_diagnostic.hxx"
 #include "reaction_parser.hxx"
 
+namespace hermes {
+
 using OPTYPE = GuardedOptions && (GuardedOptions&&, Field3D);
 
 /**
@@ -265,4 +267,7 @@ private:
 
   void transform_impl(GuardedOptions& state) override final;
 };
+
+} // namespace hermes
+
 #endif

@@ -6,6 +6,8 @@
 
 #include "amjuel_reaction.hxx"
 
+namespace hermes {
+
 static std::map<std::string, std::string> long_reaction_types_map = {
     {"cx", "charge exchange"}, {"iz", "ionisation"}, {"rec", "recombination"}};
 
@@ -124,23 +126,25 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIsotopeReaction<Isotope> {
   }
 };
 
+}; // namespace hermes
+
 namespace {
 /// Register three ionisation components, one for each hydrogen isotope
 /// so no isotope dependence included.
-RegisterComponent<AmjuelHydIonisationIsotope<'h'>>
+RegisterComponent<hermes::AmjuelHydIonisationIsotope<'h'>>
     registerionisation_h("h + e -> h+ + 2e");
-RegisterComponent<AmjuelHydIonisationIsotope<'d'>>
+RegisterComponent<hermes::AmjuelHydIonisationIsotope<'d'>>
     registerionisation_d("d + e -> d+ + 2e");
-RegisterComponent<AmjuelHydIonisationIsotope<'t'>>
+RegisterComponent<hermes::AmjuelHydIonisationIsotope<'t'>>
     registerionisation_t("t + e -> t+ + 2e");
 
 /// Register three recombination components, one for each hydrogen isotope
 /// so no isotope dependence included.
-RegisterComponent<AmjuelHydRecombinationIsotope<'h'>>
+RegisterComponent<hermes::AmjuelHydRecombinationIsotope<'h'>>
     register_recombination_h("h+ + e -> h");
-RegisterComponent<AmjuelHydRecombinationIsotope<'d'>>
+RegisterComponent<hermes::AmjuelHydRecombinationIsotope<'d'>>
     register_recombination_d("d+ + e -> d");
-RegisterComponent<AmjuelHydRecombinationIsotope<'t'>>
+RegisterComponent<hermes::AmjuelHydRecombinationIsotope<'t'>>
     register_recombination_t("t+ + e -> t");
 
 } // namespace

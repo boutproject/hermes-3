@@ -8,6 +8,8 @@
 #include "component.hxx"
 #include "reaction.hxx"
 
+namespace hermes {
+
 /**
 * @brief Reaction component to handle Hydrogen charge exchange.
 *
@@ -262,22 +264,33 @@ private:
   bool no_neutral_cx_mom_gain; ///< Make CX behave as in diffusive neutrals?
 };
 
+} // namespace hermes
+
 namespace {
 /// Register three components, one for each hydrogen isotope
 /// so no isotope dependence included.
-RegisterComponent<HydrogenChargeExchange<'h', 'h'>> register_cx_hh("h + h+ -> h+ + h");
-RegisterComponent<HydrogenChargeExchange<'d', 'd'>> register_cx_dd("d + d+ -> d+ + d");
-RegisterComponent<HydrogenChargeExchange<'t', 't'>> register_cx_tt("t + t+ -> t+ + t");
+RegisterComponent<hermes::HydrogenChargeExchange<'h', 'h'>>
+    register_cx_hh("h + h+ -> h+ + h");
+RegisterComponent<hermes::HydrogenChargeExchange<'d', 'd'>>
+    register_cx_dd("d + d+ -> d+ + d");
+RegisterComponent<hermes::HydrogenChargeExchange<'t', 't'>>
+    register_cx_tt("t + t+ -> t+ + t");
 
 // Charge exchange between different isotopes
-RegisterComponent<HydrogenChargeExchange<'h', 'd'>> register_cx_hd("h + d+ -> h+ + d");
-RegisterComponent<HydrogenChargeExchange<'d', 'h'>> register_cx_dh("d + h+ -> d+ + h");
+RegisterComponent<hermes::HydrogenChargeExchange<'h', 'd'>>
+    register_cx_hd("h + d+ -> h+ + d");
+RegisterComponent<hermes::HydrogenChargeExchange<'d', 'h'>>
+    register_cx_dh("d + h+ -> d+ + h");
 
-RegisterComponent<HydrogenChargeExchange<'h', 't'>> register_cx_ht("h + t+ -> h+ + t");
-RegisterComponent<HydrogenChargeExchange<'t', 'h'>> register_cx_th("t + h+ -> t+ + h");
+RegisterComponent<hermes::HydrogenChargeExchange<'h', 't'>>
+    register_cx_ht("h + t+ -> h+ + t");
+RegisterComponent<hermes::HydrogenChargeExchange<'t', 'h'>>
+    register_cx_th("t + h+ -> t+ + h");
 
-RegisterComponent<HydrogenChargeExchange<'d', 't'>> register_cx_dt("d + t+ -> d+ + t");
-RegisterComponent<HydrogenChargeExchange<'t', 'd'>> register_cx_td("t + d+ -> t+ + d");
+RegisterComponent<hermes::HydrogenChargeExchange<'d', 't'>>
+    register_cx_dt("d + t+ -> d+ + t");
+RegisterComponent<hermes::HydrogenChargeExchange<'t', 'd'>>
+    register_cx_td("t + d+ -> t+ + d");
 } // namespace
 
 #endif // HYDROGEN_CHARGE_EXCHANGE_H

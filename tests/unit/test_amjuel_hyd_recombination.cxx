@@ -22,6 +22,8 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using HydrogenRCTest = FakeMeshFixture;
 
+namespace hermes {
+
 TEST_F(HydrogenRCTest, CreateComponent) {
   Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
                   {"test", {{"type", "h+ + e -> h"}}}};
@@ -85,3 +87,5 @@ TEST_F(HydrogenRCTest, DensitySourceSigns) {
     ASSERT_TRUE(ion_energy_source[i] < 0.0);
   }
 }
+
+} // namespace hermes

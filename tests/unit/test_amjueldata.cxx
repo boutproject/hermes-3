@@ -6,6 +6,8 @@
 
 #include "test_amjuel_reactions.hxx"
 
+namespace hermes {
+
 /*
  * N.B. AmjuelData is tested via parent AmjuelReaction instances. Testing it
  * directly would require intrusive 'friend' declarations)
@@ -71,3 +73,5 @@ TEST(AmjuelDataTest, ValidNoSigmavEData) {
                  << ", skipping!";
   }
 }
+
+} // namespace hermes

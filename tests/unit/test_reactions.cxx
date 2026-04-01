@@ -1,6 +1,8 @@
 #include "test_adas_reactions.hxx"
 #include "test_amjuel_reactions.hxx"
 
+namespace hermes {
+
 // H isotopes ionization
 TEST_F(AmjuelHIznTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(AmjuelDIznTest, SourcesRegression) { sources_regression_test(); }
@@ -69,3 +71,5 @@ TEST_F(ADASNe9pRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNepHCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNep5DCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNep9TCXTest, SourcesRegression) { sources_regression_test(); }
+
+} // namespace hermes
