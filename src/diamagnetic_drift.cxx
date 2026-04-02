@@ -14,11 +14,32 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   auto& options = alloptions[name];
 
   bndry_flux =
-      options["bndry_flux"].doc("Allow fluxes through boundary?").withDefault<bool>(true);
+      options["bndry_flux"].doc("Allow fluxes through boundary?").withDefault<bool>(false);
 
-  diamag_form = options["diamag_form"]
-    .doc("Form of diamagnetic drift: 0 = gradient; 1 = divergence")
-    .withDefault(Field2D(1.0));
+  divergence_form = options["divergence_form"]
+    .doc("Use divergence form of diamagnetic drift?")
+    .withDefault<bool>(true);
+
+  average_core = options["average_core"]
+    .doc("Average around core boundary?")
+    .withDefault<bool>(true) and
+    // Only average if on core boundary
+    mesh->periodicY(mesh->xstart) and mesh->firstX();
+
+  if (average_core) {
+    const auto* coords = mesh->getCoordinates();
+    this->cell_volume = coords->dx * coords->dy * coords->dz * coords->J;
+    BoutReal local_core_volume = 0.0;
+    for (int jy=mesh->ystart; jy <= mesh->yend; ++jy) {
+      local_core_volume += this->cell_volume(mesh->xstart, jy);
+    }
+    // Sum over processors on core boundary
+    MPI_Allreduce(&local_core_volume,
+		  &this->core_ring_volume,
+		  1, MPI_DOUBLE,
+		  MPI_SUM,
+		  mesh->getYcomm(0));
+  }
 
   // Read curvature vector
   Curlb_B.covariant = false; // Contravariant
@@ -69,6 +90,32 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   substitutePermissions("output", {"density_source", "energy_source", "momentum_source"});
 }
 
+void DiamagneticDrift::coreAverage(Field3D& f) {
+  BoutReal local_sum = 0.0;
+  for (int jy=mesh->ystart; jy <= mesh->yend; ++jy) {
+    BoutReal zavg = 0.0;
+    for (int jz=mesh->zstart; jz <= mesh->zend; ++jz) {
+      zavg += f(mesh->xstart, jy, jz);
+    }
+    zavg /= mesh->zend - mesh->zstart + 1;
+    local_sum += this->cell_volume(mesh->xstart, jy) * zavg;
+  }
+  // Sum over processors on core boundary
+  BoutReal global_sum{0.0};
+  MPI_Allreduce(&local_sum,
+		&global_sum,
+		1, MPI_DOUBLE,
+		MPI_SUM,
+		mesh->getYcomm(0));
+
+  const BoutReal average = global_sum / core_ring_volume;
+  for (int jy=mesh->ystart; jy <= mesh->yend; ++jy) {
+    for (int jz=mesh->zstart; jz <= mesh->zend; ++jz) {
+      f(mesh->xstart, jy, jz) = average;
+    }
+  }
+}
+
 void DiamagneticDrift::transform_impl(GuardedOptions& state) {
   // Iterate through all subsections
   GuardedOptions allspecies = state["species"];
@@ -92,27 +139,44 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
     if (IS_SET(species["density"])) {
       auto N = GET_VALUE(Field3D, species["density"]);
 
-      // Divergence form: Div(n v_D)
-      Field3D div_form = FV::Div_f_v(N, vD, bndry_flux);
-      // Gradient form: Curlb_B dot Grad(N T / q)
-      Field3D grad_form = Curlb_B * Grad(N * T / q);
+      Field3D sink = (divergence_form) ?
+	// Divergence form: Div(n v_D)
+	FV::Div_f_v(N, vD, bndry_flux) :
+	// Gradient form: Curlb_B dot Grad(N T / q)
+	Curlb_B * Grad(N * T / q);
 
-      subtract(species["density_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
+      if (average_core) {
+	coreAverage(sink);
+      }
+      
+      subtract(species["density_source"], sink);
     }
 
     if (IS_SET(species["pressure"])) {
       auto P = get<Field3D>(species["pressure"]);
 
-      Field3D div_form = FV::Div_f_v(P, vD, bndry_flux);
-      Field3D grad_form = Curlb_B * Grad(P * T / q);
-      subtract(species["energy_source"], (5. / 2) * (diamag_form * div_form + (1. - diamag_form) * grad_form));
+      Field3D sink = (divergence_form) ?
+	(5. / 2) * FV::Div_f_v(P, vD, bndry_flux) :
+	(5. / 2) * Curlb_B * Grad(P * T / q);
+
+      if (average_core) {
+	coreAverage(sink);
+      }
+
+      subtract(species["energy_source"], sink);
     }
 
     if (IS_SET(species["momentum"])) {
       auto NV = get<Field3D>(species["momentum"]);
-      Field3D div_form = FV::Div_f_v(NV, vD, bndry_flux);
-      Field3D grad_form = Curlb_B * Grad(NV * T / q);
-      subtract(species["momentum_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
+      Field3D sink = (divergence_form) ?
+	FV::Div_f_v(NV, vD, bndry_flux) :
+	Curlb_B * Grad(NV * T / q);
+
+      if (average_core) {
+	coreAverage(sink);
+      }
+
+      subtract(species["momentum_source"], sink);
     }
   }
 }

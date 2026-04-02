@@ -11,8 +11,10 @@ struct DiamagneticDrift : public Component {
 
 private:
   Vector2D Curlb_B;
-  bool bndry_flux;
-  Field2D diamag_form;
+  bool bndry_flux; /// Allow boundary fluxes?
+  bool divergence_form; ///< Use divergence form?
+
+  bool average_core; ///< Average around core boundary?
 
   /// For every species, if it has:
   ///  - temperature
@@ -23,6 +25,12 @@ private:
   ///  - energy_source
   ///  - momentum_source
   void transform_impl(GuardedOptions& state) override;
+
+  /// Smooth source around core boundary
+  /// Modifies the input field
+  void coreAverage(Field3D& f);
+  Field2D cell_volume;
+  BoutReal core_ring_volume;
 };
 
 namespace {
