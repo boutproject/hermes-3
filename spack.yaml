@@ -21,6 +21,8 @@ spack:
       link_type: symlink
   concretizer:
     unify: when_possible
+    targets:
+      granularity: microarchitectures
   repos:
     - ./external/BOUT-spack/spack_repo/bout
     - ./external/Reactions/VANTAGE-repo

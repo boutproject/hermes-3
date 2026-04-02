@@ -1,0 +1,44 @@
+name: hermes-3 + VANTAGE Tests
+on:
+  pull_request:
+    branches:
+      - '**'  # This will trigger for PRs against any branch
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  docker_spack_install_tests:
+    runs-on: ubuntu-latest
+    # timeout to avoid running tests which do unexpected spack installation
+    timeout-minutes: 35
+    container:
+      image: ghcr.io/ukaea-edge-code/hermes-3-vantage-deps:edge
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.github_token }}
+      env:
+        OMP_NUM_THREADS: 1
+        OMPI_MCA_rmaps_base_oversubscribe: yes
+    permissions:
+      packages: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Install
+        run: |
+          source /opt/spack/share/spack/setup-env.sh &&
+          sed -i 's/^[[:space:]]*granularity:[[:space:]]*microarchitectures/      granularity: generic/' spack.yaml &&
+          sed -i '/^[[:space:]]*providers:/i\      require: "target=x86_64_v3"' spack.yaml &&
+          spack env activate . -v gcc &&
+          spack concretize -f &&
+          spack install -j 4 --only-concrete
+      - name : Run tests
+        run: |
+          source /opt/spack/share/spack/setup-env.sh &&
+          spack env activate . -v gcc &&
+          spack cd -b hermes-3 &&
+          ctest -j 1 --output-on-failure --timeout 300
