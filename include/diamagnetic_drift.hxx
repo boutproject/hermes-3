@@ -11,7 +11,7 @@ struct DiamagneticDrift : public Component {
 
 private:
   Vector2D Curlb_B;
-  bool bndry_flux; /// Allow boundary fluxes?
+  bool bndry_flux;      /// Allow boundary fluxes?
   bool divergence_form; ///< Use divergence form?
 
   bool average_core; ///< Average around core boundary?
