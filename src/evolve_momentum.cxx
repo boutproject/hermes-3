@@ -47,6 +47,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
                        .withDefault<bool>(true);
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
+  hyper_z_v = options["hyper_z_v"].doc("Hyper-diffusion of V in Z").withDefault(-1.0);
 
   V.setBoundary(std::string("V") + name);
 
@@ -208,6 +209,11 @@ void EvolveMomentum::finally(const Options& state) {
   if (hyper_z > 0.) {
     auto* coord = N.getCoordinates();
     ddt(NV) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(NV);
+  }
+
+  if (hyper_z_v > 0.) {
+    auto* coord = N.getCoordinates();
+    ddt(NV) -= hyper_z_v * SQ(SQ(coord->dz)) * D4DZ4(V);
   }
 
   // Other sources/sinks

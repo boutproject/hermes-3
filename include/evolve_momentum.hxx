@@ -43,6 +43,7 @@ private:
   bool low_p_diffuse_perp; ///< Cross-field diffusion at low pressure?
 
   BoutReal hyper_z;  ///< Hyper-diffusion
+  BoutReal hyper_z_v;  ///< Hyper-diffusion
 
   bool diagnose; ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
