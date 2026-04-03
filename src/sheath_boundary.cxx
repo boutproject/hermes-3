@@ -574,7 +574,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           // Ion sheath heat transmission coefficient
           const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath;
 
-          const BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
+          const BoutReal visheath = std::min(-sqrt(C_i_sq), // Negative -> into sheath
+					                          Vi[i]);        // Allow supersonic flow
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
@@ -649,7 +650,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
           const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath; // + Δγ
 
-          const BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
+          const BoutReal visheath = std::max(sqrt(C_i_sq), // Positive -> into sheath
+					                           Vi[i]); // Allow supersonic flow
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
