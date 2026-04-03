@@ -62,6 +62,10 @@ private:
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
 
   BoutReal density_floor;
+
+  BoutReal density_source_floor; ///< Floor below which an artificial density source is enabled
+  BoutReal density_source_strength; ///< Multiplier on the artificial density source
+
   bool low_n_diffuse;   ///< Parallel diffusion at low density
   bool low_n_diffuse_perp;  ///< Perpendicular diffusion at low density
   BoutReal pressure_floor; ///< When non-zero pressure is needed

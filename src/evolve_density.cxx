@@ -41,6 +41,14 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   pressure_floor = density_floor * temperature_floor;
 
+  density_source_floor = options["density_source_floor"]
+    .doc("Floor below which an artificial density source is enabled")
+    .withDefault(1e-4);
+
+  density_source_strength = options["density_source_strength"]
+    .doc("Multiplier on the artificial density source. <0 means off")
+    .withDefault(-1.0);
+
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
@@ -294,6 +302,11 @@ void EvolveDensity::finally(const Options& state) {
   // elsewhere (collisions, reactions, etc) for diagnostics
   Sn = get<Field3D>(species["density_source"]);
   ddt(N) += Sn;
+
+  if (density_source_strength > 0.0) {
+    // An artificial density source that turns on at low density
+    ddt(N) += density_source_strength * (softFloor(N, density_source_floor) - N) / density_source_floor;
+  }
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
