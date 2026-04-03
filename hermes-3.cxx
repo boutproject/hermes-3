@@ -28,6 +28,7 @@
 #include "include/adas_neon.hxx"
 #include "include/amjuel_data.hxx"
 #include "include/anomalous_diffusion.hxx"
+#include "include/dipole_anomalous_transport.hxx"
 #include "include/binormal_stpm.hxx"
 #include "include/braginskii_collisions.hxx"
 #include "include/braginskii_conduction.hxx"

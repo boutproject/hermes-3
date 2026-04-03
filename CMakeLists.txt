@@ -97,6 +97,7 @@ set(HERMES_SOURCES
     src/sound_speed.cxx
     src/zero_current.cxx
     src/anomalous_diffusion.cxx
+    src/dipole_anomalous_transport.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
     src/adas_reaction.cxx
@@ -122,6 +123,7 @@ set(HERMES_SOURCES
     include/adas_neon.hxx
     include/amjuel_data.hxx
     include/anomalous_diffusion.hxx
+    include/dipole_anomalous_transport.hxx
     include/classical_diffusion.hxx
     include/cx_reaction.hxx
     include/binormal_stpm.hxx
