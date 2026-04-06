@@ -67,6 +67,7 @@ set(HERMES_SOURCES
     src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
+    src/dipole_anomalous_transport.cxx
     src/ionisation.cxx
     src/div_ops.cxx
     src/neutral_mixed.cxx
