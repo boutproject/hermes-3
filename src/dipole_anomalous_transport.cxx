@@ -21,8 +21,7 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
 
   // Set in the mesh or options (or both)
   dipole_anomalous_D = 0.0;
-  U2D = compute_U2D();
-  mesh->communicate(U2D);
+ 
   //U3D = compute_U3D();
   include_D = (mesh->get(dipole_anomalous_D, std::string("dipole_anomalous_D_") + name) == 0)
               || options.isSet("dipole_anomalous_D");
@@ -44,7 +43,11 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
                       .withDefault(dipole_anomalous_chi)
                   / diffusion_norm;
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
-
+  local_U = options["local_U"]
+                   .doc("Compute local U?")
+                   .withDefault<bool>(false);
+   U2D = compute_U2D(local_U);
+  mesh->communicate(U2D);
   // dipole_anomalous_nu = 0.0;
   // include_nu = (mesh->get(dipole_anomalous_nu, std::string("dipole_nu_") + name) == 0)
   //              || options.isSet("dipole_anomalous_nu");
@@ -128,7 +131,7 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
   //   }
   // }
   transport_on = isnegative_grad_perp(P2D);
-
+  mesh->communicate(transport_on);
   Field3D flow_xlow, flow_ylow; // Flows through cell faces
 
   if (include_chi && include_D) {
@@ -223,7 +226,7 @@ void DipoleAnomalousDiffusion::outputVars(Options& state) {
   }
 }
 
-const Field2D compute_U2D() {
+const Field2D compute_U2D(bool local_U) {
   Field2D U;
   U.allocate();
 
@@ -231,11 +234,20 @@ const Field2D compute_U2D() {
   BoutReal s;
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     s = 0.0;
+    if (!local_U) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       s += coord->dy(i, j) / coord->Bxy(i, j);
     }
-    for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      U(i, j) = s;
+    
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        U(i, j) = s;
+      }
+    }
+    else
+    {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+      U(i, j) = 1.0 / coord->Bxy(i, j);
+    }
     }
   }
   for (int j = mesh->ystart; j <= mesh->yend; j++) {

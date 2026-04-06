@@ -38,6 +38,7 @@ private:
   Field2D transport_on;
   BoutReal dipole_gamma; // Sheath heat transmission coefficient
   BoutReal density_floor; // Minimum mass density if boussinesq=false
+  bool local_U;      ///< Compute local U?
 
   //Field2D anomalous_nu; ///< Anomalous momentum diffusion coefficient
 
@@ -61,8 +62,8 @@ private:
   ///
   void transform_impl(GuardedOptions& state) override;
 };
-const Field3D compute_U3D();
-const Field2D compute_U2D();
+
+const Field2D compute_U2D(bool local_U);
 const Field2D isnegative_grad_perp(const Field2D& P);
 const Field3D isnegative_grad_perp(const Field3D& P);
 namespace {
