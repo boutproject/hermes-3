@@ -1,0 +1,23 @@
+
+[mesh]
+dmplex_vertex_tolerance = 1e-08
+file = example_cdn.grd.nc
+
+extrapolate_y = false
+use_cxx_ivertex = true
+
+phi = 0
+ex = 0
+ey = 0
+
+initial_neutral_density = 20
+
+[neso_particles]
+
+test_mass_conservation = true
+test_cell_volumes = false
+test_cell_centres = false
+
+npart_per_cell = 1
+dt = 0.005
+nsteps = 0

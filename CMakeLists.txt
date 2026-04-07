@@ -444,6 +444,10 @@ if(HERMES_TESTS)
            WORKING_DIRECTORY tests/integrated/particle-pusher/
            COMMAND runtest)
     set_tests_properties(bout_particle_push PROPERTIES LABELS integration)
+    add_test(NAME dmplex-vertex-coordinates
+           WORKING_DIRECTORY tests/integrated/dmplex-vertex-coordinates/
+           COMMAND runtest)
+    set_tests_properties(dmplex-vertex-coordinates PROPERTIES LABELS integration)
   endif()
 endif()
 
