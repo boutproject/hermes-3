@@ -1,7 +1,7 @@
 # run a simulation with this file using
 # $ OMP_NUM_THREADS=1 mpirun -np 8 ./bout-particle-push -d particle-push-slab
 # postprocess with 
-# $ python3 path/to/the/particle_animater.py hypnotoad_dmplex_mesh_output.h5 traj_reflection_dmplex_example.h5part
+# $ python3 path/to/the/particle_animater.py dmplex_mesh_data.h5 particle_trajectories.h5part
 [mesh]
 
 # if using a Hypnotoad mesh, uncomment below

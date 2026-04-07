@@ -28,7 +28,7 @@ case_path = cwd / "data"
 datafile_path = case_path / "BOUT.dmp.*.nc"
 inputfile_path = case_path / "BOUT.inp"
 exec_path = cwd.parents[2] / "bout-particle-push"
-dmplex_path = cwd / "hypnotoad_dmplex_mesh_output.h5"
+dmplex_path = case_path / "hypnotoad_dmplex_mesh_output.h5"
 logfile_path = cwd / "run.log"
 
 gridzipfile_path = cwd / "Hypnotoad_examples.zip"

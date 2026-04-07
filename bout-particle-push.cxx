@@ -36,6 +36,19 @@ inline void ASSERT_EQ(T t, U u) {
   NESOASSERT(t == u, "A check failed.");
 }
 
+std::string get_restart_output_dir() {
+  auto& root = Options::root();
+  return root["restart_files"]["path"].withDefault(
+      root["datadir"].withDefault<std::string>("data"));
+}
+
+std::string make_output_path(const std::string& filename) {
+  if (filename.find('/') != std::string::npos) {
+    return filename;
+  }
+  return fmt::format("{}/{}", get_restart_output_dir(), filename);
+}
+
 void collect_unique_points(std::vector<double>& global_Z_vertices_buffer,
                            std::vector<double>& global_R_vertices_buffer, int& N_unique,
                            const double& tolerance,
@@ -208,6 +221,8 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
   std::string dmplex_h5_filename =
       Options::root()["mesh"]["dmplex_h5_filename"].withDefault(
           "hypnotoad_dmplex_mesh_output.h5");
+  dmplex_h5_filename = make_output_path(dmplex_h5_filename);
+
   // DMPlex vertex distance tolerance for duplicate Hypnotoad vertices
   const BoutReal dmplex_vertex_tolerance = 
     Options::root()["mesh"]["dmplex_vertex_tolerance"].withDefault(1.0e-8);
@@ -579,7 +594,7 @@ double calculate_total_mass(Field2D& density,
 }
 
 Options
-initialise_diagnostics(Field2D& neutral_density, Field2D& ion_density,
+initialise_diagnostics(Mesh* bout_mesh, Field2D& neutral_density, Field2D& ion_density,
                        std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
                        std::shared_ptr<ParticleGroup>& A_particle_group,
                        std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
@@ -600,8 +615,11 @@ initialise_diagnostics(Field2D& neutral_density, Field2D& ion_density,
   Field2D total_density = ion_density + neutral_density;
   bout_output_data["total_mass"] = calculate_total_mass(total_density, neso_mesh);
   bout_output_data["total_mass"].attributes["time_dimension"] = "t";
-  // std::string particle_data_filename =
-  // fmt::format("bout_particle_moments_{}.nc",mpi_rank);
+  bout_output_data["t_array"] = 0.0;
+  bout_output_data["t_array"].attributes["time_dimension"] = "t";
+  // Mesh metadata
+  bout_mesh->outputVars(bout_output_data);
+
   bout::OptionsIO::create(particle_data_filename)->write(bout_output_data);
   return bout_output_data;
 }
@@ -611,7 +629,7 @@ void update_diagnostics(Field2D& neutral_density, Field2D& ion_density,
                         std::shared_ptr<ParticleGroup>& A_particle_group,
                         std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
                         std::vector<double>& h_project1, Options& bout_output_data,
-                        std::string particle_data_filename) {
+                        std::string particle_data_filename, BoutReal sim_time) {
   // update density in Options object and write
   bout_output_data["neutral_density"] = neutral_density;
   bout_output_data["ion_density"] = ion_density;
@@ -620,6 +638,8 @@ void update_diagnostics(Field2D& neutral_density, Field2D& ion_density,
   bout_output_data["total_neutral_mass"] =
       calculate_total_mass(neutral_density, neso_mesh);
   bout_output_data["total_ion_mass"] = calculate_total_mass(ion_density, neso_mesh);
+  bout_output_data["t_array"] = sim_time;
+  // bout_output_data["t_array"] = 0.0;
   // Append data to file
   bout::OptionsIO::create({{"file", particle_data_filename}, {"append", true}})
       ->write(bout_output_data);
@@ -738,17 +758,18 @@ void check_cell_centres(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_m
 }
 
 void check_mass_conservation(double total_mass_final, double total_mass_initial,
-                double remove_threshold) {
+                             double remove_threshold) {
   double rtol = 1.0e-13;
   double atol = 1.0e-13;
-  bool mass_conserved = (abs(total_mass_final - total_mass_initial) < rtol*total_mass_initial + atol);
+  bool mass_conserved =
+      (abs(total_mass_final - total_mass_initial) < rtol * total_mass_initial + atol);
   // exit if we fail to find conservation
   NESOASSERT(mass_conserved,
-              fmt::format("Initial total mass {} does not match "
-                          "final total mass {} \n Ignore this message by "
-                          "setting [neso_particles] test_mass_conservation = false",
-                          total_mass_initial, total_mass_final));
-  }
+             fmt::format("Initial total mass {} does not match "
+                         "final total mass {} \n Ignore this message by "
+                         "setting [neso_particles] test_mass_conservation = false",
+                         total_mass_initial, total_mass_final));
+}
 int main(int argc, char** argv) {
   // initialise_mpi(&argc, &argv);
   // attempt to call BOUT to
@@ -786,6 +807,7 @@ int main(int argc, char** argv) {
         Options::root()["neso_particles"]["npart_per_cell"].withDefault(1);
     const REAL dt = Options::root()["neso_particles"]["dt"].withDefault(0.01);
     const int nsteps = Options::root()["neso_particles"]["nsteps"].withDefault(10);
+    BoutReal sim_time = 0.0;
     Field2D ion_density = Field2D(0.0, bout_mesh);
     Field2D neutral_density = Field2D(0.0, bout_mesh);
     // Create a mesh interface from the DM
@@ -987,8 +1009,8 @@ int main(int argc, char** argv) {
       }
     };
     // uncomment to write a trajectory
-    H5Part h5part("traj_reflection_dmplex_example.h5part", A_particle_group,
-                  Sym<REAL>("POSITION"), Sym<REAL>("VELOCITY"));
+    H5Part h5part(make_output_path("particle_trajectories.h5part"),
+                  A_particle_group, Sym<REAL>("POSITION"), Sym<REAL>("VELOCITY"));
 
     // allocate buffer vector for scalar projection/evaluation of NESO-Particles
     // properties
@@ -1001,11 +1023,11 @@ int main(int argc, char** argv) {
                                      h_project1, accumulator_transform, source_zeroer,
                                      neso_mesh);
     // diagnose the initial condition
-    std::string particle_data_filename =
-        fmt::format("bout_particle_moments_{}.nc", mpi_rank);
-    Options bout_output_data =
-        initialise_diagnostics(neutral_density, ion_density, dg0, A_particle_group,
-                               neso_mesh, h_project1, particle_data_filename);
+    std::string particle_data_filename = make_output_path(
+        fmt::format("{}/BOUT.dmp.{}.nc", get_restart_output_dir(), mpi_rank));
+    Options bout_output_data = initialise_diagnostics(
+        bout_mesh, neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
+        h_project1, particle_data_filename);
     // mass for conservation check
     Field2D total_density = neutral_density + ion_density;
     double total_mass_initial = calculate_total_mass(total_density, neso_mesh);
@@ -1013,6 +1035,7 @@ int main(int argc, char** argv) {
     for (int stepx = 0; stepx < nsteps; stepx++) {
       // nprint("step:", stepx);
       output << "step:" << std::to_string(stepx) << std::endl;
+      sim_time += dt;
       A_particle_group->hybrid_move();
       A_particle_group->cell_move();
       lambda_apply_timestep(static_particle_sub_group(A_particle_group));
@@ -1028,7 +1051,7 @@ int main(int argc, char** argv) {
                                        accumulator_transform, source_zeroer, neso_mesh);
       // diagnose timestep stepx
       update_diagnostics(neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
-                         h_project1, bout_output_data, particle_data_filename);
+                         h_project1, bout_output_data, particle_data_filename, sim_time);
     }
     // uncomment to write a trajectory
     h5part.close();
