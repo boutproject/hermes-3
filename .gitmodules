@@ -1,26 +1,26 @@
 [submodule "googletest"]
-	path = external/googletest
-	url = https://github.com/google/googletest.git
+    path = external/googletest
+    url = https://github.com/google/googletest.git
 [submodule "external/BOUT-dev"]
-	path = external/BOUT-dev
-	url = https://github.com/boutproject/BOUT-dev.git
-	branch = next
+    path = external/BOUT-dev
+    url = https://github.com/boutproject/BOUT-dev.git
+    branch = next
 [submodule "BOUT-spack"]
-	path = external/BOUT-spack
-	url = https://github.com/boutproject/BOUT-spack.git
+    path = external/BOUT-spack
+    url = https://github.com/boutproject/BOUT-spack.git
 [submodule "Reactions"]
-	path = external/Reactions
+    path = external/Reactions
     url = https://github.com/UKAEA-Edge-Code/VANTAGE-Reactions.git
-	ignore = dirty
+    ignore = dirty
 [submodule "external/xhermes"]
-	path = external/xhermes
-	url = https://github.com/boutproject/xhermes.git
-	ignore = dirty
+    path = external/xhermes
+    url = https://github.com/boutproject/xhermes.git
+    ignore = dirty
 [submodule "external/xbout"]
-	path = external/xbout
-	url = https://github.com/boutproject/xBOUT.git
-	ignore = dirty
+    path = external/xbout
+    url = https://github.com/boutproject/xBOUT.git
+    ignore = dirty
 [submodule "external/boutdata"]
-	path = external/boutdata
-	url = https://github.com/boutproject/boutdata.git
-	ignore = dirty
+    path = external/boutdata
+    url = https://github.com/boutproject/boutdata.git
+    ignore = dirty
