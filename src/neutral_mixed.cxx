@@ -25,9 +25,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   const Options& units = alloptions["units"];
   const BoutReal meters = units["meters"];
   const BoutReal seconds = units["seconds"];
-  const BoutReal Nnorm = units["inv_meters_cubed"];
-  const BoutReal Tnorm = units["eV"];
-  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  Nnorm = units["inv_meters_cubed"];
+  Tnorm = units["eV"];
+  FreqNorm = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Omega_ci = FreqNorm;
 
   // Need to take derivatives in X for cross-field diffusion terms
   ASSERT0(mesh->xstart > 0);
@@ -50,7 +51,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   if (evolve_momentum) {
     solver->add(NVn, std::string("NV") + name);
-  } else if (passive_momentum) (
+  } else if (passive_momentum) {
+    output_warn.write(
         "WARNING: Not evolving neutral parallel momentum. "
         "NVn set from diffusion + ion flow.\n");
     NVn = 0.0;
@@ -197,8 +199,7 @@ void NeutralMixed::transform(Options& state) {
   Nnlim = softFloor(Nn, density_floor);
   // Optionally take temperature from another species (e.g. Tn = Ti)
   if (!temperature_from.empty()) {
-    Tn = GET_VALUE(Field3D, state["species"][temperature_from]["temperature"]);
-    Tn.applyBoundary();
+    Tn = GET_NOBOUNDARY(Field3D, state["species"][temperature_from]["temperature"]);
     Pn = Nn * Tn;
     Pn = floor(Pn, 0.0);
   } else {
@@ -294,10 +295,18 @@ void NeutralMixed::finally(const Options& state) {
   // Field3D logNn = log(Nn);
   // Field3D logTn = log(Tn);
 
+  // In passive_momentum mode, set_temperature has run its transform() by now,
+  // localstate["temperature"] holds the correct current Ti. Re-read Tn and
+  // recompute Pn ->  update (Dnn, kappa_n, logPnlim)
+  if (passive_momentum) {
+    Tn = GET_VALUE(Field3D, localstate["temperature"]);
+    Pn = Nn * Tn;
+    Pnlim = softFloor(Pn, pressure_floor);
+    Pnlim.applyBoundary();
+  }
+
   logPnlim = log(Pnlim);
   logPnlim.applyBoundary();
-
-  ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
   //
   //
@@ -473,41 +482,43 @@ void NeutralMixed::finally(const Options& state) {
 
   /////////////////////////////////////////////////////
   // Neutral pressure
-  TRACE("Neutral pressure");
+  if (!passive_momentum) {
+    TRACE("Neutral pressure");
 
-  ddt(Pn) = - (5. / 3) * FV::Div_par_mod<ParLimiter>(       // Parallel advection
-                    Pn, Vn, sound_speed, ef_adv_par_ylow)
-            + (2. / 3) * Vn * Grad_par(Pn)                  // Work done
-            + (5. / 3) * Div_a_Grad_perp_flows(             // Perpendicular advection
-                    DnnPn, logPnlim,
-                    ef_adv_perp_xlow, ef_adv_perp_ylow)  
-     ;
+    ddt(Pn) = - (5. / 3) * FV::Div_par_mod<ParLimiter>(       // Parallel advection
+                      Pn, Vn, sound_speed, ef_adv_par_ylow)
+              + (2. / 3) * Vn * Grad_par(Pn)                  // Work done
+              + (5. / 3) * Div_a_Grad_perp_flows(             // Perpendicular advection
+                      DnnPn, logPnlim,
+                      ef_adv_perp_xlow, ef_adv_perp_ylow)
+       ;
 
-  // The factor here is 5/2 as we're advecting internal energy and pressure.
-  ef_adv_par_ylow  *= 5./2;
-  ef_adv_perp_xlow *= 5./2; 
-  ef_adv_perp_ylow *= 5./2;
+    // The factor here is 5/2 as we're advecting internal energy and pressure.
+    ef_adv_par_ylow  *= 5./2;
+    ef_adv_perp_xlow *= 5./2;
+    ef_adv_perp_ylow *= 5./2;
 
-  if (neutral_conduction) {
-    ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(
-                    kappa_n, Tn,                             // Perpendicular conduction
-                    ef_cond_perp_xlow, ef_cond_perp_ylow)
+    if (neutral_conduction) {
+      ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(
+                      kappa_n, Tn,                             // Perpendicular conduction
+                      ef_cond_perp_xlow, ef_cond_perp_ylow)
 
-            + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction 
-                      ef_cond_par_ylow,        
-                      false)  // No conduction through target boundary
-      ;
-    // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
-    ef_cond_perp_xlow *= 3./2;
-    ef_cond_perp_ylow *= 3./2;
-    ef_cond_par_ylow *= 3./2;
+              + (2. / 3) * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction
+                        ef_cond_par_ylow,
+                        false)  // No conduction through target boundary
+        ;
+      // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
+      ef_cond_perp_xlow *= 3./2;
+      ef_cond_perp_ylow *= 3./2;
+      ef_cond_par_ylow *= 3./2;
+    }
+
+    Sp = pressure_source;
+    if (localstate.isSet("energy_source")) {
+      Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    }
+    ddt(Pn) += Sp;
   }
-
-  Sp = pressure_source;
-  if (localstate.isSet("energy_source")) {
-    Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
-  }
-  ddt(Pn) += Sp;
 
   if (evolve_momentum) {
 
@@ -558,28 +569,69 @@ void NeutralMixed::finally(const Options& state) {
       Snv = 0;
     }
 
-  } else if (passive_momentum) (
-    // NVn = Nn_eq * U                         [equilibrium flow with ions]
-    // Try to find ion species velocity from state
+  } else if (passive_momentum) {
+    // NVn = Nn_eq * Vi                         [equilibrium flow with ions]
+    // Ion parallel velocity
     Field3D U = 0.0;
-    if (state["species"].isSet(ion_name) && state["species"][ion_name].isSet("velocity")) {
+    const std::string ion_name = std::string(name) + "+";
+    if (state["species"].isSet(ion_name) &&
+        state["species"][ion_name].isSet("velocity")) {
         U = GET_VALUE(Field3D, state["species"][ion_name]["velocity"]);
     }
     Field3D Ne = GET_VALUE(Field3D, state["species"]["e"]["density"]);
-    Field3D Ni = GET_VALUE(Field3D, state["species"][ion_name]["density"]);
+    //Field3D Ni = GET_VALUE(Field3D, state["species"][ion_name]["density"]); // for now assuming Ni=Ne
+    Field3D Te = GET_VALUE(Field3D, state["species"]["e"]["temperature"]);
 
     // Fetch collision frequencies; fall back to zero if not found
     Field3D nu_cx  = 0.0;
     Field3D nu_iz  = 0.0;
-    Field3D nu_rec = 0.0;
+
+    // similar to Collisionality part
+    if (equilibrium_momentum_collision_names.empty()) {
+      if (localstate.isSet("collision_frequencies")) {
+        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+          const std::string coll_name = collision.second.name();
+
+          if (equilibrium_nu_cx_name.empty() &&
+              collisionSpeciesMatch(coll_name, name, "+", "cx", "partial")) {
+            equilibrium_nu_cx_name = coll_name;
+          }
+          if (equilibrium_nu_iz_name.empty() &&
+              collisionSpeciesMatch(coll_name, name, "+", "iz", "partial")) {
+            equilibrium_nu_iz_name = coll_name;
+          }
+		}
+      }
+
+      // Cache a dummy name so the empty() check above is not re-triggered
+      equilibrium_momentum_collision_names.push_back("initialised");
+    }
+
+    if (!equilibrium_nu_cx_name.empty()) {
+      nu_cx = GET_VALUE(Field3D, localstate["collision_frequencies"][equilibrium_nu_cx_name]);
+    }
+    if (!equilibrium_nu_iz_name.empty()) {
+      nu_iz = GET_VALUE(Field3D, localstate["collision_frequencies"][equilibrium_nu_iz_name]);
+    }
+
+    // --- nu_rec: computed directly from rate coefficient ---
+    // from UpdatedRadiatedPower,
+    // nu_rec [normalised s^-1] = Ne * alpha_rec(Ne, Te) [m^3/s].
+    Field3D nu_rec(mesh);
+    nu_rec.allocate();
+    BOUT_FOR(i, Ne.getRegion("RGN_NOBNDRY")) {
+      const BoutReal ne = Ne[i] * Nnorm;
+      const BoutReal te = Te[i] * Tnorm;
+      nu_rec[i] = Ne[i] * atomic_rates.recombination(ne, te) * Nnorm / FreqNorm;
+    }
+    nu_rec.applyBoundary("neumann");
+
 
     // Equilibrium neutral density:
-    //   Nn_eq = Ne * (Nn * nu_cx + Ne * nu_rec) / (Ne * nu_cx + Ne * nu_iz)
-    //         = Ne * (Nn * nu_cx + Ne * nu_rec) / (Ne * (nu_cx + nu_iz))
-    // Floor the denominator to avoid division by zero
-    Field3D Nn_eq = Ni * (Nnlim * nu_cx + Ne * nu_rec)
-                      / softFloor(Ni * nu_cx + Ne * nu_iz, density_floor);
-    //Field3D NVn_eq = Nn_eq * U;
+    // Nn_eq = Ni * (Nn * nu_cx + Ne * nu_rec) / (Ni * nu_cx + Ne * nu_iz)
+    // Quasineutrality: Ni = Ne
+    Field3D Nn_eq = (Nnlim * nu_cx + Ne * nu_rec)
+                      / softFloor(nu_cx + nu_iz, density_floor);
     NVn = Nn_eq * U;
 
   } else {
@@ -591,8 +643,11 @@ void NeutralMixed::finally(const Options& state) {
   if (state.isSet("scale_timederivs")) {
     Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
     ddt(Nn) *= scale_timederivs;
-    ddt(Pn) *= scale_timederivs;
-    ddt(NVn) *= scale_timederivs;
+
+    if (!passive_momentum) {
+        ddt(Pn) *= scale_timederivs;
+        ddt(NVn) *= scale_timederivs;
+    }
   }
 
   if (freeze_low_density) {
@@ -623,8 +678,10 @@ void NeutralMixed::finally(const Options& state) {
       const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
       const BoutReal factor = exp(- density_floor / meanNn);
       ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
-      ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
-      ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
+      if (!passive_momentum) {
+        ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
+        ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
+	  }
     }
   }
 
@@ -633,11 +690,13 @@ void NeutralMixed::finally(const Options& state) {
     if (!std::isfinite(ddt(Nn)[i])) {
       throw BoutException("ddt(N{}) non-finite at {}\n", name, i);
     }
-    if (!std::isfinite(ddt(Pn)[i])) {
-      throw BoutException("ddt(P{}) non-finite at {}\n", name, i);
-    }
-    if (!std::isfinite(ddt(NVn)[i])) {
-      throw BoutException("ddt(NV{}) non-finite at {}\n", name, i);
+    if (!passive_momentum) {
+      if (!std::isfinite(ddt(Pn)[i])) {
+        throw BoutException("ddt(P{}) non-finite at {}\n", name, i);
+      }
+      if (!std::isfinite(ddt(NVn)[i])) {
+        throw BoutException("ddt(NV{}) non-finite at {}\n", name, i);
+      }
     }
   }
 #endif
@@ -693,16 +752,18 @@ void NeutralMixed::outputVars(Options& state) {
          {"conversion", Nnorm * Omega_ci},
          {"long_name", std::string("Rate of change of ") + name + " number density"},
          {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn),
-                   {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
-                    {"conversion", Pnorm * Omega_ci},
-                    {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NVn),
+    if (!passive_momentum) {
+      set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn),
+                     {{"time_dimension", "t"},
+                      {"units", "Pa s^-1"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"source", "neutral_mixed"}});
+      set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NVn),
                    {{"time_dimension", "t"},
                     {"units", "kg m^-2 s^-2"},
                     {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"source", "neutral_mixed"}});
+    } // end if (!passive_momentum)
   }
   if (diagnose) {
     set_with_attrs(state[std::string("T") + name], Tn,
@@ -726,20 +787,22 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "density source"},
                     {"long_name", name + " number density source"},
                     {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("SP") + name], Sp,
-                   {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
-                    {"conversion", SI::qe * Tnorm * Nnorm * Omega_ci},
-                    {"standard_name", "pressure source"},
-                    {"long_name", name + " pressure source"},
-                    {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("SNV") + name], Snv,
-                   {{"time_dimension", "t"},
-                    {"units", "kg m^-2 s^-2"},
-                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum source"},
-                    {"long_name", name + " momentum source"},
-                    {"source", "neutral_mixed"}});
+    if (!passive_momentum) {
+      set_with_attrs(state[std::string("SP") + name], Sp,
+                     {{"time_dimension", "t"},
+                      {"units", "Pa s^-1"},
+                      {"conversion", SI::qe * Tnorm * Nnorm * Omega_ci},
+                      {"standard_name", "pressure source"},
+                      {"long_name", name + " pressure source"},
+                      {"source", "neutral_mixed"}});
+      set_with_attrs(state[std::string("SNV") + name], Snv,
+                     {{"time_dimension", "t"},
+                      {"units", "kg m^-2 s^-2"},
+                      {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                      {"standard_name", "momentum source"},
+                      {"long_name", name + " momentum source"},
+                      {"source", "neutral_mixed"}});
+    }
     set_with_attrs(state[std::string("S") + name + std::string("_src")], density_source,
                    {{"time_dimension", "t"},
                     {"units", "m^-3 s^-1"},
@@ -928,6 +991,11 @@ void NeutralMixed::outputVars(Options& state) {
 
 void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma) {
   if (!precondition) {
+    return;
+  }
+  // Preconditioner only applies when evolving Pn and NVn.
+  // will get ddt(Nn) later
+  if (passive_momentum) {
     return;
   }
 
