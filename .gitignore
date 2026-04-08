@@ -24,3 +24,6 @@ spack-build*
 spack.lock
 .spack-env
 views
+
+# vscode
+src/Hermes3_branches.code-workspace
