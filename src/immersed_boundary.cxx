@@ -1,7 +1,10 @@
 #include <../include/immersed_boundary.hxx>
 
 #include <regex>
+#include <sstream>
 
+//TODO: Move IB class into BOUT++? Doesnt depend on hermes, but makes life hard for BOUT to use it (i.e. callback fn)
+//TODO: Note, cant currently restart code from dump files. Need to dump IB info too I believe?
 #include <bout/field.hxx>
 #include <bout/globals.hxx>
 #include <bout/mesh.hxx>
@@ -59,51 +62,17 @@ ImmersedBoundary::ImmersedBoundary() {
   Region<Ind3D>::RegionIndices bndry_indices;
   Region<Ind3D>::RegionIndices gst_indices;
   BOUT_FOR(i, bndry_mask.getRegion("RGN_ALL")) {
-    //Handle guard cells correctly. Allow for x+-1 guard cells, for dagp operator. May need more cells eventually.
-    if (i.x() < mesh->xstart - 1 || i.x() > mesh->xend + 1) {continue;}
-    if (i.y() < mesh->ystart || i.y() > mesh->yend) {continue;}
-    //TODO: Specfic MPI logic here requires MXG=4 and may still be prone to errors, communicate ghost info after computation (for every field...would be slow)?
-    //Left guard needs to evolve through +x face for MPI.
-    //TODO: Current boundary ghost logic needs to be cleaned up, adding extra corners (commented out code may be enough while all ok ghosts is probably overkill).
-    if (i.x() == mesh->xstart - 1) { //Match what div_ops does.
-      if (IsInside(i.xp())) {
-        xbndry_indices.push_back(i);
-        ////If a ghost to left of proc and needed for point to right inside proc.
-        //if (IsGhost(i)) {
-        //  gst_indices.push_back(i);
-        //}
-      }
-      
-      //Add on all ghost values which are ok...need to check nodes not ghost unnacounted for on this side of mpi...
+    //First handle guard cells correctly.
+    if (i.y() < mesh->ystart   || i.y() > mesh->yend) {continue;}
+    //Note, need to handle xstart-1 guard further below as special case for dagp xbndry.
+    if (i.x() < mesh->xstart-1 || i.x() > mesh->xend) {
+      //Add on all boundary ghost values which are ok for now. TODO: Clean up logic to just necessary ghosts for dagp operators at the moment?
       if (IsGhost(i)) {
         const auto gid = ghost_ids[i];
-        const auto indx = mesh->getLocalXIndex(image_inds(gid, 0));
-        if (indx < 0 || indx >= mesh->LocalNx-1) {continue;}
+        //Ignore any ghost which can't interpolate for its image point due to lack of information.
+        if (IsBadInterpForMPI(image_inds(gid, 0))) {continue;}
         gst_indices.push_back(i);
       }
-
-      ////dagp operators sometimes need corners which are ghosts out of MPI bounds.
-      //if (IsGhost(i) && (IsInside(i.zm().xp()) || IsInside(i.zp().xp()))) {
-      //  gst_indices.push_back(i);
-      //}
-
-      continue;
-    } else if (i.x() == mesh->xend + 1) {
-      
-      //Add on all ghost values which are ok...need to check nodes not ghost unnacounted for on this side of mpi...
-      if (IsGhost(i)) {
-        const auto gid = ghost_ids[i];
-        const auto indx = mesh->getLocalXIndex(image_inds(gid, 0));
-        if (indx < 0 || indx >= mesh->LocalNx-1) {continue;}
-        gst_indices.push_back(i);
-      }
-      ////If a ghost to right of proc and needed for point to left inside proc.
-      //if (IsGhost(i) && IsInside(i.xm())) {gst_indices.push_back(i);}
-
-      ////dagp operators sometimes need corners which are ghosts out of MPI bounds.
-      //if (IsGhost(i) && (IsInside(i.zm().xm()) || IsInside(i.zp().xm()))) {
-      //  gst_indices.push_back(i);
-      //}
       continue;
     }
 
@@ -170,12 +139,17 @@ bool ImmersedBoundary::IsCutCell(const Ind3D& ind) const {
   return bound_ids[ind] >= 0;
 }
 
+bool ImmersedBoundary::IsBadInterpForMPI(const int global_indx) const {
+  const auto indx = mesh->getLocalXIndex(global_indx);
+  const bool interpBad = indx < 0 || indx + 1 >= mesh->LocalNx;
+  return interpBad;
+}
+
 void ImmersedBoundary::CheckInterpOkWithMPI(const int global_indx, const int cell_id,
                             const int proc_idx, const std::string& description) const {
     //Convert global to local index for point of interest and check in bounds of processor.
     //Note, only need to check x for now since z not parallelized.
-    const auto indx = mesh->getLocalXIndex(global_indx);
-    if (indx < 0 || indx >= mesh->LocalNx) {
+    if (IsBadInterpForMPI(global_indx)) {
       std::stringstream strstm;
       strstm << description << cell_id << " on proc " << proc_idx
         << "." << " Increase # of guard cells in x for easy fix. " << std::endl;
@@ -216,7 +190,12 @@ void ImmersedBoundary::FieldSetup(Field3D& f) {
         .doc("Boundary condition to use at immersed boundary wall.")
         .withDefault("neumann(0.0)"); //Default to no flux conditions.
 
-  f.setRegion("RGN_NO_IMM_BNDRY"); //Default region to plasma cells.
+  //Default region to plasma cells.
+  //IMM_BDNRY_TODO_NEW: Don't set region because sort of complex...
+  //If field3d operator need to include ghosts. If derivative operator, just plasma cells...
+  //For now explicitly use plasma region where necessary, else use old RGN_NOBNDRY...
+  //f.setRegion("RGN_NO_IMM_BNDRY");
+  //ddt(f).setRegion("RGN_NO_IMM_BNDRY");
 
   //Load BC info and clear out non-plasma cells.
   const auto& bc_info = ReadBC(bc_type);
@@ -224,6 +203,16 @@ void ImmersedBoundary::FieldSetup(Field3D& f) {
   BOUT_FOR(i, f.getRegion("RGN_IMM_BNDRY")) {
     f[i] = 0.0;
     ddt(f)[i] = 0.0;
+  }
+}
+
+void ImmersedBoundary::FloorField(Field3D& f, const float val) const {
+  //Just floor plasma cells, not ghosts.
+  //TODO: Reset boundary after flooring? Do outside afterwards on case-by-case basis currently.
+  BOUT_FOR(i, f.getRegion("RGN_NO_IMM_BNDRY")) {
+    if (f[i] < 0.0) {
+      f[i] = val;
+    }
   }
 }
 
@@ -385,8 +374,8 @@ void ImmersedBoundary::SetBoundary(Field3D& f) {
     BOUT_FOR(i, f.getRegion("RGN_IMM_BNDRY_GST")) {
       const auto gid = ghost_ids[i];
       //If first iteration or more than 1 ghost (GS iteration to converge).
-      if (it == 0 || (it > 0 && ghost_count[gid] > 1)) {
-        const auto image_val = GetImageValue(f, gid, bc_val, bc_type, checked, it);
+      if (it == 0 || ghost_count[gid] > 1) {
+        const auto image_val = GetImageValue(f, gid, bc_val, bc_type);
         const auto ghost_val = GetGhostValue(image_val, gid, bc_val, bc_type);
         f[i] = ghost_val;
       }

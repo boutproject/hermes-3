@@ -179,12 +179,16 @@ void EvolveDensity::transform(Options& state) {
     }
   }
 
+  auto& species = state["species"][name];
+
   if (immBndry) {
+    immBndry->FloorField(N);
     immBndry->SetBoundary(N);
+    set(species["density"], N);
+  } else {
+    set(species["density"], floor(N, 0.0));
   }
 
-  auto& species = state["species"][name];
-  set(species["density"], floor(N, 0.0));
   set(species["AA"], AA);                 // Atomic mass
   if (charge != 0.0) {                    // Don't set charge for neutral species
     set(species["charge"], charge);
@@ -250,7 +254,15 @@ void EvolveDensity::finally(const Options& state) {
     } else {
       Field3D T = get<Field3D>(species["temperature"]);
       BoutReal AA = get<BoutReal>(species["AA"]);
-      fastest_wave = sqrt(T / AA);
+      if (immBndry) {
+        fastest_wave = copy(T);
+        BOUT_FOR(i, T.getRegion("RGN_ALL")) {
+          if (!T.getMesh()->isValidIndex(i)) {fastest_wave[i] = 0.0;}
+          else {fastest_wave[i] = sqrt(fastest_wave[i]/AA);}
+        }
+      } else {
+        fastest_wave = sqrt(T / AA);
+      }
     }
 
     ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);

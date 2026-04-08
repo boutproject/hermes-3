@@ -76,6 +76,7 @@ private:
   const std::string bc_key = "bndry_wall";
   std::pair<BoundCond, BoutReal> ReadBC(const std::string& bc_info) const;
 
+  bool IsBadInterpForMPI(const int global_indx) const;
   void CheckInterpOkWithMPI(const int global_indx, const int cell_id, const int proc_idx,
                       const std::string& description) const;
 
