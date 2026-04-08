@@ -780,9 +780,9 @@ void VantageSourceManager::update_source(const std::string& hermes_source_name,
     }
   }
 
-  // Convert from weight per volume to density per unit time, then normalise
-  // Assumng that dt is in normalised units already
-  source.source_data *= norms["N_w"] / dt / norms["Nnorm"];
+  // Divite by dt so that the source is in per second
+  // TODO: Ensure this has correct units and units consistent with neutral density
+  source.source_data /= dt;
 
   // Fill internal guards
   bout_mesh->communicate(source.source_data);
