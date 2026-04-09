@@ -63,7 +63,7 @@ private:
   void transform_impl(GuardedOptions& state) override;
 };
 
-const Field2D compute_U2D(bool local_U);
+const void compute_U2D(Field2D& U, bool local_U);
 const Field2D isnegative_grad_perp(const Field2D& P);
 const Field3D isnegative_grad_perp(const Field3D& P);
 namespace {
