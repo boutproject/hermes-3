@@ -7,19 +7,74 @@
 using namespace NESO::Particles;
 using namespace VANTAGE::Reactions;
 
+/// @brief Data struct to hold information about a reaction source.
+/// @param reaction_name Name of the reaction, e.g. "ionistaion"
+/// @param source_name Name of the source, e.g. Siz (ion density source due to ionisation).
+/// @param accumulator CellwiseAccumulator to use to accumulate the source term for this
+/// reaction.
+/// @param particle_group ParticleGroup to which this source applies.
+/// @param zeroer TransformationStrategy to use to zero the source term dat after
+/// accumulation.
+struct VantageSource {
+  std::string hermes_source_name;
+  std::string vantage_source_name;
+  std::shared_ptr<CellwiseAccumulator<REAL>> accumulator;
+  std::shared_ptr<ParticleGroup> particle_group;
+  std::shared_ptr<TransformationStrategy> zeroer;
+  Field2D source_data;
+};
+
+/// @brief  Class to manage reaction channel sources from VANTAGE.
+/// Source terms from VANTAGE are extracted from the accumulator.
+/// These are then converted to actual sources, e.g. units of m^-3 s^-1 for a
+/// density source.
+class VantageSourceManager {
+public:
+  VantageSourceManager(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
+                       Mesh* bout_mesh,
+                       const std::map<std::string, BoutReal>& norms);
+
+  Mesh* bout_mesh;
+
+  // Register new source
+  void add_source(const std::string& hermes_source_name,
+                  const std::string& vantage_source_name,
+                  std::shared_ptr<CellwiseAccumulator<REAL>> accumulator,
+                  std::shared_ptr<ParticleGroup> particle_group,
+                  std::shared_ptr<TransformationStrategy> zeroer);
+
+  // Update the Hermes-3 source field using the accumulated data from corresponding
+  // VANTAGE source
+  // Accumulated source is in total weight. Divide by volume to get weight/m^3,
+  // then by timestep to get weight/m^3/s, and finally multiply N_w to get
+  // particles/m^3/s and divide by Nnorm to keep normalised units.
+  void update_source(const std::string& hermes_source_name, double dt);
+
+  // Call update_source on all sources
+  void update_all_sources(double dt);
+
+  // Return data for a given Hermes-3 source name
+  Field2D get_data(const std::string& hermes_source_name);
+
+private:
+  std::map<std::string, VantageSource> sources;
+  std::shared_ptr<PetscInterface::DMPlexInterface> neso_mesh;
+  std::map<std::string, BoutReal> norms;
+};
+
 /**
  * @brief Function to calculate cell volumes.
- * 
+ *
  * @param sycl_target SYCLTargetSharedPtr to use for communication.
  * @param mesh object.
- * 
+ *
  */
 
 
 
 /**
  * @brief Function to calculate particle positions and velocities from a Maxwellian.
- * 
+ *
  * @param sycl_target SYCLTargetSharedPtr to use for communication.
  * @param mesh object.
  * @param particle_spec ParticleSpec to use for the returned ParticleSet.
@@ -71,7 +126,7 @@ inline ParticleSet uniform_cellwise_maxwellian(
 
 /**
  * @brief create an RNG kernel to use for sampling velocity distributions
- * in recombination and charge exchange. 
+ * in recombination and charge exchange.
  */
 
 inline auto get_uniform_rng_kernel(SYCLTargetSharedPtr sycl_target,
