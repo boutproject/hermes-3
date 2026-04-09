@@ -1,9 +1,6 @@
 ---
 name: Tests
 on:
-  push:
-    branches:
-      - '**'
   pull_request:
     branches:
       - '**'  # This will trigger for PRs against any branch

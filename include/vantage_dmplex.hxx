@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #ifndef VANTAGE_DMPLEX_H
 #define VANTAGE_DMPLEX_H
 
@@ -50,7 +51,8 @@ std::vector<PetscInt> cells_definition_from_RZ_ivertex(
     Field2D& ivertex_upper_left_corners);
 
 DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
-                                std::shared_ptr<SYCLTarget> sycl_target);
+                                std::shared_ptr<SYCLTarget> sycl_target,
+                                std::string dmplex_h5_filename);
 
 #endif 
 

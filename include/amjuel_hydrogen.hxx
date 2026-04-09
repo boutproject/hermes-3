@@ -6,6 +6,8 @@
 
 #include "amjuel_reaction.hxx"
 
+namespace hermes {
+
 static std::map<std::string, std::string> long_reaction_types_map = {
     {"cx", "charge exchange"}, {"iz", "ionisation"}, {"rec", "recombination"}};
 
@@ -21,8 +23,8 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
   AmjuelHydIsotopeReaction(std::string name, std::string short_reaction_type,
                            std::string amjuel_label, std::string from_species,
                            std::string to_species, Options& alloptions)
-      : AmjuelReaction(name, short_reaction_type, amjuel_label, from_species, to_species,
-                       alloptions) {
+      : AmjuelReaction(name, short_reaction_type, amjuel_label, alloptions),
+        from_species(from_species), to_species(to_species) {
     if (this->diagnose) {
       // Set up diagnostics
 
@@ -41,10 +43,8 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
         default_transformer = identity;
       }
 
-      auto heavy_products =
-          this->parser->get_species(species_filter::heavy, species_filter::products);
-      ASSERT1(heavy_products.size() == 1);
-      std::string heavy_product = heavy_products[0];
+      std::string heavy_product = this->parser->get_single_species(
+          species_filter::heavy, species_filter::products);
       std::string long_reaction_type = long_reaction_types_map.at(short_reaction_type);
       add_diagnostic(
           heavy_product, fmt::format("S{:s}", default_diag_suffix),
@@ -71,6 +71,15 @@ struct AmjuelHydIsotopeReaction : public AmjuelReaction {
           ReactionDiagnosticType::energy_loss, this->amjuel_src, rad_transformer);
     }
   }
+
+protected:
+  const std::string& get_from_species() const { return this->from_species; }
+  const std::string& get_to_species() const { return this->to_species; }
+
+private:
+  // Store some strings for use in attribute docstrings
+  std::string from_species;
+  std::string to_species;
 };
 
 /**
@@ -117,23 +126,25 @@ struct AmjuelHydIonisationIsotope : public AmjuelHydIsotopeReaction<Isotope> {
   }
 };
 
+}; // namespace hermes
+
 namespace {
 /// Register three ionisation components, one for each hydrogen isotope
 /// so no isotope dependence included.
-RegisterComponent<AmjuelHydIonisationIsotope<'h'>>
+RegisterComponent<hermes::AmjuelHydIonisationIsotope<'h'>>
     registerionisation_h("h + e -> h+ + 2e");
-RegisterComponent<AmjuelHydIonisationIsotope<'d'>>
+RegisterComponent<hermes::AmjuelHydIonisationIsotope<'d'>>
     registerionisation_d("d + e -> d+ + 2e");
-RegisterComponent<AmjuelHydIonisationIsotope<'t'>>
+RegisterComponent<hermes::AmjuelHydIonisationIsotope<'t'>>
     registerionisation_t("t + e -> t+ + 2e");
 
 /// Register three recombination components, one for each hydrogen isotope
 /// so no isotope dependence included.
-RegisterComponent<AmjuelHydRecombinationIsotope<'h'>>
+RegisterComponent<hermes::AmjuelHydRecombinationIsotope<'h'>>
     register_recombination_h("h+ + e -> h");
-RegisterComponent<AmjuelHydRecombinationIsotope<'d'>>
+RegisterComponent<hermes::AmjuelHydRecombinationIsotope<'d'>>
     register_recombination_d("d+ + e -> d");
-RegisterComponent<AmjuelHydRecombinationIsotope<'t'>>
+RegisterComponent<hermes::AmjuelHydRecombinationIsotope<'t'>>
     register_recombination_t("t+ + e -> t");
 
 } // namespace

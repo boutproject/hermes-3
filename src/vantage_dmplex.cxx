@@ -193,13 +193,14 @@ std::vector<PetscInt> cells_definition_from_RZ_ivertex(
 }
 
 DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
-                                std::shared_ptr<SYCLTarget> sycl_target) {
+                                std::shared_ptr<SYCLTarget> sycl_target,
+                                std::string dmplex_h5_filename) {
   bool use_cxx_ivertex = Options::root()["mesh"]["use_cxx_ivertex"].withDefault(false);
   std::string dmplex_name =
       Options::root()["mesh"]["dmplex_name"].withDefault("hypnotoad_dmplex_mesh");
-  std::string dmplex_h5_filename =
-      Options::root()["mesh"]["dmplex_h5_filename"].withDefault(
-          "hypnotoad_dmplex_mesh_output.h5");
+  // DMPlex vertex distance tolerance for duplicate Hypnotoad vertices
+  const BoutReal dmplex_vertex_tolerance =
+    Options::root()["mesh"]["dmplex_vertex_tolerance"].withDefault(1.0e-8);
   output << fmt::format("Using option use_cxx_ivertex = {}", use_cxx_ivertex)
          << std::endl;
   bout_mesh->load();
@@ -322,22 +323,21 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
   global_Z_vertices_buffer.at(0) = global_Z_lower_left_vertices.at(0);
   global_R_vertices_buffer.at(0) = global_R_lower_left_vertices.at(0);
   size_t N_unique = 1; // we have one unique point in the buffer
-  const double tolerance = 1.0e-8;
   // loop over lower left vertices
   collect_unique_points(global_Z_vertices_buffer, global_R_vertices_buffer, N_unique,
-                        tolerance, global_Z_lower_left_vertices,
+                        dmplex_vertex_tolerance, global_Z_lower_left_vertices,
                         global_R_lower_left_vertices);
   // loop over lower right vertices
   collect_unique_points(global_Z_vertices_buffer, global_R_vertices_buffer, N_unique,
-                        tolerance, global_Z_lower_right_vertices,
+                        dmplex_vertex_tolerance, global_Z_lower_right_vertices,
                         global_R_lower_right_vertices);
   // loop over upper right vertices
   collect_unique_points(global_Z_vertices_buffer, global_R_vertices_buffer, N_unique,
-                        tolerance, global_Z_upper_right_vertices,
+                        dmplex_vertex_tolerance, global_Z_upper_right_vertices,
                         global_R_upper_right_vertices);
   // loop over upper left vertices
   collect_unique_points(global_Z_vertices_buffer, global_R_vertices_buffer, N_unique,
-                        tolerance, global_Z_upper_left_vertices,
+                        dmplex_vertex_tolerance, global_Z_upper_left_vertices,
                         global_R_upper_left_vertices);
   // now make a vector of the size N_unique and fill from the buffer
   std::vector<double> global_Z_vertices(N_unique, 0.0);
@@ -362,16 +362,16 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
   Field2D ivertex_upper_left_corners_cxx{-1, bout_mesh};
   // now fill ivertex_corners arrays
   RZ_to_ivertex_vector(ivertex_lower_left_corners_cxx, global_Z_vertices,
-                       global_R_vertices, tolerance, bout_mesh, Rxy_lower_left_corners,
+                       global_R_vertices, dmplex_vertex_tolerance, bout_mesh, Rxy_lower_left_corners,
                        Zxy_lower_left_corners);
   RZ_to_ivertex_vector(ivertex_lower_right_corners_cxx, global_Z_vertices,
-                       global_R_vertices, tolerance, bout_mesh, Rxy_lower_right_corners,
+                       global_R_vertices, dmplex_vertex_tolerance, bout_mesh, Rxy_lower_right_corners,
                        Zxy_lower_right_corners);
   RZ_to_ivertex_vector(ivertex_upper_right_corners_cxx, global_Z_vertices,
-                       global_R_vertices, tolerance, bout_mesh, Rxy_upper_right_corners,
+                       global_R_vertices, dmplex_vertex_tolerance, bout_mesh, Rxy_upper_right_corners,
                        Zxy_upper_right_corners);
   RZ_to_ivertex_vector(ivertex_upper_left_corners_cxx, global_Z_vertices,
-                       global_R_vertices, tolerance, bout_mesh, Rxy_upper_left_corners,
+                       global_R_vertices, dmplex_vertex_tolerance, bout_mesh, Rxy_upper_left_corners,
                        Zxy_upper_left_corners);
 
   // First we setup the topology of the mesh.

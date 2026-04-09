@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+import os
+from pathlib import Path
+import numpy as np
+import urllib.request
+import hashlib
+import shutil
+from boututils.run_wrapper import shell, launch, getmpirun
+from boutdata.collect import collect
+from boutdata.data import BoutOptionsFile
+from petsc4py import PETSc
+import zipfile
+import xhermes
+
+"""
+This test checks that the DMPLex and Hypnotoad grids have matching vertices.
+It does this by:
+- Downloading a set of Hypnotoad example grids
+- Running bout-particle-push to generate the DMPlex
+- Checking that all the vertices from the DMPlex exist in the Hypnotoad grid and vice versa
+- Repeating the above for 6 Hypnotoad example grids
+"""
+
+verbose = False
+
+cwd = Path.cwd()
+case_path = cwd / "data"
+datafile_path = case_path / "BOUT.dmp.*.nc"
+inputfile_path = case_path / "BOUT.inp"
+exec_path = cwd.parents[2] / "bout-particle-push"
+dmplex_path = case_path / "hypnotoad_dmplex_mesh_output.h5"
+logfile_path = cwd / "run.log"
+
+gridzipfile_path = cwd / "Hypnotoad_examples.zip"
+gridurl = "https://zenodo.org/records/18173856/files/Hypnotoad_examples_v1.1_fixLDN.zip"
+expected_hash = "fd91d0c0d0595bc3ea6b3aacb6950c9c306ac3574c228c3b27626bb237885874"
+grid_filenames = [
+    "example_cdn.grd.nc",
+    "example_ldn.grd.nc",
+    "example_lsn.grd.nc",
+    "example_udn.grd.nc",
+    "example_udn2.grd.nc",
+    "example_usn.grd.nc",
+    ]
+
+
+### Define functions
+def get_DMPlex_vertices(dmplex_path):
+    """
+    Loads DMPlex mesh from HDF5 file and extracts vertex coordinates
+    """
+
+    dm = PETSc.DMPlex().create()
+    viewer = PETSc.Viewer().createHDF5(str(dmplex_path), "r")
+
+    dm.load(viewer)
+    viewer.destroy()
+    dm.setFromOptions()
+    dm.setUp()
+
+    coords = dm.getCoordinatesLocal().array  # Get all RZ coordinates
+    section = dm.getCoordinateSection()
+
+    ## Get vertices
+    # vertices are the simplest object, so depth = 0
+    vertex_start, vertex_end = dm.getDepthStratum(
+        0
+    )  
+    R = []
+    Z = []
+
+    # Find offset to locate matching coordinates to point p
+    for p in range(vertex_start, vertex_end):
+        off = section.getOffset(
+            p
+        )  
+
+        R.append(coords[off])
+        Z.append(coords[off + 1])
+
+    dmplex_vertices = np.column_stack((R, Z))
+
+    return dmplex_vertices
+
+
+def get_hypnotoad_vertices(gridfile):
+    """
+    Read Hypnotoad grid file with xHermes, remove guards and extract vertices
+    """
+
+    hypno = xhermes.HypnotoadGrid(gridfile).remove_guards()
+    side_names = ["lower_left", "lower_right", "upper_left", "upper_right"]
+    Rxy_corners = np.concatenate(
+        [hypno[f"Rxy_{side}_corners"] for side in side_names], axis=0
+    )
+    Zxy_corners = np.concatenate(
+        [hypno[f"Zxy_{side}_corners"] for side in side_names], axis=0
+    )
+    hypno_vertices = np.column_stack((Rxy_corners.flatten(), Zxy_corners.flatten()))
+
+    return hypno_vertices
+
+
+### Prepare for test
+
+for gridfile in grid_filenames:
+
+    if verbose:
+        print("\n", "*" * 30, "\n")
+        print(f"Testing {gridfile}")
+
+    ### Remove old data file, log file and link if they exist
+
+    to_remove = []
+    for file in case_path.glob(".BOUT.pid.*"):
+        to_remove.append(file)
+
+    for file in case_path.glob("BOUT.log.*"):
+        to_remove.append(file)
+
+    for file in case_path.glob("BOUT.dmp.*.nc"):
+        to_remove.append(file)
+
+    for file in case_path.glob("BOUT.settings"):
+        to_remove.append(file)
+
+    if logfile_path.exists():
+        to_remove.append(logfile_path)
+
+    if len(to_remove) > 0:
+        for file in to_remove:
+            shell(f"rm {file}")
+
+    ## Download grids
+    tmp_path = gridzipfile_path.with_name(gridzipfile_path.name + ".tmp")
+
+    with urllib.request.urlopen(gridurl, timeout=60) as response:
+
+        if response.status != 200:
+            raise RuntimeError(f"Test grid download failed: HTTP {response.status}")
+        
+        # Copy bits of the file from response to a temp file
+        # This ensures no partial files are left if the download fails
+        with open(tmp_path, "wb") as out_file:
+            shutil.copyfileobj(response, out_file)
+
+    # Rename temp file with the correct name
+    tmp_path.replace(gridzipfile_path)
+
+    with zipfile.ZipFile(gridzipfile_path, "r") as zf:
+
+        zip_contents = set(zf.namelist())
+        try:
+            # Extract only expected grids
+            for filename in grid_filenames:
+                if filename in zip_contents:
+                    zf.extract(filename, path=cwd)
+
+        except Exception as e:
+            print("Extracting test grids failed:", e)
+
+    # Check hash
+    with open(gridzipfile_path, "rb") as f:
+        file_hash = hashlib.sha256(f.read()).hexdigest()
+
+    if file_hash != expected_hash:
+        raise RuntimeError("Downloaded grid zip file hash does not match expected value")
+
+    ## Run Hermes-3 to generate DMPlex mesh
+    # Find how many cores to use
+    ncores = xhermes.HypnotoadGrid(gridfile).num_processors(1, 12)[0]
+    print(f'"{gridfile}" : {ncores}')
+
+    # Change input file to select grid
+    inputfile = BoutOptionsFile(inputfile_path)
+    inputfile["mesh"]["file"] = gridfile
+    inputfile.write(inputfile_path, overwrite=True)
+
+    # Run
+    s, out = launch(f"{exec_path} -d {case_path}", nproc=ncores, mthread=1, pipe=True)
+
+    # Check if it crashed
+    if s != 0:
+        print(f" => DMPLex vertex match test failed to run for {gridfile}")
+        print(out)
+        exit(1)
+
+    # Save output to log file
+    with open(logfile_path, "w") as f:
+        f.write(out)
+
+    # Check if Hermes-3 exception was thrown
+    with open(logfile_path, "r") as f:
+        lines = f.readlines()
+        for i, line in enumerate(lines):
+            if "====== Exception thrown ======" in line:
+                message = lines[i + 1]
+                print(
+                    f" => DMPLex vertex match test failed for {gridfile}: \n{message}"
+                )
+                exit(1)
+
+    ### Check vertices
+
+    # Extract
+    dmplex_vertices = get_DMPlex_vertices(dmplex_path)
+    hypno_vertices = get_hypnotoad_vertices(gridfile)
+    
+    R_dmplex = dmplex_vertices[:, 0]
+    Z_dmplex = dmplex_vertices[:, 1]
+    R_hypno = hypno_vertices[:, 0]
+    Z_hypno = hypno_vertices[:, 1]
+
+    # Vertex position error tolerance is factor of characteristic geometry size
+    geometry_size = np.max(np.sqrt(R_hypno**2 + Z_hypno**2))
+    tolerance = inputfile["mesh"]["dmplex_vertex_tolerance"] * geometry_size
+
+    # Hypnotoad has duplicate vertices due to overlapping vertices between cells.
+    # The vertices are not in an exactly identical position due to finite precision
+    # on the equilibrium interpolation done in Hypnotoad.
+    # The test just ensures that every vertex in one mesh has a matching vertex in 
+    # the other mesh within the tolerance.
+    
+    # Ensure all Hypnotoad vertices exist in DMPlex
+    for i in range(len(R_hypno)):
+        nearest_distance = np.min(np.sqrt((R_dmplex - R_hypno[i])**2 + (Z_dmplex - Z_hypno[i])**2))
+        
+        if not nearest_distance < tolerance:
+            raise AssertionError("Found Hypnotoad vertex with no match in DMPlex")
+        
+    # Ensure all DMPlex vertices exist in Hypnotoad
+    for i in range(len(R_dmplex)):
+        nearest_distance = np.min(np.sqrt((R_hypno - R_dmplex[i])**2 + (Z_hypno - Z_dmplex[i])**2))
+        
+        if not nearest_distance < tolerance:
+            raise AssertionError("Found DMPlex vertex with no match in Hypnotoad")

@@ -4,6 +4,8 @@
 
 #include "amjuel_reaction.hxx"
 
+namespace hermes {
+
 /**
  * @brief Component for Helium ionisation (e + he -> he+ + 2e) based on Amjuel
  * reaction 2.3.9a, page 161. Not resolving metastables, only transporting ground state.
@@ -11,7 +13,7 @@
  */
 struct AmjuelHeIonisation01 : public AmjuelReaction {
   AmjuelHeIonisation01(std::string name, Options& alloptions, Solver*)
-      : AmjuelReaction(name, "iz", "H.x_2.3.9a", "he", "he+", alloptions) {
+      : AmjuelReaction(name, "iz", "H.x_2.3.9a", alloptions) {
 
     rate_multiplier = alloptions[std::string("he")]["ionisation_rate_multiplier"]
                           .doc("Scale the ionisation rate by this factor")
@@ -32,7 +34,7 @@ struct AmjuelHeIonisation01 : public AmjuelReaction {
  */
 struct AmjuelHeRecombination10 : public AmjuelReaction {
   AmjuelHeRecombination10(std::string name, Options& alloptions, Solver*)
-      : AmjuelReaction(name, "rec", "H.x_2.3.13a", "he+", "he", alloptions) {
+      : AmjuelReaction(name, "rec", "H.x_2.3.13a", alloptions) {
 
     rate_multiplier = alloptions[name]["recombination_rate_multiplier"]
                           .doc("Scale the recombination rate by this factor")
@@ -62,3 +64,5 @@ RegisterComponent<AmjuelHeRecombination10> register_recombination_10("he+ + e ->
 } // namespace
 
 #endif // AMJUEL_HELIUM_H
+
+} // namespace hermes

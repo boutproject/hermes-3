@@ -4,6 +4,7 @@
 #include "bout/output.hxx"
 #include "bout/petsclib.hxx"
 #include <bout/field_factory.hxx>
+#include "bout-particle-push.hxx"
 #include <algorithm>
 #include <cmath>
 #include <fmt/core.h>
@@ -37,36 +38,20 @@ inline void ASSERT_EQ(T t, U u) {
   NESOASSERT(t == u, "A check failed.");
 }
 
-void extract_ionised_density_in_place(
-    Field2D& density, std::shared_ptr<CellwiseAccumulator<double>>& accumulator_transform,
-    std::shared_ptr<ParticleGroup>& A_particle_group,
-    std::shared_ptr<TransformationStrategy>& source_zeroer,
-    std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh) {
-  Mesh* bout_mesh = density.getMesh();
-  std::vector<CellData<double>> accumulated_1d =
-      accumulator_transform->get_cell_data("ION_SOURCE_DENSITY");
-  PetscInt ic = 0;
-  for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
-    for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
-      density(ix, iy) +=
-          accumulated_1d[ic]->at(0, 0) / neso_mesh->dmh->get_cell_volume(ic);
-      ic++;
-    }
-  }
-  // this fills internal guards
-  bout_mesh->communicate(density);
-  // apply boundary conditions to fill external guards
-  // density.applyBoundary();
-  // extrapolate -> Neumann
-
-  // Now set the property to zero in the accumulator buffer, ready for the next timestep.
-  // Note that this does not zero the data in the original particle group
-  accumulator_transform->zero_buffer("ION_SOURCE_DENSITY");
-  // set the sources to zero on the particle group read for the next timestep
-  source_zeroer->transform(std::make_shared<ParticleSubGroup>(A_particle_group));
+std::string get_restart_output_dir() {
+  auto& root = Options::root();
+  return root["restart_files"]["path"].withDefault(
+      root["datadir"].withDefault<std::string>("data"));
 }
 
-void calculate_density_in_place(
+std::string make_output_path(const std::string& filename) {
+  if (filename.find('/') != std::string::npos) {
+    return filename;
+  }
+  return fmt::format("{}/{}", get_restart_output_dir(), filename);
+}
+
+void calculate_neutral_density_in_place(
     Field2D& density, std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
     std::shared_ptr<ParticleGroup>& A_particle_group, std::vector<double>& h_project1) {
   Mesh* bout_mesh = density.getMesh();
@@ -88,20 +73,6 @@ void calculate_density_in_place(
   // extrapolate -> Neumann
 }
 
-void calculate_fluid_moments_in_place(
-    Field2D& neutral_density, Field2D& ion_density,
-    std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
-    std::shared_ptr<ParticleGroup>& A_particle_group, std::vector<double>& h_project1,
-    std::shared_ptr<CellwiseAccumulator<double>>& accumulator_transform,
-    std::shared_ptr<TransformationStrategy>& source_zeroer,
-    std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh) {
-  // calculate all of the fluid moments required for the moment, from data in
-  // the particle group. Set to zero any particle properties needed in preparation
-  // for the next time step.
-  calculate_density_in_place(neutral_density, dg0, A_particle_group, h_project1);
-  extract_ionised_density_in_place(ion_density, accumulator_transform, A_particle_group,
-                                   source_zeroer, neso_mesh);
-}
 
 double calculate_total_mass(Field2D& density,
                             std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh) {
@@ -121,7 +92,7 @@ double calculate_total_mass(Field2D& density,
 }
 
 Options
-initialise_diagnostics(Field2D& neutral_density, Field2D& ion_density,
+initialise_diagnostics(Mesh* bout_mesh, Field2D& neutral_density, Field2D& ion_density,
                        std::shared_ptr<PetscInterface::DMPlexProjectEvaluateDG>& dg0,
                        std::shared_ptr<ParticleGroup>& A_particle_group,
                        std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
@@ -142,8 +113,11 @@ initialise_diagnostics(Field2D& neutral_density, Field2D& ion_density,
   Field2D total_density = ion_density + neutral_density;
   bout_output_data["total_mass"] = calculate_total_mass(total_density, neso_mesh);
   bout_output_data["total_mass"].attributes["time_dimension"] = "t";
-  // std::string particle_data_filename =
-  // fmt::format("bout_particle_moments_{}.nc",mpi_rank);
+  bout_output_data["t_array"] = 0.0;
+  bout_output_data["t_array"].attributes["time_dimension"] = "t";
+  // Mesh metadata
+  bout_mesh->outputVars(bout_output_data);
+
   bout::OptionsIO::create(particle_data_filename)->write(bout_output_data);
   return bout_output_data;
 }
@@ -153,7 +127,7 @@ void update_diagnostics(Field2D& neutral_density, Field2D& ion_density,
                         std::shared_ptr<ParticleGroup>& A_particle_group,
                         std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
                         std::vector<double>& h_project1, Options& bout_output_data,
-                        std::string particle_data_filename) {
+                        std::string particle_data_filename, BoutReal sim_time) {
   // update density in Options object and write
   bout_output_data["neutral_density"] = neutral_density;
   bout_output_data["ion_density"] = ion_density;
@@ -162,6 +136,8 @@ void update_diagnostics(Field2D& neutral_density, Field2D& ion_density,
   bout_output_data["total_neutral_mass"] =
       calculate_total_mass(neutral_density, neso_mesh);
   bout_output_data["total_ion_mass"] = calculate_total_mass(ion_density, neso_mesh);
+  bout_output_data["t_array"] = sim_time;
+  // bout_output_data["t_array"] = 0.0;
   // Append data to file
   bout::OptionsIO::create({{"file", particle_data_filename}, {"append", true}})
       ->write(bout_output_data);
@@ -280,17 +256,88 @@ void check_cell_centres(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_m
 }
 
 void check_mass_conservation(double total_mass_final, double total_mass_initial,
-                double remove_threshold) {
+                             double remove_threshold) {
   double rtol = 1.0e-13;
   double atol = 1.0e-13;
-  bool mass_conserved = (abs(total_mass_final - total_mass_initial) < rtol*total_mass_initial + atol);
+  bool mass_conserved =
+      (abs(total_mass_final - total_mass_initial) < rtol * total_mass_initial + atol);
   // exit if we fail to find conservation
   NESOASSERT(mass_conserved,
-              fmt::format("Initial total mass {} does not match "
-                          "final total mass {} \n Ignore this message by "
-                          "setting [neso_particles] test_mass_conservation = false",
-                          total_mass_initial, total_mass_final));
+             fmt::format("Initial total mass {} does not match "
+                         "final total mass {} \n Ignore this message by "
+                         "setting [neso_particles] test_mass_conservation = false",
+                         total_mass_initial, total_mass_final));
+}
+
+VantageSourceManager::VantageSourceManager(
+    std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
+    Mesh* bout_mesh,
+    const std::map<std::string, BoutReal>& norms) {
+
+  // Store DMPlex and BOUT++ mesh
+  this->neso_mesh = neso_mesh;
+  this->bout_mesh = bout_mesh;
+  this->norms = norms;
+}
+
+// Register new source with the manager and initialise its data
+void VantageSourceManager::add_source(
+    const std::string& hermes_source_name, const std::string& vantage_source_name,
+    std::shared_ptr<CellwiseAccumulator<REAL>> accumulator,
+    std::shared_ptr<ParticleGroup> particle_group,
+    std::shared_ptr<TransformationStrategy> zeroer) {
+
+  Field2D source_data{bout_mesh};
+  source_data = 0.0;
+
+  VantageSource source{
+      hermes_source_name, vantage_source_name, accumulator, particle_group, zeroer,
+      source_data};
+
+  this->sources[hermes_source_name] = source;
+}
+
+// Return source data
+Field2D VantageSourceManager::get_data(const std::string& hermes_source_name) {
+  return this->sources[hermes_source_name].source_data;
+}
+
+// Update the source from VANTAGE and reset the VANTAGE data/accumulator
+void VantageSourceManager::update_source(const std::string& hermes_source_name,
+                                         double dt) {
+  VantageSource& source = this->sources[hermes_source_name];
+
+  std::vector<CellData<double>> accumulated_1d =
+      source.accumulator->get_cell_data(source.vantage_source_name);
+
+  PetscInt ic = 0;
+  for (PetscInt ix = bout_mesh->xstart; ix <= bout_mesh->xend; ix++) {
+    for (PetscInt iy = bout_mesh->ystart; iy <= bout_mesh->yend; iy++) {
+      source.source_data(ix, iy) =
+          accumulated_1d[ic]->at(0, 0) / neso_mesh->dmh->get_cell_volume(ic);
+      ic++;
+    }
   }
+
+  // Divite by dt so that the source is in per second
+  // TODO: Ensure this has correct units and units consistent with neutral density
+  source.source_data /= dt;
+
+  // Fill internal guards
+  bout_mesh->communicate(source.source_data);
+  // Reset the accumulator object
+  source.accumulator->zero_buffer(source.vantage_source_name);
+  // Reset the accumulated source data on the particle
+  source.zeroer->transform(std::make_shared<ParticleSubGroup>(source.particle_group));
+}
+
+// Update all sources
+void VantageSourceManager::update_all_sources(double dt) {
+  for (auto& [hermes_source_name, source] : this->sources) {
+    update_source(hermes_source_name, dt);
+  }
+}
+
 int main(int argc, char** argv) {
   // initialise_mpi(&argc, &argv);
   // attempt to call BOUT to
@@ -302,12 +349,17 @@ int main(int argc, char** argv) {
   Mesh* bout_mesh = Mesh::create(&Options::root()["mesh"]);
   PETSCCHK(PetscInitializeNoArguments());
   auto sycl_target = std::make_shared<SYCLTarget>(0, PETSC_COMM_WORLD);
-  DM dm = create_dmplex_from_Bout_mesh(bout_mesh, sycl_target);
+  // keep dmplex_h5_filename in bout-particle-push to retain access to make_output_path()
+  // which should presumably not need to exist within the hermes-3 library
+  std::string dmplex_h5_filename =
+      Options::root()["mesh"]["dmplex_h5_filename"].withDefault(
+          "hypnotoad_dmplex_mesh_output.h5");
+  DM dm = create_dmplex_from_Bout_mesh(bout_mesh, sycl_target, make_output_path(dmplex_h5_filename));
   output << "Begin particle push \n";
   // get data from BOUT.inp to assign particle weights as a fn of x,y
   auto& opt = Options::root();
-  Field2D initial_neutral_density{bout_mesh};
-  initial_neutral_density = opt["mesh"]["initial_neutral_density"].as<Field2D>();
+
+
   /*
    *
    *
@@ -323,12 +375,58 @@ int main(int argc, char** argv) {
    *
    */
   {
-    const int ndim = 2;
+
+    // Normalisations
+    //  TODO: Implement real normalisation consistent with Hermes-3
+    //  TODO: Normalise DMPlex
+
+    // Map needed to pass all norms to functions
+    std::map<std::string, BoutReal> norms = {
+        {"rho_s0", 1.0}, // [m]
+        {"Nnorm", 1.0},  // [m^-3]
+        {"Tnorm", 1.0},  // [eV]
+        {"N_w",          // [m^-3?? ]
+         Options::root()["neso_particles"]["N_w"]
+             .doc("Normalisation parameter: neutral particle density per unit weight")
+             .withDefault(2.0)}};
+
+    // Also unpack for use in this scope.
+    const BoutReal rho_s0 = norms["rho_s0"];
+    const BoutReal Nnorm = norms["Nnorm"];
+    const BoutReal Tnorm = norms["Tnorm"];
+    const BoutReal N_w = norms["N_w"];
+
+    // Initial neutral parameters
+    Field2D initial_neutral_density{bout_mesh};
+    initial_neutral_density = opt["mesh"]["initial_neutral_density"].as<Field2D>();
     const int npart_per_cell =
-        Options::root()["neso_particles"]["npart_per_cell"].withDefault(1);
+        Options::root()["VANTAGE_reactions"]["npart_per_cell"].withDefault(1);
+
+
+    // Plasma parameters
+    const BoutReal background_ion_temperature = opt["VANTAGE_reactions"]["background_ion_temperature"].withDefault(1.0);
+    const BoutReal background_ion_density = opt["VANTAGE_reactions"]["background_ion_density"].withDefault(1.0);
+    const BoutReal background_ion_Vx = opt["VANTAGE_reactions"]["background_ion_Vx"].withDefault(0.0);
+    const BoutReal background_ion_Vy = opt["VANTAGE_reactions"]["background_ion_Vy"].withDefault(0.0);
+    const std::vector<BoutReal> V_background = {background_ion_Vx, background_ion_Vy};
+
+    // Reaction settings
+    const REAL iz_rate = Options::root()["VANTAGE_reactions"]["iz_rate"].withDefault(1.0);
+    const REAL rec_rate = Options::root()["VANTAGE_reactions"]["rec_rate"].withDefault(1.0);
+    const BoutReal rec_markers_per_cell =
+        Options::root()["VANTAGE_reactions"]["rec_markers_per_cell"].withDefault(1000);
+
+    // Other settings
+    const int ndim = 2;
     const REAL dt = Options::root()["neso_particles"]["dt"].withDefault(0.01);
     const int nsteps = Options::root()["neso_particles"]["nsteps"].withDefault(10);
-    Field2D ion_density = Field2D(0.0, bout_mesh);
+    const int rng_samples = Options::root()["VANTAGE_reactions"]["rng_samples"]
+                                .doc("Number of RNG samples to prepare per-particle")
+                                .withDefault(40);
+
+
+    BoutReal sim_time = 0.0;
+    Field2D ion_density = Field2D(background_ion_density, bout_mesh);
     Field2D neutral_density = Field2D(0.0, bout_mesh);
     // Create a mesh interface from the DM
     auto neso_mesh =
@@ -350,6 +448,8 @@ int main(int argc, char** argv) {
         Options::root()["neso_particles"]["cell_centre_absolute_tolerance"].withDefault(1.0e-12),
         Options::root()["neso_particles"]["cell_centre_relative_tolerance"].withDefault(0.0));
     }
+
+
     // create a Reactions particle spec
     auto particle_spec_builder = ParticleSpecBuilder(ndim);
     auto electron_species = Species("ELECTRON");
@@ -364,7 +464,12 @@ int main(int argc, char** argv) {
         Properties<REAL>(fluid_species,
                          std::vector<int>{default_properties.source_momentum}),
         ndim);
-    ParticleSpec additional_props{ParticleProp(Sym<REAL>("TSP"), 2)};
+    ParticleSpec additional_props{ParticleProp(Sym<REAL>("TSP"), 2),
+                                  ParticleProp(Sym<REAL>("FLUID_DENSITY"), 1),
+                                  ParticleProp(Sym<REAL>("FLUID_FLOW_SPEED"), ndim),
+                                  ParticleProp(Sym<REAL>("FLUID_TEMPERATURE"), 1),
+                                  ParticleProp(Sym<INT>("N_CELL"), 1)};
+
     particle_spec_builder.add_particle_spec(additional_props);
     ParticleSpec particle_spec = particle_spec_builder.get_particle_spec();
 
@@ -398,10 +503,10 @@ int main(int argc, char** argv) {
         initial_distribution[Sym<REAL>("POSITION")][px][dimx] = positions[dimx][px];
         initial_distribution[Sym<REAL>("VELOCITY")][px][dimx] = velocities[dimx][px];
       }
-      initial_distribution[Sym<REAL>("ION_DENSITY")][px][0] = 1.0;
+      initial_distribution[Sym<REAL>("ION_DENSITY")][px][0] = background_ion_density;
       initial_distribution[Sym<REAL>("ION_SOURCE_DENSITY")][px][0] = 0.0;
       initial_distribution[Sym<REAL>("ION_SOURCE_ENERGY")][px][0] = 0.0;
-      initial_distribution[Sym<REAL>("ELECTRON_DENSITY")][px][0] = 1.0;
+      initial_distribution[Sym<REAL>("ELECTRON_DENSITY")][px][0] = background_ion_density;
       initial_distribution[Sym<REAL>("ELECTRON_SOURCE_DENSITY")][px][0] = 0.0;
       initial_distribution[Sym<REAL>("ELECTRON_SOURCE_ENERGY")][px][0] = 0.0;
       for (int dimx = 0; dimx < ndim; dimx++) {
@@ -417,14 +522,144 @@ int main(int argc, char** argv) {
     // make pointer to projection object
     auto dg0 = std::make_shared<PetscInterface::DMPlexProjectEvaluateDG>(
         neso_mesh, sycl_target, "DG", 0);
-    const REAL iz_rate = Options::root()["VANTAGE_reactions"]["iz_rate"].withDefault(1.0);
+
+    // RNG kernel
+    // Used for sampling from velocity distribution for REC/CX
+    // ------------------------------------------------------------------------------
+
+    auto rng_kernel = get_uniform_rng_kernel(sycl_target, rng_samples);
+
+    // Ionisation reaction
+    // ------------------------------------------------------------------------------
+
+
     auto iz_rate_data = FixedRateData(iz_rate);
     main_species.set_id(0);
     auto ionisation_reaction = ElectronImpactIonisation<FixedRateData, FixedRateData>(
         A_particle_group->sycl_target, iz_rate_data, iz_rate_data, main_species,
         electron_species);
 
-    // Reaction controllers
+    // Recombination reaction
+    // ------------------------------------------------------------------------------
+    // Create Maxwellian distribution of recombination markers according to fluid
+    // properties Add them to a new particle group representing the markers
+    //
+
+    // Options and constants
+
+
+    // Make new particle group just for the markers
+    auto marker_group =
+        std::make_shared<ParticleGroup>(domain, particle_spec, sycl_target);
+
+    // Give particle group initial kinetic values (positions and velocities)
+    // Numerical settings: weight, stdev, species ID
+    ParticleSet maxwellian_markers = uniform_cellwise_maxwellian<ndim>(
+        sycl_target, neso_mesh, particle_spec, rec_markers_per_cell, 1.0, 0.5, -1);
+
+    marker_group->add_particles_local(maxwellian_markers);
+
+    // Give particle group initial fluid values: markers will contain background
+    // plasma properties
+    // From demo app "set_init_fluid_values"
+    particle_loop(
+        "set init fluid values", marker_group,
+        [=](auto n, auto T, auto ne, auto Te, auto speed) {
+          n.at(0) = background_ion_density;
+          ne.at(0) = background_ion_density;
+          T.at(0) = background_ion_temperature;
+          Te.at(0) = background_ion_temperature;
+
+          for (int i = 0; i < ndim; i++) {
+            speed.at(i) = V_background[i];
+          }
+        },
+        Access::write(Sym<REAL>("FLUID_DENSITY")),
+        Access::write(Sym<REAL>("FLUID_TEMPERATURE")),
+        Access::write(Sym<REAL>("ELECTRON_DENSITY")),
+        Access::write(Sym<REAL>("ELECTRON_TEMPERATURE")),
+        Access::write(Sym<REAL>("FLUID_FLOW_SPEED")))
+        ->execute();
+
+    // Calculate marker weights
+
+
+    // Add particle property: number of particles in the local cell
+    // From demo app: "distribute_n_part_cell"
+    for (int ic = 0; ic < marker_group->domain->mesh->get_cell_count(); ic++)
+    {
+      int n_part_cell = marker_group->get_npart_cell(ic);
+      particle_loop(
+          "Update N_CELL prop", marker_group,
+          [=](auto n_cell_prop) { n_cell_prop.at(0) = n_part_cell; },
+          Access::write(Sym<INT>("N_CELL")))
+          ->execute(ic);
+    }
+
+    const int num_cells = marker_group->domain->mesh->get_cell_count();
+
+    // Calculate weight for each marker particle
+    // based on FLUID_DENSITY and N_CELL properties contained in same particle.
+    // TODO: implement normalisation. dens_norm is currently 1.
+    for (int ic = 0; ic < num_cells; ic++) {
+      REAL V_cell = neso_mesh->dmh->get_cell_volume(ic);
+      particle_loop(
+          "Update weight of ions", marker_group,
+          [=](auto n_cell_prop, auto ion_dens_prop, auto weight_prop) {
+            auto updated_weight = (ion_dens_prop.at(0) * Nnorm * V_cell) /
+                                  (N_w * n_cell_prop.at(0));
+            weight_prop.at(0) = updated_weight;
+          },
+          Access::read(Sym<INT>("N_CELL")),
+          Access::read(Sym<REAL>("FLUID_DENSITY")),
+          Access::write(Sym<REAL>("WEIGHT")))
+          ->execute(ic);
+    }
+
+    // Define marker species and reaction rates
+    auto recomb_species = Species("ION", 1.0, 0.0, -1);  //TODO: better as marker_species
+    auto recomb_data = FixedRateData(rec_rate);
+    auto recomb_energy_data = FixedRateData(rec_rate); //TODO: make this separate
+
+    // This sampler will calculate marker momentum from fluid plasma conditions
+    // TODO: Do I need a separate rng kernel?
+    auto constant_rate_cross_section = ConstantRateCrossSection(1.0);
+
+    auto recomb_data_calc_sampler =
+      FilteredMaxwellianSampler<2, decltype(constant_rate_cross_section)>(
+          1 / (recomb_species.get_mass() * Tnorm),
+          constant_rate_cross_section, rng_kernel);
+
+    // Container for objects allowing calculation of parameters within
+    // the recombination kernel: sampled velocity and the radiation
+    // energy loss source. Must be in this order.
+    auto recomb_data_calc_obj =
+      DataCalculator<decltype(recomb_energy_data),
+                     decltype(recomb_data_calc_sampler)>(
+          recomb_energy_data, recomb_data_calc_sampler);
+
+    BoutReal normalised_potential_energy = 1.0;  //TODO: units
+    auto recomb_reaction_kernel = RecombReactionKernels<2>(
+        recomb_species, electron_species, normalised_potential_energy);
+
+    // Set neutrals to be products of recombination
+    const int out_state = main_species.get_id();
+    std::array<int, 1> recomb_out_states = {out_state};
+
+    // Create reaction object
+    auto recomb_reaction = LinearReactionBase<1, decltype(recomb_data),
+                                            decltype(recomb_reaction_kernel),
+                                            decltype(recomb_data_calc_obj)>(
+      sycl_target, recomb_species.get_id(), recomb_out_states,
+      recomb_data, recomb_reaction_kernel, recomb_data_calc_obj);
+
+
+
+    // Wrappers & controllers
+    // ------------------------------------------------------------------------------
+
+    VantageSourceManager source_manager(neso_mesh, bout_mesh, norms);
+
     const REAL remove_threshold =
         Options::root()["VANTAGE_reactions"]["remove_threshold"].withDefault(1.0e-10);
     const REAL merge_threshold =
@@ -443,24 +678,50 @@ int main(int argc, char** argv) {
                 Sym<REAL>("WEIGHT"), merge_threshold)},
         make_transformation_strategy<MergeTransformationStrategy<ndim>>());
 
-    auto accumulator_transform = std::make_shared<CellwiseAccumulator<REAL>>(
+    // Ionisation reaction transforms and controller
+    auto accumulator_transform_iz = std::make_shared<CellwiseAccumulator<REAL>>(
         A_particle_group, std::vector<std::string>{"ION_SOURCE_DENSITY"});
-    // std::vector<CellData<double>> accumulated_1d =
-    // accumulator_transform->get_cell_data("ION_SOURCE_DENSITY");
+
     auto accumulator_real_transform_wrapper = std::make_shared<TransformationWrapper>(
-        std::dynamic_pointer_cast<TransformationStrategy>(accumulator_transform));
-    auto source_zeroer = make_transformation_strategy<ParticleDatZeroer<REAL>>(
+        std::dynamic_pointer_cast<TransformationStrategy>(accumulator_transform_iz));
+
+    auto ion_source_density_zeroer = make_transformation_strategy<ParticleDatZeroer<REAL>>(
         std::vector<std::string>{"ION_SOURCE_DENSITY"});
 
     std::vector<std::shared_ptr<TransformationWrapper>> child_transforms =
         std::vector{merge_wrapper, remove_wrapper};
-    std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms =
+    std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms_iz =
         std::vector{accumulator_real_transform_wrapper, merge_wrapper, remove_wrapper};
 
-    auto reaction_controller = ReactionController(parent_transforms, child_transforms);
-    // add ionisation to the controller
+    auto reaction_controller = ReactionController(parent_transforms_iz, child_transforms);
     reaction_controller.add_reaction(
         std::make_shared<decltype(ionisation_reaction)>(ionisation_reaction));
+
+    source_manager.add_source("Siz", "ION_SOURCE_DENSITY", accumulator_transform_iz,
+                              A_particle_group, ion_source_density_zeroer);
+
+    // Recombination transforms and controller
+
+    auto accumulator_transform_rec = std::make_shared<CellwiseAccumulator<REAL>>(
+        marker_group, std::vector<std::string>{"ION_SOURCE_DENSITY"});
+
+    auto recomb_accumulator_transform_wrapper = std::make_shared<TransformationWrapper>(
+        std::dynamic_pointer_cast<TransformationStrategy>(accumulator_transform_rec));
+
+    std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms_rec =
+        std::vector{accumulator_real_transform_wrapper, merge_wrapper, remove_wrapper};
+
+    auto recombination_controller = ReactionController(
+        parent_transforms_rec, child_transforms);
+
+    recombination_controller.add_reaction(
+        std::make_shared<decltype(recomb_reaction)>(recomb_reaction));
+
+    source_manager.add_source("Srec", "ION_SOURCE_DENSITY", accumulator_transform_rec,
+                              marker_group, ion_source_density_zeroer);
+
+    // Boundary handling
+    // ------------------------------------------------------------------------------
 
     // Create the boundary interaction objects
     std::map<PetscInt, std::vector<PetscInt>> boundary_groups;
@@ -478,6 +739,10 @@ int main(int argc, char** argv) {
                             Sym<REAL>("TSP"), b2d->previous_position_sym);
       }
     };
+
+    // Advection & rest of code
+    // ------------------------------------------------------------------------------
+
     auto lambda_apply_timestep_reset = [&](auto aa) {
       particle_loop(
           aa,
@@ -529,8 +794,8 @@ int main(int argc, char** argv) {
       }
     };
     // uncomment to write a trajectory
-    H5Part h5part("traj_reflection_dmplex_example.h5part", A_particle_group,
-                  Sym<REAL>("POSITION"), Sym<REAL>("VELOCITY"));
+    H5Part h5part(make_output_path("particle_trajectories.h5part"),
+                  A_particle_group, Sym<REAL>("POSITION"), Sym<REAL>("VELOCITY"));
 
     // allocate buffer vector for scalar projection/evaluation of NESO-Particles
     // properties
@@ -538,16 +803,17 @@ int main(int argc, char** argv) {
     // set weights from a Field2D from BOUT
     set_initial_particle_weights(initial_neutral_density, dg0, A_particle_group,
                                  neso_mesh, h_project1);
-    // update fluid moments
-    calculate_fluid_moments_in_place(neutral_density, ion_density, dg0, A_particle_group,
-                                     h_project1, accumulator_transform, source_zeroer,
-                                     neso_mesh);
+
+    // Calculate neutral density and sources for initial condition
+    calculate_neutral_density_in_place(neutral_density, dg0, A_particle_group, h_project1);
+    source_manager.update_all_sources(dt);
+
     // diagnose the initial condition
-    std::string particle_data_filename =
-        fmt::format("bout_particle_moments_{}.nc", mpi_rank);
-    Options bout_output_data =
-        initialise_diagnostics(neutral_density, ion_density, dg0, A_particle_group,
-                               neso_mesh, h_project1, particle_data_filename);
+    std::string particle_data_filename = make_output_path(
+        fmt::format("{}/BOUT.dmp.{}.nc", get_restart_output_dir(), mpi_rank));
+    Options bout_output_data = initialise_diagnostics(
+        bout_mesh, neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
+        h_project1, particle_data_filename);
     // mass for conservation check
     Field2D total_density = neutral_density + ion_density;
     double total_mass_initial = calculate_total_mass(total_density, neso_mesh);
@@ -555,22 +821,28 @@ int main(int argc, char** argv) {
     for (int stepx = 0; stepx < nsteps; stepx++) {
       // nprint("step:", stepx);
       output << "step:" << std::to_string(stepx) << std::endl;
+      sim_time += dt;
       A_particle_group->hybrid_move();
       A_particle_group->cell_move();
       lambda_apply_timestep(static_particle_sub_group(A_particle_group));
       // apply reactions
       reaction_controller.apply(A_particle_group, dt, ControllerMode::standard_mode);
+      recombination_controller.apply(marker_group, dt, A_particle_group);
       // uncomment to write a trajectory
       h5part.write();
-      // uncomment to print particle info
-      // A_particle_group->print(Sym<REAL>("POSITION"), Sym<INT>("ID"),
-      // Sym<REAL>("WEIGHT"), Sym<REAL>("ION_SOURCE_DENSITY")); update fluid moments
-      calculate_fluid_moments_in_place(neutral_density, ion_density, dg0,
-                                       A_particle_group, h_project1,
-                                       accumulator_transform, source_zeroer, neso_mesh);
+
+      calculate_neutral_density_in_place(neutral_density, dg0, A_particle_group, h_project1);
+      source_manager.update_all_sources(dt);
+      Field2D Siz = source_manager.get_data("Siz");
+      Field2D Srec = source_manager.get_data("Srec");
+
+      // "Solve" density
+      // Sources are in normalised m^-3 s^-1, so need to multiply by dt
+      ion_density += (Siz + Srec) * dt;
+
       // diagnose timestep stepx
       update_diagnostics(neutral_density, ion_density, dg0, A_particle_group, neso_mesh,
-                         h_project1, bout_output_data, particle_data_filename);
+                         h_project1, bout_output_data, particle_data_filename, sim_time);
     }
     // uncomment to write a trajectory
     h5part.close();

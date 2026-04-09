@@ -1,0 +1,23 @@
+{
+    "info": {
+        "fit_type": "T",
+        "sigma_v_coeffs_ref": "Amjuel H.2 3.1.8, page 43",
+        "reaction_lbl": "h + h+ -> h+ + h",
+        "sigma_v_notes": "added by DR: single parameter Maxwellian rate coeff., vs. Tp, for neutral target at rest, obtained from corresponding fit for Beam-Maxwellian rate coeff. evaluated at Eb = 0:1 eV and then verified by independent integration of cross-section with proper low energy asymptotics.",
+        "includes_sigma_v_e": false
+    },
+    "electron_heating": 0.0,
+    "sigma_v_coeffs": [
+        [
+            -1.850280000000E+01,
+            3.708409000000E-01,
+            7.949876000000E-03,
+            -6.143769000000E-04,
+            -4.698969000000E-04,
+            -4.096807000000E-04,
+            1.440382000000E-04,
+            -1.514243000000E-05,
+            5.122435000000E-07
+        ]
+    ]
+}
