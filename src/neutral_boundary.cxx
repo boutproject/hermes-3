@@ -47,6 +47,11 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                     "after wall reflection at PFR")
                                .withDefault<BoutReal>(0.75);
 
+  core_energy_refl_factor = options["core_energy_refl_factor"]
+                               .doc("Fraction of energy retained by neutral particles "
+                                    "after wall reflection at core")
+                               .withDefault<BoutReal>(0.75);
+
   target_fast_refl_fraction =
       options["target_fast_refl_fraction"]
           .doc("Fraction of neutrals that are undergoing fast reflection at the target")
@@ -62,7 +67,7 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
           .doc("Fraction of neutrals that are undergoing fast reflection at the pfr")
           .withDefault<BoutReal>(0.8);
 
-    core_fast_refl_fraction =
+  core_fast_refl_fraction =
       options["core_fast_refl_fraction"]
           .doc("Fraction of neutrals that are undergoing fast reflection at the core(fcfs for dipole)")
           .withDefault<BoutReal>(0.8);
@@ -226,68 +231,58 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
       }
     }
   }
-  if (inner_x && mesh->firstX()) {
+  if (inner_x and mesh->firstX() and mesh->periodicY(mesh->xstart)) {
+
     //for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
     for (int iy = 0; iy < mesh->LocalNy; iy++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(Nn, mesh->xstart, iy, jz);
-        auto im = i.xm();
+        for (int iz = 0; iz < mesh->LocalNz; iz++) {
 
-        // Free boundary condition on Nn, Pn, Tn
-        // This is problematic when Nn, Pn or Tn are zero
-        // Nn[im] = SQ(Nn[i]) / Nn[ip];
-        // Pn[im] = SQ(Pn[i]) / Pn[ip];
-        // Tn[im] = SQ(Tn[i]) / Tn[ip];
+          auto i = indexAt(Nn, mesh->xstart, iy, iz);      // Final domain cell
+          auto ig = indexAt(Nn, mesh->xstart - 1, iy, iz); // Guard cell
 
-        // Neumann boundary condition: do not extrapolate, but
-        // assume the target value is same as the final cell centre.
-        // Shouldn't affect results much and more resilient to positivity issues
-        Nn[im] = Nn[i];
-        Pn[im] = Pn[i];
-        Tn[im] = Tn[i];
+          // Calculate midpoint values at wall
+          const BoutReal nnsheath = 0.5 * (Nn[ig] + Nn[i]);
+          const BoutReal tnsheath = 0.5 * (Tn[ig] + Tn[i]);
 
-        // No-flow boundary condition
-        Vn[im] = -Vn[i];
-        NVn[im] = -NVn[i];
+          // Thermal speed of static Maxwellian in one direction
+          const BoutReal v_th =
+              0.25 * sqrt(8 * tnsheath / (PI * AA)); // Stangeby p.69 eqns. 2.21, 2.24
 
-        // Calculate midpoint values at wall
-        const BoutReal nnsheath = 0.5 * (Nn[im] + Nn[i]);
-        const BoutReal tnsheath = 0.5 * (Tn[im] + Tn[i]);
+          // Approach adapted from D. Power thesis 2023
+          BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
 
-        // Thermal speed
-        const BoutReal v_th =
-            0.25 * sqrt(8 * tnsheath / (PI * AA)); // Stangeby p.69 eqns. 2.21, 2.24
+          // Outgoing neutral heat flux [W/m^2]
+          // This is rearranged from Power for clarity - note definition of v_th.
+          BoutReal q = 2 * nnsheath * tnsheath * v_th // Incident energy
+                       - (core_energy_refl_factor * core_fast_refl_fraction) * 2 * nnsheath
+                             * tnsheath * v_th // Fast reflected energy
+                       - (1 - core_fast_refl_fraction) * T_FC * nnsheath
+                             * v_th; // Thermal reflected energy
 
-        // Approach adapted from D. Power thesis 2023
-        BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
+          // Multiply by radial cell area to get power
+          // Expanded form of the calculation for clarity
 
-        // Outgoing neutral heat flux [W/m^2]
-        // This is rearranged from Power for clarity - note definition of v_th.
-        // Uses standard Stangeby 1D static Maxwellian particle/heat fluxes for fast terms
-        // and simply Q = T * particle flux for the monoenergetic thermal reflected
-        // population.
-        BoutReal q = 2 * nnsheath * tnsheath * v_th // Incident energy
-                     - (target_energy_refl_factor * target_fast_refl_fraction) * 2
-                           * nnsheath * tnsheath * v_th // Fast reflected energy
-                     - (1 - target_fast_refl_fraction) * T_FC * nnsheath
-                           * v_th; // Thermal reflected energy
+          // Converts dy to poloidal length: dl = dy / sqrt(g22) = dy * h_theta
+          BoutReal dpol = 0.5 * (coord->dy[i] + coord->dy[ig]) * 1
+                          / (0.5 * (sqrt(coord->g22[i]) + sqrt(coord->g22[ig])));
 
-        // Cross-sectional area in XZ plane:
-        BoutReal da = (coord->J[i] + coord->J[im])
-                      / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[im])) * 0.5
-                      * (coord->dy[i] + coord->dy[im]) * 0.5
-                      * (coord->dz[i] + coord->dz[im]); // [m^2]
+          // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+          BoutReal dtor = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
+                          * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
 
-        // Multiply by area to get energy flow (power)
-        BoutReal flow = q * da; // [W]
+          BoutReal da = dpol * dtor; // [m^2]
 
-        // Divide by cell volume to get source [W/m^3]
-        BoutReal cooling_source =
-            flow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
+          // Multiply by area to get energy flow (power)
+          BoutReal flow = q * da; // [W]
 
-        // Subtract from cell next to boundary
-        energy_source[i] -= cooling_source;
-        core_energy_source[i] -= cooling_source;
+          // Divide by cell volume to get source [W/m^3]
+          BoutReal cooling_source =
+              flow
+              / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]); // [W m^-3]
+
+          // Subtract from cell next to boundary
+          energy_source[i] -= cooling_source;
+          wall_energy_source[i] -= cooling_source;
       }
     }
   }

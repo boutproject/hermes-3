@@ -109,12 +109,17 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
         // kappa_perp = 2 * n * nu_ii * rho_i^2
         const auto P = GET_VALUE(Field3D, species["pressure"]);
         const auto AA = GET_VALUE(BoutReal, species["AA"]);
-        const Field3D nu = floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
+        nu = floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
         // add(species["energy_source"], FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA
         // / Bsq, T));
+        Kappa_perp = 2. * floor(P, 1e-5) * nu * AA / Bsq;
+        BOUT_FOR(i, Dn.getRegion("RGN_GUARDS")) {
+          Kappa_perp[i] = 0.0;
+    }
         add(species["energy_source"],
-            Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
+            Div_a_Grad_perp_nonorthog(Kappa_perp, T,
                                       cls_tef_perp_xlow, cls_tef_perp_ylow));
+                                      
       }
     }
   }
@@ -134,5 +139,20 @@ void ClassicalDiffusion::outputVars(Options& state) {
                     {"standard_name", "Classical particle diffusion"},
                     {"long_name", "Classical cross-field particle diffusion coefficient"},
                     {"source", "classical_diffusion"}});
-  }
+    set_with_attrs(state["Kappa_perp_classical"], Kappa_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2 s^-1"},
+                    {"conversion", rho_s0 * rho_s0 * Omega_ci}, //TODO: WRONG
+                    {"standard_name", "Classical perpendicular heat conductivity"},
+                    {"long_name", "Classical cross-field perpendicular heat conductivity"},
+                    {"source", "classical_diffusion"}});
+    set_with_attrs(state["nu_classical"], nu,
+                   {{"time_dimension", "t"},
+                    {"units", "s^-1"},
+                    {"conversion", Omega_ci},
+                    {"standard_name", "Classical collision frequency"},
+                    {"long_name", "Classical cross-field collision frequency"},
+                    {"source", "classical_diffusion"}});
+                  }
+
 }

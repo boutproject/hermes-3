@@ -31,7 +31,7 @@ private:
   BoutReal Tnorm; // Temperature normalisation [eV]
 
   BoutReal target_energy_refl_factor, sol_energy_refl_factor,
-      pfr_energy_refl_factor; ///< Fraction of energy retained after reflection
+      pfr_energy_refl_factor, core_energy_refl_factor; ///< Fraction of energy retained after reflection
   BoutReal target_fast_refl_fraction, sol_fast_refl_fraction,
       pfr_fast_refl_fraction, core_fast_refl_fraction; ///< Fraction of neutrals undergoing fast reflection
 

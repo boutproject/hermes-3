@@ -14,6 +14,7 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
   // Normalisations
   const Options& units = alloptions["units"];
   const BoutReal rho_s0 = units["meters"];
+  const BoutReal Bnorm = units["Tesla"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
   const BoutReal diffusion_norm = rho_s0 * rho_s0 * Omega_ci; // m^2/s
@@ -46,7 +47,8 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
   local_U = options["local_U"]
                    .doc("Compute local U?")
                    .withDefault<bool>(false);
-   U2D = compute_U2D(local_U);
+  compute_U2D(U2D, local_U);
+  U2D = U2D/rho_s0*Bnorm;
   mesh->communicate(U2D);
   // dipole_anomalous_nu = 0.0;
   // include_nu = (mesh->get(dipole_anomalous_nu, std::string("dipole_nu_") + name) == 0)
@@ -95,7 +97,7 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
   // to zero by imposing neumann boundary conditions.
   const Field3D N = GET_VALUE(Field3D, species["density"]);
   Field2D N2D = DC(N);
-
+mesh->communicate(N2D);
 
 
   const Field3D T = species.isSet("temperature")
@@ -107,10 +109,11 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
                         ? GET_VALUE(Field3D, species["pressure"])
                         : N * T;
   Field2D P2D = DC(P);
-
+  mesh->communicate(P2D);
   Field2D Npowg = pow(softFloor(N2D, density_floor), dipole_gamma-1.0);
+    mesh->communicate(Npowg);
   Field2D S2D = DC(P)/Npowg;
-
+  mesh->communicate(S2D);
   // const Field3D V =
   //   species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
   // Field2D V2D = DC(V);
@@ -141,8 +144,9 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
     //
     //  v_D = - D_dp Grad_perp(N * dV) / N
     //transport_on = isnegative_grad_perp(P2D);
-    Field3D Gamma_N = 1/U2D *transport_on *Div_a_Grad_perp_flows(dipole_anomalous_D, N2D*U2D,
+    Field3D Gamma_N = 1/U2D *transport_on *Div_a_Grad_perp_upwind_flows(dipole_anomalous_D, N2D*U2D,
                                                                flow_xlow, flow_ylow);
+    
     // Field3D Gamma_N =Div_a_Grad_perp_upwind_flows(dipole_anomalous_D, N2D*U2D,flow_xlow, flow_ylow);
     add(species["density_source"], Gamma_N);
     add(species["particle_flow_xlow"], flow_xlow * transport_on);
@@ -161,17 +165,15 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
     //                                  flow_xlow, flow_ylow));
     // add(species["energy_flow_xlow"], flow_xlow);
     // add(species["energy_flow_ylow"], flow_ylow);
-  }
 
-  if (include_chi && include_D) {
     // Gradients in temperature that drive energy flows
     // Field3D Gamma_E = 1/U3D * pow(N2D,dipole_gamma-1.0) * isnegative_grad_perp(P2D) * Div_a_Grad_perp_upwind_flows(dipole_anomalous_chi, S2D * U2D, flow_xlow, flow_ylow);
     // Gamma_E += 1/U3D * T * (dipole_gamma-1) *isnegative_grad_perp(P2D) * Div_a_Grad_perp_upwind_flows(dipole_anomalous_D, N2D * U2D, flow_xlow, flow_ylow);
-    Field3D q_inward = (3. / 2.) * 1.0/U2D * Npowg *transport_on *Div_a_Grad_perp_flows(dipole_anomalous_chi, S2D * U2D, flow_xlow, flow_ylow);
+    Field3D q_inward = (3. / 2.) * 1.0/U2D * Npowg *transport_on *Div_a_Grad_perp_upwind_flows(dipole_anomalous_chi, S2D * U2D, flow_xlow, flow_ylow);
     add(species["energy_source"], q_inward);
     add(species["energy_flow_xlow"], flow_xlow* transport_on);
     add(species["energy_flow_ylow"], flow_ylow* transport_on);
-    q_inward = (3. / 2.) * 1.0/U2D *transport_on * T * (dipole_gamma-1.0) * Div_a_Grad_perp_flows(dipole_anomalous_D, N2D * U2D, flow_xlow, flow_ylow);
+    q_inward = (3. / 2.) * 1.0/U2D *transport_on * T * (dipole_gamma-1.0) * Div_a_Grad_perp_upwind_flows(dipole_anomalous_D, N2D * U2D, flow_xlow, flow_ylow);
     add(species["energy_source"], q_inward);
     add(species["energy_flow_xlow"], flow_xlow* transport_on);
     add(species["energy_flow_ylow"], flow_ylow* transport_on);
@@ -190,6 +192,7 @@ void DipoleAnomalousDiffusion::outputVars(Options& state) {
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+   auto Bnorm = get<BoutReal>(state["Bnorm"]);
 
   if (diagnose) {
 
@@ -220,55 +223,59 @@ void DipoleAnomalousDiffusion::outputVars(Options& state) {
                       {"source", "dipole_anomalous_transport"}});
 
       set_with_attrs(state["U"], U2D,
-                      {{"source", "dipole_anomalous_transport"}});
+                      {{"source", "dipole_anomalous_transport"},{"units", "m^3 Wb^-1"},
+                                          {"conversion", rho_s0/Bnorm}
+});
       set_with_attrs(state["transport_on"], transport_on,
                       {{"source", "dipole_anomalous_transport"}});
   }
 }
 
-const Field2D compute_U2D(bool local_U) {
-  Field2D U;
-  U.allocate();
-
-  Coordinates* coord = mesh->getCoordinates();
-  BoutReal s;
-  for (int i = mesh->xstart; i <= mesh->xend; i++) {
-    s = 0.0;
-    if (!local_U) {
-    for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      s += coord->dy(i, j) / coord->Bxy(i, j);
+const void compute_U2D(Field2D& U, bool local_U) {
+   // Load and save coordinate variables
+  if (!(mesh->sourceHasVar("dVdpsi"))) {
+      throw BoutException("Grid input does not contain dVdpsi needed for dipole transport.\n");
     }
-    
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        U(i, j) = s;
-      }
-    }
-    else
-    {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      U(i, j) = 1.0 / coord->Bxy(i, j);
-    }
-    }
-  }
-  for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      U(mesh->xstart-1, j) = U(mesh->xstart, j);
-          U(mesh->xstart-2, j) = U(mesh->xstart, j);
-  }
-  for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      U(mesh->xend+1, j) = U(mesh->xend, j);
-      U(mesh->xend+2, j) = U(mesh->xend, j);
-  }
+  mesh->get(U, "dVdpsi", 0.0, true);
 
-
-
-
-  // for (int i = mesh->xstart; i <= mesh->xend; i++) {
+  // Coordinates* coord = mesh->getCoordinates();
+  // BoutReal s;
+  // for (int i = mesh->xstart-2; i <= mesh->xend+2; i++) {
+  //   s = 0.0;
+  //   if (!local_U) {
   //   for (int j = mesh->ystart; j <= mesh->yend; j++) {
-  //     U(i, j) = coord->dy(i, j) / coord->Bxy(i, j);
+      
+  //     s += coord->dy(i, j) / sqrt(coord->g22(i, j)) / coord->Bxy(i, j);
+  //   }
+    
+  //     for (int j = mesh->ystart; j <= mesh->yend; j++) {
+  //       U(i, j) = s;
+  //     }
+  //   }
+  //   else
+  //   {
+  //     for (int j = mesh->ystart; j <= mesh->yend; j++) {
+  //     U(i, j) = 1.0 / coord->Bxy(i, j);
+  //   }
   //   }
   // }
-  
-  return U;
+  // // for (int j = mesh->ystart; j <= mesh->yend; j++) {
+  // //     U(mesh->xstart-1, j) = U(mesh->xstart, j);
+  // //         U(mesh->xstart-2, j) = U(mesh->xstart, j);
+  // // }
+  // // for (int j = mesh->ystart; j <= mesh->yend; j++) {
+  // //     U(mesh->xend+1, j) = U(mesh->xend, j);
+  // //     U(mesh->xend+2, j) = U(mesh->xend, j);
+  // // }
+
+
+
+
+  // // for (int i = mesh->xstart; i <= mesh->xend; i++) {
+  // //   for (int j = mesh->ystart; j <= mesh->yend; j++) {
+  // //     U(i, j) = coord->dy(i, j) / coord->Bxy(i, j);
+  // //   }
+  // // }
 
 }
 
