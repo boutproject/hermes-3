@@ -763,7 +763,7 @@ void NeutralMixed::finally(const Options& state) {
     ddtNVn_par_advection = -AA
                    * FV::Div_par_fvv<ParLimiter>( // Momentum flow
                        Nnlim, Vn, sound_speed);
-    ddt(NVn) += ddtNVn_par_advection;
+    ddt(NVn) = ddtNVn_par_advection;
 
     ddtNVn_pressure_gradient = -Grad_par(Pn); // Pressure gradient
     ddt(NVn) += ddtNVn_pressure_gradient;
