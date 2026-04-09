@@ -588,7 +588,7 @@ void NeutralMixed::finally(const Options& state) {
 
     // similar to Collisionality part
     if (equilibrium_momentum_collision_names.empty()) {
-      if (localstate.isSet("collision_frequencies")) {
+      if (localstate.isSet("collision_frequency")) {
         for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
           const std::string coll_name = collision.second.name();
 
