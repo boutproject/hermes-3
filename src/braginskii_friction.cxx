@@ -15,7 +15,7 @@
 BraginskiiFriction::BraginskiiFriction(const std::string& name, Options& alloptions,
                                        Solver*)
     // FIXME: Not all species actually have collisions calculated
-    : Component({readOnly("species:{all_species}:density"),
+    : Component({readOnly("species:{all_species}:density", Regions::Interior),
                  readIfSet("species:{all_species}:velocity", Regions::Interior),
                  readOnly("species:{all_species}:AA"),
                  readIfSet("species:{all_species}:charge"),
@@ -105,7 +105,7 @@ void BraginskiiFriction::transform_impl(GuardedOptions& state) {
       }
 
       const Field3D nu = GET_VALUE(Field3D, species1["collision_frequencies"][coll_name]);
-      const Field3D density2 = GET_VALUE(Field3D, species2["density"]);
+      const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]);
       const Field3D velocity2 = species2.isSet("velocity")
                                     ? GET_NOBOUNDARY(Field3D, species2["velocity"])
                                     : 0.0;
