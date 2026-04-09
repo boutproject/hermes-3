@@ -1791,7 +1791,7 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
   }
   BOUT_FOR(i, f.getRegion("RGN_dagp_fv_xbndry")) {
     const auto xf = xflux<upwinding>(a, f, i);
-    result[i.xp()] = xf;
+    result[i.xp()] += xf;
     if constexpr (extra) {
       (*flow_xlow)[i.xp()] = xf;
     }
@@ -1803,9 +1803,12 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
       (*flow_zlow)[i.zp()] = zf;
     }
   }
-  BOUT_FOR(i, f.getValidRegionWithDefault("RGN_NOBNDRY")) {
+  //If using immersed boundary, just want plasma cells.
+  //IMM_BNDRY_TODO: Do regions further below matter? i.e. for volume.
+  const auto plasmaRegion = immBndry ? "RGN_NO_IMM_BNDRY" : "RGN_NOBNDRY";
+  BOUT_FOR(i, f.getRegion(plasmaRegion)) {
     const auto xf = xflux<upwinding>(a, f, i);
-    result[i.xp()] = xf;
+    result[i.xp()] += xf;
     result[i] -= xf;
     if constexpr (extra) {
       (*flow_xlow)[i.xp()] = xf;
@@ -1820,7 +1823,7 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
   if (immBndry) {
     immBndry->ComputeBoundaryFluxes(a, f, result);
   }
-  result.setRegion("RGN_NOBNDRY"); //IMM_BNDRY_TODO: Does the region matter?
+  result.setRegion("RGN_NOBNDRY");
   if constexpr (extra) {
     flow_xlow->setRegion("RGN_NOBNDRY");
     flow_zlow->setRegion("RGN_NOBNDRY");
