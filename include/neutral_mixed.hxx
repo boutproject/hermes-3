@@ -108,27 +108,28 @@ private:
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
 
-  // Physic terms
-  Field3D ddtN_par_advection;
-  Field3D ddtN_perp_diffusion;
+  //Physic terms
+  Field3D ddtN_par_advection = 0.0;
+  Field3D ddtN_perp_diffusion = 0.0;
 
-  Field3D ddtPn_par_advection;
-  Field3D ddtPn_work_done;
-  Field3D ddtPn_perp_advection;
-  Field3D ddtPn_par_conduction;
-  Field3D ddtPn_perp_conduction;
+  Field3D ddtPn_par_advection = 0.0;
+  Field3D ddtPn_work_done = 0.0;
+  Field3D ddtPn_perp_advection = 0.0;
+  Field3D ddtPn_par_conduction = 0.0;
+  Field3D ddtPn_perp_conduction = 0.0;
 
-  Field3D ddtNVn_par_advection;
-  Field3D ddtNVn_pressure_gradient;
-  Field3D ddtNVn_perp_advection;
-  Field3D par_viscosity_source;
-  Field3D perp_viscosity_source;
-  Field3D ddtNVn_viscosity; // par_viscosity_source + perp_viscosity_source
-  Field3D ddtPn_viscosity;
+  Field3D ddtNVn_par_advection = 0.0;
+  Field3D ddtNVn_pressure_gradient = 0.0;
+  Field3D ddtNVn_perp_advection = 0.0;
 
-  Field3D ddtN_anomalous_transport;
-  Field3D ddtNVn_anomalous_transport;
-  Field3D ddtPn_anomalous_transport;
+  Field3D par_viscosity_source = 0.0;
+  Field3D perp_viscosity_source = 0.0;
+  Field3D ddtNVn_viscosity = 0.0; // par_viscosity_source + perp_viscosity_source
+  Field3D ddtPn_viscosity = 0.0; 
+
+  Field3D ddtN_anomalous_transport = 0.0;
+  Field3D ddtNVn_anomalous_transport = 0.0;
+  Field3D ddtPn_anomalous_transport = 0.0;
 
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
