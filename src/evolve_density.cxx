@@ -351,6 +351,19 @@ void EvolveDensity::finally(const Options& state) {
         flow_ylow = GET_VALUE(Field3D, species["particle_flow_ylow"]);
       }
     }
+    if (flow_xlow.isAllocated() and species.isSet("cls_particle_flow_xlow")) {
+      flow_xlow += get<Field3D>(species["cls_particle_flow_xlow"]);}
+      else
+      {
+        flow_xlow = get<Field3D>(species["cls_particle_flow_xlow"]);
+      }
+    
+    if (flow_ylow.isAllocated() and species.isSet("cls_particle_flow_ylow")) {
+      flow_ylow += get<Field3D>(species["cls_particle_flow_ylow"]);}
+      else
+      {
+        flow_ylow = get<Field3D>(species["cls_particle_flow_ylow"]);
+      }
   }
 }
 
