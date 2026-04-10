@@ -123,6 +123,8 @@ private:
   Field3D ddtNVn_perp_advection;
   Field3D par_viscosity_source;
   Field3D perp_viscosity_source;
+  Field3D ddtNVn_viscosity; // par_viscosity_source + perp_viscosity_source
+  Field3D ddtPn_viscosity; 
 
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;

@@ -799,8 +799,10 @@ void NeutralMixed::finally(const Options& state) {
         perp_viscosity_source = Div_a_Grad_perp_flows(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
       }
 
-      ddt(NVn) += par_viscosity_source + perp_viscosity_source;
-      ddt(Pn) += -(2. / 3) * Vn * (par_viscosity_source + perp_viscosity_source);
+      ddtNVn_viscosity =  par_viscosity_source + perp_viscosity_source;
+      ddtPn_viscosity  = -(2. / 3) * Vn * (par_viscosity_source + perp_viscosity_source);
+      ddt(NVn) += ddtNVn_viscosity;
+      ddt(Pn)  += ddtPn_viscosity; 
     }
     Snv = momentum_source;
     if (localstate.isSet("momentum_source")) {
