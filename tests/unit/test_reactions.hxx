@@ -1,19 +1,24 @@
-#ifndef TEST_REACTIONS_H__
-#define TEST_REACTIONS_H__
+#pragma once
+#ifndef TEST_REACTIONS_H
+#define TEST_REACTIONS_H
 
 #include <filesystem>
 #include <regex>
 #include <sstream>
 
 #include <bout/constants.hxx>
-#include <bout/field_factory.hxx> // For generating functions
+#include <bout/field_factory.hxx>
 #include <bout/options_io.hxx>
 #include <gtest/gtest.h>
 
 #include "component.hxx"
-#include "test_extras.hxx" // FakeMesh
+#include "cx_reaction.hxx"
+#include "izn_rec_reaction.hxx"
+#include "reaction.hxx"
+#include "reaction_parser.hxx"
 
-#include "fake_mesh_fixture.hxx" // IWYU pragma: export
+#include "fake_mesh_fixture.hxx"
+#include "test_extras.hxx"
 
 enum class linfunc_axis { x, y, z };
 
@@ -25,32 +30,39 @@ extern Mesh* mesh;
 // The unit tests use the global mesh
 using namespace bout::globals;
 
+namespace hermes {
+
 /**
  * @brief Base fixture for Reaction tests.
  *
- * @tparam RTYPE The reaction class; must derive from Component.
+ * @tparam RTYPE The reaction class; must derive from ReactionBase.
  *
  * @todo Change static_assert to require 'Reaction' base later.
  */
 template <typename RTYPE>
 class ReactionTest : public FakeMeshFixture_tmpl<8, 8, 8> {
 
-  static_assert(std::is_base_of<Component, RTYPE>(),
-                "Template arg to ReactionTest must derive from Component");
+  static_assert(std::is_base_of<ReactionBase, RTYPE>(),
+                "Template arg to ReactionTest must derive from ReactionBase");
 
 protected:
   ReactionTest(std::string lbl, std::string reaction_str)
-      : lbl(lbl), reaction_str(reaction_str){};
+      : lbl(lbl), parser(reaction_str){};
 
   std::string lbl;
-  std::string reaction_str;
+  ReactionParser parser;
 
   // Ranges to use for input functions
   const BoutReal logn_min = std::log(5e13), logn_max = std::log(2e22);
   const BoutReal logT_min = std::log(0.05), logT_max = std::log(4e4);
   const BoutReal logv_min = std::log(1), logv_max = std::log(100);
 
-  // Subclasses must define a function to generate the test input state
+  /**
+   * @brief Subclasses must override this to generate the input state for the reaction
+   * transform.
+   *
+   * @return Options
+   */
   virtual Options generate_state() = 0;
 
   /**
@@ -169,6 +181,10 @@ protected:
     // Generate input state for test
     Options test_state = generate_state();
 
+    // For now we need to manually reset reaction instance counter in tests, otherwise
+    // Reaction component construction will fail
+    ReactionBase::reset_instance_counter();
+
     // Run reaction
     RTYPE component = RTYPE("test" + lbl, test_state, nullptr);
     component.transform(test_state);
@@ -185,6 +201,10 @@ protected:
     // Generate input state
     Options state = generate_state();
 
+    // For now we need to manually reset reaction instance counter in tests, otherwise
+    // Reaction component construction will fail
+    ReactionBase::reset_instance_counter();
+
     // Run reaction
     RTYPE component = RTYPE("test" + lbl, state, nullptr);
     component.transform(state);
@@ -196,177 +216,6 @@ protected:
   }
 };
 
-/**
- * @brief Class to test reactions of the form heavy_species1 + <M>e -> heavy_species2 +
- * <N>e where M and N are non-negative integers.
- *
- * @tparam RTYPE
- */
-template <typename RTYPE>
-class IznRecReactionTest : public ReactionTest<RTYPE> {
-protected:
-  IznRecReactionTest(std::string lbl, std::string reaction_str)
-      : ReactionTest<RTYPE>(lbl, reaction_str) {
-    parse_reaction_str(reaction_str);
-  };
-
-  std::string heavy_reactant;
-  std::string heavy_product;
-  std::map<std::string, int> heavy_sp_charges;
-
-  Options generate_state() final {
-    // Assume 1 heavy reactant, 1 heavy product for izn/rec. Bail out otherwise.
-    std::size_t nsp = heavy_sp_charges.size();
-    if (nsp != 2) {
-      throw BoutException(fmt::format(
-          "IznRecReactionTest::generate_state assumes exactly one heavy reactant "
-          "and one heavy product per reaction; found {:d} heavy species.",
-          nsp));
-    }
-
-    // N.B. No attempt to set the correct masses for heavy species; always set to 1
-    std::string comp_name("test" + this->lbl);
-    Field3D e_vel(1.0);
-    Field3D hp_dens(1.0);
-    Field3D hp_temp(1.0);
-    Options state{
-        {comp_name, {{"type", this->reaction_str}}},
-        {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
-        {"species",
-         {{"e", {{"AA", 1. / 1836}, {"velocity", e_vel}}},
-          {this->heavy_reactant,
-           {{"AA", 1.0}, {"charge", this->heavy_sp_charges.at(this->heavy_reactant)}}},
-          {this->heavy_product,
-           {{"AA", 1.0},
-            {"charge", this->heavy_sp_charges.at(this->heavy_product)},
-            {"density", hp_dens},
-            {"temperature", hp_temp}}}}}};
-
-    // Linear functions for various fields that are inputs to the reaction transforms
-    state["species"]["e"]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logn_min, this->logn_max, linfunc_axis::y), &state,
-        mesh);
-    state["species"]["e"]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logT_min, this->logT_max, linfunc_axis::z), &state,
-        mesh);
-    state["species"][this->heavy_reactant]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logn_min, this->logn_max, linfunc_axis::x), &state,
-        mesh);
-    state["species"][this->heavy_reactant]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logT_min, this->logT_max, linfunc_axis::y), &state,
-        mesh);
-    state["species"][this->heavy_reactant]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::x), &state,
-        mesh);
-    state["species"][this->heavy_product]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::z), &state,
-        mesh);
-    return state;
-  }
-
-  /// Very clunky way to extract the heavy species names in the absence of a
-  /// more robust parser
-  virtual void parse_reaction_str(const std::string& reaction_str) {
-    std::stringstream ss(reaction_str);
-    std::string word;
-    bool is_reactant = true;
-    while (ss >> word) {
-      if (word.compare("+") == 0) {
-        continue;
-      }
-      if (word.compare("->") == 0) {
-        is_reactant = false;
-        continue;
-      }
-
-      std::regex pattern("([0-9]*)([a-zA-Z]*)(\\+?\\-?)([0-9]*)");
-      std::smatch matches;
-      bool has_matches = std::regex_search(word, matches, pattern);
-      ASSERT_TRUE(has_matches) << "Unable to parse reaction term " << word << std::endl;
-      std::string sp = matches[2].str() + matches[3].str() + matches[4].str();
-      if (sp.compare("e") == 0) {
-        continue;
-      }
-      heavy_sp_charges[sp] = (matches[4].length() == 0)
-                                 ? static_cast<int>(matches[3].length())
-                                 : stringToInt(matches[4]);
-
-      if (is_reactant) {
-        this->heavy_reactant = sp;
-      } else {
-        this->heavy_product = sp;
-      }
-    }
-  }
-};
-
-/**
- * @brief Class to test charge exchange reactions.
- *
- * @tparam RTYPE
- */
-template <typename RTYPE>
-class CXReactionTest : public ReactionTest<RTYPE> {
-protected:
-  CXReactionTest(const std::string& lbl, const std::string& reaction_str,
-                 const std::string& neutral_sp_in, const std::string& ion_sp_in,
-                 const std::string& neutral_sp_out, const std::string& ion_sp_out)
-      : ReactionTest<RTYPE>(lbl, reaction_str), neutral_sp_in(neutral_sp_in),
-        ion_sp_in(ion_sp_in), neutral_sp_out(neutral_sp_out), ion_sp_out(ion_sp_out){};
-
-  const std::string neutral_sp_in;
-  const std::string ion_sp_in;
-  const std::string neutral_sp_out;
-  const std::string ion_sp_out;
-
-  Options generate_state() override {
-    // N.B. No attempt to set the correct masses for heavy species; always set to 1
-    // Assume neutral
-    std::string comp_name = "test" + this->lbl;
-    Options state{{comp_name, {{"type", this->reaction_str}}},
-                  {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
-                  {"species",
-                   {{neutral_sp_in, {{"AA", 1.0}, {"charge", 0.0}}},
-                    {ion_sp_in, {{"AA", 1.0}, {"charge", 1.0}}}}}};
-
-    // Linear functions for various fields that are inputs to the reaction transforms
-    state["species"][neutral_sp_in]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logn_min, this->logn_max, linfunc_axis::x), &state,
-        mesh);
-    state["species"][ion_sp_in]["density"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logn_min, this->logn_max, linfunc_axis::y), &state,
-        mesh);
-    state["species"][neutral_sp_in]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logT_min, this->logT_max, linfunc_axis::z), &state,
-        mesh);
-    state["species"][ion_sp_in]["temperature"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logT_min, this->logT_max, linfunc_axis::x), &state,
-        mesh);
-    state["species"][neutral_sp_in]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::y), &state,
-        mesh);
-    state["species"][ion_sp_in]["velocity"] = FieldFactory::get()->create3D(
-        this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::z), &state,
-        mesh);
-
-    // For non-symmetric CX, add charges, masses, velocities for product species
-    if (neutral_sp_out.compare(neutral_sp_in) != 0) {
-      state["species"][neutral_sp_out]["AA"] = 1.0;
-      state["species"][neutral_sp_out]["charge"] = 0.0;
-      state["species"][neutral_sp_out]["velocity"] = FieldFactory::get()->create3D(
-          this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::y),
-          &state, mesh);
-    }
-    if (ion_sp_out.compare(ion_sp_in) != 0) {
-      state["species"][ion_sp_out]["AA"] = 1.0;
-      state["species"][ion_sp_out]["charge"] = 1.0;
-      state["species"][ion_sp_out]["velocity"] = FieldFactory::get()->create3D(
-          this->gen_lin_field_str(this->logv_min, this->logv_max, linfunc_axis::z),
-          &state, mesh);
-    }
-
-    return state;
-  }
-};
+} // namespace hermes
 
 #endif
