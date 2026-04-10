@@ -13,6 +13,10 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
 
   diagnose = options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
   custom_D = options["custom_D"].doc("Custom diffusion coefficient override. -1: Off, calculate D normally").withDefault<BoutReal>(-1);
+  nonorthogonal_operators =
+      options["nonorthogonal_operators"]
+          .doc("Use nonorthogonal operators for radial transport? NOTE: may be broken")
+          .withDefault<bool>(false);
 
   substitutePermissions("optional",
                         {"charge", "pressure", "density", "velocity", "temperature"});
@@ -25,7 +29,17 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
   // temperature are defined (respectively). Collision frequency is
   // only used if temperature is set. Nothing happens if the charge or
   // density are unset.
-  substitutePermissions("output", {"density_source", "momentum_source", "energy_source"});
+  std::vector<std::string> output_vars;
+  output_vars.push_back("density_source");
+  output_vars.push_back("cls_particle_flow_xlow");
+  output_vars.push_back("cls_particle_flow_ylow");
+  output_vars.push_back("energy_source");
+  output_vars.push_back("cls_energy_flow_xlow");
+  output_vars.push_back("cls_energy_flow_ylow");
+  output_vars.push_back("momentum_source");
+  output_vars.push_back("cls_momentum_flow_xlow");
+  output_vars.push_back("cls_momentum_flow_ylow");
+  substitutePermissions("output", output_vars);
   if (custom_D < 0.)
     setPermissions(readOnly("species:{all_species}:collision_frequency"));
 }
@@ -83,25 +97,52 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
     }
     const auto N = GET_VALUE(Field3D, species["density"]);
 
-    // add(species["density_source"], FV::Div_a_Grad_perp(Dn, N));
+    if (nonorthogonal_operators)
+    {
     add(species["density_source"],
         Div_a_Grad_perp_nonorthog(Dn, N, cls_pf_perp_xlow, cls_pf_perp_ylow));
+    }
+    else
+    {
+      Div_a_Grad_perp_flows(Dn, N, cls_pf_perp_xlow, cls_pf_perp_ylow);
+    } 
+      add(species["cls_particle_flow_xlow"], cls_pf_perp_xlow);
+      add(species["cls_particle_flow_ylow"], cls_pf_perp_ylow);
 
     if (IS_SET(species["velocity"])) {
       const auto V = GET_VALUE(Field3D, species["velocity"]);
       const auto AA = GET_VALUE(BoutReal, species["AA"]);
 
       // add(species["momentum_source"], FV::Div_a_Grad_perp(Dn * AA * V, N));
+    if (nonorthogonal_operators)
+    {
       add(species["momentum_source"],
           Div_a_Grad_perp_nonorthog(Dn * AA * V, N, cls_mf_perp_xlow, cls_mf_perp_ylow));
     }
-
+    else{
+      add(species["momentum_source"],
+          Div_a_Grad_perp_flows(Dn * AA * V, N, cls_mf_perp_xlow, cls_mf_perp_ylow));
+    }
+    add(species["cls_momentum_flow_xlow"], cls_mf_perp_xlow);
+    add(species["cls_momentum_flow_ylow"], cls_mf_perp_ylow);
+    }
     if (IS_SET(species["temperature"])) {
       const auto T = GET_VALUE(Field3D, species["temperature"]);
       // add(species["energy_source"], FV::Div_a_Grad_perp(Dn * (3. / 2) * T, N));
+      if (nonorthogonal_operators)
+      {
       add(species["energy_source"],
           Div_a_Grad_perp_nonorthog(Dn * (3. / 2) * T, N, cls_nef_perp_xlow,
                                     cls_nef_perp_ylow));
+      }
+      else{
+      add(species["energy_source"],
+          Div_a_Grad_perp_flows(Dn * (3. / 2) * T, N, cls_nef_perp_xlow,
+                                    cls_nef_perp_ylow));
+      }
+    add(species["cls_energy_flow_xlow"], cls_nef_perp_xlow);
+    add(species["cls_energy_flow_ylow"], cls_nef_perp_ylow);
+      
 
       // TODO: Figure out what to do with the below
       if(custom_D < 0) {
@@ -116,9 +157,18 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
         BOUT_FOR(i, Dn.getRegion("RGN_GUARDS")) {
           Kappa_perp[i] = 0.0;
     }
-        add(species["energy_source"],
+       if (nonorthogonal_operators)
+      {  add(species["energy_source"],
             Div_a_Grad_perp_nonorthog(Kappa_perp, T,
                                       cls_tef_perp_xlow, cls_tef_perp_ylow));
+            }
+            else{
+            add(species["energy_source"],
+                Div_a_Grad_perp_flows(Kappa_perp, T, cls_tef_perp_xlow, cls_tef_perp_ylow));
+            }
+            add(species["cls_energy_flow_xlow"], cls_tef_perp_xlow);
+            add(species["cls_energy_flow_ylow"], cls_tef_perp_ylow);
+         
                                       
       }
     }

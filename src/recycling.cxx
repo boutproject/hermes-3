@@ -220,6 +220,8 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
   if (sol_recycle or pfr_recycle or core_recycle) {
     setPermissions(readIfSet("species:{from}:energy_flow_xlow"));
     setPermissions(readIfSet("species:{from}:particle_flow_xlow"));
+    setPermissions(readIfSet("species:{from}:cls_energy_flow_xlow"));
+    setPermissions(readIfSet("species:{from}:cls_particle_flow_xlow"));
   }
   substitutePermissions("to",
                         std::vector<std::string>(to_species.begin(), to_species.end()));
@@ -477,16 +479,38 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
       if (species_from.isSet("energy_flow_xlow")) {
         energy_flow_xlow = get<Field3D>(species_from["energy_flow_xlow"]);
-      } else if ((channel.sol_fast_recycle_fraction > 0)
+      } 
+      if (species_from.isSet("cls_energy_flow_xlow")) 
+      {
+        if (energy_flow_xlow.isAllocated()) {
+           energy_flow_xlow += get<Field3D>(species_from["cls_energy_flow_xlow"]);
+        }
+        else {
+        energy_flow_xlow = get<Field3D>(species_from["cls_energy_flow_xlow"]);
+        }
+      }
+      if (!energy_flow_xlow.isAllocated() and
+          (channel.sol_fast_recycle_fraction > 0)
                  or (channel.pfr_fast_recycle_fraction > 0)
                  or (channel.core_fast_recycle_fraction > 0)) {
         throw BoutException("SOL/PFR/Core fast recycle enabled but no cell edge heat flow "
                             "available, check your wall BC choice");
       };
-
+      
       if (species_from.isSet("particle_flow_xlow")) {
         particle_flow_xlow = get<Field3D>(species_from["particle_flow_xlow"]);
-      } else if ((channel.sol_fast_recycle_fraction > 0)
+      } 
+      if (species_from.isSet("cls_particle_flow_xlow")) 
+      {
+        if (particle_flow_xlow.isAllocated()) {
+           particle_flow_xlow += get<Field3D>(species_from["cls_particle_flow_xlow"]);
+        }
+        else {
+        particle_flow_xlow = get<Field3D>(species_from["cls_particle_flow_xlow"]);
+        }
+      }
+     if (!particle_flow_xlow.isAllocated() and
+                 (channel.sol_fast_recycle_fraction > 0)
                  or (channel.pfr_fast_recycle_fraction > 0)
                  or (channel.core_fast_recycle_fraction > 0)) {
         throw BoutException("SOL/PFR/Core fast recycle enabled but no cell edge particle flow "
@@ -740,111 +764,6 @@ void Recycling::transform_impl(GuardedOptions& state) {
       }
     }
 
-// // Recycling at the divertor target plates
-//     if (core_recycle && mesh->firstX()) {   // Inner X boundary
-
-//       if (!has_sheath_boundary_simple_perp and (channel.core_fast_recycle_fraction > 0.0)) {
-//         throw BoutException(
-//             "Currently only sheath_boundary_simple_perp is supported for fast recycling.");
-//       }
-
-//       channel.core_recycle_density_source = 0.0;
-//       channel.core_recycle_energy_source = 0.0;
-
-//       //for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-//         for (int iy = 0; iy < mesh->LocalNy; iy++) {
-  
-//             // Free boundary condition on Nn, Pn, Tn
-//             // This is problematic when Nn, Pn or Tn are zero
-//         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-//           auto i = indexAt(Nn, mesh->xstart, iy, jz); // Final domain cell
-//           auto ig = i.xm();                              // First guard cell
-//           auto is = i.xp();                              // Second to last domain cell
-
-//           // Reproduce sheath advected particle flux from evolve_density
-//           BoutReal flux = -0.5 * (N[i] + N[ig]) * 0.5 * (V[i] + V[ig]);
-//           flux = std::max(flux, 0.0);
-
-//           BoutReal daparsheath = (J[i] + J[ig]) / (sqrt(g_11[i]) + sqrt(g_11[ig])) * 0.5
-//                                  * (dy[i] + dy[ig]) * 0.5 * (dz[i] + dz[ig]);
-//           BoutReal volume = J[i] * dx[i] * dy[i] * dz[i];
-
-//           // If cell is a pump, overwrite multiplier with pump multiplier
-//         BoutReal multiplier = channel.core_multiplier;
-//         //   if ((is_pump[i] > 0.5) and (neutral_pump)) {
-//         //     multiplier = channel.pump_multiplier;
-//         //   }
-
-//           // Flow of recycled neutrals into domain [s-1]
-//           BoutReal recycle_particle_flow = multiplier * flux * daparsheath;
-
-//           // Reproduce sheath advected energy flux from evolve_pressure
-//           BoutReal nisheath = (N[i] + N[ig]) * 0.5;
-//           BoutReal tisheath = (T[i] + T[ig]) * 0.5;
-//           BoutReal visheath = (V[i] + V[ig]) * 0.5;
-//           BoutReal sheath_ion_heat_flow =
-//               abs(gamma_i_perp * nisheath * tisheath * visheath * daparsheath / volume);
-
-//           // Blend fast (ion energy) and thermal (constant energy) recycling
-//           // Calculate returning neutral heat flow in [W]
-//           BoutReal recycle_energy_flow =
-//               sheath_ion_heat_flow * multiplier
-//                   * channel.core_fast_recycle_energy_factor
-//                   * channel.core_fast_recycle_fraction // Fast recycling part
-//               + recycle_particle_flow * (1 - channel.core_fast_recycle_fraction)
-//                     * channel.core_energy; // Thermal recycling part
-
-//           // Calculate neutral pump neutral sinks due to neutral impingement
-//           //BoutReal pump_neutral_particle_sink = 0.0;
-//           //BoutReal pump_neutral_energy_sink = 0.0;
-
-//           // These are additional to particle sinks due to recycling
-//         //   if ((is_pump[i] > 0.5) and (neutral_pump)) {
-
-//         //     // Free boundary condition on Nn, Tn
-//         //     // Used in this component only
-//         //     BoutReal nnguard = SQ(Nn[i]) / Nnlim[is];
-//         //     BoutReal tnguard = SQ(Tn[i]) / Tnlim[is];
-
-//         //     // Calculate wall conditions
-//         //     BoutReal nnsheath = 0.5 * (Nn[i] + nnguard);
-//         //     BoutReal tnsheath = 0.5 * (Tn[i] + tnguard);
-//         //     BoutReal v_th =
-//         //         0.25 * sqrt(8 * tnsheath / (PI * AAn)); // Stangeby p.69 eqns. 2.21, 2.24
-
-//         //     // Calculate particle and energy fluxes of neutrals hitting the pump
-//         //     // Assume thermal velocity greater than perpendicular velocity and use it for
-//         //     // flux calc
-//         //     BoutReal pump_neutral_particle_flow = v_th * nnsheath * daparsheath; // [s^-1]
-//         //     pump_neutral_particle_sink = pump_neutral_particle_flow / volume
-//         //                                  * (1 - multiplier); // Particle sink [s^-1 m^-3]
-
-//         //     BoutReal pump_neutral_energy_flow =
-//         //         2.0 * tnsheath * v_th * nnsheath * daparsheath; // [W]
-//         //     pump_neutral_energy_sink =
-//         //         pump_neutral_energy_flow / volume * (1 - multiplier); // heatsink [W m^-3]
-
-//         //     // Divide flows by volume to get sources
-//         //     // Save to pump diagnostic
-//         //     channel.pump_density_source[i] = -pump_neutral_particle_sink;
-//         //     channel.pump_energy_source[i] = -pump_neutral_energy_sink;
-//         //   }
-
-//           // Put recycling sources into diagnostic
-//           // (pump sink is a separate diagnostic).
-//           // Put both recycling and neutral sources into state
-//           channel.core_recycle_density_source[i] +=
-//               recycle_particle_flow / volume; // [m^-3 s^-1] For diagnostic
-//           density_source[i] +=
-//               recycle_particle_flow / volume;
-//               //- pump_neutral_particle_sink; // [m^-3 s^-1] For use in solver
-
-//           channel.core_recycle_energy_source[i] += recycle_energy_flow / volume;
-//           energy_source[i] += recycle_energy_flow / volume; 
-//           //- pump_neutral_energy_sink;
-//         }
-//       }
-//     }
     // Recycling at the PFR edge (2D/3D only)
     if (pfr_recycle) {
 

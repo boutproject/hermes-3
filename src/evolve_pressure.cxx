@@ -405,6 +405,17 @@ void EvolvePressure::finally(const Options& state) {
     if (species.isSet("energy_flow_ylow")) {
       flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
+    if (flow_xlow.isAllocated() and species.isSet("cls_energy_flow_xlow")) {
+      flow_xlow += get<Field3D>(species["cls_energy_flow_xlow"]);}
+      else
+      {
+        flow_xlow = get<Field3D>(species["cls_energy_flow_xlow"]);
+      }
+    if (flow_ylow.isAllocated() and species.isSet("cls_energy_flow_ylow")) {
+        flow_ylow += get<Field3D>(species["cls_energy_flow_ylow"]);}
+    else      {
+        flow_ylow = get<Field3D>(species["cls_energy_flow_ylow"]);
+      }
   }
 }
 

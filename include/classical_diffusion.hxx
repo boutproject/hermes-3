@@ -16,11 +16,21 @@ private:
   BoutReal custom_D; ///< User-set particle diffusion coefficient override
   Field3D nu; 
   Field3D Kappa_perp;
+  bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
+
   // Flow diagnostics
   Field3D cls_pf_perp_xlow, cls_pf_perp_ylow;
   Field3D cls_mf_perp_xlow, cls_mf_perp_ylow;
   Field3D cls_nef_perp_xlow, cls_nef_perp_ylow;
   Field3D cls_tef_perp_xlow, cls_tef_perp_ylow;
+  Field3D cls_energy_flow_xlow;   ///< Cell edge fluxes used for calculating
+                              ///<
+                              ///< fast recycling energy source
+  Field3D cls_particle_flow_xlow; ///< Radial wall particle fluxes for recycling calc. No need
+                              ///<
+                              ///< to get poloidal from here, it's calculated from sheath
+                              ///<
+                              ///< velocity
   void transform_impl(GuardedOptions& state) override;
 };
 
