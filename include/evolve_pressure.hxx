@@ -97,6 +97,8 @@ private:
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
   bool damp_p_nt; ///< Damp P - N*T. Active when P < 0 or N < density_floor
+  bool low_n_source, low_p_source; ///< low_density_feedback 
+  BoutReal low_n_source_scale, low_p_source_scale;
 
   Field3D kappa_par; ///< Parallel heat conduction coefficient
 

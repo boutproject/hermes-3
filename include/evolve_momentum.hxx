@@ -48,6 +48,8 @@ private:
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
   BoutReal pressure_floor;
   bool low_p_diffuse_perp; ///< Cross-field diffusion at low pressure?
+  bool low_n_source, low_p_source; ///< low_density_feedback 
+  BoutReal low_n_source_scale, low_p_source_scale;
 
   BoutReal hyper_z;  ///< Hyper-diffusion
 

@@ -15,6 +15,20 @@
 
 using bout::globals::mesh;
 
+namespace {
+  /// Adaptive source term to prevent variable dropping below a floor value.
+  Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor) {
+    Field3D result = 0.0;
+    BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
+      BoutReal diff = f[i] - lowvalue;
+      if (diff < 0.0) {
+        result[i] = -diff / scalefactor;
+      }
+    }
+    return result;
+  }
+}
+
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
     : name(name) {
   AUTO_TRACE();
@@ -44,6 +58,22 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   damp_p_nt = options["damp_p_nt"]
     .doc("Damp P - N*T? Active when P < 0 or N < density_floor")
     .withDefault<bool>(false);
+
+  low_n_source = options["low_n_source"]
+                     .doc("Add adaptive source to ddt(P) when N falls below density_floor")
+                     .withDefault<bool>(false);
+
+  low_n_source_scale = options["low_n_source_scale"]
+                           .doc("Timescale for low_n_source term [normalised]. Smaller = more aggressive.")
+                           .withDefault<BoutReal>(1e-3);
+
+  low_p_source = options["low_p_source"]
+                     .doc("Add adaptive source to ddt(P) when P falls below pressure_floor")
+                     .withDefault<bool>(false);
+
+  low_p_source_scale = options["low_p_source_scale"]
+                           .doc("Timescale for low_p_source term [normalised]. Smaller = more aggressive.")
+                           .withDefault<BoutReal>(1e-3);
 
   conduction_collisions_mode = options["conduction_collisions_mode"]
       .doc("Can be multispecies: all collisions, or braginskii: self collisions and ie")
@@ -551,6 +581,14 @@ void EvolvePressure::finally(const Options& state) {
     // Term to force evolved P towards N * T
     // This is active when P < 0 or when N < density_floor
     ddt(P) += N * T - P;
+  }
+
+  if (low_n_source) {
+    ddt(P) += low_sourceterm(N, density_floor, low_n_source_scale);
+  }
+
+  if (low_p_source) {
+    ddt(P) += low_sourceterm(P, pressure_floor, low_p_source_scale);
   }
 
   // Scale time derivatives
