@@ -108,7 +108,7 @@ private:
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
 
-  //Physic terms
+  // Physic terms
   Field3D ddtN_par_advection;
   Field3D ddtN_perp_diffusion;
 
@@ -124,7 +124,7 @@ private:
   Field3D par_viscosity_source;
   Field3D perp_viscosity_source;
   Field3D ddtNVn_viscosity; // par_viscosity_source + perp_viscosity_source
-  Field3D ddtPn_viscosity; 
+  Field3D ddtPn_viscosity;
 
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
