@@ -20,7 +20,7 @@ BraginskiiFriction::BraginskiiFriction(const std::string& name, Options& allopti
                  readOnly("species:{all_species}:AA"),
                  readIfSet("species:{all_species}:charge"),
                  readIfSet("species:{all_species}:collision_frequencies:{all_species}_{"
-                           "all_species2}_coll"),
+                           "all_species2}_coll", Regions::Interior),
                  readWrite("species:{all_species}:momentum_source")}) {
   Options& options = alloptions[name];
   frictional_heating = options["frictional_heating"]
