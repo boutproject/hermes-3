@@ -12,20 +12,6 @@
 
 using bout::globals::mesh;
 
-namespace {
-  /// Adaptive source term to prevent variable dropping below a floor value.
-  Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor) {
-    Field3D result = 0.0;
-    BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
-      BoutReal diff = f[i] - lowvalue;
-      if (diff < 0.0) {
-        result[i] = -diff / scalefactor;
-      }
-    }
-    return result;
-  }
-}
-
 EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) : name(name) {
   AUTO_TRACE();
   
@@ -48,22 +34,6 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
-
-  low_n_source = options["low_n_source"]
-                     .doc("Add adaptive source to ddt(NV) when N falls below density_floor")
-                     .withDefault<bool>(false);
-
-  low_n_source_scale = options["low_n_source_scale"]
-                           .doc("Timescale for low_n_source term [normalised]. Smaller = more aggressive.")
-                           .withDefault<BoutReal>(1e-3);
-
-  low_p_source = options["low_p_source"]
-                     .doc("Add adaptive source to ddt(NV) when P falls below pressure_floor")
-                     .withDefault<bool>(false);
-
-  low_p_source_scale = options["low_p_source_scale"]
-                           .doc("Timescale for low_p_source term [normalised]. Smaller = more aggressive.")
-                           .withDefault<BoutReal>(1e-3);
 
   bndry_flux = options["bndry_flux"]
                       .doc("Allow flows through radial boundaries")
@@ -228,14 +198,6 @@ void EvolveMomentum::finally(const Options &state) {
   if (low_p_diffuse_perp) {
     Field3D Plim = softFloor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
     ddt(NV) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV);
-  }
-
-  if (low_n_source) {
-    ddt(NV) += low_sourceterm(N, density_floor, low_n_source_scale);
-  }
-
-  if (low_p_source) {
-    ddt(NV) += low_sourceterm(get<Field3D>(species["pressure"]), pressure_floor, low_p_source_scale);
   }
 
   if (hyper_z > 0.) {

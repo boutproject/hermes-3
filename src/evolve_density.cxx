@@ -16,15 +16,12 @@ using bout::globals::mesh;
 
 namespace {
   /// Adaptive source term to prevent variable dropping below a floor value.
-  Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor) {
-    Field3D result = 0.0;
+  void add_low_sourceterm(Field3D& result, const Field3D& f,
+                        const BoutReal lowvalue, const BoutReal scalefactor) {
+    const BoutReal inv_scale = 1.0 / scalefactor;
     BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
-      BoutReal diff = f[i] - lowvalue;
-      if (diff < 0.0) {
-        result[i] = -diff / scalefactor;
-      }
+      result[i] += std::min(f[i] - lowvalue, 0.0) * (-inv_scale);
     }
-    return result;
   }
 }
 
@@ -66,14 +63,6 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   low_n_source_scale = options["low_n_source_scale"]
                            .doc("Timescale for low_n_source term [normalised]. Smaller = more aggressive.")
-                           .withDefault<BoutReal>(1e-3);
-
-  low_p_source = options["low_p_source"]
-                     .doc("Add adaptive source to ddt(N) when P falls below pressure_floor")
-                     .withDefault<bool>(false);
-
-  low_p_source_scale = options["low_p_source_scale"]
-                           .doc("Timescale for low_p_source term [normalised]. Smaller = more aggressive.")
                            .withDefault<BoutReal>(1e-3);
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
@@ -305,11 +294,7 @@ void EvolveDensity::finally(const Options& state) {
   }
 
   if (low_n_source) {
-    ddt(N) += low_sourceterm(N, density_floor, low_n_source_scale);
-  }
-
-  if (low_p_source) {
-    ddt(N) += low_sourceterm(get<Field3D>(species["pressure"]), pressure_floor, low_p_source_scale);
+    add_low_sourceterm(ddt(N), N, density_floor, low_n_source_scale);
   }
 
   if (hyper_z > 0.) {
