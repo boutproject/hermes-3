@@ -585,6 +585,7 @@ void NeutralMixed::finally(const Options& state) {
     // Fetch collision frequencies; fall back to zero if not found
     Field3D nu_cx  = 0.0;
     Field3D nu_iz  = 0.0;
+    Field3D nu_rec  = 0.0;
 
     // similar to Collisionality part
     if (equilibrium_momentum_collision_names.empty()) {
@@ -600,6 +601,14 @@ void NeutralMixed::finally(const Options& state) {
               collisionSpeciesMatch(coll_name, name, "+", "iz", "partial")) {
             equilibrium_nu_iz_name = coll_name;
           }
+          if (equilibrium_nu_rec_name.empty() &&
+              collisionSpeciesMatch(coll_name, std::string(name) + "+", name, "rec", "partial")) {
+            equilibrium_nu_rec_name = coll_name;
+          }
+          //output_info.write(
+          //  "\t{:s} passive_momentum: cx='{:s}' iz='{:s}' rec='{:s}'\n",
+          //  name,
+          //  equilibrium_nu_cx_name, equilibrium_nu_iz_name, equilibrium_nu_rec_name);
 		}
       }
 
@@ -613,19 +622,9 @@ void NeutralMixed::finally(const Options& state) {
     if (!equilibrium_nu_iz_name.empty()) {
       nu_iz = GET_VALUE(Field3D, localstate["collision_frequencies"][equilibrium_nu_iz_name]);
     }
-
-    // --- nu_rec: computed directly from rate coefficient ---
-    // from UpdatedRadiatedPower,
-    // nu_rec [normalised s^-1] = Ne * alpha_rec(Ne, Te) [m^3/s].
-    Field3D nu_rec(mesh);
-    nu_rec.allocate();
-    BOUT_FOR(i, Ne.getRegion("RGN_NOBNDRY")) {
-      const BoutReal ne = Ne[i] * Nnorm;
-      const BoutReal te = Te[i] * Tnorm;
-      nu_rec[i] = Ne[i] * atomic_rates.recombination(ne, te) * Nnorm / FreqNorm;
+    if (!equilibrium_nu_rec_name.empty()) {
+      nu_rec = GET_VALUE(Field3D, localstate["collision_frequencies"][equilibrium_nu_rec_name]);
     }
-    nu_rec.applyBoundary("neumann");
-
 
     // Equilibrium neutral density:
     // Nn_eq = Ni * (Nn * nu_cx + Ne * nu_rec) / (Ni * nu_cx + Ne * nu_iz)
@@ -634,6 +633,13 @@ void NeutralMixed::finally(const Options& state) {
                       / softFloor(nu_cx + nu_iz, density_floor);
     NVn = Nn_eq * U;
 
+    // Save for output diagnostics
+    if (diagnose) {
+      nu_cx_out  = nu_cx;
+      nu_iz_out  = nu_iz;
+      nu_rec_out = nu_rec;
+      Nn_eq_out  = Nn_eq;
+	}
   } else {
     ddt(NVn) = 0;
     Snv = 0;
@@ -985,6 +991,43 @@ void NeutralMixed::outputVars(Options& state) {
                     {"long_name", name + " parallel conduction."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
+    }
+    if (passive_momentum) {
+      set_with_attrs(state[std::string("nu_cx_") + name], nu_cx_out,
+                     {{"time_dimension", "t"},
+                      {"units", "s^-1"},
+                      {"conversion", Omega_ci},
+                      {"standard_name", "charge exchange frequency"},
+                      {"long_name", name + " charge exchange collision frequency"},
+                      {"species", name},
+                      {"source", "neutral_mixed"}});
+
+      set_with_attrs(state[std::string("nu_iz_") + name], nu_iz_out,
+                     {{"time_dimension", "t"},
+                      {"units", "s^-1"},
+                      {"conversion", Omega_ci},
+                      {"standard_name", "ionisation frequency"},
+                      {"long_name", name + " ionisation collision frequency"},
+                      {"species", name},
+                      {"source", "neutral_mixed"}});
+
+      set_with_attrs(state[std::string("nu_rec_") + name], nu_rec_out,
+                     {{"time_dimension", "t"},
+                      {"units", "s^-1"},
+                      {"conversion", Omega_ci},
+                      {"standard_name", "recombination frequency"},
+                      {"long_name", name + " recombination collision frequency"},
+                      {"species", name},
+                      {"source", "neutral_mixed"}});
+
+      set_with_attrs(state[std::string("Nn_eq_") + name], Nn_eq_out,
+                     {{"time_dimension", "t"},
+                      {"units", "m^-3"},
+                      {"conversion", Nnorm},
+                      {"standard_name", "equilibrium neutral density"},
+                      {"long_name", name + " equilibrium neutral density"},
+                      {"species", name},
+                      {"source", "neutral_mixed"}});
     }
   }
 }

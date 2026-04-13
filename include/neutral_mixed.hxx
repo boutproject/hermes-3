@@ -9,7 +9,6 @@
 #include <bout/invert_laplace.hxx>
 
 #include "component.hxx"
-#include "radiation.hxx"
 
 /// Evolve density, parallel momentum and pressure
 /// for a neutral gas species with cross-field diffusion
@@ -69,16 +68,15 @@ private:
   // Caching sentinel: filled on first call to finally(), stays non-empty thereafter.
   std::vector<std::string> equilibrium_momentum_collision_names;
   
-  // Collision frequency names and the species they live on
+  // Collision frequency names — all stored on the neutral species' localstate
   std::string equilibrium_nu_cx_name;   ///< Charge exchange collision freq name
   std::string equilibrium_nu_iz_name;   ///< Ionisation collision freq name
-  //std::string equilibrium_nu_rec_name;  ///< Recombination collision freq name
+  std::string equilibrium_nu_rec_name;  ///< Recombination collision freq name e.g. "d+_d_rec"
   
-  UpdatedRadiatedPower atomic_rates{};
-
   // Normalisations (stored for use in finally())
   BoutReal Nnorm, Tnorm, FreqNorm;
   //BoutReal Nnorm_nu, Tnorm_nu, FreqNorm_nu;
+  Field3D nu_cx_out, nu_iz_out, nu_rec_out, Nn_eq_out; ///< Saved for output
   
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 
