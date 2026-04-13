@@ -1,0 +1,21 @@
+{
+    "info": {
+        "fit_type": "T",
+        "ref": "Amjuel H.2 0.3T",
+        "reaction_lbl": "p + H2 -> p + H2 (total rate coefficient)",
+        "notes": "Total rate coefficient for elastic collisions between H2 and H+. Maxwellian rate coefficient vs. T_p, with H2 at rest, obtained by taking the corresponding Beam-Maxw. rate coefficient at Eb=0.06 eV and verification by independent integration of cross-section"
+    },
+    "coeffs": [
+        [
+            -1.857812000000E+01,
+            2.411708000000E-01,
+            1.046088000000E-02,
+            -1.203649000000E-02,
+            -3.679626000000E-03,
+            2.895358000000E-04,
+            1.354441000000E-04,
+            -2.712317000000E-06,
+            -1.356528000000E-06
+        ]
+    ]
+}
