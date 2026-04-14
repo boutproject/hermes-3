@@ -145,6 +145,13 @@ numfig = True
 # The default role for text marked up `like this`
 default_role = "any"
 
+# Some convenient substitutions:
+rst_prolog = """
+.. |br| raw:: html
+
+   <br />
+"""
+
 # Handle multiple parameters on one line correctly (in Python docs)
 napoleon_use_param = False
 

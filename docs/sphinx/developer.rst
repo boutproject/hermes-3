@@ -873,7 +873,7 @@ Reactions
 ~~~~~~~~~
 
 The code for handling reactions was significantly refactored after version 1.4.0. Currently,
-reactions involving Hydrogen and Helium isotopes use the new framework, whilst reactions involving
+reactions involving Hydrogen isotopes and Helium use the new framework, whilst reactions involving
 impurity isotopes use their own set of classes. The intent is that all reaction classes in the code
 will eventually be migrated to the new framework.
 
@@ -884,23 +884,22 @@ The hierarchy of classes in the framework is:
 
 - `Reaction`
 
-  - `AmjuelReaction`
+  - `CXReaction`
 
-    - `AmjuelHydIsotopeReaction`
+  - `IznRecReaction`
 
-      - `AmjuelHydIonisationIsotope`
-      - `AmjuelHydRecombinationIsotope`
+    - `IznReaction`
 
-    - `HydrogenChargeExchange`
-    - `AmjuelHeIonisation01`
-    - `AmjuelHeRecombination10`
+    - `RecReaction`
 
-Most reaction source term contributions are handled in the the :code:`transform_impl` method of the
-base :code:`Reaction` class. For now, all of these reactions use rate data from Amjuel, which is
-read, via the `AmjuelData` class, in the :code:`AmjuelReaction` constructor. Subclasses of
-:code:`AmjuelReaction` set up appropriate diagnostics and :ref:`Permissions<sec-permissions>` for
-particular reactions in their constructors and some implement a :code:`transform_additional` method
-to include source term contributions that aren't captured by :code:`Reaction::transform_impl`.
+Most reaction source term contributions are handled in the the
+:code:`transform_impl` method of the base :code:`Reaction` class.  The source of the reaction rate
+data can be configured via the input file; if no reaction data type and data ID is set, a sensible
+default will be set on a per-reaction basis (e.g. Amjuel, H.2_3.1.8 for Hydrogen isotope charge
+exchange, :code:`h + d+ -> d + h+`). Subclasses of :code:`Reaction` set up appropriate diagnostics
+and :ref:`Permissions<sec-permissions>` for particular reactions in their constructors and/or
+implement a :code:`transform_additional` method to include source term contributions that aren't
+captured by :code:`Reaction::transform_impl`.
 
 The following subsections describe the general approach used to compute reaction sources and provide
 guidance to developers on adding new subclasses to handle particular reactions.
@@ -1026,29 +1025,37 @@ instance of the reaction.
 These default factors can be overridden by calling
 `set_energy_channel_weight<Reaction::set_energy_channel_weight>` and
 `set_momentum_channel_weight<Reaction::set_momentum_channel_weight>` in the constructor of a
-reaction subclass. For example, for charge exchange, to specify that momentum and energy are
-transferred only from the incoming neutral to the outgoing ion and from the incoming ion to the
-outgoing neutral:
+reaction subclass.
+
+For example, for charge exchange, momentum and energy need to be transferred
+
+1. from a reactant that donates an electron ('r1') to the resulting product ('p1') and 
+2. from a reactant that accepts an electron ('r2') to the resulting product ('p2').
+
+The following code sets channels to enforce those requirements:
 
 .. code-block:: cpp
 
-   // Incoming neutral energy => outgoing ion
-   this->set_energy_channel_weight(atomR, ionP, 1.0);
-   this->set_energy_channel_weight(atomR, atomP, 0.0);
-   // Incoming ion energy => outgoing neutral
-   this->set_energy_channel_weight(ionR, ionP, 0.0);
-   this->set_energy_channel_weight(ionR, atomP, 1.0);
+   // Energy exchange between r1 and p1
+   set_energy_channel_weight(this->r1, this->p1, 1.0);
+   set_energy_channel_weight(this->r1, this->p2, 0.0);
 
-   // Incoming neutral momentum => outgoing ion
-   this->set_momentum_channel_weight(atomR, ionP, 1.0);
-   this->set_momentum_channel_weight(atomR, atomP, 0.0);
-   // Incoming ion momentum => outgoing neutral
-   this->set_momentum_channel_weight(ionR, ionP, 0.0);
-   if (this->no_neutral_cx_mom_gain) {
-      this->set_momentum_channel_weight(ionR, atomP, 0.0);
+   // Energy exchange between r2 and p2
+   set_energy_channel_weight(this->r2, this->p1, 0.0);
+   set_energy_channel_weight(this->r2, this->p2, 1.0);
+
+   //  Momentum exchange between r1 and p1
+   set_momentum_channel_weight(this->r1, this->p1, 1.0);
+   set_momentum_channel_weight(this->r1, this->p2, 0.0);
+
+   // Momentum exchange between r2 and p2
+   // (Can be turned off for neutral-ion CX using config option)
+   if (this->has_neutral_reactant && this->no_neutral_cx_mom_gain) {
+      set_momentum_channel_weight(this->r2, this->p2, 0.0);
    } else {
-     this->set_momentum_channel_weight(ionR, atomP, 1.0);
-   }  
+      set_momentum_channel_weight(this->r2, this->p2, 1.0);
+   }
+   set_momentum_channel_weight(this->r2, this->p1, 0.0);
 
 .. note::
    So-called `participation factors<Reaction::pfactors>` are included in all source term
@@ -1100,22 +1107,10 @@ in the code with the reaction string as an argument, e.g.
 
    RegisterComponent<MyReaction> register_myreaction("a + b -> c + d");
 
-To define the rate parameterisation for new reactions, subclasses must implement
-`get_rate_params_type<Reaction::get_rate_params_type>`, as well as either
-`eval_sigma_v_nT<Reaction::eval_sigma_v_nT>`, or `eval_sigma_v_T<Reaction::eval_sigma_v_T>`,
-depending on what :code:`get_rate_params_type` returns.
-`eval_sigma_vE_nT<Reaction::eval_sigma_vE_nT>` may also be overridden if it is required for any
-sources added in `transform_additional<Reaction::transform_additional>` (see below).
-
 Any sources associated with the reaction that are not captured by
 `transform_impl<Reaction::transform_impl>` should be added by overriding
 `transform_additional<Reaction::transform_additional>` and using
 `update_source<Reaction::update_source>` to set source terms and associated diagnostics.
-
-.. note::
-   Subclasses that inherit from `AmjuelReaction` need only specify the name of a json file (in
-   :file:`./json_database`) at construction. Amjuel coefficients will then be read and the rate
-   calculated accordingly.
 
 
 Adding new reaction diagnostics
@@ -1126,15 +1121,17 @@ subclass constructor; e.g. for a density source associated with the neutral reac
 exchange:
 
 .. code-block:: cpp
-   :caption: Example of adding a diagnostic for a reaction.
+   :caption: Example of adding a reaction diagnostic. :code:`r1` is the name of a reactant that
+    charge-exchanges with reactant :code:`r2` creating product :code:`p1`. 
 
-   add_diagnostic(atomR, fmt::format("S{:s}{:s}_cx", atomR, ionR),
-            fmt::format("Particle transfer to {:s} from {:s} due to CX with {:s}", atomR, ionP, ionR),
-            ReactionDiagnosticType::density_src, "hydrogen_charge_exchange", identity,
-            "particle transfer");
+   add_diagnostic(
+          this->r1, fmt::format("S{:s}{:s}_cx", this->r1, this->r2),
+          fmt::format("Particle transfer to {:s} from {:s} due to CX with {:s}", this->r1,
+                      this->p1, this->r2),
+          ReactionDiagnosticType::density_src, standard_name, identity,
+          "particle transfer");
 
-Here :code:`atomR` is the name of the neutral reactant, :code:`ionR` is the name of the ion reactant
-and :code:`ionP` is the name of the ion product. 
+
 
 An optional function pointer can be used to set a transformation that will be applied when the
 diagnostic is updated. The value passed here (also the default) is :code:`identity`, meaning that
@@ -1166,6 +1163,61 @@ associated with species :code:`h+`.
 Finally, diagnostics are written out in `outputVars()<Reaction::outputVars>`, which simply iterates
 over the `diagnostics<Reaction::diagnostics>` map, copying fields into the output state. Appropriate
 metadata is set for each diagnostic depending on the associated :code:`ReactionDiagnosticType`.
+
+
+Adding new reaction data
+````````````````````````
+
+If the data being added is of a new type (i.e. one not handled by an existing subclass of
+`ReactionData`), developers will need to:
+
+1. Create a new class that inherits from `ReactionData` (or from `ReactionDataWithCoeffs` if the
+   rate calculation computes a fit value from coefficients).
+2. Implement all pure virtual functions, including those that calculate rates with different
+   parameterisations.
+3. Add code to the constructor of the new subclass to read data into the `coeffs` data member, for file-based data sources.
+4. Add a new value to the `ReactionDataType` enum.
+5. Register the data class in a new header file.
+
+   .. code-block:: cpp
+
+      RegisterReactionData<MyDataClass> register_myclass("mylabel");
+
+   where "mylabel" must match the value of the `ReactionDataType` enum added in step 4, converted to lowercase.
+
+6. Add an include statement for your class's header in :file:`hermes-3.hxx`.
+
+
+For both new and existing data types, developers need to
+
+1. Add any associated json data files to the :file:`./json_database` directory.
+2. Register a `Reaction` subclass for the reaction string.
+3. Add any default data IDs to the `generate_default_data_ids_map` function in :file:`reaction_settings.hxx`.
+
+Step 3. is optional, but without it, users will always need to specify the data type and ID/label for the new reaction in their input file.
+
+Example: To add He+ ionisation: :code:`he+ + e -> he+2 + 2e` one could
+
+1. Create :file:`./json_database/AMJUEL_H.4_2.2C.json` containing the relevant coefficients,
+   matching the format of existing Amjuel json files.
+2. Register the reaction with the standard ionisation reaction class:
+   :code:`RegisterComponent<IznReaction> register_izn_he2p("he+ + e -> he+2 + 2e");`
+3. Set the new data to be the default source for He+ ionisation in
+   :file:`include/reaction_settings.hxx`
+
+   .. code-block:: cpp
+
+      static inline void generate_default_data_ids_map() {
+      ...
+         add_default_id(ReactionDataTypes::Amjuel, "he+ + e -> he+2 + 2e", ReactionCoeffTypes::sigma_v, "H.4_2.2C");
+      ...
+      }
+
+.. note::
+   For ionisation/recombination one would also need to add data to compute the losses associated
+   with the ionisation potential energy cost and photon emission. At time of writing, appropriate
+   Amjuel data is not available for this reaction, which is why He+ ionisation hasn't already been
+   added.
 
 .. _sec-tests:
 

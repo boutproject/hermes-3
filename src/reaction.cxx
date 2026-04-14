@@ -9,42 +9,41 @@
 #include <bout/boutexception.hxx>
 
 #include "integrate.hxx"
+#include "reaction_settings.hxx"
 
 namespace hermes {
 
+///
 Reaction::Reaction(std::string name, Options& options)
     : ReactionBase({readOnly("species:{sp}:{r_val}"), readOnly("species:e:{e_val}"),
                     readWrite("species:{sp}:{w_val}")}),
       units(options["units"]), name(name) {
 
   // Extract some relevant options, units to member vars for readability
-  Tnorm = get<BoutReal>(this->units["eV"]);
-  Nnorm = get<BoutReal>(this->units["inv_meters_cubed"]);
-  FreqNorm = 1. / get<BoutReal>(this->units["seconds"]);
+  this->Tnorm = get<BoutReal>(this->units["eV"]);
+  this->Nnorm = get<BoutReal>(this->units["inv_meters_cubed"]);
+  this->FreqNorm = 1. / get<BoutReal>(this->units["seconds"]);
 
   this->diagnose = options[name]["diagnose"]
                        .doc("Output additional diagnostics?")
                        .withDefault<bool>(false);
 
-  /*
-   * Awful hack to extract the correct reaction expression from the params; depends on
-   * instantiation order matching the order reactions are listed in the input file. There
-   * must be a better way...
-   */
-  std::string reaction_grp_str = options[name]["type"];
-  std::regex match_parentheses("\\(|\\)");
-  reaction_grp_str = std::regex_replace(reaction_grp_str, match_parentheses, "");
-  std::string reaction_str;
-  std::stringstream ss(reaction_grp_str);
-  for (auto ii = 0; ii < this->inst_num; ii++) {
-    std::getline(ss, reaction_str, ',');
-  }
+  std::string reaction_str, data_src_id;
+  ReactionDataTypes data_src_type;
+
+  // Extract reaction string, data source type for this reaction
+  get_reaction_settings(options[name], reaction_str, data_src_type, data_src_id);
 
   // Parse the reaction string
   this->parser = std::make_unique<ReactionParser>(reaction_str);
 
+  std::vector<std::string> metadata_keys = {};
+  this->rate_data = ReactionDataFactory::getInstance().create(
+      toString(data_src_type), data_src_id, options, metadata_keys);
+
   std::vector<std::string> species = this->parser->get_species();
-  // Participation factors. All set to unity for now; could make configurable in future.
+  // Participation factors. All set to unity for now; could make
+  // configurable in future.
   for (const std::string& sp : species) {
     this->pfactors[sp] = 1;
   }
@@ -68,20 +67,7 @@ Reaction::Reaction(std::string name, Options& options)
   substitutePermissions("reactant", this->parser->get_species(species_filter::reactants));
 }
 
-/**
- * @brief Add a new diagnostic.
- *
- * @param sp_name Species with which the diagnostic will be associated
- * @param diag_name Label used in the output (and to store it temporarily in the state)
- * @param diag_desc Description to use as the 'long_name' output attribute
- * @param diag_type enum identifying the diagnostic type, also used to determine source
- * name
- * @param data_source Name to use as the 'source' output attribute
- * @param standard_name Optional string to use as the 'standard_name' output attribute.
- * Defaults to diag_name.
- * @param transformer Optional transformer function to use when modifying the diagnostic
- * (default is 'negate', i.e. the diagnostic has the opposite sign to the source)
- */
+///
 void Reaction::add_diagnostic(const std::string& sp_name, const std::string& diag_name,
                               const std::string& diag_desc,
                               ReactionDiagnosticType diag_type,
@@ -91,23 +77,66 @@ void Reaction::add_diagnostic(const std::string& sp_name, const std::string& dia
   std::pair<std::string, ReactionDiagnosticType> diag_key =
       std::make_pair(sp_name, diag_type);
   if (standard_name.empty()) {
-    this->diagnostics.insert(
-        std::make_pair(diag_key, ReactionDiagnostic(diag_name, diag_desc, diag_type,
-                                                    data_source, transformer)));
+    this->diagnostics.insert(std::make_pair(
+        diag_key, ReactionDiagnostic(diag_name, diag_desc, diag_type, data_source,
+                                     this->units, transformer)));
   } else {
     this->diagnostics.insert(std::make_pair(
         diag_key, ReactionDiagnostic(diag_name, diag_desc, diag_type, data_source,
-                                     standard_name, transformer)));
+                                     standard_name, this->units, transformer)));
   }
   setPermissions(readWrite(diag_name));
 }
 
-/**
- * @brief Set weights for any reactant => product momentum / energy channel that hasn't
- * already been specified via set_energy_channel_weight and set_momentum_channel_weight.
- *
- * @param state current simulation state
- */
+///
+void Reaction::get_reaction_settings(Options& options, std::string& reaction_str,
+                                     ReactionDataTypes& data_type, std::string& data_id) {
+
+  // Extract reaction string(s). At least one must have been specified.
+  std::vector<std::string> reaction_strs = split_csv_str(
+      options["type"].doc("Comma-separated list of reaction strings").as<std::string>());
+  const std::size_t num_reactions = reaction_strs.size();
+  ASSERT1(this->inst_num <= num_reactions);
+  const std::size_t inst_idx = inst_num - 1;
+  reaction_str = reaction_strs[inst_idx];
+
+  // Extract data source type(s). Default to Amjuel for all if none was provided.
+  std::vector<std::string> data_type_strs = split_csv_str(
+      options["data_srcs"]
+          .doc("Reaction data source type ('ADAS', 'Amjuel', etc.), either a "
+               "single value for all reaction strings, "
+               "or a comma-separated list with one entry per reaction string")
+          .withDefault(toString(ReactionDataTypes::Amjuel)),
+      num_reactions, "reaction data source type");
+  std::vector<ReactionDataTypes> data_types;
+  std::transform(data_type_strs.begin(), data_type_strs.end(), data_type_strs.begin(),
+                 [](std::string s) {
+                   std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+                   return s;
+                 });
+  std::transform(data_type_strs.begin(), data_type_strs.end(),
+                 std::back_inserter(data_types), ReactionDataTypesFromString);
+  data_type = data_types[inst_idx];
+
+  // Extract data id(s). Set a sensible default if none was provided.
+  std::string data_ids_str =
+      options["data_ids"]
+          .doc("Comma-separated list of data identifiers to use for each reaction "
+               "string.")
+          .withDefault(get_default_data_ids_str(reaction_strs, data_types,
+                                                ReactionCoeffTypes::sigma_v));
+  std::vector<std::string> data_ids =
+      split_csv_str(data_ids_str, num_reactions, "reaction data source type");
+  data_id = data_ids[inst_idx];
+  if (data_id == NO_DATA_ID_DEFAULT_FOUND) {
+    throw BoutException(fmt::format(
+        "No reaction data id specified and no suitable default found for reaction "
+        "string '{}'. Please provide a data id using the 'data_ids' option.",
+        reaction_str));
+  }
+}
+
+///
 void Reaction::init_channel_weights(GuardedOptions& state) {
   std::vector<std::string> heavy_reactants =
       this->parser->get_species(species_filter::heavy, species_filter::reactants);
@@ -169,12 +198,7 @@ void Reaction::init_channel_weights(GuardedOptions& state) {
   }
 }
 
-/**
- * @brief Copy all diagnostics into the output, setting the appropriate metadata at the
- * same time
- *
- * @param state
- */
+///
 void Reaction::outputVars(Options& state) {
   if (this->diagnose) {
     for (auto& [key, diag] : this->diagnostics) {
@@ -197,13 +221,7 @@ void Reaction::set_momentum_channel_weight(const std::string& reactant_name,
   this->momentum_channels[reactant_name][product_name] = weight;
 }
 
-/**
- * @brief Add density, momentum and energy sources that apply to all reactions (e.g.
- * those driven by species population changes), then call transform_additional() to allow
- * subclasses to add other terms.
- *
- * @param state
- */
+///
 void Reaction::transform_impl(GuardedOptions& state) {
   zero_diagnostics(state);
 
@@ -221,12 +239,13 @@ void Reaction::transform_impl(GuardedOptions& state) {
 
   // Create rate helper and compute reaction rate, collision frequencies
   RateData rate_calc_results;
-  RateParamsTypes rate_params_type = get_rate_params_type();
+  RateParamsTypes rate_params_type = this->rate_data->get_fit_type();
   if (rate_params_type == RateParamsTypes::ET) {
     throw BoutException("RateParamsTypes::ET not implemented");
   } else if (rate_params_type == RateParamsTypes::nT) {
     TwoDRateFunc calc_rate = [&](BoutReal mass_action, BoutReal ne, BoutReal te) {
-      BoutReal result = mass_action * eval_sigma_v_nT(te * Tnorm, ne * Nnorm) * Nnorm
+      BoutReal result = mass_action
+                        * this->rate_data->eval_sigma_v_nT(te * Tnorm, ne * Nnorm) * Nnorm
                         / FreqNorm * rate_multiplier;
       return result;
     };
@@ -235,8 +254,8 @@ void Reaction::transform_impl(GuardedOptions& state) {
     rate_calc_results = rate_helper.calc_rates(calc_rate, this->do_parallel_averaging);
   } else if (rate_params_type == RateParamsTypes::T) {
     OneDRateFunc calc_rate = [&](BoutReal mass_action, BoutReal Teff) {
-      BoutReal result =
-          mass_action * 1e-6 * eval_sigma_v_T(Teff) * Nnorm / FreqNorm * rate_multiplier;
+      BoutReal result = mass_action * 1e-6 * this->rate_data->eval_sigma_v_T(Teff) * Nnorm
+                        / FreqNorm * rate_multiplier;
       return result;
     };
 
@@ -318,11 +337,7 @@ void Reaction::transform_impl(GuardedOptions& state) {
   }
 }
 
-/**
- * @brief Reset the temporary values of the diagnostics stored in the state.
- *
- * @param state
- */
+///
 void Reaction::zero_diagnostics(GuardedOptions& state) {
   if (this->diagnose) {
     for (auto& [key, diag] : diagnostics) {
