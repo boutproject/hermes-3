@@ -184,6 +184,13 @@ set(HERMES_SOURCES
     include/fixed_fraction_radiation.hxx
     include/simple_pump.hxx)
 
+if(HERMES_USE_VANTAGE)
+# include Hermes-VANTAGE include and source files
+  list(APPEND HERMES_SOURCES
+      src/vantage_dmplex.cxx
+      include/vantage_dmplex.hxx)
+endif()
+
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
 
@@ -269,7 +276,7 @@ if(HERMES_USE_VANTAGE)
   add_executable(bout-particle-push
                 bout-particle-push.cxx
                 ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
-  target_link_libraries(bout-particle-push PUBLIC bout++::bout++ VANTAGE-Reactions::VANTAGE-Reactions NESO-RNG-Toolkit::NESO-RNG-Toolkit)
+  target_link_libraries(bout-particle-push PUBLIC hermes-3-lib bout++::bout++ VANTAGE-Reactions::VANTAGE-Reactions NESO-RNG-Toolkit::NESO-RNG-Toolkit)
   add_sycl_to_target(TARGET bout-particle-push SOURCES bout-particle-push.cxx)
 endif()
 
