@@ -148,6 +148,9 @@ private:
 
   bool viscosity_from_anomalous_nu; ///< Calculate perpendicular viscosity from anomalous viscosity?
 
+  Field3D phi0; ///< Diamagnetic potential
+  bool initialize_phi;
+
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 

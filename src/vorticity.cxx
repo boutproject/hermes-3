@@ -107,15 +107,15 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     .doc("Perpendicular Kinematic viscosity [m^2/s]")
     .withDefault(viscosity)
     / (Lnorm * Lnorm * Omega_ci);
-  viscosity.applyBoundary("dirichlet");
+  // viscosity.applyBoundary("dirichlet");
 
   viscosity_par = 0.0;
   viscosity_par = options["viscosity_par"]
     .doc("Parallel Kinematic viscosity [m^2/s]")
     .withDefault(viscosity_par)
     / (Lnorm * Lnorm * Omega_ci);
-  viscosity_par.applyBoundary("dirichlet");
-  viscosity_par.applyParallelBoundary("parallel_dirichlet_o2");
+  // viscosity_par.applyBoundary("dirichlet");
+  // viscosity_par.applyParallelBoundary("parallel_dirichlet_o2");
 
   viscosity_from_anomalous_nu = options["viscosity_from_anomalous_nu"]
       .doc("Calculate perpendicular viscosity from anomalous viscosity?")
@@ -140,6 +140,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                            .doc("Relax x boundaries of phi towards Neumann?")
                            .withDefault<bool>(false);
 
+  initialize_phi = options["initialize_phi"]
+                           .doc("initialize electrostatic potential at the first rhs call?")
+                           .withDefault<bool>(false);                           
+
   phi_sheath_dissipation = options["phi_sheath_dissipation"]
     .doc("Add dissipation when phi < 0.0 at the sheath")
     .withDefault<bool>(false);
@@ -155,6 +159,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   // Set initial value. Will be overwritten if restarting
   phi = 0.0; Vort = 0.0;
 
+  // Pick up BCs from input file
+  Vort.setBoundary("Vort");
+  phi.setBoundary("phi");
+
   auto coord = mesh->getCoordinates();
 
   if (split_n0) {
@@ -163,7 +171,14 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     // Set coefficients for Boussinesq solve
     laplacexy->setCoefs(average_atomic_mass / SQ(coord->Bxy), 0.0);
   }
-  phiSolver = Laplacian::create(&options["laplacian"]);
+
+  // Create a solver for the Laplacian
+  phiSolver = Laplacian::create(&alloptions["laplacian"]);
+  // Save performance metrics to output, using the
+  // given name as the prefix.
+  phiSolver->savePerformance(*solver, "laplacian");
+
+  // phiSolver = Laplacian::create(&alloptions["laplacian"]);
   // Set coefficients for Boussinesq solve
   phiSolver->setCoefC(average_atomic_mass / SQ(coord->Bxy));
 
@@ -236,6 +251,9 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
 
   Bsq = SQ(coord->Bxy);
 
+  // Auxiliary
+  phi0 = 0.0;
+
   diagnose = options["diagnose"]
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
@@ -246,12 +264,15 @@ void Vorticity::transform(Options& state) {
 
   Options& allspecies = state["species"];
 
+  auto coord = mesh->getCoordinates();
+
   phi.name = "phi";
   auto& fields = state["fields"];
 
   // Set the boundary of Vort. . Needed only if dissipation terms are included. 
-  Vort.applyBoundary("neumann");
+  // Vort.applyBoundary("neumann");
   // Vort.applyBoundary("dirichlet");
+  Vort.applyBoundary();
 
   if (Vort.hasParallelSlices()) {
     Field3D &Vort_ydown = Vort.ydown();
@@ -285,8 +306,6 @@ void Vorticity::transform(Options& state) {
     Vort = fromFieldAligned(Vort_fa);
   }
 
-  // Set the boundary of phi. 
-  // phi.applyBoundary("neumann");
 
   // Both 2D and 3D fields are kept, though the 3D field
   // is constant in Z. This is for efficiency, to reduce the number of conversions.
@@ -319,6 +338,19 @@ void Vorticity::transform(Options& state) {
   }
 
   Pi_hat.applyBoundary("neumann");
+
+  // Calculate diamagnetic phi0
+  phi0 = -1.0 * Pi_hat;
+  mesh->communicate(phi0);
+
+  if (initialize_phi) {
+    phi = phi0;
+    initialize_phi = false;    
+  }
+
+  // Set the boundary of phi. 
+  // phi.applyBoundary("neumann");
+  phi.applyBoundary();
 
   if (phi_boundary_relax) {
     // Update the boundary regions by relaxing towards zero gradient
@@ -546,8 +578,7 @@ void Vorticity::transform(Options& state) {
   }
 
   // Ensure that potential is set in the communication guard cells
-  // mesh->communicate(phi);
-  mesh->communicate(phi, Vort); //NOTE: Should we include Vort?
+  mesh->communicate(phi);
 
   // Vorticity equation
   ddt(Vort) = 0.0;
