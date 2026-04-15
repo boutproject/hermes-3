@@ -14,6 +14,7 @@ struct ClassicalDiffusion : public NamedComponent<ClassicalDiffusion> {
   static constexpr auto type = "classical_diffusion";
 
 private:
+  std::string name; ///< Short name of species e.g "e"
   Coordinates::FieldMetric Bsq; // Magnetic field squared
 
   bool diagnose;     ///< Output additional diagnostics?
@@ -22,7 +23,7 @@ private:
   Field3D nu; 
   Field3D Kappa_perp;
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
-
+  bool zero_BC_transport; ///< Set transport to zero in ghost cells?
   // Flow diagnostics
   Field3D cls_pf_perp_xlow, cls_pf_perp_ylow;
   Field3D cls_mf_perp_xlow, cls_mf_perp_ylow;
