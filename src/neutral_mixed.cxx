@@ -159,12 +159,18 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
       alloptions[std::string("P") + name]["bndry_all"].withDefault("neumann");
   alloptions[std::string("N") + name]["bndry_all"] =
       alloptions[std::string("N") + name]["bndry_all"].withDefault("neumann");
+  alloptions[std::string("NV") + name]["bndry_all"] =
+      alloptions[std::string("NV") + name]["bndry_all"].withDefault("dirichlet");
+  alloptions[std::string("V") + name]["bndry_all"] =
+      alloptions[std::string("V") + name]["bndry_all"].withDefault("dirichlet");
 
   // Pick up BCs from input file
   Dnn.setBoundary(std::string("Dnn") + name);
   Tn.setBoundary(std::string("T") + name);
   Pn.setBoundary(std::string("P") + name);
   Nn.setBoundary(std::string("N") + name);
+  NVn.setBoundary(std::string("NV") + name);
+  Vn.setBoundary(std::string("V") + name);
 
   // All floored versions of variables get the same boundary as the original
   Pnlim.setBoundary(std::string("P") + name);
@@ -199,7 +205,7 @@ void NeutralMixed::transform(Options& state) {
   Tn.applyBoundary();
 
   Vn = NVn / (AA * Nnlim);
-  Vn.applyBoundary("neumann");
+  Vn.applyBoundary();
 
   // NVn.applyBoundary();
   NVn_solver = NVn; // Save the momentum as calculated by the solver
