@@ -27,7 +27,7 @@ using bout::globals::mesh;
 
 BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptions,
                                            Solver*)
-    : Component({readOnly("species:{sp}:{input_vars}"),
+    : Component({readOnly("species:{sp}:{input_vars}"), readOnly("fields:Apar_flutter"),
                  writeBoundary("species:{sp}:pressure"),
                  readWrite("species:{sp}:{output_vars}")}) {
 

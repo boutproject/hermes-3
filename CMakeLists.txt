@@ -56,7 +56,7 @@ endif()
 include("./cmake/Sanitizers.cmake")
 
 set(HERMES_SOURCES
-    src/amjuel_reaction.cxx
+    src/amjuel_data.cxx
     src/braginskii_collisions.cxx
     src/braginskii_conduction.cxx
     src/braginskii_electron_viscosity.cxx
@@ -67,8 +67,10 @@ set(HERMES_SOURCES
     src/classical_diffusion.cxx
     src/component.cxx
     src/component_scheduler.cxx
+    src/cx_reaction.cxx
     src/dipole_anomalous_transport.cxx
     src/ionisation.cxx
+    src/izn_rec_reaction.cxx
     src/div_ops.cxx
     src/neutral_mixed.cxx
     src/neutral_full_velocity.cxx
@@ -105,24 +107,24 @@ set(HERMES_SOURCES
     src/permissions.cxx
     src/polarisation_drift.cxx
     src/solkit_neutral_parallel_diffusion.cxx
-    src/hydrogen_charge_exchange.cxx
     src/solkit_hydrogen_charge_exchange.cxx
     src/upstream_density_feedback.cxx
     src/temperature_feedback.cxx
     src/detachment_controller.cxx
     src/reaction.cxx
+    src/reaction_data.cxx
     src/reaction_parser.cxx
+    src/species_parser.cxx
     src/transform.cxx
     src/vorticity.cxx
     include/adas_reaction.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
-    include/amjuel_helium.hxx
-    include/amjuel_hydrogen.hxx
-    include/amjuel_reaction.hxx
+    include/amjuel_data.hxx
     include/anomalous_diffusion.hxx
     include/dipole_anomalous_transport.hxx
     include/classical_diffusion.hxx
+    include/cx_reaction.hxx
     include/binormal_stpm.hxx
     include/braginskii_collisions.hxx
     include/braginskii_conduction.hxx
@@ -147,10 +149,10 @@ set(HERMES_SOURCES
     include/guarded_options.hxx
     include/neutral_full_velocity.hxx
     include/hermes_utils.hxx
-    include/hydrogen_charge_exchange.hxx
     include/solkit_hydrogen_charge_exchange.hxx
     include/integrate.hxx
     include/ionisation.hxx
+    include/izn_rec_reaction.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
@@ -160,6 +162,8 @@ set(HERMES_SOURCES
     include/polarisation_drift.hxx
     include/quasineutral.hxx
     include/reaction.hxx
+    include/reaction_data.hxx
+    include/reaction_settings.hxx
     include/recalculate_metric.hxx
     include/recycling.hxx
     include/relax_potential.hxx
@@ -172,6 +176,7 @@ set(HERMES_SOURCES
     include/snb_conduction.hxx
     include/sheath_closure.hxx
     include/sound_speed.hxx
+    include/species_parser.hxx
     include/upstream_density_feedback.hxx
     include/temperature_feedback.hxx
     include/detachment_controller.hxx

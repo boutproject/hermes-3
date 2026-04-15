@@ -15,7 +15,6 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
     : Component({readIfSet("species:{all_species}:charge"),
                  readOnly("species:{charged}:{inputs}"),
                  readIfSet("species:{charged}:momentum"),
-                 readIfSet("species:{charged}:pressure", Regions::Interior),
                  readIfSet("fields:{fields}"),
                  readWrite("species:{charged}:{outputs}")}) {
 
@@ -64,20 +63,22 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
 
-  // Pressure interior only,
-  std::vector<std::string> inputs = {"AA"}, fields = {"DivJdia"},
-                           outputs = {"energy_source"};
+  std::vector<std::string> inputs = {"AA"};
+  std::vector<std::string> fields = {"DivJdia", "DivJextra", "DivJcol"};
+  std::vector<std::string> outputs = {};
   if (advection) {
-    // Interior only
     inputs.push_back("density");
-    fields.push_back("DivJextra");
-    fields.push_back("DivJdia");
     outputs.push_back("density_source");
+    outputs.push_back("energy_source");
     outputs.push_back("momentum_source");
+    setPermissions(readIfSet("species:{charged}:pressure", Regions::All));
+  } else if (diamagnetic_polarisation) {
+    outputs.push_back("energy_source");
+    setPermissions(readIfSet("species:{charged}:pressure", Regions::Interior));
   }
   substitutePermissions("inputs", inputs);
   substitutePermissions("fields", fields);
-  // FIXME: energy_source and momentum source are only set if pressure
+  // FIXME: density_source, energy_source, and momentum_source are only set if density, pressure,
   // and momentum were set, respectively
   substitutePermissions("outputs", outputs);
 }

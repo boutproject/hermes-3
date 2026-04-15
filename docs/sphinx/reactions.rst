@@ -6,7 +6,12 @@ Reactions
 The following content gives some background to the reactions implemented in Hermes-3.
 Please see the :ref:`sec-postprocessing` section for related diagnostics.
 
+.. seealso::
 
+   For a more detailed description of how reaction source terms are handled in
+   the code, please see the :ref:`'Reactions' section of the developer
+   manual<sec-reactions-dev>`.
+   
 Reaction basics
 ------------------------------
 
@@ -49,38 +54,38 @@ Transfer channels
 
 Reactions typically convert species from one to another, leading to
 a transfer of mass momentum and energy. For a reaction converting
-species :math:`a` to species :math:`b` at rate :math:`R` (units
+species :math:`a` to species :math:`b` at rate :math:`S` (units
 of events per second per volume) we have transfers:
 
 .. math::
 
    \begin{aligned}
-   \frac{\partial}{\partial t} n_a =& \ldots - R \\
-   \frac{\partial}{\partial t} n_b =& \ldots + R \\
+   \frac{\partial}{\partial t} n_a =& \ldots - S \\
+   \frac{\partial}{\partial t} n_b =& \ldots + S \\
    \frac{\partial}{\partial t}\left( m n_a u_a\right) =& \ldots + F_{ab} \\
    \frac{\partial}{\partial t}\left( m n_a u_a\right) =& \ldots + F_{ba} \\
-   \frac{\partial}{\partial t}\left( \frac{3}{2} p_a \right) =& \ldots - F_{ab}u_a + W_{ab} - \frac{1}{2}mRu_a^2 \\
-   \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + W_{ba} + \frac{1}{2}mRu_b^2
+   \frac{\partial}{\partial t}\left( \frac{3}{2} p_a \right) =& \ldots - F_{ab}u_a + E_{ab} - \frac{1}{2}mSu_a^2 \\
+   \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + E_{ba} + \frac{1}{2}mSu_b^2
    \end{aligned}
    
 where both species have the same mass: :math:`m_a = m_b = m`. In the
 pressure equations the :math:`-F_{ab}u_a` comes from splitting the
-kinetic and thermal energies; :math:`W_{ab}=-W_{ba}` is the energy
+kinetic and thermal energies; :math:`E_{ab}=-E_{ba}` is the energy
 transfer term that we need to find; The final term balances the loss
 of kinetic energy at fixed momentum due to a particle source or
 sink.
 
-The momentum transfer :math:`F_{ab}=-F{ba}` is the momentum carried
-by the converted ions: :math:`F_{ab}=-m R u_a`. To find
-:math:`W_{ab}` we note that for :math:`p_a = 0` the change in pressure
-must go to zero: :math:`-F_{ab}u_a + W_{ab} -\frac{1}{2}mRu_a^2 = 0`.
+The momentum transfer :math:`F_{ab}=-F_{ba}` is the momentum carried
+by the converted ions: :math:`F_{ab}=-m S u_a`. To find
+:math:`E_{ab}` we note that for :math:`p_a = 0` the change in pressure
+must go to zero: :math:`-F_{ab}u_a + E_{ab} -\frac{1}{2}mSu_a^2 = 0`.
 
 .. math::
 
    \begin{aligned}
-   W_{ab} =& F_{ab}u_a + \frac{1}{2}mRu_a^2 \\
-   =& - mR u_a^2 + \frac{1}{2}mRu_a^2\\
-   =& -\frac{1}{2}mRu_a^2
+   E_{ab} =& F_{ab}u_a + \frac{1}{2}mSu_a^2 \\
+   =& - mS u_a^2 + \frac{1}{2}mSu_a^2\\
+   =& -\frac{1}{2}mSu_a^2
    \end{aligned}
 
 Substituting into the above gives:
@@ -88,9 +93,9 @@ Substituting into the above gives:
 .. math::
 
    \begin{aligned}
-   \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + W_{ba} + \frac{1}{2}mRu_b^2 \\
-   =& \ldots - mRu_au_b + \frac{1}{2}mRu_a^2 + \frac{1}{2}mRu_a^2 \\
-   =& \ldots + \frac{1}{2}mR\left(u_a - u_b\right)^2
+   \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + E_{ba} + \frac{1}{2}mSu_b^2 \\
+   =& \ldots - mSu_au_b + \frac{1}{2}mSu_a^2 + \frac{1}{2}mSu_a^2 \\
+   =& \ldots + \frac{1}{2}mS\left(u_a - u_b\right)^2
    \end{aligned}
 
 This has the property that the change in pressure of both species is
@@ -203,12 +208,16 @@ NOTE:
 Implemented reactions 
 ----------------------
 
-Hydrogen
-~~~~~~~~
+Hydrogen and Helium
+~~~~~~~~~~~~~~~~~~~
 
-Multiple isotopes of hydrogen can be evolved, so to keep track of this the
-species labels `h`, `d` and `t` are all handled by the same hydrogen atomic
-rates calculation. The following might therefore be used
+Reionisation and recombination reactions for Hydrogen isotopes and Helium are handled by
+the `IznReaction` and `RecReaction` classes.  Reaction rates themselves are evaluated by
+the `RateHelper` class, using Amjuel datasets by default.
+
+Multiple isotopes of Hydrogen can be evolved and are kept track of using species labels
+`h`, `d` and `t`. The following could therefore be used to enable ionisation of Deuterium
+and Tritium in the configuration file:
 
 .. code-block:: ini
   
@@ -221,83 +230,85 @@ rates calculation. The following might therefore be used
           t + e -> t+ + 2e,  # Tritium ionisation
          )
 
-+------------------+----------------------------------------------+
-| Reaction         | Description                                  |
-+==================+==============================================+
-| h + e -> h+ + 2e | Hydrogen ionisation (Amjuel H.4 2.1.5)       |
-+------------------+----------------------------------------------+
-| d + e -> d+ + 2e | Deuterium ionisation (Amjuel H.4 2.1.5)      |
-+------------------+----------------------------------------------+
-| t + e -> t+ + 2e | Tritium ionisation (Amjuel H.4 2.1.5)        |
-+------------------+----------------------------------------------+
-| h + h+ -> h+ + h | Hydrogen charge exchange (Amjuel H.3 3.1.8)  |
-+------------------+----------------------------------------------+
-| d + d+ -> d+ + d | Deuterium charge exchange (Amjuel H.3 3.1.8) |
-+------------------+----------------------------------------------+
-| t + t+ -> t+ + t | Tritium charge exchange (Amjuel H.3 3.1.8)   |
-+------------------+----------------------------------------------+
-| h + d+ -> h+ + d | Mixed hydrogen isotope CX (Amjuel H.3 3.1.8) |
-+------------------+----------------------------------------------+
-| d + h+ -> d+ + h |                                              |
-+------------------+----------------------------------------------+
-| h + t+ -> h+ + t |                                              |
-+------------------+----------------------------------------------+
-| t + h+ -> t+ + h |                                              |
-+------------------+----------------------------------------------+
-| d + t+ -> d+ + t |                                              |
-+------------------+----------------------------------------------+
-| t + d+ -> t+ + d |                                              |
-+------------------+----------------------------------------------+
-| h+ + e -> h      | Hydrogen recombination (Amjuel H.4 2.1.8)    |
-+------------------+----------------------------------------------+
-| d+ + e -> d      | Deuterium recombination (Amjuel H.4 2.1.8)   |
-+------------------+----------------------------------------------+
-| t+ + e -> t      | Tritium recombination (Amjuel H.4 2.1.8)     |
-+------------------+----------------------------------------------+
+The full set of ionisation and recombination reactions currently available for Hydrogen
+isotopes and Helium are:
 
-In addition, the energy loss associated with the ionisation potential energy cost
-as well as the photon emission during excitation and de-excitation during multi-step 
-ionisation is calculated using the AMJUEL rate H.10 2.1.5. The equivalent rate
-for recombination is H.10 2.1.8.
+.. table:: Ionisation and recombination reactions for Hydrogen isotopes and Helium
+      :widths: 20 30 50
+      :align: center
 
-The code to calculate the charge exchange rates is in
-:file:`hydrogen_charge_exchange.[ch]xx`. This implements reaction H.3 3.1.8 from
-Amjuel (p43), scaled to different isotope masses and finite neutral
-particle temperatures by using the effective temperature (Amjuel p43):
+      +----------------------+------------------------------+------------------------------------------+
+      | Reaction             | Description |br|             | Reference / Notes                        |
+      |                      | (default data source)        |                                          |
+      +======================+==============================+==========================================+
+      | h + e -> h+ + 2e     | Hydrogen ionisation |br|     | D.Reiter, K.Sawada and T.Fujimoto (2016) |
+      |                      | (Amjuel H.4 2.1.5)           |                                          |
+      +----------------------+------------------------------+------------------------------------------+
+      | d + e -> d+ + 2e     | Deuterium ionisation |br|    |                                          |
+      |                      | (Amjuel H.4 2.1.5)           |                                          |
+      +----------------------+------------------------------+------------------------------------------+
+      | t + e -> t+ + 2e     | Tritium ionisation |br|      |                                          |
+      |                      | (Amjuel H.4 2.1.5)           |                                          |
+      +----------------------+------------------------------+------------------------------------------+
+      | h+ + e -> h          | Hydrogen recombination |br|  |    Effective rates, including both       |
+      |                      | (Amjuel H.4 2.1.8)           |    radiative and 3-body contributions.   |
+      +----------------------+------------------------------+------------------------------------------+
+      | d+ + e -> d          | Deuterium recombination |br| |                                          |
+      |                      | (Amjuel H.4 2.1.8)           |                                          |
+      +----------------------+------------------------------+------------------------------------------+
+      | t+ + e -> t          | Tritium recombination |br|   |                                          |
+      |                      | (Amjuel H.4 2.1.8)           |                                          |
+      +----------------------+------------------------------+------------------------------------------+
+      | he + e -> he+ + 2e   | He ionisation |br|           |           Unresolved metastables         |
+      |                      | (Amjuel H.4 2.3.9a)          |                                          |
+      +----------------------+------------------------------+------------------------------------------+
+      | he+ + e -> he        | He+ recombination |br|       |           Unresolved metastables         |
+      |                      | (Amjuel H.4 2.3.13a)         |                                          |
+      +----------------------+------------------------------+------------------------------------------+
+
+Energy losses associated with both the ionisation potential energy cost and photon
+emission during excitation and de-excitation during multi-step ionisation are also
+included. The default datasets for these calculations are Amjuel reaction H.10 2.1.5 for
+ionisation and Amjuel reaction H.10 2.1.8 for recombination.
+
+Charge exchange reactions between Hydrogen isotopes are handled by the `CXReaction` class.
+By default, rates are calculated using Amjuel H.3 3.1.8, parameterised by an effective
+temperature scaled to different isotope masses and finite neutral particle temperatures
+according to (Amjuel p43):
 
 .. math::
 
    T_{eff} = \frac{M}{M_1}T_1 + \frac{M}{M_2}T_2
 
 
-The effective hydrogenic ionisation rates are calculated using Amjuel
-reaction H.4 2.1.5, by D.Reiter, K.Sawada and T.Fujimoto (2016).
-Effective recombination rates, which combine radiative and 3-body contributions,
-are calculated using Amjuel reaction 2.1.8. 
+The available charge exchange reactions for Hydrogen isotopes are:
 
-.. doxygenstruct:: HydrogenChargeExchange
-   :members:
+.. table:: Charge exchange reactions for Hydrogen isotopes
+      :widths: 20 40
+      :align: center
 
+      +----------------------+------------------------------------------------------------+
+      | Reaction             | Description (default data source)                          |
+      +======================+============================================================+
+      | h + h+ -> h+ + h     | Hydrogen charge exchange (Amjuel H.3 3.1.8)                |
+      +----------------------+------------------------------------------------------------+
+      | d + d+ -> d+ + d     | Deuterium charge exchange (Amjuel H.3 3.1.8)               |
+      +----------------------+------------------------------------------------------------+
+      | t + t+ -> t+ + t     | Tritium charge exchange (Amjuel H.3 3.1.8)                 |
+      +----------------------+------------------------------------------------------------+
+      | h + d+ -> h+ + d     | Mixed Hydrogen isotope CX (Amjuel H.3 3.1.8)               |
+      +----------------------+------------------------------------------------------------+
+      | d + h+ -> d+ + h     |                             "                              |
+      +----------------------+------------------------------------------------------------+
+      | h + t+ -> h+ + t     |                             "                              |
+      +----------------------+------------------------------------------------------------+
+      | t + h+ -> t+ + h     |                             "                              |
+      +----------------------+------------------------------------------------------------+
+      | d + t+ -> d+ + t     |                             "                              |
+      +----------------------+------------------------------------------------------------+
+      | t + d+ -> t+ + d     |                             "                              |
+      +----------------------+------------------------------------------------------------+
 
-Helium
-~~~~~~
-
-+----------------------+------------------------------------------------------------+
-| Reaction             | Description                                                |
-+======================+============================================================+
-| he + e -> he+ + 2e   | He ionisation, unresolved metastables (Amjuel 2.3.9a)      |
-+----------------------+------------------------------------------------------------+
-| he+ + e -> he        | He+ recombination, unresolved metastables (Amjuel 2.3.13a) |
-+----------------------+------------------------------------------------------------+
-
-The implementation of these rates are in the `AmjuelHeIonisation01`
-and `AmjuelHeRecombination10` classes:
-
-.. doxygenstruct:: AmjuelHeIonisation01
-   :members:
-
-.. doxygenstruct:: AmjuelHeRecombination10
-   :members:
 
 Lithium
 ~~~~~~~

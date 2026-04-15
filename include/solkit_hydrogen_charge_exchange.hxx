@@ -6,16 +6,16 @@
 #include "reaction.hxx"
 /// SOL-KiT Hydrogen charge exchange total rate coefficient
 ///
-struct SOLKITHydrogenChargeExchange : public ReactionBase {
+struct SOLKITHydrogenChargeExchange : public hermes::ReactionBase {
   ///
   /// @param alloptions Settings, which should include:
   ///        - units
   ///          - inv_meters_cubed
   ///          - seconds
   SOLKITHydrogenChargeExchange(std::string, Options& alloptions, Solver*)
-      : ReactionBase({readIfSet("species:{sp}:velocity"),
-                      readOnly("species:{sp}:{readvals}"),
-                      readWrite("species:{sp}:momentum_source")}) {
+      : hermes::ReactionBase({readIfSet("species:{sp}:velocity"),
+                              readOnly("species:{sp}:{readvals}"),
+                              readWrite("species:{sp}:momentum_source")}) {
     // Get the units
     const auto& units = alloptions["units"];
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
