@@ -7,6 +7,7 @@
 using bout::globals::mesh;
 
 DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& alloptions,
+                                                  
                                                    Solver*)
     : Component({readOnly("species:{name}:density"),
                  readIfSet("species:{name}:{optional}"),
@@ -618,7 +619,7 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
 
         if (diagnose) {
 
-          // Save particle, momentum and energy channels
+      // Save particle, momentum and energy channels
 
           set_with_attrs(
               state[{std::string("dipole_quasilinear_D_") + name}], dipole_quasilinear_D,
@@ -740,119 +741,43 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
 
         // Flux in x
 
-        int xs = mesh->xstart-1;
-        int xe = mesh->xend+1;
+  int xs = mesh->xstart - 1;
+  int xe = mesh->xend;
 
-        for (int i = xs; i <= xe; i++) {
-          for (int j = mesh->ystart; j <= mesh->yend; j++) {
-            if ((N2D(i + 1, j)/B2D(i + 1, j) - N2D(i, j)/B2D(i, j)) > 0) {
-              result(i, j) = 1.0;
-            } else {
-              result(i, j) = transport_off_factor;
-            }
-          }
-        }
-        mesh->communicate(result);
-        return result;
-      }
-      const Field2D set_quasilinear_transport_on(const Field2D& Kn, BoutReal transport_off_factor) {
+  for (int i = xs; i <= xe; i++){
+    for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        if ((P(i + 1, j) - P(i, j)) < 0)
+        {result(i,j) = 1.0;}
+        else
+        {result(i,j) = 0.0;}
+    }
+  }
+  return result;
+  }
 
-        Field2D result{zeroFrom(Kn)};
-        result = 1.0;
-        // Flux in x
 
-        int xs = mesh->xstart-1;
-        int xe = mesh->xend+1;
+// const Field3D isnegative_grad_perp(const Field3D& P) {
+//   Field3D result{zeroFrom(P)};
 
-        for (int i = xs; i <= xe; i++) {
-          for (int j = mesh->ystart; j <= mesh->yend; j++) {
-            if (Kn(i, j)//+Kn(i, j + 1) + Kn(i, j - 1) +  + Kn(i + 1, j) + Kn(i - 1, j) 
-                < 0) {
-              result(i, j) = 1.0;
-            } else {
-              result(i, j) = transport_off_factor;
-            }
-          }
-        }
-        mesh->communicate(result);
-        return result;
-      }
-      const Field2D compute_Kn(const Field2D& N2D, const Field2D& B2D,
-                                            const Field2D& htheta2D) {
+//   Coordinates* coord = mesh->getCoordinates();
 
-        Field2D Kn{zeroFrom(N2D)};
-        Coordinates* coord = N2D.getCoordinates();
-        // Flux in x
+ 
+//   // Flux in x
 
-        int xs = mesh->xstart-1;
-        int xe = mesh->xend+1;
+//   int xs = mesh->xstart - 1;
+//   int xe = mesh->xend;
 
-        for (int i = xs; i <= xe; i++) {
-          for (int j = mesh->ystart; j <= mesh->yend; j++) {
-            Kn(i, j) = -(log(N2D(i + 1, j)/B2D(i + 1, j)) - log(N2D(i, j)/B2D(i, j))) / coord->dx(i, j)- 2 * (log(htheta2D(i + 1, j)) - log(htheta2D(i, j))) / coord->dx(i, j);
-          }
-        }
-        mesh->communicate(Kn);
-        return Kn;
-      }
-      // const Field2D compute_Kp(const Field2D& P2D, const Field2D& B2D) {
-
-      //   Field2D dlogPdpsi{zeroFrom(P2D)};
-      //   Coordinates* coord = N2D.getCoordinates();
-
-      //   // Flux in x
-
-      //   int xs = mesh->xstart - 1;
-      //   int xe = mesh->xend;
-
-      //   for (int i = xs; i <= xe; i++) {
-      //     for (int j = mesh->ystart; j <= mesh->yend; j++) {
-
-      //         dlogPdpsi(i, j) = (sqrt(coord->g11(i + 1, j)) + sqrt(coord->g11(i, j)))/2.0*(P(i + 1, j) - P(i, j))/ (P(i, j)+P(i+1, j)/2);
-      //         kappa_n(i, j) = (sqrt(coord->g11(i + 1, j)) + sqrt(coord->g11(i, j)))/ 2.0 * (B2D(i + 1, j) - B2D(i, j)) / (B2D(i, j) + B2D(i + 1, j)/2.0);
-      //     }
-      //   }
-      //   R = sqrt(coord->g11(i + 1, j))/B;
-      //   return result;
-      // }
-      // ASSERT2(a.getLocation() == f.getLocation());
-
-      // Mesh* mesh = a.getMesh();
-
-      // Field3D result{zeroFrom(f)};
-
-      // Coordinates* coord = f.getCoordinates();
-
-      // // Zero all flows
-      // flow_xlow = 0.0;
-      // flow_ylow = 0.0;
-
-      // // Flux in x
-
-      // int xs = mesh->xstart - 1;
-      // int xe = mesh->xend;
-
-      // /*
-      //   if(mesh->firstX())
-      //   xs += 1;
-      // */
-      // /*
-      //   if(mesh->lastX())
-      //   xe -= 1;
-      // */
-
-      // for (int i = xs; i <= xe; i++) {
-      //   for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      //     for (int k = 0; k < mesh->LocalNz; k++) {
-      //       // Calculate flux from i to i+1
-
-      //       BoutReal fout = 0.5
-      //                       * (a(i, j, k) 
-      //                          + a(i + 1, j, k))
-      //                       * (coord->J(i, j, k) * coord->g11(i, j, k)
-      //                          + coord->J(i + 1, j, k) * coord->g11(i + 1, j, k))
-      //                       * (f(i + 1, j, k)
-      //                          - f(i, j, k) )
-      //                       / (coord->dx(i, j, k) + coord->dx(i + 1, j, k));
-
-      //       result(i, j, k) += fout / (coord->dx(i, j, k) * coord->J(i, j, k));
+//   for (int i = xs; i <= xe; i++){
+//     for (int j = mesh->ystart; j <= mesh->yend; j++) {
+//       for (int k = 0; k < mesh->LocalNz; k++) {
+//         // Calculate flux from i to i+1
+//         if ((P(i + 1, j, k) - P(i, j, k)) * (coord->Bxy(i + 1, j, k) - coord->Bxy(i, j, k)) < 0)
+//         {result(i,j,k) = 1.0;}
+//         else
+//         {result(i,j,k) = 0.0;}
+//     }
+//     }
+//   }
+//   return result;
+//   }
+  
