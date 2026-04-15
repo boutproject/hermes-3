@@ -53,14 +53,15 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   const Field3D sqrtB = sqrt(Bxy);
 
   // Parallel electron viscosity
-  Field3D eta = (4. / 3) * 0.73 * P * tau;
+  Field3D eta = (4. / 3) * 0.73 * floor(P, 0.0) *tau;
 
   if (eta_limit_alpha > 0.) {
     // SOLPS-style flux limiter
     // Values of alpha ~ 0.5 typically
 
     const Field3D q_cl = eta * Grad_par(V);   // Collisional value
-    const Field3D q_fl = eta_limit_alpha * P; // Flux limit
+    const Field3D q_fl = eta_limit_alpha * floor(P, 1e-6);
+    ; // Flux limit
 
     eta = eta / (1. + abs(q_cl / q_fl));
 
