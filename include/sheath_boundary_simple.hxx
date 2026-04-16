@@ -86,6 +86,7 @@ private:
   bool upper_y; // Boundary on upper y?
 
   bool always_set_phi; ///< Set phi field?
+  bool phi_sheath_boundary; ///< Set Bohm/floating potential BC for phi? Calculated assuming zero current at the sheath.
 
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
 

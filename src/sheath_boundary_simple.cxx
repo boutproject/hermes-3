@@ -97,6 +97,11 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
 
+  phi_sheath_boundary =
+      options["phi_sheath_boundary"]
+          .doc("Set Bohm/floating potential BC for phi? Calculated assuming zero current at the sheath.")
+          .withDefault<bool>(false);
+
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
 
@@ -167,6 +172,10 @@ void SheathBoundarySimple::transform(Options& state) {
   if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   } else {
+    phi.allocate();
+  }
+
+  if (!IS_SET_NOBOUNDARY(state["fields"]["phi"]) || phi_sheath_boundary) {
     // Calculate potential phi assuming zero current
 
     // Need to sum  n_i Z_i C_i over all ion species
@@ -254,8 +263,6 @@ void SheathBoundarySimple::transform(Options& state) {
       }
     }
 
-    phi.allocate();
-
     // ion_sum now contains the ion current, sum Z_i n_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
     if (lower_y) {
@@ -273,15 +280,21 @@ void SheathBoundarySimple::transform(Options& state) {
 
           // Note: Floor on nesheath is the same as on ion_sum so that the ratio is
           // 1 when both go to zero (implying a flow velocity of 1).
-          phi[i] =
-              tesheath
-              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge)
-                    * floor(nesheath, 1e-5) / floor(ion_sum[i], 1e-5));
+
+          BoutReal phisheath = 
+                          tesheath
+                          * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge)
+                                * floor(nesheath, 1e-5) / floor(ion_sum[i], 1e-5));
 
           const BoutReal phi_wall = wall_potential[i];
-          phi[i] += phi_wall; // Add bias potential
+          phisheath += phi_wall; // Add bias potential
 
-          phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
+          if (phi_sheath_boundary) {
+            phi[i.ym()] = phisheath; // Set sheath potential in guard cell
+          } else {
+            phi[i] = phisheath;
+            phi[i.yp()] = phi[i.ym()] = phi[i]; // Constant into sheath
+          }
         }
       }
     }
@@ -299,15 +312,20 @@ void SheathBoundarySimple::transform(Options& state) {
           const BoutReal nesheath = 0.5 * (Ne_ip + Ne[i]);
           const BoutReal tesheath = floor(0.5 * (Te_ip + Te[i]), 1e-5);
 
-          phi[i] =
-              tesheath
-              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge)
-                    * floor(nesheath, 1e-5) / floor(ion_sum[i], 1e-5));
+          BoutReal phisheath = 
+                          tesheath
+                          * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge)
+                                * floor(nesheath, 1e-5) / floor(ion_sum[i], 1e-5));        
 
           const BoutReal phi_wall = wall_potential[i];
-          phi[i] += phi_wall; // Add bias potential
+          phisheath += phi_wall; // Add bias potential                                
 
-          phi[i.yp()] = phi[i.ym()] = phi[i];
+          if (phi_sheath_boundary) {
+            phi[i.yp()] = phisheath; // Set sheath potential in guard cell
+          } else {
+            phi[i] = phisheath;
+            phi[i.yp()] = phi[i.ym()] = phi[i];
+          }
         }
       }
     }
@@ -341,8 +359,10 @@ void SheathBoundarySimple::transform(Options& state) {
         Te[im] = limitFree(Te[ip], Te[i], temperature_boundary_mode);
         Pe[im] = limitFree(Pe[ip], Pe[i], pressure_boundary_mode);
 
-        // Free boundary potential linearly extrapolated
-        phi[im] = 2 * phi[i] - phi[ip];
+        if (!phi_sheath_boundary) {
+          // Free boundary potential linearly extrapolated
+          phi[im] = 2 * phi[i] - phi[ip];
+        }
 
         const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[im] + Te[i]); // electron temperature
@@ -405,8 +425,10 @@ void SheathBoundarySimple::transform(Options& state) {
         Te[ip] = limitFree(Te[im], Te[i], temperature_boundary_mode);
         Pe[ip] = limitFree(Pe[im], Pe[i], pressure_boundary_mode);
 
-        // Free boundary potential linearly extrapolated.
-        phi[ip] = 2 * phi[i] - phi[im];
+        if (!phi_sheath_boundary) {
+          // Free boundary potential linearly extrapolated.
+          phi[ip] = 2 * phi[i] - phi[im];
+        }
 
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]); // electron temperature
