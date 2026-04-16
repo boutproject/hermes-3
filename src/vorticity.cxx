@@ -140,6 +140,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                            .doc("Relax x boundaries of phi towards Neumann?")
                            .withDefault<bool>(false);
 
+  phi_boundary_neumann = options["phi_boundary_neumann"]
+                           .doc("Apply Neumann BC to phi at x boundaries?")
+                           .withDefault<bool>(false);
+
   initialize_phi = options["initialize_phi"]
                            .doc("initialize electrostatic potential at the first rhs call?")
                            .withDefault<bool>(false);                           
@@ -442,6 +446,28 @@ void Vorticity::transform(Options& state) {
         }
       }
     }
+
+  } else if (phi_boundary_neumann) {
+
+    if (mesh->firstX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          phi(mesh->xstart - 1, j, k) = phi(mesh->xstart, j, k); // Neumann
+          phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
+        }
+      }
+    }
+
+    if (mesh->lastX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          phi(mesh->xend + 1, j, k) = phi(mesh->xend, j, k); // Neumann
+          // phi(mesh->xend + 1, j, k) = 0.0; // Dirichlet
+          phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
+        }
+      }
+    }
+
   } else {
     // phi_boundary_relax = false
     //
