@@ -17,3 +17,5 @@ maint = [
       "ruamel-yaml~=0.19",
       "Unidecode~=1.3",
 ]
+
+[tool.uv.workspace]
