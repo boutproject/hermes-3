@@ -75,7 +75,7 @@ private:
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low pressure?
   BoutReal hyper_z;    ///< Hyper-diffusion in Z
-  bool low_n_source; ///< low_density_feedback 
+  bool low_n_source; ///< low_density_feedback
   BoutReal low_n_source_scale;
 
   bool evolve_log; ///< Evolve logarithm of density?

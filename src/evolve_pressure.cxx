@@ -19,9 +19,9 @@ namespace {
   /// Adaptive source term to prevent variable dropping below a floor value.
   void add_low_sourceterm(Field3D& result, const Field3D& f,
                         const BoutReal lowvalue, const BoutReal scalefactor) {
-    const BoutReal inv_scale = 1.0 / scalefactor;
+    const BoutReal inv_scale = -1.0 / scalefactor;
     BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
-      result[i] += std::min(f[i] - lowvalue, 0.0) * (-inv_scale);
+      result[i] += std::min(f[i] - lowvalue, 0.0) * inv_scale;
     }
   }
 }
@@ -62,7 +62,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   low_p_source_scale = options["low_p_source_scale"]
                            .doc("Timescale for low_p_source term [normalised]. Smaller = more aggressive.")
-                           .withDefault<BoutReal>(1e-3);
+                           .withDefault<BoutReal>(1e-1);
 
   conduction_collisions_mode = options["conduction_collisions_mode"]
       .doc("Can be multispecies: all collisions, or braginskii: self collisions and ie")
