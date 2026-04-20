@@ -271,14 +271,6 @@ int Hermes::init(bool restarting) {
         // dx,dy and dz are dimensionless,
         // so J has SI units of volume. Divide by volume to normalise.
 
-
-	// try loading J from the grid, otherwise use the one calculated from the metric coefficients
-	Coordinates::FieldMetric Jtmp = 0.0;
-	if (mesh->get(Jtmp, "J_new")==0){
-	  mesh->communicate(Jtmp);
-	  coord->J = Jtmp;
-	} 
-	
 	coord->J /= rho_s0 * rho_s0 * rho_s0;
      	
 	coord->g_11 /= SQ(rho_s0);
