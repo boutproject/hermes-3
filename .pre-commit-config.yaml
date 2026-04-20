@@ -1,10 +1,4 @@
 # This file requires prek rather than pre-commit
-exclude:
-  glob:
-    - "tools/**/*.pro"
-    - "tools/**/*.m"
-    - "tools/**/*.[ch]"
-
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
