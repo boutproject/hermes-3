@@ -76,8 +76,7 @@ IndentCaseLabels: false
 # IndentPPDirectives: None
 IndentWidth:     2
 IndentWrappedFunctionNames: false
-# requires clang-format 15+
-# InsertBraces: true
+InsertBraces: true
 KeepEmptyLinesAtTheStartOfBlocks: true
 MacroBlockBegin: ''
 MacroBlockEnd:   ''
