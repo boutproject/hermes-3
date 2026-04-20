@@ -855,17 +855,22 @@ void NeutralMixed::finally(const Options& state) {
           Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
         }
 
-        ddtN_anomalous_transport = Div_a_Grad_perp_upwind(Nn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
-        ddt(Nn) += ddtN_anomalous_transport; 
+        ddtN_anomalous_transport =
+            Div_a_Grad_perp_upwind(Nn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        ddt(Nn) += ddtN_anomalous_transport;
         // NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the
         // equilibrium value of Nn.
 
-        ddtPn_anomalous_transport = (5. / 3) * Div_a_Grad_perp_upwind(Pn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
-        ddt(Pn) += ddtPn_anomalous_transport; 
+        ddtPn_anomalous_transport =
+            (5. / 3)
+            * Div_a_Grad_perp_upwind(Pn * anomalous_D / softFloor(Ni, density_floor),
+                                     Ni2D);
+        ddt(Pn) += ddtPn_anomalous_transport;
 
         if (evolve_momentum) {
-           ddtNVn_anomalous_transport = Div_a_Grad_perp_upwind( NVn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
-           ddt(NVn) += ddtNVn_anomalous_transport;
+          ddtNVn_anomalous_transport = Div_a_Grad_perp_upwind(
+              NVn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+          ddt(NVn) += ddtNVn_anomalous_transport;
         }
       }
     }
@@ -1084,54 +1089,68 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"long_name", name + std::string(" momentum pressure gradient")},
                     {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("ddtNV") + name + std::string("_perp_advection")], ddtNVn_perp_advection,
-                   {{"time_dimension", "t"},
-                    {"units", "kg m^-2 s^-2"},
-                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"long_name", name + std::string(" momentum perpendicular advection")},
-                    {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("NV") + name + std::string("_par_visc_source")], par_viscosity_source,
-                   {{"time_dimension", "t"},
-                    {"units", "kg m^-2 s^-2"},
-                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"long_name", name + std::string(" momentum parallel viscosity source")},
-                    {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("NV") + name + std::string("_perp_visc_source")], perp_viscosity_source,
-                   {{"time_dimension", "t"},
-                    {"units", "kg m^-2 s^-2"},
-                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"long_name", name + std::string(" momentum perpendicular viscosity source")},
-                    {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("ddtNV") + name + std::string("_viscosity")], ddtNVn_viscosity,
+    set_with_attrs(
+        state[std::string("ddtNV") + name + std::string("_perp_advection")],
+        ddtNVn_perp_advection,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum perpendicular advection")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("NV") + name + std::string("_par_visc_source")],
+        par_viscosity_source,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum parallel viscosity source")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("NV") + name + std::string("_perp_visc_source")],
+        perp_viscosity_source,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum perpendicular viscosity source")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtNV") + name + std::string("_viscosity")],
+                   ddtNVn_viscosity,
                    {{"time_dimension", "t"},
                     {"units", "kg m^-2 s^-2"},
                     {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"long_name", name + std::string(" momentum viscosity")},
                     {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("ddtPn") + name + std::string("_viscosity")], ddtPn_viscosity,
+    set_with_attrs(state[std::string("ddtPn") + name + std::string("_viscosity")],
+                   ddtPn_viscosity,
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
-                    {"conversion",Pnorm * Omega_ci},
+                    {"conversion", Pnorm * Omega_ci},
                     {"long_name", name + std::string(" pressure viscosity")},
                     {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("ddtN") + name + std::string("_anomalous_transport")], ddtN_anomalous_transport,
-                   {{"time_dimension", "t"},
-                    {"units", "m^-3 s^-1"},
-                    {"conversion", Nnorm * Omega_ci},
-                    {"long_name", name + std::string(" density anomalous transport")},
-                    {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("ddtNV") + name + std::string("_anomalous_transport")], ddtNVn_anomalous_transport,
-                   {{"time_dimension", "t"},
-                    {"units", "kg m^-2 s^-2"},
-                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"long_name", name + std::string(" momentum anomalous transport")},
-                    {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("ddtPn") + name + std::string("_anomalous_transport")], ddtPn_anomalous_transport,
-                   {{"time_dimension", "t"},
-                    {"units", "Pa s^-1"},
-                    {"conversion",Pnorm * Omega_ci},
-                    {"long_name", name + std::string(" pressure anomalous transport")},
-                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtN") + name + std::string("_anomalous_transport")],
+        ddtN_anomalous_transport,
+        {{"time_dimension", "t"},
+         {"units", "m^-3 s^-1"},
+         {"conversion", Nnorm * Omega_ci},
+         {"long_name", name + std::string(" density anomalous transport")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtNV") + name + std::string("_anomalous_transport")],
+        ddtNVn_anomalous_transport,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum anomalous transport")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtPn") + name + std::string("_anomalous_transport")],
+        ddtPn_anomalous_transport,
+        {{"time_dimension", "t"},
+         {"units", "Pa s^-1"},
+         {"conversion", Pnorm * Omega_ci},
+         {"long_name", name + std::string(" pressure anomalous transport")},
+         {"source", "neutral_mixed"}});
   }
   if (diagnose) {
     set_with_attrs(state["debug"], debug,
