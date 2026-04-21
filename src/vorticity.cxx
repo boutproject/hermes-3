@@ -4,11 +4,13 @@
 #include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/invert/laplacexy.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/fv_ops.hxx>
+#include <bout/invert/laplacexy.hxx>
 #include <bout/invert_laplace.hxx>
+#include <bout/solver.hxx>
+#include <bout/vecops.hxx>
 
 using bout::globals::mesh;
 
@@ -55,16 +57,16 @@ Vector3D Grad_perp_XZ(const Field3D& f) {
     auto xp = i.xp();
     auto xm = i.xm();
     // DDX(f)
-    result.x[i] = ((4. * f[xp] + f[xp.zp()] + f[xp.zm()]) -
-                   (4. * f[xm] + f[xm.zp()] + f[xm.zm()]))
-      / (12. * dx[i]);
+    result.x[i] =
+        ((4. * f[xp] + f[xp.zp()] + f[xp.zm()]) - (4. * f[xm] + f[xm.zp()] + f[xm.zm()]))
+        / (12. * dx[i]);
 
     // DDZ(f)
     auto zp = i.zp();
     auto zm = i.zm();
-    result.z[i] = ((4. * f[zp] + f[zp.xp()] + f[zp.xm()]) -
-                   (4. * f[zm] + f[zm.xp()] + f[zm.xm()]))
-      / (12. * dz[i]);
+    result.z[i] =
+        ((4. * f[zp] + f[zp.xp()] + f[zp.xm()]) - (4. * f[zm] + f[zm.xp()] + f[zm.xm()]))
+        / (12. * dz[i]);
   }
 
   result.setLocation(f.getLocation());
@@ -91,15 +93,16 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
                       .withDefault<bool>(true);
 
   exb_advection_simplified = options["exb_advection_simplified"]
-                      .doc("Simplify nonlinear ExB advection form?")
-                      .withDefault<bool>(true);
+                                 .doc("Simplify nonlinear ExB advection form?")
+                                 .withDefault<bool>(true);
 
   diamagnetic =
       options["diamagnetic"].doc("Include diamagnetic current?").withDefault<bool>(true);
 
-  sheath_boundary = options["sheath_boundary"]
-                        .doc("Set potential to j=0 sheath at radial boundaries? (default = 0)")
-                        .withDefault<bool>(false);
+  sheath_boundary =
+      options["sheath_boundary"]
+          .doc("Set potential to j=0 sheath at radial boundaries? (default = 0)")
+          .withDefault<bool>(false);
 
   diamagnetic_polarisation =
       options["diamagnetic_polarisation"]
@@ -128,10 +131,9 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
                  .withDefault<bool>(false);
 
   include_viscosity = options.isSet("viscosity"); // Only include if set
-  viscosity = options["viscosity"]
-    .doc("Kinematic viscosity [m^2/s]")
-    .withDefault<BoutReal>(0.0)
-    / (Lnorm * Lnorm * Omega_ci);
+  viscosity =
+      options["viscosity"].doc("Kinematic viscosity [m^2/s]").withDefault<BoutReal>(0.0)
+      / (Lnorm * Lnorm * Omega_ci);
   viscosity.applyBoundary("dirichlet");
 
   hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
@@ -154,12 +156,12 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
                            .withDefault<bool>(false);
 
   phi_sheath_dissipation = options["phi_sheath_dissipation"]
-    .doc("Add dissipation when phi < 0.0 at the sheath")
-    .withDefault<bool>(false);
+                               .doc("Add dissipation when phi < 0.0 at the sheath")
+                               .withDefault<bool>(false);
 
   damp_core_vorticity = options["damp_core_vorticity"]
-	  .doc("Damp vorticity at the core boundary?")
-	  .withDefault<bool>(false);
+                            .doc("Damp vorticity at the core boundary?")
+                            .withDefault<bool>(false);
 
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
@@ -186,8 +188,9 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
     phi_boundary_last_update = -1.;
 
     phi_core_averagey = options["phi_core_averagey"]
-      .doc("Average phi core boundary in Y?")
-      .withDefault<bool>(false) and mesh->periodicY(mesh->xstart);
+                            .doc("Average phi core boundary in Y?")
+                            .withDefault<bool>(false)
+                        and mesh->periodicY(mesh->xstart);
 
     phi_boundary_timescale = options["phi_boundary_timescale"]
                                  .doc("Timescale for phi boundary relaxation [seconds]")
@@ -237,9 +240,8 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
 
   Bsq = SQ(coord->Bxy);
 
-  diagnose = options["diagnose"]
-    .doc("Output additional diagnostics?")
-    .withDefault<bool>(false);
+  diagnose =
+      options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
   if (diamagnetic or diamagnetic_polarisation) {
     // FIXME: These will only be read if BOTH charge and pressure (and possibly AA) are
@@ -329,16 +331,18 @@ Field3D Vorticity::calculateDivJdia(Field3D phi, GuardedOptions allspecies) {
     // Note: We need boundary conditions on P, so apply the same
     //       free boundary condition as sheath_boundary.
     if (P.hasParallelSlices()) {
-      Field3D &P_ydown = P.ydown();
-      Field3D &P_yup = P.yup();
+      Field3D& P_ydown = P.ydown();
+      Field3D& P_yup = P.yup();
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          P_ydown(r.ind, mesh->ystart - 1, jz) = 2 * P(r.ind, mesh->ystart, jz) - P_yup(r.ind, mesh->ystart + 1, jz);
+          P_ydown(r.ind, mesh->ystart - 1, jz) =
+              2 * P(r.ind, mesh->ystart, jz) - P_yup(r.ind, mesh->ystart + 1, jz);
         }
       }
       for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
-          P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
+          P_yup(r.ind, mesh->yend + 1, jz) =
+              2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
         }
       }
     } else {
@@ -415,10 +419,7 @@ void Vorticity::transform_impl(GuardedOptions& state) {
           MPI_Comm comm_inner = mesh->getYcomm(0);
           int np;
           MPI_Comm_size(comm_inner, &np);
-          MPI_Allreduce(&philocal,
-                        &phivalue,
-                        1, MPI_DOUBLE,
-                        MPI_SUM, comm_inner);
+          MPI_Allreduce(&philocal, &phivalue, 1, MPI_DOUBLE, MPI_SUM, comm_inner);
           phivalue /= (np * mesh->LocalNz * mesh->LocalNy);
         }
 
@@ -534,7 +535,7 @@ void Vorticity::transform_impl(GuardedOptions& state) {
         }
         if (mesh->xend < mesh->LocalNx - 2) {
           for (int k = 0; k < mesh->LocalNz; k++) {
-        
+
             // Note: This seems to make a difference, but don't know why.
             // Without this, get convergence failures with no apparent instability
             // (all fields apparently smooth, well behaved)
@@ -620,28 +621,32 @@ void Vorticity::transform_impl(GuardedOptions& state) {
   // Note: The below calculation requires phi derivatives at the Y boundaries
   //       Setting to free boundaries
   if (phi.hasParallelSlices()) {
-    Field3D &phi_ydown = phi.ydown();
-    Field3D &phi_yup = phi.yup();
+    Field3D& phi_ydown = phi.ydown();
+    Field3D& phi_yup = phi.yup();
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        phi_ydown(r.ind, mesh->ystart - 1, jz) = 2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
+        phi_ydown(r.ind, mesh->ystart - 1, jz) =
+            2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
       }
     }
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        phi_yup(r.ind, mesh->yend + 1, jz) = 2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
+        phi_yup(r.ind, mesh->yend + 1, jz) =
+            2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
       }
     }
   } else {
     Field3D phi_fa = toFieldAligned(phi);
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        phi_fa(r.ind, mesh->ystart - 1, jz) = 2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
+        phi_fa(r.ind, mesh->ystart - 1, jz) =
+            2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
       }
     }
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        phi_fa(r.ind, mesh->yend + 1, jz) = 2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
+        phi_fa(r.ind, mesh->yend + 1, jz) =
+            2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
       }
     }
     phi = fromFieldAligned(phi_fa);
@@ -723,7 +728,7 @@ void Vorticity::transform_impl(GuardedOptions& state) {
     //phi_hat.applyBoundary("neumann");
 
     // Note: Grad_perp_XZ ignores the DDY terms
-    viscous_heating = - viscosity * (Grad_perp_XZ(Vort) * Grad_perp_XZ(phi_hat));
+    viscous_heating = -viscosity * (Grad_perp_XZ(Vort) * Grad_perp_XZ(phi_hat));
 
     // Weight the heating by mass density of charged species
     // This is an approximation motivated because the perpendicular
@@ -734,7 +739,8 @@ void Vorticity::transform_impl(GuardedOptions& state) {
     for (const auto& kv : allspecies.getChildren()) {
       const GuardedOptions species = kv.second;
 
-      if (!(species.isSet("charge") and species.isSet("AA") and species.isSet("density"))) {
+      if (!(species.isSet("charge") and species.isSet("AA")
+            and species.isSet("density"))) {
         continue; // No charge or mass -> no current
       }
       if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
@@ -749,7 +755,8 @@ void Vorticity::transform_impl(GuardedOptions& state) {
     for (const auto& kv : allspecies.getChildren()) {
       GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
-      if (!(species.isSet("charge") and species.isSet("AA") and species.isSet("density"))) {
+      if (!(species.isSet("charge") and species.isSet("AA")
+            and species.isSet("density"))) {
         continue; // No charge or mass -> no current
       }
       if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
@@ -786,8 +793,7 @@ void Vorticity::finally(const Options& state) {
       // Because this is implemented in terms of an operation on the result
       // of an operation, we need to communicate and the resulting stencil is
       // wider than the simple form.
-      ddt(Vort) -=
-        Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows);
+      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows);
 
       // V_ExB dot Grad(Pi)
       Field3D vEdotGradPi = bracket(phi, Pi_hat, BRACKET_ARAKAWA);
@@ -800,8 +806,8 @@ void Vorticity::finally(const Options& state) {
       mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
       ddt(Vort) -= FV::Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
-      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux,
-                                         poloidal_flows);
+      ddt(Vort) -=
+          Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux, poloidal_flows);
     }
   }
 
@@ -871,7 +877,7 @@ void Vorticity::finally(const Options& state) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         auto i = indexAt(phi_fa, r.ind, mesh->ystart, jz);
-        BoutReal phisheath = 0.5*(phi_fa[i] + phi_fa[i.ym()]);
+        BoutReal phisheath = 0.5 * (phi_fa[i] + phi_fa[i.ym()]);
         dissipation[i] = -floor(-phisheath, 0.0);
       }
     }
@@ -879,7 +885,7 @@ void Vorticity::finally(const Options& state) {
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         auto i = indexAt(phi_fa, r.ind, mesh->yend, jz);
-        BoutReal phisheath = 0.5*(phi_fa[i] + phi_fa[i.yp()]);
+        BoutReal phisheath = 0.5 * (phi_fa[i] + phi_fa[i.yp()]);
         dissipation[i] = -floor(-phisheath, 0.0);
       }
     }
