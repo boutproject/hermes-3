@@ -34,10 +34,28 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
           .doc("Dipole quasilinear particle diffusion coefficient [m^2/s]")
           .withDefault(dipole_quasilinear_D)
       / diffusion_norm;
+  
+  // dr/dx  = 1/(Bpol * R) and g11 = (Bpol*R)**2
+  zero_inner_gradient_U = options["zero_inner_gradient_U"]
+                              .doc("Zero inner gradient U?")
+                              .withDefault<bool>(false);
+  zero_outer_gradient_U = options["zero_outer_gradient_U"]
+                              .doc("Zero outer gradient U?")
+                              .withDefault<bool>(false);
+  compute_U2D(U2D, zero_inner_gradient_U, zero_outer_gradient_U);
+  mesh->communicate(U2D);
+  U2D = U2D; //* Bnorm;
+  mesh->communicate(U2D);
   dipole_anomalous_D = options["dipole_anomalous_D"]
                            .doc("Dipole anomalous particle diffusion coefficient [m^2/s]")
                            .withDefault(dipole_anomalous_D)
                        / diffusion_norm;
+  Coordinates* coord = dipole_quasilinear_D.getCoordinates();
+  mesh->communicate(coord->g11);
+  BOUT_FOR(i, dipole_quasilinear_D.getRegion("RGN_ALL")) {
+  dipole_quasilinear_D[i] =
+      dipole_quasilinear_D[i] / (coord->g11[i] * rho_s0 * rho_s0) / U2D[i];
+    }
   dipole_gamma = 5.0 / 3.0;
   dipole_gamma = options["dipole_gamma"].doc("Dipole gamma").withDefault(dipole_gamma);
   dipole_upwind = options["dipole_upwind"].doc("Dipole gamma").withDefault(false);
@@ -51,23 +69,32 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
           .doc("Dipole anomalous thermal diffusion coefficient [m^2/s]")
           .withDefault(dipole_anomalous_chi)
       / diffusion_norm;
+
   dipole_quasilinear_chi =
       options["dipole_quasilinear_chi"]
           .doc("Dipole quasilinear thermal diffusion coefficient [m^2/s]")
           .withDefault(dipole_quasilinear_chi)
       / diffusion_norm;
+
+  Coordinates* coord2 = dipole_quasilinear_chi.getCoordinates();
+  mesh->communicate(coord2->g11);
+   BOUT_FOR(i, dipole_quasilinear_D.getRegion("RGN_ALL")) {
+    dipole_quasilinear_chi[i] =
+        dipole_quasilinear_chi[i] / (coord2->g11[i] * rho_s0 * rho_s0) / U2D[i];
+  }
+  mesh->communicate(dipole_quasilinear_D);
+  mesh->communicate(dipole_quasilinear_chi);
   dipole_div_form = options["dipole_div_form"]
                         .doc("Include dipole anomalous diffusion?")
                         .withDefault(false);
+  dipole_naive = options["dipole_naive"]
+                         .doc("Include dipole naive diffusion?")
+                         .withDefault(true);
 
   dipole_anomalous = options["dipole_anomalous"].doc("Include dipole anomalous diffusion?").withDefault(false);
   density_floor =
     options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
-  zero_inner_gradient_U =
-      options["zero_inner_gradient_U"].doc("Zero inner gradient U?").withDefault<bool>(false);
-  compute_U2D(U2D, zero_inner_gradient_U);
-  U2D = U2D / rho_s0 * Bnorm;
-  mesh->communicate(U2D);
+
   // dipole_anomalous_nu = 0.0;
   // include_nu = (mesh->get(dipole_anomalous_nu, std::string("dipole_nu_") + name) == 0)
   //              || options.isSet("dipole_anomalous_nu");
@@ -157,20 +184,25 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
     //
     //  v_D = - D_dp Grad_perp(N * dV) / N
     // transport_on = isnegative_grad_perp(P2D);
-    if (dipole_upwind) {
-      Gamma_N = 1 / U2D * transport_on
+    if (dipole_naive) {
+      Gamma_N = transport_on
                 * Div_a_Grad_perp_upwind_flows(dipole_quasilinear_D, N2D * U2D, flow_xlow,
                                                flow_ylow);
-    }
-    else {
-      if (!dipole_div_form) {
+    } else {
+      if (dipole_upwind) {
         Gamma_N = 1 / U2D * transport_on
-          * Div_a_Grad_perp_flows(dipole_quasilinear_D, N2D * U2D, flow_xlow,
-            flow_ylow);
+                  * Div_a_Grad_perp_upwind_flows(dipole_quasilinear_D, N2D * U2D,
+                                                 flow_xlow, flow_ylow);
       } else {
-        Gamma_N =  transport_on
-                  * Div_a_Grad_perp_flows(1 / U2D * dipole_quasilinear_D, N2D * U2D, flow_xlow,
-                                          flow_ylow);
+        if (!dipole_div_form) {
+          Gamma_N = 1 / U2D * transport_on
+                    * Div_a_Grad_perp_flows(dipole_quasilinear_D, N2D * U2D, flow_xlow,
+                                            flow_ylow);
+        } else {
+          Gamma_N = transport_on
+                    * Div_a_Grad_perp_flows(1 / U2D * dipole_quasilinear_D, N2D * U2D,
+                                            flow_xlow, flow_ylow);
+        }
       }
     }
     // Gamma_N = 1/U2D *transport_on *Div_a_Grad_per
@@ -205,15 +237,24 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
     // flow_ylow); Gamma_E += 1/U3D * T * (dipole_gamma-1) *isnegative_grad_perp(P2D) *
     // Div_a_Grad_perp_upwind_flows(dipole_anomalous_D, N2D * U2D, flow_xlow, flow_ylow);
     Field2D Npowg = pow(softFloor(N2D, density_floor), dipole_gamma - 1.0);
+    Field2D U2Dpowg2 = pow(U2D, dipole_gamma - 1.0);
     mesh->communicate(Npowg);
-
-    Field2D S2D = DC(P) / Npowg;
+    mesh->communicate(U2Dpowg2);
+    Field2D TU2D = T2D* U2Dpowg2;
+     Field2D S2D = DC(P) / Npowg;
     mesh->communicate(S2D);
-
+    mesh->communicate(TU2D);
+    if (dipole_naive) {
+      q_inward = transport_on * Div_a_Grad_perp_flows(dipole_quasilinear_chi * N2D,
+                                                   TU2D, flow_xlow, flow_ylow);
+    }
+    else
+    {
     if (dipole_upwind) {
       q_inward = (3. / 2.) * 1.0 / U2D * Npowg * transport_on
                  * Div_a_Grad_perp_upwind_flows(  dipole_quasilinear_chi, S2D * U2D,
                    flow_xlow, flow_ylow);
+
       // q_inward = transport_on
       //            * Div_a_Grad_perp_upwind_flows((3. / 2.) * 1.0 / U2D * Npowg
       //                                               *  dipole_quasilinear_chi,
@@ -225,6 +266,7 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
         q_inward = (3. / 2.) * 1.0 / U2D * Npowg * transport_on
           * Div_a_Grad_perp_flows(  dipole_quasilinear_chi, S2D * U2D, flow_xlow,
             flow_ylow);
+
       } else {
         q_inward = transport_on
                    * Div_a_Grad_perp_flows((3. / 2.) * 1.0 / U2D * Npowg
@@ -232,35 +274,46 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
                                           S2D * U2D, flow_xlow, flow_ylow);
       }
       }
-    add(species["energy_source"], q_inward);
-    add(species["energy_flow_xlow"], flow_xlow * transport_on);
-    add(species["energy_flow_ylow"], flow_ylow * transport_on);
-    if (dipole_upwind) {
-      q_inward =  (3. / 2.) * 1.0 / U2D * T * transport_on *  Div_a_Grad_perp_upwind_flows( (dipole_gamma - 1.0) * dipole_quasilinear_D, N2D * U2D,
-                   flow_xlow, flow_ylow);
-      // q_inward = transport_on
-      //            * Div_a_Grad_perp_upwind_flows((3. / 2.) * 1.0 / U2D * T * (dipole_gamma - 1.0)
-      //                                        * dipole_quasilinear_D,
-      //                                    N2D * U2D, flow_xlow, flow_ylow);
     }
-    else {
-      // q_inward = (3. / 2.) * 1.0 / U2D * transport_on * T * (dipole_gamma - 1.0)
-      //            * Div_a_Grad_perp_flows(dipole_quasilinear_D, N2D * U2D,
-      //              flow_xlow, flow_ylow);
-      if (!dipole_div_form)
-      {
-        q_inward =
-          (dipole_gamma - 1.0) * (3. / 2.) * 1.0 / U2D * T2D * transport_on
-          * Div_a_Grad_perp_flows(dipole_quasilinear_D, N2D * U2D, flow_xlow, flow_ylow);
-      }
-      else {
-        q_inward = transport_on
-          * Div_a_Grad_perp_flows((3. / 2.) * 1.0 / U2D * T2D * (dipole_gamma - 1.0)
-            * dipole_quasilinear_D,
-            N2D * U2D, flow_xlow, flow_ylow);
-      }
-    }
+      //ef_dipole_quasilinear_xlow += flow_xlow * transport_on;
+      //ef_dipole_quasilinear_ylow += flow_ylow * transport_on;
       add(species["energy_source"], q_inward);
+      add(species["energy_flow_xlow"], flow_xlow * transport_on);
+      add(species["energy_flow_ylow"], flow_ylow * transport_on);
+      if (dipole_naive) {
+        q_inward = transport_on * Div_a_Grad_perp_upwind_flows(
+            (3. / 2) * T2D * dipole_quasilinear_D, N2D * U2D, flow_xlow, flow_ylow);
+      } else {
+        if (dipole_upwind) {
+          q_inward =
+              (3. / 2.) * 1.0 / U2D * T * transport_on
+              * Div_a_Grad_perp_upwind_flows((dipole_gamma - 1.0) * dipole_quasilinear_D,
+                                             N2D * U2D, flow_xlow, flow_ylow);
+          // q_inward = transport_on
+          //            * Div_a_Grad_perp_upwind_flows((3. / 2.) * 1.0 / U2D * T *
+          //            (dipole_gamma - 1.0)
+          //                                        * dipole_quasilinear_D,
+          //                                    N2D * U2D, flow_xlow, flow_ylow);
+        } else {
+          // q_inward = (3. / 2.) * 1.0 / U2D * transport_on * T * (dipole_gamma - 1.0)
+          //            * Div_a_Grad_perp_flows(dipole_quasilinear_D, N2D * U2D,
+          //              flow_xlow, flow_ylow);
+          if (!dipole_div_form) {
+            q_inward = (dipole_gamma - 1.0) * (3. / 2.) * 1.0 / U2D * T2D * transport_on
+                       * Div_a_Grad_perp_flows(dipole_quasilinear_D, N2D * U2D, flow_xlow,
+                                               flow_ylow);
+          } else {
+            q_inward =
+                transport_on
+                * Div_a_Grad_perp_flows((3. / 2.) * 1.0 / U2D * T2D * (dipole_gamma - 1.0)
+                                            * dipole_quasilinear_D,
+                                        N2D * U2D, flow_xlow, flow_ylow);
+          }
+        }
+      }
+    //ef_dipole_quasilinear_xlow += flow_xlow * transport_on;
+     //ef_dipole_quasilinear_ylow += flow_ylow * transport_on;
+    add(species["energy_source"], q_inward);
     add(species["energy_flow_xlow"], flow_xlow * transport_on);
     add(species["energy_flow_ylow"], flow_ylow * transport_on);
     if (dipole_anomalous) {
@@ -272,6 +325,8 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
         ;
       }
       add(species["density_source"], Gamma_anomalous);
+      //pf_dipole_anomalous_xlow += flow_xlow ;
+      //pf_dipole_anomalous_ylow += flow_ylow ;
       add(species["particle_flow_xlow"], flow_xlow);
       add(species["particle_flow_ylow"], flow_ylow);
 
@@ -338,8 +393,9 @@ void DipoleAnomalousDiffusion::outputVars(Options& state) {
 
     set_with_attrs(state["U"], U2D,
                    {{"source", "dipole_anomalous_transport"},
-                    {"units", "m^3 Wb^-1"},
-                    {"conversion", rho_s0 / Bnorm} });
+                    {"units", "m^3 Wb^-1"}});
+                    //,
+                    //{"conversion", rho_s0 / Bnorm} });
   
     set_with_attrs(state["transport_on"], transport_on,
                    {{"source", "dipole_anomalous_transport"}});
@@ -367,24 +423,37 @@ void DipoleAnomalousDiffusion::outputVars(Options& state) {
   }
 }
 
-const void compute_U2D(Field2D& U, bool zero_inner_gradient_U) {
+const void compute_U2D(Field2D& U, bool zero_inner_gradient_U, bool zero_outer_gradient_U) {
   // Load and save coordinate variables
+  Coordinates* coord = mesh->getCoordinates();
   if (!(mesh->sourceHasVar("dVdpsi"))) {
     throw BoutException(
         "Grid input does not contain dVdpsi needed for dipole transport.\n");
   }
   mesh->get(U, "dVdpsi", 0.0, true);
-  if (mesh->firstX() and zero_inner_gradient_U) {
-
+  mesh->communicate(U); 
+  for (int i = mesh->xstart-2; i <= mesh->xend+2; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
-
-      U(mesh->xstart - 2, j) = U(mesh->xstart + 1, j);
-      U(mesh->xstart - 1, j) = U(mesh->xstart + 1, j);
-      U(mesh->xstart , j) = U(mesh->xstart + 1, j);
-   }
+      U(i, j) = U(i, j) / 230.0; // Normalise to value at inner boundary
+    }
   }
-}
+  if (mesh->firstX() and zero_inner_gradient_U) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
 
+        U(mesh->xstart - 2, j) = U(mesh->xstart + 1, j);
+        U(mesh->xstart - 1, j) = U(mesh->xstart + 1, j);
+        U(mesh->xstart, j) = U(mesh->xstart + 1, j);
+      }
+    }
+  if (mesh->lastX() and zero_outer_gradient_U) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+
+        U(mesh->xend + 2, j) = U(mesh->xend - 1, j);
+        U(mesh->xend + 1, j) = U(mesh->xend - 1, j);
+        U(mesh->xend, j) = U(mesh->xend - 1, j);
+      }
+    }
+}
     const Field2D isnegative_grad_perp(const Field2D& P) {
 
       Field2D result{zeroFrom(P)};

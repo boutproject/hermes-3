@@ -327,7 +327,8 @@ void EvolveEnergy::finally(const Options& state) {
     if (species.isSet("energy_flow_ylow")) {
       flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
-    if (flow_xlow.isAllocated() and species.isSet("cls_energy_flow_xlow")) {
+    if (species.isSet("cls_energy_flow_xlow")) {
+    if (flow_xlow.isAllocated()) {
       flow_xlow += get<Field3D>(species["cls_energy_flow_xlow"]);}
       else
       {
@@ -338,6 +339,7 @@ void EvolveEnergy::finally(const Options& state) {
     else      {
         flow_ylow = get<Field3D>(species["cls_energy_flow_ylow"]);
       }
+    }
   }
 }
 
