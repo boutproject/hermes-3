@@ -91,8 +91,8 @@ protected:
       break;
     case linfunc_axis::z:
       axis_str = "z";
-      axis_min = TWOPI * (mesh->zstart) / static_cast<BoutReal>(mesh->LocalNz);
-      axis_max = TWOPI * (mesh->zend) / static_cast<BoutReal>(mesh->LocalNz);
+      axis_min = TWOPI * (mesh->zstart);
+      axis_max = TWOPI * (mesh->zend);
       break;
     default:
       axis_min = axis_max = 0;
