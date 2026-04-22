@@ -40,11 +40,15 @@ private:
   BoutReal dipole_gamma; // Sheath heat transmission coefficient
   BoutReal density_floor; // Minimum mass density if boussinesq=false
   bool zero_inner_gradient_U; ///< Compute local U?
+  bool zero_outer_gradient_U; ///< Compute local U?
   bool dipole_upwind;       ///< Use upwind gradients for anomalous fluxes?
   bool entropy_conserving;
   bool dipole_anomalous;
-  Field3D flow_xlow, flow_ylow; // Flows through cell faces
+  Field3D flow_xlow, flow_ylow, ef_dipole_quasilinear_xlow,
+      ef_dipole_quasilinear_ylow,pf_dipole_anomalous_xlow,
+      pf_dipole_anomalous_ylow; // Flows through cell faces
   bool   dipole_div_form;
+  bool dipole_naive; ///< Use naive diffusion instead of quasilinear diffusion?     
   // Field2D anomalous_nu; ///< Anomalous momentum diffusion coefficient
 
   // bool dipole_anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
@@ -68,9 +72,9 @@ private:
   void transform_impl(GuardedOptions& state) override;
 };
 
-const void compute_U2D(Field2D& U, bool local_U);
+const void compute_U2D(Field2D& U, bool local_U, bool zero_outer_gradient_U);
 const Field2D isnegative_grad_perp(const Field2D& P);
-const Field3D isnegative_grad_perp(const Field3D& P);
+//const Field3D isnegative_grad_perp(const Field3D& P);
 namespace {
 RegisterComponent<DipoleAnomalousDiffusion> registercomponentdipoleanomalousdiffusion("dipole_anomalous_diffusion");
 }
