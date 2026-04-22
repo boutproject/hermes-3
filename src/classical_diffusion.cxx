@@ -7,8 +7,6 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
     : Component({readIfSet("species:{all_species}:{optional}"),
                  readOnly("species:{all_species}:AA"), 
                  readOnly("species:e:{e_vals}"),
-                 // FIXME: This is only read velocity or temperature are set for the species.
-                 readOnly("species:{all_species}:AA"),
                  readWrite("species:{all_species}:{output}")}), name(name) {
   Options& options = alloptions[name];
 
