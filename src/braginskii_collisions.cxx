@@ -18,7 +18,9 @@
 
 #include "../include/braginskii_collisions.hxx"
 #include "../include/component.hxx"
+#include "../include/guarded_options.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/permissions.hxx"
 
 BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions,
                                            Solver*)
@@ -370,7 +372,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
             BoutReal const coulomb_log =
                 29.91
                 - log((Z1 * Z2 * (AA1 + AA2)) / (AA1 * Tlim2 + AA2 * Tlim1)
-                      * sqrt(Nlim1 * SQ(Z1) / Tlim1 + Nlim2 * SQ(Z2) / Tlim2));
+                      * sqrt((Nlim1 * SQ(Z1) / Tlim1) + (Nlim2 * SQ(Z2) / Tlim2)));
 
             // Calculate v_a^2, v_b^2
             const BoutReal v1sq = 2 * Tlim1 * SI::qe / mass1;
@@ -389,6 +391,10 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
         } else {
           // species1 charged, species2 neutral
+
+          if (!ion_neutral) {
+            continue;
+          }
 
           // Scattering of charged species 1
           // Neutral density
