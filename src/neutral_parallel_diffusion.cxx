@@ -1,8 +1,11 @@
+#include "../include/component.hxx"
 #include "../include/neutral_parallel_diffusion.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/guarded_options.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/output_bout_types.hxx>
 
 using bout::globals::mesh;
 
@@ -89,6 +92,8 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
     for (const auto& collision_name : collision_names[species_name]) {
       nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
     }
+    // If nu is zero then Dn will be NaN
+    nu = floor(nu, 1e-5);
 
     // Diffusion coefficient
     BoutReal advection_factor = 0;
