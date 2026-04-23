@@ -354,7 +354,7 @@ bool hermesDataInvalid([[maybe_unused]] const T& value) {
 /// Doesn't check boundary cells
 template<>
 inline bool hermesDataInvalid(const Field3D& value) {
-  for (auto& i : value.getRegion("RGN_NOBNDRY")) {
+  for (const auto& i : value.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(value[i])) {
       return true;
     }
