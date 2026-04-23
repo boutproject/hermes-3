@@ -5,6 +5,7 @@
 #include "bout/constants.hxx"
 #include "bout/mesh.hxx"
 
+#include "bout/immersed_boundary.hxx"
 #include "bout/parallel_boundary_region.hxx"
 #include "bout/boundary_iterator.hxx"
 
@@ -156,6 +157,7 @@ void SheathBoundaryParallel::transform(Options &state) {
       iter_regions([&](auto& region) {
         for (auto& pnt : region) {
           const auto& i = pnt.ind();
+          if (immBndry && !immBndry->IsInside(i)) {continue;}
           BoutReal s_i =
               clip(pnt.extrapolate_sheath_o2([&, Ni, Ne](int yoffset, Ind3D ind) {
                 return Ni.ynext(yoffset)[ind] / Ne.ynext(yoffset)[ind];
@@ -183,13 +185,13 @@ void SheathBoundaryParallel::transform(Options &state) {
                    100); // Limit for e.g. Ni zero gradient
 
           // Note: Vzi = C_i * sin(α)
-	  BoutReal toadd = s_i * Zi * sin_alpha * sqrt(C_i_sq);
-	  if (legacy_match && pnt.dir == 1) {
-	    // sin_alpha missing
-	    toadd = s_i * Zi * sqrt(C_i_sq);
-	  }
+          BoutReal toadd = s_i * Zi * sin_alpha * sqrt(C_i_sq);
+          if (legacy_match && pnt.dir == 1) {
+            // sin_alpha missing
+            toadd = s_i * Zi * sqrt(C_i_sq);
+          }
           ion_sum[i] += toadd;
-        }
+          }
       }); // end iter_regions
     }
 
@@ -202,14 +204,14 @@ void SheathBoundaryParallel::transform(Options &state) {
       for (const auto& pnt : region) {
         auto i = pnt.ind();
 
-	BoutReal thisphi;
-	if (Te[i] <= 0.0) {
-	  thisphi = 0.0;
-	} else {
-	  thisphi = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
-	}
+        BoutReal thisphi;
+        if (Te[i] <= 0.0 || (immBndry && !immBndry->IsInside(i))) {
+          thisphi = 0.0;
+        } else {
+          thisphi = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+        }
 
-	thisphi += wall_potential[i];
+        thisphi += wall_potential[i];
 
         pnt.setAll(phi, thisphi);
       }
@@ -226,6 +228,8 @@ void SheathBoundaryParallel::transform(Options &state) {
   iter_regions([&](auto& region) {
     for (const auto& pnt : region) {
       auto i = pnt.ind();
+
+      if (immBndry && !immBndry->IsInside(i)) {continue;}
 
       // Free gradient of log electron density and temperature
       // Limited so that the values don't increase into the sheath
@@ -245,7 +249,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 
       const BoutReal phisheath = floor_potential ? floor(
             pnt.interpolate_sheath_o1(phi), phi_wall) // Electron saturation at phi = phi_wall
-	    : pnt.interpolate_sheath_o1(phi);
+      : pnt.interpolate_sheath_o1(phi);
 
       // Electron sheath heat transmission
       const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
@@ -257,7 +261,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 
       pnt.dirichlet_o2(Ve, vesheath);
       if (has_NVe) {
-	pnt.dirichlet_o2(NVe, Me * nesheath * vesheath);
+        pnt.dirichlet_o2(NVe, Me * nesheath * vesheath);
       }
 
       // Take into account the flow of energy due to fluid flow
@@ -277,8 +281,8 @@ void SheathBoundaryParallel::transform(Options &state) {
 
 #if CHECKLEVEL >= 1
       if (!std::isfinite(power)) {
-	throw BoutException("Non-finite power {} at {} : Te {} Ne {} Ve {} phi {}, {} => q {}, flux {}",
-			    power, i, tesheath, nesheath, vesheath, phi[i], phisheath, q, flux);
+          throw BoutException("Non-finite power {} at {} : Te {} Ne {} Ve {} phi {}, {} => q {}, flux {}",
+            power, i, tesheath, nesheath, vesheath, phi[i], phisheath, q, flux);
       }
 #endif
 
@@ -357,8 +361,8 @@ void SheathBoundaryParallel::transform(Options &state) {
 
     iter_regions([&](auto& region) {
       for (const auto& pnt : region) {
-
-        // auto i = pnt.ind();
+        auto i = pnt.ind();
+        if (immBndry && !immBndry->IsInside(i)) {continue;}
 
         // Free gradient of log electron density and temperature
         // This ensures that the guard cell values remain positive
@@ -370,63 +374,62 @@ void SheathBoundaryParallel::transform(Options &state) {
 
         // Calculate sheath values at half-way points (cell edge)
         const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);
-	const BoutReal nisheath = pnt.interpolate_sheath_o1(Ni);
-	const BoutReal tesheath = floor(pnt.interpolate_sheath_o1(Te), 1e-5);  // electron temperature
-	const BoutReal tisheath = floor(pnt.interpolate_sheath_o1(Ti), 1e-5);  // ion temperature
+        const BoutReal nisheath = pnt.interpolate_sheath_o1(Ni);
+        const BoutReal tesheath = floor(pnt.interpolate_sheath_o1(Te), 1e-5);  // electron temperature
+        const BoutReal tisheath = floor(pnt.interpolate_sheath_o1(Ti), 1e-5);  // ion temperature
 
-	// Ion sheath heat transmission coefficient
-	// Equation (22) in Tskhakaya 2005
-	// with 
-	//
-	// 1 / (1 + ∂_{ln n_e} ln s_i = s_i ∂_z n_e / ∂_z n_i
-	// (from comparing C_i^2 in eq. 9 with eq. 20
-	//
-	//BoutReal s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0; // Concentration ; upper_y
-	BoutReal s_i = clip(nisheath / floor(nesheath, 1e-10), 0, 1); // Concentration ; lower_y
-	if (legacy_match && pnt.dir == -1){
-	  s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0;
-	}
+        // Ion sheath heat transmission coefficient
+        // Equation (22) in Tskhakaya 2005
+        // with 
+        //
+        // 1 / (1 + ∂_{ln n_e} ln s_i = s_i ∂_z n_e / ∂_z n_i
+        // (from comparing C_i^2 in eq. 9 with eq. 20
+        //
+        //BoutReal s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0; // Concentration ; upper_y
+        BoutReal s_i = clip(nisheath / floor(nesheath, 1e-10), 0, 1); // Concentration ; lower_y
+        if (legacy_match && pnt.dir == -1){
+          s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0;
+        }
 
-	BoutReal grad_ne = pnt.extrapolate_grad_o2(Ne);
-	BoutReal grad_ni = pnt.extrapolate_grad_o2(Ni);
+        BoutReal grad_ne = pnt.extrapolate_grad_o2(Ne);
+        BoutReal grad_ni = pnt.extrapolate_grad_o2(Ni);
 
-	if (fabs(grad_ni) < 1e-3) {
-	  grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
-	}
+        if (fabs(grad_ni) < 1e-3) {
+          grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
+        }
 
-	// Ion speed into sheath
-	// Equation (9) in Tskhakaya 2005
-	//
-	BoutReal C_i_sq =
-	  clip((adiabatic * tisheath + Zi * s_i * tesheath * grad_ne / grad_ni) / Mi,
-	       0, 100); // Limit for e.g. Ni zero gradient
+        // Ion speed into sheath
+        // Equation (9) in Tskhakaya 2005
+        //
+        BoutReal C_i_sq =
+          clip((adiabatic * tisheath + Zi * s_i * tesheath * grad_ne / grad_ni) / Mi,
+               0, 100); // Limit for e.g. Ni zero gradient
 
-	const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath; // + Δγ 
+        const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath; // + Δγ 
 
-	const BoutReal visheath = pnt.dir * sqrt(C_i_sq); // sign changes -> into sheath
+        const BoutReal visheath = pnt.dir * sqrt(C_i_sq); // sign changes -> into sheath
 
-	// Set boundary conditions on flows
-	pnt.dirichlet_o2(Vi, visheath);
-       	pnt.dirichlet_o2(NVi, Mi * nisheath * visheath);
+        // Set boundary conditions on flows
+        pnt.dirichlet_o2(Vi, visheath);
+        pnt.dirichlet_o2(NVi, Mi * nisheath * visheath);
 
-	// Take into account the flow of energy due to fluid flow
-	// This is additional energy flux through the sheath
-	// Note: Sign depends on sign of visheath
-	BoutReal q =
-	  ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * C_i_sq * Mi)
-	  * nisheath * visheath;
-	if (legacy_match and pnt.dir == -1) {
-	  // Mi position switched with C_i_sq
-	  q =
-              ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * Mi * C_i_sq)
+        // Take into account the flow of energy due to fluid flow
+        // This is additional energy flux through the sheath
+        // Note: Sign depends on sign of visheath
+        BoutReal q =
+          ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * C_i_sq * Mi)
+          * nisheath * visheath;
+        if (legacy_match and pnt.dir == -1) {
+          // Mi position switched with C_i_sq
+          q = ((gamma_i - 1 - 1 / (adiabatic - 1)) * tisheath - 0.5 * Mi * C_i_sq)
               * nisheath * visheath;
-	}
+        }
 
-	if (q * pnt.dir < 0.0) {
-	  q = 0.0;
-	}
+        if (q * pnt.dir < 0.0) {
+          q = 0.0;
+        }
 
-	// Multiply by cell area to get power
+        // Multiply by cell area to get power
         const BoutReal flux =
             q * (pnt.ythis(coord->J) + pnt.ynext(coord->J))
             / (sqrt(pnt.ythis(coord->g_22)) + sqrt(pnt.ynext(coord->g_22)));
@@ -446,17 +449,19 @@ void SheathBoundaryParallel::transform(Options &state) {
 
     // Finished boundary conditions for this species
     // Put the modified fields back into the state.
-    setBoundary(species["density"], fromFieldAligned(Ni));
+    setBoundary(species["density"],     fromFieldAligned(Ni));
     setBoundary(species["temperature"], fromFieldAligned(Ti));
-    setBoundary(species["pressure"], fromFieldAligned(Pi));
+    setBoundary(species["pressure"],    fromFieldAligned(Pi));
 
     if (species.isSet("velocity")) {
       setBoundary(species["velocity"], fromFieldAligned(Vi));
     }
+    
 
     if (species.isSet("momentum")) {
       setBoundary(species["momentum"], fromFieldAligned(NVi));
     }
+
     if (tracking) {
       saveParallel(*tracking, fmt::format("NV{}_sheath", kv.first), NVi);
       saveParallel(*tracking, fmt::format("N{}_sheath",kv.first), Ni);

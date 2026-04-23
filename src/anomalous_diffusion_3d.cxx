@@ -3,7 +3,7 @@
 #include "../include/div_ops.hxx"
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
-#include "../include/immersed_boundary.hxx"
+#include <bout/immersed_boundary.hxx>
 
 using bout::globals::mesh;
 
@@ -79,22 +79,6 @@ void AnomalousDiffusion3D::transform(Options& state) {
                         : 0.0;
   Field3D V =
       species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
-  
-  //IMM_BNDRY_TODO_NEW
-  //This is required if evolve_momentum or evolve_pressure/energy not used so V,T not setup...
-  //if (immBndry) {
-  //  // Get species name by removing "species:" from front of full_name...
-  //  const std::string name = species.str().erase(0,8);
-  //  //T.name = std::string("T") + name;
-  //  V.name = std::string("V") + name;
-
-  //  static bool imm_bndry_set = false;
-  //  if (!imm_bndry_set) {
-  //    //immBndry->FieldSetup(T);
-  //    immBndry->FieldSetup(V);
-  //    imm_bndry_set = true;
-  //  }
-  //}
 
   Field3D flow_xlow, flow_zlow; // Flows through cell faces
 

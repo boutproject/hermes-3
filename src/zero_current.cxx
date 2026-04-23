@@ -1,5 +1,6 @@
 
 #include <bout/difops.hxx>
+#include <bout/immersed_boundary.hxx>
 
 #include "../include/zero_current.hxx"
 
@@ -39,6 +40,7 @@ void ZeroCurrent::transform(Options &state) {
       const BoutReal charge = get<BoutReal>(species["charge"]);
       const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
 
+      //IB_TODO: I think * operator is fine here. velocity set with current and the BCs set after so ghosts dont matter here.
       if (!current.isAllocated()) {
         // Not yet allocated -> Set to the value
         // This avoids having to set to zero initially and add the first time
@@ -61,7 +63,24 @@ void ZeroCurrent::transform(Options &state) {
   }
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
-  velocity = current / (-charge * floor(N, 1e-5));
+  Field3D Nfloor = copy(N);
+  if (immBndry) {
+    //IB_TODO: Just floor, dont need to SetBoundary because velocity will below and loop ignores ghost cells here.
+    immBndry->FloorField(Nfloor, 1e-5);
+    velocity = current;
+    BOUT_FOR(i, mesh->getRegion3D("RGN_NO_IMM_BNDRY")) {
+      velocity[i] /= (-charge * Nfloor[i]);
+    }
+    velocity.name = std::string("V") + name;
+    //IB_TODO: Complex logic for late setup...
+    if (!immBndry->CheckFieldSetUp(velocity.name)) {
+      immBndry->FieldSetup(velocity);
+    }
+    immBndry->SetBoundary(velocity);
+  } else {
+    Field3D Nfloor = floor(N, 1e-5);
+    velocity = current / (-charge * Nfloor);
+  }
   set(species["velocity"], velocity);
 }
 

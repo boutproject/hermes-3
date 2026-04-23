@@ -4,6 +4,7 @@
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/immersed_boundary.hxx>
 
 #include "../include/evolve_momentum.hxx"
 #include "../include/div_ops.hxx"
@@ -64,6 +65,16 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   // Set to zero so set for output
   momentum_source = 0.0;
+
+  if (immBndry) {
+    //Note, use name V to get setting from input file. V gets set to NV anyway later.
+    NV.name = std::string("NV") + name;
+    immBndry->FieldSetup(NV);
+
+    V = copy(NV);
+    V.name = Vname;
+    immBndry->FieldSetup(V);
+  }
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -81,17 +92,48 @@ void EvolveMomentum::transform(Options &state) {
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
-  Field3D Nlim = floor(N, density_floor);
+  Field3D Nlim = copy(N);
+  if (immBndry) {
+    //IB_TODO: Just floor, dont SetBoundary since V and NV will below?
+    immBndry->FloorField(Nlim, density_floor);
+  } else {
+    Nlim = floor(N, density_floor);
+  }
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-  NV.applyBoundary();
-  V = NV / (AA * Nlim);
-  V.name = Vname;
+  if (immBndry) {
+    immBndry->SetBoundary(NV);
+  } else {
+    NV.applyBoundary();
+  }
+  V = NV;
+  if (immBndry) {
+    //IB_TODO: Complicated / operator logic.
+    BOUT_FOR(i, NV.getRegion("RGN_NO_IMM_BNDRY")) {
+      V[i] /= (AA * Nlim[i]);
+    }
+    V.name = Vname;
+    immBndry->SetBoundary(V);
+  } else {
+    V /= (AA * Nlim);
+    V.name = Vname;
+  }
   mesh->communicate(V);
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver
-  NV = AA * N * V; // Re-calculate consistent with V and N
+  if (immBndry) {
+    NV_solver.name = NV.name;
+    //IB_TODO: Complex * operator logic...
+    BOUT_FOR(i, V.getRegion("RGN_NO_IMM_BNDRY")) {
+      NV[i] = AA * N[i] * V[i];
+    }
+    //IB_TODO: Dont need to SetBoundary(NV) if N and V set at some point?
+    immBndry->SetBoundary(NV);
+  } else {
+    NV = AA * N * V; // Re-calculate consistent with V and N
+  }
+
   if (NV.isFci()) {
     NV.splitParallelSlices();
     NV.yup() = AA * N.yup() * V.yup();
@@ -120,7 +162,13 @@ void EvolveMomentum::finally(const Options &state) {
   // Get the species density
   Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  Field3D Nlim = floor(N, density_floor);
+  Field3D Nlim = copy(N);
+  if (immBndry) {
+    //IB_TODO: Just floor, dont need to SetBoundary again because only used for parallel dynamics so ghosts dont matter?
+    immBndry->FloorField(Nlim, density_floor);
+  } else {
+    Nlim = floor(N, density_floor);
+  }
 
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
@@ -128,7 +176,16 @@ void EvolveMomentum::finally(const Options &state) {
     fastest_wave = get<Field3D>(state["fastest_wave"]);
   } else {
     Field3D T = get<Field3D>(species["temperature"]);
-    fastest_wave = sqrt(T / AA);
+    if (immBndry) {
+      fastest_wave = copy(T);
+      //IB_TODO: Complex / operator logic...
+      BOUT_FOR(i, T.getRegion("RGN_ALL")) {
+        if (!immBndry->IsInside(i)) {fastest_wave[i] = 0.0;}
+        else {fastest_wave[i] = sqrt(fastest_wave[i]/AA);}
+      }
+    } else {
+      fastest_wave = sqrt(T / AA);
+    }
   }
 
   // Parallel flow
@@ -239,7 +296,14 @@ void EvolveMomentum::finally(const Options &state) {
   // -> Add term to force NV_solver towards NV
   // Note: This correction is calculated in transform()
   //       because NV may be modified by electromagnetic terms
-  ddt(NV) += NV_err;
+  if (immBndry) {
+    //IB_TODO: Dont need to include ghost cells for time stepper, right?
+    BOUT_FOR(i, mesh->getRegion3D("RGN_NO_IMM_BNDRY")) {
+      ddt(NV)[i] += NV_err[i];
+    }
+  } else {
+    ddt(NV) += NV_err;
+  }
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {

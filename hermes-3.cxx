@@ -47,7 +47,6 @@
 #include "include/fixed_temperature.hxx"
 #include "include/fixed_velocity.hxx"
 #include "include/hydrogen_charge_exchange.hxx"
-#include "include/immersed_boundary.hxx"
 #include "include/ion_viscosity.hxx"
 #include "include/ionisation.hxx"
 #include "include/isothermal.hxx"
@@ -83,6 +82,7 @@
 #include <bout/boundary_factory.hxx>
 #include <bout/boundary_op.hxx>
 #include <bout/field_factory.hxx>
+#include <bout/immersed_boundary.hxx>
 
 #include "include/recalculate_metric.hxx"
 
@@ -166,7 +166,7 @@ private:
   std::shared_ptr<FieldGenerator> gen; // Generator
 };
 
-//IMM_BNDRY_TODO: Get normalized z coord working with evolving variables.
+//IB_TODO: Get normalized z coord working with evolving variables.
 // A 'zn' field. A version of 'z' index normalised between 0 and 1 on Z boundaries
   class FieldZnorm : public FieldGenerator {
   public:
@@ -321,6 +321,7 @@ int Hermes::init(bool restarting) {
     }
   }
 
+  //IB_TODO: Can move into mesh if inside BOUT++ now? Requires coordinates made first so not sure where to put it.
   if (options["imm_bndry"]
         .doc("Flag to use immersed boundary method. Note, requires FCI (z_periodic=0 also recommended).")
         .withDefault(false)) {

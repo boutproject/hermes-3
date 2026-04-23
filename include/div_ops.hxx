@@ -29,6 +29,7 @@
 #include <bout/difops.hxx>
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/vector3d.hxx>
 
 /*!
@@ -155,44 +156,41 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
 
     Field3D result{emptyFrom(f_in)};
 
-    for (int i = mesh->xstart; i <= mesh->xend; i++) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        for (int k = mesh->zstart; k <= mesh->zend; k++) {
-          // Value of f and v at left cell face
-          const BoutReal fL = 0.5 * (f_in(i, j, k) + f_in.ydown()(i, j - 1, k));
-          const BoutReal vL = 0.5 * (v_in(i, j, k) + v_in.ydown()(i, j - 1, k));
+    BOUT_FOR(i, mesh->getRegion("RGN_NOBNDRY")) {
+      //IB_TODO: Check par logic.
+      if (immBndry && !immBndry->IsInside(i)) {continue;}
+      // Value of f and v at left cell face
+      const BoutReal fL = 0.5 * (f_in[i] + f_in.ydown()[i.ym()]);
+      const BoutReal vL = 0.5 * (v_in[i] + v_in.ydown()[i.ym()]);
 
-          const BoutReal fR = 0.5 * (f_in(i, j, k) + f_in.yup()(i, j + 1, k));
-          const BoutReal vR = 0.5 * (v_in(i, j, k) + v_in.yup()(i, j + 1, k));
+      const BoutReal fR = 0.5 * (f_in[i] + f_in.yup()[i.yp()]);
+      const BoutReal vR = 0.5 * (v_in[i] + v_in.yup()[i.yp()]);
 
-          // Reconstruct v at the cell faces
-          Stencil1D sv;
-          sv.c = v_in(i, j, k);
-          sv.m = v_in.ydown()(i, j - 1, k);
-          sv.p = v_in.yup()(i, j + 1, k);
-          cellboundary(sv);
+      // Reconstruct v at the cell faces
+      Stencil1D sv;
+      sv.c = v_in[i];
+      sv.m = v_in.ydown()[i.ym()];
+      sv.p = v_in.yup()[i.yp()];
+      cellboundary(sv);
 
-          // Maximum local wave speed
-          const BoutReal amax = BOUTMAX(wave_speed_in
-                                        (i, j, k),
-                                        fabs(v_in(i, j, k)),
-                                        fabs(v_in.yup()(i, j + 1, k)),
-                                        fabs(v_in.ydown()(i, j - 1, k)));
+      // Maximum local wave speed
+      const BoutReal amax = BOUTMAX(wave_speed_in[i],
+                                    fabs(v_in[i]),
+                                    fabs(v_in.yup()[i.yp()]),
+                                    fabs(v_in.ydown()[i.ym()]));
 
-          // Calculate flux at right boundary (y+1/2)
-          BoutReal fluxRight =
-            fR * (vR * vR  + amax * (sv.c - vR)) * (coord->J(i, j, k) + coord->J(i, j + 1, k))
-            / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j + 1, k)));
+      // Calculate flux at right boundary (y+1/2)
+      BoutReal fluxRight =
+        fR * (vR * vR  + amax * (sv.c - vR)) * (coord->J[i] + coord->J[i.yp()])
+        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[i.yp()]));
 
-          // Calculate at left boundary (y-1/2)
-          BoutReal fluxLeft =
-            fL * (vL * vL - amax * (sv.c - vL)) * (coord->J(i, j, k) + coord->J(i, j - 1, k))
-            / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j - 1, k)));
+      // Calculate at left boundary (y-1/2)
+      BoutReal fluxLeft =
+        fL * (vL * vL - amax * (sv.c - vL)) * (coord->J[i] + coord->J[i.ym()])
+        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[i.ym()]));
 
-          result(i, j, k) =
-            (fluxRight - fluxLeft) / (coord->dy(i, j, k) * coord->J(i, j, k));
-        }
-      }
+      result[i] =
+        (fluxRight - fluxLeft) / (coord->dy[i] * coord->J[i]);
     }
     return result;
   }

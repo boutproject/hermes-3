@@ -1,6 +1,8 @@
 
 #include <numeric> // for accumulate
 
+#include <bout/immersed_boundary.hxx>
+
 #include "../include/quasineutral.hxx"
 
 Quasineutral::Quasineutral(std::string name, Options &alloptions,
@@ -43,7 +45,18 @@ void Quasineutral::transform(Options &state) {
   Options &species = allspecies[name];
 
   // Calculate density required. Floor so that density is >= 0
+
   density = floor(rho / (-charge), 0.0);
+
+  if (immBndry) {
+    //IB_TODO: Complex logic here because not setup at init...
+    density.name = std::string("N") + name;
+    if (!immBndry->CheckFieldSetUp(density.name)) {
+      immBndry->FieldSetup(density);
+    }
+    immBndry->SetBoundary(density);
+  }
+
   set(species["density"], density);
 
   set(species["charge"], charge);

@@ -8,6 +8,7 @@
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
 #include <bout/yboundary_regions.hxx>
+#include <bout/immersed_boundary.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
@@ -182,6 +183,19 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   kappa_limit_alpha = options["kappa_limit_alpha"]
     .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
     .withDefault(-1.0);
+
+  if (immBndry) {
+    P.name = std::string("P") + name;
+    if (!immBndry->CheckFieldSetUp(P.name)) {
+      immBndry->FieldSetup(P);
+    }
+
+    T = 0; //IB_TODO: Is this the right way to do this? Will T ever be created elsewhere if calling evolve_pressure?
+    T.name = std::string("T") + name;
+    if (!immBndry->CheckFieldSetUp(T.name)) {
+      immBndry->FieldSetup(T);
+    }
+  }
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -234,9 +248,29 @@ void EvolvePressure::transform(Options& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
 
-  Field3D Pfloor = floor(P, 0.0);
-  T = Pfloor / floor(N, density_floor);
-  Pfloor = N * T; // Ensure consistency
+  Field3D Pfloor = copy(P);
+  if (immBndry) {
+    //IB_TODO: Complicated flooring and / operator logic...
+    Field3D Nfloor = copy(N);
+    immBndry->FloorField(Pfloor);
+    immBndry->FloorField(Nfloor, density_floor);
+    const auto old_name = T.name;
+    T = copy(Pfloor);
+    BOUT_FOR(i, T.getRegion("RGN_NO_IMM_BNDRY")) {
+      T[i] /= Nfloor[i];
+    }
+    Pfloor = Nfloor * T;
+    Pfloor.name = P.name;
+    T.name = old_name;
+
+    //IB_TODO: Is it necessary to do this or just loop over ghost cells above too to combine BCs?
+    immBndry->SetBoundary(Pfloor);
+    immBndry->SetBoundary(T);
+  } else {
+    Field3D Pfloor = floor(P, 0.0);
+    T = Pfloor / floor(N, density_floor);
+    Pfloor = N * T; // Ensure consistency
+  }
 
   set(species["pressure"], Pfloor);
   set(species["temperature"], T);
@@ -254,7 +288,13 @@ void EvolvePressure::finally(const Options& state) {
     P.clearParallelSlices();
   }
   P.setBoundaryTo(get<Field3D>(species["pressure"]));
-  Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
+  Field3D Pfloor = P;
+  if (immBndry) {
+    immBndry->FloorField(Pfloor);
+    immBndry->SetBoundary(Pfloor);
+  } else {
+    Pfloor = floor(P, 0.0); // Restricted to never go below zero
+  }
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
@@ -279,7 +319,16 @@ void EvolvePressure::finally(const Options& state) {
       fastest_wave = get<Field3D>(state["fastest_wave"]);
     } else {
       BoutReal AA = get<BoutReal>(species["AA"]);
-      fastest_wave = sqrt(T / AA);
+      if (immBndry) {
+        fastest_wave = copy(T);
+        //IB_TODO: Complicated / operator logic...
+        BOUT_FOR(i, T.getRegion("RGN_ALL")) {
+          if (!immBndry->IsInside(i)) {fastest_wave[i] = 0.0;}
+          else {fastest_wave[i] = sqrt(fastest_wave[i]/AA);}
+        }
+      } else {
+        fastest_wave = sqrt(T / AA);
+      }
     }
 
     if (p_div_v) {
@@ -315,9 +364,9 @@ void EvolvePressure::finally(const Options& state) {
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
       // skip if only for diagnostic with FCI, as not yet implemented
       if (numerical_viscous_heating || (!Nlim.isFci())) {
-	Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
-	flow_ylow_kinetic *= AA;
-	flow_ylow += flow_ylow_kinetic;
+        Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
+        flow_ylow_kinetic *= AA;
+        flow_ylow += flow_ylow_kinetic;
       }
       if (numerical_viscous_heating) {
         ddt(P) += Sp_nvh;
@@ -454,7 +503,14 @@ void EvolvePressure::finally(const Options& state) {
 
   // Term to force evolved P towards N * T
   // This is active when P < 0 or when N < density_floor
-  ddt(P) += N * T - P;
+  if (immBndry) {
+    //IB_TODO: Can use field operators here? Ghost cells ignored by timestepper...
+    BOUT_FOR(i, P.getRegion("RGN_NO_IMM_BNDRY")) {
+      ddt(P)[i] += N[i] * T[i] - P[i];
+    }
+  } else {
+    ddt(P) += N * T - P;
+  }
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {

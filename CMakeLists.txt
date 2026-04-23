@@ -65,7 +65,6 @@ set(HERMES_SOURCES
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
-    src/immersed_boundary.cxx
     src/isothermal.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
@@ -134,7 +133,6 @@ set(HERMES_SOURCES
     include/hermes_utils.hxx
     include/hydrogen_charge_exchange.hxx
     include/solkit_hydrogen_charge_exchange.hxx
-    include/immersed_boundary.hxx
     include/integrate.hxx
     include/ion_viscosity.hxx
     include/ionisation.hxx

@@ -6,12 +6,12 @@
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 #include <bout/initialprofiles.hxx>
+#include <bout/immersed_boundary.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_density.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/hermes_build_config.hxx"
-#include "../include/immersed_boundary.hxx"
 
 using bout::globals::mesh;
 
@@ -131,7 +131,9 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   if (immBndry) {
     N.name = std::string("N") + name;
-    immBndry->FieldSetup(N);
+    if (!immBndry->CheckFieldSetUp(N.name)) {
+      immBndry->FieldSetup(N);
+    }
   }
 }
 
@@ -256,8 +258,9 @@ void EvolveDensity::finally(const Options& state) {
       BoutReal AA = get<BoutReal>(species["AA"]);
       if (immBndry) {
         fastest_wave = copy(T);
+        //IB_TODO: Complicated / operator logic...
         BOUT_FOR(i, T.getRegion("RGN_ALL")) {
-          if (!T.getMesh()->isValidIndex(i)) {fastest_wave[i] = 0.0;}
+          if (!immBndry->IsInside(i)) {fastest_wave[i] = 0.0;}
           else {fastest_wave[i] = sqrt(fastest_wave[i]/AA);}
         }
       } else {

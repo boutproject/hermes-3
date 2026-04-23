@@ -28,7 +28,7 @@
 #include <bout/assert.hxx>
 #include <bout/mesh.hxx>
 #include <bout/derivs.hxx>
-#include <../include/immersed_boundary.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/globals.hxx>
 #include <bout/output.hxx>
 #include <bout/utils.hxx>
@@ -1779,7 +1779,7 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, bool upwinding) 
   }
 }
 
-//IMM_BNDRY_TODO: Note immBndry requires midpoint rule for cut-face fluxes...and a at partial edge midpoint.
+//IB_TODO: Note immBndry requires midpoint rule for cut-face fluxes...and a at partial edge midpoint.
 template <bool extra, bool upwinding>
 Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xlow,
                             Field3D* flow_zlow) {
@@ -1804,7 +1804,6 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
     }
   }
   //If using immersed boundary, just want plasma cells.
-  //IMM_BNDRY_TODO: Do regions further below matter? i.e. for volume.
   const auto plasmaRegion = immBndry ? "RGN_NO_IMM_BNDRY" : "RGN_NOBNDRY";
   BOUT_FOR(i, f.getRegion(plasmaRegion)) {
     const auto xf = xflux<upwinding>(a, f, i);
@@ -1821,8 +1820,10 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
     }
   }
   if (immBndry) {
+    //IB_TODO: Cleaner way to do this? Should IB class know how to compute cut-cell dagp fluxes?
     immBndry->ComputeBoundaryFluxes(a, f, result);
   }
+  //IB_TODO: Do regions here matter? i.e. for dividing by non-zero volume for instance. Currently use 1 outside IB.
   result.setRegion("RGN_NOBNDRY");
   if constexpr (extra) {
     flow_xlow->setRegion("RGN_NOBNDRY");

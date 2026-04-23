@@ -2,6 +2,7 @@
 #include <bout/difops.hxx>
 
 #include "../include/electron_force_balance.hxx"
+#include <bout/immersed_boundary.hxx>
 
 using bout::globals::mesh;
 
@@ -31,7 +32,24 @@ void ElectronForceBalance::transform(Options &state) {
   }
   // Parallel electric field. Stored as a private member variable
   // and may be saved as an output diagnostic
-  Epar = force_density / floor(Ne, 1e-5);
+  Field3D Nfloor = copy(Ne);
+  if (immBndry) {
+    //IB_TODO: Complex logic for / operator and late Epar setup.
+    //IB_TODO: Just floor, don't need to SetBoundary again because Epar will below.
+    immBndry->FloorField(Nfloor, 1e-5);
+    Epar = force_density;
+    BOUT_FOR(i, mesh->getRegion3D("RGN_NO_IMM_BNDRY")) {
+      Epar[i] /= Nfloor[i];
+    }
+    Epar.name = "Epar";
+    if (!immBndry->CheckFieldSetUp(Epar.name)) {
+      immBndry->FieldSetup(Epar);
+    }
+    immBndry->SetBoundary(Epar);
+  } else {
+    Nfloor = floor(Ne, 1e-5);
+    Epar = force_density / Nfloor;
+  }
 
   // Now calculate forces on other species
   Options& allspecies = state["species"];

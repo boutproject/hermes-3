@@ -4,6 +4,8 @@
 
 #include "component.hxx"
 
+#include <bout/immersed_boundary.hxx>
+
 /// Set species temperature to a fixed value
 ///
 struct FixedTemperature : public Component {
@@ -22,6 +24,13 @@ struct FixedTemperature : public Component {
     // Get the temperature and normalise
     T = options["temperature"].doc("Constant temperature [eV]").as<Field3D>()
         / Tnorm; // Normalise
+    
+    if (immBndry) {
+      T.name = std::string("T") + name;
+        if (!immBndry->CheckFieldSetUp(T.name)) {
+          immBndry->FieldSetup(T);
+        }
+    }
 
     if (T.isFci()) {
       bout::globals::mesh->communicate(T); // Calculate yup/down fields
@@ -49,6 +58,7 @@ struct FixedTemperature : public Component {
     AUTO_TRACE();
     auto& species = state["species"][name];
 
+    if (immBndry) {immBndry->SetBoundary(T);}
     set(species["temperature"], T);
 
     // If density is set, also set pressure
@@ -56,9 +66,20 @@ struct FixedTemperature : public Component {
       // Note: The boundary of N may not be set yet
       auto N = GET_NOBOUNDARY(Field3D, species["density"]);
       P = N * T;
+
+      if (immBndry) {
+        //IB_TODO: Complex logic for late P setup...
+        //IB_TODO: Dont need to set P boundary after because multiplies N and T boundaries?
+        P.name = std::string("P") + name;
+        if (!immBndry->CheckFieldSetUp(P.name)) {
+          immBndry->FieldSetup(P);
+        }
+      }
+
       if (P.isFci()) {
         bout::globals::mesh->communicate(P);
       }
+
       set(species["pressure"], P);
     }
   }

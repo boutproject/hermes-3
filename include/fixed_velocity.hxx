@@ -4,6 +4,8 @@
 
 #include "component.hxx"
 
+#include <bout/immersed_boundary.hxx>
+
 /// Set parallel velocity to a fixed value
 ///
 struct FixedVelocity : public Component {
@@ -20,6 +22,14 @@ struct FixedVelocity : public Component {
 
     // Get the velocity and normalise
     V = options["velocity"].as<Field3D>() / Cs0;
+    
+    if (immBndry) {
+      V.name = std::string("V") + name;
+        if (!immBndry->CheckFieldSetUp(V.name)) {
+          immBndry->FieldSetup(V);
+        }
+    }
+
     if (V.isFci()) {
       bout::globals::mesh->communicate(V);
     }
@@ -32,6 +42,8 @@ struct FixedVelocity : public Component {
   ///     - momentum
   void transform(Options& state) override {
     AUTO_TRACE();
+
+    if (immBndry) {immBndry->SetBoundary(V);}
     auto& species = state["species"][name];
     set(species["velocity"], V);
 
@@ -41,9 +53,20 @@ struct FixedVelocity : public Component {
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
       Field3D NV = AA * N * V;
+
+      if (immBndry) {
+        //IB_TODO: Complex logic for late NV setup...
+        //IB_TODO: Dont need to set NV boundary below because multiplies N and V boundaries?
+        NV.name = std::string("NV") + name;
+        if (!immBndry->CheckFieldSetUp(NV.name)) {
+          immBndry->FieldSetup(NV);
+        }
+      }
+
       if (NV.isFci()) {
         bout::globals::mesh->communicate(NV);
       }
+
       set(species["momentum"], NV);
     }
   }

@@ -375,7 +375,7 @@ public:
       rval = values[name].as<Array<BoutReal>>();
       return true;
     }
-    rval = def; //IMM_BNDRY_TODO: Fix this and Matrix version below.
+    rval = def; //IB_TODO: Fix this and Matrix version below.
     return false;
   }
   bool get([[maybe_unused]] Mesh* m, Matrix<BoutReal>& rval, const std::string& name,
