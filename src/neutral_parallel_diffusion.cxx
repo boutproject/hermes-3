@@ -3,9 +3,16 @@
 #include "../include/guarded_options.hxx"
 #include "../include/hermes_utils.hxx"
 
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
+
+#include <string>
 
 using bout::globals::mesh;
 
@@ -40,7 +47,7 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
       if (diffusion_collisions_mode == "afn") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string collision_name = collision.first;
+          const std::string collision_name = collision.first;
 
           if ( // Charge exchange
               (collisionSpeciesMatch(collision_name, species_name, "+", "cx", "partial"))
@@ -56,7 +63,7 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
       } else if (diffusion_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string collision_name = collision.first;
+          const std::string collision_name = collision.first;
 
           if ( // Charge exchange
               (collisionSpeciesMatch(collision_name, species_name, "", "cx", "partial"))
@@ -121,7 +128,7 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
     logPn.applyBoundary("neumann");
 
     // Particle advection
-    Field3D S = FV::Div_par_K_Grad_par(Dn * Nn, logPn);
+    const Field3D S = FV::Div_par_K_Grad_par(Dn * Nn, logPn);
     add(species["density_source"], S);
 
     Field3D kappa_n = kappa_factor * Nn * Dn;
@@ -143,10 +150,10 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
       // Transport Processes in Gases", 1972
       //
 
-      Field3D Vn = GET_VALUE(Field3D, species["velocity"]);
-      Field3D NVn = GET_VALUE(Field3D, species["momentum"]);
+      const Field3D Vn = GET_VALUE(Field3D, species["velocity"]);
+      const Field3D NVn = GET_VALUE(Field3D, species["momentum"]);
 
-      Field3D eta_n = (2. / 5) * kappa_n;
+      const Field3D eta_n = (2. / 5) * kappa_n;
 
       // Momentum diffusion
       F = FV::Div_par_K_Grad_par(NVn * Dn, logPn) + FV::Div_par_K_Grad_par(eta_n, Vn);
