@@ -193,12 +193,21 @@ void Reaction::init_channel_weights(GuardedOptions& state) {
     double total_energy_weight = std::accumulate(
         this->energy_channels[reactant].begin(), this->energy_channels[reactant].end(),
         0.0, [](double sum, const auto& pair) { return sum + pair.second; });
-    ASSERT0(total_energy_weight >= 0 && total_energy_weight <= 1);
+    if (total_energy_weight < 0 || total_energy_weight > 1.0) {
+      throw BoutException(fmt::format("Total energy channel weight for reactant '{}' is "
+                                      "{} (must satisfy 0 <= weight <= 1).",
+                                      reactant, total_energy_weight));
+    }
     double total_momentum_weight =
         std::accumulate(this->momentum_channels[reactant].begin(),
                         this->momentum_channels[reactant].end(), 0.0,
                         [](double sum, const auto& pair) { return sum + pair.second; });
-    ASSERT0(total_momentum_weight >= 0 && total_momentum_weight <= 1);
+    if (total_momentum_weight < 0 || total_momentum_weight > 1.0) {
+      throw BoutException(
+          fmt::format("Total momentum channel weight for reactant '{}' is "
+                      "{} (must satisfy 0 <= weight <= 1).",
+                      reactant, total_momentum_weight));
+    }
   }
 }
 
