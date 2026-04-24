@@ -28,6 +28,9 @@ Reaction::Reaction(std::string name, Options& options)
                        .doc("Output additional diagnostics?")
                        .withDefault<bool>(false);
 
+  // Multiplier defaults to 1, subclasses may read appropriate an option and overwrite
+  this->rate_multiplier = 1.0;
+
   std::string reaction_str, data_src_id;
   ReactionDataTypes data_src_type;
 

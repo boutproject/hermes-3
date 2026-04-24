@@ -83,8 +83,8 @@ protected:
   Options& units;
   BoutReal Tnorm, Nnorm, FreqNorm;
 
-  /// Rate multipliers, extracted from input options
-  BoutReal rate_multiplier, radiation_multiplier;
+  /// Rate multiplier. Defaults to 1, but subclasses may read an option and overwrite.
+  BoutReal rate_multiplier;
 
   /// Output diagnostics?
   bool diagnose;

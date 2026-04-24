@@ -18,6 +18,9 @@ IznRecReaction::IznRecReaction(std::string short_reaction_type, std::string name
   this->heavy_product =
       this->parser->get_single_species(species_filter::heavy, species_filter::products);
 
+  // Multiplier defaults to 1, subclasses may read appropriate an option and overwrite
+  this->radiation_multiplier = 1;
+
   /*
   Data for calculating the electron energy loss rate.
   Data type is assumed to be the same as the izn/rec rate data for now and the data ID is
