@@ -1,7 +1,7 @@
-#include "../include/component.hxx"
 #include "../include/neutral_parallel_diffusion.hxx"
-#include "../include/hermes_utils.hxx"
+#include "../include/component.hxx"
 #include "../include/guarded_options.hxx"
+#include "../include/hermes_utils.hxx"
 
 #include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
@@ -23,68 +23,71 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
     }
     // Initialise collision_names for each species if not already done
     if (collision_names.find(species_name) == collision_names.end()) {
-      collision_names[species_name] = {};  // Initialise with empty vector
+      collision_names[species_name] = {}; // Initialise with empty vector
     }
 
     const BoutReal AA = GET_VALUE(BoutReal, species["AA"]); // Atomic mass
     const Field3D Nn = GET_VALUE(Field3D, species["density"]);
     const Field3D Tn = GET_VALUE(Field3D, species["temperature"]);
-    const Field3D Pn = IS_SET(species["pressure"]) ?
-      GET_VALUE(Field3D, species["pressure"]) : Nn * Tn;
+    const Field3D Pn =
+        IS_SET(species["pressure"]) ? GET_VALUE(Field3D, species["pressure"]) : Nn * Tn;
 
     // Collisionality
     // Multispecies mode: in, en, nn, cx
     // New mode: cx, iz (in line with SOLPS AFN, Horsten 2017)
-    if (collision_names[species_name].empty()) {     // Calculate only once - at the beginning
+    if (collision_names[species_name].empty()) { // Calculate only once - at the beginning
 
       if (diffusion_collisions_mode == "afn") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.first;
 
-          if (// Charge exchange
-              (collisionSpeciesMatch(    
-                collision_name, species_name, "+", "cx", "partial")) or
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, species_name, "+", "cx", "partial"))
+              or
               // Ionisation
-              (collisionSpeciesMatch(    
-                collision_name, species_name, "+", "iz", "partial"))) {
-                  
-                  collision_names[species_name].push_back(collision_name);
-                }
+              (collisionSpeciesMatch(collision_name, species_name, "+", "iz",
+                                     "partial"))) {
+
+            collision_names[species_name].push_back(collision_name);
+          }
         }
-      // Multispecies mode: all collisions and CX are included
+        // Multispecies mode: all collisions and CX are included
       } else if (diffusion_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
           std::string collision_name = collision.first;
 
-          if (// Charge exchange
-              (collisionSpeciesMatch(    
-                collision_name, species_name, "", "cx", "partial")) or
+          if ( // Charge exchange
+              (collisionSpeciesMatch(collision_name, species_name, "", "cx", "partial"))
+              or
               // Any collision (ne, ni, nn)
-              (collisionSpeciesMatch(    
-                collision_name, species_name, "", "coll", "partial"))) {
-                  
-                  collision_names[species_name].push_back(collision_name);
-                }
+              (collisionSpeciesMatch(collision_name, species_name, "", "coll",
+                                     "partial"))) {
+
+            collision_names[species_name].push_back(collision_name);
+          }
         }
 
       } else {
-        throw BoutException("\tdiffusion_collisions_mode for {:s} must be either multispecies or afn", species_name);
+        throw BoutException(
+            "\tdiffusion_collisions_mode for {:s} must be either multispecies or afn",
+            species_name);
       }
 
       if (collision_names[species_name].empty()) {
-        throw BoutException("\tNo collisions found for {:s} in neutral_parallel_diffusion for selected collisions mode", species_name);
+        throw BoutException("\tNo collisions found for {:s} in "
+                            "neutral_parallel_diffusion for selected collisions mode",
+                            species_name);
       }
 
       // Write chosen collisions to log file
       output_info.write("\t{:s} neutral diffusion collisionality mode: '{:s}' using ",
-                      species_name, diffusion_collisions_mode);
-      for (const auto& collision : collision_names[species_name]) {        
+                        species_name, diffusion_collisions_mode);
+      for (const auto& collision : collision_names[species_name]) {
         output_info.write("{:s} ", collision);
       }
       output_info.write("\n");
-
     }
 
     // Collect the collisionalities based on list of names
@@ -100,7 +103,7 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
     BoutReal kappa_factor = 0;
 
     if (equation_fix) {
-      advection_factor = (5. / 2);    // This is equivalent to 5/3 if on pressure basis
+      advection_factor = (5. / 2); // This is equivalent to 5/3 if on pressure basis
       kappa_factor = (5. / 2);
     } else {
       advection_factor = (3. / 2);
@@ -113,7 +116,7 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
     mesh->communicate(Dn);
 
     // Cross-field diffusion calculated from pressure gradient
-    // This is the pressure-diffusion approximation 
+    // This is the pressure-diffusion approximation
     Field3D logPn = log(floor(Pn, 1e-7));
     logPn.applyBoundary("neumann");
 
@@ -125,10 +128,10 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
     kappa_n.applyBoundary("neumann");
 
     // Heat transfer
-    Field3D E = + FV::Div_par_K_Grad_par(
-      Dn * advection_factor * Pn, logPn);        // Pressure advection
+    Field3D E =
+        +FV::Div_par_K_Grad_par(Dn * advection_factor * Pn, logPn); // Pressure advection
     if (perpendicular_conduction) {
-      E += FV::Div_par_K_Grad_par(kappa_n, Tn);   // Conduction
+      E += FV::Div_par_K_Grad_par(kappa_n, Tn); // Conduction
     }
     add(species["energy_source"], E);
 
@@ -155,7 +158,7 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
       auto search = diagnostics.find(species_name);
       if (search == diagnostics.end()) {
         // First time, create diagnostic
-        diagnostics.emplace(species_name, Diagnostics {Dn, S, E, F});
+        diagnostics.emplace(species_name, Diagnostics{Dn, S, E, F});
       } else {
         // Update diagnostic values
         auto& d = search->second;
@@ -182,40 +185,40 @@ void NeutralParallelDiffusion::outputVars(Options& state) {
       const std::string& species_name = it.first;
       const auto& d = it.second;
       set_with_attrs(state[std::string("D") + species_name + std::string("_Dpar")], d.Dn,
-                   {{"time_dimension", "t"},
-                    {"units", "m^2/s"},
-                    {"conversion", rho_s0 * Cs0},
-                    {"standard_name", "diffusion coefficient"},
-                    {"long_name", species_name + " particle diffusion coefficient"},
-                    {"species", species_name},
-                    {"source", "neutral_parallel_diffusion"}});
+                     {{"time_dimension", "t"},
+                      {"units", "m^2/s"},
+                      {"conversion", rho_s0 * Cs0},
+                      {"standard_name", "diffusion coefficient"},
+                      {"long_name", species_name + " particle diffusion coefficient"},
+                      {"species", species_name},
+                      {"source", "neutral_parallel_diffusion"}});
 
       set_with_attrs(state[std::string("S") + species_name + std::string("_Dpar")], d.S,
-                   {{"time_dimension", "t"},
-                    {"units", "s^-1"},
-                    {"conversion", Nnorm * Omega_ci},
-                    {"standard_name", "particle diffusion"},
-                    {"long_name", species_name + " particle source due to diffusion"},
-                    {"species", species_name},
-                    {"source", "neutral_parallel_diffusion"}});
+                     {{"time_dimension", "t"},
+                      {"units", "s^-1"},
+                      {"conversion", Nnorm * Omega_ci},
+                      {"standard_name", "particle diffusion"},
+                      {"long_name", species_name + " particle source due to diffusion"},
+                      {"species", species_name},
+                      {"source", "neutral_parallel_diffusion"}});
 
       set_with_attrs(state[std::string("E") + species_name + std::string("_Dpar")], d.E,
-                   {{"time_dimension", "t"},
-                    {"units", "W / m^3"},
-                    {"conversion", SI::qe * Tnorm * Nnorm * Omega_ci},
-                    {"standard_name", "energy diffusion"},
-                    {"long_name", species_name + " energy source due to diffusion"},
-                    {"species", species_name},
-                    {"source", "neutral_parallel_diffusion"}});
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", SI::qe * Tnorm * Nnorm * Omega_ci},
+                      {"standard_name", "energy diffusion"},
+                      {"long_name", species_name + " energy source due to diffusion"},
+                      {"species", species_name},
+                      {"source", "neutral_parallel_diffusion"}});
 
       set_with_attrs(state[std::string("F") + species_name + std::string("_Dpar")], d.F,
-                   {{"time_dimension", "t"},
-                    {"units", "kg m^-2 s^-2"},
-                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
-                    {"standard_name", "momentum diffusion"},
-                    {"long_name", species_name + " momentum source due to diffusion"},
-                    {"species", species_name},
-                    {"source", "neutral_parallel_diffusion"}});
+                     {{"time_dimension", "t"},
+                      {"units", "kg m^-2 s^-2"},
+                      {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                      {"standard_name", "momentum diffusion"},
+                      {"long_name", species_name + " momentum source due to diffusion"},
+                      {"species", species_name},
+                      {"source", "neutral_parallel_diffusion"}});
     }
   }
 }

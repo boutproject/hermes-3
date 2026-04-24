@@ -444,11 +444,11 @@ type = (
         d + e -> d+ + 2e,     # Deuterium ionisation
         d+ + e -> d,          # Deuterium recombination
         d + d+ -> d+ + d,     # Charge exchange
-        
+
         ne + e -> ne+ + 2e,   # Neon ionisation
         ne+ + e -> ne,        # Neon+ recombination
         ne+ + d -> ne + d+,   # Neon+ charge exchange recombination
-        
+
         ne+ + e -> ne+2 + 2e, # Neon+ ionisation
         ne+2 + e -> ne+,      # Neon+2 recombination
         ne+2 + d -> ne+ + d+, # Neon+2 charge exchange recombination
