@@ -21,27 +21,30 @@ timestep = 1000
 MXG = 0  # No guard cells in X
 
 [mesh]
+# 1D simulation, use "y" as the dimension along the fieldline
 nx = 1
 ny = 400   # Resolution along field-line
 nz = 1
 
 length = 30           # Length of the domain in meters
-length_xpt = 10   # Length from midplane to X-point [m]
+length_xpt = 10   # Length from midplane to X-point [m] (i.e. this is where the source ends)
 
 dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
 
-# Parallel grid spacing
+# Parallel grid spacing — grid refinement near the divertor target
 dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
 
-# Calculate where the source ends in grid index
+# Calculate where the source ends in grid index (i.e. at the X-point)
 source = length_xpt / length
 y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
 
+# Separatrix index set to -1 for 1D simulations
 ixseps1 = -1
 ixseps2 = -1
 
-[restart_files]
-init_missing = true # Initialise any missing variables to zero
+# In 1D, the Jacobian is inversely proportional to volume
+# Total flux expansion can be set up with a non-constant J profile
+J = 1
 
 [hermes]
 # Notes:
@@ -50,10 +53,10 @@ init_missing = true # Initialise any missing variables to zero
 #  - electron_force_balance after thermal force and collisions, so the electric field
 #    includes the force on the electrons
 components = (d+, d, ne, ne+, ne+2, ne+3, ne+4, ne+5, ne+6, ne+7, ne+8, ne+9, ne+10, e,
-              sheath_boundary,  braginskii_collisions, braginskii_thermal_force,
-              braginskii_friction, braginskii_heat_exchange, reactions,
+              sheath_boundary, braginskii_thermal_force, braginskii_collisions,
+              braginskii_friction, braginskii_heat_exchange, recycling, reactions,
               electron_force_balance, neutral_parallel_diffusion,
-              braginskii_ion_viscosity, braginskii_conduction, recycling)
+              braginskii_ion_viscosity, braginskii_conduction)
 
 normalise_metric = true  # Normalise the input metric?
 
@@ -62,15 +65,36 @@ Bnorm = 1
 Tnorm = 100
 
 [solver]
-type = beuler  # Backward Euler steady-state solver
-max_nonlinear_iterations = 10
-
 diagnose = true
+type = snes
+snes_type = newtonls
+ksp_type = preonly    # Direct solver
+pc_type = lu
+max_nonlinear_iterations = 16
+atol = 4e-8
+rtol = 1e-6
+stol = 0
+maxf = 2000
+maxl = 260
+matrix_free_operator = false
+lag_jacobian = 1
+timestep = 0.001
 
-atol = 1e-7
-rtol = 1e-5
+pid_controller = true # Change timestep
+target_its = 3        # Target number of nonlinear iterations
+kP = 0.65
+kI = 0.3
+kD = 0.15
 
-predictor = false
+[petsc]
+
+# STRUMPACK as factorization backend for ILU/LU
+pc_factor_mat_solver_type = strumpack
+
+mat_strumpack_reordering = metis  # try amd/rcm if needed
+mat_strumpack_colperm = true      # allow column permutation for nonzero diagonal
+pc_factor_shift_type = NONZERO
+pc_factor_shift_amount = 1e-12
 
 [sheath_boundary]
 
@@ -78,7 +102,7 @@ lower_y = false
 upper_y = true
 
 [neutral_parallel_diffusion]
-
+diffusion_collisions_mode = multispecies  # "afn" or "multispecies"
 dneut = 10   # (B / Bpol)^2 in neutral diffusion terms
 
 ####################################
@@ -105,24 +129,27 @@ diagnose = true   # Output diagnostics for these components?
 recycle_as = d
 target_recycle = true  # Target recycling on
 target_recycle_energy = 3.5  # Franck-Condon dissociation energy
-target_recycle_multiplier = 1.0  # Recycling fraction
+target_recycle_multiplier = 1  # Recycling fraction
 
 [Nd+]
 
 function = 1
 
-source_shape = H(mesh:y_xpt - y) * 1e20
+source_shape = H(mesh:y_xpt - y) * 1e20 # for upstream_density_feedback
 
 [Pd+]
+
+# Initial condition for ion pressure (in terms of hermes:Nnorm * hermes:Tnorm)
 function = 1
 
 powerflux = 2.5e7  # Input power flux in W/m^2
 
+# Divide by length of source region to get heat source in W/m3
 source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
 
 [NVd+]
 
-function = 0
+function = 0  # Initialise with Vi=0
 
 ####################################
 
@@ -136,11 +163,9 @@ AA = 2
 thermal_conduction = true
 
 [Nd]
-
 function = 0.001
 
 [Pd]
-
 function = 0.0001
 
 ####################################
@@ -171,8 +196,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-target_recycle = true   # Target recycling on
-target_recycle_energy = 0   # Simple assumption
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 [Nne+]
@@ -193,8 +218,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-target_recycle = true   # Target recycling on
-target_recycle_energy = 0   # Simple assumption
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 [Nne+2]
@@ -215,8 +240,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-target_recycle = true   # Target recycling on
-target_recycle_energy = 0   # Simple assumption
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 [Nne+3]
@@ -237,8 +262,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-target_recycle = true   # Target recycling on
-target_recycle_energy = 0   # Simple assumption
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 diagnose = true
@@ -261,9 +286,10 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-target_recycle = true   # Target recycling on
-target_recycle_energy = 0   # Simple assumption
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 0.99  # Recycling fraction
+
 diagnose = true
 
 [Nne+5]
@@ -284,8 +310,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-target_recycle = true   # Target recycling on
-target_recycle_energy = 0   # Simple assumption
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 diagnose = true
@@ -308,8 +334,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-target_recycle = true   # Target recycling on
-target_recycle_energy = 0   # Simple assumption
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 diagnose = true
@@ -332,8 +358,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-target_recycle = true   # Target recycling on
-target_recycle_energy = 0   # Simple assumption
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 diagnose = true
@@ -356,8 +382,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-target_recycle = true   # Target recycling on
-target_recycle_energy = 0   # Simple assumption
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 diagnose = true
@@ -380,8 +406,8 @@ noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
 
 recycle_as = ne
-target_recycle = true   # Target recycling on
-target_recycle_energy = 0   # Simple assumption
+target_recycle = true  # Target recycling on
+target_recycle_energy = 0  # Simple assumption
 target_recycle_multiplier = 0.99  # Recycling fraction
 
 diagnose = true
@@ -395,20 +421,19 @@ function = 1e-7
 ####################################
 
 [e] # Electrons
-type = quasineutral, zero_current, evolve_pressure, noflow_boundary
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
 
 noflow_upper_y = false
 
 charge = -1
 AA = 1/1836
-
 thermal_conduction = true  # in evolve_pressure
+diagnose = true
 
 [Pe]
 
 function = `Pd+:function`  # Same as ion pressure initially
-
-source = `Pd+:source`  # Same as ion pressure source
+source = `Pd+:source`      # Same as ion pressure source
 
 ####################################
 
