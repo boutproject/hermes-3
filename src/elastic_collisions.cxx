@@ -33,11 +33,13 @@ ElasticCollision::ElasticCollision(std::string name, Options& options)
   this->r2 = reactants[1];
 
   // Diagnostics
-  add_diagnostic(
-      this->r1, fmt::format("F{}{}", this->r1, this->r2),
-      fmt::format("Momentum exchange due to elastic collisions between {} and {}",
-                  this->r1, this->r2),
-      ReactionDiagnosticType::momentum_src, this->rate_data->src_str());
+  if (this->diagnose) {
+    add_diagnostic(
+        this->r1, fmt::format("F{}{}", this->r1, this->r2),
+        fmt::format("Momentum exchange due to elastic collisions between {} and {}",
+                    this->r1, this->r2),
+        ReactionDiagnosticType::momentum_src, this->rate_data->src_str());
+  }
 }
 
 ///

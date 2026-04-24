@@ -5,7 +5,7 @@
 
 namespace hermes {
 
-//======================== General reaction class tests =======================
+// ======================= General reaction class tests =======================
 /// @brief Test parsing of various input optionsReactionBase constructor should throw if
 /// the reaction type string is not valid
 TEST(ReactionTest, InputOptions) {
@@ -49,7 +49,7 @@ TEST(ReactionTest, InputOptions) {
   ASSERT_THROW(CXReaction(comp_name, invalid_input2), BoutException);
 }
 
-//======================== CX reaction class tests =======================
+// ========================== CX reaction class tests =========================
 
 /// @brief CXReaction constructor should throw for strings that aren't valid CX
 /// reactions
@@ -98,7 +98,36 @@ TEST(CXReactionTest, OrderIndependentReactionStrs) {
   }
 }
 
-//====================== Reaction source regression tests =====================
+// =================== ElasticCollision reaction class tests ==================
+/// @brief Test validity of various reaction strings for elastic collisions
+TEST(ElasticCollisionTest, ReactionStrings) {
+  Options base_options{
+      {"test", {{"data_ids", "H.2_0.3T"}}},
+      {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+
+  // Swapped order should work
+  std::string valid_reaction_str = "h2 + d+ -> d+ + h2 ";
+  ReactionBase::reset_instance_counter();
+  Options options = base_options.copy();
+  options["test"]["type"] = valid_reaction_str;
+  ASSERT_NO_THROW(ElasticCollision("test", options));
+
+  // Invalid elastic collision reaction strings
+  std::string too_few_species = "h -> h";
+  std::string too_many_species = "h + d+ + t -> h + d+ + t";
+  std::string reactants_products_mismatch = "h2 + d+ -> h2 +d";
+
+  // Test that constructor throws for each invalid reaction string
+  for (const auto& invalid_reaction_str :
+       {too_few_species, too_many_species, reactants_products_mismatch}) {
+    ReactionBase::reset_instance_counter();
+    Options options = base_options.copy();
+    options["test"]["type"] = invalid_reaction_str;
+    ASSERT_THROW(ElasticCollision("test", options), BoutException);
+  }
+}
+
+// ===================== Reaction source regression tests =====================
 
 // H isotopes ionization
 TEST_F(HIznTest, SourcesRegression) { sources_regression_test(); }
