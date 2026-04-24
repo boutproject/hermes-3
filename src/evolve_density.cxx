@@ -15,8 +15,7 @@
 using bout::globals::mesh;
 
 EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solver)
-    : name(name) {
-  AUTO_TRACE();
+    : Component({readWrite("species:{name}:{outputs}")}), name(name) {
 
   auto& options = alloptions[name];
 
@@ -130,10 +129,23 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
+
+  std::vector<std::string> outputs = {"AA", "density", "density_source"};
+  if (charge != 0.) {
+    outputs.push_back("charge");
+  }
+  if (low_n_diffuse) {
+    outputs.push_back("low_n_coeff");
+  }
+
+  if (source_time_dependent) {
+    setPermissions(readOnly("time"));
+  }
+  substitutePermissions("name", {name});
+  substitutePermissions("outputs", outputs);
 }
 
-void EvolveDensity::transform(Options& state) {
-  AUTO_TRACE();
+void EvolveDensity::transform_impl(GuardedOptions& state) {
 
   if (evolve_log) {
     // Evolving logN, but most calculations use N
@@ -176,7 +188,7 @@ void EvolveDensity::transform(Options& state) {
     }
   }
 
-  auto& species = state["species"][name];
+  auto species = state["species"][name];
   set(species["density"], floor(N, 0.0)); // Density in state always >= 0
   set(species["AA"], AA);                 // Atomic mass
   if (charge != 0.0) {                    // Don't set charge for neutral species
@@ -211,7 +223,6 @@ void EvolveDensity::transform(Options& state) {
 }
 
 void EvolveDensity::finally(const Options& state) {
-  AUTO_TRACE();
 
   auto& species = state["species"][name];
 
@@ -266,13 +277,12 @@ void EvolveDensity::finally(const Options& state) {
   }
 
   if (low_n_diffuse_perp) {
-    ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
-                                    bndry_flux);
+    ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N);
   }
 
   if (low_p_diffuse_perp) {
     Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
-    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N, true);
+    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N);
   }
 
   if (hyper_z > 0.) {

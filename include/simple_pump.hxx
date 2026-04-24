@@ -5,9 +5,14 @@
 #include "component.hxx"
 #include <bout/constants.hxx>
 
+#include <fmt/format.h>
+
 struct SimplePump : public Component {
 
-  SimplePump(std::string name, Options& alloptions, Solver*) : name(name) {
+  SimplePump(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:{name}:density", Regions::Interior),
+                   readWrite("species:{name}:density_source")}),
+        name(name) {
 
     Options& options = alloptions[name];
 
@@ -29,36 +34,24 @@ struct SimplePump : public Component {
                   .doc("Output additional diagnostics?")
                   .withDefault<bool>(false);
 
-    };
+    substitutePermissions("name", {name});
+  };
 
-    void transform(Options& state) override {
-
-        Field3D species_density = getNoBoundary<Field3D>(state["species"][name]["density"]);
-
-        pumping_sink = (sink_shape * species_density) * (-1.0 / residence_time);
-
-        add(state["species"][name]["density_source"], pumping_sink);
-
-    };
-
-    void outputVars(Options& state) override {
-    AUTO_TRACE();
+  void outputVars(Options& state) override {
     if (diagnose) {
 
-      set_with_attrs(
-          state[std::string("simple_pump_src_shape_" + name)], sink_shape,
+      set_with_attrs(state[fmt::format("simple_pump_src_shape_{}", name)], sink_shape,
           {{"long_name", "simple pump source shape"},
            {"source", "simple_pump"}});
     
-      set_with_attrs(
-          state[std::string("simple_pump_sink_" + name)], pumping_sink,
+      set_with_attrs(state[fmt::format("simple_pump_sink_{}", name)], pumping_sink,
           {{"time_dimension", "t"},
            {"units", "m^-3 / s"},
            {"conversion", Nnorm * Omega_ci},
            {"long_name", "simple pump source shape"},
            {"source", "simple_pump"}});
-
-    }}
+    }
+  }
 
   private:
     std::string name; ///< The species name
@@ -69,6 +62,15 @@ struct SimplePump : public Component {
     BoutReal residence_time;
     bool diagnose;
 
+    void transform_impl(GuardedOptions& state) override {
+
+        Field3D species_density = getNoBoundary<Field3D>(state["species"][name]["density"]);
+
+        pumping_sink = (sink_shape * species_density) * (-1.0 / residence_time);
+
+        add(state["species"][name]["density_source"], pumping_sink);
+
+    };
 };
 
 namespace {

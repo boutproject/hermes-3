@@ -47,8 +47,8 @@ TEST_F(FixedDensityTest, SetValues) {
 
   Options state;
   component.transform(state);
-  ASSERT_FLOAT_EQ(2, state["species"]["e"]["charge"].as<BoutReal>());
-  ASSERT_FLOAT_EQ(3, state["species"]["e"]["AA"].as<BoutReal>());
+  ASSERT_DOUBLE_EQ(2, state["species"]["e"]["charge"].as<BoutReal>());
+  ASSERT_DOUBLE_EQ(3, state["species"]["e"]["AA"].as<BoutReal>());
   // Check that density has been normalised
   ASSERT_TRUE(
       IsFieldEqual(state["species"]["e"]["density"].as<Field3D>(), 24.0, "RGN_ALL"));

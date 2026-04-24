@@ -1,11 +1,13 @@
 #ifndef TEST_ADAS_REACTIONS_H__
 #define TEST_ADAS_REACTIONS_H__
 
-#include "test_reactions.hxx"
+#include "test_cx_reactions.hxx"
+#include "test_izn_rec_reactions.hxx"
 
 #include "../../include/adas_carbon.hxx"
 #include "../../include/adas_lithium.hxx"
 #include "../../include/adas_neon.hxx"
+#include <cstddef>
 
 /**
  * @brief Base fixture for tests of OpenADAS subclasses.
@@ -13,14 +15,14 @@
  * @tparam RTYPE The reaction class; must derive from OpenADAS.
  */
 template <typename RTYPE>
-class ADASIznRecReactionTest : public IznRecReactionTest<RTYPE> {
+class ADASIznRecReactionTest : public hermes::IznRecReactionTest<RTYPE> {
 
   static_assert(std::is_base_of<OpenADAS, RTYPE>(),
                 "Template arg to ADASReactionTest must derive from OpenADAS");
 
 public:
   ADASIznRecReactionTest(std::string lbl, std::string reaction_str)
-      : IznRecReactionTest<RTYPE>(lbl, reaction_str) {}
+      : hermes::IznRecReactionTest<RTYPE>(lbl, reaction_str) {}
 };
 
 // C izn
@@ -32,12 +34,15 @@ public:
 
 class ADASCpIznTest : public ADASIznRecReactionTest<ADASCarbonIonisation<1>> {
 public:
-  ADASCpIznTest() : ADASIznRecReactionTest("CpIzn", "c+ + e -> c+2 + 2e") {}
+  ADASCpIznTest()
+      : ADASIznRecReactionTest<ADASCarbonIonisation<1>>("CpIzn", "c+ + e -> c+2 + 2e") {}
 };
 
 class ADASC5pIznTest : public ADASIznRecReactionTest<ADASCarbonIonisation<5>> {
 public:
-  ADASC5pIznTest() : ADASIznRecReactionTest("C5pIzn", "c+5 + e -> c+6 + 2e") {}
+  ADASC5pIznTest()
+      : ADASIznRecReactionTest<ADASCarbonIonisation<5>>("C5pIzn", "c+5 + e -> c+6 + 2e") {
+  }
 };
 
 // C rec
@@ -147,16 +152,13 @@ public:
  * @tparam RTYPE the reaction class
  */
 template <typename RTYPE>
-class ADASCXReactionTest : public CXReactionTest<RTYPE> {
+class ADASCXReactionTest : public hermes::CXReactionTest<RTYPE> {
 protected:
-  ADASCXReactionTest(const std::string& lbl, const std::string& reaction_str,
-                     const std::string& neutral_sp_in, const std::string& ion_sp_in,
-                     const std::string& neutral_sp_out, const std::string& ion_sp_out)
-      : CXReactionTest<RTYPE>(lbl, reaction_str, neutral_sp_in, ion_sp_in, neutral_sp_out,
-                              ion_sp_out) {}
+  ADASCXReactionTest(const std::string& lbl, const std::string& reaction_str)
+      : hermes::CXReactionTest<RTYPE>(lbl, reaction_str) {}
   // Add n_e, T_e to the input state
   virtual Options generate_state() override {
-    Options state = CXReactionTest<RTYPE>::generate_state();
+    Options state = hermes::CXReactionTest<RTYPE>::generate_state();
     state["species"]["e"]["density"] = FieldFactory::get()->create3D(
         this->gen_lin_field_str(this->logn_min, this->logn_max, linfunc_axis::z), &state,
         mesh);
@@ -172,9 +174,7 @@ template <int level, char Hisotope>
 class ADASCCXReactionTest : public ADASCXReactionTest<ADASCarbonCX<level, Hisotope>> {
 public:
   ADASCCXReactionTest(std::string lbl, std::string reaction_str)
-      : ADASCXReactionTest<ADASCarbonCX<level, Hisotope>>(
-          lbl, reaction_str, {carbon_species_name<level + 1>}, {Hisotope},
-          {carbon_species_name<level>}, {Hisotope, '+'}) {}
+      : ADASCXReactionTest<ADASCarbonCX<level, Hisotope>>(lbl, reaction_str) {}
 };
 
 class ADASCpHCXTest : public ADASCCXReactionTest<0, 'h'> {
@@ -192,13 +192,11 @@ public:
 };
 
 // Li CX
-template <int level, char Hisotope>
+template <std::size_t level, char Hisotope>
 class ADASLiCXReactionTest : public ADASCXReactionTest<ADASLithiumCX<level, Hisotope>> {
 public:
   ADASLiCXReactionTest(std::string lbl, std::string reaction_str)
-      : ADASCXReactionTest<ADASLithiumCX<level, Hisotope>>(
-          lbl, reaction_str, {lithium_species_name<level + 1>}, {Hisotope},
-          {lithium_species_name<level>}, {Hisotope, '+'}) {}
+      : ADASCXReactionTest<ADASLithiumCX<level, Hisotope>>(lbl, reaction_str) {}
 };
 
 class ADASLipHCXTest : public ADASLiCXReactionTest<0, 'h'> {
@@ -217,13 +215,11 @@ public:
 };
 
 // Ne CX
-template <int level, char Hisotope>
+template <std::size_t level, char Hisotope>
 class ADASNeCXReactionTest : public ADASCXReactionTest<ADASNeonCX<level, Hisotope>> {
 public:
   ADASNeCXReactionTest(std::string lbl, std::string reaction_str)
-      : ADASCXReactionTest<ADASNeonCX<level, Hisotope>>(
-          lbl, reaction_str, {neon_species_name<level + 1>}, {Hisotope},
-          {neon_species_name<level>}, {Hisotope, '+'}) {}
+      : ADASCXReactionTest<ADASNeonCX<level, Hisotope>>(lbl, reaction_str) {}
 };
 
 class ADASNepHCXTest : public ADASNeCXReactionTest<0, 'h'> {

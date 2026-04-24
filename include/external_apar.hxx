@@ -9,16 +9,16 @@
 struct ExternalApar : public Component {
   ExternalApar(std::string name, Options& alloptions, Solver* UNUSED(solver));
 
-  /// Adds to the Apar_flutter field
-  ///
-  /// - fields
-  ///   - Apar_flutter
-  void transform(Options& state) override;
-
   /// Saves the added field to output
   void outputVars(Options& state) override;
 
 private:
+  /// Adds to the Apar_flutter field
+  ///
+  /// - fields
+  ///   - Apar_flutter
+  void transform_impl(GuardedOptions& state) override;
+
   Field3D external_apar; ///< The external field
 };
 

@@ -1,13 +1,15 @@
-
 #pragma once
 
 #ifndef COMPONENT_SCHEDULER_H
 #define COMPONENT_SCHEDULER_H
 
-#include "component.hxx"
-
 #include <vector>
 #include <memory>
+
+#include <bout/bout_types.hxx>
+#include <bout/options.hxx>
+
+#include "component.hxx"
 
 /// Creates and schedules model components
 ///

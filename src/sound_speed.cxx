@@ -3,13 +3,13 @@
 #include "../include/hermes_utils.hxx"
 #include <bout/mesh.hxx>
 
-void SoundSpeed::transform(Options &state) {
+void SoundSpeed::transform_impl(GuardedOptions& state) {
   Field3D total_pressure = 0.0;
   Field3D total_density = 0.0;
 
   Field3D fastest_wave = 0.0;
   for (auto& kv : state["species"].getChildren()) {
-    const Options& species = kv.second;
+    const GuardedOptions species = kv.second;
 
     if (species.isSet("pressure")) {
       total_pressure += GET_NOBOUNDARY(Field3D, species["pressure"]);

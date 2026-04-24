@@ -11,24 +11,8 @@
 /// where the aim is to reach ddt -> 0
 ///
 struct ScaleTimeDerivs : public Component {
-  ScaleTimeDerivs(std::string, Options&, Solver*) {}
-
-  /// Sets in the state
-  ///
-  /// - scale_timederivs
-  ///
-  void transform(Options &state) override {
-
-    auto* coord = bout::globals::mesh->getCoordinates();
-    Field2D dl2 = coord->g_22 * SQ(coord->dy);
-
-    // Scale by parallel heat conduction CFL timescale
-    auto Te = get<Field3D>(state["species"]["e"]["temperature"]);
-    Field3D dt = dl2 / pow(floor(Te, 1e-5), 5./2);
-    scaling = dt / max(dt, true); // Saved for output
-
-    state["scale_timederivs"] = scaling;
-  }
+  ScaleTimeDerivs(std::string, Options&, Solver*)
+      : Component({readOnly("species:e:temperature"), writeFinal("scale_timederivs")}) {}
 
   void outputVars(Options& state) override {
     set_with_attrs(
@@ -39,10 +23,33 @@ struct ScaleTimeDerivs : public Component {
   }
 private:
   Field3D scaling; // The scaling factor applied to each cell
+
+  /// Inputs
+  ///
+  /// - species
+  ///   - e
+  ///     - temperature
+  ///
+  /// Sets in the state
+  ///
+  /// - scale_timederivs
+  ///
+  void transform_impl(GuardedOptions& state) override {
+
+    auto* coord = bout::globals::mesh->getCoordinates();
+    Field2D dl2 = coord->g_22 * SQ(coord->dy);
+
+    // Scale by parallel heat conduction CFL timescale
+    auto Te = get<Field3D>(state["species"]["e"]["temperature"]);
+    Field3D dt = dl2 / pow(floor(Te, 1e-5), 5. / 2);
+    scaling = dt / max(dt, true); // Saved for output
+
+    state["scale_timederivs"].getWritable() = scaling;
+  }
 };
 
 namespace {
-RegisterComponent<ScaleTimeDerivs> registercomponentscaletimederivs("scale_timederivs");
+  RegisterComponent<ScaleTimeDerivs> registercomponentscaletimederivs("scale_timederivs");
 }
 
 #endif // SCALE_TIMEDERIVS_H

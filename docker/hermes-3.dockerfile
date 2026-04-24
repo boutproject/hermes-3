@@ -5,7 +5,7 @@ ARG BUILDER_TAG=latest
 FROM ghcr.io/boutproject/hermes-3-builder:${BUILDER_TAG} AS builder
 
 # Bare OS image to run the installed executables
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 COPY --from=builder /opt/spack-environment /opt/spack-environment
 COPY --from=builder /opt/software /opt/software

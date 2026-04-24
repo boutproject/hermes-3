@@ -1,41 +1,58 @@
 #include "classical_diffusion.hxx"
 
+#include "../include/div_ops.hxx"
 #include <bout/fv_ops.hxx>
 
-ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, Solver*) {
-  AUTO_TRACE();
+ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, Solver*)
+    : Component({readIfSet("species:{all_species}:{optional}"),
+                 readOnly("species:e:{e_vals}"),
+                 // FIXME: This is only read velocity or temperature are set for the species.
+                 readOnly("species:{all_species}:AA"),
+                 readWrite("species:{all_species}:{output}")}) {
   Options& options = alloptions[name];
 
   Bsq = SQ(bout::globals::mesh->getCoordinates()->Bxy);
 
   diagnose = options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
   custom_D = options["custom_D"].doc("Custom diffusion coefficient override. -1: Off, calculate D normally").withDefault<BoutReal>(-1);
+
+  substitutePermissions("optional",
+                        {"charge", "pressure", "density", "velocity", "temperature"});
+  std::vector<std::string> e_vals = {"AA", "density"};
+  if (custom_D <= 0.) {
+    e_vals.push_back("collision_frequency");
+  }
+  substitutePermissions("e_vals", e_vals);
+  // FIXME: momentum and energy sources are only set if velocity and
+  // temperature are defined (respectively). Collision frequency is
+  // only used if temperature is set. Nothing happens if the charge or
+  // density are unset.
+  substitutePermissions("output", {"density_source", "momentum_source", "energy_source"});
+  if (custom_D < 0.)
+    setPermissions(readOnly("species:{all_species}:collision_frequency"));
 }
 
-void ClassicalDiffusion::transform(Options &state) {
-  AUTO_TRACE();
-  Options& allspecies = state["species"];
+void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
+  GuardedOptions allspecies = state["species"];
   
   // Particle diffusion coefficient
   // The only term here comes from the resistive drift
 
   Field3D Ptotal = 0.0;
-  for (auto& kv : allspecies.getChildren()) {
-    const auto& species = kv.second;
+  if (!(custom_D > 0)) {
+    for (auto& kv : allspecies.getChildren()) {
+      const auto species = kv.second;
 
-    if (!(species.isSet("charge") and IS_SET(species["pressure"]))) {
-      continue; // Skip, go to next species
+      if (!(species.isSet("charge") and species.isSet("pressure"))) {
+        continue; // Skip, go to next species
+      }
+      auto q = get<BoutReal>(species["charge"]);
+      if (fabs(q) < 1e-5) {
+        continue;
+      }
+      Ptotal += GET_VALUE(Field3D, species["pressure"]);
     }
-    auto q = get<BoutReal>(species["charge"]);
-    if (fabs(q) < 1e-5) {
-      continue;
-    }
-    Ptotal += GET_VALUE(Field3D, species["pressure"]);
   }
-
-  auto& electrons = allspecies["e"];
-  const auto me = get<BoutReal>(electrons["AA"]);
-  const Field3D Ne = GET_VALUE(Field3D, electrons["density"]);
 
   // Particle diffusion coefficient. Applied to all charged species
   // so that net transport is ambipolar
@@ -43,6 +60,9 @@ void ClassicalDiffusion::transform(Options &state) {
   if (custom_D > 0) {    // User-set
     Dn = custom_D;   
   } else {                  // Calculated from collisions
+    auto electrons = allspecies["e"];
+    const auto me = get<BoutReal>(electrons["AA"]);
+    const Field3D Ne = GET_VALUE(Field3D, electrons["density"]);
     const Field3D nu_e = floor(GET_VALUE(Field3D, electrons["collision_frequency"]), 1e-10);
     Dn = floor(Ptotal, 1e-5) * me * nu_e / (floor(Ne, 1e-5) * Bsq);
   }
@@ -52,49 +72,57 @@ void ClassicalDiffusion::transform(Options &state) {
       Dn[i] = 0.0;
     }
 
-  for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: Need non-const
-
-    if (!(species.isSet("charge") and IS_SET(species["density"]))) {
-      continue; // Skip, go to next species
+  for (auto kv : allspecies.getChildren()) {
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
+    if (!(custom_D > 0)) {
+      if (!(species.isSet("charge") and species.isSet("density"))) {
+        continue; // Skip, go to next species
+      }
+      auto q = get<BoutReal>(species["charge"]);
+      if (fabs(q) < 1e-5) {
+        continue;
+      }
     }
-    auto q = get<BoutReal>(species["charge"]);
-    if (fabs(q) < 1e-5) {
-      continue;
-    }
-
     const auto N = GET_VALUE(Field3D, species["density"]);
 
-    add(species["density_source"], FV::Div_a_Grad_perp(Dn, N));
+    // add(species["density_source"], FV::Div_a_Grad_perp(Dn, N));
+    add(species["density_source"],
+        Div_a_Grad_perp_nonorthog(Dn, N, cls_pf_perp_xlow, cls_pf_perp_ylow));
 
     if (IS_SET(species["velocity"])) {
       const auto V = GET_VALUE(Field3D, species["velocity"]);
       const auto AA = GET_VALUE(BoutReal, species["AA"]);
 
-      add(species["momentum_source"], FV::Div_a_Grad_perp(Dn * AA * V, N));
+      // add(species["momentum_source"], FV::Div_a_Grad_perp(Dn * AA * V, N));
+      add(species["momentum_source"],
+          Div_a_Grad_perp_nonorthog(Dn * AA * V, N, cls_mf_perp_xlow, cls_mf_perp_ylow));
     }
 
     if (IS_SET(species["temperature"])) {
       const auto T = GET_VALUE(Field3D, species["temperature"]);
-      add(species["energy_source"], FV::Div_a_Grad_perp(Dn * (3. / 2) * T, N));
-
-      // Cross-field heat conduction
-      // kappa_perp = 2 * n * nu_ii * rho_i^2
-
-      const auto P = GET_VALUE(Field3D, species["pressure"]);
-      const auto AA = GET_VALUE(BoutReal, species["AA"]);
+      // add(species["energy_source"], FV::Div_a_Grad_perp(Dn * (3. / 2) * T, N));
+      add(species["energy_source"],
+          Div_a_Grad_perp_nonorthog(Dn * (3. / 2) * T, N, cls_nef_perp_xlow,
+                                    cls_nef_perp_ylow));
 
       // TODO: Figure out what to do with the below
       if(custom_D < 0) {
+        // Cross-field heat conduction
+        // kappa_perp = 2 * n * nu_ii * rho_i^2
+        const auto P = GET_VALUE(Field3D, species["pressure"]);
+        const auto AA = GET_VALUE(BoutReal, species["AA"]);
         const Field3D nu = floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
-        add(species["energy_source"], FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA / Bsq, T));
+        // add(species["energy_source"], FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA
+        // / Bsq, T));
+        add(species["energy_source"],
+            Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
+                                      cls_tef_perp_xlow, cls_tef_perp_ylow));
       }
     }
   }
 }
 
-void ClassicalDiffusion::outputVars(Options &state) {
-  AUTO_TRACE();
+void ClassicalDiffusion::outputVars(Options& state) {
 
   if (diagnose) {
     // Normalisations

@@ -47,6 +47,7 @@ TEST_F(ElectronForceBalanceTest, ZeroPressureGradient) {
   options["species"]["h+"]["density"] = 1.0;
   options["species"]["h+"]["charge"] = 1.0;
 
+  component.declareAllSpecies({"e", "h+"});
   component.transform(options);
 
   // Should have a momentum source, but zero because no pressure gradient
@@ -69,6 +70,7 @@ TEST_F(ElectronForceBalanceTest, WithPressureGradient) {
   options["species"]["h+"]["density"] = 1.0;
   options["species"]["h+"]["charge"] = 1.0;
 
+  component.declareAllSpecies({"e", "h+"});
   component.transform(options);
 
   // Should have a momentum source
@@ -98,6 +100,7 @@ TEST_F(ElectronForceBalanceTest, ForceBalance) {
   options["species"]["ion"]["density"] = 1.0;
   options["species"]["ion"]["charge"] = 3.0;
 
+  component.declareAllSpecies({"e", "ion"});
   component.transform(options);
 
   // Should give ion momentum source charge * E = 3 * 0.5 / 2.0

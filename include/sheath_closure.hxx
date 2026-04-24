@@ -17,24 +17,6 @@ struct SheathClosure : public Component {
   ///
   SheathClosure(std::string name, Options &options, Solver *);
 
-  /// Inputs
-  /// - fields
-  ///   - phi      Electrostatic potential
-  ///
-  /// Optional inputs
-  /// - species
-  ///   - density
-  ///   - pressure
-  ///
-  /// Modifies
-  /// - species
-  ///   - e
-  ///     - density_source   (If density present)
-  ///   - density_source and energy_source (If sinks=true)
-  /// - fields
-  ///   - DivJdia     Divergence of current
-  ///
-  void transform(Options &state) override;
 private:
   BoutReal L_par; // Normalised connection length
 
@@ -45,6 +27,27 @@ private:
   BoutReal offset; // Potential at which the sheath current is zero
 
   bool sinks; // Include sinks of density and energy?
+
+  /// Inputs
+  /// - fields
+  ///   - phi      Electrostatic potential
+  ///
+  /// Optional inputs
+  /// - species
+  ///   - AA
+  ///   - density
+  ///   - temperature
+  ///
+  /// Modifies
+  /// - species
+  ///   - e
+  ///     - density_source
+  ///     - energy_source (if temperature present)
+  ///   - density_source and energy_source (If sinks=true)
+  /// - fields
+  ///   - DivJdia     Divergence of current
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

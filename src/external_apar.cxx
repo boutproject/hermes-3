@@ -4,8 +4,8 @@
 #include <bout/mesh.hxx>
 
 ExternalApar::ExternalApar(std::string name, Options& alloptions,
-                           Solver* UNUSED(solver)) {
-  AUTO_TRACE();
+                           Solver* UNUSED(solver))
+  : Component({readWrite("fields:Apar_flutter")}) {
 
   // Read a 3D field from the input e.g. mesh file
   // Store in member variable
@@ -18,16 +18,12 @@ ExternalApar::ExternalApar(std::string name, Options& alloptions,
   external_apar /= Bnorm * rho_s0;
 }
 
-void ExternalApar::transform(Options& state) {
-  AUTO_TRACE();
-
+void ExternalApar::transform_impl(GuardedOptions& state) {
   // Add the field member variable to Apar_flutter
   add(state["fields"]["Apar_flutter"], external_apar);
 }
 
 void ExternalApar::outputVars(Options& state) {
-  AUTO_TRACE();
-
   // Normalisations
   auto Bnorm = get<BoutReal>(state["Bnorm"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
