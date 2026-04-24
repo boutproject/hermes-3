@@ -1,6 +1,7 @@
 #include "test_adas_reactions.hxx"
 #include "test_cx_reactions.hxx"
 #include "test_izn_rec_reactions.hxx"
+#include "test_molecule_reactions.hxx"
 
 namespace hermes {
 
@@ -120,10 +121,17 @@ TEST_F(DTpCXTest, SourcesRegression) { sources_regression_test(); }
 // H/H+ CX with neutral momentum gain turned off
 TEST_F(HHpCXTest_noNeutralMomGain, SourcesRegression) { sources_regression_test(); }
 
+/* Various dissociation reactions involving neutral/ionic molecules of H
+ * isotopes(non-exhaustive)
+ */
+TEST_F(H2DissTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(T2pDissExcTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(D2DissIznTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(H2NonDissIznTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(T2pDissRecTest, SourcesRegression) { sources_regression_test(); }
+
 // CX involving molecules of H isotopes (non-exhaustive)
-TEST_F(D2DpCXTest, SourcesRegression) {
-  generate_data(); // sources_regression_test();
-}
+TEST_F(D2DpCXTest, SourcesRegression) { sources_regression_test(); }
 
 // He ionization
 TEST_F(HeIzn01Test, SourcesRegression) { sources_regression_test(); }

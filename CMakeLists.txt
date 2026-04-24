@@ -68,6 +68,7 @@ set(HERMES_SOURCES
     src/component.cxx
     src/component_scheduler.cxx
     src/cx_reaction.cxx
+    src/hydrogen_molecule_reactions.cxx
     src/ionisation.cxx
     src/izn_rec_reaction.cxx
     src/div_ops.cxx
@@ -83,6 +84,7 @@ set(HERMES_SOURCES
     src/isothermal.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
+    src/molecular_reactions.cxx
     src/recalculate_metric.cxx
     src/relax_potential.cxx
     src/sheath_closure.cxx
@@ -144,10 +146,12 @@ set(HERMES_SOURCES
     include/guarded_options.hxx
     include/neutral_full_velocity.hxx
     include/hermes_utils.hxx
+    include/hydrogen_molecule_reactions.hxx
     include/solkit_hydrogen_charge_exchange.hxx
     include/integrate.hxx
     include/ionisation.hxx
     include/izn_rec_reaction.hxx
+    include/molecular_reactions.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
