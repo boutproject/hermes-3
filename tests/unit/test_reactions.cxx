@@ -8,7 +8,7 @@ namespace hermes {
 // ======================= General reaction class tests =======================
 /// @brief Test parsing of various input optionsReactionBase constructor should throw if
 /// the reaction type string is not valid
-TEST(ReactionTest, InputOptions) {
+TEST(ReactionConfigTest, InputOptions) {
   const std::string comp_name = "test";
 
   // Base input with two reaction strings
@@ -49,6 +49,22 @@ TEST(ReactionTest, InputOptions) {
   ASSERT_THROW(CXReaction(comp_name, invalid_input2), BoutException);
 }
 
+/// @brief Values < 0 or > 1 for momentum/energy channels should throw
+TEST(ReactionConfigTest, InvalidChannelWeightOptions) {
+  Options base_options{
+      {"test", {{"type", "(h2 + d+ -> d+ + h2)"}, {"data_ids", "H.2_0.3T"}}},
+      {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+
+  ReactionBase::reset_instance_counter();
+  Options options1 = base_options.copy();
+  auto invalid_mom_weights_reaction = InvalidMomWeightsReaction("test", options1);
+  ASSERT_THROW(invalid_mom_weights_reaction.transform(options1), BoutException);
+
+  ReactionBase::reset_instance_counter();
+  Options options2 = base_options.copy();
+  auto invalid_energy_weights_reaction = InvalidEnergyWeightsReaction("test", options2);
+  ASSERT_THROW(invalid_energy_weights_reaction.transform(options2), BoutException);
+}
 // ========================== CX reaction class tests =========================
 
 /// @brief CXReaction constructor should throw for strings that aren't valid CX

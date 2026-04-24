@@ -241,6 +241,29 @@ protected:
   }
 };
 
+/// An invalid reaction ( > 1 total energy weight for the first reactant)
+struct InvalidEnergyWeightsReaction : public Reaction {
+  InvalidEnergyWeightsReaction(const std::string& name, Options& options)
+      : Reaction(name, options) {
+    std::string r1 = this->parser->get_reactant_by_position(1);
+    for (const std::string& product :
+         this->parser->get_species(species_filter::products)) {
+      this->set_energy_channel_weight(r1, product, 1.1);
+    }
+  }
+};
+/// An invalid reaction ( < 0 total momentum weight for the first reactant)
+struct InvalidMomWeightsReaction : public Reaction {
+  InvalidMomWeightsReaction(const std::string& name, Options& options)
+      : Reaction(name, options) {
+    std::string r1 = this->parser->get_reactant_by_position(1);
+    for (const std::string& product :
+         this->parser->get_species(species_filter::products)) {
+      this->set_momentum_channel_weight(r1, product, -0.1);
+    }
+  }
+};
+
 } // namespace hermes
 
 #endif
