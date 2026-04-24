@@ -133,6 +133,9 @@ TEST_F(T2pDissRecTest, SourcesRegression) { sources_regression_test(); }
 // CX involving molecules of H isotopes (non-exhaustive)
 TEST_F(D2DpCXTest, SourcesRegression) { sources_regression_test(); }
 
+// Elastic collision between H2 and H+
+TEST_F(H2HpElasticCollisionTest, SourcesRegression) { sources_regression_test(); }
+
 // He ionization
 TEST_F(HeIzn01Test, SourcesRegression) { sources_regression_test(); }
 

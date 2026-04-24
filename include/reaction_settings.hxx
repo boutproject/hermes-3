@@ -106,7 +106,7 @@ static inline void generate_default_data_ids_map() {
                    "H.4_2.2.14");
   }
 
-  // H isotope CX
+  // CX and elastic collisions involving H isotopes
   for (const char& isotope1 : H_isotopes) {
     for (const char& isotope2 : H_isotopes) {
       // Atom-ion CX
@@ -119,6 +119,11 @@ static inline void generate_default_data_ids_map() {
           fmt::format("{}2 + {}+ -> {}2+ + {}", isotope1, isotope2, isotope1, isotope2);
       add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
                      "H.2_3.2.3");
+      // Molecule-ion elastic collisions
+      reaction_str =
+          fmt::format("{}2 + {}+ -> {}2 + {}+", isotope1, isotope2, isotope1, isotope2);
+      add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
+                     "H.2_0.3T");
     }
   }
 

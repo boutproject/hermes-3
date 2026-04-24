@@ -139,6 +139,16 @@ public:
   D2DpCXTest() : CXReactionTest<CXReaction>("D2DpCX", "d2 + d+ -> d2+ + d") {}
 };
 
+// Elastic collision between H2 and H+
+// Use DissociativeReactionTest fixture for now
+class H2HpElasticCollisionTest
+    : public DissociativeReactionTest<MolHElasticCollision<HIsotope::h>> {
+public:
+  H2HpElasticCollisionTest()
+      : DissociativeReactionTest<MolHElasticCollision<HIsotope::h>>(
+            "H2HpElastic", "h2 + h+ -> h2 + h+") {}
+};
+
 } // namespace hermes
 
 #endif // TEST_MOLECULE_REACTIONS_H

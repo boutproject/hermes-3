@@ -3,6 +3,7 @@
 #define HYDROGEN_MOLECULE_REACTIONS_H
 
 #include "cx_reaction.hxx"
+#include "elastic_collisions.hxx"
 #include "molecular_reactions.hxx"
 #include <string>
 
@@ -11,7 +12,7 @@ namespace hermes {
 enum class HIsotope { h, d, t };
 
 /**
- * @brief Reaction class for molecular charge exchange / ion conversion.
+ * @brief Class to handle charge exchange between Hydrogen (isotope) ions and molecules.
  *
  * @details Based on CXReaction.
  */
@@ -162,6 +163,34 @@ struct MolHDissociativeRec : public DissociativeRec {
       : DissociativeRec(name, options, solver) {}
 };
 
+/**
+ * @brief Templated hydrogen molecule elastic collision reaction.
+ *
+ * @details Child class of ElasticCollision, templated on hydrogen isotope.
+ */
+template <HIsotope isotope>
+struct MolHElasticCollision : public ElasticCollision {
+  /**
+   * @brief Constructor for MolHElasticCollision.
+   *
+   * @param name The name of the reaction
+   * @param options The options object
+   */
+  MolHElasticCollision(std::string name, Options& options)
+      : ElasticCollision(name, options) {}
+
+  /**
+   * @brief Constructor used by component factory.
+   *
+   * @param name The name of the reaction
+   * @param options The options object
+   * @param solver The solver object for the simulation
+   */
+  MolHElasticCollision(std::string name, Options& options,
+                       [[maybe_unused]] Solver* solver)
+      : MolHElasticCollision(name, options) {}
+};
+
 } // namespace hermes
 
 // Register molecular Hydrogen reactions
@@ -219,6 +248,14 @@ RegisterComponent<hermes::MolHDissociativeIzn<hermes::HIsotope::d>>
     register_d2_plus_diss_izn_d("d2+ + e -> 2d+ + 2e");
 RegisterComponent<hermes::MolHDissociativeIzn<hermes::HIsotope::t>>
     register_t2_plus_diss_izn_t("t2+ + e -> 2t+ + 2e");
+
+// Elastic collisions between H isotope molecules and H isotope ions
+RegisterComponent<hermes::MolHElasticCollision<hermes::HIsotope::h>>
+    register_h2_h_elastic("h2 + h+ -> h2+ + h+");
+RegisterComponent<hermes::MolHElasticCollision<hermes::HIsotope::d>>
+    register_d2_d_elastic("d2 + d+ -> d2+ + d+");
+RegisterComponent<hermes::MolHElasticCollision<hermes::HIsotope::t>>
+    register_t2_t_elastic("t2 + t+ -> t2+ + t+");
 
 } // namespace
 

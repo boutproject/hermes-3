@@ -68,6 +68,7 @@ set(HERMES_SOURCES
     src/component.cxx
     src/component_scheduler.cxx
     src/cx_reaction.cxx
+    src/elastic_collisions.cxx
     src/hydrogen_molecule_reactions.cxx
     src/ionisation.cxx
     src/izn_rec_reaction.cxx
@@ -134,6 +135,7 @@ set(HERMES_SOURCES
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/div_ops.hxx
+    include/elastic_collisions.hxx
     include/electromagnetic.hxx
     include/electron_force_balance.hxx
     include/evolve_density.hxx
