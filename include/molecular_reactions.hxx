@@ -20,7 +20,7 @@ struct Dissociation : public Reaction {
    * @param name
    * @param options The options object
    */
-  Dissociation(std::string name, Options& options);
+  Dissociation(std::string name, Options& options) : Reaction(name, options) {};
 
   /**
    * @brief Constructor used by component factory.
@@ -29,7 +29,8 @@ struct Dissociation : public Reaction {
    * @param options The options object
    * @param solver The solver object for the simulation
    */
-  Dissociation(std::string name, Options& options, Solver*);
+  Dissociation(std::string name, Options& options, [[maybe_unused]] Solver* solver)
+      : Dissociation(name, options) {};
 };
 
 /**
@@ -42,7 +43,7 @@ struct DissociativeExc : public Reaction {
    * @param name
    * @param options The options object
    */
-  DissociativeExc(std::string name, Options& options);
+  DissociativeExc(std::string name, Options& options) : Reaction(name, options) {};
 
   /**
    * @brief Constructor used by component factory.
@@ -51,7 +52,8 @@ struct DissociativeExc : public Reaction {
    * @param options The options object
    * @param solver The solver object for the simulation
    */
-  DissociativeExc(std::string name, Options& options, Solver*);
+  DissociativeExc(std::string name, Options& options, [[maybe_unused]] Solver* solver)
+      : DissociativeExc(name, options) {};
 };
 
 /**
@@ -64,7 +66,7 @@ struct DissociativeIzn : public Reaction {
    * @param name
    * @param options The options object
    */
-  DissociativeIzn(std::string name, Options& options);
+  DissociativeIzn(std::string name, Options& options) : Reaction(name, options) {};
 
   /**
    * @brief Constructor used by component factory.
@@ -73,7 +75,8 @@ struct DissociativeIzn : public Reaction {
    * @param options The options object
    * @param solver The solver object for the simulation
    */
-  DissociativeIzn(std::string name, Options& options, Solver*);
+  DissociativeIzn(std::string name, Options& options, [[maybe_unused]] Solver* solver)
+      : DissociativeIzn(name, options) {};
 };
 
 /**
@@ -86,7 +89,7 @@ struct NonDissociativeIzn : public Reaction {
    * @param name
    * @param options The options object
    */
-  NonDissociativeIzn(std::string name, Options& options);
+  NonDissociativeIzn(std::string name, Options& options) : Reaction(name, options) {};
 
   /**
    * @brief Constructor used by component factory.
@@ -95,7 +98,8 @@ struct NonDissociativeIzn : public Reaction {
    * @param options The options object
    * @param solver The solver object for the simulation
    */
-  NonDissociativeIzn(std::string name, Options& options, Solver*);
+  NonDissociativeIzn(std::string name, Options& options, [[maybe_unused]] Solver* solver)
+      : NonDissociativeIzn(name, options) {};
 };
 
 /**
@@ -108,7 +112,7 @@ struct DissociativeRec : public Reaction {
    * @param name
    * @param options The options object
    */
-  DissociativeRec(std::string name, Options& options);
+  DissociativeRec(std::string name, Options& options) : Reaction(name, options) {};
 
   /**
    * @brief Constructor used by component factory.
@@ -117,7 +121,8 @@ struct DissociativeRec : public Reaction {
    * @param options The options object
    * @param solver The solver object for the simulation
    */
-  DissociativeRec(std::string name, Options& options, Solver*);
+  DissociativeRec(std::string name, Options& options, [[maybe_unused]] Solver* solver)
+      : DissociativeRec(name, options) {};
 };
 
 } // namespace hermes

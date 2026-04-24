@@ -85,7 +85,6 @@ set(HERMES_SOURCES
     src/isothermal.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
-    src/molecular_reactions.cxx
     src/recalculate_metric.cxx
     src/relax_potential.cxx
     src/sheath_closure.cxx

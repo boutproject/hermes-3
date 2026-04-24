@@ -5,7 +5,7 @@ namespace hermes {
 // MolHCX implementation
 MolHCX::MolHCX(std::string name, Options& options) : CXReaction(name, options) {}
 
-MolHCX::MolHCX(std::string name, Options& options, Solver* solver)
-    : CXReaction(name, options, solver) {}
+MolHCX::MolHCX(std::string name, Options& options, [[maybe_unused]] Solver* solver)
+    : MolHCX(name, options) {}
 
 } // namespace hermes
