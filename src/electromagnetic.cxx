@@ -223,7 +223,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
     // Ensure that guard cells are communicated
     Apar.getMesh()->communicate(Apar_flutter);
 
-    set(state["fields"]["Apar_flutter"], Apar_flutter);
+    add(state["fields"]["Apar_flutter"], Apar_flutter);
 
 #if 0
     // Create a vector A from covariant components
