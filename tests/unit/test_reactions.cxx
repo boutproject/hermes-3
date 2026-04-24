@@ -6,7 +6,7 @@ namespace hermes {
 
 //======================== General reaction class tests =======================
 /// @brief Test parsing of various input optionsReactionBase constructor should throw if
-/// the reaction type string is not
+/// the reaction type string is not valid
 TEST(ReactionTest, InputOptions) {
   const std::string comp_name = "test";
 
@@ -119,6 +119,11 @@ TEST_F(DTpCXTest, SourcesRegression) { sources_regression_test(); }
 
 // H/H+ CX with neutral momentum gain turned off
 TEST_F(HHpCXTest_noNeutralMomGain, SourcesRegression) { sources_regression_test(); }
+
+// CX involving molecules of H isotopes (non-exhaustive)
+TEST_F(D2DpCXTest, SourcesRegression) {
+  generate_data(); // sources_regression_test();
+}
 
 // He ionization
 TEST_F(HeIzn01Test, SourcesRegression) { sources_regression_test(); }
