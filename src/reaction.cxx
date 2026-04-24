@@ -14,10 +14,11 @@
 namespace hermes {
 
 ///
-Reaction::Reaction(std::string name, Options& options)
+Reaction::Reaction(std::string name, Options& options, bool add_pop_change_sources)
     : ReactionBase({readOnly("species:{sp}:{r_val}"), readOnly("species:e:{e_val}"),
                     readWrite("species:{sp}:{w_val}")}),
-      units(options["units"]), name(name) {
+      units(options["units"]), add_pop_change_sources(add_pop_change_sources),
+      name(name) {
 
   // Extract some relevant options, units to member vars for readability
   this->Tnorm = get<BoutReal>(this->units["eV"]);
@@ -280,63 +281,67 @@ void Reaction::transform_impl(GuardedOptions& state) {
   // Subclasses perform any additional transform tasks
   transform_additional(state, rate_calc_results);
 
-  // Use the stoichiometric values to set density sources for all species
-  Field3D density_source(0.0);
-  for (const auto& sp_name : this->parser->get_species()) {
-    int pop_change = this->parser->pop_change(sp_name);
-    if (pop_change != 0) {
-      // Density sources
-      density_source = pfactors.at(sp_name) * pop_change * rate_calc_results.rate;
-      update_source<add<Field3D>>(state, sp_name, ReactionDiagnosticType::density_src,
-                                  density_source);
-    }
-  }
+  if (this->add_pop_change_sources) {
 
-  // Population change-driven sources for all species other than electrons
-  init_channel_weights(state);
-  Field3D momentum_source, energy_source;
-  for (const auto& [sp_name, pop_change_s] : this->parser->get_mom_energy_pop_changes()) {
-    // No momentum, energy source for electrons due to pop change
-    if (sp_name.compare("e") == 0) {
-      continue;
-    }
-    momentum_source = 0.0;
-    energy_source = 0.0;
-    if (pop_change_s < 0) {
-      // For species with net loss, sources follows directly from pop change
-      momentum_source = pop_change_s * rate_calc_results.rate
-                        * get<BoutReal>(state["species"][sp_name]["AA"])
-                        * get<Field3D>(state["species"][sp_name]["velocity"]);
-      energy_source = pop_change_s * rate_calc_results.rate * (3. / 2)
-                      * get<Field3D>(state["species"][sp_name]["temperature"]);
-    } else if (pop_change_s > 0) {
-      // Species with net gain receive a proportion of the momentum and energy lost by
-      // consumed reactants. See init_channel_weights() for default splitting factors.
-      for (auto& rsp_name : heavy_reactant_species) {
-        // All consumed (net loss) reactants can contribute
-        int pop_change_r = this->parser->pop_change_reactant(rsp_name);
-        if (pop_change_r < 0) {
-          momentum_source += -pop_change_r * pfactors.at(rsp_name)
-                             * this->momentum_channels[rsp_name][sp_name]
-                             * rate_calc_results.rate
-                             * get<BoutReal>(state["species"][rsp_name]["AA"])
-                             * get<Field3D>(state["species"][rsp_name]["velocity"]);
-          energy_source += -pop_change_r * pfactors.at(rsp_name)
-                           * this->energy_channels[rsp_name][sp_name]
-                           * rate_calc_results.rate * (3. / 2)
-                           * get<Field3D>(state["species"][rsp_name]["temperature"]);
-        }
+    // Use the stoichiometric values to set density sources for all species
+    Field3D density_source(0.0);
+    for (const auto& sp_name : this->parser->get_species()) {
+      int pop_change = this->parser->pop_change(sp_name);
+      if (pop_change != 0) {
+        // Density sources
+        density_source = pfactors.at(sp_name) * pop_change * rate_calc_results.rate;
+        update_source<add<Field3D>>(state, sp_name, ReactionDiagnosticType::density_src,
+                                    density_source);
       }
-    } else {
-      // No pop change
-      continue;
     }
 
-    // Update sources
-    update_source<add<Field3D>>(state, sp_name, ReactionDiagnosticType::momentum_src,
-                                momentum_source);
-    update_source<add<Field3D>>(state, sp_name, ReactionDiagnosticType::energy_src,
-                                energy_source);
+    // Population change-driven sources for all species other than electrons
+    init_channel_weights(state);
+    Field3D momentum_source, energy_source;
+    for (const auto& [sp_name, pop_change_s] :
+         this->parser->get_mom_energy_pop_changes()) {
+      // No momentum, energy source for electrons due to pop change
+      if (sp_name.compare("e") == 0) {
+        continue;
+      }
+      momentum_source = 0.0;
+      energy_source = 0.0;
+      if (pop_change_s < 0) {
+        // For species with net loss, sources follows directly from pop change
+        momentum_source = pop_change_s * rate_calc_results.rate
+                          * get<BoutReal>(state["species"][sp_name]["AA"])
+                          * get<Field3D>(state["species"][sp_name]["velocity"]);
+        energy_source = pop_change_s * rate_calc_results.rate * (3. / 2)
+                        * get<Field3D>(state["species"][sp_name]["temperature"]);
+      } else if (pop_change_s > 0) {
+        // Species with net gain receive a proportion of the momentum and energy lost by
+        // consumed reactants. See init_channel_weights() for default splitting factors.
+        for (auto& rsp_name : heavy_reactant_species) {
+          // All consumed (net loss) reactants can contribute
+          int pop_change_r = this->parser->pop_change_reactant(rsp_name);
+          if (pop_change_r < 0) {
+            momentum_source += -pop_change_r * pfactors.at(rsp_name)
+                               * this->momentum_channels[rsp_name][sp_name]
+                               * rate_calc_results.rate
+                               * get<BoutReal>(state["species"][rsp_name]["AA"])
+                               * get<Field3D>(state["species"][rsp_name]["velocity"]);
+            energy_source += -pop_change_r * pfactors.at(rsp_name)
+                             * this->energy_channels[rsp_name][sp_name]
+                             * rate_calc_results.rate * (3. / 2)
+                             * get<Field3D>(state["species"][rsp_name]["temperature"]);
+          }
+        }
+      } else {
+        // No pop change
+        continue;
+      }
+
+      // Update sources
+      update_source<add<Field3D>>(state, sp_name, ReactionDiagnosticType::momentum_src,
+                                  momentum_source);
+      update_source<add<Field3D>>(state, sp_name, ReactionDiagnosticType::energy_src,
+                                  energy_source);
+    }
   }
 }
 
