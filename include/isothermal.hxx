@@ -16,6 +16,9 @@ private:
   BoutReal T; ///< The normalised temperature
   Field3D P; ///< The normalised pressure
 
+  bool initialize_from_mesh; ///< Initilize the Field3D T from 2D profiles stored in the
+                             ///< mesh file.
+
   bool diagnose; ///< Output additional diagnostics?
 
   /// Inputs
