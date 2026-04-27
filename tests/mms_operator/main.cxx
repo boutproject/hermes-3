@@ -1,3 +1,4 @@
+#include "bout/bout.hxx"
 #include "bout/field_factory.hxx"
 
 // #include "hermes-2.hxx"

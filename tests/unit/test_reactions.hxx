@@ -47,7 +47,7 @@ class ReactionTest : public FakeMeshFixture_tmpl<8, 8, 8> {
 
 protected:
   ReactionTest(std::string lbl, std::string reaction_str)
-      : lbl(lbl), parser(reaction_str){};
+      : lbl(lbl), parser(reaction_str) {};
 
   std::string lbl;
   ReactionParser parser;
@@ -91,8 +91,8 @@ protected:
       break;
     case linfunc_axis::z:
       axis_str = "z";
-      axis_min = TWOPI * (mesh->zstart) / static_cast<BoutReal>(mesh->LocalNz);
-      axis_max = TWOPI * (mesh->zend) / static_cast<BoutReal>(mesh->LocalNz);
+      axis_min = TWOPI * (mesh->zstart);
+      axis_max = TWOPI * (mesh->zend);
       break;
     default:
       axis_min = axis_max = 0;
@@ -167,6 +167,9 @@ protected:
    */
   void sources_regression_test(bool compare_all_values = true,
                                const int ignore_last_n_sigfigs = 6) {
+
+    // Uncomment below to update the reference data.
+    //generate_data();
 
     // Read reference state
     Options ref_state = bout::OptionsIO::create(ref_data_path())->read();

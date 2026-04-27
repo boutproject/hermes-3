@@ -8,6 +8,7 @@
 #include <bout/utils.hxx> // for trim, strsplit
 
 #include <algorithm>
+#include <cmath>
 
 using bout::globals::mesh;
 
@@ -54,8 +55,9 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
   for (const auto& species : species_list) {
     std::string from = trim(species, " \t\r()"); // The species name in the list
 
-    if (from.empty())
+    if (from.empty()) {
       continue; // Missing
+    }
 
     // Get the options for this species
     Options& from_options = alloptions[from];
@@ -272,7 +274,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
           BoutReal tisheath = (T[i] + T[ig]) * 0.5;
           BoutReal visheath = (V[i] + V[ig]) * 0.5;
           BoutReal sheath_ion_heat_flow =
-              abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
+              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
 
           // Blend fast (ion energy) and thermal (constant energy) recycling
           // Calculate returning neutral heat flow in [W]
@@ -366,7 +368,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
           BoutReal tisheath = (T[i] + T[ig]) * 0.5;
           BoutReal visheath = (V[i] + V[ig]) * 0.5;
           BoutReal sheath_ion_heat_flow =
-              abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
+              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
 
           // Blend fast (ion energy) and thermal (constant energy) recycling
           // Calculate returning neutral heat flow in [W]
