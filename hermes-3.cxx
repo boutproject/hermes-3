@@ -51,6 +51,7 @@
 #include "include/fixed_fraction_radiation.hxx"
 #include "include/fixed_temperature.hxx"
 #include "include/fixed_velocity.hxx"
+#include "include/hydrogen_molecule_reactions.hxx"
 #include "include/ionisation.hxx"
 #include "include/isothermal.hxx"
 #include "include/izn_rec_reaction.hxx"
@@ -96,8 +97,8 @@ BOUT_OVERRIDE_DEFAULT_OPTION("mesh:calcParallelSlices_on_communicate", false);
 class DecayLengthBoundary : public BoundaryOp {
 public:
   DecayLengthBoundary() : gen(nullptr) {}
-  DecayLengthBoundary(BoundaryRegion* region,  std::shared_ptr<FieldGenerator> g)
-    : BoundaryOp(region), gen(std::move(g)) {}
+  DecayLengthBoundary(BoundaryRegion* region, std::shared_ptr<FieldGenerator> g)
+      : BoundaryOp(region), gen(std::move(g)) {}
 
   using BoundaryOp::clone;
   /// Create a copy of this boundary condition
@@ -118,10 +119,11 @@ public:
     ASSERT1(mesh == f.getMesh());
 
     // Get cell radial length
-    Coordinates *coord = mesh->getCoordinates();
+    Coordinates* coord = mesh->getCoordinates();
     Field2D dx = coord->dx;
     Field2D g11 = coord->g11;
-    Field2D dr = dx / sqrt(g11); // cell radial length. dr = dx/(Bpol * R) and g11 = (Bpol*R)**2 
+    Field2D dr =
+        dx / sqrt(g11); // cell radial length. dr = dx/(Bpol * R) and g11 = (Bpol*R)**2
 
     // Only implemented for cell centre quantities
     ASSERT1(f.getLocation() == CELL_CENTRE);
@@ -129,11 +131,13 @@ public:
     // This loop goes over the first row of boundary cells (in X and Y)
     for (bndry->first(); !bndry->isDone(); bndry->next1d()) {
       for (int zk = 0; zk < mesh->LocalNz; zk++) { // Loop over Z points
-        BoutReal decay_length = 3; // Default decay length is 3 normalised units (usually ~3mm)
+        BoutReal decay_length =
+            3; // Default decay length is 3 normalised units (usually ~3mm)
         if (gen) {
           // Pick up the boundary condition setting from the input file
           // Must be specified in normalised units like the other BCs inputs
-          decay_length = gen->generate(bout::generator::Context(bndry, zk, CELL_CENTRE, 0.0, mesh));
+          decay_length =
+              gen->generate(bout::generator::Context(bndry, zk, CELL_CENTRE, 0.0, mesh));
         }
         // Set value in inner guard cell f(bndry->x, bndry->y, zk)
         // using the final domain cell value f(bndry->x - bndry->bx, bndry->y - bndry->by, zk)
@@ -142,19 +146,21 @@ public:
         //    (-1, 0) X inner boundary (Core or PF)
         //    (0, 1)  Y upper boundary (outer lower target)
         //    (0, -1) Y lower boundary (inner lower target)
-        
-        // Distance between final cell centre and inner guard cell centre in normalised units
-        BoutReal distance = 0.5 * (dr(bndry->x, bndry->y) + 
-          dr(bndry->x - bndry->bx, bndry->y - bndry->by));
 
-        // Exponential decay 
-        f(bndry->x, bndry->y, zk) =
-          f(bndry->x - bndry->bx, bndry->y - bndry->by, zk) * exp(-1 * distance / decay_length);
+        // Distance between final cell centre and inner guard cell centre in normalised units
+        BoutReal distance =
+            0.5
+            * (dr(bndry->x, bndry->y) + dr(bndry->x - bndry->bx, bndry->y - bndry->by));
+
+        // Exponential decay
+        f(bndry->x, bndry->y, zk) = f(bndry->x - bndry->bx, bndry->y - bndry->by, zk)
+                                    * exp(-1 * distance / decay_length);
 
         // Set any remaining guard cells (i.e. the outer guards) to the same value
         // Should the outer guards have the decay continue, or just copy what the inners have?
         for (int i = 1; i < bndry->width; i++) {
-          f(bndry->x + i * bndry->bx, bndry->y + i * bndry->by, zk) = f(bndry->x, bndry->y, zk);
+          f(bndry->x + i * bndry->bx, bndry->y + i * bndry->by, zk) =
+              f(bndry->x, bndry->y, zk);
         }
       }
     }
@@ -170,8 +176,8 @@ private:
 
 int Hermes::init(bool restarting) {
 
-  auto &options = Options::root()["hermes"];
-  
+  auto& options = Options::root()["hermes"];
+
   output.write("\nGit Version of Hermes: {:s}\n", hermes::version::revision);
   options["revision"] = hermes::version::revision;
   options["revision"].setConditionallyUsed();
@@ -193,7 +199,7 @@ int Hermes::init(bool restarting) {
   units["inv_meters_cubed"] = Nnorm;
   units["eV"] = Tnorm;
   units["Tesla"] = Bnorm;
-  units["seconds"] = 1./Omega_ci;
+  units["seconds"] = 1. / Omega_ci;
   units["meters"] = rho_s0;
 
   // Put into the options tree, so quantities can be normalised
@@ -212,11 +218,13 @@ int Hermes::init(bool restarting) {
   TRACE("Loading metric tensor");
 
   if (options.isSet("loadmetric")) {
-    throw BoutException("Error: The loadmetric option has been renamed to recalculate_metric.\n"
-                        "Note: The default (true/false) is inverted for the new option.\n"
-                        "Setting recalculate_metric=false (the default) uses the metric in the grid file.\n"
-                        "Setting recalculate_metric=true loads Rxy, Bpxy etc from the grid file.\n"
-                        "  This assumes an orthogonal coordinate system. See manual for details.");
+    throw BoutException(
+        "Error: The loadmetric option has been renamed to recalculate_metric.\n"
+        "Note: The default (true/false) is inverted for the new option.\n"
+        "Setting recalculate_metric=false (the default) uses the metric in the grid "
+        "file.\n"
+        "Setting recalculate_metric=true loads Rxy, Bpxy etc from the grid file.\n"
+        "  This assumes an orthogonal coordinate system. See manual for details.");
   }
 
   if (options["recalculate_metric"]
@@ -227,28 +235,23 @@ int Hermes::init(bool restarting) {
   } else {
     // Check that the grid file contains at least one metric tensor component
     // Note: Older grid files did not, so would silently default to the identity metric
-    if (!(mesh->sourceHasVar("J") or
-          mesh->sourceHasVar("g11") or
-          mesh->sourceHasVar("g22") or
-          mesh->sourceHasVar("g33") or
-          mesh->sourceHasVar("g12") or
-          mesh->sourceHasVar("g23") or
-          mesh->sourceHasVar("g13") or
-          mesh->sourceHasVar("g_11") or
-          mesh->sourceHasVar("g_22") or
-          mesh->sourceHasVar("g_33") or
-          mesh->sourceHasVar("g_12") or
-          mesh->sourceHasVar("g_23") or
-          mesh->sourceHasVar("g_13"))) {
-      throw BoutException("Grid input does not contain any metric components (J, g11, g_22 etc).\n"
-                          "Set hermes:recalculate_metric=true to calculate from Rxy, Bpxy etc.\n"
-                          "If the default identity metric is intended then set e.g. mesh:J=1\n");
+    if (!(mesh->sourceHasVar("J") or mesh->sourceHasVar("g11")
+          or mesh->sourceHasVar("g22") or mesh->sourceHasVar("g33")
+          or mesh->sourceHasVar("g12") or mesh->sourceHasVar("g23")
+          or mesh->sourceHasVar("g13") or mesh->sourceHasVar("g_11")
+          or mesh->sourceHasVar("g_22") or mesh->sourceHasVar("g_33")
+          or mesh->sourceHasVar("g_12") or mesh->sourceHasVar("g_23")
+          or mesh->sourceHasVar("g_13"))) {
+      throw BoutException(
+          "Grid input does not contain any metric components (J, g11, g_22 etc).\n"
+          "Set hermes:recalculate_metric=true to calculate from Rxy, Bpxy etc.\n"
+          "If the default identity metric is intended then set e.g. mesh:J=1\n");
     }
 
     if (options["normalise_metric"]
-             .doc("Normalise input metric tensor? (assumes input is in SI units)")
-             .withDefault<bool>(true)) {
-      Coordinates *coord = mesh->getCoordinates();
+            .doc("Normalise input metric tensor? (assumes input is in SI units)")
+            .withDefault<bool>(true)) {
+      Coordinates* coord = mesh->getCoordinates();
       // To use non-orthogonal metric
       // Normalise
       coord->dx /= rho_s0 * rho_s0 * Bnorm;
@@ -296,7 +299,7 @@ int Hermes::init(bool restarting) {
 int Hermes::rhs(BoutReal time, bool linear) {
   // Need to reset the state, since fields may be modified in transform steps
   state = Options();
-  
+
   set(state["time"], time);
   state["units"] = units.copy();
   set(state["linear"], linear);
@@ -330,82 +333,70 @@ void Hermes::outputVars(Options& options) {
   // Save normalisation quantities. These may be used by components
   // to calculate conversion factors to SI units
 
-  set_with_attrs(options["Tnorm"], Tnorm, {
-      {"units", "eV"},
-      {"conversion", 1}, // Already in SI units
-      {"standard_name", "temperature normalisation"},
-      {"long_name", "temperature normalisation"}
-    });
-  set_with_attrs(options["Nnorm"], Nnorm, {
-      {"units", "m^-3"},
-      {"conversion", 1},
-      {"standard_name", "density normalisation"},
-      {"long_name", "Number density normalisation"}
-    });
-  set_with_attrs(options["Bnorm"], Bnorm, {
-      {"units", "T"},
-      {"conversion", 1},
-      {"standard_name", "magnetic field normalisation"},
-      {"long_name", "Magnetic field normalisation"}
-    });
-  set_with_attrs(options["Cs0"], Cs0, {
-      {"units", "m/s"},
-      {"conversion", 1},
-      {"standard_name", "velocity normalisation"},
-      {"long_name", "Sound speed normalisation"}
-    });
-  set_with_attrs(options["Omega_ci"], Omega_ci, {
-      {"units", "s^-1"},
-      {"conversion", 1},
-      {"standard_name", "frequency normalisation"},
-      {"long_name", "Cyclotron frequency normalisation"}
-    });
-  set_with_attrs(options["rho_s0"], rho_s0, {
-      {"units", "m"},
-      {"conversion", 1},
-      {"standard_name", "length normalisation"},
-      {"long_name", "Gyro-radius length normalisation"}
-    });
+  set_with_attrs(options["Tnorm"], Tnorm,
+                 {{"units", "eV"},
+                  {"conversion", 1}, // Already in SI units
+                  {"standard_name", "temperature normalisation"},
+                  {"long_name", "temperature normalisation"}});
+  set_with_attrs(options["Nnorm"], Nnorm,
+                 {{"units", "m^-3"},
+                  {"conversion", 1},
+                  {"standard_name", "density normalisation"},
+                  {"long_name", "Number density normalisation"}});
+  set_with_attrs(options["Bnorm"], Bnorm,
+                 {{"units", "T"},
+                  {"conversion", 1},
+                  {"standard_name", "magnetic field normalisation"},
+                  {"long_name", "Magnetic field normalisation"}});
+  set_with_attrs(options["Cs0"], Cs0,
+                 {{"units", "m/s"},
+                  {"conversion", 1},
+                  {"standard_name", "velocity normalisation"},
+                  {"long_name", "Sound speed normalisation"}});
+  set_with_attrs(options["Omega_ci"], Omega_ci,
+                 {{"units", "s^-1"},
+                  {"conversion", 1},
+                  {"standard_name", "frequency normalisation"},
+                  {"long_name", "Cyclotron frequency normalisation"}});
+  set_with_attrs(options["rho_s0"], rho_s0,
+                 {{"units", "m"},
+                  {"conversion", 1},
+                  {"standard_name", "length normalisation"},
+                  {"long_name", "Gyro-radius length normalisation"}});
   scheduler->outputVars(options);
 }
 
 void Hermes::restartVars(Options& options) {
-  set_with_attrs(options["Tnorm"], Tnorm, {
-      {"units", "eV"},
-      {"conversion", 1}, // Already in SI units
-      {"standard_name", "temperature normalisation"},
-      {"long_name", "temperature normalisation"}
-    });
-  set_with_attrs(options["Nnorm"], Nnorm, {
-      {"units", "m^-3"},
-      {"conversion", 1},
-      {"standard_name", "density normalisation"},
-      {"long_name", "Number density normalisation"}
-    });
-  set_with_attrs(options["Bnorm"], Bnorm, {
-      {"units", "T"},
-      {"conversion", 1},
-      {"standard_name", "magnetic field normalisation"},
-      {"long_name", "Magnetic field normalisation"}
-    });
-  set_with_attrs(options["Cs0"], Cs0, {
-      {"units", "m/s"},
-      {"conversion", 1},
-      {"standard_name", "velocity normalisation"},
-      {"long_name", "Sound speed normalisation"}
-    });
-  set_with_attrs(options["Omega_ci"], Omega_ci, {
-      {"units", "s^-1"},
-      {"conversion", 1},
-      {"standard_name", "frequency normalisation"},
-      {"long_name", "Cyclotron frequency normalisation"}
-    });
-  set_with_attrs(options["rho_s0"], rho_s0, {
-      {"units", "m"},
-      {"conversion", 1},
-      {"standard_name", "length normalisation"},
-      {"long_name", "Gyro-radius length normalisation"}
-    });
+  set_with_attrs(options["Tnorm"], Tnorm,
+                 {{"units", "eV"},
+                  {"conversion", 1}, // Already in SI units
+                  {"standard_name", "temperature normalisation"},
+                  {"long_name", "temperature normalisation"}});
+  set_with_attrs(options["Nnorm"], Nnorm,
+                 {{"units", "m^-3"},
+                  {"conversion", 1},
+                  {"standard_name", "density normalisation"},
+                  {"long_name", "Number density normalisation"}});
+  set_with_attrs(options["Bnorm"], Bnorm,
+                 {{"units", "T"},
+                  {"conversion", 1},
+                  {"standard_name", "magnetic field normalisation"},
+                  {"long_name", "Magnetic field normalisation"}});
+  set_with_attrs(options["Cs0"], Cs0,
+                 {{"units", "m/s"},
+                  {"conversion", 1},
+                  {"standard_name", "velocity normalisation"},
+                  {"long_name", "Sound speed normalisation"}});
+  set_with_attrs(options["Omega_ci"], Omega_ci,
+                 {{"units", "s^-1"},
+                  {"conversion", 1},
+                  {"standard_name", "frequency normalisation"},
+                  {"long_name", "Cyclotron frequency normalisation"}});
+  set_with_attrs(options["rho_s0"], rho_s0,
+                 {{"units", "m"},
+                  {"conversion", 1},
+                  {"standard_name", "length normalisation"},
+                  {"long_name", "Gyro-radius length normalisation"}});
   scheduler->restartVars(options);
 }
 

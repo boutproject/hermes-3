@@ -58,31 +58,72 @@ static inline void add_default_id(ReactionDataTypes data_type,
 static inline void generate_default_data_ids_map() {
   constexpr char H_isotopes[] = {'h', 'd', 't'};
 
-  // H isotope izn
+  // Various atomic and molecular reactions involving H isotopes
+  std::string reaction_str;
   for (const char& isotope : H_isotopes) {
-    std::string reaction_str = fmt::format("{} + e -> {}+ + 2e", isotope, isotope);
+    reaction_str = fmt::format("{} + e -> {}+ + 2e", isotope, isotope);
+    // Ionisation of atoms
     add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
                    "H.4_2.1.5");
     add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v_E,
                    "H.10_2.1.5");
-  }
 
-  // H isotope rec
-  for (const char& isotope : H_isotopes) {
-    std::string reaction_str = fmt::format("{}+ + e -> {}", isotope, isotope);
+    // Recombination of ions
+    reaction_str = fmt::format("{}+ + e -> {}", isotope, isotope);
     add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
                    "H.4_2.1.8");
     add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v_E,
                    "H.10_2.1.8");
+
+    // Dissociation of neutral molecules
+    reaction_str = fmt::format("{}2 + e -> 2{} + e", isotope, isotope);
+    add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
+                   "H.4_2.2.5g");
+
+    // Non-dissociative ionisation of neutral molecules
+    reaction_str = fmt::format("{}2 + e -> {}2+ + 2e", isotope, isotope);
+    add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
+                   "H.4_2.2.9");
+
+    // Dissociative ionisation of neutral molecules
+    reaction_str = fmt::format("{}2 + e -> {} + {}+ + 2e", isotope, isotope, isotope);
+    add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
+                   "H.4_2.2.10");
+
+    // Dissociative ionisation of (singly-) ionised molecules
+    reaction_str = fmt::format("{}2+ + e -> 2{}+ + 2e", isotope, isotope, isotope);
+    add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
+                   "H.4_2.2.11");
+
+    // Dissociative excitation of (singly-) ionised molecules
+    reaction_str = fmt::format("{}2+ + e -> {} + {}+ + e", isotope, isotope, isotope);
+    add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
+                   "H.4_2.2.12");
+
+    // Dissociative recombination of (singly-) ionised molecules
+    reaction_str = fmt::format("{}2+ + e -> 2{}", isotope, isotope);
+    add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
+                   "H.4_2.2.14");
   }
 
-  // H isotope CX
+  // CX and elastic collisions involving H isotopes
   for (const char& isotope1 : H_isotopes) {
     for (const char& isotope2 : H_isotopes) {
+      // Atom-ion CX
       std::string reaction_str =
           fmt::format("{} + {}+ -> {}+ + {}", isotope1, isotope2, isotope1, isotope2);
       add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
                      "H.2_3.1.8");
+      // Molecule-ion CX
+      reaction_str =
+          fmt::format("{}2 + {}+ -> {}2+ + {}", isotope1, isotope2, isotope1, isotope2);
+      add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
+                     "H.2_3.2.3");
+      // Molecule-ion elastic collisions
+      reaction_str =
+          fmt::format("{}2 + {}+ -> {}2 + {}+", isotope1, isotope2, isotope1, isotope2);
+      add_default_id(ReactionDataTypes::Amjuel, reaction_str, ReactionCoeffTypes::sigma_v,
+                     "H.2_0.3T");
     }
   }
 
