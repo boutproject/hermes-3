@@ -19,7 +19,7 @@
 /// frequency is used to calculate parallel viscosity
 ///
 /// References
-///  - https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html
+///  - https://farside.ph.utexas.edu/teaching/plasma/lectures1/node56.html
 ///
 struct BraginskiiElectronViscosity : public Component {
   /// Inputs
