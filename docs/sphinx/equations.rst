@@ -196,7 +196,7 @@ The pressure source is the energy density source multiplied by ``2/3``
 
 .. math::
 
-   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}S_E + S_N\frac{1}{2}mNV^2
+   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}S_E + \frac{2}{3}S_N\frac{1}{2}mNV^2
 
 where :math:`S_E` is the ``energy_source`` (thermal energy source),
 and :math:`S_N` is the density source. If conduction has been
@@ -503,7 +503,7 @@ The perpendicular part is calculated from:
 
 .. math::
 
-   \begin{aligned}\Pi_{ci\perp} =& 0.96 p_i\tau_i \kappa \cdot \left[\mathbf{V}_E + \mathbf{V}_{di} + 1.16\frac{\mathbf{b}\times\nabla T_i}{B} \right] \\
+   \begin{aligned}\Pi_{ci\perp} =& 0.96 p_i\tau_i \kappa \cdot \left[\mathbf{V}_E + \mathbf{V}_{di} + 1.61\frac{\mathbf{b}\times\nabla T_i}{B} \right] \\
    =& -0.96 p_i\tau_i\frac{1}{B}\left(\mathbf{b}\times\kappa\right)\cdot\left[\nabla\phi + \frac{\nabla p_i}{en_i} + 1.61\nabla T_i \right]\end{aligned}
 
 
@@ -766,7 +766,7 @@ velocity :math:`\mathbf{v}_n` and pressure :math:`p_n`.
 
    \begin{aligned}
    \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{v}_n\right) \nonumber \\
-   \frac{\partial \mathbf{v}_n}{\partial t} =& - \mathbf{v}_n\cdot\nabla\mathbf{v}_n -\frac{1}{n_n}\nabla p_n + \frac{1}{n_n}\nabla\cdot\left(\mu \nabla\mathbf{v}\right) + \nabla\cdot\left(\nu \nabla \mathbf{v}_n\right) \\
+   \frac{\partial \mathbf{v}_n}{\partial t} =& - \mathbf{v}_n\cdot\nabla\mathbf{v}_n -\frac{1}{n_n m_n}\nabla p_n + \nabla\cdot\left(\nu \nabla\mathbf{v}\right)\\
    \frac{\partial p_n}{\partial t} =& -\gamma \nabla\cdot\left(p_n\mathbf{v}_n\right) + \left(\gamma - 1\right)\mathbf{v}_n\cdot\nabla p_n + \nabla\cdot\left(n_n \chi_n \nabla T_n\right) \nonumber
    \end{aligned}
 
@@ -946,7 +946,7 @@ equations. Calculates the diamagnetic drift velocity as
 where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
 is read from the `bxcv` mesh input variable.
 
-Two forms are available. Form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P; 
+Two forms are available, which are implemented differently for density, momentum, and pressure equations. In the density equation, form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P; 
 at the boundaries this velocity is perpendicular to the boundary. Form 1 uses the magnetic gyro-center drifts, which are mostly vertical;
 at the boundaries this form produces a flow through the boundary. 
 Forms 0 and 1 are analytically equivalent and should give the same result away from boundaries, 
@@ -957,10 +957,38 @@ However, Form 1 is nice because the flow velocity depends on the temperature, no
 This usually makes it better behaved numerically. To make the most of both, the `diamagnetic_drift` component allows the forms to be mixed
 using the ``diamag_form`` setting. For example, the :code:`tcv-x21` example blends it such that form 0 is at the boundary:
 
+
 .. code-block:: ini
 
    [diamagnetic_drift]
    diamag_form = x * (1 - x)  # 0 = gradient; 1 = divergence
+
+
+A table of the two forms used in Hermes-3, and the corresponding terms in `Simakov & Catto <https://doi.org/10.1063/1.1623492>`_ is shown below, where :math:`\mathbf{C}=\nabla\times\left(\frac{\mathbf{b}}{B}\right)` is the curvature vector. Instead of the diamagnetic velocity, the whole terms associated are shown. The difference among the forms is the divergence of a curl, which vanishes. The diamagnetic velocity :math:`\mathbf{v}_{dia}` is defined above. Notice that Simakov & Catto used Gaussian units, but Hermes-3 uses SI units. 
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 20 20 35
+
+   * -
+     - Form 0
+     - Form 1
+     - Simakov & Catto
+   * - Density
+     - :math:`\mathbf{C} \cdot \nabla\left(\dfrac{p}{q}\right)`
+     - :math:`\nabla \cdot (n \mathbf{v}_{dia})`
+     - Eq. (51): :math:`\dfrac{c}{q}\left(\nabla \times \dfrac{\mathbf{b}}{B}\right) \cdot \nabla p`
+   * - Momentum
+     - :math:`\mathbf{C} \cdot \nabla\left(\dfrac{mnv_\parallel T}{q}\right)`
+     - :math:`\nabla\cdot (mnv_\parallel \mathbf{v}_{dia})`
+     - Eq. (64): :math:`\nabla\cdot \left(\dfrac{1}{\Omega} \mathbf{b} \times \nabla(p v_\parallel)\right)`
+   * - Pressure
+     - :math:`\dfrac{5}{2}\mathbf{C} \cdot \nabla\left(\dfrac{pT}{q}\right)`
+     - :math:`\dfrac{5}{2}\nabla\cdot (p \mathbf{v}_{dia})`
+     - Eq. (56): :math:`\nabla\cdot\left(\dfrac{5}{2 m \Omega} \mathbf{b} \times \nabla(p T)\right)`
+
+\* Eq.(64) in Simakov & Catto is derived for ion parallel momentum, but it is also applicable to electrons since it comes from the gyro-viscosity and the mass factors of :math:`m_i` or :math:`m_e` cancel out. 
+
 
 .. doxygenstruct:: DiamagneticDrift
    :members:
