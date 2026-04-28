@@ -12,7 +12,7 @@
 /// Intended mainly for testing.
 ///
 /// Expressions taken from:
-/// https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html
+/// https://farside.ph.utexas.edu/teaching/plasma/lectures1/node55.html
 struct SimpleConduction : public Component {
   SimpleConduction(std::string name, Options& alloptions, Solver*)
       : Component({readOnly("species:{name}:temperature", Regions::Interior),
