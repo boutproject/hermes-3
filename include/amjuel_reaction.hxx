@@ -102,16 +102,9 @@ protected:
       BoutReal avgNe = 0.0;
       BoutReal avgN1 = 0.0;
       BoutReal avgTe = 0.0;
-      if (Ne.isFci()) {
-	avgNe = (4.0 * Ne[i] + Ne.ydown()[iym] + Ne.yup()[iyp]) / 6.0;
-	avgN1 = (4.0 * N1[i] + N1.ydown()[iym] + N1.yup()[iyp]) / 6.0;
-	avgTe = (4.0 * Te[i] + Te.ydown()[iym] + Te.yup()[iyp]) / 6.0;
-      } else {
-	avgNe = Ne[i];
-	avgN1 = N1[i];
-	avgTe = Te[i];
-      }
-      
+      avgNe = Ne[i];
+      avgN1 = N1[i];
+      avgTe = Te[i];      
       reaction_rate[i] = avgNe * avgN1 * evaluate(rate_coefs, avgTe * Tnorm, avgNe * Nnorm) * Nnorm / FreqNorm * rate_multiplier;
     }
     
@@ -179,15 +172,11 @@ protected:
       BoutReal avgNe = 0.0;
       BoutReal avgN1 = 0.0;
       BoutReal avgTe = 0.0;
-      if (Ne.isFci()) {
-        avgNe = (4.0 * Ne[i] + Ne.ydown()[iym] + Ne.yup()[iyp]) / 6.0;
-        avgN1 = (4.0 * N1[i] + N1.ydown()[iym] + N1.yup()[iyp]) / 6.0;
-        avgTe = (4.0 * Te[i] + Te.ydown()[iym] + Te.yup()[iyp]) / 6.0;
-      }	else {
-	avgNe =	Ne[i];
-        avgN1 =	N1[i];
-        avgTe =	Te[i];
-      }
+
+      avgNe =	Ne[i];
+      avgN1 =	N1[i];
+      avgTe =	Te[i];
+
       energy_loss[i] = avgNe * avgN1 * evaluate(radiation_coefs, avgTe * Tnorm, avgNe * Nnorm) * Nnorm / (Tnorm * FreqNorm) * radiation_multiplier;
     }
 

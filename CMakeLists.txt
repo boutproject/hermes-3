@@ -245,6 +245,14 @@ add_custom_command(TARGET setup-test PRE_BUILD
 if(HERMES_TESTS)
   enable_testing()
 
+  if (BOUT_ENABLE_METRIC_3D)
+    add_custom_command(TARGET setup-test PRE_BUILD
+      COMMAND python3 ./generate_axial_circular.py
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/grids
+    )
+    file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/grids ${CMAKE_CURRENT_BINARY_DIR}/grids SYMBOLIC)
+  endif()
+  
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
     set(oneValueArgs DOWNLOAD DOWNLOAD_NAME)
@@ -298,6 +306,10 @@ if(HERMES_TESTS)
 	DEPENDS setup-test)
     endif()
   endfunction()
+  hermes_add_integrated_test(3D-Axial-circular-conduction-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-axial-circular-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-vorticity-inversion-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-sheathtest-recycling-fci
