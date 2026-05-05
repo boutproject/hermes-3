@@ -1,23 +1,45 @@
+nout = 0
+timestep = 1
 
 [mesh]
-dmplex_vertex_tolerance = 1e-08
 file = example_cdn.grd.nc
-
 extrapolate_y = false
+
+[dmplex]
 use_cxx_ivertex = true
+test_dmplex_cell_volumes = false
+test_dmplex_cell_centres = false
+dmplex_vertex_tolerance = 1e-08
 
-phi = 0
-ex = 0
-ey = 0
+[solver]
+type = pvode
 
-initial_neutral_density = 20
+[hermes]
+components = (d+, e, vantage)
+Nnorm = 1e+19
 
-[neso_particles]
+[d+]
+type = evolve_density
+AA = 1
+charge = 1
+
+[Nd+]
+function = 1
+
+[e]
+type = quasineutral
+AA = 1/1836
+charge = -1
+
+[vantage]
+dt = 0.005
+nsteps = 3
 
 test_mass_conservation = true
-test_cell_volumes = false
-test_cell_centres = false
+initial_neutral_density = 20
 
-npart_per_cell = 1
-dt = 0.005
-nsteps = 0
+npart_per_cell = 20
+remove_threshold = 0.0
+merge_threshold = 0.0
+iz_rate = 0.0
+rec_rate = 0.0

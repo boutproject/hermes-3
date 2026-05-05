@@ -53,7 +53,6 @@ else()
   find_package(bout++ REQUIRED)
 endif()
 
-
 find_package(MPI REQUIRED)
 
 # option for whether or not to compile with VANTAGE-Reactions and NESO-Particles
@@ -188,13 +187,16 @@ set(HERMES_SOURCES
     include/zero_current.hxx
     include/transform.hxx
     include/fixed_fraction_radiation.hxx
-    include/simple_pump.hxx)
+    include/simple_pump.hxx
+)
 
 if(HERMES_USE_VANTAGE)
-# include Hermes-VANTAGE include and source files
-  list(APPEND HERMES_SOURCES
-      src/vantage_dmplex.cxx
-      include/vantage_dmplex.hxx)
+  # include Hermes-VANTAGE include and source files
+  list(APPEND HERMES_SOURCES 
+    src/vantage_dmplex.cxx 
+    include/vantage_dmplex.hxx 
+    src/vantage.cxx 
+    include/vantage.hxx)
 endif()
 
 # Compile Hermes sources into a library, which can be used for unit tests
@@ -206,8 +208,9 @@ target_link_libraries(hermes-3-lib PUBLIC bout++::bout++)
 if(HERMES_USE_VANTAGE)
   # preprocessor flag for optional VANTAGE includes
   target_compile_definitions(hermes-3-lib PUBLIC HERMES_INCLUDE_VANTAGE)
-  # link to VANTAGE-Reactions libraries
-  target_link_libraries(hermes-3-lib PUBLIC VANTAGE-Reactions::VANTAGE-Reactions)
+  # link to VANTAGE-Reactions and NESO-RNG-Toolkit libraries
+  target_link_libraries(hermes-3-lib PUBLIC VANTAGE-Reactions::VANTAGE-Reactions
+                                            NESO-RNG-Toolkit::NESO-RNG-Toolkit)
 endif()
 
 target_compile_features(hermes-3-lib PUBLIC cxx_std_17)
@@ -273,17 +276,6 @@ if(HERMES_COPY_EXAMPLES_TO_BUILD OR HERMES_COPY_JSON_DATABASE_TO_BUILD)
   add_custom_target(setup-examples ALL)
 else()
   add_custom_target(setup-examples)
-endif()
-
-
-
-if(HERMES_USE_VANTAGE)
-  # Test of bout+neso
-  add_executable(bout-particle-push
-                bout-particle-push.cxx
-                ${CMAKE_CURRENT_BINARY_DIR}/include/revision.hxx)
-  target_link_libraries(bout-particle-push PUBLIC hermes-3-lib bout++::bout++ VANTAGE-Reactions::VANTAGE-Reactions NESO-RNG-Toolkit::NESO-RNG-Toolkit)
-  add_sycl_to_target(TARGET bout-particle-push SOURCES bout-particle-push.cxx)
 endif()
 
 # Tests
@@ -404,13 +396,37 @@ if(HERMES_TESTS)
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   option(SPACK_GTEST "Use spack-installed googletest for unit tests" ON)
+
+  # "gtest" and "GTest::gtest" are not the same, and the latter is preferred as being
+  # more complete. So, instead of just linking to "gtest", we will try to find the package
+  # using CMake if SPACK_GTEST is enabled. If not, then if gtest isn't already a target, then
+  # it will get it from the submodule. The GTest target is saved as its own variable
+  # so that it can be passed to both hermes_unit_tests.
+  set(HERMES_GTEST_TARGET "")
   if(HERMES_UNIT_TESTS)
-    if(NOT PACKAGE_TESTS AND NOT SPACK_GTEST)
-      # Not running BOUT++ tests
-      # Since BOUT++ includes googletest, adding it again causes errors
+    if(SPACK_GTEST)
+      find_package(GTest REQUIRED)
+    elseif(
+      NOT TARGET GTest::gtest
+      AND NOT TARGET gtest
+      AND NOT PACKAGE_TESTS)
       add_subdirectory(external/googletest)
     endif()
+
+    if(TARGET GTest::gtest)
+      set(HERMES_GTEST_TARGET GTest::gtest)
+    elseif(TARGET gtest)
+      set(HERMES_GTEST_TARGET gtest)
+    else()
+      message(FATAL_ERROR "Could not find a GTest target to link against")
+    endif()
+
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
+
+    # Exclude VANTAGE unit test if VANTAGE not used
+    if(NOT HERMES_USE_VANTAGE)
+      list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_vantage\\.cxx$")
+    endif()
 
     add_executable(hermes_unit_tests tests/unit/main.cxx ${TEST_SOURCES})
 
@@ -418,8 +434,13 @@ if(HERMES_TESTS)
 
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
     set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
-    target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++
-                                                    hermes-3-lib)
+    target_link_libraries(hermes_unit_tests PRIVATE ${HERMES_GTEST_TARGET}
+                                                    bout++::bout++ hermes-3-lib)
+    if(HERMES_USE_VANTAGE)
+      add_sycl_to_target(TARGET hermes_unit_tests SOURCES tests/unit/main.cxx
+                         ${TEST_SOURCES})
+    endif()
+
     # Have hermes_unit_tests look for dynamic libs in ./ before searching
     # elsewhere
     set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
@@ -431,8 +452,9 @@ if(HERMES_TESTS)
     # TEST_SOURCES=
     add_executable(hermes_mms_operator_tests tests/mms_operator/main.cxx)
     # ${TEST_SOURCES})
-    target_link_libraries(hermes_mms_operator_tests
-                          PRIVATE gtest bout++::bout++ hermes-3-lib)
+    target_link_libraries(
+      hermes_mms_operator_tests PRIVATE ${HERMES_GTEST_TARGET} bout++::bout++
+                                        hermes-3-lib)
     add_test(
       NAME differential_operators_mms_orthogonal
       WORKING_DIRECTORY tests/mms_operator/
@@ -454,14 +476,17 @@ if(HERMES_TESTS)
 
   # Integrated tests of VANTAGE-Reactions+NESO-Particles features
   if(HERMES_USE_VANTAGE)
-    add_test(NAME bout_particle_push
-           WORKING_DIRECTORY tests/integrated/particle-pusher/
-           COMMAND runtest)
+    add_test(
+      NAME bout_particle_push
+      WORKING_DIRECTORY tests/integrated/particle-pusher/
+      COMMAND runtest)
     set_tests_properties(bout_particle_push PROPERTIES LABELS integration)
-    add_test(NAME dmplex-vertex-coordinates
-           WORKING_DIRECTORY tests/integrated/dmplex-vertex-coordinates/
-           COMMAND runtest)
-    set_tests_properties(dmplex-vertex-coordinates PROPERTIES LABELS integration)
+    add_test(
+      NAME dmplex-vertex-coordinates
+      WORKING_DIRECTORY tests/integrated/dmplex-vertex-coordinates/
+      COMMAND runtest)
+    set_tests_properties(dmplex-vertex-coordinates PROPERTIES LABELS
+                                                              integration)
   endif()
 endif()
 

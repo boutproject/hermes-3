@@ -3,14 +3,21 @@ from petsc4py import PETSc
 import meshio
 import argparse
 
-parser = argparse.ArgumentParser(description="Create a HDF5, VTK, GMSH representation of a PETSc DMPlex mesh from a Hypnotoad grid file.")
-parser.add_argument("hypnotoad_nc_file_path", type=str, help="The path to the NetCDF file containing the Hypnotoad grid data")
+parser = argparse.ArgumentParser(
+    description="Create a HDF5, VTK, GMSH representation of a PETSc DMPlex mesh from a Hypnotoad grid file."
+)
+parser.add_argument(
+    "hypnotoad_nc_file_path",
+    type=str,
+    help="The path to the NetCDF file containing the Hypnotoad grid data",
+)
 args = parser.parse_args()
 file_path = args.hypnotoad_nc_file_path
 print(f"Creating DMPlex from Hypnotoad grid: {file_path}")
 
+
 # function to check correctly assigned labels
-def check_label_value_coords(value,coords,boundary_vertex_info):
+def check_label_value_coords(value, coords, boundary_vertex_info):
     check = False
     for key in boundary_vertex_info.keys():
         if value == boundary_vertex_info[key]["DMFaceSetsLabel"]:
@@ -20,7 +27,11 @@ def check_label_value_coords(value,coords,boundary_vertex_info):
                 check = True
                 break
     return check
-def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_vertex_info):
+
+
+def create_and_visualize_mesh(
+    file_path, Nx, Ny, cell_list, vertex_list, boundary_vertex_info
+):
     # Initialize PETSc
     comm = PETSc.COMM_WORLD
     # Create a DMPlex object
@@ -28,12 +39,12 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_ver
     # Define mesh parameters
     # for a rectangle with 2 cells and 6 vertices
     dim = 2  # 2D mesh
-    num_cells = Nx*Ny
+    num_cells = Nx * Ny
     # integers defining the cells
-    #cells = [[0, 1, 3, 4], [1, 2, 4, 5]]
-    cells = cell_list.astype('int32')
-    #print("cells")
-    #print(cells)
+    # cells = [[0, 1, 3, 4], [1, 2, 4, 5]]
+    cells = cell_list.astype("int32")
+    # print("cells")
+    # print(cells)
     # global list of vertices, in correct order
     # vertex_coords = [[0.0, 0.0],
     #                  [0.0, 1.0],
@@ -51,12 +62,12 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_ver
     #                  [2.0, 1.0],
     #                 ]
     vertex_coords = vertex_list
-    #print("vertex_coords")
-    #print(vertex_coords)
+    # print("vertex_coords")
+    # print(vertex_coords)
     # Create the mesh from the cell list
     dm.createFromCellList(dim, cells, vertex_coords, comm=comm)
     # Distribute the mesh (optional, useful for parallel runs)
-    #dm = dm.distribute()
+    # dm = dm.distribute()
     label_name = "Face Sets"
     dm.createLabel(label_name)
     global_label = False
@@ -74,8 +85,8 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_ver
         for key in boundary_vertex_info.keys():
             label_value = boundary_vertex_info[key]["DMFaceSetsLabel"]
             boundary_vertex_indices = boundary_vertex_info[key]["ivertex"]
-            #print(key)
-            #print(boundary_vertex_indices)
+            # print(key)
+            # print(boundary_vertex_indices)
             # loop over faces
             for face in range(face_start, face_end):
                 # vertices supporting this face
@@ -83,7 +94,7 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_ver
                 # n.b. need to subtract vertex_start
                 # to get back the input global index
                 # if all points in cone are in the boundary, this is a boundary face
-                if all( (v-vertex_start) in boundary_vertex_indices for v in cone):
+                if all((v - vertex_start) in boundary_vertex_indices for v in cone):
                     dm.setLabelValue("Face Sets", face, label_value)
 
     # Print labeled boundary faces
@@ -95,41 +106,54 @@ def create_and_visualize_mesh(file_path,Nx,Ny,cell_list,vertex_list,boundary_ver
         value = dm.getLabelValue(label_name, face)
         cone = dm.getCone(face)
         coords = vertex_coords[cone - vertex_start]
-        if value in [100,200,300,400]:
-            #print(f"Face {face} labeled with value {value}")
-            #print(f"Face {face} coords {coords[0]}")
-            check = check_label_value_coords(value,coords[0],boundary_vertex_info)
-            #print(f"Test passed: {check}")
-    mesh_name = file_path+".mesh"
-    mesh_path = mesh_name+".vtk"
+        if value in [100, 200, 300, 400]:
+            # print(f"Face {face} labeled with value {value}")
+            # print(f"Face {face} coords {coords[0]}")
+            check = check_label_value_coords(value, coords[0], boundary_vertex_info)
+            # print(f"Test passed: {check}")
+    mesh_name = file_path + ".mesh"
+    mesh_path = mesh_name + ".vtk"
     # Write the mesh to a VTK file
-    viewer = PETSc.Viewer().createVTK(mesh_path, mode=PETSc.Viewer.Mode.WRITE, comm=comm)
+    viewer = PETSc.Viewer().createVTK(
+        mesh_path, mode=PETSc.Viewer.Mode.WRITE, comm=comm
+    )
     dm.view(viewer)
     viewer.destroy()
     print(f"Saved DMPlex view: {mesh_path}")
     # Write the mesh to a .h5 file
-    mesh_path = mesh_name+".h5"
-    #viewer = PETSc.Viewer().createHDF5('mesh.h5', mode=PETSc.Viewer.Mode.WRITE, comm=comm)
-    viewer = PETSc.ViewerHDF5().create(mesh_path, mode=PETSc.Viewer.Mode.WRITE, comm=comm)
+    mesh_path = mesh_name + ".h5"
+    # viewer = PETSc.Viewer().createHDF5('mesh.h5', mode=PETSc.Viewer.Mode.WRITE, comm=comm)
+    viewer = PETSc.ViewerHDF5().create(
+        mesh_path, mode=PETSc.Viewer.Mode.WRITE, comm=comm
+    )
     dm.view(viewer)
     viewer.destroy()
     print(f"Saved DMPlex view: {mesh_path}")
     # Read the mesh from .h5
     dmtest = PETSc.DMPlex().create(comm=comm)
-    viewer = PETSc.ViewerHDF5().create(mesh_path, mode=PETSc.Viewer.Mode.READ, comm=comm)
+    viewer = PETSc.ViewerHDF5().create(
+        mesh_path, mode=PETSc.Viewer.Mode.READ, comm=comm
+    )
     dmtest.load(viewer)
     viewer.destroy()
     # Write the reloaded mesh to a VTK file
-    mesh_path = mesh_name+"_h5_to_vtk.vtk"
-    viewer = PETSc.Viewer().createVTK(mesh_path, mode=PETSc.Viewer.Mode.WRITE, comm=comm)
+    mesh_path = mesh_name + "_h5_to_vtk.vtk"
+    viewer = PETSc.Viewer().createVTK(
+        mesh_path, mode=PETSc.Viewer.Mode.WRITE, comm=comm
+    )
     dmtest.view(viewer)
     viewer.destroy()
     # write mesh to gmsh format with ascii output, for use in NESO-particles tests
-    mesh = meshio.read(mesh_name+".vtk")
-    mesh_path = mesh_name+".msh"
-    mesh.write(mesh_path,binary=False)
+    mesh = meshio.read(mesh_name + ".vtk")
+    mesh_path = mesh_name + ".msh"
+    mesh.write(mesh_path, binary=False)
     print(f"Saved DMPlex view: {mesh_path}")
     return None
 
-Nx,Ny,cell_vertices,vertex_list,boundary_vertex_info = plot_corners_get_dmplex_data(file_path)
-create_and_visualize_mesh(file_path,Nx,Ny,cell_vertices,vertex_list,boundary_vertex_info)
+
+Nx, Ny, cell_vertices, vertex_list, boundary_vertex_info = plot_corners_get_dmplex_data(
+    file_path
+)
+create_and_visualize_mesh(
+    file_path, Nx, Ny, cell_vertices, vertex_list, boundary_vertex_info
+)

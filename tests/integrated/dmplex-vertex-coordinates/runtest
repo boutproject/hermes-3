@@ -16,7 +16,7 @@ import xhermes
 This test checks that the DMPLex and Hypnotoad grids have matching vertices.
 It does this by:
 - Downloading a set of Hypnotoad example grids
-- Running bout-particle-push to generate the DMPlex
+- Running hermes-3 to generate the DMPlex
 - Checking that all the vertices from the DMPlex exist in the Hypnotoad grid and vice versa
 - Repeating the above for 6 Hypnotoad example grids
 """
@@ -27,7 +27,7 @@ cwd = Path.cwd()
 case_path = cwd / "data"
 datafile_path = case_path / "BOUT.dmp.*.nc"
 inputfile_path = case_path / "BOUT.inp"
-exec_path = cwd.parents[2] / "bout-particle-push"
+exec_path = cwd.parents[2] / "hermes-3"
 dmplex_path = case_path / "hypnotoad_dmplex_mesh_output.h5"
 logfile_path = cwd / "run.log"
 
@@ -41,7 +41,7 @@ grid_filenames = [
     "example_udn.grd.nc",
     "example_udn2.grd.nc",
     "example_usn.grd.nc",
-    ]
+]
 
 
 ### Define functions
@@ -63,17 +63,13 @@ def get_DMPlex_vertices(dmplex_path):
 
     ## Get vertices
     # vertices are the simplest object, so depth = 0
-    vertex_start, vertex_end = dm.getDepthStratum(
-        0
-    )  
+    vertex_start, vertex_end = dm.getDepthStratum(0)
     R = []
     Z = []
 
     # Find offset to locate matching coordinates to point p
     for p in range(vertex_start, vertex_end):
-        off = section.getOffset(
-            p
-        )  
+        off = section.getOffset(p)
 
         R.append(coords[off])
         Z.append(coords[off + 1])
@@ -104,7 +100,6 @@ def get_hypnotoad_vertices(gridfile):
 ### Prepare for test
 
 for gridfile in grid_filenames:
-
     if verbose:
         print("\n", "*" * 30, "\n")
         print(f"Testing {gridfile}")
@@ -135,10 +130,9 @@ for gridfile in grid_filenames:
     tmp_path = gridzipfile_path.with_name(gridzipfile_path.name + ".tmp")
 
     with urllib.request.urlopen(gridurl, timeout=60) as response:
-
         if response.status != 200:
             raise RuntimeError(f"Test grid download failed: HTTP {response.status}")
-        
+
         # Copy bits of the file from response to a temp file
         # This ensures no partial files are left if the download fails
         with open(tmp_path, "wb") as out_file:
@@ -148,7 +142,6 @@ for gridfile in grid_filenames:
     tmp_path.replace(gridzipfile_path)
 
     with zipfile.ZipFile(gridzipfile_path, "r") as zf:
-
         zip_contents = set(zf.namelist())
         try:
             # Extract only expected grids
@@ -164,7 +157,9 @@ for gridfile in grid_filenames:
         file_hash = hashlib.sha256(f.read()).hexdigest()
 
     if file_hash != expected_hash:
-        raise RuntimeError("Downloaded grid zip file hash does not match expected value")
+        raise RuntimeError(
+            "Downloaded grid zip file hash does not match expected value"
+        )
 
     ## Run Hermes-3 to generate DMPlex mesh
     # Find how many cores to use
@@ -205,7 +200,7 @@ for gridfile in grid_filenames:
     # Extract
     dmplex_vertices = get_DMPlex_vertices(dmplex_path)
     hypno_vertices = get_hypnotoad_vertices(gridfile)
-    
+
     R_dmplex = dmplex_vertices[:, 0]
     Z_dmplex = dmplex_vertices[:, 1]
     R_hypno = hypno_vertices[:, 0]
@@ -213,24 +208,28 @@ for gridfile in grid_filenames:
 
     # Vertex position error tolerance is factor of characteristic geometry size
     geometry_size = np.max(np.sqrt(R_hypno**2 + Z_hypno**2))
-    tolerance = inputfile["mesh"]["dmplex_vertex_tolerance"] * geometry_size
+    tolerance = inputfile["dmplex"]["dmplex_vertex_tolerance"] * geometry_size
 
     # Hypnotoad has duplicate vertices due to overlapping vertices between cells.
     # The vertices are not in an exactly identical position due to finite precision
     # on the equilibrium interpolation done in Hypnotoad.
-    # The test just ensures that every vertex in one mesh has a matching vertex in 
+    # The test just ensures that every vertex in one mesh has a matching vertex in
     # the other mesh within the tolerance.
-    
+
     # Ensure all Hypnotoad vertices exist in DMPlex
     for i in range(len(R_hypno)):
-        nearest_distance = np.min(np.sqrt((R_dmplex - R_hypno[i])**2 + (Z_dmplex - Z_hypno[i])**2))
-        
+        nearest_distance = np.min(
+            np.sqrt((R_dmplex - R_hypno[i]) ** 2 + (Z_dmplex - Z_hypno[i]) ** 2)
+        )
+
         if not nearest_distance < tolerance:
             raise AssertionError("Found Hypnotoad vertex with no match in DMPlex")
-        
+
     # Ensure all DMPlex vertices exist in Hypnotoad
     for i in range(len(R_dmplex)):
-        nearest_distance = np.min(np.sqrt((R_hypno - R_dmplex[i])**2 + (Z_hypno - Z_dmplex[i])**2))
-        
+        nearest_distance = np.min(
+            np.sqrt((R_hypno - R_dmplex[i]) ** 2 + (Z_hypno - Z_dmplex[i]) ** 2)
+        )
+
         if not nearest_distance < tolerance:
             raise AssertionError("Found DMPlex vertex with no match in Hypnotoad")

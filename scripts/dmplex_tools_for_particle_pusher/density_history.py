@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 def plot(case_path):
 
     ds = xbout.load.open_boutdataset(
-        datapath=case_path / "BOUT.dmp.*.nc",
+        datapath=case_path / "BOUT.dmp.vantage.*.nc",
         inputfilepath=case_path / "BOUT.inp",
         keep_xboundaries=False,
         keep_yboundaries=False,
@@ -27,7 +27,7 @@ def plot(case_path):
     Ni_avg.plot(ax=ax, marker="o")
     ax.set_ylabel("Normalised density")
     ax.set_title("Mean ion density")
-    
+
     ax = axes[1]
     Nn_avg.plot(ax=ax, marker="o")
     ax.set_ylabel("Normalised density")
@@ -44,7 +44,6 @@ def plot(case_path):
     ax.legend(fontsize="x-small")
     ax.set_ylabel("-")
     ax.set_title("Density volume integrals")
-
 
     for ax in axes:
         ax.set_xlabel("time")

@@ -1,5 +1,7 @@
 #pragma once
+#include "../include/component.hxx"
 #include "bout/bout.hxx"
+#include "bout/petsclib.hxx"
 #include <neso_particles.hpp>
 #include <neso_rng_toolkit.hpp>
 #include <reactions/reactions.hpp>
@@ -7,9 +9,36 @@
 using namespace NESO::Particles;
 using namespace VANTAGE::Reactions;
 
+struct Vantage : public Component {
+  Vantage(std::string name, Options& options, Solver* solver);
+
+  ~Vantage(); // Destructor for VANTAGE related cleanup
+  void finally(const Options& state) override;
+  void transform_impl(GuardedOptions& state) override;
+  void outputVars(Options& state) override;
+
+private:
+  PetscLib petsc_lib; // Ensures PETSc is initialized for the lifetime of this component
+  std::string name;   // Component name
+  std::shared_ptr<H5Part> h5part;
+  DM dm;
+  std::shared_ptr<PetscInterface::DMPlexInterface> neso_mesh;
+  std::shared_ptr<SYCLTarget> sycl_target;
+  std::shared_ptr<PetscInterface::BoundaryInteraction2D> b2d;
+
+  Field2D ion_density;
+  Field2D neutral_density;
+  BoutReal particle_time;
+};
+
+namespace {
+RegisterComponent<Vantage> registercomponentvantage("vantage");
+}
+
 /// @brief Data struct to hold information about a reaction source.
 /// @param reaction_name Name of the reaction, e.g. "ionistaion"
-/// @param source_name Name of the source, e.g. Siz (ion density source due to ionisation).
+/// @param source_name Name of the source, e.g. Siz (ion density source due to
+/// ionisation).
 /// @param accumulator CellwiseAccumulator to use to accumulate the source term for this
 /// reaction.
 /// @param particle_group ParticleGroup to which this source applies.
@@ -31,8 +60,7 @@ struct VantageSource {
 class VantageSourceManager {
 public:
   VantageSourceManager(std::shared_ptr<PetscInterface::DMPlexInterface>& neso_mesh,
-                       Mesh* bout_mesh,
-                       const std::map<std::string, BoutReal>& norms);
+                       Mesh* bout_mesh, Options& units);
 
   Mesh* bout_mesh;
 
@@ -59,7 +87,7 @@ public:
 private:
   std::map<std::string, VantageSource> sources;
   std::shared_ptr<PetscInterface::DMPlexInterface> neso_mesh;
-  std::map<std::string, BoutReal> norms;
+  Options& units;
 };
 
 /**
@@ -69,8 +97,6 @@ private:
  * @param mesh object.
  *
  */
-
-
 
 /**
  * @brief Function to calculate particle positions and velocities from a Maxwellian.
@@ -87,35 +113,37 @@ private:
  */
 
 template <size_t ndim>
-inline ParticleSet uniform_cellwise_maxwellian(
-    SYCLTargetSharedPtr sycl_target, std::shared_ptr<PetscInterface::DMPlexInterface> mesh,
-    const ParticleSpec &particle_spec, const INT &npart_per_cell,
-    const REAL &weight, const REAL &std_dev, const INT &species_id) {
+inline ParticleSet
+uniform_cellwise_maxwellian(SYCLTargetSharedPtr sycl_target,
+                            std::shared_ptr<PetscInterface::DMPlexInterface> mesh,
+                            const ParticleSpec& particle_spec, const int npart_per_cell,
+                            const REAL& weight, const REAL& std_dev,
+                            const INT& species_id) {
 
   const int rank = sycl_target->comm_pair.rank_parent;
-  const int size = sycl_target->comm_pair.size_parent;
 
-  std::mt19937 rng_pos(52234234 + rank);
-  std::mt19937 rng_vel(52234231 + rank);
+  std::mt19937 rng_pos(static_cast<std::mt19937::result_type>(52234234 + rank));
+  std::mt19937 rng_vel(static_cast<std::mt19937::result_type>(52234231 + rank));
 
   std::vector<std::vector<double>> positions;
   std::vector<int> cell_ids;
   PetscInterface::uniform_within_dmplex_cells(mesh, npart_per_cell, positions, cell_ids,
-                                 &rng_pos);
+                                              &rng_pos);
 
-  const int N = cell_ids.size();
+  const int N = static_cast<int>(cell_ids.size());
 
-  auto velocities =
-      NESO::Particles::normal_distribution(N, ndim, 0.0, std_dev, rng_vel);
+  auto velocities = NESO::Particles::normal_distribution(N, ndim, 0.0, std_dev, rng_vel);
 
   ParticleSet maxwellian(N, particle_spec);
 
   for (int px = 0; px < N; px++) {
-    for (int dimx = 0; dimx < ndim; dimx++) {
-      maxwellian[Sym<REAL>("POSITION")][px][dimx] = positions.at(dimx).at(px);
-      maxwellian[Sym<REAL>("VELOCITY")][px][dimx] = velocities.at(dimx).at(px);
+    std::size_t pxu = static_cast<std::size_t>(px);
+    for (int dimx = 0; dimx < static_cast<int>(ndim); dimx++) {
+      std::size_t dimxu = static_cast<std::size_t>(dimx);
+      maxwellian[Sym<REAL>("POSITION")][px][dimx] = positions.at(dimxu).at(pxu);
+      maxwellian[Sym<REAL>("VELOCITY")][px][dimx] = velocities.at(dimxu).at(pxu);
     }
-    maxwellian[Sym<INT>("CELL_ID")][px][0] = cell_ids.at(px);
+    maxwellian[Sym<INT>("CELL_ID")][px][0] = cell_ids.at(pxu);
     maxwellian[Sym<INT>("ID")][px][0] = px;
     maxwellian[Sym<REAL>("WEIGHT")][px][0] = weight;
     maxwellian[Sym<INT>("INTERNAL_STATE")][px][0] = species_id;
@@ -129,29 +157,29 @@ inline ParticleSet uniform_cellwise_maxwellian(
  * in recombination and charge exchange.
  */
 
-inline auto get_uniform_rng_kernel(SYCLTargetSharedPtr sycl_target,
-                                   std::size_t n_samples,
+inline auto get_uniform_rng_kernel(SYCLTargetSharedPtr sycl_target, std::size_t n_samples,
                                    std::uint64_t root_seed = 141351) {
 
   const int rank = sycl_target->comm_pair.rank_parent;
 
   std::uint64_t seed = NESO::RNGToolkit::create_seeds(
-      sycl_target->comm_pair.size_parent, rank, root_seed);
+      static_cast<std::size_t>(sycl_target->comm_pair.size_parent),
+      static_cast<std::size_t>(rank), root_seed);
 
   auto rng_normal = NESO::RNGToolkit::create_rng<REAL>(
       NESO::RNGToolkit::Distribution::Uniform<REAL>{
           NESO::RNGToolkit::Distribution::next_value(0.0), 1.0},
-      seed, sycl_target->device, sycl_target->device_index);
+      seed, sycl_target->device, static_cast<std::size_t>(sycl_target->device_index));
 
   // Create an interface between NESO-RNG-Toolkit and NESO-Particles KernelRNG
   auto rng_interface =
       make_rng_generation_function<GenericDeviceRNGGenerationFunction, REAL>(
-          [=](REAL *d_ptr, const std::size_t num_samples) -> int {
+          [=](REAL* d_ptr, const std::size_t num_samples) -> int {
             return rng_normal->get_samples(d_ptr, num_samples);
           });
 
   auto rng_kernel =
-      host_atomic_block_kernel_rng<REAL>(rng_interface, n_samples);
+      host_atomic_block_kernel_rng<REAL>(rng_interface, static_cast<int>(n_samples));
 
   return rng_kernel;
 }

@@ -50,7 +50,7 @@ std::vector<PetscInt> cells_definition_from_RZ_ivertex(
     Field2D& ivertex_lower_right_corners, Field2D& ivertex_upper_right_corners,
     Field2D& ivertex_upper_left_corners);
 
-DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
+DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh, Options& mesh_options,
                                 std::shared_ptr<SYCLTarget> sycl_target,
                                 std::string dmplex_h5_filename);
 

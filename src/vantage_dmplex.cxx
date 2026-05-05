@@ -192,18 +192,27 @@ std::vector<PetscInt> cells_definition_from_RZ_ivertex(
   return cells;
 }
 
-DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
+DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh, Options& mesh_options,
                                 std::shared_ptr<SYCLTarget> sycl_target,
                                 std::string dmplex_h5_filename) {
-  bool use_cxx_ivertex = Options::root()["mesh"]["use_cxx_ivertex"].withDefault(false);
-  std::string dmplex_name =
-      Options::root()["mesh"]["dmplex_name"].withDefault("hypnotoad_dmplex_mesh");
+
+  bool use_cxx_ivertex = mesh_options["use_cxx_ivertex"]
+                             .doc("Use C++ based DMPlex creation routine instead of "
+                                  "loading an external DMPlex? "
+                                  "Default and recommendation is true.")
+                             .withDefault(true);
+  std::string dmplex_name = mesh_options["dmplex_name"]
+                                .doc("DMPlex object name.")
+                                .withDefault("hypnotoad_dmplex_mesh");
   // DMPlex vertex distance tolerance for duplicate Hypnotoad vertices
   const BoutReal dmplex_vertex_tolerance =
-    Options::root()["mesh"]["dmplex_vertex_tolerance"].withDefault(1.0e-8);
+      mesh_options["dmplex_vertex_tolerance"]
+          .doc("Tolerance for determining duplicate vertices when creating DMPlex from "
+               "BOUT++ mesh.")
+          .withDefault(1.0e-8);
+
   output << fmt::format("Using option use_cxx_ivertex = {}", use_cxx_ivertex)
          << std::endl;
-  bout_mesh->load();
   Field2D Rxy_lower_left_corners;
   Field2D Rxy_lower_right_corners;
   Field2D Rxy_upper_right_corners;
@@ -280,30 +289,30 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
     }
   }
   // Perform Allreduce (sum) to get knowledge of vertices to all ranks
-  MPICHK(MPI_Allreduce(local_R_lower_left_vertices.data(),
-                       global_R_lower_left_vertices.data(), static_cast<int>(N_nonunique_vertices),
-                       MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
-  MPICHK(MPI_Allreduce(local_Z_lower_left_vertices.data(),
-                       global_Z_lower_left_vertices.data(), static_cast<int>(N_nonunique_vertices),
-                       MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
-  MPICHK(MPI_Allreduce(local_R_lower_right_vertices.data(),
-                       global_R_lower_right_vertices.data(), static_cast<int>(N_nonunique_vertices),
-                       MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
-  MPICHK(MPI_Allreduce(local_Z_lower_right_vertices.data(),
-                       global_Z_lower_right_vertices.data(), static_cast<int>(N_nonunique_vertices),
-                       MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
-  MPICHK(MPI_Allreduce(local_R_upper_right_vertices.data(),
-                       global_R_upper_right_vertices.data(), static_cast<int>(N_nonunique_vertices),
-                       MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
-  MPICHK(MPI_Allreduce(local_Z_upper_right_vertices.data(),
-                       global_Z_upper_right_vertices.data(), static_cast<int>(N_nonunique_vertices),
-                       MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
-  MPICHK(MPI_Allreduce(local_R_upper_left_vertices.data(),
-                       global_R_upper_left_vertices.data(), static_cast<int>(N_nonunique_vertices),
-                       MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
-  MPICHK(MPI_Allreduce(local_Z_upper_left_vertices.data(),
-                       global_Z_upper_left_vertices.data(), static_cast<int>(N_nonunique_vertices),
-                       MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
+  MPICHK(MPI_Allreduce(
+      local_R_lower_left_vertices.data(), global_R_lower_left_vertices.data(),
+      static_cast<int>(N_nonunique_vertices), MPI_DOUBLE, MPI_SUM, BoutComm::get()));
+  MPICHK(MPI_Allreduce(
+      local_Z_lower_left_vertices.data(), global_Z_lower_left_vertices.data(),
+      static_cast<int>(N_nonunique_vertices), MPI_DOUBLE, MPI_SUM, BoutComm::get()));
+  MPICHK(MPI_Allreduce(
+      local_R_lower_right_vertices.data(), global_R_lower_right_vertices.data(),
+      static_cast<int>(N_nonunique_vertices), MPI_DOUBLE, MPI_SUM, BoutComm::get()));
+  MPICHK(MPI_Allreduce(
+      local_Z_lower_right_vertices.data(), global_Z_lower_right_vertices.data(),
+      static_cast<int>(N_nonunique_vertices), MPI_DOUBLE, MPI_SUM, BoutComm::get()));
+  MPICHK(MPI_Allreduce(
+      local_R_upper_right_vertices.data(), global_R_upper_right_vertices.data(),
+      static_cast<int>(N_nonunique_vertices), MPI_DOUBLE, MPI_SUM, BoutComm::get()));
+  MPICHK(MPI_Allreduce(
+      local_Z_upper_right_vertices.data(), global_Z_upper_right_vertices.data(),
+      static_cast<int>(N_nonunique_vertices), MPI_DOUBLE, MPI_SUM, BoutComm::get()));
+  MPICHK(MPI_Allreduce(
+      local_R_upper_left_vertices.data(), global_R_upper_left_vertices.data(),
+      static_cast<int>(N_nonunique_vertices), MPI_DOUBLE, MPI_SUM, BoutComm::get()));
+  MPICHK(MPI_Allreduce(
+      local_Z_upper_left_vertices.data(), global_Z_upper_left_vertices.data(),
+      static_cast<int>(N_nonunique_vertices), MPI_DOUBLE, MPI_SUM, BoutComm::get()));
   // if (mpi_rank == 0) {
   //     std::cout << "Result of Allreduce (sum): ";
   //     for (double val : global_R_lower_left_vertices) {
@@ -442,7 +451,7 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
   DM dm;
   // Create the DMPlex from the cells and coordinates.
   PETSCCHK(DMPlexCreateFromCellListParallelPetsc(
-      PETSC_COMM_WORLD, 2, num_cells_owned, num_vertices_owned, PETSC_DECIDE, 4,
+      BoutComm::get(), 2, num_cells_owned, num_vertices_owned, PETSC_DECIDE, 4,
       PETSC_TRUE, cells.data(), 2, vertex_coords.data(), NULL, NULL, &dm));
 
   // Label all of the boundary faces with 100 in the "Face Sets" label by using
@@ -472,7 +481,7 @@ DM create_dmplex_from_Bout_mesh(Mesh* bout_mesh,
   // Set a name for the DMPlex object (important for HDF5)
   PetscObjectSetName(reinterpret_cast<PetscObject>(dm), dmplex_name.c_str());
   // Create an HDF5 viewer
-  PetscViewerHDF5Open(PETSC_COMM_WORLD, dmplex_h5_filename.c_str(), FILE_MODE_WRITE,
+  PetscViewerHDF5Open(BoutComm::get(), dmplex_h5_filename.c_str(), FILE_MODE_WRITE,
                       &viewer);
   // Set viewer format to PETSC_VIEWER_HDF5_PETSC for compatibility
   PetscViewerPushFormat(viewer, PETSC_VIEWER_HDF5_PETSC);

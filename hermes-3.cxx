@@ -87,7 +87,8 @@
 
 #include "include/recalculate_metric.hxx"
 #ifdef HERMES_INCLUDE_VANTAGE
-#include "include/particle_pusher_include.hxx"
+#include "vantage.hxx"
+#include "include/vantage_dmplex.hxx"
 #endif
 #if !BOUT_USE_METRIC_3D
 // For standard 2D metrics,
