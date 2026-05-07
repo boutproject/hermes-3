@@ -8,7 +8,7 @@ defaults:
 jobs:
   cmake_tests:
     name: ${{ matrix.config.name }}
-    runs-on: ${{ matrix.config.os }}
+    runs-on: ubuntu-latest
     env:
       OMP_NUM_THREADS: ${{ matrix.config.omp_num_threads }}
       PYTHONPATH: ${{ github.workspace }}/tools/pylib
@@ -19,17 +19,15 @@ jobs:
       matrix:
         config:
           - name: "CMake default options"
-            os: ubuntu-22.04
             configure_options: ""
 
           - name: "3D Metrics"
-            os: ubuntu-latest
             configure_options: "-DBOUT_ENABLE_METRIC_3D=ON -DBOUT_DOWNLOAD_SUNDIALS=ON"
 
     steps:
       - name: Job information
         run: |
-          echo Build: ${{ matrix.config.name }}, ${{ matrix.config.os }}
+          echo Build: ${{ matrix.config.name }}
           echo Configure options: ${{ matrix.config.configure_options }}
 
       - name: Install dependencies
