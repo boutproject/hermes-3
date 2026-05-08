@@ -29,7 +29,7 @@ neutral_lmax = 0.02/ rho_s
 
 
 Nn = (1e17 + 2e16* sin(4.0 * pi * x) * sin(2 * z + 1.33221) ) / Nnorm
-Vn_x = 2500 * sin(4.0 * pi * x) * sin(2 * z + 1.33221) / (rho_s/seconds)
+Vn_x = 100 * sin(4.0 * pi * x) * sin(2 * z + 1.33221) / (rho_s/seconds)
 
 
 
@@ -39,7 +39,7 @@ Nn = Nn.subs(replace)
 Vn_x = Vn_x.subs(replace)
 
 
-dNndt = ( -DDX(Nn*Vn_x) ) * rho_s**2
+dNndt = ( -DDX(Nn*Vn_x) ) * rho_s
 
 SNn = diff(Nn, t) - dNndt
 
@@ -51,7 +51,7 @@ SNn = SNn.subs(replace)
 
 print("initial_Vn_x = " + exprToStr(Vn_x * (rho_s/seconds)))
 
-print("[Nn]")
+print("[Nh]")
 print("solution = " + exprToStr(Nn))
 print("\nsource = " + exprToStr(SNn))
-
+print("bndry_all = dirichlet_o2(`Nh:solution`)")

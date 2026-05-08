@@ -422,6 +422,18 @@ void NeutralFullVelocityCurv::outputVars(Options& state) {
        {"long_name", name + " parallel momentum"},
        {"species", name},
        {"source", "neutral_mixed"}});
+
+  if (diagnose) {
+    set_with_attrs(state[std::string("Vx") + name], Vn_x,
+		   {{"source", "neutral_full_velocity_curv"}});
+    set_with_attrs(state[std::string("Vz") + name], Vn_z,
+                   {{"source", "neutral_full_velocity_curv"}});
+
+  
+  
+  
+  }
+  
   
 }
 
