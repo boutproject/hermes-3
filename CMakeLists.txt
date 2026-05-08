@@ -302,6 +302,8 @@ if(HERMES_TESTS)
   endfunction()
   hermes_add_integrated_test(2D-neutral-full-density-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-neutral-full-momentum-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-vorticity-inversion-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-sheathtest-recycling-fci
