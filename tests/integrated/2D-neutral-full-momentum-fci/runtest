@@ -40,7 +40,7 @@ timestep = 1e6 / nout
 
 nproc = 1
 
-varnames = ["Nh"]
+varnames = ["Nh", "NVxh", "NVzh"]
 
 results = {}
 for var in varnames:

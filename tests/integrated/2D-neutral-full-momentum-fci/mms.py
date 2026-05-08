@@ -56,8 +56,8 @@ dNVn_zdt = -DDZ(Pn) * rho_s + AA * ( DDX(anomalous_D * Vn_z * DDX(Nn)) + DDZ(ano
 
 
 SNn = diff(Nn, t) - dNndt
-SNVn_x = diff(NVn_x) - dNVn_xdt
-SNVn_z = diff(NVn_z) - dNVn_zdt
+SNVn_x = diff(NVn_x, t) - dNVn_xdt
+SNVn_z = diff(NVn_z, t) - dNVn_zdt
  
 
 replace = [(metric.x, x), (metric.z, z / (2.0 * pi) ) ]
@@ -65,14 +65,34 @@ replace = [(metric.x, x), (metric.z, z / (2.0 * pi) ) ]
 Nn = Nn.subs(replace)
 Vn_x = Vn_x.subs(replace)
 Vn_z = Vn_z.subs(replace)
+NVn_x = NVn_x.subs(replace)
+NVn_z =	NVn_z.subs(replace)
+
+
 SNn = SNn.subs(replace)
+SNVn_x = SNVn_x.subs(replace)
+SNVn_z = SNVn_z.subs(replace)
+
 anomalous_D = anomalous_D.subs(replace)
 
 print("anomalous_D = " + exprToStr(anomalous_D * rho_s * rho_s / seconds))
-print("initial_Vn_x = " + exprToStr(Vn_x * (rho_s/seconds)))
-print("initial_Vn_z = " + exprToStr(Vn_z * (rho_s/seconds)))
 
 print("[Nh]")
 print("solution = " + exprToStr(Nn))
 print("\nsource = " + exprToStr(SNn))
 print("bndry_all = dirichlet_o2(`Nh:solution`)")
+
+print("[Nh]")
+print("solution = " + exprToStr(Nn))
+print("\nsource = " + exprToStr(SNn))
+print("bndry_all = dirichlet_o2(`Nh:solution`)")
+
+print("[NVxh]")
+print("solution = " + exprToStr(NVn_x))
+print("\nsource = " + exprToStr(SNVn_x))
+print("bndry_all = dirichlet_o2(`NVxh:solution`)")
+
+print("[NVzh]")
+print("solution = " + exprToStr(NVn_z))
+print("\nsource = " + exprToStr(SNVn_z))
+print("bndry_all = dirichlet_o2(`NVzh:solution`)")
