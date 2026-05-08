@@ -62,7 +62,7 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
   } else {
     output_warn.write(
         "WARNING: Not evolving neutral parallel momentum. NVn and Vn set to zero\n");
-    initial_Vn = options["initial_Vn_x"]
+    initial_Vn = options["initial_Vn"]
                         .doc("Initial neutral velocity in parallel direction?")
                         .withDefault(Field3D{0.0}) / (meters/seconds);
     Vn = initial_Vn;
@@ -106,7 +106,7 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
 
     initial_Tn = options["initial_Tn"]
                         .doc("Initial neutral temperature when pressure is not evolved?")
-			.withDefault(Field3D{0.0}) / Tnorm;
+			.withDefault(Field3D{1.0}) / Tnorm;
 
     Tn = initial_Tn;
     Pn = Tn * Nn;
