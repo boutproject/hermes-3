@@ -316,6 +316,8 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
 
   logPnlim = log(Pnlim);
 
+  Field3D Tnlim = floor(Tn, temperature_floor);
+  
   sound_speed = 0;
   if (lax_flux) {
     sound_speed = sqrt(Tnlim * (5. / 3) / AA);
@@ -325,7 +327,6 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
     sound_speed = 0.0;
   }
 
-  Field3D Tnlim = floor(Tn, temperature_floor);
 
   Field3D Rnn = sqrt(Tnlim / AA) / neutral_lmax;
 

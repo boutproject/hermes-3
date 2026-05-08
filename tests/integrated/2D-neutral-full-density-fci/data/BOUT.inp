@@ -36,11 +36,9 @@ evolve_pressure = false
 evolve_momentum = false
 evolve_momentum_xz = false
 
-[Nh]
+initial_Vn_x = 2500.0*sin(12.5663706143592*x)*sin(2.0*z + 1.33221)
 
+[Nh]
 solution = 0.02*sin(12.5663706143592*x)*sin(2.0*z + 1.33221) + 0.1
 
-source = 0.0
-
-bndry_all = dirichlet_o2(`Nh:solution`)
-
+source = 7.49256180660037e-8*(0.02*sin(12.5663706143592*x)*sin(2.0*z + 1.33221) + 0.1)*sin(2.0*z + 1.33221)*cos(12.5663706143592*x) + 1.49851236132007e-9*sin(12.5663706143592*x)*sin(2.0*z + 1.33221)^2*cos(12.5663706143592*x)

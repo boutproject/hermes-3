@@ -36,7 +36,7 @@ def gridname(nx):
 # nxlist = [36, 68, 132, 260] #, 640, 1280, 2560, 5120]
 nxlist = [36, 68]
 nout = 10
-timestep = 1e3 / nout
+timestep = 1e1 / nout
 
 nproc = 1
 
