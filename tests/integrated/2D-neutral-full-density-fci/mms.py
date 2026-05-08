@@ -32,16 +32,18 @@ Nn = (1e17 + 2e16* sin(4.0 * pi * x) * sin(2 * z + 1.33221) ) / Nnorm
 Vn_x = 30 * sin(4.0 * pi * x) * sin(2 * z + 1.33221) / (rho_s/seconds)
 Vn_z = 20 * sin(2.0 * pi * x) * sin(4 * z + 2.34123135) / (rho_s/seconds)
 
-
+anomalous_D = 0.5 + 0.2 * sin(2.0 * pi * x) * sin(4 * z + 4.661) / ((rho_s * rho_s) / seconds)
 
 replace = [(x, metric.x), (z, metric.z * 2.0 * pi ) ]
 
 Nn = Nn.subs(replace)
 Vn_x = Vn_x.subs(replace)
 Vn_z = Vn_z.subs(replace)
+anomalous_D = anomalous_D.subs(replace)
 
 
-dNndt = ( -DDX(Nn*Vn_x) -DDZ(Nn*Vn_z)) * rho_s
+
+dNndt = ( -DDX(Nn*Vn_x) -DDZ(Nn*Vn_z)) * rho_s + (DDX(anomalous_D * DDX(Nn)) + DDZ(anomalous_D * DDZ(Nn))) * (rho_s * rho_s)
 
 SNn = diff(Nn, t) - dNndt
 
@@ -51,7 +53,9 @@ Nn = Nn.subs(replace)
 Vn_x = Vn_x.subs(replace)
 Vn_z = Vn_z.subs(replace)
 SNn = SNn.subs(replace)
+anomalous_D = anomalous_D.subs(replace)
 
+print("anomalous_D = " + exprToStr(anomalous_D * rho_s * rho_s / seconds))
 print("initial_Vn_x = " + exprToStr(Vn_x * (rho_s/seconds)))
 print("initial_Vn_z = " + exprToStr(Vn_z * (rho_s/seconds)))
 

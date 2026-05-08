@@ -132,7 +132,9 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
   parallel_dirichlet = options["parallel_dirichlet"]
                    .doc("Use parallel dirichlet boundary conditions for the plasma?")
                    .withDefault<bool>(true);
+  
 
+  
   n_lowsource = options["n_lowsource"].withDefault(-1.0) / Nnorm;
   T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
   lowsource_scale = options["lowsource_scale"].withDefault(1e-5) * Omega_ci;
@@ -160,6 +162,20 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
   neutral_conduction = options["neutral_conduction"]
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(false);
+
+  BoutReal diffusion_norm = meters * meters / seconds;
+
+  include_D = options.isSet("anomalous_D");
+  anomalous_D = options["anomalous_D"].withDefault(Field3D{0.0}) / diffusion_norm;
+
+  include_nu = options.isSet("anomalous_nu");
+  anomalous_nu = options["anomalous_nu"].withDefault(Field3D{0.0}) / diffusion_norm;
+
+  anomalous_D.applyBoundary("neumann");
+  anomalous_nu.applyBoundary("neumann");
+  mesh->communicate(anomalous_D, anomalous_nu);
+  anomalous_D.applyParallelBoundary("parallel_neumann_o1");
+  anomalous_nu.applyParallelBoundary("parallel_neumann_o1");
   
   if (precondition) {
     inv = Laplacian::create(&options["precon_laplace"]);
@@ -343,6 +359,10 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
   if (n_lowsource > 0.0) {
     ddt(Nn) += low_sourceterm(Nn, n_lowsource, lowsource_scale);
   } 
+
+  if (include_D) {
+    ddt(Nn) += Div_a_Grad_perp(anomalous_D, Nn, use_finite_difference);
+  }
   
   /////////////////////////////////////////////////////                                                                                                                                                           
   // Neutral parallel momentum 
@@ -354,8 +374,9 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
 
     // Parallel gradient
     ddt(NVn) -= Grad_par(Pn);
+    // Perpendicular advection
 
-    // Perpendicular advection    
+    
         
   }
 

@@ -57,6 +57,8 @@ private:
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
 
+  bool include_D, include_nu;
+  Field3D anomalous_D, anomalous_nu;
 
   bool parallel_dirichlet;
   bool neutral_viscosity; ///< include viscosity?
@@ -165,9 +167,13 @@ private:
 
 
   
-  Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
+  Field3D Div_a_Grad_perp(Field3D a, Field3D b, bool use_finite=false) {
     if (a.isFci()) {
-      return (*dagp)(a, b, false);
+      if (use_finite) {
+	return Div_a_Grad_perp_curv(a,b);
+      } else {
+	return (*dagp)(a, b, false);
+      }
     }
     return FV::Div_a_Grad_perp(a, b);
   }
