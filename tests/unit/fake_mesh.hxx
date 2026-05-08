@@ -73,8 +73,6 @@ public:
 
     // Unused variables
     periodicX = false;
-    NXPE = 1;
-    PE_XIND = 0;
     IncIntShear = false;
     maxregionblocksize = MAXREGIONBLOCKSIZE;
 
@@ -109,10 +107,14 @@ public:
     return nullptr;
   }
   int wait(comm_handle UNUSED(handle)) override { return 0; }
-  int getNXPE() override { return 1; }
-  int getNYPE() override { return 1; }
-  int getXProcIndex() override { return 1; }
-  int getYProcIndex() override { return 1; }
+  int getNXPE() const override { return 1; }
+  int getNYPE() const override { return 1; }
+  int getNZPE() const override { return 1; }
+  int getXProcIndex() const override { return 0; }
+  int getYProcIndex() const override { return 0; }
+  int getZProcIndex() const override { return 0; }
+  int getProcIndex(int UNUSED(X), int UNUSED(Y), int UNUSED(Z)) const override { return 0; }
+  MPI_Comm getXZcomm() const override { return BoutComm::get(); }
   bool firstX() const override { return true; }
   bool lastX() const override { return true; }
   int sendXOut(BoutReal* UNUSED(buffer), int UNUSED(size), int UNUSED(tag)) override {
@@ -164,8 +166,10 @@ public:
   }
   BoutReal GlobalX(int jx) const override { return jx; }
   BoutReal GlobalY(int jy) const override { return jy; }
+  BoutReal GlobalZ(int jz) const override { return jz; }
   BoutReal GlobalX(BoutReal jx) const override { return jx; }
   BoutReal GlobalY(BoutReal jy) const override { return jy; }
+  BoutReal GlobalZ(BoutReal jz) const override { return jz; }
   int getGlobalXIndex(int) const override { return 0; }
   int getGlobalXIndexNoBoundaries(int) const override { return 0; }
   int getGlobalYIndex(int y) const override { return y; }
@@ -228,7 +232,7 @@ public:
     addRegion2D("RGN_BNDRY",
                 std::accumulate(begin(boundary_names), end(boundary_names),
                                 Region<Ind2D>{},
-                                [this](Region<Ind2D>& a, const std::string& b) {
+                                [this](Region<Ind2D> a, const std::string& b) {
                                   return a + getRegion2D(b);
                                 })
                     .unique());
@@ -236,7 +240,7 @@ public:
     addRegion3D("RGN_BNDRY",
                 std::accumulate(begin(boundary_names), end(boundary_names),
                                 Region<Ind3D>{},
-                                [this](Region<Ind3D>& a, const std::string& b) {
+                                [this](Region<Ind3D> a, const std::string& b) {
                                   return a + getRegion3D(b);
                                 })
                     .unique());

@@ -9,6 +9,7 @@
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 #include <bout/invert_laplace.hxx>
+#include <bout/solver.hxx>
 
 using bout::globals::mesh;
 

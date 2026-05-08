@@ -1,4 +1,6 @@
 #include "bout/field_factory.hxx"
+#include "bout/bout.hxx"
+#include "bout/options_io.hxx"
 
 // #include "hermes-2.hxx"
 #include "../include/div_ops.hxx"

@@ -4,6 +4,8 @@
 #include <bout/difops.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
+#include <bout/vecops.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/hermes_build_config.hxx"

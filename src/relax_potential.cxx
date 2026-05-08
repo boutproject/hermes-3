@@ -7,6 +7,7 @@
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/solver.hxx>
 
 using bout::globals::mesh;
 

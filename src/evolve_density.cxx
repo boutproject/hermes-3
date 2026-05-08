@@ -6,6 +6,7 @@
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 #include <bout/initialprofiles.hxx>
+#include <bout/solver.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/evolve_density.hxx"
