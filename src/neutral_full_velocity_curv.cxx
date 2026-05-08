@@ -368,13 +368,21 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
   // Neutral parallel momentum 
 
   if (evolve_momentum) {
-
+    Field3D dummy_NVn;
     // Parallel advection
     ddt(NVn) = -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed);
 
     // Parallel gradient
     ddt(NVn) -= Grad_par(Pn);
     // Perpendicular advection
+
+    if (include_D) {
+      ddt(NVn) += Div_par_K_Grad_par_mod(AA * anomalous_D * Vn, Nn, dummy_NVn, false);
+    }
+    
+    if (include_nu) {
+      ddt(NVn) += Div_par_K_Grad_par_mod(AA * anomalous_nu * Nn, Vn, dummy_NVn, false);
+    }
 
     
         
@@ -383,12 +391,20 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
   if (evolve_momentum_xz) {
 
     ddt(NVn_x) = -AA * Div_perp_fvv_x(Nnlim, Vn_x, sound_speed);
-
     ddt(NVn_x) -= Grad_x(Pn);
 
-    ddt(NVn_z) -= -AA * Div_perp_fvv_z(Nnlim, Vn_z, sound_speed);
+    ddt(NVn_z) = -AA * Div_perp_fvv_z(Nnlim, Vn_z, sound_speed);
+    ddt(NVn_z) -= Grad_z(Pn);
 
-    ddt(NVn_z) -= Grad_z(Pn);       
+    if (include_D) {
+      ddt(NVn_x) += Div_a_Grad_perp(AA * anomalous_D * Vn_x, Nn, use_finite_difference);
+      ddt(NVn_z) += Div_a_Grad_perp(AA * anomalous_D * Vn_z, Nn, use_finite_difference);
+    }
+
+    if (include_nu) {
+      ddt(NVn_x) += Div_a_Grad_perp(AA * anomalous_nu * Nn, Vn_x, use_finite_difference);
+      ddt(NVn_z) += Div_a_Grad_perp(AA * anomalous_nu * Nn, Vn_z, use_finite_difference);
+    }
     
   } 
 

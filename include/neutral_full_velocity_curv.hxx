@@ -158,10 +158,14 @@ private:
   
   const Field3D Div_perp_fvv_x(Field3D& f,Field3D& v, Field3D& spd) {
     Field3D result{zeroFrom(f)};
+
+    return result;
   }
 
   const Field3D Div_perp_fvv_z(Field3D& f,Field3D& v, Field3D& spd) {
     Field3D result{zeroFrom(f)};
+
+    return result;
   }
   
 
