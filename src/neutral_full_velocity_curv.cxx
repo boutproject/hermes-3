@@ -16,30 +16,6 @@ using ParLimiter = FV::Upwind;
 
 
 
-const Field3D Grad_x(Field3D a) {
-  Coordinates* coord = mesh->getCoordinates();
-  return DDX(a) / sqrt(coord->g_11); 
-}
-
-const Field3D Grad_z(Field3D a)	{
-  Coordinates* coord = mesh->getCoordinates();
-  return DDZ(a) / sqrt(coord->g_33);
-}
-
-
-const Field3D  Div_perp(Field3D f, Field3D vx, Field3D vz, Field3D spd) {
-
-  Coordinates* coord = mesh->getCoordinates();
-
-  Field3D cellcross_x = coord->cellvolume / (coord->dx * sqrt(coord->g_11));
-  Field3D cellcross_z =	coord->cellvolume / (coord->dz * sqrt(coord->g_33));
-
-  
-  
-}
-
-
-
 NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Options& alloptions, Solver* solver)
     : name(name) {
   AUTO_TRACE();
