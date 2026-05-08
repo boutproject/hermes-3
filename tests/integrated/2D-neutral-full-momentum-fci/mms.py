@@ -39,8 +39,8 @@ NVn_z =	AA * Nn	* Vn_z
 Pn = 1.0 + 0*x
 Tn = Pn / Nn
 
-anomalous_D = (10.5 + 0.2 * sin(2.0 * pi * x) * sin(4 * z + 4.661)) / ((rho_s * rho_s) / seconds)
-anomalous_nu = (20.5 + 0.2 * sin(2.0 * pi * x) * sin(4 * z + 4.661)) / ((rho_s * rho_s) / seconds)
+anomalous_D = (1.5 + 0.2 * sin(2.0 * pi * x) * sin(4 * z + 4.661)) / ((rho_s * rho_s) / seconds)
+anomalous_nu = (2.5 + 0.2 * sin(2.0 * pi * x) * sin(4 * z + 4.661)) / ((rho_s * rho_s) / seconds)
 #anomalous_D = 0.0 + 0*x
 
 replace = [(x, metric.x), (z, metric.z * 2.0 * pi ) ]
@@ -67,7 +67,7 @@ dNndt = ( -DDX(Nn*Vn_x) -DDZ(Nn*Vn_z)) * rho_s + (DDX(anomalous_D * DDX(Nn)) + D
 x_grad = -DDX(Pn) * rho_s
 x_an_D = AA * ( DDX(anomalous_D * Vn_x * DDX(Nn)) + DDZ(anomalous_D * Vn_x * DDZ(Nn)) ) * (rho_s * rho_s)
 x_an_nu = AA * ( DDX(anomalous_nu * Nn * DDX(Vn_x)) +DDZ(anomalous_nu * Nn * DDZ(Vn_x)) ) * (rho_s * rho_s)
-x_visc = ( DDX(eta_n * DDX(Vn_x)) +DDZ(eta_n * DDZ(Vn_x)) ) * (rho_s * rho_s)
+x_visc = ( DDX(eta_n * DDX(Vn_x)) +DDZ(eta_n * DDZ(Vn_x)) ) * (rho_s * rho_s) 
 
 dNVn_xdt = x_grad + x_an_D + x_an_nu + x_visc
 

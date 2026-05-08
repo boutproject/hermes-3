@@ -397,10 +397,10 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
 
   if (evolve_momentum_xz) {
     Field3D dummy_NVnxz;
-    ddt(NVn_x) = -AA * Div_perp_fvv_x(Nnlim, Vn_x, sound_speed);
+    ddt(NVn_x) = -AA * Div_perp_flows(Nnlim, Vn_x, Vn_x, Vn_z, sound_speed);
     ddt(NVn_x) -= Grad_x(Pn);
 
-    ddt(NVn_z) = -AA * Div_perp_fvv_z(Nnlim, Vn_z, sound_speed);
+    ddt(NVn_z) = -AA * Div_perp_flows(Nnlim, Vn_z, Vn_x, Vn_z, sound_speed);
     ddt(NVn_z) -= Grad_z(Pn);
 
     if (include_D) {
