@@ -384,12 +384,19 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
       ddt(NVn) += Div_par_K_Grad_par_mod(AA * anomalous_nu * Nn, Vn, dummy_NVn, false);
     }
 
-    
+    if (neutral_viscosity) {
+      Field3D viscosity_source = Div_par_K_Grad_par_mod(eta_n , Vn , mf_visc_par_ylow , false);
+      viscosity_source += Div_a_Grad_perp(eta_n , Vn, use_finite_difference);
+      ddt(NVn) += viscosity_source;
+      if (evolve_pressure) {
+	ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
+      }
+    }
         
   }
 
   if (evolve_momentum_xz) {
-
+    Field3D dummy_NVnxz;
     ddt(NVn_x) = -AA * Div_perp_fvv_x(Nnlim, Vn_x, sound_speed);
     ddt(NVn_x) -= Grad_x(Pn);
 
@@ -404,6 +411,23 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
     if (include_nu) {
       ddt(NVn_x) += Div_a_Grad_perp(AA * anomalous_nu * Nn, Vn_x, use_finite_difference);
       ddt(NVn_z) += Div_a_Grad_perp(AA * anomalous_nu * Nn, Vn_z, use_finite_difference);
+    }
+
+    if (neutral_viscosity) {
+      Field3D viscosity_source_x = Div_par_K_Grad_par_mod(eta_n , Vn_x , dummy_NVnxz, false);
+      viscosity_source_x += Div_a_Grad_perp(eta_n , Vn_x, use_finite_difference);
+      ddt(NVn_x) += viscosity_source_x;
+      if (evolve_pressure) {
+        ddt(Pn)  += -(2. /3) * Vn_x * viscosity_source_x;
+      }
+
+      Field3D viscosity_source_z = Div_par_K_Grad_par_mod(eta_n , Vn_z , dummy_NVnxz, false);
+      viscosity_source_z += Div_a_Grad_perp(eta_n , Vn_z, use_finite_difference);
+      ddt(NVn_z) += viscosity_source_z;
+      if (evolve_pressure) {
+        ddt(Pn)  += -(2. /3) * Vn_z * viscosity_source_z;
+      }
+      
     }
     
   } 

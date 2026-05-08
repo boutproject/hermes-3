@@ -52,17 +52,32 @@ anomalous_D = anomalous_D.subs(replace)
 anomalous_nu = anomalous_nu.subs(replace)
 NVn_x = NVn_x.subs(replace)
 NVn_z =	NVn_z.subs(replace)
+Tn = Tn.subs(replace)
 Pn = Pn.subs(replace)
+
+Rnn = sqrt(Tn / AA) / neutral_lmax
+Dnn = (Tn / AA) / Rnn
+kappa_n = (5.0 / 2.0) * Dnn * Nn
+eta_n = AA * (2.0 / 5.0) * kappa_n
+
 
 
 dNndt = ( -DDX(Nn*Vn_x) -DDZ(Nn*Vn_z)) * rho_s + (DDX(anomalous_D * DDX(Nn)) + DDZ(anomalous_D * DDZ(Nn))) * (rho_s * rho_s)
 
-dNVn_xdt = -DDX(Pn) * rho_s + AA * ( DDX(anomalous_D * Vn_x * DDX(Nn)) + DDZ(anomalous_D * Vn_x * DDZ(Nn)) ) * (rho_s * rho_s) + AA * ( DDX(anomalous_nu * Nn * DDX(Vn_x)) +
-                                                                                                                                        DDZ(anomalous_nu * Nn * DDZ(Vn_x)) ) * (rho_s * rho_s)
+x_grad = -DDX(Pn) * rho_s
+x_an_D = AA * ( DDX(anomalous_D * Vn_x * DDX(Nn)) + DDZ(anomalous_D * Vn_x * DDZ(Nn)) ) * (rho_s * rho_s)
+x_an_nu = AA * ( DDX(anomalous_nu * Nn * DDX(Vn_x)) +DDZ(anomalous_nu * Nn * DDZ(Vn_x)) ) * (rho_s * rho_s)
+x_visc = ( DDX(eta_n * DDX(Vn_x)) +DDZ(eta_n * DDZ(Vn_x)) ) * (rho_s * rho_s)
 
-dNVn_zdt = -DDZ(Pn) * rho_s + AA * ( DDX(anomalous_D * Vn_z * DDX(Nn)) + DDZ(anomalous_D * Vn_z * DDZ(Nn)) ) * (rho_s * rho_s) + AA * ( DDX(anomalous_nu * Nn * DDX(Vn_z)) +
-                                                                                                                                        DDZ(anomalous_nu * Nn * DDZ(Vn_z)) ) * (rho_s * rho_s)
+dNVn_xdt = x_grad + x_an_D + x_an_nu + x_visc
 
+z_grad = -DDZ(Pn) * rho_s
+z_an_D = AA * ( DDX(anomalous_D * Vn_z * DDX(Nn)) + DDZ(anomalous_D * Vn_z * DDZ(Nn)) ) * (rho_s * rho_s)
+z_an_nu = AA * ( DDX(anomalous_nu * Nn * DDX(Vn_z)) + DDZ(anomalous_nu * Nn * DDZ(Vn_z)) ) * (rho_s * rho_s)
+z_visc = ( DDX(eta_n * DDX(Vn_z)) +DDZ(eta_n * DDZ(Vn_z)) ) * (rho_s * rho_s)
+
+
+dNVn_zdt = z_grad + z_an_D + z_an_nu + z_visc
 
 
 SNn = diff(Nn, t) - dNndt
@@ -77,6 +92,7 @@ Vn_x = Vn_x.subs(replace)
 Vn_z = Vn_z.subs(replace)
 NVn_x = NVn_x.subs(replace)
 NVn_z =	NVn_z.subs(replace)
+Tn = Tn.subs(replace)
 
 
 SNn = SNn.subs(replace)
