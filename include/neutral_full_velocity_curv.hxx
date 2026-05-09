@@ -139,6 +139,20 @@ private:
       BoutReal flux_zup	= 0.5 * (f[i]*vz[i] + f[izp]*vz[izp]) * cellarea_zup;
       BoutReal flux_zdown = 0.5 * (f[i]*vz[i] + f[izm]*vz[izm]) * cellarea_zdown;
 
+      if (dissipation) {
+	BoutReal amax_xup = BOUTMAX(vx[i], vx[ixp], spd[i], spd[ixp]);
+	BoutReal amax_xdown = BOUTMAX(vx[i], vx[ixm], spd[i], spd[ixm]);
+
+	BoutReal amax_zup = BOUTMAX(vz[i], vz[izp], spd[i], spd[izp]);
+        BoutReal amax_zdown = BOUTMAX(vz[i], vz[izm], spd[i], spd[izm]);
+
+	flux_xup -= 0.5 * amax_xup * (f[ixp] - f[i]);
+	flux_xdown -= 0.5 * amax_xdown * (f[i] - f[ixm]);
+
+	flux_zup -= 0.5	* amax_zup * (f[izp] - f[i]);
+        flux_zdown -= 0.5 * amax_zdown * (f[i] - f[izm]);
+	
+      }
       
       result[i] = (flux_xup + flux_zup - flux_xdown -flux_zdown) / coord->cellvolume[i];            
     }
