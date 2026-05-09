@@ -56,7 +56,7 @@ private:
   bool dissipative;
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
-
+  bool disable_dndt;
   bool include_D, include_nu;
   Field3D anomalous_D, anomalous_nu;
 

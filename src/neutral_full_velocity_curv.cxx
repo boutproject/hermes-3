@@ -127,6 +127,10 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
   dissipative = options["dissipative"]
                  .doc("Use strong dissipation in parallel divergence?")
                  .withDefault(true);
+
+  disable_dndt = options["disable_dndt"]
+                 .doc("Disable dn/dt?")
+                 .withDefault(false);
   
   use_finite_difference = options["use_finite_difference"]
                    .doc("Use finite difference for perpendicular diffusion?")
@@ -331,8 +335,13 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
   } else {
     Dnn = (Tnlim / AA) / Rnn;
   }
-
-  Dnn.applyBoundary("neumann");
+  
+  if (isMMS) {
+    Dnn.applyBoundary("free_o2");
+  } else {
+    Dnn.applyBoundary("neumann");
+  }
+  
   mesh->communicate(Dnn);
   Dnn.applyParallelBoundary("parallel_neumann_o1");  
   
@@ -376,7 +385,11 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
     ddt(Nn) += Div_a_Grad_perp(anomalous_D, Nn, use_finite_difference);
   }
 
-  
+
+  // Disabling time derivate for testing purposes
+  if (disable_dndt) {
+    ddt(Nn) = 0.0;
+  }
   
   /////////////////////////////////////////////////////                                                                                                                                                           
   // Neutral parallel momentum 
