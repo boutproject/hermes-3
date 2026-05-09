@@ -49,6 +49,10 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
                         .doc("Evolve poloidal neutral momentum?")
                         .withDefault<bool>(true);
 
+  momentum_advection = options["momentum_advection"]
+                        .doc("Use non-linear advection of momentum?")
+                        .withDefault<bool>(false);
+  
   evolve_pressure = options["evolve_pressure"]
                         .doc("Evolve neutral pressure?")
                         .withDefault<bool>(false);
@@ -342,12 +346,16 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
   TRACE("Neutral density");
   Field3D dummy;
 
+  
   // Parallel advection
   ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, dummy, dissipative, false);
 
+  
   // Perpendicular advection
-  ddt(Nn) = -Div_perp(Nn, Vn_x, Vn_z, sound_speed);  
+  ddt(Nn) += -Div_perp(Nn, Vn_x, Vn_z, sound_speed);  
 
+
+  // Sources
   Sn = density_source; // Save for possible output
   if (localstate.isSet("density_source")) {
     Sn += get<Field3D>(localstate["density_source"]);
@@ -356,26 +364,38 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
     ddt(Nn) += Sn; // Always add density_source
   }
 
+
+  // Lowsource
   if (n_lowsource > 0.0) {
     ddt(Nn) += low_sourceterm(Nn, n_lowsource, lowsource_scale);
   } 
 
+
+  // Anomalous diffusion
   if (include_D) {
     ddt(Nn) += Div_a_Grad_perp(anomalous_D, Nn, use_finite_difference);
   }
+
+  
   
   /////////////////////////////////////////////////////                                                                                                                                                           
   // Neutral parallel momentum 
 
   if (evolve_momentum) {
     Field3D dummy_NVn;
-    // Parallel advection
-    ddt(NVn) = -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed);
 
+    
     // Parallel gradient
-    ddt(NVn) -= Grad_par(Pn);
-    // Perpendicular advection
+    ddt(NVn) = Grad_par(Pn);
 
+    
+    // Parallel advection
+    if (momentum_advection) {                                                                                                                        
+      ddt(NVn) += -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed);
+    }
+
+    
+    // Perpendicular advection
     if (include_D) {
       ddt(NVn) += Div_par_K_Grad_par_mod(AA * anomalous_D * Vn, Nn, dummy_NVn, false);
     }
@@ -397,22 +417,35 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
 
   if (evolve_momentum_xz) {
     Field3D dummy_NVnxz;
-    ddt(NVn_x) = -AA * Div_perp_flows(Nnlim, Vn_x, Vn_x, Vn_z, sound_speed);
-    ddt(NVn_x) -= Grad_x(Pn);
 
-    ddt(NVn_z) = -AA * Div_perp_flows(Nnlim, Vn_z, Vn_x, Vn_z, sound_speed);
-    ddt(NVn_z) -= Grad_z(Pn);
 
+    // Perpendicular gradient
+    ddt(NVn_x) = -Grad_x(Pn);
+    ddt(NVn_z) = -Grad_z(Pn);
+    
+
+    // Perpendicular momentum advection
+    if (momentum_advection) {
+      ddt(NVn_x) += -AA * Div_perp_flows(Nnlim, Vn_x, Vn_x, Vn_z, sound_speed);
+      ddt(NVn_z) += -AA * Div_perp_flows(Nnlim, Vn_z, Vn_x, Vn_z, sound_speed);
+    }
+
+
+    // Anomalous diffusion
     if (include_D) {
       ddt(NVn_x) += Div_a_Grad_perp(AA * anomalous_D * Vn_x, Nn, use_finite_difference);
       ddt(NVn_z) += Div_a_Grad_perp(AA * anomalous_D * Vn_z, Nn, use_finite_difference);
     }
+    
 
+    // Anomalous viscosity
     if (include_nu) {
       ddt(NVn_x) += Div_a_Grad_perp(AA * anomalous_nu * Nn, Vn_x, use_finite_difference);
       ddt(NVn_z) += Div_a_Grad_perp(AA * anomalous_nu * Nn, Vn_z, use_finite_difference);
     }
 
+    
+    // Collisional viscosity
     if (neutral_viscosity) {
       Field3D viscosity_source_x = Div_par_K_Grad_par_mod(eta_n , Vn_x , dummy_NVnxz, false);
       viscosity_source_x += Div_a_Grad_perp(eta_n , Vn_x, use_finite_difference);
@@ -427,9 +460,7 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
       if (evolve_pressure) {
         ddt(Pn)  += -(2. /3) * Vn_z * viscosity_source_z;
       }
-      
     }
-    
   } 
 
   

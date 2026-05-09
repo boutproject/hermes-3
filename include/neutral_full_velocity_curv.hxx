@@ -66,6 +66,7 @@ private:
   bool evolve_momentum; ///< Evolve parallel momentum?
   bool evolve_momentum_xz;
   bool evolve_pressure;
+  bool momentum_advection;
   Field3D initial_Tn;
   Field3D initial_Vn, initial_Vn_x,initial_Vn_z;
 
