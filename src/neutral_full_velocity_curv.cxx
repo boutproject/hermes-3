@@ -352,7 +352,7 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
 
   
   // Perpendicular advection
-  ddt(Nn) += -Div_perp(Nn, Vn_x, Vn_z, sound_speed);  
+  ddt(Nn) += -Div_perp(Nn, Vn_x, Vn_z, sound_speed, dissipative);  
 
 
   // Sources

@@ -109,7 +109,7 @@ private:
   }
 
 
-  const Field3D  Div_perp(Field3D& f, Field3D& vx, Field3D& vz, Field3D& spd) {
+  const Field3D  Div_perp(Field3D& f, Field3D& vx, Field3D& vz, Field3D& spd, const bool& dissipation=false) {
 
     Mesh* mesh = f.getMesh();
     Coordinates* coord = mesh->getCoordinates();
@@ -131,25 +131,15 @@ private:
 
       BoutReal cellarea_zup = 0.5 * (cellcross_z[i] + cellcross_z[izp]);
       BoutReal cellarea_zdown = 0.5 * (cellcross_z[i] + cellcross_z[izm]);
+
+
+      BoutReal flux_xup = 0.5 * (f[i]*vx[i] + f[ixp]*vx[ixp]) * cellarea_xup;
+      BoutReal flux_xdown = 0.5 * (f[i]*vx[i] + f[ixm]*vx[ixm]) * cellarea_xdown;
+
+      BoutReal flux_zup	= 0.5 * (f[i]*vz[i] + f[izp]*vz[izp]) * cellarea_zup;
+      BoutReal flux_zdown = 0.5 * (f[i]*vz[i] + f[izm]*vz[izm]) * cellarea_zdown;
+
       
-      BoutReal f_xup = 0.5 * (f[i] + f[ixp]);
-      BoutReal f_xdown = 0.5 * (f[i] + f[ixm]);
-
-      BoutReal f_zup = 0.5 * (f[i] + f[izp]);
-      BoutReal f_zdown = 0.5 * (f[i] + f[izm]);
-
-      BoutReal v_xup = 0.5 * (vx[i] + vx[ixp]);
-      BoutReal v_xdown = 0.5 * (vx[i] + vx[ixm]);
-
-      BoutReal v_zup = 0.5 * (vz[i] + vz[izp]);
-      BoutReal v_zdown = 0.5 * (vz[i] + vz[izm]);
-
-      BoutReal flux_xup = f_xup * v_xup * cellarea_xup;
-      BoutReal flux_xdown = f_xdown * v_xdown * cellarea_xdown;
-
-      BoutReal flux_zup	= f_zup * v_zup * cellarea_zup;
-      BoutReal flux_zdown = f_zdown * v_zdown * cellarea_zdown;
-
       result[i] = (flux_xup + flux_zup - flux_xdown -flux_zdown) / coord->cellvolume[i];            
     }
 
