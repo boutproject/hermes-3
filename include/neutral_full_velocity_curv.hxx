@@ -109,6 +109,47 @@ private:
   }
 
 
+  struct Stencil1D {
+    // Cell centre values                                                                                                                            
+    BoutReal c, m, p, mm, pp;
+    // Left and right cell face values                                                                                                              
+    BoutReal L, R;
+  };
+
+  BoutReal minmod(BoutReal a, BoutReal b) {
+    if (a * b <= 0.0)
+      return 0.0; 
+    if (fabs(a) < fabs(b))
+      return a;
+    return b;
+  }
+
+  BoutReal minmod(BoutReal a, BoutReal b, BoutReal c) {
+    // If any of the signs are different, return zero gradient                                                                                      
+    if ((a * b <= 0.0) || (a * c <= 0.0)) {
+      return 0.0;
+    }
+    // Return the minimum absolute value                                                                                                            
+    return SIGN(a) * BOUTMIN(fabs(a), fabs(b), fabs(c));
+  }
+
+  void MinMod(Stencil1D& n, const BoutReal h) {
+    // Choose the gradient within the cell                                                                                                           
+    // as the minimum (smoothest) solution                                                                                                           
+    BoutReal slope = minmod(n.p - n.c, n.c - n.m);
+    n.L = n.c - 0.5 * slope; // 0.25*(n.p - n.m);
+    n.R = n.c + 0.5 * slope; // 0.25*(n.p - n.m)
+  }
+
+  // Monotonized Central limiter (Van-Leer)                                                                                                             
+  void MC(Stencil1D& n, const BoutReal h) {
+    BoutReal slope = minmod(2. * (n.p - n.c), 0.5 * (n.p - n.m), 2. * (n.c - n.m));
+    n.L = n.c - 0.5 * slope;
+    n.R = n.c + 0.5 * slope;
+  }
+
+
+
   const Field3D  Div_perp(Field3D& f, Field3D& vx, Field3D& vz, Field3D& spd, const bool& dissipation=false) {
 
     Mesh* mesh = f.getMesh();
@@ -121,10 +162,14 @@ private:
 
     BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
       const auto ixp = i.xp();
+      const auto ixpp = i.xpp();
       const auto ixm = i.xm();
-
+      const auto ixmm = i.xmm();
+      
       const auto izp = i.zp();
+      const auto izpp = i.zpp();
       const auto izm = i.zm();
+      const auto izmm = i.zmm();
 
       BoutReal cellarea_xup = 0.5 * (cellcross_x[i] + cellcross_x[ixp]);
       BoutReal cellarea_xdown = 0.5 * (cellcross_x[i] + cellcross_x[ixm]);
@@ -132,27 +177,42 @@ private:
       BoutReal cellarea_zup = 0.5 * (cellcross_z[i] + cellcross_z[izp]);
       BoutReal cellarea_zdown = 0.5 * (cellcross_z[i] + cellcross_z[izm]);
 
+      Stencil1D sx;
+      sx.c = f[i];
+      sx.m = f[ixm];
+      sx.mm = f[ixmm];
+      sx.p = f[ixp];
+      sx.pp = f[ixpp];
 
-      BoutReal flux_xup = 0.5 * (f[i]*vx[i] + f[ixp]*vx[ixp]) * cellarea_xup;
-      BoutReal flux_xdown = 0.5 * (f[i]*vx[i] + f[ixm]*vx[ixm]) * cellarea_xdown;
+      MC(sx, coord->dx[i]);
 
-      BoutReal flux_zup	= 0.5 * (f[i]*vz[i] + f[izp]*vz[izp]) * cellarea_zup;
-      BoutReal flux_zdown = 0.5 * (f[i]*vz[i] + f[izm]*vz[izm]) * cellarea_zdown;
+      Stencil1D sz;
+      sz.c = f[i];
+      sz.m = f[izm];
+      sz.mm = f[izmm];
+      sz.p = f[izp];
+      sz.pp = f[izpp];
 
-      if (dissipation) {
-	BoutReal amax_xup = BOUTMAX(vx[i], vx[ixp], spd[i], spd[ixp]);
-	BoutReal amax_xdown = BOUTMAX(vx[i], vx[ixm], spd[i], spd[ixm]);
+      MC(sz, coord->dz[i]);
+      
+      BoutReal f_xup = sx.R;
+      BoutReal f_xdown = sx.L;
 
-	BoutReal amax_zup = BOUTMAX(vz[i], vz[izp], spd[i], spd[izp]);
-        BoutReal amax_zdown = BOUTMAX(vz[i], vz[izm], spd[i], spd[izm]);
+      BoutReal f_zup = sz.R;
+      BoutReal f_zdown = sz.L;
 
-	flux_xup -= 0.5 * amax_xup * (f[ixp] - f[i]);
-	flux_xdown -= 0.5 * amax_xdown * (f[i] - f[ixm]);
+      BoutReal v_xup = 0.5 * (vx[i] + vx[ixp]);
+      BoutReal v_xdown = 0.5 * (vx[i] + vx[ixm]);
 
-	flux_zup -= 0.5	* amax_zup * (f[izp] - f[i]);
-        flux_zdown -= 0.5 * amax_zdown * (f[i] - f[izm]);
-	
-      }
+      BoutReal v_zup = 0.5 * (vz[i] + vz[izp]);
+      BoutReal v_zdown = 0.5 * (vz[i] + vz[izm]);
+
+      BoutReal flux_xup = f_xup * v_xup * cellarea_xup;
+      BoutReal flux_xdown = f_xdown * v_xdown * cellarea_xdown;
+
+      BoutReal flux_zup	= f_zup * v_zup * cellarea_zup;
+      BoutReal flux_zdown = f_zdown * v_zdown * cellarea_zdown;
+
       
       result[i] = (flux_xup + flux_zup - flux_xdown -flux_zdown) / coord->cellvolume[i];            
     }
@@ -161,17 +221,6 @@ private:
   }
 
   
-  const Field3D Div_perp_fvv_x(Field3D& f,Field3D& v, Field3D& spd) {
-    Field3D result{zeroFrom(f)};
-
-    return result;
-  }
-
-  const Field3D Div_perp_fvv_z(Field3D& f,Field3D& v, Field3D& spd) {
-    Field3D result{zeroFrom(f)};
-
-    return result;
-  }
   
   const Field3D Div_perp_flows(Field3D& f, Field3D& v, Field3D& vx, Field3D& vz, Field3D& spd) {
     Mesh* mesh = f.getMesh();
