@@ -56,6 +56,10 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
   evolve_pressure = options["evolve_pressure"]
                         .doc("Evolve neutral pressure?")
                         .withDefault<bool>(false);
+
+  inherited_T = options["inherited_T"]
+                        .doc("Inherit temperature from h+?")
+                        .withDefault<bool>(false);
   
   isMMS = options["isMMS"]
                         .doc("Is this MMS? If yes, stop sources and sinks")
@@ -253,7 +257,14 @@ void NeutralFullVelocityCurv::transform(Options& state) {
   NVn_z.applyParallelBoundary();
   
   if (!evolve_pressure) {
-    Pn = initial_Tn * Nn;
+    if (inherited_T) {
+      Options& allspecies = state["species"];
+      Options& donor_species = allspecies["h+"];
+      const auto donor_T = GET_NOBOUNDARY(Field3D, donor_species["temperature"]);
+      Pn = donor_T * Nn;
+    } else {
+      Pn = initial_Tn * Nn;
+    }
   }
 
   Pn.applyBoundary();
@@ -390,6 +401,54 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
   if (disable_dndt) {
     ddt(Nn) = 0.0;
   }
+
+
+  /////////////////////////////////////////////////////                                                                                                                                                           
+  // Neutral pressure
+
+  
+  TRACE("Neutral pressure");
+
+  if (evolve_pressure) {
+    Field3D dummy_Pn;
+    // Parallel advection                                                                                                                                                                                          
+    if (!isMMS) {
+      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, dummy_Pn, dissipative);      // Parallel advection                                                                           
+    } else {
+      ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
+    }
+    ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
+
+
+    // Perpendicular advection
+
+    ddt(Pn) -= (5.0 / 3.0) * Div_perp(Pn, Vn_x, Vn_z, sound_speed, dissipative);
+    
+    ddt(Pn) += (2.0 / 3.0) * (Vn_x * Grad_x(Pn) + Vn_z * Grad_z(Pn));
+
+
+    // Thermal conduction
+    if (neutral_conduction) {
+      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, dummy_Pn, false);
+      ddt(Pn) += (2.0/3.0) * Div_a_Grad_perp(kappa_n, Tn, use_finite_difference);
+    }
+
+    Sp = pressure_source;
+    if (localstate.isSet("energy_source")) {
+      Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    }
+    
+    if (!isMMS) {
+      ddt(Pn) += Sp;
+    }
+
+    if (T_lowsource > 0.0) {
+      ddt(Pn) += low_sourceterm(Tn, T_lowsource, lowsource_scale);
+    }
+    
+    
+  }
+
   
   /////////////////////////////////////////////////////                                                                                                                                                           
   // Neutral parallel momentum 
@@ -399,7 +458,7 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
 
     
     // Parallel gradient
-    ddt(NVn) = Grad_par(Pn);
+    ddt(NVn) = -Grad_par(Pn);
 
     
     // Parallel advection
@@ -427,6 +486,11 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
     }
         
   }
+
+
+  
+  /////////////////////////////////////////////////////                                                                                                                                                           
+  // Neutral perpendicular momentum 
 
   if (evolve_momentum_xz) {
     Field3D dummy_NVnxz;
@@ -477,19 +541,6 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
   } 
 
   
-  
-  /////////////////////////////////////////////////////                                                                                                                                                           
-  // Neutral perpendicular momentum
-
-
-
-  
-  /////////////////////////////////////////////////////
-  // Neutral pressure
-  TRACE("Neutral pressure");
-
-
-
   
 
 }
