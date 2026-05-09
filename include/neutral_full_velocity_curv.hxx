@@ -59,7 +59,7 @@ private:
   bool disable_dndt;
   bool include_D, include_nu;
   Field3D anomalous_D, anomalous_nu;
-
+  bool inherited_T;
   bool parallel_dirichlet;
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
