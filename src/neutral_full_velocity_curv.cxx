@@ -52,6 +52,10 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
   momentum_advection = options["momentum_advection"]
                         .doc("Use non-linear advection of momentum?")
                         .withDefault<bool>(false);
+
+  momentum_loss = options["momentum_loss"]
+                        .doc("Use perpendicular momentu loss by CX with plasma, assuming plasma has no perpendicular velocity?")
+                        .withDefault<bool>(false);
   
   evolve_pressure = options["evolve_pressure"]
                         .doc("Evolve neutral pressure?")
@@ -521,6 +525,15 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
       ddt(NVn_z) += Div_a_Grad_perp(AA * anomalous_nu * Nn, Vn_z, use_finite_difference);
     }
 
+    if (momentum_loss && localstate.isSet("collision_frequency") ) {
+      const Options& allspecies = state["species"];
+      const Options& donor_species = allspecies["h+"];
+      const auto N_ion = GET_NOBOUNDARY(Field3D, donor_species["density"]);
+      Field3D mom_lossfactor = -AA * N_ion * get<Field3D>(localstate["collision_frequency"]);
+      ddt(NVn_x) += mom_lossfactor * Vn_x;
+      ddt(NVn_z) += mom_lossfactor * Vn_z;	    
+    }
+			   
     
     // Collisional viscosity
     if (neutral_viscosity) {

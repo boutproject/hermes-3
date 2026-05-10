@@ -67,6 +67,7 @@ private:
   bool evolve_momentum_xz;
   bool evolve_pressure;
   bool momentum_advection;
+  bool momentum_loss;
   Field3D initial_Tn;
   Field3D initial_Vn, initial_Vn_x,initial_Vn_z;
 
@@ -177,44 +178,71 @@ private:
       BoutReal cellarea_zup = 0.5 * (cellcross_z[i] + cellcross_z[izp]);
       BoutReal cellarea_zdown = 0.5 * (cellcross_z[i] + cellcross_z[izm]);
 
-      Stencil1D sx;
-      sx.c = f[i];
-      sx.m = f[ixm];
-      sx.mm = f[ixmm];
-      sx.p = f[ixp];
-      sx.pp = f[ixpp];
-
-      MC(sx, coord->dx[i]);
-
-      Stencil1D sz;
-      sz.c = f[i];
-      sz.m = f[izm];
-      sz.mm = f[izmm];
-      sz.p = f[izp];
-      sz.pp = f[izpp];
-
-      MC(sz, coord->dz[i]);
-      
-      BoutReal f_xup = sx.R;
-      BoutReal f_xdown = sx.L;
-
-      BoutReal f_zup = sz.R;
-      BoutReal f_zdown = sz.L;
-
       BoutReal v_xup = 0.5 * (vx[i] + vx[ixp]);
       BoutReal v_xdown = 0.5 * (vx[i] + vx[ixm]);
 
       BoutReal v_zup = 0.5 * (vz[i] + vz[izp]);
       BoutReal v_zdown = 0.5 * (vz[i] + vz[izm]);
 
-      BoutReal flux_xup = f_xup * v_xup * cellarea_xup;
-      BoutReal flux_xdown = f_xdown * v_xdown * cellarea_xdown;
-
-      BoutReal flux_zup	= f_zup * v_zup * cellarea_zup;
-      BoutReal flux_zdown = f_zdown * v_zdown * cellarea_zdown;
-
+      ////////////////////////////////////////////////////////////////////////7
+      //                         x- direction
       
-      result[i] = (flux_xup + flux_zup - flux_xdown -flux_zdown) / coord->cellvolume[i];            
+      Stencil1D sx;
+      sx.c = f[i];
+      sx.m = f[ixm];
+      sx.p = f[ixp];      
+      MinMod(sx, coord->dx[i]);
+
+      Stencil1D sxm;
+      sxm.c = f[ixm];
+      sxm.m = f[ixmm];
+      sxm.p = f[i];
+      MinMod(sxm, coord->dx[i]);
+
+      Stencil1D sxp;
+      sxp.c = f[ixp];
+      sxp.m = f[i];
+      sxp.p = f[ixpp];
+      MinMod(sxp, coord->dx[i]);
+      
+      BoutReal amax_xup = BOUTMAX(fabs(vx[i]),fabs(vx[ixp]),spd[i],spd[ixp]);
+      BoutReal flux_xup = (0.5 * (sx.R + sxp.L) * v_xup + 0.5 * amax_xup * (sx.R - sxp.L)) * cellarea_xup;
+
+      BoutReal amax_xdown = BOUTMAX(fabs(vx[i]),fabs(vx[ixm]),spd[i],spd[ixm]);
+      BoutReal flux_xdown = (0.5 * (sx.L + sxm.R) * v_xdown + 0.5 * amax_xdown * (sxm.R - sx.L)) * cellarea_xdown;
+      
+      
+
+      /////////////////////////////////////////////////////////
+      //         Z direction
+
+      Stencil1D sz;
+      sz.c = f[i];
+      sz.m = f[izm];
+      sz.p = f[izp];
+      MinMod(sz, coord->dz[i]);
+
+      Stencil1D szm;
+      szm.c = f[izm];
+      szm.m = f[izmm];
+      szm.p = f[i];
+      MinMod(szm, coord->dz[i]);
+
+      Stencil1D szp;
+      szp.c = f[izp];
+      szp.m = f[i];
+      szp.p = f[izpp];
+      MinMod(szp, coord->dz[i]);
+      
+      
+      BoutReal amax_zup = BOUTMAX(fabs(vz[i]),fabs(vz[izp]),spd[i],spd[izp]);
+      BoutReal flux_zup = (0.5 * (sz.R + szp.L) * v_zup + 0.5 * amax_zup * (sz.R - szp.L)) * cellarea_zup;
+
+      BoutReal amax_zdown = BOUTMAX(fabs(vz[i]),fabs(vz[izm]),spd[i],spd[izm]);
+      BoutReal flux_zdown = (0.5 * (sz.L + szm.R) * v_zdown + 0.5 * amax_zdown * (szm.R - sz.L)) * cellarea_zdown;
+
+      result[i] = (flux_xup + flux_zup - flux_xdown - flux_zdown) / coord->cellvolume[i];
+      
     }
 
     return result;
