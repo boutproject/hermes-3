@@ -42,11 +42,13 @@ private:
   Field3D NVn_x, NVn_z;
   Field3D Vn, Vn_x, Vn_z; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
-  Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
+  Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim, Vn_xlim, Vn_zlim; // Limited in regions of low density
   bool isMMS;
   BoutReal AA; ///< Atomic mass (proton = 1)
   BoutReal n_lowsource, T_lowsource, lowsource_scale;
 
+  BoutReal flux_limit;
+  
   Field3D Rnn;
   Field3D Dnn;
   BoutReal neutral_lmax;
@@ -286,12 +288,19 @@ private:
       BoutReal v_xdown = (0.5 * (v[i] + v[ixm]));
       BoutReal v_zup = (0.5 * (v[i] + v[izp]));
       BoutReal v_zdown = (0.5 * (v[i] + v[izm]));
-      
-      BoutReal flux_xup = f_xup * vx_up * v_xup * cellarea_xup;
-      BoutReal flux_xdown = f_xdown * vx_down * v_xdown * cellarea_xdown;
 
-      BoutReal flux_zup = f_zup * vz_up * v_zup * cellarea_zup;
-      BoutReal flux_zdown = f_zdown * vz_down * v_zdown * cellarea_zdown;
+      BoutReal amax_xup = BOUTMAX(fabs(vx[i]),fabs(vx[ixp]),spd[i],spd[ixp]);
+      BoutReal amax_xdown = BOUTMAX(fabs(vx[i]),fabs(vx[ixm]),spd[i],spd[ixm]);
+
+      BoutReal amax_zup = BOUTMAX(fabs(vz[i]),fabs(vz[izp]),spd[i],spd[izp]);
+      BoutReal amax_zdown = BOUTMAX(fabs(vz[i]),fabs(vz[izm]),spd[i],spd[izm]);
+
+      
+      BoutReal flux_xup = (f_xup * vx_up * v_xup + 0.5 * amax_xup * f_xup * (v[i] - v[ixp]) ) * cellarea_xup;
+      BoutReal flux_xdown = (f_xdown * vx_down * v_xdown - 0.5 * amax_xdown * f_xdown * (v[i] - v[ixm])) * cellarea_xdown;
+
+      BoutReal flux_zup = (f_zup * vz_up * v_zup + 0.5 * amax_zup * f_zup * (v[i] - v[izp]) ) * cellarea_zup;
+      BoutReal flux_zdown = (f_zdown * vz_down * v_zdown - 0.5 * amax_zdown * f_zdown * (v[i] - v[izm]) ) * cellarea_zdown;
 
       result[i] = (flux_xup + flux_zup - flux_xdown -flux_zdown) / coord->cellvolume[i];
     }

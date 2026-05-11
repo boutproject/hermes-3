@@ -14,8 +14,6 @@ using bout::globals::mesh;
 using ParLimiter = FV::Upwind;
 
 
-
-
 NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Options& alloptions, Solver* solver)
     : name(name) {
   AUTO_TRACE();
@@ -179,6 +177,8 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(false);
 
+  flux_limit = options["flux_limit"].doc("Limit the flux by taking harmonic mean of velocity and sound speed?").withDefault<BoutReal>(-1.0);
+  
   BoutReal diffusion_norm = meters * meters / seconds;
 
   include_D = options.isSet("anomalous_D");
@@ -285,6 +285,13 @@ void NeutralFullVelocityCurv::transform(Options& state) {
   Vn_x = NVn_x / (AA * Nnlim);
   Vn_z = NVn_z / (AA * Nnlim);
 
+
+  Vnlim = 1.0 * Vn;
+  Vn_xlim = 1.0 * Vn_x;
+  Vn_zlim = 1.0 * Vn_z;
+
+
+  
   Tn = Pn / Nnlim;
 
   /////////////////////////////////////////////////////
@@ -342,7 +349,44 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
     sound_speed = 0.0;
   }
 
+  if (flux_limit > 0.0) {
+    BOUT_FOR(i, Nn.getRegion("RGN_NOY")) {
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
 
+      BoutReal vmax = flux_limit * sound_speed[i];
+      
+      if (Vn.yup()[iyp] > 0.0) {
+	Vnlim.yup()[iyp] = Vnlim.yup()[iyp] * vmax / (Vnlim.yup()[iyp] + vmax);
+      } else {
+	Vnlim.yup()[iyp] = -fabs(Vnlim.yup()[iyp]) * vmax / (fabs(Vnlim.yup()[iyp]) + vmax);
+      }
+
+      if (Vn.ydown()[iym] > 0.0) {
+	Vnlim.ydown()[iym] = Vnlim.ydown()[iym] * vmax / (Vnlim.ydown()[iym] + vmax);
+      } else {
+        Vnlim.ydown()[iym] = -fabs(Vnlim.ydown()[iym]) * vmax / (fabs(Vnlim.ydown()[iym]) + vmax);
+      }
+
+      if (Vn_x[i] > 0.0) {
+	Vn_xlim[i] = Vn_x[i] * vmax / (Vn_x[i] + vmax);
+      } else {
+	Vn_xlim[i] = -fabs(Vn_x[i]) * vmax / (fabs(Vn_x[i]) + vmax);
+      }
+
+      if (Vn_z[i] > 0.0) {
+	Vn_zlim[i] = Vn_z[i] * vmax / (Vn_z[i] + vmax);
+      }	else {
+	Vn_zlim[i] = -fabs(Vn_z[i]) * vmax / (fabs(Vn_z[i]) + vmax);
+      }
+      
+      
+      
+    }
+      
+  }
+
+  
   Field3D Rnn = sqrt(Tnlim / AA) / neutral_lmax;
 
   if (localstate.isSet("collision_frequency")) {
@@ -372,11 +416,11 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
 
   
   // Parallel advection
-  ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, dummy, dissipative, false);
+  ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vnlim, sound_speed, dummy, dissipative, false);
 
   
   // Perpendicular advection
-  ddt(Nn) += -Div_perp(Nn, Vn_x, Vn_z, sound_speed, dissipative);  
+  ddt(Nn) += -Div_perp(Nn, Vn_xlim, Vn_zlim, sound_speed, dissipative);  
 
 
   // Sources
@@ -417,18 +461,18 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
     Field3D dummy_Pn;
     // Parallel advection                                                                                                                                                                                          
     if (!isMMS) {
-      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, dummy_Pn, dissipative);      // Parallel advection                                                                           
+      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vnlim, sound_speed, dummy_Pn, dissipative);      // Parallel advection                                                                           
     } else {
-      ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
+      ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vnlim);
     }
-    ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
+    ddt(Pn) += (2. / 3) * Vnlim * Grad_par(Pn);
 
 
     // Perpendicular advection
 
-    ddt(Pn) -= (5.0 / 3.0) * Div_perp(Pn, Vn_x, Vn_z, sound_speed, dissipative);
+    ddt(Pn) -= (5.0 / 3.0) * Div_perp(Pn, Vn_xlim, Vn_zlim, sound_speed, dissipative);
     
-    ddt(Pn) += (2.0 / 3.0) * (Vn_x * Grad_x(Pn) + Vn_z * Grad_z(Pn));
+    ddt(Pn) += (2.0 / 3.0) * (Vn_xlim * Grad_x(Pn) + Vn_z * Grad_z(Pn));
 
 
     // Thermal conduction
@@ -467,7 +511,7 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
     
     // Parallel advection
     if (momentum_advection) {                                                                                                                        
-      ddt(NVn) += -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed);
+      ddt(NVn) += -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vnlim, sound_speed);
     }
 
     
@@ -507,8 +551,8 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
 
     // Perpendicular momentum advection
     if (momentum_advection) {
-      ddt(NVn_x) += -AA * Div_perp_flows(Nnlim, Vn_x, Vn_x, Vn_z, sound_speed);
-      ddt(NVn_z) += -AA * Div_perp_flows(Nnlim, Vn_z, Vn_x, Vn_z, sound_speed);
+      ddt(NVn_x) += -AA * Div_perp_flows(Nnlim, Vn_x, Vn_xlim, Vn_zlim, sound_speed);
+      ddt(NVn_z) += -AA * Div_perp_flows(Nnlim, Vn_z, Vn_xlim, Vn_zlim, sound_speed);
     }
 
 
