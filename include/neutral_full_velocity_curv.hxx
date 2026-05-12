@@ -73,6 +73,7 @@ private:
   Field3D initial_Tn;
   Field3D initial_Vn, initial_Vn_x,initial_Vn_z;
 
+  bool cross_terms;
   
   bool use_finite_difference;
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
