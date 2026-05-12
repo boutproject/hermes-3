@@ -67,6 +67,10 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
                         .doc("Is this MMS? If yes, stop sources and sinks")
                         .withDefault<bool>(false);
 
+  cross_terms = options["cross_terms"]
+                        .doc("Use cross terms for momentum transport?")
+                        .withDefault<bool>(true);
+  
   if (evolve_momentum) {
     solver->add(NVn, std::string("NV") + name);
   } else {
@@ -128,7 +132,7 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
   density_floor = options["density_floor"]
                  .doc("A minimum density used when dividing NVn by Nn. "
                       "Normalised units.")
-                 .withDefault(1e-8);
+                 .withDefault(1e14) / Nnorm;
 
   dissipative = options["dissipative"]
                  .doc("Use strong dissipation in parallel divergence?")
@@ -526,13 +530,22 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
 
     if (neutral_viscosity) {
       Field3D viscosity_source = Div_par_K_Grad_par_mod(eta_n , Vn , mf_visc_par_ylow , false);
-      viscosity_source += Div_a_Grad_perp(eta_n , Vn, use_finite_difference);
+      if (cross_terms) {
+	viscosity_source += Div_a_Grad_perp(eta_n , Vn, use_finite_difference);
+      }
       ddt(NVn) += viscosity_source;
       if (evolve_pressure) {
 	ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
       }
     }
-        
+
+    if (localstate.isSet("momentum_source")) {
+      Snv = get<Field3D>(localstate["momentum_source"]);
+      ddt(NVn) += Snv;
+    } else {
+      Snv = 0;
+    }
+    
   }
 
 
@@ -572,28 +585,32 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
     if (momentum_loss && localstate.isSet("collision_frequency") ) {
       const Options& allspecies = state["species"];
       const Options& donor_species = allspecies["h+"];
-      const auto N_ion = GET_NOBOUNDARY(Field3D, donor_species["density"]);
-      Field3D mom_lossfactor = -AA * N_ion * get<Field3D>(localstate["collision_frequency"]);
-      ddt(NVn_x) += mom_lossfactor * Vn_x;
-      ddt(NVn_z) += mom_lossfactor * Vn_z;	    
+      Field3D mom_lossfactor = - get<Field3D>(localstate["collision_frequency"]);
+      ddt(NVn_x) += mom_lossfactor * NVn_x;
+      ddt(NVn_z) += mom_lossfactor * NVn_z;	    
     }
 			   
     
     // Collisional viscosity
     if (neutral_viscosity) {
-      Field3D viscosity_source_x = Div_par_K_Grad_par_mod(eta_n , Vn_x , dummy_NVnxz, false);
-      viscosity_source_x += Div_a_Grad_perp(eta_n , Vn_x, use_finite_difference);
+      Field3D viscosity_source_x = Div_a_Grad_perp(eta_n , Vn_x, use_finite_difference);
+      if (cross_terms) {
+	viscosity_source_x += Div_par_K_Grad_par_mod(eta_n , Vn_x , dummy_NVnxz, false);
+      }      
       ddt(NVn_x) += viscosity_source_x;
       if (evolve_pressure) {
         ddt(Pn)  += -(2. /3) * Vn_x * viscosity_source_x;
       }
 
-      Field3D viscosity_source_z = Div_par_K_Grad_par_mod(eta_n , Vn_z , dummy_NVnxz, false);
-      viscosity_source_z += Div_a_Grad_perp(eta_n , Vn_z, use_finite_difference);
+      Field3D viscosity_source_z = Div_a_Grad_perp(eta_n , Vn_z, use_finite_difference);
+      if (cross_terms) {
+	viscosity_source_z += Div_par_K_Grad_par_mod(eta_n , Vn_z , dummy_NVnxz, false);
+      }
       ddt(NVn_z) += viscosity_source_z;
       if (evolve_pressure) {
         ddt(Pn)  += -(2. /3) * Vn_z * viscosity_source_z;
       }
+      
     }
   } 
 
