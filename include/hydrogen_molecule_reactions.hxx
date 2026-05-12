@@ -251,11 +251,11 @@ RegisterComponent<hermes::MolHDissociativeIzn<hermes::HIsotope::t>>
 
 // Elastic collisions between H isotope molecules and H isotope ions
 RegisterComponent<hermes::MolHElasticCollision<hermes::HIsotope::h>>
-    register_h2_h_elastic("h2 + h+ -> h2+ + h+");
+    register_h2_h_elastic("h2 + h+ -> h2 + h+");
 RegisterComponent<hermes::MolHElasticCollision<hermes::HIsotope::d>>
-    register_d2_d_elastic("d2 + d+ -> d2+ + d+");
+    register_d2_d_elastic("d2 + d+ -> d2 + d+");
 RegisterComponent<hermes::MolHElasticCollision<hermes::HIsotope::t>>
-    register_t2_t_elastic("t2 + t+ -> t2+ + t+");
+    register_t2_t_elastic("t2 + t+ -> t2 + t+");
 
 } // namespace
 
