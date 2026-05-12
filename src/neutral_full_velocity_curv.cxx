@@ -191,11 +191,17 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
   include_nu = options.isSet("anomalous_nu");
   anomalous_nu = options["anomalous_nu"].withDefault(Field3D{0.0}) / diffusion_norm;
 
+  include_cond = options.isSet("anomalous_conduction");
+  anomalous_conduction = options["anomalous_conduction"].withDefault(Field3D{0.0}) / diffusion_norm;
+  
+  
   anomalous_D.applyBoundary("neumann");
   anomalous_nu.applyBoundary("neumann");
-  mesh->communicate(anomalous_D, anomalous_nu);
+  anomalous_conduction.applyBoundary("neumann");
+  mesh->communicate(anomalous_D, anomalous_nu, anomalous_conduction);
   anomalous_D.applyParallelBoundary("parallel_neumann_o1");
   anomalous_nu.applyParallelBoundary("parallel_neumann_o1");
+  anomalous_conduction.applyParallelBoundary("parallel_neumann_o1");
   
   if (precondition) {
     inv = Laplacian::create(&options["precon_laplace"]);
@@ -485,6 +491,11 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
       ddt(Pn) += (2.0/3.0) * Div_a_Grad_perp(kappa_n, Tn, use_finite_difference);
     }
 
+    if (include_cond) {
+      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(anomalous_conduction, Tn, dummy_Pn, false);
+      ddt(Pn) += (2.0/3.0) * Div_a_Grad_perp(anomalous_conduction, Tn, use_finite_difference);
+    }
+
     Sp = pressure_source;
     if (localstate.isSet("energy_source")) {
       Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
@@ -610,8 +621,18 @@ void NeutralFullVelocityCurv::finally(const Options& state) {
       if (evolve_pressure) {
         ddt(Pn)  += -(2. /3) * Vn_z * viscosity_source_z;
       }
-      
     }
+
+    if (localstate.isSet("momentum_x_source")) {
+      ddt(NVn_x) += get<Field3D>(localstate["momentum_x_source"]);
+    }
+
+    if (localstate.isSet("momentum_z_source")) {
+      ddt(NVn_z) += get<Field3D>(localstate["momentum_z_source"]);
+    }
+    
+    
+    
   } 
 
   
@@ -655,11 +676,20 @@ void NeutralFullVelocityCurv::outputVars(Options& state) {
 
   if (diagnose) {
     set_with_attrs(state[std::string("Vx") + name], Vn_x,
-		   {{"source", "neutral_full_velocity_curv"}});
+		   {{"source", "neutral_full_velocity_curv"},
+		   {"time_dimension", "t"}});
     set_with_attrs(state[std::string("Vz") + name], Vn_z,
-                   {{"source", "neutral_full_velocity_curv"}});
+                   {{"source", "neutral_full_velocity_curv"},
+		   {"time_dimension", "t"}});
+    set_with_attrs(state[std::string("eta_") + name], eta_n,
+                   {{"source", "neutral_full_velocity_curv"},
+                   {"time_dimension", "t"}});
 
-  
+    set_with_attrs(state[std::string("kappa_") + name], kappa_n,
+                   {{"source", "neutral_full_velocity_curv"},
+                   {"time_dimension", "t"}});
+
+    
   
   
   }

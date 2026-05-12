@@ -59,8 +59,9 @@ private:
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
   bool disable_dndt;
-  bool include_D, include_nu;
+  bool include_D, include_nu, include_cond;
   Field3D anomalous_D, anomalous_nu;
+  Field3D anomalous_conduction;
   bool inherited_T;
   bool parallel_dirichlet;
   bool neutral_viscosity; ///< include viscosity?
@@ -111,6 +112,10 @@ private:
     Coordinates* coord = mesh->getCoordinates();
     return DDZ(a) / sqrt(coord->g_33);
   }
+
+
+
+  
 
 
   struct Stencil1D {
