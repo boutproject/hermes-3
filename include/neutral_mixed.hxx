@@ -10,6 +10,7 @@
 
 #include "component.hxx"
 #include <bout/yboundary_regions.hxx>
+#include <bout/derivs.hxx>
 
 
 
@@ -43,8 +44,11 @@ private:
   Field3D Tn; ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
   bool isMMS;
+  Field3D Pn_solver;
+  bool use_eos;
   BoutReal AA; ///< Atomic mass (proton = 1)
   BoutReal n_lowsource, T_lowsource, lowsource_scale;
+  BoutReal low_N_lim;
   Field3D Dnn; ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnNVn;
   bool disable_Dnn;
@@ -57,6 +61,9 @@ private:
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
+  BoutReal include_cond;
+  Field3D anomalous_conduction;
+  
   bool parallel_dirichlet;
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
@@ -86,6 +93,19 @@ private:
   Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
   Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
 
+  const Field3D Grad_x(Field3D& a) {
+    Mesh* mesh = a.getMesh();
+    Coordinates* coord = mesh->getCoordinates();
+    return DDX(a) / sqrt(coord->g_11);
+  }
+
+
+  const Field3D Grad_z(Field3D& a) {
+    Mesh* mesh = a.getMesh();
+    Coordinates* coord = mesh->getCoordinates();
+    return DDZ(a) / sqrt(coord->g_33);
+  }
+  
   Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
     if (a.isFci()) {
       return (*dagp)(a, b, false);

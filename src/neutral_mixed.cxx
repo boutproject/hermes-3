@@ -13,6 +13,29 @@ using bout::globals::mesh;
 
 using ParLimiter = FV::Upwind;
 
+
+inline BoutReal softFloor(BoutReal value, BoutReal min) {
+  value = std::max(value, 0.0);
+  return value + min * exp(-value / min);
+}
+
+/// Apply a soft floor value \p f to a field \p var. Any value lower than
+/// the floor is set to the floor.
+///
+/// @param[in] var  Variable to apply floor to
+/// @param[in] f    The floor value. Must be > 0 (NOT zero)
+/// @param[in] rgn  The region to calculate the result over
+template <typename T, typename = bout::utils::EnableIfField<T>>
+inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_NOBNDRY") {
+  T result{emptyFrom(var)};
+  result.allocate();
+
+  BOUT_FOR(d, var.getRegion(rgn)) { result[d] = softFloor(var[d], f); }
+
+  return result;
+}
+
+
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
     : name(name) {
   AUTO_TRACE();
@@ -39,6 +62,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                         .doc("Evolve parallel neutral momentum?")
                         .withDefault<bool>(true);
 
+
+  
   isMMS = options["isMMS"]
                         .doc("Is this MMS? If yes, stop sources and sinks")
                         .withDefault<bool>(false);
@@ -63,7 +88,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   density_floor = options["density_floor"]
                  .doc("A minimum density used when dividing NVn by Nn. "
                       "Normalised units.")
-                 .withDefault(1e-8);
+                 .withDefault(1e13) / Nnorm;
 
   dissipative = options["dissipative"]
                  .doc("Use strong dissipation in parallel divergence?")
@@ -89,6 +114,13 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
     .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
+
+  include_cond = options.isSet("anomalous_conduction");
+  anomalous_conduction = options["anomalous_conduction"].withDefault(Field3D{0.0}) / (meters * meters / seconds);
+
+  anomalous_conduction.applyBoundary("neumann");
+  mesh->communicate(anomalous_conduction);
+  anomalous_conduction.applyParallelBoundary("parallel_neumann_o1");
   
   pressure_floor = density_floor * temperature_floor;
 
@@ -208,19 +240,23 @@ void NeutralMixed::transform(Options& state) {
   NVn.applyParallelBoundary();
 
   
+  Pn_solver = Pn;
+  
+  
   if (!Nn.isFci()) {
     Nn.clearParallelSlices();
     Pn.clearParallelSlices();
     NVn.clearParallelSlices();
   }
   
-  Nn = floor(Nn, 1e-3 * density_floor);
-  Pn = floor(Pn, 1e-3 * pressure_floor);
+  Nn = floor(Nn, 0.0);
+  Pn = floor(Pn, 0.0);
 
   // Nnlim Used where division by neutral density is needed
-  Nnlim = floor(Nn, density_floor);
-  
+  Nnlim = floor(Nn, density_floor);  
   Tn = Pn / Nnlim;
+  Pn_solver = Pn;
+  Pn = Tn*Nn;
   
   Vn = NVn / (AA * Nnlim);
   
@@ -282,6 +318,11 @@ void NeutralMixed::finally(const Options& state) {
   // Field3D logNn = log(Nn);
   // Field3D logTn = log(Tn);
 
+
+  
+  Nnlim = floor(Nn, density_floor);
+  Tnlim = floor(Tn, temperature_floor);
+  
   logPnlim = log(Pnlim);
 
   ///////////////////////////////////////////////////////
@@ -289,12 +330,13 @@ void NeutralMixed::finally(const Options& state) {
   //
   //
 
-  Field3D Tnlim = floor(Tn, temperature_floor);
   
   Field3D Rnn =
     sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
-  if (localstate.isSet("collision_frequency")) {
+  if (localstate.isSet("collision_frequency") && flux_limit > 0.0) {
+    Dnn = (Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]));
+  } else if (localstate.isSet("collision_frequency")) {
     // Dnn = Vth^2 / sigma
     Dnn = (Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
   } else {
@@ -304,8 +346,9 @@ void NeutralMixed::finally(const Options& state) {
   if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
-    BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = BOUTMIN(Dnn[i], Dmax[i]); }
+    // Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / ( sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) ) + 1. / neutral_lmax);
+    BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]); }
   }
 
   if (diffusion_limit > 0.0) {
@@ -414,25 +457,26 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  if (evolve_momentum) {
-    if (!isMMS) {
-      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
-    } else {
-      ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
-    }
-    ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
+  Field3D e_plus_p = Nnlim * Tn + (2. / 3) * Pn;
+
+  
+
+  if (!isMMS) {
+    ddt(Pn) = - FV::Div_par_mod<hermes::Limiter>(e_plus_p, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
   } else {
-    ddt(Pn) = 0.0;
+    ddt(Pn) = - Div_par(Pn * Vn);
   }
+  ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
+
   
   if (!Pn.isFci()) {                                                                     // Perpendicular advection
-    ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
+    ddt(Pn) +=  Div_a_Grad_perp_flows(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
   } else {
     bool upwind = false;
     if (!use_finite_difference) { 
-      ddt(Pn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+      ddt(Pn) +=  (*dagp)(Dnn * e_plus_p, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
     } else {
-      ddt(Pn) += (5.0 / 3.0) * Div_a_Grad_perp_curv(DnnPn, logPnlim);
+      ddt(Pn) +=  Div_a_Grad_perp_curv(Dnn * e_plus_p, logPnlim);
     }
   }
 
@@ -458,6 +502,12 @@ void NeutralMixed::finally(const Options& state) {
     //ef_cond_perp_xlow *= 3/2;
     //ef_cond_perp_ylow *= 3/2;
     //ef_cond_par_ylow *= 3/2;
+  }
+
+  if (include_cond) {
+    ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(anomalous_conduction * Nn, Tn, ef_cond_par_ylow, false);
+    bool upwind = false;
+    ddt(Pn) += (2.0 / 3.0) * (*dagp)(anomalous_conduction * Nn, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
   }
   
   Sp = pressure_source;
@@ -609,6 +659,9 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 #endif
+
+
+  Pn = Pn_solver;
 }
 
 void NeutralMixed::outputVars(Options& state) {
