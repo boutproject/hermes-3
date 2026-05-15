@@ -59,22 +59,22 @@ struct ReactionDiagnostic {
 public:
   ReactionDiagnostic(const std::string& name, const std::string& long_name,
                      ReactionDiagnosticType type, const std::string& source,
+                     const Options& units,
                      DiagnosticTransformerType transformer = identity)
-      : ReactionDiagnostic(name, long_name, type, source, default_std_name(type),
+      : ReactionDiagnostic(name, long_name, type, source, default_std_name(type), units,
                            transformer){};
 
   ReactionDiagnostic(const std::string& name, const std::string& long_name,
                      ReactionDiagnosticType type, const std::string& source,
-                     const std::string& standard_name,
+                     const std::string& standard_name, const Options& units,
                      DiagnosticTransformerType transformer)
       : long_name(long_name), name(name), source(source), standard_name(standard_name),
         transformer(transformer), type(type) {
 
-    // Extract normalisation units from the root options
-    Options& options = Options::root();
-    const BoutReal Nnorm = get<BoutReal>(options["units"]["inv_meters_cubed"]);
-    const BoutReal Tnorm = get<BoutReal>(options["units"]["eV"]);
-    const BoutReal Omega_ci = 1 / get<BoutReal>(options["units"]["seconds"]);
+    // Extract normalisation units
+    const BoutReal Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
+    const BoutReal Tnorm = get<BoutReal>(units["eV"]);
+    const BoutReal Omega_ci = 1 / get<BoutReal>(units["seconds"]);
 
     switch (type) {
     case ReactionDiagnosticType::collision_freq: {

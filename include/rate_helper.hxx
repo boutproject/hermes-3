@@ -12,8 +12,9 @@
 #include "hermes_build_config.hxx"
 #include "hermes_utils.hxx"
 #include "integrate.hxx"
+#include "reaction_data.hxx"
 
-BOUT_ENUM_CLASS(RateParamsTypes, T, ET, nT)
+namespace hermes {
 
 /// Struct to hold pre-averaged data for each cell
 struct CellData {
@@ -329,10 +330,10 @@ private:
 
     if (do_averaging) {
       if (result.left > 0) {
-        result.left /= cellLeft<hermes::Limiter>(dens[i], dens[ym], dens[yp]);
+        result.left /= cellLeft<Limiter>(dens[i], dens[ym], dens[yp]);
       }
       if (result.right > 0) {
-        result.right /= cellRight<hermes::Limiter>(dens[i], dens[ym], dens[yp]);
+        result.right /= cellRight<Limiter>(dens[i], dens[ym], dens[yp]);
       }
     }
 
@@ -354,8 +355,8 @@ private:
     for (const auto& [sp_name, dens] : this->reactant_densities) {
       result.centre *= (*dens)[i];
       if (do_averaging) {
-        result.left *= cellLeft<hermes::Limiter>((*dens)[i], (*dens)[ym], (*dens)[yp]);
-        result.right *= cellRight<hermes::Limiter>((*dens)[i], (*dens)[ym], (*dens)[yp]);
+        result.left *= cellLeft<Limiter>((*dens)[i], (*dens)[ym], (*dens)[yp]);
+        result.right *= cellRight<Limiter>((*dens)[i], (*dens)[ym], (*dens)[yp]);
       }
     }
     return result;
@@ -377,11 +378,13 @@ private:
     CellData result;
     result.centre = field[i];
     if (do_averaging) {
-      result.left = cellLeft<hermes::Limiter>(field[i], field[ym], field[yp]);
-      result.right = cellRight<hermes::Limiter>(field[i], field[ym], field[yp]);
+      result.left = cellLeft<Limiter>(field[i], field[ym], field[yp]);
+      result.right = cellRight<Limiter>(field[i], field[ym], field[yp]);
     }
     return result;
   }
 };
+
+} // namespace hermes
 
 #endif
