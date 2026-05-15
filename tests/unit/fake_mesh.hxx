@@ -179,7 +179,7 @@ public:
   }
   BoutReal GlobalX(int jx) const override { return jx; }
   BoutReal GlobalY(int jy) const override { return jy; }
-  BoutReal GlobalZ(int jz) const override { return jz; }
+  BoutReal GlobalZ(int jz) const override { return jz / static_cast<BoutReal>(LocalNz); }
   BoutReal GlobalX(BoutReal jx) const override { return jx; }
   BoutReal GlobalY(BoutReal jy) const override { return jy; }
   BoutReal GlobalZ(BoutReal jz) const override { return jz; }
