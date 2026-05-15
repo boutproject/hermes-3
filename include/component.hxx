@@ -54,8 +54,8 @@ struct SpeciesInformation {
       } else {
         throw BoutException("Species {} has unrecognised type {}", sp, toString(type));
       }
-      finish_construction();
     }
+    finish_construction();
   }
 
   std::vector<std::string> electrons, neutrals, positive_ions, negative_ions, ions,

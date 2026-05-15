@@ -9,10 +9,9 @@
 #include "../include/guarded_options.hxx"
 #include "../include/permissions.hxx"
 
-std::unique_ptr<Component> Component::create(const std::string &type,
-                                             const std::string &name,
-                                             Options &alloptions,
-                                             Solver *solver) {
+std::unique_ptr<Component> Component::create(const std::string& type,
+                                             const std::string& name, Options& alloptions,
+                                             Solver* solver) {
 
   return ComponentFactory::getInstance().create(type, name, alloptions, solver);
 }
@@ -32,24 +31,24 @@ void Component::transform(Options& state) {
 #endif
 }
 
-void Component::declareAllSpecies(const SpeciesInformation & info) {
-    state_variable_access.substitute("electrons", info.electrons);
-    state_variable_access.substitute("electrons2", info.electrons);
-    state_variable_access.substitute("neutrals", info.neutrals);
-    state_variable_access.substitute("neutrals2", info.neutrals);
-    state_variable_access.substitute("positive_ions", info.positive_ions);
-    state_variable_access.substitute("positive_ions2", info.positive_ions);
-    state_variable_access.substitute("negative_ions", info.negative_ions);
-    state_variable_access.substitute("negative_ions2", info.negative_ions);
-    state_variable_access.substitute("ions", info.ions);
-    state_variable_access.substitute("ions2", info.ions);
-    state_variable_access.substitute("charged", info.charged);
-    state_variable_access.substitute("charged", info.charged);
-    state_variable_access.substitute("non_electrons", info.non_electrons);
-    state_variable_access.substitute("non_electrons2", info.non_electrons);
-    state_variable_access.substitute("all_species", info.all_species);
-    state_variable_access.substitute("all_species2", info.all_species);
-    state_variable_access.checkNoRemainingSubstitutions();
+void Component::declareAllSpecies(const SpeciesInformation& info) {
+  state_variable_access.substitute("electrons", info.electrons);
+  state_variable_access.substitute("electrons2", info.electrons);
+  state_variable_access.substitute("neutrals", info.neutrals);
+  state_variable_access.substitute("neutrals2", info.neutrals);
+  state_variable_access.substitute("positive_ions", info.positive_ions);
+  state_variable_access.substitute("positive_ions2", info.positive_ions);
+  state_variable_access.substitute("negative_ions", info.negative_ions);
+  state_variable_access.substitute("negative_ions2", info.negative_ions);
+  state_variable_access.substitute("ions", info.ions);
+  state_variable_access.substitute("ions2", info.ions);
+  state_variable_access.substitute("charged", info.charged);
+  state_variable_access.substitute("charged2", info.charged);
+  state_variable_access.substitute("non_electrons", info.non_electrons);
+  state_variable_access.substitute("non_electrons2", info.non_electrons);
+  state_variable_access.substitute("all_species", info.all_species);
+  state_variable_access.substitute("all_species2", info.all_species);
+  state_variable_access.checkNoRemainingSubstitutions();
 }
 
 constexpr decltype(ComponentFactory::type_name) ComponentFactory::type_name;
@@ -66,12 +65,12 @@ bool isSetFinal(const Options& option, [[maybe_unused]] const std::string& locat
   return option.isSet();
 }
 
-bool isSetFinal(const GuardedOptions & option, [[maybe_unused]] const std::string& location) {
+bool isSetFinal(const GuardedOptions& option,
+                [[maybe_unused]] const std::string& location) {
   const bool set = option.isSet();
 #if CHECKLEVEL >= 1
   const PermissionTypes perm = option.getHighestPermission();
-  if (perm >= PermissionTypes::Read
-      or (perm == PermissionTypes::ReadIfSet and set)) {
+  if (perm >= PermissionTypes::Read or (perm == PermissionTypes::ReadIfSet and set)) {
     const Options& opt = option.get();
     const_cast<Options&>(opt).attributes["final"] = location;
     const_cast<Options&>(opt).attributes["final-domain"] = location;
@@ -80,8 +79,8 @@ bool isSetFinal(const GuardedOptions & option, [[maybe_unused]] const std::strin
   return set;
 }
 
-
-bool isSetFinalNoBoundary(const Options& option, [[maybe_unused]] const std::string& location) {
+bool isSetFinalNoBoundary(const Options& option,
+                          [[maybe_unused]] const std::string& location) {
 #if CHECKLEVEL >= 1
   // Mark option as final inside the domain, but not in the boundary
   const_cast<Options&>(option).attributes["final-domain"] = location;
@@ -89,7 +88,8 @@ bool isSetFinalNoBoundary(const Options& option, [[maybe_unused]] const std::str
   return option.isSet();
 }
 
-bool isSetFinalNoBoundary(const GuardedOptions & option, [[maybe_unused]] const std::string& location) {
+bool isSetFinalNoBoundary(const GuardedOptions& option,
+                          [[maybe_unused]] const std::string& location) {
   const bool set = option.isSet();
 #if CHECKLEVEL >= 1
   const PermissionTypes perm = option.getHighestPermission(Regions::Interior);
