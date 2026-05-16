@@ -221,12 +221,15 @@ const Field3D hyperdiffusion(const BoutReal a, const Field3D& b) {
 }
 
 
-const Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor){
+const Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor, const bool exponential){
   Field3D result = 0.0;
   BOUT_FOR(i, f.getRegion("RGN_NOY")){
     BoutReal diff = f[i] - lowvalue;
-    if (diff < 0.0){
+    
+    if (diff < 0.0 && !exponential){
       result[i] = -diff/scalefactor;
+    } else if (diff < 0.0) {
+      result[i] = exp(-diff/scalefactor)-1;
     }
   }
   return result;
