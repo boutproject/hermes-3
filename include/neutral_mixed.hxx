@@ -46,6 +46,7 @@ private:
   bool isMMS;
   Field3D Pn_solver;
   bool use_eos;
+  bool viscous_heating;
   BoutReal AA; ///< Atomic mass (proton = 1)
   BoutReal n_lowsource, T_lowsource, lowsource_scale;
   BoutReal low_N_lim;
@@ -57,10 +58,13 @@ private:
   bool dissipative;
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
-
+  bool exponential_source;
   BoutReal flux_limit; ///< Diffusive flux limit
+  bool LP_limit;
+  BoutReal LP_speed;
+  Field3D lambdaLP;
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
-
+  bool inherited_T;
   BoutReal include_cond;
   Field3D anomalous_conduction;
   
@@ -68,9 +72,10 @@ private:
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
-
+  bool evolve_pressure;
   bool freeze_low_density;
   bool use_finite_difference;
+  Field3D initial_Tn;
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
   BoutReal neutral_lmax;
   bool precondition {true}; ///< Enable preconditioner?
@@ -80,7 +85,7 @@ private:
   Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
-
+  BoutReal sound_speed_Tfloor;
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
 

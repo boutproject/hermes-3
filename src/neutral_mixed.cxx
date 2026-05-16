@@ -56,8 +56,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   
   // Evolving variables e.g name is "h" or "h+"
   solver->add(Nn, std::string("N") + name);
-  solver->add(Pn, std::string("P") + name);
-
+  
   evolve_momentum = options["evolve_momentum"]
                         .doc("Evolve parallel neutral momentum?")
                         .withDefault<bool>(true);
@@ -67,6 +66,24 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   isMMS = options["isMMS"]
                         .doc("Is this MMS? If yes, stop sources and sinks")
                         .withDefault<bool>(false);
+
+  evolve_pressure = options["evolve_pressure"]
+                        .doc("Evolve pressure?")
+                        .withDefault<bool>(true);
+  
+  if (evolve_pressure) {
+    solver->add(Pn, std::string("P") + name);
+  } else {
+    output_warn.write(
+        "WARNING: Not evolving neutral pressure!");
+
+    initial_Tn = options["initial_Tn"]
+			.doc("Initial neutral temperature when pressure is not evolved?")
+                        .withDefault(Field3D{1.0}) / Tnorm;
+
+    Tn = initial_Tn;
+    Pn = Tn * Nn;
+  }
   
   if (evolve_momentum) {
     solver->add(NVn, std::string("NV") + name);
@@ -109,7 +126,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   n_lowsource = options["n_lowsource"].withDefault(-1.0) / Nnorm;
   T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
   lowsource_scale = options["lowsource_scale"].withDefault(1e-5) * Omega_ci;
-  
+  exponential_source = options["exponential_source"].withDefault<bool>(false);
   neutral_lmax = options["neutral_lmax"].doc("Largest distance to the target, limits diffusion").withDefault<BoutReal>(0.1) / meters;
   
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
@@ -131,7 +148,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   lax_flux = options["lax_flux"]
                      .doc("Enable stabilising lax flux?")
                      .withDefault<bool>(true);
+  LP_limit = options["LP_limit"].doc("https://ui.adsabs.harvard.edu/scan/manifest/1981ApJ...248..321L").withDefault<bool>(false);
 
+  LP_speed = options["LP_speed"].withDefault<BoutReal>(1.0);
+  
   flux_limit =
       options["flux_limit"]
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
@@ -146,6 +166,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas viscosity?")
                           .withDefault<bool>(false);
 
+  viscous_heating = options["viscous_heating"].withDefault<bool>(true);
+  
   neutral_conduction = options["neutral_conduction"]
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(false);
@@ -168,6 +190,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(1.0);
 
+  sound_speed_Tfloor = options["sound_speed_Tfloor"].doc("Particle atomic mass. Proton = 1").withDefault(0.0)/ Tnorm;
+  
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
   density_source = 0.0;
@@ -230,14 +254,27 @@ void NeutralMixed::transform(Options& state) {
   AUTO_TRACE();
 
   Nn.applyBoundary();
-  Pn.applyBoundary();
   NVn.applyBoundary();
   
-  mesh->communicate(Nn, Pn, NVn);
+  mesh->communicate(Nn, NVn);
 
   Nn.applyParallelBoundary();
-  Pn.applyParallelBoundary();
   NVn.applyParallelBoundary();
+
+  if (!evolve_pressure) {
+    if (inherited_T) {
+      Options& allspecies = state["species"];
+      Options& donor_species = allspecies["h+"];
+      const auto donor_T = GET_NOBOUNDARY(Field3D, donor_species["temperature"]);
+      Pn = donor_T * Nn;
+    } else {
+      Pn = initial_Tn * Nn;
+    }
+  }
+
+  Pn.applyBoundary();
+  mesh->communicate(Pn);
+  Pn.applyParallelBoundary();
 
   
   Pn_solver = Pn;
@@ -343,11 +380,32 @@ void NeutralMixed::finally(const Options& state) {
     Dnn = (Tnlim / AA) / Rnn;
   }
 
+  if (LP_limit) {
+    Field3D vth =  LP_speed * sqrt(Tnlim / AA);
+    Field3D nu_eff = get<Field3D>(localstate["collision_frequency"]) + Rnn;
+    Field3D lambda_mfp = vth / nu_eff;
+    BoutReal eps = SQ(1. / neutral_lmax);
+
+    Field3D gradlogP = sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) + eps);
+    Field3D R = lambda_mfp * gradlogP;
+
+    // Levermore-Pomraning limiter
+    lambdaLP = (2.0 + R) / (6.0 + 3.0 * R + SQ(R));
+
+    // Classical diffusion
+    Field3D Dclassical =
+      (Tnlim / AA) / nu_eff;
+
+    // Flux-limited diffusion
+    Dnn = 3.0 * lambdaLP * Dclassical;
+  }
+
   if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
     // Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
-    Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / ( sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) ) + 1. / neutral_lmax);
+    BoutReal eps = SQ(1. / neutral_lmax);
+    Field3D Dmax = flux_limit * sqrt((Tnlim + sound_speed_Tfloor) / AA) / ( sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) + eps));
     BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]); }
   }
 
@@ -390,12 +448,17 @@ void NeutralMixed::finally(const Options& state) {
   // Sound speed appearing in Lax flux for advection terms
   sound_speed = 0;
   if (lax_flux) {
-    sound_speed = sqrt(Tnlim * (5. / 3) / AA);
+    if (sound_speed_Tfloor > 0.0) {
+      sound_speed = sqrt((Tnlim + sound_speed_Tfloor) * (5. / 3) / AA);
+    } else {
+      sound_speed = sqrt(Tnlim * (5. / 3) / AA);
+    }
   }
 
   if (isMMS) {
     sound_speed = 0.0;
   }
+
 
   // Heat conductivity 
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
@@ -414,15 +477,12 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  if (evolve_momentum) {
-    if (!isMMS){
-      ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
-    } else {
-      ddt(Nn) = -Div_par(Nn * Vn);
-    }
+  if (!isMMS){
+    ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
   } else {
-    ddt(Nn) = 0.0;
+    ddt(Nn) = -Div_par(Nn * Vn);
   }
+  
 
   
   if (!Nn.isFci()) {
@@ -449,7 +509,11 @@ void NeutralMixed::finally(const Options& state) {
   }
 
   if (n_lowsource > 0.0) {
-    ddt(Nn) += low_sourceterm(Nn, n_lowsource, lowsource_scale);
+    Field3D a = low_sourceterm(Nn, n_lowsource, lowsource_scale, exponential_source);
+    ddt(Nn) += a;
+    if (evolve_pressure) {
+      ddt(Pn) += a * Tnlim;
+    }
   } 
   
   
@@ -457,75 +521,78 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  Field3D e_plus_p = Nnlim * Tn + (2. / 3) * Pn;
-
+  if (evolve_pressure) {
   
+    Field3D e_plus_p = Nnlim * Tn + (2. / 3) * Pn;
 
-  if (!isMMS) {
-    ddt(Pn) = - FV::Div_par_mod<hermes::Limiter>(e_plus_p, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
-  } else {
-    ddt(Pn) = - Div_par(Pn * Vn);
-  }
-  ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
-
-  
-  if (!Pn.isFci()) {                                                                     // Perpendicular advection
-    ddt(Pn) +=  Div_a_Grad_perp_flows(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
-  } else {
-    bool upwind = false;
-    if (!use_finite_difference) { 
-      ddt(Pn) +=  (*dagp)(Dnn * e_plus_p, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+    if (!isMMS) {
+      ddt(Pn) = - FV::Div_par_mod<hermes::Limiter>(e_plus_p, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
     } else {
-      ddt(Pn) +=  Div_a_Grad_perp_curv(Dnn * e_plus_p, logPnlim);
+      ddt(Pn) = - Div_par(Pn * Vn);
     }
-  }
+    ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
 
-  // The factor here is 5/2 as we're advecting internal energy and pressure.
-  //ef_adv_par_ylow  *= 5/2;
-  //ef_adv_perp_xlow *= 5/2; 
-  //ef_adv_perp_ylow *= 5/2;
-
-  if (neutral_conduction) {
-    ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
-    
-    if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
-      ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
+  
+    if (!Pn.isFci()) {                                                                     // Perpendicular advection
+      ddt(Pn) +=  Div_a_Grad_perp_flows(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
     } else {
       bool upwind = false;
-      if (!use_finite_difference) {
-	ddt(Pn) += (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+      if (!use_finite_difference) { 
+	ddt(Pn) +=  (*dagp)(Dnn * e_plus_p, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
       } else {
-	ddt(Pn) += (2.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
+	ddt(Pn) +=  Div_a_Grad_perp_curv(Dnn * e_plus_p, logPnlim);
       }
     }
-    // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
-    //ef_cond_perp_xlow *= 3/2;
-    //ef_cond_perp_ylow *= 3/2;
-    //ef_cond_par_ylow *= 3/2;
-  }
 
-  if (include_cond) {
-    ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(anomalous_conduction * Nn, Tn, ef_cond_par_ylow, false);
-    bool upwind = false;
-    ddt(Pn) += (2.0 / 3.0) * (*dagp)(anomalous_conduction * Nn, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
-  }
+    // The factor here is 5/2 as we're advecting internal energy and pressure.
+    //ef_adv_par_ylow  *= 5/2;
+    //ef_adv_perp_xlow *= 5/2; 
+    //ef_adv_perp_ylow *= 5/2;
+
+    if (neutral_conduction) {
+      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
+    
+      if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
+	ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
+      } else {
+	bool upwind = false;
+	if (!use_finite_difference) {
+	  ddt(Pn) += (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+	} else {
+	  ddt(Pn) += (2.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
+	}
+      }
+      // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
+      //ef_cond_perp_xlow *= 3/2;
+      //ef_cond_perp_ylow *= 3/2;
+      //ef_cond_par_ylow *= 3/2;
+    }
+
+    if (include_cond) {
+      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(anomalous_conduction * Nn, Tn, ef_cond_par_ylow, false);
+      bool upwind = false;
+      ddt(Pn) += (2.0 / 3.0) * (*dagp)(anomalous_conduction * Nn, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+    }
   
-  Sp = pressure_source;
-  if (localstate.isSet("energy_source")) {
-    Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
-  }
-  if (!isMMS) {
-    ddt(Pn) += Sp;
+    Sp = pressure_source;
+    if (localstate.isSet("energy_source")) {
+      Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    }
+    if (!isMMS) {
+      ddt(Pn) += Sp;
+    }
+
+    if (T_lowsource > 0.0) {
+      ddt(Pn) += Nn * low_sourceterm(Tn, T_lowsource, lowsource_scale, exponential_source);
+    }
+
   }
 
-  if (T_lowsource > 0.0) {
-    ddt(Pn) += low_sourceterm(Tn, T_lowsource, lowsource_scale);
-  }
+  /////////////////////////////////////////////////////                                                                                             
+  // Neutral momentum 
   
   if (evolve_momentum) {
 
-    /////////////////////////////////////////////////////
-    // Neutral momentum
     TRACE("Neutral momentum");
     if (!isMMS) {
       ddt(NVn) = -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed);             // Momentum flow
@@ -570,7 +637,9 @@ void NeutralMixed::finally(const Options& state) {
       }
       
       ddt(NVn) += viscosity_source;
-      ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
+      if (viscous_heating) {
+	ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
+      }
     }
 
     if (localstate.isSet("momentum_source")) {
@@ -698,6 +767,15 @@ void NeutralMixed::outputVars(Options& state) {
        {"species", name},
        {"source", "neutral_mixed"}});
 
+  if (LP_limit) {
+    
+
+    set_with_attrs(state[std::string("lambdaLP")], lambdaLP,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"source", "neutral_mixed"}});
+  }
+  
   if (output_ddt) {
     set_with_attrs(
         state[std::string("ddt(N") + name + std::string(")")], ddt(Nn),
