@@ -528,7 +528,7 @@ void NeutralMixed::finally(const Options& state) {
     if (!isMMS) {
       ddt(Pn) = - FV::Div_par_mod<hermes::Limiter>(e_plus_p, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
     } else {
-      ddt(Pn) = - Div_par(Pn * Vn);
+      ddt(Pn) = - Div_par(e_plus_p * Vn);
     }
     ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
 
@@ -1035,14 +1035,30 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   const auto& species = state["species"][name];
   const Field3D N = get<Field3D>(species["density"]);
 
+  Field3D DTdtN = Dnn * Tn * ddt(Nn);
+  DTdtN.applyBoundary("neumann");
+  mesh->communicate(DTdtN);
+  ddt(Pn) -= (gamma * 5. / 3) * Div_a_Grad_perp(DTdtN, logPnlim);
+
+  
   // Set the coefficient in Div_par( B * Grad_par )
   Field3D coef = - gamma * Dnn;
 
-  inv->setCoefD(coef);
+  inv->setCoefA(1 - gamma * Div_a_Grad_perp(Dnn, logPnlim));
+  inv->setCoefC1(-1. / ((gamma * 5. / 3) * Dnn));
+  inv->setCoefC2(logPnlim);
+  inv->setCoefD((-gamma * 5. / 3) * Dnn);
+  
   Field3D dT = ddt(Pn);
   dT.applyBoundary("neumann");
   mesh->communicate(dT);
   Field3D dummy = 0.0;
   ddt(Pn) = inv->solve(dT, ddt(Pn));
 
+  ddt(Nn) -= gamma * Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
+
+  if (evolve_momentum) {
+    ddt(NVn) -= gamma * Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
+  }
+  
 }
