@@ -78,10 +78,6 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  p_div_v = options["p_div_v"]
-                .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
-                .withDefault<bool>(false);
-
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
   hyper_z_T = options["hyper_z_T"]
@@ -221,11 +217,20 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
 
-  Field3D Pfloor = floor(P, 0.0);
-  T = Pfloor / softFloor(N, density_floor);
-  Pfloor = N * T; // Ensure consistency
+  // Nnlim is used where division by neutral density is needed
+  // The equation of state is modified at low density:
+  //
+  // e = Cv T Nlim / N    <- Specific internal energy
+  // p = N T
+  //
+  // The internal energy evolution of (N * e) is therefore
+  // evolving P_solver = Nlim * T
+  // rather than pressure P = N * T
+  T = floor(P, 0.0) / softFloor(N, density_floor);
+  P_solver = P; // Save solver variable to restore later
+  P = N * T;    // Equation of state
 
-  set(species["pressure"], Pfloor);
+  set(species["pressure"], P);
   set(species["temperature"], T);
 }
 
@@ -235,13 +240,12 @@ void EvolvePressure::finally(const Options& state) {
   const auto& species = state["species"][name];
 
   // Get updated pressure and temperature with boundary conditions
-  // Note: Retain pressures which fall below zero
-  P.clearParallelSlices();
-  P.setBoundaryTo(get<Field3D>(species["pressure"]));
-  Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
-
+  P = get<Field3D>(species["pressure"]);
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
+
+  Field3D Nlim = softFloor(N, density_floor);
+  Field3D Pint = Nlim * T; // Internal energy uses limited density
 
   if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5)
       and state.isSection("fields") and state["fields"].isSet("phi")) {
@@ -249,7 +253,7 @@ void EvolvePressure::finally(const Options& state) {
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) = -Div_n_bxGrad_f_B_XPPM(Pint, phi, bndry_flux, poloidal_flows, true);
   } else {
     ddt(P) = 0.0;
   }
@@ -266,33 +270,22 @@ void EvolvePressure::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    if (p_div_v) {
-      // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+    // Use V * Grad(P) form
+    //
+    // The internal energy term Pint = Nlim * T
+    ddt(P) -= FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave,
+                                               flow_ylow_advection);
 
-      // Work done. This balances energetically a term in the momentum equation
-      E_PdivV = -Pfloor * Div_par(V);
-      ddt(P) += (2. / 3) * E_PdivV;
+    E_VgradP = V * Grad_par(P);
+    ddt(P) += (2. / 3) * E_VgradP;
 
-    } else {
-      // Use V * Grad(P) form
-      // Note: A mixed form has been tried (on 1D neon example)
-      //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
-      //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -=
-          (5. / 3)
-          * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
-
-      E_VgradP = V * Grad_par(P);
-      ddt(P) += (2. / 3) * E_VgradP;
-    }
     flow_ylow_advection *= 5. / 2; // Energy flow
     flow_ylow = flow_ylow_advection;
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
-      ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
+      ddt(P) -= Div_n_g_bxGrad_f_B_XZ(Pint + (2. / 3) * P, V, -Apar_flutter);
       ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
     }
 
@@ -406,6 +399,11 @@ void EvolvePressure::finally(const Options& state) {
       flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
   }
+
+  // Restore solver pressure.
+  // Keep boundary conditions for post-processing.
+  P_solver.setBoundaryTo(P);
+  P = P_solver;
 }
 
 void EvolvePressure::outputVars(Options& state) {
@@ -465,30 +463,16 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    if (p_div_v) {
-      if (E_PdivV.isAllocated()) {
-        set_with_attrs(state["E" + name + "_PdivV"], E_PdivV,
-                       {{"time_dimension", "t"},
-                        {"units", "W / m^-3"},
-                        {"conversion", Pnorm * Omega_ci},
-                        {"standard_name", "energy source"},
-                        {"long_name", name + " energy source due to pressure gradient"},
-                        {"species", name},
-                        {"source", "evolve_pressure"}});
-      }
-    } else {
-      if (E_VgradP.isAllocated()) {
-        set_with_attrs(state["E" + name + "_VgradP"], E_VgradP,
-                       {{"time_dimension", "t"},
-                        {"units", "W / m^-3"},
-                        {"conversion", Pnorm * Omega_ci},
-                        {"standard_name", "energy source"},
-                        {"long_name", name + " energy source due to pressure gradient"},
-                        {"species", name},
-                        {"source", "evolve_pressure"}});
-      }
+    if (E_VgradP.isAllocated()) {
+      set_with_attrs(state["E" + name + "_VgradP"], E_VgradP,
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy source"},
+                      {"long_name", name + " energy source due to pressure gradient"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
     }
-
     if (flow_xlow.isAllocated()) {
       set_with_attrs(
           state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
