@@ -29,6 +29,19 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
                     .withDefault(anomalous_D)
                 / diffusion_norm;
 
+
+  anomalous_D_par = 0.0;
+  include_D_par = (mesh->get(anomalous_D_par, std::string("D_par_") + name) == 0)
+              || options.isSet("anomalous_D_par");
+  anomalous_D_par = options["anomalous_D_par"]
+                    .doc("Anomalous parallel particle diffusion coefficient [m^2/s]")
+                    .withDefault(anomalous_D_par)
+                / diffusion_norm;
+
+  anomalous_D_par.applyBoundary("neumann");
+  mesh->communicate(anomalous_D_par);
+  anomalous_D_par.applyParallelBoundary("parallel_neumann_o1");
+
   anomalous_chi = 0.0;
   include_chi = (mesh->get(anomalous_chi, std::string("chi_") + name) == 0)
                 || options.isSet("anomalous_chi");
@@ -49,6 +62,12 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
                               .doc("Allow anomalous diffusion into sheath?")
                               .withDefault<bool>(false);
 
+  use_finite_difference = options["use_finite_difference"]
+    .doc("Use Div_a_Grad_perp_curv instead of finite volume operator")
+    .withDefault<bool>(false);
+  
+  // Div_a_Grad_perp_curv
+  
   if (include_D) {
     output_info.write("\tUsing mean(anomalous_D) = {}\n", mean(anomalous_D));
   }
@@ -74,6 +93,7 @@ void AnomalousDiffusion3D::transform(Options& state) {
   // to zero by imposing neumann boundary conditions.
   Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
+  
   Field3D T = species.isSet("temperature")
                         ? GET_NOBOUNDARY(Field3D, species["temperature"])
                         : 0.0;
@@ -84,48 +104,87 @@ void AnomalousDiffusion3D::transform(Options& state) {
 
   bool upwind = false;
 
+  if (species.isSet("tracedensity")) {
+    Field3D tN = GET_NOBOUNDARY(Field3D, species["tracedensity"]);
+    add(species["tracedensity_source"], (*dagp)(anomalous_D, tN, flow_xlow, flow_zlow, upwind));
+
+  }
+
+  if (include_D_par) {
+    Field3D dummy;
+    add(species["density_source"], Div_par_K_Grad_par_mod(anomalous_D_par, N, dummy, false));
+  }
+  
   if (include_D) {
     // Particle diffusion. Gradients of density drive flows of particles,
     // momentum and energy. The implementation here is equivalent to an
     // advection velocity
     //
     //  v_D = - D Grad_perp(N) / N
-    density_source = (*dagp)(anomalous_D, N, flow_xlow, flow_zlow, upwind);
-    add(species["density_source"], density_source);
-    add(species["particle_flow_xlow"], flow_xlow);
-    add(species["particle_flow_zlow"], flow_zlow);
 
-    // Note: Upwind operators used, or unphysical increases
-    // in temperature and flow can be produced
-    auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"],
-        (*dagp)(AA * V * anomalous_D, N, flow_xlow, flow_zlow, true));
-    add(species["momentum_flow_xlow"], flow_xlow);
-    add(species["momentum_flow_zlow"], flow_zlow);
+    if (use_finite_difference) {
+      density_source = Div_a_Grad_perp_curv(anomalous_D, N);
+      add(species["density_source"], density_source);
+      auto AA = get<BoutReal>(species["AA"]);
 
-    add(species["energy_source"],
-        (*dagp)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_zlow, upwind));
-    add(species["energy_flow_xlow"], flow_xlow);
-    add(species["energy_flow_zlow"], flow_zlow);
+      add(species["momentum_source"],
+          Div_a_Grad_perp_curv(AA * V * anomalous_D, N));
+
+      add(species["energy_source"],
+          Div_a_Grad_perp_curv((3. / 2) * T * anomalous_D, N));
+      
+    } else {
+    
+      density_source = (*dagp)(anomalous_D, N, flow_xlow, flow_zlow, upwind);
+      add(species["density_source"], density_source);
+      add(species["particle_flow_xlow"], flow_xlow);
+      add(species["particle_flow_zlow"], flow_zlow);
+    
+      // Note: Upwind operators used, or unphysical increases
+      // in temperature and flow can be produced
+      auto AA = get<BoutReal>(species["AA"]);
+      add(species["momentum_source"],
+          (*dagp)(AA * V * anomalous_D, N, flow_xlow, flow_zlow, true));
+      add(species["momentum_flow_xlow"], flow_xlow);
+      add(species["momentum_flow_zlow"], flow_zlow);
+
+      add(species["energy_source"],
+          (*dagp)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_zlow, upwind));
+      add(species["energy_flow_xlow"], flow_xlow);
+      add(species["energy_flow_zlow"], flow_zlow);
+    }
   }
 
   if (include_chi) {
     // Gradients in temperature that drive energy flows
-    add(species["energy_source"],
-        (*dagp)(anomalous_chi * N, T, flow_xlow, flow_zlow, upwind));
-    add(species["energy_flow_xlow"], flow_xlow);
-    add(species["energy_flow_zlow"], flow_zlow);
+    if (use_finite_difference){
+      add(species["energy_source"],
+          Div_a_Grad_perp_curv(anomalous_chi * N, T));
+    } else {
+      add(species["energy_source"],
+          (*dagp)(anomalous_chi * N, T, flow_xlow, flow_zlow, upwind));
+      add(species["energy_flow_xlow"], flow_xlow);
+      add(species["energy_flow_zlow"], flow_zlow);
+    }
   }
 
   if (include_nu) {
     // Gradients in flow speed that drive momentum flows
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"],
-        setName((*dagp)(anomalous_nu * AA * N, V, flow_xlow, flow_zlow, upwind),
-                "dagp_fv(anomalous_nu * AA * N{}, V{}", name, name));
-    add(species["momentum_flow_xlow"], flow_xlow);
-    add(species["momentum_flow_zlow"], flow_zlow);
+    if (use_finite_difference){
+      add(species["momentum_source"],
+          Div_a_Grad_perp_curv(anomalous_nu * AA * N, V));
+    } else {
+      add(species["momentum_source"],
+      setName((*dagp)(anomalous_nu * AA * N, V, flow_xlow, flow_zlow, upwind),
+          "dagp_fv(anomalous_nu * AA * N{}, V{}", name, name));
+      add(species["momentum_flow_xlow"], flow_xlow);
+      add(species["momentum_flow_zlow"], flow_zlow);
+    }
   }
+
+
+  
 }
 
 void AnomalousDiffusion3D::outputVars(Options& state) {

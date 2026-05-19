@@ -31,6 +31,7 @@
 #include <bout/fv_ops.hxx>
 #include <bout/immersed_boundary.hxx>
 #include <bout/vector3d.hxx>
+#include <bout/output_bout_types.hxx>
 
 /*!
  * Diffusion in index space
@@ -45,6 +46,10 @@ const Field3D Div_par_diffusion_index(const Field3D& f, bool bndry_flux = true);
 const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f,
                                     bool bndry_flux = true, bool poloidal = false,
                                     bool positive = false);
+
+const Field3D adaptive_sourceterm(const Field3D& thisfield ,const Field3D& sourceterm, const BoutReal maximum, const BoutReal overshoot);
+
+const Field3D hyperdiffusion(const BoutReal a, const Field3D& b);
 
 /// This version has an extra coefficient 'g' that is linearly interpolated
 /// onto cell faces
@@ -79,6 +84,8 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f, Field3D& flow_ylow,
                                      bool bndry_flux = true);
 
+
+Field3D Div_a_Grad_perp_curv(const Field3D& b, const Field3D& a);
 /*!
  * Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) -- Vorticity
  *
@@ -87,6 +94,8 @@ const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f, Field3D
  * i.e. X-Y, X-Z and Y-Z coordinates can all be non-orthogonal.
  */
 const Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x);
+
+const Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor);
 
 namespace FV {
 
@@ -154,43 +163,53 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
     ASSERT1(f_in.hasParallelSlices());
     ASSERT1(v_in.hasParallelSlices());
 
-    Field3D result{emptyFrom(f_in)};
+    const auto B = coord->Bxy;
+    const auto B_up = coord->Bxy.yup();
+    const auto B_down = coord->Bxy.ydown();
 
-    BOUT_FOR(i, mesh->getRegion("RGN_NOBNDRY")) {
+    const auto f_up = f_in.yup();
+    const auto f_down = f_in.ydown();
+
+    const auto v_up = v_in.yup();
+    const auto v_down = v_in.ydown();
+
+    const auto g_22 = coord->g_22;
+    const auto dy = coord->dy;
+
+    Field3D result{emptyFrom(f_in)};
+    BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
       //IB_TODO: Check par logic.
       if (immBndry && !immBndry->IsInside(i)) {continue;}
-      // Value of f and v at left cell face
-      const BoutReal fL = 0.5 * (f_in[i] + f_in.ydown()[i.ym()]);
-      const BoutReal vL = 0.5 * (v_in[i] + v_in.ydown()[i.ym()]);
 
-      const BoutReal fR = 0.5 * (f_in[i] + f_in.yup()[i.yp()]);
-      const BoutReal vR = 0.5 * (v_in[i] + v_in.yup()[i.yp()]);
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
 
-      // Reconstruct v at the cell faces
-      Stencil1D sv;
-      sv.c = v_in[i];
-      sv.m = v_in.ydown()[i.ym()];
-      sv.p = v_in.yup()[i.yp()];
-      cellboundary(sv);
-
-      // Maximum local wave speed
+      //Maximum local wave speed
       const BoutReal amax = BOUTMAX(wave_speed_in[i],
-                                    fabs(v_in[i]),
-                                    fabs(v_in.yup()[i.yp()]),
-                                    fabs(v_in.ydown()[i.ym()]));
+                                          fabs(v_in[i]),
+                                  fabs(v_up[iyp]),
+                                  fabs(v_down[iym]));
 
-      // Calculate flux at right boundary (y+1/2)
-      BoutReal fluxRight =
-        fR * (vR * vR  + amax * (sv.c - vR)) * (coord->J[i] + coord->J[i.yp()])
-        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[i.yp()]));
+      result[i] = B[i] * (
+                          (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
+                          - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
+                          // Penalty terms. This implementation is very dissipative.
+			  // Note: This version adds a viscosity that damps gradients of velocity
+			  + amax * (f_in[i] + f_up[iyp]) * (v_in[i] - v_up[iyp]) / (B[i] + B_up[iyp])
+                          + amax * (f_in[i] + f_down[iym]) * (v_in[i] - v_down[iym]) / (B[i] + B_down[iym])
+                          )
+        / (2 * dy[i] * sqrt(g_22[i]));
 
-      // Calculate at left boundary (y-1/2)
-      BoutReal fluxLeft =
-        fL * (vL * vL - amax * (sv.c - vL)) * (coord->J[i] + coord->J[i.ym()])
-        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[i.ym()]));
-
-      result[i] =
-        (fluxRight - fluxLeft) / (coord->dy[i] * coord->J[i]);
+#if CHECK > 0
+      if(!std::isfinite(result[i])) {
+        throw BoutException("Non-finite value in Div_par_fvv at {}\n"
+                            "fup {} vup {} fdown {} vdown {} amax {}\n",
+                            "B {} Bup {} Bdown {} dy {} sqrt(g_22} {}",
+                            i,
+                            f_up[i], v_up[i], f_down[i], v_down[i], amax,
+                            B[i], B_up[i], B_down[i], dy[i], sqrt(g_22[i]));
+      }
+#endif
     }
     return result;
   }
@@ -565,18 +584,81 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
 template <typename CellEdges = MC>
 Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in,
-                          Field3D &flow_ylow, bool fixflux = true) {
+		    Field3D &flow_ylow, bool fixflux = true, bool dissipative = false, bool bndry_flux = true) {
+
+  Coordinates* coord = f_in.getCoordinates();
 
   if (f_in.isFci()){
     // Use mid-point (cell boundary) averages
     if (flow_ylow.isAllocated()) {
       flow_ylow = emptyFrom(flow_ylow);
+      flow_ylow = 0.0;
     }
-    return Div_par(f_in, v_in);
+
+    ASSERT1(f_in.hasParallelSlices());
+    ASSERT1(v_in.hasParallelSlices());
+
+    const auto& f_up = f_in.yup();
+    const auto& f_down = f_in.ydown();
+
+    const auto& v_up = v_in.yup();
+    const auto& v_down = v_in.ydown();
+
+    Field3D result{emptyFrom(f_in)};
+    BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+
+      // Maximum local wave speed
+      const BoutReal amax = BOUTMAX(wave_speed_in[i],
+                                    fabs(v_in[i]),
+                                    fabs(v_up[iyp]),
+                                    fabs(v_down[iym]));
+      // Divergencefree B leads to A1 * B1 = A2 * B2 -> A2 = A1 * B1 / B2
+      BoutReal flux_up = 0.0;
+      BoutReal flux_down = 0.0;
+      if (dissipative) {
+
+	flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cellarea_yup[i];
+        flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cellarea_ydown[i];
+
+	if (coord->has_bndry_yup[i] == true) {
+	  flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
+	}
+	if (coord->has_bndry_ydown[i] == true) {
+	  flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
+	}
+        
+      } else {
+
+	flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
+	flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
+
+      }
+
+      if (coord->has_bndry_yup[i] == true && bndry_flux == false) {
+	flux_up = 0.0;
+      }
+
+      if (coord->has_bndry_ydown[i] == true && bndry_flux == false) {
+	flux_down = 0.0;
+      }
+
+      if (coord->has_bndry_yup[i] == true && flow_ylow.isAllocated()) {
+	flow_ylow[i] = flux_up / coord->cellvolume[i];
+      }
+
+      if (coord->has_bndry_ydown[i] == true && flow_ylow.isAllocated()) {
+        flow_ylow[i] =	flux_down / coord->cellvolume[i];
+      }
+      
+      result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
+      
+    }
+    return result;
   }
   ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
   ASSERT1_FIELDS_COMPATIBLE(f_in, wave_speed_in);
-
 
   Mesh* mesh = f_in.getMesh();
 
@@ -593,8 +675,6 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
   Field3D v = are_unaligned ? toFieldAligned(v_in, "RGN_NOX") : v_in;
   Field3D wave_speed =
       are_unaligned ? toFieldAligned(wave_speed_in, "RGN_NOX") : wave_speed_in;
-
-  Coordinates* coord = f_in.getCoordinates();
 
   Field3D result{zeroFrom(f)};
   flow_ylow = zeroFrom(f);

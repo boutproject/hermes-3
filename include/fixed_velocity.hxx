@@ -32,6 +32,7 @@ struct FixedVelocity : public Component {
 
     if (V.isFci()) {
       bout::globals::mesh->communicate(V);
+      V.applyParallelBoundary("parallel_neumann_o2");
     }
   }
 

@@ -25,6 +25,10 @@ IonViscosity::IonViscosity(std::string name, Options& alloptions, Solver*) {
   perpendicular = options["perpendicular"]
     .doc("Include perpendicular flow? (Requires phi)")
     .withDefault<bool>(false);
+
+  heating = options["heating"]
+			.doc("Viscous heating. Turn off at beginning of simulations")
+                        .withDefault(true);
   
   if (perpendicular) {
     // Read curvature vector
@@ -92,6 +96,7 @@ void IonViscosity::transform(Options &state) {
       continue;
     }
 
+    //const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
     const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
     const Field3D P = get<Field3D>(species["pressure"]);
     const Field3D V = get<Field3D>(species["velocity"]);
@@ -107,17 +112,22 @@ void IonViscosity::transform(Options &state) {
       const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
       eta = eta / (1. + abs(q_cl / q_fl));
-
-      eta.getMesh()->communicate(eta);
+    }
+    if ((eta_limit_alpha > 0.) || eta.isFci()) {
       eta.applyBoundary("neumann");
+      eta.getMesh()->communicate(eta);
+      eta.applyParallelBoundary("parallel_neumann_o1");
     }
     
     // This term is the parallel flow part of
     // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
-    const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+    Field3D dummy;
+    const Field3D div_Pi_cipar = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy, true);
 
     add(species["momentum_source"], div_Pi_cipar);
-    subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+    if (heating) {
+      subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+    }
 
     if (!perpendicular) {
       if (diagnose) {

@@ -62,6 +62,9 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
 
+  always_zero_current = options["always_zero_current"]
+    .doc("Always set zero current?").withDefault<bool>(false);
+
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
 
@@ -78,6 +81,10 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
   // to how twist-shift boundary conditions and non-aligned inputs are
   // treated; using the cell boundary gives incorrect results.
 
+  sheath_extrapolate = options["sheath_extrapolate"]
+                        .doc("Extrapolate values into the sheath? If not use neumann on all variables.")
+                        .withDefault<bool>(true);
+  
   floor_potential = options["floor_potential"]
                         .doc("Apply a floor to wall potential when calculating Ve?")
                         .withDefault<bool>(true);
@@ -126,6 +133,11 @@ void SheathBoundaryParallel::transform(Options &state) {
   if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   } else {
+    phi = zeroFrom(Ne); // So phi is field aligned
+    always_zero_current = true; // Assume zero current to calculate phi on boundary
+  }
+
+  if (always_zero_current) {
     // Calculate potential phi assuming zero current
     // Note: This is equation (22) in Tskhakaya 2005, with I = 0
 
@@ -134,7 +146,6 @@ void SheathBoundaryParallel::transform(Options &state) {
     // To avoid looking up species for every grid point, this
     // loops over the boundaries once per species.
     Field3D ion_sum {zeroFrom(Ne)};
-    phi = emptyFrom(Ne); // So phi is field aligned
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {
@@ -158,11 +169,17 @@ void SheathBoundaryParallel::transform(Options &state) {
         for (auto& pnt : region) {
           const auto& i = pnt.ind();
           if (immBndry && !immBndry->IsInside(i)) {continue;}
-          BoutReal s_i =
+
+          BoutReal s_i;
+          if (sheath_extrapolate) {
+            s_i =
               clip(pnt.extrapolate_sheath_o2([&, Ni, Ne](int yoffset, Ind3D ind) {
                 return Ni.ynext(yoffset)[ind] / Ne.ynext(yoffset)[ind];
               }),
                    0.0, 1.0);
+          } else {
+            s_i = pnt.ythis(Ni) / pnt.ythis(Ne);
+          } 
 
           if (!std::isfinite(s_i)) {
             s_i = 1.0;
@@ -171,8 +188,16 @@ void SheathBoundaryParallel::transform(Options &state) {
           BoutReal ti = Ti[i];
 
           // Equation (9) in Tskhakaya 2005
-          BoutReal grad_ne = pnt.extrapolate_grad_o2(Ne);
-          BoutReal grad_ni = pnt.extrapolate_grad_o2(Ni);
+          BoutReal grad_ne;
+          BoutReal grad_ni;
+
+          if (sheath_extrapolate) {
+            grad_ne = pnt.extrapolate_grad_o2(Ne);
+            grad_ni = pnt.extrapolate_grad_o2(Ni);
+          } else {
+            grad_ne = 1.0;
+            grad_ni = 1.0;
+          }
 
           // Note: Needed to get past initial conditions, perhaps
           // transients but this shouldn't happen in steady state
@@ -235,10 +260,16 @@ void SheathBoundaryParallel::transform(Options &state) {
       // Limited so that the values don't increase into the sheath
       // This ensures that the guard cell values remain positive
       // exp( 2*log(N[i]) - log(N[ip]) )
-      pnt.limitFree(Ne);
-      pnt.limitFree(Te);
-      pnt.limitFree(Pe);
-
+      if (sheath_extrapolate) {
+	pnt.limitFree(Ne);
+	pnt.limitFree(Te);
+	pnt.limitFree(Pe);
+      } else {
+	pnt.ynext(Ne) = pnt.ythis(Ne);
+	pnt.ynext(Te) =	pnt.ythis(Te);
+	pnt.ynext(Pe) =	pnt.ythis(Pe);
+      }
+      
       // Free boundary potential linearly extrapolated
       const BoutReal phiGradient = pnt.extrapolate_grad_o2(phi);
       pnt.neumann_o1(phi, phiGradient);
@@ -272,12 +303,16 @@ void SheathBoundaryParallel::transform(Options &state) {
                      * nesheath * vesheath;
 
       // Multiply by cell area to get power
-      const BoutReal flux =
-          q * (pnt.ythis(coord->J) + pnt.ynext(coord->J))
-          / (sqrt(pnt.ythis(coord->g_22)) + sqrt(pnt.ynext(coord->g_22)));
+      BoutReal flux = 0.0;
+
+      if (pnt.dir < 0.0) {
+	flux = q * coord->cellarea_ydown[i];
+      } else {
+	flux = q * coord->cellarea_yup[i];
+      }
 
       // Divide by volume of cell to get energy loss rate (sign depending on vesheath)
-      const BoutReal power = flux / (coord->dy[pnt.ind()] * pnt.ythis(coord->J));
+      const BoutReal power = flux / coord->cellvolume[i];
 
 #if CHECKLEVEL >= 1
       if (!std::isfinite(power)) {
@@ -367,10 +402,15 @@ void SheathBoundaryParallel::transform(Options &state) {
         // Free gradient of log electron density and temperature
         // This ensures that the guard cell values remain positive
         // exp( 2*log(N[i]) - log(N[ip]) )
-
-        pnt.limitFree(Ni);
-        pnt.limitFree(Ti);
-        pnt.limitFree(Pi);
+        if (sheath_extrapolate) {
+          pnt.limitFree(Ni);
+          pnt.limitFree(Ti);
+          pnt.limitFree(Pi);
+        } else {
+          pnt.ynext(Ni) = pnt.ythis(Ni);
+          pnt.ynext(Ti) = pnt.ythis(Ti);
+          pnt.ynext(Pi) = pnt.ythis(Pi);
+        }
 
         // Calculate sheath values at half-way points (cell edge)
         const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);
@@ -391,8 +431,16 @@ void SheathBoundaryParallel::transform(Options &state) {
           s_i = (nesheath > 1e-5) ? nisheath / nesheath : 0.0;
         }
 
-        BoutReal grad_ne = pnt.extrapolate_grad_o2(Ne);
-        BoutReal grad_ni = pnt.extrapolate_grad_o2(Ni);
+        BoutReal grad_ne;
+        BoutReal grad_ni;
+
+        if (sheath_extrapolate) {
+          grad_ne = pnt.extrapolate_grad_o2(Ne);
+          grad_ni = pnt.extrapolate_grad_o2(Ni);
+        } else {
+          grad_ni = 1.0;
+          grad_ne = 1.0;
+        }
 
         if (fabs(grad_ni) < 1e-3) {
           grad_ni = grad_ne = 1e-3; // Remove kinetic correction term
@@ -430,12 +478,15 @@ void SheathBoundaryParallel::transform(Options &state) {
         }
 
         // Multiply by cell area to get power
-        const BoutReal flux =
-            q * (pnt.ythis(coord->J) + pnt.ynext(coord->J))
-            / (sqrt(pnt.ythis(coord->g_22)) + sqrt(pnt.ynext(coord->g_22)));
+        BoutReal flux = 0.0;
+        if (pnt.dir < 0.0) {
+          flux = q * coord->cellarea_ydown[i];
+        } else {
+          flux = q * coord->cellarea_yup[i];
+        }
 
         // Divide by volume of cell to get energy loss rate (sign depending on vesheath)
-        const BoutReal power = flux / (coord->dy[pnt.ind()] * pnt.ythis(coord->J));
+        const BoutReal power = flux / coord->cellvolume[i];
 
         ASSERT1(std::isfinite(power));
         ASSERT2(power * pnt.dir >= 0.0);

@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+
+from __future__ import division
+from __future__ import print_function
+import numpy as np
+
+try:
+    from builtins import str
+except:
+    pass
+
+from boututils.run_wrapper import shell, launch_safe, getmpirun
+from boutdata.collect import collect
+
+from numpy import sqrt, max, abs, mean, array, log, concatenate
+
+import tarfile
+
+gridpath = "../../../../grids/mms_slab_fci_xz/"
+archive_path = "MMS_Slab_fci_XZ.tar.xz"
+
+try:
+    with tarfile.open(gridpath + archive_path, "r:xz") as tar:
+        tar.extractall(path=gridpath)
+except:
+    raise FileNotFoundError("Could not fine mms slab y file to extract")
+
+
+def gridname(nx):
+    return gridpath + f"MMS_straight_slab_{nx}_4_{nx-4}.fci.grid.nc"
+
+
+# List of NY values to use
+# nxlist = [36, 68, 132, 260] #, 640, 1280, 2560, 5120]
+nxlist = [36, 68, 132]
+nout = 20
+timestep = 1e7 / nout
+
+nproc = 1
+
+varnames = ["Nh+"]
+
+results = {}
+for var in varnames:
+    results[var] = {"l2": [], "inf": []}
+
+for ny in nxlist:
+    args = (
+        "mesh:file="
+        + gridname(ny)
+        + " nout="
+        + str(nout)
+        + " timestep="
+        + str(timestep)
+    )
+
+    print("Running with " + args)
+
+    # Delete old data
+    shell("rm data/BOUT.dmp.*.nc")
+
+    # Command to run
+    cmd = "../../../hermes-3 " + args
+    # Launch using MPI
+    s, out = launch_safe(cmd, nproc=nproc, pipe=True)
+
+    # Save output to log file
+    f = open("run.log." + str(ny), "w")
+    f.write(out)
+    f.close()
+
+    # Collect data
+    for var in varnames:
+        E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
+        print(str(np.array(E).shape))
+        E = E[0, 2:-2, 0, :]
+
+        l2 = sqrt(mean(E**2))
+        linf = max(abs(E))
+        results[var]["l2"].append(l2)
+        results[var]["inf"].append(linf)
+
+        print("Error norm %s: l-2 %f l-inf %f" % (var, l2, linf))
+
+# Calculate grid spacing
+dy = 1.0 / array(nxlist)
+
+success = True
+
+for var in varnames:
+    l2 = results[var]["l2"]
+    order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
+    print("Convergence order %s = %f" % (var, order))
+
+    if order < 1.8:
+        success = False
+
+# plot errors
+try:
+    import matplotlib.pyplot as plt
+
+    for var in varnames:
+        l2 = results[var]["l2"]
+        inf = results[var]["inf"]
+        order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
+
+        plt.plot(dy, l2, "-o", label=r"$l_2$ (" + var + ")")
+        plt.plot(dy, inf, "-x", label=r"$l_\infty$ (" + var + ")")
+        plt.plot(
+            dy, l2[-1] * (dy / dy[-1]) ** order, "--", label="Order %.1f" % (order)
+        )
+
+    plt.legend(loc="upper left")
+    plt.grid()
+
+    plt.yscale("log")
+    plt.xscale("log")
+
+    plt.xlabel(r"Mesh spacing $\delta y$")
+    plt.ylabel("Error norm")
+
+    plt.savefig("fluid_norm.pdf")
+    plt.savefig("fluid_norm.png")
+
+    # plt.show()
+    plt.close()
+except:
+    # Plotting could fail for any number of reasons, and the actual
+    # error raised may depend on, among other things, the current
+    # matplotlib backend, so catch everything
+    pass
+
+if success:
+    print(" => Test passed")
+    exit(0)
+else:
+    print(" => Test failed")
+    exit(1)

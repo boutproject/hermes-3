@@ -55,6 +55,10 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
                    .doc("Allow flows through radial boundaries")
                    .withDefault<bool>(true);
 
+  exb_advection = options["exb_advection"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(true);
+
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
@@ -118,6 +122,17 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
       alloptions[std::string("E") + name]["neumann_boundary_average_z"]
           .doc("Apply neumann boundary with Z average?")
           .withDefault<bool>(false);
+
+  if (mesh->isFci()) {
+    const auto coord = mesh->getCoordinates();
+    // Note: This is 1 for a Clebsch coordinate system
+    //       Remove parallel slices before operations
+    bracket_factor = sqrt(coord->g_22.withoutParallelSlices())
+      / (coord->J.withoutParallelSlices() * coord->Bxy);
+  } else {
+    // Clebsch coordinate system
+    bracket_factor = 1.0;
+  }
 }
 
 void EvolveEnergy::transform(Options& state) {
@@ -232,13 +247,14 @@ void EvolveEnergy::finally(const Options& state) {
 
   Field3D Pfloor = P;
 
-  if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
+  if (exb_advection and species.isSet("charge") and
+      (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
       state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(E) = -Div_n_bxGrad_f_B_XPPM(E, phi, bndry_flux, poloidal_flows, true);
+    ddt(E) = -Div_n_bxGrad_f_B_XPPM(E, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
   } else {
     ddt(E) = 0.0;
   }

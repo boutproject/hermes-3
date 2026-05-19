@@ -34,12 +34,19 @@ void Ionisation::transform(Options &state) {
   Options& ion = state["species"]["h+"];
   ASSERT1(AA == get<BoutReal>(ion["AA"]));
 
+  /*
   Field3D reaction_rate = cellAverage(
       [&](BoutReal ne, BoutReal nn, BoutReal te) {
         return ne * nn * atomic_rates.ionisation(te * Tnorm) * Nnorm / FreqNorm;
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, Nn, Te);
-
+  */
+  
+  Field3D reaction_rate = 0.0;
+  BOUT_FOR(i, Nn.getRegion("RGN_NOY")) {
+    reaction_rate[i] = Ne[i] * Nn[i] * atomic_rates.ionisation(Te[i] * Tnorm) * Nnorm / FreqNorm;
+  }
+  
   // Particles move from hydrogen to ion
   subtract(hydrogen["density_source"],
            reaction_rate);

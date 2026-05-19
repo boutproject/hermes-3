@@ -37,6 +37,10 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
+  output_ddt = options["output_ddt"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(false);
+
   pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
@@ -47,12 +51,28 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                       .doc("Allow flows through radial boundaries")
                       .withDefault<bool>(true);
 
+  exb_advection = options["exb_advection"]
+                   .doc("Include ExB advection?")
+                   .withDefault<bool>(true);
+
+  scale_ExB = options["scale_ExB"]
+                   .doc("Scale ExB flow?")
+                   .withDefault<BoutReal>(1.0);
+  
   poloidal_flows = options["poloidal_flows"]
                        .doc("Include poloidal ExB flow")
                        .withDefault<bool>(true);
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
+
+  const Options& units = alloptions["units"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Lnorm = units["meters"];
+  hyper_nv = options["hyper_nv"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
+
+
+  
   V.setBoundary(std::string("V") + name);
 
   diagnose = options["diagnose"]
@@ -65,6 +85,25 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   // Set to zero so set for output
   momentum_source = 0.0;
+
+  if (mesh->isFci()) {
+    const auto coord = mesh->getCoordinates();
+    // Note: This is 1 for a Clebsch coordinate system
+    //       Remove parallel slices before operations
+    bracket_factor = sqrt(coord->g_22.withoutParallelSlices())
+      / (coord->J.withoutParallelSlices() * coord->Bxy);
+  } else {
+    // Clebsch coordinate system
+    bracket_factor = 1.0;
+  }
+
+  auto& nv_options = alloptions[std::string("NV") + name];
+
+  isMMS = nv_options["isMMS"]
+    .withDefault<bool>(false);
+  
+  disable_ddt = nv_options["disable_ddt"]
+    .withDefault<bool>(false);
 
   if (immBndry) {
     //Note, use name V to get setting from input file. V gets set to NV anyway later.
@@ -106,19 +145,23 @@ void EvolveMomentum::transform(Options &state) {
   } else {
     NV.applyBoundary();
   }
-  V = NV;
+  mesh->communicate(NV);
+  NV.applyParallelBoundary();
+
   if (immBndry) {
     //IB_TODO: Complicated / operator logic.
+    V = NV;
     BOUT_FOR(i, NV.getRegion("RGN_NO_IMM_BNDRY")) {
       V[i] /= (AA * Nlim[i]);
     }
     V.name = Vname;
     immBndry->SetBoundary(V);
   } else {
-    V /= (AA * Nlim);
+    V = NV / (AA * Nlim);
     V.name = Vname;
   }
   mesh->communicate(V);
+  V.applyParallelBoundary();
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver
@@ -201,8 +244,12 @@ void EvolveMomentum::finally(const Options &state) {
 
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                       true); // ExB drift
+      if (exb_advection) {
+        ddt(NV) = -scale_ExB * Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+                                         true) * bracket_factor; // ExB drift
+      } else {
+        ddt(NV) = 0.0;
+      }
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
@@ -221,8 +268,12 @@ void EvolveMomentum::finally(const Options &state) {
         // This is Z * Apar * dn/dt, keeping just leading order terms
         Field3D dndt = density_source
           - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, dummy)
-          - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true)
           ;
+
+        if (exb_advection) {
+          dndt -= Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
+        }
+
         if (low_n_diffuse_perp) {
           dndt += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
                                         bndry_flux);
@@ -235,7 +286,7 @@ void EvolveMomentum::finally(const Options &state) {
 
         // Using the approximation for small delta-B/B
         // b dot Grad(phi) = Grad_par(phi) + [phi, Apar]
-        ddt(NV) -= Z * N * bracket(phi, Apar_flutter, BRACKET_ARAKAWA);
+        ddt(NV) -= Z * N * bracket(phi, Apar_flutter, BRACKET_ARAKAWA) * bracket_factor;
       }
     } else {
       ddt(NV) = 0.0;
@@ -248,8 +299,13 @@ void EvolveMomentum::finally(const Options &state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
-  ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
-  
+
+  if (isMMS) {
+    Field3D NVV = NV * V;
+    ddt(NV) -= Div_par(NVV);
+  } else {
+    ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
+  }
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
     Field3D P = get<Field3D>(species["pressure"]);
@@ -286,6 +342,12 @@ void EvolveMomentum::finally(const Options &state) {
     auto* coord = N.getCoordinates();
     ddt(NV) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(NV);
   }
+
+  if (hyper_nv > 0) {
+    // Form of hyper-viscosity                                                                                                                                                                                    
+    ddt(NV) += hyperdiffusion(hyper_nv, NV);
+  }
+  
 
   // Other sources/sinks
   if (species.isSet("momentum_source")) {
@@ -333,6 +395,11 @@ void EvolveMomentum::finally(const Options &state) {
   // Note: Copy boundary condition so dump file has correct boundary.
   NV_solver.setBoundaryTo(NV, true);
   NV = NV_solver;
+
+  if (disable_ddt){
+    ddt(NV) = 0.0;
+  }
+
 }
 
 void EvolveMomentum::outputVars(Options &state) {
@@ -351,8 +418,7 @@ void EvolveMomentum::outputVars(Options &state) {
        {"species", name},
        {"source", "evolve_momentum"}});
 
-  if (diagnose) {
-    set_with_attrs(state[std::string("V") + name], V,
+  set_with_attrs(state[std::string("V") + name], V,
                    {{"time_dimension", "t"},
                     {"units", "m / s"},
                     {"conversion", Cs0},
@@ -361,6 +427,7 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
 
+  if (output_ddt || diagnose) {
     set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NV),
                    {{"time_dimension", "t"},
                     {"units", "kg m^-2 s^-2"},
@@ -368,6 +435,10 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"long_name", std::string("Rate of change of ") + name + " momentum"},
                     {"species", name},
                     {"source", "evolve_momentum"}});
+  }
+
+  
+  if (diagnose) {
 
     if (momentum_source.isAllocated()) {
       set_with_attrs(state[std::string("SNV") + name], momentum_source,
@@ -403,5 +474,7 @@ void EvolveMomentum::outputVars(Options &state) {
                     {"species", name},
                     {"source", "evolve_momentum"}});
     }
+
+    
   }
 }

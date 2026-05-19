@@ -27,7 +27,10 @@ struct FixedDensity : public Component {
 
     // Get the density and normalise
     N = options["density"].as<Field3D>() / Nnorm;
-    bout::globals::mesh->communicate(N);
+    if (N.isFci()) {
+      bout::globals::mesh->communicate(N);
+      N.applyParallelBoundary("parallel_neumann_o2");
+    } 
   }
 
   /// Sets in the state the density, mass and charge of the species

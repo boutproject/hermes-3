@@ -4,6 +4,7 @@
 #include <bout/mesh.hxx>
 #include <bout/difops.hxx>
 #include <bout/constants.hxx>
+#include "../include/div_ops.hxx"
 
 #include "../include/electron_viscosity.hxx"
 
@@ -30,6 +31,7 @@ void ElectronViscosity::transform(Options& state) {
     throw BoutException("No electron velocity => Can't calculate electron viscosity");
   }
 
+  //const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
   const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
   const Field3D P = get<Field3D>(species["pressure"]);
   const Field3D V = get<Field3D>(species["velocity"]);
@@ -49,13 +51,17 @@ void ElectronViscosity::transform(Options& state) {
     const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
     eta = eta / (1. + abs(q_cl / q_fl));
-
-    eta.getMesh()->communicate(eta);
-    eta.applyBoundary("neumann");
   }
 
+  eta.applyBoundary("neumann");
+  eta.getMesh()->communicate(eta);
+  eta.applyParallelBoundary("parallel_neumann_o1");
+
+  
   // Save term for output diagnostic
-  viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+  // viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+  Field3D dummy;
+  viscosity = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy, true);
   add(species["momentum_source"], viscosity);
 }
 

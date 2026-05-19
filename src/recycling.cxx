@@ -236,7 +236,7 @@ void Recycling::transform(Options& state) {
 	  flux = 0.0;
 	}
 	
-	BoutReal flow = channel.target_multiplier * flux * pnt.interpolate_sheath_o1(J) / pnt.interpolate_sheath_o1(g_22) * pnt.interpolate_sheath_o1(dx) * pnt.interpolate_sheath_o1(dz);
+	BoutReal flow = channel.target_multiplier * flux * pnt.interpolate_sheath_o1(J) / sqrt(pnt.interpolate_sheath_o1(g_22)) * pnt.interpolate_sheath_o1(dx) * pnt.interpolate_sheath_o1(dz);
 
 	BoutReal volume  = pnt.ythis(J) * pnt.ythis(dx) * pnt.ythis(dy) * pnt.ythis(dz);
 
