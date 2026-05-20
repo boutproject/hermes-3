@@ -2,9 +2,15 @@
 #ifndef RELAX_POTENTIAL_H
 #define RELAX_POTENTIAL_H
 
+#include "../include/guarded_options.hxx"
+
+#include <bout/bout_types.hxx>
+#include <bout/options.hxx>
 #include <bout/vector2d.hxx>
 
 #include "component.hxx"
+
+#include <string>
 
 /// Evolve vorticity and potential in time.
 ///
@@ -80,8 +86,14 @@ struct RelaxPotential : public Component {
   //                  {{"long_name", "plasma potential"},
   //                   {"source", "vorticity"}});
   // }
+
+  /// Calculate vorticity from potential and species
+  Field3D vorticity(const Field3D& phi, GuardedOptions& allspecies);
+
 private:
-  Field3D Vort; // Evolving vorticity
+  bool evolve_vorticity; ///< Evolve vorticity?
+  Field3D Vort;          // Evolving vorticity
+  Field3D Vort_from_phi; ///< Vort calculated from phi
 
   Field3D phi1; // Scaled electrostatic potential, evolving in time ϕ_1 = λ_2 ϕ
   Field3D phi;  // Electrostatic potential
@@ -102,25 +114,25 @@ private:
 
   bool sheath_boundary; ///< Set outer boundary to j=0?
 
-  bool vort_dissipation; ///< Parallel dissipation of vorticity
-  bool phi_dissipation;  ///< Parallel dissipation of potential
+  bool vort_dissipation;       ///< Parallel dissipation of vorticity
+  bool phi_dissipation;        ///< Parallel dissipation of potential
   bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
-  bool damp_core_vorticity; ///< Damp axisymmetric component of vorticity
+  bool damp_core_vorticity;    ///< Damp axisymmetric component of vorticity
 
-  bool phi_boundary_relax; ///< Relax boundary to zero-gradient
-  BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
+  bool phi_boundary_relax;           ///< Relax boundary to zero-gradient
+  BoutReal phi_boundary_timescale;   ///< Relaxation timescale [normalised]
   BoutReal phi_boundary_last_update; ///< Time when last updated
-  bool phi_core_averagey; ///< Average phi core boundary in Y?
+  bool phi_core_averagey;            ///< Average phi core boundary in Y?
 
-  Field2D Bsq;      ///< SQ(coord->Bxy)
-  Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
-  BoutReal hyper_z; ///< Hyper-viscosity in Z
-  Field2D viscosity; ///< Perpendicular Kinematic viscosity
-  Field2D viscosity_par;  ///< Parallel Kinematic viscosity
+  Field2D Bsq;           ///< SQ(coord->Bxy)
+  Vector2D Curlb_B;      ///< Curvature vector Curl(b/B)
+  BoutReal hyper_z;      ///< Hyper-viscosity in Z
+  Field2D viscosity;     ///< Perpendicular Kinematic viscosity
+  Field2D viscosity_par; ///< Parallel Kinematic viscosity
 
-  // Relax-potential related variables 
-  BoutReal lambda_1;  ///< Relaxation parameters.  NOTE: lambda_1 has dimensions! 
-  BoutReal lambda_2;  ///< Relaxation parameters
+  // Relax-potential related variables
+  BoutReal lambda_1; ///< Relaxation parameters.  NOTE: lambda_1 has dimensions!
+  BoutReal lambda_2; ///< Relaxation parameters
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
