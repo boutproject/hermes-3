@@ -89,7 +89,6 @@ private:
   std::vector<IoniseChannel> channels; // Ionising channels
 
   bool core_ionising{false}; ///< Flags for enabling ionisinging in different regions
-  bool diagnose;           ///< Save additional post-processing variables?
 
   BoutReal density_floor,
       pressure_floor; ///< minimum values for Nn, Pn to avoid divide by zero

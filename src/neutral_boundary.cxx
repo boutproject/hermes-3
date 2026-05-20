@@ -10,7 +10,10 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
     : Component({writeBoundary("species:{name}:{outputs}"),
                  writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
                  readWrite("species:{name}:energy_source"),
-                 readOnly("species:{name}:AA")}),
+                 readOnly("species:{name}:AA"),
+                 readOnly("species:{from}:{from_inputs}"),
+                 readOnly("species:{to}:{to_inputs}"),
+                 readWrite("species:{to}:{outputs}")}),
       name(name) {
 
   auto& options = alloptions[name];
@@ -58,10 +61,64 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
           .doc("Fraction of neutrals that are undergoing fast reflection at the pfr")
           .withDefault<BoutReal>(0.8);
 
+  /// For neutral ionising at core
+  // copy paste from recycling
+  //
+  auto species_list = strsplit(options["species"]
+                                   .doc("Comma-separated list of species to ionise")
+                                   .as<std::string>(),
+                               ',');
+  std::set<std::string> from_species, to_species;
+
+  for (const auto& species : species_list) {
+    std::string from = trim(species, " \t\r()"); // The species name in the list
+
+    if (from.empty())
+      continue; // Missing
+
+    // Get the options for this species
+    Options& from_options = alloptions[from];
+    std::string to = from_options["ionise_as"]
+                         .doc("Name of the species to ionise into")
+                         .as<std::string>();
+
+    from_species.insert(from);
+    to_species.insert(to);
+
+    density_floor =
+        options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
+    pressure_floor = density_floor * (1. / get<BoutReal>(alloptions["units"]["eV"]));
+    BoutReal core_ionise_multiplier =
+        from_options["core_ionise_multiplier"]
+            .doc("Multiply the core ionised flux by this factor. Should be >=0 and <= 1")
+            .withDefault<BoutReal>(1.0);
+    BoutReal core_ionise_energy =
+        from_options["core_ionise_energy"]
+            .doc("Fixed energy of the ionised particles at core [eV]")
+            .withDefault<BoutReal>(3.0)
+        / Tnorm; // Normalise from eV
+    if ((core_ionise_multiplier < 0.0) or (core_ionise_multiplier > 1.0)){
+      throw BoutException("Core ionise multipliers must be betweeen 0 and 1");
+    }
+    channels.push_back({from, to, core_ionise_multiplier, core_ionise_energy});
+    core_ionising = from_options["core_ionising"]
+                      .doc("Neutrals ionised in the core?")
+                      .withDefault<bool>(true);
+  }
+  
   substitutePermissions("name", {name});
   substitutePermissions("outputs", {"density", "temperature", "pressure"});
   substitutePermissions("conditional_outputs", {"velocity", "momentum"});
+  // For core ionising
+  substitutePermissions("to",
+                        std::vector<std::string>(to_species.begin(), to_species.end()));
+  substitutePermissions(
+      "from", std::vector<std::string>(from_species.begin(), from_species.end()));
+  substitutePermissions("to_inputs", {"AA", "density", "pressure", "temperature"});
+  substitutePermissions("from_inputs", {"density", "velocity", "temperature"});
+  substitutePermissions("outputs", {"density_source", "energy_source"});
 }
+
 
 void NeutralBoundary::transform_impl(GuardedOptions& state) {
   auto species = state["species"][name];
@@ -347,6 +404,73 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
   // Set energy source (negative in cell next to sheath)
   // Note: energy_source includes any sources previously set in other components
   set(species["energy_source"], fromFieldAligned(energy_source));
+
+
+
+  /* ---- Core ionising ----*/
+  for (auto& channel : channels) {
+
+    GuardedOptions species_from = state["species"][channel.from];
+    const Field3D Nn = get<Field3D>(species_from["density"]);
+    const Field3D Pn = get<Field3D>(species_from["pressure"]);
+    const Field3D Tn = get<Field3D>(species_from["temperature"]);
+    const BoutReal AA = get<BoutReal>(species_from["AA"]);
+
+    const Field3D Nnlim = floor(Nn, density_floor);
+    const Field3D Pnlim = floor(Pn, pressure_floor);
+    const Field3D Tnlim = Pnlim / Nnlim;
+
+    const GuardedOptions species_to = state["species"][channel.to];
+    const Field3D N = get<Field3D>(species_to["density"]);
+    const Field3D V = get<Field3D>(species_to["velocity"]);    // Parallel flow velocity
+    const Field3D T = get<Field3D>(species_to["temperature"]); // Ion temperature
+
+    // Recycling particle and energy sources will be added to these global sources
+    // which are then passed to the density and pressure equations
+    density_source = species_to.isSet("density_source")
+                         ? getNonFinal<Field3D>(species_to["density_source"])
+                         : 0.0;
+    energy_source = species_to.isSet("energy_source")
+                        ? getNonFinal<Field3D>(species_to["energy_source"])
+                        : 0.0;
+   
+    // Get core particle and heat for the species being ionised
+      if (core_ionising){
+    
+    
+          channel.core_ionising_density_source = 0;
+          channel.core_ionising_energy_source = 0;
+    
+          if (species_from.isSet("energy_flow_xlow")) {
+            energy_flow_xlow = get<Field3D>(species_from["energy_flow_xlow"]);
+          } else {
+            throw BoutException("core ionise enabled but no cell edge heat flow "
+                                "available, check your core BC choice (?)");
+          };
+    
+          if (species_from.isSet("particle_flow_xlow")) {
+            particle_flow_xlow = get<Field3D>(species_from["particle_flow_xlow"]);
+          } else {
+            throw BoutException("core ionise enabled but no cell edge particle flow "
+                                "available, check your core BC choice");
+          };
+    
+          Field3D radial_particle_outflow = particle_flow_xlow;
+          Field3D radial_energy_outflow = energy_flow_xlow;
+          if (mesh->xstart){
+            // int x = mesh->xstart;
+            if (mesh -> periodicY(x)){
+              for(int y = mesh -> ystart; y <= mesh->yend; y++){
+                for(int z = mesh -> zstart; z <=mesh->zend; z++){
+                  std::cout<<"Hi"<<std::endl;
+                }
+              }
+            }
+          }
+    
+          
+      }
+    }
 }
 
 void NeutralBoundary::outputVars(Options& state) {
