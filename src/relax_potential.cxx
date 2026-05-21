@@ -6,6 +6,8 @@ using bout::globals::mesh;
 #include "../include/div_ops.hxx"
 #include "../include/relax_potential.hxx"
 #include "../include/hermes_build_config.hxx"
+#include <bout/yboundary_regions.hxx>
+
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver) {
   AUTO_TRACE();
@@ -51,6 +53,19 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                    .doc("Disable timevolution to iterate")
                    .withDefault<bool>(false);
 
+
+  vort_dissipation = options["vort_dissipation"]
+                   .doc("Use dissipation on vorticity")
+                   .withDefault<bool>(false);
+
+  yboundary.init(options);
+  
+  sheath_parallel = options["sheath_parallel"]
+                   .doc("Use parallel sheath to dissipate vorticity at the boundaries")
+                   .withDefault<bool>(false);
+
+
+  
   viscosity_core = options["viscosity_core"]
     .doc("Kinematic viscosity [m^2/s]")
     .withDefault<Field3D>(0.0)
@@ -94,6 +109,8 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   lambda_2 = options["lambda_2"].doc("λ_2 > λ_1").withDefault<BoutReal>(10000.0);
 
   vort_timedissipation = options["vort_timedissipation"].doc("Vort dissipation").withDefault<BoutReal>(-1.0) * Omega_ci;
+
+  vort_volumedissipation = options["vort_volumedissipation"].doc("Vort dissipation").withDefault<BoutReal>(-1.0) * Omega_ci;
   
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
@@ -161,6 +178,20 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   ones.applyBoundary("neumann");
   mesh->communicate(ones);
   ones.applyParallelBoundary("parallel_neumann_o1");
+
+  core_dissipation = options["core_dissipation"]
+                   .doc("Use core dissipation of vorticity? Grid field required!")
+                   .withDefault<bool>(false);
+
+  if (core_dissipation || (vort_timedissipation > 0.0)) {
+    mesh->get(is_SOL, "is_SOL", 0.0);
+  }
+
+  zeroes = 0.0;
+  zeroes.applyBoundary("neumann");
+  mesh->communicate(zeroes);
+  zeroes.applyParallelBoundary("parallel_neumann_o1");
+  
   
 }
 
@@ -193,8 +224,8 @@ void RelaxPotential::transform(Options& state) {
   mesh->communicate(Vort, phi1);
 
   if (phi.isFci()){
-    phi1.applyParallelBoundary("parallel_neumann_o1");
-    Vort.applyParallelBoundary("parallel_neumann_o1");
+    phi1.applyParallelBoundary();
+    Vort.applyParallelBoundary();
   }
   auto& fields = state["fields"];
 
@@ -366,8 +397,25 @@ void RelaxPotential::finally(const Options& state) {
   // Solve diffusion equation for potential
 
   if (vort_timedissipation > 0.0) {
-    ddt(Vort) -= vort_timedissipation * Vort;
+    ddt(Vort) -= (1.0 - is_SOL) * Vort / vort_timedissipation;
   } 
+
+  if (vort_volumedissipation > 0.0) {
+    ddt(Vort) -= Vort / vort_volumedissipation;
+  }
+
+  if (core_dissipation) {
+     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+     ddt(Vort) -= (1.0 - is_SOL) * FV::Div_par_mod<hermes::Limiter>(Vort, zeroes, sound_speed, dummy);
+  }
+   
+  if (vort_dissipation) {
+    Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+    Field3D dummy;
+    ddt(Vort) -= FV::Div_par_mod<hermes::Limiter>(Vort, zeroes, sound_speed, dummy);
+  }
+
+
   
   if (boussinesq) {
 
