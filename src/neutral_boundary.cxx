@@ -111,16 +111,16 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
   substitutePermissions("boundary_outputs", {"density", "temperature", "pressure"});
   substitutePermissions("conditional_outputs", {"velocity", "momentum"});
   // For core ionising
+  if (core_ionising) {
+    setPermissions(readIfSet("species:{from}:energy_flow_xlow"));
+    setPermissions(readIfSet("species:{from}:particle_flow_xlow"));
+  }
   substitutePermissions("to",
                         std::vector<std::string>(to_species.begin(), to_species.end()));
   substitutePermissions(
       "from", std::vector<std::string>(from_species.begin(), from_species.end()));
   substitutePermissions("to_inputs", {"AA", "density", "pressure", "temperature"});
   substitutePermissions("from_inputs", {"density", "velocity", "temperature"});
-  if (core_ionising) {
-    setPermissions(readIfSet("species:{from}:energy_flow_xlow"));
-    setPermissions(readIfSet("species:{from}:particle_flow_xlow"));
-  }
   substitutePermissions("outputs", {"density_source", "energy_source"});
 }
 
@@ -441,19 +441,19 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
     ion_energy_source = species_to.isSet("energy_source")
                         ? getNonFinal<Field3D>(species_to["energy_source"])
                         : 0.0;
-    neutral_density_source = species_from.isSet("density_source")
-                         ? getNonFinal<Field3D>(species_from["density_source"])
+    neutral_density_source = species_from.isSet("neutral_density_source")
+                         ? getNonFinal<Field3D>(species_from["neutral_density_source"])
                          : 0.0;
-    neutral_energy_source = species_from.isSet("energy_source")
-                        ? getNonFinal<Field3D>(species_from["energy_source"])
+    neutral_energy_source = species_from.isSet("neutral_energy_source")
+                        ? getNonFinal<Field3D>(species_from["neutral_energy_source"])
                         : 0.0;
    
     // Get core particle and heat for the species being ionised
     if (core_ionising){
-          channel.core_ion_density_source = 0.0;
-          channel.core_ion_energy_source = 0.0;
-          channel.core_neutral_density_sink = 0.0;
-          channel.core_neutral_energy_sink = 0.0;
+    
+    
+          channel.core_ion_density_source = 0;
+          channel.core_ion_energy_source = 0;
     
           if (species_from.isSet("energy_flow_xlow")) {
             energy_flow_xlow = get<Field3D>(species_from["energy_flow_xlow"]);
@@ -469,8 +469,8 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
                                 "available, check your core BC choice");
           };
     
-          Field3D radial_particle_outflow = particle_flow_xlow * -1.0;
-          Field3D radial_energy_outflow = energy_flow_xlow * -1.0;
+          Field3D radial_particle_outflow = particle_flow_xlow;
+          Field3D radial_energy_outflow = energy_flow_xlow;
 
           // The neutrals that reach the core boundary are removed from the domain 
           // and their flux is added to the boundary condition on the flux of ions
@@ -486,22 +486,20 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
                   
                   // Particle 
                   BoutReal ionise_particle_flow = 0.0;
-                  BoutReal ionise_energy_flow = 0.0;
-                  BoutReal core_neutral_particle_sink_flow = 0.0;
-                  BoutReal core_neutral_energy_sink_flow = 0.0;
-
-                  if (radial_particle_outflow(mesh->xstart, iy, iz) > 0.0) {
+                  if(radial_particle_outflow(mesh->xstart-1, iy, iz) > 0){
                     ionise_particle_flow = 
-                      multiplier * radial_particle_outflow(mesh->xstart, iy, iz);
-                    core_neutral_particle_sink_flow = ionise_particle_flow;
+                      multiplier * radial_particle_outflow(mesh->xstart-1, iy, iz);
+                  }
+                  BoutReal core_neutral_particle_sink_flow = 0.0;
+                  core_neutral_particle_sink_flow = ionise_particle_flow;
 
-                    // Born ions have fixed energy core_ionise_energy
-                    ionise_energy_flow = ionise_particle_flow * channel.core_energy;
-
-                    if (radial_energy_outflow(mesh->xstart, iy, iz) > 0.0) {
-                      core_neutral_energy_sink_flow = 
-                        multiplier * radial_energy_outflow(mesh->xstart, iy, iz);
-                    }
+                  // Energy flow removed from neutral and addeed in to ions
+                  // due to ionisation
+                  // TODO: Assume energy remain the same - is this correct? 
+                  BoutReal ionise_energy_flow = radial_energy_outflow(mesh->xstart-1, iy, iz);
+                  BoutReal core_neutral_energy_sink_flow = 0.0;
+                  if(ionise_energy_flow > 0){
+                    core_neutral_energy_sink_flow = ionise_energy_flow;
                   }
 
                   // diagnostic
