@@ -43,18 +43,13 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
                               .doc("Zero outer gradient U?")
                               .withDefault<bool>(false);
   compute_U2D(U2D, zero_inner_gradient_U, zero_outer_gradient_U);
-  mesh->communicate(U2D);
-  U2D = U2D; //* Bnorm;
-  mesh->communicate(U2D);
   dipole_anomalous_D = options["dipole_anomalous_D"]
                            .doc("Dipole anomalous particle diffusion coefficient [m^2/s]")
-                           .withDefault(dipole_anomalous_D)
-                       / diffusion_norm;
+                           .withDefault(dipole_anomalous_D);
   Coordinates* coord = dipole_quasilinear_D.getCoordinates();
   mesh->communicate(coord->g11);
   BOUT_FOR(i, dipole_quasilinear_D.getRegion("RGN_ALL")) {
-  dipole_quasilinear_D[i] =
-      dipole_quasilinear_D[i] / (coord->g11[i] * rho_s0 * rho_s0) / U2D[i];
+    dipole_quasilinear_D[i] = dipole_quasilinear_D[i] / (coord->g11[i] * diffusion_norm);
     }
   dipole_gamma = 5.0 / 3.0;
   dipole_gamma = options["dipole_gamma"].doc("Dipole gamma").withDefault(dipole_gamma);
@@ -184,27 +179,28 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
     //
     //  v_D = - D_dp Grad_perp(N * dV) / N
     // transport_on = isnegative_grad_perp(P2D);
-    if (dipole_naive) {
+    // if (dipole_naive) {
       Gamma_N = transport_on
-                * Div_a_Grad_perp_upwind_flows(dipole_quasilinear_D, N2D * U2D, flow_xlow,
-                                               flow_ylow);
-    } else {
-      if (dipole_upwind) {
-        Gamma_N = 1 / U2D * transport_on
-                  * Div_a_Grad_perp_upwind_flows(dipole_quasilinear_D, N2D * U2D,
-                                                 flow_xlow, flow_ylow);
-      } else {
-        if (!dipole_div_form) {
-          Gamma_N = 1 / U2D * transport_on
-                    * Div_a_Grad_perp_flows(dipole_quasilinear_D, N2D * U2D, flow_xlow,
-                                            flow_ylow);
-        } else {
-          Gamma_N = transport_on
-                    * Div_a_Grad_perp_flows(1 / U2D * dipole_quasilinear_D, N2D * U2D,
-                                            flow_xlow, flow_ylow);
-        }
-      }
-    }
+                * Div_a_Grad_perpB_upwind_flows(dipole_quasilinear_D, N2D,
+                                                flow_xlow, flow_ylow);
+    // } 
+    //else {
+    //   if (dipole_upwind) {
+    //     Gamma_N = 1 / U2D * transport_on
+    //               * Div_a_Grad_perp_upwind_flows(dipole_quasilinear_D, N2D * U2D,
+    //                                              flow_xlow, flow_ylow);
+    //   } else {
+    //     if (!dipole_div_form) {
+    //       Gamma_N = 1 / U2D * transport_on
+    //                 * Div_a_Grad_perp_flows(dipole_quasilinear_D, N2D * U2D, flow_xlow,
+    //                                         flow_ylow);
+    //     } else {
+    //       Gamma_N = transport_on
+    //                 * Div_a_Grad_perp_flows(1 / U2D * dipole_quasilinear_D, N2D * U2D,
+    //                                         flow_xlow, flow_ylow);
+    //     }
+    //   }
+    // }
     // Gamma_N = 1/U2D *transport_on *Div_a_Grad_per
 
     // Field3D Gamma_N =Div_a_Grad_perp_upwind_flows(dipole_anomalous_D,
