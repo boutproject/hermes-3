@@ -144,6 +144,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                            .doc("Apply Neumann BC to phi at x boundaries?")
                            .withDefault<bool>(false);
 
+  phi_boundary_diamagnetic = options["phi_boundary_diamagnetic"]
+                           .doc("Set x phi gradient to diamagnetic electric field?")
+                           .withDefault<bool>(false);
+
   initialize_phi = options["initialize_phi"]
                            .doc("initialize electrostatic potential at the first rhs call?")
                            .withDefault<bool>(false);                           
@@ -256,6 +260,8 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   Bsq = SQ(coord->Bxy);
 
   // Auxiliary
+  // Er_dia = 0.0;
+  Er_dia_x = 0.0;
   phi0 = 0.0;
 
   diagnose = options["diagnose"]
@@ -468,6 +474,121 @@ void Vorticity::transform(Options& state) {
       }
     }
 
+
+  } else if (phi_boundary_diamagnetic) {
+
+    // Er_dia.x = 0.0;
+    // Er_dia.y = 0.0;
+    // Er_dia.z = 0.0;
+    // Er_dia.covariant = Curlb_B.covariant;
+
+    Er_dia_x = 0.0;
+
+    for (auto& kv : allspecies.getChildren()) {
+      Options& species = allspecies[kv.first]; // Note: need non-const
+
+      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"]))) {
+        continue; // No pressure or charge -> no diamagnetic current
+      }
+
+      const BoutReal Z = get<BoutReal>(species["charge"]);
+      if (fabs(Z) < 1e-5 || Z <= 0.0) {
+        continue; // Not charged
+      }
+
+      const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
+
+      auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+
+      // // Note: We need boundary conditions on P, so apply the same
+      // //       free boundary condition as sheath_boundary.
+      // if (P.hasParallelSlices()) {
+      //   Field3D &P_ydown = P.ydown();
+      //   Field3D &P_yup = P.yup();
+      //   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      //     for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      //       P_ydown(r.ind, mesh->ystart - 1, jz) = 2 * P(r.ind, mesh->ystart, jz) - P_yup(r.ind, mesh->ystart + 1, jz);
+      //     }
+      //   }
+      //   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      //     for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      //       P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
+      //     }
+      //   }
+      // } else {
+      //   Field3D P_fa = toFieldAligned(P);
+      //   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      //     for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      //       auto i = indexAt(P_fa, r.ind, mesh->ystart, jz);
+      //       P_fa[i.ym()] = limitFree(P_fa[i.yp()], P_fa[i]);
+      //     }
+      //   }
+      //   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      //     for (int jz = 0; jz < mesh->LocalNz; jz++) {
+      //       auto i = indexAt(P_fa, r.ind, mesh->yend, jz);
+      //       P_fa[i.yp()] = limitFree(P_fa[i.ym()], P_fa[i]);
+      //     }
+      //   }
+      //   P = fromFieldAligned(P_fa);
+      // }
+
+
+      // Vector3D Er_dia_species = Grad_perp(P) / N / Z ; // Diamagnetic electric field for this species
+      // Er_dia += Er_dia_species; // Collect total diamagnetic current
+
+      Field3D Er_dia_species = DDX(P) / N / Z ; // Diamagnetic electric field for this species
+      Er_dia_x += Er_dia_species; // Collect total diamagnetic current
+      
+    }
+
+    // Er_dia.applyBoundary("neumann");
+    // mesh->communicate(Er_dia);
+
+    Er_dia_x.applyBoundary("neumann");
+    mesh->communicate(Er_dia_x);    
+
+    // Outer boundary cells
+    if (mesh->firstX()) {
+      for (int i = mesh->xstart - 1; i >= 0; --i) {
+        if (mesh->periodicY(i)) {
+          for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+
+            // BoutReal delta = bndry->bx * metric->dx(bndry->x, bndry->y)
+            //              + bndry->by * metric->dy(bndry->x, bndry->y);
+            BoutReal delta =  coord->dx(mesh->xstart, j);
+            // BoutReal delta =  coord->dx(mesh->xstart, j) / sqrt(coord->g11(mesh->xstart, j));
+            // BoutReal delta =  coord->g11(mesh->xstart, j) * coord->J (mesh->xstart, j) * coord->dx(mesh->xstart, j) 
+            // + coord->dy(mesh->xstart, j);
+
+            for (int k = 0; k < mesh->LocalNz; ++k) {
+              // phi(i, j, k) = phi(i + 1, j, k) + delta * Er_dia.x(mesh->xstart, j, k);
+              phi(i, j, k) = phi(i + 1, j, k) + delta * Er_dia_x(mesh->xstart, j, k);
+            }
+          }
+        } else {
+          for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+            for (int k = 0; k < mesh->LocalNz; ++k) {
+              phi(i, j, k) = phi(i + 1, j, k); // Neumann
+            }
+          }
+        }
+      }
+    }
+
+    if (mesh->lastX()) {
+      for (int i = mesh->xend + 1; i < mesh->LocalNx; ++i) {
+        for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+          for (int k = 0; k < mesh->LocalNz; ++k) {
+            phi(i, j, k) = phi(i - 1, j, k); // Neumann
+            // phi(i, j, k) = 0.0; // Dirichlet
+            // phi(i, j, k) = phi0(i - 1, j, k);
+          }
+        }
+      }
+    }
+
+
+
   } else {
     // phi_boundary_relax = false
     //
@@ -666,7 +787,7 @@ void Vorticity::transform(Options& state) {
       // Note that the species must have a charge, but charge is not used,
       // because it cancels out in the expression for current
 
-      auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+      auto P = softFloor(GET_NOBOUNDARY(Field3D, species["pressure"]), 1e-20);
 
       // Note: We need boundary conditions on P, so apply the same
       //       free boundary condition as sheath_boundary.
@@ -744,7 +865,7 @@ void Vorticity::transform(Options& state) {
       }
     }
 
-    Field3D weighted_collision_frequency = sum_A_nu_n / sum_A_n;
+    Field3D weighted_collision_frequency = sum_A_nu_n / softFloor(sum_A_n, 1e-15);
     weighted_collision_frequency.applyBoundary("neumann");
 
     DivJcol = -FV::Div_a_Grad_perp(
@@ -870,7 +991,7 @@ void Vorticity::finally(const Options& state) {
       }
     }
 
-    Field3D weighted_viscosity = sum_A_mu_n / sum_A_n;
+    Field3D weighted_viscosity = sum_A_mu_n /softFloor(sum_A_n, 1e-15);
     weighted_viscosity.applyBoundary("neumann");
 
     ddt(Vort) += FV::Div_a_Grad_perp(weighted_viscosity, Vort);
@@ -1023,6 +1144,7 @@ void Vorticity::outputVars(Options& state) {
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  // auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   state["Vort"].setAttributes({{"time_dimension", "t"},
                                {"units", "C m^-3"},
@@ -1037,6 +1159,13 @@ void Vorticity::outputVars(Options& state) {
                   {"standard_name", "potential"},
                   {"long_name", "plasma potential"},
                   {"source", "vorticity"}});
+
+  // set_with_attrs(state["Er_dia"], Er_dia.x,
+  //               {{"time_dimension", "t"},
+  //                 {"units", "V / m"},
+  //                 {"conversion", Tnorm / rho_s0 },
+  //                 {"long_name", "Redial diamagnetic electric field"},
+  //                 {"source", "vorticity"}});
 
   if (diagnose) {
     set_with_attrs(state["ddt(Vort)"], ddt(Vort),

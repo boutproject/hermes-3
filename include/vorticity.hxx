@@ -149,6 +149,9 @@ private:
 
   bool viscosity_from_anomalous_nu; ///< Calculate perpendicular viscosity from anomalous viscosity?
 
+  bool phi_boundary_diamagnetic; ///< Set radial core boundary phi gradient to diamagnetic electric field Er0_dia 
+  // Vector3D Er_dia; ///< Diamagnetic Electric Field.
+  Field3D Er_dia_x; ///< Diamagnetic Electric Field.
   Field3D phi0; ///< Diamagnetic potential
   bool initialize_phi;
 
