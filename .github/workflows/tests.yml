@@ -56,7 +56,7 @@ jobs:
 
       - name: Install pip packages
         run: |
-          ./.pip_install_for_tests.sh 'netcdf4~=1.5' 'boutdata==0.3.0' boututils
+          ./.pip_install_for_tests.sh 'netcdf4~=1.5' 'boutdata==0.3.0' boututils 'git+https://github.com/boutproject/zoidberg'
           # Add the pip install location to the runner's PATH
           echo ~/.local/bin >> $GITHUB_PATH
       - name: Build and run tests
