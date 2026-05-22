@@ -129,6 +129,9 @@ private:
   bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
   bool damp_core_vorticity; ///< Damp axisymmetric component of vorticity
 
+  std::unique_ptr<Laplacian> phiSolver_zonalneumann;
+  bool zonal_neumann;
+  
   bool phi_boundary_relax; ///< Relax boundary to zero-gradient
   BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
   BoutReal phi_boundary_last_update; ///< Time when last updated
