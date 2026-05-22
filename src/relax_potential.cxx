@@ -58,7 +58,12 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 } // namespace
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver)
-    : Component({readWrite("fields:vorticity"), readWrite("fields:phi")}) {
+    : Component({
+          readWrite("fields:vorticity"),
+          readWrite("fields:phi"),
+          readIfSet("species:{all_species}:charge"),
+          readOnly("species:{charged}:AA"),
+      }) {
 
   auto& options = alloptions[name];
 
@@ -189,6 +194,8 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                                  .doc("Timescale for phi boundary relaxation [seconds]")
                                  .withDefault(1e-4)
                              / get<BoutReal>(alloptions["units"]["seconds"]);
+  } else {
+    setPermissions(readIfSet("species:{charged}:temperature", Regions::Interior));
   }
 
   if (diamagnetic) {
@@ -877,7 +884,7 @@ Field3D RelaxPotential::vorticity(const Field3D& phi, GuardedOptions& allspecies
           continue; // No pressure
         }
         const BoutReal A = get<BoutReal>(species["AA"]);
-        const Field3D P = get<Field3D>(species["pressure"]);
+        const Field3D P = GET_NOBOUNDARY(Field3D, species["pressure"]);
         phi_vort += FV::Div_a_Grad_perp(A / Bsq, P);
       }
     }
