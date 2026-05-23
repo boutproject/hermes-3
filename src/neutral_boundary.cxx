@@ -467,9 +467,12 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           // The neutrals that reach the core boundary are removed from the domain 
           // and their flux is added to the boundary condition on the flux of ions
           //  from the core.
+          // firstX from first domain cell 
+          // the processor that contains the core boundary -> firstX
+          // xstart -> the first domain cell in the boundary
           if (mesh->firstX() && mesh->periodicY(mesh->xstart)){
-              for(int iy = mesh->ystart; iy <= mesh->yend; iy++){
-                for(int iz = mesh->zstart; iz <= mesh->zend; iz++){
+              for(int iy=0; iy < mesh->LocalNy; iy++){ 
+                for(int iz = 0; iz < mesh->LocalNz; iz++){
                   // Volume of cell adjacent to wall which will receive source
                   BoutReal volume = J(mesh->xstart, iy) * dx(mesh->xstart, iy) * dy(mesh->xstart, iy)
                               * dz(mesh->xstart, iy);
@@ -478,7 +481,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
                   
                   // Particle 
                   BoutReal ionise_particle_flow = 0.0;
-                  if (radial_particle_outflow(mesh->xstart, iy, iz) > 0.0) {
+                  if (radial_particle_outflow(mesh->xstart-1, iy, iz) > 0.0) {
                     ionise_particle_flow = 
                       multiplier * radial_particle_outflow(mesh->xstart, iy, iz);
                   }
@@ -486,7 +489,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
 
                   BoutReal ionise_energy_flow = 0.0;
                   BoutReal core_neutral_energy_sink_flow = 0.0;
-                  if (radial_energy_outflow(mesh->xstart, iy, iz) > 0.0) {
+                  if (radial_energy_outflow(mesh->xstart-1, iy, iz) > 0.0) {
                     core_neutral_energy_sink_flow = 
                       multiplier * radial_energy_outflow(mesh->xstart, iy, iz);
                     ionise_energy_flow = core_neutral_energy_sink_flow;
