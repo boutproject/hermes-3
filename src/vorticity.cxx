@@ -1,6 +1,9 @@
 
 #include "../include/vorticity.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_build_config.hxx"
+#include "../include/hermes_utils.hxx"
+
 
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
@@ -14,11 +17,6 @@
 using bout::globals::mesh;
 
 namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
 
 Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int ny = f.getNy();
@@ -216,6 +214,12 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
         Curlb_B = 0.0;
       }
     }
+
+    zeroes = 0.0;
+    zeroes.applyBoundary("neumann");
+    mesh->communicate(zeroes);
+    zeroes.applyParallelBoundary("parallel_neumann_o1");
+    
   }
 
   if (Options::root()["mesh"]["paralleltransform"]["type"].as<std::string>()
@@ -427,40 +431,13 @@ void Vorticity::transform(Options& state) {
       Te = 0.0;
     }
 
-    // Sheath multiplier Te -> phi (2.84522 for Deuterium if Ti = 0)
-    if ( mesh->firstX()) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal teavg = 0.0; // Average Te in Z
-
-	for (int k = 0; k < mesh->LocalNz; k++) {
-	  teavg += Te(mesh->xstart, j, k);
-	}
-	teavg /= mesh->LocalNz;
-	BoutReal phivalue = sheathmult * teavg;
-	
-        // Set midpoint (boundary) value
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          phi(mesh->xstart - 1, j, k) = 2. * phivalue - phi(mesh->xstart, j, k);
-
-          // Note: This seems to make a difference, but don't know why.
-          // Without this, get convergence failures with no apparent instability
-          // (all fields apparently smooth, well behaved)
-          phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
-        }
-      }
-    }
 
     if ( mesh->lastX()) {
       for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal teavg = 0.0; // Average Te in Z
-
-	for (int k = 0; k < mesh->LocalNz; k++) {
-	  teavg += Te(mesh->xend, j, k);
-	}
-	teavg /= mesh->LocalNz;
-	BoutReal phivalue = sheathmult * teavg;
         // Set midpoint (boundary) value
         for (int k = 0; k < mesh->LocalNz; k++) {
+	  BoutReal phivalue = sheathmult * 0.5 * (Te(mesh->xend, j, k) + Te(mesh->xend + 1, j, k));
+
           phi(mesh->xend + 1, j, k) = 2. * phivalue - phi(mesh->xend, j, k);
 
           // Note: This seems to make a difference, but don't know why.
@@ -798,11 +775,13 @@ void Vorticity::finally(const Options& state) {
 
     const Field3D N = get<Field3D>(species["density"]);
     const Field3D NV = get<Field3D>(species["momentum"]);
+    const Field3D V = get<Field3D>(species["velocity"]);
     const BoutReal A = get<BoutReal>(species["AA"]);
 
-    // Note: Using NV rather than N*V so that the cell boundary flux is correct
-    const Field3D jpar = (Z / A) * NV;
-    ddt(Vort) += Div_par(jpar);
+
+    Field3D flow_ylow = 0.0;
+    ddt(Vort) += Z * FV::Div_par_mod<hermes::Limiter>(N, V, zeroes, flow_ylow,  false,
+						   false, true);
 
     if (state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -811,7 +790,7 @@ void Vorticity::finally(const Options& state) {
       // Div_par(jpar) = B * Grad_par(jpar / B)
       // Using the approximation for small delta-B/B
       // b dot Grad(jpar) = Grad_par(jpar) + [jpar, Apar]
-      ddt(Vort) += coord->Bxy * bracket(jpar / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(Vort) += coord->Bxy * bracket(Z*NV / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA);
     }
   }
 
@@ -836,7 +815,13 @@ void Vorticity::finally(const Options& state) {
     // Adds dissipation term like in other equations, but depending on gradient of
     // potential
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    ddt(Vort) -= FV::Div_par(-phi, 0.0, sound_speed);
+    Field3D dummy1;
+    zeroes = 0.0;
+    zeroes.applyBoundary("neumann");
+    mesh->communicate(zeroes);
+    zeroes.applyParallelBoundary("parallel_neumann_o1");
+    ddt(Vort) -= FV::Div_par_mod<hermes::Limiter>(-phi, zeroes, sound_speed, dummy1,  false,
+						  false, true);
   }
 
   if (hyper > 0) {
