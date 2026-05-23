@@ -5,6 +5,8 @@
 #include <bout/vectormetric.hxx>
 
 #include "component.hxx"
+#include <bout/yboundary_regions.hxx>
+
 
 /// Evolve vorticity and potential in time.
 ///
@@ -69,6 +71,18 @@ private:
   bool boussinesq;               ///< Use the Boussinesq approximation?
   BoutReal average_atomic_mass;  //< Weighted average atomic mass, for polarisaion current
                                  // (Boussinesq approximation)
+
+  Field3D zeroes;
+  
+  bool sheath_parallel;
+
+  YBoundary yboundary;
+  bool core_dissipation;
+  bool disable_ddt_Vort, disable_ddt_phi1;
+
+  BoutReal vort_volumedissipation;
+  bool vort_dissipation;
+  
   bool poloidal_flows;           ///< Include poloidal ExB flow?
   bool bndry_flux;               ///< Allow flows through radial boundaries?
   bool diamagnetic_bracketform;
@@ -92,6 +106,8 @@ private:
   Field3D ones;
   bool phi_dissipation; /// Parallel dissipation of potential
   BoutReal vort_timedissipation;
+
+  Field3D is_SOL;
   
   Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
