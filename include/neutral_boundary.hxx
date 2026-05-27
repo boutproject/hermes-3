@@ -81,13 +81,13 @@ private:
 
     // Ionising particle and energy sources for the different sources of ionising
     // These sources are per-channel and added to the `to` species
-    /// Ionising density sink for core ionising (for neutral removal)
+    /// Neutral sink for core ionising (for neutral removal)
     Field3D core_neutral_density_sink = 0.0;
-    /// Ionising energy sink for core ionising (for neutral removal)
+    Field3D core_neutral_momentum_sink = 0.0;
     Field3D core_neutral_energy_sink = 0.0;
-    /// Ionising density source for core ionising (for ion source)
+    /// Ion source for core ionising (for ion source)
     Field3D core_ion_density_source = 0.0;
-    /// Ionising energy source for core ionising (for ion source)
+    Field3D core_ion_momentum_source = 0.0;
     Field3D core_ion_energy_source = 0.0;
   };
   std::vector<IoniseChannel> channels; // Ionising channels
@@ -100,8 +100,8 @@ private:
   BoutReal gamma_i; /// Sheath heat transmission coefficient
 
   // After the calculation is done, the following variables are added to the solver as sources/sinks
-  Field3D ion_density_source, ion_energy_source; ///< Ionising particle and energy sources for all locations
-  Field3D neutral_density_source, neutral_energy_source; 
+  Field3D ion_density_source, ion_momentum_source, ion_energy_source; ///< Ionising particle and energy sources for all locations
+  Field3D neutral_density_source, neutral_momentum_source, neutral_energy_source; 
 
   Field3D energy_flow_xlow;   ///< Cell edge fluxes used for calculating
   Field3D particle_flow_xlow; ///< Radial core particle fluxes for ionising calc. 

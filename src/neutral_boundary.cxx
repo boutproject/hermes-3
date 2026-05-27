@@ -111,7 +111,7 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
       "from", std::vector<std::string>(from_species.begin(), from_species.end()));
   substitutePermissions("to_inputs", {"AA", "density", "pressure", "temperature"});
   substitutePermissions("from_inputs", {"density", "velocity", "temperature"});
-  substitutePermissions("outputs", {"density_source", "energy_source"});
+  substitutePermissions("outputs", {"density_source", "momentum_source", "energy_source"});
 }
 
 
@@ -407,125 +407,178 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
 
 
   /* ---- Core ionising ----*/
-  for (auto& channel : channels) {
+  if (core_ionising){ 
+    for (auto& channel : channels) {
 
-    GuardedOptions species_from = state["species"][channel.from];
-    const Field3D Nn = get<Field3D>(species_from["density"]);
-    const Field3D Pn = get<Field3D>(species_from["pressure"]);
-    const Field3D Tn = get<Field3D>(species_from["temperature"]);
+      GuardedOptions species_from = state["species"][channel.from];
+      const Field3D Nn = get<Field3D>(species_from["density"]);
+      const Field3D Pn = get<Field3D>(species_from["pressure"]);
+      const Field3D Tn = get<Field3D>(species_from["temperature"]);
+      const BoutReal AAn = get<BoutReal>(species_from["AA"]);
+ 
+      const Field3D Nnlim = floor(Nn, density_floor);
+      const Field3D Pnlim = floor(Pn, pressure_floor);
+      const Field3D Tnlim = Pnlim / Nnlim;
 
-    const Field3D Nnlim = floor(Nn, density_floor);
-    const Field3D Pnlim = floor(Pn, pressure_floor);
-    const Field3D Tnlim = Pnlim / Nnlim;
+      const GuardedOptions species_to = state["species"][channel.to];
+      const Field3D N = get<Field3D>(species_to["density"]);
+      const Field3D V = get<Field3D>(species_to["velocity"]);    // Parallel flow velocity
+      const Field3D T = get<Field3D>(species_to["temperature"]); // Ion temperature
 
-    const GuardedOptions species_to = state["species"][channel.to];
-    const Field3D N = get<Field3D>(species_to["density"]);
-    const Field3D V = get<Field3D>(species_to["velocity"]);    // Parallel flow velocity
-    const Field3D T = get<Field3D>(species_to["temperature"]); // Ion temperature
+      // Recycling particle and energy sources will be added to these global sources
+      // which are then passed to the density and pressure equations
+      ion_density_source = species_to.isSet("density_source")
+                          ? getNonFinal<Field3D>(species_to["density_source"])
+                          : 0.0;
+      ion_energy_source = species_to.isSet("energy_source")
+                          ? getNonFinal<Field3D>(species_to["energy_source"])
+                          : 0.0;
+      ion_momentum_source = species_to.isSet("momentum_source")
+                          ? getNonFinal<Field3D>(species_to["momentum_source"])
+                          : 0.0;
+      neutral_density_source = species_from.isSet("density_source")
+                          ? getNonFinal<Field3D>(species_from["density_source"])
+                          : 0.0;
+      neutral_energy_source = species_from.isSet("energy_source")
+                          ? getNonFinal<Field3D>(species_from["energy_source"])
+                          : 0.0;
+      neutral_momentum_source = species_from.isSet("momentum_source")
+                          ? getNonFinal<Field3D>(species_from["momentum_source"])
+                          : 0.0;
+    
+      channel.core_ion_density_source = 0.0;
+      channel.core_ion_energy_source = 0.0;
+      channel.core_ion_momentum_source = 0.0;
+      channel.core_neutral_density_sink = 0.0;
+      channel.core_neutral_energy_sink = 0.0;
+      channel.core_neutral_momentum_sink = 0.0;
+    
+      if (species_from.isSet("energy_flow_xlow")) {
+        energy_flow_xlow = get<Field3D>(species_from["energy_flow_xlow"]);
+      } else {
+        throw BoutException("core ionise enabled but no cell edge heat flow "
+                            "available, check your core BC choice (?)");
+      };
+    
+      if (species_from.isSet("particle_flow_xlow")) {
+        particle_flow_xlow = get<Field3D>(species_from["particle_flow_xlow"]);
+      } else {
+        throw BoutException("core ionise enabled but no cell edge particle flow "
+                            "available, check your core BC choice");
+      };
+    
+      // Field3D radial_particle_outflow = particle_flow_xlow * -1.0;
+      // Field3D radial_energy_outflow = energy_flow_xlow * -1.0;
 
-    // Recycling particle and energy sources will be added to these global sources
-    // which are then passed to the density and pressure equations
-    ion_density_source = species_to.isSet("density_source")
-                         ? getNonFinal<Field3D>(species_to["density_source"])
-                         : 0.0;
-    ion_energy_source = species_to.isSet("energy_source")
-                        ? getNonFinal<Field3D>(species_to["energy_source"])
-                        : 0.0;
-    neutral_density_source = species_from.isSet("density_source")
-                         ? getNonFinal<Field3D>(species_from["density_source"])
-                         : 0.0;
-    neutral_energy_source = species_from.isSet("energy_source")
-                        ? getNonFinal<Field3D>(species_from["energy_source"])
-                        : 0.0;
-   
-    // Get core particle and heat for the species being ionised
-    if (core_ionising){
-    
-    
-          channel.core_ion_density_source = 0.0;
-          channel.core_ion_energy_source = 0.0;
-          channel.core_neutral_density_sink = 0.0;
-          channel.core_neutral_energy_sink = 0.0;
-    
-          if (species_from.isSet("energy_flow_xlow")) {
-            energy_flow_xlow = get<Field3D>(species_from["energy_flow_xlow"]);
-          } else {
-            throw BoutException("core ionise enabled but no cell edge heat flow "
-                                "available, check your core BC choice (?)");
-          };
-    
-          if (species_from.isSet("particle_flow_xlow")) {
-            particle_flow_xlow = get<Field3D>(species_from["particle_flow_xlow"]);
-          } else {
-            throw BoutException("core ionise enabled but no cell edge particle flow "
-                                "available, check your core BC choice");
-          };
-    
-          Field3D radial_particle_outflow = particle_flow_xlow * -1.0;
-          Field3D radial_energy_outflow = energy_flow_xlow * -1.0;
-
-          // The neutrals that reach the core boundary are removed from the domain 
-          // and their flux is added to the boundary condition on the flux of ions
-          //  from the core.
-          // firstX from first domain cell 
-          // the processor that contains the core boundary -> firstX
-          // xstart -> the first domain cell in the boundary
-          if (mesh->firstX() && mesh->periodicY(mesh->xstart)){
-              for(int iy=0; iy < mesh->LocalNy; iy++){ 
-                for(int iz = 0; iz < mesh->LocalNz; iz++){
-                  // Volume of cell adjacent to wall which will receive source
-                  BoutReal volume = J(mesh->xstart, iy) * dx(mesh->xstart, iy) * dy(mesh->xstart, iy)
+      // The neutrals that reach the core boundary are removed from the domain 
+      // and their flux is added to the boundary condition on the flux of ions
+      //  from the core.
+      // firstX from first domain cell 
+      // the processor that contains the core boundary -> firstX
+      // xstart -> the first domain cell in the boundary
+      if (mesh->firstX() && mesh->periodicY(mesh->xstart)){
+        for(int iy=0; iy < mesh->LocalNy; iy++){ 
+          for(int iz = 0; iz < mesh->LocalNz; iz++){
+            // Volume of cell adjacent to wall which will receive source
+            BoutReal volume = J(mesh->xstart, iy) * dx(mesh->xstart, iy) * dy(mesh->xstart, iy)
                               * dz(mesh->xstart, iy);
-                  
-                  BoutReal multiplier = channel.core_multiplier;
-                  
-                  // Particle 
-                  BoutReal ionise_particle_flow = 0.0;
-                  if (radial_particle_outflow(mesh->xstart-1, iy, iz) > 0.0) {
-                    ionise_particle_flow = 
-                      multiplier * radial_particle_outflow(mesh->xstart, iy, iz);
-                  }
-                  BoutReal core_neutral_particle_sink_flow = ionise_particle_flow;
+            
+            BoutReal multiplier = channel.core_multiplier;
+            
+            // Particle
+            // Rather than using particle flow calculated in neutral transport,
+            // use thermal speed to calculate particle flux into the core from 
+            // core neutrals. This assumes that particles move thermally to 
+            // ward the wall until they hit it.
+            auto i = indexAt(Nn, mesh->xstart, iy, iz);      // Final domain cell
+            auto ig = indexAt(Nn, mesh->xstart - 1, iy, iz); // Guard cell
 
-                  BoutReal ionise_energy_flow = 0.0;
-                  BoutReal core_neutral_energy_sink_flow = 0.0;
-                  if (radial_energy_outflow(mesh->xstart-1, iy, iz) > 0.0) {
-                    core_neutral_energy_sink_flow = 
-                      multiplier * radial_energy_outflow(mesh->xstart, iy, iz);
-                    ionise_energy_flow = core_neutral_energy_sink_flow;
-                  }
+            // Calculate midpoint values at wall
+            const BoutReal nncore = 0.5 * (Nn[ig] + Nn[i]);
+            const BoutReal tncore = 0.5 * (Tn[ig] + Tn[i]);
 
-                  // diagnostic
-                  channel.core_ion_density_source(mesh->xstart, iy, iz) += 
-                    ionise_particle_flow / volume;
-                  channel.core_ion_energy_source(mesh->xstart, iy, iz) += 
-                    ionise_energy_flow / volume;
-                  channel.core_neutral_density_sink(mesh->xstart, iy, iz) -= 
-                    core_neutral_particle_sink_flow / volume;
-                  channel.core_neutral_energy_sink(mesh->xstart, iy, iz) -= 
-                    core_neutral_energy_sink_flow / volume;
+            // Thermal speed of static Maxwellian in one direction
+            const BoutReal v_th =
+                0.25 * sqrt(8 * tncore / (PI * AAn)); // Stangeby p.69 eqns. 2.21, 2.24
+            
+            // Convert dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
+            // Convert dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+            // Calculate radial wall area in [m^2]
+            // Calculate final cell volume [m^3]
+            BoutReal dpolcore =
+                0.5 * (coord->dy[i] + coord->dy[ig]) * 1
+                / (0.5 * (sqrt(coord->g22[i]) + sqrt(coord->g22[ig])));
+            BoutReal dtorcore = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
+                                  * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+            BoutReal dacore = dpolcore * dtorcore; // [m^2]
+            // BoutReal dv = coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i];
+            BoutReal neutral_particle_flow_to_core = v_th * nncore * dacore;
+            // The amount of neutral ionised in core
+            BoutReal ionise_particle_flow = neutral_particle_flow_to_core * multiplier;
+            
+            // if (radial_particle_outflow(mesh->xstart-1, iy, iz) > 0.0) {
+            //   ionise_particle_flow = 
+            //     multiplier * radial_particle_outflow(mesh->xstart, iy, iz);
+            // }
+            // BoutReal core_neutral_particle_sink_flow = ionise_particle_flow;
 
-                  // save to solver
-                  ion_density_source(mesh->xstart, iy, iz) += 
-                    ionise_particle_flow / volume;
-                  ion_energy_source(mesh->xstart, iy, iz) += 
-                    ionise_energy_flow / volume;
-                  neutral_density_source(mesh->xstart, iy, iz) -= 
-                    core_neutral_particle_sink_flow / volume;
-                  neutral_energy_source(mesh->xstart, iy, iz) -= 
-                    core_neutral_energy_sink_flow / volume;
+            // Momentum 
+            // mnv = kg m/s 1/m^3 
+            BoutReal neutral_momentum_flow_to_core = v_th * v_th * nncore * dacore * AAn;
+            BoutReal ionise_momentum_flow = neutral_momentum_flow_to_core * multiplier;
 
-                }
-              }
+            // Energy 
+            BoutReal neutral_energy_flow_to_core = 2.0 * nncore * tncore * v_th * dacore; // Incident energy
+            BoutReal ionise_energy_flow = neutral_energy_flow_to_core * multiplier;
+
+            // BoutReal core_neutral_energy_sink_flow = 0.0;
+            // if (radial_energy_outflow(mesh->xstart-1, Viy, iz) > 0.0) {
+            //   core_neutral_energy_sink_flow = 
+            //     multiplier * radial_energy_outflow(mesh->xstart, iy, iz);
+            //   ionise_energy_flow = core_neutral_energy_sink_flow;
+            // }
+
+            // diagnostic
+            // source must be in domain
+            channel.core_ion_density_source(mesh->xstart, iy, iz) = 
+              ionise_particle_flow / volume;
+            channel.core_ion_momentum_source(mesh->xstart, iy, iz) = 
+              ionise_momentum_flow / volume;
+            channel.core_ion_energy_source(mesh->xstart, iy, iz) = 
+              ionise_energy_flow / volume;
+            channel.core_neutral_density_sink(mesh->xstart, iy, iz) = 
+              - ionise_particle_flow / volume;
+            channel.core_neutral_momentum_sink(mesh->xstart, iy, iz) = 
+              - ionise_momentum_flow / volume;
+            channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = 
+              - ionise_energy_flow / volume;
+
+            // save to solver
+            ion_density_source(mesh->xstart, iy, iz) += 
+              ionise_particle_flow / volume;
+            ion_momentum_source(mesh->xstart, iy, iz) += 
+              ionise_momentum_flow / volume;
+            ion_energy_source(mesh->xstart, iy, iz) += 
+              ionise_energy_flow / volume;
+            neutral_density_source(mesh->xstart, iy, iz) -= 
+              ionise_particle_flow / volume;
+            neutral_momentum_source(mesh->xstart, iy, iz) -= 
+              ionise_momentum_flow / volume;
+            neutral_energy_source(mesh->xstart, iy, iz) -= 
+              ionise_energy_flow / volume;
           }
+        }
       }
 
       // Put the updated sources back into the state
       set<Field3D>(species_to["density_source"], ion_density_source);
+      set<Field3D>(species_to["momentum_source"], ion_momentum_source);
       set<Field3D>(species_to["energy_source"], ion_energy_source);
       set<Field3D>(species_from["density_source"], neutral_density_source);
+      set<Field3D>(species_from["momentum_source"], neutral_momentum_source);
       set<Field3D>(species_from["energy_source"], neutral_energy_source);
     }
+  }
 }
 
 void NeutralBoundary::outputVars(Options& state) {
@@ -534,6 +587,7 @@ void NeutralBoundary::outputVars(Options& state) {
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   if (diagnose) {
@@ -563,46 +617,65 @@ void NeutralBoundary::outputVars(Options& state) {
          {"standard_name", "energy source"},
          {"long_name", std::string("Wall reflection energy source of ") + name},
          {"source", "neutral_boundary"}});
+
     if (core_ionising){
       // Save particle and energy sink for neutrals
       for (const auto& channel : channels) {
         set_with_attrs(
-            state[{std::string("N") + name + std::string("_core_sink")}],
-            channel.core_neutral_density_sink,
-            {{"time_dimension", "t"},
-             {"units", "m^-3"},
-           {"conversion", Nnorm},
-           {"standard_name", "density sink"},
-           {"long_name", std::string("Core ionising particle sink of ") + name},
+          state[{std::string("N") + channel.from + std::string("_core_sink")}],
+          channel.core_neutral_density_sink,
+          {{"time_dimension", "t"},
+           {"units", "m^-3 s^-1"},
+           {"conversion", Nnorm * Omega_ci},
+           {"standard_name", "particle sink"},
+           {"long_name", std::string("Core neutral particle sink of ") + channel.from},
            {"source", "neutral_boundary"}});
         set_with_attrs(
-            state[{std::string("E") + name + std::string("_core_sink")}],
+          state[{std::string("NV") + channel.from + std::string("_core_sink")}],
+          channel.core_neutral_momentum_sink,
+          {{"time_dimension", "t"},
+           {"units", "kg m^-2 s^-2"},
+           {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+           {"standard_name", "momentum sink"},
+           {"long_name", std::string("Core neutral momentum sink of ") + channel.from},
+           {"source", "neutral_boundary"}});
+        set_with_attrs(
+          state[{std::string("E") + channel.from + std::string("_core_sink")}],
             channel.core_neutral_energy_sink,
             {{"time_dimension", "t"},
              {"units", "W m^-3"},
              {"conversion", Pnorm * Omega_ci},
             {"standard_name", "energy sink"},
-            {"long_name", std::string("Core ionising energy sink of ") + name},
+            {"long_name", std::string("Core neutral energy sink of ") + channel.from},
             {"source", "neutral_boundary"}});
         set_with_attrs(
-            state[{std::string("N") + name + std::string("_core_source")}],
+            state[{std::string("N") + channel.to + std::string("_core_source")}],
             channel.core_ion_density_source,
             {{"time_dimension", "t"},
-            {"units", "m^-3"},
-            {"conversion", Nnorm},
-            {"standard_name", "density source"},
-            {"long_name", std::string("Core ionising particle source of ") + name},
+            {"units", "m^-3 s^-1"},
+            {"conversion", Nnorm * Omega_ci},
+            {"standard_name", "particle source"},
+            {"long_name", std::string("Core ionising particle source of ") + channel.to},
             {"source", "neutral_boundary"}});
         set_with_attrs(
-            state[{std::string("E") + name + std::string("_core_source")}],
+            state[{std::string("NV") + channel.to + std::string("_core_source")}],
+            channel.core_ion_momentum_source,
+            {{"time_dimension", "t"},
+            {"units", "kg m^-2 s^-2"},
+            {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+            {"standard_name", "momentum source"},
+            {"long_name", std::string("Core ionising momentum source of ") + channel.to},
+            {"source", "neutral_boundary"}});
+        set_with_attrs(
+            state[{std::string("E") + channel.to + std::string("_core_source") }],
             channel.core_ion_energy_source,
             {{"time_dimension", "t"},
             {"units", "W m^-3"},
             {"conversion", Pnorm * Omega_ci},
             {"standard_name", "energy source"},
-            {"long_name", std::string("Core ionising energy source of ") + name},
+            {"long_name", std::string("Core ionising energy source of ") + channel.to},
             {"source", "neutral_boundary"}});
-          }
+      }
     }
   }
 }
