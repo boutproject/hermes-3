@@ -473,8 +473,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
       // The neutrals that reach the core boundary are removed from the domain 
       // and their flux is added to the boundary condition on the flux of ions
       //  from the core.
-      // firstX from first domain cell 
-      // the processor that contains the core boundary -> firstX
+      // firstX -> the processor that contains the core boundary 
       // xstart -> the first domain cell in the boundary
       if (mesh->firstX() && mesh->periodicY(mesh->xstart)){
         for(int iy=0; iy < mesh->LocalNy; iy++){ 
@@ -485,9 +484,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
             
             BoutReal multiplier = channel.core_multiplier;
             
-            // Particle
-            // Rather than using particle flow calculated in neutral transport,
-            // use thermal speed to calculate particle flux into the core from 
+            // Use thermal speed to calculate particle flux into the core from 
             // core neutrals. This assumes that particles move thermally to 
             // ward the wall until they hit it.
             auto i = indexAt(Nn, mesh->xstart, iy, iz);      // Final domain cell
@@ -499,7 +496,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
 
             // Thermal speed of static Maxwellian in one direction
             const BoutReal v_th =
-                0.25 * sqrt(8 * tncore / (PI * AAn)); // Stangeby p.69 eqns. 2.21, 2.24
+                 sqrt(8 * tncore / (PI * AAn)); // Stangeby eqns. 2.21
             
             // Convert dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
             // Convert dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
@@ -511,32 +508,18 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
             BoutReal dtorcore = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
                                   * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
             BoutReal dacore = dpolcore * dtorcore; // [m^2]
-            // BoutReal dv = coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i];
-            BoutReal neutral_particle_flow_to_core = v_th * nncore * dacore;
+            BoutReal neutral_particle_flow_to_core = 0.25 * v_th * nncore * dacore; // Stangeby eqns. 2.24
             // The amount of neutral ionised in core
             BoutReal ionise_particle_flow = neutral_particle_flow_to_core * multiplier;
-            
-            // if (radial_particle_outflow(mesh->xstart-1, iy, iz) > 0.0) {
-            //   ionise_particle_flow = 
-            //     multiplier * radial_particle_outflow(mesh->xstart, iy, iz);
-            // }
-            // BoutReal core_neutral_particle_sink_flow = ionise_particle_flow;
 
             // Momentum 
             // mnv = kg m/s 1/m^3 
-            BoutReal neutral_momentum_flow_to_core = v_th * v_th * nncore * dacore * AAn;
+            BoutReal neutral_momentum_flow_to_core = 0.5 * nncore * tncore * dacore;
             BoutReal ionise_momentum_flow = neutral_momentum_flow_to_core * multiplier;
 
             // Energy 
-            BoutReal neutral_energy_flow_to_core = 2.0 * nncore * tncore * v_th * dacore; // Incident energy
+            BoutReal neutral_energy_flow_to_core = 2.0 * tncore * v_th * nncore *  dacore; // Incident energy
             BoutReal ionise_energy_flow = neutral_energy_flow_to_core * multiplier;
-
-            // BoutReal core_neutral_energy_sink_flow = 0.0;
-            // if (radial_energy_outflow(mesh->xstart-1, Viy, iz) > 0.0) {
-            //   core_neutral_energy_sink_flow = 
-            //     multiplier * radial_energy_outflow(mesh->xstart, iy, iz);
-            //   ionise_energy_flow = core_neutral_energy_sink_flow;
-            // }
 
             // diagnostic
             // source must be in domain
