@@ -29,7 +29,7 @@ Species density
 The density of a species can be calculated in several different ways,
 and are usually needed by other components.
 
-.. _fixed_density:
+.. _sec-fixed_density:
 
 fixed_density
 ~~~~~~~~~~~~~
@@ -53,7 +53,7 @@ The implementation is in the `FixedDensity` class:
 .. doxygenstruct:: FixedDensity
    :members:
 
-.. _evolve_density:
+.. _sec-evolve_density:
 
 evolve_density
 ~~~~~~~~~~~~~~
@@ -85,18 +85,18 @@ other processes that nay be included, including drift terms
 
 Notes:
 
-1. The density will be saved in the output file as `N` + species
-   label, e.g `Nd` in the above example.
-2. If `diagnose=true` is set in the species options then the net
-   source :math:`S_n` is saved as `SN` + species, e.g. `SNd`; the
-   external source is saved as `S` + species + `_src` e.g. `Sd_src`.
-   The time derivative of density is saved as `ddt(N` + species + `)`
-   e.g. `ddt(Nd)`.
+1. The density will be saved in the output file as ``N`` + species
+   label, e.g ``Nd`` in the above example.
+2. If ``diagnose=true`` is set in the species options then the net
+   source :math:`S_n` is saved as ``SN`` + species, e.g. ``SNd``; the
+   external source is saved as ``S`` + species + ``_src`` e.g. ``Sd_src``.
+   The time derivative of density is saved as ``ddt(N`` + species + ``)``
+   e.g. ``ddt(Nd)``.
 3. The density source can be set in the input mesh file as a field
-   `S` + species + `_src` e.g. `Sd_src`. This can be overridden by
+   ``S`` + species + ``_src`` e.g. ``Sd_src``. This can be overridden by
    specifying the source in the input options.
-4. The `poloidal_flows` switch controls whether the X-Y components of
-   the ExB flow are included (default is true). If set to `false` then
+4. The ``poloidal_flows`` switch controls whether the X-Y components of
+   the ExB flow are included (default is true). If set to ``false`` then
    ExB flows are only in the X-Z plane.
 
 The implementation is in the `EvolveDensity` class:
@@ -114,7 +114,7 @@ This sets the density of a species to a fraction of the electron density.
 .. doxygenstruct:: FixedFractionIons
    :members:
 
-.. _quasineutral:
+.. _sec-quasineutral:
 
 quasineutral
 ~~~~~~~~~~~~
@@ -130,7 +130,7 @@ makes sense to use this component for species with a non-zero charge.
 Species pressure and temperature
 --------------------------------
 
-.. _isothermal:
+.. _sec-isothermal:
 
 isothermal
 ~~~~~~~~~~
@@ -175,17 +175,16 @@ variable.
 .. doxygenstruct:: FixedTemperature
    :members:
 
-.. _evolve_pressure:
+.. _sec-evolve_pressure:
 
 evolve_pressure
 ~~~~~~~~~~~~~~~
 
-Evolves the pressure in time. This pressure is named `P<species>` where `<species>`
-is the short name of the evolving species e.g. `Pe`.
+Evolves the pressure in time. This pressure is named ``P<species>`` where ``<species>``
+is the short name of the evolving species e.g. ``Pe``.
 
-By default parallel thermal conduction is included, which requires a collision
-time. If collisions are not calculated, then thermal conduction should be turned off
-by setting `thermal_conduction = false` in the input options.
+Parallel conduction is included if the global
+:ref:`sec-braginskii_conduction` component has been used.
 
 If the component option ``diagnose = true`` then additional fields
 will be saved to the dump files: The species temperature ``T + name``
@@ -197,10 +196,11 @@ The pressure source is the energy density source multiplied by ``2/3``
 
 .. math::
 
-   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}\nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right) + \frac{2}{3}S_E + S_N\frac{1}{2}mNV^2
+   \frac{\partial P}{\partial t} = -\nabla\cdot\left(P\mathbf{v}\right) - \frac{2}{3} P \nabla\cdot\mathbf{b}v_{||} + \frac{2}{3}S_E + \frac{2}{3}S_N\frac{1}{2}mNV^2
 
 where :math:`S_E` is the ``energy_source`` (thermal energy source),
-and :math:`S_N` is the density source.
+and :math:`S_N` is the density source. If conduction has been
+calculated, it will be included in the ``energy_source`` term.
 
 Notes:
 
@@ -213,7 +213,7 @@ The implementation is in `EvolvePressure`:
 .. doxygenstruct:: EvolvePressure
    :members:
 
-.. _evolve_energy:
+.. _sec-evolve_energy:
 
 evolve_energy
 ~~~~~~~~~~~~~
@@ -237,9 +237,9 @@ that sets the velocity, such as `evolve_momentum`:
    [d]
    type = ..., evolve_momentum, evolve_energy
 
-The energy density will be saved as `E<species>` (e.g `Ed`) and the
-pressure as `P<species>` (e.g. `Pd`). Additional diagnostics, such as the
-temperature, can be saved by setting the option `diagnose = true`.
+The energy density will be saved as ``E<species>`` (e.g ``Ed``) and the
+pressure as ``P<species>`` (e.g. ``Pd``). Additional diagnostics, such as the
+temperature, can be saved by setting the option ``diagnose = true``.
 
 .. doxygenstruct:: EvolveEnergy
    :members:
@@ -249,7 +249,7 @@ SNB nonlocal heat flux
 
 Calculates the divergence of the electron heat flux using the
 Shurtz-Nicolai-Busquet (SNB) model. Uses the BOUT++ implementation which is
-`documented here <https://bout-dev.readthedocs.io/en/latest/user_docs/nonlocal.html?#snb-model>`_.
+`documented here <https://bout-dev.readthedocs.io/en/latest/user_docs/nonlocal.html?#snb-model>`__.
 
 .. doxygenstruct:: SNBConduction
    :members:
@@ -283,6 +283,38 @@ disabled.
 .. doxygenstruct:: SimpleConduction
    :members:
 
+.. _sec-braginskii_conduction:
+
+braginskii_conduction
+~~~~~~~~~~~~~~~~~~~~~
+
+This is a global component that calculates the parallel thermal
+conduction for all species that use :ref:`sec-evolve_pressure` or
+:ref:`sec-evolve_energy`, storing it in `energy_source`. If this is not
+desired for a particular species then it can be turned off by setting
+:code:`thermal_conduction = false` in the input options for that species.
+
+This component requires a collision time to have been calculated
+(i.e., with the :ref:`sec-collisions` component). It is
+recommended that this be one of the last component to run, to ensure density,
+pressure, and temperature have their final values. However, it must be
+run before :ref:`sec-recycling`, as that component will need to use the
+`energy_flow_ylow` value, to which conduction contributes.
+
+The choice of collision frequency used for conduction is set by the
+flag `conduction_collisions_mode`: `multispecies` uses all available
+collision frequencies involving the chosen species, while `braginskii`
+uses only self-collisions .The default is `multispecies` and it is
+recommended for use if solving more than one ion.  If you are solving
+for a single ion and want to recover Braginskii, use the `braginskii`
+mode.
+
+.. math::
+    \nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right)
+
+.. doxygenstruct:: BraginskiiConduction
+   :members:
+
 
 Species parallel dynamics
 -------------------------
@@ -296,6 +328,17 @@ component also calculates the momentum.
 
 Saves the temperature once as a non-evolving variable.
 
+The velocity may be set in the mesh file as an array (2D or 3D), or in
+the options as an expression. The options value overrides the value in
+the mesh. If neither mesh array nor option are set then an exception
+will be thrown. Both mesh array and option should be specified in
+units of meters per second.
+
+The name of the array in the mesh file is ``V<name>0`` where
+``<name>`` is the name of the species e.g. for species ``e``
+(electrons), ``fixed_velocity`` will try to read ``Ve0`` from the mesh
+file, and then the ``velocity`` option in the ``[e]`` section:
+
 .. code-block:: ini
 
    [e]
@@ -307,7 +350,7 @@ Saves the temperature once as a non-evolving variable.
    :members:
 
 
-.. _evolve_momentum:
+.. _sec-evolve_momentum:
 
 evolve_momentum
 ~~~~~~~~~~~~~~~
@@ -315,7 +358,7 @@ evolve_momentum
 Evolves the momentum `NV<species>` in time. The evolving quantity includes the atomic
 mass number, so should be divided by `AA` to obtain the particle flux.
 
-If the component option ``diagnose = true`` then additional fields
+If the component option :code:`diagnose = true` then additional fields
 will be saved to the dump files: The velocity ``V + name``
 (e.g. ``Vd+`` or ``Ve``), the time derivative ``ddt(NV + name)``
 (e.g. ``ddt(NVd+)`` or ``ddt(NVe)``), and the source of momentum
@@ -328,7 +371,7 @@ The implementation is in ``EvolveMomentum``:
    :members:
 
 
-.. _zero_current:
+.. _sec-zero_current:
 
 zero_current
 ~~~~~~~~~~~~
@@ -340,7 +383,7 @@ using flows already calculated for other species. It is used like `quasineutral`
 
    [hermes]
    components = h+, ..., e, ...   # Note: e after all other species
-   
+
    [e]
    type = ..., zero_current,... # Set e:velocity
 
@@ -374,8 +417,10 @@ The implementation is in `ElectronForceBalance`:
 .. doxygenstruct:: ElectronForceBalance
    :members:
 
-electron_viscosity
-~~~~~~~~~~~~~~~~~~~~~~
+.. _sec-braginskii_electron_viscosity:
+
+braginskii_electron_viscosity
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Calculates the Braginskii electron parallel viscosity, adding a force (momentum source)
 to the electron momentum equation:
@@ -396,13 +441,15 @@ and all other species therefore need to be calculated before this component is r
 .. code-block:: ini
 
    [hermes]
-   components = ..., e, ..., collisions, electron_viscosity
+   components = ..., e, ..., braginskii_collisions, braginskii_electron_viscosity
 
-.. doxygenstruct:: ElectronViscosity
+.. doxygenstruct:: BraginskiiElectronViscosity
    :members:
 
-ion_viscosity
-~~~~~~~~~~~~~~~~~~~~~~
+.. _sec-braginskii_ion_viscosity:
+
+braginskii_ion_viscosity
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 Adds ion viscosity terms to all charged species that are not electrons.
 The collision frequency is required so this is a top-level component that
@@ -411,7 +458,7 @@ must be calculated after collisions:
 .. code-block:: ini
 
    [hermes]
-   components =  ..., collisions, ion_viscosity
+   components =  ..., braginskii_collisions, braginskii_ion_viscosity
 
 By default only the parallel diffusion of momentum is included, adding a force to each
 ion's momentum equation:
@@ -426,11 +473,18 @@ The ion parallel viscosity is
 
    \eta_i = \frac{4}{3} 0.96 p_i \tau_i
 
+The choice of collision frequency is set by the flag `viscosity_collisions_mode`: `multispecies` uses
+all available collision frequencies involving the chosen species, while `braginskii` uses only
+ii collisions. The default is `multispecies` and it is recommended when solving
+more than one ion. If you are solving for a single ion and want to recover Braginskii, 
+use the `braginskii` mode.
+
+
 If the `perpendicular` option is set:
 
 .. code-block:: ini
 
-   [ion_viscosity]
+   [braginskii_ion_viscosity]
    perpendicular = true # Include perpendicular flows
 
 Then the ion scalar viscous pressure is calculated as:
@@ -449,7 +503,7 @@ The perpendicular part is calculated from:
 
 .. math::
 
-   \begin{aligned}\Pi_{ci\perp} =& 0.96 p_i\tau_i \kappa \cdot \left[\mathbf{V}_E + \mathbf{V}_{di} + 1.16\frac{\mathbf{b}\times\nabla T_i}{B} \right] \\
+   \begin{aligned}\Pi_{ci\perp} =& 0.96 p_i\tau_i \kappa \cdot \left[\mathbf{V}_E + \mathbf{V}_{di} + 1.61\frac{\mathbf{b}\times\nabla T_i}{B} \right] \\
    =& -0.96 p_i\tau_i\frac{1}{B}\left(\mathbf{b}\times\kappa\right)\cdot\left[\nabla\phi + \frac{\nabla p_i}{en_i} + 1.61\nabla T_i \right]\end{aligned}
 
 
@@ -505,20 +559,20 @@ and neglecting parallel gradients of velocity gives:
    \Pi_{ci} \simeq 0.96 p_i\tau_i \left[ \frac{RB_{\zeta}}{B}F\left(\psi\right) - V_{||i} \right]\partial_{||}\ln B
 
    
-**Notes** and implementation details:
-- The magnitude of :math:`\Pi_{ci\perp}` and :math:`\Pi_{ci||}` are individually
-  limited to be less than or equal to the scalar pressure :math:`Pi` (though can have
-  opposite sign). The reasoning is that if these off-diagonal terms become large then
-  the model is likely breaking down. Occasionally happens in low-density regions.
+.. note::
+   Implementation details: The magnitude of :math:`\Pi_{ci\perp}` and :math:`\Pi_{ci||}` are
+   individually limited to be less than or equal to the scalar pressure :math:`Pi` (though can have
+   opposite sign). The reasoning is that if these off-diagonal terms become large then the model is
+   likely breaking down. Occasionally happens in low-density regions.
 
    
-.. doxygenstruct:: IonViscosity
+.. doxygenstruct:: BraginskiiIonViscosity
    :members:
 
-.. _thermal_force:
+.. _sec-braginskii_thermal_force:
 
-thermal_force
-~~~~~~~~~~~~~
+braginskii_thermal_force
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 This implements simple expressions for the thermal force. If the
 `electron_ion` option is true (which is the default), then a momentum
@@ -549,9 +603,9 @@ where subscripts :math:`z` refer to the heavy ion, and :math:`i`
 refers to the light ion. The force on the light ion fluid is equal and
 opposite: :math:`F_i = -F_z`.
 
-The implementation is in the `ThermalForce` class:
+The implementation is in the `BraginskiiThermalForce` class:
 
-.. doxygenstruct:: ThermalForce
+.. doxygenstruct:: BraginskiiThermalForce
    :members:
 
 
@@ -564,10 +618,10 @@ In 2D, all of this functionality is implemented in one component called `neutral
 has cross-field transport. This discrepancy is due to historical reasons and will be refactored.
 
 
-.. _neutral_parallel_diffusion:
+.. _sec-neutral_parallel_diffusion:
 
 1D: neutral_parallel_diffusion
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This adds diffusion to **all** neutral species (those with no or zero charge),
 because it needs to be calculated after the collision frequencies are known.
@@ -575,7 +629,7 @@ because it needs to be calculated after the collision frequencies are known.
 .. code-block:: ini
 
    [hermes]
-   components = ... , collisions, neutral_parallel_diffusion
+   components = ... , braginskii_collisions, neutral_parallel_diffusion
 
    [neutral_parallel_diffusion]
    dneut = 1         # Diffusion multiplication factor
@@ -600,16 +654,18 @@ The diffusion coefficient is in :math:`m^2/s` and is calculated as
 
    D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{eT_n}{m_{n} \nu}
 
-where `m_{n}` is the neutral species mass in kg and :math:`\nu` is the collision
+where ``m_{n}`` is the neutral species mass in kg and :math:`\nu` is the collision
 frequency (by default, this sums up all of the enabled neutral collisions from 
 the collisions component as well as the charge exchange rate).
 The factor :math:`B / B_{pol}` is the projection of the cross-field
-direction on the parallel transport, and is the `dneut` input setting. Currently, the recommended
+direction on the parallel transport, and is the ``dneut`` input setting. Currently, the recommended
 use case for this component is to represent the neutrals diffusing orthogonal to the target wall, and
-it is recommended to set `dneut` according to the field line pitch at the target.
+it is recommended to set ``dneut`` according to the field line pitch at the target.
 
 .. doxygenstruct:: NeutralParallelDiffusion
    :members:
+
+.. _sec-neutral_mixed:
 
 2D/3D: neutral_mixed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -628,16 +684,16 @@ new AFN (Advanced Fluid Neutral) model in SOLPS-ITER [N. Horsten, N.F. (2017)].
    
    \begin{aligned}
 
-   \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{||n} + n_n\mathbf{v}_{\perp n}\right) \\
+   \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{\parallel, n} + n_n\mathbf{v}_{\perp n}\right) \\
          &    + S \\
-   \frac{\partial}{\partial t}\left(n_nv_{||n}\right) =& -\nabla\cdot\left(n_nv_{||n} \mathbf{b}v_{||n} + n_nv_{||n}\mathbf{v}_{\perp n}\right) \\
-         &    - \partial_{||}p_n \\
-         &    + \nabla \cdot (m_n \eta_{n} \nabla_{\perp} v_{\parallel n}) + \nabla \cdot( m_n \eta_{n} \nabla{\parallel} v_{\parallel n} ) \\
+   \frac{\partial}{\partial t}\left(m_nn_nv_{\parallel, n}\right) =& -m_n \nabla\cdot\left(n_n v_{\parallel, n} (\mathbf{b}v_{||n} + \mathbf{v}_{\perp n}\right)) \\
+         &    - \nabla_{\parallel}p_n \\
+         &    + \nabla \cdot (\eta_{n} (\nabla_{\perp} v_{\parallel n} + \mathbf{b} \nabla_{\parallel} v_{\parallel n} )) \\
          &    + F \\
-   \frac{\partial p_n}{\partial t} =& -\nabla\cdot\left(p_n\mathbf{b}v_{||n} + \frac{5}{3} p_n\mathbf{v}_{\perp n}\right) \\
-         &    - \frac{2}{3}p_n\nabla\cdot\left(\mathbf{b}v_{||n}\right) \\
-         &    + \frac{2}{3} \nabla\cdot\left(\kappa_n \nabla_\perp T_n\right) + \frac{2}{3} \nabla\cdot\left(\kappa_n \nabla_{\parallel} T_n\right) \\
-         &    - \frac{2}{3} v_n \nabla \cdot (m_n \eta_{n} \nabla_{\perp} v_{\parallel n}) + \frac{2}{3} \nabla \cdot( m_n \eta_{n} \nabla_{\parallel} v_{\parallel n} ) \\
+   \frac{\partial p_n}{\partial t} =& -\frac{5}{3} \nabla\cdot\left(p_n\mathbf{b}v_{\parallel, n} +  p_n\mathbf{v}_{\perp n}\right) \\
+         &    + \frac{2}{3}v_{\parallel, n} \nabla_{\parallel} p_n \\
+         &    + \frac{2}{3} \nabla\cdot\left(\kappa_n \left(\nabla_\perp T_n + \mathbf{b} \nabla_{\parallel} T_n\right)\right) \\
+         &    - \frac{2}{3} v_{\parallel,n} \nabla \cdot \left(\eta_{n} \left( \nabla_{\perp} v_{\parallel n} + \mathbf{b} \nabla_{\parallel} v_{\parallel n} \right) \right) \\
          &    + \frac{2}{3}E \\
 
    \end{aligned}
@@ -657,27 +713,32 @@ gradient replacing the density gradient as the flow driver, in an approach simil
 The perpendicular velocity is calculated as:
 
 .. math::
+
    \begin{aligned}
    v_{\perp} =& -D_n \frac{1}{P_n} \nabla_{\perp} p_n
    \end{aligned}
 
 Where in the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`ln(P_n)`, which helps
-preserve pressure positivity.
+preserve pressure positivity. 
 
 The diffusion coefficients are defined as:
 
 .. math::
 
    \begin{aligned} 
-   D_n =& v_{th,n}^{2} \nu_{n, tot}  \\
+   D_n =& \frac{v_{th,n}^{2}}{\nu_{n, tot}} = \frac{T_n}{m_n \nu_{n, tot}} \\
    \kappa_{n} =& \frac{5}{2} D_n N_n \\
    \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
    \end{aligned}
 
 Where :math:`v_{th,n}= \sqrt{\frac{T_n}{m_n}}` is the thermal velocity of neutrals and :math:`\nu_{n, tot}` is the total
-neutral collisionality. This is primarily driven by charge exchange and ionisation, which can cause issues in regions
-where plasma density is low. Because of this, an additional pseudo-collisionality is calculated based on the maximum vessel 
-mean free path and added to the total neutral collisionality.
+neutral collisionality.  When the `AFN` diffusion collision mode is selected using the `diffusion_collisions_mode` setting, 
+this collisionality is the sum of charge exchange, ionisation, neutral-neutral collisions and the 
+pseudo-collisionality `Rnn`, which represents a mean-free path limit. When the `multispecies` mode is selected, all available 
+collision frequencies are enabled instead of ionisation. `AFN` is recommended in all cases, with the `multispecies` mode representing
+a legacy approach. The `Rnn` pseudo-collisionality is based on the `neutral_lmax` parameter, currently hardcoded to 0.1m, 
+which acts as an effective maximum neutral mean free path. It represents the distance that neutrals can travel before
+hitting a solid surface.
 
 In an additional effort to limit the diffusivitiy to more physical values, a flux limiter has been implemented which clamps
 :math:`D_n` to :math:`D_{n,max}` defined as:
@@ -685,7 +746,7 @@ In an additional effort to limit the diffusivitiy to more physical values, a flu
 .. math::
 
    \begin{aligned}
-   D_{n,max} =& f_l \frac{v_{th,n}}{abs(\nabla ln(P_n) + 1/l_{max}}
+   D_{n,max} =& f_l \frac{v_{th,n}}{abs(\nabla ln(P_n) + 1/l_{max})}
    \end{aligned}
 
 This formulation is equivalent to defining a :math:`D_n` with a free streaming velocity while accounting for the pseudo collisionality due 
@@ -705,7 +766,7 @@ velocity :math:`\mathbf{v}_n` and pressure :math:`p_n`.
 
    \begin{aligned}
    \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{v}_n\right) \nonumber \\
-   \frac{\partial \mathbf{v}_n}{\partial t} =& - \mathbf{v}_n\cdot\nabla\mathbf{v}_n -\frac{1}{n_n}\nabla p_n + \frac{1}{n_n}\nabla\cdot\left(\mu \nabla\mathbf{v}\right) + \nabla\cdot\left(\nu \nabla \mathbf{v}_n\right) \\
+   \frac{\partial \mathbf{v}_n}{\partial t} =& - \mathbf{v}_n\cdot\nabla\mathbf{v}_n -\frac{1}{n_n m_n}\nabla p_n + \nabla\cdot\left(\nu \nabla\mathbf{v}\right)\\
    \frac{\partial p_n}{\partial t} =& -\gamma \nabla\cdot\left(p_n\mathbf{v}_n\right) + \left(\gamma - 1\right)\mathbf{v}_n\cdot\nabla p_n + \nabla\cdot\left(n_n \chi_n \nabla T_n\right) \nonumber
    \end{aligned}
 
@@ -818,18 +879,18 @@ viscosity.
 The advection of momentum :math:`\mathbf{v}\cdot\nabla\mathbf{v}` is
 controlled by these settings:
 
-#. `momentum_advection` is `false` by default, disabling this
+#. `momentum_advection` is ``false`` by default, disabling this
    nonlinear advection term. This keeps the inertia in the time
    derivative, but neglects the neutral dynamic pressure in the
    momentum balance.
    
-#. `toroidal_flow` is `true` by default, which includes the toroidal
+#. `toroidal_flow` is ``true`` by default, which includes the toroidal
    (:math:`z`) component of the neutral flow. Importantly, this allows
    the parallel and poloidal flows to evolve independently: The
    parallel flow can follow the plasma towards the target, while the
    poloidal flow can be away from the target.
 
-#. `curved_torus` is `true` by default, and is only active when both
+#. `curved_torus` is ``true`` by default, and is only active when both
    `momentum_advection` and `toroidal_flow` are enabled. Neutrals
    travel in straight lines in real space, so toroidal flow is
    converted to radial flow. This appears in the :math:`v_r` and
@@ -885,7 +946,7 @@ equations. Calculates the diamagnetic drift velocity as
 where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
 is read from the `bxcv` mesh input variable.
 
-Two forms are available. Form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P; 
+Two forms are available, which are implemented differently for density, momentum, and pressure equations. In the density equation, form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P; 
 at the boundaries this velocity is perpendicular to the boundary. Form 1 uses the magnetic gyro-center drifts, which are mostly vertical;
 at the boundaries this form produces a flow through the boundary. 
 Forms 0 and 1 are analytically equivalent and should give the same result away from boundaries, 
@@ -894,12 +955,40 @@ but form 0 doesn't produce flows through boundaries. This is an approach that UE
 
 However, Form 1 is nice because the flow velocity depends on the temperature, not the pressure gradient. 
 This usually makes it better behaved numerically. To make the most of both, the `diamagnetic_drift` component allows the forms to be mixed
-using the ``diamag_form`` setting. For example, the `tcv-x21` example blends it such that form 0 is at the boundary:
+using the ``diamag_form`` setting. For example, the :code:`tcv-x21` example blends it such that form 0 is at the boundary:
+
 
 .. code-block:: ini
 
    [diamagnetic_drift]
    diamag_form = x * (1 - x)  # 0 = gradient; 1 = divergence
+
+
+A table of the two forms used in Hermes-3, and the corresponding terms in `Simakov & Catto <https://doi.org/10.1063/1.1623492>`_ is shown below, where :math:`\mathbf{C}=\nabla\times\left(\frac{\mathbf{b}}{B}\right)` is the curvature vector. Instead of the diamagnetic velocity, the whole terms associated are shown. The difference among the forms is the divergence of a curl, which vanishes. The diamagnetic velocity :math:`\mathbf{v}_{dia}` is defined above. Notice that Simakov & Catto used Gaussian units, but Hermes-3 uses SI units. 
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 20 20 35
+
+   * -
+     - Form 0
+     - Form 1
+     - Simakov & Catto
+   * - Density
+     - :math:`\mathbf{C} \cdot \nabla\left(\dfrac{p}{q}\right)`
+     - :math:`\nabla \cdot (n \mathbf{v}_{dia})`
+     - Eq. (51): :math:`\dfrac{c}{q}\left(\nabla \times \dfrac{\mathbf{b}}{B}\right) \cdot \nabla p`
+   * - Momentum
+     - :math:`\mathbf{C} \cdot \nabla\left(\dfrac{mnv_\parallel T}{q}\right)`
+     - :math:`\nabla\cdot (mnv_\parallel \mathbf{v}_{dia})`
+     - Eq. (64): :math:`\nabla\cdot \left(\dfrac{1}{\Omega} \mathbf{b} \times \nabla(p v_\parallel)\right)`
+   * - Pressure
+     - :math:`\dfrac{5}{2}\mathbf{C} \cdot \nabla\left(\dfrac{pT}{q}\right)`
+     - :math:`\dfrac{5}{2}\nabla\cdot (p \mathbf{v}_{dia})`
+     - Eq. (56): :math:`\nabla\cdot\left(\dfrac{5}{2 m \Omega} \mathbf{b} \times \nabla(p T)\right)`
+
+\* Eq.(64) in Simakov & Catto is derived for ion parallel momentum, but it is also applicable to electrons since it comes from the gyro-viscosity and the mass factors of :math:`m_i` or :math:`m_e` cancel out. 
+
 
 .. doxygenstruct:: DiamagneticDrift
    :members:
@@ -925,7 +1014,7 @@ This component needs to be run after all other currents have been
 calculated.  It marks currents as used, so out-of-order modifications
 should raise errors.
 
-See the `examples/blob2d-vpol` example, which contains:
+See the :file:`examples/blob2d-vpol` example, which contains:
 
 .. code-block:: ini
 
@@ -935,14 +1024,14 @@ See the `examples/blob2d-vpol` example, which contains:
    [polarisation_drift]
    diagnose = true
 
-Setting `diagnose = true` saves `DivJ` to the dump files with the divergence of all
+Setting ``diagnose = true`` saves `DivJ` to the dump files with the divergence of all
 currents except polarisation, and `phi_pol` which is the polarisation flow potential.
 
 .. doxygenstruct:: PolarisationDrift
    :members:
 
 Stellarator cross-field transport: binormal_stpm
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This adds a term to **all** species which includes the effects of cross-field
 drifts following the stellarator two point model:
@@ -980,7 +1069,7 @@ The diffusion coefficients `D`, `\chi` and `\nu` and field line pitch `\Theta` a
 
 
 Tokamak cross-field transport: anomalous_diffusion
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Adds cross-field diffusion of particles, momentum and energy to a species.
 
@@ -1031,7 +1120,7 @@ Electromagnetic fields
 These are components which calculate the electric and/or magnetic
 fields.
 
-.. _vorticity:
+.. _sec-vorticity:
 
 vorticity
 ~~~~~~~~~
@@ -1112,6 +1201,58 @@ The form of the vorticity equation is based on `Simakov & Catto
 with the first term modified to conserve energy. In the limit of zero
 ion pressure and constant :math:`B` it reduces to the simplified form.
 
+
+Kinematic viscosity can be included by setting e.g. ``viscosity = 0.1`` in SI units (m^2/s).
+This adds a diffusion of vorticity and corresponding ion heating.
+The viscous friction force in this simplified operator is
+
+.. math::
+
+   \mathbf{F}_\nu = - \nu B \mathbf{b} \times \nabla \Omega
+
+This gives rise to a drift and current with divergence:
+
+.. math::
+
+   \begin{aligned}\nabla\cdot\mathbf{J_{\nu}} =& \nabla\cdot\left[\frac{\mathbf{b}\times\mathbf{F}_\nu}{B}\right] \\
+   =& \nabla\cdot\left[\nu \nabla_\perp \Omega\right]\end{aligned}
+
+Viscous heating is calculated using the work done by a fluid velocity
+consistent with the Boussinesq approximation:
+
+.. math::
+
+   \mathbf{u} = \frac{\mathbf{b}\times\nabla\Phi}{B}
+
+where the generalized potential is
+
+.. math::
+
+   \Phi = \phi + \hat{p} / \overline{n}
+
+The work done is
+
+.. math::
+
+   \mathbf{F}_\nu\cdot\mathbf{u} = -\nu \nabla_\perp\Omega \cdot \nabla_\perp\Phi
+
+This heating is distributed between charged species in proportion to their local mass density.
+The properties of the work done can be analysed by writing in terms of a vector :math:`\mathbf{g}`:
+
+.. math::
+
+   \mathbf{g} = \frac{\overline{A}\overline{n}}{B^2}\nabla_\perp\Phi
+
+to write:
+
+.. math::
+
+   \begin{aligned}\mathbf{F}_\nu\cdot\mathbf{u} =& -\nu\frac{B^2}{\overline{A}\overline{n}} \nabla_\perp\left(\nabla\cdot\mathbf{g}\right)\cdot\mathbf{g} \\
+   =& \nu\frac{B^2}{\overline{A}\overline{n}} \left[\left(\nabla_\perp\mathbf{g} : \nabla_\perp\mathbf{g}\right) - \nabla\cdot\left(\mathbf{g}\cdot\nabla\mathbf{g}\right)\right]\end{aligned}
+
+The last term is not in general positive definite, so this simple form
+of viscosity could in some cases lead to cooling.
+
 .. doxygenstruct:: Vorticity
    :members:
 
@@ -1125,7 +1266,7 @@ the potential in time as a diffusion equation.
 .. doxygenstruct:: RelaxPotential
    :members:
 
-.. _electromagnetic:
+.. _sec-electromagnetic:
 
 electromagnetic
 ~~~~~~~~~~~~~~~

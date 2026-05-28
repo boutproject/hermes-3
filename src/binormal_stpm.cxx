@@ -7,9 +7,14 @@
 
 using bout::globals::mesh;
 
-BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions, Solver* solver)
-  : name(name) {
-  AUTO_TRACE();
+BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions,
+                           [[maybe_unused]] Solver* solver)
+    : Component({
+          readIfSet("species:{all_species}:{input}", Regions::Interior),
+          readOnly("species:{all_species}:AA"),
+          readWrite("species:{all_species}:{output}"),
+      }),
+      name(name) {
   auto& options = alloptions[name];
   const Options& units = alloptions["units"];
   const BoutReal rho_s0 = units["meters"];
@@ -44,16 +49,18 @@ BinormalSTPM::BinormalSTPM(std::string name, Options& alloptions, Solver* solver
   diagnose = options["diagnose"]
     .doc("Output diagnostics?")
     .withDefault(false);
+
+  substitutePermissions("input", {"density", "temperature", "momentum"});
+  substitutePermissions("output", {"energy_source", "momentum_source", "density_source"});
 }
 
-void BinormalSTPM::transform(Options& state) {
-  AUTO_TRACE();
-  Options& allspecies = state["species"];
+void BinormalSTPM::transform_impl(GuardedOptions& state) {
+  GuardedOptions allspecies = state["species"];
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
     const auto& species_name = kv.first;
 
-    Options& species = allspecies[species_name];
+    GuardedOptions species = allspecies[species_name];
     auto AA = get<BoutReal>(species["AA"]);
 
     const Field3D N = species.isSet("density")
@@ -79,14 +86,12 @@ void BinormalSTPM::transform(Options& state) {
 }
 
 void BinormalSTPM::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   if (diagnose) {
 
-      AUTO_TRACE();
       // Save particle, momentum and energy channels
 
       set_with_attrs(state[{std::string("D_") + name}], D,

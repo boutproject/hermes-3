@@ -53,7 +53,7 @@ mxstep = 10000
 
 [hermes]
 components = (e, d+, sound_speed, vorticity,
-              sheath_boundary, collisions
+              sheath_boundary, braginskii_collisions, braginskii_friction, braginskii_heat_exchange
               )
 
 Nnorm = 1e18  # Reference density [m^-3]

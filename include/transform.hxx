@@ -9,10 +9,10 @@
 struct Transform : public Component {
   Transform(std::string name, Options& options, Solver*);
 
-  void transform(Options& state) override;
-
 private:
   std::map<std::string, std::string> transforms;
+
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

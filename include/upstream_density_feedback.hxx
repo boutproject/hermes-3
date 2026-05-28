@@ -20,7 +20,16 @@ struct UpstreamDensityFeedback : public Component {
   ///  - N<name>  (e.g. "Nd+")
   ///    - source_shape  The initial source that is scaled by a time-varying factor
   ///
-  UpstreamDensityFeedback(std::string name, Options& alloptions, Solver*) : name(name) {
+  UpstreamDensityFeedback(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("time"),
+                   readOnly("species:{name}:density", Regions::Interior),
+                   // FIXME: These are only read if BOTH are set
+                   readIfSet("species:{name}:AA"),
+                   readIfSet("species:{name}:velocity", Regions::Interior),
+                   readWrite("species:{name}:density_source"),
+                   // FIXME: This is only set if AA and density_source are set
+                   readWrite("species:{name}:energy_source")}),
+        name(name) {
     const auto& units = alloptions["units"];
     BoutReal Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     BoutReal FreqNorm = 1. / get<BoutReal>(units["seconds"]);
@@ -59,21 +68,11 @@ struct UpstreamDensityFeedback : public Component {
     diagnose = options["diagnose"]
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
+
+    substitutePermissions("name", {name});
   }
 
-  /// Inputs
-  ///  - <name>
-  ///    - density
-  ///
-  /// Outputs
-  ///
-  ///  - <name>
-  ///    - density_source
-  ///
-  void transform(Options& state) override;
-
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     if (diagnose) {
       // Normalisations
       auto Nnorm = get<BoutReal>(state["Nnorm"]);
@@ -122,7 +121,6 @@ struct UpstreamDensityFeedback : public Component {
   }
 
   void restartVars(Options& state) override {
-    AUTO_TRACE();
 
     // NOTE: This is a hack because we know that the loaded restart file
     //       is passed into restartVars in PhysicsModel::postInit
@@ -161,6 +159,20 @@ private:
   BoutReal proportional_term, integral_term; ///< Components of resulting source for diagnostics
 
   bool diagnose; ///< Output diagnostic information?
+
+  /// Inputs
+  ///  - <name>
+  ///    - density
+  ///    - velocity (if set)
+  ///    - AA (if set)
+  ///
+  /// Outputs
+  ///
+  ///  - <name>
+  ///    - density_source
+  ///    - energy_source (if velocity and AA are set)
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

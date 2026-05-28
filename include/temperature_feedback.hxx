@@ -22,7 +22,10 @@ struct TemperatureFeedback : public Component {
   ///  - T<name>  (e.g. "Td+")
   ///    - source_shape  The initial source that is scaled by a time-varying factor
   ///
-  TemperatureFeedback(std::string name, Options& alloptions, Solver*) : name(name) {
+  TemperatureFeedback(std::string name, Options& alloptions, Solver*)
+      : Component({readOnly("species:{name}:temperature", Regions::Interior),
+                   readOnly("time"), readWrite("species:{sp}:energy_source")}),
+        name(name) {
 
     Options& options = alloptions[name];
     const auto& units = alloptions["units"];
@@ -82,21 +85,15 @@ struct TemperatureFeedback : public Component {
     diagnose = options["diagnose"]
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
+
+    std::vector<std::string> species_stripped;
+    std::transform(species_list.begin(), species_list.end(), species_stripped.begin(),
+                   [](const std::string& val) { return trim(val); });
+    substitutePermissions("name", {name});
+    substitutePermissions("sp", species_stripped);
   }
 
-  /// Inputs
-  ///  - <name>
-  ///    - temperature
-  ///
-  /// Outputs
-  ///
-  ///  - <name>
-  ///    - temperature_source
-  ///
-  void transform(Options& state) override;
-
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     if (diagnose) {
       // Normalisations
       auto Tnorm = get<BoutReal>(state["Tnorm"]);
@@ -148,7 +145,6 @@ struct TemperatureFeedback : public Component {
   }
 
   void restartVars(Options& state) override {
-    AUTO_TRACE();
 
     // NOTE: This is a hack because we know that the loaded restart file
     //       is passed into restartVars in PhysicsModel::postInit
@@ -191,6 +187,17 @@ private:
   BoutReal proportional_term, integral_term; ///< Components of resulting source for diagnostics
 
   bool diagnose; ///< Output diagnostic information?
+
+  /// Inputs
+  ///  - <name>
+  ///    - temperature
+  ///
+  /// Outputs
+  ///
+  ///  - <name>
+  ///    - temperature_source
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

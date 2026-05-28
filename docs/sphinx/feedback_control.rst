@@ -5,10 +5,10 @@ Feedback control
 
 The two feedback controllers detailed in this section are implemented for 1D only at the moment.
 
-.. _upstream_density_feedback:
+.. _sec-upstream_density_feedback:
 
 Upstream density controller
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This is intended for 1D simulations, where the density at :math:`y=0` is set
 by adjusting an input source. This component uses a PI controller method
@@ -55,7 +55,7 @@ The implementation is in the `UpstreamDensityFeedback` class:
    :members:
 
 Detachment front position controller
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 *N.b. currently this code has been developed for and tested only in 1D
 and with a single processor.*
@@ -106,7 +106,7 @@ actuator type, and configure the PID controller parameters (gain,
 integral time, derivative time). The input for a minimum working example
 would be something like
 
-::
+.. code-block:: ini
 
    [hermes]
    components = (d+, d, e, detachment_controller, ...)
@@ -155,10 +155,10 @@ Top-level overview of the algorithm
    plasma dynamics to achieve the desired detachment front location.
 
 Fine details
------------
+------------
 
 Finding the detachment front
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 We define the detachment front as the point where the neutral density
 (``N_neutral_species``) becomes larger than the electron density
@@ -179,7 +179,7 @@ Note that, since the :math:`y` values aren’t stored directly, we compute
 it from :math:`dy` while iterating along cells.
 
 Calculating the feedback response via PID control
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Once we have the detachment position, we need to control its position.
 Firstly, we define the error :math:`e = x_S - x_D` where :math:`x_S` is
@@ -242,7 +242,7 @@ which can be used either to ensure that the system stays within
 physical, engineering or numerical-stability constraints.
 
 Understanding PID control and tuning the coefficients
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 See
 `en.wikipedia.org/wiki/Proportional-integral-derivative_controller <https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller>`__.
@@ -264,7 +264,7 @@ Most relevant sections are
    method <https://en.wikipedia.org/wiki/Ziegler%E2%80%93Nichols_method>`__
 
 Input Parameters
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
 
 -  **``detachment_front_setpoint``**: The desired position of the
    detachment front from the divertor target, measured in meters from

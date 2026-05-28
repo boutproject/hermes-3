@@ -4,15 +4,22 @@
 
 namespace {
 struct TestComponent : public Component {
-  TestComponent(const std::string&, Options&, Solver *) {}
-  void transform(Options &state) { state["answer"] = 42; }
+  TestComponent(const std::string&, Options&, Solver*)
+      : Component({readWrite("answer")}) {}
+
+private:
+  void transform_impl(GuardedOptions& state) override {
+    state["answer"].getWritable() = 42;
+  }
 };
   
 
 struct TestMultiply : public Component {
-  TestMultiply(const std::string&, Options&, Solver *) {}
-  
-  void transform(Options &state) {
+  TestMultiply(const std::string&, Options&, Solver*)
+      : Component({writeFinal("answer")}) {}
+
+private:
+  void transform_impl(GuardedOptions& state) override {
     // Note: Using set<>() and get<>() for quicker access, avoiding printing
     //       getNonFinal needs to be used because we set the value afterwards
     set(state["answer"],

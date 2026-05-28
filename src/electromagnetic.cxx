@@ -13,8 +13,13 @@ BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:rtol_accept", 1e-2);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:atol_accept", 1e-6);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:maxits", 1000);
 
-Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* solver) {
-  AUTO_TRACE();
+Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* solver)
+    : Component({readIfSet("species:{all_species}:charge"),
+                 writeFinal("species:{all_species}:momentum"),
+                 writeFinal("species:{all_species}:velocity"), readOnly("time"),
+                 readOnly("species:{all_species}:AA"),
+                 readOnly("species:{all_species}:density", Regions::Interior),
+                 readWrite("fields:Apar")}) {
 
   Options& units = alloptions["units"];
   BoutReal Bnorm = units["Tesla"];
@@ -32,7 +37,10 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
   // Use the "Naulin" solver because we need to include toroidal
   // variations of the density (A coefficient)
   aparSolver = Laplacian::create(&options["laplacian"]);
-  aparSolver->savePerformance(*solver, "AparSolver");
+  if (solver != nullptr) {
+    // solver may be null in unit testing
+    aparSolver->savePerformance(*solver, "AparSolver");
+  }
 
   const_gradient = options["const_gradient"]
     .doc("Extrapolate gradient of Apar into all radial boundaries?")
@@ -76,10 +84,12 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
   magnetic_flutter = options["magnetic_flutter"]
     .doc("Set magnetic flutter terms (Apar_flutter)?")
     .withDefault<bool>(false);
+
+  if (magnetic_flutter)
+    setPermissions(readWrite("fields:Apar_flutter"));
 }
 
 void Electromagnetic::restartVars(Options& state) {
-  AUTO_TRACE();
 
   // NOTE: This is a hack because we know that the loaded restart file
   //       is passed into restartVars in PhysicsModel::postInit
@@ -99,10 +109,9 @@ void Electromagnetic::restartVars(Options& state) {
                   {"source", "electromagnetic"}});
 }
 
-void Electromagnetic::transform(Options &state) {
-  AUTO_TRACE();
-  
-  Options& allspecies = state["species"];
+void Electromagnetic::transform_impl(GuardedOptions& state) {
+
+  GuardedOptions allspecies = state["species"];
 
   // Sum coefficients over species
   //
@@ -110,9 +119,9 @@ void Electromagnetic::transform(Options &state) {
   alpha_em = 0.0;
   Ajpar = 0.0;
   for (auto& kv : allspecies.getChildren()) {
-    const Options& species = kv.second;
+    const GuardedOptions species = kv.second;
 
-    if (!IS_SET(species["charge"]) or !species.isSet("momentum")) {
+    if (!species.isSet("charge") or !species.isSet("momentum")) {
       continue; // Not charged, or no parallel flow
     }
     const BoutReal Z = get<BoutReal>(species["charge"]);
@@ -181,7 +190,7 @@ void Electromagnetic::transform(Options &state) {
 
   // Update momentum
   for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
     if (!species.isSet("charge") or !species.isSet("momentum")) {
       continue; // Not charged, or no parallel flow

@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "../include/sheath_boundary_simple.hxx"
 #include "../include/hermes_utils.hxx"
 
@@ -6,14 +8,6 @@
 using bout::globals::mesh;
 
 namespace {
-BoutReal clip(BoutReal value, BoutReal min, BoutReal max) {
-  if (value < min)
-    return min;
-  if (value > max)
-    return max;
-  return value;
-}
-
 Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int ny = f.getNy();
   int nz = f.getNz();
@@ -63,9 +57,22 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
 
 } // namespace
 
-SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions,
-                                           Solver*) {
-  AUTO_TRACE();
+SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions, Solver*)
+    : Component({
+          readIfSet("species:e:{e_whole_domain}"),
+          writeBoundary("species:e:{e_boundary}"),
+          readWrite("species:e:energy_source"),
+          readWrite("species:e:energy_flow_ylow"),
+          writeBoundaryIfSet("species:e:{e_optional}"),
+          writeBoundaryReadInteriorIfSet("species:e:pressure"),
+          readIfSet("species:{all_species}:charge"),
+          readOnly("species:{ions}:AA"),
+          readWrite("species:{ions}:energy_source"),
+          readWrite("species:{ions}:energy_flow_ylow"),
+          writeBoundary("species:{ions}:{ion_boundary}"),
+          writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+          writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+      }) {
 
   Options& options = alloptions[name];
 
@@ -140,14 +147,20 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
   diagnose = options["diagnose"]
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
-  
+
+  substitutePermissions("e_whole_domain", {"AA", "charge"});
+  substitutePermissions("e_boundary", {"density", "temperature"});
+  substitutePermissions("e_optional", {"velocity", "momentum"});
+  substitutePermissions("ion_boundary", {"density", "temperature"});
+  substitutePermissions("ion_optional", {"velocity", "momentum"});
+  setPermissions(always_set_phi ? writeBoundaryReadInteriorIfSet("fields:phi")
+                                : writeBoundaryIfSet("fields:phi"));
 }
 
-void SheathBoundarySimple::transform(Options& state) {
-  AUTO_TRACE();
+void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
 
-  Options& allspecies = state["species"];
-  Options& electrons = allspecies["e"];
+  GuardedOptions allspecies = state["species"];
+  GuardedOptions electrons = allspecies["e"];
 
   // Need electron properties
   // Not const because boundary conditions will be set
@@ -190,7 +203,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
+      const GuardedOptions species = kv.second;
 
       if ((kv.first == "e") or !species.isSet("charge")
           or (get<BoutReal>(species["charge"]) == 0.0)) {
@@ -232,10 +245,7 @@ void SheathBoundarySimple::transform(Options& state) {
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath +
                                Zi * sheath_electron_polytropic * tesheath) / Mi;
 
-            BoutReal visheath = -sqrt(C_i_sq);
-            if (Vi[i] < visheath) {
-              visheath = Vi[i];
-            }
+            const BoutReal visheath = std::min(Vi[i], -sqrt(C_i_sq));
 
             ion_sum[i] -= Zi * nisheath * visheath;
           }
@@ -263,10 +273,7 @@ void SheathBoundarySimple::transform(Options& state) {
 
             BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-            BoutReal visheath = sqrt(C_i_sq);
-            if (Vi[i] > visheath) {
-              visheath = Vi[i];
-            }
+            const BoutReal visheath = std::max(Vi[i], sqrt(C_i_sq));
 
             ion_sum[i] += Zi * nisheath * visheath;
           }
@@ -291,9 +298,12 @@ void SheathBoundarySimple::transform(Options& state) {
           const BoutReal nesheath = 0.5 * (Ne_im + Ne[i]);
           const BoutReal tesheath = floor(0.5 * (Te_im + Te[i]), 1e-5);
 
+          // Note: Floor on nesheath is the same as on ion_sum so that the ratio is
+          // 1 when both go to zero (implying a flow velocity of 1).
           phi[i] =
               tesheath
-              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
+              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge)
+                    * floor(nesheath, 1e-5) / floor(ion_sum[i], 1e-5));
 
           const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
@@ -318,7 +328,8 @@ void SheathBoundarySimple::transform(Options& state) {
 
           phi[i] =
               tesheath
-              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge) * nesheath / ion_sum[i]);
+              * log(sqrt(tesheath / (Me * TWOPI)) * (1. - Ge)
+                    * floor(nesheath, 1e-5) / floor(ion_sum[i], 1e-5));
 
           const BoutReal phi_wall = wall_potential[i];
           phi[i] += phi_wall; // Add bias potential
@@ -483,6 +494,7 @@ void SheathBoundarySimple::transform(Options& state) {
   set(electrons["energy_source"], fromFieldAligned(electron_energy_source));
 
   // Add the total sheath power flux to the tracker of y power flows
+  // WARNING: this is only the additional source and is missing advection
   add(electrons["energy_flow_ylow"], fromFieldAligned(electron_sheath_power_ylow));
 
   if (IS_SET_NOBOUNDARY(electrons["velocity"])) {
@@ -509,7 +521,7 @@ void SheathBoundarySimple::transform(Options& state) {
       continue; // Skip electrons
     }
 
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
     // Ion charge
     const BoutReal Zi = species.isSet("charge") ? get<BoutReal>(species["charge"]) : 0.0;
@@ -566,7 +578,6 @@ void SheathBoundarySimple::transform(Options& state) {
           Pi[im] = limitFree(Pi[ip], Pi[i], pressure_boundary_mode);
 
           // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne[im] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[im] + Ni[i]);
           const BoutReal tesheath =
               floor(0.5 * (Te[im] + Te[i]), 1e-5); // electron temperature
@@ -576,11 +587,8 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          BoutReal visheath = -sqrt(C_i_sq); // Negative -> into sheath
-
-          if (Vi[i] < visheath) {
-            visheath = Vi[i];
-          }
+          // Negative -> into sheath
+          BoutReal visheath = std::min(Vi[i], -sqrt(C_i_sq));
 
           // Note: Here this is negative because visheath < 0
           BoutReal q = gamma_i * tisheath * nisheath * visheath;
@@ -635,7 +643,6 @@ void SheathBoundarySimple::transform(Options& state) {
           Pi[ip] = limitFree(Pi[im], Pi[i], pressure_boundary_mode);
 
           // Calculate sheath values at half-way points (cell edge)
-          const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
           const BoutReal nisheath = 0.5 * (Ni[ip] + Ni[i]);
           const BoutReal tesheath =
               floor(0.5 * (Te[ip] + Te[i]), 1e-5); // electron temperature
@@ -645,11 +652,8 @@ void SheathBoundarySimple::transform(Options& state) {
           // Ion speed into sheath
           BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-          BoutReal visheath = sqrt(C_i_sq); // Positive -> into sheath
-
-          if (Vi[i] > visheath) {
-            visheath = Vi[i];
-          }
+          // Positive -> into sheath
+          BoutReal visheath = std::max(Vi[i], sqrt(C_i_sq));
 
           BoutReal q = gamma_i * tisheath * nisheath * visheath;
 
@@ -715,17 +719,15 @@ void SheathBoundarySimple::transform(Options& state) {
     // Add the total sheath power flux to the tracker of y power flows
     add(species["energy_flow_ylow"], fromFieldAligned(ion_sheath_power_ylow));
 
-    set(diagnostics[species.name()]["energy_source"], hflux_i);
-    set(diagnostics[species.name()]["particle_source"], particle_source);
+    set(diagnostics[kv.first]["energy_source"], hflux_i);
+    set(diagnostics[kv.first]["particle_source"], particle_source);
 
   }
 }
 
 void SheathBoundarySimple::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
-  auto rho_s0 = get<BoutReal>(state["rho_s0"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
@@ -757,5 +759,4 @@ void SheathBoundarySimple::outputVars(Options& state) {
 
     }
   }
-
-  }
+}

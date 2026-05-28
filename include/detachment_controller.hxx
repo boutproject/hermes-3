@@ -5,10 +5,15 @@
 #include "component.hxx"
 #include <bout/constants.hxx>
 
+#include <cstddef>
+
 struct DetachmentController : public Component {
 
-  DetachmentController(std::string, Options& options, Solver*) {
-ASSERT0(BoutComm::size() == 1); // Only works on one processor
+  DetachmentController(std::string, Options& options, Solver*)
+      : Component({readOnly("species:{neutral}:density", Regions::Interior),
+                   readOnly("species:e:density", Regions::Interior), readOnly("time"),
+                   readWrite("species:{sp}:{output}")}) {
+    ASSERT0(BoutComm::size() == 1); // Only works on one processor
     Options& detachment_controller_options = options["detachment_controller"];
 
     const auto& units = options["units"];
@@ -108,7 +113,7 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
 
     buffer_size = detachment_controller_options["buffer_size"]
                                .doc("Number of points to store for calculating derivatives.")
-                               .withDefault(10);
+                               .withDefault(std::size_t{10});
     
     species_list = strsplit(detachment_controller_options["species_list"]
                                   .doc("Comma-separated list of species to apply the PI-controlled source to")
@@ -151,13 +156,22 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
       detachment_controller_options["debug"]
       .doc("Print debugging information to the screen (0 for none, 1 for basic, 2 for extensive).")
       .withDefault<int>(0);
-    
+
+    substitutePermissions("neutral", {neutral_species});
+    substitutePermissions(
+        "sp", std::vector<std::string>(species_list.begin(), species_list.end()));
+    std::string output;
+    if (control_mode == control_power) {
+      output = "energy_source";
+    } else if (control_mode == control_particles) {
+      output = "density_source";
+    } else {
+      ASSERT2(false);
+    }
+    substitutePermissions("output", {output});
   };
 
-  void transform(Options& state) override;
-
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     if (diagnose) {
 
       set_with_attrs(
@@ -207,11 +221,11 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
                     {"standard_name", "derivative_term"},
                     {"long_name", "detachment control derivative term"},
                     {"source", "detachment_controller"}});
-  }}
+    }
+  }
 
   void restartVars(Options& state) override {
-    AUTO_TRACE();
-    
+
     if ((initialise) && (not ignore_restart)) {
       if (state.isSet("detachment_control_src_mult")) {
         control = state["detachment_control_src_mult"].as<BoutReal>();
@@ -310,9 +324,11 @@ ASSERT0(BoutComm::size() == 1); // Only works on one processor
     bool first_step{true};
     BoutReal number_of_crossings{0.0};
 
-    int buffer_size = 0;
+    std::size_t buffer_size = 0;
     std::vector<BoutReal> time_buffer;
     std::vector<BoutReal> error_buffer;
+
+    void transform_impl(GuardedOptions& state) override;
 
 };
 

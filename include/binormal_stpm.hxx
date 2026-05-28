@@ -23,14 +23,6 @@ struct BinormalSTPM : public Component {
   ///
   BinormalSTPM(std::string name, Options& options, Solver* solver);
   
-  /// Sets
-  /// - species
-  ///   - <name>
-  ///     - pressure correction 
-  ///     - momentum correction
-  ///     - density correction
-  ///
-  void transform(Options& state) override;
   void outputVars(Options &state) override;
 
 
@@ -41,6 +33,14 @@ private:
   Field3D nu_Theta, chi_Theta, D_Theta; ///< nu/Theta, chi/Theta, D/Theta, precalculated
   Field3D Theta_inv; ///< Precalculate 1/Theta
 
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - pressure correction 
+  ///     - momentum correction
+  ///     - density correction
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {

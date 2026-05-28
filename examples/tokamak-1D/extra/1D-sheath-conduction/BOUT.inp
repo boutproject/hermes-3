@@ -31,7 +31,8 @@ J = 1 # Identity metric
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
 # to electron pressure using electron force balance
 # Collisions are needed to calculate heat conduction
-components = i, e, sheath_boundary, collisions, electron_force_balance
+components = (i, e, sheath_boundary, braginskii_collisions, braginskii_friction,
+              braginskii_heat_exchange, electron_force_balance, braginskii_conduction)
 
 normalise_metric = true  # Normalise the input metric?
 

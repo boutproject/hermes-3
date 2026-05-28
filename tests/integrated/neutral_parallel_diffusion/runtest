@@ -15,7 +15,7 @@ shell("ln -s ../../../hermes-3 hermes-3")
 # Run the case
 s, out = launch_safe("./hermes-3", nproc=1, mthread=1, pipe=True)
 with open("run.log", "w") as f:
-  f.write(out)
+    f.write(out)
 
 # Open the dataset
 outputs = BoutData("data")["outputs"]
@@ -45,13 +45,13 @@ assert "Fd+_Dpar" not in outputs.keys()
 # but they sum to zero over the domain
 
 for name in ["Sd_Dpar", "Ed_Dpar", "Fd_Dpar"]:
-  s = outputs[name]
-  print(name, np.amax(np.abs(s)), np.abs(np.sum(s)))
+    s = outputs[name]
+    print(name, np.amax(np.abs(s)), np.abs(np.sum(s)))
 
-  # Not zero
-  assert np.amax(np.abs(s)) > 1
+    # Not zero
+    assert np.amax(np.abs(s)) > 1
 
-  # Sum is zero
-  assert np.abs(np.sum(s)) < 1e-9
+    # Sum is zero
+    assert np.abs(np.sum(s)) < 1e-9
 
 exit(0)
