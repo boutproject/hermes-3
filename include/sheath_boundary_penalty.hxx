@@ -22,34 +22,6 @@ struct SheathBoundaryPenalty : public Component {
   ///                          Equal 0 inside the plasma, 1 in the wall
   SheathBoundaryPenalty(std::string name, Options& options, Solver*);
 
-  /// # Inputs
-  ///   - fields
-  ///     - phi  [optional]
-  ///       If present then electron sheath current terms are calculated
-  ///   - species
-  ///     - <name>
-  ///       - AA
-  ///       - charge
-  ///       - density
-  ///       - temperature
-  ///       - pressure [optional]
-  ///       - velocity [optional]
-  ///       - momentum [optional]
-  ///
-  /// # Outputs
-  ///   - species
-  ///     - <name>
-  ///       - density_source     Adds to existing
-  ///       - momentum_source    Adds to existing
-  ///       - energy_source      Adds to existing
-  ///       - density_penalty    Particle source term (negative)
-  ///       - momentum_penalty   Momentum source term
-  ///       - energy_penalty     Energy source term
-  ///
-  /// The *_penalty terms can be used in the recycling component
-  /// to implement volumetric recycling.
-  void transform(Options& state) override;
-
   /// Save diagnostics
   ///
   /// Always saves `penalty_mask` as a time-independent 3D field
@@ -76,6 +48,39 @@ private:
   /// Diagnostics for output
   Options diagnostics;
   bool diagnose; ///< Save diagnostics?
+
+  // Field-aligned fields for surface terms
+  bool surface_terms;
+  Field3D penalty_mask_fa;
+  Region<Ind3D> penalty_region_fa;
+
+  /// # Inputs
+  ///   - fields
+  ///     - phi  [optional]
+  ///       If present then electron sheath current terms are calculated
+  ///   - species
+  ///     - <name>
+  ///       - AA
+  ///       - charge
+  ///       - density
+  ///       - temperature
+  ///       - pressure [optional]
+  ///       - velocity [optional]
+  ///       - momentum [optional]
+  ///
+  /// # Outputs
+  ///   - species
+  ///     - <name>
+  ///       - density_source     Adds to existing
+  ///       - momentum_source    Adds to existing
+  ///       - energy_source      Adds to existing
+  ///       - density_penalty    Particle source term (negative)
+  ///       - momentum_penalty   Momentum source term
+  ///       - energy_penalty     Energy source term
+  ///
+  /// The *_penalty terms can be used in the recycling component
+  /// to implement volumetric recycling.
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
