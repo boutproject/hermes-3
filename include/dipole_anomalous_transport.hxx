@@ -34,12 +34,17 @@ private:
   Field2D dipole_anomalous_D; ///< Anomalous density diffusion coefficient
   Field2D dipole_anomalous_chi; ///< Anomalous thermal diffusion coefficient
   Field2D dipole_quasilinear_chi; ///< Quasilinear thermal diffusion coefficient
-  Field2D dipole_quasilinear_D; ///< Quasilinear particle diffusion coefficient
-  Field2D U2D;
+  Field2D dipole_quasilinear_D,
+      dipole_quasilinear_v; ///< Quasilinear particle diffusion coefficient
+  Field2D dipole_quasilinear_D_p;
+
+  Field2D U2D,B2D, R2D;
   Field2D transport_on;
   BoutReal dipole_gamma; // Sheath heat transmission coefficient
   BoutReal density_floor; // Minimum mass density if boussinesq=false
-  bool zero_inner_gradient_U; ///< Compute local U?
+  BoutReal mu0_normalized; // Normalisation for mu0, used in anomalous pressure diffusion coefficient
+  BoutReal transport_off_factor; ///< Factor to turn off transport based on sign of dn/dphi
+  bool transport_switch; ///< Switch to turn on/off transport based on sign of dn/dphi zero_inner_gradient_U; ///< Compute local U?
   bool zero_outer_gradient_U; ///< Compute local U?
   bool dipole_upwind;       ///< Use upwind gradients for anomalous fluxes?
   bool entropy_conserving;
@@ -74,6 +79,8 @@ private:
 
 const void compute_U2D(Field2D& U, bool local_U, bool zero_outer_gradient_U);
 const Field2D isnegative_grad_perp(const Field2D& P);
+const Field2D isnegative_dnBdphi(const Field2D& N2D, const Field2D& B2D, BoutReal transport_off_factor);
+
 //const Field3D isnegative_grad_perp(const Field3D& P);
 namespace {
 RegisterComponent<DipoleAnomalousDiffusion> registercomponentdipoleanomalousdiffusion("dipole_anomalous_diffusion");
