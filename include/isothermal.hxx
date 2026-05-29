@@ -12,10 +12,10 @@ struct Isothermal : public Component {
   void outputVars(Options &state) override;
 private:
   std::string name; // Species name
-
+  bool dipole_scaling; ///< Apply dipole scaling ~ B to the temperature
   BoutReal T; ///< The normalised temperature
   Field3D P; ///< The normalised pressure
-
+  Field2D T2D, B2D, B2D_edge; ///< The normalised temperature, averaged to 2D (for dipole scaling)
   bool diagnose; ///< Output additional diagnostics?
 
   /// Inputs

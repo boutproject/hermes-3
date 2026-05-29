@@ -64,6 +64,8 @@ const Field2D Laplace_FV(const Field2D& k, const Field2D& f);
 /// Takes Div_a_Grad_perp from BOUT++ and adds flows
 const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
                                            Field3D& flux_xlow, Field3D& flux_ylow);
+const Field3D Div_a_Grad_perpB_flows(const Field3D& a, const Field3D& f,
+                                    Field3D& flux_xlow, Field3D& flux_ylow);
 /// Same but with upwinding
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
 const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
@@ -73,7 +75,7 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
                                            Field3D& flux_xlow, Field3D& flux_ylow);
 const Field3D Div_a_Grad_perpB_upwind_flows(const Field3D& a, const Field3D& f,
                                             Field3D& flux_xlow, Field3D& flux_ylow);
-
+Field3D Conv_flows(const Field3D& a, const Field3D& f, Field3D& flow_xlow);
 /// Version with energy flow diagnostic
 const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f,
                                      Field3D& flow_ylow, bool bndry_flux = true);
