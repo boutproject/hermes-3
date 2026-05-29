@@ -508,17 +508,21 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
             BoutReal dtorcore = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
                                   * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
             BoutReal dacore = dpolcore * dtorcore; // [m^2]
+
+            // Particle flow
+            // Γ = 1/4 * n * v_th
             BoutReal neutral_particle_flow_to_core = 0.25 * v_th * nncore * dacore; // Stangeby eqns. 2.24
             // The amount of neutral ionised in core
             BoutReal ionise_particle_flow = neutral_particle_flow_to_core * multiplier;
 
             // Momentum 
-            // mnv = kg m/s 1/m^3 
+            // Γ_m = 1/2 P = 1/2 n * T
             BoutReal neutral_momentum_flow_to_core = 0.5 * nncore * tncore * dacore;
             BoutReal ionise_momentum_flow = neutral_momentum_flow_to_core * multiplier;
 
             // Energy 
-            BoutReal neutral_energy_flow_to_core = 2.0 * tncore * v_th * nncore *  dacore; // Incident energy
+            // Q = 2TΓ
+            BoutReal neutral_energy_flow_to_core = 2.0 * tncore * neutral_particle_flow_to_core; // Incident energy
             BoutReal ionise_energy_flow = neutral_energy_flow_to_core * multiplier;
 
             // diagnostic
