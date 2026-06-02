@@ -283,7 +283,7 @@ void Reaction::transform_impl(GuardedOptions& state) {
   // Set collision frequencies
   for (const auto& reactant_name : reactant_names) {
     update_state_and_diagnostics<set<Field3D>>(
-        state, reactant_name, ReactionDiagnosticType::collision_freq,
+        state, reactant_name, ReactionDiagnosticType::species_collision_freq,
         rate_calc_results.coll_freq(reactant_name));
   }
 

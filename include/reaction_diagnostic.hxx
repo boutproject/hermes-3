@@ -12,13 +12,13 @@
 
 #include "component.hxx"
 
-BOUT_ENUM_CLASS(ReactionDiagnosticType, collision_freq, density_src, energy_src,
+BOUT_ENUM_CLASS(ReactionDiagnosticType, species_collision_freq, density_src, energy_src,
                 energy_loss, momentum_src);
 
 std::string toString(ReactionDiagnosticType diag_type);
 
 static const std::map<ReactionDiagnosticType, std::string> sp_data_keys = {
-    {ReactionDiagnosticType::collision_freq, "collision_frequency"},
+    {ReactionDiagnosticType::species_collision_freq, "collision_frequency"},
     {ReactionDiagnosticType::density_src, "density_source"},
     {ReactionDiagnosticType::energy_src, "energy_source"},
     {ReactionDiagnosticType::energy_loss, "energy_source"},
@@ -34,7 +34,7 @@ struct ReactionDiagnostic {
   static inline std::string default_std_name(ReactionDiagnosticType type) {
     std::string standard_name;
     switch (type) {
-    case ReactionDiagnosticType::collision_freq:
+    case ReactionDiagnosticType::species_collision_freq:
       standard_name = "collision frequency";
       break;
     case ReactionDiagnosticType::density_src:
@@ -62,7 +62,7 @@ public:
                      const Options& units,
                      DiagnosticTransformerType transformer = identity)
       : ReactionDiagnostic(name, long_name, type, source, default_std_name(type), units,
-                           transformer){};
+                           transformer) {};
 
   ReactionDiagnostic(const std::string& name, const std::string& long_name,
                      ReactionDiagnosticType type, const std::string& source,
@@ -77,7 +77,7 @@ public:
     const BoutReal Omega_ci = 1 / get<BoutReal>(units["seconds"]);
 
     switch (type) {
-    case ReactionDiagnosticType::collision_freq: {
+    case ReactionDiagnosticType::species_collision_freq: {
       this->conversion = Omega_ci;
       this->units = "s^-1";
       break;

@@ -140,7 +140,8 @@ CXReaction::CXReaction(std::string name, Options& alloptions)
                    fmt::format("Collision frequency of CX of {:s} and {:s} producing "
                                "{:s} and {:s}. Note Kab != Kba",
                                this->r1, this->p1, this->r2, this->p2),
-                   ReactionDiagnosticType::collision_freq, standard_name, identity);
+                   ReactionDiagnosticType::species_collision_freq, standard_name,
+                   identity);
   }
 }
 
@@ -220,13 +221,13 @@ void CXReaction::transform_additional(GuardedOptions& state, const RateData& rat
   std::string r1_coll_freq_key = fmt::format(
       "species:{:s}:collision_frequencies:{:s}_{:s}_cx", this->r1, this->r1, this->r2);
   update_state_and_diagnostics<set>(state, this->r1,
-                                    ReactionDiagnosticType::collision_freq,
+                                    ReactionDiagnosticType::species_collision_freq,
                                     r1_coll_freq_key, rate_data.coll_freq(this->r1));
 
   std::string r2_coll_freq_key = fmt::format(
       "species:{:s}:collision_frequencies:{:s}_{:s}_cx", this->r2, this->r2, this->r1);
   update_state_and_diagnostics<set>(state, this->r2,
-                                    ReactionDiagnosticType::collision_freq,
+                                    ReactionDiagnosticType::species_collision_freq,
                                     r2_coll_freq_key, rate_data.coll_freq(this->r2));
 }
 
