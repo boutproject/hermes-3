@@ -126,6 +126,11 @@ inline bool collisionSpeciesMatch(std::string input, const std::string& species1
   bool species2_found = false;
   bool reaction_found = false;
 
+  // No match if there aren't at least three substrings when splitting by _
+  if (substrings.size() < 3) {
+    return false;
+  }
+
   // output << std::string("\n############################\n");
 
   if (mode == "partial") {
