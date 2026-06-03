@@ -41,7 +41,8 @@ private:
   Field2D U2D, B2D, R2D;
   Field2D loghtheta;
   bool zero_gradient;
-
+  Field2D Kn;
+  
   Field2D transport_on;
   BoutReal dipole_gamma; // Sheath heat transmission coefficient
   BoutReal density_floor; // Minimum mass density if boussinesq=false
@@ -85,10 +86,11 @@ const Field2D isnegative_grad_perp(const Field2D& P);
 const Field2D isnegative_dnBthetadpsi(const Field2D& N2D, const Field2D& B2D, 
                                       const Field2D& htheta2D,
                                        BoutReal transport_off_factor);
-
-//const Field3D isnegative_grad_perp(const Field3D& P);
-namespace {
-RegisterComponent<DipoleAnomalousDiffusion> registercomponentdipoleanomalousdiffusion("dipole_anomalous_diffusion");
+const Field2D compute_Kn(const Field2D& N2D, const Field2D& B2D, const Field2D& htheta2D);
+const Field2D set_quasilinear_transport_on(const Field2D& Kn, BoutReal transport_off_factor);
+    namespace {
+  RegisterComponent<DipoleAnomalousDiffusion> registercomponentdipoleanomalousdiffusion(
+      "dipole_anomalous_diffusion");
 }
 
 #endif // DIPOLE_ANOMALOUS_DIFFUSION_H
