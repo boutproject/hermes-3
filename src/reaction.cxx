@@ -280,9 +280,9 @@ void Reaction::transform_impl(GuardedOptions& state) {
     throw BoutException("Unhandled RateParamsTypes in Reaction::transform_impl()");
   }
 
-  // Set collision frequencies
+  // Update reactant species collision frequencies
   for (const auto& reactant_name : reactant_names) {
-    update_state_and_diagnostics<set<Field3D>>(
+    update_state_and_diagnostics<add<Field3D>>(
         state, reactant_name, ReactionDiagnosticType::species_collision_freq,
         rate_calc_results.coll_freq(reactant_name));
   }
