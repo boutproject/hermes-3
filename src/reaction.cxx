@@ -273,9 +273,9 @@ void Reaction::transform_impl(GuardedOptions& state) {
 
   RateData rate_calc_results = this->get_rate(state);
 
-  // Set collision frequencies
+  // Update reactant species collision frequencies
   for (const auto& reactant_name : this->reactant_names) {
-    update_source<set<Field3D>>(state, reactant_name,
+    update_source<add<Field3D>>(state, reactant_name,
                                 ReactionDiagnosticType::collision_freq,
                                 rate_calc_results.coll_freq(reactant_name));
   }
