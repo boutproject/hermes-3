@@ -68,9 +68,6 @@ CXReaction::CXReaction(std::string name, Options& alloptions)
   add_coll_freq(this->r1, r1_r2_reaction_lbl, this->r1);
   add_coll_freq(this->r2, r2_r1_reaction_lbl, this->r2);
 
-  setPermissions(readWrite("species:{r1}:collision_frequencies:{r1}_{r2}_cx"));
-  setPermissions(readWrite("species:{r2}:collision_frequencies:{r2}_{r1}_cx"));
-
   std::vector<std::string> writevals = {"momentum_source", "energy_source"};
   if (this->r1 != this->p2) {
     writevals.push_back("density_source");
