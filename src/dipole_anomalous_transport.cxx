@@ -47,6 +47,7 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
   BoutReal qs_norm;
   Field3D B = mesh->getCoordinates()->Bxy;
   B2D = DC(B);
+  Kn = 0;
   Field2D rescale_qs_D = zeroFrom(dipole_quasilinear_D) +1.0;
   Coordinates* coord = dipole_quasilinear_D.getCoordinates();
   if (dipole_model == 1) {
@@ -307,10 +308,10 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
     
         transport_on = 1.0;
         mesh->communicate(transport_on);
-
-        // -- quasilinear anomalous transport --
-        Field3D S_N =
-            Div_a_Grad_perp_upwind_flows(dipole_anomalous_D, N2D, flow_xlow, flow_ylow);
+        
+            // -- quasilinear anomalous transport --
+            Field3D S_N = Div_a_Grad_perp_upwind_flows(dipole_anomalous_D, N2D, flow_xlow,
+                                                       flow_ylow);
 
         add(species["density_source"], S_N);
         add(species["particle_flow_xlow"], flow_xlow);
@@ -318,7 +319,10 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
 
         // -- quasilinear dipole transport --
         Field2D htheta2D = 1/sqrt(mesh->getCoordinates()->g22);
-        transport_on = 1;//isnegative_dnBthetadpsi(N2D, B2D, htheta2D, transport_off_factor);
+        mesh->communicate(htheta2D);
+        Kn = compute_Kn(N2D, B2D, htheta2D);
+        mesh->communicate(Kn);
+        transport_on = set_quasilinear_transport_on(Kn, transport_off_factor);
         mesh->communicate(transport_on);
         Field2D nthetaB = N2D * htheta2D / B2D;
         mesh->communicate(nthetaB);
@@ -328,20 +332,17 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
             nthetaB(mesh->xstart - 1, j) = nthetaB(mesh->xstart, j);
           }
         }
-        Field2D _dipole_quasilinear_D = DC(dipole_quasilinear_D) * B2D / htheta2D;
-        S_N = transport_on
-              * Div_a_Grad_perp_upwind_flows(_dipole_quasilinear_D, nthetaB, flow_xlow,
+        Field2D _dipole_quasilinear_D =
+            DC(dipole_quasilinear_D) * B2D / htheta2D * transport_on;
+        mesh->communicate(_dipole_quasilinear_D);
+        
+        S_N = 
+              Div_a_Grad_perp_upwind_flows(_dipole_quasilinear_D, nthetaB, flow_xlow,
                                              flow_ylow);
-        Field2D S_N2D = DC(S_N);                                     
-        if (mesh->lastX()) {
-          for (int j = mesh->ystart; j <= mesh->yend; j++) {
-            S_N2D(mesh->xend + 2, j) = 0.0;
-            S_N2D(mesh->xend + 1, j) = 0.0;
-          }
-        }
+
         add(species["density_source"], S_N);
-        add(species["particle_flow_xlow"], flow_xlow * transport_on);
-        add(species["particle_flow_ylow"], flow_ylow * transport_on);
+        add(species["particle_flow_xlow"], flow_xlow );
+        add(species["particle_flow_ylow"], flow_ylow );
 
 
 
@@ -663,6 +664,17 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
                              {"long_name", "Dipole transport on/off switch"},
                          });
 
+          if (Kn.isAllocated()) {
+            set_with_attrs(
+                state[fmt::format("Kn_{}", name)], Kn,
+                {{"time_dimension", "t"},
+                 {"units", ""},
+                 {"standard_name", "Kn"},
+                 {"long_name", name + " dipole quasilinear Kn"},
+                 {"species", name},
+                 {"source", "dipole_anomalous_transport"}});
+          }
+
           if (flow_xlow.isAllocated()) {
             set_with_attrs(
                 state[fmt::format("pf{}_dipole_xlow", name)], flow_xlow,
@@ -728,8 +740,8 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
 
         // Flux in x
 
-        int xs = mesh->xstart;
-        int xe = mesh->xend;
+        int xs = mesh->xstart-1;
+        int xe = mesh->xend+1;
 
         for (int i = xs; i <= xe; i++) {
           for (int j = mesh->ystart; j <= mesh->yend; j++) {
@@ -740,9 +752,49 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
             }
           }
         }
+        mesh->communicate(result);
         return result;
       }
+      const Field2D set_quasilinear_transport_on(const Field2D& Kn, BoutReal transport_off_factor) {
 
+        Field2D result{zeroFrom(Kn)};
+        result = 1.0;
+        // Flux in x
+
+        int xs = mesh->xstart-1;
+        int xe = mesh->xend+1;
+
+        for (int i = xs; i <= xe; i++) {
+          for (int j = mesh->ystart; j <= mesh->yend; j++) {
+            if (Kn(i, j)//+Kn(i, j + 1) + Kn(i, j - 1) +  + Kn(i + 1, j) + Kn(i - 1, j) 
+                < 0) {
+              result(i, j) = 1.0;
+            } else {
+              result(i, j) = transport_off_factor;
+            }
+          }
+        }
+        mesh->communicate(result);
+        return result;
+      }
+      const Field2D compute_Kn(const Field2D& N2D, const Field2D& B2D,
+                                            const Field2D& htheta2D) {
+
+        Field2D Kn{zeroFrom(N2D)};
+        Coordinates* coord = N2D.getCoordinates();
+        // Flux in x
+
+        int xs = mesh->xstart-1;
+        int xe = mesh->xend+1;
+
+        for (int i = xs; i <= xe; i++) {
+          for (int j = mesh->ystart; j <= mesh->yend; j++) {
+            Kn(i, j) = -(log(N2D(i + 1, j)/B2D(i + 1, j)) - log(N2D(i, j)/B2D(i, j))) / coord->dx(i, j)- 2 * (log(htheta2D(i + 1, j)) - log(htheta2D(i, j))) / coord->dx(i, j);
+          }
+        }
+        mesh->communicate(Kn);
+        return Kn;
+      }
       // const Field2D compute_Kp(const Field2D& P2D, const Field2D& B2D) {
 
       //   Field2D dlogPdpsi{zeroFrom(P2D)};
