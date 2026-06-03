@@ -20,7 +20,7 @@ struct Dissociation : public Reaction {
    * @param name
    * @param options The options object
    */
-  Dissociation(std::string name, Options& options) : Reaction(name, options) {};
+  Dissociation(std::string name, Options& options);
 
   /**
    * @brief Constructor used by component factory.
@@ -43,7 +43,7 @@ struct DissociativeExc : public Reaction {
    * @param name
    * @param options The options object
    */
-  DissociativeExc(std::string name, Options& options) : Reaction(name, options) {};
+  DissociativeExc(std::string name, Options& options);
 
   /**
    * @brief Constructor used by component factory.
@@ -66,7 +66,7 @@ struct DissociativeIzn : public Reaction {
    * @param name
    * @param options The options object
    */
-  DissociativeIzn(std::string name, Options& options) : Reaction(name, options) {};
+  DissociativeIzn(std::string name, Options& options);
 
   /**
    * @brief Constructor used by component factory.
@@ -89,7 +89,7 @@ struct NonDissociativeIzn : public Reaction {
    * @param name
    * @param options The options object
    */
-  NonDissociativeIzn(std::string name, Options& options) : Reaction(name, options) {};
+  NonDissociativeIzn(std::string name, Options& options);
 
   /**
    * @brief Constructor used by component factory.
@@ -112,7 +112,7 @@ struct DissociativeRec : public Reaction {
    * @param name
    * @param options The options object
    */
-  DissociativeRec(std::string name, Options& options) : Reaction(name, options) {};
+  DissociativeRec(std::string name, Options& options);
 
   /**
    * @brief Constructor used by component factory.

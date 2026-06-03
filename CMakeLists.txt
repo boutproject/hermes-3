@@ -99,6 +99,7 @@ set(HERMES_SOURCES
     src/binormal_stpm.cxx
     src/recycling.cxx
     src/adas_reaction.cxx
+    src/molecular_reactions.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
     src/neutral_boundary.cxx
