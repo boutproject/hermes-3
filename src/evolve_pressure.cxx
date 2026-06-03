@@ -248,7 +248,11 @@ void EvolvePressure::transform(Options& state) {
     P = exp(logP);
   }
   
-  P.applyBoundary();
+  if (immBndry) {
+    immBndry->SetBoundary(P);
+  } else {
+    P.applyBoundary();
+  }
   mesh->communicate(P);
   P.applyParallelBoundary();
 
