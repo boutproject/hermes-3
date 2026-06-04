@@ -12,8 +12,8 @@
 #include "hermes_build_config.hxx"
 #include "hermes_utils.hxx"
 #include "integrate.hxx"
+#include "reaction_data.hxx"
 
-BOUT_ENUM_CLASS(RateParamsTypes, T, ET, nT)
 namespace hermes {
 
 /// Struct to hold pre-averaged data for each cell

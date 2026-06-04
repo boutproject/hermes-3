@@ -1,11 +1,16 @@
 #include "../include/sheath_boundary.hxx"
-#include "../include/hermes_utils.hxx"
+#include "../include/guarded_options.hxx"
+#include "../include/permissions.hxx"
 
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
+#include <bout/field3d.hxx>
 #include <bout/mesh.hxx>
 #include <bout/output_bout_types.hxx>
 
 #include <algorithm>
+#include <string>
 
 using bout::globals::mesh;
 
@@ -71,10 +76,27 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
     throw BoutException("Secondary electron emission must be between 0 and 1 ({:e})", Ge);
   }
 
+  ion_ee_gamma_max = options["ion_ee_gamma_max"]
+                         .doc("Maximum ion induced secondary electron emission "
+                              "coefficient. < 0 means off")
+                         .withDefault(-1.0);
+  ion_ee_E_th =
+      options["ion_ee_E_th"]
+          .doc("Energy threshold [eV] for ion induced secondary electron emission")
+          .withDefault(50.0);
+  ion_ee_E_max =
+      options["ion_ee_E_max"]
+          .doc("Energy of maximum ion induced secondary electron emission [eV]")
+          .withDefault(5e3);
+
+  ion_ee_p = options["ion_ee_p"]
+                 .doc("Shape factor for ion induced secondary electron emission")
+                 .withDefault(1.0);
+
   sin_alpha = options["sin_alpha"]
                   .doc("Sin of the angle between magnetic field line and wall surface. "
                        "Should be between 0 and 1")
-    .withDefault(Field3D(1.0));
+                  .withDefault(Field3D(1.0));
 
   if ((min(sin_alpha) < 0.0) or (max(sin_alpha) > 1.0)) {
     throw BoutException("Range of sin_alpha must be between 0 and 1");
@@ -575,7 +597,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath;
 
           const BoutReal visheath = std::min(-sqrt(C_i_sq), // Negative -> into sheath
-					                          Vi[i]);        // Allow supersonic flow
+                                             Vi[i]);        // Allow supersonic flow
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
@@ -599,6 +621,38 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           ASSERT2(power <= 0.0);
 
           energy_source[i] += power;
+
+          if (ion_ee_gamma_max > 0.0) {
+            // Ion-induced secondary electron emission
+
+            const BoutReal phi_wall = wall_potential[i];
+            const BoutReal phisheath = floor_potential
+                                           ? floor(0.5 * (phi[im] + phi[i]), phi_wall)
+                                           : 0.5 * (phi[im] + phi[i]);
+
+            // Ion energy at the wall
+            const BoutReal Ei =
+                0.5 * (tisheath + Mi * SQ(visheath)) + Zi * (phisheath - phi_wall);
+
+            const BoutReal ion_ee_gamma =
+                // Smooth turn on around threshold energy
+                0.5
+                * (1. + tanh(Ei - ion_ee_E_th) / (0.3 * ion_ee_E_th))
+                // Increase with energy to a maximum
+                * ion_ee_gamma_max
+                * std::pow(Ei / ion_ee_E_max, ion_ee_p)
+                // Rolls over above maximum
+                * std::exp(ion_ee_p * (1. - (Ei / ion_ee_E_max)));
+
+            // Add flow of cold electrons into plasma
+            BoutReal vesheath = 0.5 * (Ve[im] + Ve[i]);
+            const BoutReal nvesheath =
+                nesheath + vesheath - ion_ee_gamma * nisheath * visheath;
+            vesheath = nvesheath / nesheath;
+
+            Ve[im] = 2 * vesheath - Ve[i];
+            NVe[im] = 2. * Me * nvesheath - NVe[i];
+          }
         }
       }
     }
@@ -651,7 +705,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath; // + Δγ
 
           const BoutReal visheath = std::max(sqrt(C_i_sq), // Positive -> into sheath
-					                           Vi[i]); // Allow supersonic flow
+                                             Vi[i]);       // Allow supersonic flow
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
@@ -676,6 +730,38 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           ASSERT2(power >= 0.0);
 
           energy_source[i] -= power; // Note: Sign negative because power > 0
+
+          if (ion_ee_gamma_max > 0.0) {
+            // Ion-induced secondary electron emission
+
+            const BoutReal phi_wall = wall_potential[i];
+            const BoutReal phisheath = floor_potential
+                                           ? floor(0.5 * (phi[ip] + phi[i]), phi_wall)
+                                           : 0.5 * (phi[ip] + phi[i]);
+
+            // Ion energy at the wall
+            const BoutReal Ei =
+                0.5 * (tisheath + Mi * SQ(visheath)) + Zi * (phisheath - phi_wall);
+
+            const BoutReal ion_ee_gamma =
+                // Smooth turn on around threshold energy
+                0.5
+                * (1. + tanh(Ei - ion_ee_E_th) / (0.3 * ion_ee_E_th))
+                // Increase with energy to a maximum
+                * ion_ee_gamma_max
+                * std::pow(Ei / ion_ee_E_max, ion_ee_p)
+                // Rolls over above maximum
+                * std::exp(ion_ee_p * (1. - (Ei / ion_ee_E_max)));
+
+            // Add flow of cold electrons into plasma
+            BoutReal vesheath = 0.5 * (Ve[ip] + Ve[i]);
+            const BoutReal nvesheath =
+                nesheath + vesheath - ion_ee_gamma * nisheath * visheath;
+            vesheath = nvesheath / nesheath;
+
+            Ve[ip] = 2 * vesheath - Ve[i];
+            NVe[ip] = 2. * Me * nvesheath - NVe[i];
+          }
         }
       }
     }
