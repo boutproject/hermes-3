@@ -627,7 +627,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
             const BoutReal ion_ee_gamma =
                 // Smooth turn on around threshold energy
                 0.5
-                * (1. + tanh(Ei - ion_ee_E_th) / (0.3 * ion_ee_E_th))
+                * (1. + tanh((Ei - ion_ee_E_th) / (0.3 * ion_ee_E_th)))
                 // Increase with energy to a maximum
                 * ion_ee_gamma_max
                 * std::pow(Ei / ion_ee_E_max, ion_ee_p)
@@ -736,7 +736,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
             const BoutReal ion_ee_gamma =
                 // Smooth turn on around threshold energy
                 0.5
-                * (1. + tanh(Ei - ion_ee_E_th) / (0.3 * ion_ee_E_th))
+                * (1. + tanh((Ei - ion_ee_E_th) / (0.3 * ion_ee_E_th)))
                 // Increase with energy to a maximum
                 * ion_ee_gamma_max
                 * std::pow(Ei / ion_ee_E_max, ion_ee_p)
