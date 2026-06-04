@@ -1,16 +1,28 @@
 
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/globals.hxx>
+#include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
+#include "../include/component.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/guarded_options.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/neutral_mixed.hxx"
+#include "../include/permissions.hxx"
 
 #include <algorithm>
+#include <string>
 
 using bout::globals::mesh;
 
@@ -242,7 +254,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
             0.5 * (3. * Nn(r.ind, mesh->ystart, jz) - Nn(r.ind, mesh->ystart + 1, jz)),
             0.0);
 
-        BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
+        const BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
 
         Nn(r.ind, mesh->ystart - 1, jz) = 2 * nnwall - Nn(r.ind, mesh->ystart, jz);
 
@@ -270,7 +282,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
         const BoutReal nnwall = std::max(
             0.5 * (3. * Nn(r.ind, mesh->yend, jz) - Nn(r.ind, mesh->yend - 1, jz)), 0.0);
 
-        BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
+        const BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
 
         Nn(r.ind, mesh->yend + 1, jz) = 2 * nnwall - Nn(r.ind, mesh->yend, jz);
 
@@ -298,7 +310,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
 }
 
 void NeutralMixed::finally(const Options& state) {
-  auto& localstate = state["species"][name];
+  const auto& localstate = state["species"][name];
 
   // extract auxiliary variables derived from
   // Nn, Pn, NVn, from the local state
@@ -324,7 +336,7 @@ void NeutralMixed::finally(const Options& state) {
   // Nnlim Used where division by neutral density is needed
   Nnlim = softFloor(Nn, density_floor);
   // Tnlim used where positivity of Tn is required
-  Field3D Tnlim = softFloor(Tn, temperature_floor);
+  const Field3D Tnlim = softFloor(Tn, temperature_floor);
   // Pnlim used where positivity of Pn is required
   Pnlim = softFloor(Pn, pressure_floor);
   logPnlim = log(Pnlim);
@@ -334,8 +346,8 @@ void NeutralMixed::finally(const Options& state) {
   //
   //
 
-  Field3D Rnn = sqrt(Tnlim / AA)
-                / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+  const Field3D Rnn = sqrt(Tnlim / AA)
+                      / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
   if (collisionality_override > 0.0) {
     // user has set an override for collision frequency
     Dnn = (Tn / AA) / collisionality_override;
@@ -349,7 +361,7 @@ void NeutralMixed::finally(const Options& state) {
           for (const auto& collision :
                localstate["collision_frequencies"].getChildren()) {
 
-            std::string collision_name = collision.second.name();
+            const std::string collision_name = collision.second.name();
 
             if ( // Charge exchange
                 (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
@@ -365,7 +377,7 @@ void NeutralMixed::finally(const Options& state) {
           for (const auto& collision :
                localstate["collision_frequencies"].getChildren()) {
 
-            std::string collision_name = collision.second.name();
+            const std::string collision_name = collision.second.name();
 
             if ( // Charge exchange
                 (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
