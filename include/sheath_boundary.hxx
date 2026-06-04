@@ -53,8 +53,8 @@ private:
 
   // Ion-induced Secondary Electron Emission
   BoutReal ion_ee_gamma_max; ///< Maximum ion induced secondary emission coefficient
-  BoutReal ion_ee_E_th;      ///< Threshold energy [eV]
-  BoutReal ion_ee_E_max;     ///< Peak energy [eV]
+  BoutReal ion_ee_E_th;      ///< Threshold energy [normalised]
+  BoutReal ion_ee_E_max;     ///< Peak energy [normalised]
   BoutReal ion_ee_p;         ///< Shape coefficient
 
   ///
