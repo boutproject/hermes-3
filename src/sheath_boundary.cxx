@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 using bout::globals::mesh;
 
@@ -57,6 +58,19 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 }
 
 } // namespace
+
+BoutReal SheathBoundary::ionSecondaryElectronEmissionGamma(BoutReal ion_energy) const {
+  if (ion_ee_gamma_max < 0.0) {
+    return 0.0;
+  }
+  if (ion_energy <= 0.0) {
+    return 0.0;
+  }
+
+  return 0.5 * (1. + tanh((ion_energy - ion_ee_E_th) / (0.3 * ion_ee_E_th)))
+         * ion_ee_gamma_max * std::pow(ion_energy / ion_ee_E_max, ion_ee_p)
+         * std::exp(ion_ee_p * (1. - (ion_energy / ion_ee_E_max)));
+}
 
 SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
     : Component({
@@ -191,6 +205,16 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
     // Calculate potential phi assuming zero current
     // Note: This is equation (22) in Tskhakaya 2005, with I = 0
 
+    struct IonBoundaryInfo {
+      Field3D density;
+      Field3D temperature;
+      BoutReal mass;
+      BoutReal charge;
+      BoutReal adiabatic;
+    };
+
+    std::vector<IonBoundaryInfo> ion_species;
+
     // Need to sum  s_i Z_i C_i over all ion species
     //
     // To avoid looking up species for every grid point, this
@@ -216,6 +240,10 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
       const BoutReal adiabatic = IS_SET(species["adiabatic"])
                                      ? get<BoutReal>(species["adiabatic"])
                                      : 5. / 3; // Ratio of specific heats (ideal gas)
+
+      if (ion_ee_gamma_max > 0.0) {
+        ion_species.push_back({Ni, Ti, Mi, Zi, adiabatic});
+      }
 
       if (lower_y) {
         // Sum values, put result in mesh->ystart
@@ -303,11 +331,84 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           auto i = indexAt(phi, r.ind, mesh->ystart, jz);
+          auto ip = i.yp();
 
           if (Te[i] <= 0.0) {
             phi[i] = 0.0;
           } else {
-            phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+            const BoutReal v_te = sqrt(Te[i] / (Me * TWOPI));
+            const BoutReal prefactor = v_te * (1. - Ge);
+
+            // Solve for sheath drop Δφ = φ - φ_wall, with optional ion-induced SEE:
+            //   (1-Ge) v_te exp(-Δφ/Te) = ion_sum + Σ_i [γ_i(E_i(Δφ)) Γ_i/n_e]
+            BoutReal delta_phi = Te[i] * log(prefactor / ion_sum[i]);
+
+            if (ion_ee_gamma_max > 0.0) {
+              BoutReal delta_phi_guess = delta_phi;
+              constexpr int max_iter = 20;
+              constexpr BoutReal relax = 0.5;
+
+              for (int iter = 0; iter < max_iter; ++iter) {
+                BoutReal ion_emission_sum = 0.0;
+
+                for (const auto& ion : ion_species) {
+                  const BoutReal te = Te[i];
+                  const BoutReal ti = ion.temperature[i];
+                  const BoutReal mi = ion.mass;
+                  const BoutReal zi = ion.charge;
+                  const BoutReal ad = ion.adiabatic;
+
+                  BoutReal s_i = std::clamp(
+                      0.5 * (3. * ion.density[i] / Ne[i] - ion.density[ip] / Ne[ip]), 0.0,
+                      1.0);
+                  if (!std::isfinite(s_i)) {
+                    s_i = 1.0;
+                  }
+
+                  BoutReal grad_ne = Ne[ip] - Ne[i];
+                  BoutReal grad_ni = ion.density[ip] - ion.density[i];
+
+                  // Keep consistent with the ion_sum construction above
+                  if (fabs(grad_ni) < 2e-3) {
+                    grad_ni = grad_ne = 2e-3;
+                  }
+
+                  const BoutReal C_i_sq = std::clamp(
+                      (ad * ti + zi * s_i * te * grad_ne / grad_ni) / mi, 0., 100.);
+
+                  const BoutReal ion_flux_over_ne =
+                      s_i * sin_alpha[ip] * sqrt(C_i_sq); // Γ_i / n_e
+
+                  const BoutReal ion_energy =
+                      0.5 * (ti + mi * C_i_sq) + zi * delta_phi_guess;
+
+                  ion_emission_sum +=
+                      ionSecondaryElectronEmissionGamma(ion_energy) * ion_flux_over_ne;
+                }
+
+                const BoutReal denom = ion_sum[i] + ion_emission_sum;
+                if (!(denom > 0.0) || !std::isfinite(denom)) {
+                  break;
+                }
+
+                const BoutReal delta_phi_new = Te[i] * log(prefactor / denom);
+                if (!std::isfinite(delta_phi_new)) {
+                  break;
+                }
+
+                const BoutReal err = fabs(delta_phi_new - delta_phi_guess);
+                const BoutReal scale = 1.0 + fabs(delta_phi_guess);
+                delta_phi_guess = (1. - relax) * delta_phi_guess + relax * delta_phi_new;
+
+                if (err < 1e-10 * scale) {
+                  break;
+                }
+              }
+
+              delta_phi = delta_phi_guess;
+            }
+
+            phi[i] = delta_phi;
           }
 
           const BoutReal phi_wall = wall_potential[i];
@@ -322,11 +423,79 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
       for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           auto i = indexAt(phi, r.ind, mesh->yend, jz);
+          auto im = i.ym();
 
           if (Te[i] <= 0.0) {
             phi[i] = 0.0;
           } else {
-            phi[i] = Te[i] * log(sqrt(Te[i] / (Me * TWOPI)) * (1. - Ge) / ion_sum[i]);
+            const BoutReal v_te = sqrt(Te[i] / (Me * TWOPI));
+            const BoutReal prefactor = v_te * (1. - Ge);
+
+            BoutReal delta_phi = Te[i] * log(prefactor / ion_sum[i]);
+
+            if (ion_ee_gamma_max > 0.0) {
+              BoutReal delta_phi_guess = delta_phi;
+              constexpr int max_iter = 20;
+              constexpr BoutReal relax = 0.5;
+
+              for (int iter = 0; iter < max_iter; ++iter) {
+                BoutReal ion_emission_sum = 0.0;
+
+                for (const auto& ion : ion_species) {
+                  const BoutReal te = Te[i];
+                  const BoutReal ti = ion.temperature[i];
+                  const BoutReal mi = ion.mass;
+                  const BoutReal zi = ion.charge;
+                  const BoutReal ad = ion.adiabatic;
+
+                  BoutReal s_i = std::clamp(
+                      0.5 * (3. * ion.density[i] / Ne[i] - ion.density[im] / Ne[im]), 0.0,
+                      1.0);
+                  if (!std::isfinite(s_i)) {
+                    s_i = 1.0;
+                  }
+
+                  BoutReal grad_ne = Ne[i] - Ne[im];
+                  BoutReal grad_ni = ion.density[i] - ion.density[im];
+
+                  if (fabs(grad_ni) < 2e-3) {
+                    grad_ni = grad_ne = 2e-3;
+                  }
+
+                  const BoutReal C_i_sq = std::clamp(
+                      (ad * ti + zi * s_i * te * grad_ne / grad_ni) / mi, 0., 100.);
+
+                  const BoutReal ion_flux_over_ne = s_i * sin_alpha[im] * sqrt(C_i_sq);
+                  const BoutReal ion_energy =
+                      0.5 * (ti + mi * C_i_sq) + zi * delta_phi_guess;
+
+                  ion_emission_sum +=
+                      ionSecondaryElectronEmissionGamma(ion_energy) * ion_flux_over_ne;
+                }
+
+                const BoutReal denom = ion_sum[i] + ion_emission_sum;
+                if (!(denom > 0.0) || !std::isfinite(denom)) {
+                  break;
+                }
+
+                const BoutReal delta_phi_new = Te[i] * log(prefactor / denom);
+                if (!std::isfinite(delta_phi_new)) {
+                  break;
+                }
+
+                const BoutReal err = fabs(delta_phi_new - delta_phi_guess);
+                const BoutReal scale = 1.0 + fabs(delta_phi_guess);
+                delta_phi_guess = (1. - relax) * delta_phi_guess + relax * delta_phi_new;
+
+                if (err < 1e-10 * scale) {
+                  break;
+                }
+              }
+
+              delta_phi = delta_phi_guess;
+            }
+
+            phi[i] = delta_phi;
           }
 
           const BoutReal phi_wall = wall_potential[i];
@@ -624,15 +793,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
             const BoutReal Ei =
                 (0.5 * (tisheath + (Mi * SQ(visheath)))) + (Zi * (phisheath - phi_wall));
 
-            const BoutReal ion_ee_gamma =
-                // Smooth turn on around threshold energy
-                0.5
-                * (1. + tanh(Ei - ion_ee_E_th) / (0.3 * ion_ee_E_th))
-                // Increase with energy to a maximum
-                * ion_ee_gamma_max
-                * std::pow(Ei / ion_ee_E_max, ion_ee_p)
-                // Rolls over above maximum
-                * std::exp(ion_ee_p * (1. - (Ei / ion_ee_E_max)));
+            const BoutReal ion_ee_gamma = ionSecondaryElectronEmissionGamma(Ei);
 
             // Add flow of cold electrons into plasma
             BoutReal vesheath = 0.5 * (Ve[im] + Ve[i]);
@@ -733,15 +894,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
             const BoutReal Ei =
                 (0.5 * (tisheath + Mi * SQ(visheath))) + (Zi * (phisheath - phi_wall));
 
-            const BoutReal ion_ee_gamma =
-                // Smooth turn on around threshold energy
-                0.5
-                * (1. + tanh(Ei - ion_ee_E_th) / (0.3 * ion_ee_E_th))
-                // Increase with energy to a maximum
-                * ion_ee_gamma_max
-                * std::pow(Ei / ion_ee_E_max, ion_ee_p)
-                // Rolls over above maximum
-                * std::exp(ion_ee_p * (1. - (Ei / ion_ee_E_max)));
+            const BoutReal ion_ee_gamma = ionSecondaryElectronEmissionGamma(Ei);
 
             // Add flow of cold electrons into plasma
             BoutReal vesheath = 0.5 * (Ve[ip] + Ve[i]);

@@ -38,6 +38,14 @@ struct SheathBoundary : public Component {
   ///   already set
   SheathBoundary(std::string name, Options& options, Solver*);
 
+  /// Ion-induced secondary electron emission yield γ(E_i)
+  ///
+  /// Input energy `ion_energy` is in Hermes normalised units (same as used internally
+  /// in `src/sheath_boundary.cxx`).
+  ///
+  /// If ion-induced SEE is disabled (`ion_ee_gamma_max < 0`) then returns 0.
+  BoutReal ionSecondaryElectronEmissionGamma(BoutReal ion_energy) const;
+
 private:
   BoutReal Ge;       // Secondary electron emission coefficient
   Field3D sin_alpha; // sin of angle between magnetic field and wall.
