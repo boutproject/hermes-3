@@ -197,3 +197,30 @@ TEST_F(SheathBoundaryTest, IonSEE) {
     }
   }
 }
+
+TEST_F(SheathBoundaryTest, IonSEEYieldFunction) {
+  Options options;
+  options["units"]["eV"] = 1.0; // Voltage normalisation
+
+  // Disabled by default (ion_ee_gamma_max < 0)
+  {
+    SheathBoundary component("test", options, nullptr);
+    ASSERT_DOUBLE_EQ(component.ionSecondaryElectronEmissionGamma(100.0), 0.0);
+  }
+
+  // Enabled: check value at E_i = E_max where the model reduces to smooth_turn_on * gamma_max
+  {
+    options["test"] = {{"ion_ee_gamma_max", 0.5},
+                       {"ion_ee_E_th", 50.0},
+                       {"ion_ee_E_max", 5e3},
+                       {"ion_ee_p", 1.0}};
+
+    SheathBoundary component("test", options, nullptr);
+
+    const BoutReal Ei = 5e3;
+    const BoutReal smooth = 0.5 * (1. + std::tanh((Ei - 50.0) / (0.3 * 50.0)));
+    const BoutReal expected = smooth * 0.5;
+
+    ASSERT_DOUBLE_EQ(component.ionSecondaryElectronEmissionGamma(Ei), expected);
+  }
+}

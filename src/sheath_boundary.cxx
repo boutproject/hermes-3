@@ -58,6 +58,19 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 
 } // namespace
 
+BoutReal SheathBoundary::ionSecondaryElectronEmissionGamma(BoutReal ion_energy) const {
+  if (ion_ee_gamma_max < 0.0) {
+    return 0.0;
+  }
+  if (ion_energy <= 0.0) {
+    return 0.0;
+  }
+
+  return 0.5 * (1. + tanh((ion_energy - ion_ee_E_th) / (0.3 * ion_ee_E_th)))
+         * ion_ee_gamma_max * std::pow(ion_energy / ion_ee_E_max, ion_ee_p)
+         * std::exp(ion_ee_p * (1. - (ion_energy / ion_ee_E_max)));
+}
+
 SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
     : Component({
           readIfSet("species:{all_species}:charge"),
@@ -624,15 +637,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
             const BoutReal Ei =
                 (0.5 * (tisheath + (Mi * SQ(visheath)))) + (Zi * (phisheath - phi_wall));
 
-            const BoutReal ion_ee_gamma =
-                // Smooth turn on around threshold energy
-                0.5
-                * (1. + tanh((Ei - ion_ee_E_th) / (0.3 * ion_ee_E_th)))
-                // Increase with energy to a maximum
-                * ion_ee_gamma_max
-                * std::pow(Ei / ion_ee_E_max, ion_ee_p)
-                // Rolls over above maximum
-                * std::exp(ion_ee_p * (1. - (Ei / ion_ee_E_max)));
+            const BoutReal ion_ee_gamma = ionSecondaryElectronEmissionGamma(Ei);
 
             // Add flow of cold electrons into plasma
             BoutReal vesheath = 0.5 * (Ve[im] + Ve[i]);
@@ -733,15 +738,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
             const BoutReal Ei =
                 (0.5 * (tisheath + Mi * SQ(visheath))) + (Zi * (phisheath - phi_wall));
 
-            const BoutReal ion_ee_gamma =
-                // Smooth turn on around threshold energy
-                0.5
-                * (1. + tanh((Ei - ion_ee_E_th) / (0.3 * ion_ee_E_th)))
-                // Increase with energy to a maximum
-                * ion_ee_gamma_max
-                * std::pow(Ei / ion_ee_E_max, ion_ee_p)
-                // Rolls over above maximum
-                * std::exp(ion_ee_p * (1. - (Ei / ion_ee_E_max)));
+            const BoutReal ion_ee_gamma = ionSecondaryElectronEmissionGamma(Ei);
 
             // Add flow of cold electrons into plasma
             BoutReal vesheath = 0.5 * (Ve[ip] + Ve[i]);
