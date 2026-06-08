@@ -36,9 +36,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   auto& options = alloptions[name];
 
   // Evolving variables e.g name is "h" or "h+"
-  solver->add(Nn, std::string("N") + name);
-  solver->add(Pn, std::string("P") + name);
-
   evolve_momentum = options["evolve_momentum"]
                         .doc("Evolve parallel neutral momentum?")
                         .withDefault<bool>(true);
@@ -48,6 +45,18 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   temperature_from = options["temperature_from"]
                 .doc("Name of species to take temperature from. If not set, uses own species temperature.")
                 .withDefault<std::string>("");
+  evolve_pressure = options["evolve_pressure"]
+                        .doc("Evolve neutral pressure equation? "
+                             "Automatically false when passive_momentum=true.")
+                        .withDefault<bool>(!passive_momentum);
+
+  // Register evolving variables with the solver
+  solver->add(Nn, std::string("N") + name);
+  if (evolve_pressure) {
+    solver->add(Pn, std::string("P") + name);
+  } else {
+    Pn = 0.0; // Allocate so mesh->communicate(Pn) in transform() doesn't assert
+  }
 
   if (evolve_momentum) {
     solver->add(NVn, std::string("NV") + name);
@@ -298,7 +307,7 @@ void NeutralMixed::finally(const Options& state) {
   // In passive_momentum mode, set_temperature has run its transform() by now,
   // localstate["temperature"] holds the correct current Ti. Re-read Tn and
   // recompute Pn ->  update (Dnn, kappa_n, logPnlim)
-  if (passive_momentum) {
+  if (!evolve_pressure && !temperature_from.empty()) {
     Tn = GET_VALUE(Field3D, localstate["temperature"]);
     Pn = Nn * Tn;
     Pnlim = softFloor(Pn, pressure_floor);
@@ -307,6 +316,8 @@ void NeutralMixed::finally(const Options& state) {
 
   logPnlim = log(Pnlim);
   logPnlim.applyBoundary();
+
+  ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
   //
   //
@@ -410,20 +421,25 @@ void NeutralMixed::finally(const Options& state) {
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
-  DnnPn = Dnn * Pnlim;
-  DnnNVn = Dnn * NVn;
-
-  DnnPn.applyBoundary();
   DnnNn.applyBoundary();
-  DnnNVn.applyBoundary();
+  if (evolve_pressure) {
+    DnnPn = Dnn * Pnlim;
+    DnnPn.applyBoundary();
+  }
+  if (evolve_momentum) {
+    DnnNVn = Dnn * NVn;
+    DnnNVn.applyBoundary();
+  }
 
   if (sheath_ydown) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         Dnn(r.ind, mesh->ystart - 1, jz) = -Dnn(r.ind, mesh->ystart, jz);
         DnnNn(r.ind, mesh->ystart - 1, jz) = -DnnNn(r.ind, mesh->ystart, jz);
-        DnnPn(r.ind, mesh->ystart - 1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
-        DnnNVn(r.ind, mesh->ystart - 1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
+        if (evolve_pressure)
+          DnnPn(r.ind, mesh->ystart - 1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
+        if (evolve_momentum)
+          DnnNVn(r.ind, mesh->ystart - 1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
       }
     }
   }
@@ -433,8 +449,10 @@ void NeutralMixed::finally(const Options& state) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         Dnn(r.ind, mesh->yend + 1, jz) = -Dnn(r.ind, mesh->yend, jz);
         DnnNn(r.ind, mesh->yend + 1, jz) = -DnnNn(r.ind, mesh->yend, jz);
-        DnnPn(r.ind, mesh->yend + 1, jz) = -DnnPn(r.ind, mesh->yend, jz);
-        DnnNVn(r.ind, mesh->yend + 1, jz) = -DnnNVn(r.ind, mesh->yend, jz);
+        if (evolve_pressure)
+          DnnPn(r.ind, mesh->yend + 1, jz) = -DnnPn(r.ind, mesh->yend, jz);
+        if (evolve_momentum)
+          DnnNVn(r.ind, mesh->yend + 1, jz) = -DnnNVn(r.ind, mesh->yend, jz);
       }
     }
   }
@@ -449,19 +467,23 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
-  // Heat conductivity 
-  // Note: This is kappa_n = (5/2) * Pn / (m * nu)
-  //       where nu is the collision frequency used in Dnn
-  kappa_n = (5. / 2) * DnnNn;
+  if (evolve_pressure || evolve_momentum) {
+    // Heat conductivity
+    // Note: This is kappa_n = (5/2) * Pn / (m * nu)
+    //       where nu is the collision frequency used in Dnn
+    kappa_n = (5. / 2) * DnnNn;
 
-  // Viscosity
-  // Relationship between heat conduction and viscosity for neutral
-  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
-  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
-  // Transport Processes in Gases", 1972
-  // eta_n = (2. / 5) * m_n * kappa_n;
-  //
-  eta_n = AA * (2. / 5) * kappa_n;
+    if (evolve_momentum) {
+      // Viscosity
+      // Relationship between heat conduction and viscosity for neutral
+      // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+      // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+      // Transport Processes in Gases", 1972
+      // eta_n = (2. / 5) * m_n * kappa_n;
+      //
+      eta_n = AA * (2. / 5) * kappa_n;
+    }
+  }
 
   /////////////////////////////////////////////////////
   // Neutral density
@@ -482,7 +504,7 @@ void NeutralMixed::finally(const Options& state) {
 
   /////////////////////////////////////////////////////
   // Neutral pressure
-  if (!passive_momentum) {
+  if (evolve_pressure) {
     TRACE("Neutral pressure");
 
     ddt(Pn) = - (5. / 3) * FV::Div_par_mod<ParLimiter>(       // Parallel advection
@@ -559,7 +581,9 @@ void NeutralMixed::finally(const Options& state) {
                           ;
 
       ddt(NVn) += viscosity_source;
-      ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
+      if (evolve_pressure) {
+        ddt(Pn)  += -(2. /3) * Vn * viscosity_source;
+      }
     }
 
     if (localstate.isSet("momentum_source")) {
@@ -587,43 +611,24 @@ void NeutralMixed::finally(const Options& state) {
     Field3D nu_iz  = 0.0;
     Field3D nu_rec  = 0.0;
 
-    // similar to Collisionality part
-    if (equilibrium_momentum_collision_names.empty()) {
-      if (localstate.isSet("collision_frequency")) {
-        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
-          const std::string coll_name = collision.second.name();
-
-          if (equilibrium_nu_cx_name.empty() &&
-              collisionSpeciesMatch(coll_name, name, "+", "cx", "partial")) {
-            equilibrium_nu_cx_name = coll_name;
-          }
-          if (equilibrium_nu_iz_name.empty() &&
-              collisionSpeciesMatch(coll_name, name, "+", "iz", "partial")) {
-            equilibrium_nu_iz_name = coll_name;
-          }
-          if (equilibrium_nu_rec_name.empty() &&
-              collisionSpeciesMatch(coll_name, std::string(name) + "+", name, "rec", "partial")) {
-            equilibrium_nu_rec_name = coll_name;
-          }
-          //output_info.write(
-          //  "\t{:s} passive_momentum: cx='{:s}' iz='{:s}' rec='{:s}'\n",
-          //  name,
-          //  equilibrium_nu_cx_name, equilibrium_nu_iz_name, equilibrium_nu_rec_name);
-		}
+    // from Collisionality part, afn
+    for (const auto& collision_name : collision_names) {
+      if (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) {
+        nu_cx += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
       }
-
-      // Cache a dummy name so the empty() check above is not re-triggered
-      equilibrium_momentum_collision_names.push_back("initialised");
+      if (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) {
+        nu_iz += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
+      }
     }
-
-    if (!equilibrium_nu_cx_name.empty()) {
-      nu_cx = GET_VALUE(Field3D, localstate["collision_frequencies"][equilibrium_nu_cx_name]);
-    }
-    if (!equilibrium_nu_iz_name.empty()) {
-      nu_iz = GET_VALUE(Field3D, localstate["collision_frequencies"][equilibrium_nu_iz_name]);
-    }
-    if (!equilibrium_nu_rec_name.empty()) {
-      nu_rec = GET_VALUE(Field3D, localstate["collision_frequencies"][equilibrium_nu_rec_name]);
+    // nu_rec: stored on neutral species by amjuel_reaction as e.g. "d+_d_rec"
+    if (localstate.isSet("collision_frequency")) {
+      for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
+        const std::string coll_name = collision.second.name();
+        if (collisionSpeciesMatch(coll_name, std::string(name) + "+", name, "rec", "partial")) {
+          nu_rec = GET_VALUE(Field3D, localstate["collision_frequencies"][coll_name]);
+          break;
+        }
+      }
     }
 
     // Equilibrium neutral density:
@@ -650,8 +655,10 @@ void NeutralMixed::finally(const Options& state) {
     Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
     ddt(Nn) *= scale_timederivs;
 
-    if (!passive_momentum) {
+    if (evolve_pressure) {
         ddt(Pn) *= scale_timederivs;
+    }
+    if (evolve_momentum) {
         ddt(NVn) *= scale_timederivs;
     }
   }
@@ -684,8 +691,10 @@ void NeutralMixed::finally(const Options& state) {
       const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
       const BoutReal factor = exp(- density_floor / meanNn);
       ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
-      if (!passive_momentum) {
+      if (evolve_pressure) {
         ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
+      }
+      if (evolve_momentum) {
         ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
 	  }
     }
@@ -696,10 +705,12 @@ void NeutralMixed::finally(const Options& state) {
     if (!std::isfinite(ddt(Nn)[i])) {
       throw BoutException("ddt(N{}) non-finite at {}\n", name, i);
     }
-    if (!passive_momentum) {
+    if (evolve_pressure) {
       if (!std::isfinite(ddt(Pn)[i])) {
         throw BoutException("ddt(P{}) non-finite at {}\n", name, i);
       }
+    }
+    if (evolve_momentum) {
       if (!std::isfinite(ddt(NVn)[i])) {
         throw BoutException("ddt(NV{}) non-finite at {}\n", name, i);
       }
@@ -758,18 +769,20 @@ void NeutralMixed::outputVars(Options& state) {
          {"conversion", Nnorm * Omega_ci},
          {"long_name", std::string("Rate of change of ") + name + " number density"},
          {"source", "neutral_mixed"}});
-    if (!passive_momentum) {
+    if (evolve_pressure) {
       set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn),
                      {{"time_dimension", "t"},
                       {"units", "Pa s^-1"},
                       {"conversion", Pnorm * Omega_ci},
                       {"source", "neutral_mixed"}});
+    }
+    if (evolve_momentum) {
       set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NVn),
                    {{"time_dimension", "t"},
                     {"units", "kg m^-2 s^-2"},
                     {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"source", "neutral_mixed"}});
-    } // end if (!passive_momentum)
+    }
   }
   if (diagnose) {
     set_with_attrs(state[std::string("T") + name], Tn,
@@ -793,7 +806,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "density source"},
                     {"long_name", name + " number density source"},
                     {"source", "neutral_mixed"}});
-    if (!passive_momentum) {
+    if (evolve_pressure) {
       set_with_attrs(state[std::string("SP") + name], Sp,
                      {{"time_dimension", "t"},
                       {"units", "Pa s^-1"},
@@ -1036,12 +1049,27 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
   if (!precondition) {
     return;
   }
-  // Preconditioner only applies when evolving Pn and NVn.
-  // will get ddt(Nn) later
-  if (passive_momentum) {
+  if (!evolve_pressure) {
+    // passive_momentum case: only Nn is evolved.
+    // Stiff term: Div_a_Grad_perp(DnnNn, logPnlim) ≈ Div_perp(Dnn·Grad_perp(Nn)) when Tn fixed.
+    // Preconditioner: solve (I - γ·Div_perp(Dnn·Grad_perp))·ddt(Nn) = rhs.
+    inv->setCoefA(1.0);
+    inv->setCoefD(-gamma * Dnn);
+    Field3D rhs_Nn = ddt(Nn);
+    rhs_Nn.applyBoundary("dirichlet");
+    ddt(Nn) = inv->solve(rhs_Nn);
+    mesh->communicate(ddt(Nn));
+    ddt(Nn).applyBoundary("dirichlet");
+
+    for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
+      if (!std::isfinite(ddt(Nn)[i])) {
+        throw BoutException("Precon ddt(N{}) non-finite at {}\n", name, i);
+      }
+    }
     return;
   }
 
+  // Full preconditioner (evolve_pressure = true): 2×2 block system for (Nn, Pn).
   // First matrix
   //   ( I   0)
   //   (-LE  I)
@@ -1087,7 +1115,7 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
     if (!std::isfinite(ddt(Pn)[i])) {
       throw BoutException("Precon ddt(P{}) non-finite at {}\n", name, i);
     }
-    if (!std::isfinite(ddt(NVn)[i])) {
+    if (evolve_momentum && !std::isfinite(ddt(NVn)[i])) {
       throw BoutException("Precon ddt(NV{}) non-finite at {}\n", name, i);
     }
   }

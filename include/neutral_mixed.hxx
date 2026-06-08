@@ -61,21 +61,17 @@ private:
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
+  bool evolve_pressure; ///< Evolve pressure equation? (false when passive_momentum=true)
   bool passive_momentum; ///< only evolve density, passive NVn and Tn=Ti
   std::string temperature_from;
-
-  // --- Equilibrium NVn (used when passive_momentum = true) ---
-  // Caching sentinel: filled on first call to finally(), stays non-empty thereafter.
-  std::vector<std::string> equilibrium_momentum_collision_names;
   
   // Collision frequency names — all stored on the neutral species' localstate
-  std::string equilibrium_nu_cx_name;   ///< Charge exchange collision freq name
-  std::string equilibrium_nu_iz_name;   ///< Ionisation collision freq name
-  std::string equilibrium_nu_rec_name;  ///< Recombination collision freq name e.g. "d+_d_rec"
+  //std::string equilibrium_nu_cx_name;   ///< Charge exchange collision freq name
+  //std::string equilibrium_nu_iz_name;   ///< Ionisation collision freq name
+  //std::string equilibrium_nu_rec_name;  ///< Recombination collision freq name e.g. "d+_d_rec"
   
   // Normalisations (stored for use in finally())
   BoutReal Nnorm, Tnorm, FreqNorm;
-  //BoutReal Nnorm_nu, Tnorm_nu, FreqNorm_nu;
   Field3D nu_cx_out, nu_iz_out, nu_rec_out, Nn_eq_out; ///< Saved for output
   
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
