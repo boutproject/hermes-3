@@ -236,32 +236,38 @@ void Reaction::transform_impl(GuardedOptions& state) {
   // All reaction sources are computed in interior region only
   Region<Ind3D> rng_nobndry = get<Field3D>(state["species"][reactant_names[0]]["density"])
                                   .getRegion("RGN_NOBNDRY");
-
+  //output.write("welcome to output region for reaction \n"); 
   // Create rate helper and compute reaction rate, collision frequencies
   RateData rate_calc_results;
   RateParamsTypes rate_params_type = this->rate_data->get_fit_type();
   if (rate_params_type == RateParamsTypes::ET) {
     throw BoutException("RateParamsTypes::ET not implemented");
   } else if (rate_params_type == RateParamsTypes::nT) {
+    //output.write("calculating nT rate \n"); 
     TwoDRateFunc calc_rate = [&](BoutReal mass_action, BoutReal ne, BoutReal te) {
       BoutReal result = mass_action
                         * this->rate_data->eval_sigma_v_nT(te * Tnorm, ne * Nnorm) * Nnorm
                         / FreqNorm * rate_multiplier;
+     
       return result;
     };
+    //output.write(" now calculating nT rate \n");
     auto rate_helper =
         RateHelper<RateParamsTypes::nT>(state, units, reactant_names, rng_nobndry);
+        //output.write("call nT rate \n");
     rate_calc_results = rate_helper.calc_rates(calc_rate, this->do_parallel_averaging);
+     //output.write("end call nT rate \n");
   } else if (rate_params_type == RateParamsTypes::T) {
     OneDRateFunc calc_rate = [&](BoutReal mass_action, BoutReal Teff) {
       BoutReal result = mass_action * 1e-6 * this->rate_data->eval_sigma_v_T(Teff) * Nnorm
                         / FreqNorm * rate_multiplier;
       return result;
     };
+    //output.write("looking for rate helper\n"); 
 
     auto rate_helper =
         RateHelper<RateParamsTypes::T>(state, units, reactant_names, rng_nobndry);
-
+    //output.write("looking for rate calcl_results\n"); 
     rate_calc_results = rate_helper.calc_rates(calc_rate, this->do_parallel_averaging);
   } else {
     throw BoutException("Unhandled RateParamsTypes in Reaction::transform_impl()");
@@ -273,6 +279,7 @@ void Reaction::transform_impl(GuardedOptions& state) {
                                 ReactionDiagnosticType::collision_freq,
                                 rate_calc_results.coll_freq(reactant_name));
   }
+  //output.write("looking for transform_additional"); 
 
   // Subclasses perform any additional transform tasks
   transform_additional(state, rate_calc_results);

@@ -14,6 +14,7 @@ Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(sol
   auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
   T = options["temperature"].doc("Constant temperature [eV]").as<BoutReal>()
       / Tnorm; // Normalise
+  is3D = options["is3D"].doc("Is the temperature 3D field?").withDefault<bool>(true);
 
   diagnose = options["diagnose"]
     .doc("Save additional output diagnostics")
@@ -23,8 +24,14 @@ Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(sol
 void Isothermal::transform_impl(GuardedOptions& state) {
 
   GuardedOptions species = state["species"][name];
-
-  set(species["temperature"], T);
+  if (is3D) {
+    // If the temperature is 3D, we need to set it at every point in the domain
+    Field3D Tfield = T;
+    set(species["temperature"], Tfield);
+  } else {
+    // If the temperature is not 3D, we can just set it as a scalar and it will be broadcast to the whole domain
+    set(species["temperature"], T);
+  }
 
   // If density is set, also set pressure
   if (isSetFinalNoBoundary(species["density"])) {

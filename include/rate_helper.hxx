@@ -98,8 +98,10 @@ struct RateHelper {
         add_rate_param(field_lbl, state["species"][field_lbl].template GetRef<Field3D>());
       }
     } else if constexpr (RateParamsType == RateParamsTypes::T) {
+      //output.write("here we are with our issue \n");
       calc_Teff(state, units, reactant_names, Teff_storage);
       add_rate_param("Teff", Teff_storage);
+      //output.write("done with Teff \n");
     } else {
       // Compile-time error if any other RateParamsType enum exists
       static_assert(dependent_false<RateParamsType>, "Unhandled RateParamsType");

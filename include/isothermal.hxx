@@ -15,7 +15,7 @@ private:
 
   BoutReal T; ///< The normalised temperature
   Field3D P; ///< The normalised pressure
-
+  bool is3D;
   bool diagnose; ///< Output additional diagnostics?
 
   /// Inputs
