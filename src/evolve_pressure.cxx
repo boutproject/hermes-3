@@ -50,6 +50,14 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                           .withDefault<BoutReal>(0.1)
                       / get<BoutReal>(alloptions["units"]["eV"]);
 
+  pressure_source_floor = options["pressure_source_floor"]
+    .doc("Floor below which an artificial pressure source is enabled")
+    .withDefault(1e-6);
+
+  pressure_source_strength = options["pressure_source_strength"]
+    .doc("Multiplier on the artificial pressure source. <0 means off")
+          .withDefault(-1.0);
+
   low_T_diffuse_perp = options["low_T_diffuse_perp"]
                            .doc("Add cross-field diffusion at low temperature?")
                            .withDefault<bool>(false);
@@ -379,6 +387,12 @@ void EvolvePressure::finally(const Options& state) {
   }
 #endif
   ddt(P) += Sp;
+
+  if (pressure_source_strength > 0.0) {
+    // An artificial pressure source that turns on at low density
+    ddt(P) += pressure_source_strength * (softFloor(P_solver, pressure_source_floor) - P_solver)
+              / pressure_source_floor;
+  }
 
   if (damp_p_nt) {
     // Term to force evolved P towards N * T

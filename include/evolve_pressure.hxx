@@ -78,6 +78,9 @@ private:
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
   bool damp_p_nt; ///< Damp P - N*T. Active when P < 0 or N < density_floor
 
+  BoutReal pressure_source_floor; ///< Floor below which an artificial pressure source is enabled
+  BoutReal pressure_source_strength; ///< Multiplier on the artificial pressure source. <0 means off
+
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;     ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
