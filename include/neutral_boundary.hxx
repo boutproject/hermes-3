@@ -74,10 +74,11 @@ private:
   struct IoniseChannel {
     std::string from; ///< The species name to be ionised (neutral)
     std::string to;   ///< Species to ionising to (ion)
+    std::string electron; 
 
     /// Flux multiplier (ionising fraction).
     BoutReal core_multiplier;
-    BoutReal core_energy; ///< Energy of ionisingd particle (normalised to Tnorm)
+    // BoutReal core_energy; ///< Energy of ionisingd particle (normalised to Tnorm)
 
     // Ionising particle and energy sources for the different sources of ionising
     // These sources are per-channel and added to the `to` species
@@ -89,10 +90,14 @@ private:
     Field3D core_ion_density_source = 0.0;
     Field3D core_ion_momentum_source = 0.0;
     Field3D core_ion_energy_source = 0.0;
+    Field3D core_electron_energy_source = 0.0;
+
   };
   std::vector<IoniseChannel> channels; // Ionising channels
 
-  bool core_ionising{false}; ///< Flags for enabling ionisinging in different regions
+  bool ionising_core{false}; ///< Flags for enabling ionisinging in different regions
+  bool only_particle_flow{false};
+  bool ionisation_energy_loss{false};
 
   BoutReal density_floor,
       pressure_floor; ///< minimum values for Nn, Pn to avoid divide by zero
@@ -101,11 +106,8 @@ private:
 
   // After the calculation is done, the following variables are added to the solver as sources/sinks
   Field3D ion_density_source, ion_momentum_source, ion_energy_source; ///< Ionising particle and energy sources for all locations
-  Field3D neutral_density_source, neutral_momentum_source, neutral_energy_source; 
-
-  Field3D energy_flow_xlow;   ///< Cell edge fluxes used for calculating
-  Field3D particle_flow_xlow; ///< Radial core particle fluxes for ionising calc. 
-                              ///< Does it need y flow?
+  Field3D neutral_density_source, neutral_momentum_source, neutral_energy_source;
+  Field3D electron_energy_source;
 
 
   void transform_impl(GuardedOptions& state) override;
