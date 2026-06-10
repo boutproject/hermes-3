@@ -523,7 +523,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
               ionise_particle_flow / volume;
 
             if (!only_particle_flow){
-              // Momentum 
+              // Momentum
               // Γ_m = 1/2 P = 1/2 n * T
               // use parallel momeneutm instead of radial momentum (one-way is in radial component)
               BoutReal neutral_momentum_flow_to_core = NVn[i];
@@ -531,9 +531,9 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
               BoutReal ionise_momentum_flow = neutral_momentum_flow_to_core * multiplier;
 
               // diagnose
-              channel.core_ion_momentum_source(mesh->xstart, iy, iz) = 
+              channel.core_ion_momentum_source(mesh->xstart, iy, iz) =
                 ionise_momentum_flow / volume;
-              channel.core_neutral_momentum_sink(mesh->xstart, iy, iz) = 
+              channel.core_neutral_momentum_sink(mesh->xstart, iy, iz) =
                 - ionise_momentum_flow / volume;
 
               // solver
@@ -548,12 +548,12 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
                 // Ionisation cost: 13.6 eV per ionisation event, normalized by Tnorm
                 // Multiplied by ionisation rate density to get power per volume
                 BoutReal ionisation_power = (13.6 / Tnorm) * ionise_particle_flow / volume;
-                
+
                 // diagnostic
                 channel.core_electron_energy_source(mesh->xstart, iy, iz) = ionisation_power;
                 channel.core_ion_energy_source(mesh->xstart, iy, iz) = ionise_energy_flow / volume;
                 channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = -ionise_energy_flow / volume;
-                
+
                 // solver
                 electron_energy_source(mesh->xstart, iy, iz) -= ionisation_power;
                 ion_energy_source(mesh->xstart, iy, iz) += ionise_energy_flow / volume;
@@ -566,7 +566,14 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
                 ion_energy_source(mesh->xstart, iy, iz) += ionise_energy_flow / volume;
                 neutral_energy_source(mesh->xstart, iy, iz) -= ionise_energy_flow / volume;
               }
-           }
+            } else {
+              // only_particle_flow = true: zero out momentum and energy diagnostics
+              channel.core_ion_momentum_source(mesh->xstart, iy, iz) = 0.0;
+              channel.core_neutral_momentum_sink(mesh->xstart, iy, iz) = 0.0;
+              channel.core_electron_energy_source(mesh->xstart, iy, iz) = 0.0;
+              channel.core_ion_energy_source(mesh->xstart, iy, iz) = 0.0;
+              channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = 0.0;
+            }
           }
         }
       }
