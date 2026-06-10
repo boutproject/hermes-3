@@ -530,36 +530,48 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
               // BoutReal neutral_momentum_flow_to_core = 0.5 * nncore * tncore * dacore;
               BoutReal ionise_momentum_flow = neutral_momentum_flow_to_core * multiplier;
 
-              // Energy 
-              // Q = 2TΓ
-              BoutReal neutral_energy_flow_to_core = 2.0 * tncore * neutral_particle_flow_to_core; // Incident energy
-              BoutReal ionise_energy_flow = neutral_energy_flow_to_core * multiplier;
-
               // diagnose
               channel.core_ion_momentum_source(mesh->xstart, iy, iz) = 
                 ionise_momentum_flow / volume;
-              channel.core_ion_energy_source(mesh->xstart, iy, iz) = 
-                ionise_energy_flow / volume;
               channel.core_neutral_momentum_sink(mesh->xstart, iy, iz) = 
                 - ionise_momentum_flow / volume;
-              channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = 
-                - ionise_energy_flow / volume;
-              
+
               // solver
               ion_momentum_source(mesh->xstart, iy, iz) += 
-                ionise_momentum_flow / volume;
-              ion_energy_source(mesh->xstart, iy, iz) += 
-                ionise_energy_flow / volume;
               neutral_momentum_source(mesh->xstart, iy, iz) -= 
                 ionise_momentum_flow / volume;
-              neutral_energy_source(mesh->xstart, iy, iz) -= 
-                ionise_energy_flow / volume;
 
-              // if (ionisation_energy_loss){
+              if (ionisation_energy_loss){
+                
+                BoutReal neutral_energy_flow_to_core = 2.0 * tncore * neutral_particle_flow_to_core; // Incident energy
+                BoutReal ionisation_energy = 13.6 * SI::qe; // in Joules
+                BoutReal ionise_energy_flow = neutral_energy_flow_to_core * multiplier;
+                channel.core_electron_energy_source(mesh->xstart, iy, iz) = ionisation_energy / volume;
+                channel.core_ion_energy_source(mesh->xstart, iy, iz) = (ionise_energy_flow/volume - ionisation_energy/volume);
+                channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = - ionise_energy_flow/volume;
 
-              //   ion_energy_source(mesh->xstart, iy, iz) += 
-              //     ionise_energy_flow / volume;
-              // }
+                electron_energy_source(mesh->xstart, iy, iz) +=ionisation_energy / volume; 
+                ion_energy_source(mesh->xstart, iy, iz) += (ionise_energy_flow/volume - ionisation_energy/volume);
+                neutral_energy_source(mesh->xstart, iy, iz) -= ionise_energy_flow / volume;
+                
+
+              } else {
+
+                // Energy 
+                // Q = 2TΓ
+                BoutReal neutral_energy_flow_to_core = 2.0 * tncore * neutral_particle_flow_to_core; // Incident energy
+                BoutReal ionise_energy_flow = neutral_energy_flow_to_core * multiplier;
+                channel.core_ion_energy_source(mesh->xstart, iy, iz) = 
+                  ionise_energy_flow / volume;
+                channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = 
+                  - ionise_energy_flow / volume;
+              
+                ion_energy_source(mesh->xstart, iy, iz) += 
+                  ionise_energy_flow / volume;
+                neutral_energy_source(mesh->xstart, iy, iz) -= 
+                  ionise_energy_flow / volume;
+
+              }
            }
           }
         }
