@@ -78,6 +78,10 @@ private:
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
 
+  /// Pressure that increases into the wall? (<0 = off)
+  BoutReal wall_pressure_factor;
+  Field3D wall_depth;
+
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
 

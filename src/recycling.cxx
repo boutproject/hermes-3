@@ -226,6 +226,10 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
     setPermissions(readIfSet("species:{from}:energy_flow_xlow"));
     setPermissions(readIfSet("species:{from}:particle_flow_xlow"));
   }
+  if (penalty_recycle) {
+    setPermissions(readIfSet("species:{from}:density_penalty"));
+    setPermissions(readIfSet("species:{from}:energy_penalty"));
+  }
   substitutePermissions("to",
                         std::vector<std::string>(to_species.begin(), to_species.end()));
   substitutePermissions(
