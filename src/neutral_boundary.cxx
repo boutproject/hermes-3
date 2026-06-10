@@ -537,40 +537,34 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
                 - ionise_momentum_flow / volume;
 
               // solver
-              ion_momentum_source(mesh->xstart, iy, iz) += 
-              neutral_momentum_source(mesh->xstart, iy, iz) -= 
-                ionise_momentum_flow / volume;
+              ion_momentum_source(mesh->xstart, iy, iz) += ionise_momentum_flow / volume;
+              neutral_momentum_source(mesh->xstart, iy, iz) -= ionise_momentum_flow / volume;
 
-              if (ionisation_energy_loss){
+              // Energy: Q = 2TΓ
+              BoutReal neutral_energy_flow_to_core = 2.0 * tncore * neutral_particle_flow_to_core;
+              BoutReal ionise_energy_flow = neutral_energy_flow_to_core * multiplier;
+
+              if (ionisation_energy_loss) {
+                // Ionisation cost: 13.6 eV per ionisation event, normalized by Tnorm
+                // Multiplied by ionisation rate density to get power per volume
+                BoutReal ionisation_power = (13.6 / Tnorm) * ionise_particle_flow / volume;
                 
-                BoutReal neutral_energy_flow_to_core = 2.0 * tncore * neutral_particle_flow_to_core; // Incident energy
-                BoutReal ionisation_energy = 13.6 * SI::qe; // in Joules
-                BoutReal ionise_energy_flow = neutral_energy_flow_to_core * multiplier;
-                channel.core_electron_energy_source(mesh->xstart, iy, iz) = ionisation_energy / volume;
-                channel.core_ion_energy_source(mesh->xstart, iy, iz) = (ionise_energy_flow/volume - ionisation_energy/volume);
-                channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = - ionise_energy_flow/volume;
-
-                electron_energy_source(mesh->xstart, iy, iz) +=ionisation_energy / volume; 
-                ion_energy_source(mesh->xstart, iy, iz) += (ionise_energy_flow/volume - ionisation_energy/volume);
+                // diagnostic
+                channel.core_electron_energy_source(mesh->xstart, iy, iz) = ionisation_power;
+                channel.core_ion_energy_source(mesh->xstart, iy, iz) = ionise_energy_flow / volume;
+                channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = -ionise_energy_flow / volume;
+                
+                // solver
+                electron_energy_source(mesh->xstart, iy, iz) -= ionisation_power;
+                ion_energy_source(mesh->xstart, iy, iz) += ionise_energy_flow / volume;
                 neutral_energy_source(mesh->xstart, iy, iz) -= ionise_energy_flow / volume;
-                
-
               } else {
+                channel.core_electron_energy_source(mesh->xstart, iy, iz) = 0.0;
+                channel.core_ion_energy_source(mesh->xstart, iy, iz) = ionise_energy_flow / volume;
+                channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = -ionise_energy_flow / volume;
 
-                // Energy 
-                // Q = 2TΓ
-                BoutReal neutral_energy_flow_to_core = 2.0 * tncore * neutral_particle_flow_to_core; // Incident energy
-                BoutReal ionise_energy_flow = neutral_energy_flow_to_core * multiplier;
-                channel.core_ion_energy_source(mesh->xstart, iy, iz) = 
-                  ionise_energy_flow / volume;
-                channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = 
-                  - ionise_energy_flow / volume;
-              
-                ion_energy_source(mesh->xstart, iy, iz) += 
-                  ionise_energy_flow / volume;
-                neutral_energy_source(mesh->xstart, iy, iz) -= 
-                  ionise_energy_flow / volume;
-
+                ion_energy_source(mesh->xstart, iy, iz) += ionise_energy_flow / volume;
+                neutral_energy_source(mesh->xstart, iy, iz) -= ionise_energy_flow / volume;
               }
            }
           }
@@ -578,15 +572,15 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
       }
 
       // Put the updated sources back into the state
-      set<Field3D>(species_to["density_source"], ion_density_source);
-      set<Field3D>(species_from["density_source"], neutral_density_source);
+      set(species_to["density_source"], ion_density_source);
+      set(species_from["density_source"], neutral_density_source);
 
       if (!only_particle_flow){
-        set<Field3D>(species_to["momentum_source"], ion_momentum_source);
-        set<Field3D>(species_to["energy_source"], ion_energy_source);
-        set<Field3D>(species_from["momentum_source"], neutral_momentum_source);
-        set<Field3D>(species_from["energy_source"], neutral_energy_source);
-        set<Field3D>(electron["energy_source"], electron_energy_source);
+        set(species_to["momentum_source"], ion_momentum_source);
+        set(species_to["energy_source"], ion_energy_source);
+        set(species_from["momentum_source"], neutral_momentum_source);
+        set(species_from["energy_source"], neutral_energy_source);
+        set(electron["energy_source"], electron_energy_source);
       }
     }
   }
