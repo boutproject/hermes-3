@@ -9,7 +9,7 @@
 #include <vector>
 
 #include <bout/boutexception.hxx>
-#include <fmt/base.h>
+#include <fmt/core.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
@@ -112,8 +112,9 @@ void Permissions::checkNoRemainingSubstitutions() const {
     }
   }
   if (unsubstituted.size() > 0) {
+    const std::string unsubstituted_names = fmt::format("{}", fmt::join(unsubstituted, ", "));
     throw BoutException("The following variable names have unsubstituted labels: {}",
-                        fmt::join(unsubstituted, ", "));
+                        unsubstituted_names);
   }
 }
 

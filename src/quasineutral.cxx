@@ -38,8 +38,8 @@ void Quasineutral::transform_impl(GuardedOptions& state) {
         if (name_species.first != name and species.isSet("charge") and
             species.isSet("density")) {
           // Note: Not assuming that the boundary has been set
-          return value + getNoBoundary<Field3D>(species["density"]) *
-                             get<BoutReal>(species["charge"]);
+          return Field3D(value + getNoBoundary<Field3D>(species["density"]) *
+                                     get<BoutReal>(species["charge"]));
         }
         return value;
       });
@@ -48,7 +48,7 @@ void Quasineutral::transform_impl(GuardedOptions& state) {
   GuardedOptions species = allspecies[name];
 
   // Calculate density required. Floor so that density is >= 0
-  density = floor(rho / (-charge), 0.0);
+  density = floor(Field3D(rho / (-charge)), 0.0);
   set(species["density"], density);
 
   set(species["charge"], charge);

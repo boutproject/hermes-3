@@ -9,6 +9,9 @@
 
 inline BoutReal floor(BoutReal value, BoutReal min) { return std::max(value, min); }
 
+template <typename ResT, typename L, typename R, typename Func>
+struct BinaryExpr;
+
 /// Apply a smoothly varying "soft" floor to the value
 /// The intention is to keep the RHS function differentiable
 ///
@@ -33,6 +36,12 @@ inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_ALL")
   BOUT_FOR(d, var.getRegion(rgn)) { result[d] = softFloor(var[d], f); }
 
   return result;
+}
+
+template <typename ResT, typename L, typename R, typename Func>
+inline ResT floor(const BinaryExpr<ResT, L, R, Func>& var, BoutReal f,
+                  const std::string& rgn = "RGN_ALL") {
+  return floor(ResT(var), f, rgn);
 }
 
 template <typename T, typename = bout::utils::EnableIfField<T>>

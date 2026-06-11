@@ -117,8 +117,8 @@ void BraginskiiHeatExchange::outputVars(Options& state) {
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   BoutReal const Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
-  for (const auto& [A, section] : energy_channels) {
-    for (const auto& [B, child] : section) {
+  for (const auto& [A, section] : energy_channels.getChildren()) {
+    for (const auto& [B, child] : section.getChildren()) {
       const std::string AB = A + B;
 
       // Collisional energy transfer channels (i.e. thermal equilibration)

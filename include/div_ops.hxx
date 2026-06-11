@@ -72,6 +72,13 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
 const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
                                            Field3D& flux_xlow, Field3D& flux_ylow);
 
+template <typename ResT, typename L, typename R, typename Func>
+const Field3D Div_a_Grad_perp_upwind_flows(const BinaryExpr<ResT, L, R, Func>& a,
+                                           const Field3D& f, Field3D& flux_xlow,
+                                           Field3D& flux_ylow) {
+  return Div_a_Grad_perp_upwind_flows(Field3D(ResT(a)), f, flux_xlow, flux_ylow);
+}
+
 /// Version with energy flow diagnostic
 const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f, Field3D& flow_ylow,
                                      bool bndry_flux = true);

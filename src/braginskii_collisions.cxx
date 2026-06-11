@@ -312,10 +312,12 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
     GuardedOptions species1 = allspecies[kv1->first];
 
     // If temperature isn't set, assume zero. in eV
-    const Field3D temperature1 =
-        species1.isSet("temperature")
-            ? GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm
-            : 0.0;
+    Field3D temperature1;
+    if (species1.isSet("temperature")) {
+      temperature1 = GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm;
+    } else {
+      temperature1 = 0.0;
+    }
     const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]) * Nnorm;
 
     const BoutReal AA1 = get<BoutReal>(species1["AA"]);
@@ -339,10 +341,12 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         // Note: Here species1 could be equal to species2
 
         // If temperature isn't set, assume zero. in eV
-        const Field3D temperature2 =
-            species2.isSet("temperature")
-                ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
-                : 0.0;
+        Field3D temperature2;
+        if (species2.isSet("temperature")) {
+          temperature2 = GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm;
+        } else {
+          temperature2 = 0.0;
+        }
 
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
 
@@ -432,10 +436,12 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         // Note: Here species1 could be equal to species2
 
         // If temperature isn't set, assume zero
-        const Field3D temperature2 =
-            species2.isSet("temperature")
-                ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
-                : 0.0;
+        Field3D temperature2;
+        if (species2.isSet("temperature")) {
+          temperature2 = GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm;
+        } else {
+          temperature2 = 0.0;
+        }
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
 

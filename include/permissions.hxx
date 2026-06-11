@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/base.h>
+#include <fmt/core.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 

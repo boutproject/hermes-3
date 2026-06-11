@@ -233,7 +233,7 @@ void PolarisationDrift::polarisationAdvection(GuardedOptions& state, Field3D phi
     const BoutReal A = get<BoutReal>(species["AA"]);
 
     // Shared coefficient in polarisation velocity
-    Field3D coef = (A / Z) / Bsq;
+    Field3D coef((A / Z) / Bsq);
 
     if (IS_SET(species["density"])) {
       auto N = GET_VALUE(Field3D, species["density"]);

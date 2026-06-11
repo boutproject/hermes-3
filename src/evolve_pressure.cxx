@@ -342,7 +342,9 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) +=
         1e-4
         * Div_Perp_Lap_FV_Index(
-            floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
+            floor(Field3D(temperature_floor / softFloor(T, 1e-3 * temperature_floor)
+                          - 1.0),
+                  0.0),
             T);
   }
 

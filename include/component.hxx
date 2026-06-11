@@ -6,6 +6,7 @@
 #include <bout/assert.hxx>
 #include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
+#include <bout/mesh.hxx>
 #include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
 #include <bout/generic_factory.hxx>
@@ -380,8 +381,7 @@ inline bool hermesDataInvalid(const Field2D& value) {
 ///
 /// @tparam T The type of the value to set. Usually this is inferred
 template <typename T>
-Options& set(Options& option, T value) {
-  // Check that the value has not already been used
+Options& set(Options& option, T&& value) {
 #if CHECKLEVEL >= 1
   if (option.hasAttribute("final")) {
     throw BoutException("Setting value of {} but it has already been used in {}.",
@@ -398,8 +398,20 @@ Options& set(Options& option, T value) {
   }
 #endif
 
-  option.force(std::move(value));
+  option.force(std::forward<T>(value));
   return option;
+}
+
+template <typename ResT, typename L, typename R, typename Func>
+Options& set(Options& option, BinaryExpr<ResT, L, R, Func>&& value) {
+  return set(option, ResT(value));
+}
+
+template <typename ResT, typename L, typename R, typename Func, class GO,
+          typename = hermes::EnableIfGuardedOption<GO>>
+decltype(auto) set(GO&& option, BinaryExpr<ResT, L, R, Func>&& value) {
+  set(std::forward<GO>(option).getWritable(), std::move(value));
+  return std::forward<GO>(option);
 }
 
 template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
@@ -446,19 +458,31 @@ decltype(auto) setBoundary(GO&& option, T value) {
 template <typename T>
 Options& add(Options& option, T value) {
   if (!option.isSet()) {
-    return set(option, value);
+    return set(option, std::move(value));
   } else {
     try {
       return set(option,
-                 value
-                     + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
-                         option.value));
+                 T(value
+                   + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
+                       option.value)));
     } catch (const std::bad_cast& e) {
       // Convert to a more useful error message
       throw BoutException("Could not convert {:s} to type {:s}", option.str(),
                           typeid(T).name());
     }
   }
+}
+
+template <typename ResT, typename L, typename R, typename Func>
+Options& add(Options& option, BinaryExpr<ResT, L, R, Func>&& value) {
+  return add(option, ResT(value));
+}
+
+template <typename ResT, typename L, typename R, typename Func, class GO,
+          typename = hermes::EnableIfGuardedOption<GO>>
+decltype(auto) add(GO&& option, BinaryExpr<ResT, L, R, Func>&& value) {
+  add(std::forward<GO>(option).getWritable(), std::move(value));
+  return std::forward<GO>(option);
 }
 
 template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
@@ -475,18 +499,31 @@ decltype(auto) add(GO&& option, T value) {
 template <typename T>
 Options& subtract(Options& option, T value) {
   if (!option.isSet()) {
-    return set(option, -value);
+    return set(option, T(-value));
   } else {
     try {
-      return set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
-                             option.value)
-                             - value);
+      return set(option,
+                 T(bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
+                       option.value)
+                   - value));
     } catch (const std::bad_cast& e) {
       // Convert to a more useful error message
       throw BoutException("Could not convert {:s} to type {:s}", option.str(),
                           typeid(T).name());
     }
   }
+}
+
+template <typename ResT, typename L, typename R, typename Func>
+Options& subtract(Options& option, BinaryExpr<ResT, L, R, Func>&& value) {
+  return subtract(option, ResT(value));
+}
+
+template <typename ResT, typename L, typename R, typename Func, class GO,
+          typename = hermes::EnableIfGuardedOption<GO>>
+decltype(auto) subtract(GO&& option, BinaryExpr<ResT, L, R, Func>&& value) {
+  subtract(std::forward<GO>(option).getWritable(), std::move(value));
+  return std::forward<GO>(option);
 }
 
 template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
@@ -503,11 +540,26 @@ void set_with_attrs(
   option.setAttributes(attrs);
 }
 
+template <typename ResT, typename L, typename R, typename Func>
+void set_with_attrs(
+    Options& option, BinaryExpr<ResT, L, R, Func>&& value,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(option, ResT(value), attrs);
+}
+
 template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
 void set_with_attrs(
     GO&& option, T value,
     std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
   set_with_attrs(std::forward<GO>(option).getWritable(), value, attrs);
+}
+
+template <typename ResT, typename L, typename R, typename Func, class GO,
+          typename = hermes::EnableIfGuardedOption<GO>>
+void set_with_attrs(
+    GO&& option, BinaryExpr<ResT, L, R, Func>&& value,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(std::forward<GO>(option).getWritable(), std::move(value), attrs);
 }
 
 #if CHECKLEVEL >= 1
