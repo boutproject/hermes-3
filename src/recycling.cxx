@@ -1,11 +1,11 @@
+#include "../include/recycling.hxx"
 #include "../include/component.hxx"
 #include "../include/guarded_options.hxx"
-#include "../include/permissions.hxx"
-#include "../include/recycling.hxx"
 #include "../include/hermes_utils.hxx" // For indexAt
+#include "../include/permissions.hxx"
 
-#include <bout/boutexception.hxx>
 #include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/field2d.hxx>
@@ -72,8 +72,8 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
     // Get the options for this species
     Options& from_options = alloptions[from];
     const std::string to = from_options["recycle_as"]
-                         .doc("Name of the species to recycle into")
-                         .as<std::string>();
+                               .doc("Name of the species to recycle into")
+                               .as<std::string>();
 
     from_species.insert(from);
     to_species.insert(to);
@@ -86,10 +86,11 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
                    .doc("Save additional diagnostics?")
                    .withDefault<bool>(false);
 
-    const BoutReal target_recycle_multiplier = from_options["target_recycle_multiplier"]
-                                             .doc("Multiply the target recycled flux by "
-                                                  "this factor. Should be >=0 and <= 1")
-                                             .withDefault<BoutReal>(1.0);
+    const BoutReal target_recycle_multiplier =
+        from_options["target_recycle_multiplier"]
+            .doc("Multiply the target recycled flux by "
+                 "this factor. Should be >=0 and <= 1")
+            .withDefault<BoutReal>(1.0);
 
     BoutReal sol_recycle_multiplier =
         from_options["sol_recycle_multiplier"]
@@ -108,9 +109,10 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
             .withDefault<BoutReal>(1.0);
 
     BoutReal penalty_recycle_multiplier =
-      from_options["penalty_recycle_multiplier"]
-          .doc("Multiply the penalty boundary recycling flux by this factor (like albedo). Should be >=0 and <= 1")
-          .withDefault<BoutReal>(1.0);
+        from_options["penalty_recycle_multiplier"]
+            .doc("Multiply the penalty boundary recycling flux by this factor (like "
+                 "albedo). Should be >=0 and <= 1")
+            .withDefault<BoutReal>(1.0);
 
     BoutReal target_recycle_energy =
         from_options["target_recycle_energy"]
@@ -130,10 +132,11 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
             .withDefault<BoutReal>(3.0)
         / Tnorm; // Normalise from eV
 
-    BoutReal penalty_recycle_energy = from_options["penalty_recycle_energy"]
-                                  .doc("Fixed energy of the recycled particles at penalty boundary [eV]")
-                                  .withDefault<BoutReal>(3.0)
-                              / Tnorm; // Normalise from eV
+    BoutReal penalty_recycle_energy =
+        from_options["penalty_recycle_energy"]
+            .doc("Fixed energy of the recycled particles at penalty boundary [eV]")
+            .withDefault<BoutReal>(3.0)
+        / Tnorm; // Normalise from eV
 
     BoutReal target_fast_recycle_fraction =
         from_options["target_fast_recycle_fraction"]
@@ -172,7 +175,8 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
 
     BoutReal penalty_fast_recycle_energy_factor =
         from_options["penalty_fast_recycle_energy_factor"]
-            .doc("Fraction of energy retained by fast recycled neutrals at penalty boundary")
+            .doc("Fraction of energy retained by fast recycled neutrals at penalty "
+                 "boundary")
             .withDefault<BoutReal>(0);
 
     if ((target_recycle_multiplier < 0.0) or (target_recycle_multiplier > 1.0)
@@ -184,19 +188,20 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
     }
 
     // Populate recycling channel vector
-    channels.push_back({
-      from, to,
-      // Flux multiplier (recycling fraction)
-      target_recycle_multiplier, sol_recycle_multiplier, pfr_recycle_multiplier, pump_recycle_multiplier,
-      penalty_recycle_multiplier,
-      // Energy of recycled neutrals
-      target_recycle_energy, sol_recycle_energy, pfr_recycle_energy, penalty_recycle_energy,
-      // Fast recycling fraction
-      target_fast_recycle_fraction, pfr_fast_recycle_fraction, sol_fast_recycle_fraction,
-      penalty_fast_recycle_fraction,
-      // Fast recycling energy factor
-      target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor, pfr_fast_recycle_energy_factor,
-      penalty_fast_recycle_energy_factor});
+    channels.push_back(
+        {from, to,
+         // Flux multiplier (recycling fraction)
+         target_recycle_multiplier, sol_recycle_multiplier, pfr_recycle_multiplier,
+         pump_recycle_multiplier, penalty_recycle_multiplier,
+         // Energy of recycled neutrals
+         target_recycle_energy, sol_recycle_energy, pfr_recycle_energy,
+         penalty_recycle_energy,
+         // Fast recycling fraction
+         target_fast_recycle_fraction, pfr_fast_recycle_fraction,
+         sol_fast_recycle_fraction, penalty_fast_recycle_fraction,
+         // Fast recycling energy factor
+         target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor,
+         pfr_fast_recycle_energy_factor, penalty_fast_recycle_energy_factor});
     // FIXME: These are global settings, but are being overwritten by each particular
     // recycling channel
 
@@ -214,8 +219,8 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
                       .withDefault<bool>(false);
 
     penalty_recycle = from_options["penalty_recycle"]
-                   .doc("Recycling in the penalty boundary?")
-                   .withDefault<bool>(false);
+                          .doc("Recycling in the penalty boundary?")
+                          .withDefault<bool>(false);
 
     neutral_pump = from_options["neutral_pump"]
                        .doc("Neutral pump enabled? Note, need location in grid file")
@@ -252,7 +257,8 @@ void Recycling::transform_impl(GuardedOptions& state) {
   for (auto& channel : channels) {
     const GuardedOptions species_from = state["species"][channel.from];
     const Field3D N = GET_VALUE(Field3D, species_from["density"]);
-    const Field3D V = GET_VALUE(Field3D, species_from["velocity"]); // Parallel flow velocity
+    const Field3D V =
+        GET_VALUE(Field3D, species_from["velocity"]); // Parallel flow velocity
     const Field3D T = GET_VALUE(Field3D, species_from["temperature"]); // Ion temperature
 
     const GuardedOptions species_to = state["species"][channel.to];
@@ -746,8 +752,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
       }
     }
 
-    if (penalty_recycle and
-        IS_SET(species_from["density_penalty"])) {
+    if (penalty_recycle and IS_SET(species_from["density_penalty"])) {
       // Recycling in penalty sheath boundary
 
       // Sources (negative) in the 'from' species equations
@@ -757,15 +762,17 @@ void Recycling::transform_impl(GuardedOptions& state) {
       const Field3D from_energy = GET_VALUE(Field3D, species_from["energy_penalty"]);
 
       // Density source of the 'to' species
-      const Field3D to_density = - channel.penalty_multiplier * from_density;
+      const Field3D to_density = -channel.penalty_multiplier * from_density;
 
       channel.penalty_density_source = to_density;
       channel.penalty_energy_source = filledFrom(to_density, [&](auto& i) {
         return
-          // Fast recycling
-          - from_energy[i] * channel.penalty_fast_recycle_fraction * channel.penalty_multiplier * channel.penalty_fast_recycle_energy_factor
-          // Thermal recycling
-          + (1 - channel.penalty_fast_recycle_fraction) * to_density[i] * channel.penalty_energy;
+            // Fast recycling
+            -from_energy[i] * channel.penalty_fast_recycle_fraction
+                * channel.penalty_multiplier * channel.penalty_fast_recycle_energy_factor
+            // Thermal recycling
+            + (1 - channel.penalty_fast_recycle_fraction) * to_density[i]
+                  * channel.penalty_energy;
       });
 
       // Add penalty recycling to the total sources
@@ -881,23 +888,27 @@ void Recycling::outputVars(Options& state) {
 
       // Recycling in penalty boundaries
       if (penalty_recycle) {
-        set_with_attrs(state[{std::string("S") + channel.to + std::string("_penalty_recycle")}],
-                       channel.penalty_density_source,
-                       {{"time_dimension", "t"},
-                        {"units", "m^-3 s^-1"},
-                        {"conversion", Nnorm * Omega_ci},
-                        {"standard_name", "particle source"},
-                        {"long_name", std::string("Penalty recycling particle source of ") + channel.to},
-                        {"source", "recycling"}});
+        set_with_attrs(
+            state[{std::string("S") + channel.to + std::string("_penalty_recycle")}],
+            channel.penalty_density_source,
+            {{"time_dimension", "t"},
+             {"units", "m^-3 s^-1"},
+             {"conversion", Nnorm * Omega_ci},
+             {"standard_name", "particle source"},
+             {"long_name",
+              std::string("Penalty recycling particle source of ") + channel.to},
+             {"source", "recycling"}});
 
-        set_with_attrs(state[{std::string("E") + channel.to + std::string("_penalty_recycle")}],
-                       channel.penalty_energy_source,
-                       {{"time_dimension", "t"},
-                        {"units", "W m^-3"},
-                        {"conversion", Pnorm * Omega_ci},
-                        {"standard_name", "energy source"},
-                        {"long_name", std::string("Penalty recycling energy source of ") + channel.to},
-                        {"source", "recycling"}});
+        set_with_attrs(
+            state[{std::string("E") + channel.to + std::string("_penalty_recycle")}],
+            channel.penalty_energy_source,
+            {{"time_dimension", "t"},
+             {"units", "W m^-3"},
+             {"conversion", Pnorm * Omega_ci},
+             {"standard_name", "energy source"},
+             {"long_name",
+              std::string("Penalty recycling energy source of ") + channel.to},
+             {"source", "recycling"}});
       }
     }
   }
