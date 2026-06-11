@@ -102,11 +102,30 @@ similar to the BOUT++
 [blob2d](https://github.com/boutproject/BOUT-dev/tree/master/examples/blob2d)
 example:
 
-    ./hermes-3 -d examples/blob2d
+    ./hermes-3 -d examples/other/blob2d
 
 See the
 [examples](https://github.com/bendudson/hermes-3/tree/master/examples)
 for more complicated cases.
+
+## Installing and testing with GPU support
+Compile BOUT-dev branch "support-gpu-field-operators-lazy-j"
+
+  - git checkout support-gpu-field-operators-lazy-j
+
+  - ```cmake -S . -B build_release -DCMAKE_INSTALL_PREFIX=$HOME/BOUT-dev/install -DBOUT_BUILD_EXAMPLES=ON -DBOUT_ENABLE_UMPIRE=ON -DBOUT_ENABLE_RAJA=ON -DBOUT_ENABLE_CUDA=ON -DCUDA_ARCH=compute_90,code=sm_90 -DBOUT_ENABLE_WARNINGS=OFF -DCMAKE_C_COMPILER=/apps/packages/gcc/11.5.0/bin/gcc -DCMAKE_CXX_COMPILER=/apps/packages/gcc/11.5.0/bin/g++ -DCMAKE_CUDA_HOST_COMPILER=/apps/packages/gcc/11.5.0/bin/g++ -DCMAKE_CUDA_COMPILER=$CUDA_HOME/bin/nvcc -DCUDA_TOOLKIT_ROOT_DIR=$CUDA_HOME -DCUDAToolkit_ROOT=$CUDA_HOME```
+
+  - ```cmake --build $HOME/BOUT-dev/build_release -j 16```
+
+  - ```cmake --install build_release```
+
+  - ```cd ../hermes-3```
+
+  - ```rm -rf build```
+
+  - ```bash
+    cmake -S . -B build  -DHERMES_BUILD_BOUT=OFF   -Dbout++_DIR=$HOME/BOUT-dev/install/lib64/cmake/bout++   -DCMAKE_PREFIX_PATH="$HOME/BOUT-dev/install;$SPACK_DIR/opt/spack/linux-zen4/fmt-12.1.0-4joecqo5irqsc63qdfbwxxpmji22ebmo;$SPACK_DIR/opt/spack/linux-zen4/umpire-2022.03.1-v6frol5dm7spzcq7kgf44yt65alq754u;$SPACK_DIR/opt/spack/linux-zen4/raja-git.v2023.06.1_2023.06.1-c2x6odrduwube23crr3dfkheefuai5lf;$SPACK_DIR/opt/spack/linux-zen4/camp-2023.06.0-e4n5p7dfoam7hwnpp7xalwz6onewmtq4"   -DCMAKE_CXX_FLAGS="-I$SPACK_DIR/opt/spack/linux-zen4/umpire-2022.03.1-v6frol5dm7spzcq7kgf44yt65alq754u/include -I$SPACK_DIR/opt/spack/linux-zen4/raja-git.v2023.06.1_2023.06.1-c2x6odrduwube23crr3dfkheefuai5lf/include -I$SPACK_DIR/opt/spack/linux-zen4/camp-2023.06.0-e4n5p7dfoam7hwnpp7xalwz6onewmtq4/include -fopenmp"
+    ```
 
 ## Publications
 
