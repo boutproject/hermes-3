@@ -14,7 +14,7 @@ from time import time
 t0 = time()
 
 """
-This test reconstructs neutra target density and energy sources due to recycling 
+This test reconstructs neutra target density and energy sources due to recycling
 and compares them to code output. It uses the same file as 2D-production.
 
 It mirrors the code in recycling.cxx. It's written in a way to allow easy debugging
@@ -140,8 +140,6 @@ ds = xhermes.open_hermesdataset(
     geometry="toroidal",
     unnormalise=False,
 ).isel(t=-1)
-
-ds = ds.hermes.extract_2d_tokamak_geometry()
 
 ds = ds.load()
 

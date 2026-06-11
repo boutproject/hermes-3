@@ -120,8 +120,6 @@ ds = xhermes.open_hermesdataset(
     geometry="toroidal",
 ).isel(t=-1)
 
-ds = ds.hermes.extract_2d_tokamak_geometry()
-
 t_load = time()
 if verbose:
     print(f"2D-Production test: loading results took {t_load - t_run:.2f} seconds")

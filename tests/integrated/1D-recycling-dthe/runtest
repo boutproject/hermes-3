@@ -80,7 +80,9 @@ def fail_test():
 
 def optimisation_level(run_output):
     comp_flags_line = [
-        l for l in run_output.split("\n") if l.startswith("\tCompiled with flags")
+        line
+        for line in run_output.split("\n")
+        if line.startswith("\tCompiled with flags")
     ]
     if len(comp_flags_line) == 1:
         comp_flags = comp_flags_line[0].split()
@@ -120,7 +122,7 @@ with open("run.log", "w") as f:
 fail_on_missing_data()
 
 # Examine last output
-ds = xhermes.open(data_dir, unnormalise=False).hermes.extract_1d_tokamak_geometry()
+ds = xhermes.open(data_dir, unnormalise=False)
 ds_last = ds.isel(t=-1)
 
 # fmt: off
