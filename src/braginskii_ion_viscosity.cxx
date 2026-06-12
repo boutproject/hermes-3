@@ -32,16 +32,16 @@ using bout::globals::mesh;
 BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                                                Options& alloptions, Solver*)
     : Component({
-        readIfSet("species:{non_electrons}:pressure"),
-        readIfSet("species:{non_electrons}:temperature"),
-        readIfSet("species:{non_electrons}:density"),
-        readIfSet("species:{non_electrons}:velocity"),
-        readIfSet("species:{non_electrons}:charge"),
-        readIfSet("species:{non_electrons}:collision_frequencies:{coll_type}"),
-        readWrite("species:{non_electrons}:momentum_source"),
-        readWrite("species:{non_electrons}:energy_source"),
-        readWrite("fields:DivJextra"),
-    }) {
+          readIfSet("species:{non_electrons}:pressure"),
+          readIfSet("species:{non_electrons}:temperature"),
+          readIfSet("species:{non_electrons}:density"),
+          readIfSet("species:{non_electrons}:velocity"),
+          readIfSet("species:{non_electrons}:charge"),
+          readIfSet("species:{non_electrons}:collision_frequencies:{coll_type}"),
+          readWrite("species:{non_electrons}:momentum_source"),
+          readWrite("species:{non_electrons}:energy_source"),
+          readWrite("fields:DivJextra"),
+      }) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]
@@ -60,8 +60,8 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
   parallel = options["parallel"]
-    .doc("Include parallel viscosity (requires parallel velocity)")
-    .withDefault<bool>(true);
+                 .doc("Include parallel viscosity (requires parallel velocity)")
+                 .withDefault<bool>(true);
 
   perpendicular = options["perpendicular"]
                       .doc("Include perpendicular flow? (Requires phi)")
@@ -186,8 +186,8 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
           const std::string collision_name = collision.first;
 
           if ( // Self-collisions
-              (collisionSpeciesMatch(collision_name, species_name, species_name,
-                                     "coll", "exact"))) {
+              (collisionSpeciesMatch(collision_name, species_name, species_name, "coll",
+                                     "exact"))) {
             collision_names[species_name].push_back(collision_name);
           }
         }
@@ -246,7 +246,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     const Field2D tau_av = DC(tau);
 
     Field2D bounce_factor =
-      1.0; // if bounce_frequency = false, this factor does nothing to anything
+        1.0; // if bounce_frequency = false, this factor does nothing to anything
     Field2D nu_star = 1.0;
 
     if (bounce_frequency) {
@@ -261,11 +261,11 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       const Field2D v_thermal = sqrt(2.0 * T_av / mass);
 
       nu_star = (bounce_frequency_R * bounce_frequency_q95)
-        / (tau_av * pow(bounce_frequency_epsilon, 1.5) * v_thermal);
+                / (tau_av * pow(bounce_frequency_epsilon, 1.5) * v_thermal);
 
       bounce_factor *=
-        (1 / (1 + (1. / nu_star)))
-        * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1. / nu_star)));
+          (1 / (1 + (1. / nu_star)))
+          * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1. / nu_star)));
       eta *= bounce_factor;
     }
 
@@ -279,7 +279,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         // Values of alpha ~ 0.5 typically
 
         const Field3D q_cl = eta * abs(Grad_par(V)); // Collisional value
-        const Field3D q_fl = eta_limit_alpha * P; // Flux limit
+        const Field3D q_fl = eta_limit_alpha * P;    // Flux limit
 
         eta = eta / (1. + softFloor(q_cl, 1e-15) / softFloor(q_fl, 1e-15));
 
@@ -295,8 +295,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
 
       // Parallel ion stress tensor component
-      Pi_cipar = -0.96 * P * tau * bounce_factor
-        * (2. * Grad_par(V) + V * Grad_par_logB);
+      Pi_cipar = -0.96 * P * tau * bounce_factor * (2. * Grad_par(V) + V * Grad_par_logB);
       // Could also be written as:
       // Pi_cipar = -0.96*Pi*tau*2.*Grad_par(sqrt(Bxy)*Vi)/sqrt(Bxy);
 
@@ -304,7 +303,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         const Field3D Pi_ciperp = 0.0;
         const Field3D DivJ = 0.0;
         diagnostics[species_name] =
-          Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
+            Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
       }
     }
 
@@ -322,9 +321,8 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     // Perpendicular ion stress tensor
     // 0.96 P tau kappa * (V_E + V_di + 1.61 b x Grad(T)/B )
     // Note: Heat flux terms are neglected for now
-    Field3D Pi_ciperp =
-        -0.5 * 0.96 * P * tau * bounce_factor
-        * (Curlb_B * Grad(phi + 1.61 * T) - Curlb_B * Grad(P) / Nlim);
+    Field3D Pi_ciperp = -0.5 * 0.96 * P * tau * bounce_factor
+                        * (Curlb_B * Grad(phi + 1.61 * T) - Curlb_B * Grad(P) / Nlim);
 
     // Limit size of stress tensor components
     // If the off-diagonal components of the pressure tensor are large compared
@@ -349,7 +347,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       const Field3D V = get<Field3D>(species["velocity"]);
 
       const Field3D div_Pi_ciperp =
-        -(2. / 3) * Grad_par(Pi_ciperp) + Pi_ciperp * Grad_par_logB;
+          -(2. / 3) * Grad_par(Pi_ciperp) + Pi_ciperp * Grad_par_logB;
       // const Field3D div_Pi_ciperp = - (2. / 3) * B32 * Grad_par(Pi_ciperp / B32);
 
       add(species["momentum_source"], div_Pi_ciperp);
@@ -380,7 +378,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     // Transfer of energy between ion internal energy and ExB flow
     subtract(species["energy_source"],
              0.5 * Pi_ci * Curlb_B * Grad(phi + P)
-             - (1. / 3.) * bracket(Pi_ci, phi + P, BRACKET_STD));
+                 - (1. / 3.) * bracket(Pi_ci, phi + P, BRACKET_STD));
 
     if (diagnose) {
       diagnostics[species_name] =
