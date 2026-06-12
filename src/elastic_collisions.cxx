@@ -33,8 +33,9 @@ ElasticCollision::ElasticCollision(std::string name, Options& options)
   this->r2 = reactants[1];
 
   // Register collision frequencies for both colliding species.
-  std::string collfreq_lbl = fmt::format("{:s}_{:s}_ecoll", this->r1, this->r2);
+  std::string collfreq_lbl = fmt::format("{:s}_{:s}_ec", this->r1, this->r2);
   add_coll_freq(this->r1, collfreq_lbl, this->r1);
+  collfreq_lbl = fmt::format("{:s}_{:s}_ec", this->r2, this->r1);
   add_coll_freq(this->r2, collfreq_lbl, this->r2);
 
   // Diagnostics
