@@ -35,8 +35,7 @@ SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
   output.write("\tL_par = {:e} (normalised)\n", L_par);
 
   if (sinks) {
-    setPermissions(readOnly("species:e:temperature"));
-    setPermissions(readOnly("species:{non_electrons}:{inputs}"));
+    setPermissions(readOnly("species:{all_species}:{inputs}"));
     setPermissions(readWrite("species:{non_electrons}:{outputs}"));
     substitutePermissions("inputs", {"AA", "density", "temperature"});
     substitutePermissions("outputs", {"density_source", "energy_source"});

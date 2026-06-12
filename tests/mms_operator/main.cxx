@@ -1,11 +1,16 @@
-#include "bout/field_factory.hxx"
+#include <bout/bout.hxx>
+#include <bout/difops.hxx>
+#include <bout/field3d.hxx>
+#include <bout/field_factory.hxx>
+#include <bout/fv_ops.hxx>
+#include <bout/options_io.hxx>
 
-// #include "hermes-2.hxx"
 #include "../include/div_ops.hxx"
 #include "div_ops.hxx"
-#include "bout/difops.hxx"
-#include "bout/fv_ops.hxx"
-#include "bout/version.hxx"
+
+#include <functional>
+#include <string>
+
 using ParLimiter = FV::Upwind;
 
 // Class used to store function of one argument
@@ -103,7 +108,7 @@ const auto differential_operators_4_arg = {
 int main(int argc, char** argv) {
   BoutInitialise(argc, argv);
 
-  int n_operators = Options::root()["mesh"]["n_operators"].withDefault(1);
+  const int n_operators = Options::root()["mesh"]["n_operators"].withDefault(1);
 
   Mesh* mesh = Mesh::create(&Options::root()["mesh"]);
   mesh->load();
@@ -139,23 +144,23 @@ int main(int argc, char** argv) {
   Field3D flow_xlow{mesh};
   Field3D flow_ylow{mesh};
   // auxiliary variables
-  Field3D ones{1.0, mesh};
-  Field3D zeros{0.0, mesh};
+  const Field3D ones{1.0, mesh};
+  const Field3D zeros{0.0, mesh};
 
   for (int i = 0; i < n_operators; i++) {
-    std::string inputname = "differential_operator_name_" + std::to_string(i);
-    std::string expectedname = "expected_result_" + std::to_string(i);
-    std::string outname = "result_" + std::to_string(i);
-    std::string outname_flow_xlow = "result_flow_xlow_" + std::to_string(i);
-    std::string outname_flow_ylow = "result_flow_ylow_" + std::to_string(i);
-    std::string differential_operator_name =
+    const std::string inputname = "differential_operator_name_" + std::to_string(i);
+    const std::string expectedname = "expected_result_" + std::to_string(i);
+    const std::string outname = "result_" + std::to_string(i);
+    const std::string outname_flow_xlow = "result_flow_xlow_" + std::to_string(i);
+    const std::string outname_flow_ylow = "result_flow_ylow_" + std::to_string(i);
+    const std::string differential_operator_name =
         Options::root()["mesh"][inputname].withDefault("FV::Div_a_Grad_perp(a, f)");
     // the for loop and if statement below should be replaced
     // by a neater indexing syntax below if possible
     for (const auto& difop : differential_operators_1_arg) {
       if (difop.name.compare(differential_operator_name) == 0) {
         // Get result of applying the named differential operator
-        Field3D result = difop.func(f);
+        const Field3D result = difop.func(f);
         dump[outname] = result;
         dump[outname].setAttributes({
             {"operator", difop.name},
@@ -169,7 +174,7 @@ int main(int argc, char** argv) {
     for (const auto& difop : differential_operators_2_arg) {
       if (difop.name.compare(differential_operator_name) == 0) {
         // Get result of applying the named differential operator
-        Field3D result = difop.func(a, f);
+        const Field3D result = difop.func(a, f);
         dump[outname] = result;
         dump[outname].setAttributes({
             {"operator", difop.name},
@@ -183,7 +188,7 @@ int main(int argc, char** argv) {
     for (const auto& difop : differential_operators_3_arg) {
       if (difop.name.compare(differential_operator_name) == 0) {
         // Get result of applying the named differential operator
-        Field3D result = difop.func(a, f, flow_ylow);
+        const Field3D result = difop.func(a, f, flow_ylow);
         dump[outname] = result;
         dump[outname].setAttributes({
             {"operator", difop.name},
@@ -199,7 +204,7 @@ int main(int argc, char** argv) {
     for (const auto& difop : differential_operators_3_arg_mod) {
       if (difop.name.compare(differential_operator_name) == 0) {
         // Get result of applying the named differential operator
-        Field3D result = difop.func(f, ones, zeros);
+        const Field3D result = difop.func(f, ones, zeros);
         dump[outname] = result;
         dump[outname].setAttributes({
             {"operator", difop.name},
@@ -213,7 +218,7 @@ int main(int argc, char** argv) {
     for (const auto& difop : differential_operators_3_arg_mod_diagnose) {
       if (difop.name.compare(differential_operator_name) == 0) {
         // Get result of applying the named differential operator
-        Field3D result = difop.func(f, ones, zeros, flow_ylow);
+        const Field3D result = difop.func(f, ones, zeros, flow_ylow);
         dump[outname] = result;
         dump[outname].setAttributes({
             {"operator", difop.name},
@@ -229,7 +234,7 @@ int main(int argc, char** argv) {
     for (const auto& difop : differential_operators_4_arg) {
       if (difop.name.compare(differential_operator_name) == 0) {
         // Get result of applying the named differential operator
-        Field3D result = difop.func(a, f, flow_xlow, flow_ylow);
+        const Field3D result = difop.func(a, f, flow_xlow, flow_ylow);
         dump[outname] = result;
         dump[outname].setAttributes({
             {"operator", difop.name},
@@ -252,7 +257,7 @@ int main(int argc, char** argv) {
 
   mesh->outputVars(dump);
 
-  std::string outname = fmt::format(
+  const std::string outname = fmt::format(
       "{}/BOUT.{}.nc", Options::root()["datadir"].withDefault<std::string>("data"),
       BoutComm::rank());
 

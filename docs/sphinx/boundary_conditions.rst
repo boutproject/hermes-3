@@ -11,7 +11,7 @@ Fundamental boundary conditions
 
 Component-set boundary conditions
   Individual components, such as ``sheath_boundary``, will override
-  the fundamental BCs, for example to set a Bohm condition and 
+  the fundamental BCs, for example to set a Bohm condition and
   extrapolate to the wall.
 
 Generally speaking, it shouldn't be necessary to change any fundamental
@@ -19,7 +19,7 @@ boundary conditions, as they are handled by the components. A notable
 exception to this is at the radial boundaries, which default to ``Neumann``
 (zero gradient), preventing any cross-field transport. This can be
 set to ``dirichlet(value)`` to set a constant value for a particular quantity.
-The outer radial boundary can be set to ``decaylength(value)`` to allow 
+The outer radial boundary can be set to ``decaylength(value)`` to allow
 losses according to a far-SOL decay length, see below for details.
 Eventually, a component will be added to handle this at a higher level.
 
@@ -41,16 +41,16 @@ The boundary conditions can also be applied over a finite width as well as relax
 These boundary conditions are implemented in BOUT++, and therefore have no access to
 the normalisations within Hermes-3 and so must be used in normalised units.
 Please see the `BOUT++ documentation
-<https://bout-dev.readthedocs.io/en/latest/user_docs/boundary_options.html>`__ for more detail, 
+<https://bout-dev.readthedocs.io/en/latest/user_docs/boundary_options.html>`__ for more detail,
 including the full list of boundary conditions and more guidance on their use.
-In case the documentation is incomplete or insufficient, please refer to the 
+In case the documentation is incomplete or insufficient, please refer to the
 `BOUT++ boundary condition code
 <https://github.com/boutproject/BOUT-dev/blob/cbd197e78f7d52721188badfd7c38a0a540a82bd/src/mesh/boundary_standard.cxx>`__
 .
 
 
 Currently, there is only one additional simple boundary condition implemented in Hermes-3.
-:code:`decaylength(x)` sets the boundary according to a user-set radial decay length. 
+:code:`decaylength(x)` sets the boundary according to a user-set radial decay length.
 This is a commonly used setting for plasma density and pressure in the tokamak SOL boundary in 2D and 3D but is not applicable in 1D.
 Note that this must be provided in normalised units just like the BOUT++ simple boundary conditions.
 
@@ -88,9 +88,9 @@ as components. They may overwrite simple boundary conditions and must be set in 
 sheath_boundary_simple
 ^^^^^^^^^^^^^^^^^^^^^^
 
-This is a top-level component which determines the conditions and sources at the divertor target. 
+This is a top-level component which determines the conditions and sources at the divertor target.
 First, density, temperature and pressure are extrapolated into the target boundary.
-The extrapolation method for each can be user set, e.g. `density_boundary_mode`. At the moment, 
+The extrapolation method for each can be user set, e.g. `density_boundary_mode`. At the moment,
 the available modes are:
 
 - 0: LimitFree
@@ -99,19 +99,19 @@ the available modes are:
    unless you have a reason to use it - it's legacy behaviour.
 
 - 1: ExponentialFree
-   An exponential extrapolation. It is more consistent than LimitFree and has the advantage of 
+   An exponential extrapolation. It is more consistent than LimitFree and has the advantage of
    inherently preventing negative values at the target. This is the default and is recommended for most cases.
    It is defined as :math:`guard = (last)^2 / previous`
 
 - 2: LinearFree
-   A linear extrapolation. It can lead to negative values at the target. However, it is the most 
-   consistent (the linear extrapolation is what second order differencing reduces to at the wall) and has been shown to 
+   A linear extrapolation. It can lead to negative values at the target. However, it is the most
+   consistent (the linear extrapolation is what second order differencing reduces to at the wall) and has been shown to
    reduce "zigzags" or "squiggles" near the target which are common in cell centered codes. Use only
    if you have a particular reason to care about this.
    It's defined as :math:`guard = 2 * last - previous`.
 
-In the above definitions, `last`, `previous` and `guard` refer to the final domain cell, the penultimate 
-domain cell and the guard cell respectively. The value at the target is defined to be 
+In the above definitions, `last`, `previous` and `guard` refer to the final domain cell, the penultimate
+domain cell and the guard cell respectively. The value at the target is defined to be
 an interpolation between the last and guard cells, i.e:
 
 .. math::
@@ -132,7 +132,7 @@ The electron velocity is calculated from the potential:
 
 .. math::
    \begin{aligned}
-   \phi^{sheath} &= T_{e} \  ln \biggl[ \sqrt{ T_{e} / (2 \pi m_e) \cdot (1 - G_{e}) \cdot n_{e} / \Gamma_{i}^{tot}} \biggr]   \\ 
+   \phi^{sheath} &= T_{e} \  ln \biggl[ \sqrt{ T_{e} / (2 \pi m_e) \cdot (1 - G_{e}) \cdot n_{e} / \Gamma_{i}^{tot}} \biggr]   \\
    v_{e}^{sheath} &= -\sqrt{ T_{e} / 2 \pi m_e} \cdot (1-G_{e}) \cdot e^{(- \frac{\phi_{sheath} - \phi_{wall}} {T_{e}})}
    \end{aligned}
 
@@ -141,7 +141,7 @@ emission coefficient (default 1) and :math:`\phi_{wall}` is the wall potential (
 options `secondary_electron_coef` and `wall_potential`, respectively.
 
 
-Hermes-3 allows the pressure and momentum equations to advect internal and 
+Hermes-3 allows the pressure and momentum equations to advect internal and
 kinetic energy out of the sheath, but disables the conduction term, so before applying any sheath boundary condition,
 the "underlying" sheath heat flux is:
 
@@ -153,7 +153,7 @@ the "underlying" sheath heat flux is:
    \end{aligned}
 
 With both of the above definitions following Stangeby (eqns. 9.61 and 9.63) with the addition of electron kinetic
-energy, and where each variable is evaluated at the sheath (target). Continuing from Stangeby (eqs. 2.89 and 2.94), 
+energy, and where each variable is evaluated at the sheath (target). Continuing from Stangeby (eqs. 2.89 and 2.94),
 the above can be represented as the internal energy multiplied by the sheath heat transfer coefficient:
 
 .. math::
@@ -162,12 +162,12 @@ the above can be represented as the internal energy multiplied by the sheath hea
    q_{e}^{sheath} &= n_{e} v_{e} \gamma_{e} (e T_{e}n_{e})
    \end{aligned}
 
-Where :math:`\gamma_{i}` and :math:`\gamma_{e}` are the **total** ion and electron sheath heat transfer coefficients 
+Where :math:`\gamma_{i}` and :math:`\gamma_{e}` are the **total** ion and electron sheath heat transfer coefficients
 and are user set through the options `gamma_i` and `gamma_e`. The easiest way to calculate the sheath heat flux leaving the model
 is to use this form of the equations.
 
 Assuming :math:`T_e = T_i`, the "underlying" heat flux corresponds to :math:`\gamma_{i} = 3.5` and :math:`\gamma_{e} = 3.5`.
-In order to facilitate a user-set total gamma, `sheath_boundary_simple` creates a heat sink (or source) 
+In order to facilitate a user-set total gamma, `sheath_boundary_simple` creates a heat sink (or source)
 based on the difference between the required and "underlying" coefficient:
 
 .. math::
@@ -189,7 +189,7 @@ If recycling is enabled, a corresponding recycled neutral particle source is set
 **Usage and other options**
 
 To enable the boundary condition, add `sheath_boundary_simple` to the list of components. The settings are
-accessed through the component header. Use the `lower_y` and `upper_y` flags to enable the boundary on each 
+accessed through the component header. Use the `lower_y` and `upper_y` flags to enable the boundary on each
 end of the domain, where `lower` and `upper` refer to the start and end of the poloidal index space, respectively:
 
 .. code-block:: ini
@@ -209,12 +209,12 @@ end of the domain, where `lower` and `upper` refer to the start and end of the p
 
 It can be useful to run the code without neutrals/recycling in order to simplify the physics, e.g. for debugging.
 However, just disabling ``recycling`` would result in mach flows throughout the whole domain due to the lack of the
-neutral source. To avoid this, you can set ``no_flow = true`` under ``sheath_boundary_simple``. This will set the ion 
+neutral source. To avoid this, you can set ``no_flow = true`` under ``sheath_boundary_simple``. This will set the ion
 velocity to zero for the particle flux but will keep it at the :math:`v_i \geq c_{bohm}` condition for the heat flux.
 
-By default, the Bohm condition is imposed on the target by the Lax flux. This allows the code to have a small amount 
+By default, the Bohm condition is imposed on the target by the Lax flux. This allows the code to have a small amount
 of slack, resulting in a not-perfectly-exact setting but a smoother and more stable solution. For debugging, you can
-disable this behaviour and fix the Bohm condition explicitly. This can be done by setting ``fix_momentum_boundary_flux`` 
+disable this behaviour and fix the Bohm condition explicitly. This can be done by setting ``fix_momentum_boundary_flux``
 to ``true`` in the `evolve_pressure` component. Note that this has been observed to increase numerical oscillations near
 the boundary and is not recommended.
 
@@ -225,6 +225,61 @@ sheath_boundary
 
 This component is required to calculate correct sheath heat transfer coefficients considering multiple main ions
 based on Tskhakaya 2005. As this component is more complex, the development may lag behind `sheath_boundary_simple`.
+
+In addition to a constant effective electron secondary emission coefficient :math:`G_e` (set by
+``secondary_electron_coef``), ``sheath_boundary`` optionally supports **ion-induced secondary electron emission**
+(IISEE) through an energy-dependent yield model.
+
+Ion-induced secondary electron emission
+""""""""""""""""""""""""""""""""""""""
+
+When IISEE is enabled (``ion_ee_gamma_max > 0``), the floating/sheath potential at the target is computed
+*self-consistently* by iterating the sheath drop :math:`\Delta\phi = \phi - \phi_{wall}` because the IISEE yield
+depends on the ion impact energy, which itself depends on :math:`\Delta\phi`.
+
+The iteration solves the (local) current balance in the form
+
+.. math::
+   (1 - G_e)\,v_{te}\,\exp(-\Delta\phi/T_e)
+   = \sum_i Z_i \Gamma_i/n_e + \sum_i \gamma_i(E_i)\,\Gamma_i/n_e
+
+where :math:`v_{te}=\sqrt{T_e/(2\pi m_e)}` and the ion impact energy is taken as
+
+.. math::
+   E_i = \tfrac{1}{2}\left(T_i + m_i v_i^2\right) + Z_i\,\Delta\phi
+
+with all quantities in Hermes-3 normalised units (eV-normalised temperatures and potentials).
+
+The IISEE yield curve used is the same one applied later to modify the electron particle flux at the wall:
+it smoothly turns on around a threshold energy, rises towards a maximum, then rolls over at high energy.
+
+Notes and limitations:
+
+- The electron-induced emission coefficient ``secondary_electron_coef`` (:math:`G_e`) is a constant effective value.
+- Extremely strong emission regimes where an inverse sheath would form are not explicitly modelled; the behaviour is
+  also affected by ``floor_potential`` (used elsewhere in the component when computing sheath values at the wall).
+
+IISEE options
+"""""""""""""
+
+Enable IISEE and control the yield curve with:
+
+- ``ion_ee_gamma_max``: maximum ion-induced secondary electron emission coefficient. Default ``-1`` (disabled).
+- ``ion_ee_E_th``: threshold energy [eV] for IISEE. Default ``50``.
+- ``ion_ee_E_max``: energy [eV] of maximum IISEE yield. Default ``5000``.
+- ``ion_ee_p``: shape factor controlling the rise/rollover. Default ``1``.
+
+The yield as a function of the ion impact energy :math:`E_i` is
+
+.. math::
+   \gamma_i(E_i) =
+   \frac{1}{2}\left[1 + \tanh\left(\frac{E_i - E_{th}}{0.3\,E_{th}}\right)\right]
+   \gamma_{max}
+   \left(\frac{E_i}{E_{max}}\right)^{p}
+   \exp\left(p\left[1 - \frac{E_i}{E_{max}}\right]\right)
+
+where :math:`\gamma_{max}` is set by ``ion_ee_gamma_max``, :math:`E_{th}` by ``ion_ee_E_th``,
+:math:`E_{max}` by ``ion_ee_E_max``, and :math:`p` by ``ion_ee_p``.
 
 .. _sec-sheath_boundary_insulating:
 
@@ -255,12 +310,12 @@ have been set. It is therefore expected that this component is a top-level
 component (i.e. in the `Hermes` section) which comes after boundary conditions are set.
 
 Recycling has been implemented at the target, the SOL edge and the PFR edge.
-Each is off by default and must be activated with a separate flag. Each can be 
-assigned a separate recycle multiplier and recycle energy. 
+Each is off by default and must be activated with a separate flag. Each can be
+assigned a separate recycle multiplier and recycle energy.
 
 .. warning::
    For recycling and pumping to work, there must be some incident particle flow on the wall.
-   Example setups where there is no flow to the boundary include the use of `noflow_boundary` for the 
+   Example setups where there is no flow to the boundary include the use of `noflow_boundary` for the
    targets, and `Neumann` boundary conditions for the radial boundaries.
 
 
@@ -268,27 +323,27 @@ Configuring thermal recycling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A simple and commonly used way to model recycling is to assume it is fully thermal,
-i.e. that every incident ion recombines into a neutral molecule and thermalises with the surface 
-before becoming re-emitted. Hermes-3 does not yet have a hydrogenic molecule model, and so 
+i.e. that every incident ion recombines into a neutral molecule and thermalises with the surface
+before becoming re-emitted. Hermes-3 does not yet have a hydrogenic molecule model, and so
 the molecules are assumed to instantly dissociate at the Franck-Condon dissociation temperature of 3.5eV.
 
 In order to set this up, the chosen species must feature an outflow through the boundary - any cells
 with an inflow have their recycling source set to zero. If a sheath boundary condition
 is enabled, then this is automatically satisfied at the target through the Bohm condition.
-If it is not enabled, then the target boundary must be set to `free_o2`, `free_o3` or `decaylength` to 
-allow an outflow. 
+If it is not enabled, then the target boundary must be set to `free_o2`, `free_o3` or `decaylength` to
+allow an outflow.
 
 The recycling component has a `species` option, that is a list of species
 to recycle. For each of the species in that list, `recycling` will look in
 the corresponding section for the options `recycle_as`, `recycle_multiplier`
-and `recycle_energy` for each of the three implemented boundaries. Note that 
+and `recycle_energy` for each of the three implemented boundaries. Note that
 the resulting recycling source is a simple
 multiplication of the outgoing species flow and the multiplier factor.
-This means that recycling ``d+`` ions into ``d2`` molecules would require a multiplier 
+This means that recycling ``d+`` ions into ``d2`` molecules would require a multiplier
 of 0.5 to maintain a particle balance in the simulation.
 
 For example, recycling ``d+`` ions into ``d`` atoms with a recycling fraction
-of 0.95 at the target and 1.0 at the SOL and PFR edges. 
+of 0.95 at the target and 1.0 at the SOL and PFR edges.
 Each returning atom has an energy of 3.5eV:
 
 .. code-block:: ini
@@ -302,7 +357,7 @@ Each returning atom has an energy of 3.5eV:
    [d+]
    recycle_as = d         # Species to recycle as
 
-   target_recycle = true  
+   target_recycle = true
    target_recycle_multiplier = 0.95 # Recycling fraction
    target_recycle_energy = 3.5   # Energy of recycled particles [eV]
 
@@ -317,8 +372,8 @@ Each returning atom has an energy of 3.5eV:
 Allowing for fast recycling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In reality, a fraction of incident ions will undergo specular reflection off the surface and 
-preserve a fraction of their energy. In the popular Monte-Carlo neutral code EIRENE, the 
+In reality, a fraction of incident ions will undergo specular reflection off the surface and
+preserve a fraction of their energy. In the popular Monte-Carlo neutral code EIRENE, the
 fast recycling fraction and the energy reflection factor are provided by the `TRIM database <https://www.eirene.de/old_eirene/html/surface_data.html>`_
 as a function of incident angle, surface material and incident particle energy.
 Studies found that sheath acceleration can make the ion angle relatively consistent, e.g. 60 degrees; in (`Jae-Sun Park et al 2021 Nucl. Fusion 61 016021 <https://iopscience.iop.org/article/10.1088/1741-4326/abc1ce>`_).
@@ -336,9 +391,9 @@ Where :math:`R` is the recycle multiplier, :math:`R_{f}` is the fast reflection 
 
 .. warning::
    Fast recycling is currently only compatible with `sheath_boundary_simple` and not `sheath_boundary`
-   or `sheath_boundary_insulating`. This is due to `sheath_boundary` and `sheath_boundary_insulating` 
+   or `sheath_boundary_insulating`. This is due to `sheath_boundary` and `sheath_boundary_insulating`
    not featuring a sheath ion heat transmission coefficient setting, which is necessary to recalculate
-   the sheath incident ion heat flux for fast recycling. 
+   the sheath incident ion heat flux for fast recycling.
    This will be resolved in the near-term when all three sheath boundary conditions are merged and feature
    a consistent user options set.
 
@@ -350,7 +405,7 @@ the word "target" with either "sol" or "pfr".
    [d+]
    recycle_as = d         # Species to recycle as
 
-   target_recycle = true  
+   target_recycle = true
    target_recycle_multiplier = 0.95 # Recycling fraction
    target_recycle_energy = 3.5   # Energy of recycled particles [eV]
    target_fast_recycle_energy_factor = 0.70
@@ -370,8 +425,8 @@ on a recycling surface:
 .. warning::
    The pump requires recycling to be enabled on the relevant boundary region.
 
-The additional neutral sink due to the pump :math:`\Gamma_{N_{n}}^{loss}` 
-is calculated by multiplying the incident neutral flux :math:`\Gamma_{N_{n}}^{incident}` by the fraction 
+The additional neutral sink due to the pump :math:`\Gamma_{N_{n}}^{loss}`
+is calculated by multiplying the incident neutral flux :math:`\Gamma_{N_{n}}^{incident}` by the fraction
 of neutrals which are not reflected :math:`(1-M_{p})`. The pump multiplier also affects the ions
 by overriding the ion recycle multiplier on that surface.
 
@@ -382,7 +437,7 @@ by overriding the ion recycle multiplier on that surface.
    \Gamma_{N_{n}}^{incident} &= N_{n} v_{th} = N_{n} \frac{1}{4} \sqrt{\frac{8 T_{n}}{\pi m_{n}}} \\
    \end{aligned}
 
-The thermal velocity formulation is for a static maxwellian in 1D (see Stangeby p.64, eqns 2.21, 2.24) 
+The thermal velocity formulation is for a static maxwellian in 1D (see Stangeby p.64, eqns 2.21, 2.24)
 and the temperature is in `eV`.
 
 The heat loss rate :math:`\Gamma_{E_{n}}` is calculated as:
@@ -409,19 +464,19 @@ Diagnostic variables and settings
 .. note::
    All recycling settings are in the ion header (e.g. ``[d+]``), including pump settings.
 
-Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, and the 
+Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, and the
 SOL/PFR region (grouped together as `wall`, e.g. `Sd_wall_recycle`). The pump diagnostics are provided in the form
-of neutral particle and energy losses due to the pump, e.g. `Sd_pump` and `Ed_pump`, which correspond to 
-:math:`\Gamma_{N_{n}}^{loss}` and :math:`\Gamma_{E_{n}}^{loss}` respectively. The pump recycle multiplier is 
+of neutral particle and energy losses due to the pump, e.g. `Sd_pump` and `Ed_pump`, which correspond to
+:math:`\Gamma_{N_{n}}^{loss}` and :math:`\Gamma_{E_{n}}^{loss}` respectively. The pump recycle multiplier is
 set by the `pump_multiplier` option, and recycling coefficients by `target_recycle_multiplier`, etc.
 The pump and recycling surfaces can be enabled or disabled using `target_recycle`, `sol_recycle`, `pfr_recycle`
-and `neutral_pump` flags. 
+and `neutral_pump` flags.
 
 
 
 .. doxygenstruct:: Recycling
    :members:
-      
+
 .. _sec-binormal_stpm:
 
 Others
@@ -480,7 +535,7 @@ is set on parallel velocity and momentum. It is a species-specific
 component and so goes in the list of components for the species
 that the boundary condition should be applied to.
 
-Just like ions can undergo fast and thermal recycling, neutrals can undergo fast or thermal 
+Just like ions can undergo fast and thermal recycling, neutrals can undergo fast or thermal
 reflection at the wall. In edge codes using the kinetic neutral code EIRENE, this is typically
 controlled by the `TRIM database <https://www.eirene.de/old_eirene/html/surface_data.html>`_.
 Hermes-3 features a simpler implementation for a constant, user-set fast reflection fraction :math:`R_{f}`
@@ -508,16 +563,16 @@ Where :math:`Q_{incident}` is the neutral heat flux incident on the wall, :math:
 returning heat flux from fast reflection, :math:`Q_{thermal}` is the returning heat flux from thermal reflection
 and :math:`T_{FC}` is the Franck-Condon dissociation temperature, currently hardcoded to 3eV.
 Note that the fast and incident heat flux are both of a Maxwellian distribution, and so their
-formula corresponds to the 1 dimensional static Maxwellian heat flux and :math:`v_{th}^{x}` the 
+formula corresponds to the 1 dimensional static Maxwellian heat flux and :math:`v_{th}^{x}` the
 corresponding 1D static Maxwellian thermal velocity (Stangeby p.69).
-The thermal heat flux represents a monoenergetic distribution at :math:`T_{n}=T_{FC}` and 
+The thermal heat flux represents a monoenergetic distribution at :math:`T_{n}=T_{FC}` and
 is therefore calculated with a simpler formula.
 
 
-Since different regions of the tokamak feature different incidence angles and may feature 
-different materials, the energy reflection coefficient and the fast reflection fraction 
+Since different regions of the tokamak feature different incidence angles and may feature
+different materials, the energy reflection coefficient and the fast reflection fraction
 can be set individually for the target, PFR and SOL walls. The default values are 0.75
-for :math:`\alpha_{n}` and 0.8 for :math:`R_{r}` and correspond to approximate values for 
+for :math:`\alpha_{n}` and 0.8 for :math:`R_{r}` and correspond to approximate values for
 tungsten for incidence angles seen at the target. (Power, 2023)
 
 Here are the options set to their defaults. Note that the SOL and PFR are set to have no
@@ -534,7 +589,7 @@ reflection by default so that it is compatible with a model of any dimensionalit
    neutral_boundary_sol = true
    neutral_boundary_pfr = true
    neutral_boundary_upper_y = true
-   neutral_boundary_lower_y = true 
+   neutral_boundary_lower_y = true
 
    target_energy_refl_factor = 0.75
    sol_energy_refl_factor = 0.75
@@ -557,7 +612,7 @@ This is done by defining an array representing values of the source across the e
 using the BOUT++ input file syntax (see `BOUT++ documentation
 <https://bout-dev.readthedocs.io/en/latest/user_docs/bout_options.html>`__).
 
-Sources are available for the density, pressure and momentum equations, and are prescribed under 
+Sources are available for the density, pressure and momentum equations, and are prescribed under
 a header corresponding to the chosen equation and species.
 
 For example, this is how a pressure source is prescribed in the 1D-recycling example. First the domain and grid
@@ -565,7 +620,7 @@ are defined using input file functions. This creates a 400 element 1D grid with 
 The grid increases in resolution towards the target, with a minimum grid spacing of 0.1 times the average grid spacing:
 
 .. code-block:: ini
-   
+
    [mesh]
    # 1D simulation, use "y" as the dimension along the fieldline
    nx = 1
@@ -585,11 +640,11 @@ The grid increases in resolution towards the target, with a minimum grid spacing
    source = length_xpt / length
    y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
 
-And here is how the calculated geometric information is used to prepare a pressure source. The user 
+And here is how the calculated geometric information is used to prepare a pressure source. The user
 inputs a parallel heatflux in :math:`W/m^2`, or Watts per cross-sectional flux tube area.
 This is converted to a pressure flux in :math:`Pa/{m^2s}` by the :math:`2/3` factor, and then
-converted to a pressure source in :math:`Pa/{m^3s}` by dividing by the length of the heating region ``mesh:length_xpt``. 
-Note that this assumes a constant cross-sectional area, i.e. :math:`dx = dz = J = 1` due to the fact this 
+converted to a pressure source in :math:`Pa/{m^3s}` by dividing by the length of the heating region ``mesh:length_xpt``.
+Note that this assumes a constant cross-sectional area, i.e. :math:`dx = dz = J = 1` due to the fact this
 is a 1D simulation. Note that ``dz`` is actually :math:`2 \pi` by default, and must be set to 1 in the input file for
 this particular expression to work.
 If you are imposing a full B-field profile in your 1D simulation, you will need to account for the fact that :math:`J` is no longer constant.
@@ -627,7 +682,7 @@ Any source can be made time-dependent by adding a flag and providing a prefactor
 The already defined source will be multiplied by the prefactor, which is defined by a time-dependent input file function.
 
 Here is the implementation in the 1D-time-dependent-sources example, where the electrons and ions are set to receive 8MW
-of mean power flux each with a +/-10% sinusoidal fluctuation of a period of 50us. The density source has a mean of zero and 
+of mean power flux each with a +/-10% sinusoidal fluctuation of a period of 50us. The density source has a mean of zero and
 oscillates between :math:`-1\times10^{22}` and :math:`1\times10^{22}`, also with a period of 50us.
 
 Note that if you have the density controller enabled, it will work to counteract the imposed density source oscillation.

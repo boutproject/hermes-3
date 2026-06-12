@@ -1,16 +1,30 @@
 
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/field_factory.hxx>
-#include <bout/output_bout_types.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field.hxx>
+#include <bout/field3d.hxx>
+#include <bout/field_factory.hxx>
+#include <bout/fv_ops.hxx>
+#include <bout/globals.hxx>
 #include <bout/initialprofiles.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+#include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
+#include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/evolve_density.hxx"
-#include "../include/hermes_utils.hxx"
+#include "../include/guarded_options.hxx"
 #include "../include/hermes_build_config.hxx"
+#include "../include/hermes_utils.hxx"
+#include "../include/permissions.hxx"
+
+#include <string>
+#include <vector>
 
 using bout::globals::mesh;
 
@@ -28,9 +42,12 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
-  BoutReal temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
-    .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
-  
+  const BoutReal temperature_floor =
+      options["temperature_floor"]
+          .doc("Low temperature scale for low_T_diffuse_perp")
+          .withDefault<BoutReal>(0.1)
+      / get<BoutReal>(alloptions["units"]["eV"]);
+
   low_n_diffuse = options["low_n_diffuse"]
                       .doc("Parallel diffusion at low density")
                       .withDefault<bool>(false);
@@ -84,15 +101,15 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   auto& n_options = alloptions[std::string("N") + name];
   source_time_dependent = n_options["source_time_dependent"]
-    .doc("Use a time-dependent source?")
-    .withDefault<bool>(false);
+                              .doc("Use a time-dependent source?")
+                              .withDefault<bool>(false);
 
   source_only_in_core = n_options["source_only_in_core"]
-    .doc("Zero the source outside the closed field-line region?")
-    .withDefault<bool>(false);
+                            .doc("Zero the source outside the closed field-line region?")
+                            .withDefault<bool>(false);
 
   source_normalisation = Nnorm * Omega_ci;
-  time_normalisation = 1./Omega_ci;
+  time_normalisation = 1. / Omega_ci;
 
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
@@ -100,16 +117,17 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   mesh->get(source, std::string("N") + name + "_src");
   // Allow the user to override the source from input file
   source = n_options["source"]
-    .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
-    .withDefault(source)
-    / source_normalisation;
+               .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
+               .withDefault(source)
+           / source_normalisation;
 
   // If time dependent, parse the function with respect to time from the input file
   if (source_time_dependent) {
     auto str = n_options["source_prefactor"]
-      .doc("Time-dependent function of multiplier on ddt(N" + name + std::string(") source."))
-      .as<std::string>();
-      source_prefactor_function = FieldFactory::get()->parse(str, &n_options);
+                   .doc("Time-dependent function of multiplier on ddt(N" + name
+                        + std::string(") source."))
+                   .as<std::string>();
+    source_prefactor_function = FieldFactory::get()->parse(str, &n_options);
   }
 
   // Putting source at first X index would put it in both PFR in core, this ensures only core
@@ -126,9 +144,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     }
   }
 
-  neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
-    .doc("Apply neumann boundary with Z average?")
-    .withDefault<bool>(false);
+  neumann_boundary_average_z =
+      alloptions[std::string("N") + name]["neumann_boundary_average_z"]
+          .doc("Apply neumann boundary with Z average?")
+          .withDefault<bool>(false);
 
   std::vector<std::string> outputs = {"AA", "density", "density_source"};
   if (charge != 0.) {
@@ -212,8 +231,10 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
   // So evaluate them here rather than in finally()
   if (source_time_dependent) {
     // Evaluate the source_prefactor function at the current time in seconds and scale source with it
-    BoutReal time = get<BoutReal>(state["time"]);
-    BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
+    const BoutReal time = get<BoutReal>(state["time"]);
+    const BoutReal source_prefactor =
+        source_prefactor_function->generate(bout::generator::Context().set(
+            "x", 0, "y", 0, "z", 0, "t", time * time_normalisation));
     final_source = source * source_prefactor;
   } else {
     final_source = source;
@@ -224,16 +245,17 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
 
 void EvolveDensity::finally(const Options& state) {
 
-  auto& species = state["species"][name];
+  const auto& species = state["species"][name];
 
   // Get density boundary conditions
   // but retain densities which fall below zero
   N.setBoundaryTo(get<Field3D>(species["density"]));
 
-  if ((fabs(charge) > 1e-5) and state.isSection("fields") and state["fields"].isSet("phi")) {
+  if ((fabs(charge) > 1e-5) and state.isSection("fields")
+      and state["fields"].isSet("phi")) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
-    Field3D phi = get<Field3D>(state["fields"]["phi"]);
+    const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
     ddt(N) = -Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
                                     true); // ExB drift
@@ -243,7 +265,7 @@ void EvolveDensity::finally(const Options& state) {
 
   if (species.isSet("velocity")) {
     // Parallel velocity set
-    Field3D V = get<Field3D>(species["velocity"]);
+    const Field3D V = get<Field3D>(species["velocity"]);
 
     // Wave speed used for numerical diffusion
     // Note: For simulations where ion density is evolved rather than electron density,
@@ -252,8 +274,8 @@ void EvolveDensity::finally(const Options& state) {
     if (state.isSet("fastest_wave")) {
       fastest_wave = get<Field3D>(state["fastest_wave"]);
     } else {
-      Field3D T = get<Field3D>(species["temperature"]);
-      BoutReal AA = get<BoutReal>(species["AA"]);
+      const Field3D T = get<Field3D>(species["temperature"]);
+      const BoutReal AA = get<BoutReal>(species["AA"]);
       fastest_wave = sqrt(T / AA);
     }
 
@@ -272,7 +294,7 @@ void EvolveDensity::finally(const Options& state) {
     // Diffusion which kicks in at very low density, in order to
     // help prevent negative density regions
 
-    Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
+    const Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(N) += FV::Div_par_K_Grad_par(low_n_coeff, N);
   }
 
@@ -281,7 +303,7 @@ void EvolveDensity::finally(const Options& state) {
   }
 
   if (low_p_diffuse_perp) {
-    Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
+    const Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
     ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N);
   }
 
@@ -305,7 +327,7 @@ void EvolveDensity::finally(const Options& state) {
   }
 
 #if CHECKLEVEL >= 1
-  for (auto& i : N.getRegion("RGN_NOBNDRY")) {
+  for (const auto& i : N.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(N)[i])) {
       throw BoutException("ddt(N{}) non-finite at {}. Sn={}\n", name, i, Sn[i]);
     }
@@ -373,25 +395,26 @@ void EvolveDensity::outputVars(Options& state) {
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
     if (flow_xlow.isAllocated()) {
-      set_with_attrs(state[fmt::format("pf{}_tot_xlow", name)], flow_xlow,
-                   {{"time_dimension", "t"},
-                    {"units", "s^-1"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
-                    {"standard_name", "particle flow"},
-                    {"long_name", name + " particle flow in X. Note: May be incomplete."},
-                    {"species", name},
-                    {"source", "evolve_density"}});
+      set_with_attrs(
+          state[fmt::format("pf{}_tot_xlow", name)], flow_xlow,
+          {{"time_dimension", "t"},
+           {"units", "s^-1"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+           {"standard_name", "particle flow"},
+           {"long_name", name + " particle flow in X. Note: May be incomplete."},
+           {"species", name},
+           {"source", "evolve_density"}});
     }
     if (flow_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("pf{}_tot_ylow", name)], flow_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "s^-1"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
-                    {"standard_name", "particle flow"},
-                    {"long_name", name + " particle flow in Y. Note: May be incomplete."},
-                    {"species", name},
-                    {"source", "evolve_density"}});
+      set_with_attrs(
+          state[fmt::format("pf{}_tot_ylow", name)], flow_ylow,
+          {{"time_dimension", "t"},
+           {"units", "s^-1"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Nnorm * Omega_ci},
+           {"standard_name", "particle flow"},
+           {"long_name", name + " particle flow in Y. Note: May be incomplete."},
+           {"species", name},
+           {"source", "evolve_density"}});
     }
   }
 }
-

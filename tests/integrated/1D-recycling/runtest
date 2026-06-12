@@ -9,6 +9,7 @@ from boututils.run_wrapper import launch_safe
 import numpy
 import pathlib
 import xhermes
+
 from numpy.testing._private.utils import nulp_diff
 
 this_dir = pathlib.Path(__file__).parent
@@ -137,17 +138,17 @@ success &= check_value("Ion temperature", Ti_up, 150, atol=10)
 # Check the values of various diagnostics
 # Diagnostic names and reference values (generated with -O1)
 diags_ref = {
-    "Sd+_iz": 0.0012499733087984837,
-    "Fd+_iz": 5.031884239132974e-05,
-    "Ed+_iz": 0.0008868546724864824,
-    "Rd+_ex": -0.0002980594078569322,
-    "Sd+_rec": -3.47672067567105e-09,
-    "Fd+_rec": -1.0521433154929093e-09,
-    "Ed+_rec": -4.287064694541695e-09,
-    "Rd+_rec": -7.854083423012946e-10,
-    "Kdd+_cx": 0.006217352262215783,
-    "Fdd+_cx": 0.00035849318054988167,
-    "Edd+_cx": 0.0007154009328739765,
+    "Sd+_iz": 0.0012499881952594985,
+    "Fd+_iz": 5.031216101641959e-05,
+    "Ed+_iz": 0.000886838203275551,
+    "Rd+_ex": -0.0002980624196407826,
+    "Sd+_rec": -3.4771720061886495e-09,
+    "Fd+_rec": -1.0521986319516e-09,
+    "Ed+_rec": -4.287427530435614e-09,
+    "Rd+_rec": -7.854858287981961e-10,
+    "Kdd+_cx": 0.006217560172858273,
+    "Fdd+_cx": 0.0003584735644616168,
+    "Edd+_cx": 0.000715363070057263,
 }
 # fmt: on
 

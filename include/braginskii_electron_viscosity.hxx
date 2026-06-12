@@ -19,7 +19,7 @@
 /// frequency is used to calculate parallel viscosity
 ///
 /// References
-///  - https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html
+///  - https://farside.ph.utexas.edu/teaching/plasma/lectures1/node56.html
 ///
 struct BraginskiiElectronViscosity : public Component {
   /// Inputs
@@ -30,7 +30,7 @@ struct BraginskiiElectronViscosity : public Component {
   ///     Flux limiter coefficient. < 0 means no limiter
   BraginskiiElectronViscosity(const std::string& name, Options& alloptions, Solver*);
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
 
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
