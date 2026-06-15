@@ -84,7 +84,6 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
     only_particle_flow = options["only_particle_flow"]
                          .doc("Only account for particle flux during ionising at core. This is made for replicating SOLPS feature.")
                          .withDefault<bool>(false);
-    // d (E) -> d+ (E - 13.6eV) + e (13.6eV)
     ionisation_energy_loss = options["ionisation_energy_loss"]
                          .doc("Does energy loss (13.6eV) to electron because of ionisation?")
                          .withDefault<bool>(true);
@@ -480,8 +479,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
             BoutReal multiplier = channel.core_multiplier;
             
             // Use thermal speed to calculate particle flux into the core from 
-            // core neutrals. This assumes that particles move thermally to 
-            // ward the wall until they hit it.
+            // core neutrals. This assumes that particles move thermally toward the wall until they hit it.
             auto i = indexAt(Nn, mesh->xstart, iy, iz);      // Final domain cell
             auto ig = indexAt(Nn, mesh->xstart - 1, iy, iz); // Guard cell
 
@@ -489,7 +487,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
             const BoutReal nncore = 0.5 * (Nn[ig] + Nn[i]);
             const BoutReal tncore = 0.5 * (Tn[ig] + Tn[i]);
 
-            // Thermal speed of static Maxwellian in one direction
+            // Average speed of Maxwellian distribution 
             const BoutReal v_th =
                  sqrt(8 * tncore / (PI * AAn)); // Stangeby eqns. 2.21
             
@@ -504,7 +502,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
                                   * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
             BoutReal dacore = dpolcore * dtorcore; // [m^2]
 
-            // Particle flow
+            // Particle flow (one way particle flow)
             // Γ = 1/4 * n * v_th
             BoutReal neutral_particle_flow_to_core = 0.25 * v_th * nncore * dacore; // Stangeby eqns. 2.24
             // The amount of neutral ionised in core
@@ -516,6 +514,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
               ionise_particle_flow / volume;
             channel.core_neutral_density_sink(mesh->xstart, iy, iz) = 
               - ionise_particle_flow / volume;
+
             // save to solver
             ion_density_source(mesh->xstart, iy, iz) += 
               ionise_particle_flow / volume;
@@ -523,11 +522,12 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
               ionise_particle_flow / volume;
 
             if (!only_particle_flow){
-              // Momentum
-              // Γ_m = 1/2 P = 1/2 n * T
-              // use parallel momeneutm instead of radial momentum (one-way is in radial component)
-              BoutReal neutral_momentum_flow_to_core = NVn[i];
-              // BoutReal neutral_momentum_flow_to_core = 0.5 * nncore * tncore * dacore;
+              // Momentum (parallel momentum carried by the thermal particle flux)
+              // Each escaping neutral carries parallel momentum m*V_par = NVn/n,
+              // so the momentum flow = (NVn/n) * particle_flow = 1/4 * NVn * v_th * A.
+              // NVn is momentum density [mom m^-3], so this gives momentum/time.
+              const BoutReal nvncore = 0.5 * (NVn[ig] + NVn[i]); // midpoint momentum density
+              BoutReal neutral_momentum_flow_to_core = 0.25 * nvncore * v_th * dacore;
               BoutReal ionise_momentum_flow = neutral_momentum_flow_to_core * multiplier;
 
               // diagnose
@@ -550,7 +550,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
                 BoutReal ionisation_power = (13.6 / Tnorm) * ionise_particle_flow / volume;
 
                 // diagnostic
-                channel.core_electron_energy_source(mesh->xstart, iy, iz) = ionisation_power;
+                channel.core_electron_energy_source(mesh->xstart, iy, iz) = -ionisation_power;
                 channel.core_ion_energy_source(mesh->xstart, iy, iz) = ionise_energy_flow / volume;
                 channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = -ionise_energy_flow / volume;
 
@@ -658,6 +658,15 @@ void NeutralBoundary::outputVars(Options& state) {
              {"conversion", Pnorm * Omega_ci},
             {"standard_name", "energy sink"},
             {"long_name", std::string("Core neutral energy sink of ") + channel.from},
+            {"source", "neutral_boundary"}});
+        set_with_attrs(
+          state[{std::string("E") + channel.electron + std::string("_core_source")}],
+            channel.core_electron_energy_source,
+            {{"time_dimension", "t"},
+             {"units", "W m^-3"},
+             {"conversion", Pnorm * Omega_ci},
+            {"standard_name", "energy sink"},
+            {"long_name", std::string("Core ionisation energy loss of ") + channel.from},
             {"source", "neutral_boundary"}});
         set_with_attrs(
             state[{std::string("N") + channel.to + std::string("_core_source")}],
