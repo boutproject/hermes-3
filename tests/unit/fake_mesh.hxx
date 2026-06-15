@@ -111,14 +111,14 @@ public:
     return nullptr;
   }
   int wait(comm_handle UNUSED(handle)) override { return 0; }
-  int getNXPE() const override { return 1; }
-  int getNYPE() const override { return 1; }
-  int getNZPE() const override { return 1; }
-  int getXProcIndex() const override { return 0; }
-  int getYProcIndex() const override { return 0; }
-  int getZProcIndex() const override { return 0; }
+  int getNXPE() override { return 1; }
+  int getNYPE() override { return 1; }
+  int getNZPE() { return 1; }
+  int getXProcIndex() override { return 0; }
+  int getYProcIndex() override { return 0; }
+  int getZProcIndex() { return 0; }
   int getProcIndex([[maybe_unused]] int X, [[maybe_unused]] int Y,
-                   [[maybe_unused]] int Z) const override {
+                   [[maybe_unused]] int Z) const {
     return 0;
   }
   bool firstX() const override { return true; }
@@ -139,7 +139,7 @@ public:
   }
   MPI_Comm getXcomm(int UNUSED(jy)) const override { return BoutComm::get(); }
   MPI_Comm getYcomm(int UNUSED(jx)) const override { return BoutComm::get(); }
-  MPI_Comm getXZcomm() const override { return BoutComm::get(); }
+  MPI_Comm getXZcomm() const { return BoutComm::get(); }
 
   // Periodic Y
   int ix_separatrix{1000000}; // separatrix index
@@ -169,8 +169,8 @@ public:
   RangeIterator iterateBndryLowerInnerY() const override { return RangeIterator(); }
   RangeIterator iterateBndryUpperOuterY() const override { return RangeIterator(); }
   RangeIterator iterateBndryUpperInnerY() const override { return RangeIterator(); }
-  bool hasBndryLowerY() const override { return false; }
-  bool hasBndryUpperY() const override { return false; }
+  bool hasBndryLowerY() const { return false; }
+  bool hasBndryUpperY() const { return false; }
   void addBoundary(BoundaryRegion* region) override { boundaries.push_back(region); }
   std::vector<BoundaryRegion*> getBoundaries() override { return boundaries; }
   std::vector<std::shared_ptr<BoundaryRegionPar>>
@@ -179,10 +179,10 @@ public:
   }
   BoutReal GlobalX(int jx) const override { return jx; }
   BoutReal GlobalY(int jy) const override { return jy; }
-  BoutReal GlobalZ(int jz) const override { return jz / static_cast<BoutReal>(LocalNz); }
+  BoutReal GlobalZ(int jz) const { return jz / static_cast<BoutReal>(LocalNz); }
   BoutReal GlobalX(BoutReal jx) const override { return jx; }
   BoutReal GlobalY(BoutReal jy) const override { return jy; }
-  BoutReal GlobalZ(BoutReal jz) const override { return jz; }
+  BoutReal GlobalZ(BoutReal jz) const { return jz; }
   int getGlobalXIndex(int) const override { return 0; }
   int getGlobalXIndexNoBoundaries(int) const override { return 0; }
   int getGlobalYIndex(int y) const override { return y; }

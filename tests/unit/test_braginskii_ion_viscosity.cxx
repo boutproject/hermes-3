@@ -66,8 +66,8 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityPressureScaling) {
   state2 = state1.copy();
 
   state1["species"]["d+"]["pressure"] = constantGradient(0, 0., 1., 0.);
-  state2["species"]["d+"]["pressure"] =
-      2 * state1["species"]["d+"]["pressure"].as<Field3D>();
+  Field3D scaled_pressure = 2 * state1["species"]["d+"]["pressure"].as<Field3D>();
+  state2["species"]["d+"]["pressure"] = scaled_pressure;
 
   component.declareAllSpecies({"d+", "c+"});
   component.transform(state1);
@@ -96,10 +96,14 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityCollisionScaling) {
   state1["species"]["d+"]["collision_frequencies"]["d+_d+_coll"] =
       linearGradient(1., 0.1, 0.2, 0.1, 0.4, 1., 0.2);
   state1["species"]["d+"]["collision_frequencies"]["d+_he+_coll"] = 0.5;
-  state2["species"]["d+"]["collision_frequencies"]["d+_d+_coll"] =
+  Field3D scaled_d_collision_frequency =
       2 * state1["species"]["d+"]["collision_frequencies"]["d+_d+_coll"].as<Field3D>();
-  state2["species"]["d+"]["collision_frequencies"]["d+_he+_coll"] =
+  state2["species"]["d+"]["collision_frequencies"]["d+_d+_coll"] =
+      scaled_d_collision_frequency;
+  Field3D scaled_he_collision_frequency =
       2 * state1["species"]["d+"]["collision_frequencies"]["d+_he+_coll"].as<Field3D>();
+  state2["species"]["d+"]["collision_frequencies"]["d+_he+_coll"] =
+      scaled_he_collision_frequency;
 
   component.declareAllSpecies({"d+", "he+"});
   component.transform(state1);
@@ -131,8 +135,8 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityVelocityScaling) {
 
   state0["species"]["d+"]["velocity"] = constantGradient(1., 1., 0., 1.);
   state1["species"]["d+"]["velocity"] = linearGradient(1., 0., 1., 1., 1., 0., 0.);
-  state2["species"]["d+"]["velocity"] =
-      2 * state1["species"]["d+"]["velocity"].as<Field3D>();
+  Field3D scaled_velocity = 2 * state1["species"]["d+"]["velocity"].as<Field3D>();
+  state2["species"]["d+"]["velocity"] = scaled_velocity;
 
   component.declareAllSpecies({"d+", "c+"});
   component.transform(state0);

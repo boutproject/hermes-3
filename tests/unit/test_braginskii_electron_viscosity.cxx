@@ -64,8 +64,8 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityPressureScaling) {
   state2 = state1.copy();
 
   state1["species"]["e"]["pressure"] = constantGradient(0, 0., 1., 0.);
-  state2["species"]["e"]["pressure"] =
-      2 * state1["species"]["e"]["pressure"].as<Field3D>();
+  Field3D scaled_pressure = 2 * state1["species"]["e"]["pressure"].as<Field3D>();
+  state2["species"]["e"]["pressure"] = scaled_pressure;
 
   component.transform(state1);
   component.transform(state2);
@@ -92,8 +92,9 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityCollisionScaling) {
 
   state1["species"]["e"]["collision_frequency"] =
       linearGradient(1., 0.1, 0.2, -0.1, -0.4, 0., 1.);
-  state2["species"]["e"]["collision_frequency"] =
+  Field3D scaled_collision_frequency =
       2 * state1["species"]["e"]["collision_frequency"].as<Field3D>();
+  state2["species"]["e"]["collision_frequency"] = scaled_collision_frequency;
 
   component.transform(state1);
   component.transform(state2);
@@ -122,8 +123,8 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityVelocityScaling) {
 
   state0["species"]["e"]["velocity"] = constantGradient(1., 1., 0., 1.);
   state1["species"]["e"]["velocity"] = linearGradient(1., 0., 1., 1., 1., 0., 0.);
-  state2["species"]["e"]["velocity"] =
-      2 * state1["species"]["e"]["velocity"].as<Field3D>();
+  Field3D scaled_velocity = 2 * state1["species"]["e"]["velocity"].as<Field3D>();
+  state2["species"]["e"]["velocity"] = scaled_velocity;
 
   component.transform(state0);
   component.transform(state1);
