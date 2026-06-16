@@ -13,7 +13,9 @@
 #include <bout/options.hxx>
 #include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/rajalib.hxx>
 #include <bout/solver.hxx>
+#include <bout/single_index_ops.hxx>
 
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
@@ -23,8 +25,13 @@
 #include "../include/hermes_utils.hxx"
 #include "../include/permissions.hxx"
 
+#include <cstdlib>
 #include <string>
 #include <vector>
+
+#include <bout/nvtx.hxx>
+
+#define DISABLE_RAJA 0 // Disable RAJA here for testing?
 
 using bout::globals::mesh;
 
@@ -315,7 +322,17 @@ void EvolveDensity::finally(const Options& state) {
   // Collect the external source from above with all the sources from
   // elsewhere (collisions, reactions, etc) for diagnostics
   Sn = get<Field3D>(species["density_source"]);
-  ddt(N) += Sn;
+
+  auto N_acc = FieldAccessor<>(N);
+  auto Sn_acc = FieldAccessor<>(Sn);
+  const auto& all_points = N.getRegion("RGN_ALL");
+
+  bout::profiling::nvtxPushColor("evolve_density_source_raja",
+                                  bout::profiling::nvtxColor::Red);
+  BOUT_FOR_RAJA(i, all_points) {
+    ddt(N_acc)[i] += Sn_acc[i];
+  };
+  bout::profiling::nvtxPop();
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {

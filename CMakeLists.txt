@@ -53,6 +53,21 @@ else()
   find_package(bout++ REQUIRED)
 endif()
 
+if(BOUT_HAS_CUDA)
+  enable_language(CUDA)
+  if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+    string(APPEND CMAKE_CUDA_FLAGS
+           " --expt-extended-lambda --expt-relaxed-constexpr -Xcompiler -fopenmp")
+  endif()
+  foreach(_prefix IN LISTS CMAKE_PREFIX_PATH)
+    if(EXISTS "${_prefix}/include/RAJA" OR EXISTS "${_prefix}/include/umpire"
+       OR EXISTS "${_prefix}/include/camp")
+      include_directories(SYSTEM "${_prefix}/include")
+    endif()
+  endforeach()
+  set_source_files_properties(src/evolve_density.cxx PROPERTIES LANGUAGE CUDA)
+endif()
+
 include("./cmake/Sanitizers.cmake")
 
 set(HERMES_SOURCES
