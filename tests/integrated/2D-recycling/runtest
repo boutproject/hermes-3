@@ -14,7 +14,7 @@ from time import time
 t0 = time()
 
 """
-This test reconstructs neutra target density and energy sources due to recycling 
+This test reconstructs neutra target density and energy sources due to recycling
 and compares them to code output. It uses the same file as 2D-production.
 
 It mirrors the code in recycling.cxx. It's written in a way to allow easy debugging
@@ -141,8 +141,6 @@ ds = xhermes.open_hermesdataset(
     unnormalise=False,
 ).isel(t=-1)
 
-ds = ds.hermes.extract_2d_tokamak_geometry()
-
 ds = ds.load()
 
 t_load = time()
@@ -240,7 +238,7 @@ def reconstruct_target_recycle(name):
     """
     ### Indexing
     xslice = slice(3, -3)
-    i_index = xhermes.slice_poloidal(ds, name)
+    i_index = xhermes.selector_poloidal(ds, name)
 
     # i = final domain cell
     # g = guard cell
@@ -255,7 +253,9 @@ def reconstruct_target_recycle(name):
     i = (xslice, i_index)
     g = (xslice, g_index)
     s = (xslice, s_index)
-    reg = ds.hermes.select_region(name).isel(x=slice(1, -1))
+    # Keep using the explicit domain selector for newer xhermes, but trim the
+    # edge cells to preserve the pre-API-change region used by this test.
+    reg = ds.hermes.select_region("domain", name).isel(x=slice(1, -1))
 
     ### Calculate sheath values
     sheath = {}

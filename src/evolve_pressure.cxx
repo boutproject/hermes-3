@@ -262,6 +262,7 @@ void EvolvePressure::finally(const Options& state) {
 
   // Get updated pressure and temperature with boundary conditions
   P = get<Field3D>(species["pressure"]);
+  P.clearParallelSlices();
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);

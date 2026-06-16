@@ -120,8 +120,6 @@ ds = xhermes.open_hermesdataset(
     geometry="toroidal",
 ).isel(t=-1)
 
-ds = ds.hermes.extract_2d_tokamak_geometry()
-
 t_load = time()
 if verbose:
     print(f"2D-Production test: loading results took {t_load - t_run:.2f} seconds")
@@ -129,20 +127,49 @@ if verbose:
 
 # Testing at specific locations around the domain
 m = ds.metadata
-x_selection = slice(None)
+
+
+def selection_to_indices(selection, size):
+    if isinstance(selection, slice):
+        return np.arange(size)[selection]
+    return np.asarray(selection)
+
+
+# Use named xHermes regions so the test compares physical regions rather than
+# the old raw guard-cell layout.
+x_domain_indices = selection_to_indices(
+    xhermes.selector_radial(ds, "domain"), ds.sizes["x"]
+)
+sol_theta_indices = selection_to_indices(
+    xhermes.selector_poloidal(ds, "sol"), ds.sizes["theta"]
+)
+
 regions = {}
-regions["inner_lower_target"] = ds.isel(x=x_selection, theta=2)
-regions["inner_upper_target"] = ds.isel(
-    x=x_selection, theta=m["ny_innerg"] - m["MYG"] * 2 - 1
+regions["inner_lower_target"] = ds.hermes.select_region("domain", "inner_lower_target")
+regions["inner_upper_target"] = ds.hermes.select_region("domain", "inner_upper_target")
+regions["outer_upper_target"] = ds.hermes.select_region("domain", "outer_upper_target")
+regions["outer_lower_target"] = ds.hermes.select_region("domain", "outer_lower_target")
+regions["outer_midplane_a"] = ds.hermes.select_region("domain", "outer_upper_midplane")
+regions["sol_boundary"] = ds.hermes.select_region("boundary_xup", "sol")
+regions["sol_ring"] = ds.hermes.select_region(
+    custom_selection=(m["ixseps1g"], sol_theta_indices)
 )
-regions["outer_upper_target"] = ds.isel(x=x_selection, theta=m["ny_innerg"])
-regions["outer_lower_target"] = ds.isel(x=x_selection, theta=-3)
-regions["outer_midplane_a"] = ds.isel(
-    x=x_selection, theta=int((m["jyseps2_2g"] - m["jyseps1_2g"]) / 2) + m["jyseps1_2g"]
-)
-regions["sol_boundary"] = ds.isel(x=-3, theta=slice(None))
-regions["core_and_pfr_boundary"] = ds.isel(x=0, theta=slice(None))
-regions["sol_ring"] = ds.isel(x=m["ixseps1"], theta=slice(None))
+
+
+def expected_region(region_name, variable):
+    data = np.asarray(expected[region_name][variable])
+    if region_name in {
+        "inner_lower_target",
+        "inner_upper_target",
+        "outer_upper_target",
+        "outer_lower_target",
+        "outer_midplane_a",
+    }:
+        return data[x_domain_indices]
+    if region_name in {"sol_boundary", "sol_ring"}:
+        return data[sol_theta_indices]
+    return data
+
 
 # Expected results
 # The below line disables Ruff formatting for the data to keep it readable
@@ -209,7 +236,7 @@ else:
     for region_name, ds in regions.items():
         for variable in ["ddt(Pe)", "ddt(NVd+)"]:
             actual = ds[variable]
-            reference = expected[region_name][variable]
+            reference = expected_region(region_name, variable)
 
             try:
                 np.testing.assert_allclose(actual, reference, rtol=rtol, atol=atol)
