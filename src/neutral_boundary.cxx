@@ -81,15 +81,18 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                          .doc("Name of the species to ionise into")
                          .as<std::string>();
 
-    only_particle_flow = options["only_particle_flow"]
-                         .doc("Only account for particle flux during ionising at core. This is made for replicating SOLPS feature.")
+    ionising_core_return_mom_energy = options["ionising_core_return_mom_energy"]
+                         .doc("Does removed neutral energy and momentum come back as ion energy and momentum?")
                          .withDefault<bool>(false);
-    ionisation_energy_loss = options["ionisation_energy_loss"]
-                         .doc("Does energy loss (13.6eV) to electron because of ionisation?")
-                         .withDefault<bool>(true);
+    ionising_core_iz_energy_loss =
+        options["ionising_core_iz_energy_loss"]
+                         .doc("Energy [eV] removed from the electrons per core ionisation event. "
+                              "Default 13.6 eV (hydrogen ground-state ionisation potential). "
+                              "Set to 0 to disable the electron ionisation energy loss.")
+                         .withDefault<BoutReal>(13.6);
                       
 
-    BoutReal core_ionise_multiplier =
+    core_ionise_multiplier =
         options["core_ionise_multiplier"]
             .doc("Multiply the core ionised flux by this factor. Should be >=0 and <= 1")
             .withDefault<BoutReal>(1.0);
@@ -506,89 +509,84 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
             // Γ = 1/4 * n * v_th
             BoutReal neutral_particle_flow_to_core = 0.25 * v_th * nncore * dacore; // Stangeby eqns. 2.24
             // The amount of neutral ionised in core
-            BoutReal ionise_particle_flow = neutral_particle_flow_to_core * multiplier;
+            BoutReal ionised_particle_flow = neutral_particle_flow_to_core * multiplier;
 
-            // diagnostic
-            // source must be in domain
+
+            // Momentum (parallel momentum carried by the thermal particle flux)
+            // Each escaping neutral carries parallel momentum m*V_par = NVn/n,
+            // so the momentum flow = (NVn/n) * particle_flow = 1/4 * NVn * v_th * A.
+            // NVn is momentum density [mom m^-3], so this gives momentum/time.
+            const BoutReal nvncore = 0.5 * (NVn[ig] + NVn[i]); // midpoint momentum density
+            BoutReal neutral_momentum_flow_to_core = 0.25 * nvncore * v_th * dacore;
+            BoutReal ionised_momentum_flow = neutral_momentum_flow_to_core * multiplier;
+
+            // Energy: Q = 2TΓ
+            BoutReal neutral_energy_flow_to_core = 2.0 * tncore * neutral_particle_flow_to_core;
+            BoutReal ionised_energy_flow = neutral_energy_flow_to_core * multiplier;
+
+            // Neutral particle flow turn back as ion particle flow
+            // Momentum and energy of neutrals into the core don't come back unless ionising_core_return_mom_energy is true
+            // diagnose
             channel.core_ion_density_source(mesh->xstart, iy, iz) = 
-              ionise_particle_flow / volume;
+              ionised_particle_flow / volume;
             channel.core_neutral_density_sink(mesh->xstart, iy, iz) = 
-              - ionise_particle_flow / volume;
+              - ionised_particle_flow / volume;
+            channel.core_neutral_momentum_sink(mesh->xstart, iy, iz) =
+              - ionised_momentum_flow / volume;
+            channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = 
+              - ionised_energy_flow / volume;
+            // solver
+            ion_density_source(mesh->xstart, iy, iz) += ionised_particle_flow / volume;
+            neutral_density_source(mesh->xstart, iy, iz) -= ionised_particle_flow / volume;
+            neutral_momentum_source(mesh->xstart, iy, iz) -= ionised_momentum_flow / volume;
+            neutral_energy_source(mesh->xstart, iy, iz) -= ionised_energy_flow / volume;
 
-            // save to solver
-            ion_density_source(mesh->xstart, iy, iz) += 
-              ionise_particle_flow / volume;
-            neutral_density_source(mesh->xstart, iy, iz) -= 
-              ionise_particle_flow / volume;
+            if (ionising_core_iz_energy_loss!=0.0) {
+              // Ionisation energy cost paid by the electrons.
+              // ionising_core_iz_energy_loss [eV] is normalised by Tnorm and multiplied by
+              // the ionisation rate density (ionised_particle_flow / volume) to give a
+              // power density [normalised] that is removed from the electron energy.
+              // Default is 13.6 eV, the hydrogen ground-state ionisation potential. Only the
+              // ground-state potential is charged here so as not to double count radiation 
+              // from excitation, which is considered in boundary condition.
+              
+              BoutReal ionisation_power = (ionising_core_iz_energy_loss / Tnorm) * ionised_particle_flow / volume;
 
-            if (!only_particle_flow){
-              // Momentum (parallel momentum carried by the thermal particle flux)
-              // Each escaping neutral carries parallel momentum m*V_par = NVn/n,
-              // so the momentum flow = (NVn/n) * particle_flow = 1/4 * NVn * v_th * A.
-              // NVn is momentum density [mom m^-3], so this gives momentum/time.
-              const BoutReal nvncore = 0.5 * (NVn[ig] + NVn[i]); // midpoint momentum density
-              BoutReal neutral_momentum_flow_to_core = 0.25 * nvncore * v_th * dacore;
-              BoutReal ionise_momentum_flow = neutral_momentum_flow_to_core * multiplier;
-
-              // diagnose
-              channel.core_ion_momentum_source(mesh->xstart, iy, iz) =
-                ionise_momentum_flow / volume;
-              channel.core_neutral_momentum_sink(mesh->xstart, iy, iz) =
-                - ionise_momentum_flow / volume;
-
+              // diagnostic
+              channel.core_electron_energy_source(mesh->xstart, iy, iz) = -ionisation_power;
               // solver
-              ion_momentum_source(mesh->xstart, iy, iz) += ionise_momentum_flow / volume;
-              neutral_momentum_source(mesh->xstart, iy, iz) -= ionise_momentum_flow / volume;
+              electron_energy_source(mesh->xstart, iy, iz) -= ionisation_power;
 
-              // Energy: Q = 2TΓ
-              BoutReal neutral_energy_flow_to_core = 2.0 * tncore * neutral_particle_flow_to_core;
-              BoutReal ionise_energy_flow = neutral_energy_flow_to_core * multiplier;
-
-              if (ionisation_energy_loss) {
-                // Ionisation cost: 13.6 eV per ionisation event, normalized by Tnorm
-                // Multiplied by ionisation rate density to get power per volume
-                BoutReal ionisation_power = (13.6 / Tnorm) * ionise_particle_flow / volume;
-
-                // diagnostic
-                channel.core_electron_energy_source(mesh->xstart, iy, iz) = -ionisation_power;
-                channel.core_ion_energy_source(mesh->xstart, iy, iz) = ionise_energy_flow / volume;
-                channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = -ionise_energy_flow / volume;
-
-                // solver
-                electron_energy_source(mesh->xstart, iy, iz) -= ionisation_power;
-                ion_energy_source(mesh->xstart, iy, iz) += ionise_energy_flow / volume;
-                neutral_energy_source(mesh->xstart, iy, iz) -= ionise_energy_flow / volume;
-              } else {
-                channel.core_electron_energy_source(mesh->xstart, iy, iz) = 0.0;
-                channel.core_ion_energy_source(mesh->xstart, iy, iz) = ionise_energy_flow / volume;
-                channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = -ionise_energy_flow / volume;
-
-                ion_energy_source(mesh->xstart, iy, iz) += ionise_energy_flow / volume;
-                neutral_energy_source(mesh->xstart, iy, iz) -= ionise_energy_flow / volume;
-              }
             } else {
-              // only_particle_flow = true: zero out momentum and energy diagnostics
-              channel.core_ion_momentum_source(mesh->xstart, iy, iz) = 0.0;
-              channel.core_neutral_momentum_sink(mesh->xstart, iy, iz) = 0.0;
               channel.core_electron_energy_source(mesh->xstart, iy, iz) = 0.0;
+            }
+
+            /// Removed neutral momentum and energy  return back as ions.
+            if (ionising_core_return_mom_energy){
+            
+              // diagnose
+              channel.core_ion_momentum_source(mesh->xstart, iy, iz) = ionised_momentum_flow / volume;
+              channel.core_ion_energy_source(mesh->xstart, iy, iz) = ionised_energy_flow / volume;
+              // solver
+              ion_momentum_source(mesh->xstart, iy, iz) += ionised_momentum_flow / volume;
+              ion_energy_source(mesh->xstart, iy, iz) += ionised_energy_flow / volume;
+
+            } else {
+              channel.core_ion_momentum_source(mesh->xstart, iy, iz) = 0.0;
               channel.core_ion_energy_source(mesh->xstart, iy, iz) = 0.0;
-              channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = 0.0;
             }
           }
         }
       }
 
       // Put the updated sources back into the state
-      set(species_to["density_source"], ion_density_source);
       set(species_from["density_source"], neutral_density_source);
-
-      if (!only_particle_flow){
-        set(species_to["momentum_source"], ion_momentum_source);
-        set(species_to["energy_source"], ion_energy_source);
-        set(species_from["momentum_source"], neutral_momentum_source);
-        set(species_from["energy_source"], neutral_energy_source);
-        set(electron["energy_source"], electron_energy_source);
-      }
+      set(species_from["momentum_source"], neutral_momentum_source);
+      set(species_from["energy_source"], neutral_energy_source);
+      set(species_to["density_source"], ion_density_source);
+      set(species_to["momentum_source"], ion_momentum_source);
+      set(species_to["energy_source"], ion_energy_source);
+      set(electron["energy_source"], electron_energy_source);
     }
   }
 }

@@ -96,8 +96,10 @@ private:
   std::vector<IoniseChannel> channels; // Ionising channels
 
   bool ionising_core{false}; ///< Flags for enabling ionisinging in different regions
-  bool only_particle_flow{false};
-  bool ionisation_energy_loss{false};
+  bool ionising_core_return_mom_energy{false};
+
+  BoutReal ionising_core_iz_energy_loss;
+  BoutReal core_ionise_multiplier;
 
   BoutReal density_floor,
       pressure_floor; ///< minimum values for Nn, Pn to avoid divide by zero
