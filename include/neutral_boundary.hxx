@@ -20,12 +20,26 @@
 ///
 /// where v_th = sqrt(eT/m) is the thermal speed
 ///
+
+/// Core ionising: neutrals that reach the core boundary are removed from the domain 
+/// and their flux is added to the boundary condition on the flux of ions from the core.
+/// 
+/// Inputs
+///
+///   - <name>
+///     - species    A comma-separated list of species to ionise
+///   - <species>
+///     - ionise_as  The species to ionise into
+///     - ionise_multiplier   The ionised flux multiplier, between 0 and 1
+///     - ionise_energy       The energy of the ionised particles [eV]
+///
 struct NeutralBoundary : public Component {
   NeutralBoundary(std::string name, Options& options, Solver*);
 
   void outputVars(Options& state) override;
 
 private:
+
   std::string name; ///< Short name of species e.g "d"
 
   BoutReal Tnorm; // Temperature normalisation [eV]
@@ -55,6 +69,49 @@ private:
   ///      - momentum [if set] Zero boundary
   ///      - energy_source  Adds wall losses
   ///
+
+  /// Core ionising 
+  struct IoniseChannel {
+    std::string from; ///< The species name to be ionised (neutral)
+    std::string to;   ///< Species to ionising to (ion)
+    std::string electron; 
+
+    /// Flux multiplier (ionising fraction).
+    BoutReal core_multiplier;
+    // BoutReal core_energy; ///< Energy of ionisingd particle (normalised to Tnorm)
+
+    // Ionising particle and energy sources for the different sources of ionising
+    // These sources are per-channel and added to the `to` species
+    /// Neutral sink for core ionising (for neutral removal)
+    Field3D core_neutral_density_sink = 0.0;
+    Field3D core_neutral_momentum_sink = 0.0;
+    Field3D core_neutral_energy_sink = 0.0;
+    /// Ion source for core ionising (for ion source)
+    Field3D core_ion_density_source = 0.0;
+    Field3D core_ion_momentum_source = 0.0;
+    Field3D core_ion_energy_source = 0.0;
+    Field3D core_electron_energy_source = 0.0;
+
+  };
+  std::vector<IoniseChannel> channels; // Ionising channels
+
+  bool ionising_core{false}; ///< Flags for enabling ionisinging in different regions
+  bool ionising_core_return_mom_energy{false};
+
+  BoutReal ionising_core_iz_energy_loss;
+  BoutReal core_ionise_multiplier;
+
+  BoutReal density_floor,
+      pressure_floor; ///< minimum values for Nn, Pn to avoid divide by zero
+
+  BoutReal gamma_i; /// Sheath heat transmission coefficient
+
+  // After the calculation is done, the following variables are added to the solver as sources/sinks
+  Field3D ion_density_source, ion_momentum_source, ion_energy_source; ///< Ionising particle and energy sources for all locations
+  Field3D neutral_density_source, neutral_momentum_source, neutral_energy_source;
+  Field3D electron_energy_source;
+
+
   void transform_impl(GuardedOptions& state) override;
 };
 

@@ -7,10 +7,15 @@ using bout::globals::mesh;
 
 NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                  [[maybe_unused]] Solver* solver)
-    : Component({writeBoundary("species:{name}:{outputs}"),
+    : Component({writeBoundary("species:{name}:{boundary_outputs}"),
                  writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
                  readWrite("species:{name}:energy_source"),
-                 readOnly("species:{name}:AA")}),
+                 readOnly("species:{name}:AA"),
+                 readOnly("species:{from}:{from_inputs}"),
+                 readOnly("species:{to}:{to_inputs}"),
+                 readWrite("species:{to}:{outputs}"),
+                 readWrite("species:{from}:{outputs}"),
+                 readWrite("species:e:energy_source")}),
       name(name) {
 
   auto& options = alloptions[name];
@@ -58,10 +63,63 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
           .doc("Fraction of neutrals that are undergoing fast reflection at the pfr")
           .withDefault<BoutReal>(0.8);
 
+  /// For neutral ionising at core
+  std::set<std::string> from_species, to_species;
+
+  density_floor =
+      options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
+  pressure_floor = density_floor * (1. / get<BoutReal>(alloptions["units"]["eV"]));
+
+  ionising_core = options["ionising_core"]
+                    .doc("Neutrals ionised in the core?")
+                    .withDefault<bool>(false);
+
+
+  if (options["ionise_as"].isSet() or ionising_core) {
+    std::string from = name;
+    std::string to = options["ionise_as"]
+                         .doc("Name of the species to ionise into")
+                         .as<std::string>();
+
+    ionising_core_return_mom_energy = options["ionising_core_return_mom_energy"]
+                         .doc("Does removed neutral energy and momentum come back as ion energy and momentum?")
+                         .withDefault<bool>(false);
+    ionising_core_iz_energy_loss =
+        options["ionising_core_iz_energy_loss"]
+                         .doc("Energy [eV] removed from the electrons per core ionisation event. "
+                              "Default 13.6 eV (hydrogen ground-state ionisation potential). "
+                              "Set to 0 to disable the electron ionisation energy loss.")
+                         .withDefault<BoutReal>(13.6);
+                      
+
+    core_ionise_multiplier =
+        options["core_ionise_multiplier"]
+            .doc("Multiply the core ionised flux by this factor. Should be >=0 and <= 1")
+            .withDefault<BoutReal>(1.0);
+    if ((core_ionise_multiplier < 0.0) or (core_ionise_multiplier > 1.0)){
+      throw BoutException("Core ionise multipliers must be betweeen 0 and 1");
+    }
+    channels.push_back({from, to, "e", core_ionise_multiplier});
+
+    if (ionising_core) {
+      from_species.insert(from);
+      to_species.insert(to);
+    }
+  }
+  
   substitutePermissions("name", {name});
-  substitutePermissions("outputs", {"density", "temperature", "pressure"});
+  substitutePermissions("boundary_outputs", {"density", "temperature", "pressure"});
   substitutePermissions("conditional_outputs", {"velocity", "momentum"});
+  // For core ionising
+  substitutePermissions("to",
+                        std::vector<std::string>(to_species.begin(), to_species.end()));
+  substitutePermissions(
+      "from", std::vector<std::string>(from_species.begin(), from_species.end()));
+  substitutePermissions("to_inputs", {"AA", "density", "pressure", "temperature"});
+  substitutePermissions("from_inputs", {"density", "velocity", "temperature"});
+  substitutePermissions("outputs", {"density_source", "momentum_source", "energy_source"});
 }
+
 
 void NeutralBoundary::transform_impl(GuardedOptions& state) {
   auto species = state["species"][name];
@@ -77,7 +135,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
 
   Field3D NVn = IS_SET_NOBOUNDARY(species["momentum"])
                     ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
-                    : zeroFrom(Nn);
+                    : zeroFrom(NVn);
 
   // Get the energy source, or create if not set
   Field3D energy_source =
@@ -86,6 +144,10 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           : zeroFrom(Nn);
 
   Coordinates* coord = mesh->getCoordinates();
+  const Field2D& J = coord->J;
+  const Field2D& dy = coord->dy;
+  const Field2D& dx = coord->dx;
+  const Field2D& dz = coord->dz;
   target_energy_source = 0;
   wall_energy_source = 0;
 
@@ -347,6 +409,186 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
   // Set energy source (negative in cell next to sheath)
   // Note: energy_source includes any sources previously set in other components
   set(species["energy_source"], fromFieldAligned(energy_source));
+
+
+
+  /* ---- Core ionising ----*/
+  if (ionising_core){ 
+    for (auto& channel : channels) {
+
+      GuardedOptions species_from = state["species"][channel.from];
+      const Field3D Nn = get<Field3D>(species_from["density"]);
+      const Field3D Pn = get<Field3D>(species_from["pressure"]);
+      const Field3D Tn = get<Field3D>(species_from["temperature"]);
+      const Field3D NVn = get<Field3D>(species_from["momentum"]); // Parallel momentum
+      const BoutReal AAn = get<BoutReal>(species_from["AA"]);
+ 
+      const Field3D Nnlim = floor(Nn, density_floor);
+      const Field3D Pnlim = floor(Pn, pressure_floor);
+      const Field3D Tnlim = Pnlim / Nnlim;
+
+      const GuardedOptions species_to = state["species"][channel.to];
+      const Field3D N = get<Field3D>(species_to["density"]);
+      const Field3D V = get<Field3D>(species_to["velocity"]);    // Parallel flow velocity
+      const Field3D T = get<Field3D>(species_to["temperature"]); // Ion temperature
+      const Field3D NV = get<Field3D>(species_to["momentum"]); // Parallel momentum 
+
+      GuardedOptions electron = state["species"][channel.electron];
+      // const Field3D Pe = get<Field3D>(species_to["energy"]); // energy
+
+      ion_density_source = species_to.isSet("density_source")
+                          ? getNonFinal<Field3D>(species_to["density_source"])
+                          : 0.0;
+      ion_energy_source = species_to.isSet("energy_source")
+                          ? getNonFinal<Field3D>(species_to["energy_source"])
+                          : 0.0;
+      ion_momentum_source = species_to.isSet("momentum_source")
+                          ? getNonFinal<Field3D>(species_to["momentum_source"])
+                          : 0.0;
+      electron_energy_source = electron.isSet("energy_source")
+                          ? getNonFinal<Field3D>(electron["energy_source"])
+                          : 0.0;
+
+      neutral_density_source = species_from.isSet("density_source")
+                          ? getNonFinal<Field3D>(species_from["density_source"])
+                          : 0.0;
+      neutral_energy_source = species_from.isSet("energy_source")
+                          ? getNonFinal<Field3D>(species_from["energy_source"])
+                          : 0.0;
+      neutral_momentum_source = species_from.isSet("momentum_source")
+                          ? getNonFinal<Field3D>(species_from["momentum_source"])
+                          : 0.0;
+    
+      channel.core_ion_density_source = 0.0;
+      channel.core_ion_energy_source = 0.0;
+      channel.core_ion_momentum_source = 0.0;
+      channel.core_electron_energy_source = 0.0;
+      channel.core_neutral_density_sink = 0.0;
+      channel.core_neutral_energy_sink = 0.0;
+      channel.core_neutral_momentum_sink = 0.0;
+    
+      // The neutrals that reach the core boundary are removed from the domain 
+      // and their flux is added to the boundary condition on the flux of ions
+      //  from the core.
+      // firstX -> the processor that contains the core boundary 
+      // xstart -> the first domain cell in the boundary
+      if (mesh->firstX() && mesh->periodicY(mesh->xstart)){
+        for(int iy=0; iy < mesh->LocalNy; iy++){ 
+          for(int iz = 0; iz < mesh->LocalNz; iz++){
+            // Volume of cell adjacent to wall which will receive source
+            BoutReal volume = J(mesh->xstart, iy) * dx(mesh->xstart, iy) * dy(mesh->xstart, iy)
+                              * dz(mesh->xstart, iy);
+            
+            BoutReal multiplier = channel.core_multiplier;
+            
+            // Use thermal speed to calculate particle flux into the core from 
+            // core neutrals. This assumes that particles move thermally toward the wall until they hit it.
+            auto i = indexAt(Nn, mesh->xstart, iy, iz);      // Final domain cell
+            auto ig = indexAt(Nn, mesh->xstart - 1, iy, iz); // Guard cell
+
+            // Calculate midpoint values at wall
+            const BoutReal nncore = 0.5 * (Nn[ig] + Nn[i]);
+            const BoutReal tncore = 0.5 * (Tn[ig] + Tn[i]);
+
+            // Average speed of Maxwellian distribution 
+            const BoutReal v_th =
+                 sqrt(8 * tncore / (PI * AAn)); // Stangeby eqns. 2.21
+            
+            // Convert dy to poloidal length: dl = dy * sqrt(g22) = dy * h_theta
+            // Convert dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+            // Calculate radial wall area in [m^2]
+            // Calculate final cell volume [m^3]
+            BoutReal dpolcore =
+                0.5 * (coord->dy[i] + coord->dy[ig]) * 1
+                / (0.5 * (sqrt(coord->g22[i]) + sqrt(coord->g22[ig])));
+            BoutReal dtorcore = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
+                                  * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+            BoutReal dacore = dpolcore * dtorcore; // [m^2]
+
+            // Particle flow (one way particle flow)
+            // Γ = 1/4 * n * v_th
+            BoutReal neutral_particle_flow_to_core = 0.25 * v_th * nncore * dacore; // Stangeby eqns. 2.24
+            // The amount of neutral ionised in core
+            BoutReal ionised_particle_flow = neutral_particle_flow_to_core * multiplier;
+
+
+            // Momentum (parallel momentum carried by the thermal particle flux)
+            // Each escaping neutral carries parallel momentum m*V_par = NVn/n,
+            // so the momentum flow = (NVn/n) * particle_flow = 1/4 * NVn * v_th * A.
+            // NVn is momentum density [mom m^-3], so this gives momentum/time.
+            const BoutReal nvncore = 0.5 * (NVn[ig] + NVn[i]); // midpoint momentum density
+            BoutReal neutral_momentum_flow_to_core = 0.25 * nvncore * v_th * dacore;
+            BoutReal ionised_momentum_flow = neutral_momentum_flow_to_core * multiplier;
+
+            // Energy: Q = 2TΓ
+            BoutReal neutral_energy_flow_to_core = 2.0 * tncore * neutral_particle_flow_to_core;
+            BoutReal ionised_energy_flow = neutral_energy_flow_to_core * multiplier;
+
+            // Neutral particle flow turn back as ion particle flow
+            // Momentum and energy of neutrals into the core don't come back unless ionising_core_return_mom_energy is true
+            // diagnose
+            channel.core_ion_density_source(mesh->xstart, iy, iz) = 
+              ionised_particle_flow / volume;
+            channel.core_neutral_density_sink(mesh->xstart, iy, iz) = 
+              - ionised_particle_flow / volume;
+            channel.core_neutral_momentum_sink(mesh->xstart, iy, iz) =
+              - ionised_momentum_flow / volume;
+            channel.core_neutral_energy_sink(mesh->xstart, iy, iz) = 
+              - ionised_energy_flow / volume;
+            // solver
+            ion_density_source(mesh->xstart, iy, iz) += ionised_particle_flow / volume;
+            neutral_density_source(mesh->xstart, iy, iz) -= ionised_particle_flow / volume;
+            neutral_momentum_source(mesh->xstart, iy, iz) -= ionised_momentum_flow / volume;
+            neutral_energy_source(mesh->xstart, iy, iz) -= ionised_energy_flow / volume;
+
+            if (ionising_core_iz_energy_loss!=0.0) {
+              // Ionisation energy cost paid by the electrons.
+              // ionising_core_iz_energy_loss [eV] is normalised by Tnorm and multiplied by
+              // the ionisation rate density (ionised_particle_flow / volume) to give a
+              // power density [normalised] that is removed from the electron energy.
+              // Default is 13.6 eV, the hydrogen ground-state ionisation potential. Only the
+              // ground-state potential is charged here so as not to double count radiation 
+              // from excitation, which is considered in boundary condition.
+              
+              BoutReal ionisation_power = (ionising_core_iz_energy_loss / Tnorm) * ionised_particle_flow / volume;
+
+              // diagnostic
+              channel.core_electron_energy_source(mesh->xstart, iy, iz) = -ionisation_power;
+              // solver
+              electron_energy_source(mesh->xstart, iy, iz) -= ionisation_power;
+
+            } else {
+              channel.core_electron_energy_source(mesh->xstart, iy, iz) = 0.0;
+            }
+
+            /// Removed neutral momentum and energy  return back as ions.
+            if (ionising_core_return_mom_energy){
+            
+              // diagnose
+              channel.core_ion_momentum_source(mesh->xstart, iy, iz) = ionised_momentum_flow / volume;
+              channel.core_ion_energy_source(mesh->xstart, iy, iz) = ionised_energy_flow / volume;
+              // solver
+              ion_momentum_source(mesh->xstart, iy, iz) += ionised_momentum_flow / volume;
+              ion_energy_source(mesh->xstart, iy, iz) += ionised_energy_flow / volume;
+
+            } else {
+              channel.core_ion_momentum_source(mesh->xstart, iy, iz) = 0.0;
+              channel.core_ion_energy_source(mesh->xstart, iy, iz) = 0.0;
+            }
+          }
+        }
+      }
+
+      // Put the updated sources back into the state
+      set(species_from["density_source"], neutral_density_source);
+      set(species_from["momentum_source"], neutral_momentum_source);
+      set(species_from["energy_source"], neutral_energy_source);
+      set(species_to["density_source"], ion_density_source);
+      set(species_to["momentum_source"], ion_momentum_source);
+      set(species_to["energy_source"], ion_energy_source);
+      set(electron["energy_source"], electron_energy_source);
+    }
+  }
 }
 
 void NeutralBoundary::outputVars(Options& state) {
@@ -355,6 +597,7 @@ void NeutralBoundary::outputVars(Options& state) {
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   if (diagnose) {
@@ -384,5 +627,73 @@ void NeutralBoundary::outputVars(Options& state) {
          {"standard_name", "energy source"},
          {"long_name", std::string("Wall reflection energy source of ") + name},
          {"source", "neutral_boundary"}});
+
+    {
+      for (const auto& channel : channels) {
+        set_with_attrs(
+          state[{std::string("N") + channel.from + std::string("_core_sink")}],
+          channel.core_neutral_density_sink,
+          {{"time_dimension", "t"},
+           {"units", "m^-3 s^-1"},
+           {"conversion", Nnorm * Omega_ci},
+           {"standard_name", "particle sink"},
+           {"long_name", std::string("Core neutral particle sink of ") + channel.from},
+           {"source", "neutral_boundary"}});
+        set_with_attrs(
+          state[{std::string("NV") + channel.from + std::string("_core_sink")}],
+          channel.core_neutral_momentum_sink,
+          {{"time_dimension", "t"},
+           {"units", "kg m^-2 s^-2"},
+           {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+           {"standard_name", "momentum sink"},
+           {"long_name", std::string("Core neutral momentum sink of ") + channel.from},
+           {"source", "neutral_boundary"}});
+        set_with_attrs(
+          state[{std::string("E") + channel.from + std::string("_core_sink")}],
+            channel.core_neutral_energy_sink,
+            {{"time_dimension", "t"},
+             {"units", "W m^-3"},
+             {"conversion", Pnorm * Omega_ci},
+            {"standard_name", "energy sink"},
+            {"long_name", std::string("Core neutral energy sink of ") + channel.from},
+            {"source", "neutral_boundary"}});
+        set_with_attrs(
+          state[{std::string("E") + channel.electron + std::string("_core_source")}],
+            channel.core_electron_energy_source,
+            {{"time_dimension", "t"},
+             {"units", "W m^-3"},
+             {"conversion", Pnorm * Omega_ci},
+            {"standard_name", "energy sink"},
+            {"long_name", std::string("Core ionisation energy loss of ") + channel.from},
+            {"source", "neutral_boundary"}});
+        set_with_attrs(
+            state[{std::string("N") + channel.to + std::string("_core_source")}],
+            channel.core_ion_density_source,
+            {{"time_dimension", "t"},
+            {"units", "m^-3 s^-1"},
+            {"conversion", Nnorm * Omega_ci},
+            {"standard_name", "particle source"},
+            {"long_name", std::string("Core ionising particle source of ") + channel.to},
+            {"source", "neutral_boundary"}});
+        set_with_attrs(
+            state[{std::string("NV") + channel.to + std::string("_core_source")}],
+            channel.core_ion_momentum_source,
+            {{"time_dimension", "t"},
+            {"units", "kg m^-2 s^-2"},
+            {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+            {"standard_name", "momentum source"},
+            {"long_name", std::string("Core ionising momentum source of ") + channel.to},
+            {"source", "neutral_boundary"}});
+        set_with_attrs(
+            state[{std::string("E") + channel.to + std::string("_core_source") }],
+            channel.core_ion_energy_source,
+            {{"time_dimension", "t"},
+            {"units", "W m^-3"},
+            {"conversion", Pnorm * Omega_ci},
+            {"standard_name", "energy source"},
+            {"long_name", std::string("Core ionising energy source of ") + channel.to},
+            {"source", "neutral_boundary"}});
+      }
+    }
   }
 }
