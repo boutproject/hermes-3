@@ -419,12 +419,12 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g,
 
         // Flux across cell edge
         const BoutReal fout = gradient * aedge * gedge
-                              * (coord->J(i, j) * coord->g11(i, j)
-                                 + coord->J(i + 1, j) * coord->g11(i + 1, j))
-                              / (coord->dx(i, j) + coord->dx(i + 1, j));
+                              * (coord->J(i, j, k) * coord->g11(i, j, k)
+                                 + coord->J(i + 1, j, k) * coord->g11(i + 1, j, k))
+                              / (coord->dx(i, j, k) + coord->dx(i + 1, j, k));
 
-        result(i, j, k) += fout / (coord->dx(i, j) * coord->J(i, j));
-        result(i + 1, j, k) -= fout / (coord->dx(i + 1, j) * coord->J(i + 1, j));
+        result(i, j, k) += fout / (coord->dx(i, j, k) * coord->J(i, j, k));
+        result(i + 1, j, k) -= fout / (coord->dx(i + 1, j, k) * coord->J(i + 1, j, k));
       }
     }
   }
@@ -471,119 +471,142 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g,
 
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
-
-      BoutReal coef_u =
-          0.5
-          * (coord->g_23(i, j) / SQ(coord->J(i, j) * coord->Bxy(i, j))
-             + coord->g_23(i, j + 1) / SQ(coord->J(i, j + 1) * coord->Bxy(i, j + 1)));
-
-      BoutReal coef_d =
-          0.5
-          * (coord->g_23(i, j) / SQ(coord->J(i, j) * coord->Bxy(i, j))
-             + coord->g_23(i, j - 1) / SQ(coord->J(i, j - 1) * coord->Bxy(i, j - 1)));
-
+#if BOUT_USE_METRIC_3D
       for (int k = 0; k < mesh->LocalNz; k++) {
-        // Calculate flux between j and j+1
-        int kp = (k + 1) % mesh->LocalNz;
-        int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+#else
+      int k = 0;
+#endif
+        BoutReal coef_u =
+            0.5
+            * (coord->g_23(i, j, k) / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k))
+               + coord->g_23(i, j + 1, k)
+                     / SQ(coord->J(i, j + 1, k) * coord->Bxy(i, j + 1, k)));
 
-        // Calculate Z derivative at y boundary
-        BoutReal dfdz =
-            0.25 * (fc(i, j, kp) - fc(i, j, km) + fup(i, j + 1, kp) - fup(i, j + 1, km))
-            / coord->dz(i, j);
+        BoutReal coef_d =
+            0.5
+            * (coord->g_23(i, j, k) / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k))
+               + coord->g_23(i, j - 1, k)
+                     / SQ(coord->J(i, j - 1, k) * coord->Bxy(i, j - 1, k)));
 
-        // Y derivative
-        BoutReal dfdy = 2. * (fup(i, j + 1, k) - fc(i, j, k))
-                        / (coord->dy(i, j + 1) + coord->dy(i, j));
+#if not BOUT_USE_METRIC_3D
+        for (int k = 0; k < mesh->LocalNz; k++) {
+#endif
+          // Calculate flux between j and j+1
+          int kp = (k + 1) % mesh->LocalNz;
+          int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
 
-        BoutReal aedge = 0.5 * (ac(i, j, k) + aup(i, j + 1, k));
-        BoutReal gedge;
-        if ((j == mesh->yend) and mesh->lastY(i)) {
-          // Midpoint boundary value
-          gedge = 0.5 * (gc(i, j, k) + gup(i, j + 1, k));
-        } else if (dfdy > 0) {
-          // Flux from (j+1) to (j)
-          gedge = gup(i, j + 1, k);
-        } else {
-          // Flux from (j) to (j+1)
-          gedge = gc(i, j, k);
+          // Calculate Z derivative at y boundary
+          BoutReal dfdz =
+              0.25 * (fc(i, j, kp) - fc(i, j, km) + fup(i, j + 1, kp) - fup(i, j + 1, km))
+              / coord->dz(i, j, k);
+
+          // Y derivative
+          BoutReal dfdy = 2. * (fup(i, j + 1, k) - fc(i, j, k))
+                          / (coord->dy(i, j + 1, k) + coord->dy(i, j, k));
+
+          BoutReal aedge = 0.5 * (ac(i, j, k) + aup(i, j + 1, k));
+          BoutReal gedge;
+          if ((j == mesh->yend) and mesh->lastY(i)) {
+            // Midpoint boundary value
+            gedge = 0.5 * (gc(i, j, k) + gup(i, j + 1, k));
+          } else if (dfdy > 0) {
+            // Flux from (j+1) to (j)
+            gedge = gup(i, j + 1, k);
+          } else {
+            // Flux from (j) to (j+1)
+            gedge = gc(i, j, k);
+          }
+
+          BoutReal fout = aedge * gedge * 0.5
+                          * (coord->J(i, j, k) * coord->g23(i, j, k)
+                             + coord->J(i, j + 1, k) * coord->g23(i, j + 1, k))
+                          * (dfdz - coef_u * dfdy);
+
+          yzresult(i, j, k) = fout / (coord->dy(i, j, k) * coord->J(i, j, k));
+
+          // Calculate flux between j and j-1
+          dfdz =
+              0.25
+              * (fc(i, j, kp) - fc(i, j, km) + fdown(i, j - 1, kp) - fdown(i, j - 1, km))
+              / coord->dz(i, j, k);
+
+          dfdy = 2. * (fc(i, j, k) - fdown(i, j - 1, k))
+                 / (coord->dy(i, j, k) + coord->dy(i, j - 1, k));
+
+          aedge = 0.5 * (ac(i, j, k) + adown(i, j - 1, k));
+          if ((j == mesh->ystart) and mesh->firstY(i)) {
+            gedge = 0.5 * (gc(i, j, k) + gdown(i, j - 1, k));
+          } else if (dfdy > 0) {
+            gedge = gc(i, j, k);
+          } else {
+            gedge = gdown(i, j - 1, k);
+          }
+
+          fout = aedge * gedge * 0.5
+                 * (coord->J(i, j, k) * coord->g23(i, j, k)
+                    + coord->J(i, j - 1, k) * coord->g23(i, j - 1, k))
+                 * (dfdz - coef_d * dfdy);
+
+          yzresult(i, j, k) -= fout / (coord->dy(i, j, k) * coord->J(i, j, k));
+#if BOUT_USE_METRIC_3D
         }
-
-        BoutReal fout = aedge * gedge * 0.5
-                        * (coord->J(i, j) * coord->g23(i, j)
-                           + coord->J(i, j + 1) * coord->g23(i, j + 1))
-                        * (dfdz - coef_u * dfdy);
-
-        yzresult(i, j, k) = fout / (coord->dy(i, j) * coord->J(i, j));
-
-        // Calculate flux between j and j-1
-        dfdz = 0.25
-               * (fc(i, j, kp) - fc(i, j, km) + fdown(i, j - 1, kp) - fdown(i, j - 1, km))
-               / coord->dz(i, j);
-
-        dfdy = 2. * (fc(i, j, k) - fdown(i, j - 1, k))
-               / (coord->dy(i, j) + coord->dy(i, j - 1));
-
-        aedge = 0.5 * (ac(i, j, k) + adown(i, j - 1, k));
-        if ((j == mesh->ystart) and mesh->firstY(i)) {
-          gedge = 0.5 * (gc(i, j, k) + gdown(i, j - 1, k));
-        } else if (dfdy > 0) {
-          gedge = gc(i, j, k);
-        } else {
-          gedge = gdown(i, j - 1, k);
-        }
-
-        fout = aedge * gedge * 0.5
-               * (coord->J(i, j) * coord->g23(i, j)
-                  + coord->J(i, j - 1) * coord->g23(i, j - 1))
-               * (dfdz - coef_d * dfdy);
-
-        yzresult(i, j, k) -= fout / (coord->dy(i, j) * coord->J(i, j));
+#else
+    }
+#endif
       }
     }
+
+    // Z flux
+    // Easier since all metrics constant in Z
+
+    for (int i = mesh->xstart; i <= mesh->xend; i++) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+#if BOUT_USE_METRIC_3D
+        for (int k = 0; k < mesh->LocalNz; k++) {
+#else
+    int k = 0;
+#endif
+          // Coefficient in front of df/dy term
+          BoutReal coef = coord->g_23(i, j, k)
+                          / (coord->dy(i, j + 1, k) + 2. * coord->dy(i, j, k)
+                             + coord->dy(i, j - 1, k))
+                          / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k));
+#if not BOUT_USE_METRIC_3D
+          for (int k = 0; k < mesh->LocalNz; k++) {
+#endif
+            // Calculate flux between k and k+1
+            int kp = (k + 1) % mesh->LocalNz;
+
+            BoutReal gradient =
+                // df/dz
+                (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j, k)
+
+                // - g_yz * df/dy / SQ(J*B)
+                - coef
+                      * (fup(i, j + 1, k) + fup(i, j + 1, kp) - fdown(i, j - 1, k)
+                         - fdown(i, j - 1, kp));
+
+            BoutReal fout = gradient * 0.5 * (ac(i, j, kp) + ac(i, j, k))
+                            * ((gradient > 0) ? gc(i, j, kp) : gc(i, j, k));
+
+            yzresult(i, j, k) += fout / coord->dz(i, j, k);
+            yzresult(i, j, kp) -= fout / coord->dz(i, j, kp);
+#if BOUT_USE_METRIC_3D
+          }
+#else
   }
-
-  // Z flux
-  // Easier since all metrics constant in Z
-
-  for (int i = mesh->xstart; i <= mesh->xend; i++) {
-    for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      // Coefficient in front of df/dy term
-      BoutReal coef = coord->g_23(i, j)
-                      / (coord->dy(i, j + 1) + 2. * coord->dy(i, j) + coord->dy(i, j - 1))
-                      / SQ(coord->J(i, j) * coord->Bxy(i, j));
-
-      for (int k = 0; k < mesh->LocalNz; k++) {
-        // Calculate flux between k and k+1
-        int kp = (k + 1) % mesh->LocalNz;
-
-        BoutReal gradient =
-            // df/dz
-            (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j)
-
-            // - g_yz * df/dy / SQ(J*B)
-            - coef
-                  * (fup(i, j + 1, k) + fup(i, j + 1, kp) - fdown(i, j - 1, k)
-                     - fdown(i, j - 1, kp));
-
-        BoutReal fout = gradient * 0.5 * (ac(i, j, kp) + ac(i, j, k))
-                        * ((gradient > 0) ? gc(i, j, kp) : gc(i, j, k));
-
-        yzresult(i, j, k) += fout / coord->dz(i, j);
-        yzresult(i, j, kp) -= fout / coord->dz(i, j);
+#endif
+        }
       }
+      // Check if we need to transform back
+      if (f.hasParallelSlices() && a.hasParallelSlices()) {
+        result += yzresult;
+      } else {
+        result += fromFieldAligned(yzresult);
+      }
+      return result;
     }
-  }
-  // Check if we need to transform back
-  if (f.hasParallelSlices() && a.hasParallelSlices()) {
-    result += yzresult;
-  } else {
-    result += fromFieldAligned(yzresult);
-  }
 
-  return result;
-}
-
-} // namespace FV
+  } // namespace FV
 
 #endif //  DIV_OPS_H
