@@ -1,5 +1,8 @@
 
 #include <bout/difops.hxx>
+#include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
+#include <bout/options.hxx>
 
 #include "../include/zero_current.hxx"
 
@@ -8,7 +11,7 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
                  readIfSet("species:{all_species}:{inputs}", Regions::Interior),
                  readWrite(fmt::format("species:{}:velocity", name))}),
       name(name) {
-  Options &options = alloptions[name];
+  Options& options = alloptions[name];
 
   charge = options["charge"].doc("Particle charge. electrons = -1");
 
@@ -21,7 +24,7 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
 
   // Current due to other species
   Field3D current;
-  
+
   // Now calculate forces on other species
   GuardedOptions allspecies = state["species"];
   for (auto& kv : allspecies.getChildren()) {
@@ -29,7 +32,7 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
       continue; // Skip self
     }
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
- 
+
     if (!(species.isSet("density") and species.isSet("charge"))) {
       continue; // Needs both density and charge to contribute
     }
@@ -60,7 +63,8 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
   // Get the species density
   GuardedOptions species = state["species"][name];
   if (species.isSet("velocity")) {
-    throw BoutException("Cannot use zero_current in species {} if velocity already set\n", name);
+    throw BoutException("Cannot use zero_current in species {} if velocity already set\n",
+                        name);
   }
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 

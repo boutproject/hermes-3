@@ -6,6 +6,7 @@
 #include <bout/constants.hxx>
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
 #include <bout/options.hxx>
 #include <fmt/format.h>
 
@@ -148,8 +149,8 @@ void BraginskiiFriction::transform_impl(GuardedOptions& state) {
         //  1) This term is always positive: Collisions don't lead to cooling
         //  2) In the limit that m_2 << m_1 (e.g. electron-ion collisions),
         //     the lighter species is heated more than the heavy species.
-        Field3D const species1_source = (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12;
-        Field3D const species2_source = (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12;
+        const Field3D species1_source = (A2 / (A1 + A2)) * (velocity2 - velocity1) * F12;
+        const Field3D species2_source = (A1 / (A1 + A2)) * (velocity2 - velocity1) * F12;
 
         add(species1["energy_source"], species1_source);
         add(species2["energy_source"], species2_source);
@@ -172,7 +173,7 @@ void BraginskiiFriction::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  BoutReal const Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   /// Iterate through the first species in each collision pair

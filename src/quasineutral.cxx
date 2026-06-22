@@ -1,7 +1,10 @@
 
-#include <numeric> // for accumulate
+#include <bout/mesh.hxx>
 
 #include "../include/quasineutral.hxx"
+
+#include <numeric> // for accumulate
+#include <string>
 
 Quasineutral::Quasineutral(std::string name, Options& alloptions, Solver* UNUSED(solver))
     : Component({readWrite("species:{name}:{outputs}"),
@@ -9,7 +12,7 @@ Quasineutral::Quasineutral(std::string name, Options& alloptions, Solver* UNUSED
                  readIfSet("species:{all_species}:charge"),
                  readIfSet("species:{all_species}:density", Regions::Interior)}),
       name(name) {
-  Options &options = alloptions[name];
+  Options& options = alloptions[name];
 
   // Need to have a charge and mass
   charge = options["charge"].doc("Particle charge. electrons = -1");
@@ -35,11 +38,12 @@ void Quasineutral::transform_impl(GuardedOptions& state) {
              const std::map<std::string, GuardedOptions>::value_type& name_species) {
         const GuardedOptions species = name_species.second;
         // Add other species which have density and charge
-        if (name_species.first != name and species.isSet("charge") and
-            species.isSet("density")) {
+        if (name_species.first != name and species.isSet("charge")
+            and species.isSet("density")) {
           // Note: Not assuming that the boundary has been set
-          return value + getNoBoundary<Field3D>(species["density"]) *
-                             get<BoutReal>(species["charge"]);
+          return Field3D{value
+                         + getNoBoundary<Field3D>(species["density"])
+                               * get<BoutReal>(species["charge"])};
         }
         return value;
       });
@@ -48,7 +52,7 @@ void Quasineutral::transform_impl(GuardedOptions& state) {
   GuardedOptions species = allspecies[name];
 
   // Calculate density required. Floor so that density is >= 0
-  density = floor(rho / (-charge), 0.0);
+  density = floor(Field3D{rho / (-charge)}, 0.0);
   set(species["density"], density);
 
   set(species["charge"], charge);
@@ -56,7 +60,7 @@ void Quasineutral::transform_impl(GuardedOptions& state) {
   set(species["AA"], AA);
 }
 
-void Quasineutral::finally(const Options &state) {
+void Quasineutral::finally(const Options& state) {
   // Density may have had boundary conditions applied
   density = get<Field3D>(state["species"][name]["density"]);
 }
