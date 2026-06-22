@@ -93,53 +93,6 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x, Field3D& f
                                   Field3D& flux_ylow);
 
 namespace FV {
-
-/// Superbee limiter
-///
-/// This corresponds to the limiter function
-///    φ(r) = max(0, min(2r, 1), min(r,2)
-///
-/// The value at cell right (i.e. i + 1/2) is:
-///
-///   n.R = n.c - φ(r) (n.c - (n.p + n.c)/2)
-///       = n.c + φ(r) (n.p - n.c)/2
-///
-/// Four regimes:
-///  a) r < 1/2 -> φ(r) = 2r
-///     n.R = n.c + gL
-///  b) 1/2 < r < 1 -> φ(r) = 1
-///     n.R = n.c + gR/2
-///  c) 1 < r < 2 -> φ(r) = r
-///     n.R = n.c + gL/2
-///  d) 2 < r  -> φ(r) = 2
-///     n.R = n.c + gR
-///
-///  where the left and right gradients are:
-///   gL = n.c - n.m
-///   gR = n.p - n.c
-///
-struct Superbee {
-  void operator()(Stencil1D& n) {
-    BoutReal gL = n.c - n.L;
-    BoutReal gR = n.R - n.c;
-
-    // r = gL / gR
-    // Limiter is φ(r)
-    if (gL * gR < 0) {
-      // Different signs => Zero gradient
-      n.L = n.R = n.c;
-    } else {
-      const BoutReal sign = SIGN(gL);
-      gL = fabs(gL);
-      gR = fabs(gR);
-      const BoutReal half_slope =
-          sign * BOUTMAX(BOUTMIN(gL, 0.5 * gR), BOUTMIN(gR, 0.5 * gL));
-      n.L = n.c - half_slope;
-      n.R = n.c + half_slope;
-    }
-  }
-};
-
 // Calculates viscous heating due to numerical momentum fluxes
 // and flow of kinetic energy (in flow_ylow)
 template <typename CellEdges = MC>
