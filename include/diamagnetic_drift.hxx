@@ -2,17 +2,19 @@
 #ifndef DIAMAGNETIC_DRIFT_H
 #define DIAMAGNETIC_DRIFT_H
 
+#include <bout/vectormetric.hxx>
+
 #include "component.hxx"
 
 /// Calculate diamagnetic flows
 
 struct DiamagneticDrift : public Component {
-  DiamagneticDrift(std::string name, Options &options, Solver *UNUSED(solver));
+  DiamagneticDrift(std::string name, Options& options, Solver* UNUSED(solver));
 
 private:
-  Vector2D Curlb_B;
+  VectorMetric Curlb_B;
   bool bndry_flux;
-  Field2D diamag_form;
+  Coordinates::FieldMetric diamag_form;
 
   /// For every species, if it has:
   ///  - temperature
@@ -30,5 +32,3 @@ RegisterComponent<DiamagneticDrift> registercomponentdiamagnetic("diamagnetic_dr
 }
 
 #endif // DIAMAGNETIC_DRIFT_H
-
-
