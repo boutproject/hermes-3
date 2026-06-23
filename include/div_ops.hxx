@@ -93,6 +93,7 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x, Field3D& f
                                   Field3D& flux_ylow);
 
 namespace FV {
+
 // Calculates viscous heating due to numerical momentum fluxes
 // and flow of kinetic energy (in flow_ylow)
 template <typename CellEdges = MC>
@@ -472,10 +473,11 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g,
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
 #if BOUT_USE_METRIC_3D
-      for (int k = 0; k < mesh->LocalNz; k++) {
+      for (int k = 0; k < mesh->LocalNz; k++)
 #else
       int k = 0;
 #endif
+      {
         BoutReal coef_u =
             0.5
             * (coord->g_23(i, j, k) / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k))
@@ -489,8 +491,9 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g,
                      / SQ(coord->J(i, j - 1, k) * coord->Bxy(i, j - 1, k)));
 
 #if not BOUT_USE_METRIC_3D
-        for (int k = 0; k < mesh->LocalNz; k++) {
+        for (int k = 0; k < mesh->LocalNz; k++)
 #endif
+        {
           // Calculate flux between j and j+1
           int kp = (k + 1) % mesh->LocalNz;
           int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
@@ -548,65 +551,61 @@ const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g,
                  * (dfdz - coef_d * dfdy);
 
           yzresult(i, j, k) -= fout / (coord->dy(i, j, k) * coord->J(i, j, k));
-#if BOUT_USE_METRIC_3D
         }
-#else
-    }
-#endif
       }
     }
-
-    // Z flux
-    // Easier since all metrics constant in Z
-
-    for (int i = mesh->xstart; i <= mesh->xend; i++) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-#if BOUT_USE_METRIC_3D
-        for (int k = 0; k < mesh->LocalNz; k++) {
-#else
-    int k = 0;
-#endif
-          // Coefficient in front of df/dy term
-          BoutReal coef = coord->g_23(i, j, k)
-                          / (coord->dy(i, j + 1, k) + 2. * coord->dy(i, j, k)
-                             + coord->dy(i, j - 1, k))
-                          / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k));
-#if not BOUT_USE_METRIC_3D
-          for (int k = 0; k < mesh->LocalNz; k++) {
-#endif
-            // Calculate flux between k and k+1
-            int kp = (k + 1) % mesh->LocalNz;
-
-            BoutReal gradient =
-                // df/dz
-                (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j, k)
-
-                // - g_yz * df/dy / SQ(J*B)
-                - coef
-                      * (fup(i, j + 1, k) + fup(i, j + 1, kp) - fdown(i, j - 1, k)
-                         - fdown(i, j - 1, kp));
-
-            BoutReal fout = gradient * 0.5 * (ac(i, j, kp) + ac(i, j, k))
-                            * ((gradient > 0) ? gc(i, j, kp) : gc(i, j, k));
-
-            yzresult(i, j, k) += fout / coord->dz(i, j, k);
-            yzresult(i, j, kp) -= fout / coord->dz(i, j, kp);
-#if BOUT_USE_METRIC_3D
-          }
-#else
   }
+
+  // Z flux
+  // Easier since all metrics constant in Z
+
+  for (int i = mesh->xstart; i <= mesh->xend; i++) {
+    for (int j = mesh->ystart; j <= mesh->yend; j++) {
+#if BOUT_USE_METRIC_3D
+      for (int k = 0; k < mesh->LocalNz; k++)
+#else
+      int k = 0;
 #endif
+      {
+        // Coefficient in front of df/dy term
+        BoutReal coef =
+            coord->g_23(i, j, k)
+            / (coord->dy(i, j + 1, k) + 2. * coord->dy(i, j, k) + coord->dy(i, j - 1, k))
+            / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k));
+#if not BOUT_USE_METRIC_3D
+        for (int k = 0; k < mesh->LocalNz; k++)
+#endif
+        {
+          // Calculate flux between k and k+1
+          int kp = (k + 1) % mesh->LocalNz;
+
+          BoutReal gradient =
+              // df/dz
+              (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j, k)
+
+              // - g_yz * df/dy / SQ(J*B)
+              - coef
+                    * (fup(i, j + 1, k) + fup(i, j + 1, kp) - fdown(i, j - 1, k)
+                       - fdown(i, j - 1, kp));
+
+          BoutReal fout = gradient * 0.5 * (ac(i, j, kp) + ac(i, j, k))
+                          * ((gradient > 0) ? gc(i, j, kp) : gc(i, j, k));
+
+          yzresult(i, j, k) += fout / coord->dz(i, j, k);
+          yzresult(i, j, kp) -= fout / coord->dz(i, j, kp);
         }
       }
-      // Check if we need to transform back
-      if (f.hasParallelSlices() && a.hasParallelSlices()) {
-        result += yzresult;
-      } else {
-        result += fromFieldAligned(yzresult);
-      }
-      return result;
     }
+  }
+  // Check if we need to transform back
+  if (f.hasParallelSlices() && a.hasParallelSlices()) {
+    result += yzresult;
+  } else {
+    result += fromFieldAligned(yzresult);
+  }
+  return result;
+}
 
-  } // namespace FV
+} // namespace FV
 
 #endif //  DIV_OPS_H
