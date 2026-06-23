@@ -8,6 +8,7 @@
 
 #include <bout/field_factory.hxx> // For generating functions
 
+#if not BOUT_USE_METRIC_3D
 /// Global mesh
 namespace bout {
 namespace globals {
@@ -89,7 +90,9 @@ TEST_F(NeutralFullVelocityTest, CreateComponentRequiresBpxy) {
 
   static_cast<FakeMesh*>(bout::globals::mesh)
       ->setGridDataSource(new FakeGridDataSource{{
-          {"Rxy", 0.0}, {"Zxy", 1.0}, {"hthe", 1.0},
+          {"Rxy", 0.0},
+          {"Zxy", 1.0},
+          {"hthe", 1.0},
           // Missing Bpxy
       }});
 
@@ -316,3 +319,5 @@ TEST_F(NeutralFullVelocityTest, OutputVars) {
   ASSERT_TRUE(outputs.isSet("Urx"));
   ASSERT_TRUE(outputs.isSet("Tyr"));
 }
+
+#endif
