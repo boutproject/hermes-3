@@ -634,46 +634,39 @@ const Field2D Laplace_FV(const Field2D& k, const Field2D& f) {
 
       // Calculate gradients on cell faces
 
-      BoutReal gR = (coord->g11(i, j, k) + coord->g11(i + 1, j, k))
-                    * (f(i + 1, j, k) - f(i, j, k))
-                    / (coord->dx(i + 1, j, k) + coord->dx(i, j, k));
+      BoutReal gR = (coord->g11(i, j) + coord->g11(i + 1, j)) * (f(i + 1, j) - f(i, j))
+                    / (coord->dx(i + 1, j) + coord->dx(i, j));
 
-      BoutReal gL = (coord->g11(i - 1, j, k) + coord->g11(i, j, k))
-                    * (f(i, j, k) - f(i - 1, j, k))
-                    / (coord->dx(i - 1, j, k) + coord->dx(i, j, k));
+      BoutReal gL = (coord->g11(i - 1, j) + coord->g11(i, j)) * (f(i, j) - f(i - 1, j))
+                    / (coord->dx(i - 1, j) + coord->dx(i, j));
 
-      BoutReal gU = (coord->g22(i, j, k) + coord->g22(i, j + 1))
-                    * (f(i, j + 1) - f(i, j, k))
-                    / (coord->dy(i, j + 1) + coord->dy(i, j, k));
+      BoutReal gU = (coord->g22(i, j) + coord->g22(i, j + 1)) * (f(i, j + 1) - f(i, j))
+                    / (coord->dy(i, j + 1) + coord->dy(i, j));
 
-      BoutReal gD = (coord->g22(i, j - 1) + coord->g22(i, j, k))
-                    * (f(i, j, k) - f(i, j - 1))
-                    / (coord->dy(i, j, k) + coord->dy(i, j - 1));
+      BoutReal gD = (coord->g22(i, j - 1) + coord->g22(i, j)) * (f(i, j) - f(i, j - 1))
+                    / (coord->dy(i, j) + coord->dy(i, j - 1));
 
       // Flow right
 
-      BoutReal flux = gR * 0.25 * (coord->J(i + 1, j, k) + coord->J(i, j, k))
-                      * (k(i + 1, j, k) + k(i, j, k));
+      BoutReal flux =
+          gR * 0.25 * (coord->J(i + 1, j) + coord->J(i, j)) * (k(i + 1, j) + k(i, j));
 
-      result(i, j, k) = flux / (coord->dx(i, j, k) * coord->J(i, j, k));
+      result(i, j) = flux / (coord->dx(i, j) * coord->J(i, j));
 
       // Flow left
 
-      flux = gL * 0.25 * (coord->J(i - 1, j, k) + coord->J(i, j, k))
-             * (k(i - 1, j, k) + k(i, j, k));
-      result(i, j, k) -= flux / (coord->dx(i, j, k) * coord->J(i, j, k));
+      flux = gL * 0.25 * (coord->J(i - 1, j) + coord->J(i, j)) * (k(i - 1, j) + k(i, j));
+      result(i, j) -= flux / (coord->dx(i, j) * coord->J(i, j));
 
       // Flow up
 
-      flux = gU * 0.25 * (coord->J(i, j + 1) + coord->J(i, j, k))
-             * (k(i, j + 1) + k(i, j, k));
-      result(i, j, k) += flux / (coord->dy(i, j, k) * coord->J(i, j, k));
+      flux = gU * 0.25 * (coord->J(i, j + 1) + coord->J(i, j)) * (k(i, j + 1) + k(i, j));
+      result(i, j) += flux / (coord->dy(i, j) * coord->J(i, j));
 
       // Flow down
 
-      flux = gD * 0.25 * (coord->J(i, j - 1) + coord->J(i, j, k))
-             * (k(i, j - 1) + k(i, j, k));
-      result(i, j, k) -= flux / (coord->dy(i, j, k) * coord->J(i, j, k));
+      flux = gD * 0.25 * (coord->J(i, j - 1) + coord->J(i, j)) * (k(i, j - 1) + k(i, j));
+      result(i, j) -= flux / (coord->dy(i, j) * coord->J(i, j));
     }
   }
   return result;
