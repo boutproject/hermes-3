@@ -22,7 +22,7 @@ jobs:
       OMPI_MCA_rmaps_base_oversubscribe: yes
       MPIRUN: mpiexec -np
       LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
-      BOUT_CONFIGURE_OPTIONS: ${{ matrix.config.configure_options }} -DHERMES_COVERAGE=${{ matrix.build_type.coverage }}
+      BOUT_CONFIGURE_OPTIONS: ${{ matrix.build_type.configure_options }} -DHERMES_COVERAGE=${{ matrix.build_type.coverage }}
       BUILD_TYPE: ${{ matrix.build_type.cmake_build_type }}
       TEST_TYPE: ${{ matrix.build_type.test_type }}
     strategy:
@@ -49,7 +49,7 @@ jobs:
       - name: Job information
         run: |
           echo Build: ${{ matrix.config.name }}, ${{ matrix.config.os }}
-          echo Configure options: ${{ matrix.config.configure_options }}
+          echo Configure options: ${{ matrix.build_type.configure_options }}
           echo Build type: ${{ matrix.build_type.cmake_build_type }}
           echo Coverage: ${{ matrix.build_type.coverage }}
           echo Tests to run: ${{ matrix.build_type.test_type }}
