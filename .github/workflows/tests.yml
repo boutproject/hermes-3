@@ -42,7 +42,7 @@ jobs:
             configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON"
           - cmake_build_type: Debug
             test_type: None
-            configure_options: "-PACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
+            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
             coverage: OFF
 
     steps:
