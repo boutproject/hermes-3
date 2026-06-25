@@ -8,7 +8,7 @@ nx = 10
 ny = 10   # Resolution along field-line
 nz = 10
 ixseps1 = 0
-J = 1  
+J = 1
 
 
 [hermes]
@@ -20,7 +20,7 @@ components = (d+, he+, he, d, e,
 
 
 [solver]
-type = pvode           
+type = pvode
 
 
 [sheath_boundary_simple]
@@ -30,7 +30,7 @@ diagnose = true
 
 
 [neutral_parallel_diffusion]
-dneut = 10 
+dneut = 10
 diffusion_collisions_mode = multispecies
 
 
@@ -53,16 +53,16 @@ species = d+, he+
 
 ####################################
 [d+]
-type = (evolve_density, evolve_pressure, evolve_momentum, 
+type = (evolve_density, evolve_pressure, evolve_momentum,
         noflow_boundary)
 
 charge = 1
-AA = 2 
+AA = 2
 thermal_conduction = true
 conduction_collisions_mode = multispecies
 noflow_upper_y = false
 recycle_as = d
-target_recycle = true  
+target_recycle = true
 diagnose = true
 
 [Nd+]
@@ -72,20 +72,20 @@ function = 1
 function = 1
 
 [NVd+]
-function = 1 
+function = 1
 
 ####################################
-[he+]  
-type = (evolve_density, evolve_pressure, evolve_momentum, 
+[he+]
+type = (evolve_density, evolve_pressure, evolve_momentum,
         noflow_boundary)
-        
+
 charge = 2
-AA = 4 
+AA = 4
 thermal_conduction = true
 conduction_collisions_mode = multispecies
 noflow_upper_y = false
 recycle_as = he
-target_recycle = true  
+target_recycle = true
 diagnose = true
 
 [Nhe+]
@@ -133,7 +133,7 @@ function = 0.0001
 
 ####################################
 [e] # Electrons
-type = (quasineutral, evolve_pressure, zero_current, 
+type = (quasineutral, evolve_pressure, zero_current,
         noflow_boundary)
 
 noflow_upper_y = false
@@ -147,7 +147,7 @@ diagnose = true
 
 [Pe]
 
-function = `Pd+:function`  
+function = `Pd+:function`
 
 ####################################
 

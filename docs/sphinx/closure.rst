@@ -3,9 +3,9 @@
 Closure
 =======
 
-Hermes-3 currently uses the standard Braginskii closure, but with a selection of 
+Hermes-3 currently uses the standard Braginskii closure, but with a selection of
 collision frequencies that can be used: the formulas use all solved collisions
-by default in order to have some accounting of multiple ion species, which 
+by default in order to have some accounting of multiple ion species, which
 are not considered in standard Braginskii. See the next section for how this can be
 changed to reproduce the exact Braginskii closure.
 
@@ -14,13 +14,13 @@ different components, which are described in the :ref:`sec-equations`
 section and on this page. They all use collision frequencies
 calculated in the ``Collisions`` component.
 
-**Conduction:** 
+**Conduction:**
 Parallel conduction for all species is implemented in the
 :ref:`sec-braginskii_conduction` component.
 
 **Viscosity:**
-Parallel and perpendicular viscosity for ions is in the 
-:ref:`sec-braginskii_ion_viscosity` top-level component. The parallel viscosity for 
+Parallel and perpendicular viscosity for ions is in the
+:ref:`sec-braginskii_ion_viscosity` top-level component. The parallel viscosity for
 electrons is in :ref:`sec-braginskii_electron_viscosity`.
 
 **Thermal force:**
@@ -36,24 +36,24 @@ Thermal transfers are calculated in the
 
 **Neutral diffusion:**
 The parallel projection of diffusion from the wall in 1D
-is captured in the :ref:`sec-neutral_parallel_diffusion` top-level component, while 
-both parallel Braginskii transport and perpendicular pressure-diffusion for 2D/3D 
-are captured in the :ref:`sec-neutral_mixed` species-level component. 
-   
+is captured in the :ref:`sec-neutral_parallel_diffusion` top-level component, while
+both parallel Braginskii transport and perpendicular pressure-diffusion for 2D/3D
+are captured in the :ref:`sec-neutral_mixed` species-level component.
+
 
 
 Collision frequency selection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When configured in ``multispecies``
-mode (default), all collision frequencies for solved collisions of a particular 
+mode (default), all collision frequencies for solved collisions of a particular
 species are counted, e.g. electron conduction would include ``ee``, ``ei`` and ``en``
 collisions, and ion conduction would include ``ii``, ``ie``, ``in`` and ``CX``.
 In this way, the closure is similar to that used in UEDGE and has
 a way to account for multiple ion species.
 Note that any of the collisions can be disabled (see next section).
 
-For code comparison purposes, it can be useful to reproduce exact Braginskii 
+For code comparison purposes, it can be useful to reproduce exact Braginskii
 closure, e.g. featuring only self-collisions for conduction and viscosity.
 This is enabled by changing the mode to ``braginskii``. Note that this will be invalid
 for simulations with multiple ion species.
@@ -77,7 +77,7 @@ being a top level component, e.g.:
    viscosity_collisions_mode = braginskii
 
 In addition to the parallel closure, there is also a collision frequency choice
-for neutral diffusion, which is present both in ``neutral_parallel_diffusion`` (1D) 
+for neutral diffusion, which is present both in ``neutral_parallel_diffusion`` (1D)
 and ``neutral_mixed`` (2D). In this case, there are again two choices:
 ``multispecies`` features all enabled collisions, while ``afn`` selects
 only ionisation and charge exchange, consistent with the AFN (Advanced Fluid Neutral)
@@ -91,7 +91,7 @@ work in `N. Horsten Nucl. Fusion 57 (11) 116043 (2017) <https://doi.org/10.1088/
    type = neutral_mixed
    diffusion_collisions_mode = afn
 
-While ``neutral_parallel_diffusion`` is a top level component and must be set under its own 
+While ``neutral_parallel_diffusion`` is a top level component and must be set under its own
 header, e.g.:
 
 .. code-block:: ini
@@ -124,12 +124,12 @@ By default, the following collisions are enabled:
    neutral_neutral = true
 
 ``electon_neutral`` collisions are disabled as they are are typically
-a very minor contributor, while ``ion_neutral`` collisions are disabled as 
+a very minor contributor, while ``ion_neutral`` collisions are disabled as
 they are already accounted for by charge exchange which is enabled by default.
 
 All of the collision frequencies are added to the state in ``species["collision_frequencies"]``.
 They are also available as diagnostics, e.g. ``Kd+e_coll`` is the ion-electron collision
-frequency. 
+frequency.
 
 Theory
 ----------
@@ -144,14 +144,14 @@ Debye length :math:`\lambda_D`
 .. math::
 
    \lambda_D = \sqrt{\frac{\epsilon_0 T_e}{n_e e}}
-   
+
 Coulomb logarithm, from [NRL formulary 2019], adapted to SI units
 
 - For thermal electron-electron collisions
 
   .. math::
 
-     \ln \lambda_{ee} = 30.4 - \frac{1}{2} \ln\left(n_e\right) + \frac{5}{4}\ln\left(T_e\right) - \sqrt{10^{-5} + \left(\ln T_e - 2\right)^2 / 16} 
+     \ln \lambda_{ee} = 30.4 - \frac{1}{2} \ln\left(n_e\right) + \frac{5}{4}\ln\left(T_e\right) - \sqrt{10^{-5} + \left(\ln T_e - 2\right)^2 / 16}
 
   where the coefficient (30.4) differs from the NRL value due to
   converting density from cgs to SI units (:math:`30.4 = 23.5 -
@@ -168,9 +168,9 @@ Coulomb logarithm, from [NRL formulary 2019], adapted to SI units
                               31 - \frac{1}{2}\ln\left(n_e\right) + \ln\left(T_e\right) & \textrm{if } T_im_e/m_i < 10Z^2 < T_e \\
                               23 - \frac{1}{2}\ln\left(n_i\right) + \frac{3}{2}\ln\left(T_i\right) - \ln\left(Z^2\mu\right) & \textrm{if } T_e < T_im_e/m_i \\
                               \end{array}\right.
-     
+
 - Mixed ion-ion collisions
-  
+
   .. math::
 
      \ln \lambda_{ii'} = 29.91 - ln\left[\frac{ZZ'\left(\mu + \mu'\right)}{\mu T_{i'} + \mu'T_i}\left(\frac{n_iZ^2}{T_i} + \frac{n_{i'} Z'^2}{T_{i'}}\right)^{1/2}\right]
@@ -197,12 +197,12 @@ Note that with this definition we recover the `Braginskii expressions
 <https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html>`_
 for e-i and i-i collision times.
 
-The electron-electron collision time definition follows Braginskii (note that Fitzpatrick uses 
+The electron-electron collision time definition follows Braginskii (note that Fitzpatrick uses
 a different definition in his `notes <https://farside.ph.utexas.edu/teaching/plasma/Plasma/node41.html>`_,
 these are not consistent with Braginskii):
 
 .. math::
-   \nu_{ee} = \frac{ln \Lambda e^4 n_e} { 12 \pi^{3/2} \varepsilon_0^2 m_{e}^{1/2} T_{e}^{3/2} } 
+   \nu_{ee} = \frac{ln \Lambda e^4 n_e} { 12 \pi^{3/2} \varepsilon_0^2 m_{e}^{1/2} T_{e}^{3/2} }
 
 For conservation of momentum, the collision frequencies :math:`\nu_{ab}` and :math:`\nu_{ba}` are
 related by:
@@ -216,7 +216,7 @@ related by:
   *Note*: These are disabled by default. If enabled, care is needed to
   avoid double-counting collisions in atomic reactions e.g charge-exchange
   reactions.
-  
+
   The cross-section for elastic collisions between charged and neutral
   particles can vary significantly. Here for simplicity we just take
   a value of :math:`5\times 10^{-19}m^2` from the NRL formulary.
@@ -224,11 +224,11 @@ related by:
 - Neutral-neutral collisions
 
   *Note* This is enabled by default.
-  
+
   The cross-section is given by
 
 .. math::
-     
+
    \sigma = \pi \left(\frac{d_1 + d_2}{2}\right)^2
 
 where :math:`d_1` and :math:`d_2` are the kinetic diameters of the two
