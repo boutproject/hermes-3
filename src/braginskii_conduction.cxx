@@ -90,8 +90,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
 
   std::vector<std::string> coll_types;
 
-  substitutePermissions("input_vars",
-                        {"AA", "density", "temperature", "pressure"});
+  substitutePermissions("input_vars", {"AA", "density", "temperature", "pressure"});
   substitutePermissions("output_vars",
                         {"energy_source", "kappa_par", "energy_flow_ylow"});
   std::vector<std::string> species;

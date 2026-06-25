@@ -577,7 +577,7 @@ The `name` is a string labelling the instance. The `alloptions` tree contains at
 
 * ``alloptions[name]`` options for this instance
 * ``alloptions['units']``
-  
+
 All component constructors must pass a `Permissions` object to the
 constructor on the `Component::Component` base class. This specifies
 which variables will be read/written by the `Component::transform`

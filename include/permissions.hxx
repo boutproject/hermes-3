@@ -142,7 +142,7 @@ public:
   ///     permissions.setAccess("species:he:density",
   ///                           {Regions::Nowhere, Regions::All,
   ///                           Regions::Interior, Regions::Nowhere})
-  /// 
+  ///
   /// or, equivalently,
   ///
   ///     permissions.setAccess("species:he:density",

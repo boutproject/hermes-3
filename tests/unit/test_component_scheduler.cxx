@@ -12,7 +12,6 @@ private:
     state["answer"].getWritable() = 42;
   }
 };
-  
 
 struct TestMultiply : public Component {
   TestMultiply(const std::string&, Options&, Solver*)
@@ -22,8 +21,7 @@ private:
   void transform_impl(GuardedOptions& state) override {
     // Note: Using set<>() and get<>() for quicker access, avoiding printing
     //       getNonFinal needs to be used because we set the value afterwards
-    set(state["answer"],
-        getNonFinal<int>(state["answer"]) * 2);
+    set(state["answer"], getNonFinal<int>(state["answer"]) * 2);
   }
 };
 

@@ -25,16 +25,16 @@ In 1D, Hermes-3 follows a single flux tube, typically from midplane to target.
 The code inherits a lot of capability and convention from the code `SD1D
 <https://github.com/boutproject/SD1D/>`_ - see `Dudson 2019
 <https://iopscience.iop.org/article/10.1088/1361-6587/ab1321/meta>`_. for a good description
-of the equations and capabilities. Note that SD1D features a "plasma" pressure equation, 
+of the equations and capabilities. Note that SD1D features a "plasma" pressure equation,
 combining the ion and electron pressures, which are separate in Hermes-3.
 
 There is an `xHermes 1D post-processing example
 <https://github.com/boutproject/xhermes/blob/main/examples/1d-postprocessing.ipynb>`_
 to guide you through results analysis.
 
-For published Hermes-1D applications, see `Body 2024 
+For published Hermes-1D applications, see `Body 2024
 <https://www.sciencedirect.com/science/article/pii/S2352179124002424>`_
-and `Holt 2024 <https://iopscience.iop.org/article/10.1088/1741-4326/ad4f9e/meta>`_. 
+and `Holt 2024 <https://iopscience.iop.org/article/10.1088/1741-4326/ad4f9e/meta>`_.
 
 
 
@@ -112,7 +112,7 @@ The reactions component is a group, which lists the reactions included:
           )
 
 
-.. 
+..
    1D-te-ti
    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -124,7 +124,7 @@ The reactions component is a group, which lists the reactions included:
       :name: 1d_te_ti
       :alt:
       :width: 60%
-      
+
       Evolution of pressure, starting from a top hat. Input in ``examples/1D-te-ti``.
 
    To run this example:
@@ -207,10 +207,10 @@ The reactions component is a group, which lists the reactions included:
 Simulations where the dynamics along the magnetic field is not
 included, or only included in a parameterised way as sources or
 sinks. The field line direction is then "into the page", and the
-domain represents a slice somewhere along the field line, e.g. 
+domain represents a slice somewhere along the field line, e.g.
 at the midplane.
 These are useful for the study of the basic physics of plasma
-"blobs" / filaments, and tokamak edge turbulence. 
+"blobs" / filaments, and tokamak edge turbulence.
 
 .. _sec-Blob2d:
 
@@ -225,7 +225,7 @@ closure is used for the parallel current.
    :name: fig-blob2d
    :alt:
    :scale: 50
-   
+
    Electron density Ne at three times, showing propagation to the right
 
 The model components are
@@ -318,7 +318,7 @@ current.
    :name: fig-blob2d-te-ti
    :alt:
    :scale: 50
-   
+
    Electron density Ne at three times, showing propagation to the right and downwards
 
 The model components are
@@ -342,7 +342,7 @@ The ion component sets the ion density from the electron density, by
 using the quasineutrality of the plasma; the ion pressure (``Ph+``) is evolved.
 
 .. code-block:: ini
-   
+
    [h+]
    type = quasineutral, evolve_pressure
 
@@ -528,7 +528,7 @@ boundary conditions on `Pe`:
 
    [Pe]
    function = 1
-   bndry_core = dirichlet(1.0)  # Core boundary high pressure 
+   bndry_core = dirichlet(1.0)  # Core boundary high pressure
    bndry_all = neumann
 
 That sets the pressure initially uniform, to a normalised value of 1,
@@ -598,9 +598,9 @@ recycling-dthene
 
 Warning
    Impurity transport can be notoriously computationally expensive to run.
-   If you are interested in 2D transport simulations, consider starting 
+   If you are interested in 2D transport simulations, consider starting
    with the much simpler ``recycling`` example (not yet in documentation)
-   
+
 The ``recycling-dthene`` example includes cross-field diffusion,
 parallel flow and heat conduction, collisions between species, sheath
 boundary conditions and recycling. It simulates the density, parallel
@@ -626,14 +626,14 @@ which couple multiple species.
                  recycling, reactions, braginskii_conduction)
 
 Note that long lists like this can be split across multiple lines by
-using parentheses. 
-                 
+using parentheses.
+
 Each ion species has a set of components, to evolve the density,
 momentum and pressure. Anomalous diffusion adds diffusion of
 particles, momentum and energy. For example deuterium ions contain:
 
 .. code-block:: ini
-   
+
    [d+]
    type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion
    AA = 2
@@ -642,7 +642,7 @@ particles, momentum and energy. For example deuterium ions contain:
 Atomic reactions are specified as a list:
 
 .. code-block:: ini
-   
+
    [reactions]
    type = (
         d + e -> d+ + 2e,   # Deuterium ionisation
@@ -738,7 +738,7 @@ divergence of the diamagnetic current is written as
 .. math::
 
    \nabla\cdot\mathbf{J}_d = \nabla\cdot\left[\left(p_e + p_i\right)\nabla\times\frac{\mathbf{b}}{B}\right]
-   
+
 
 
 The input file sets the number of output steps to take and the time
@@ -811,7 +811,5 @@ TCV-X21
 ~~~~~~~~~~~~
 
 An example based on the TCV validation in `Oliveira, Body et al. 2022
-<https://iopscience.iop.org/article/10.1088/1741-4326/ac4cde/meta>`_, 
+<https://iopscience.iop.org/article/10.1088/1741-4326/ac4cde/meta>`_,
 located in located in ``examples\tcv-x21``.
-
-
