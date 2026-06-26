@@ -85,8 +85,9 @@ struct RateHelper {
 
     // Extract and store reactant densities
     for (const auto& reactant : reactant_names) {
-      this->reactant_densities[reactant] =
-          &state["species"][reactant]["density"].GetRef<Field3D>();
+      // Hold the wrapper in a local so the referenced field lifetime is obvious to GCC.
+      const GuardedOptions reactant_density = state["species"][reactant]["density"];
+      this->reactant_densities[reactant] = &reactant_density.GetRef<Field3D>();
     }
 
     // Compute / extract fields that are required as parameters for the rate calculations
@@ -95,7 +96,9 @@ struct RateHelper {
                     "RateParamsTypes::ET not implemented");
     } else if constexpr (RateParamsType == RateParamsTypes::nT) {
       for (auto field_lbl : {"e:density", "e:temperature"}) {
-        add_rate_param(field_lbl, state["species"][field_lbl].template GetRef<Field3D>());
+        // Split the access to avoid dangling-reference warnings through temporary wrappers.
+        const GuardedOptions rate_param = state["species"][field_lbl];
+        add_rate_param(field_lbl, rate_param.template GetRef<Field3D>());
       }
     } else if constexpr (RateParamsType == RateParamsTypes::T) {
       calc_Teff(state, units, reactant_names, Teff_storage);
@@ -292,8 +295,9 @@ private:
     Teff = 0.0;
     BoutReal Tnorm = get<BoutReal>(units["eV"]);
     for (auto& sp : heavy_reactant_names) {
-      const Field3D& temperature =
-          state["species"][sp]["temperature"].template GetRef<Field3D>();
+      // Keep the child option alive before taking a reference to its stored field.
+      const GuardedOptions temperature_opt = state["species"][sp]["temperature"];
+      const Field3D& temperature = temperature_opt.template GetRef<Field3D>();
       BoutReal AA = get<BoutReal>(state["species"][sp]["AA"]);
       Teff += (temperature / AA) * Tnorm;
     }

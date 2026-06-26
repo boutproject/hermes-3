@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include <bout/assert.hxx>
 #include <bout/bout_types.hxx>
@@ -25,7 +26,9 @@
 #include "../include/braginskii_ion_viscosity.hxx"
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/guarded_options.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/permissions.hxx"
 
 using bout::globals::mesh;
 
@@ -50,7 +53,7 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-8);
 
-  BoutReal temperature_floor =
+  const BoutReal temperature_floor =
       options["temperature_floor"].doc("Low temperature scale").withDefault<BoutReal>(0.1)
       / get<BoutReal>(alloptions["units"]["eV"]);
 
@@ -117,7 +120,7 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
     const BoutReal Bnorm = units["Tesla"];
     const BoutReal Lnorm = units["meters"];
 
-    auto coord = mesh->getCoordinates();
+    const auto* coord = mesh->getCoordinates();
 
     Curlb_B.x /= Bnorm;
     Curlb_B.y *= SQ(Lnorm);
@@ -148,7 +151,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
   GuardedOptions allspecies = state["species"];
 
-  auto coord = mesh->getCoordinates();
+  const auto* coord = mesh->getCoordinates();
   const Field2D Bxy = coord->Bxy;
   const Field2D sqrtB = sqrt(Bxy);
   const Field2D Grad_par_logB = Grad_par(log(Bxy));
@@ -282,10 +285,9 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         const Field3D q_fl = eta_limit_alpha * P;    // Flux limit
 
         eta = eta / (1. + softFloor(q_cl, 1e-15) / softFloor(q_fl, 1e-15));
-
-        eta.getMesh()->communicate(eta);
-        eta.applyBoundary("neumann");
       }
+      eta.getMesh()->communicate(eta);
+      eta.applyBoundary("neumann");
 
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
@@ -316,7 +318,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     // Need electrostatic potential for ExB flow
     const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    Field3D Nlim = softFloor(N, density_floor);
+    const Field3D Nlim = softFloor(N, density_floor);
 
     // Perpendicular ion stress tensor
     // 0.96 P tau kappa * (V_E + V_di + 1.61 b x Grad(T)/B )
@@ -359,7 +361,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     Pi_ci.applyBoundary("neumann");
 
 #if CHECKLEVEL >= 1
-    for (auto& i : Pi_cipar.getRegion("RGN_NOBNDRY")) {
+    for (const auto& i : Pi_cipar.getRegion("RGN_NOBNDRY")) {
       if (!std::isfinite(Pi_cipar[i])) {
         throw BoutException("{} Pi_cipar non-finite at {}.\n", species_name, i);
       }
