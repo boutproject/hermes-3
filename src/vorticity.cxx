@@ -284,37 +284,37 @@ void Vorticity::transform(Options& state) {
   // Vort.applyBoundary("dirichlet");
   Vort.applyBoundary();
 
-  if (Vort.hasParallelSlices()) {
-    Field3D &Vort_ydown = Vort.ydown();
-    Field3D &Vort_yup = Vort.yup();
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        // Vort_ydown(r.ind, mesh->ystart - 1, jz) = 2 * Vort(r.ind, mesh->ystart, jz) - Vort_yup(r.ind, mesh->ystart + 1, jz);
-        Vort_ydown(r.ind, mesh->ystart - 1, jz) = Vort(r.ind, mesh->ystart, jz); // TODO: <! Check if this is correct?
-      }
-    }
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        // Vort_yup(r.ind, mesh->yend + 1, jz) = 2 * Vort(r.ind, mesh->yend, jz) - Vort_ydown(r.ind, mesh->yend - 1, jz);
-        Vort_yup(r.ind, mesh->yend + 1, jz) = Vort(r.ind, mesh->yend, jz);
-      }
-    }
-  } else {
-    Field3D Vort_fa = toFieldAligned(Vort);
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        // Vort_fa(r.ind, mesh->ystart - 1, jz) = 2 * Vort_fa(r.ind, mesh->ystart, jz) - Vort_fa(r.ind, mesh->ystart + 1, jz);
-        Vort_fa(r.ind, mesh->ystart - 1, jz) = Vort_fa(r.ind, mesh->ystart, jz); // Neumann BC
-      }
-    }
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        // Vort_fa(r.ind, mesh->yend + 1, jz) = 2 * Vort_fa(r.ind, mesh->yend, jz) - Vort_fa(r.ind, mesh->yend - 1, jz);
-        Vort_fa(r.ind, mesh->yend + 1, jz) = Vort_fa(r.ind, mesh->yend, jz); // Neumann BC
-      }
-    }
-    Vort = fromFieldAligned(Vort_fa);
-  }
+  // if (Vort.hasParallelSlices()) {
+  //   Field3D &Vort_ydown = Vort.ydown();
+  //   Field3D &Vort_yup = Vort.yup();
+  //   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+  //     for (int jz = 0; jz < mesh->LocalNz; jz++) {
+  //       // Vort_ydown(r.ind, mesh->ystart - 1, jz) = 2 * Vort(r.ind, mesh->ystart, jz) - Vort_yup(r.ind, mesh->ystart + 1, jz);
+  //       Vort_ydown(r.ind, mesh->ystart - 1, jz) = Vort(r.ind, mesh->ystart, jz); // TODO: <! Check if this is correct?
+  //     }
+  //   }
+  //   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+  //     for (int jz = 0; jz < mesh->LocalNz; jz++) {
+  //       // Vort_yup(r.ind, mesh->yend + 1, jz) = 2 * Vort(r.ind, mesh->yend, jz) - Vort_ydown(r.ind, mesh->yend - 1, jz);
+  //       Vort_yup(r.ind, mesh->yend + 1, jz) = Vort(r.ind, mesh->yend, jz);
+  //     }
+  //   }
+  // } else {
+  //   Field3D Vort_fa = toFieldAligned(Vort);
+  //   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+  //     for (int jz = 0; jz < mesh->LocalNz; jz++) {
+  //       // Vort_fa(r.ind, mesh->ystart - 1, jz) = 2 * Vort_fa(r.ind, mesh->ystart, jz) - Vort_fa(r.ind, mesh->ystart + 1, jz);
+  //       Vort_fa(r.ind, mesh->ystart - 1, jz) = Vort_fa(r.ind, mesh->ystart, jz); // Neumann BC
+  //     }
+  //   }
+  //   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+  //     for (int jz = 0; jz < mesh->LocalNz; jz++) {
+  //       // Vort_fa(r.ind, mesh->yend + 1, jz) = 2 * Vort_fa(r.ind, mesh->yend, jz) - Vort_fa(r.ind, mesh->yend - 1, jz);
+  //       Vort_fa(r.ind, mesh->yend + 1, jz) = Vort_fa(r.ind, mesh->yend, jz); // Neumann BC
+  //     }
+  //   }
+  //   Vort = fromFieldAligned(Vort_fa);
+  // }
 
 
   // Both 2D and 3D fields are kept, though the 3D field
@@ -725,7 +725,7 @@ void Vorticity::transform(Options& state) {
   }
 
   // Ensure that potential is set in the communication guard cells
-  mesh->communicate(phi);
+  mesh->communicate(Vort, phi);
 
   // Vorticity equation
   ddt(Vort) = 0.0;
