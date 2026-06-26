@@ -1,13 +1,13 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 60d34e1ad..9dc804d50 100644
+index 194f97e84..8f5e8b65c 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -51,7 +51,7 @@ message(STATUS "Configuring BOUT++ version ${BOUT_FULL_VERSION}")
- project(BOUT++
+@@ -61,7 +61,7 @@ project(
+   BOUT++
    DESCRIPTION "Fluid PDE solver framework"
    VERSION ${BOUT_CMAKE_ACCEPTABLE_VERSION}
--  LANGUAGES CXX)
-+  LANGUAGES C CXX)
- 
+-  LANGUAGES CXX
++  LANGUAGES C CXX
+ )
+
  include(CMakeDependentOption)
- 
