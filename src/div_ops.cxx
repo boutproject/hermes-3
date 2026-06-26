@@ -1,6 +1,6 @@
 /*
-    Copyright B.Dudson, J.Leddy, University of York, September 2016
-              email: benjamin.dudson@york.ac.uk
+    Copyright 2016 - 2026 BOUT++ contributors
+              email: dudson2@llnl.gov
 
     This file is part of Hermes.
 
@@ -22,17 +22,24 @@
 #include <mpi.h>
 
 #include "../include/div_ops.hxx"
+#include "../include/hermes_build_config.hxx"
 
 #include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/coordinates.hxx>
 #include <bout/derivs.hxx>
+#include <bout/field.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/globals.hxx>
 #include <bout/mesh.hxx>
 #include <bout/output.hxx>
+#include <bout/region.hxx>
 #include <bout/utils.hxx>
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 using bout::globals::mesh;
 

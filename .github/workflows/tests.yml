@@ -30,7 +30,7 @@ jobs:
       matrix:
         config:
           - name: "CMake default options"
-            os: ubuntu-22.04
+            os: ubuntu-latest
         build_type:
           - cmake_build_type: Debug
             test_type: unit
@@ -82,7 +82,7 @@ jobs:
 
       - name: Install pip packages
         run: |
-          ./.pip_install_for_tests.sh 'netcdf4~=1.5' boutdata boututils
+          ./ci/pip_install.sh
           # Add the pip install location to the runner's PATH
           echo ~/.local/bin >> $GITHUB_PATH
       - name: Run tests

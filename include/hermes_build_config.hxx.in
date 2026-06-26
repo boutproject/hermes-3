@@ -10,6 +10,12 @@ namespace hermes {
   /// Slope limiter to use in advection operators
   using Limiter=FV::@HERMES_SLOPE_LIMITER@;
   const char* const limiter_typename = "@HERMES_SLOPE_LIMITER@";
+
+  // Method used in Div_par_K_Grad_par_mod
+  enum class ConductionMethod {Original, ProductJK, Harmonic};
+
+  constexpr ConductionMethod conduction_method = ConductionMethod::@HERMES_CONDUCTION_METHOD@;
+  const char* const conduction_typename = "@HERMES_CONDUCTION_METHOD@";
 }
 
 #endif // HERMES_BUILD_CONFIG_HXX

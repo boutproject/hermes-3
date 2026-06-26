@@ -147,6 +147,7 @@ public:
         //    (0, -1) Y lower boundary (inner lower target)
 
         // Distance between final cell centre and inner guard cell centre in normalised units
+
         BoutReal distance = 0.5
                             * (dr(bndry->x, bndry->y, zk)
                                + dr(bndry->x - bndry->bx, bndry->y - bndry->by, zk));
@@ -184,6 +185,9 @@ int Hermes::init(bool restarting) {
   output.write("Slope limiter: {}\n", hermes::limiter_typename);
   options["slope_limiter"] = hermes::limiter_typename;
   options["slope_limiter"].setConditionallyUsed();
+  output.write("Conduction method: {}\n", hermes::conduction_typename);
+  options["conduction_method"] = hermes::conduction_typename;
+  options["conduction_method"].setConditionallyUsed();
 
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);

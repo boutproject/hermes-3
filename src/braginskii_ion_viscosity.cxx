@@ -277,10 +277,9 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
         eta = eta / (1. + abs(q_cl / q_fl));
-
-        eta.getMesh()->communicate(eta);
-        eta.applyBoundary("neumann");
       }
+      eta.getMesh()->communicate(eta);
+      eta.applyBoundary("neumann");
 
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))

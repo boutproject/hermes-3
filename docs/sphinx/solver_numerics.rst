@@ -9,7 +9,7 @@ Solvers
 
 While Hermes-3 has access to any solver within BOUT++ (`see the long
 list in the documentation <https://
-bout-dev.readthedocs.io/en/stable/user_docs/time_integration.html>`__), 
+bout-dev.readthedocs.io/en/stable/user_docs/time_integration.html>`__),
 the development and optimisation efforts focuses on two solvers:
 
 CVODE
@@ -21,28 +21,28 @@ CVODE
    in time as possible and take long timesteps. Please
    see the `developer page <https://computing.llnl.gov/
    projects/sundials/cvode>`__ for details. CVODE is required for 3D
-   turbulence simulations and currently gives better results in 2D 
+   turbulence simulations and currently gives better results in 2D
    simulations. `The BOUT++ implementation is here. <https
    ://github.com/mikekryjak/BOUT-dev/blob/master/src/solver/impls/cvode/cvode.cxx>`__
 
 beuler
    A first-order in time implementation of the backward Euler method.
-   This is implemented using the `SNES <https://petsc.org/release/manual/snes/>`__ 
-   nonlinear solver in `PETSc <https://petsc.org/release/>`__, and 
+   This is implemented using the `SNES <https://petsc.org/release/manual/snes/>`__
+   nonlinear solver in `PETSc <https://petsc.org/release/>`__, and
    currently uses a GMRES linear solver and an ILU-type preconditioner
-   in `hypre <https://hypre.readthedocs.io/en/latest/ch-intro.html>`__. 
+   in `hypre <https://hypre.readthedocs.io/en/latest/ch-intro.html>`__.
    The algebraic preconditioner allows for extreme speedups over CVODE,
    and can already be used in 1D with good results. 2D performance is
-   highly mixed and still in development. 3D use is not feasible as the 
+   highly mixed and still in development. 3D use is not feasible as the
    matrix size precludes the use of algebraic preconditioners.
    Due to its first order nature, it will be less accurate for time-dependent
    problems, and it is mostly intended to solve for steady-state problems.
    `The BOUT++ implementation is here. <https://github.com/mikekryjak/
-   BOUT-dev/blob/master/src/solver/impls/snes/snes.cxx>`__. See the 
+   BOUT-dev/blob/master/src/solver/impls/snes/snes.cxx>`__. See the
    higher level BOUT++ PETSc implementation `here <https://github.com
    /mikekryjak/BOUT-dev/blob/master/src/solver/impls/petsc/petsc.cxx>`__.
 
-Both CVODE and beuler have an adaptive timestepper and will take as long a 
+Both CVODE and beuler have an adaptive timestepper and will take as long a
 timestep as the Newton iteration failure rate will allow.
 
 Configuring CVODE
@@ -71,11 +71,11 @@ mxorder = 3
    for preventing the solver from getting "stuck" at high order with a
    small timestep. You can alternatively set ``stablimdet = true`` to
    enable automatic `stability limit detection <https://sundials.readthedocs
-   .io/en/latest/cvode/Mathematics_link.html#cvode-mathematics-stablimit>`__ 
+   .io/en/latest/cvode/Mathematics_link.html#cvode-mathematics-stablimit>`__
    to prevent this.
 
 atol = 1e-7
-   Absolute tolerance for the solver. This is the maximum absolute error 
+   Absolute tolerance for the solver. This is the maximum absolute error
    allowed and is required to ensure accuracy/stability when variables are small.
    Available in all solvers.
 
@@ -105,9 +105,9 @@ Hypre Euclid preconditioner:
 
 
 There is an additional option ``stol`` which allows the Newton iteration
-to "converge" if the simulation has only changed by a small amount. 
-This enables the simulation to iterate almost instantly if it detects that the 
-results aren't changing. 
+to "converge" if the simulation has only changed by a small amount.
+This enables the simulation to iterate almost instantly if it detects that the
+results aren't changing.
 
 PETSc can print quite extensive performance diagnostics. These can be enabled
 by putting in the BOUT.inp options file:
@@ -120,18 +120,18 @@ by putting in the BOUT.inp options file:
 This section can also be used to set other PETSc flags, just omitting
 the leading ``-`` from the PETSc option.
 
-   
+
 
 Numerics
 ------------------------------
 
-Slope (flux) limiters 
+Slope (flux) limiters
 ~~~~~~~~~~~~~~~~~~~~~
 
 The choice of slope limiter is important: a dissipative limiter increases
 numerical dissipation but can substantially improve solver stability and
-robustness. See :ref:`sec-slope-limiter-settings` for how to change the 
-limiter. The default is ``MC``, which has a good balance between 
+robustness. See :ref:`sec-slope-limiter-settings` for how to change the
+limiter. The default is ``MC``, which has a good balance between
 stability and accuracy.
 
 Dynamics parallel to the magnetic field are solved using a 2nd-order
@@ -144,9 +144,35 @@ velocity in the direction of the magnetic field, and is aligned with
 one of the mesh coordinate directions.  All quantities are cell
 centered.
 
-Cell edge values are by default reconstructed using a MinMod method
-(other limiters are available, including 1st-order upwind, Monotonized
-Central, and Superbee). If :math:`f_i` is the value of field :math:`f` at the
+Cell edge values are reconstructed using a configurable limiter. The
+available compile-time choices of ``HERMES_SLOPE_LIMITER`` are:
+
+``MC``
+   Monotonised central second-order limiter. This is the default.
+
+``VanAlbada``
+   Symmetric second-order limiter using a smooth approximation to the
+   usual limiter switch. This is often friendlier to nonlinear solvers
+   and finite-difference Jacobian calculations because the reconstruction
+   remains differentiable at extrema.
+
+``WENO3``
+   Third-order Jiang-Shu WENO reconstruction on the same three-point stencil.
+   This is generally smoother and less dissipative than TVD limiters, but it
+   does not enforce strict monotonicity.
+
+``MinMod``
+   More dissipative second-order TVD limiter.
+
+``Upwind``
+   First-order upwind reconstruction. This is the most dissipative, but is
+   sometimes useful for robustness tests.
+
+``Superbee``
+   Aggressive second-order TVD limiter with reduced diffusion in sharp fronts,
+   but it can be less robust.
+
+If :math:`f_i` is the value of field :math:`f` at the
 center of cell :math:`i`, then using MinMod slope limiter the gradient :math:`g_i`
 inside the cell is:
 
@@ -199,6 +225,47 @@ The divergence of the flux, and so the rate of change of :math:`f` in cell
 
    \nabla\cdot\left(\mathbf{b} f v_{||}\right)_{i} = \frac{1}{V_i}\left[\frac{A_{i} + A_{i+1}}{2}\Gamma_{f, i+1/2} - \frac{A_{i-1} + A_{i}}{2}\Gamma_{f, i-1/2}\right]
 
+.. _sec-slope-limiter-settings:
+
+Selecting slope limiter and conduction method
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Hermes-3 selects both the parallel advection slope limiter and the
+``Div_par_K_Grad_par_mod`` conduction discretisation at compile time
+through CMake cache options:
+
+.. code-block:: bash
+
+   cmake -S . -B build \
+     -DHERMES_SLOPE_LIMITER=MC \
+     -DHERMES_CONDUCTION_METHOD=Original
+
+``HERMES_SLOPE_LIMITER``
+   Available values are ``MC``, ``VanAlbada``, ``WENO3``, ``MinMod``,
+   ``Upwind``, and ``Superbee``.
+
+``HERMES_CONDUCTION_METHOD``
+   Selects the parallel heat conduction discretisation used in
+   :cpp:func:`Div_par_K_Grad_par_mod`. Available values are:
+
+   ``Original``
+      Separately averages :math:`K`, :math:`J`, :math:`g_{22}`, and
+      :math:`dy` at the face and then multiplies them together.
+
+   ``ProductJK``
+      Uses the same stencil as ``Original`` but averages :math:`J K`
+      together before applying the face gradient.
+
+   ``Harmonic``
+      Uses a harmonic average of the half-cell conductances
+      :math:`K J / (g_{22} dy)`. This better matches a series-resistance
+      interpretation of two adjacent half-cells and can give noticeably
+      different results when coefficients or cell sizes vary strongly.
+
+The selected values are reported at startup in the Hermes-3 log and are
+also recorded in the options tree as ``slope_limiter`` and
+``conduction_method``.
+
 Controlling Lax flux strength with sound_speed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -208,14 +275,14 @@ Controlling Lax flux strength with sound_speed
 
 By default, the Lax flux strength is calculated based on the sound speed
 of each species individually. Instead, the ``sound_speed`` component can be used
-component to sum the pressure of all species and divide by the sum of the mass density 
+component to sum the pressure of all species and divide by the sum of the mass density
 of all species:
 
 .. math::
-   
+
    c_s = \sqrt{\sum_i P_i / \sum_i m_in_i}
 
-This is set in the state as `sound_speed`. It is highly recommended to use 
+This is set in the state as `sound_speed`. It is highly recommended to use
 this when evolving electron momentum, as the electrons will represent the fastest
 sound speed in the system, increasing the amount of numerical damping from the Lax flux.
 This is enabled by default.
@@ -251,5 +318,3 @@ layers that can form:
    \Gamma_{nv, i+1/2}^{boundary} = n_{i,R}v_{||i,R}v_{||i+1/2} + a_{max}\left[n_{i,R}v_{||i,R} - n_{i+1/2}v_{||i+1/2}\right]
 
 where :math:`n_{i+1/2} = \frac{1}{2}\left(n_{i} + n_{i+1}\right)`.
-
-
