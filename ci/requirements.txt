@@ -1,0 +1,7 @@
+scipy~=1.4
+numpy~=1.18
+netcdf4~=1.5
+boututils
+boutdata @ git+https://github.com/boutproject/boutdata.git@a4b429965d15e6e2b09abc8d400ee840d01c1aac
+xbout @ git+https://github.com/boutproject/xbout.git@8942a1c354096596e446d80165eabcc812d4786c
+xhermes @ git+https://github.com/boutproject/xhermes.git@4fdfb574ab593dddc859676727f289e0e2134d58

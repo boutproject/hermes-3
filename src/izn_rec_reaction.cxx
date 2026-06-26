@@ -105,12 +105,17 @@ void IznRecReaction::transform_additional(GuardedOptions& state,
   // Extract heavy reactant properties
   GuardedOptions hr = state["species"][this->heavy_reactant];
   const BoutReal AA_rh = get<BoutReal>(hr["AA"]);
-  const Field3D& n_rh = hr["density"].GetRef<Field3D>();
-  const Field3D& v_rh = hr["velocity"].GetRef<Field3D>();
+  // Keep child options alive so compilers can see the returned Field3D refs stay valid.
+  const GuardedOptions hr_density = hr["density"];
+  const GuardedOptions hr_velocity = hr["velocity"];
+  const Field3D& n_rh = hr_density.GetRef<Field3D>();
+  const Field3D& v_rh = hr_velocity.GetRef<Field3D>();
 
   // Extract heavy product properties
   GuardedOptions hp = state["species"][this->heavy_product];
-  const Field3D& v_hp = hp["velocity"].GetRef<Field3D>();
+  // Avoid -Wdangling-reference false positives from chaining through temporary wrappers.
+  const GuardedOptions hp_velocity = hp["velocity"];
+  const Field3D& v_hp = hp_velocity.GetRef<Field3D>();
 
   // Kinetic energy transfer to thermal energy
   //
@@ -146,7 +151,9 @@ void IznRecReaction::transform_additional(GuardedOptions& state,
 
   // Energy source for electrons due to pop change
   GuardedOptions electron = state["species"]["e"];
-  const Field3D& T_e = electron["temperature"].GetRef<Field3D>();
+  // Keep the GuardedOptions wrapper in scope before taking references from it.
+  const GuardedOptions electron_temperature = electron["temperature"];
+  const Field3D& T_e = electron_temperature.GetRef<Field3D>();
   const int e_pop_change = this->parser->pop_change("e");
   if (e_pop_change != 0) {
     if (electron.isSet("velocity")) {
@@ -158,14 +165,16 @@ void IznRecReaction::transform_additional(GuardedOptions& state,
       // For recombination:
       // Electrons with some velocity are incorporated into a species with their
       // kinetic energy converted to an internal energy source of that species.
-      const Field3D& v_e = electron["velocity"].GetRef<Field3D>();
+      const GuardedOptions electron_velocity = electron["velocity"];
+      const Field3D& v_e = electron_velocity.GetRef<Field3D>();
       const BoutReal m_e = get<BoutReal>(electron["AA"]);
       add(electron["energy_source"], 0.5 * m_e * e_pop_change * rate * SQ(v_e));
     }
   }
 
   // Electron energy loss (radiation, ionisation potential)
-  const Field3D& n_e = electron["density"].GetRef<Field3D>();
+  const GuardedOptions electron_density = electron["density"];
+  const Field3D& n_e = electron_density.GetRef<Field3D>();
   auto region_no_bndry = n_e.getRegion("RGN_NOBNDRY");
 
   Field3D energy_loss = cellAverage(

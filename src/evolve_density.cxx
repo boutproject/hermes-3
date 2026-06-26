@@ -246,10 +246,7 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
 void EvolveDensity::finally(const Options& state) {
 
   const auto& species = state["species"][name];
-
-  // Get density boundary conditions
-  // but retain densities which fall below zero
-  N.setBoundaryTo(get<Field3D>(species["density"]));
+  N = get<Field3D>(species["density"]);
 
   if ((fabs(charge) > 1e-5) and state.isSection("fields")
       and state["fields"].isSet("phi")) {

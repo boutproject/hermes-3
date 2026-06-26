@@ -414,12 +414,20 @@ endif()
 
 # Compile-time options
 
-set(SLOPE_LIMITERS MinMod MC Upwind Superbee)
+set(SLOPE_LIMITERS MC VanAlbada WENO3 MinMod Upwind Superbee)
 set(HERMES_SLOPE_LIMITER
     MC
     CACHE STRING "Set advection slope limiter")
 set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
 message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")
+
+set(CONDUCTION_METHODS Original ProductJK Harmonic)
+set(HERMES_CONDUCTION_METHOD
+    Original
+    CACHE STRING "Parallel conduction method")
+set_property(CACHE HERMES_CONDUCTION_METHOD PROPERTY STRINGS
+                                                     ${CONDUCTION_METHODS})
+message(STATUS "Conduction method: ${HERMES_CONDUCTION_METHOD}")
 
 # Generate the build config header
 
