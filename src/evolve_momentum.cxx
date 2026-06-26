@@ -75,7 +75,6 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
 
   // Set to zero so set for output
   momentum_source = 0.0;
-  NV_err = 0.0;
 
   substitutePermissions("name", {name});
   substitutePermissions("outputs", {"velocity", "momentum"});
@@ -98,7 +97,6 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
   NV_solver = NV;  // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
-  NV_err = NV - NV_solver; // This is used in the finally() function
   set(species["momentum"], NV);
 }
 
@@ -138,7 +136,10 @@ void EvolveMomentum::finally(const Options& state) {
 
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+      Field3D NVint = AA * Nlim * V; // Evolving momentum with Nlim rather than N
+      NVint.setBoundaryTo(NV);
+
+      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NVint, phi, bndry_flux, poloidal_flows,
                                        true); // ExB drift
 
       // Parallel electric field
@@ -233,12 +234,6 @@ void EvolveMomentum::finally(const Options& state) {
     momentum_source = get<Field3D>(species["momentum_source"]);
     ddt(NV) += momentum_source;
   }
-
-  // If N < density_floor then NV and NV_solver may differ
-  // -> Add term to force NV_solver towards NV
-  // Note: This correction is calculated in transform()
-  //       because NV may be modified by electromagnetic terms
-  ddt(NV) += NV_err;
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
