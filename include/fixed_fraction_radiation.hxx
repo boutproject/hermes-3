@@ -418,6 +418,11 @@ struct FixedFractionRadiation : public Component {
       }
     }
 
+    // Zero guard cells to avoid junk numbers in output diagnostic
+    BOUT_FOR(i, radiation.getRegion("RGN_GUARDS")) {
+      radiation[i] = 0.0;  
+    }    
+
     // Remove radiation from the electron energy source
     subtract(electrons["energy_source"], radiation);
   }

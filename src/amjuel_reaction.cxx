@@ -148,6 +148,11 @@ void AmjuelReaction::transform_additional(Options& state, Field3D& reaction_rate
   energy_loss -=
       (amjuel_data.electron_heating / Tnorm) * reaction_rate * radiation_multiplier;
 
+  // Zero guard cells to avoid junk numbers in output diagnostic
+  BOUT_FOR(i, energy_loss.getRegion("RGN_GUARDS")) {
+    energy_loss[i] = 0.0;  
+  }         
+
   update_source<subtract<Field3D>>(state, "e", ReactionDiagnosticType::energy_loss,
                                    energy_loss);
 
