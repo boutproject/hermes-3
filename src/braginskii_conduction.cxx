@@ -159,7 +159,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
       } else if (conduction_collisions_mode == "multispecies") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string const collision_name = collision.second.name();
+          const std::string collision_name = collision.second.name();
 
           if ( /// Charge exchange
               (collisionSpeciesMatch(collision_name, species.name(), "", "cx", "partial"))
@@ -174,7 +174,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
       } else if (conduction_collisions_mode == "afn") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {
 
-          std::string const collision_name = collision.second.name();
+          const std::string collision_name = collision.second.name();
 
           if (species_type != SpeciesType::neutral) {
             throw BoutException("\tAFN conduction collisions mode not available for ions "
@@ -233,10 +233,9 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
 
     Field3D P = GET_VALUE(Field3D, species["pressure"]);
     P.clearParallelSlices();
-    P.setBoundaryTo(get<Field3D>(species["pressure"]));
-    Field3D const Pfloor = floor(P, 0.0); // Restricted to never go below zero
-    Field3D const T = get<Field3D>(species["temperature"]);
-    Field3D const N = get<Field3D>(species["density"]);
+    const Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
+    const Field3D T = get<Field3D>(species["temperature"]);
+    const Field3D N = get<Field3D>(species["density"]);
 
     // Calculate ion collision times
     const Field3D tau = 1. / softFloor(nu, 1e-10);
@@ -262,9 +261,9 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
        */
 
       // Spitzer-Harm heat flux
-      Field3D const q_SH = kappa_par * Grad_par(T);
+      const Field3D q_SH = kappa_par * Grad_par(T);
       // Free-streaming flux
-      Field3D const q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
+      const Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
 
       // This results in a harmonic average of the heat fluxes
       kappa_par /= (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
@@ -321,7 +320,7 @@ void BraginskiiConduction::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
-  BoutReal const Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   for (const auto& [name, diagnose] : all_diagnose) {
     if (!diagnose) {
