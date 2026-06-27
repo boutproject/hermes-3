@@ -80,9 +80,16 @@ except ImportError:
 # They will always differ between two separate runs and must not be used for
 # correctness comparisons.
 _BOUT_TIMING_VARS = {
+    # Wall-clock timing — always differ between runs
     'wall_time', 'wtime', 'wtime_comms', 'wtime_io',
     'wtime_per_rhs', 'wtime_per_rhs_e', 'wtime_per_rhs_i',
     'wtime_rhs', 'wtime_invert',
+    # RHS call counters — integer counts; differ when the adaptive
+    # timestepper takes different numbers of steps (chaotic divergence),
+    # not a physics regression
+    'ncalls', 'ncalls_e', 'ncalls_i',
+    # Solver iteration counter
+    'iteration',
 }
 
 
