@@ -52,6 +52,16 @@ except ImportError:
     sys.exit("xhermes is required: pip install xhermes")
 
 
+# Variables BOUT++ writes into every dump file that measure wall-clock timing.
+# They will always differ between two separate runs and must not be used for
+# correctness comparisons.
+_BOUT_TIMING_VARS = {
+    'wall_time', 'wtime', 'wtime_comms', 'wtime_io',
+    'wtime_per_rhs', 'wtime_per_rhs_e', 'wtime_per_rhs_i',
+    'wtime_rhs', 'wtime_invert',
+}
+
+
 # ─── helpers ─────────────────────────────────────────────────────────────────
 
 def detect_nproc(test_dir: pathlib.Path) -> int:
@@ -154,12 +164,12 @@ def compare_outputs(data_old: pathlib.Path, data_new: pathlib.Path) -> bool:
 
     vars_old = set(old_last.data_vars)
     vars_new = set(new_last.data_vars)
-    common = sorted(vars_old & vars_new)
+    common = sorted((vars_old & vars_new) - _BOUT_TIMING_VARS)
 
-    if vars_old - vars_new:
-        print(f"  [!] Variables only in OLD: {sorted(vars_old - vars_new)}")
-    if vars_new - vars_old:
-        print(f"  [!] Variables only in NEW: {sorted(vars_new - vars_old)}")
+    if vars_old - vars_new - _BOUT_TIMING_VARS:
+        print(f"  [!] Variables only in OLD: {sorted(vars_old - vars_new - _BOUT_TIMING_VARS)}")
+    if vars_new - vars_old - _BOUT_TIMING_VARS:
+        print(f"  [!] Variables only in NEW: {sorted(vars_new - vars_old - _BOUT_TIMING_VARS)}")
 
     print(f"\n  {'Variable':<30} {'max |rel diff|':>16}  {'RMS rel diff':>14}  {'max ULPs':>10}")
     print("  " + "-" * 74)
@@ -189,11 +199,15 @@ def compare_outputs(data_old: pathlib.Path, data_new: pathlib.Path) -> bool:
 
 # ─── per-test driver ─────────────────────────────────────────────────────────
 
+_SKIPPED = object()  # sentinel returned when a test is skipped
+
+
 def run_test_case(test_dir: pathlib.Path,
                   exec_old: pathlib.Path,
                   exec_new: pathlib.Path,
                   nruns: int,
-                  mpirun: str) -> bool:
+                  mpirun: str):
+    """Return True (pass), False (fail), or _SKIPPED."""
     name = test_dir.name
     print(f"\n{'='*70}")
     print(f"Test: {name}  (nproc={detect_nproc(test_dir)})")
@@ -201,14 +215,14 @@ def run_test_case(test_dir: pathlib.Path,
 
     if not (test_dir / "data" / "BOUT.inp").is_file():
         print(f"  [!] No data/BOUT.inp — skipping")
-        return True
+        return _SKIPPED
 
     missing = missing_input_files(test_dir)
     if missing:
         print(f"  [!] Skipping: missing input file(s): {missing}")
         print(f"       Run the original runtest once to download them:")
         print(f"       python3 {test_dir}/runtest")
-        return True
+        return _SKIPPED
 
     nproc = detect_nproc(test_dir)
 
@@ -318,9 +332,14 @@ def main():
 
     for test in tests:
         try:
-            ok = run_test_case(test, args.old.resolve(), args.new.resolve(),
-                               args.nruns, args.mpirun)
-            (passed if ok else failed).append(test.name)
+            result = run_test_case(test, args.old.resolve(), args.new.resolve(),
+                                   args.nruns, args.mpirun)
+            if result is _SKIPPED:
+                skipped.append(test.name)
+            elif result:
+                passed.append(test.name)
+            else:
+                failed.append(test.name)
         except Exception as e:
             print(f"\n  [!] Unexpected error in {test.name}: {e}")
             failed.append(test.name)
@@ -330,12 +349,12 @@ def main():
     print("SUMMARY")
     print('='*70)
     if passed:
-        print(f"  PASSED ({len(passed)}): {', '.join(passed)}")
+        print(f"  PASSED  ({len(passed)}): {', '.join(passed)}")
     if skipped:
         print(f"  SKIPPED ({len(skipped)}): {', '.join(skipped)}")
     if failed:
-        print(f"  FAILED ({len(failed)}): {', '.join(failed)}")
-    else:
+        print(f"  FAILED  ({len(failed)}): {', '.join(failed)}")
+    if not failed:
         print("\n  All completed tests passed.")
 
 
