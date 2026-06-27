@@ -342,8 +342,8 @@ void NeutralMixed::finally(const Options& state) {
   //
   //
 
-  const Field3D Rnn = sqrt(Tnlim / AA)
-                      / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+  const Field3D vth_n = sqrt(Tnlim / AA); // Neutral thermal speed [normalised]
+  const Field3D Rnn = vth_n / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
   if (collisionality_override > 0.0) {
     // user has set an override for collision frequency
     Dnn = (Tn / AA) / collisionality_override;
@@ -420,7 +420,7 @@ void NeutralMixed::finally(const Options& state) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
     Field3D Dmax =
-        flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+        flux_limit * vth_n / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
       Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
     }

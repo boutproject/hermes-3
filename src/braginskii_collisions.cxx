@@ -181,6 +181,13 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           continue;
         }
 
+        // Hoist constants from e-e collision formula.
+        // PI*2*v1sq = 4*PI*(qe/Me)*Telim, so pow(...,1.5) = (4*PI*qe/Me)^1.5 * Telim^1.5
+        const BoutReal ee_base = 4.0 * PI * SI::qe / SI::Me;
+        const BoutReal ee_prefactor = SQ(SQ(SI::qe)) * 2.0
+                                      / (3.0 * ee_base * sqrt(ee_base)
+                                         * SQ(SI::e0 * SI::Me));
+
         const Field3D nu_ee = filledFrom(Ne, [&](auto& i) {
           const BoutReal Telim = softFloor(Te[i], 0.1);
           const BoutReal Nelim = softFloor(Ne[i], 1e10);
@@ -191,12 +198,10 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           const BoutReal coulomb_log = 30.4 - 0.5 * log(Nelim) + (5. / 4) * logTe
                                        - sqrt(1e-5 + SQ(logTe - 2) / 16.);
 
-          const BoutReal v1sq = 2 * Telim * SI::qe / SI::Me;
-
-          // Collision frequency
-          const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne[i], 0.0)
-                              * softFloor(coulomb_log, 1.0) * 2
-                              / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
+          // Collision frequency; Telim^1.5 = Telim * sqrt(Telim)
+          const BoutReal nu = ee_prefactor * floor(Ne[i], 0.0)
+                              * softFloor(coulomb_log, 1.0)
+                              / (Telim * sqrt(Telim));
 
           ASSERT2(std::isfinite(nu));
           return nu;
@@ -223,27 +228,37 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         const BoutReal Ai = get<BoutReal>(species["AA"]);
         const BoutReal me_mi = SI::Me / (SI::Mp * Ai); // m_e / m_i
 
+        // Hoist scalar constants from e-i collision frequency formula.
+        const BoutReal ei_prefactor = SQ(SQ(SI::qe) * Zi) * (1. + me_mi) * ei_multiplier
+                                      / (3.0 * SQ(SI::e0 * SI::Me));
+        const BoutReal two_qe_over_Me = 2.0 * SI::qe / SI::Me;
+        const BoutReal two_qe_over_mi = 2.0 * SI::qe / (SI::Mp * Ai);
+        const BoutReal zi_sq = SQ(Zi);
+        const BoutReal log_zi_sq_Ai = std::log(zi_sq * Ai);
+        const BoutReal log_Zi = std::log(Zi);
+        const BoutReal exp2_zi_sq = std::exp(2.0) * zi_sq;
+
         const Field3D nu_ei = filledFrom(Ne, [&](auto& i) {
           // NRL formulary 2019, page 34
           const BoutReal coulomb_log =
               ((Te[i] < 0.1) || (Ni[i] < 1e10) || (Ne[i] < 1e10)) ? 10
               : (Te[i] < Ti[i] * me_mi)
-                  ? 23 - 0.5 * log(Ni[i]) + 1.5 * log(Ti[i]) - log(SQ(Zi) * Ai)
-              : (Te[i] < exp(2) * SQ(Zi)) // Fix to ei coulomb log from S.Mijin ReMKiT1D
-                                          // Ti m_e/m_i < Te < 10 Z^2
-                  ? 30.0 - 0.5 * log(Ne[i]) - log(Zi) + 1.5 * log(Te[i])
+                  ? 23 - 0.5 * log(Ni[i]) + 1.5 * log(Ti[i]) - log_zi_sq_Ai
+              : (Te[i] < exp2_zi_sq) // Fix to ei coulomb log from S.Mijin ReMKiT1D
+                                     // Ti m_e/m_i < Te < 10 Z^2
+                  ? 30.0 - 0.5 * log(Ne[i]) - log_Zi + 1.5 * log(Te[i])
                   // Ti m_e/m_i < 10 Z^2 < Te
                   : 31.0 - 0.5 * log(Ne[i]) + log(Te[i]);
 
-          // Calculate v_a^2, v_b^2
-          const BoutReal vesq = 2 * softFloor(Te[i], 0.1) * SI::qe / SI::Me;
-          const BoutReal visq = 2 * softFloor(Ti[i], 0.1) * SI::qe / (SI::Mp * Ai);
+          // Calculate v_a^2 + v_b^2; x^1.5 = x * sqrt(x)
+          const BoutReal vesq = two_qe_over_Me * softFloor(Te[i], 0.1);
+          const BoutReal visq = two_qe_over_mi * softFloor(Ti[i], 0.1);
+          const BoutReal base = PI * (vesq + visq);
 
           // Collision frequency
-          const BoutReal nu = SQ(SQ(SI::qe) * Zi) * floor(Ni[i], 0.0)
-                              * softFloor(coulomb_log, 1.0) * (1. + me_mi)
-                              / (3 * pow(PI * (vesq + visq), 1.5) * SQ(SI::e0 * SI::Me))
-                              * ei_multiplier;
+          const BoutReal nu = ei_prefactor * floor(Ni[i], 0.0)
+                              * softFloor(coulomb_log, 1.0)
+                              / (base * sqrt(base));
 #if CHECK >= 2
           if (!std::isfinite(nu)) {
             throw BoutException("Collisions 195 {}: {} at {}: Ni {}, Ne {}, Clog {}, "
@@ -279,12 +294,13 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
         BoutReal a0 = 5e-19; // Cross-section [m^2]
 
-        const Field3D nu_en = filledFrom(Ne, [&](auto& i) {
-          // Electron thermal speed (normalised)
-          const BoutReal vth_e = sqrt((SI::Mp / SI::Me) * Te[i] / Tnorm);
+        // sqrt(Mp/(Me*Tnorm)) is constant for this species pair
+        const BoutReal en_prefactor =
+            std::sqrt(SI::Mp / (SI::Me * Tnorm)) * Nnorm * a0 * rho_s0;
 
-          // Electron-neutral collision rate
-          return vth_e * Nnorm * Nn[i] * a0 * rho_s0;
+        const Field3D nu_en = filledFrom(Ne, [&](auto& i) {
+          // Electron thermal speed: sqrt(Mp/Me * Te/Tnorm) = sqrt(Mp/(Me*Tnorm))*sqrt(Te)
+          return en_prefactor * std::sqrt(Te[i]) * Nn[i];
         });
 
         collide(electrons, species, nu_en);
@@ -361,6 +377,15 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           const BoutReal Z2 = get<BoutReal>(species2["charge"]);
           const BoutReal charge2 = Z2 * SI::qe; // in Coulombs
 
+          // Hoist scalar constants from i-i collision frequency formula.
+          const BoutReal z1sq = SQ(Z1);
+          const BoutReal z2sq = SQ(Z2);
+          const BoutReal z1z2_aa = Z1 * Z2 * (AA1 + AA2);
+          const BoutReal ii_prefactor = SQ(charge1 * charge2) * (1. + mass1 / mass2)
+                                        / (3.0 * SQ(SI::e0 * mass1));
+          const BoutReal two_qe_m1 = 2.0 * SI::qe / mass1;
+          const BoutReal two_qe_m2 = 2.0 * SI::qe / mass2;
+
           // Ion-ion collisions
           const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
             const BoutReal Tlim1 = softFloor(temperature1[i], 0.1);
@@ -372,17 +397,18 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
             // Coulomb logarithm
             const BoutReal coulomb_log =
                 29.91
-                - log((Z1 * Z2 * (AA1 + AA2)) / (AA1 * Tlim2 + AA2 * Tlim1)
-                      * sqrt((Nlim1 * SQ(Z1) / Tlim1) + (Nlim2 * SQ(Z2) / Tlim2)));
+                - log(z1z2_aa / (AA1 * Tlim2 + AA2 * Tlim1)
+                      * sqrt((Nlim1 * z1sq / Tlim1) + (Nlim2 * z2sq / Tlim2)));
 
-            // Calculate v_a^2, v_b^2
-            const BoutReal v1sq = 2 * Tlim1 * SI::qe / mass1;
-            const BoutReal v2sq = 2 * Tlim2 * SI::qe / mass2;
+            // Calculate v_a^2 + v_b^2; x^1.5 = x * sqrt(x)
+            const BoutReal v1sq = two_qe_m1 * Tlim1;
+            const BoutReal v2sq = two_qe_m2 * Tlim2;
+            const BoutReal base = PI * (v1sq + v2sq);
 
             // Collision frequency
-            const BoutReal nu = SQ(charge1 * charge2) * Nlim2
-                                * softFloor(coulomb_log, 1.0) * (1. + mass1 / mass2)
-                                / (3 * pow(PI * (v1sq + v2sq), 1.5) * SQ(SI::e0 * mass1));
+            const BoutReal nu = ii_prefactor * Nlim2
+                                * softFloor(coulomb_log, 1.0)
+                                / (base * sqrt(base));
             ASSERT2(std::isfinite(nu));
             return nu;
           });

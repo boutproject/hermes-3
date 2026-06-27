@@ -22,6 +22,29 @@ Or for a specific subset of tests:
         --test tests/integrated/2D-production \\
         --mpirun "mpirun -np"
 
+Recommended tests for the performance branch changes
+-----------------------------------------------------
+The following tests directly exercise the modified components:
+
+  braginskii_collisions + braginskii_ion_viscosity + neutral_mixed:
+    tests/integrated/collfreq-braginskii-afn
+    tests/integrated/collfreq-multispecies
+
+  neutral_mixed (standalone):
+    tests/integrated/neutral_mixed
+
+  braginskii_collisions + ADAS reactions (cellAverage/cellAverageInto):
+    tests/integrated/1D-recycling
+    tests/integrated/1D-recycling-dthe
+
+  neutral_mixed with flux_limit (sqrt reuse path):
+    tests/integrated/2D-production   [requires Zenodo download]
+    tests/integrated/2D-recycling    [requires Zenodo download]
+
+The optimisations are purely computational (same equations, different order of
+floating-point operations), so all field differences should be ≤ 2-3 ULPs
+(~1e-15 relative).  Any larger difference indicates a regression.
+
 Notes
 -----
 * 2D tests (2D-production, 2D-recycling) download a ~300 MB zip from Zenodo
@@ -32,6 +55,8 @@ Notes
 * The --mpirun flag should match your cluster's launcher, e.g.:
     Imperial CX3:  "mpirun -np"   (default)
     Slurm systems: "srun -n"
+* Use --warmup 1 (the default) to discard the first run, which is slower due
+  to cold OS page cache and process start-up overhead.
 """
 
 import argparse
@@ -44,7 +69,6 @@ import tempfile
 import time
 
 import numpy
-from numpy.testing._private.utils import nulp_diff
 
 try:
     import xhermes
@@ -60,6 +84,25 @@ _BOUT_TIMING_VARS = {
     'wtime_per_rhs', 'wtime_per_rhs_e', 'wtime_per_rhs_i',
     'wtime_rhs', 'wtime_invert',
 }
+
+
+# ─── ULP comparison ──────────────────────────────────────────────────────────
+
+def _ulp_diff(a: numpy.ndarray, b: numpy.ndarray) -> numpy.ndarray:
+    """Return the number of ULPs between each pair of float64 values.
+
+    Both arrays must contain only finite values.  The algorithm reinterprets
+    the IEEE 754 bit pattern as a signed integer, flips the ordering for
+    negative values (where the sign-magnitude representation reverses the
+    integer ordering), then returns the absolute integer difference.
+    """
+    INT64_MIN = numpy.int64(-0x8000000000000000)
+    ai = a.view(numpy.int64).copy()
+    bi = b.view(numpy.int64).copy()
+    # Negative floats are ordered backwards in two's-complement; flip them.
+    ai[ai < 0] = INT64_MIN - ai[ai < 0]
+    bi[bi < 0] = INT64_MIN - bi[bi < 0]
+    return numpy.abs(ai - bi)
 
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
@@ -123,6 +166,11 @@ def setup_work_dir(test_dir: pathlib.Path,
         (work_dir / nc_file.name).symlink_to(nc_file.resolve())
 
 
+def _clear_dmp_files(data_dir: pathlib.Path) -> None:
+    for f in data_dir.glob("BOUT.dmp*.nc"):
+        f.unlink()
+
+
 # ─── runner ──────────────────────────────────────────────────────────────────
 
 def run_hermes(work_dir: pathlib.Path,
@@ -150,51 +198,69 @@ def run_hermes(work_dir: pathlib.Path,
 
 # ─── comparison ──────────────────────────────────────────────────────────────
 
-def compare_outputs(data_old: pathlib.Path, data_new: pathlib.Path) -> bool:
+def compare_outputs(data_old: pathlib.Path, data_new: pathlib.Path,
+                    ulp_tol: int) -> bool:
     """Compare all field variables in the last timestep. Returns True if ok."""
+    ds_old = ds_new = None
     try:
         ds_old = xhermes.open(data_old, unnormalise=False)
         ds_new = xhermes.open(data_new, unnormalise=False)
+
+        old_last = ds_old.isel(t=-1)
+        new_last = ds_new.isel(t=-1)
+
+        vars_old = set(old_last.data_vars)
+        vars_new = set(new_last.data_vars)
+        common = sorted((vars_old & vars_new) - _BOUT_TIMING_VARS)
+
+        if vars_old - vars_new - _BOUT_TIMING_VARS:
+            print(f"  [!] Variables only in OLD: "
+                  f"{sorted(vars_old - vars_new - _BOUT_TIMING_VARS)}")
+        if vars_new - vars_old - _BOUT_TIMING_VARS:
+            print(f"  [!] Variables only in NEW: "
+                  f"{sorted(vars_new - vars_old - _BOUT_TIMING_VARS)}")
+
+        print(f"\n  {'Variable':<30} {'max |rel diff|':>16}  {'RMS rel diff':>14}"
+              f"  {'max ULPs':>10}")
+        print("  " + "-" * 74)
+
+        any_large_diff = False
+        for v in common:
+            a = old_last[v].values.ravel().astype(numpy.float64)
+            b = new_last[v].values.ravel().astype(numpy.float64)
+
+            mask = numpy.isfinite(a) & numpy.isfinite(b) & (a != 0)
+            if not mask.any():
+                continue
+
+            a_m, b_m = a[mask], b[mask]
+            rel = numpy.abs((b_m - a_m) / a_m)
+            max_rel = rel.max()
+            rms_rel = numpy.sqrt((rel**2).mean())
+            max_ulps = int(_ulp_diff(a_m, b_m).max())
+
+            rel_flag = "  <-- LARGE REL" if max_rel > 1e-10 else ""
+            ulp_flag = f"  <-- HIGH ULPs (>{ulp_tol})" if max_ulps > ulp_tol else ""
+            flag = rel_flag or ulp_flag
+
+            if flag:
+                any_large_diff = True
+
+            print(f"  {v:<30} {max_rel:>16.3e}  {rms_rel:>14.3e}"
+                  f"  {max_ulps:>10}{flag}")
+
+        return not any_large_diff
+
     except Exception as e:
-        print(f"  [!] Could not load output: {e}")
+        print(f"  [!] Could not compare output: {e}")
         return False
-
-    old_last = ds_old.isel(t=-1)
-    new_last = ds_new.isel(t=-1)
-
-    vars_old = set(old_last.data_vars)
-    vars_new = set(new_last.data_vars)
-    common = sorted((vars_old & vars_new) - _BOUT_TIMING_VARS)
-
-    if vars_old - vars_new - _BOUT_TIMING_VARS:
-        print(f"  [!] Variables only in OLD: {sorted(vars_old - vars_new - _BOUT_TIMING_VARS)}")
-    if vars_new - vars_old - _BOUT_TIMING_VARS:
-        print(f"  [!] Variables only in NEW: {sorted(vars_new - vars_old - _BOUT_TIMING_VARS)}")
-
-    print(f"\n  {'Variable':<30} {'max |rel diff|':>16}  {'RMS rel diff':>14}  {'max ULPs':>10}")
-    print("  " + "-" * 74)
-
-    any_large_diff = False
-    for v in common:
-        a = old_last[v].values.ravel().astype(float)
-        b = new_last[v].values.ravel().astype(float)
-
-        mask = numpy.isfinite(a) & numpy.isfinite(b) & (a != 0)
-        if not mask.any():
-            continue
-
-        rel = numpy.abs((b[mask] - a[mask]) / a[mask])
-        max_rel = rel.max()
-        rms_rel = numpy.sqrt((rel**2).mean())
-        max_ulps = int(nulp_diff(a[mask], b[mask]).max())
-
-        flag = "  <-- LARGE" if max_rel > 1e-10 else ""
-        if max_rel > 1e-10:
-            any_large_diff = True
-
-        print(f"  {v:<30} {max_rel:>16.3e}  {rms_rel:>14.3e}  {max_ulps:>10}{flag}")
-
-    return not any_large_diff
+    finally:
+        for ds in (ds_old, ds_new):
+            if ds is not None:
+                try:
+                    ds.close()
+                except Exception:
+                    pass
 
 
 # ─── per-test driver ─────────────────────────────────────────────────────────
@@ -206,7 +272,9 @@ def run_test_case(test_dir: pathlib.Path,
                   exec_old: pathlib.Path,
                   exec_new: pathlib.Path,
                   nruns: int,
-                  mpirun: str):
+                  warmup: int,
+                  mpirun: str,
+                  ulp_tol: int):
     """Return True (pass), False (fail), or _SKIPPED."""
     name = test_dir.name
     print(f"\n{'='*70}")
@@ -234,50 +302,71 @@ def run_test_case(test_dir: pathlib.Path,
         setup_work_dir(test_dir, work_old, exec_old)
         setup_work_dir(test_dir, work_new, exec_new)
 
-        # ── old binary ───────────────────────────────────────────────────────
-        times_old = []
-        try:
+        def timed_runs(work_dir: pathlib.Path, label: str) -> list[float]:
+            times = []
+            data_dir = work_dir / "data"
+
+            if warmup > 0:
+                print(f"  {label}: warming up ({warmup} run(s))...")
+                for _ in range(warmup):
+                    try:
+                        run_hermes(work_dir, nproc, mpirun)
+                    except RuntimeError as e:
+                        raise RuntimeError(f"{label} warmup failed: {e}") from e
+                    _clear_dmp_files(data_dir)
+
             for i in range(nruns):
-                t = run_hermes(work_old, nproc, mpirun)
-                times_old.append(t)
+                try:
+                    t = run_hermes(work_dir, nproc, mpirun)
+                except RuntimeError as e:
+                    raise RuntimeError(f"{label} run {i+1} failed: {e}") from e
+                times.append(t)
                 if i < nruns - 1:
-                    for f in (work_old / "data").glob("BOUT.dmp*.nc"):
-                        f.unlink()
+                    _clear_dmp_files(data_dir)
+            return times
+
+        # ── old binary ───────────────────────────────────────────────────────
+        try:
+            times_old = timed_runs(work_old, "OLD")
         except RuntimeError as e:
-            print(f"  [!] OLD binary failed: {e}")
+            print(f"  [!] {e}")
             return False
 
         # ── new binary ───────────────────────────────────────────────────────
-        times_new = []
         try:
-            for i in range(nruns):
-                t = run_hermes(work_new, nproc, mpirun)
-                times_new.append(t)
-                if i < nruns - 1:
-                    for f in (work_new / "data").glob("BOUT.dmp*.nc"):
-                        f.unlink()
+            times_new = timed_runs(work_new, "NEW")
         except RuntimeError as e:
-            print(f"  [!] NEW binary failed: {e}")
+            print(f"  [!] {e}")
             return False
 
         # ── timing ───────────────────────────────────────────────────────────
         mean_old = numpy.mean(times_old)
         mean_new = numpy.mean(times_new)
-        speedup = mean_old / mean_new
-        sign = "faster" if speedup > 1 else "slower"
+        min_old = numpy.min(times_old)
+        min_new = numpy.min(times_new)
+        speedup_mean = mean_old / mean_new
+        speedup_min = min_old / min_new
 
-        print(f"\n  Timing ({nruns} run(s) each):")
-        print(f"    OLD: {mean_old:.2f} s   ({', '.join(f'{t:.2f}' for t in times_old)})")
-        print(f"    NEW: {mean_new:.2f} s   ({', '.join(f'{t:.2f}' for t in times_new)})")
-        print(f"    Speedup: {speedup:.3f}x ({abs(speedup-1)*100:.1f}% {sign})")
+        def _sign(x):
+            return "faster" if x > 1 else "slower"
+
+        print(f"\n  Timing ({nruns} timed run(s) each, {warmup} warmup):")
+        print(f"    OLD: mean={mean_old:.2f}s  min={min_old:.2f}s"
+              f"  ({', '.join(f'{t:.2f}' for t in times_old)})")
+        print(f"    NEW: mean={mean_new:.2f}s  min={min_new:.2f}s"
+              f"  ({', '.join(f'{t:.2f}' for t in times_new)})")
+        print(f"    Speedup (mean): {speedup_mean:.3f}x"
+              f" ({abs(speedup_mean-1)*100:.1f}% {_sign(speedup_mean)})")
+        print(f"    Speedup (min):  {speedup_min:.3f}x"
+              f" ({abs(speedup_min-1)*100:.1f}% {_sign(speedup_min)})")
 
         # ── correctness ──────────────────────────────────────────────────────
-        print("\n  Field differences (last timestep):")
-        ok = compare_outputs(work_old / "data", work_new / "data")
+        print(f"\n  Field differences (last timestep, ULP tolerance: {ulp_tol}):")
+        ok = compare_outputs(work_old / "data", work_new / "data", ulp_tol)
         if ok:
-            print("\n  => All variables match within 1e-10 relative tolerance.")
+            print("\n  => All variables within tolerance.")
         else:
-            print("\n  => WARNING: large differences detected (see above).")
+            print("\n  => WARNING: differences exceed tolerance (see above).")
 
         return ok
 
@@ -308,6 +397,13 @@ def main():
 
     parser.add_argument("--nruns", type=int, default=3,
                         help="Timed runs per binary per test (default: 3)")
+    parser.add_argument("--warmup", type=int, default=1,
+                        help="Throwaway runs before timing to warm the page "
+                             "cache and stabilise clocks (default: 1)")
+    parser.add_argument("--ulp-tol", type=int, default=10,
+                        help="Flag variables whose max ULP difference exceeds "
+                             "this threshold (default: 10). Pure computational "
+                             "optimisations should stay within 2-3 ULPs.")
     parser.add_argument("--mpirun", default="mpirun -np",
                         help='MPI launch prefix including the -n flag '
                              '(default: "mpirun -np"). '
@@ -332,8 +428,15 @@ def main():
 
     for test in tests:
         try:
-            result = run_test_case(test, args.old.resolve(), args.new.resolve(),
-                                   args.nruns, args.mpirun)
+            result = run_test_case(
+                test,
+                args.old.resolve(),
+                args.new.resolve(),
+                nruns=args.nruns,
+                warmup=args.warmup,
+                mpirun=args.mpirun,
+                ulp_tol=args.ulp_tol,
+            )
             if result is _SKIPPED:
                 skipped.append(test.name)
             elif result:
@@ -356,6 +459,8 @@ def main():
         print(f"  FAILED  ({len(failed)}): {', '.join(failed)}")
     if not failed:
         print("\n  All completed tests passed.")
+    else:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

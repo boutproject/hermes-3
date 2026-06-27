@@ -256,12 +256,15 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
       const Field2D v_thermal = sqrt(2.0 * T_av / mass);
 
+      const BoutReal eps_15 =
+          bounce_frequency_epsilon * std::sqrt(bounce_frequency_epsilon);
+
       nu_star = (bounce_frequency_R * bounce_frequency_q95)
-                / (tau_av * pow(bounce_frequency_epsilon, 1.5) * v_thermal);
+                / (tau_av * eps_15 * v_thermal);
 
       bounce_factor *=
           (1 / (1 + (1. / nu_star)))
-          * (1 / (1 + (1. / pow(bounce_frequency_epsilon, 1.5)) * (1. / nu_star)));
+          * (1 / (1 + (1. / eps_15) * (1. / nu_star)));
       eta *= bounce_factor;
     }
 

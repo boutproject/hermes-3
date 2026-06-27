@@ -81,13 +81,14 @@ auto cellAverage(Function func, const RegionType &region) {
       auto yp = i.yp();
       auto ym = i.ym();
       auto Ji = J[i];
+      const BoutReal inv_12_Ji = 1.0 / (12.0 * Ji);
 
       // Integrate in Y using Simpson's rule
       // Using limiter to calculate cell edge values
       result[i] =
-        4. / 6 * func((args[i])...) +
-        (Ji + J[ym]) / (12. * Ji) * func(cellLeft<CellEdges>(args[i], args[ym], args[yp])...) +
-        (Ji + J[yp]) / (12. * Ji) * func(cellRight<CellEdges>(args[i], args[ym], args[yp])...);
+        (2. / 3) * func((args[i])...) +
+        (Ji + J[ym]) * inv_12_Ji * func(cellLeft<CellEdges>(args[i], args[ym], args[yp])...) +
+        (Ji + J[yp]) * inv_12_Ji * func(cellRight<CellEdges>(args[i], args[ym], args[yp])...);
     }
     return result;
   };
@@ -109,11 +110,12 @@ void cellAverageInto(Field3D& result, Function func, const RegionType& region,
     auto yp = i.yp();
     auto ym = i.ym();
     auto Ji = J[i];
+    const BoutReal inv_12_Ji = 1.0 / (12.0 * Ji);
     result[i] =
-        4. / 6 * func((args[i])...) +
-        (Ji + J[ym]) / (12. * Ji) *
+        (2. / 3) * func((args[i])...) +
+        (Ji + J[ym]) * inv_12_Ji *
             func(cellLeft<CellEdges>(args[i], args[ym], args[yp])...) +
-        (Ji + J[yp]) / (12. * Ji) *
+        (Ji + J[yp]) * inv_12_Ji *
             func(cellRight<CellEdges>(args[i], args[ym], args[yp])...);
   }
 }
