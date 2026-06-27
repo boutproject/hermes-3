@@ -6,6 +6,8 @@
 #include "reaction.hxx"
 
 #include <array>
+#include <bout/field3d.hxx>
+
 #include <cstddef>
 #include <iostream>
 #include <string_view>
@@ -98,6 +100,9 @@ private:
   BoutReal electron_heating; ///< Heating per reaction [eV]
 
   BoutReal Tnorm, Nnorm, FreqNorm; ///< Normalisations
+
+  Field3D reaction_rate_workspace_; ///< Reused across timesteps to avoid repeated allocation
+  Field3D energy_loss_workspace_;
 };
 
 struct OpenADASChargeExchange : public hermes::ReactionBase {
@@ -136,6 +141,8 @@ struct OpenADASChargeExchange : public hermes::ReactionBase {
 private:
   OpenADASRateCoefficient rate_coef; ///< Reaction rate coefficient
   BoutReal Tnorm, Nnorm, FreqNorm;   ///< Normalisations
+
+  Field3D reaction_rate_workspace_; ///< Reused across timesteps to avoid repeated allocation
 };
 
 /// Subclasses of OpenADAS clsses that implements the typeName method via CRTP.

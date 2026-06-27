@@ -69,7 +69,7 @@ BoutReal cellRight(BoutReal c, BoutReal m, BoutReal p) {
 template <typename CellEdges = hermes::Limiter, typename Function, typename RegionType>
 auto cellAverage(Function func, const RegionType &region) {
   // Note: Capture by value or func and region go out of scope
-  return [=](const auto &... args) { 
+  return [=](const auto &... args) {
     // Use the first argument to set the result mesh etc.
     Field3D result{emptyFrom(firstArg(args...))};
     result.allocate();
@@ -91,6 +91,31 @@ auto cellAverage(Function func, const RegionType &region) {
     }
     return result;
   };
+}
+
+/// Like cellAverage but writes into a caller-supplied Field3D, avoiding a heap
+/// allocation on every call. On the first call result is initialised from the
+/// first input field; subsequent calls reuse the existing allocation.
+template <typename CellEdges = hermes::Limiter, typename Function, typename RegionType,
+          typename... Fields>
+void cellAverageInto(Field3D& result, Function func, const RegionType& region,
+                     const Fields&... args) {
+  if (!result.isAllocated()) {
+    result = emptyFrom(firstArg(args...));
+    result.allocate();
+  }
+  auto J = result.getCoordinates()->J;
+  BOUT_FOR(i, region) {
+    auto yp = i.yp();
+    auto ym = i.ym();
+    auto Ji = J[i];
+    result[i] =
+        4. / 6 * func((args[i])...) +
+        (Ji + J[ym]) / (12. * Ji) *
+            func(cellLeft<CellEdges>(args[i], args[ym], args[yp])...) +
+        (Ji + J[yp]) / (12. * Ji) *
+            func(cellRight<CellEdges>(args[i], args[ym], args[yp])...);
+  }
 }
 
 #endif // INTEGRATE_H

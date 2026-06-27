@@ -139,10 +139,10 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bnd
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < nz; k++) {
-        int kp = (k + 1) % nz;
-        int kpp = (kp + 1) % nz;
-        int km = (k - 1 + nz) % nz;
-        int kmm = (km - 1 + nz) % nz;
+        int kp = (k + 1 == nz ? 0 : k + 1);
+        int kpp = (kp + 1 == nz ? 0 : kp + 1);
+        int km = (k == 0 ? nz - 1 : k - 1);
+        int kmm = (km == 0 ? nz - 1 : km - 1);
 
         // 1) Interpolate stream function f onto corners fmp, fpp, fpm
 
@@ -448,8 +448,8 @@ const Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs) {
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < mesh->LocalNz; k++) {
-        int kp = (k + 1) % mesh->LocalNz;
-        int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+        int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
+        int km = (k == 0 ? mesh->LocalNz - 1 : k - 1);
 
         // Calculate gradients on cell faces
 
@@ -497,8 +497,8 @@ const Field3D Div_Z_FV_Index(const Field3D& as, const Field3D& fs) {
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < mesh->LocalNz; k++) {
-        int kp = (k + 1) % mesh->LocalNz;
-        int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+        int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
+        int km = (k == 0 ? mesh->LocalNz - 1 : k - 1);
 
         // Calculate gradients on cell faces
 
@@ -805,8 +805,8 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux between j and j+1
-        int kp = (k + 1) % mesh->LocalNz;
-        int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+        int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
+        int km = (k == 0 ? mesh->LocalNz - 1 : k - 1);
 
         BoutReal coef =
             0.5
@@ -860,7 +860,7 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux between k and k+1
-        int kp = (k + 1) % mesh->LocalNz;
+        int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
 
         // Coefficient in front of df/dy term
         BoutReal coef = g_23c(i, j, k)
@@ -977,8 +977,8 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
 
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux between j and j+1
-        int kp = (k + 1) % mesh->LocalNz;
-        int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+        int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
+        int km = (k == 0 ? mesh->LocalNz - 1 : k - 1);
 
         // Calculate Z derivative at y boundary
         BoutReal dfdz =
@@ -1026,7 +1026,7 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
 
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux between k and k+1
-        int kp = (k + 1) % mesh->LocalNz;
+        int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
 
         BoutReal gradient =
             // df/dz
@@ -1199,8 +1199,8 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux between j and j+1
-        int kp = (k + 1) % mesh->LocalNz;
-        int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+        int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
+        int km = (k == 0 ? mesh->LocalNz - 1 : k - 1);
 
         BoutReal coef_yz =
             0.5
@@ -1300,7 +1300,7 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux between k and k+1
-        int kp = (k + 1) % mesh->LocalNz;
+        int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
 
         BoutReal ddx =
             0.5
@@ -1363,8 +1363,8 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux from i to i+1
 
-        const int kp = (k + 1) % mesh->LocalNz;
-        const int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+        const int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
+        const int km = (k == 0 ? mesh->LocalNz - 1 : k - 1);
 
         BoutReal ddx = 2 * (f(i + 1, j, k) - f(i, j, k))
                        / (coord->dx(i, j, k) + coord->dx(i + 1, j, k));
@@ -1521,8 +1521,8 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux between j and j+1
-        int kp = (k + 1) % mesh->LocalNz;
-        int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+        int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
+        int km = (k == 0 ? mesh->LocalNz - 1 : k - 1);
 
         // Calculate Z derivative at y boundary
         BoutReal dfdz =
@@ -1572,7 +1572,7 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
                       / SQ(coord->J(i, j) * coord->Bxy(i, j));
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux between k and k+1
-        int kp = (k + 1) % mesh->LocalNz;
+        int kp = (k + 1 == mesh->LocalNz ? 0 : k + 1);
 
         BoutReal gradient =
             // df/dz
@@ -1626,10 +1626,10 @@ const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Fi
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < nz; k++) {
-        int kp = (k + 1) % nz;
-        int kpp = (kp + 1) % nz;
-        int km = (k - 1 + nz) % nz;
-        int kmm = (km - 1 + nz) % nz;
+        int kp = (k + 1 == nz ? 0 : k + 1);
+        int kpp = (kp + 1 == nz ? 0 : kp + 1);
+        int km = (k == 0 ? nz - 1 : k - 1);
+        int kmm = (km == 0 ? nz - 1 : km - 1);
 
         // 1) Interpolate stream function f onto corners fmp, fpp, fpm
 

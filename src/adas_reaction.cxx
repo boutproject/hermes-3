@@ -19,6 +19,7 @@
 #include "../external/json.hxx"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <fstream>
 #include <iterator>
@@ -108,7 +109,7 @@ BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
                            + (log_coeff[high_T_index][low_n_index] * (1 - y)
                               + log_coeff[high_T_index][high_n_index] * y)
                                  * x;
-  return pow(10., eval_log_coef);
+  return std::exp(eval_log_coef * M_LN10);
 }
 
 void OpenADAS::calculate_rates(GuardedOptions&& electron, GuardedOptions&& from_ion,
@@ -129,13 +130,14 @@ void OpenADAS::calculate_rates(GuardedOptions&& electron, GuardedOptions&& from_
   const BoutReal to_charge =
       to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
-  Field3D reaction_rate = cellAverage(
+  cellAverageInto(reaction_rate_workspace_,
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
         // Note: densities can be (slightly) negative
         return floor(ne, 0.0) * floor(n1, 0.0)
                * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
       },
-      Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
+      Ne.getRegion("RGN_NOBNDRY"), Ne, N1, Te);
+  Field3D& reaction_rate = reaction_rate_workspace_;
 
   // Particles
   subtract(from_ion["density_source"], reaction_rate);
@@ -158,13 +160,14 @@ void OpenADAS::calculate_rates(GuardedOptions&& electron, GuardedOptions&& from_
   add(to_ion["energy_source"], energy_exchange);
 
   // Electron energy loss (radiation, ionisation potential)
-  Field3D energy_loss = cellAverage(
+  cellAverageInto(energy_loss_workspace_,
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
         return floor(ne, 0.0) * floor(n1, 0.0)
                * radiation_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm
                / (Tnorm * FreqNorm);
       },
-      Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
+      Ne.getRegion("RGN_NOBNDRY"), Ne, N1, Te);
+  Field3D& energy_loss = energy_loss_workspace_;
 
   // Loss is reduced by heating
   energy_loss -= (electron_heating / Tnorm) * reaction_rate;
@@ -192,12 +195,13 @@ void OpenADASChargeExchange::calculate_rates(GuardedOptions&& electron,
   const Field3D Na = GET_VALUE(Field3D, from_A["density"]);
   const Field3D Nb = GET_VALUE(Field3D, from_B["density"]);
 
-  const Field3D reaction_rate = cellAverage(
+  cellAverageInto(reaction_rate_workspace_,
       [&](BoutReal na, BoutReal nb, BoutReal ne, BoutReal te) {
         return floor(na, 0.0) * floor(nb, 0.0)
                * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
       },
-      Ne.getRegion("RGN_NOBNDRY"))(Na, Nb, Ne, Te);
+      Ne.getRegion("RGN_NOBNDRY"), Na, Nb, Ne, Te);
+  const Field3D& reaction_rate = reaction_rate_workspace_;
 
   // from_A -> to_A
   {
