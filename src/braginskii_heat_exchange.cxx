@@ -16,9 +16,9 @@ BraginskiiHeatExchange::BraginskiiHeatExchange(const std::string& name,
                                                Options& alloptions, Solver*)
     // FIXME: Not all species are actually read or written; only those with collision
     // rates and temperatures
-    : Component({readOnly("species:{all_species}:{input_vars}"),
-                 readIfSet("species:{all_species}:{optional_vars}"),
-                 readWrite("species:{all_species}:{output_vars}")}) {
+    : NamedComponent(name, {readOnly("species:{all_species}:{input_vars}"),
+                            readIfSet("species:{all_species}:{optional_vars}"),
+                            readWrite("species:{all_species}:{output_vars}")}) {
   diagnose = alloptions[name]["diagnose"]
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
@@ -115,7 +115,7 @@ void BraginskiiHeatExchange::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  BoutReal const Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   for (const auto& [A, section] : energy_channels) {
     for (const auto& [B, child] : section) {

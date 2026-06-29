@@ -19,7 +19,7 @@
 /// really apply species-by-species, but we can't do that until we
 /// have dynamic ordering to make sure collision rates get calculated
 /// first.
-struct BraginskiiConduction : public Component {
+struct BraginskiiConduction : public NamedComponent<BraginskiiConduction> {
   ///
   /// # Inputs
   ///
@@ -39,6 +39,8 @@ struct BraginskiiConduction : public Component {
 
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "braginskii_conduction";
 
 private:
   std::map<std::string, Field3D> all_nu;        ///< Collision frequency for conduction
@@ -79,8 +81,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiConduction>
-    registercomponentbraginskiiconduction("braginskii_conduction");
+RegisterComponent<BraginskiiConduction> registercomponentbraginskiiconduction;
 }
 
 #endif // BRAGINSKII_CONDUCTION_H

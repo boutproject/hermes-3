@@ -4,9 +4,9 @@
 
 #include "component.hxx"
 
-struct NoFlowBoundary : public Component {
+struct NoFlowBoundary : public NamedComponent<NoFlowBoundary> {
   NoFlowBoundary(std::string name, Options& alloptions, Solver*)
-      : Component({writeBoundaryIfSet("species:{name}:{variables}")}), name(name) {
+      : NamedComponent({writeBoundaryIfSet("species:{name}:{variables}")}), name(name) {
 
     Options& options = alloptions[name];
     noflow_lower_y = options["noflow_lower_y"]
@@ -19,6 +19,8 @@ struct NoFlowBoundary : public Component {
     substitutePermissions("variables",
                           {"density", "temperature", "pressure", "velocity", "momentum"});
   }
+
+  static constexpr auto type = "noflow_boundary";
 
 private:
   std::string name;    ///<
@@ -37,7 +39,7 @@ private:
 };
 
 namespace {
-RegisterComponent<NoFlowBoundary> registercomponentnoflowboundary("noflow_boundary");
+RegisterComponent<NoFlowBoundary> registercomponentnoflowboundary;
 }
 
 #endif // NOFLOW_BOUNDARY_H
