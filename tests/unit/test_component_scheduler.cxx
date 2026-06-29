@@ -33,7 +33,10 @@ struct OrderChecker : public NamedComponent<OrderChecker> {
   OrderChecker(const std::string& name, Options& alloptions, Solver*)
       : NamedComponent(name, getPermissions(name, alloptions)) {}
   static Permissions getPermissions(const std::string& name, Options& alloptions) {
-    return alloptions[name]["permissions"].as<Permissions>();
+    if (alloptions[name].isSet("permissions")) {
+      return alloptions[name]["permissions"].as<Permissions>();
+    }
+    return {};
   }
   static void resetOrderInfo() { execution_order.clear(); }
 
