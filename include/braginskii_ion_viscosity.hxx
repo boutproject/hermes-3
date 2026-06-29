@@ -61,6 +61,7 @@ private:
                                      ///< frequency change
   BoutReal bounce_frequency_R;       ///< Input major radius
   BoutReal density_floor;            ///< Minimum density used in calculating Pi_ciperp
+  BoutReal pressure_floor;           ///< When non-zero pressure is needed
   bool diagnose;                     ///< Output additional diagnostics?
 
   /// Per-species diagnostics

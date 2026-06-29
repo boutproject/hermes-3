@@ -18,6 +18,7 @@
 #include <bout/globals.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
+#include <bout/output_bout_types.hxx>
 #include <bout/solver.hxx>
 #include <bout/sys/range.hxx>
 #include <bout/vecops.hxx>
@@ -842,6 +843,20 @@ void RelaxPotential::finally(const Options& state) {
 
     ddt(phi1) = lambda_1 * (phi_vort - Vort);
   }
+
+#if CHECKLEVEL >= 1
+  for (auto& i : Vort.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(Vort)[i])) {
+      throw BoutException("ddt(Vort) non-finite at {}\n", i);
+    }
+  }
+
+  for (auto& i : phi1.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(phi1)[i])) {
+      throw BoutException("ddt(phi1) non-finite at {}\n", i);
+    }
+  }
+#endif
 }
 
 void RelaxPotential::outputVars(Options& state) {

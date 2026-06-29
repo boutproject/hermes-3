@@ -124,6 +124,7 @@ void BraginskiiThermalForce::transform_impl(GuardedOptions& state) {
         const BoutReal mz = get<BoutReal>((*heavy)["AA"]);
         const BoutReal Z = get<BoutReal>((*heavy)["charge"]);
         const Field3D nz = GET_NOBOUNDARY(Field3D, (*heavy)["density"]);
+        ;
 
         if (Z == 0.0) {
           continue; // Check that the charge is not zero
