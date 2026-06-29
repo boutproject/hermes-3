@@ -578,7 +578,54 @@ struct fmt::formatter<Component> : formatter<string_view> {
   /// - ``~n``: Don't show object name
   /// - ``~t``: Don't show type name
   /// - ``T``: Always show type name
-  constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator;
+  constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator {
+    const auto* it = ctx.begin();
+    const auto* end = ctx.end();
+
+    if (it == end) {
+      return underlying.parse(ctx);
+    }
+
+    while (it != end and *it != ':' and *it != '}') {
+      // Other cases handled explicitly below
+      // NOLINTNEXTLINE(bugprone-switch-missing-default-case)
+      switch (*it) {
+      case '~':
+        ++it;
+        if (*it == 'n') {
+          hide_name = true;
+        } else if (*it == 't') {
+          hide_type = true;
+        } else {
+          throw fmt::format_error(
+              fmt::format("Unrecognised format specifier '~{}'", *it));
+        }
+        ++it;
+        break;
+      case 'T':
+        show_type = true;
+        ++it;
+        break;
+      }
+      // FIXME: This is copied from the parser used for Fields, but
+      // won't it result in an infinite loop if an unrecognised
+      // character is encountered?
+    }
+
+    if (hide_type and show_type) {
+      throw fmt::format_error("Format specifiers 'T' and '~t' are mutually-exclusive");
+    }
+
+    if (it != end and *it != '}') {
+      if (*it != ':') {
+        throw fmt::format_error("invalid format specifier");
+      }
+      ++it;
+    }
+
+    ctx.advance_to(it);
+    return underlying.parse(ctx);
+  }
 
   auto format(const Component& component, format_context& ctx) const
       -> format_context::iterator;
