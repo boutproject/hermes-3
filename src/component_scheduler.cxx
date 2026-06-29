@@ -19,6 +19,8 @@
 #include "../include/component_scheduler.hxx"
 #include "../include/permissions.hxx"
 
+namespace {
+
 /// Cheap class to track dependencies while recursing through the
 /// dependency graph. It is designed to minimise the ammount of
 /// copying that neesd to be done.
@@ -90,7 +92,9 @@ private:
         _size(tail._size + 1) {}
 };
 
-const std::set<std::string> ComponentScheduler::predeclared_variables = {
+/// All the variable names which are pre-set in the state, before
+/// any components are applied.
+const std::set<std::string> predeclared_variables = {
     "time",          "linear",      "units:inv_meters_cubed", "units:eV", "units:Tesla",
     "units:seconds", "units:meters"};
 
@@ -128,7 +132,14 @@ void topological_sort(const std::vector<std::set<size_t>>& dependencies, size_t 
 }
 
 /// Get all the parent sections of a variable "path". Sections are
-/// separated by colons in the path.
+/// separated by colons in the path. This is different from just
+/// splitting on ':' because it returns the hierarchy of
+/// fully-qualified parent sections. E.g.
+///
+///     getParents("species:d:collision_frequencies:d_d_coll")
+///
+/// would return {"species", "species:d",
+/// "species:d:collision_frequencies"}.
 std::set<std::string> getParents(const std::string& name) {
   std::set<std::string> result;
   size_t start = 0;
@@ -193,8 +204,6 @@ getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) 
   // reference elsewhere. We create them with empty sets, which will
   // get filled if they are present.
   for (const auto& name : conditional_names) {
-    // FIXME: this isn't an empty set
-    //result.insert({name, {name}});
     result.insert({name, {}});
   }
 
@@ -278,7 +287,7 @@ setReadDependencies(const std::vector<std::unique_ptr<Component>>& components,
     // them
     for (const auto& [name, regions] :
          permissions.getVariablesWithPermission(permission)) {
-      if (ComponentScheduler::predeclared_variables.count(name) > 0) {
+      if (predeclared_variables.count(name) > 0) {
         continue;
       }
       for (const auto& sub_name : expandVariableName(hierarchy, permissions, name)) {
@@ -387,6 +396,7 @@ void sortComponents(std::vector<std::unique_ptr<Component>>& components) {
 
   components = std::move(result);
 }
+} // namespace
 
 ComponentScheduler::ComponentScheduler(Options& scheduler_options,
                                        Options& component_options, Solver* solver) {
@@ -454,7 +464,7 @@ ComponentScheduler::ComponentScheduler(Options& scheduler_options,
     component->declareAllSpecies(species);
   }
 
-  sortComponents(components);
+  ::sortComponents(components);
 }
 
 std::unique_ptr<ComponentScheduler> ComponentScheduler::create(Options& scheduler_options,
