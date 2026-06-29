@@ -1,10 +1,10 @@
 #include "../include/polarisation_drift.hxx"
 
 #include <bout/constants.hxx>
-#include <bout/fv_ops.hxx>
-#include <bout/output_bout_types.hxx>
-#include <bout/invert_laplace.hxx>
 #include <bout/difops.hxx>
+#include <bout/fv_ops.hxx>
+#include <bout/invert_laplace.hxx>
+#include <bout/output_bout_types.hxx>
 
 using bout::globals::mesh;
 
@@ -12,11 +12,11 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
                                      Solver* UNUSED(solver))
     // FIXME: There is a lot of complicated conditional logic which is not being captured
     // here. E.g., species without AA or momentum will be skipped.
-    : Component({readIfSet("species:{all_species}:charge"),
-                 readOnly("species:{charged}:{inputs}"),
-                 readIfSet("species:{charged}:momentum"),
-                 readIfSet("fields:{fields}"),
-                 readWrite("species:{charged}:{outputs}")}) {
+    : NamedComponent(name, {readIfSet("species:{all_species}:charge"),
+                            readOnly("species:{charged}:{inputs}"),
+                            readIfSet("species:{charged}:momentum"),
+                            readIfSet("fields:{fields}"),
+                            readWrite("species:{charged}:{outputs}")}) {
 
   // Get options for this component
   auto& options = alloptions[name];
@@ -34,34 +34,36 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
   phiSolver->setInnerBoundaryFlags(0);
   phiSolver->setOuterBoundaryFlags(0);
 
-  boussinesq = options["boussinesq"]
-    .doc("Assume a uniform mass density in calculating the polarisation drift")
-    .withDefault<bool>(true);
+  boussinesq =
+      options["boussinesq"]
+          .doc("Assume a uniform mass density in calculating the polarisation drift")
+          .withDefault<bool>(true);
 
   if (boussinesq) {
     average_atomic_mass =
-      options["average_atomic_mass"]
-      .doc("Weighted average atomic mass, for polarisaion current "
-           "(Boussinesq approximation)")
-      .withDefault<BoutReal>(2.0); // Deuterium
+        options["average_atomic_mass"]
+            .doc("Weighted average atomic mass, for polarisaion current "
+                 "(Boussinesq approximation)")
+            .withDefault<BoutReal>(2.0); // Deuterium
   } else {
     average_atomic_mass = 1.0;
     // Use a density floor to prevent divide-by-zero errors
-    density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+    density_floor =
+        options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
   }
 
   advection = options["advection"]
-    .doc("Include advection by polarisation drift, using potential flow approximation?")
-    .withDefault<bool>(true);
+                  .doc("Include advection by polarisation drift, using potential flow "
+                       "approximation?")
+                  .withDefault<bool>(true);
 
   diamagnetic_polarisation =
       options["diamagnetic_polarisation"]
           .doc("Include diamagnetic drift in polarisation current?")
           .withDefault<bool>(true);
 
-  diagnose = options["diagnose"]
-    .doc("Output additional diagnostics?")
-    .withDefault<bool>(false);
+  diagnose =
+      options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
   std::vector<std::string> inputs = {"AA"};
   std::vector<std::string> fields = {"DivJdia", "DivJextra", "DivJcol"};
@@ -182,7 +184,8 @@ Field3D PolarisationDrift::calcMassDensity(GuardedOptions& state) {
     for (auto& kv : allspecies.getChildren()) {
       const GuardedOptions species = kv.second;
 
-      if (!(species.isSet("charge") and species.isSet("AA") and species.isSet("density"))) {
+      if (!(species.isSet("charge") and species.isSet("AA")
+            and species.isSet("density"))) {
         continue; // No charge or mass -> no current
       }
       if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {

@@ -6,7 +6,7 @@
 
 struct NoFlowBoundary : public NamedComponent<NoFlowBoundary> {
   NoFlowBoundary(std::string name, Options& alloptions, Solver*)
-      : NamedComponent({writeBoundaryIfSet("species:{name}:{variables}")}), name(name) {
+      : NamedComponent(name, {writeBoundaryIfSet("species:{name}:{variables}")}) {
 
     Options& options = alloptions[name];
     noflow_lower_y = options["noflow_lower_y"]

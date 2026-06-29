@@ -6,9 +6,11 @@
 #include <algorithm> // std::any_of
 
 namespace {
-struct TestComponent : public Component {
-  TestComponent(const std::string&, Options&, Solver*)
-      : Component({readWrite("answer")}) {}
+struct TestComponent : public NamedComponent<TestComponent> {
+  TestComponent(const std::string name, Options&, Solver*)
+      : NamedComponent(name, {readWrite("answer")}) {}
+
+  static constexpr auto type = "testcomponent";
 
 private:
   void transform_impl(GuardedOptions& state) override {
@@ -16,16 +18,15 @@ private:
   }
 };
 
-RegisterComponent<TestComponent> registertestcomponent("testcomponent");
+RegisterComponent<TestComponent> registertestcomponent;
 } // namespace
 
 TEST(ComponentTest, InAvailableList) {
   // Check that the test component is in the list of available components
   auto available = ComponentFactory::getInstance().listAvailable();
 
-  ASSERT_TRUE(std::any_of(
-      available.begin(), available.end(),
-      [](const std::string &str) { return str == "testcomponent"; }));
+  ASSERT_TRUE(std::any_of(available.begin(), available.end(),
+                          [](const std::string& str) { return str == "testcomponent"; }));
 }
 
 TEST(ComponentTest, CanCreate) {
@@ -33,7 +34,7 @@ TEST(ComponentTest, CanCreate) {
   auto component = Component::create("testcomponent", "species", options, nullptr);
 
   EXPECT_FALSE(options.isSet("answer"));
-  
+
   component->transform(options);
 
   ASSERT_TRUE(options.isSet("answer"));
@@ -45,7 +46,7 @@ TEST(ComponentTest, GetThrowsNoValue) {
 
   // No value throws
   ASSERT_THROW(get<int>(option), BoutException);
-  
+
   // Compatible value doesn't throw
   option = 42;
   ASSERT_TRUE(option == 42);
@@ -53,7 +54,7 @@ TEST(ComponentTest, GetThrowsNoValue) {
 
 TEST(ComponentTest, GetThrowsIncompatibleValue) {
   Options option;
-  
+
   option = "hello";
   // Invalid value throws
   ASSERT_THROW(get<int>(option), BoutException);

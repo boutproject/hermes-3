@@ -3,21 +3,20 @@
 
 FixedFractionIons::FixedFractionIons(std::string name, Options& alloptions,
                                      Solver* UNUSED(solver))
-    : Component({readOnly("species:e:density"), readWrite("species:{sp}:density")}) {
+    : NamedComponent(name,
+                     {readOnly("species:e:density"), readWrite("species:{sp}:density")}) {
 
-  std::string fractions_str =
-      alloptions[name]["fractions"]
-          .doc("Comma-separated list of pairs e.g. "
-               "'species1@fraction1, species2@fraction2'")
-          .as<std::string>();
+  std::string fractions_str = alloptions[name]["fractions"]
+                                  .doc("Comma-separated list of pairs e.g. "
+                                       "'species1@fraction1, species2@fraction2'")
+                                  .as<std::string>();
 
   std::vector<std::string> specified_species;
 
-  for (const auto &pair : strsplit(fractions_str, ',')) {
+  for (const auto& pair : strsplit(fractions_str, ',')) {
     auto species_frac = strsplit(pair, '@');
     if (species_frac.size() != 2) {
-      throw BoutException("Expected 'species @ fraction', but got %s",
-                          pair.c_str());
+      throw BoutException("Expected 'species @ fraction', but got %s", pair.c_str());
     }
     std::string species = trim(species_frac.front());
     BoutReal fraction = stringToReal(trim(species_frac.back()));
@@ -38,8 +37,7 @@ void FixedFractionIons::transform_impl(GuardedOptions& state) {
   // Electron density
   auto Ne = get<Field3D>(state["species"]["e"]["density"]);
 
-  for (const auto &spec_frac : fractions) {
-    set(state["species"][spec_frac.first]["density"],
-        Ne * spec_frac.second);
+  for (const auto& spec_frac : fractions) {
+    set(state["species"][spec_frac.first]["density"], Ne * spec_frac.second);
   }
 }

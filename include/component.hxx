@@ -98,8 +98,6 @@ struct Component {
   /// created by a ComponentSchedular).
   Component(const std::string& name, Permissions&& access_permissions)
       : name(name), state_variable_access(access_permissions) {}
-  Component(Permissions&& access_permissions)
-      : name("<unknown name>"), state_variable_access(access_permissions) {}
 
   virtual ~Component() {}
 
@@ -161,7 +159,7 @@ struct Component {
 
   const Permissions& getPermissions() const { return state_variable_access; }
 
-  virtual std::string typeName() const { return "<unknown>"; }
+  virtual std::string typeName() const = 0;
 
   std::string objectName() const { return name; }
 
@@ -224,15 +222,18 @@ public:
 ///
 ///     #include "component.hxx"
 ///     namespace {
-///     RegisterComponent<MyComponent> registercomponentmine("mycomponent");
+///     RegisterComponent<MyComponent> registercomponentmine;
 ///     }
+///
+/// In order for this to work, the component class must have a static
+/// constexpr component called `type` containing the name for the
+/// component. This component will need to be convertible to a string.
+///
 template <typename DerivedType>
 struct RegisterComponent : public ComponentFactory::RegisterInFactory<DerivedType> {
   RegisterComponent()
-      : ComponentFactory::RegisterInFactory<DerivedType>(DerivedType::type) {}
-  // FIXME: Temporary constructor, for backwards-compatibility while I'm testing
-  RegisterComponent(const std::string& name)
-      : ComponentFactory::RegisterInFactory<DerivedType>(name) {}
+      : ComponentFactory::RegisterInFactory<DerivedType>(std::string(DerivedType::type)) {
+  }
 };
 
 /// Faster non-printing getter for Options

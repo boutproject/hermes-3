@@ -24,8 +24,9 @@ using OPTYPE = GuardedOptions && (GuardedOptions&&, Field3D);
  * Reaction.
  */
 struct ReactionBase : public Component {
-  ReactionBase(Permissions&& permissions)
-      : Component(std::move(permissions)), inst_num(incremented_instance_num() + 1) {}
+  ReactionBase(std::string name, Permissions&& permissions)
+      : Component(name, std::move(permissions)),
+        inst_num(incremented_instance_num() + 1) {}
 
   static std::size_t incremented_instance_num() { return instance_num_ref()++; }
 
@@ -213,9 +214,6 @@ private:
   // Channels to determine how momentum and energy are distributed to product species
   std::map<std::string, std::map<std::string, BoutReal>> energy_channels;
   std::map<std::string, std::map<std::string, BoutReal>> momentum_channels;
-
-  /// Label used in the state for reaction configuration.
-  const std::string name;
 
   /// Participation factors of all species - currently set to 1!
   std::map<std::string, BoutReal> pfactors;
