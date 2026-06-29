@@ -113,7 +113,7 @@ auto fmt::formatter<Component>::format(const Component& component,
   if (not hide_name) {
     result += on;
   }
-  if (show_type or (tn != on and not hide_type)) {
+  if (show_type or ((tn != on or hide_name) and not hide_type)) {
     if (not hide_name) {
       result += " (";
     }

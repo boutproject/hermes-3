@@ -14,7 +14,7 @@ struct DetachmentController : public NamedComponent<DetachmentController> {
                               readOnly("species:e:density", Regions::Interior),
                               readOnly("time"), readWrite("species:{sp}:{output}")}) {
     ASSERT0(BoutComm::size() == 1); // Only works on one processor
-    Options& detachment_controller_options = options["detachment_controller"];
+    Options& detachment_controller_options = options[name];
 
     const auto& units = options["units"];
     BoutReal Tnorm = get<BoutReal>(units["eV"]);
