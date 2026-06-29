@@ -19,6 +19,77 @@
 #include "../include/component_scheduler.hxx"
 #include "../include/permissions.hxx"
 
+/// Cheap class to track dependencies while recursing through the
+/// dependency graph. It is designed to minimise the ammount of
+/// copying that neesd to be done.
+class DependencyChain {
+private:
+  struct Element {
+    Element(std::shared_ptr<Element> _next, Component* _component)
+        : next(std::move(_next)), component(_component) {}
+    std::shared_ptr<Element> next;
+    Component* component;
+  };
+
+public:
+  DependencyChain(std::vector<std::unique_ptr<Component>>* components)
+      : components(components) {}
+
+  DependencyChain addComponent(Component* component) const {
+    return DependencyChain(*this, component);
+  }
+  DependencyChain addComponent(const size_t comp_idx) const {
+    return addComponent((*components)[comp_idx].get());
+  }
+
+  struct iterator {
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = Component;
+    using pointer = Component*;
+    using reference = Component&;
+
+    iterator(std::shared_ptr<Element> item) : current(std::move(item)) {}
+
+    reference operator*() const { return *current->component; }
+    pointer operator->() { return current->component; }
+
+    iterator& operator++() {
+      current = current->next;
+      return *this;
+    }
+    iterator operator++(int) {
+      iterator tmp = *this;
+      ++(*this);
+      return tmp;
+    }
+
+    friend bool operator==(const iterator& a, const iterator& b) {
+      return a.current == b.current;
+    }
+    friend bool operator!=(const iterator& a, const iterator& b) {
+      return a.current != b.current;
+    }
+
+  private:
+    std::shared_ptr<Element> current;
+  };
+
+  iterator begin() const { return back; }
+  iterator end() const { return std::shared_ptr<Element>(nullptr); }
+
+  std::size_t size() const { return _size; }
+
+private:
+  std::vector<std::unique_ptr<Component>>* components = nullptr;
+  std::shared_ptr<Element> back{nullptr};
+  std::size_t _size = 0;
+
+  DependencyChain(const DependencyChain& tail, Component* new_comp)
+      : components(tail.components), back(std::make_shared<Element>(tail.back, new_comp)),
+        _size(tail._size + 1) {}
+};
+
 const std::set<std::string> ComponentScheduler::predeclared_variables = {
     "time",          "linear",      "units:inv_meters_cubed", "units:eV", "units:Tesla",
     "units:seconds", "units:meters"};
@@ -34,17 +105,23 @@ const std::set<std::string> ComponentScheduler::predeclared_variables = {
 /// the corresponding element of `dependencies`.
 void topological_sort(const std::vector<std::set<size_t>>& dependencies, size_t item,
                       std::vector<size_t>& sorted, std::vector<bool>& processing,
-                      std::vector<bool>& processed) {
+                      std::vector<bool>& processed, const DependencyChain& dependees) {
   if (processed[item]) {
     return;
   }
   if (processing[item]) {
-    throw BoutException("Circular dependency among components.");
+    auto recursed_dependees = dependees.addComponent(item);
+    throw BoutException("Circular dependency among components: {}",
+                        fmt::join(recursed_dependees, " -> "));
   }
   processing[item] = true;
 
-  for (const auto dep : dependencies[item]) {
-    topological_sort(dependencies, dep, sorted, processing, processed);
+  if (not dependencies[item].empty()) {
+    auto recursed_dependees = dependees.addComponent(item);
+    for (const auto dep : dependencies[item]) {
+      topological_sort(dependencies, dep, sorted, processing, processed,
+                       recursed_dependees);
+    }
   }
   processed[item] = true;
   sorted.push_back(item);
@@ -103,7 +180,7 @@ getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) 
   std::set_intersection(unconditional_names.begin(), unconditional_names.end(),
                         unconditional_sections.begin(), unconditional_sections.end(),
                         std::inserter(sections_present, sections_present.begin()));
-  /// Assemble the set of all variable names which are definitlye
+  /// Assemble the set of all variable names which are definitly
   /// read/written by components (i.e., not including sections)
   std::set<std::string> non_sections;
   std::set_difference(unconditional_names.begin(), unconditional_names.end(),
@@ -297,7 +374,8 @@ void sortComponents(std::vector<std::unique_ptr<Component>>& components) {
   // Perform the sort
   for (size_t i = 0; i < components.size(); i++) {
     if (!processed[i]) {
-      topological_sort(component_dependencies, i, order, processing, processed);
+      topological_sort(component_dependencies, i, order, processing, processed,
+                       DependencyChain(&components));
     }
   }
 
