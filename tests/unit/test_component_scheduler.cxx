@@ -3,9 +3,11 @@
 #include "../../include/component_scheduler.hxx"
 
 namespace {
-struct TestComponent : public Component {
-  TestComponent(const std::string&, Options&, Solver*)
-      : Component({readWrite("answer")}) {}
+struct TestComponent : public NamedComponent<TestComponent> {
+  TestComponent(std::string name, Options&, Solver*)
+      : NamedComponent(name, {readWrite("answer")}) {}
+
+  static constexpr auto type = "testcomponent";
 
 private:
   void transform_impl(GuardedOptions& state) override {
@@ -13,9 +15,11 @@ private:
   }
 };
 
-struct TestMultiply : public Component {
-  TestMultiply(const std::string&, Options&, Solver*)
-      : Component({writeFinal("answer")}) {}
+struct TestMultiply : public NamedComponent<TestMultiply> {
+  TestMultiply(std::string name, Options&, Solver*)
+      : NamedComponent(name, {writeFinal("answer")}) {}
+
+  static constexpr auto type = "multiply";
 
 private:
   void transform_impl(GuardedOptions& state) override {
@@ -25,26 +29,29 @@ private:
   }
 };
 
-struct OrderChecker : public Component {
+struct OrderChecker : public NamedComponent<OrderChecker> {
   OrderChecker(const std::string& name, Options& alloptions, Solver*)
-      : Component(getPermissions(name, alloptions)), name(name) {}
+      : NamedComponent(name, getPermissions(name, alloptions)) {}
   static Permissions getPermissions(const std::string& name, Options& alloptions) {
     return alloptions[name]["permissions"].as<Permissions>();
   }
   static void resetOrderInfo() { execution_order.clear(); }
 
-  std::string name;
   static std::vector<std::string> execution_order;
 
+  static constexpr auto type = "orderchecker";
+
 private:
-  void transform_impl(GuardedOptions&) override { execution_order.push_back(name); }
+  void transform_impl(GuardedOptions&) override {
+    execution_order.push_back(objectName());
+  }
 };
 
 std::vector<std::string> OrderChecker::execution_order;
 
-RegisterComponent<TestComponent> registertestcomponent("testcomponent");
-RegisterComponent<TestMultiply> registertestcomponent2("multiply");
-RegisterComponent<OrderChecker> registercomponentorderchecker("orderchecker");
+RegisterComponent<TestComponent> registertestcomponent;
+RegisterComponent<TestMultiply> registertestcomponent2;
+RegisterComponent<OrderChecker> registercomponentorderchecker;
 } // namespace
 
 TEST(SchedulerTest, OneComponent) {

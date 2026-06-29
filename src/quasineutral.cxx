@@ -7,10 +7,11 @@
 #include <string>
 
 Quasineutral::Quasineutral(std::string name, Options& alloptions, Solver* UNUSED(solver))
-    : Component({readWrite("species:{name}:{outputs}"),
-                 // FIXME: These are only read if BOTH are set
-                 readIfSet("species:{all_species}:charge"),
-                 readIfSet("species:{all_species}:density", Regions::Interior)}),
+    : NamedComponent(name,
+                     {readWrite("species:{name}:{outputs}"),
+                      // FIXME: These are only read if BOTH are set
+                      readIfSet("species:{all_species}:charge"),
+                      readIfSet("species:{all_species}:density", Regions::Interior)}),
       name(name) {
   Options& options = alloptions[name];
 

@@ -72,20 +72,65 @@ private:
 
 } // namespace hermes
 namespace {
+// hermes::CXReaction couldn't inherit from NamedComponent while
+// keeping the function implementations in the .cxx file. Instead
+// we apply CRTP here.
+template <typename T>
+struct CXReaction : public hermes::CXReaction {
+  using hermes::CXReaction::CXReaction;
+  std::string typeName() const final { return T::type; }
+};
+
 /// Register components for symmetric HCX, one per isotope
-RegisterComponent<hermes::CXReaction> register_cx_hh("h + h+ -> h+ + h");
-RegisterComponent<hermes::CXReaction> register_cx_dd("d + d+ -> d+ + d");
-RegisterComponent<hermes::CXReaction> register_cx_tt("t + t+ -> t+ + t");
+struct CXHH : CXReaction<CXHH> {
+  using CXReaction<CXHH>::CXReaction;
+  static constexpr auto type = "h + h+ -> h+ + h";
+};
+struct CXDD : CXReaction<CXDD> {
+  using CXReaction<CXDD>::CXReaction;
+  static constexpr auto type = "d + d+ -> d+ + d";
+};
+struct CXTT : CXReaction<CXTT> {
+  using CXReaction<CXTT>::CXReaction;
+  static constexpr auto type = "t + t+ -> t+ + t";
+};
+RegisterComponent<CXHH> register_cx_hh;
+RegisterComponent<CXDD> register_cx_dd;
+RegisterComponent<CXTT> register_cx_tt;
 
 /// Register components for non-symmetric HCX; one per atom,ion combination
-RegisterComponent<hermes::CXReaction> register_cx_hd("h + d+ -> h+ + d");
-RegisterComponent<hermes::CXReaction> register_cx_dh("d + h+ -> d+ + h");
+struct CXHD : CXReaction<CXHD> {
+  using CXReaction<CXHD>::CXReaction;
+  static constexpr auto type = "h + d+ -> h+ + d";
+};
+struct CXDH : CXReaction<CXDH> {
+  using CXReaction<CXDH>::CXReaction;
+  static constexpr auto type = "d + h+ -> d+ + h";
+};
+RegisterComponent<CXHD> register_cx_hd;
+RegisterComponent<CXDH> register_cx_dh;
 
-RegisterComponent<hermes::CXReaction> register_cx_ht("h + t+ -> h+ + t");
-RegisterComponent<hermes::CXReaction> register_cx_th("t + h+ -> t+ + h");
+struct CXHT : CXReaction<CXHT> {
+  using CXReaction<CXHT>::CXReaction;
+  static constexpr auto type = "h + t+ -> h+ + t";
+};
+struct CXTH : CXReaction<CXTH> {
+  using CXReaction<CXTH>::CXReaction;
+  static constexpr auto type = "t + h+ -> t+ + h";
+};
+RegisterComponent<CXHT> register_cx_ht;
+RegisterComponent<CXTH> register_cx_th;
 
-RegisterComponent<hermes::CXReaction> register_cx_dt("d + t+ -> d+ + t");
-RegisterComponent<hermes::CXReaction> register_cx_td("t + d+ -> t+ + d");
+struct CXDT : CXReaction<CXDT> {
+  using CXReaction<CXDT>::CXReaction;
+  static constexpr auto type = "d + t+ -> d+ + t";
+};
+struct CXTD : CXReaction<CXTD> {
+  using CXReaction<CXTD>::CXReaction;
+  static constexpr auto type = "t + d+ -> t+ + d";
+};
+RegisterComponent<CXDT> register_cx_dt;
+RegisterComponent<CXTD> register_cx_td;
 } // namespace
 
 #endif // CX_REACTION_H

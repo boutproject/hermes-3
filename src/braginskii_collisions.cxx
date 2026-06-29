@@ -24,10 +24,11 @@
 
 BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions,
                                            Solver*)
-    : Component({readOnly("species:{non_electrons}:density", Regions::Interior),
-                 readIfSet("species:{non_electrons}:charge"),
-                 readIfSet("species:{negative_ions}:temperature", Regions::Interior),
-                 readOnly("species:{all_species}:AA")}) {
+    : NamedComponent(name,
+                     {readOnly("species:{non_electrons}:density", Regions::Interior),
+                      readIfSet("species:{non_electrons}:charge"),
+                      readIfSet("species:{negative_ions}:temperature", Regions::Interior),
+                      readOnly("species:{all_species}:AA")}) {
   const Options& units = alloptions["units"];
 
   // Normalisations

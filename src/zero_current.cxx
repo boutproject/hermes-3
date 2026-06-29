@@ -7,9 +7,10 @@
 #include "../include/zero_current.hxx"
 
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
-    : Component({readIfSet("species:{all_species}:charge"),
-                 readIfSet("species:{all_species}:{inputs}", Regions::Interior),
-                 readWrite(fmt::format("species:{}:velocity", name))}),
+    : NamedComponent(name,
+                     {readIfSet("species:{all_species}:charge"),
+                      readIfSet("species:{all_species}:{inputs}", Regions::Interior),
+                      readWrite(fmt::format("species:{}:velocity", name))}),
       name(name) {
   Options& options = alloptions[name];
 

@@ -531,7 +531,11 @@ The basic building block of all Hermes-3 models is the
 (a tree of dictionaries/maps) and transforms (modifies) it. This is
 done by calling the public `Component::transform` method. This will
 call the private `Component::transform_impl` method, which must be
-overriden for each Component implementation.
+overriden for each Component implementation. There must also be an
+implementation of the `Component::typeName` method. This can be done
+by inheriting from the `NamedComponent` class, which implements it
+using the ["Curiously Recurring Template
+Pattern"](https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern).
 
 After all components have modified the state in turn, all components
 may then implement a `finally` method to take the final state but not
@@ -552,20 +556,24 @@ file using a code like::
 
   #include "component.hxx"
 
-  struct MyComponent : public Component {
+  struct MyComponent : public NamedComponent<MyComponent> {
     MyComponent(const std::string &name, Options &options, Solver *solver);
     ...
+
+    static constexpr auto type = "mycomponent";
   };
 
   namespace {
-  RegisterComponent<MyComponent> registercomponentmine("mycomponent");
+  RegisterComponent<MyComponent> registercomponentmine;
   }
 
-where `MyComponent` is the component class, and "mycomponent" is the
+where ``MyComponent`` is the component class, and "mycomponent" is the
 name that can be used in the BOUT.inp settings file to create a
-component of this type. Note that the name can be any string except it
-can't contain commas or brackets, and shouldn't start or end with
-whitespace.
+component of this type. The latter is specified in a publicly
+accessible component of the class called ``type``. It must be possible
+to convert ``type`` to a string. Note that the name can be any string
+except it can't contain commas or brackets, and shouldn't start or end
+with whitespace.
 
 Inputs to the component constructors are:
 
