@@ -586,18 +586,6 @@ The `name` is a string labelling the instance. The `alloptions` tree contains at
 * ``alloptions[name]`` options for this instance
 * ``alloptions['units']``
 
-All component constructors must pass a `Permissions` object to the
-constructor on the `Component::Component` base class. This specifies
-which variables will be read/written by the `Component::transform`
-method and will be used to construct a `GuardedOptions` object to be
-passed into `Component::transform_impl`. The `Permissions` object
-(`Component::state_variable_access`) can be further updated in the
-body of the constructor of your component, based on what
-configurations were specified in ``alloptions``. You should give read
-and write permissions to the minimum number of variables necessary, to
-avoid circular dependencies arising among components.
-
-
 Component Permissions
 `````````````````````
 
