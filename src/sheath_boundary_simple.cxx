@@ -58,7 +58,7 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
 
 SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions, Solver*)
     : NamedComponent(name, {
-                               readIfSet("species:e:{e_whole_domain}"),
+                               readIfSet("species:e:AA"),
                                writeBoundaryFinal("species:e:{e_boundary}"),
                                readWrite("species:e:energy_source"),
                                readWrite("species:e:energy_flow_ylow"),
