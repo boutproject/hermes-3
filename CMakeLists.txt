@@ -358,6 +358,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-production)
   hermes_add_integrated_test(2D-energy)
   hermes_add_integrated_test(2D-recycling)
+  hermes_add_integrated_test(component-order)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)

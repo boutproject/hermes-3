@@ -10,7 +10,7 @@
 ///
 /// This is most often used in the electron species, but
 /// does not need to be.
-struct ZeroCurrent : public Component {
+struct ZeroCurrent : public NamedComponent<ZeroCurrent> {
   /// Inputs
   /// ------
   ///
@@ -20,19 +20,22 @@ struct ZeroCurrent : public Component {
   ///     - charge   (must not be zero)
   ZeroCurrent(std::string name, Options& alloptions, Solver*);
 
-  void finally(const Options &state) override {
+  void finally(const Options& state) override {
     // Get the velocity with boundary condition applied.
     // This is for output only
     velocity = get<Field3D>(state["species"][name]["velocity"]);
   }
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
+  static constexpr auto type = "zero_current";
+
 private:
   std::string name; ///< Name of this species
   BoutReal charge;  ///< The charge of this species
 
   Field3D velocity; ///< Species velocity (for writing to output)
-  
+
   /// Required inputs
   /// - species
   ///   - <name>
@@ -40,19 +43,19 @@ private:
   ///     - charge
   ///   - <one or more other species>
   ///     - density
-  ///     - velocity
+  ///     - velocityg
   ///     - charge
   ///
   /// Sets in the state
   /// - species
   ///   - <name>
   ///     - velocity
-  /// 
+  ///
   void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
-RegisterComponent<ZeroCurrent> registercomponentzerocurrent("zero_current");
+RegisterComponent<ZeroCurrent> registercomponentzerocurrent;
 }
 
 #endif // ZERO_CURRENT

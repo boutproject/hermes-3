@@ -531,7 +531,11 @@ The basic building block of all Hermes-3 models is the
 (a tree of dictionaries/maps) and transforms (modifies) it. This is
 done by calling the public `Component::transform` method. This will
 call the private `Component::transform_impl` method, which must be
-overriden for each Component implementation.
+overriden for each Component implementation. There must also be an
+implementation of the `Component::typeName` method. This can be done
+by inheriting from the `NamedComponent` class, which implements it
+using the ["Curiously Recurring Template
+Pattern"](https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern).
 
 After all components have modified the state in turn, all components
 may then implement a `finally` method to take the final state but not
@@ -552,20 +556,24 @@ file using a code like::
 
   #include "component.hxx"
 
-  struct MyComponent : public Component {
+  struct MyComponent : public NamedComponent<MyComponent> {
     MyComponent(const std::string &name, Options &options, Solver *solver);
     ...
+
+    static constexpr auto type = "mycomponent";
   };
 
   namespace {
-  RegisterComponent<MyComponent> registercomponentmine("mycomponent");
+  RegisterComponent<MyComponent> registercomponentmine;
   }
 
-where `MyComponent` is the component class, and "mycomponent" is the
+where ``MyComponent`` is the component class, and "mycomponent" is the
 name that can be used in the BOUT.inp settings file to create a
-component of this type. Note that the name can be any string except it
-can't contain commas or brackets, and shouldn't start or end with
-whitespace.
+component of this type. The latter is specified in a publicly
+accessible component of the class called ``type``. It must be possible
+to convert ``type`` to a string. Note that the name can be any string
+except it can't contain commas or brackets, and shouldn't start or end
+with whitespace.
 
 Inputs to the component constructors are:
 
@@ -577,7 +585,6 @@ The `name` is a string labelling the instance. The `alloptions` tree contains at
 
 * ``alloptions[name]`` options for this instance
 * ``alloptions['units']``
-
 
 Component Permissions
 `````````````````````
@@ -620,9 +627,14 @@ and then in `Hermes::rhs` the components are run by a call::
   scheduler->transform(state);
 
 The call to `ComponentScheduler::create` treats the "components"
-option as a comma-separated list of names. The order of the components
-is the order that they are run in. For each name in the list, the
-scheduler looks up the options under the section of that name.
+option as a comma-separated list of names. For each name in the list,
+the scheduler looks up the options under the section of that name. The
+``ComponentScheduler`` will use permission information stored by each
+component in `Component::state_variable_access` to work out the order
+to execute components. It will ensure that all writes to a variable
+have occurred before the first time it is read. If there is a variable
+needed by some component which is never set or if there is a circular
+dependency then it will throw an exception.
 
 .. code-block:: ini
 
@@ -639,8 +651,9 @@ scheduler looks up the options under the section of that name.
 
 This would create two `Component` objects, of type `component1` and
 `component2`. Each time `Hermes::rhs` is run, the `transform`
-functions of `component1` and then `component2` will be called,
-followed by their `finally` functions.
+functions of `component1` and `component2` will be called, with the
+order depending on what state variables each reads and writes. This is
+followed by a call to their `finally` functions.
 
 It is often useful to group components together, for example to
 define the governing equations for different species. A `type` setting
@@ -662,8 +675,10 @@ of components
    # options to control component3
 
 This will create three components, which will be run in the order
-`component1`, `component2`, `component3`: First all the components
-in `group1`, and then `component3`.
+`component1`, `component2`, `component3`: First all the components in
+`group1`, and then `component3`. Grouped components will be sorted
+individually when determining the run order; they may not be run
+together.
 
 .. doxygenclass:: ComponentScheduler
    :members:

@@ -21,7 +21,7 @@
 /// References
 ///  - https://farside.ph.utexas.edu/teaching/plasma/lectures1/node56.html
 ///
-struct BraginskiiElectronViscosity : public Component {
+struct BraginskiiElectronViscosity : public NamedComponent<BraginskiiElectronViscosity> {
   /// Inputs
   /// - <name>
   ///   - diagnose: bool, default false
@@ -30,7 +30,9 @@ struct BraginskiiElectronViscosity : public Component {
   ///     Flux limiter coefficient. < 0 means no limiter
   BraginskiiElectronViscosity(const std::string& name, Options& alloptions, Solver*);
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
+  static constexpr auto type = "braginskii_electron_viscosity";
 
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
@@ -54,7 +56,7 @@ private:
 
 namespace {
 RegisterComponent<BraginskiiElectronViscosity>
-    registercomponentbraginskiielectronviscosity("braginskii_electron_viscosity");
+    registercomponentbraginskiielectronviscosity;
 }
 
 #endif

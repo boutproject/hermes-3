@@ -7,6 +7,7 @@ namespace hermes {
 //======================== General reaction class tests =======================
 /// @brief Test parsing of various input optionsReactionBase constructor should throw if
 /// the reaction type string is not
+
 TEST(ReactionTest, InputOptions) {
   const std::string comp_name = "test";
 
@@ -21,15 +22,15 @@ TEST(ReactionTest, InputOptions) {
   Options valid_input2 = base_input.copy();
   valid_input2[comp_name]["data_srcs"] = "(Amjuel,Amjuel)";
   ReactionBase::reset_instance_counter();
-  ASSERT_NO_THROW(CXReaction(comp_name, valid_input1));
+  ASSERT_NO_THROW(ConcreteCXReaction(comp_name, valid_input1));
   ReactionBase::reset_instance_counter();
-  ASSERT_NO_THROW(CXReaction(comp_name, valid_input2));
+  ASSERT_NO_THROW(ConcreteCXReaction(comp_name, valid_input2));
 
   // Setting num_data_srcs != (1 || num_reactions) should throw
   Options invalid_input1 = base_input.copy();
   invalid_input1[comp_name]["data_srcs"] = "(Amjuel,Amjuel,Amjuel)";
   ReactionBase::reset_instance_counter();
-  ASSERT_THROW(CXReaction(comp_name, invalid_input1), BoutException);
+  ASSERT_THROW(ConcreteCXReaction(comp_name, invalid_input1), BoutException);
 
   // Setting one or two data IDs should work
   Options valid_input3 = base_input.copy();
@@ -37,15 +38,15 @@ TEST(ReactionTest, InputOptions) {
   Options valid_input4 = base_input.copy();
   valid_input4[comp_name]["data_ids"] = "H.2_3.1.8,H.2_3.1.8";
   ReactionBase::reset_instance_counter();
-  ASSERT_NO_THROW(CXReaction(comp_name, valid_input3));
+  ASSERT_NO_THROW(ConcreteCXReaction(comp_name, valid_input3));
   ReactionBase::reset_instance_counter();
-  ASSERT_NO_THROW(CXReaction(comp_name, valid_input4));
+  ASSERT_NO_THROW(ConcreteCXReaction(comp_name, valid_input4));
 
   // Setting num_data_ids != (1 || num_reactions) should throw
   Options invalid_input2 = base_input.copy();
   invalid_input2[comp_name]["data_ids"] = "H.2_3.1.8,H.2_3.1.8,H.2_3.1.8";
   ReactionBase::reset_instance_counter();
-  ASSERT_THROW(CXReaction(comp_name, invalid_input2), BoutException);
+  ASSERT_THROW(ConcreteCXReaction(comp_name, invalid_input2), BoutException);
 }
 
 //======================== CX reaction class tests =======================
@@ -72,7 +73,7 @@ TEST(CXReactionTest, InvalidReactionStrings) {
     ReactionBase::reset_instance_counter();
     Options options = base_options.copy();
     options["test"]["type"] = invalid_reaction_str;
-    ASSERT_THROW(CXReaction("test", options), BoutException);
+    ASSERT_THROW(ConcreteCXReaction("test", options), BoutException);
   }
 }
 
@@ -93,7 +94,7 @@ TEST(CXReactionTest, OrderIndependentReactionStrs) {
     ReactionBase::reset_instance_counter();
     Options options = base_options.copy();
     options["test"]["type"] = valid_reaction_str;
-    ASSERT_NO_THROW(CXReaction("test", options));
+    ASSERT_NO_THROW(ConcreteCXReaction("test", options));
   }
 }
 

@@ -22,20 +22,21 @@
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/permissions.hxx"
 
 using bout::globals::mesh;
 
-BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptions,
+BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& alloptions,
                                            Solver*)
-    : Component({readOnly("species:{sp}:{input_vars}"), readOnly("fields:Apar_flutter"),
-                 writeBoundary("species:{sp}:pressure"),
-                 readWrite("species:{sp}:{output_vars}")}) {
+    : NamedComponent(name, {readOnly("species:{sp}:{input_vars}"),
+                            readIfSet("fields:Apar_flutter"),
+                            readWrite("species:{sp}:{output_vars}")}) {
 
   // Get settings for each species
-  for (auto& kv : alloptions.getChildren()) {
+  for (const auto& kv : alloptions.getChildren()) {
     auto& options = alloptions[kv.first];
     // Check if the component is a species which undergoes energy/pressure evolution
-    if (options.isValue() || !options["type"].isValue()
+    if (options.isValue() || !options.isSet("type")
         || (options["type"].as<std::string>().find("evolve_pressure") == std::string::npos
             && options["type"].as<std::string>().find("evolve_energy")
                    == std::string::npos)) {
@@ -90,7 +91,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
 
   std::vector<std::string> coll_types;
 
-  substitutePermissions("input_vars", {"AA", "density", "temperature"});
+  substitutePermissions("input_vars", {"AA", "density", "pressure", "temperature"});
   substitutePermissions("output_vars",
                         {"energy_source", "kappa_par", "energy_flow_ylow"});
   std::vector<std::string> species;
@@ -294,7 +295,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
         Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false));
     add(species["energy_flow_ylow"], flow_ylow_conduction);
 
-    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and IS_SET(state["fields:Apar_flutter"])) {
       // Magnetic flutter term. The operator splits into 4 pieces:
       // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))
       //                    + Div(k db b0.Grad(T)) + Div(k db db.Grad(T))

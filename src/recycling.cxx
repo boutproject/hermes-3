@@ -13,9 +13,9 @@
 using bout::globals::mesh;
 
 Recycling::Recycling(std::string name, Options& alloptions, Solver*)
-    : Component({readOnly("species:{from}:{from_inputs}"),
-                 readOnly("species:{to}:{to_inputs}"),
-                 readWrite("species:{to}:{outputs}")}) {
+    : NamedComponent(name, {readOnly("species:{from}:{from_inputs}"),
+                            readOnly("species:{to}:{to_inputs}"),
+                            readWrite("species:{to}:{outputs}")}) {
 
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];

@@ -13,12 +13,11 @@
 ///
 /// Expressions taken from:
 /// https://farside.ph.utexas.edu/teaching/plasma/lectures1/node55.html
-struct SimpleConduction : public Component {
+struct SimpleConduction : public NamedComponent<SimpleConduction> {
   SimpleConduction(std::string name, Options& alloptions, Solver*)
-      : Component({readOnly("species:{name}:temperature", Regions::Interior),
-                   readOnly("species:{name}:AA"),
-                   readWrite("species:{name}:energy_source")}),
-        name(name) {
+      : NamedComponent(name, {readOnly("species:{name}:temperature", Regions::Interior),
+                              readOnly("species:{name}:AA"),
+                              readWrite("species:{name}:energy_source")}) {
     auto& units = alloptions["units"];
     Tnorm = units["eV"];
     Nnorm = units["inv_meters_cubed"];
@@ -56,8 +55,8 @@ struct SimpleConduction : public Component {
               / Nnorm;
 
     boundary_flux = options["conduction_boundary_flux"]
-      .doc("Allow heat conduction through sheath boundaries?")
-      .withDefault<bool>(false);
+                        .doc("Allow heat conduction through sheath boundaries?")
+                        .withDefault<bool>(false);
 
     if (density <= 0.0) {
       setPermissions(readOnly("species:{name}:density", Regions::Interior));
@@ -65,17 +64,20 @@ struct SimpleConduction : public Component {
     substitutePermissions("name", {name});
   }
 
+  static constexpr auto type = "simple_conduction";
+
 private:
-  std::string name;      ///< Name of the species e.g. "e"
   BoutReal kappa0;       ///< Pre-calculated constant in heat conduction coefficient
   BoutReal Nnorm, Tnorm; ///< Normalisation coefficients
 
   BoutReal temperature; ///< Fix temperature if > 0
   BoutReal density;     ///< Fix density if > 0
 
-  bool boundary_flux;   ///< Allow flux through sheath boundaries?
+  bool boundary_flux; ///< Allow flux through sheath boundaries?
 
   void transform_impl(GuardedOptions& state) override {
+    const std::string& name = objectName();
+
     auto species = state["species"][name];
 
     // Species time-evolving temperature
@@ -107,8 +109,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SimpleConduction>
-    registercomponentsimpleconduction("simple_conduction");
+RegisterComponent<SimpleConduction> registercomponentsimpleconduction;
 }
 
 #endif // SIMPLE_CONDUCTION_H

@@ -31,7 +31,7 @@
 /// is solved as a parallel diffusion, so is treated separately
 /// All other terms are added to Pi_ciperp, even if they are
 /// not really parallel parts
-struct BraginskiiIonViscosity : public Component {
+struct BraginskiiIonViscosity : public NamedComponent<BraginskiiIonViscosity> {
   /// Inputs
   /// - <name>
   ///   - eta_limit_alpha: float, default -1
@@ -44,6 +44,8 @@ struct BraginskiiIonViscosity : public Component {
 
   /// Save variables to the output
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "braginskii_ion_viscosity";
 
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
@@ -97,8 +99,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiIonViscosity>
-    registercomponentionbraginskiiviscosity("braginskii_ion_viscosity");
+RegisterComponent<BraginskiiIonViscosity> registercomponentionbraginskiiviscosity;
 }
 
 #endif

@@ -30,8 +30,8 @@
 using bout::globals::mesh;
 
 EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver)
-    : Component(
-          {readOnly("species:{name}:{inputs}"), readWrite("species:{name}:{outputs}")}),
+    : NamedComponent(name, {readOnly("species:{name}:{inputs}"),
+                            readWrite("species:{name}:{outputs}")}),
       name(name) {
 
   auto& options = alloptions[name];
