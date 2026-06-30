@@ -51,6 +51,7 @@
 #include "include/fixed_fraction_radiation.hxx"
 #include "include/fixed_temperature.hxx"
 #include "include/fixed_velocity.hxx"
+#include "include/hydrogen_molecule_reactions.hxx"
 #include "include/ionisation.hxx"
 #include "include/isothermal.hxx"
 #include "include/izn_rec_reaction.hxx"

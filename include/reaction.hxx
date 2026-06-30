@@ -60,8 +60,10 @@ struct Reaction : public ReactionBase {
    *
    * @param name
    * @param options Options object
+   * @param add_pop_change_sources Whether to add population change sources (default:
+   * true)
    */
-  Reaction(std::string name, Options& options);
+  Reaction(std::string name, Options& options, bool add_pop_change_sources = true);
 
   /**
    * @brief Copy all diagnostics into the output, setting the appropriate metadata at the
@@ -83,8 +85,8 @@ protected:
   Options& units;
   BoutReal Tnorm, Nnorm, FreqNorm;
 
-  /// Rate multipliers, extracted from input options
-  BoutReal rate_multiplier, radiation_multiplier;
+  /// Rate multiplier. Defaults to 1, but subclasses may read an option and overwrite.
+  BoutReal rate_multiplier;
 
   /// Output diagnostics?
   bool diagnose;
@@ -210,6 +212,8 @@ protected:
   }
 
 private:
+  const bool add_pop_change_sources;
+
   // Channels to determine how momentum and energy are distributed to product species
   std::map<std::string, std::map<std::string, BoutReal>> energy_channels;
   std::map<std::string, std::map<std::string, BoutReal>> momentum_channels;

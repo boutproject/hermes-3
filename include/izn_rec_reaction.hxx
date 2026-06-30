@@ -51,6 +51,9 @@ protected:
   /// Name of the (heavy) species with which collision freqs. are associated in the state
   std::string heavy_collfreq_species;
 
+  /// Radiation rate multiplier, extracted from input options
+  BoutReal radiation_multiplier;
+
 private:
   /// Short reaction type string used in diagnostic names ("iz" or "rec")
   const std::string short_reaction_type;
@@ -81,7 +84,7 @@ struct IznReaction : public IznRecReaction {
    * @param solver  The solver object for the simulation (discarded by this class)
    */
   IznReaction(std::string name, Options& options, [[maybe_unused]] Solver* solver)
-      : IznReaction(name, options){};
+      : IznReaction(name, options) {};
 };
 
 /**
@@ -106,7 +109,7 @@ struct RecReaction : public IznRecReaction {
    * @param solver  The solver object for the simulation (discarded by this class)
    */
   RecReaction(std::string name, Options& options, [[maybe_unused]] Solver* solver)
-      : RecReaction(name, options){};
+      : RecReaction(name, options) {};
 };
 
 } // namespace hermes

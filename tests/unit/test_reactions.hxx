@@ -22,6 +22,31 @@
 
 enum class linfunc_axis { x, y, z };
 
+/**
+ * @brief Prefix increment operator for linfunc_axis.
+ *
+ * @param current_val The current value of the enum.
+ * @return linfunc_axis& The incremented value of the enum.
+ */
+inline linfunc_axis& operator++(linfunc_axis& current) {
+  current = (current == linfunc_axis::z)
+                ? linfunc_axis::x
+                : static_cast<linfunc_axis>(static_cast<int>(current) + 1);
+  return current;
+}
+
+/**
+ * @brief Postfix increment operator for linfunc_axis.
+ *
+ * @param current The current value of the enum.
+ * @return linfunc_axis The old value of the enum.
+ */
+inline linfunc_axis operator++(linfunc_axis& current, int) {
+  linfunc_axis old = current;
+  ++current;
+  return old;
+}
+
 /// Global mesh
 namespace bout::globals {
 extern Mesh* mesh;
@@ -47,7 +72,7 @@ class ReactionTest : public FakeMeshFixture_tmpl<8, 8, 8> {
 
 protected:
   ReactionTest(std::string lbl, std::string reaction_str)
-      : lbl(lbl), parser(reaction_str){};
+      : lbl(lbl), parser(reaction_str) {};
 
   std::string lbl;
   ReactionParser parser;
@@ -213,6 +238,29 @@ protected:
     std::filesystem::path outpath = ref_data_path();
     std::filesystem::remove(outpath);
     bout::OptionsIO::create(std::string(outpath))->write(state);
+  }
+};
+
+/// An invalid reaction ( > 1 total energy weight for the first reactant)
+struct InvalidEnergyWeightsReaction : public Reaction {
+  InvalidEnergyWeightsReaction(const std::string& name, Options& options)
+      : Reaction(name, options) {
+    std::string r1 = this->parser->get_reactant_by_position(1);
+    for (const std::string& product :
+         this->parser->get_species(species_filter::products)) {
+      this->set_energy_channel_weight(r1, product, 1.1);
+    }
+  }
+};
+/// An invalid reaction ( < 0 total momentum weight for the first reactant)
+struct InvalidMomWeightsReaction : public Reaction {
+  InvalidMomWeightsReaction(const std::string& name, Options& options)
+      : Reaction(name, options) {
+    std::string r1 = this->parser->get_reactant_by_position(1);
+    for (const std::string& product :
+         this->parser->get_species(species_filter::products)) {
+      this->set_momentum_channel_weight(r1, product, -0.1);
+    }
   }
 };
 
