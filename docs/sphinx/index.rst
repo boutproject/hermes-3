@@ -13,6 +13,7 @@ Hermes-3 documentation
    installation
    inputs
    domain_grid
+   fieldline_geometry
    execution
    postprocessing
    examples
@@ -22,7 +23,6 @@ Hermes-3 documentation
    reactions
    closure
    feedback_control
-   fieldline_geometry
    developer
 
 
