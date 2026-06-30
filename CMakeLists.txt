@@ -113,8 +113,6 @@ set(HERMES_SOURCES
     src/reaction_parser.cxx
     src/species_parser.cxx
     src/fieldline_geometry.cxx
-    src/thermal_force.cxx
-    src/ion_viscosity.cxx
     src/transform.cxx
     src/vorticity.cxx
     include/adas_reaction.hxx
