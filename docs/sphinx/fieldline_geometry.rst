@@ -39,17 +39,17 @@ Return variables
 
 * ``fieldline_geometry_lpar``: :math:`L_\parallel`, parallel distance from upstream
 * ``fieldline_geometry_lambda_int``: :math:`\lambda_{int}=\lambda_q + 1.64S`, the provided ``lambda_int`` function
-* ``fieldline_geometry_pitch_angle``: :math:`\sin(\theta)=B_{pol}/B`, the pitch angle of the magnetic field
-* ``fieldline_geometry_fieldline_radius``: :math:`R`, the provided ``fieldline_radius`` function
-* ``fieldline_geometry_poloidal_magnetic_field``: :math:`B_{pol}`, the poloidal magnetic field strength
-* ``fieldline_geometry_toroidal_magnetic_field``: :math:`B_{tor}`, the toroidal magnetic field strength
-* ``fieldline_geometry_total_magnetic_field``: :math:`B`, the total magnetic field strength
+* ``fieldline_geometry_magnetic_pitch``: :math:`\sin(\theta)=B_{pol}/B`, the magnetic pitch (ratio of poloidal to total field)
+* ``fieldline_geometry_Rxy``: :math:`R`, the provided ``fieldline_radius`` function
+* ``fieldline_geometry_Bpxy``: :math:`B_{pol}`, the poloidal magnetic field strength
+* ``fieldline_geometry_Btxy``: :math:`B_{tor}`, the toroidal magnetic field strength
+* ``fieldline_geometry_Bxy``: :math:`B`, the total magnetic field strength
 * ``fieldline_geometry_transport_broadening``: :math:`\lambda_{int}/\lambda_{int,up}`, the flux tube broadening due to cross-field transport
-* ``fieldline_geometry_flux_expansion``: :math:`f_{exp}=(B_{pol,up}/B_{up})/(B_{pol}/B)`, the flux expansion
-* ``fieldline_geometry_flux_tube_width``: :math:`\lambda_{int} f_{exp}`, the flux tube radial width
-* ``fieldline_geometry_cell_poloidal_length``: :math:`dl_{pol}=dl_\parallel B_{pol}/B`, the poloidal length of the flux tube
+* ``fieldline_geometry_f_R``: :math:`f_R=(B_{pol,up}/B_{up})/(B_{pol}/B)`, the total flux expansion
+* ``fieldline_geometry_flux_tube_width``: :math:`\lambda_{int} f_R`, the flux tube radial width
+* ``fieldline_geometry_dlpol``: :math:`dl_{pol}=dl_\parallel B_{pol}/B`, the poloidal length of the flux tube
 * ``fieldline_geometry_cell_side_area``: :math:`2 \pi R \cdot dl_{pol}`, the poloidal length of the flux tube times its circumference
-* ``fieldline_geometry_cell_volume``: :math:`2 \pi R \cdot dl_{pol} \lambda_{int} f_{exp}`, the poloidal length of the flux tube times its circumference and radial width
+* ``fieldline_geometry_cell_volume``: :math:`2 \pi R \cdot dl_{pol} \lambda_{int} f_R`, the poloidal length of the flux tube times its circumference and radial width
 
 Effect of these terms
 ---------------------------

@@ -218,7 +218,7 @@ void FieldlineGeometry::outputVars(Options& state) {
         );
 
         set_with_attrs(
-            state[std::string("fieldline_geometry_pitch_angle")], pitch_angle,
+            state[std::string("fieldline_geometry_magnetic_pitch")], pitch_angle,
             {
                 {"units", ""},
                 {"long_name", "sin(theta) = Bpol/B"},
@@ -227,7 +227,7 @@ void FieldlineGeometry::outputVars(Options& state) {
         );
 
         set_with_attrs(
-            state[std::string("fieldline_geometry_fieldline_radius")], fieldline_radius,
+            state[std::string("fieldline_geometry_Rxy")], fieldline_radius,
             {
                 {"units", "m"},
                 {"conversion", Lnorm},
@@ -237,7 +237,7 @@ void FieldlineGeometry::outputVars(Options& state) {
         );
 
         set_with_attrs(
-            state[std::string("fieldline_geometry_poloidal_magnetic_field")], poloidal_magnetic_field,
+            state[std::string("fieldline_geometry_Bpxy")], poloidal_magnetic_field,
             {
                 {"units", "T"},
                 {"conversion", Bnorm},
@@ -247,7 +247,7 @@ void FieldlineGeometry::outputVars(Options& state) {
         );
 
         set_with_attrs(
-            state[std::string("fieldline_geometry_toroidal_magnetic_field")], toroidal_magnetic_field,
+            state[std::string("fieldline_geometry_Btxy")], toroidal_magnetic_field,
             {
                 {"units", "T"},
                 {"conversion", Bnorm},
@@ -257,7 +257,7 @@ void FieldlineGeometry::outputVars(Options& state) {
         );
 
         set_with_attrs(
-            state[std::string("fieldline_geometry_total_magnetic_field")], total_magnetic_field,
+            state[std::string("fieldline_geometry_Bxy")], total_magnetic_field,
             {
                 {"units", "T"},
                 {"conversion", Bnorm},
@@ -276,7 +276,7 @@ void FieldlineGeometry::outputVars(Options& state) {
         );
 
         set_with_attrs(
-            state[std::string("fieldline_geometry_flux_expansion")], flux_expansion,
+            state[std::string("fieldline_geometry_f_R")], flux_expansion,
             {
                 {"units", ""},
                 {"long_name", "Flux expansion"},
@@ -295,7 +295,7 @@ void FieldlineGeometry::outputVars(Options& state) {
         );
 
         set_with_attrs(
-            state[std::string("fieldline_geometry_cell_poloidal_length")], cell_poloidal_length,
+            state[std::string("fieldline_geometry_dlpol")], cell_poloidal_length,
             {
                 {"units", "m"},
                 {"conversion", Lnorm},
