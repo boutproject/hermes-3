@@ -23,13 +23,13 @@ spack:
 
   concretizer:
     unify: true
-    # Pin the microarchitecture so the amd64 image is portable. Without this,
-    # Spack concretizes to the build host's native microarch (AVX2/AVX-512 on
-    # GitHub runners), which crashes under emulation on Apple-silicon Macs.
-    # 'generic' granularity makes Spack target a portable baseline (x86_64_v2 /
-    # generic aarch64) for both arches. Unlike a `packages: all: require:
-    # target=...` clause, this does not constrain the compiler node (compilers
-    # are graph nodes in Spack 1.x), so the externally-found gcc still concretizes.
+    # Prefer a portable baseline microarch. NOTE: this is only a *preference* -
+    # with reuse enabled (needed for the OCI build cache) the concretizer will
+    # still reuse a prebuilt binary with a newer native microarch (e.g. armv9.0a
+    # or x86_64_v4/AVX-512), which then SIGILLs on older hardware / Docker VMs.
+    # The actual portability guarantee is a hard `require: target=...` injected
+    # per-arch in hermes-3-builder.dockerfile (this shared file cannot branch on
+    # architecture). Keep this preference as defence-in-depth for source builds.
     targets:
       granularity: generic
 

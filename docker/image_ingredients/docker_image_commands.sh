@@ -79,7 +79,7 @@ build_boutpp () {
     check_exit_code "BOUT++ configuration failed"
 
     notice "Finished configuring BOUT++. Starting build"
-    cmake --build "${build_dir}" --parallel
+    cmake --build "${build_dir}" --parallel 4
     check_exit_code "BOUT++ build failed"
 
     notice "Finished building BOUT++"
@@ -109,7 +109,7 @@ build_hermes () {
     check_exit_code "Hermes-3 configuration failed"
 
     notice "Finished configuring Hermes-3. Starting build"
-    cmake --build "${build_dir}" --parallel
+    cmake --build "${build_dir}" --parallel 4
     check_exit_code "Hermes-3 build failed"
 
     notice "Finished building Hermes-3"

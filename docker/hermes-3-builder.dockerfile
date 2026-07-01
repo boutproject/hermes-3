@@ -52,6 +52,23 @@ COPY docker/image_ingredients/spack.yaml /opt/spack-environment/spack.yaml
 # changed - even after edits to spack.yaml. Without a token, this is skipped
 # and we fall back to the public mirror + compiling from source.
 WORKDIR /opt/spack-environment
+# Pin a hard, portable microarchitecture target for this arch. The
+# `concretizer:targets:granularity: generic` clause in spack.yaml is only a
+# *preference*: with reuse enabled (the default, and required for the OCI cache
+# below) the concretizer happily reuses a prebuilt binary with a newer, native
+# microarch - e.g. armv9.0a from the public mirror, or x86_64_v4 (AVX-512) built
+# on a GitHub runner - which then SIGILLs ("Illegal instruction") on older
+# hardware or under a Docker VM. A `require: target=...` is a hard constraint
+# that reuse cannot override, so we inject it per-arch here (the shared
+# spack.yaml cannot branch on architecture). aarch64/x86_64_v2 are the portable
+# baselines; an external gcc can always target an older ISA than its build host,
+# so this does not make the compiler node unsatisfiable.
+RUN case "$(uname -m)" in \
+      aarch64) HERMES_TARGET=aarch64 ;; \
+      x86_64)  HERMES_TARGET=x86_64_v2 ;; \
+      *)       HERMES_TARGET="$(uname -m)" ;; \
+    esac && \
+    spack -e . config add "packages:all:require:target=${HERMES_TARGET}"
 RUN --mount=type=secret,id=ghcr_token \
     spack env activate . && \
     if [ -n "${SPACK_OCI_USER}" ] && [ -s /run/secrets/ghcr_token ]; then \
