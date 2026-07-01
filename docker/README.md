@@ -8,7 +8,7 @@ This Docker configuration provides a containerized environment for building and 
 
 ### Multi-architecture support
 
-The published images (`ghcr.io/boutproject/hermes-3`, `hermes-3-builder`, and `hermes-3-jupyter`) are built for both `linux/amd64` and `linux/arm64`. Docker automatically pulls the variant matching your machine, so Apple-silicon Macs get a native `arm64` image and no longer rely on x86 emulation. The Spack build uses a portable *generic* microarchitecture target (via `concretizer.targets.granularity: generic`) rather than the build runner's native AVX target, so the `amd64` variant also runs correctly under emulation and on older CPUs. (See the [Spack binary caches](#spack-binary-caches-and-the-amd64-microarchitecture-caveat) section for the details and caveats of this choice.)
+The published images (`ghcr.io/boutproject/hermes-3`, `hermes-3-builder`, and `hermes-3-jupyter`) are built for both `linux/amd64` and `linux/arm64`. Docker automatically pulls the variant matching your machine, so Apple-silicon Macs get a native `arm64` image and no longer rely on x86 emulation. The Spack build is pinned to a portable microarchitecture baseline per architecture — `aarch64` on arm64 and `x86_64_v2` on amd64 — rather than the build runner's native (SVE2 / AVX-512) target, so the images also run correctly under emulation and on older CPUs. (See the [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin) section for the details of this choice.)
 
 ## Basic Getting Started
 
@@ -91,7 +91,7 @@ All published images are built and pushed to the GitHub Container Registry (`ghc
 
 ### The three images and how they relate
 
-* **`hermes-3-builder`** (`docker/hermes-3-builder.dockerfile`) — a heavyweight image containing the full Spack-built scientific toolchain (MPI, PETSc, SLEPc, SUNDIALS, netCDF, cmake, Python, …). This is the slow, expensive image to build, so it is built infrequently and cached aggressively (see [Spack binary caches](#spack-binary-caches-and-the-amd64-microarchitecture-caveat)).
+* **`hermes-3-builder`** (`docker/hermes-3-builder.dockerfile`) — a heavyweight image containing the full Spack-built scientific toolchain (MPI, PETSc, SLEPc, SUNDIALS, netCDF, cmake, Python, …). This is the slow, expensive image to build, so it is built infrequently and cached aggressively (see [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin)).
 * **`hermes-3`** (`docker/hermes-3.dockerfile`) — the runtime image. It starts `FROM ghcr.io/boutproject/hermes-3-builder:${BUILDER_TAG}` to pull in the toolchain, then compiles BOUT++ and Hermes-3 on top of it and copies the result into a slim `ubuntu:24.04` runtime stage. Because it builds on the builder, the builder image must exist first.
 * **`hermes-3-jupyter`** (`docker/hermes-3-jupyter.dockerfile`) — an independent image built `FROM jupyter/scipy-notebook` with `xhermes` and docs tooling added. It does not depend on the other two.
 
@@ -129,21 +129,44 @@ The workflow can also be started manually via **workflow_dispatch**, but the bui
 
 Note that publishing to the registry requires write access, so this workflow only works for branches pushed to this repository — pull requests opened from forks cannot publish the experimental tag.
 
-### Spack binary caches (and the amd64 microarchitecture caveat)
+### Spack binary caches (and the microarchitecture pin)
 
 To avoid recompiling the whole scientific stack on every build, the builder image pulls prebuilt binaries from two mirrors:
 
 * **Spack's public mirror** (`binaries.spack.io/develop`) — covers most common dependencies.
 * **A self-hosted OCI cache** (`ghcr.io/boutproject/hermes-3-spack-cache`) — fills in the config-specific packages the public mirror doesn't carry (e.g. `meson`, `py-meson-python`, `py-numpy`). Each builder run pulls from it before building and pushes newly-built specs back, so it warms up over time. This is only used when registry credentials are available (same-repo branches); fork PRs and local builds fall back to the public mirror plus compiling from source.
 
-Both caches are keyed on each package's Spack concretization hash, which **includes the microarchitecture target**. This creates an asymmetry between the two architectures worth being aware of:
+Both caches are keyed on each package's Spack concretization hash, which **includes the microarchitecture target** — and this is exactly why the target is pinned.
 
-* **arm64** runners are homogeneous, so they always concretize to the same generic `aarch64` target. Their hashes are stable, the OCI cache stays warm, and pushes are incremental (only genuinely-new specs).
-* **amd64** runners are a heterogeneous fleet. Because `spack.yaml` sets `concretizer.targets.granularity: generic` (rather than pinning an explicit target), Spack derives the target from the *host* CPU and rounds it to a generic level — which can be `x86_64_v2`, `_v3`, or `_v4` depending on which runner the job landed on. Two consequences:
-  * The *first* amd64 run at a given target finds an empty OCI cache and pushes **all** specs (not incrementally). This looks like a lot of work but is a one-time population, not a from-source rebuild — the packages themselves are still pulled from a binary cache. Subsequent runs at the same target push incrementally.
-  * If a later amd64 runner concretizes to a *different* target, the OCI cache entries written at the previous target won't match. Anything the public mirror also lacks at that target (the config-specific packages) would then be genuinely rebuilt from source.
+#### Why a hard target pin (not just `granularity: generic`)
 
-  If deterministic amd64 cache hits become important, pin an explicit portable baseline (e.g. `target=x86_64_v2`) instead of relying on `granularity: generic`. Note that a blanket `packages.all.require: target=…` clause constrains the compiler node in Spack 1.x and breaks concretization of the externally-found gcc, so the target must be applied in a way that exempts the compiler.
+The images need to run on older CPUs and under emulation, so they must not contain instructions (SVE2 on arm64, AVX-512 on amd64) that the runtime host lacks. `spack.yaml` sets `concretizer.targets.granularity: generic` as a first line of defence, but **that setting alone is not enough**: it is only a *preference*, and with cache reuse enabled (which the OCI cache relies on) the concretizer will happily reuse a prebuilt binary at a newer native microarchitecture. In practice the public mirror serves arm64 binaries built for `armv9.0a` (SVE2), so a build that merely *preferred* generic still pulled them — and the resulting image crashed with `Illegal instruction` the moment the solver ran on Apple-silicon / a Docker VM.
+
+The fix is a **hard target constraint**, which cache reuse cannot override. Because the shared `spack.yaml` can't branch on architecture, `hermes-3-builder.dockerfile` injects it per-arch before installing:
+
+```sh
+case "$(uname -m)" in
+  aarch64) HERMES_TARGET=aarch64 ;;
+  x86_64)  HERMES_TARGET=x86_64_v2 ;;
+esac
+spack -e . config add "packages:all:require:target=${HERMES_TARGET}"
+```
+
+`aarch64` and `x86_64_v2` are portable baselines (`x86_64_v2` ≈ any x86-64 CPU since ~2009). Requiring a *generic-family* target this way does **not** break concretization of the externally-found gcc — a newer compiler can always target an older ISA — despite the compiler being a graph node in Spack 1.x. (A more specific microarch, e.g. `x86_64_v4`, could conflict with the external gcc's detected target; the generic family does not.)
+
+Because the target is now fixed regardless of which runner a job lands on, concretization — and therefore OCI-cache hits — are **deterministic across the heterogeneous amd64 runner fleet**. The one residual cost: the public mirror ships some amd64 binaries only at higher `x86_64_vN` levels, so a few packages may compile from source at the `v2` floor; they populate the OCI cache on the first run and are reused incrementally thereafter (arm64, already generic on the public mirror, is fully cache-served from the start).
+
+#### Saving build progress on failure
+
+In the OCI-cache branch the builder runs `spack install` **without** `--fail-fast` and pushes to the OCI cache **regardless of the install exit code**, then re-propagates that code so a failed build still fails CI:
+
+```sh
+{ spack install ; rc=$? ; \
+  spack buildcache push --unsigned --update-index hermes-oci || true ; \
+  exit $rc ; }
+```
+
+Previously `spack install --fail-fast && spack buildcache push` discarded *every* package built during a run that failed near the end. Now whatever installed is cached, so a retry reuses it as prebuilt binaries and only recompiles what actually failed.
 
 ## How the Docker Images are Built (Dockerfiles Explained)
 
@@ -153,9 +176,10 @@ The runtime image is built from **two** Dockerfiles: `docker/hermes-3-builder.do
 
 1.  **Base image (`FROM spack/ubuntu-noble@sha256:...`)**: a Spack image pinned by digest, based on Ubuntu 24.04. It already ships Spack *and* a full GCC toolchain (`gcc`/`g++`/`gfortran`/`make`, `libc6-dev`) plus `git`, so **no `apt-get` step is needed** — nothing is installed via the OS package manager.
 2.  **Spack config + external compiler**: the global Spack config (`spack_config.yaml`, which sets the install tree to `/opt/software`) is copied in, and `spack external find gcc` registers the base image's GCC as an external package. In Spack 1.x compilers are graph nodes and the concretizer only accepts them when found as external *packages*, not via the legacy `spack compiler find`.
-3.  **Binary mirrors**: Spack's signed public mirror (`binaries.spack.io/develop`) is added and its keys trusted, and — when registry credentials are supplied — the self-hosted OCI cache is added too. See the [Spack binary caches](#spack-binary-caches-and-the-amd64-microarchitecture-caveat) section.
-4.  **Install the environment (`spack.yaml` → `spack install --fail-fast`)**: the environment manifest (`docker/image_ingredients/spack.yaml`) lists the desired packages (`cmake`, `python`, MPI, PETSc, SLEPc, SUNDIALS, netCDF, …) and the concretizer settings (`require: %gcc`, `granularity: generic`). Note that **`cmake` is built by Spack** here — it is not in the base image. Newly-built packages are pushed back to the OCI cache when credentials are present.
-5.  **Activation script (`spack env activate --sh -d . > activate.sh`)** and **entrypoint**: `activate.sh` activates the Spack environment when sourced, and `docker_entrypoint.sh` (which sources it, then `exec "$@"`) is installed as the image entrypoint.
+3.  **Binary mirrors**: Spack's signed public mirror (`binaries.spack.io/develop`) is added and its keys trusted, and — when registry credentials are supplied — the self-hosted OCI cache is added too. See the [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin) section.
+4.  **Pin the microarchitecture target**: a hard `packages.all.require: target=…` (per-arch: `aarch64` / `x86_64_v2`) is added to the environment so cache reuse can't pull a non-portable native build. See the [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin) section.
+5.  **Install the environment (`spack.yaml` → `spack install`)**: the environment manifest (`docker/image_ingredients/spack.yaml`) lists the desired packages (`cmake`, `python`, MPI, PETSc, SLEPc, SUNDIALS, netCDF, …) and the base concretizer settings (`require: %gcc`, `granularity: generic`). Note that **`cmake` is built by Spack** here — it is not in the base image. Whatever installs is pushed back to the OCI cache (even if the install later fails); see [saving build progress on failure](#saving-build-progress-on-failure).
+6.  **Activation script (`spack env activate --sh -d . > activate.sh`)** and **entrypoint**: `activate.sh` activates the Spack environment when sourced, and `docker_entrypoint.sh` (which sources it, then `exec "$@"`) is installed as the image entrypoint.
 
 ### The final runtime image (`hermes-3.dockerfile`)
 
