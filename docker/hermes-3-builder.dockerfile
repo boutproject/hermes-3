@@ -13,9 +13,13 @@ COPY docker/image_ingredients/spack_config.yaml /root/.spack/config.yaml
 
 # Install OS packages needed to build the software
 RUN apt-get -yqq update && apt-get -yqq upgrade \
- && apt-get -yqq install --no-install-recommends git build-essential cmake \
+ && apt-get -yqq install --no-install-recommends git build-essential gfortran cmake \
  && rm -rf /var/lib/apt/lists/*
-RUN spack compiler find && spack external find cmake
+# Register gcc (c/cxx/fortran) and cmake as external packages. In Spack 1.x
+# compilers are graph nodes and the concretizer only accepts compilers found
+# as external *packages* via `spack external find`; the legacy `spack compiler
+# find` (which writes compilers.yaml) is ignored, giving "no compilers found".
+RUN spack external find gcc cmake
 
 # What we want to install and how we want to install it
 # is specified in a manifest file (spack.yaml)
