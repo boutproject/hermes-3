@@ -161,4 +161,3 @@ One somewhat annoying problem with using this docker image is the possibility th
 docker run --rm -v "${PWD}/hermes-3-docker/work:/hermes_project/work" -e "PUID=$(id -u)" -e "PGID=$(id -g)" ghcr.io/boutproject/hermes-3 image fix_permissions
 ```
 to adjust the permissions of `./hermes-3-docker/work`. You should then be able to `rm -rf hermes-3-docker/work`.
-
