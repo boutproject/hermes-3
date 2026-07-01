@@ -181,8 +181,7 @@ set(HERMES_SOURCES
     include/transform.hxx
     include/fixed_fraction_radiation.hxx
     include/simple_pump.hxx
-    include/fieldline_geometry.hxx
-    )
+    include/fieldline_geometry.hxx)
 
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
