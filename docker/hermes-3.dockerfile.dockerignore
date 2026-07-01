@@ -3,6 +3,8 @@
 # Exclude folders not needed for the build
 .github/*
 docs
+# Local runtime directory created by docker/setup.sh (can be very large)
+docker/work
 external/googletest
 performance
 scripts

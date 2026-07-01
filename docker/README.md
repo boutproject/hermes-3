@@ -6,6 +6,10 @@ This document describes the Docker setup for building and running the Hermes-3 a
 
 This Docker configuration provides a containerized environment for building and running Hermes-3. It's designed to be flexible, allowing you to build the software and run simulations using files from your local machine, and even modify the source code and build configurations within the container by leveraging the `work` folder.
 
+### Multi-architecture support
+
+The published images (`ghcr.io/boutproject/hermes-3`, `hermes-3-builder`, and `hermes-3-jupyter`) are built for both `linux/amd64` and `linux/arm64`. Docker automatically pulls the variant matching your machine, so Apple-silicon Macs get a native `arm64` image and no longer rely on x86 emulation. The `amd64` variant is compiled for a portable `x86_64_v2` baseline (no AVX2/AVX-512), so it also runs correctly under emulation and on older CPUs.
+
 ## Basic Getting Started
 
 This guide will walk you through the quickest way to run a Hermes-3 simulation using the Docker image.
@@ -81,12 +85,27 @@ Here's a breakdown of the available commands:
 
 When you use commands like `docker compose run --rm hermes work/case`, the `docker-compose.yml` defines the `hermes` service in a way that effectively runs `/bin/image run work/case` inside the container. Similarly, `docker compose run --rm build_hermes` executes `/bin/image build_hermes`.
 
+## Continuous Integration and the `experimental_docker_build` tag
+
+The published images are built by GitHub Actions:
+
+* `build_builder_image.yml` and `build_docker_image.yml` build and push the production `hermes-3-builder` and `hermes-3` images (multi-arch: `linux/amd64` and `linux/arm64`) under tags such as `latest` and `edge`.
+* `test_docker_build.yml` runs on pull requests that touch the `docker/` folder. It validates that the images still build and publishes the results under a dedicated `experimental_docker_build` tag, so the builder→final chain can be exercised end to end without disturbing the `latest`/`edge` tags that real users rely on. If a change touches the builder image (or anything it depends on), the builder is rebuilt and the `hermes-3` image is built on top of it; if only the final image is affected, `hermes-3` is built by itself, `FROM` the `experimental_docker_build` builder published by a previous run.
+
+### Bootstrapping the `experimental_docker_build` builder
+
+The final-image-only path of `test_docker_build.yml` builds `FROM ghcr.io/boutproject/hermes-3-builder:experimental_docker_build`, so that tag must already exist in the registry. The first time you use this workflow (or any time the experimental builder tag has been deleted), you must seed it by running a build that produces the builder image. The reliable way to do this is to open (or push to) a branch whose changes touch a builder dependency — e.g. `docker/hermes-3-builder.dockerfile` or `docker/image_ingredients/spack.yaml` — which makes the workflow rebuild the builder, publish the `experimental_docker_build` builder tag, and then build the final image on top of it.
+
+The workflow can also be started manually via **workflow_dispatch**, but the builder is only rebuilt if a builder dependency differs from the base branch (the change-detection step compares against the base), so a manual run is not by itself guaranteed to seed the tag.
+
+Note that publishing to the registry requires write access, so this workflow only works for branches pushed to this repository — pull requests opened from forks cannot publish the experimental tag.
+
 ## How the Docker Image is Built (`Dockerfile` Explained)
 
 The `Dockerfile` contains the instructions for building the Docker image layer by layer. Here's a breakdown of the key stages:
 
-1.  **Base Image (`FROM spack/ubuntu-jammy@sha256:d9acf9ed998cbde8d12bd302c5921291086bfe6f70d2d0e26908fdc48c272324 AS builder`)**:
-    * The process starts by using a pre-built Docker image from Spack (a package manager for scientific computing) based on Ubuntu 22.04 (Jammy Jellyfish). This image already has Spack installed, which significantly speeds up the build process for scientific software.
+1.  **Base Image (`FROM spack/ubuntu-noble@sha256:... AS builder`)**:
+    * The process starts by using a pre-built Docker image from Spack (a package manager for scientific computing) based on Ubuntu 24.04 (Noble Numbat). This image already has Spack installed, which significantly speeds up the build process for scientific software.
     * The `AS builder` part gives this stage a name, "builder", which allows later stages to copy files from it.
 
 2.  **Installing OS Dependencies (`RUN apt-get ...`)**:
@@ -100,8 +119,8 @@ The `Dockerfile` contains the instructions for building the Docker image layer b
 4.  **Creating the Activation Script (`RUN spack env activate --sh -d . > activate.sh`)**:
     * This command generates a shell script (`activate.sh`) that, when sourced, activates the Spack environment where BOUT++ and Hermes-3 are installed. This script is crucial for making the installed software accessible in later stages.
 
-5.  **Final Runtime Image (`FROM ubuntu:22.04`)**:
-    * A new, minimal Ubuntu 22.04 image is used as the base for the final runtime container. This keeps the production image lean by only including necessary components.
+5.  **Final Runtime Image (`FROM ubuntu:24.04`)**:
+    * A new, minimal Ubuntu 24.04 image is used as the base for the final runtime container. This keeps the production image lean by only including necessary components.
 
 6.  **Copying Built Software (`COPY --from=builder ...`)**:
     * The compiled BOUT++ and Hermes-3 installations, along with the Spack environment and views (symlinked installation directories), are copied from the `builder` stage into the current image. This ensures that the final image contains the built software without needing to rebuild it.
@@ -113,9 +132,9 @@ The `Dockerfile` contains the instructions for building the Docker image layer b
     * The default working directory inside the container is set to `/hermes_project`.
     * Environment variables are defined to specify the locations of the source code, build directories, and configuration files for both Hermes-3 and BOUT++. Importantly, `*_OVERRIDE` variables are defined to point to the `work` directory, allowing users to mount their local source code and configuration files, which will take precedence over the built-in versions.
 
-9.  **Copying Hermes-3 Source and Patches (`COPY . ${HERMES_SRC_DIR}`, `COPY docker/image_ingredients/enable_c.patch ...`, `RUN git ...`)**:
-    * The Hermes-3 source code from the repository is copied into the designated source directory.
-    * A specific patch (`enable_c.patch`) is applied to the BOUT++ source code. This likely addresses a compatibility issue or enables specific features.
+9.  **Copying Hermes-3 Source (`COPY . ${HERMES_SRC_DIR}`, `RUN git submodule update ...`)**:
+    * The Hermes-3 source code from the repository is copied into the designated source directory. Files not needed for the build are excluded via `docker/hermes-3.dockerfile.dockerignore`.
+    * The git submodules (including BOUT++) are then initialized so the source is complete.
 
 10. **Copying Default Configuration Files (`COPY docker/image_ingredients/boutpp_config.cmake ...`, `COPY docker/image_ingredients/hermes_config.cmake ...`)**:
     * Default CMake configuration files for BOUT++ and Hermes-3 are copied into their respective configuration directories. These will be used unless overridden by files in the `work` directory.

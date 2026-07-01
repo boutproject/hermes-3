@@ -11,7 +11,17 @@ spack:
   - petsc+double+fftw+hdf5+hypre+mpi
   - slepc
 
+  # Pin the microarchitecture so the amd64 image is portable. Without this,
+  # Spack concretizes to the build host's native microarch (AVX2/AVX-512 on
+  # GitHub runners), which crashes under emulation on Apple-silicon Macs.
+  # 'require' is a list, so Spack picks whichever alternative is satisfiable
+  # on the build host: x86_64_v2 (SSE4.2, no AVX) on amd64, aarch64 on arm64.
+  packages:
+    all:
+      require:
+      - one_of: ["target=x86_64_v2", "target=aarch64"]
+
   concretizer:
     unify: true
-  
+
   view: /opt/views/view
