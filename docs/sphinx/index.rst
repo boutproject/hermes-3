@@ -26,7 +26,7 @@ Hermes-3 documentation
    developer
 
 
-.. Dummy reference to the top-level breathe rst to suppress sphinx warning 
+.. Dummy reference to the top-level breathe rst to suppress sphinx warning
 
 .. toctree::
    :hidden:

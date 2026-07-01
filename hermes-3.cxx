@@ -46,6 +46,7 @@
 #include "include/evolve_energy.hxx"
 #include "include/evolve_momentum.hxx"
 #include "include/evolve_pressure.hxx"
+#include "include/fieldline_geometry.hxx"
 #include "include/fixed_density.hxx"
 #include "include/fixed_fraction_ions.hxx"
 #include "include/fixed_fraction_radiation.hxx"
@@ -80,8 +81,6 @@
 #include "include/upstream_density_feedback.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
-#include "include/simple_pump.hxx"
-#include "include/fieldline_geometry.hxx"
 #include <bout/boundary_factory.hxx>
 #include <bout/boundary_op.hxx>
 #include <bout/constants.hxx>

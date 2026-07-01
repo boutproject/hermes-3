@@ -1,14 +1,14 @@
 #include "gtest/gtest.h"
 
-#include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
+#include "test_extras.hxx" // FakeMesh
 
 #include "../../include/fieldline_geometry.hxx"
 
 /// Global mesh
-namespace bout{
-namespace globals{
-extern Mesh *mesh;
+namespace bout {
+namespace globals {
+extern Mesh* mesh;
 } // namespace globals
 } // namespace bout
 
@@ -22,8 +22,7 @@ namespace {
 /// Build an Options tree with the units and fieldline_geometry sections
 /// required to construct a FieldlineGeometry component.
 Options makeOptions(const std::string& lambda_int, const std::string& fieldline_radius,
-                    const std::string& poloidal_magnetic_field,
-                    bool compute_Btor_from_R,
+                    const std::string& poloidal_magnetic_field, bool compute_Btor_from_R,
                     const std::string& toroidal_field_value, bool diagnose = false) {
   Options options;
   options["units"]["meters"] = 1.0;
@@ -66,8 +65,8 @@ TEST_F(FieldlineGeometryTest, ConstantInputsGivenBtor) {
 
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_lambda_int"]),
                            lambda_int, "RGN_NOBNDRY"));
-  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Rxy"]), R,
-                           "RGN_NOBNDRY"));
+  ASSERT_TRUE(
+      IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Rxy"]), R, "RGN_NOBNDRY"));
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Bpxy"]), Bpol,
                            "RGN_NOBNDRY"));
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Btxy"]), Btor,
@@ -78,24 +77,25 @@ TEST_F(FieldlineGeometryTest, ConstantInputsGivenBtor) {
                            pitch, "RGN_NOBNDRY"));
 
   // Inputs are constant in y, so there is no broadening or flux expansion
-  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_transport_broadening"]),
-                           1.0, "RGN_NOBNDRY"));
+  ASSERT_TRUE(
+      IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_transport_broadening"]), 1.0,
+                   "RGN_NOBNDRY"));
   ASSERT_TRUE(
       IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_f_R"]), 1.0, "RGN_NOBNDRY"));
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_flux_tube_width"]),
                            lambda_int, "RGN_NOBNDRY"));
 
   // dy = 1 in the fake mesh, so dlpol = dy * Bpol/B = pitch
-  ASSERT_TRUE(
-      IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_dlpol"]), pitch, "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_dlpol"]), pitch,
+                           "RGN_NOBNDRY"));
 
   const BoutReal dlpol = pitch;
   const BoutReal side_area = dlpol * 2.0 * PI * R;
   const BoutReal volume = side_area * lambda_int;
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_cell_side_area"]),
                            side_area, "RGN_NOBNDRY"));
-  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_cell_volume"]), volume,
-                           "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_cell_volume"]),
+                           volume, "RGN_NOBNDRY"));
 }
 
 TEST_F(FieldlineGeometryTest, ComputeBtorFromConstantR) {
@@ -106,8 +106,8 @@ TEST_F(FieldlineGeometryTest, ComputeBtorFromConstantR) {
   Options outputs = {{"rho_s0", 1.0}, {"Bnorm", 1.0}};
   component.outputVars(outputs);
 
-  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Btxy"]), 3.0,
-                           "RGN_NOBNDRY"));
+  ASSERT_TRUE(
+      IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Btxy"]), 3.0, "RGN_NOBNDRY"));
 }
 
 TEST_F(FieldlineGeometryTest, DiagnoseDefaultsToFalse) {
@@ -254,6 +254,6 @@ TEST_F(FieldlineGeometryTest, GeometryFactorsAreSelfConsistentForNonTrivialProfi
   // tests don't already cover).
   ASSERT_FALSE(IsFieldEqual(f_R, 1.0, "RGN_NOBNDRY"));
   ASSERT_FALSE(
-      IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_transport_broadening"]),
-                  1.0, "RGN_NOBNDRY"));
+      IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_transport_broadening"]), 1.0,
+                   "RGN_NOBNDRY"));
 }
