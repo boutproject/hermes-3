@@ -16,7 +16,7 @@ COPY --from=builder /opt/views /opt/views
 # Install useful tools you'll want in the container
 RUN apt-get -yqq update && apt-get -yqq upgrade \
  && apt-get -yqq install --no-install-recommends\
- git vim ca-certificates cmake build-essential \
+ git vim ca-certificates build-essential \
  && rm -rf /var/lib/apt/lists/*
 
 # Change into the /hermes_project, and define paths
@@ -54,7 +54,7 @@ RUN . /opt/spack-environment/activate.sh \
           -S ${BOUTPP_SRC_DIR} \
           -C ${BOUTPP_CONFIG} \
           -Wno-dev \
-&& cmake --build ${BOUTPP_BUILD_DIR} --parallel 2
+&& cmake --build ${BOUTPP_BUILD_DIR} --parallel 4
 
 # Configure and build Hermes
 RUN . /opt/spack-environment/activate.sh \
@@ -63,7 +63,7 @@ RUN . /opt/spack-environment/activate.sh \
           -C ${HERMES_CONFIG} \
           -DCMAKE_PREFIX_PATH=${BOUTPP_BUILD_DIR} \
           -Wno-dev \
-&& cmake --build ${HERMES_BUILD_DIR} --parallel 2
+&& cmake --build ${HERMES_BUILD_DIR} --parallel 4
 
 # Copy in some helpful commands which can be used in
 # the image. Make sure these can be executed when setting
