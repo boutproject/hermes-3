@@ -317,10 +317,14 @@ void NeutralMixed::finally(const Options& state) {
   // and set boundary conditions on evolved quantities
   Tn = get<Field3D>(localstate["temperature"]);
   Vn = get<Field3D>(localstate["velocity"]);
-  Pn = get<Field3D>(localstate["pressure"]);
-  Nn = get<Field3D>(localstate["density"]);
-  NVn = get<Field3D>(localstate["momentum"]);
-
+  Pn.setBoundaryTo(get<Field3D>(localstate["pressure"]), true, true);
+  Nn.setBoundaryTo(get<Field3D>(localstate["density"]), true, true);
+  if (!evolve_momentum) {
+    // momentum is not evolved, so need to get the value from the localstate
+    NVn = get<Field3D>(localstate["momentum"]);
+  } else {
+    NVn.setBoundaryTo(get<Field3D>(localstate["momentum"]), true, true);
+  }
   // Logarithms used to calculate perpendicular velocity
   // V_perp = -Dnn * ( Grad_perp(Nn)/Nn + Grad_perp(Tn)/Tn )
   //
