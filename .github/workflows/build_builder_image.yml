@@ -9,6 +9,17 @@ on:
     # Run monthly, at 1:23AM UTC on the 1st
     - cron: '23 1 1 * *'
 
+permissions:
+  contents: read
+  packages: write
+
+# Serialize runs so overlapping push/schedule/dispatch builds don't race on
+# the shared image tags. Don't cancel an in-progress build (it may already be
+# pushing binaries to the OCI cache).
+concurrency:
+  group: build-builder-image
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   BUILDER_IMAGE_NAME: boutproject/hermes-3-builder
@@ -69,6 +80,12 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=builder-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=builder-${{ matrix.arch }}
+          # Credentials for the self-hosted OCI Spack build cache, so the build
+          # can pull previously-compiled binaries and push newly-built ones.
+          build-args: |
+            SPACK_OCI_USER=${{ github.actor }}
+          secrets: |
+            ghcr_token=${{ secrets.GITHUB_TOKEN }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest

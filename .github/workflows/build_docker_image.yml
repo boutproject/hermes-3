@@ -12,6 +12,16 @@ on:
 
   workflow_dispatch:  # Allows manual triggering
 
+permissions:
+  contents: read
+  packages: write
+
+# Serialize runs so overlapping push/release/dispatch builds don't race on the
+# shared image tags.
+concurrency:
+  group: build-docker-image
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: boutproject/hermes-3

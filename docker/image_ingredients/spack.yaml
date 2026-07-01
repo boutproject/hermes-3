@@ -12,10 +12,10 @@ spack:
   - petsc+double+fftw+hdf5+hypre+mpi
   - slepc
 
-  # Build everything with the external, apt-provided gcc (registered by
-  # `spack compiler find` in the Dockerfile). This selects that compiler
-  # rather than constraining it, so Spack never falls back to trying to
-  # build another compiler (e.g. cce, which is buildable:false).
+  # Build everything with the external gcc (registered by `spack external
+  # find gcc` in the Dockerfile). This selects that compiler rather than
+  # constraining it, so Spack never falls back to trying to build another
+  # compiler (e.g. cce, which is buildable:false).
   packages:
     all:
       require:

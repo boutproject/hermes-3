@@ -28,6 +28,11 @@ permissions:
   contents: read
   packages: write
 
+# One run per PR/ref; cancel superseded runs since only the latest push matters.
+concurrency:
+  group: test-docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   BUILDER_IMAGE_NAME: boutproject/hermes-3-builder

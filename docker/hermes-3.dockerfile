@@ -39,7 +39,11 @@ ENV BOUTPP_CONFIG=/hermes_project/config/boutpp_config.cmake
 ENV HERMES_CONFIG_OVERRIDE=/hermes_project/work/hermes_config.cmake
 ENV BOUTPP_CONFIG_OVERRIDE=/hermes_project/work/boutpp_config.cmake
 
-# Copy in required files for a minimal build of Hermes-3 and BOUT++
+# Copy in required files for a minimal build of Hermes-3 and BOUT++.
+# NOTE: this intentionally includes the .git directory (not excluded by the
+# dockerignore) because the submodule update below needs the repo's git
+# metadata to resolve and check out submodules. The trade-off is that the
+# runtime image carries the git history.
 COPY . ${HERMES_SRC_DIR}
 # Initialize the git submodules (needed for CI/CD build)
 RUN git -C ${HERMES_SRC_DIR} submodule update --init --recursive --depth 1 --single-branch
