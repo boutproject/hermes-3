@@ -16,7 +16,7 @@ COPY --from=builder /opt/views /opt/views
 # Install useful tools you'll want in the container
 RUN apt-get -yqq update && apt-get -yqq upgrade \
  && apt-get -yqq install --no-install-recommends\
- git vim ca-certificates cmake build-essential \
+ git vim ca-certificates build-essential \
  && rm -rf /var/lib/apt/lists/*
 
 # Change into the /hermes_project, and define paths
@@ -39,7 +39,11 @@ ENV BOUTPP_CONFIG=/hermes_project/config/boutpp_config.cmake
 ENV HERMES_CONFIG_OVERRIDE=/hermes_project/work/hermes_config.cmake
 ENV BOUTPP_CONFIG_OVERRIDE=/hermes_project/work/boutpp_config.cmake
 
-# Copy in required files for a minimal build of Hermes-3 and BOUT++
+# Copy in required files for a minimal build of Hermes-3 and BOUT++.
+# NOTE: this intentionally includes the .git directory (not excluded by the
+# dockerignore) because the submodule update below needs the repo's git
+# metadata to resolve and check out submodules. The trade-off is that the
+# runtime image carries the git history.
 COPY . ${HERMES_SRC_DIR}
 # Initialize the git submodules (needed for CI/CD build)
 RUN git -C ${HERMES_SRC_DIR} submodule update --init --recursive --depth 1 --single-branch
@@ -54,7 +58,7 @@ RUN . /opt/spack-environment/activate.sh \
           -S ${BOUTPP_SRC_DIR} \
           -C ${BOUTPP_CONFIG} \
           -Wno-dev \
-&& cmake --build ${BOUTPP_BUILD_DIR} --parallel 2
+&& cmake --build ${BOUTPP_BUILD_DIR} --parallel 4
 
 # Configure and build Hermes
 RUN . /opt/spack-environment/activate.sh \
@@ -63,7 +67,7 @@ RUN . /opt/spack-environment/activate.sh \
           -C ${HERMES_CONFIG} \
           -DCMAKE_PREFIX_PATH=${BOUTPP_BUILD_DIR} \
           -Wno-dev \
-&& cmake --build ${HERMES_BUILD_DIR} --parallel 2
+&& cmake --build ${HERMES_BUILD_DIR} --parallel 4
 
 # Copy in some helpful commands which can be used in
 # the image. Make sure these can be executed when setting
