@@ -8,7 +8,7 @@ This Docker configuration provides a containerized environment for building and 
 
 ### Multi-architecture support
 
-The published images (`ghcr.io/boutproject/hermes-3`, `hermes-3-builder`, and `hermes-3-jupyter`) are built for both `linux/amd64` and `linux/arm64`. Docker automatically pulls the variant matching your machine, so Apple-silicon Macs get a native `arm64` image and no longer rely on x86 emulation. The `amd64` variant is compiled for a portable `x86_64_v2` baseline (no AVX2/AVX-512), so it also runs correctly under emulation and on older CPUs.
+The published images (`ghcr.io/boutproject/hermes-3`, `hermes-3-builder`, and `hermes-3-jupyter`) are built for both `linux/amd64` and `linux/arm64`. Docker automatically pulls the variant matching your machine, so Apple-silicon Macs get a native `arm64` image and no longer rely on x86 emulation. The Spack build uses a portable *generic* microarchitecture target (via `concretizer.targets.granularity: generic`) rather than the build runner's native AVX target, so the `amd64` variant also runs correctly under emulation and on older CPUs. (See the [Spack binary caches](#spack-binary-caches-and-the-amd64-microarchitecture-caveat) section for the details and caveats of this choice.)
 
 ## Basic Getting Started
 
@@ -85,12 +85,41 @@ Here's a breakdown of the available commands:
 
 When you use commands like `docker compose run --rm hermes work/case`, the `docker-compose.yml` defines the `hermes` service in a way that effectively runs `/bin/image run work/case` inside the container. Similarly, `docker compose run --rm build_hermes` executes `/bin/image build_hermes`.
 
-## Continuous Integration and the `experimental_docker_build` tag
+## Continuous Integration and Delivery
 
-The published images are built by GitHub Actions:
+All published images are built and pushed to the GitHub Container Registry (`ghcr.io/boutproject/...`) by GitHub Actions. There are three images and four workflows.
 
-* `build_builder_image.yml` and `build_docker_image.yml` build and push the production `hermes-3-builder` and `hermes-3` images (multi-arch: `linux/amd64` and `linux/arm64`) under tags such as `latest` and `edge`.
-* `test_docker_build.yml` runs on pull requests that touch the `docker/` folder. It validates that the images still build and publishes the results under a dedicated `experimental_docker_build` tag, so the builder→final chain can be exercised end to end without disturbing the `latest`/`edge` tags that real users rely on. If a change touches the builder image (or anything it depends on), the builder is rebuilt and the `hermes-3` image is built on top of it; if only the final image is affected, `hermes-3` is built by itself, `FROM` the `experimental_docker_build` builder published by a previous run.
+### The three images and how they relate
+
+* **`hermes-3-builder`** (`docker/hermes-3-builder.dockerfile`) — a heavyweight image containing the full Spack-built scientific toolchain (MPI, PETSc, SLEPc, SUNDIALS, netCDF, cmake, Python, …). This is the slow, expensive image to build, so it is built infrequently and cached aggressively (see [Spack binary caches](#spack-binary-caches-and-the-amd64-microarchitecture-caveat)).
+* **`hermes-3`** (`docker/hermes-3.dockerfile`) — the runtime image. It starts `FROM ghcr.io/boutproject/hermes-3-builder:${BUILDER_TAG}` to pull in the toolchain, then compiles BOUT++ and Hermes-3 on top of it and copies the result into a slim `ubuntu:24.04` runtime stage. Because it builds on the builder, the builder image must exist first.
+* **`hermes-3-jupyter`** (`docker/hermes-3-jupyter.dockerfile`) — an independent image built `FROM jupyter/scipy-notebook` with `xhermes` and docs tooling added. It does not depend on the other two.
+
+### Per-architecture builds and manifest merging
+
+The multi-arch images are **not** built with QEMU emulation for the heavy compilation (that would be prohibitively slow). Instead, `build_builder_image.yml` and `build_docker_image.yml` use a matrix that builds each architecture on a *native* runner — `ubuntu-latest` for `amd64` and `ubuntu-24.04-arm` for `arm64`. Each arch build pushes its image *by digest only* (no tag), and a following `merge` job assembles the per-arch digests into a single multi-arch manifest and applies the human-readable tags (`latest`, `edge`, semver, etc.). Docker then serves the matching architecture automatically on `docker pull`.
+
+The `hermes-3-jupyter` image is the exception: its steps are only `apt`/`pip` installs, so emulation is cheap enough that `build_jupyter_image.yml` just builds `linux/amd64,linux/arm64` together via QEMU in a single job.
+
+All workflows also use a GitHub Actions layer cache (`cache-from`/`cache-to: type=gha`, scoped per arch) so unchanged Docker layers are reused between runs.
+
+### The four workflows and their triggers
+
+| Workflow | Builds | Triggers |
+| --- | --- | --- |
+| `build_builder_image.yml` | `hermes-3-builder` (→ `latest`/`edge`/date tags), then chains into building `hermes-3` on top | monthly schedule (1st of the month), `release`, `workflow_dispatch` |
+| `build_docker_image.yml` | `hermes-3` only, `FROM` the `latest` builder (→ `latest`/`edge`/semver tags) | push to `master`, `release`, `workflow_dispatch` |
+| `build_jupyter_image.yml` | `hermes-3-jupyter` | push to `master`, `release`, `workflow_dispatch` |
+| `test_docker_build.yml` | builder and/or `hermes-3` under the `experimental_docker_build` tag (validation only) | pull requests touching `docker/**` or that workflow, `workflow_dispatch` |
+
+The split reflects build cost: the expensive builder is only refreshed on a schedule/release, while the cheaper `hermes-3` runtime image is rebuilt on every push to `master` (picking up source changes) `FROM` the most recent `latest` builder.
+
+### The `experimental_docker_build` tag
+
+`test_docker_build.yml` runs on pull requests that touch the `docker/` folder. It validates that the images still build and publishes the results under a dedicated `experimental_docker_build` tag, so the builder→final chain can be exercised end to end without disturbing the `latest`/`edge` tags that real users rely on. A `changes` job (using `dorny/paths-filter`) decides what to rebuild:
+
+* If a change touches the builder image or anything it depends on (the builder Dockerfile, `spack.yaml`, `spack_config.yaml`, the entrypoint, or the workflow), the builder is rebuilt and published as `experimental_docker_build`, and the `hermes-3` image is then built on top of that freshly built builder.
+* If only the final image is affected, `hermes-3` is built by itself, `FROM` the `experimental_docker_build` builder published by a previous run.
 
 ### Bootstrapping the `experimental_docker_build` builder
 
@@ -100,63 +129,48 @@ The workflow can also be started manually via **workflow_dispatch**, but the bui
 
 Note that publishing to the registry requires write access, so this workflow only works for branches pushed to this repository — pull requests opened from forks cannot publish the experimental tag.
 
-## How the Docker Image is Built (`Dockerfile` Explained)
+### Spack binary caches (and the amd64 microarchitecture caveat)
 
-The `Dockerfile` contains the instructions for building the Docker image layer by layer. Here's a breakdown of the key stages:
+To avoid recompiling the whole scientific stack on every build, the builder image pulls prebuilt binaries from two mirrors:
 
-1.  **Base Image (`FROM spack/ubuntu-noble@sha256:... AS builder`)**:
-    * The process starts by using a pre-built Docker image from Spack (a package manager for scientific computing) based on Ubuntu 24.04 (Noble Numbat). This image already has Spack installed, which significantly speeds up the build process for scientific software.
-    * The `AS builder` part gives this stage a name, "builder", which allows later stages to copy files from it.
+* **Spack's public mirror** (`binaries.spack.io/develop`) — covers most common dependencies.
+* **A self-hosted OCI cache** (`ghcr.io/boutproject/hermes-3-spack-cache`) — fills in the config-specific packages the public mirror doesn't carry (e.g. `meson`, `py-meson-python`, `py-numpy`). Each builder run pulls from it before building and pushes newly-built specs back, so it warms up over time. This is only used when registry credentials are available (same-repo branches); fork PRs and local builds fall back to the public mirror plus compiling from source.
 
-2.  **Installing OS Dependencies (`RUN apt-get ...`)**:
-    * This step updates the package lists and installs essential system packages required for building software, such as `git`, `build-essential` (which includes `gcc`, `g++`, `make`, etc.), `vim`, and `cmake`. Unnecessary package lists are then removed to reduce the image size.
+Both caches are keyed on each package's Spack concretization hash, which **includes the microarchitecture target**. This creates an asymmetry between the two architectures worth being aware of:
 
-3.  **Spack Configuration (`COPY docker/image_ingredients/docker_spack.yaml ...`, `WORKDIR ...`, `RUN spack env activate . && spack install --fail-fast && spack gc -y`)**:
-    * A `spack.yaml` file, which specifies the desired software packages (including BOUT++ and Hermes-3, along with their dependencies and build options), is copied into the `/opt/spack-environment` directory.
-    * Spack is then activated in this environment, and the software packages defined in `spack.yaml` are installed. The `--fail-fast` option stops the installation immediately if any package fails to build.
-    * Finally, `spack gc -y` performs garbage collection, removing any unnecessary files left over from the build process, further optimizing the image size.
+* **arm64** runners are homogeneous, so they always concretize to the same generic `aarch64` target. Their hashes are stable, the OCI cache stays warm, and pushes are incremental (only genuinely-new specs).
+* **amd64** runners are a heterogeneous fleet. Because `spack.yaml` sets `concretizer.targets.granularity: generic` (rather than pinning an explicit target), Spack derives the target from the *host* CPU and rounds it to a generic level — which can be `x86_64_v2`, `_v3`, or `_v4` depending on which runner the job landed on. Two consequences:
+  * The *first* amd64 run at a given target finds an empty OCI cache and pushes **all** specs (not incrementally). This looks like a lot of work but is a one-time population, not a from-source rebuild — the packages themselves are still pulled from a binary cache. Subsequent runs at the same target push incrementally.
+  * If a later amd64 runner concretizes to a *different* target, the OCI cache entries written at the previous target won't match. Anything the public mirror also lacks at that target (the config-specific packages) would then be genuinely rebuilt from source.
 
-4.  **Creating the Activation Script (`RUN spack env activate --sh -d . > activate.sh`)**:
-    * This command generates a shell script (`activate.sh`) that, when sourced, activates the Spack environment where BOUT++ and Hermes-3 are installed. This script is crucial for making the installed software accessible in later stages.
+  If deterministic amd64 cache hits become important, pin an explicit portable baseline (e.g. `target=x86_64_v2`) instead of relying on `granularity: generic`. Note that a blanket `packages.all.require: target=…` clause constrains the compiler node in Spack 1.x and breaks concretization of the externally-found gcc, so the target must be applied in a way that exempts the compiler.
 
-5.  **Final Runtime Image (`FROM ubuntu:24.04`)**:
-    * A new, minimal Ubuntu 24.04 image is used as the base for the final runtime container. This keeps the production image lean by only including necessary components.
+## How the Docker Images are Built (Dockerfiles Explained)
 
-6.  **Copying Built Software (`COPY --from=builder ...`)**:
-    * The compiled BOUT++ and Hermes-3 installations, along with the Spack environment and views (symlinked installation directories), are copied from the `builder` stage into the current image. This ensures that the final image contains the built software without needing to rebuild it.
+The runtime image is built from **two** Dockerfiles: `docker/hermes-3-builder.dockerfile` produces the `hermes-3-builder` image (the scientific toolchain), and `docker/hermes-3.dockerfile` produces the final `hermes-3` image `FROM` that builder. Splitting them lets the expensive toolchain be built and cached independently of the frequently-changing application build.
 
-7.  **Installing Runtime Dependencies (`RUN apt-get ...`)**:
-    * Essential tools like `git`, `build-essential`, `vim`, and `cmake` are installed in the runtime image. These are useful for users who might want to interact with the container and potentially rebuild or run other tools.
+### The builder image (`hermes-3-builder.dockerfile`)
 
-8.  **Setting up Working Directories and Environment Variables (`WORKDIR /hermes_project`, `ENV ...`)**:
-    * The default working directory inside the container is set to `/hermes_project`.
-    * Environment variables are defined to specify the locations of the source code, build directories, and configuration files for both Hermes-3 and BOUT++. Importantly, `*_OVERRIDE` variables are defined to point to the `work` directory, allowing users to mount their local source code and configuration files, which will take precedence over the built-in versions.
+1.  **Base image (`FROM spack/ubuntu-noble@sha256:...`)**: a Spack image pinned by digest, based on Ubuntu 24.04. It already ships Spack *and* a full GCC toolchain (`gcc`/`g++`/`gfortran`/`make`, `libc6-dev`) plus `git`, so **no `apt-get` step is needed** — nothing is installed via the OS package manager.
+2.  **Spack config + external compiler**: the global Spack config (`spack_config.yaml`, which sets the install tree to `/opt/software`) is copied in, and `spack external find gcc` registers the base image's GCC as an external package. In Spack 1.x compilers are graph nodes and the concretizer only accepts them when found as external *packages*, not via the legacy `spack compiler find`.
+3.  **Binary mirrors**: Spack's signed public mirror (`binaries.spack.io/develop`) is added and its keys trusted, and — when registry credentials are supplied — the self-hosted OCI cache is added too. See the [Spack binary caches](#spack-binary-caches-and-the-amd64-microarchitecture-caveat) section.
+4.  **Install the environment (`spack.yaml` → `spack install --fail-fast`)**: the environment manifest (`docker/image_ingredients/spack.yaml`) lists the desired packages (`cmake`, `python`, MPI, PETSc, SLEPc, SUNDIALS, netCDF, …) and the concretizer settings (`require: %gcc`, `granularity: generic`). Note that **`cmake` is built by Spack** here — it is not in the base image. Newly-built packages are pushed back to the OCI cache when credentials are present.
+5.  **Activation script (`spack env activate --sh -d . > activate.sh`)** and **entrypoint**: `activate.sh` activates the Spack environment when sourced, and `docker_entrypoint.sh` (which sources it, then `exec "$@"`) is installed as the image entrypoint.
 
-9.  **Copying Hermes-3 Source (`COPY . ${HERMES_SRC_DIR}`, `RUN git submodule update ...`)**:
-    * The Hermes-3 source code from the repository is copied into the designated source directory. Files not needed for the build are excluded via `docker/hermes-3.dockerfile.dockerignore`.
-    * The git submodules (including BOUT++) are then initialized so the source is complete.
+### The final runtime image (`hermes-3.dockerfile`)
 
-10. **Copying Default Configuration Files (`COPY docker/image_ingredients/boutpp_config.cmake ...`, `COPY docker/image_ingredients/hermes_config.cmake ...`)**:
-    * Default CMake configuration files for BOUT++ and Hermes-3 are copied into their respective configuration directories. These will be used unless overridden by files in the `work` directory.
-
-11. **Configuring and Building BOUT++ and Hermes-3 (`RUN . /opt/spack-environment/activate.sh && cmake ... && cmake --build ...`)**:
-    * The Spack environment is activated using the `activate.sh` script.
-    * CMake is then used to configure the build for both BOUT++ and Hermes-3, using the specified source and configuration directories. The `-DCMAKE_PREFIX_PATH` option ensures that Hermes-3 can find the BOUT++ installation.
-    * Finally, the `cmake --build` command compiles the code in parallel (`--parallel`).
-
-12. **Copying Helper Commands (`COPY docker/image_ingredients/docker_image_commands.sh /bin/image`, `RUN chmod ...`)**:
-    * The `docker_image_commands.sh` script (which you provided) is copied into the `/bin` directory and made executable. This script provides the `build_boutpp`, `build_hermes`, `run`, etc., commands.
-
-13. **Copying Entrypoint Script (`COPY docker/image_ingredients/docker_entrypoint.sh /entrypoint.sh`, `RUN chmod ...`)**:
-    * A script named `docker_entrypoint.sh` is copied to `/` and made executable. This script is executed when the container starts. It likely performs initial setup or defers to the command provided when running the container (e.g., the `/bin/image` script).
-
-14. **Setting Entrypoint and Default Command (`ENTRYPOINT [ "/entrypoint.sh" ]`, `CMD [ "/bin/bash"]`)**:
-    * The `ENTRYPOINT` instruction specifies the default executable to run when the container starts. Here, it's the `/entrypoint.sh` script.
-    * The `CMD` instruction provides default arguments to the `ENTRYPOINT`. If no command is specified when running the container (e.g., `docker run <image>`), it will default to `/bin/bash`, providing an interactive shell within the container.
+1.  **`FROM ghcr.io/boutproject/hermes-3-builder:${BUILDER_TAG}` (as `builder`)**: pulls in the toolchain. `BUILDER_TAG` is a build-arg (default `latest`; CI overrides it, e.g. to `edge` or `experimental_docker_build`).
+2.  **`FROM ubuntu:24.04`** — a fresh, slim runtime stage. The Spack environment, `/opt/software`, and `/opt/views` are copied from the `builder` stage, so the built toolchain is available without the Spack machinery.
+3.  **Runtime tools (`apt-get ... git vim ca-certificates build-essential`)**: a small set of tools useful for interacting with and rebuilding inside the container. (`cmake` is *not* installed here — it comes from the Spack environment.)
+4.  **Working directory and environment variables (`WORKDIR /hermes_project`, `ENV ...`)**: define the locations of the source, build, and config directories for BOUT++ and Hermes-3. The `*_OVERRIDE` variables point into `work/`, so mounted local source and config files take precedence over the built-in versions (see [Overriding Default Builds](#overriding-default-builds-using-the-work-folder)).
+5.  **Copy source and init submodules (`COPY . ${HERMES_SRC_DIR}`, `git submodule update ...`)**: the Hermes-3 source is copied in (files excluded via `docker/hermes-3.dockerfile.dockerignore`) and its submodules (including BOUT++) are initialized.
+6.  **Copy default config files** (`boutpp_config.cmake`, `hermes_config.cmake`), used unless overridden from `work/`.
+7.  **Configure and build BOUT++ then Hermes-3 (`. activate.sh && cmake ... && cmake --build ... --parallel 4`)**: both are compiled at image-build time. `-DCMAKE_PREFIX_PATH` points Hermes-3 at the freshly-built BOUT++.
+8.  **Helper commands and entrypoint**: `docker_image_commands.sh` is installed as `/bin/image` (providing `build_boutpp`, `build_hermes`, `run`, etc.), `docker_entrypoint.sh` becomes the entrypoint, and the default command is `/bin/bash`.
 
 ## Help!!! I don't have permission to delete the `hermes-3-docker/work` folder
 
-One somewhat annoying problem with using this docker image is the possibility that you end up with files in the `hermes-3-docker/work` folder that you don't have permission to delete. If you still have the `docker-compose.yaml` and `.env` file available, you can run `docker compose run --rm fix-permissions` and then proceed with deleting the `hermes-3-docker/work` folder. However, if you've already deleted these files, run the following command
+One somewhat annoying problem with using this docker image is the possibility that you end up with files in the `hermes-3-docker/work` folder that you don't have permission to delete. If you still have the `docker-compose.yaml` and `.env` file available, you can run `docker compose run --rm fix_permissions` and then proceed with deleting the `hermes-3-docker/work` folder. However, if you've already deleted these files, run the following command
 ```
 docker run --rm -v "${PWD}/hermes-3-docker/work:/hermes_project/work" -e "PUID=$(id -u)" -e "PGID=$(id -g)" ghcr.io/boutproject/hermes-3 image fix_permissions
 ```
