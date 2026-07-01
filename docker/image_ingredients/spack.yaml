@@ -1,5 +1,6 @@
 spack:
   specs:
+  - cmake
   - python
   - py-cython
   - py-numpy
