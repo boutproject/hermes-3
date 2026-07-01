@@ -69,6 +69,11 @@ RUN case "$(uname -m)" in \
       *)       HERMES_TARGET="$(uname -m)" ;; \
     esac && \
     spack -e . config add "packages:all:require:target=${HERMES_TARGET}"
+# Save progress even on failure. Without --fail-fast, Spack builds every package
+# whose dependencies succeeded before giving up, so a late failure still leaves
+# most packages installed. We then push whatever installed (regardless of the
+# install exit code) so the next build reuses it as a prebuilt binary, and
+# finally re-propagate the exit code so a failed build still fails CI.
 RUN --mount=type=secret,id=ghcr_token \
     spack env activate . && \
     if [ -n "${SPACK_OCI_USER}" ] && [ -s /run/secrets/ghcr_token ]; then \
@@ -77,8 +82,9 @@ RUN --mount=type=secret,id=ghcr_token \
         --oci-username-variable SPACK_OCI_USER \
         --oci-password-variable SPACK_OCI_TOKEN \
         hermes-oci "${SPACK_OCI_CACHE}" && \
-      spack install --fail-fast && \
-      spack buildcache push --unsigned --update-index hermes-oci ; \
+      { spack install ; rc=$? ; \
+        spack buildcache push --unsigned --update-index hermes-oci || true ; \
+        exit $rc ; } ; \
     else \
       spack install --fail-fast ; \
     fi
