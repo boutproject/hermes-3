@@ -1,9 +1,13 @@
 # Build as "hermes-3-builder"
 # with sudo docker build -f docker/hermes-3-builder.dockerfile -t hermes-3-builder .
 
-# Use a spack image with a pinned SHA - currently the 1.2 release (spack/ubuntu-noble:1.2, == :latest).
+# Use a spack image pinned to the 1.2 release. The reference is tag@digest:
+# Docker resolves *solely* by the @sha256 digest (immutable - the exact bytes
+# never change even if the tag is re-pushed) and does NOT verify the tag against
+# it. The :1.2.0 tag is unverified documentation only, so keep it in sync with
+# the digest by hand when bumping.
 # N.B. The spack 1.1 release has a bug in the PETSc package that causes this build to fail; 1.2 fixes it.
-FROM spack/ubuntu-noble@sha256:dafccd1a2e77c61b5b6f81c06bbdabd999e6886daa405b3ac9011c5e4d98f8fa AS builder
+FROM spack/ubuntu-noble:1.2.0@sha256:dafccd1a2e77c61b5b6f81c06bbdabd999e6886daa405b3ac9011c5e4d98f8fa AS builder
 
 # Location of a self-hosted OCI Spack build cache (see below) and the registry
 # user to authenticate as. When SPACK_OCI_USER is empty (e.g. local builds or
@@ -36,8 +40,10 @@ RUN spack external find gcc
 # prebuilt binaries instead of compiled from source. Signed, so import the
 # public signing keys and trust them. (Cache hits depend on the concretization
 # matching what Spack built upstream, so this may only cover some packages.)
+# In Spack 1.2 `buildcache keys --trust` prompts to confirm each key ([y/N]),
+# which EOFs during a non-interactive build; --yes-to-all answers automatically.
 RUN spack mirror add --scope site spack-public https://binaries.spack.io/develop \
- && spack buildcache keys --install --trust
+ && spack buildcache keys --install --trust --yes-to-all
 
 # What we want to install and how we want to install it
 # is specified in a manifest file (spack.yaml)
