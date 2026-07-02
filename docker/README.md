@@ -150,7 +150,7 @@ All published images are built and pushed to the GitHub Container Registry (`ghc
 
 * **`hermes-3-builder`** (`docker/hermes-3-builder.dockerfile`) — a heavyweight image containing the full Spack-built scientific toolchain (MPI, PETSc, SLEPc, SUNDIALS, netCDF, cmake, Python, …). This is the slow, expensive image to build, so it is built infrequently and cached aggressively (see [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin)).
 * **`hermes-3`** (`docker/hermes-3.dockerfile`) — the runtime image. It starts `FROM ghcr.io/boutproject/hermes-3-builder:${BUILDER_TAG}` to pull in the toolchain, then compiles BOUT++ and Hermes-3 on top of it and copies the result into a slim `ubuntu:24.04` runtime stage. Because it builds on the builder, the builder image must exist first.
-* **`hermes-3-jupyter`** (`docker/hermes-3-jupyter.dockerfile`) — an independent image built `FROM jupyter/scipy-notebook` with `xhermes` and docs tooling added. It does not depend on the other two.
+* **`hermes-3-jupyter`** (`docker/hermes-3-jupyter.dockerfile`) — an independent image built `FROM quay.io/jupyter/scipy-notebook` with `xhermes` and docs tooling added. It does not depend on the other two.
 
 ### Per-architecture builds and manifest merging
 
