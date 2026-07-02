@@ -678,7 +678,8 @@ void RelaxPotential::finally(const Options& state) {
 
       mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
-      ddt(Vort) -= FV::Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
+      ddt(Vort) -=
+          FV::Div_a_Grad_perp(Field3D{0.5 * average_atomic_mass / Bsq}, vEdotGradPi);
       ddt(Vort) -=
           Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux, poloidal_flows);
     }
@@ -790,7 +791,8 @@ void RelaxPotential::finally(const Options& state) {
   // Solve diffusion equation for potential
 
   if (boussinesq) {
-    ddt(phi1) = lambda_1 * (FV::Div_a_Grad_perp(average_atomic_mass / Bsq, phi) - Vort);
+    ddt(phi1) =
+        lambda_1 * (FV::Div_a_Grad_perp(Field3D{average_atomic_mass / Bsq}, phi) - Vort);
 
     if (diamagnetic_polarisation) {
       for (const auto& kv : allspecies.getChildren()) {
@@ -809,7 +811,7 @@ void RelaxPotential::finally(const Options& state) {
         }
         const BoutReal A = get<BoutReal>(species["AA"]);
         const Field3D P = get<Field3D>(species["pressure"]);
-        ddt(phi1) += lambda_1 * FV::Div_a_Grad_perp(A / Bsq, P);
+        ddt(phi1) += lambda_1 * FV::Div_a_Grad_perp(Field3D{A / Bsq}, P);
       }
     }
   } else {
@@ -836,7 +838,7 @@ void RelaxPotential::finally(const Options& state) {
       if (diamagnetic_polarisation and species.isSet("pressure")) {
         // Calculate the diamagnetic flow contribution
         const Field3D Pi = get<Field3D>(species["pressure"]);
-        phi_vort += FV::Div_a_Grad_perp(Ai / Bsq / Zi, Pi);
+        phi_vort += FV::Div_a_Grad_perp(Field3D{Ai / Bsq / Zi}, Pi);
       }
     }
 
