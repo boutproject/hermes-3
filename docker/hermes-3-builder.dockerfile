@@ -60,12 +60,12 @@ WORKDIR /opt/spack-environment
 # on a GitHub runner - which then SIGILLs ("Illegal instruction") on older
 # hardware or under a Docker VM. A `require: target=...` is a hard constraint
 # that reuse cannot override, so we inject it per-arch here (the shared
-# spack.yaml cannot branch on architecture). aarch64/x86_64_v2 are the portable
+# spack.yaml cannot branch on architecture). aarch64/x86_64_v3 are the portable
 # baselines; an external gcc can always target an older ISA than its build host,
 # so this does not make the compiler node unsatisfiable.
 RUN case "$(uname -m)" in \
       aarch64) HERMES_TARGET=aarch64 ;; \
-      x86_64)  HERMES_TARGET=x86_64_v2 ;; \
+      x86_64)  HERMES_TARGET=x86_64_v3 ;; \
       *)       HERMES_TARGET="$(uname -m)" ;; \
     esac && \
     spack -e . config add "packages:all:require:target=${HERMES_TARGET}"

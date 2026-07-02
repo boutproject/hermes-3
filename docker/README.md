@@ -8,7 +8,7 @@ This Docker configuration provides a containerized environment for building and 
 
 ### Multi-architecture support
 
-The published images (`ghcr.io/boutproject/hermes-3`, `hermes-3-builder`, and `hermes-3-jupyter`) are built for both `linux/amd64` and `linux/arm64`. Docker automatically pulls the variant matching your machine, so Apple-silicon Macs get a native `arm64` image and no longer rely on x86 emulation. The Spack build is pinned to a portable microarchitecture baseline per architecture — `aarch64` on arm64 and `x86_64_v2` on amd64 — rather than the build runner's native (SVE2 / AVX-512) target, so the images also run correctly under emulation and on older CPUs. (See the [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin) section for the details of this choice.)
+The published images (`ghcr.io/boutproject/hermes-3`, `hermes-3-builder`, and `hermes-3-jupyter`) are built for both `linux/amd64` and `linux/arm64`. Docker automatically pulls the variant matching your machine, so Apple-silicon Macs get a native `arm64` image and no longer rely on x86 emulation. The Spack build is pinned to a portable microarchitecture baseline per architecture — `aarch64` on arm64 and `x86_64_v3` on amd64 — rather than the build runner's native (SVE2 / AVX-512) target, so the images also run correctly under emulation and on older CPUs. (See the [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin) section for the details of this choice.)
 
 ## Basic Getting Started
 
@@ -147,14 +147,14 @@ The fix is a **hard target constraint**, which cache reuse cannot override. Beca
 ```sh
 case "$(uname -m)" in
   aarch64) HERMES_TARGET=aarch64 ;;
-  x86_64)  HERMES_TARGET=x86_64_v2 ;;
+  x86_64)  HERMES_TARGET=x86_64_v3 ;;
 esac
 spack -e . config add "packages:all:require:target=${HERMES_TARGET}"
 ```
 
-`aarch64` and `x86_64_v2` are portable baselines (`x86_64_v2` ≈ any x86-64 CPU since ~2009). Requiring a *generic-family* target this way does **not** break concretization of the externally-found gcc — a newer compiler can always target an older ISA — despite the compiler being a graph node in Spack 1.x. (A more specific microarch, e.g. `x86_64_v4`, could conflict with the external gcc's detected target; the generic family does not.)
+`aarch64` and `x86_64_v3` are portable baselines (`x86_64_v3` ≈ any x86-64 CPU since ~2013 — Intel Haswell / AMD Excavator and later — adding AVX2, BMI1/2 and FMA). Requiring a *generic-family* target this way does **not** break concretization of the externally-found gcc — a newer compiler can always target an older ISA — despite the compiler being a graph node in Spack 1.x. (A more specific microarch, e.g. `x86_64_v4`, could conflict with the external gcc's detected target; the generic family does not.)
 
-Because the target is now fixed regardless of which runner a job lands on, concretization — and therefore OCI-cache hits — are **deterministic across the heterogeneous amd64 runner fleet**. The one residual cost: the public mirror ships some amd64 binaries only at higher `x86_64_vN` levels, so a few packages may compile from source at the `v2` floor; they populate the OCI cache on the first run and are reused incrementally thereafter (arm64, already generic on the public mirror, is fully cache-served from the start).
+Because the target is now fixed regardless of which runner a job lands on, concretization — and therefore OCI-cache hits — are **deterministic across the heterogeneous amd64 runner fleet**. The one residual cost: the public mirror ships some amd64 binaries only at other `x86_64_vN` levels, so a few packages may compile from source at the `v3` floor; they populate the OCI cache on the first run and are reused incrementally thereafter (arm64, already generic on the public mirror, is fully cache-served from the start).
 
 #### Saving build progress on failure
 
@@ -177,7 +177,7 @@ The runtime image is built from **two** Dockerfiles: `docker/hermes-3-builder.do
 1.  **Base image (`FROM spack/ubuntu-noble@sha256:...`)**: a Spack image pinned by digest, based on Ubuntu 24.04. It already ships Spack *and* a full GCC toolchain (`gcc`/`g++`/`gfortran`/`make`, `libc6-dev`) plus `git`, so **no `apt-get` step is needed** — nothing is installed via the OS package manager.
 2.  **Spack config + external compiler**: the global Spack config (`spack_config.yaml`, which sets the install tree to `/opt/software`) is copied in, and `spack external find gcc` registers the base image's GCC as an external package. In Spack 1.x compilers are graph nodes and the concretizer only accepts them when found as external *packages*, not via the legacy `spack compiler find`.
 3.  **Binary mirrors**: Spack's signed public mirror (`binaries.spack.io/develop`) is added and its keys trusted, and — when registry credentials are supplied — the self-hosted OCI cache is added too. See the [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin) section.
-4.  **Pin the microarchitecture target**: a hard `packages.all.require: target=…` (per-arch: `aarch64` / `x86_64_v2`) is added to the environment so cache reuse can't pull a non-portable native build. See the [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin) section.
+4.  **Pin the microarchitecture target**: a hard `packages.all.require: target=…` (per-arch: `aarch64` / `x86_64_v3`) is added to the environment so cache reuse can't pull a non-portable native build. See the [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin) section.
 5.  **Install the environment (`spack.yaml` → `spack install`)**: the environment manifest (`docker/image_ingredients/spack.yaml`) lists the desired packages (`cmake`, `python`, MPI, PETSc, SLEPc, SUNDIALS, netCDF, …) and the base concretizer settings (`require: %gcc`, `granularity: generic`). Note that **`cmake` is built by Spack** here — it is not in the base image. Whatever installs is pushed back to the OCI cache (even if the install later fails); see [saving build progress on failure](#saving-build-progress-on-failure).
 6.  **Activation script (`spack env activate --sh -d . > activate.sh`)** and **entrypoint**: `activate.sh` activates the Spack environment when sourced, and `docker_entrypoint.sh` (which sources it, then `exec "$@"`) is installed as the image entrypoint.
 
