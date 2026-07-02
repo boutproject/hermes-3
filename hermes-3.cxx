@@ -121,7 +121,7 @@ public:
     Coordinates* coord = mesh->getCoordinates();
     auto dx = coord->dx;
     auto g11 = coord->g11;
-    auto dr =
+    Coordinates::FieldMetric dr =
         dx / sqrt(g11); // cell radial length. dr = dx/(Bpol * R) and g11 = (Bpol*R)**2
 
     // Only implemented for cell centre quantities
