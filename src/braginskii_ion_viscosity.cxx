@@ -31,17 +31,19 @@ using bout::globals::mesh;
 
 BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                                                Options& alloptions, Solver*)
-    : Component({
-          readIfSet("species:{non_electrons}:pressure"),
-          readIfSet("species:{non_electrons}:temperature"),
-          readIfSet("species:{non_electrons}:density"),
-          readIfSet("species:{non_electrons}:velocity"),
-          readIfSet("species:{non_electrons}:charge"),
-          readIfSet("species:{non_electrons}:collision_frequencies:{coll_type}"),
-          readWrite("species:{non_electrons}:momentum_source"),
-          readWrite("species:{non_electrons}:energy_source"),
-          readWrite("fields:DivJextra"),
-      }) {
+    : NamedComponent(
+          name,
+          {
+              readIfSet("species:{non_electrons}:pressure"),
+              readIfSet("species:{non_electrons}:temperature"),
+              readIfSet("species:{non_electrons}:density"),
+              readIfSet("species:{non_electrons}:velocity"),
+              readIfSet("species:{non_electrons}:charge"),
+              readIfSet("species:{non_electrons}:collision_frequencies:{coll_type}"),
+              readWrite("species:{non_electrons}:momentum_source"),
+              readWrite("species:{non_electrons}:energy_source"),
+              readWrite("fields:DivJextra"),
+          }) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]

@@ -24,7 +24,7 @@
 ///   - Boundary conditions are applied to field-aligned fields
 ///     using to/fromFieldAligned
 ///
-struct SheathBoundary : public Component {
+struct SheathBoundary : public NamedComponent<SheathBoundary> {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary"
   ///   - lower_y                  Boundary on lower y?
@@ -45,6 +45,8 @@ struct SheathBoundary : public Component {
   ///
   /// If ion-induced SEE is disabled (`ion_ee_gamma_max < 0`) then returns 0.
   BoutReal ionSecondaryElectronEmissionGamma(BoutReal ion_energy) const;
+
+  static constexpr auto type = "sheath_boundary";
 
 private:
   BoutReal Ge;       // Secondary electron emission coefficient
@@ -114,7 +116,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SheathBoundary> registercomponentsheathboundary("sheath_boundary");
+RegisterComponent<SheathBoundary> registercomponentsheathboundary;
 }
 
 #endif // SHEATH_BOUNDARY_H

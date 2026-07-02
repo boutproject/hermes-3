@@ -3,32 +3,34 @@
 #include "../../include/component_scheduler.hxx"
 
 namespace {
-struct TestComponent : public Component {
-  TestComponent(const std::string&, Options&, Solver*)
-      : Component({readWrite("answer")}) {}
+struct TestComponent : public NamedComponent<TestComponent> {
+  TestComponent(std::string name, Options&, Solver*)
+      : NamedComponent(name, {readWrite("answer")}) {}
+
+  static constexpr auto type = "testcomponent";
 
 private:
   void transform_impl(GuardedOptions& state) override {
     state["answer"].getWritable() = 42;
   }
 };
-  
 
-struct TestMultiply : public Component {
-  TestMultiply(const std::string&, Options&, Solver*)
-      : Component({writeFinal("answer")}) {}
+struct TestMultiply : public NamedComponent<TestMultiply> {
+  TestMultiply(std::string name, Options&, Solver*)
+      : NamedComponent(name, {writeFinal("answer")}) {}
+
+  static constexpr auto type = "multiply";
 
 private:
   void transform_impl(GuardedOptions& state) override {
     // Note: Using set<>() and get<>() for quicker access, avoiding printing
     //       getNonFinal needs to be used because we set the value afterwards
-    set(state["answer"],
-        getNonFinal<int>(state["answer"]) * 2);
+    set(state["answer"], getNonFinal<int>(state["answer"]) * 2);
   }
 };
 
-RegisterComponent<TestComponent> registertestcomponent("testcomponent");
-RegisterComponent<TestMultiply> registertestcomponent2("multiply");
+RegisterComponent<TestComponent> registertestcomponent;
+RegisterComponent<TestMultiply> registertestcomponent2;
 } // namespace
 
 TEST(SchedulerTest, OneComponent) {
@@ -65,4 +67,3 @@ TEST(SchedulerTest, SubComponents) {
   ASSERT_TRUE(options.isSet("answer"));
   ASSERT_TRUE(options["answer"] == 42 * 2);
 }
-
