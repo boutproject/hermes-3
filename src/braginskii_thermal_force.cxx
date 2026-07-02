@@ -7,6 +7,7 @@
 #include <bout/difops.hxx>
 #include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
 #include <bout/utils.hxx>
