@@ -15,6 +15,10 @@ name: Test Docker image builds
 # Both images are built natively per architecture (amd64 + arm64) and merged
 # into a single multi-arch manifest per tag.
 #
+#   * If a change touches the jupyter image, it is built (multi-arch, under
+#     emulation) and published as 'experimental_docker_build' too. It is
+#     independent of the builder->final chain.
+#
 # NOTE: publishing requires write access to the registry, so this only works for
 # branches in this repository, not pull requests opened from forks.
 on:
@@ -37,8 +41,10 @@ env:
   REGISTRY: ghcr.io
   BUILDER_IMAGE_NAME: boutproject/hermes-3-builder
   FINAL_IMAGE_NAME: boutproject/hermes-3
+  JUPYTER_IMAGE_NAME: boutproject/hermes-3-jupyter
   BUILDER_DOCKERFILE: docker/hermes-3-builder.dockerfile
   FINAL_DOCKERFILE: docker/hermes-3.dockerfile
+  JUPYTER_DOCKERFILE: docker/hermes-3-jupyter.dockerfile
   EXPERIMENTAL_TAG: experimental_docker_build
 
 jobs:
@@ -49,6 +55,7 @@ jobs:
     outputs:
       builder: ${{ steps.filter.outputs.builder }}
       final: ${{ steps.filter.outputs.final }}
+      jupyter: ${{ steps.filter.outputs.jupyter }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -74,6 +81,12 @@ jobs:
               - 'docker/image_ingredients/boutpp_config.cmake'
               - 'docker/image_ingredients/docker_image_commands.sh'
               - 'docker/image_ingredients/docker_entrypoint.sh'
+              - '.github/workflows/test_docker_build.yml'
+            # Files that affect the jupyter image build. This image is built
+            # FROM jupyter/scipy-notebook and is independent of the
+            # builder->final chain.
+            jupyter:
+              - 'docker/hermes-3-jupyter.dockerfile'
               - '.github/workflows/test_docker_build.yml'
 
   # ---- Builder image (only when the builder or its deps changed) ----
@@ -300,3 +313,61 @@ jobs:
 
       - name: Inspect manifest
         run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}
+
+  # ---- Jupyter image (only when the jupyter dockerfile changed) ----
+
+  # The jupyter image is built FROM jupyter/scipy-notebook and is independent of
+  # the builder->final chain, so it gets its own standalone job. As in
+  # build_jupyter_image.yml, the steps are just apt/pip installs, so building the
+  # arm64 variant under emulation is cheap enough that a native-runner matrix is
+  # unnecessary; a single job builds both platforms and pushes the multi-arch
+  # 'experimental_docker_build' tag directly.
+  build-jupyter:
+    needs: changes
+    # Publishing needs registry write access, which fork PRs don't have, so skip
+    # cleanly on forks instead of failing on the push step.
+    if: |
+      needs.changes.outputs.jupyter == 'true' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # Enable emulation so we can build the arm64 variant on an amd64 runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.JUPYTER_IMAGE_NAME }}
+
+      - name: Build and push jupyter image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.JUPYTER_DOCKERFILE }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.JUPYTER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=exp-jupyter
+          cache-to: type=gha,mode=max,scope=exp-jupyter
+
+      - name: Inspect manifest
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.JUPYTER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}
