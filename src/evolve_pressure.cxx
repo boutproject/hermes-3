@@ -1,17 +1,30 @@
 
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field.hxx>
+#include <bout/field3d.hxx>
 #include <bout/field_factory.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/globals.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
+#include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
+#include "../include/guarded_options.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/permissions.hxx"
+
+#include <string>
 
 using bout::globals::mesh;
 
@@ -235,10 +248,9 @@ void EvolvePressure::finally(const Options& state) {
   const auto& species = state["species"][name];
 
   // Get updated pressure and temperature with boundary conditions
-  // Note: Retain pressures which fall below zero
+  P = get<Field3D>(species["pressure"]);
   P.clearParallelSlices();
-  P.setBoundaryTo(get<Field3D>(species["pressure"]));
-  Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
+  const Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
@@ -247,7 +259,7 @@ void EvolvePressure::finally(const Options& state) {
       and state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
-    Field3D phi = get<Field3D>(state["fields"]["phi"]);
+    const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
     ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
   } else {
@@ -255,14 +267,14 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (species.isSet("velocity")) {
-    Field3D V = get<Field3D>(species["velocity"]);
+    const Field3D V = get<Field3D>(species["velocity"]);
 
     // Typical wave speed used for numerical diffusion
     Field3D fastest_wave;
     if (state.isSet("fastest_wave")) {
       fastest_wave = get<Field3D>(state["fastest_wave"]);
     } else {
-      BoutReal AA = get<BoutReal>(species["AA"]);
+      const BoutReal AA = get<BoutReal>(species["AA"]);
       fastest_wave = sqrt(T / AA);
     }
 
@@ -298,7 +310,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (numerical_viscous_heating || diagnose) {
       // Viscous heating coming from numerical viscosity from the Lax flux
-      Field3D Nlim = softFloor(N, density_floor);
+      const Field3D Nlim = softFloor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
       Sp_nvh = (2. / 3) * AA
                * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_viscous_heating,
@@ -315,7 +327,7 @@ void EvolvePressure::finally(const Options& state) {
 
   if (species.isSet("low_n_coeff")) {
     // Low density parallel diffusion
-    Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
+    const Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N)
               + FV::Div_par_K_Grad_par(low_n_coeff, P);
   }
@@ -334,7 +346,7 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_p_diffuse_perp) {
-    Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
+    const Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
     ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P);
   }
 
@@ -352,8 +364,8 @@ void EvolvePressure::finally(const Options& state) {
   if (source_time_dependent) {
     // Evaluate the source_prefactor function at the current time in seconds and scale
     // source with it
-    BoutReal time = get<BoutReal>(state["time"]);
-    BoutReal source_prefactor =
+    const BoutReal time = get<BoutReal>(state["time"]);
+    const BoutReal source_prefactor =
         source_prefactor_function->generate(bout::generator::Context().set(
             "x", 0, "y", 0, "z", 0, "t", time * time_normalisation));
     final_source = source * source_prefactor;
@@ -389,7 +401,7 @@ void EvolvePressure::finally(const Options& state) {
   }
 
 #if CHECKLEVEL >= 1
-  for (auto& i : P.getRegion("RGN_NOBNDRY")) {
+  for (const auto& i : P.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(P)[i])) {
       throw BoutException("ddt(P{}) non-finite at {}. Sp={}\n", name, i, Sp[i]);
     }

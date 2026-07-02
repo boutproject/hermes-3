@@ -1,0 +1,19 @@
+{
+    "info": {
+        "fit_type": "nT",
+        "ref": "Dummy test data",
+        "reaction_lbl": "Dummy test data",
+        "notes": "Dummy test data.",
+        "some_metadata": 999.9
+    },
+    "coeffs": [
+        [
+            1.0,
+            2.0
+        ],
+        [
+            2.0,
+            4.0
+        ]
+    ]
+}

@@ -1,12 +1,26 @@
+#include <bout/bout_types.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/globals.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+#include <bout/solver.hxx>
+#include <bout/sys/range.hxx>
+#include <bout/utils.hxx>
 #include <bout/vecops.hxx>
 
+#include "../include/component.hxx"
 #include "../include/diamagnetic_drift.hxx"
+#include "../include/guarded_options.hxx"
+#include "../include/permissions.hxx"
+
+#include <string>
 
 using bout::globals::mesh;
 
 DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
-                                   Solver* UNUSED(solver))
+                                   [[maybe_unused]] Solver* solver)
     : Component({readIfSet("species:{all_species}:{input}"),
                  readWrite("species:{all_species}:{output}")}) {
 
@@ -41,15 +55,16 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
 
   // Read curvature vector
   Curlb_B.covariant = false; // Contravariant
-  if (mesh->get(Curlb_B, "bxcv")) {
+  if (mesh->get(Curlb_B, "bxcv") != 0) {
+    output_warn.write("Diamagnetic drift: Couldn't read curvature vector 'bxcv'");
     Curlb_B.x = Curlb_B.y = Curlb_B.z = 0.0;
   }
 
   Options& paralleltransform = Options::root()["mesh"]["paralleltransform"];
-  if (paralleltransform.isSet("type") and
-      paralleltransform["type"].as<std::string>() == "shifted") {
+  if (paralleltransform.isSet("type")
+      and paralleltransform["type"].as<std::string>() == "shifted") {
     Field2D I;
-    if (mesh->get(I, "sinty")) {
+    if (mesh->get(I, "sinty") != 0) {
       I = 0.0;
     }
     Curlb_B.z += I * Curlb_B.x;
@@ -59,8 +74,8 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
 
   // Get the units
   const auto& units = alloptions["units"];
-  BoutReal Bnorm = get<BoutReal>(units["Tesla"]);
-  BoutReal Lnorm = get<BoutReal>(units["meters"]);
+  const BoutReal Bnorm = get<BoutReal>(units["Tesla"]);
+  const BoutReal Lnorm = get<BoutReal>(units["meters"]);
 
   Curlb_B.x /= Bnorm;
   Curlb_B.y *= SQ(Lnorm);
@@ -117,8 +132,9 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
   for (auto& kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-    if (!(species.isSet("charge") and species.isSet("temperature")))
+    if (!(species.isSet("charge") and species.isSet("temperature"))) {
       continue; // Skip, go to next species
+    }
 
     // Calculate diamagnetic drift velocity for this species
     auto q = get<BoutReal>(species["charge"]);
@@ -128,7 +144,7 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
     auto T = GET_VALUE(Field3D, species["temperature"]);
 
     // Diamagnetic drift velocity
-    Vector3D vD = (T / q) * Curlb_B;
+    const Vector3D vD = (T / q) * Curlb_B;
 
     if (IS_SET(species["density"])) {
       auto N = GET_VALUE(Field3D, species["density"]);

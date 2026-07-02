@@ -3,11 +3,19 @@
 #define DIAMAGNETIC_DRIFT_H
 
 #include "component.hxx"
+#include "guarded_options.hxx"
+
+#include <bout/bout_types.hxx>
+#include <bout/field2d.hxx>
+#include <bout/options.hxx>
+#include <bout/vector2d.hxx>
+
+#include <string>
 
 /// Calculate diamagnetic flows
 
 struct DiamagneticDrift : public Component {
-  DiamagneticDrift(std::string name, Options &options, Solver *UNUSED(solver));
+  DiamagneticDrift(std::string name, Options& options, [[maybe_unused]] Solver* solver);
 
 private:
   Vector2D Curlb_B;
@@ -30,7 +38,7 @@ private:
   /// Modifies the input field
   void coreAverage(Field3D& f);
   Field2D cell_volume;
-  BoutReal core_ring_volume;
+  BoutReal core_ring_volume{0.0};
 };
 
 namespace {
@@ -38,5 +46,3 @@ RegisterComponent<DiamagneticDrift> registercomponentdiamagnetic("diamagnetic_dr
 }
 
 #endif // DIAMAGNETIC_DRIFT_H
-
-
