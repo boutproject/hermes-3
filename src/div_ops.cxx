@@ -40,8 +40,39 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <map>
 
 using bout::globals::mesh;
+
+namespace {
+/// Metric components promoted to Field3D and shifted to field-aligned
+/// coordinates, for use in Y flux calculations when the inputs have no
+/// parallel slices. The metric is constant during a simulation, so
+/// these are computed once for each Coordinates object and then
+/// reused, rather than being shifted and promoted on every call.
+struct AlignedMetrics {
+  Field3D g23, g_23, g12, g_12, J, dx, dy, dz, Bxy;
+};
+
+const AlignedMetrics& alignedMetrics(const Coordinates* coord) {
+  static std::map<const Coordinates*, AlignedMetrics> cache;
+  auto it = cache.find(coord);
+  if (it == cache.end()) {
+    it = cache
+             .emplace(coord, AlignedMetrics{toFieldAligned(coord->g23),
+                                            toFieldAligned(coord->g_23),
+                                            toFieldAligned(coord->g12),
+                                            toFieldAligned(coord->g_12),
+                                            toFieldAligned(coord->J),
+                                            toFieldAligned(coord->dx),
+                                            toFieldAligned(coord->dy),
+                                            toFieldAligned(coord->dz),
+                                            toFieldAligned(coord->Bxy)})
+             .first;
+  }
+  return it->second;
+}
+} // namespace
 
 const Field3D Div_par_diffusion_index(const Field3D& f, bool bndry_flux) {
   Field3D result;
@@ -730,12 +761,10 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
   Field3D fc = f;
   Field3D ac = a;
 
-  Field3D g23c = coord->g23;
-  Field3D g_23c = coord->g_23;
-  Field3D Jc = coord->J;
-  Field3D dyc = coord->dy;
-  Field3D dzc = coord->dz;
-  Field3D Bxyc = coord->Bxy;
+  // Metric components at the cell centre. Set below, either directly
+  // from the coordinates (3D metrics) or from the cached field-aligned
+  // metrics (2D metrics).
+  Field3D g23c(mesh), g_23c(mesh), Jc(mesh), dyc(mesh), dzc(mesh), Bxyc(mesh);
 
   // Result of the Y and Z fluxes
   Field3D yzresult(mesh);
@@ -788,15 +817,23 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
     Bxyup = coord->Bxy.yup();
     Bxydown = coord->Bxy.ydown();
 
+    g23c = coord->g23;
+    g_23c = coord->g_23;
+    Jc = coord->J;
+    dyc = coord->dy;
+    dzc = coord->dz;
+    Bxyc = coord->Bxy;
+
   } else {
     // No 3D metrics
-    // Need to shift to/from field aligned coordinates
-    g23up = g23down = g23c = toFieldAligned(coord->g23);
-    g_23up = g_23down = g_23c = toFieldAligned(coord->g_23);
-    Jup = Jdown = Jc = toFieldAligned(coord->J);
-    dyup = dydown = dyc = toFieldAligned(coord->dy);
-    dzup = dzdown = dzc = toFieldAligned(coord->dz);
-    Bxyup = Bxydown = Bxyc = toFieldAligned(coord->Bxy);
+    // Use cached metric components in field aligned coordinates
+    const AlignedMetrics& aligned = alignedMetrics(coord);
+    g23up = g23down = g23c = aligned.g23;
+    g_23up = g_23down = g_23c = aligned.g_23;
+    Jup = Jdown = Jc = aligned.J;
+    dyup = dydown = dyc = aligned.dy;
+    dzup = dzdown = dzc = aligned.dz;
+    Bxyup = Bxydown = Bxyc = aligned.Bxy;
   }
 
   // Y flux
@@ -1089,15 +1126,11 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
   Field3D fc = f;
   Field3D ac = a;
 
-  Field3D g23c = coord->g23;
-  Field3D g_23c = coord->g_23;
-  Field3D g12c = coord->g12;
-  Field3D g_12c = coord->g_12;
-  Field3D Jc = coord->J;
-  Field3D dxc = coord->dx;
-  Field3D dyc = coord->dy;
-  Field3D dzc = coord->dz;
-  Field3D Bxyc = coord->Bxy;
+  // Metric components at the cell centre. Set below, either directly
+  // from the coordinates (3D metrics) or from the cached field-aligned
+  // metrics (2D metrics).
+  Field3D g23c(mesh), g_23c(mesh), g12c(mesh), g_12c(mesh), Jc(mesh), dxc(mesh),
+      dyc(mesh), dzc(mesh), Bxyc(mesh);
 
   // Calculate the X derivative at cell edge (X + 1/2), including in Y guard cells
   // This is used to calculate Y flux contribution from g21 * d/dx
@@ -1177,18 +1210,29 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
     Bxyup = coord->Bxy.yup();
     Bxydown = coord->Bxy.ydown();
 
+    g23c = coord->g23;
+    g_23c = coord->g_23;
+    g12c = coord->g12;
+    g_12c = coord->g_12;
+    Jc = coord->J;
+    dxc = coord->dx;
+    dyc = coord->dy;
+    dzc = coord->dz;
+    Bxyc = coord->Bxy;
+
   } else {
     // No 3D metrics
-    // Need to shift to/from field aligned coordinates
-    g23up = g23down = g23c = toFieldAligned(coord->g23);
-    g_23up = g_23down = g_23c = toFieldAligned(coord->g_23);
-    g12up = g12down = g12c = toFieldAligned(coord->g12);
-    g_12up = g_12down = g_12c = toFieldAligned(coord->g_12);
-    Jup = Jdown = Jc = toFieldAligned(coord->J);
-    dxc = toFieldAligned(coord->dx);
-    dyup = dydown = dyc = toFieldAligned(coord->dy);
-    dzup = dzdown = dzc = toFieldAligned(coord->dz);
-    Bxyup = Bxydown = Bxyc = toFieldAligned(coord->Bxy);
+    // Use cached metric components in field aligned coordinates
+    const AlignedMetrics& aligned = alignedMetrics(coord);
+    g23up = g23down = g23c = aligned.g23;
+    g_23up = g_23down = g_23c = aligned.g_23;
+    g12up = g12down = g12c = aligned.g12;
+    g_12up = g_12down = g_12c = aligned.g_12;
+    Jup = Jdown = Jc = aligned.J;
+    dxc = aligned.dx;
+    dyup = dydown = dyc = aligned.dy;
+    dzup = dzdown = dzc = aligned.dz;
+    Bxyup = Bxydown = Bxyc = aligned.Bxy;
   }
 
   // Y flux

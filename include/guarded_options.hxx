@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <map>
 #include <memory>
 #include <string>
@@ -27,7 +28,7 @@ public:
   /// Get a subsection or value. The result will also be wrapped in a
   /// GuardedOptions object, with the same permissions as this one.
   GuardedOptions operator[](const std::string& name) const {
-    return GuardedOptions(&(*options)[name], permissions, unread_variables,
+    return GuardedOptions(&(*options)[name], permissions, session, unread_variables,
                           unwritten_variables);
   }
   GuardedOptions operator[](const char* name) const { return (*this)[std::string(name)]; }
@@ -86,13 +87,17 @@ public:
 private:
   Options* options;
   Permissions* permissions;
+  /// Identifies the root GuardedOptions this object was derived from,
+  /// so that objects from different constructions compare unequal.
+  std::size_t session;
+  /// Only allocated when CHECKLEVEL >= 999; null otherwise.
   mutable std::shared_ptr<std::map<std::string, Regions>> unread_variables,
       unwritten_variables;
 
-  GuardedOptions(Options* options, Permissions* permissions,
+  GuardedOptions(Options* options, Permissions* permissions, std::size_t session,
                  std::shared_ptr<std::map<std::string, Regions>> unread_vars,
                  std::shared_ptr<std::map<std::string, Regions>> unwritten_vars)
       : options(std::move(options)), permissions(std::move(permissions)),
-        unread_variables(std::move(unread_vars)),
+        session(session), unread_variables(std::move(unread_vars)),
         unwritten_variables(std::move(unwritten_vars)) {}
 };

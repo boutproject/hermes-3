@@ -68,6 +68,7 @@ Permissions::Permissions(std::initializer_list<VarRights> data) : variable_permi
 void Permissions::setAccess(const std::string& variable, const AccessRights& rights) {
 
   variable_permissions[variable] = applyLowerPermissions(rights);
+  match_cache.clear();
 }
 
 std::string replaceAll(const std::string& str, const std::string& from,
@@ -87,6 +88,7 @@ std::string replaceAll(const std::string& str, const std::string& from,
 
 void Permissions::substitute(const std::string& label,
                              const std::vector<std::string>& substitutions) {
+  match_cache.clear();
   for (auto it = variable_permissions.begin(); it != variable_permissions.end();) {
     const auto [varname, access] = *it;
     const std::string pattern = "{" + label + "}";
@@ -118,29 +120,44 @@ void Permissions::checkNoRemainingSubstitutions() const {
   }
 }
 
-Permissions::VarRights Permissions::bestMatchRights(const std::string& variable) const {
+const Permissions::VarRights&
+Permissions::bestMatchRights(const std::string& variable) const {
+  // The permissions are fixed after initialisation, but this is
+  // called for every state variable access in every RHS evaluation,
+  // so matches are cached.
+  const auto cached = match_cache.find(variable);
+  if (cached != match_cache.end()) {
+    return cached->second;
+  }
   auto match = variable_permissions.find(variable);
   if (match != variable_permissions.end()) {
-    return {match->first, match->second};
+    return match_cache.emplace(variable, VarRights{match->first, match->second})
+        .first->second;
   }
   Permissions::AccessRights best_candidate = {Regions::Nowhere, Regions::Nowhere,
                                               Regions::Nowhere};
   std::string best_candidate_name = "";
   size_t max_len = 0;
   for (const auto& [varname, rights] : variable_permissions) {
-    if (varname.size() > max_len and variable.find(varname + ":") == 0) {
+    // Match variables starting with "<varname>:" without allocating a
+    // temporary string for the comparison
+    if (varname.size() > max_len and variable.size() > varname.size()
+        and variable[varname.size()] == ':'
+        and variable.compare(0, varname.size(), varname) == 0) {
       max_len = varname.size();
       best_candidate = rights;
       best_candidate_name = varname;
     }
   }
-  return {best_candidate_name, best_candidate};
+  return match_cache
+      .emplace(variable, VarRights{std::move(best_candidate_name), best_candidate})
+      .first->second;
 }
 
 std::pair<bool, std::string> Permissions::canAccess(const std::string& variable,
                                                     PermissionTypes permission,
                                                     Regions region) const {
-  auto [match_name, match_rights] = bestMatchRights(variable);
+  const auto& [match_name, match_rights] = bestMatchRights(variable);
   if ((match_rights[static_cast<size_t>(permission)] & region) == region) {
     return {true, match_name};
   }
@@ -152,7 +169,7 @@ Permissions::getHighestPermission(const std::string& variable, Regions region) c
   if (region == Regions::Nowhere) {
     return {PermissionTypes::None, ""};
   }
-  auto [varname, rights] = bestMatchRights(variable);
+  const auto& [varname, rights] = bestMatchRights(variable);
   size_t i = static_cast<int>(PermissionTypes::ReadIfSet);
   while (i < static_cast<size_t>(PermissionTypes::END)
          and (rights[i] & region) == region) {
@@ -222,6 +239,7 @@ std::istream& operator>>(std::istream& is, Permissions& permissions) {
     throw BoutException("Error parsing Permissions data; no closing bracket.");
   }
   permissions.variable_permissions.clear();
+  permissions.match_cache.clear();
 
   // FIXME: This will just skip over any malformed content, without an error or warning
   std::vector<std::string> rights_patterns;

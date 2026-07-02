@@ -7,6 +7,7 @@
 #include <ostream>
 #include <regex>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -237,9 +238,18 @@ private:
   /// string indicates the name of the variable from which the access
   /// rights were derived. It will be empty if there are no matching
   /// entries.
-  VarRights bestMatchRights(const std::string& variable) const;
+  ///
+  /// Results are memoised in `match_cache`, as this is called for
+  /// every state variable access in every RHS evaluation. The
+  /// reference returned is invalidated by any change to the
+  /// permissions.
+  const VarRights& bestMatchRights(const std::string& variable) const;
 
   std::map<std::string, AccessRights> variable_permissions;
+
+  /// Cache of previous bestMatchRights results. Must be cleared
+  /// whenever variable_permissions changes.
+  mutable std::unordered_map<std::string, VarRights> match_cache;
 
   static const std::regex LABEL_RE;
 };
