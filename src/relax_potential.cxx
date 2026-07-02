@@ -20,9 +20,11 @@
 #include <bout/output.hxx>
 #include <bout/solver.hxx>
 #include <bout/sys/range.hxx>
+#include <bout/utils.hxx>
 #include <bout/vecops.hxx>
 #include <bout/vector3d.hxx>
 
+#include <cmath>
 #include <string>
 
 using bout::globals::mesh;
@@ -56,12 +58,22 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 } // namespace
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver)
-    : Component({readWrite("fields:vorticity"), readWrite("fields:phi")}) {
-
-  solver->add(Vort, "Vort"); // Vorticity evolving
-  solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
+    : Component({
+          readWrite("fields:vorticity"),
+          readWrite("fields:phi"),
+          readIfSet("species:{all_species}:charge"),
+          readOnly("species:{charged}:AA"),
+      }) {
 
   auto& options = alloptions[name];
+
+  evolve_vorticity = options["evolve_vorticity"].doc("").withDefault<bool>(true);
+
+  if (evolve_vorticity) {
+    solver->add(Vort, "Vort"); // Vorticity evolving
+  }
+  solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
+
   // Normalisations
   const Options& units = alloptions["units"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
@@ -182,6 +194,8 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                                  .doc("Timescale for phi boundary relaxation [seconds]")
                                  .withDefault(1e-4)
                              / get<BoutReal>(alloptions["units"]["seconds"]);
+  } else {
+    setPermissions(readIfSet("species:{charged}:temperature", Regions::Interior));
   }
 
   if (diamagnetic) {
@@ -206,10 +220,9 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
       if (diamagnetic) {
         // Need curvature
         throw;
-      } else {
-        output_warn.write("No curvature vector in input grid");
-        Curlb_B = 0.0;
       }
+      output_warn.write("No curvature vector in input grid");
+      Curlb_B = 0.0;
     }
   }
 
@@ -245,9 +258,15 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
   // Scale potential
   phi = phi1 / lambda_2;
 
-  // Set the boundary of Vort. . Needed only if dissipation terms are included.
+  // Calculate vorticity from phi.
+  this->Vort_from_phi = vorticity(phi, allspecies);
+  if (!evolve_vorticity) {
+    // Not evolving vorticity so calculate from phi
+    Vort = this->Vort_from_phi;
+  }
+
+  // Set the boundary of Vort. Needed only if dissipation terms are included.
   Vort.applyBoundary("neumann");
-  // Vort.applyBoundary("dirichlet");
 
   if (Vort.hasParallelSlices()) {
     Field3D& Vort_ydown = Vort.ydown();
@@ -286,9 +305,6 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
     }
     Vort = fromFieldAligned(Vort_fa);
   }
-
-  // Set the boundary of phi.
-  // phi.applyBoundary("neumann");
 
   // Note: For now the boundary values are all at the midpoint,
   //       and only phi is considered, not phi + Pi which is handled in Boussinesq solves
@@ -642,13 +658,9 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
 }
 
 void RelaxPotential::finally(const Options& state) {
-
-  const Options& allspecies = state["species"];
-
   const auto* coord = mesh->getCoordinates();
 
   phi = get<Field3D>(state["fields"]["phi"]);
-  // Vort = get<Field3D>(state["fields"]["vorticity"]);
 
   // Solve vorticity equation
 
@@ -787,60 +799,16 @@ void RelaxPotential::finally(const Options& state) {
     }
   }
 
-  // Solve diffusion equation for potential
+  if (evolve_vorticity) {
+    // Solve diffusion equation for potential, relaxing towards
+    // the evolving vorticity. Uses Vort_from_phi calculated in transform()
+    ddt(phi1) = lambda_1 * (this->Vort_from_phi - Vort);
 
-  if (boussinesq) {
-    ddt(phi1) = lambda_1 * (FV::Div_a_Grad_perp(average_atomic_mass / Bsq, phi) - Vort);
-
-    if (diamagnetic_polarisation) {
-      for (const auto& kv : allspecies.getChildren()) {
-        // Note: includes electrons (should it?)
-
-        const Options& species = kv.second;
-        if (!species.isSet("charge")) {
-          continue; // Not charged
-        }
-        const BoutReal Z = get<BoutReal>(species["charge"]);
-        if (fabs(Z) < 1e-5) {
-          continue; // Not charged
-        }
-        if (!species.isSet("pressure")) {
-          continue; // No pressure
-        }
-        const BoutReal A = get<BoutReal>(species["AA"]);
-        const Field3D P = get<Field3D>(species["pressure"]);
-        ddt(phi1) += lambda_1 * FV::Div_a_Grad_perp(A / Bsq, P);
-      }
-    }
   } else {
-    // Non-Boussinesq. Calculate mass density by summing over species
+    // Evolve potential not vorticity.
+    // This is only valid in steady state (ddt -> 0)
 
-    // Calculate vorticity from potential phi
-    Field3D phi_vort = 0.0;
-    for (const auto& kv : allspecies.getChildren()) {
-      const Options& species = kv.second;
-
-      if (!species.isSet("charge")) {
-        continue; // Not charged
-      }
-      const BoutReal Zi = get<BoutReal>(species["charge"]);
-      if (fabs(Zi) < 1e-5) {
-        continue; // Not charged
-      }
-
-      const BoutReal Ai = get<BoutReal>(species["AA"]);
-      const Field3D Ni = get<Field3D>(species["density"]);
-
-      phi_vort += FV::Div_a_Grad_perp((Ai / Bsq) * Ni, phi);
-
-      if (diamagnetic_polarisation and species.isSet("pressure")) {
-        // Calculate the diamagnetic flow contribution
-        const Field3D Pi = get<Field3D>(species["pressure"]);
-        phi_vort += FV::Div_a_Grad_perp(Ai / Bsq / Zi, Pi);
-      }
-    }
-
-    ddt(phi1) = lambda_1 * (phi_vort - Vort);
+    ddt(phi1) = -lambda_1 * ddt(Vort);
   }
 }
 
@@ -894,4 +862,59 @@ void RelaxPotential::outputVars(Options& state) {
                       {"source", "relax_potential"}});
     }
   }
+}
+
+Field3D RelaxPotential::vorticity(const Field3D& phi, GuardedOptions& allspecies) {
+  if (boussinesq) {
+    Field3D phi_vort = FV::Div_a_Grad_perp(average_atomic_mass / Bsq, phi);
+
+    if (diamagnetic_polarisation) {
+      for (const auto& kv : allspecies.getChildren()) {
+        // Note: includes electrons (should it?)
+
+        const GuardedOptions& species = kv.second;
+        if (!species.isSet("charge")) {
+          continue; // Not charged
+        }
+        const BoutReal Z = get<BoutReal>(species["charge"]);
+        if (fabs(Z) < 1e-5) {
+          continue; // Not charged
+        }
+        if (!species.isSet("pressure")) {
+          continue; // No pressure
+        }
+        const BoutReal A = get<BoutReal>(species["AA"]);
+        const Field3D P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+        phi_vort += FV::Div_a_Grad_perp(A / Bsq, P);
+      }
+    }
+    return phi_vort;
+  }
+  // Non-Boussinesq. Calculate mass density by summing over species
+
+  // Calculate vorticity from potential phi
+  Field3D phi_vort = 0.0;
+  for (const auto& kv : allspecies.getChildren()) {
+    const GuardedOptions& species = kv.second;
+
+    if (!species.isSet("charge")) {
+      continue; // Not charged
+    }
+    const BoutReal Zi = get<BoutReal>(species["charge"]);
+    if (fabs(Zi) < 1e-5) {
+      continue; // Not charged
+    }
+
+    const BoutReal Ai = get<BoutReal>(species["AA"]);
+    const Field3D Ni = get<Field3D>(species["density"]);
+
+    phi_vort += FV::Div_a_Grad_perp((Ai / Bsq) * Ni, phi);
+
+    if (diamagnetic_polarisation and species.isSet("pressure")) {
+      // Calculate the diamagnetic flow contribution
+      const Field3D Pi = get<Field3D>(species["pressure"]);
+      phi_vort += FV::Div_a_Grad_perp(Ai / Bsq / Zi, Pi);
+    }
+  }
+  return phi_vort;
 }
