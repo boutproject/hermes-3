@@ -17,6 +17,31 @@
 struct DiamagneticDrift : public Component {
   DiamagneticDrift(std::string name, Options& options, [[maybe_unused]] Solver* solver);
 
+  // The following functions are public for unit testing
+
+  /// Calculate the diamagnetic sink for a single evolved quantity
+  /// using divergence form:
+  ///
+  ///   factor * Div(quantity * T / q * Curlb_B)
+  Field3D calculateDivergenceForm(const Field3D& quantity, const Field3D& temperature,
+                                  BoutReal charge, BoutReal factor = 1.0);
+
+  /// Calculate the diamagnetic sink for a single evolved quantity
+  /// using gradient form:
+  ///
+  ///   factor * Curlb_B . Grad(quantity * T / q)
+  Field3D calculateGradientForm(const Field3D& quantity, const Field3D& temperature,
+                                BoutReal charge, BoutReal factor = 1.0);
+
+  /// Add diamagnetic source terms for a single species subsection.
+  void addDiamagneticSources(GuardedOptions& species);
+
+  /// Smooth a source around the inner radial core boundary.
+  ///
+  /// Requires average_core to be enabled for this component.
+  /// Modifies the input field in-place.
+  void coreAverage(Field3D& f);
+
 private:
   Vector2D Curlb_B;
   bool bndry_flux;      /// Allow boundary fluxes?
@@ -33,10 +58,6 @@ private:
   ///  - energy_source
   ///  - momentum_source
   void transform_impl(GuardedOptions& state) override;
-
-  /// Smooth source around core boundary
-  /// Modifies the input field
-  void coreAverage(Field3D& f);
   Field2D cell_volume;
   BoutReal core_ring_volume{0.0};
 };

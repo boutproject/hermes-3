@@ -1,4 +1,5 @@
 #include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
@@ -103,7 +104,88 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   substitutePermissions("output", {"density_source", "energy_source", "momentum_source"});
 }
 
+Field3D DiamagneticDrift::calculateDivergenceForm(const Field3D& quantity,
+                                                  const Field3D& temperature,
+                                                  BoutReal charge, BoutReal factor) {
+  if (fabs(charge) < 1e-5) {
+    throw BoutException(
+        "DiamagneticDrift::calculateDivergenceForm requires a non-zero charge");
+  }
+
+  const Vector3D vD = (temperature / charge) * Curlb_B;
+  return factor * FV::Div_f_v(quantity, vD, bndry_flux);
+}
+
+Field3D DiamagneticDrift::calculateGradientForm(const Field3D& quantity,
+                                                const Field3D& temperature,
+                                                BoutReal charge, BoutReal factor) {
+  if (fabs(charge) < 1e-5) {
+    throw BoutException(
+        "DiamagneticDrift::calculateGradientForm requires a non-zero charge");
+  }
+
+  return factor * Curlb_B * Grad(quantity * temperature / charge);
+}
+
+void DiamagneticDrift::addDiamagneticSources(GuardedOptions& species) {
+  if (!(species.isSet("charge") and species.isSet("temperature"))) {
+    return;
+  }
+
+  const auto charge = get<BoutReal>(species["charge"]);
+  if (fabs(charge) < 1e-5) {
+    return;
+  }
+  const auto temperature = GET_VALUE(Field3D, species["temperature"]);
+
+  if (IS_SET(species["density"])) {
+    Field3D sink = divergence_form
+                       ? calculateDivergenceForm(GET_VALUE(Field3D, species["density"]),
+                                                 temperature, charge)
+                       : calculateGradientForm(GET_VALUE(Field3D, species["density"]),
+                                               temperature, charge);
+
+    if (average_core) {
+      coreAverage(sink);
+    }
+
+    subtract(species["density_source"], sink);
+  }
+
+  if (IS_SET(species["pressure"])) {
+    Field3D sink = divergence_form
+                       ? calculateDivergenceForm(get<Field3D>(species["pressure"]),
+                                                 temperature, charge, 5. / 2)
+                       : calculateGradientForm(get<Field3D>(species["pressure"]),
+                                               temperature, charge, 5. / 2);
+
+    if (average_core) {
+      coreAverage(sink);
+    }
+
+    subtract(species["energy_source"], sink);
+  }
+
+  if (IS_SET(species["momentum"])) {
+    Field3D sink = divergence_form
+                       ? calculateDivergenceForm(get<Field3D>(species["momentum"]),
+                                                 temperature, charge)
+                       : calculateGradientForm(get<Field3D>(species["momentum"]),
+                                               temperature, charge);
+
+    if (average_core) {
+      coreAverage(sink);
+    }
+
+    subtract(species["momentum_source"], sink);
+  }
+}
+
 void DiamagneticDrift::coreAverage(Field3D& f) {
+  if (!average_core) {
+    throw BoutException("DiamagneticDrift::coreAverage requires average_core=true");
+  }
+
   BoutReal local_sum = 0.0;
   for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
     BoutReal zavg = 0.0;
@@ -131,61 +213,6 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
 
   for (auto& kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
-
-    if (!(species.isSet("charge") and species.isSet("temperature"))) {
-      continue; // Skip, go to next species
-    }
-
-    // Calculate diamagnetic drift velocity for this species
-    auto q = get<BoutReal>(species["charge"]);
-    if (fabs(q) < 1e-5) {
-      continue;
-    }
-    auto T = GET_VALUE(Field3D, species["temperature"]);
-
-    // Diamagnetic drift velocity
-    const Vector3D vD = (T / q) * Curlb_B;
-
-    if (IS_SET(species["density"])) {
-      auto N = GET_VALUE(Field3D, species["density"]);
-
-      Field3D sink = (divergence_form) ?
-                                       // Divergence form: Div(n v_D)
-                         FV::Div_f_v(N, vD, bndry_flux)
-                                       :
-                                       // Gradient form: Curlb_B dot Grad(N T / q)
-                         Curlb_B * Grad(N * T / q);
-
-      if (average_core) {
-        coreAverage(sink);
-      }
-
-      subtract(species["density_source"], sink);
-    }
-
-    if (IS_SET(species["pressure"])) {
-      auto P = get<Field3D>(species["pressure"]);
-
-      Field3D sink = (divergence_form) ? (5. / 2) * FV::Div_f_v(P, vD, bndry_flux)
-                                       : (5. / 2) * Curlb_B * Grad(P * T / q);
-
-      if (average_core) {
-        coreAverage(sink);
-      }
-
-      subtract(species["energy_source"], sink);
-    }
-
-    if (IS_SET(species["momentum"])) {
-      auto NV = get<Field3D>(species["momentum"]);
-      Field3D sink = (divergence_form) ? FV::Div_f_v(NV, vD, bndry_flux)
-                                       : Curlb_B * Grad(NV * T / q);
-
-      if (average_core) {
-        coreAverage(sink);
-      }
-
-      subtract(species["momentum_source"], sink);
-    }
+    addDiamagneticSources(species);
   }
 }
