@@ -103,9 +103,14 @@ const T& GuardedOptions::GetRef([[maybe_unused]] Regions region) const {
   const std::string name = options->str();
   auto [permission, varname] = permissions->getHighestPermission(name, region);
   if (permission >= PermissionTypes::ReadIfSet) {
-    if (permission == PermissionTypes::ReadIfSet && !options->isSet()) {
+    if (!options->isSet()) {
+      if (permission == PermissionTypes::ReadIfSet) {
+        throw BoutException(
+            "Only have permission to read {} if it is already set, which it is not.",
+            name);
+      }
       throw BoutException(
-          "Only have permission to read {} if it is already set, which it is not.", name);
+          "Reading value of {} but it has not been set this RHS evaluation.", name);
     }
 #if CHECKLEVEL >= 999
     updateAccessRecords(*unread_variables, varname, region);
