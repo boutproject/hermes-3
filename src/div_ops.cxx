@@ -30,7 +30,7 @@
 #include <bout/derivs.hxx>
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
-#include <bout/fv_ops.hxx>
+#include <bout/fv_ops_impl.hxx>
 #include <bout/globals.hxx>
 #include <bout/mesh.hxx>
 #include <bout/output.hxx>

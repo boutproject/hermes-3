@@ -32,7 +32,7 @@
 #include <bout/coordinates.hxx>
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
-#include <bout/fv_ops.hxx>
+#include <bout/fv_ops_impl.hxx>
 #include <bout/output_bout_types.hxx>
 #include <bout/region.hxx>
 #include <bout/utils.hxx>
@@ -91,7 +91,5 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
  */
 Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x, Field3D& flux_xlow,
                                   Field3D& flux_ylow);
-
-namespace FV {} // namespace FV
 
 #endif //  DIV_OPS_H
