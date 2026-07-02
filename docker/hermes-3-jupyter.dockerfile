@@ -1,7 +1,9 @@
 # Build as "hermes-3-jupyter"
 # with sudo docker build -f docker/hermes-3-jupyter.dockerfile -t hermes-3-jupyter .
 
-FROM jupyter/scipy-notebook
+# Maintained images now live at quay.io (docker.io/jupyter/scipy-notebook is frozen at Oct 2023).
+# Pinned to quay.io/jupyter/scipy-notebook:latest as of 2026-06-29.
+FROM quay.io/jupyter/scipy-notebook@sha256:52a7d9ee3faa90118d89db7729d6bb45db7cb030d9e2fdb096eb9979264d1ab6
 
 RUN git clone https://github.com/boutproject/xhermes /home/jovyan/xhermes && cd /home/jovyan/xhermes && pip install -e .
 USER root

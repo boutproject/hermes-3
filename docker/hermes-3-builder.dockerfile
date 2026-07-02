@@ -1,9 +1,9 @@
 # Build as "hermes-3-builder"
 # with sudo docker build -f docker/hermes-3-builder.dockerfile -t hermes-3-builder .
 
-# Use a spack image with a pinned SHA - currently points to develop between the 1.1 and 1.2 releases.
-# N.B. The spack 1.1 release has a bug in the PETSc package that causes this build to fail
-FROM spack/ubuntu-noble@sha256:d7784a53424fda1c528d8afe837841a6947e46b55fd4380779656d4b276f63a0 AS builder
+# Use a spack image with a pinned SHA - currently the 1.2 release (spack/ubuntu-noble:1.2, == :latest).
+# N.B. The spack 1.1 release has a bug in the PETSc package that causes this build to fail; 1.2 fixes it.
+FROM spack/ubuntu-noble@sha256:dafccd1a2e77c61b5b6f81c06bbdabd999e6886daa405b3ac9011c5e4d98f8fa AS builder
 
 # Location of a self-hosted OCI Spack build cache (see below) and the registry
 # user to authenticate as. When SPACK_OCI_USER is empty (e.g. local builds or
