@@ -89,7 +89,7 @@ RUN --mount=type=secret,id=ghcr_token \
         --oci-password-variable SPACK_OCI_TOKEN \
         hermes-oci "${SPACK_OCI_CACHE}" && \
       { spack install ; rc=$? ; \
-        spack buildcache push --unsigned --update-index hermes-oci || true ; \
+        spack buildcache push --unsigned --update-index --without-build-dependencies hermes-oci || true ; \
         exit $rc ; } ; \
     else \
       spack install --fail-fast ; \

@@ -13,13 +13,22 @@ spack:
   - slepc
 
   # Build everything with the external gcc (registered by `spack external
-  # find gcc` in the Dockerfile). This selects that compiler rather than
-  # constraining it, so Spack never falls back to trying to build another
-  # compiler (e.g. cce, which is buildable:false).
+  # find gcc` in the Dockerfile). In Spack 1.2 compilers are providers of the
+  # language virtuals (c/cxx/fortran), so require gcc as the provider of each
+  # rather than putting '%gcc' on `all` (which applies to every node - including
+  # ones with no compiler - and is now warned against). This selects that
+  # compiler rather than constraining it, so Spack never falls back to trying to
+  # build another compiler (e.g. cce, which is buildable:false).
   packages:
-    all:
+    c:
       require:
-      - '%gcc'
+      - gcc
+    cxx:
+      require:
+      - gcc
+    fortran:
+      require:
+      - gcc
 
   concretizer:
     unify: true
