@@ -8,7 +8,7 @@
 
 #include <bout/bout_types.hxx>
 #include <bout/options.hxx>
-#include <bout/vector2d.hxx>
+#include <bout/vectormetric.hxx>
 
 #include "component.hxx"
 
@@ -54,7 +54,7 @@ private:
   std::string viscosity_collisions_mode; ///< Collision selection, either multispecies or
                                          ///< braginskii
   Field3D nu;                            ///< Collision frequency for conduction
-  Vector2D Curlb_B;                      ///< Curvature vector Curl(b/B)
+  VectorMetric Curlb_B;                  ///< Curvature vector Curl(b/B)
   bool bounce_frequency;         ///< Modify the collision time with the bounce frequency?
   BoutReal bounce_frequency_q95; ///< Input q95 for when including bounce frequency change
   BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce

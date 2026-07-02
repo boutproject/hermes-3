@@ -6,6 +6,7 @@
 #include <bout/constants.hxx>
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
 #include <bout/options.hxx>
 #include <fmt/format.h>
 
@@ -115,7 +116,7 @@ void BraginskiiHeatExchange::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
-  BoutReal const Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   for (const auto& [A, section] : energy_channels) {
     for (const auto& [B, child] : section) {

@@ -248,9 +248,8 @@ void EvolvePressure::finally(const Options& state) {
   const auto& species = state["species"][name];
 
   // Get updated pressure and temperature with boundary conditions
-  // Note: Retain pressures which fall below zero
+  P = get<Field3D>(species["pressure"]);
   P.clearParallelSlices();
-  P.setBoundaryTo(get<Field3D>(species["pressure"]));
   const Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
 
   T = get<Field3D>(species["temperature"]);
@@ -339,11 +338,12 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) +=
-        1e-4
-        * Div_Perp_Lap_FV_Index(
-            floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
-            T);
+    ddt(P) += 1e-4
+              * Div_Perp_Lap_FV_Index(
+                  floor(Field3D{temperature_floor / softFloor(T, 1e-3 * temperature_floor)
+                                - 1.0},
+                        0.0),
+                  T);
   }
 
   if (low_p_diffuse_perp) {

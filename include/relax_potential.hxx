@@ -2,7 +2,8 @@
 #ifndef RELAX_POTENTIAL_H
 #define RELAX_POTENTIAL_H
 
-#include <bout/vector2d.hxx>
+#include <bout/coordinates.hxx>
+#include <bout/vectormetric.hxx>
 
 #include "component.hxx"
 
@@ -102,25 +103,25 @@ private:
 
   bool sheath_boundary; ///< Set outer boundary to j=0?
 
-  bool vort_dissipation; ///< Parallel dissipation of vorticity
-  bool phi_dissipation;  ///< Parallel dissipation of potential
+  bool vort_dissipation;       ///< Parallel dissipation of vorticity
+  bool phi_dissipation;        ///< Parallel dissipation of potential
   bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
-  bool damp_core_vorticity; ///< Damp axisymmetric component of vorticity
+  bool damp_core_vorticity;    ///< Damp axisymmetric component of vorticity
 
-  bool phi_boundary_relax; ///< Relax boundary to zero-gradient
-  BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
+  bool phi_boundary_relax;           ///< Relax boundary to zero-gradient
+  BoutReal phi_boundary_timescale;   ///< Relaxation timescale [normalised]
   BoutReal phi_boundary_last_update; ///< Time when last updated
-  bool phi_core_averagey; ///< Average phi core boundary in Y?
+  bool phi_core_averagey;            ///< Average phi core boundary in Y?
 
-  Field2D Bsq;      ///< SQ(coord->Bxy)
-  Vector2D Curlb_B; ///< Curvature vector Curl(b/B)
-  BoutReal hyper_z; ///< Hyper-viscosity in Z
-  Field2D viscosity; ///< Perpendicular Kinematic viscosity
-  Field2D viscosity_par;  ///< Parallel Kinematic viscosity
+  Coordinates::FieldMetric Bsq;           ///< SQ(coord->Bxy)
+  VectorMetric Curlb_B;                   ///< Curvature vector Curl(b/B)
+  BoutReal hyper_z;                       ///< Hyper-viscosity in Z
+  Coordinates::FieldMetric viscosity;     ///< Perpendicular Kinematic viscosity
+  Coordinates::FieldMetric viscosity_par; ///< Parallel Kinematic viscosity
 
-  // Relax-potential related variables 
-  BoutReal lambda_1;  ///< Relaxation parameters.  NOTE: lambda_1 has dimensions! 
-  BoutReal lambda_2;  ///< Relaxation parameters
+  // Relax-potential related variables
+  BoutReal lambda_1; ///< Relaxation parameters.  NOTE: lambda_1 has dimensions!
+  BoutReal lambda_2; ///< Relaxation parameters
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
