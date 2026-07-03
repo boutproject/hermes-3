@@ -98,7 +98,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   lax_flux =
       options["lax_flux"].doc("Enable stabilising lax flux?").withDefault<bool>(true);
 
-  neutral_lmax = 0.1 / meters; // Normalised length
+  neutral_lmax = options["neutral_lmax"]
+                     .doc("Maximum neutral mean free path in [m]. Used to calculate "
+                          "collisionality floor.")
+                     .withDefault(0.1)
+                 / meters;
 
   flux_limit =
       options["flux_limit"]
@@ -341,9 +345,10 @@ void NeutralMixed::finally(const Options& state) {
   // Calculate cross-field diffusion from collision frequency
   //
   //
+  // Pseudo-collisionality. A collision frequency calculated from user-set
+  // maximum neutral mean free path to use as a floor for neutral collisionality.
+  const Field3D nu_pseudo_mfp = sqrt(Tnlim / AA) / neutral_lmax;
 
-  const Field3D Rnn = sqrt(Tnlim / AA)
-                      / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
   if (collisionality_override > 0.0) {
     // user has set an override for collision frequency
     Dnn = (Tn / AA) / collisionality_override;
@@ -410,10 +415,13 @@ void NeutralMixed::finally(const Options& state) {
         nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
       }
 
+      // Floor collisionality to avoid unphysically large Dnn at low plasma densities
+      Field3D nu_floored = nu + nu_pseudo_mfp * exp(-nu / nu_pseudo_mfp);
+
       // Dnn = Vth^2 / sigma
-      Dnn = (Tnlim / AA) / (nu + Rnn);
+      Dnn = (Tnlim / AA) / nu_floored;
     } else {
-      Dnn = (Tnlim / AA) / Rnn;
+      Dnn = (Tnlim / AA) / nu_pseudo_mfp;
     }
   }
   if (flux_limit > 0.0) {
