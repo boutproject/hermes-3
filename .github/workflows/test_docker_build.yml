@@ -26,6 +26,7 @@ on:
     paths:
       - 'docker/**'
       - '.github/workflows/test_docker_build.yml'
+      - '.github/workflows/build*image.yml'
   workflow_dispatch:  # Allows manual triggering
 
 permissions:

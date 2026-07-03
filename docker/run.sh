@@ -44,7 +44,7 @@ run_docker_help() {
   notice "Usage: run_docker <service> [arguments]"
   echo
   echo "Available services (from docker-compose.yaml):"
-  echo "  shell            Interactive terminal shell in the image"
+  echo "  shell            Interactive shell in the image"
   echo "  sudo             Interactive shell with root access"
   echo "  build_hermes     Rebuild hermes, using ./work/hermes-3 if available"
   echo "  build_boutpp     Rebuild BOUT++, using ./work/BOUT-dev if available"
