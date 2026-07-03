@@ -22,43 +22,44 @@ Or for a specific subset of tests:
         --test tests/integrated/2D-production \\
         --mpirun "mpirun -np"
 
-When both builds include the same floating-point code and only differ by
-the bit-identical framework commits, require exact equality instead of
-the ULP tolerance, and check the new runtime option:
+If both builds are known to perform exactly the same floating-point
+operations (e.g. comparing before/after a pure caching or refactoring
+change with no algebraic reordering), require bit-for-bit equality instead
+of the default ULP tolerance, and check the check_state_values runtime
+option if the new build has one:
 
     python3 scripts/compare_builds.py \\
-        --old  /path/to/b8d46fb7/hermes-3 \\
-        --new  /path/to/HEAD/hermes-3 \\
+        --old  /path/to/old/hermes-3 \\
+        --new  /path/to/new/hermes-3 \\
         --tests-dir tests/integrated \\
         --expect identical \\
         --verify-check-state-values
 
-Recommended tests for the performance branch changes
------------------------------------------------------
-The performance branch contains two classes of change, with different
-expected differences. Choose --expect accordingly:
+Choosing --expect
+------------------
+A performance change generally falls into one of two classes, with
+different expected output differences:
 
-1. Floating-point reordering (braginskii_collisions, neutral_mixed, ADAS
-   cellAverage, integrate.hxx). Same equations, different order of
-   operations: differences of ≤ 2-3 ULPs (~1e-15 relative) are expected.
-   Use the default --expect ulp when the comparison spans these commits
-   (e.g. --old built from master).
+1. Floating-point reordering (e.g. hoisting a common subexpression,
+   replacing pow(x, 1.5) with x * sqrt(x), reordering a sum). Same
+   equations, different order of operations: differences of a few ULPs
+   (~1e-15 relative) are expected and not a bug. Use the default
+   --expect ulp for any comparison spanning this kind of change.
 
-2. Bit-identical framework changes (commits 04207481 and 3bb5babf):
-   permissions match caching, GuardedOptions session IDs, cached
-   field-aligned metrics in div_ops, persistent state Options tree,
-   merged guard-cell communication in neutral_full_velocity, and the
-   hermes:check_state_values option. These must produce EXACTLY the
-   same output, bit for bit, at every timestep. Use --expect identical
-   when both binaries include the class-1 commits (e.g. --old built
-   from b8d46fb7, --new from HEAD). Any nonzero difference is a bug.
+2. Pure caching/refactoring with no change to the arithmetic performed
+   (e.g. memoizing a lookup, reusing a persistent buffer instead of
+   reallocating, merging communication calls). These must produce
+   EXACTLY the same output, bit for bit, at every timestep — use
+   --expect identical. Any nonzero difference here is a bug, not noise.
 
-Which tests exercise what:
+Which tests exercise what (useful when bisecting a correctness diff in
+this codebase):
 
-  Framework changes (state tree, permissions cache, GuardedOptions):
+  Any change touching per-RHS-evaluation state (options tree, permission
+  checks, GuardedOptions):
     every test, on every RHS evaluation
 
-  div_ops cached aligned metrics (Div_a_Grad_perp_flows via
+  div_ops aligned-metric caching (Div_a_Grad_perp_flows via
   neutral_mixed / classical_diffusion):
     tests/integrated/neutral_mixed
     tests/integrated/collfreq-braginskii-afn
@@ -66,12 +67,12 @@ Which tests exercise what:
     tests/integrated/2D-production   [requires Zenodo download]
     tests/integrated/2D-recycling    [requires Zenodo download]
 
-  Persistent state tree with the fields:phi / isSection probe paths:
+  Persistent state tree via the fields:phi / isSection probe paths:
     tests/integrated/vorticity
     tests/integrated/drift-wave
     tests/integrated/alfven-wave
 
-  braginskii_collisions + ADAS reactions (class-1 changes):
+  braginskii_collisions + ADAS reactions:
     tests/integrated/1D-recycling
     tests/integrated/1D-recycling-dthe
 
@@ -80,15 +81,17 @@ Which tests exercise what:
     tests/integrated/2D-production   [requires Zenodo download]
     tests/integrated/2D-recycling    [requires Zenodo download]
 
-  NOT covered by any integrated test: neutral_full_velocity (the merged
-  communicate call). Its correctness argument is structural only —
-  guard-cell exchanges of independent fields commute.
+  NOT covered by any integrated test: a change to neutral_full_velocity's
+  communicate() calls has no integrated-test coverage; correctness there
+  needs a structural argument (e.g. guard-cell exchanges of independent
+  fields commute) rather than a bitwise check.
 
-The hermes:check_state_values option (new in 3bb5babf) can be verified
-with --verify-check-state-values: this runs the NEW binary once more
-with hermes:check_state_values=false and requires bitwise-identical
-output, reporting the time saved by skipping the finiteness sweeps.
-Only meaningful for builds with CHECK >= 1.
+If the new build adds a hermes:check_state_values-style option to skip a
+per-set() finiteness sweep, verify it with --verify-check-state-values:
+this runs the NEW binary once more with the option disabled and requires
+bitwise-identical output, reporting the time saved. Only meaningful for
+builds with CHECK >= 1 (finiteness sweeps are typically compiled out at
+CHECK=0).
 
 Notes
 -----
@@ -105,14 +108,14 @@ Notes
 * Differences confined to the x-boundary guard columns of diagnostic fields
   (sources, ddt(...)) are reported but not counted as failures, in BOTH
   --expect modes: Hermes never writes those cells, so the output there is
-  stale recycled-allocation content in BOTH builds. Verified on
-  2D-production/2D-recycling (the shifted-metric tests, where the div_ops
-  metric cache changes the allocation sequence): all interior values and
-  all evolved-field values, guard cells included, are bit-identical (or
-  within tolerance); only diagnostic x-guard columns hold different
-  (junk-scale, e.g. 1e+219) stale values. This applies whenever the two
-  binaries being compared differ in allocation sequence for these fields
-  (e.g. master vs. any build including 04207481), not just b8d46fb7..HEAD.
+  stale recycled-allocation content in BOTH builds. This shows up whenever
+  the two binaries differ in allocation sequence for these fields (e.g. one
+  build caches a temporary that the other reallocates every call) —
+  verified on 2D-production/2D-recycling (the shifted-metric tests, where a
+  div_ops metric cache changed the allocation sequence): all interior
+  values and all evolved-field values, guard cells included, were
+  bit-identical (or within tolerance); only diagnostic x-guard columns held
+  different (junk-scale, e.g. 1e+219) stale values.
 """
 
 import argparse
@@ -710,15 +713,15 @@ def main():
                              "up to --ulp-tol at the compared timestep. "
                              "'identical': require bit-for-bit identical "
                              "output at every timestep — use when the "
-                             "comparison spans only bit-identical commits "
-                             "(e.g. b8d46fb7..HEAD).")
+                             "comparison spans only changes with no "
+                             "algebraic reordering (pure caching/refactor).")
     parser.add_argument("--verify-check-state-values", action="store_true",
                         help="Also run the NEW binary once per test with "
                              "hermes:check_state_values=false, require "
                              "bitwise-identical output, and report the time "
-                             "saved. Requires the NEW build to include the "
-                             "option (3bb5babf) and CHECK >= 1 for a "
-                             "meaningful timing difference.")
+                             "saved. Requires the NEW build to have this "
+                             "option and CHECK >= 1 for a meaningful timing "
+                             "difference.")
     parser.add_argument("--mpirun", default="mpirun -np",
                         help='MPI launch prefix including the -n flag '
                              '(default: "mpirun -np"). '
