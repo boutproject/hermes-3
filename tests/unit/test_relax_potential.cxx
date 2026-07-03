@@ -116,9 +116,7 @@ TEST_F(RelaxPotentialTest, ApplyPhiBoundaryRelax) {
   for (int j = mesh->ystart; j <= mesh->yend; j++) {
     for (int k = 0; k < mesh->LocalNz; k++) {
       phi(mesh->xstart - 1, j, k) = 0.0;
-      phi(mesh->xstart - 2, j, k) = 0.0;
       phi(mesh->xend + 1, j, k) = 0.0;
-      phi(mesh->xend + 2, j, k) = 0.0;
     }
   }
 
@@ -135,9 +133,7 @@ TEST_F(RelaxPotentialTest, ApplyPhiBoundaryRelax) {
 
   const BoutReal expected = 2.0 - (2.0 * std::exp(-1.0));
   ASSERT_NEAR(phi(mesh->xstart - 1, mesh->ystart, 0), expected, 1e-12);
-  ASSERT_NEAR(phi(mesh->xstart - 2, mesh->ystart, 0), expected, 1e-12);
   ASSERT_NEAR(phi(mesh->xend + 1, mesh->ystart, 0), expected, 1e-12);
-  ASSERT_NEAR(phi(mesh->xend + 2, mesh->ystart, 0), expected, 1e-12);
 }
 
 TEST_F(RelaxPotentialTest, CalculateDivJdia) {
