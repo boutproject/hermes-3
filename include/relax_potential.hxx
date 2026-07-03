@@ -69,6 +69,38 @@ struct RelaxPotential : public Component {
 
   void outputVars(Options& state) override;
 
+  // The following are public functions for unit testing
+
+  /// Diamagnetic term in vorticity, weighted by mass/charge
+  Field3D calculatePihat(GuardedOptions allspecies);
+
+  /// Apply the configured radial boundary condition to phi
+  void applyPhiBoundary(Field3D& phi, GuardedOptions state);
+
+  /// Calculates Div(Jdia) and sets energy_source for all
+  /// charged species with pressure.
+  /// The parallel boundary of phi is set using extrapolation
+  Field3D calculateDivJdia(Field3D& phi, GuardedOptions allspecies);
+
+  /// Calculates the collisional friction current divergence.
+  Field3D calculateDivJcol(const Field3D& phi, const Field3D& pi_hat,
+                           GuardedOptions allspecies);
+
+  /// Calculate the ExB advection contribution to ddt(Vort).
+  Field3D calculateExBAdvectionSource(const Field3D& vort, const Field3D& phi,
+                                      const Field3D& pi_hat);
+
+  /// Calculate the current-divergence source terms added in finally().
+  Field3D calculateParallelCurrentSource(const Options& state);
+
+  /// Calculate viscosity and dissipation contributions added in finally().
+  Field3D calculateDissipationSource(const Options& state, const Field3D& vort,
+                                     const Field3D& phi);
+
+  /// Calculate ddt(phi1) from the chosen evolution mode.
+  Field3D calculatePhi1Source(const Field3D& vort, const Field3D& vort_rhs,
+                              const Field3D& vort_from_phi) const;
+
   // // Save and restore potential phi
   // void restartVars(Options& state) override {
 
