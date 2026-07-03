@@ -358,7 +358,11 @@ void RelaxPotential::applyPhiBoundary(Field3D& phi, GuardedOptions state) {
 
         for (int k = 0; k < mesh->LocalNz; k++) {
           phi(mesh->xstart - 1, j, k) = 2. * newvalue - phi(mesh->xstart, j, k);
-          phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
+        }
+        if (mesh->xstart > 1) {
+          for (int k = 0; k < mesh->LocalNz; k++) {
+            phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
+          }
         }
       }
     }
@@ -377,7 +381,11 @@ void RelaxPotential::applyPhiBoundary(Field3D& phi, GuardedOptions state) {
 
         for (int k = 0; k < mesh->LocalNz; k++) {
           phi(mesh->xend + 1, j, k) = 2. * newvalue - phi(mesh->xend, j, k);
-          phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
+        }
+        if (mesh->LocalNx - mesh->xend > 2) {
+          for (int k = 0; k < mesh->LocalNz; k++) {
+            phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
+          }
         }
       }
     }
