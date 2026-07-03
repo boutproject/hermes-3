@@ -11,7 +11,7 @@
 
 /// Get the first argument from a parameter pack
 template <typename Head, typename... Tail>
-auto firstArg(const Head &head, Tail... ) {
+auto firstArg(const Head& head, Tail...) {
   return head;
 }
 
@@ -45,79 +45,72 @@ BoutReal cellRight(BoutReal c, BoutReal m, BoutReal p) {
   return s.R;
 }
 
-/// Take a function of BoutReals, and a region. Return
-/// a function which takes fields (e.g. Field2D, Field3D),
-/// and for every cell in the region evaluates the function
-/// at quadrature points with weights.
-/// These weights sum to 1, resulting in volume averaged values.
+/// Take a function of BoutReals, a region and input fields
+/// (e.g. Field2D, Field3D). For every cell in the region evaluate
+/// the function at quadrature points with weights.
+/// These weights sum to 1, resulting in volume averaged values,
+/// written into the caller-supplied `result` field.
+///
+/// Reusing `result` between calls avoids constructing a new Field3D
+/// on every call: on the first call it is initialised from the first
+/// input field; subsequent calls reuse the existing data.
 ///
 /// Uses a limiter to calculate values at cell edges. This is
 /// needed so that as Ne goes to zero in a cell then atomic
 /// rates also go to zero.
 ///
-/// Example
-///   Field3D Ne = ..., Te = ...;
-/// 
-///   Field3D result = cellAverage(
-///          [](BoutReal Ne, BoutReal Te) {return Ne*Te;} // The function to evaluate
-///          Ne.getRegion("RGN_NOBNDRY")  // The region to iterate over
-///          )(Ne, Te);                   // The input fields
-///
 /// Note that the order of the arguments to the lambda function
 /// is the same as the input fields.
-///
-template <typename CellEdges = hermes::Limiter, typename Function, typename RegionType>
-auto cellAverage(Function func, const RegionType &region) {
-  // Note: Capture by value or func and region go out of scope
-  return [=](const auto &... args) {
-    // Use the first argument to set the result mesh etc.
-    Field3D result{emptyFrom(firstArg(args...))};
-    result.allocate();
-
-    // Get the coordinate Jacobian
-    auto J = result.getCoordinates()->J;
-    BOUT_FOR(i, region) {
-      // Offset indices
-      auto yp = i.yp();
-      auto ym = i.ym();
-      auto Ji = J[i];
-      const BoutReal inv_12_Ji = 1.0 / (12.0 * Ji);
-
-      // Integrate in Y using Simpson's rule
-      // Using limiter to calculate cell edge values
-      result[i] =
-        (2. / 3) * func((args[i])...) +
-        (Ji + J[ym]) * inv_12_Ji * func(cellLeft<CellEdges>(args[i], args[ym], args[yp])...) +
-        (Ji + J[yp]) * inv_12_Ji * func(cellRight<CellEdges>(args[i], args[ym], args[yp])...);
-    }
-    return result;
-  };
-}
-
-/// Like cellAverage but writes into a caller-supplied Field3D, avoiding a heap
-/// allocation on every call. On the first call result is initialised from the
-/// first input field; subsequent calls reuse the existing allocation.
 template <typename CellEdges = hermes::Limiter, typename Function, typename RegionType,
           typename... Fields>
 void cellAverageInto(Field3D& result, Function func, const RegionType& region,
                      const Fields&... args) {
   if (!result.isAllocated()) {
+    // Use the first argument to set the result mesh etc.
     result = emptyFrom(firstArg(args...));
-    result.allocate();
   }
+  // Ensure the backing data is not shared with another field (copy-on-write)
+  result.allocate();
+
+  // Get the coordinate Jacobian
   auto J = result.getCoordinates()->J;
   BOUT_FOR(i, region) {
+    // Offset indices
     auto yp = i.yp();
     auto ym = i.ym();
     auto Ji = J[i];
     const BoutReal inv_12_Ji = 1.0 / (12.0 * Ji);
-    result[i] =
-        (2. / 3) * func((args[i])...) +
-        (Ji + J[ym]) * inv_12_Ji *
-            func(cellLeft<CellEdges>(args[i], args[ym], args[yp])...) +
-        (Ji + J[yp]) * inv_12_Ji *
-            func(cellRight<CellEdges>(args[i], args[ym], args[yp])...);
+
+    // Integrate in Y using Simpson's rule
+    // Using limiter to calculate cell edge values
+    result[i] = (2. / 3) * func((args[i])...)
+                + (Ji + J[ym]) * inv_12_Ji
+                      * func(cellLeft<CellEdges>(args[i], args[ym], args[yp])...)
+                + (Ji + J[yp]) * inv_12_Ji
+                      * func(cellRight<CellEdges>(args[i], args[ym], args[yp])...);
   }
+}
+
+/// Like cellAverageInto, but takes only the function and region, and
+/// returns a function which takes the input fields and returns the
+/// volume-averaged result as a new Field3D.
+///
+/// Example
+///   Field3D Ne = ..., Te = ...;
+///
+///   Field3D result = cellAverage(
+///          [](BoutReal Ne, BoutReal Te) {return Ne*Te;} // The function to evaluate
+///          Ne.getRegion("RGN_NOBNDRY")  // The region to iterate over
+///          )(Ne, Te);                   // The input fields
+///
+template <typename CellEdges = hermes::Limiter, typename Function, typename RegionType>
+auto cellAverage(Function func, const RegionType& region) {
+  // Note: Capture by value or func and region go out of scope
+  return [=](const auto&... args) {
+    Field3D result;
+    cellAverageInto<CellEdges>(result, func, region, args...);
+    return result;
+  };
 }
 
 #endif // INTEGRATE_H
