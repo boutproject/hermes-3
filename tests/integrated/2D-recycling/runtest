@@ -237,8 +237,11 @@ def reconstruct_target_recycle(name):
 
     """
     ### Indexing
+    # This simulation has a pump over every wall, but this tests only reproduces the
+    # target pump, meaning the edge cells will not be captured.
+    # TODO: Implement radial recycling and pumping into the test.
     xslice = slice(3, -3)
-    i_index = xhermes.slice_poloidal(ds, name)
+    i_index = xhermes.selector_poloidal(ds, name)
 
     # i = final domain cell
     # g = guard cell
@@ -253,7 +256,8 @@ def reconstruct_target_recycle(name):
     i = (xslice, i_index)
     g = (xslice, g_index)
     s = (xslice, s_index)
-    reg = ds.hermes.select_region(name).isel(x=slice(1, -1))
+
+    reg = ds.hermes.select_region("domain", name).isel(x=slice(1, -1))
 
     ### Calculate sheath values
     sheath = {}
