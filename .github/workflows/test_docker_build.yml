@@ -109,9 +109,23 @@ jobs:
           - platform: linux/amd64
             runner: ubuntu-latest
             arch: amd64
+            target: x86_64_v2
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+            target: x86_64_v3
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+            target: x86_64_v4
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
+            target: arm64_v8
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+            target: arm64_v9
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
@@ -149,6 +163,7 @@ jobs:
           # can pull previously-compiled binaries and push newly-built ones.
           build-args: |
             SPACK_OCI_USER=${{ github.actor }}
+            HERMES_TARGET=${{ matrix.target }}
           secrets: |
             ghcr_token=${{ secrets.GITHUB_TOKEN }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
@@ -162,7 +177,7 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: exp-builder-digests-${{ matrix.arch }}
+          name: exp-builder-digests-${{ matrix.target }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -261,8 +276,8 @@ jobs:
           file: ${{ env.FINAL_DOCKERFILE }}
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=exp-final-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=exp-final-${{ matrix.arch }}
+          cache-from: type=gha,scope=exp-final-${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=exp-final-${{ matrix.target }}
           build-args: |
             BUILDER_TAG=${{ env.EXPERIMENTAL_TAG }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
@@ -276,7 +291,7 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: exp-final-digests-${{ matrix.arch }}
+          name: exp-final-digests-${{ matrix.target }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
