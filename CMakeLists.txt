@@ -254,7 +254,7 @@ else()
 endif()
 
 # copy the data and test directories
-if(HERMES_COPY_EXAMPLES_TO_BUILD)
+if(EXISTS ${CMAKE_SOURCE_DIR}/examples)
   add_custom_command(
     TARGET setup-examples
     PRE_BUILD
@@ -262,7 +262,7 @@ if(HERMES_COPY_EXAMPLES_TO_BUILD)
             $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
 endif()
 
-if(HERMES_COPY_JSON_DATABASE_TO_BUILD)
+if(EXISTS ${CMAKE_SOURCE_DIR}/json_database)
   add_custom_command(
     TARGET setup-examples
     PRE_BUILD
@@ -271,7 +271,7 @@ if(HERMES_COPY_JSON_DATABASE_TO_BUILD)
       $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
 endif()
 
-if(HERMES_COPY_TESTS_TO_BUILD)
+if(EXISTS ${CMAKE_SOURCE_DIR}/tests)
   add_custom_command(
     TARGET setup-test
     PRE_BUILD
