@@ -104,6 +104,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                      .withDefault(0.1)
                  / meters;
 
+  limiter_gradient_floor =
+      options["limiter_gradient_floor"]
+          .doc("Floor for |grad log Pn| in the D limiter denominator. Normalised inverse-length units.")
+          .withDefault(1.0e-3);
+
   flux_limit =
       options["flux_limit"]
           .doc("Limit diffusive fluxes to fraction of free-streaming flux. <0 means off.")
@@ -433,7 +438,11 @@ void NeutralMixed::finally(const Options& state) {
 
     // Particle flux is 0.25 * Nn * Vth, with Nn coming in at operator.
     // [Stangeby, under eq 2.24, p.67]
-    Field3D Dmax = flux_limit * 0.25 * Vn_th / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+    // Denominator is regularised: smoothly differentiable and avoids division by zero.
+    const Vector3D grad_logPnlim = Grad_perp(logPnlim);
+    const Field3D square_gradient = grad_logPnlim * grad_logPnlim;
+    Field3D Dmax =
+        flux_limit * 0.25 * Vn_th / (sqrt(square_gradient + SQ(limiter_gradient_floor)));
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
       Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
     }
