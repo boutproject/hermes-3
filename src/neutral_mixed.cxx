@@ -102,8 +102,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   flux_limit =
       options["flux_limit"]
-          .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
-          .withDefault(0.2);
+          .doc("Limit diffusive fluxes to fraction of free-streaming flux. <0 means off.")
+          .withDefault(0.5);
 
   diffusion_limit = options["diffusion_limit"]
                         .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
@@ -419,8 +419,13 @@ void NeutralMixed::finally(const Options& state) {
   if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax =
-        flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+
+    // Thermal speed in non-drifting Maxwellian [Stangeby eq. 2.21, p.67]
+    Field3D Vn_th = sqrt(8.0 * Tnlim / (PI * AA));
+
+    // Particle flux is 0.25 * Nn * Vth, with Nn coming in at operator.
+    // [Stangeby, under eq 2.24, p.67]
+    Field3D Dmax = flux_limit * 0.25 * Vn_th / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
       Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
     }
