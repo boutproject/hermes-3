@@ -41,48 +41,66 @@ expected_filenames = [
 ]
 
 
-## Download files
-tmp_path = zipfile_path.with_name(zipfile_path.name + ".tmp")
+def download_data():
+    ## Download files
+    tmp_path = zipfile_path.with_name(zipfile_path.name + ".tmp")
 
-with urllib.request.urlopen(url, timeout=60) as response:
-    if response.status != 200:
-        raise RuntimeError(
-            f"2D-Production test: download failed - HTTP {response.status}"
-        )
+    with urllib.request.urlopen(url, timeout=60) as response:
+        if response.status != 200:
+            raise RuntimeError(
+                f"2D-Production test: download failed - HTTP {response.status}"
+            )
 
-    # Copy bits of the file from response to a temp file
-    # This ensures no partial files are left if the download fails
-    with open(tmp_path, "wb") as out_file:
-        shutil.copyfileobj(response, out_file)
+        # Copy bits of the file from response to a temp file
+        # This ensures no partial files are left if the download fails
+        with open(tmp_path, "wb") as out_file:
+            shutil.copyfileobj(response, out_file)
+
+    if verbose:
+        print(f"2D-Production test: download took {t_download - t0:.2f} seconds")
+
+    # Rename temp file with the correct name
+    tmp_path.replace(zipfile_path)
+
+
+def extractZip():
+    with zipfile.ZipFile(zipfile_path, "r") as zf:
+        zip_contents = set(zf.namelist())
+        try:
+            # Extract only expected grids
+            for filename in expected_filenames:
+                if filename in zip_contents:
+                    zf.extract(filename, path=this_dir)
+
+        except Exception as e:
+            print("2D-Production test: extracting test grids failed:", e)
+            raise
+
+
+def checkHash(doRaise=True):
+    # Check hash
+    try:
+        with open(zipfile_path, "rb") as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+    except FileNotFoundError:
+        if doRaise:
+            raise
+        return False
+
+    if doRaise:
+        if file_hash != expected_hash:
+            raise RuntimeError(
+                "2D-Production test: downloaded zip file hash does not match expected value"
+            )
+    return file_hash == expected_hash
+
 
 t_download = time()
-if verbose:
-    print(f"2D-Production test: download took {t_download - t0:.2f} seconds")
+if not checkHash(False):
+    download_data()
+    checkHash()
 
-# Rename temp file with the correct name
-tmp_path.replace(zipfile_path)
-
-
-with zipfile.ZipFile(zipfile_path, "r") as zf:
-    zip_contents = set(zf.namelist())
-    try:
-        # Extract only expected grids
-        for filename in expected_filenames:
-            if filename in zip_contents:
-                zf.extract(filename, path=this_dir)
-
-    except Exception as e:
-        print("2D-Production test: extracting test grids failed:", e)
-
-# Check hash
-with open(zipfile_path, "rb") as f:
-    file_hash = hashlib.sha256(f.read()).hexdigest()
-# print(file_hash)
-
-if file_hash != expected_hash:
-    raise RuntimeError(
-        "2D-Production test: downloaded zip file hash does not match expected value"
-    )
+extractZip()
 
 t_extract = time()
 if verbose:
