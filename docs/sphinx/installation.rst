@@ -3,11 +3,11 @@
 Installation
 ===============
 
-Hermes-3 can be installed using CMake or spack. Using CMake is a more manual process 
+Hermes-3 can be installed using CMake or spack. Using CMake is a more manual process
 which requires you to provide all of the dependencies yourself, but it has been used
 extensively and the documentation provides a module list for several HPC systems.
 
-Spack capability has recently been added and allows an easy way to install the 
+Spack capability has recently been added and allows an easy way to install the
 dependencies, making it much easier to install Hermes-3 without a module environment,
 e.g. on a workstation or laptop.
 
@@ -29,10 +29,10 @@ Only modified files will be recompiled.
 
 Hermes-3 is built using `CMake <https://cmake.org>`__. During configuration `BOUT++
 <https://github.com/boutproject/BOUT-dev/>`__ will be automatically
-downloaded as a submodule, together with some dependencies. The correct version 
-of `netCDF <https://www.unidata.ucar.edu/software/netcdf/>`__ is downloaded 
+downloaded as a submodule, together with some dependencies. The correct version
+of `netCDF <https://www.unidata.ucar.edu/software/netcdf/>`__ is downloaded
 and compiled automatically for convenience. `FFTW
-<https://www.fftw.org/>`__ is assumed to be installed already. 
+<https://www.fftw.org/>`__ is assumed to be installed already.
 
 Hermes-3 uses two solvers: `SUNDIALS <https://computing.llnl.gov/projects/sundials>`__ `cvode` for
 time-dependent simulations and the faster `PETSc
@@ -131,9 +131,9 @@ any previously generated build directories.
 Dependencies
 ~~~~~~~~~~~~
 Since Hermes-3 heavily relies on BOUT++, the `BOUT++ documentation on installation and
-dependencies <https://bout-dev.readthedocs.io/en/stable/user_docs/quickstart.html#prerequisites>`__ 
+dependencies <https://bout-dev.readthedocs.io/en/stable/user_docs/quickstart.html#prerequisites>`__
 contains a lot of useful information. Below is a selection of working module lists
-for several HPC systems. It is recommended you start with a clean module environment 
+for several HPC systems. It is recommended you start with a clean module environment
 by executing :command:`module purge` first.
 
 YPI Workstations:
@@ -152,13 +152,13 @@ ARCHER2:
    module swap PrgEnv-cray/8.3.3
    module swap cce/15.0.0
    module swap cray-mpich/8.1.23
-   module load cray-python/3.9.13.1 
-   module load netcdf4 
-   module load cmake 
-   module load cray-hdf5 
-   module load cray-netcdf/4.9.0.1 
-   module load cray-parallel-netcdf/1.12.3.1 
-   module load cray-fftw/3.3.10.3 
+   module load cray-python/3.9.13.1
+   module load netcdf4
+   module load cmake
+   module load cray-hdf5
+   module load cray-netcdf/4.9.0.1
+   module load cray-parallel-netcdf/1.12.3.1
+   module load cray-fftw/3.3.10.3
    module load valgrind4hpc
 
 Marconi:
@@ -187,10 +187,10 @@ Ancalagon:
 
 .. code-block:: bash
 
-   module load OpenMPI/4.1.1-GCC-10.3.0 
-   module load CMake/3.20.1-GCCcore-10.3.0 
-   module load OpenBLAS/0.3.15-GCC-10.3.0 
-   module load SciPy-bundle/2021.05-foss-2021a 
+   module load OpenMPI/4.1.1-GCC-10.3.0
+   module load CMake/3.20.1-GCCcore-10.3.0
+   module load OpenBLAS/0.3.15-GCC-10.3.0
+   module load SciPy-bundle/2021.05-foss-2021a
    module load netCDF/4.8.0-gompi-2021a
 
 Perlmutter:
@@ -228,7 +228,7 @@ accuracy. The optimal choice of method is problem-dependent.
 The CMake flag ``-DHERMES_SLOPE_LIMITER`` sets the choice of slope
 limiter.  The default method is ``MC``, which has been found to
 provide a good balance for problems of interest. If more dissipation
-is required then this can be changed to ``MinMod``; 
+is required then this can be changed to ``MinMod``;
 if less dissipation is required then this can be changed
 to ``Superbee``.
 
@@ -241,7 +241,7 @@ lead to over-dissipation, but greater robustness.
 
 Compiling in debug mode
 ~~~~~~~~~~~~~~~~~~~~~~~
-Please see the `relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`__ 
+Please see the `relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`__
 in the BOUT++ documentation.
 
 
@@ -251,16 +251,16 @@ Custom versions of BOUT++
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you have already installed BOUT++ and want to use that rather than
-configure and build BOUT++ again, set ```-HERMES_BUILD_BOUT=OFF``` and pass
+configure and build BOUT++ again, set ``-DHERMES_BUILD_BOUT=OFF`` and pass
 CMake the path to the BOUT++ `build` directory e.g.
 
 .. code-block:: bash
 
    cmake . -B build -DHERMES_BUILD_BOUT=OFF -DCMAKE_PREFIX_PATH=$HOME/BOUT-dev/build
 
-The version of BOUT++ required by Hermes-3 is periodically updated, and is usually derived 
-from a commit on the `next` branch of BOUT++. The up to date commit can be found in the 
-`"external" directory of the Hermes-3 repo 
+The version of BOUT++ required by Hermes-3 is periodically updated, and is usually derived
+from a commit on the `next` branch of BOUT++. The up to date commit can be found in the
+`"external" directory of the Hermes-3 repo
 <https://github.com/bendudson/hermes-3/tree/master/external>`__.
 
 
@@ -284,8 +284,8 @@ Troubleshooting issues
 The first step to troubleshooting compilation issues should always to delete
 build folder for a fresh compilation. This can resolve several types of issues.
 
-There have also been several reported issues due to Conda (e.g. making 
-BOUT++ pick up the Conda MPI installation instead of the module one). A 
+There have also been several reported issues due to Conda (e.g. making
+BOUT++ pick up the Conda MPI installation instead of the module one). A
 workaround is to compile with the CMake flag :code:`-DBOUT_IGNORE_CONDA_ENV=ON`.
 
 
@@ -325,7 +325,7 @@ Now, clone spack. You must use version v1.0.0 or newer. At the time of writing t
 version v1.1.0 has been tested:
 
 .. code-block:: bash
-   
+
    git clone -c feature.manyFiles=true --depth=2 https://github.com/spack/spack.git -b v1.1.0
 
 .. important::
@@ -340,7 +340,7 @@ version v1.1.0 has been tested:
 Initialise spack. Add this command to your .bashrc or similar to make spack available in all new shells:
 
 .. code-block:: bash
-  
+
    . spack/share/spack/setup-env.sh
 
 The ``spack`` command should now be available; e.g.
@@ -374,7 +374,7 @@ To add gcc to your user-level package list, and register it as a compiler that s
 
 .. code-block:: bash
 
-   spack compiler find gcc
+   spack compiler find
 
 If you don't do this, the below instructions should still work, but spack will modify the (version-controlled)
 environment file, spack.yaml, to include the gcc installation details.
@@ -389,7 +389,8 @@ environment file, spack.yaml, to include the gcc installation details.
 
       repos:
          builtin:
-            git: https://github.com/spack/spack-packages.git branch: develop # branch: releases/v2025.11
+            git: https://github.com/spack/spack-packages.git
+            branch: develop # branch: releases/v2025.11
 
    and then run :command:`spack repo update`.
 
@@ -408,14 +409,14 @@ repository checked out:
 
    git submodule update --init --recursive
 
-Then activate the spack environment described in ``spack.yaml`` by using the wrapper script: 
+Then activate the spack environment described in ``spack.yaml`` by using the wrapper script:
 
 .. code-block:: bash
 
    . activate_h3env
 
 This file provides some useful bash functions and aliases, but it's also possible to use standard
-spack commands to activate the environment. You should see your prompt change to ``[hermes-3]``, 
+spack commands to activate the environment. You should see your prompt change to ``[hermes-3]``,
 indicating that the spack environment is active.
 
 .. note::
@@ -425,7 +426,7 @@ indicating that the spack environment is active.
    for the instructions below to work. For more info on views, see the `spack documentation
    <https://spack.readthedocs.io/en/latest/environments.html#environment-views>`__.
 
-.. note:: 
+.. note::
 
    If you've run ``spack install`` in this environment before, it's advisable to run ``spack
    concretize -f`` at this point to ensure the concretized 'spec' is up to date. See the `spack docs
@@ -553,7 +554,7 @@ then (re-)install dependencies as necessary:
 Using Spack in HPC environments
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You should be able to use spack on any HPC system by cloning the spack repository and following the 
+You should be able to use spack on any HPC system by cloning the spack repository and following the
 instructions as normal. However, many HPC systems have module environments compiled in a way which
 is optimised for that system. In order to take advantage of this, you can configure spack to use
 the system modules as 'external' packages. You can also use ``spack external find`` to automatically
@@ -571,8 +572,8 @@ Updating your environment
 Most of the time, spack will detect when the 'spec' in spack.yaml has changed and run ``spack
 concretize`` automatically to regenerate all of the package details in ``spack.lock``. If you've
 made changes that aren't captured by the 'spec' string (for example, if the packages in the
-BOUT-spack submodule have been updated) , you'll need to force the update with 
-  
+BOUT-spack submodule have been updated) , you'll need to force the update with
+
 .. code-block:: bash
 
    spack concretize -f
@@ -585,16 +586,16 @@ Examining the current environment spec
 To see a list of the packages that are installed / will be installed, run
 
 .. code-block:: bash
-  
+
    spack spec
 
-Checking package paths 
+Checking package paths
 ^^^^^^^^^^^^^^^^^^^^^^
 
 To see lib, bin, and include paths for installed packages, run
 
 .. code-block:: bash
-  
+
    spack find --paths [package_name]
 
 Changing the build type
@@ -604,7 +605,7 @@ To change the build type of Hermes-3 and/or BOUT++ when spack-installing the pac
 'build_type' variants in spack.yaml, e.g.:
 
 .. code-block:: yaml
-  
+
    spack:
       specs:
          - hermes-3%gcc build_type=Debug ^boutpp+petsc+sundials ^petsc+hypre+mumps
