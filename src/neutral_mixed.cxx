@@ -110,9 +110,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                                .withDefault(1.0e-3);
 
   limiter_gradient_ceiling = options["limiter_gradient_ceiling"]
-                               .doc("Ceiling for |grad log Pn| in the D limiter "
-                                    "denominator. Normalised inverse-length units.")
-                               .withDefault(0.1);
+                                 .doc("Ceiling for |grad log Pn| in the D limiter "
+                                      "denominator. Normalised inverse-length units.")
+                                 .withDefault(0.1);
 
   flux_limit =
       options["flux_limit"]
@@ -458,15 +458,17 @@ void NeutralMixed::finally(const Options& state) {
     const Field3D Vn_th = sqrt(8.0 * Tnlim / (PI * AA));
 
     // Particle flux is 0.25 * Nn * Vth [Stangeby, under eq. 2.24, p.67]; the Nn
-    // factor enters at the operator. 
+    // factor enters at the operator.
     // The gradient has a smooth user-set ceiling, which aids robustness in transients.
     // It also has a smooth floor to avoid division by zero while keeping differentiability.
     const Vector3D grad_logPnlim = Grad_perp(logPnlim);
     const Field3D gradient_squared = grad_logPnlim * grad_logPnlim;
-    const Field3D gradient_squared_ceiled = gradient_squared * SQ(limiter_gradient_ceiling)
-                                     / (gradient_squared + SQ(limiter_gradient_ceiling));
+    const Field3D gradient_squared_ceiled =
+        gradient_squared * SQ(limiter_gradient_ceiling)
+        / (gradient_squared + SQ(limiter_gradient_ceiling));
 
-    Dmax = flux_limit * 0.25 * Vn_th / sqrt(gradient_squared_ceiled + SQ(limiter_gradient_floor));
+    Dmax = flux_limit * 0.25 * Vn_th
+           / sqrt(gradient_squared_ceiled + SQ(limiter_gradient_floor));
   }
 
   // Hard upper limit on the diffusion coefficient. Clamp Dmax down to whichever
