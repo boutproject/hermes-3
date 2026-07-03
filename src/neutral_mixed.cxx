@@ -680,9 +680,13 @@ void NeutralMixed::finally(const Options& state) {
     ddt(NVn) += Snv;
 
   } else if (passive_momentum) {
-    // NVn set from an equilibrium flow with the ions (not evolved):
-    //   NVn = Nn_eq * Vi,  Nn_eq = (Nn*nu_cx + Ne*nu_rec) / (nu_cx + nu_iz)
-    // (quasineutrality Ni = Ne assumed)
+    // NVn from quasi-static parallel momentum balance (Bufferand 2024 eq 3-5):
+    //   NVn = AA * [ Nn_eq * Vi - (DnnNn/Pnlim) * Grad_par(Pn) ]
+    //   Nn_eq = (Nn*nu_cx + Ne*nu_rec) / (nu_cx + nu_iz + Rnn)
+    // Convective part: equilibrium density advected with ions.
+    // Diffusive part: pressure-gradient driven, coefficient D_n = Dnn/Tn = DnnNn/Pnlim.
+    // Denominator regularised with Rnn (neutral-neutral collisions), consistent with Dnn.
+    // (quasineutrality Ni = Ne assumed so far)
     const std::string ion_name = std::string(name) + "+";
     Field3D U = 0.0; // ion parallel velocity
     if (state["species"].isSet(ion_name)
@@ -718,8 +722,8 @@ void NeutralMixed::finally(const Options& state) {
       }
     }
 
-    Field3D Nn_eq = (Nnlim * nu_cx + Ne * nu_rec) / softFloor(nu_cx + nu_iz, density_floor);
-    NVn = Nn_eq * U;
+    Field3D Nn_eq = (Nnlim * nu_cx + Ne * nu_rec) / (nu_cx + nu_iz + Rnn);
+    NVn = AA * (Nn_eq * U - (DnnNn / Pnlim) * Grad_par(Pn));
 
     if (diagnose) {
       nu_cx_out = nu_cx;
