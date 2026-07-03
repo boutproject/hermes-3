@@ -130,7 +130,8 @@ void OpenADAS::calculate_rates(GuardedOptions&& electron, GuardedOptions&& from_
   const BoutReal to_charge =
       to_ion.isSet("charge") ? get<BoutReal>(to_ion["charge"]) : 0.0;
 
-  cellAverageInto(reaction_rate_workspace_,
+  cellAverageInto(
+      reaction_rate_workspace_,
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
         // Note: densities can be (slightly) negative
         return floor(ne, 0.0) * floor(n1, 0.0)
@@ -160,7 +161,8 @@ void OpenADAS::calculate_rates(GuardedOptions&& electron, GuardedOptions&& from_
   add(to_ion["energy_source"], energy_exchange);
 
   // Electron energy loss (radiation, ionisation potential)
-  cellAverageInto(energy_loss_workspace_,
+  cellAverageInto(
+      energy_loss_workspace_,
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
         return floor(ne, 0.0) * floor(n1, 0.0)
                * radiation_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm
@@ -195,7 +197,8 @@ void OpenADASChargeExchange::calculate_rates(GuardedOptions&& electron,
   const Field3D Na = GET_VALUE(Field3D, from_A["density"]);
   const Field3D Nb = GET_VALUE(Field3D, from_B["density"]);
 
-  cellAverageInto(reaction_rate_workspace_,
+  cellAverageInto(
+      reaction_rate_workspace_,
       [&](BoutReal na, BoutReal nb, BoutReal ne, BoutReal te) {
         return floor(na, 0.0) * floor(nb, 0.0)
                * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;

@@ -184,9 +184,8 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         // Hoist constants from e-e collision formula.
         // PI*2*v1sq = 4*PI*(qe/Me)*Telim, so pow(...,1.5) = (4*PI*qe/Me)^1.5 * Telim^1.5
         const BoutReal ee_base = 4.0 * PI * SI::qe / SI::Me;
-        const BoutReal ee_prefactor = SQ(SQ(SI::qe)) * 2.0
-                                      / (3.0 * ee_base * sqrt(ee_base)
-                                         * SQ(SI::e0 * SI::Me));
+        const BoutReal ee_prefactor =
+            SQ(SQ(SI::qe)) * 2.0 / (3.0 * ee_base * sqrt(ee_base) * SQ(SI::e0 * SI::Me));
 
         const Field3D nu_ee = filledFrom(Ne, [&](auto& i) {
           const BoutReal Telim = softFloor(Te[i], 0.1);
@@ -200,8 +199,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
           // Collision frequency; Telim^1.5 = Telim * sqrt(Telim)
           const BoutReal nu = ee_prefactor * floor(Ne[i], 0.0)
-                              * softFloor(coulomb_log, 1.0)
-                              / (Telim * sqrt(Telim));
+                              * softFloor(coulomb_log, 1.0) / (Telim * sqrt(Telim));
 
           ASSERT2(std::isfinite(nu));
           return nu;
@@ -257,8 +255,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
           // Collision frequency
           const BoutReal nu = ei_prefactor * floor(Ni[i], 0.0)
-                              * softFloor(coulomb_log, 1.0)
-                              / (base * sqrt(base));
+                              * softFloor(coulomb_log, 1.0) / (base * sqrt(base));
 #if CHECK >= 2
           if (!std::isfinite(nu)) {
             throw BoutException("Collisions 195 {}: {} at {}: Ni {}, Ne {}, Clog {}, "
@@ -381,8 +378,8 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           const BoutReal z1sq = SQ(Z1);
           const BoutReal z2sq = SQ(Z2);
           const BoutReal z1z2_aa = Z1 * Z2 * (AA1 + AA2);
-          const BoutReal ii_prefactor = SQ(charge1 * charge2) * (1. + mass1 / mass2)
-                                        / (3.0 * SQ(SI::e0 * mass1));
+          const BoutReal ii_prefactor =
+              SQ(charge1 * charge2) * (1. + mass1 / mass2) / (3.0 * SQ(SI::e0 * mass1));
           const BoutReal two_qe_m1 = 2.0 * SI::qe / mass1;
           const BoutReal two_qe_m2 = 2.0 * SI::qe / mass2;
 
@@ -406,9 +403,8 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
             const BoutReal base = PI * (v1sq + v2sq);
 
             // Collision frequency
-            const BoutReal nu = ii_prefactor * Nlim2
-                                * softFloor(coulomb_log, 1.0)
-                                / (base * sqrt(base));
+            const BoutReal nu =
+                ii_prefactor * Nlim2 * softFloor(coulomb_log, 1.0) / (base * sqrt(base));
             ASSERT2(std::isfinite(nu));
             return nu;
           });

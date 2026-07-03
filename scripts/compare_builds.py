@@ -140,15 +140,23 @@ except ImportError:
 # correctness comparisons.
 _BOUT_TIMING_VARS = {
     # Wall-clock timing — always differ between runs
-    'wall_time', 'wtime', 'wtime_comms', 'wtime_io',
-    'wtime_per_rhs', 'wtime_per_rhs_e', 'wtime_per_rhs_i',
-    'wtime_rhs', 'wtime_invert',
+    "wall_time",
+    "wtime",
+    "wtime_comms",
+    "wtime_io",
+    "wtime_per_rhs",
+    "wtime_per_rhs_e",
+    "wtime_per_rhs_i",
+    "wtime_rhs",
+    "wtime_invert",
     # RHS call counters — integer counts; differ when the adaptive
     # timestepper takes different numbers of steps (chaotic divergence),
     # not a physics regression
-    'ncalls', 'ncalls_e', 'ncalls_i',
+    "ncalls",
+    "ncalls_e",
+    "ncalls_i",
     # Solver iteration counter
-    'iteration',
+    "iteration",
 }
 
 
@@ -167,6 +175,7 @@ _FEEDBACK_SENSITIVE_MAX_TIMESTEP = {
 
 
 # ─── ULP comparison ──────────────────────────────────────────────────────────
+
 
 def _ulp_diff(a: numpy.ndarray, b: numpy.ndarray) -> numpy.ndarray:
     """Return the number of ULPs between each pair of float64 values.
@@ -187,12 +196,13 @@ def _ulp_diff(a: numpy.ndarray, b: numpy.ndarray) -> numpy.ndarray:
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
 
+
 def detect_nproc(test_dir: pathlib.Path) -> int:
     """Parse the nproc value from the test's runtest script (default 1)."""
     runtest = test_dir / "runtest"
     if not runtest.is_file():
         return 1
-    m = re.search(r'nproc\s*=\s*(\d+)', runtest.read_text())
+    m = re.search(r"nproc\s*=\s*(\d+)", runtest.read_text())
     return int(m.group(1)) if m else 1
 
 
@@ -208,7 +218,10 @@ def missing_input_files(test_dir: pathlib.Path) -> list[str]:
     missing = []
     for m in re.finditer(r'file\s*=\s*"?([^"\s]+\.nc)"?', bout_inp.read_text()):
         fname = m.group(1)
-        if not (test_dir / fname).is_file() and not (test_dir / "data" / fname).is_file():
+        if (
+            not (test_dir / fname).is_file()
+            and not (test_dir / "data" / fname).is_file()
+        ):
             missing.append(fname)
     # Also check for restart files, but only for tests that actually fetch
     # them as external input (e.g. from Zenodo). Some runtest scripts just
@@ -223,9 +236,9 @@ def missing_input_files(test_dir: pathlib.Path) -> list[str]:
     return missing
 
 
-def setup_work_dir(test_dir: pathlib.Path,
-                   work_dir: pathlib.Path,
-                   executable: pathlib.Path) -> None:
+def setup_work_dir(
+    test_dir: pathlib.Path, work_dir: pathlib.Path, executable: pathlib.Path
+) -> None:
     """
     Prepare an isolated working directory for one run:
       work_dir/
@@ -258,10 +271,10 @@ def _clear_dmp_files(data_dir: pathlib.Path) -> None:
 
 # ─── runner ──────────────────────────────────────────────────────────────────
 
-def run_hermes(work_dir: pathlib.Path,
-               nproc: int,
-               mpirun: str,
-               extra_args: list[str] | None = None) -> float:
+
+def run_hermes(
+    work_dir: pathlib.Path, nproc: int, mpirun: str, extra_args: list[str] | None = None
+) -> float:
     """Run hermes-3 from work_dir and return wall-clock seconds."""
     if nproc > 1:
         cmd = mpirun.split() + [str(nproc), "./hermes-3", "-d", "data"]
@@ -286,6 +299,7 @@ def run_hermes(work_dir: pathlib.Path,
 
 # ─── comparison ──────────────────────────────────────────────────────────────
 
+
 def _strip_x_boundaries(da, mxg: int):
     """Drop the x-boundary (guard) columns from a DataArray, if present."""
     if mxg > 0 and "x" in da.dims and da.sizes["x"] > 2 * mxg:
@@ -307,8 +321,9 @@ def _guard_cell_only(da_old, da_new, mxg: int, ulp_tol: int) -> bool:
         return False  # nothing was actually stripped; not a boundary effect
 
     ai = numpy.ascontiguousarray(stripped_old.values, dtype=numpy.float64).ravel()
-    bi = numpy.ascontiguousarray(_strip_x_boundaries(da_new, mxg).values,
-                                 dtype=numpy.float64).ravel()
+    bi = numpy.ascontiguousarray(
+        _strip_x_boundaries(da_new, mxg).values, dtype=numpy.float64
+    ).ravel()
 
     mask = numpy.isfinite(ai) & numpy.isfinite(bi) & (ai != 0)
     if not mask.any():
@@ -339,27 +354,32 @@ def _compare_identical(ds_old, ds_new, common) -> bool:
     simulation (verified: all evolved fields, including their guard
     cells, remain bit-identical).
     """
-    nt = min(ds_old.sizes.get('t', 1), ds_new.sizes.get('t', 1))
-    if ds_old.sizes.get('t', 1) != ds_new.sizes.get('t', 1):
-        print(f"  [!] Different number of output timesteps: "
-              f"OLD={ds_old.sizes.get('t', 1)} NEW={ds_new.sizes.get('t', 1)}; "
-              f"comparing the first {nt}. This alone indicates the runs "
-              f"are not identical.")
+    nt = min(ds_old.sizes.get("t", 1), ds_new.sizes.get("t", 1))
+    if ds_old.sizes.get("t", 1) != ds_new.sizes.get("t", 1):
+        print(
+            f"  [!] Different number of output timesteps: "
+            f"OLD={ds_old.sizes.get('t', 1)} NEW={ds_new.sizes.get('t', 1)}; "
+            f"comparing the first {nt}. This alone indicates the runs "
+            f"are not identical."
+        )
 
     # x-guard columns are only present in the dataset if xhermes kept them
     # (its default); only then can diffs be attributed to them.
-    mxg = int(ds_old.metadata.get("MXG", 0)) \
-        if ds_old.metadata.get("keep_xboundaries", True) else 0
+    mxg = (
+        int(ds_old.metadata.get("MXG", 0))
+        if ds_old.metadata.get("keep_xboundaries", True)
+        else 0
+    )
 
     print(f"\n  {'Variable':<30} {'differing values':>18}  {'max ULPs':>10}")
     print("  " + "-" * 62)
 
-    any_diff = ds_old.sizes.get('t', 1) != ds_new.sizes.get('t', 1)
+    any_diff = ds_old.sizes.get("t", 1) != ds_new.sizes.get("t", 1)
     n_identical = 0
     boundary_only = []
     for v in common:
         da_old, da_new = ds_old[v], ds_new[v]
-        if 't' in da_old.dims and 't' in da_new.dims:
+        if "t" in da_old.dims and "t" in da_new.dims:
             da_old = da_old.isel(t=slice(0, nt))
             da_new = da_new.isel(t=slice(0, nt))
 
@@ -381,10 +401,12 @@ def _compare_identical(ds_old, ds_new, common) -> bool:
 
         # Are all diffs in the x-boundary guard columns (never written by
         # Hermes diagnostics, so indeterminate in both builds)?
-        ai = numpy.ascontiguousarray(_strip_x_boundaries(da_old, mxg).values,
-                                     dtype=numpy.float64).ravel()
-        bi = numpy.ascontiguousarray(_strip_x_boundaries(da_new, mxg).values,
-                                     dtype=numpy.float64).ravel()
+        ai = numpy.ascontiguousarray(
+            _strip_x_boundaries(da_old, mxg).values, dtype=numpy.float64
+        ).ravel()
+        bi = numpy.ascontiguousarray(
+            _strip_x_boundaries(da_new, mxg).values, dtype=numpy.float64
+        ).ravel()
         if ai.size < a.size and (ai.view(numpy.int64) == bi.view(numpy.int64)).all():
             boundary_only.append(v)
             print(f"  {v:<30} {ndiff:>18}  {'':>10}  <-- x-guard cells only")
@@ -396,20 +418,28 @@ def _compare_identical(ds_old, ds_new, common) -> bool:
         ulps_str = str(max_ulps) if max_ulps >= 0 else "n/a"
         print(f"  {v:<30} {ndiff:>18}  {ulps_str:>10}  <-- DIFFERS")
 
-    print(f"  ({n_identical}/{len(common)} variables bit-identical over "
-          f"all {nt} timestep(s))")
+    print(
+        f"  ({n_identical}/{len(common)} variables bit-identical over "
+        f"all {nt} timestep(s))"
+    )
     if boundary_only:
-        print(f"  [note] {len(boundary_only)} variable(s) differ only in the "
-              f"x-boundary guard columns: {', '.join(boundary_only)}.\n"
-              f"         Hermes never writes diagnostic x-guard cells, so both "
-              f"builds output stale allocation contents there; not counted "
-              f"as a failure.")
+        print(
+            f"  [note] {len(boundary_only)} variable(s) differ only in the "
+            f"x-boundary guard columns: {', '.join(boundary_only)}.\n"
+            f"         Hermes never writes diagnostic x-guard cells, so both "
+            f"builds output stale allocation contents there; not counted "
+            f"as a failure."
+        )
     return not any_diff
 
 
-def compare_outputs(data_old: pathlib.Path, data_new: pathlib.Path,
-                    ulp_tol: int, timestep: int = -1,
-                    expect_identical: bool = False) -> bool:
+def compare_outputs(
+    data_old: pathlib.Path,
+    data_new: pathlib.Path,
+    ulp_tol: int,
+    timestep: int = -1,
+    expect_identical: bool = False,
+) -> bool:
     """Compare all field variables at the given timestep. Returns True if ok.
 
     With expect_identical=True, instead require every common variable to
@@ -426,12 +456,14 @@ def compare_outputs(data_old: pathlib.Path, data_new: pathlib.Path,
             common = sorted((vars_old & vars_new) - _BOUT_TIMING_VARS)
             sets_differ = bool((vars_old ^ vars_new) - _BOUT_TIMING_VARS)
             if sets_differ:
-                print(f"  [!] Variable sets differ: "
-                      f"only-OLD={sorted(vars_old - vars_new - _BOUT_TIMING_VARS)} "
-                      f"only-NEW={sorted(vars_new - vars_old - _BOUT_TIMING_VARS)}")
+                print(
+                    f"  [!] Variable sets differ: "
+                    f"only-OLD={sorted(vars_old - vars_new - _BOUT_TIMING_VARS)} "
+                    f"only-NEW={sorted(vars_new - vars_old - _BOUT_TIMING_VARS)}"
+                )
             return _compare_identical(ds_old, ds_new, common) and not sets_differ
 
-        nt = min(ds_old.sizes['t'], ds_new.sizes['t'])
+        nt = min(ds_old.sizes["t"], ds_new.sizes["t"])
         ts = timestep if timestep >= 0 else nt + timestep
         ts = max(0, min(ts, nt - 1))
 
@@ -443,18 +475,27 @@ def compare_outputs(data_old: pathlib.Path, data_new: pathlib.Path,
         common = sorted((vars_old & vars_new) - _BOUT_TIMING_VARS)
 
         if vars_old - vars_new - _BOUT_TIMING_VARS:
-            print(f"  [!] Variables only in OLD: "
-                  f"{sorted(vars_old - vars_new - _BOUT_TIMING_VARS)}")
+            print(
+                f"  [!] Variables only in OLD: "
+                f"{sorted(vars_old - vars_new - _BOUT_TIMING_VARS)}"
+            )
         if vars_new - vars_old - _BOUT_TIMING_VARS:
-            print(f"  [!] Variables only in NEW: "
-                  f"{sorted(vars_new - vars_old - _BOUT_TIMING_VARS)}")
+            print(
+                f"  [!] Variables only in NEW: "
+                f"{sorted(vars_new - vars_old - _BOUT_TIMING_VARS)}"
+            )
 
         # x-guard columns are only present if xhermes kept them (its default).
-        mxg = int(ds_old.metadata.get("MXG", 0)) \
-            if ds_old.metadata.get("keep_xboundaries", True) else 0
+        mxg = (
+            int(ds_old.metadata.get("MXG", 0))
+            if ds_old.metadata.get("keep_xboundaries", True)
+            else 0
+        )
 
-        print(f"\n  {'Variable':<30} {'max |rel diff|':>16}  {'RMS rel diff':>14}"
-              f"  {'max ULPs':>10}")
+        print(
+            f"\n  {'Variable':<30} {'max |rel diff|':>16}  {'RMS rel diff':>14}"
+            f"  {'max ULPs':>10}"
+        )
         print("  " + "-" * 74)
 
         any_large_diff = False
@@ -479,22 +520,25 @@ def compare_outputs(data_old: pathlib.Path, data_new: pathlib.Path,
 
             if flag and _guard_cell_only(old_last[v], new_last[v], mxg, ulp_tol):
                 boundary_only.append(v)
-                print(f"  {v:<30} {max_rel:>16.3e}  {rms_rel:>14.3e}"
-                      f"  {max_ulps:>10}  <-- x-guard cells only")
+                print(
+                    f"  {v:<30} {max_rel:>16.3e}  {rms_rel:>14.3e}"
+                    f"  {max_ulps:>10}  <-- x-guard cells only"
+                )
                 continue
 
             if flag:
                 any_large_diff = True
 
-            print(f"  {v:<30} {max_rel:>16.3e}  {rms_rel:>14.3e}"
-                  f"  {max_ulps:>10}{flag}")
+            print(f"  {v:<30} {max_rel:>16.3e}  {rms_rel:>14.3e}  {max_ulps:>10}{flag}")
 
         if boundary_only:
-            print(f"  [note] {len(boundary_only)} variable(s) differ only in the "
-                  f"x-boundary guard columns: {', '.join(boundary_only)}.\n"
-                  f"         Hermes never writes diagnostic x-guard cells, so both "
-                  f"builds output stale allocation contents there; not counted "
-                  f"as a failure.")
+            print(
+                f"  [note] {len(boundary_only)} variable(s) differ only in the "
+                f"x-boundary guard columns: {', '.join(boundary_only)}.\n"
+                f"         Hermes never writes diagnostic x-guard cells, so both "
+                f"builds output stale allocation contents there; not counted "
+                f"as a failure."
+            )
 
         return not any_large_diff
 
@@ -515,29 +559,31 @@ def compare_outputs(data_old: pathlib.Path, data_new: pathlib.Path,
 _SKIPPED = object()  # sentinel returned when a test is skipped
 
 
-def run_test_case(test_dir: pathlib.Path,
-                  exec_old: pathlib.Path,
-                  exec_new: pathlib.Path,
-                  nruns: int,
-                  warmup: int,
-                  mpirun: str,
-                  ulp_tol: int,
-                  expect_identical: bool = False,
-                  verify_check_state_values: bool = False):
+def run_test_case(
+    test_dir: pathlib.Path,
+    exec_old: pathlib.Path,
+    exec_new: pathlib.Path,
+    nruns: int,
+    warmup: int,
+    mpirun: str,
+    ulp_tol: int,
+    expect_identical: bool = False,
+    verify_check_state_values: bool = False,
+):
     """Return True (pass), False (fail), or _SKIPPED."""
     name = test_dir.name
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"Test: {name}  (nproc={detect_nproc(test_dir)})")
-    print('='*70)
+    print("=" * 70)
 
     if not (test_dir / "data" / "BOUT.inp").is_file():
-        print(f"  [!] No data/BOUT.inp — skipping")
+        print("  [!] No data/BOUT.inp — skipping")
         return _SKIPPED
 
     missing = missing_input_files(test_dir)
     if missing:
         print(f"  [!] Skipping: missing input file(s): {missing}")
-        print(f"       Run the original runtest once to download them:")
+        print("       Run the original runtest once to download them:")
         print(f"       python3 {test_dir}/runtest")
         return _SKIPPED
 
@@ -568,7 +614,7 @@ def run_test_case(test_dir: pathlib.Path,
                 try:
                     t = run_hermes(work_dir, nproc, mpirun)
                 except RuntimeError as e:
-                    raise RuntimeError(f"{label} run {i+1} failed: {e}") from e
+                    raise RuntimeError(f"{label} run {i + 1} failed: {e}") from e
                 times.append(t)
                 if i < nruns - 1:
                     _clear_dmp_files(data_dir)
@@ -600,14 +646,22 @@ def run_test_case(test_dir: pathlib.Path,
             return "faster" if x > 1 else "slower"
 
         print(f"\n  Timing ({nruns} timed run(s) each, {warmup} warmup):")
-        print(f"    OLD: mean={mean_old:.2f}s  min={min_old:.2f}s"
-              f"  ({', '.join(f'{t:.2f}' for t in times_old)})")
-        print(f"    NEW: mean={mean_new:.2f}s  min={min_new:.2f}s"
-              f"  ({', '.join(f'{t:.2f}' for t in times_new)})")
-        print(f"    Speedup (mean): {speedup_mean:.3f}x"
-              f" ({abs(speedup_mean-1)*100:.1f}% {_sign(speedup_mean)})")
-        print(f"    Speedup (min):  {speedup_min:.3f}x"
-              f" ({abs(speedup_min-1)*100:.1f}% {_sign(speedup_min)})")
+        print(
+            f"    OLD: mean={mean_old:.2f}s  min={min_old:.2f}s"
+            f"  ({', '.join(f'{t:.2f}' for t in times_old)})"
+        )
+        print(
+            f"    NEW: mean={mean_new:.2f}s  min={min_new:.2f}s"
+            f"  ({', '.join(f'{t:.2f}' for t in times_new)})"
+        )
+        print(
+            f"    Speedup (mean): {speedup_mean:.3f}x"
+            f" ({abs(speedup_mean - 1) * 100:.1f}% {_sign(speedup_mean)})"
+        )
+        print(
+            f"    Speedup (min):  {speedup_min:.3f}x"
+            f" ({abs(speedup_min - 1) * 100:.1f}% {_sign(speedup_min)})"
+        )
 
         # ── correctness ──────────────────────────────────────────────────────
         if expect_identical:
@@ -615,9 +669,10 @@ def run_test_case(test_dir: pathlib.Path,
             # is compared and the feedback-controller timestep cap is not
             # needed (a chaotic divergence would itself prove the builds
             # are not identical).
-            print(f"\n  Field differences (all timesteps, bitwise):")
-            ok = compare_outputs(work_old / "data", work_new / "data", ulp_tol,
-                                 expect_identical=True)
+            print("\n  Field differences (all timesteps, bitwise):")
+            ok = compare_outputs(
+                work_old / "data", work_new / "data", ulp_tol, expect_identical=True
+            )
             if ok:
                 print("\n  => Output is bit-identical.")
             else:
@@ -625,18 +680,21 @@ def run_test_case(test_dir: pathlib.Path,
         else:
             max_ts = _FEEDBACK_SENSITIVE_MAX_TIMESTEP.get(name)
             if max_ts is not None:
-                print(f"\n  [!] {name} has a feedback controller that chaotically "
-                      f"amplifies any bit-level rounding change late in the run; "
-                      f"comparing timestep {max_ts} instead of the last one to "
-                      f"avoid that expected (non-correctness) divergence.")
+                print(
+                    f"\n  [!] {name} has a feedback controller that chaotically "
+                    f"amplifies any bit-level rounding change late in the run; "
+                    f"comparing timestep {max_ts} instead of the last one to "
+                    f"avoid that expected (non-correctness) divergence."
+                )
                 timestep = max_ts
                 label = f"timestep {max_ts}"
             else:
                 timestep = -1
                 label = "last timestep"
             print(f"\n  Field differences ({label}, ULP tolerance: {ulp_tol}):")
-            ok = compare_outputs(work_old / "data", work_new / "data", ulp_tol,
-                                 timestep=timestep)
+            ok = compare_outputs(
+                work_old / "data", work_new / "data", ulp_tol, timestep=timestep
+            )
             if ok:
                 print("\n  => All variables within tolerance.")
             else:
@@ -644,36 +702,47 @@ def run_test_case(test_dir: pathlib.Path,
 
         # ── hermes:check_state_values verification ───────────────────────────
         if verify_check_state_values:
-            print(f"\n  Verifying hermes:check_state_values=false "
-                  f"(NEW binary, 1 run)...")
+            print(
+                "\n  Verifying hermes:check_state_values=false (NEW binary, 1 run)..."
+            )
             work_ncsv = tmp / "no_check_state_values"
             setup_work_dir(test_dir, work_ncsv, exec_new)
             try:
-                t_ncsv = run_hermes(work_ncsv, nproc, mpirun,
-                                    extra_args=["hermes:check_state_values=false"])
+                t_ncsv = run_hermes(
+                    work_ncsv,
+                    nproc,
+                    mpirun,
+                    extra_args=["hermes:check_state_values=false"],
+                )
             except RuntimeError as e:
                 print(f"  [!] Run with check_state_values=false failed: {e}")
                 return False
             # Values must be unchanged; only the failure behaviour on
             # non-finite data differs. Compare bitwise against the NEW
             # binary's own (final timed run) output.
-            ok_ncsv = compare_outputs(work_new / "data", work_ncsv / "data",
-                                      ulp_tol, expect_identical=True)
+            ok_ncsv = compare_outputs(
+                work_new / "data", work_ncsv / "data", ulp_tol, expect_identical=True
+            )
             saved = mean_new - t_ncsv
-            print(f"    check_state_values=false: {t_ncsv:.2f}s vs NEW mean "
-                  f"{mean_new:.2f}s ({saved:+.2f}s, "
-                  f"{saved / mean_new * 100:+.1f}% of runtime)")
+            print(
+                f"    check_state_values=false: {t_ncsv:.2f}s vs NEW mean "
+                f"{mean_new:.2f}s ({saved:+.2f}s, "
+                f"{saved / mean_new * 100:+.1f}% of runtime)"
+            )
             if ok_ncsv:
                 print("    => Identical output with finiteness checks disabled.")
             else:
-                print("    => WARNING: disabling check_state_values changed "
-                      "the output — this is a bug.")
+                print(
+                    "    => WARNING: disabling check_state_values changed "
+                    "the output — this is a bug."
+                )
             ok = ok and ok_ncsv
 
         return ok
 
 
 # ─── main ────────────────────────────────────────────────────────────────────
+
 
 def discover_tests(tests_dir: pathlib.Path) -> list[pathlib.Path]:
     """Return all subdirectories of tests_dir that contain a runtest script."""
@@ -682,50 +751,88 @@ def discover_tests(tests_dir: pathlib.Path) -> list[pathlib.Path]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--old", required=True, type=pathlib.Path,
-                        help="OLD hermes-3 executable (baseline)")
-    parser.add_argument("--new", required=True, type=pathlib.Path,
-                        help="NEW hermes-3 executable (with changes)")
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--old",
+        required=True,
+        type=pathlib.Path,
+        help="OLD hermes-3 executable (baseline)",
+    )
+    parser.add_argument(
+        "--new",
+        required=True,
+        type=pathlib.Path,
+        help="NEW hermes-3 executable (with changes)",
+    )
 
     test_group = parser.add_mutually_exclusive_group(required=True)
-    test_group.add_argument("--test", action="append", dest="tests",
-                            type=pathlib.Path, metavar="DIR",
-                            help="Integrated test directory (repeatable)")
-    test_group.add_argument("--tests-dir", type=pathlib.Path, metavar="DIR",
-                            help="Run all tests found under this directory "
-                                 "(e.g. tests/integrated)")
+    test_group.add_argument(
+        "--test",
+        action="append",
+        dest="tests",
+        type=pathlib.Path,
+        metavar="DIR",
+        help="Integrated test directory (repeatable)",
+    )
+    test_group.add_argument(
+        "--tests-dir",
+        type=pathlib.Path,
+        metavar="DIR",
+        help="Run all tests found under this directory (e.g. tests/integrated)",
+    )
 
-    parser.add_argument("--nruns", type=int, default=3,
-                        help="Timed runs per binary per test (default: 3)")
-    parser.add_argument("--warmup", type=int, default=1,
-                        help="Throwaway runs before timing to warm the page "
-                             "cache and stabilise clocks (default: 1)")
-    parser.add_argument("--ulp-tol", type=int, default=10,
-                        help="Flag variables whose max ULP difference exceeds "
-                             "this threshold (default: 10). Pure computational "
-                             "optimisations should stay within 2-3 ULPs. "
-                             "Ignored with --expect identical.")
-    parser.add_argument("--expect", choices=("ulp", "identical"), default="ulp",
-                        help="Expected difference between the builds. "
-                             "'ulp' (default): allow float-reordering noise "
-                             "up to --ulp-tol at the compared timestep. "
-                             "'identical': require bit-for-bit identical "
-                             "output at every timestep — use when the "
-                             "comparison spans only changes with no "
-                             "algebraic reordering (pure caching/refactor).")
-    parser.add_argument("--verify-check-state-values", action="store_true",
-                        help="Also run the NEW binary once per test with "
-                             "hermes:check_state_values=false, require "
-                             "bitwise-identical output, and report the time "
-                             "saved. Requires the NEW build to have this "
-                             "option and CHECK >= 1 for a meaningful timing "
-                             "difference.")
-    parser.add_argument("--mpirun", default="mpirun -np",
-                        help='MPI launch prefix including the -n flag '
-                             '(default: "mpirun -np"). '
-                             'Use "srun -n" on Slurm clusters.')
+    parser.add_argument(
+        "--nruns",
+        type=int,
+        default=3,
+        help="Timed runs per binary per test (default: 3)",
+    )
+    parser.add_argument(
+        "--warmup",
+        type=int,
+        default=1,
+        help="Throwaway runs before timing to warm the page "
+        "cache and stabilise clocks (default: 1)",
+    )
+    parser.add_argument(
+        "--ulp-tol",
+        type=int,
+        default=10,
+        help="Flag variables whose max ULP difference exceeds "
+        "this threshold (default: 10). Pure computational "
+        "optimisations should stay within 2-3 ULPs. "
+        "Ignored with --expect identical.",
+    )
+    parser.add_argument(
+        "--expect",
+        choices=("ulp", "identical"),
+        default="ulp",
+        help="Expected difference between the builds. "
+        "'ulp' (default): allow float-reordering noise "
+        "up to --ulp-tol at the compared timestep. "
+        "'identical': require bit-for-bit identical "
+        "output at every timestep — use when the "
+        "comparison spans only changes with no "
+        "algebraic reordering (pure caching/refactor).",
+    )
+    parser.add_argument(
+        "--verify-check-state-values",
+        action="store_true",
+        help="Also run the NEW binary once per test with "
+        "hermes:check_state_values=false, require "
+        "bitwise-identical output, and report the time "
+        "saved. Requires the NEW build to have this "
+        "option and CHECK >= 1 for a meaningful timing "
+        "difference.",
+    )
+    parser.add_argument(
+        "--mpirun",
+        default="mpirun -np",
+        help="MPI launch prefix including the -n flag "
+        '(default: "mpirun -np"). '
+        'Use "srun -n" on Slurm clusters.',
+    )
     args = parser.parse_args()
 
     for exe in (args.old, args.new):
@@ -768,9 +875,9 @@ def main():
             failed.append(test.name)
 
     # ── summary ──────────────────────────────────────────────────────────────
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("SUMMARY")
-    print('='*70)
+    print("=" * 70)
     if passed:
         print(f"  PASSED  ({len(passed)}): {', '.join(passed)}")
     if skipped:

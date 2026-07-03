@@ -59,15 +59,13 @@ const AlignedMetrics& alignedMetrics(const Coordinates* coord) {
   auto it = cache.find(coord);
   if (it == cache.end()) {
     it = cache
-             .emplace(coord, AlignedMetrics{toFieldAligned(coord->g23),
-                                            toFieldAligned(coord->g_23),
-                                            toFieldAligned(coord->g12),
-                                            toFieldAligned(coord->g_12),
-                                            toFieldAligned(coord->J),
-                                            toFieldAligned(coord->dx),
-                                            toFieldAligned(coord->dy),
-                                            toFieldAligned(coord->dz),
-                                            toFieldAligned(coord->Bxy)})
+             .emplace(
+                 coord,
+                 AlignedMetrics{toFieldAligned(coord->g23), toFieldAligned(coord->g_23),
+                                toFieldAligned(coord->g12), toFieldAligned(coord->g_12),
+                                toFieldAligned(coord->J), toFieldAligned(coord->dx),
+                                toFieldAligned(coord->dy), toFieldAligned(coord->dz),
+                                toFieldAligned(coord->Bxy)})
              .first;
   }
   return it->second;
