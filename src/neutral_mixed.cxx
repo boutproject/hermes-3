@@ -104,10 +104,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                      .withDefault(0.1)
                  / meters;
 
-  limiter_gradient_floor =
-      options["limiter_gradient_floor"]
-          .doc("Floor for |grad log Pn| in the D limiter denominator. Normalised inverse-length units.")
-          .withDefault(1.0e-3);
+  limiter_gradient_floor = options["limiter_gradient_floor"]
+                               .doc("Floor for |grad log Pn| in the D limiter "
+                                    "denominator. Normalised inverse-length units.")
+                               .withDefault(1.0e-3);
 
   flux_limit =
       options["flux_limit"]
@@ -356,7 +356,7 @@ void NeutralMixed::finally(const Options& state) {
 
   if (collisionality_override > 0.0) {
     // user has set an override for collision frequency
-    Dnn = (Tn / AA) / collisionality_override;
+    Dnn_unlimited = (Tn / AA) / collisionality_override;
   } else {
     if (localstate.isSet("collision_frequency")) {
       // Collisionality
@@ -424,34 +424,45 @@ void NeutralMixed::finally(const Options& state) {
       Field3D nu_floored = nu + nu_pseudo_mfp * exp(-nu / nu_pseudo_mfp);
 
       // Dnn = Vth^2 / sigma
-      Dnn = (Tnlim / AA) / nu_floored;
+      Dnn_unlimited = (Tnlim / AA) / nu_floored;
     } else {
-      Dnn = (Tnlim / AA) / nu_pseudo_mfp;
+      Dnn_unlimited = (Tnlim / AA) / nu_pseudo_mfp;
     }
   }
+
+  // Start from the unlimited coefficient. copy() forces independent storage, so
+  // that later writes to Dnn / Dmax do not alias back onto Dnn_unlimited.
+  Dnn = copy(Dnn_unlimited);
+  Dmax = copy(Dnn_unlimited);
+
+  // Flux limit: cap diffusion at a fraction of the free-streaming particle flux,
+  // set through the ceiling coefficient Dmax.
   if (flux_limit > 0.0) {
-    // Apply flux limit to diffusion,
-    // using the local thermal speed and pressure gradient magnitude
 
-    // Thermal speed in non-drifting Maxwellian [Stangeby eq. 2.21, p.67]
-    Field3D Vn_th = sqrt(8.0 * Tnlim / (PI * AA));
+    // Thermal speed in a non-drifting Maxwellian [Stangeby eq. 2.21, p.67]
+    const Field3D Vn_th = sqrt(8.0 * Tnlim / (PI * AA));
 
-    // Particle flux is 0.25 * Nn * Vth, with Nn coming in at operator.
-    // [Stangeby, under eq 2.24, p.67]
-    // Denominator is regularised: smoothly differentiable and avoids division by zero.
+    // Particle flux is 0.25 * Nn * Vth [Stangeby, under eq. 2.24, p.67]; the Nn
+    // factor enters at the operator. The denominator uses a gradient floor:
+    // smoothly differentiable and avoids division by zero at shallow gradients.
     const Vector3D grad_logPnlim = Grad_perp(logPnlim);
     const Field3D square_gradient = grad_logPnlim * grad_logPnlim;
-    Field3D Dmax =
-        flux_limit * 0.25 * Vn_th / (sqrt(square_gradient + SQ(limiter_gradient_floor)));
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
+    Dmax = flux_limit * 0.25 * Vn_th / sqrt(square_gradient + SQ(limiter_gradient_floor));
+  }
+
+  // Hard upper limit on the diffusion coefficient. Clamp Dmax down to whichever
+  // cap is tighter, so both limiters compose through the single blend below.
+  if (diffusion_limit > 0.0) {
+    BOUT_FOR(i, Dmax.getRegion("RGN_ALL")) {
+      Dmax[i] = BOUTMIN(Dmax[i], diffusion_limit);
     }
   }
 
-  if (diffusion_limit > 0.0) {
-    // Impose an upper limit on the diffusion coefficient
+  // Blend the unlimited coefficient with the ceiling (harmonic mean). Skipped
+  // when no limiter is active, leaving Dnn = Dnn_unlimited from the copy above.
+  if (flux_limit > 0.0 || diffusion_limit > 0.0) {
     BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+      Dnn[i] = Dnn_unlimited[i] * Dmax[i] / (Dnn_unlimited[i] + Dmax[i]);
     }
   }
 
@@ -779,6 +790,20 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", Cs0 * Cs0 / Omega_ci},
                     {"standard_name", "diffusion coefficient"},
                     {"long_name", name + " diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("Dnn{}_unlimited", name)], Dnn_unlimited,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " unlimited diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("Dnn{}_max", name)], Dmax,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " maximum diffusion coefficient"},
                     {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
