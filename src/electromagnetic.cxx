@@ -1,8 +1,18 @@
 #include "../include/electromagnetic.hxx"
 
+#include "../include/component.hxx"
+#include "../include/guarded_options.hxx"
+#include "../include/permissions.hxx"
+
+#include <bout/bout_types.hxx>
 #include <bout/constants.hxx>
+#include <bout/field3d.hxx>
 #include <bout/invert_laplace.hxx>
 #include <bout/mesh.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+
+#include <string>
 
 // Set the default acceptance tolerances for the Naulin solver.
 // These are used if the maximum iterations is reached.
@@ -224,7 +234,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
     // Ensure that guard cells are communicated
     Apar.getMesh()->communicate(Apar_flutter);
 
-    set(state["fields"]["Apar_flutter"], Apar_flutter);
+    add(state["fields"]["Apar_flutter"], Apar_flutter);
 
 #if 0
     // Create a vector A from covariant components
