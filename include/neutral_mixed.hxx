@@ -47,6 +47,7 @@ private:
   Field3D Dnn_unlimited, Dmax;   ///< Unlimited and max Dnn
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   BoutReal flux_limit;                 ///< Diffusive flux limit
+  BoutReal flux_limiter_sharpness;     ///< Sharpness of the diffusive flux limiter
   BoutReal limiter_gradient_floor;     ///< Floor for gradient in Dmax denominator
   BoutReal diffusion_limit;            ///< Maximum diffusion coefficient
   BoutReal neutral_lmax;

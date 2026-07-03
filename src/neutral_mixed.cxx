@@ -114,6 +114,16 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .doc("Limit diffusive fluxes to fraction of free-streaming flux. <0 means off.")
           .withDefault(0.5);
 
+  flux_limiter_sharpness = options["flux_limiter_sharpness"]
+                               .doc("Sharpness parameter for flux limiter. Higher values "
+                                    "make the limiter more abrupt. Must be >0")
+                               .withDefault(1.0);
+
+  if (flux_limiter_sharpness <= 0.0) {
+    throw BoutException("flux_limiter_sharpness must be > 0.0, got {:g}",
+                        flux_limiter_sharpness);
+  }
+
   diffusion_limit = options["diffusion_limit"]
                         .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
                         .withDefault(-1.0)
@@ -461,8 +471,18 @@ void NeutralMixed::finally(const Options& state) {
   // Blend the unlimited coefficient with the ceiling (harmonic mean). Skipped
   // when no limiter is active, leaving Dnn = Dnn_unlimited from the copy above.
   if (flux_limit > 0.0 || diffusion_limit > 0.0) {
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn_unlimited[i] * Dmax[i] / (Dnn_unlimited[i] + Dmax[i]);
+
+    if (flux_limiter_sharpness == 1.0) {
+      // Avoid expensive pow() if not needed
+      BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+        Dnn[i] = Dnn_unlimited[i] * Dmax[i] / (Dnn_unlimited[i] + Dmax[i]);
+      }
+    } else {
+      BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+        Dnn[i] = Dnn_unlimited[i]
+                 * pow(1.0 + pow(Dnn_unlimited[i] / Dmax[i], flux_limiter_sharpness),
+                       -1.0 / flux_limiter_sharpness);
+      }
     }
   }
 
