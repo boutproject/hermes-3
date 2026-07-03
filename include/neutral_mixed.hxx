@@ -64,13 +64,13 @@ private:
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum;    ///< Evolve parallel momentum?
   bool normalise_sources;  ///< Normalise input sources?
-  bool evolve_pressure;    ///< Evolve pressure equation? (false when passive_momentum=true)
-  bool passive_momentum;   ///< Only evolve density; passive NVn and Tn=Ti
+  bool evolve_pressure;    ///< Evolve pressure equation? (false when parallel_pressure_diffusion=true)
+  bool parallel_pressure_diffusion;   ///< Only evolve density; passive NVn and Tn=Ti
   std::string temperature_from; ///< Species to take Tn from (empty = own Pn/Nn)
 
   // Normalisations (stored for use in finally())
   BoutReal Nnorm, Tnorm, FreqNorm;
-  Field3D nu_cx_out, nu_iz_out, nu_rec_out, Nn_eq_out; ///< passive_momentum diagnostics
+  Field3D nu_cx_out, nu_iz_out, nu_rec_out, Nn_eq_out; ///< parallel_pressure_diffusion diagnostics
 
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 

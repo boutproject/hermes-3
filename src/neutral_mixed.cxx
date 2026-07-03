@@ -47,20 +47,33 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   auto& options = alloptions[name];
 
+  parallel_pressure_diffusion =
+      options["parallel_pressure_diffusion"]
+          .doc("Evolve only neutral density; NVn set from quasi-static parallel "
+               "pressure-diffusion balance (Bufferand 2024 eq 3-5). "
+               "Implies evolve_momentum=false and evolve_pressure=false.")
+          .withDefault<bool>(false);
   evolve_momentum = options["evolve_momentum"]
                         .doc("Evolve parallel neutral momentum?")
-                        .withDefault<bool>(true);
-  passive_momentum = options["passive_momentum"]
-                        .doc("Evolve only neutral density; passive momentum and pressure")
-                        .withDefault<bool>(false);
+                        .withDefault<bool>(!parallel_pressure_diffusion);
+  if (parallel_pressure_diffusion && evolve_momentum) {
+    throw BoutException(
+        "Cannot set both parallel_pressure_diffusion=true and evolve_momentum=true "
+        "for neutral species '{}'", name);
+  }
   temperature_from = options["temperature_from"]
                 .doc("Name of species to take neutral temperature from "
                      "(e.g. the ion species, giving Tn=Ti). Empty = use own Pn/Nn.")
                 .withDefault<std::string>("");
+  if (parallel_pressure_diffusion && temperature_from.empty()) {
+    throw BoutException(
+        "parallel_pressure_diffusion=true requires temperature_from to be set "
+        "(e.g. temperature_from = d+) for neutral species '{}'", name);
+  }
   evolve_pressure = options["evolve_pressure"]
                         .doc("Evolve the neutral pressure equation? "
-                             "Automatically false when passive_momentum=true.")
-                        .withDefault<bool>(!passive_momentum);
+                             "Automatically false when parallel_pressure_diffusion=true.")
+                        .withDefault<bool>(!parallel_pressure_diffusion);
 
   if (!temperature_from.empty()) {
     // transform_impl() reads another species' temperature (e.g. Tn = Ti), so
@@ -79,7 +92,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   if (evolve_momentum) {
     solver->add(NVn, std::string("NV") + name);
-  } else if (passive_momentum) {
+  } else if (parallel_pressure_diffusion) {
     output_warn.write(
         "WARNING: Not evolving neutral parallel momentum. "
         "NVn set from diffusion + ion flow.\n");
@@ -366,7 +379,7 @@ void NeutralMixed::finally(const Options& state) {
   // Field3D logNn = log(Nn);
   // Field3D logTn = log(Tn);
 
-  // In passive_momentum mode the pressure is not evolved; set_temperature has
+  // In parallel_pressure_diffusion mode the pressure is not evolved; set_temperature has
   // run by now, so localstate["temperature"] holds the current Ti. Recompute
   // Pn = Nn*Tn so the derived (Dnn, kappa_n, logPnlim, Pnlim) stay consistent.
   if (!evolve_pressure && !temperature_from.empty()) {
@@ -679,7 +692,7 @@ void NeutralMixed::finally(const Options& state) {
     }
     ddt(NVn) += Snv;
 
-  } else if (passive_momentum) {
+  } else if (parallel_pressure_diffusion) {
     // NVn from quasi-static parallel momentum balance (Bufferand 2024 eq 3-5):
     //   NVn = AA * [ Nn_eq * Vi - (DnnNn/Pnlim) * Grad_par(Pn) ]
     //   Nn_eq = (Nn*nu_cx + Ne*nu_rec) / (nu_cx + nu_iz + Rnn)
@@ -1103,7 +1116,7 @@ void NeutralMixed::outputVars(Options& state) {
                       {"species", name},
                       {"source", "evolve_pressure"}});
     }
-    if (passive_momentum) {
+    if (parallel_pressure_diffusion) {
       set_with_attrs(state[std::string("nu_cx_") + name], nu_cx_out,
                      {{"time_dimension", "t"},
                       {"units", "s^-1"},
@@ -1146,7 +1159,7 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
   }
 
   if (!evolve_pressure) {
-    // passive_momentum case: only Nn is evolved. The stiff term is the
+    // parallel_pressure_diffusion case: only Nn is evolved. The stiff term is the
     // perpendicular diffusion Div_a_Grad_perp(DnnNn, logPnlim), which with Tn
     // fixed behaves like Div_perp(Dnn Grad_perp(Nn)). Solve
     //   (I - gamma Div_perp(Dnn Grad_perp)) ddt(Nn) = rhs.
