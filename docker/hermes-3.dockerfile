@@ -44,9 +44,6 @@ COPY . ${HERMES_SRC_DIR}
 # Initialize the git submodules (needed for CI/CD build)
 RUN git -C ${HERMES_SRC_DIR} submodule update --init --recursive --depth 1 --single-branch
 
-COPY docker/image_ingredients/enable_c.patch ${BOUTPP_SRC_DIR}/enable_c.patch
-RUN git -C ${BOUTPP_SRC_DIR} apply ./enable_c.patch
-
 # Copy in the default CMake config files
 COPY docker/image_ingredients/boutpp_config.cmake ${BOUTPP_CONFIG}
 COPY docker/image_ingredients/hermes_config.cmake ${HERMES_CONFIG}

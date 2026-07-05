@@ -17,8 +17,10 @@
 #include <bout/utils.hxx> // for trim, strsplit
 
 #include <algorithm>
+#include <cmath>
 #include <set>
 #include <string>
+#include <vector>
 
 using bout::globals::mesh;
 
@@ -92,88 +94,88 @@ Recycling::Recycling(std::string name, Options& alloptions, Solver*)
                  "this factor. Should be >=0 and <= 1")
             .withDefault<BoutReal>(1.0);
 
-    BoutReal sol_recycle_multiplier =
+    const BoutReal sol_recycle_multiplier =
         from_options["sol_recycle_multiplier"]
             .doc("Multiply the sol recycled flux by this factor. Should be >=0 and <= 1")
             .withDefault<BoutReal>(1.0);
 
-    BoutReal pfr_recycle_multiplier =
+    const BoutReal pfr_recycle_multiplier =
         from_options["pfr_recycle_multiplier"]
             .doc("Multiply the pfr recycled flux by this factor. Should be >=0 and <= 1")
             .withDefault<BoutReal>(1.0);
 
-    BoutReal pump_recycle_multiplier =
+    const BoutReal pump_recycle_multiplier =
         from_options["pump_recycle_multiplier"]
             .doc("Multiply the pump boundary recycling flux by this factor (like "
                  "albedo). Should be >=0 and <= 1")
             .withDefault<BoutReal>(1.0);
 
-    BoutReal penalty_recycle_multiplier =
+    const BoutReal penalty_recycle_multiplier =
         from_options["penalty_recycle_multiplier"]
             .doc("Multiply the penalty boundary recycling flux by this factor (like "
                  "albedo). Should be >=0 and <= 1")
             .withDefault<BoutReal>(1.0);
 
-    BoutReal target_recycle_energy =
+    const BoutReal target_recycle_energy =
         from_options["target_recycle_energy"]
             .doc("Fixed energy of the recycled particles at target [eV]")
             .withDefault<BoutReal>(3.0)
         / Tnorm; // Normalise from eV
 
-    BoutReal sol_recycle_energy =
+    const BoutReal sol_recycle_energy =
         from_options["sol_recycle_energy"]
             .doc("Fixed energy of the recycled particles at sol [eV]")
             .withDefault<BoutReal>(3.0)
         / Tnorm; // Normalise from eV
 
-    BoutReal pfr_recycle_energy =
+    const BoutReal pfr_recycle_energy =
         from_options["pfr_recycle_energy"]
             .doc("Fixed energy of the recycled particles at pfr [eV]")
             .withDefault<BoutReal>(3.0)
         / Tnorm; // Normalise from eV
 
-    BoutReal penalty_recycle_energy =
+    const BoutReal penalty_recycle_energy =
         from_options["penalty_recycle_energy"]
             .doc("Fixed energy of the recycled particles at penalty boundary [eV]")
             .withDefault<BoutReal>(3.0)
         / Tnorm; // Normalise from eV
 
-    BoutReal target_fast_recycle_fraction =
+    const BoutReal target_fast_recycle_fraction =
         from_options["target_fast_recycle_fraction"]
             .doc("Fraction of ions undergoing fast reflection at target")
             .withDefault<BoutReal>(0);
 
-    BoutReal pfr_fast_recycle_fraction =
+    const BoutReal pfr_fast_recycle_fraction =
         from_options["pfr_fast_recycle_fraction"]
             .doc("Fraction of ions undergoing fast reflection at pfr")
             .withDefault<BoutReal>(0);
 
-    BoutReal sol_fast_recycle_fraction =
+    const BoutReal sol_fast_recycle_fraction =
         from_options["sol_fast_recycle_fraction"]
             .doc("Fraction of ions undergoing fast reflection at sol")
             .withDefault<BoutReal>(0);
 
-    BoutReal penalty_fast_recycle_fraction =
+    const BoutReal penalty_fast_recycle_fraction =
         from_options["penalty_fast_recycle_fraction"]
             .doc("Fraction of ions undergoing fast reflection at penalty boundary")
             .withDefault<BoutReal>(0);
 
-    BoutReal target_fast_recycle_energy_factor =
+    const BoutReal target_fast_recycle_energy_factor =
         from_options["target_fast_recycle_energy_factor"]
             .doc("Fraction of energy retained by fast recycled neutrals at target")
             .withDefault<BoutReal>(0);
 
-    BoutReal sol_fast_recycle_energy_factor =
+    const BoutReal sol_fast_recycle_energy_factor =
         from_options["sol_fast_recycle_energy_factor"]
             .doc("Fraction of energy retained by fast recycled neutrals at sol")
             .withDefault<BoutReal>(0);
 
-    BoutReal pfr_fast_recycle_energy_factor =
+    const BoutReal pfr_fast_recycle_energy_factor =
         from_options["pfr_fast_recycle_energy_factor"]
             .doc("Fraction of energy retained by fast recycled neutrals at pfr")
             .withDefault<BoutReal>(0);
 
-    BoutReal penalty_fast_recycle_energy_factor =
+    const BoutReal penalty_fast_recycle_energy_factor =
         from_options["penalty_fast_recycle_energy_factor"]
             .doc("Fraction of energy retained by fast recycled neutrals at penalty "
                  "boundary")
@@ -325,7 +327,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
           BoutReal tisheath = (T[i] + T[ig]) * 0.5;
           BoutReal visheath = (V[i] + V[ig]) * 0.5;
           BoutReal sheath_ion_heat_flow =
-              abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
+              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
 
           // Blend fast (ion energy) and thermal (constant energy) recycling
           // Calculate returning neutral heat flow in [W]
@@ -419,7 +421,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
           BoutReal tisheath = (T[i] + T[ig]) * 0.5;
           BoutReal visheath = (V[i] + V[ig]) * 0.5;
           BoutReal sheath_ion_heat_flow =
-              abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
+              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
 
           // Blend fast (ion energy) and thermal (constant energy) recycling
           // Calculate returning neutral heat flow in [W]

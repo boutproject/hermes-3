@@ -610,8 +610,8 @@ void Vorticity::transform_impl(GuardedOptions& state) {
     phi = phiSolver->solve(Vort * (Bsq / average_atomic_mass), phi_plus_pi) - Pi_hat;
   }
 
-  // Ensure that potential is set in the communication guard cells
-  mesh->communicate(phi);
+  // Ensure that potential and vorticity are set in the communication guard cells
+  mesh->communicate(phi, Vort);
 
   // Outer boundary cells
   if (mesh->firstX()) {
