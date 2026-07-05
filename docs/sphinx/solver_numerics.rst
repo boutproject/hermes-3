@@ -125,6 +125,19 @@ the leading ``-`` from the PETSc option.
 Numerics
 ------------------------------
 
+Low-density robustness
+~~~~~~~~~~~~~~~~~~~~~~
+
+Very low density regions are one of the main sources of nonlinear
+solver difficulty in Hermes-3 because velocities, temperatures, and
+transport coefficients can become singular or extremely stiff. Hermes
+therefore uses a mixture of density floors, soft floors, artificial
+diffusion, and component-specific regularisations in dilute cells.
+
+These treatments are documented in :ref:`sec-low-density-regions`.
+That page also lists the main robustness options and their current
+limitations.
+
 Slope (flux) limiters
 ~~~~~~~~~~~~~~~~~~~~~
 
