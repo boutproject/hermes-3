@@ -11,7 +11,6 @@ BootstrapCurrent::BootstrapCurrent(std::string name, Options& alloptions, Solver
           {readIfSet("species:{all_species}:charge"),
            readOnly("species:{charged}:pressure"), readOnly("species:{charged}:density"),
            readOnly("species:{charged}:velocity"), readOnly("species:e:temperature")}) {
-  AUTO_TRACE();
 
   const Options& units = alloptions["units"];
 
@@ -47,11 +46,11 @@ void BootstrapCurrent::transform_impl(GuardedOptions& state) {
   GuardedOptions electrons = allspecies["e"];
 
   // Calculate flux-surface averages
-  Field2D pe_av =
+  Field2D pe_av_SI =
       fluxSurfaceAverage(GET_NOBOUNDARY(Field3D, electrons["pressure"])) * Pnorm;
 
-  Field2D Te_av =
-      fluxSurfaceAverage(GET_NOBOUNDARY(Field3D, electrons["temperature"])) * Pnorm;
+  Field2D Te_av_eV =
+      fluxSurfaceAverage(GET_NOBOUNDARY(Field3D, electrons["temperature"])) * Tnorm;
 
   Field3D JparB = get<BoutReal>(electrons["charge"])
                   * GET_NOBOUNDARY(Field3D, electrons["density"])
@@ -81,20 +80,20 @@ void BootstrapCurrent::transform_impl(GuardedOptions& state) {
     JparB += Zi * species_n * GET_NOBOUNDARY(Field3D, species["velocity"]) * Bxy;
   }
 
-  Field2D pi_av = fluxSurfaceAverage(pi);
+  Field2D pi_av_SI = fluxSurfaceAverage(pi) * Pnorm;
   Field2D ni_av = fluxSurfaceAverage(ni);
   JparB_av = fluxSurfaceAverage(JparB);
 
-  Field2D p_av = pe_av + pi_av;
-  Field2D Ti_av = pi_av / ni_av;
+  Field2D p_av_SI = pe_av_SI + pi_av_SI;
+  Field2D Ti_av_eV = pi_av_SI / (ni_av * Nnorm * SI::qe);
 
   // Communicate and set boundaries
-  mesh->communicate(p_av, pe_av, Ti_av, Te_av);
+  mesh->communicate(p_av_SI, pe_av_SI, Ti_av_eV, Te_av_eV);
 
   // Radial gradients
-  Field2D dp_dpsi = DDX(p_av);
-  Field2D dlnTe_dpsi = DDX(log(Te_av));
-  Field2D dlnTi_dpsi = DDX(log(Ti_av));
+  Field2D dp_dpsi_SI = DDX(p_av_SI);
+  Field2D dlnTe_dpsi = DDX(log(Te_av_eV));
+  Field2D dlnTi_dpsi = DDX(log(Ti_av_eV));
 
   // Electron collisionality
   // nu_estar = 0.012 n_20 Zeff qR / epsilon^3/2 T_ekev^2
@@ -103,6 +102,9 @@ void BootstrapCurrent::transform_impl(GuardedOptions& state) {
 
   // Effective ion charge
   Field2D Zeff = 1.0;
+
+  JparB_bs.allocate();
+  JparB_bs = 0.0;
 
   // Loop over flux surfaces
   for (int ix = mesh->xstart; ix <= mesh->xend; ++ix) {
@@ -123,8 +125,8 @@ void BootstrapCurrent::transform_impl(GuardedOptions& state) {
     const BoutReal L34_ix = L34(Z, f, nu_e);
     const BoutReal alpha_ix = alpha(f, nu_i);
 
-    const BoutReal pe_ix = pe_av(ix, mesh->ystart);
-    const BoutReal dp_dpsi_ix = dp_dpsi(ix, mesh->ystart);
+    const BoutReal pe_ix = pe_av_SI(ix, mesh->ystart);
+    const BoutReal dp_dpsi_ix = dp_dpsi_SI(ix, mesh->ystart);
     const BoutReal dlnTe_dpsi_ix = dlnTe_dpsi(ix, mesh->ystart);
     const BoutReal dlnTi_dpsi_ix = dlnTi_dpsi(ix, mesh->ystart);
 
