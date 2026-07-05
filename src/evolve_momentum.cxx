@@ -125,6 +125,8 @@ void EvolveMomentum::finally(const Options& state) {
 
   // Parallel flow
   V = get<Field3D>(species["velocity"]);
+  Field3D NVint = AA * Nlim * V; // Evolving momentum with Nlim rather than N
+  NVint.setBoundaryTo(NV);
 
   if (state.isSection("fields") and state["fields"].isSet("phi")
       and species.isSet("charge")) {
@@ -135,9 +137,6 @@ void EvolveMomentum::finally(const Options& state) {
       // -> include ExB flow and parallel force
 
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
-
-      Field3D NVint = AA * Nlim * V; // Evolving momentum with Nlim rather than N
-      NVint.setBoundaryTo(NV);
 
       ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NVint, phi, bndry_flux, poloidal_flows,
                                        true); // ExB drift
@@ -198,7 +197,7 @@ void EvolveMomentum::finally(const Options& state) {
   if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
     // Magnetic flutter term
     const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
-    ddt(NV) -= Div_n_g_bxGrad_f_B_XZ(NV, V, -Apar_flutter);
+    ddt(NV) -= Div_n_g_bxGrad_f_B_XZ(NVint, V, -Apar_flutter);
 
     if (species.isSet("pressure")) {
       const Field3D P = get<Field3D>(species["pressure"]);

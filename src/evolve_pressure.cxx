@@ -391,7 +391,7 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (evolve_log) {
-    ddt(logP) = ddt(P) / P;
+    ddt(logP) = ddt(P) / P_solver;
   }
 
 #if CHECKLEVEL >= 1

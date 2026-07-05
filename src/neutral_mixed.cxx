@@ -695,6 +695,7 @@ void NeutralMixed::finally(const Options& state) {
 #endif
 
   // Restore solver Pn
+  Pn_solver.setBoundaryTo(Pn);
   Pn = Pn_solver;
 }
 
