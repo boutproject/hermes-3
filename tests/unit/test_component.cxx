@@ -174,6 +174,11 @@ TEST(ComponentTest, Formatting) {
   EXPECT_EQ(fmt::format("{:~t}", *component_diffname), "object_name");
   EXPECT_EQ(fmt::format("{:~n~t}", *component_diffname), "");
   EXPECT_EQ(fmt::format("{:T}", *component_diffname), "object_name (testcomponent)");
+
+  EXPECT_EQ(fmt::format(fmt::runtime("{:xT}"), *component_diffname),
+            "object_name (testcomponent)");
+  EXPECT_THROW((void)fmt::format(fmt::runtime("{:~}"), *component_diffname),
+               fmt::format_error);
 }
 
 using ComponentCreationTest = FakeMeshFixture;

@@ -601,11 +601,12 @@ struct fmt::formatter<Component> : formatter<string_view> {
     }
 
     while (it != end and *it != ':' and *it != '}') {
-      // Other cases handled explicitly below
-      // NOLINTNEXTLINE(bugprone-switch-missing-default-case)
       switch (*it) {
       case '~':
         ++it;
+        if (it == end) {
+          throw fmt::format_error("Unrecognised format specifier '~'");
+        }
         if (*it == 'n') {
           hide_name = true;
         } else if (*it == 't') {
@@ -620,10 +621,10 @@ struct fmt::formatter<Component> : formatter<string_view> {
         show_type = true;
         ++it;
         break;
+      default:
+        ++it;
+        break;
       }
-      // FIXME: This is copied from the parser used for Fields, but
-      // won't it result in an infinite loop if an unrecognised
-      // character is encountered?
     }
 
     if (hide_type and show_type) {
