@@ -1,16 +1,16 @@
 .. _sec-developer:
 
 Developer manual
-==============
+================
 
 
 Developer tips
 --------------
 
 Compiling Hermes-3 quickly
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-After compiling Hermes-3 and changing something, you can avoid unnecessary recompilation of 
+After compiling Hermes-3 and changing something, you can avoid unnecessary recompilation of
 unchanged files. Simply enter the build directory and do:
 
 .. code-block:: bash
@@ -23,13 +23,13 @@ To stop this try adding the flag ``-DHERMES_UPDATE_GIT_SUBMODULE=OFF`` in your C
 This and other useful options can be found in ``hermes-3/CMakeLists.txt``.
 
 Compiling documentation
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 The Hermes-3 documentation is built using `Sphinx <https:
-//www.sphinx-doc.org/en/master/usage/installation.html>`_ and 
-`Doxygen <https://www.doxygen.nl/index.html>`_. It's written in 
-`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`_, 
-which is a markup language similar to Markdown. Doxygen generates automatic 
+//www.sphinx-doc.org/en/master/usage/installation.html>`__ and
+`Doxygen <https://www.doxygen.nl/index.html>`__. It's written in
+`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`__,
+which is a markup language similar to Markdown. Doxygen generates automatic
 documentation based on the C++ code, while Sphinx handles everything else.
 
 Editing documentation is much easier if you can compile it locally using the following steps:
@@ -72,15 +72,15 @@ Editing documentation is much easier if you can compile it locally using the fol
 6. **Open the generated HTML files**, either by double clicking on the file in your
    browser, or some other way. If you use VS Code locally or on a remote
    machine through SSH, you can use the extension `Live Preview <https:
-   //marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`_ which
+   //marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`__ which
    can stream it to your browser.
 
 Debugging: running for one iteration
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Any BOUT++ code can be run for just one right-hand side (RHS) iteration. This will
 run instantly for any simulation and not need any kind of solver convergence, making
-it ideal for debugging. 
+it ideal for debugging.
 
 This can be done by setting the following in the input file:
 
@@ -88,12 +88,12 @@ This can be done by setting the following in the input file:
 
    nout = 0
 
-The ``timestep`` setting will be ignored. 
+The ``timestep`` setting will be ignored.
 
 Debugging: printing values
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When debugging, it can be useful to print things out. This is simple in C++. 
+When debugging, it can be useful to print things out. This is simple in C++.
 For example, if you want to print the value of the variable ``particle_flow``, do:
 
 .. code-block:: ini
@@ -138,47 +138,47 @@ The output will look something like:
 Note that there are multiple ways to print out values in C++, and both ``std::string(text)`` and ``"text"`` are valid.
 
 Debugging: segmentation faults
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-`Segmentation faults <https://thelinuxcode.com/segmentation-fault-cpp/>`_ can be frustrating because
+`Segmentation faults <https://thelinuxcode.com/segmentation-fault-cpp/>`__ can be frustrating because
 they give very little verbosity. In practice, the most common cause is trying to access a variable
-that hasn't been initialised yet. The easiest way to debug this is to carefully review the new lines of 
+that hasn't been initialised yet. The easiest way to debug this is to carefully review the new lines of
 code to make sure all variables exist and have been declared and initialised. If this is tricky,
-another simple way is to comment out large parts of the code until the segmentation fault disappears, 
-helping to narrow down its location. 
+another simple way is to comment out large parts of the code until the segmentation fault disappears,
+helping to narrow down its location.
 
-While the above methods are very simple and can be effective, debugging tools such as 
-`gdb <https://sourceware.org/gdb/>`_ or `valgrind <https://valgrind.org/>`_ can be used to find 
+While the above methods are very simple and can be effective, debugging tools such as
+`gdb <https://sourceware.org/gdb/>`__ or `valgrind <https://valgrind.org/>`__ can be used to find
 the segmentation fault as well.
 
 Debugging: compiling in debug mode
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This can be a useful way to catch errors. Please see the
-`relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`_ 
+`relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`__
 in the BOUT++ documentation.
 
 Header vs. implementation files
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 C++ allows you to split code into implementation (.cxx) and header (.hxx) files.
 The convention of what should be in each one is not consistent in Hermes-3 at
 the moment. The most common standard is for the header file to contain all of the
 variable and class declarations and the implementation file to contain the rest.
 An example of this is in the ``evolve_density`` component - see the
-`implementation file <https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`_
-and the `header file <https://github.com/boutproject/hermes-3/blob/master/include/evolve_density.hxx>`_.
+`implementation file <https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`__
+and the `header file <https://github.com/boutproject/hermes-3/blob/master/include/evolve_density.hxx>`__.
 
 
 
 Data types
 ~~~~~~~~~~~~~~
 
-Hermes-3 casts its variables in a variety of BOUT++ classes. Floats are 
+Hermes-3 casts its variables in a variety of BOUT++ classes. Floats are
 usually represented as ``BoutReal``, and fields as ``Field3D``. Note that
 Hermes-3 always runs "in 3D" - when configured in 1D, the x and z dimensions
-are of unit length. See relevant `BOUT++ docs 
-<https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`_ 
+are of unit length. See relevant `BOUT++ docs
+<https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`__
 for more info. There is also a data type called ``Options`` which is equivalent
 to a Python dictionary with extra functionality, and is used to store input
 options, the entire simulation state and many other data. Finally,
@@ -187,7 +187,7 @@ object and controls access to its contents.
 
 
 Adding new settings
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 This is simple and uses the following syntax:
 
@@ -197,13 +197,13 @@ This is simple and uses the following syntax:
                      .doc("Allow flows through radial boundaries")
                      .withDefault<bool>(true);
 
-See `this real world example 
-<https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`_.
+See `this real world example
+<https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`__.
 
 The variable must also be declared in the corresponding header file.
 
 Adding new diagnostics
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Adding new diagnostics is also simple, provided there is already an ``outputVars``
 function set up in your component. This is usually located at the end of the
@@ -252,19 +252,19 @@ species, source
    The relevant species and component that the diagnostic is coming from
 
 What is "Options"?
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 Options is a dictionary-like class originally developed for parsing BOUT++ options.
 In Hermes-3, it is used as a general purpose dictionary.
 
 Getting/setting values
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Hermes-3 has a system to prevent quantities from being modified after they are used.
-This is important as it uses a single dictionary-like ``state`` class to hold all of 
+This is important as it uses a single dictionary-like ``state`` class to hold all of
 the variables in one place, which could allow some components to overwrite others.
 
-In ``component.hxx`` there is the function ``get``, which once called sets the 
+In ``component.hxx`` there is the function ``get``, which once called sets the
 "final" and "final-domain" attributes:
 
 .. code-block:: ini
@@ -278,7 +278,7 @@ In ``component.hxx`` there is the function ``get``, which once called sets the
    return getNonFinal<T>(option);
    }
 
-When you call ``set``, these attributes are checked for, so that if they have 
+When you call ``set``, these attributes are checked for, so that if they have
 already been "gotten", they can't be set again:
 
 .. code-block:: ini
@@ -317,7 +317,7 @@ the domain cells, leaving the guard cells to be settable using ``getNoBoundary``
 And there is a corresponding ``setBoundary`` that can be used for BC operations:
 
 .. code-block:: ini
-   
+
    Options& setBoundary(Options& option, T value) {
    // Check that the value has not already been used
    #if CHECKLEVEL >= 1
@@ -337,16 +337,16 @@ These functions take a second argument which tells you where they were set, whic
 They are wrapped into additional functions, ``GET_VALUE`` and ``GET_NOBOUNDARY`` which automatically
 include this argument.
 
-Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`_ 
+Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`__
 for more details.
 
 
 Looping over cells
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 BOUT++ provides a really easy way to loop over the domain using ``BOUT_FOR`` and
 similar loops, see `BOUT++ docs <https://bout-dev.readthedocs
-.io/en/stable/developer_docs/data_types.html#iterating-over-fields>`_.
+.io/en/stable/developer_docs/data_types.html#iterating-over-fields>`__.
 
 There is a way to way to tell if you are in the core or not. The ``mesh`` object
 has a function to indicate if the coordinate is in a periodic region or not.
@@ -378,7 +378,7 @@ Code structure
 
 
 A hermes-3 model, like all `BOUT++ models
-<https://bout-dev.readthedocs.io/en/latest/user_docs/physics_models.htmlject.github.io/>`_,
+<https://bout-dev.readthedocs.io/en/latest/user_docs/physics_models.htmlject.github.io/>`__,
 is an implementation of a set of Ordinary Differential Equations
 (ODEs). The time integration solver drives the simulation, calling the
 `Hermes::rhs` function to calculate the time-derivatives of all the
@@ -394,7 +394,7 @@ For example a transport simulation with deuterium and tritium ions and
 atoms has an input file specifying the components
 
 .. code-block:: ini
-  
+
   [hermes]
   components = (d+, d, t+, t, e, braginskii_collisions,
                 braginskii_friction, braginskii_heat_exchange,
@@ -421,12 +421,12 @@ and other components have their configuration options e.g. for reactions:
          )
 
 In terms of design patterns, the method used here is essentially a combination
-of the `Encapsulate Context <https://accu.org/journals/overload/12/63/kelly_246/>`_
-and `Command <https://en.wikipedia.org/wiki/Command_pattern>`_ patterns.
+of the `Encapsulate Context <https://accu.org/journals/overload/12/63/kelly_246/>`__
+and `Command <https://en.wikipedia.org/wiki/Command_pattern>`__ patterns.
 
 
 Simulation state
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 
 The simulation state is passed between components, and is a tree of
@@ -436,7 +436,7 @@ new state is created and contains:
 * `time`   BoutReal, the current simulation time
 * `linear` bool. True if the time integrator expects a linear response.
 * `units`
-  
+
   * `seconds`   Multiply by this to get units of seconds
   * `eV`          Temperature normalisation
   * `Tesla`       Magnetic field normalisation
@@ -446,7 +446,7 @@ new state is created and contains:
 so the temperature normalisation can be extracted using::
 
   BoutReal Tnorm = state["units"]["eV"];
-    
+
 As the components of a model are run, they set, modify and use values
 stored in this state. To ensure that components use consistent names
 for their input and output variables, a set of conventions are used
@@ -459,7 +459,7 @@ for new variables which are added to the state:
 
     * `AA`  Atomic mass, proton = 1
     * `charge`  Charge, in units of proton charge (i.e. electron=-1)
-    
+
     * `density`
     * `momentum` Parallel momentum
     * `pressure`
@@ -467,7 +467,7 @@ for new variables which are added to the state:
     * `temperature`
 
     * `collision_frequency`   Normalised collision frequency
-    * `density_source`  Normalised particle source 
+    * `density_source`  Normalised particle source
     * `momentum_source` Normalised momentum source
     * `energy_source`  Normalised energy source
 
@@ -513,16 +513,16 @@ A common need is to add or subtract values from fields, such as density sources:
 
   add(state["species"]["h"]["density_source"], recombination_rate);
   subtract(state["species"]["h+"]["density_source"], recombination_rate);
-  
+
 Notes:
 
-- When checking if a subsection exists, use `option.isSection`, since `option.isSet`
+- When checking if a subsection exists, use ``option.isSection``, since ``option.isSet``
   is false if it is a section and not a value.
-- The species name convention is that the charge state is last, after the `+` or `-`
-  sign: `n2+` is a singly charged nitrogen molecule, while `n+2` is a +2 charged
+- The species name convention is that the charge state is last, after the ``+`` or ``-``
+  sign: ``n2+`` is a singly charged nitrogen molecule, while ``n+2`` is a +2 charged
   nitrogen atom.
 
-  
+
 Components
 ~~~~~~~~~~~~~~
 
@@ -556,7 +556,7 @@ file using a code like::
     MyComponent(const std::string &name, Options &options, Solver *solver);
     ...
   };
-  
+
   namespace {
   RegisterComponent<MyComponent> registercomponentmine("mycomponent");
   }
@@ -575,8 +575,8 @@ Inputs to the component constructors are:
 
 The `name` is a string labelling the instance. The `alloptions` tree contains at least:
 
-* `alloptions[name]` options for this instance
-* `alloptions['units']`
+* ``alloptions[name]`` options for this instance
+* ``alloptions['units']``
 
 
 Component Permissions
@@ -609,7 +609,7 @@ all substitutions that will be performed.
 
 
 Component scheduler
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 The simulation model is created in `Hermes::init` by a call to the `ComponentScheduler`::
 
@@ -622,7 +622,7 @@ and then in `Hermes::rhs` the components are run by a call::
 The call to `ComponentScheduler::create` treats the "components"
 option as a comma-separated list of names. The order of the components
 is the order that they are run in. For each name in the list, the
-scheduler looks up the options under the section of that name. 
+scheduler looks up the options under the section of that name.
 
 .. code-block:: ini
 
@@ -654,7 +654,7 @@ of components
 
    [group1]
    type = component1, component2
-   
+
    # options to control component1 and component2
 
    [component3]
@@ -663,11 +663,13 @@ of components
 
 This will create three components, which will be run in the order
 `component1`, `component2`, `component3`: First all the components
-in `group1`, and then `component3`. 
+in `group1`, and then `component3`.
 
 .. doxygenclass:: ComponentScheduler
    :members:
 
+
+.. _sec-permissions:
 
 Permissions
 ~~~~~~~~~~~~~~
@@ -741,7 +743,7 @@ using bitwise logical operators.
 
 .. doxygengroup:: RegionsGroup
    :members:
-         
+
 Permission Substitution
 ```````````````````````
 
@@ -781,7 +783,7 @@ momentum as follows::
   p.substitute({"density", "pressure", "temperature", "velocity", "momentum"});
 
 This is equivalent to having written::
-   
+
    Permissions p({readOnly("species:e:density"),
                   readOnly("species:e:pressure")},
                   readOnly("species:e:temperature")},
@@ -865,15 +867,412 @@ calling these methods will raise an exception.
    reference, but this requires you to think carefully about whether
    the argument is going to be an r-value or an l-value.
 
+.. _sec-reactions-dev:
+
+Reactions
+~~~~~~~~~
+
+The code for handling reactions was significantly refactored after version 1.4.0. Currently,
+reactions involving Hydrogen isotopes and Helium use the new framework, whilst reactions involving
+impurity isotopes use their own set of classes. The intent is that all reaction classes in the code
+will eventually be migrated to the new framework.
+
+Executive summary
+`````````````````
+
+The hierarchy of classes in the framework is:
+
+- `Reaction`
+
+  - `CXReaction`
+
+  - `IznRecReaction`
+
+    - `IznReaction`
+
+    - `RecReaction`
+
+Most reaction source term contributions are handled in the the
+:code:`transform_impl` method of the base :code:`Reaction` class.  The source of the reaction rate
+data can be configured via the input file; if no reaction data type and data ID is set, a sensible
+default will be set on a per-reaction basis (e.g. Amjuel, H.2_3.1.8 for Hydrogen isotope charge
+exchange, :code:`h + d+ -> d + h+`). Subclasses of :code:`Reaction` set up appropriate diagnostics
+and :ref:`Permissions<sec-permissions>` for particular reactions in their constructors and/or
+implement a :code:`transform_additional` method to include source term contributions that aren't
+captured by :code:`Reaction::transform_impl`.
+
+The following subsections describe the general approach used to compute reaction sources and provide
+guidance to developers on adding new subclasses to handle particular reactions.
+
+The stoichiometry matrix
+````````````````````````
+
+A core part of the approach is to convert reaction strings into a stoichiometry matrix.
+stoichiometry matrices specify the population changes associated with a *mechanism* or system of
+reactions, with each column corresponding to a reaction and each row to a species.
+
+For a configuration
+
+.. _code-reactions_config_eg:
+
+.. code-block:: ini
+
+  [reactions]
+  type = (
+          h + e -> h+ + 2e,   # R1
+          h+ + e -> h,        # R2
+          he + e -> he+ + 2e, # R3
+          he+ + e -> he,      # R4
+         )
+
+the stoichiometry matrix would be:
+
+.. _fig-stoichiometry_matrix_eg:
+.. figure:: figs/stoichiometry_matrix_eg.*
+   :alt: Example of a stoichiometry matrix for the reactions configured in :numref:code-reactions_config_eg
+
+In the `Reaction` base class, the constructor instantiates a `ReactionParser`, which assembles one
+column of this matrix from the reaction string.
+
+.. note::
+
+   The reaction string is extracted from the comma-separated list of strings provided as the 'type'
+   of the reactions component in the input file. All reaction classes (including those that do not
+   currently inherit from `Reaction`) inherit from `ReactionBase`, which ensures that subclasses are
+   paired up with reaction strings correctly. It is anticipated that changes to the input file
+   format and/or the migration of all reaction classes to the new framework will make
+   :code:`ReactionBase` unnecessary in the future.
+
+.. tip::
+
+   In addition to computing population changes, `ReactionParser` can be used to identify different
+   subsets of species via the `species_filter` enum. For instance, to obtain the names of all
+   'heavy' (non-electron) reactants:
+
+   .. code-block:: cpp
+
+      auto heavy_reactants = this->parser.get_species(species_filter::reactants, species_filter::heavy);
+
+
+Source term equations
+`````````````````````
+
+Source terms related to the population changes are calculated from the stoichiometric coefficients
+in `Reaction::transform_impl`.
+
+The reaction rate is calculated as
+
+.. math::
+   K &= M \langle\sigma_v\rangle \\
+     &= \prod_{r} n_r \langle\sigma_v\rangle
+
+where :math:`\langle\sigma_v\rangle` is the reaction cross section and :math:`M` is called the *mass
+action factor*.
+
+The density source for a species :math:`s` follows directly from the rate:
+
+.. _fig-reactions_dens_src_eqn:
+.. math::
+   S = C_s K
+
+where :math:`C_s` is the population change for species :math:`s` (from the stoichiometry matrix)
+and :math:`K` is the reaction rate calculated above. The momentum source (:math:`F`) and energy
+source (:math:`E`) associated with a species population change depend on whether the reaction in
+question is a net consumer (:math:`C_s < 0`) or a net producer (:math:`C_s > 0`) of the species:
+
+.. math::
+   F =
+      \begin{cases}
+         C_s K (NV)_s                                      & \textrm{for}\ C_s < 0 \\
+         f_{NV,s} K \sum_{r'} -C_{r'}(NV)_{r'} & \textrm{for}\ C_s > 0 \\
+         0                                              & \textrm{otherwise}    \\
+      \end{cases}
+
+.. math::
+   E =
+      \begin{cases}
+         C_s K \mathcal{E}_s                                                & \textrm{for}\ C_s < 0 \\
+         f_{\mathcal{E},s} K \sum_{r'} -C_{r'}\mathcal{E}_{r'} & \textrm{for}\ C_s > 0 \\
+         0                                                                  & \textrm{otherwise}    \\
+      \end{cases}
+
+If the species is consumed, it has negative sources proportional to its current momentum
+(:math:`{NV}_s`) and energy (:math:`\mathcal{E}_s`). If the species is produced, it has positive sources, which
+are proportional to the total momentum and energy of all consumed reactants (:math:`r'`; implying
+:math:`C_r < 0`).
+
+:math:`f_{NV,s}` and :math:`f_{\mathcal{E},s}` are weights / splitting factors used to distribute momentum and
+energy between products. The default is to weight by mass for momentum, and by population change
+(number) for energy, that is
+
+.. math::
+   \begin{aligned}
+      f_{NV,s} &= \frac{\Delta M_s}{\Delta M} \\
+              &= \frac{C_s m_s}{\sum_{p'}C_{p'} m_{p'}}
+   \end{aligned}
+
+.. math::
+   \begin{aligned}
+     f_{\mathcal{E},s} &= \frac{\Delta N_s}{\Delta N} \\
+                       &= \frac{C_s}{\sum_{p'}C_{p'}}
+   \end{aligned}
+
+where :math:`m` are species masses, :math:`C` are population changes and subscripts :math:`s` and
+:math:`p'` refer to the target species and to a *produced* species (:math:`C > 0`) respectively.
+:math:`\Delta M` and :math:`\Delta N` are the change in mass and particle number associated with one
+instance of the reaction.
+
+These default factors can be overridden by calling
+`set_energy_channel_weight<Reaction::set_energy_channel_weight>` and
+`set_momentum_channel_weight<Reaction::set_momentum_channel_weight>` in the constructor of a
+reaction subclass.
+
+For example, for charge exchange, momentum and energy need to be transferred
+
+1. from a reactant that donates an electron ('r1') to the resulting product ('p1') and
+2. from a reactant that accepts an electron ('r2') to the resulting product ('p2').
+
+The following code sets channels to enforce those requirements:
+
+.. code-block:: cpp
+
+   // Energy exchange between r1 and p1
+   set_energy_channel_weight(this->r1, this->p1, 1.0);
+   set_energy_channel_weight(this->r1, this->p2, 0.0);
+
+   // Energy exchange between r2 and p2
+   set_energy_channel_weight(this->r2, this->p1, 0.0);
+   set_energy_channel_weight(this->r2, this->p2, 1.0);
+
+   //  Momentum exchange between r1 and p1
+   set_momentum_channel_weight(this->r1, this->p1, 1.0);
+   set_momentum_channel_weight(this->r1, this->p2, 0.0);
+
+   // Momentum exchange between r2 and p2
+   // (Can be turned off for neutral-ion CX using config option)
+   if (this->has_neutral_reactant && this->no_neutral_cx_mom_gain) {
+      set_momentum_channel_weight(this->r2, this->p2, 0.0);
+   } else {
+      set_momentum_channel_weight(this->r2, this->p2, 1.0);
+   }
+   set_momentum_channel_weight(this->r2, this->p1, 0.0);
+
+.. note::
+   So-called `participation factors<Reaction::pfactors>` are included in all source term
+   calculations in the code. For now, these are all set to 1, reproducing the equations above
+   exactly, but in future they could be made configurable to allow users to experiment with tuning
+   the contribution of particular species to reaction source terms.
+
+
+Source term calculation
+```````````````````````
+
+Density, momentum and energy source fields are constructed in `Reaction::transform_impl` using the
+`RateHelper` class to calculate reaction rates and collision frequencies.
+
+On instantiation, :code:`RateHelper` assembles maps containing (pointers to) all reactant densities
+and any other fields required as inputs.
+
+`RateHelper::calc_rates` is "run-time templated", allowing it to accept rate functions with 1D and
+2D parameterisations. It also includes an optional flag which causes reaction input parameters to be
+averaged in the parallel direction. Averaging is turned on by default, but can be disabled in a
+subclass by setting :code:`do_parallel_averaging = false`.
+
+Having calculated the reaction rate, :code:`Reaction::transform_impl` constructs sources by looping
+over the species population changes provided by :code:`ReactionParser`.
+
+.. note::
+   The loop to compute momentum and energy sources includes a subtle workaround for reactions like
+   symmetric charge exchange. Rather than using the regular stoichiometric coefficients, which are
+   all zero in such cases, the loop uses the result of `ReactionParser::get_mom_energy_pop_changes`.
+   For symmetric reactions, this returns a :code:`std::multimap` in which each species appears
+   twice; once as a reactant, with a negative population change and once as a product, with a
+   positive population change. This effectively turns reactions like :math:`\textrm{a} + \textrm{b}
+   \rightarrow \textrm{b} + \textrm{a}` into :math:`\textrm{a} + \textrm{b} \rightarrow \textrm{b}'
+   + \textrm{a}'`, allowing the momentum and energy transfer to be computed as usual, before mapping
+   sources back to the correct species.
+
+
+Adding new reaction subclasses
+``````````````````````````````
+
+New reaction subclasses should inherit directly or indirectly from `Reaction`. They are registered
+in the code with the reaction string as an argument, e.g.
+
+.. code-block:: cpp
+
+   struct MyReaction : public Reaction {
+      ...
+   }
+
+   RegisterComponent<MyReaction> register_myreaction("a + b -> c + d");
+
+Any sources associated with the reaction that are not captured by
+`transform_impl<Reaction::transform_impl>` should be added by overriding
+`transform_additional<Reaction::transform_additional>` and using
+`update_source<Reaction::update_source>` to set source terms and associated diagnostics.
+
+
+Adding new reaction diagnostics
+```````````````````````````````
+
+New diagnostics are configured by making calls to `add_diagnostic<Reaction::add_diagnostic>` in the
+subclass constructor; e.g. for a density source associated with the neutral reactant in charge
+exchange:
+
+.. code-block:: cpp
+   :caption: Example of adding a reaction diagnostic. :code:`r1` is the name of a reactant that
+    charge-exchanges with reactant :code:`r2` creating product :code:`p1`.
+
+   add_diagnostic(
+          this->r1, fmt::format("S{:s}{:s}_cx", this->r1, this->r2),
+          fmt::format("Particle transfer to {:s} from {:s} due to CX with {:s}", this->r1,
+                      this->p1, this->r2),
+          ReactionDiagnosticType::density_src, standard_name, identity,
+          "particle transfer");
+
+
+
+An optional function pointer can be used to set a transformation that will be applied when the
+diagnostic is updated. The value passed here (also the default) is :code:`identity`, meaning that
+the diagnostic and associated source term will be updated in the same way. The fourth argument is an
+:code:`enum` value that determines, among other things, which metadata will be set when the
+diagnostic is written out.
+
+Each call adds an instance of `ReactionDiagnostic` to a `diagnostics map<Reaction::diagnostics>`,
+indexed by species name and a `ReactionDiagnosticType<ReactionDiagnostic::ReactionDiagnosticType>`
+enum. The map entries are updated via `update_source()<Reaction::update_source>`, which wraps the
+`add`, `subtract`, and `set` operations, applying them to both a source term and to an associated
+diagnostic at the same time.
+
+For example, this code
+
+.. code-block:: cpp
+
+   update_source<add<Field3D>>(state, "h+", ReactionDiagnosticType::momentum_src, momentum_source);
+
+would add the :code:`momentum_source` field to :code:`state["species"]["h+"]["momentum_source"]`,
+then apply the diagnostic transform (which defaults to an identity function) to
+:code:`momentum_source` and add the result to any diagnostics of type :code:`momentum_src`
+associated with species :code:`h+`.
+
+.. note::
+   `add`, `subtract`, and `set` can still be used directly to update the state, as usual, if there
+   is no associated diagnostic to update.
+
+Finally, diagnostics are written out in `outputVars()<Reaction::outputVars>`, which simply iterates
+over the `diagnostics<Reaction::diagnostics>` map, copying fields into the output state. Appropriate
+metadata is set for each diagnostic depending on the associated :code:`ReactionDiagnosticType`.
+
+
+Adding new reaction data
+````````````````````````
+
+If the data being added is of a new type (i.e. one not handled by an existing subclass of
+`ReactionData`), developers will need to:
+
+1. Create a new class that inherits from `ReactionData` (or from `ReactionDataWithCoeffs` if the
+   rate calculation computes a fit value from coefficients).
+2. Implement all pure virtual functions, including those that calculate rates with different
+   parameterisations.
+3. Add code to the constructor of the new subclass to read data into the `coeffs` data member, for file-based data sources.
+4. Add a new value to the `ReactionDataType` enum.
+5. Register the data class in a new header file.
+
+   .. code-block:: cpp
+
+      RegisterReactionData<MyDataClass> register_myclass("mylabel");
+
+   where "mylabel" must match the value of the `ReactionDataType` enum added in step 4, converted to lowercase.
+
+6. Add an include statement for your class's header in :file:`hermes-3.hxx`.
+
+
+For both new and existing data types, developers need to
+
+1. Add any associated json data files to the :file:`./json_database` directory.
+2. Register a `Reaction` subclass for the reaction string.
+3. Add any default data IDs to the `generate_default_data_ids_map` function in :file:`reaction_settings.hxx`.
+
+Step 3. is optional, but without it, users will always need to specify the data type and ID/label for the new reaction in their input file.
+
+Example: To add He+ ionisation: :code:`he+ + e -> he+2 + 2e` one could
+
+1. Create :file:`./json_database/AMJUEL_H.4_2.2C.json` containing the relevant coefficients,
+   matching the format of existing Amjuel json files.
+2. Register the reaction with the standard ionisation reaction class:
+   :code:`RegisterComponent<IznReaction> register_izn_he2p("he+ + e -> he+2 + 2e");`
+3. Set the new data to be the default source for He+ ionisation in
+   :file:`include/reaction_settings.hxx`
+
+   .. code-block:: cpp
+
+      static inline void generate_default_data_ids_map() {
+      ...
+         add_default_id(ReactionDataTypes::Amjuel, "he+ + e -> he+2 + 2e", ReactionCoeffTypes::sigma_v, "H.4_2.2C");
+      ...
+      }
+
+.. note::
+   For ionisation/recombination one would also need to add data to compute the losses associated
+   with the ionisation potential energy cost and photon emission. At time of writing, appropriate
+   Amjuel data is not available for this reaction, which is why He+ ionisation hasn't already been
+   added.
+
 .. _sec-tests:
 
 Tests
 --------------
 
 The specification of the Toro tests used here is taken from
-`Walker (2012) <https://doi.org/10.1371/journal.pone.0039999>`_,
+`Walker (2012) <https://doi.org/10.1371/journal.pone.0039999>`__,
 originally from Toro's book `Riemann Solvers and Numerical Methods for
-Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`_.
+Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`__.
+
+1D-recycling-dthe
+~~~~~~~~~~~~~~~~~
+
+This is a comprehensive 1D test featuring three species (deuterium tritium and helium)
+as well as all of the parallel closure terms apart from electron viscosity.
+It includes ionisation and recombination reactions for all species as well as
+charge exchange for D-D, T-T, D-T and T-D species pairs.
+
+The test checks the values of charge
+exchange channels in the final domain cell against a reference.
+
+The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
+of the script.
+
+2D-production
+~~~~~~~~~~~~~~
+
+This is a test representing the most common production fidelity simulations at the time
+of implementation. It features a double null 2D tokamak from an upcoming publication with
+deuterium only, a neutral puff, H-mode profiles of anomalous diffusion coefficients, a neutral pump,
+fast/thermal recycling, fast/thermal reflection as well as decay length boundary conditions on the SOL and PFR.
+Viscosity, impurities, currents and drifts are neglected.
+
+The test downloads the restart files and the grid from Zenodo and runs a few very short timesteps.
+It compares electron pressure and ion momentum at the four targets, outer midplane, SOL boundary
+and core/pfr boundaries. If the test fails, it will print the degree of error at each boundary.
+
+The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
+of the script.
+
+2D-recycling
+~~~~~~~~~~~~~~
+
+This test uses the same restart file as 2D-production, but tests target recycling by reproducing the relevant
+recycling.cxx section in Python. It compares the source of recycled neutral density and energy as well as
+the pumped neutral density and energy sources between
+the calculation and the reference simulation. The test currently only covers the target and does not
+reproduce radial recycling or pumping. Because of this, the test neglects the outermost radial domain cells,
+which can simultaneously have sources due to parallel and radial recycling or pumping.
+
+This test is a reproduction of C++ code, and therefore there is no golden answer reference to update.
+
+This test plots results and can be used to help with developing the recycling component. There
+is a `plot` flag near the beginning of the file.
 
 1D fluid (MMS)
 ~~~~~~~~~~~~~~
@@ -932,7 +1331,7 @@ Toro test 1
 ``tests/integrated/toro-1``
 
 Toro's test problem #1, from `Riemann Solvers and Numerical Methods
-for Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`_
+for Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`__
 is a variation of Sod's shock tube problem. The left state is moving
 into the right, increasing the speed of the resulting shock. Left
 state :math:`\left(\rho_L, u_L, p_L\right) = \left(1.0, 0.75,
@@ -1013,7 +1412,7 @@ Drift wave
 ``tests/integrated/drift-wave``
 
 This calculates the growth rate and frequency of a resistive drift
-wave with finite electron mass. 
+wave with finite electron mass.
 
 The equations solved are:
 
@@ -1123,7 +1522,7 @@ When collisions are neglected, we obtain the result
    :width: 60%
 
 Collision frequency selection
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 There are two simple integrated tests to make sure that the collision frequency selection is correct
 across `neutral_mixed`, `evolve_pressure`, `ion_viscosity` and `neutral_parallel_diffusion`.

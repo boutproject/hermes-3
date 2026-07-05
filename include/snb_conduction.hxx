@@ -19,22 +19,22 @@
 /// Important: If evolving electron pressure, disable thermal
 /// conduction or that will continue to add Spitzer heat conduction.
 ///
-/// ```
-/// [hermes]
-/// components = e, ..., collisions, snb_conduction
+/// \code{ini}
+///     [hermes]
+///     components = e, ..., collisions, snb_conduction
 ///
-/// [e]
-/// type = evolve_pressure, ...
-/// thermal_conduction = false # For evolve_pressure
+///     [e]
+///     type = evolve_pressure, ...
+///     thermal_conduction = false # For evolve_pressure
 ///
-/// [snb_conduction]
-/// diagnose = true # Saves heat flux diagnostics
-/// ```
+///     [snb_conduction]
+///     diagnose = true # Saves heat flux diagnostics
+/// \endcode
 ///
 /// # Useful references:
 ///
 ///  *  Braginskii equations by R.Fitzpatrick:
-///     http://farside.ph.utexas.edu/teaching/plasma/Plasmahtml/node35.html
+///     http://farside.ph.utexas.edu/teaching/plasma/Plasmahtml/node54.html
 ///
 ///  *  J.P.Brodrick et al 2017: https://doi.org/10.1063/1.5001079 and
 ///     https://arxiv.org/abs/1704.08963
@@ -50,7 +50,6 @@ struct SNBConduction : public Component {
       : Component({readOnly("species:e:density"), readOnly("species:e:temperature"),
                    readWrite("species:e:energy_source")}),
         snb(alloptions[name]) {
-    AUTO_TRACE();
     auto& options = alloptions[name];
 
     auto& units = alloptions["units"];

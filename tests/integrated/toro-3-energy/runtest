@@ -8,7 +8,7 @@
 resolutions = [
     (100, "ob", 1.0),
     (400, "-r", 1.0),
-    #(1600, '-g', 1.0)
+    # (1600, '-g', 1.0)
 ]
 
 plotting = False
@@ -25,7 +25,7 @@ import sys
 #  P1, rho1  | P2, rho2  |  P3, rho3  | P4, rho4 | P5, rho5
 #           pos12      pos23        pos34      pos45
 
-L = 5     # Length of domain
+L = 5  # Length of domain
 x0 = 2.5  # Starting position
 gamma = 5.0 / 3
 time = 0.04  # In seconds
@@ -47,9 +47,9 @@ P3 = 0.5 * (P5 + P1)
 while True:
     u4 = (P3 - P5) * sqrt((1 - G) / (rho5 * (P3 + G * P5)))
     u3 = u4
-    P3_new = (
-        P1**beta - u3 * sqrt(G**2 * rho1 / ((1 - G**2) * P1 ** (1 / gamma)))
-    ) ** (1 / beta)
+    P3_new = (P1**beta - u3 * sqrt(G**2 * rho1 / ((1 - G**2) * P1 ** (1 / gamma)))) ** (
+        1 / beta
+    )
     P3 = 0.5 * (P3 + P3_new)
     if abs(P3_new - P3) < 1e-10:
         break
@@ -102,17 +102,17 @@ if plotting:
         fig, ax1 = plt.subplots()
         ax1.plot(x_exact, rho_exact, "k")
 
-        #ax2 = plt.axes([0, 0, 1, 1])
-        #ax2.plot(x_exact, rho_exact, "k")
-        #ax2.set_xlim(0.82, 0.9)
-        #ax2.set_ylim(0.11, 0.25)
+        # ax2 = plt.axes([0, 0, 1, 1])
+        # ax2.plot(x_exact, rho_exact, "k")
+        # ax2.set_xlim(0.82, 0.9)
+        # ax2.set_ylim(0.11, 0.25)
 
         # Manually set the position and relative size of the inset axes within ax1
         ip = InsetPosition(ax1, [0.01, 0.03, 0.4, 0.4])
-        #ax2.set_axes_locator(ip)
+        # ax2.set_axes_locator(ip)
         # Mark the region corresponding to the inset axes on ax1 and draw lines
         # in grey linking the two axes.
-        #mark_inset(ax1, ax2, loc1=2, loc2=4, fc="none", ec="0.5")
+        # mark_inset(ax1, ax2, loc1=2, loc2=4, fc="none", ec="0.5")
     except:
         print("WARNING: Could not import Matplotlib")
         plotting = False
@@ -166,7 +166,7 @@ for ny, sym, tol in resolutions:
 
     if plotting:
         ax1.plot(xs, n, sym, label=f"n = {ny} $l_2={err:.3}$", mfc="none")
-        #ax2.plot(xs, n, sym, mfc="none")
+        # ax2.plot(xs, n, sym, mfc="none")
 
 print(errs)
 
@@ -175,8 +175,8 @@ if plotting:
     ax1.set_ylabel(r"Density $\rho$")
     ax1.legend()
 
-    #ax2.set_yticks([])
-    #ax2.set_xticks([])
+    # ax2.set_yticks([])
+    # ax2.set_xticks([])
 
     plt.savefig("toro-3-energy.png")
     plt.savefig("toro-3-energy.pdf")

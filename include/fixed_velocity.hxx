@@ -14,7 +14,6 @@ struct FixedVelocity : public Component {
                    // FIXME: AA is only read if density is set
                    readOnly("species:{name}:AA"), readWrite("species:{name}:{output}")}),
         name(name) {
-    AUTO_TRACE();
 
     auto& options = alloptions[name];
 
@@ -37,7 +36,6 @@ struct FixedVelocity : public Component {
   }
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     auto Cs0 = get<BoutReal>(state["Cs0"]);
 
     // Save the density, not time dependent
@@ -61,7 +59,6 @@ private:
   ///     - velocity
   ///     - momentum
   void transform_impl(GuardedOptions& state) override {
-    AUTO_TRACE();
     auto species = state["species"][name];
     set(species["velocity"], V);
 

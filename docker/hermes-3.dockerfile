@@ -5,7 +5,7 @@ ARG BUILDER_TAG=latest
 FROM ghcr.io/boutproject/hermes-3-builder:${BUILDER_TAG} AS builder
 
 # Bare OS image to run the installed executables
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 COPY --from=builder /opt/spack-environment /opt/spack-environment
 COPY --from=builder /opt/software /opt/software
@@ -43,9 +43,6 @@ ENV BOUTPP_CONFIG_OVERRIDE=/hermes_project/work/boutpp_config.cmake
 COPY . ${HERMES_SRC_DIR}
 # Initialize the git submodules (needed for CI/CD build)
 RUN git -C ${HERMES_SRC_DIR} submodule update --init --recursive --depth 1 --single-branch
-
-COPY docker/image_ingredients/enable_c.patch ${BOUTPP_SRC_DIR}/enable_c.patch
-RUN git -C ${BOUTPP_SRC_DIR} apply ./enable_c.patch
 
 # Copy in the default CMake config files
 COPY docker/image_ingredients/boutpp_config.cmake ${BOUTPP_CONFIG}

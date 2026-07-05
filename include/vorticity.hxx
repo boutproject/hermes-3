@@ -68,7 +68,6 @@ struct Vorticity : public Component {
 
   // Save and restore potential phi
   void restartVars(Options& state) override {
-    AUTO_TRACE();
 
     // NOTE: This is a hack because we know that the loaded restart file
     //       is passed into restartVars in PhysicsModel::postInit

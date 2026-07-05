@@ -15,14 +15,14 @@
 BraginskiiFriction::BraginskiiFriction(const std::string& name, Options& alloptions,
                                        Solver*)
     // FIXME: Not all species actually have collisions calculated
-    : Component({readOnly("species:{all_species}:density"),
+    : Component({readOnly("species:{all_species}:density", Regions::Interior),
                  readIfSet("species:{all_species}:velocity", Regions::Interior),
                  readOnly("species:{all_species}:AA"),
                  readIfSet("species:{all_species}:charge"),
                  readIfSet("species:{all_species}:collision_frequencies:{all_species}_{"
-                           "all_species2}_coll"),
+                           "all_species2}_coll",
+                           Regions::Interior),
                  readWrite("species:{all_species}:momentum_source")}) {
-  AUTO_TRACE();
   Options& options = alloptions[name];
   frictional_heating = options["frictional_heating"]
                            .doc("Include R dot v heating term as energy source?")
@@ -51,7 +51,6 @@ BoutReal momentumCoefficient(const std::string& name1, BoutReal Z1,
 }
 
 void BraginskiiFriction::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   GuardedOptions allspecies = state["species"];
 
@@ -106,8 +105,9 @@ void BraginskiiFriction::transform_impl(GuardedOptions& state) {
         continue;
       }
 
-      const Field3D nu = GET_VALUE(Field3D, species1["collision_frequencies"][coll_name]);
-      const Field3D density2 = GET_VALUE(Field3D, species2["density"]);
+      const Field3D nu =
+          GET_NOBOUNDARY(Field3D, species1["collision_frequencies"][coll_name]);
+      const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]);
       const Field3D velocity2 = species2.isSet("velocity")
                                     ? GET_NOBOUNDARY(Field3D, species2["velocity"])
                                     : 0.0;
@@ -163,7 +163,6 @@ void BraginskiiFriction::transform_impl(GuardedOptions& state) {
 }
 
 void BraginskiiFriction::outputVars(Options& state) {
-  AUTO_TRACE();
 
   if (!diagnose) {
     return; // Don't save diagnostics

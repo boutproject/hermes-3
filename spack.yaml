@@ -5,22 +5,21 @@
 spack:
   # add package specs to the `specs` list
   specs:
-    - hermes-3%gcc ^boutpp+petsc+sundials ^petsc+hypre+mumps
-    - cmake
+  - hermes-3%gcc ^boutpp+petsc+sundials ^petsc+hypre+mumps
+  - cmake
   view:
     gcc:
       root: ./views/gcc
-      select: ["%gcc"]
+      select: [ '%gcc', '^python' ]
       link_type: symlink
   concretizer:
     unify: when_possible
   repos:
-    - ./external/BOUT-spack
-    - $spack/var/spack/repos/builtin
+    bout: ./external/BOUT-spack/spack_repo/bout
   packages:
     all:
       providers:
-        mpi: [mpich, openmpi]
+        mpi: [ mpich, openmpi ]
   develop:
     boutpp:
       path: ./external/BOUT-dev

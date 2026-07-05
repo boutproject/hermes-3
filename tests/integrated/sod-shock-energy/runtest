@@ -48,9 +48,9 @@ P3 = 0.5 * (P5 + P1)
 while True:
     u4 = (P3 - P5) * sqrt((1 - G) / (rho5 * (P3 + G * P5)))
     u3 = u4
-    P3_new = (
-        P1**beta - u3 * sqrt(G**2 * rho1 / ((1 - G**2) * P1 ** (1 / gamma)))
-    ) ** (1 / beta)
+    P3_new = (P1**beta - u3 * sqrt(G**2 * rho1 / ((1 - G**2) * P1 ** (1 / gamma)))) ** (
+        1 / beta
+    )
     P3 = 0.5 * (P3 + P3_new)
     if abs(P3_new - P3) < 1e-10:
         break

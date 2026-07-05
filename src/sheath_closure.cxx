@@ -35,19 +35,17 @@ SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
   output.write("\tL_par = {:e} (normalised)\n", L_par);
 
   if (sinks) {
-    setPermissions(readOnly("species:e:temperature"));
-    setPermissions(readOnly("species:{non_electrons}:{inputs}"));
+    setPermissions(readOnly("species:{all_species}:{inputs}"));
     setPermissions(readWrite("species:{non_electrons}:{outputs}"));
     substitutePermissions("inputs", {"AA", "density", "temperature"});
-    substitutePermissions("output", {"density_source", "energy_source"});
+    substitutePermissions("outputs", {"density_source", "energy_source"});
   } else {
     setPermissions(readIfSet("species:e:temperature"));
   }
 }
 
 void SheathClosure::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
-  
+
   // Get electrostatic potential
   auto phi = get<Field3D>(state["fields"]["phi"]);
 

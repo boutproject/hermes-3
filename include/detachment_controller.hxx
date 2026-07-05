@@ -172,7 +172,6 @@ struct DetachmentController : public Component {
   };
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     if (diagnose) {
 
       set_with_attrs(
@@ -222,11 +221,11 @@ struct DetachmentController : public Component {
                     {"standard_name", "derivative_term"},
                     {"long_name", "detachment control derivative term"},
                     {"source", "detachment_controller"}});
-  }}
+    }
+  }
 
   void restartVars(Options& state) override {
-    AUTO_TRACE();
-    
+
     if ((initialise) && (not ignore_restart)) {
       if (state.isSet("detachment_control_src_mult")) {
         control = state["detachment_control_src_mult"].as<BoutReal>();

@@ -1,50 +1,51 @@
-
 # Data consists of
 #    (path, delta*, setting changes)
 #
 # These are arranged in approximate order of importance, so
 # the list can be truncated
-dataset = [('delta-1', 1.0, [('nout', 15)])
-           ,('delta-0.5', 0.5, [('nout', 10),
-                                ('mesh:Lrad', 0.025),
-                                ('mesh:Lpol', 0.025)])
-           ,('delta-0.25', 0.25, [('nout', 10),
-                                  ('mesh:Lrad', 0.0125),
-                                  ('mesh:Lpol', 0.0125)])
-           ,('delta-8', 8.0, [('nout', 20),
-                              ('mesh:Lrad', 0.2),
-                              ('mesh:Lpol', 0.2),
-                              ('Ne:width', 0.1)])
-           ,('delta-16', 16.0, [('nout', 20),
-                                ('mesh:Lrad', 0.4),
-                                ('mesh:Lpol', 0.4),
-                                ('Ne:width', 0.1)])
-           ,('delta-0.125', 0.125, [('nout', 10),
-                                    ('timestep', 25),
-                                    ('mesh:Lrad', 0.00625),
-                                    ('mesh:Lpol', 0.00625)])
-           ,('delta-0.35', 0.35, [('nout', 10),
-                                  ('mesh:Lrad', 0.0175),
-                                  ('mesh:Lpol', 0.0175)])
-           ,('delta-2', 2.0, [('nout', 20),
-                              ('mesh:Lrad', 0.1),
-                              ('mesh:Lpol', 0.1)])
-           ,('delta-2.8', 2.8, [('nout', 20),
-                                ('mesh:Lrad', 0.14),
-                                ('mesh:Lpol', 0.14)])
-           ,('delta-4', 4.0, [('nout', 15),
-                              ('mesh:Lrad', 0.1),
-                              ('mesh:Lpol', 0.1),
-                              ('Ne:width', 0.1)])
-           ,('delta-11.2', 11.2, [('nout', 20),
-                                  ('mesh:Lrad', 0.2),
-                                  ('mesh:Lpol', 0.2),
-                                  ('Ne:width', 0.14)])
-           ,('delta-5.6', 5.6, [('nout', 15),
-                                ('mesh:Lrad', 0.1),
-                                ('mesh:Lpol', 0.1),
-                                ('Ne:width', 0.14)])
-           ]
+dataset = [
+    ("delta-1", 1.0, [("nout", 15)]),
+    ("delta-0.5", 0.5, [("nout", 10), ("mesh:Lrad", 0.025), ("mesh:Lpol", 0.025)]),
+    ("delta-0.25", 0.25, [("nout", 10), ("mesh:Lrad", 0.0125), ("mesh:Lpol", 0.0125)]),
+    (
+        "delta-8",
+        8.0,
+        [("nout", 20), ("mesh:Lrad", 0.2), ("mesh:Lpol", 0.2), ("Ne:width", 0.1)],
+    ),
+    (
+        "delta-16",
+        16.0,
+        [("nout", 20), ("mesh:Lrad", 0.4), ("mesh:Lpol", 0.4), ("Ne:width", 0.1)],
+    ),
+    (
+        "delta-0.125",
+        0.125,
+        [
+            ("nout", 10),
+            ("timestep", 25),
+            ("mesh:Lrad", 0.00625),
+            ("mesh:Lpol", 0.00625),
+        ],
+    ),
+    ("delta-0.35", 0.35, [("nout", 10), ("mesh:Lrad", 0.0175), ("mesh:Lpol", 0.0175)]),
+    ("delta-2", 2.0, [("nout", 20), ("mesh:Lrad", 0.1), ("mesh:Lpol", 0.1)]),
+    ("delta-2.8", 2.8, [("nout", 20), ("mesh:Lrad", 0.14), ("mesh:Lpol", 0.14)]),
+    (
+        "delta-4",
+        4.0,
+        [("nout", 15), ("mesh:Lrad", 0.1), ("mesh:Lpol", 0.1), ("Ne:width", 0.1)],
+    ),
+    (
+        "delta-11.2",
+        11.2,
+        [("nout", 20), ("mesh:Lrad", 0.2), ("mesh:Lpol", 0.2), ("Ne:width", 0.14)],
+    ),
+    (
+        "delta-5.6",
+        5.6,
+        [("nout", 15), ("mesh:Lrad", 0.1), ("mesh:Lpol", 0.1), ("Ne:width", 0.14)],
+    ),
+]
 
 from boutdata.data import BoutOptionsFile
 import os
@@ -154,7 +155,6 @@ def analyse_cases(destination, dataset):
 
 
 if __name__ == "__main__":
-
     import argparse
 
     parser = argparse.ArgumentParser()

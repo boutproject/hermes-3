@@ -15,7 +15,6 @@ using bout::globals::mesh;
 NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& alloptions,
                                          Solver* solver)
     : Component({readWrite("species:{name}:{outputs}")}), name(name) {
-  AUTO_TRACE();
 
   // This is used in both transform and finally functions
   coord = mesh->getCoordinates();
@@ -25,6 +24,9 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   const BoutReal meters = units["meters"];
   const BoutReal seconds = units["seconds"];
   const BoutReal Bnorm = units["Tesla"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
+  const BoutReal Tnorm = units["eV"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
   auto& options = alloptions[name];
 
@@ -34,6 +36,10 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
       options["adiabatic_index"]
           .doc("Ratio of specific heats γ = Cp/Cv [5/3 for monatomic ideal gas]")
           .withDefault(5. / 3);
+
+  constant_transport_coef = options["constant_transport_coef"]
+                                .doc("Use constant transport coefficients?")
+                                .withDefault<bool>(false);
 
   neutral_viscosity =
       options["viscosity"].doc("Kinematic viscosity [m^2/s]").withDefault(1.0)
@@ -50,7 +56,14 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   density_floor = options["density_floor"]
                       .doc("A minimum density used when dividing by density."
                            "Normalised units.")
-                      .withDefault(1e-5);
+                      .withDefault(1e-8);
+
+  temperature_floor = options["temperature_floor"]
+                          .doc("Low temperature scale for low_T_diffuse_perp")
+                          .withDefault<BoutReal>(0.1)
+                      / get<BoutReal>(alloptions["units"]["eV"]);
+
+  pressure_floor = density_floor * temperature_floor;
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
@@ -65,6 +78,56 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   curved_torus = options["curved_torus"]
                      .doc("Include toroidal curvature in momentum advection?")
                      .withDefault<bool>(true);
+
+  flux_limit =
+      options["flux_limit"]
+          .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
+          .withDefault(0.2);
+
+  neutral_lmax = options["neutral_lmax"]
+                     .doc("Maximum length scale due to the present of walls.")
+                     .withDefault<BoutReal>(0.1)
+                 / get<BoutReal>(alloptions["units"]["meters"]); // Normalised length
+
+  diffusion_limit = options["diffusion_limit"]
+                        .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
+                        .withDefault(-1.0)
+                    / (meters * meters / seconds); // Normalise
+
+  diffusion_collisions_mode = options["diffusion_collisions_mode"]
+                                  .doc("Can be multispecies: all enabled collisions "
+                                       "excl. IZ, or afn: CX, IZ and NN collisions")
+                                  .withDefault<std::string>("multispecies");
+
+  zero_timederivs = options["zero_timederivs"]
+                        .doc("Set the time derivatives to zero?")
+                        .withDefault<bool>(false);
+
+  // Optionally output time derivatives
+  output_ddt =
+      options["output_ddt"].doc("Save derivatives to output?").withDefault<bool>(false);
+
+  // Try to read the density source from the mesh
+  // Units of particles per cubic meter per second
+  density_source = 0.0;
+  mesh->get(density_source, std::string("N") + name + "_src");
+  // Allow the user to override the source
+  density_source =
+      alloptions[std::string("N") + name]["source"]
+          .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
+          .withDefault(density_source)
+      / (Nnorm * Omega_ci);
+
+  // Try to read the pressure source from the mesh
+  // Units of Pascals per second
+  pressure_source = 0.0;
+  mesh->get(pressure_source, std::string("P") + name + "_src");
+  // Allow the user to override the source
+  pressure_source = alloptions[std::string("P") + name]["source"]
+                        .doc(std::string("Source term in ddt(P") + name
+                             + std::string("). Units [N/m^2/s]"))
+                        .withDefault(pressure_source)
+                    / (SI::qe * Nnorm * Tnorm * Omega_ci);
 
   // Note: We evolve v^x, v^y and v^z because these have magnitudes close to 1
   //       whereas v_x, v_y and v_z are >> 1.
@@ -120,7 +183,7 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
   Tyr.allocate();
   Tyz.allocate();
 
-  for (int i = 0; i < mesh->LocalNx; i++)
+  for (int i = 0; i < mesh->LocalNx; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       // Central differencing of coordinates
       BoutReal dRdtheta, dZdtheta;
@@ -173,7 +236,36 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
       Txz(i, j) = -dRdtheta / J;
       Tyr(i, j) = -dZdpsi / J;
       Tyz(i, j) = dRdpsi / J;
+
+      // Ensure that all fields are finite
+
+      if (!std::isfinite(Urx(i, j))) {
+        throw BoutException("Urx non-finite at ({}, {})\n", i, j);
+      }
+      if (!std::isfinite(Ury(i, j))) {
+        throw BoutException("Ury non-finite at ({}, {})\n", i, j);
+      }
+      if (!std::isfinite(Uzx(i, j))) {
+        throw BoutException("Uzx non-finite at ({}, {})\n", i, j);
+      }
+      if (!std::isfinite(Uzy(i, j))) {
+        throw BoutException("Uzy non-finite at ({}, {})\n", i, j);
+      }
+
+      if (!std::isfinite(Txr(i, j))) {
+        throw BoutException("Txr non-finite at ({}, {})\n", i, j);
+      }
+      if (!std::isfinite(Txz(i, j))) {
+        throw BoutException("Txz non-finite at ({}, {})\n", i, j);
+      }
+      if (!std::isfinite(Tyr(i, j))) {
+        throw BoutException("Tyr non-finite at ({}, {})\n", i, j);
+      }
+      if (!std::isfinite(Tyz(i, j))) {
+        throw BoutException("Tyz non-finite at ({}, {})\n", i, j);
+      }
     }
+  }
 
   Urx.applyBoundary("neumann");
   Ury.applyBoundary("neumann");
@@ -195,7 +287,6 @@ NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& allop
 
 /// Modify the given simulation state
 void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
   mesh->communicate(Nn2D, Vn2D, Pn2D);
 
   // Boundary conditions
@@ -268,15 +359,165 @@ void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
 
 /// Use the final simulation state to update internal state
 /// (e.g. time derivatives)
+/// Note: The evolving state (density, temperature, pressure, velocity)
+///       is not taken from `state`. These are calculated in
+///       `transform()` that must be called before `finally()`.
 void NeutralFullVelocity::finally(const Options& state) {
-  AUTO_TRACE();
+  auto& localstate = state["species"][name];
 
-  // Density
-  ddt(Nn2D) = -Div(Vn2D_contravariant, Nn2D);
+  ///////////////////////////////////////////////////////
+  // Calculate transport coefficients from collision frequency
 
   Field2D Nn2D_floor = softFloor(Nn2D, density_floor);
+  Field2D Pn2D_floor = softFloor(Pn2D, pressure_floor);
+  Field2D Tn2D_floor = softFloor(Tn2D, temperature_floor);
 
-  // Velocity
+  if (!constant_transport_coef) {
+
+    Field2D Rnn = sqrt(Tn2D_floor / AA)
+                  / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+
+    if (localstate.isSet("collision_frequency")) {
+      // Collisionality
+      // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+      if (collision_names.empty()) { // Calculate only once - at the beginning
+
+        if (diffusion_collisions_mode == "afn") {
+          for (const auto& collision :
+               localstate["collision_frequencies"].getChildren()) {
+
+            std::string collision_name = collision.second.name();
+
+            if ( // Charge exchange
+                (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
+                // Ionisation
+                (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) or
+                // Neutral-neutral collisions
+                (collisionSpeciesMatch(collision_name, name, name, "coll", "exact"))) {
+              collision_names.push_back(collision_name);
+            }
+          }
+          // Multispecies mode: all collisions and CX are included
+        } else if (diffusion_collisions_mode == "multispecies") {
+          for (const auto& collision :
+               localstate["collision_frequencies"].getChildren()) {
+
+            std::string collision_name = collision.second.name();
+
+            if ( // Charge exchange
+                (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
+                // Any collision (en, in, ee, ii, nn)
+                (collisionSpeciesMatch(collision_name, name, "", "coll", "partial"))) {
+              collision_names.push_back(collision_name);
+            }
+          }
+
+        } else {
+          throw BoutException("\ndiffusion_collisions_mode for {:s} must be either "
+                              "multispecies or braginskii",
+                              name);
+        }
+
+        if (collision_names.empty()) {
+          throw BoutException("\tNo collisions found for {:s} in neutral_full_velocity "
+                              "for selected collisions mode",
+                              name);
+        }
+
+        // Write chosen collisions to log file
+        output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ", name,
+                          diffusion_collisions_mode);
+        for (const auto& collision : collision_names) {
+          output_info.write("{:s} ", collision);
+        }
+        output_info.write("\n");
+      }
+
+      // Collect the collisionalities based on list of names
+      nu = 0;
+      for (const auto& collision_name : collision_names) {
+        nu += DC(get<Field3D>(localstate["collision_frequencies"][collision_name]));
+      }
+
+      // Dnn = Vth^2 / sigma
+      Dnn = (Tn2D_floor / AA) / (nu + Rnn);
+    } else {
+      Dnn = (Tn2D_floor / AA) / Rnn;
+    }
+
+    if (diffusion_limit > 0.0) {
+      // Impose an upper limit on the diffusion coefficient
+      BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+        Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+      }
+    }
+
+    // Heat conductivity
+    // Note: This is kappa_n = (5/2) * Pn / (m * nu)
+    //       where nu is the collision frequency used in Dnn
+    kappa_n = (5. / 2) * Dnn * Nn2D_floor;
+
+    if (flux_limit > 0.0) {
+      // Thermal velocity of neutrals
+      Field2D Vnth = sqrt(Tn2D_floor / AA);
+
+      // Apply flux limit to diffusion,
+      // using the local thermal speed and pressure gradient magnitude
+      Field2D Dmax =
+          flux_limit * Vnth / (abs(Grad(Pn2D_floor) / Pn2D_floor) + 1. / neutral_lmax);
+      BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+        Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
+      }
+
+      Field2D kappa_n_max = flux_limit * (3.0 / 2.0 * Vnth * Nn2D_floor)
+                            / (abs(Grad(Tn2D_floor)) / Tn2D_floor + 1. / neutral_lmax);
+      BOUT_FOR(i, kappa_n.getRegion("RGN_NOBNDRY")) {
+        kappa_n[i] = kappa_n[i] * kappa_n_max[i] / (kappa_n[i] + kappa_n_max[i]);
+      }
+    }
+
+    // Viscosity
+    // Relationship between heat conduction and viscosity for neutral
+    // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+    // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+    // Transport Processes in Gases", 1972
+    eta_n = AA * (2. / 5) * kappa_n;
+
+    mesh->communicate(Dnn);
+    Dnn.applyBoundary();
+
+    mesh->communicate(kappa_n);
+    kappa_n.applyBoundary("neumann");
+
+    mesh->communicate(eta_n);
+    eta_n.applyBoundary("neumann");
+
+    for (RangeIterator idwn = mesh->iterateBndryLowerY(); !idwn.isDone(); idwn.next()) {
+      // Neumann conditions for transport coefficients
+      kappa_n(idwn.ind, mesh->ystart - 1) = kappa_n(idwn.ind, mesh->ystart);
+      eta_n(idwn.ind, mesh->ystart - 1) = eta_n(idwn.ind, mesh->ystart);
+    }
+
+    for (RangeIterator idwn = mesh->iterateBndryUpperY(); !idwn.isDone(); idwn.next()) {
+      // Neumann conditions for transport coefficients
+      kappa_n(idwn.ind, mesh->yend + 1) = kappa_n(idwn.ind, mesh->yend);
+      eta_n(idwn.ind, mesh->yend + 1) = eta_n(idwn.ind, mesh->yend);
+    }
+  }
+
+  /////////////////////////////////////////////////////
+  // Neutral density
+  ddt(Nn2D) = -Div(Vn2D_contravariant, Nn2D);
+
+  // Particles
+  Sn = density_source; // Save for possible output
+  if (localstate.isSet("density_source")) {
+    Sn += DC(get<Field3D>(localstate["density_source"]));
+  }
+  ddt(Nn2D) += Sn; // Always add density_source
+
+  /////////////////////////////////////////////////////
+  // Neutral Velocity
   // Note: Vn2D.y is proportional to the parallel flow
   //       Vn2D.z is proportional to the toroidal angular momentum
   // Poloidal pressure gradients therefore change the parallel flow
@@ -305,8 +546,13 @@ void NeutralFullVelocity::finally(const Options& state) {
   }
 
   // Viscosity
-  ddt(vr) += Laplace_FV(neutral_viscosity, vr);
-  ddt(vz) += Laplace_FV(neutral_viscosity, vz);
+  if (constant_transport_coef) {
+    ddt(vr) += Laplace_FV(neutral_viscosity, vr);
+    ddt(vz) += Laplace_FV(neutral_viscosity, vz);
+  } else {
+    ddt(vr) += Laplace_FV(eta_n, vr) / (AA * Nn2D_floor);
+    ddt(vz) += Laplace_FV(eta_n, vz) / (AA * Nn2D_floor);
+  }
 
   // Convert back to field-aligned coordinates
   ddt(Vn2D).x += Urx * ddt(vr) + Uzx * ddt(vz);
@@ -328,17 +574,71 @@ void NeutralFullVelocity::finally(const Options& state) {
     }
 
     // Viscosity
-    ddt(vphi) += Laplace_FV(neutral_viscosity, vphi);
+    if (constant_transport_coef) {
+      ddt(vphi) += Laplace_FV(neutral_viscosity, vphi);
+    } else {
+      ddt(vphi) += Laplace_FV(eta_n, vphi) / (AA * Nn2D_floor);
+    }
 
     // Convert back to field-aligned
     ddt(Vn2D).z += ddt(vphi) * sigma_Bp * Rxy;
   }
 
+  /////////////////////////////////////////////////////
+  // Atomic processes
+
+  // Momentum. Note need to turn back into covariant form
+  // The parallel and toroidal components partly cancel when converting
+  // velocity to contravariant form for advection in X-Y.
+  if (localstate.isSet("momentum_source")) {
+    Snv = DC(get<Field3D>(localstate["momentum_source"]));
+    Field2D Fpar_mN = Snv / (AA * Nn2D_floor);
+    ddt(Vn2D).y += Fpar_mN * (coord->J * coord->Bxy); // Parallel flow
+
+    if (toroidal_flow) {
+      ddt(Vn2D).z += Fpar_mN * coord->g_23 / (coord->J * coord->Bxy); // Toroidal flow
+    }
+
+    // NOTE: Should we add the contribution of Sn here?
+    // Sn is introduced in the momentum equation
+    // because we solve for Vn instead of AA*Nn*Vn
+    // It is propably something like that:
+    // ddt(Vn2D).y += Vn2D.y * Sn / Nn2D_floor * (coord->J * coord->Bxy); // Parallel flow
+    // if (toroidal_flow) {
+    //   ddt(Vn2D).z += Vn2D.z * Sn / Nn2D_floor * coord->g_23 / (coord->J * coord->Bxy);
+    //   // Toroidal flow
+    // }
+
+  } else {
+    Snv = 0;
+  }
+
+  if (localstate.isSet("collision_frequency")) {
+    // Damp flow perpendicular to B due to collisions
+    Field2D collision_freq = DC(get<Field3D>(localstate["collision_frequency"]));
+    // Radial flow
+    ddt(Vn2D).x -= Vn2D.x * collision_freq;
+    // Binormal flow
+    ddt(Vn2D).z -= (Vn2D.z - (coord->g_23 / coord->g_22) * Vn2D.y) * collision_freq;
+  }
+
   //////////////////////////////////////////////////////
-  // Pressure
+  // Neutral pressure
   ddt(Pn2D) = -adiabatic_index * Div(Vn2D, Pn2D)
-              + (adiabatic_index - 1.) * (Vn2D_contravariant * GradPn2D)
-              + Laplace_FV(Nn2D_floor * neutral_conduction, Tn2D);
+              + (adiabatic_index - 1.) * (Vn2D_contravariant * GradPn2D);
+
+  if (constant_transport_coef) {
+    ddt(Pn2D) += Laplace_FV(Nn2D_floor * neutral_conduction, Tn2D);
+  } else {
+    ddt(Pn2D) += (adiabatic_index - 1.) * Laplace_FV(kappa_n, Tn2D);
+  }
+
+  // Energy source
+  Sp = pressure_source;
+  if (localstate.isSet("energy_source")) {
+    Sp += (adiabatic_index - 1) * DC(get<Field3D>(localstate["energy_source"]));
+  }
+  ddt(Pn2D) += Sp;
 
   ///////////////////////////////////////////////////////////////////
   // Boundary condition on fluxes
@@ -401,42 +701,6 @@ void NeutralFullVelocity::finally(const Options& state) {
         / (coord->dy(r.ind, mesh->yend) * coord->J(r.ind, mesh->yend));
   }
 
-  /////////////////////////////////////////////////////
-  // Atomic processes
-
-  auto& localstate = state["species"][name];
-
-  // Particles
-  if (localstate.isSet("density_source")) {
-    ddt(Nn2D) += DC(get<Field3D>(localstate["density_source"]));
-  }
-
-  // Momentum. Note need to turn back into covariant form
-  // The parallel and toroidal components partly cancel when converting
-  // velocity to contravariant form for advection in X-Y.
-  if (localstate.isSet("momentum_source")) {
-    Field2D Fpar_mN = DC(get<Field3D>(localstate["momentum_source"])) / (AA * Nn2D_floor);
-    ddt(Vn2D).y += Fpar_mN * (coord->J * coord->Bxy); // Parallel flow
-
-    if (toroidal_flow) {
-      ddt(Vn2D).z += Fpar_mN * coord->g_23 / (coord->J * coord->Bxy); // Toroidal flow
-    }
-  }
-
-  if (localstate.isSet("collision_frequency")) {
-    // Damp flow perpendicular to B due to collisions
-    Field2D collision_freq = DC(get<Field3D>(localstate["collision_frequency"]));
-    // Radial flow
-    ddt(Vn2D).x -= Vn2D.x * collision_freq;
-    // Binormal flow
-    ddt(Vn2D).z -= (Vn2D.z - (coord->g_23 / coord->g_22) * Vn2D.y) * collision_freq;
-  }
-
-  // Energy
-  if (localstate.isSet("energy_source")) {
-    ddt(Pn2D) += (adiabatic_index - 1) * DC(get<Field3D>(localstate["energy_source"]));
-  }
-
 #if CHECKLEVEL >= 2
   for (auto& i : Nn2D.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(Nn2D)[i])) {
@@ -460,6 +724,15 @@ void NeutralFullVelocity::finally(const Options& state) {
   // Convert back to contravariant components v^x, v^y, v^z
   ddt(Vn2D).toContravariant();
   Vn2D.toContravariant();
+
+  // Set time derivatives to zero
+  if (zero_timederivs) {
+    Field2D zero{0.0};
+    ddt(Nn2D) = zero;
+    ddt(Pn2D) = zero;
+    ddt(Vn2D) = 0.0;
+    return;
+  }
 }
 
 /// Add extra fields for output, or set attributes e.g docstrings
@@ -467,6 +740,7 @@ void NeutralFullVelocity::outputVars(Options& state) {
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
 
@@ -495,6 +769,25 @@ void NeutralFullVelocity::outputVars(Options& state) {
   set_with_attrs(state["Tyr"], Tyr, {{"source", "neutral_full_velocity"}});
   set_with_attrs(state["Tyz"], Tyz, {{"source", "neutral_full_velocity"}});
 
+  if (output_ddt) {
+    set_with_attrs(
+        state[std::string("ddt(N") + name + std::string(")")], ddt(Nn2D),
+        {{"time_dimension", "t"},
+         {"units", "m^-3 s^-1"},
+         {"conversion", Nnorm * Omega_ci},
+         {"long_name", std::string("Rate of change of ") + name + " number density"},
+         {"source", "neutral_full_velocity"}});
+    set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn2D),
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"source", "neutral_full_velocity"}});
+    // set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(Vn2D),
+    //                {{"time_dimension", "t"},
+    //                 {"units", "kg m^-2 s^-2"},
+    //                 {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+    //                 {"source", "neutral_full_velocity"}});
+  }
   if (diagnose) {
     set_with_attrs(state[std::string("T") + name], Tn2D,
                    {{"time_dimension", "t"},
@@ -511,6 +804,53 @@ void NeutralFullVelocity::outputVars(Options& state) {
                     {"conversion", Cs0},
                     {"standard_name", "velocity"},
                     {"long_name", name + " parallel velocity"},
+                    {"species", name},
+                    {"source", "neutral_full_velocity"}});
+
+    if (Dnn.isAllocated()) {
+      set_with_attrs(state[std::string("Dnn") + name], Dnn,
+                     {{"time_dimension", "t"},
+                      {"units", "m^2/s"},
+                      {"conversion", Cs0 * Cs0 / Omega_ci},
+                      {"standard_name", "diffusion coefficient"},
+                      {"long_name", name + " diffusion coefficient"},
+                      {"source", "neutral_full_velocity"}});
+    }
+    set_with_attrs(state[std::string("SN") + name], Sn,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "density source"},
+                    {"long_name", name + " number density source"},
+                    {"source", "neutral_full_velocity"}});
+    set_with_attrs(state[std::string("SP") + name], Sp,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", SI::qe * Tnorm * Nnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source"},
+                    {"source", "neutral_full_velocity"}});
+    set_with_attrs(state[std::string("SNV") + name], Snv,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"standard_name", "momentum source"},
+                    {"long_name", name + " momentum source"},
+                    {"source", "neutral_full_velocity"}});
+    set_with_attrs(state[std::string("S") + name + std::string("_src")], density_source,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"standard_name", "density source"},
+                    {"long_name", name + " number density source"},
+                    {"species", name},
+                    {"source", "neutral_full_velocity"}});
+    set_with_attrs(state[std::string("P") + name + std::string("_src")], pressure_source,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "pressure source"},
+                    {"long_name", name + " pressure source"},
                     {"species", name},
                     {"source", "neutral_full_velocity"}});
   }
