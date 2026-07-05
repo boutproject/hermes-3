@@ -43,7 +43,7 @@ struct SpeciesInformation {
   }
 
   SpeciesInformation(const std::initializer_list<std::string> species) {
-    for (auto& sp : species) {
+    for (const auto& sp : species) {
       // FIXME: identifySpecies only identifies positive ions
       // FIXME: identifySpecies has no concept of ebeam
       const SpeciesType type = identifySpeciesType(sp);
