@@ -272,11 +272,8 @@ namespace hermes {
 template <class T>
 using EnableIfGuardedOption = std::enable_if_t<std::is_base_of_v<GuardedOptions, T>>;
 
-/// If true (the default), every `set()` of a field checks all values
-/// are finite (when CHECKLEVEL >= 1). This is a full pass over the
-/// field's memory per set, so it can be disabled at runtime with the
-/// `hermes:check_state_values` option to measure or avoid the cost
-/// without rebuilding with CHECK=0.
+/// If true (the default), every `set()` checks all values are finite
+/// (when CHECKLEVEL >= 1). Set `hermes:check_state_values` to disable.
 extern bool check_state_values;
 } // namespace hermes
 

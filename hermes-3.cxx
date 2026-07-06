@@ -306,16 +306,11 @@ int Hermes::init(bool restarting) {
 }
 
 namespace {
-/// Clear all values in an options tree, keeping the tree of nodes
-/// alive so it can be reused by the next RHS evaluation rather than
-/// destroyed and rebuilt. A cleared node is indistinguishable from a
-/// newly created one: it becomes an empty section, so isSet() returns
-/// false, the value and attributes are dropped, and reading it throws.
+/// Clear all values in an options tree, keeping the node tree alive
+/// so it can be reused by the next RHS evaluation rather than rebuilt.
 void clearOptionValues(Options& node) {
   if (node.isValue()) {
-    // Move-assignment replaces the value, attributes and section flag
-    // but keeps this node's parent pointer. The temporary carries the
-    // node's full name.
+    // Move-assignment resets the value/attributes but keeps the parent pointer
     node = Options{nullptr, node.str()};
   } else {
     for (auto& child : node) {

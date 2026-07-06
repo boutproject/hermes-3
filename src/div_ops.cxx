@@ -46,10 +46,8 @@ using bout::globals::mesh;
 
 namespace {
 /// Metric components promoted to Field3D and shifted to field-aligned
-/// coordinates, for use in Y flux calculations when the inputs have no
-/// parallel slices. The metric is constant during a simulation, so
-/// these are computed once for each Coordinates object and then
-/// reused, rather than being shifted and promoted on every call.
+/// coordinates, cached per Coordinates object to avoid recomputing them
+/// on every call.
 struct AlignedMetrics {
   Field3D g23, g_23, g12, g_12, J, dx, dy, dz, Bxy;
 };
@@ -759,9 +757,8 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
   Field3D fc = f;
   Field3D ac = a;
 
-  // Metric components at the cell centre. Set below, either directly
-  // from the coordinates (3D metrics) or from the cached field-aligned
-  // metrics (2D metrics).
+  // Metric components at the cell centre, set below either directly
+  // or from the cached field-aligned metrics.
   Field3D g23c(mesh), g_23c(mesh), Jc(mesh), dyc(mesh), dzc(mesh), Bxyc(mesh);
 
   // Result of the Y and Z fluxes
@@ -1124,9 +1121,8 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
   Field3D fc = f;
   Field3D ac = a;
 
-  // Metric components at the cell centre. Set below, either directly
-  // from the coordinates (3D metrics) or from the cached field-aligned
-  // metrics (2D metrics).
+  // Metric components at the cell centre, set below either directly
+  // or from the cached field-aligned metrics.
   Field3D g23c(mesh), g_23c(mesh), g12c(mesh), g_12c(mesh), Jc(mesh), dxc(mesh),
       dyc(mesh), dzc(mesh), Bxyc(mesh);
 

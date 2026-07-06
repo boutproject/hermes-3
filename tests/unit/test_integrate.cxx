@@ -39,7 +39,7 @@ TEST_F(CellAverageTest, ConstantField) {
   ASSERT_TRUE(IsFieldEqual(result, 2.0, "RGN_NOBNDRY"));
 }
 
-// ─── cellAverageInto tests ───────────────────────────────────────────────────
+// cellAverageInto tests
 
 using CellAverageIntoTest = FakeMeshFixture;
 
@@ -82,8 +82,7 @@ TEST_F(CellAverageIntoTest, MatchesCellAverage) {
   ASSERT_TRUE(IsFieldEqual(result, expected, "RGN_NOBNDRY", 0.0));
 }
 
-// Verify that calling cellAverageInto a second time reuses the allocation
-// and updates the values correctly (workspace reuse path).
+// Second call must reuse the allocation and overwrite the values
 TEST_F(CellAverageIntoTest, WorkspaceReuse) {
   Field3D field_a{2.0};
   Field3D field_b{5.0};

@@ -87,8 +87,7 @@ public:
 private:
   Options* options;
   Permissions* permissions;
-  /// Identifies the root GuardedOptions this object was derived from,
-  /// so that objects from different constructions compare unequal.
+  /// Identifies the root GuardedOptions this object was derived from.
   std::size_t session;
   /// Only allocated when CHECKLEVEL >= 999; null otherwise.
   mutable std::shared_ptr<std::map<std::string, Regions>> unread_variables,

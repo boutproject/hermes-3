@@ -122,9 +122,7 @@ void Permissions::checkNoRemainingSubstitutions() const {
 
 const Permissions::VarRights&
 Permissions::bestMatchRights(const std::string& variable) const {
-  // The permissions are fixed after initialisation, but this is
-  // called for every state variable access in every RHS evaluation,
-  // so matches are cached.
+  // Called for every state variable access, so matches are cached.
   const auto cached = match_cache.find(variable);
   if (cached != match_cache.end()) {
     return cached->second;
@@ -139,8 +137,7 @@ Permissions::bestMatchRights(const std::string& variable) const {
   std::string best_candidate_name = "";
   size_t max_len = 0;
   for (const auto& [varname, rights] : variable_permissions) {
-    // Match variables starting with "<varname>:" without allocating a
-    // temporary string for the comparison
+    // Match "<varname>:" without allocating a temporary string
     if (varname.size() > max_len and variable.size() > varname.size()
         and variable[varname.size()] == ':'
         and variable.compare(0, varname.size(), varname) == 0) {

@@ -45,15 +45,10 @@ BoutReal cellRight(BoutReal c, BoutReal m, BoutReal p) {
   return s.R;
 }
 
-/// Take a function of BoutReals, a region and input fields
-/// (e.g. Field2D, Field3D). For every cell in the region evaluate
-/// the function at quadrature points with weights.
-/// These weights sum to 1, resulting in volume averaged values,
-/// written into the caller-supplied `result` field.
-///
-/// Reusing `result` between calls avoids constructing a new Field3D
-/// on every call: on the first call it is initialised from the first
-/// input field; subsequent calls reuse the existing data.
+/// Take a function of BoutReals, a region and input fields (e.g. Field2D,
+/// Field3D). For every cell in the region evaluate the function at
+/// quadrature points with weights that sum to 1, writing the volume-averaged
+/// result into `result` (reusing its allocation if already set).
 ///
 /// Uses a limiter to calculate values at cell edges. This is
 /// needed so that as Ne goes to zero in a cell then atomic
@@ -91,9 +86,8 @@ void cellAverageInto(Field3D& result, Function func, const RegionType& region,
   }
 }
 
-/// Like cellAverageInto, but takes only the function and region, and
-/// returns a function which takes the input fields and returns the
-/// volume-averaged result as a new Field3D.
+/// Like cellAverageInto, but allocates and returns a new Field3D
+/// each call instead of writing into a caller-supplied field.
 ///
 /// Example
 ///   Field3D Ne = ..., Te = ...;
