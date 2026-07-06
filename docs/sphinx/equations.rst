@@ -430,7 +430,7 @@ The electron parallel viscosity is
    \eta_e = \frac{4}{3} 0.73 p_e \tau_e
 
 where :math:`\tau_e` is the electron collision time. The collisions between electrons
-and all other species therefore needs to be calculated:
+and all other species therefore need to be calculated:
 
 .. code-block:: ini
 

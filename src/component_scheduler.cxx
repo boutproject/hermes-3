@@ -23,7 +23,7 @@ namespace {
 
 /// Cheap class to track dependencies while recursing through the
 /// dependency graph. It is designed to minimise the ammount of
-/// copying that neesd to be done.
+/// copying that needs to be done.
 class DependencyChain {
 private:
   struct Element {
@@ -154,7 +154,7 @@ std::set<std::string> getParents(const std::string& name) {
 
 /// Produce a map between Option paths and all variable names held
 /// within that path. If the path refers to a section then it maps to
-/// the set of all variables contained in that section and any
+/// the set of all variables contained in that section and its
 /// sub-sections. Otherwise the path corresponds to a variable and
 /// just maps to itself. Only paths which are explicitly given a
 /// permission by at least one component will be present.
@@ -310,10 +310,35 @@ setReadDependencies(const std::vector<std::unique_ptr<Component>>& components,
 
 /// Topologically sorts the list of components to ensure variables are
 /// written and read in the right order.
+///
+/// This is quite a complicated process. The steps are:
+///
+/// 1. Construct a map between names and the variable(s) to which
+///    they refer (section names refer to all variables contained within
+///    the section). This is used so that, when a permission is set for
+///    a whole section, we can work out what are the actual variables
+///    the permission applies to.
+/// 2. Identify the components which have permission to do final writes
+///    and non-final writes on each variable.
+/// 3. Construct a map between variable names and which components last
+///    write to them.
+///    - For variables where a component has final write permission,
+///      it is that component.
+///    - Otherwise, it is all components which have non-final write
+///      permission for the variable.
+/// 4. Establish the dependencies between components.
+///    - Components which have final-write permission for a variable
+///      depend on any components that have non-final write permission for
+///      that variable.
+///    - Components that have read permission for a variable will depend
+///      on whichever component(s) last write to that variable, as
+///      determined in the previous step.
+/// 5. Use this dependency information to perform a topological sort on
+///    the components.
 void sortComponents(std::vector<std::unique_ptr<Component>>& components) {
   // Map between variable/section names specified by component
   // permissions and the variables they contain. In the case of
-  // sections this is all variables within the section and any
+  // sections this is all variables within the section and its
   // sub-sections. Non-section viarables map to themselves.
   const std::map<std::string, std::set<std::string>> variable_hierarchy =
       getVariableHierarchy(components);
@@ -367,7 +392,7 @@ void sortComponents(std::vector<std::unique_ptr<Component>>& components) {
   if (missing.size() > 0) {
     throw BoutException(
         "The following required variables are not written by any component:\n\t{}\n",
-        fmt::format("{}", fmt::join(missing, "\n\t")));
+        fmt::join(missing, "\n\t"));
   }
   // Insert dependency information for components that read variables
   // if those variables have been set. If can not find a place where
