@@ -5,6 +5,9 @@
 
 #include "../../include/sheath_boundary_penalty.hxx"
 
+#include <bout/constants.hxx>
+
+#include <cmath>
 #include <set>
 
 /// Global mesh
@@ -112,4 +115,138 @@ TEST_F(SheathBoundaryPenaltyTest, PrepareFieldAlignedPenaltyMaskCopiesYGuards) {
       EXPECT_TRUE(indices.count(interior.ind));
     }
   }
+}
+
+TEST_F(SheathBoundaryPenaltyTest, CalculateVolumetricPenaltyReturnsElectronPenaltyTerms) {
+  auto mask = makeField<Field3D>([](const Ind3D&) { return 0.0; });
+  const auto active = indexAt(mask, mesh->xstart, mesh->ystart, 0);
+  mask[active] = 0.25;
+  const auto region = SheathBoundaryPenalty::buildPenaltyRegion(mask, 0.0);
+
+  auto Ne = makeField<Field3D>([](const Ind3D&) { return 0.5; });
+  auto Te = makeField<Field3D>([](const Ind3D&) { return 2.0; });
+  auto Ve = makeField<Field3D>([](const Ind3D&) { return 3.0; });
+  auto density_source = makeField<Field3D>([](const Ind3D&) { return 7.0; });
+  auto momentum_source = makeField<Field3D>([](const Ind3D&) { return 11.0; });
+  auto energy_source = makeField<Field3D>([](const Ind3D&) { return 13.0; });
+  const SheathBoundaryPenalty::PenaltyMaskData penalty_data{mask, region};
+
+  const BoutReal Me = 0.1;
+  const BoutReal gamma_e = 3.5;
+  const BoutReal penalty_timescale = 4.0;
+
+  const auto result = SheathBoundaryPenalty::calculateVolumetricPenalty(
+      penalty_data, Ne, Te, Ve, Me, gamma_e, penalty_timescale, density_source,
+      momentum_source, energy_source);
+
+  EXPECT_DOUBLE_EQ(result.density[active],
+                   -0.25 * 7.0 - 0.25 * (0.5 - 1e-5) / penalty_timescale);
+  EXPECT_DOUBLE_EQ(result.momentum[active],
+                   -0.25 * 11.0 - 0.25 * Me * 0.5 * 3.0 / penalty_timescale);
+  EXPECT_DOUBLE_EQ(result.energy[active],
+                   -0.25 * 13.0 - 0.25 * gamma_e * 0.5 * 2.0 / penalty_timescale);
+
+  const auto other = indexAt(mask, mesh->xend, mesh->yend, mesh->LocalNz - 1);
+  EXPECT_DOUBLE_EQ(result.density[other], 0.0);
+  EXPECT_DOUBLE_EQ(result.momentum[other], 0.0);
+  EXPECT_DOUBLE_EQ(result.energy[other], 0.0);
+}
+
+TEST_F(SheathBoundaryPenaltyTest, CalculateVolumetricPenaltyReturnsIonPenaltyTerms) {
+  auto mask = makeField<Field3D>([](const Ind3D&) { return 0.0; });
+  const auto active = indexAt(mask, mesh->xstart, mesh->ystart, 0);
+  mask[active] = 0.5;
+  const auto region = SheathBoundaryPenalty::buildPenaltyRegion(mask, 0.0);
+
+  auto Ni = makeField<Field3D>([](const Ind3D&) { return 0.5; });
+  auto Ti = makeField<Field3D>([](const Ind3D&) { return 2.0; });
+  auto Vi = makeField<Field3D>([](const Ind3D&) { return 3.0; });
+  auto density_source = makeField<Field3D>([](const Ind3D&) { return 5.0; });
+  auto momentum_source = makeField<Field3D>([](const Ind3D&) { return 7.0; });
+  auto energy_source = makeField<Field3D>([](const Ind3D&) { return 11.0; });
+  const SheathBoundaryPenalty::PenaltyMaskData penalty_data{mask, region};
+
+  const BoutReal Mi = 2.0;
+  const BoutReal gamma_i = 4.0;
+  const BoutReal penalty_timescale = 10.0;
+  const BoutReal density_floor = 1.0;
+
+  const auto result = SheathBoundaryPenalty::calculateVolumetricPenalty(
+      penalty_data, Ni, Ti, Vi, Mi, gamma_i, penalty_timescale, density_source,
+      momentum_source, energy_source, density_floor);
+
+  EXPECT_DOUBLE_EQ(result.density[active], -0.5 * 5.0);
+  EXPECT_DOUBLE_EQ(result.momentum[active],
+                   -0.5 * 7.0 - 0.5 * Mi * density_floor * 3.0 / penalty_timescale);
+  EXPECT_DOUBLE_EQ(result.energy[active],
+                   -0.5 * 11.0 - 0.5 * gamma_i * density_floor * 2.0 / penalty_timescale);
+
+  const auto other = indexAt(mask, mesh->xend, mesh->yend, mesh->LocalNz - 1);
+  EXPECT_DOUBLE_EQ(result.density[other], 0.0);
+  EXPECT_DOUBLE_EQ(result.momentum[other], 0.0);
+  EXPECT_DOUBLE_EQ(result.energy[other], 0.0);
+}
+
+TEST_F(SheathBoundaryPenaltyTest,
+       CalculateElectronSurfaceMomentumPenaltyAddsExpectedTerm) {
+  auto mask_fa = makeField<Field3D>([](const Ind3D&) { return 0.0; });
+  const auto active = indexAt(mask_fa, mesh->xstart, mesh->ystart, 0);
+  const auto iyp = active.yp();
+  const auto iym = active.ym();
+  mask_fa[active] = 1.0;
+  mask_fa[iyp] = 0.0;
+  mask_fa[iym] = 1.0;
+  const auto region = SheathBoundaryPenalty::buildPenaltyRegion(mask_fa, 0.0);
+
+  auto Ne_fa = makeField<Field3D>([](const Ind3D&) { return 0.7; });
+  auto Te_fa = makeField<Field3D>([](const Ind3D&) { return 2.0; });
+  auto Ve_fa = makeField<Field3D>([](const Ind3D&) { return 0.5; });
+  auto phi_fa = makeField<Field3D>([](const Ind3D&) { return 0.3; });
+  const SheathBoundaryPenalty::PenaltyMaskData penalty_fa_data{mask_fa, region};
+
+  const BoutReal Me = 0.2;
+  const BoutReal penalty_timescale = 4.0;
+  const BoutReal tesheath = 2.0;
+  const BoutReal vesheath = 0.5;
+  const BoutReal phisheath = 0.3;
+  const BoutReal Cse =
+      sqrt(tesheath / (TWOPI * Me)) * exp(-phisheath / BOUTMAX(tesheath, 1e-5));
+  const BoutReal expected = Me * 0.7 * (-Cse - vesheath) / penalty_timescale;
+
+  const auto result = SheathBoundaryPenalty::calculateElectronSurfaceMomentumPenalty(
+      penalty_fa_data, Ne_fa, Te_fa, Ve_fa, phi_fa, Me, penalty_timescale);
+
+  EXPECT_DOUBLE_EQ(result[active], expected);
+  const auto other = indexAt(mask_fa, mesh->xend, mesh->yend, mesh->LocalNz - 1);
+  EXPECT_DOUBLE_EQ(result[other], 0.0);
+}
+
+TEST_F(SheathBoundaryPenaltyTest, CalculateIonSurfaceMomentumPenaltyAddsExpectedTerm) {
+  auto mask_fa = makeField<Field3D>([](const Ind3D&) { return 0.0; });
+  const auto active = indexAt(mask_fa, mesh->xstart, mesh->yend, 0);
+  const auto iyp = active.yp();
+  const auto iym = active.ym();
+  mask_fa[active] = 1.0;
+  mask_fa[iyp] = 1.0;
+  mask_fa[iym] = 0.0;
+  const auto region = SheathBoundaryPenalty::buildPenaltyRegion(mask_fa, 0.0);
+
+  auto Ni_fa = makeField<Field3D>([](const Ind3D&) { return 0.4; });
+  auto Ti_fa = makeField<Field3D>([](const Ind3D&) { return 1.5; });
+  auto Te_fa = makeField<Field3D>([](const Ind3D&) { return 2.5; });
+  auto Vi_fa = makeField<Field3D>([](const Ind3D&) { return -0.2; });
+  const SheathBoundaryPenalty::PenaltyMaskData penalty_fa_data{mask_fa, region};
+
+  const BoutReal Mi = 2.0;
+  const BoutReal penalty_timescale = 5.0;
+  const BoutReal density_floor = 0.6;
+  const BoutReal Cs = sqrt((2.5 + 1.5) / Mi);
+  const BoutReal expected = Mi * density_floor * (Cs - (-0.2)) / penalty_timescale;
+
+  const auto result = SheathBoundaryPenalty::calculateIonSurfaceMomentumPenalty(
+      penalty_fa_data, Ni_fa, Ti_fa, Te_fa, Vi_fa, Mi, penalty_timescale, density_floor);
+
+  EXPECT_DOUBLE_EQ(result[active], expected);
+  const auto other = indexAt(mask_fa, mesh->xstart, mesh->ystart, mesh->LocalNz - 1);
+  EXPECT_DOUBLE_EQ(result[other], 0.0);
 }

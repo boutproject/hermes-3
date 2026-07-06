@@ -19,6 +19,12 @@ struct SheathBoundaryPenalty : public Component {
     Region<Ind3D> region;
   };
 
+  struct PenaltySourceData {
+    Field3D density;
+    Field3D momentum;
+    Field3D energy;
+  };
+
   /// # Input options
   /// - <name> e.g. "sheath_boundary_penalty"
   ///   - penalty_timescale    Timescale in seconds
@@ -51,12 +57,29 @@ struct SheathBoundaryPenalty : public Component {
   static PenaltyMaskData prepareFieldAlignedPenaltyMask(Field3D mask_fa, Mesh& mesh,
                                                         BoutReal threshold = 1e-5);
 
-private:
-  /// Mask function that is 0 in the plasma, 1 in the wall
-  Field3D penalty_mask;
+  /// Calculate the volumetric penalty terms for a species
+  static PenaltySourceData calculateVolumetricPenalty(
+      const PenaltyMaskData& penalty_data, const Field3D& Ni, const Field3D& Ti,
+      const Field3D& Vi, BoutReal Mi, BoutReal gamma_i, BoutReal penalty_timescale,
+      const Field3D& density_source, const Field3D& momentum_source,
+      const Field3D& energy_source, BoutReal density_floor = 1e-5);
 
-  /// Cell indices where penalty_mask > 0
-  Region<Ind3D> penalty_region;
+  /// Calculate electron surface momentum penalty terms in field-aligned coordinates
+  static Field3D calculateElectronSurfaceMomentumPenalty(
+      const PenaltyMaskData& penalty_fa_data, const Field3D& Ne_fa, const Field3D& Te_fa,
+      const Field3D& Ve_fa, const Field3D& phi_fa, BoutReal Me,
+      BoutReal penalty_timescale, BoutReal density_floor = 1e-5,
+      BoutReal mask_threshold = 1e-5);
+
+  /// Calculate ion surface momentum penalty terms in field-aligned coordinates
+  static Field3D calculateIonSurfaceMomentumPenalty(
+      const PenaltyMaskData& penalty_fa_data, const Field3D& Ni_fa, const Field3D& Ti_fa,
+      const Field3D& Te_fa, const Field3D& Vi_fa, BoutReal Mi, BoutReal penalty_timescale,
+      BoutReal density_floor = 1e-5, BoutReal mask_threshold = 1e-5);
+
+private:
+  /// Mask function and region in the original mesh coordinates
+  PenaltyMaskData penalty_data;
 
   BoutReal gamma_e, gamma_i; // Sheath heat transmission factors
 
@@ -69,8 +92,7 @@ private:
 
   // Field-aligned fields for surface terms
   bool surface_terms;
-  Field3D penalty_mask_fa;
-  Region<Ind3D> penalty_region_fa;
+  PenaltyMaskData penalty_fa_data;
 
   /// # Inputs
   ///   - fields
