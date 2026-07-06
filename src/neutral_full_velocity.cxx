@@ -484,11 +484,11 @@ void NeutralFullVelocity::finally(const Options& state) {
     // Transport Processes in Gases", 1972
     eta_n = AA * (2. / 5) * kappa_n;
 
-    // Communicate together to reduce the number of MPI exchanges
-    mesh->communicate(Dnn, kappa_n, eta_n);
     Dnn.applyBoundary();
     kappa_n.applyBoundary("neumann");
     eta_n.applyBoundary("neumann");
+    mesh->communicate(Dnn, kappa_n, eta_n);
+
 
     for (RangeIterator idwn = mesh->iterateBndryLowerY(); !idwn.isDone(); idwn.next()) {
       // Neumann conditions for transport coefficients
