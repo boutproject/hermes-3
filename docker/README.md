@@ -225,7 +225,7 @@ esac
 spack -e . config add "packages:all:require:target=${HERMES_TARGET}"
 ```
 
-`aarch64` and `x86_64_v3` are portable baselines (`x86_64_v3` adds AVX2, BMI1/2 and FMA on top of the base x86-64 ISA). Requiring a *generic-family* target this way does **not** break concretization of the externally-found gcc — a newer compiler can always target an older ISA — despite the compiler being a graph node in Spack 1.x.
+`aarch64` and `x86_64_v3` are portable baselines (`x86_64_v3` adds AVX2, BMI1/2 and FMA on top of x86-64_v2 ISA). Requiring a *generic-family* target this way does **not** break concretization of the externally-found gcc — a newer compiler can always target an older ISA — despite the compiler being a graph node in Spack 1.x.
 
 Because the target is now fixed regardless of which runner a job lands on, concretization — and therefore OCI-cache hits — are **deterministic across the heterogeneous amd64 runner fleet**. The one residual cost: the public mirror ships some amd64 binaries only at other `x86_64_vN` levels, so a few packages may compile from source at the `v3` floor; they populate the OCI cache on the first run and are reused incrementally thereafter (arm64, already generic on the public mirror, is fully cache-served from the start).
 
