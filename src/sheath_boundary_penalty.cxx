@@ -6,6 +6,44 @@
 #include <bout/mesh.hxx>
 using bout::globals::mesh;
 
+Region<Ind3D> SheathBoundaryPenalty::buildPenaltyRegion(const Field3D& mask,
+                                                        BoutReal threshold) {
+  Region<Ind3D>::RegionIndices indices;
+  BOUT_FOR_SERIAL(i, mask.getRegion("RGN_NOBNDRY")) {
+    if (mask[i] > threshold) {
+      indices.push_back(i);
+    }
+  }
+  return Region<Ind3D>(indices);
+}
+
+SheathBoundaryPenalty::PenaltyMaskData
+SheathBoundaryPenalty::preparePenaltyMask(Field3D mask, BoutReal threshold) {
+  mask.applyBoundary("neumann");
+  return {mask, buildPenaltyRegion(mask, threshold)};
+}
+
+SheathBoundaryPenalty::PenaltyMaskData
+SheathBoundaryPenalty::prepareFieldAlignedPenaltyMask(Field3D mask_fa, Mesh& localmesh,
+                                                      BoutReal threshold) {
+  auto region = buildPenaltyRegion(mask_fa, threshold);
+
+  for (RangeIterator r = localmesh.iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < localmesh.LocalNz; jz++) {
+      auto i = indexAt(mask_fa, r.ind, localmesh.ystart, jz);
+      mask_fa[i.ym()] = mask_fa[i];
+    }
+  }
+  for (RangeIterator r = localmesh.iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < localmesh.LocalNz; jz++) {
+      auto i = indexAt(mask_fa, r.ind, localmesh.yend, jz);
+      mask_fa[i.yp()] = mask_fa[i];
+    }
+  }
+
+  return {mask_fa, region};
+}
+
 SheathBoundaryPenalty::SheathBoundaryPenalty(std::string name, Options& alloptions,
                                              Solver*)
     : Component({
@@ -62,45 +100,16 @@ SheathBoundaryPenalty::SheathBoundaryPenalty(std::string name, Options& alloptio
   if (mesh->get(penalty_mask, mask_name) != 0) {
     throw BoutException("Could not read penalty mask variable '{}'", mask_name);
   }
-  penalty_mask.applyBoundary("neumann");
-
-  // Find every cell that has penalty_mask > 0
-  // so we can efficiently iterate over them later
-  {
-    Region<Ind3D>::RegionIndices indices;
-    BOUT_FOR_SERIAL(i, penalty_mask.getRegion("RGN_NOBNDRY")) {
-      if (penalty_mask[i] > 1e-5) {
-        // Add this cell to the iteration
-        indices.push_back(i);
-      }
-    }
-    penalty_region = Region<Ind3D>(indices);
-  }
+  auto mask_data = preparePenaltyMask(penalty_mask);
+  penalty_mask = std::move(mask_data.mask);
+  penalty_region = std::move(mask_data.region);
 
   if (surface_terms) {
     // Calculate surface terms using field-aligned coordinates
-    penalty_mask_fa = toFieldAligned(penalty_mask);
-    Region<Ind3D>::RegionIndices indices;
-    BOUT_FOR_SERIAL(i, penalty_mask_fa.getRegion("RGN_NOBNDRY")) {
-      if (penalty_mask_fa[i] > 1e-5) {
-        // Add this cell to the iteration
-        indices.push_back(i);
-      }
-    }
-    penalty_region_fa = Region<Ind3D>(indices);
-
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(penalty_mask_fa, r.ind, mesh->ystart, jz);
-        penalty_mask_fa[i.ym()] = penalty_mask_fa[i];
-      }
-    }
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(penalty_mask_fa, r.ind, mesh->yend, jz);
-        penalty_mask_fa[i.yp()] = penalty_mask_fa[i];
-      }
-    }
+    auto fa_mask_data =
+        prepareFieldAlignedPenaltyMask(toFieldAligned(penalty_mask), *mesh);
+    penalty_mask_fa = std::move(fa_mask_data.mask);
+    penalty_region_fa = std::move(fa_mask_data.region);
   }
 }
 

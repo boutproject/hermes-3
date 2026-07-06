@@ -3,6 +3,7 @@
 #define SHEATH_BOUNDARY_PENALTY_H
 
 #include "component.hxx"
+#include <bout/mesh.hxx>
 #include <bout/region.hxx>
 
 /// Penalty method for imposing sheath boundary conditions over an
@@ -13,6 +14,11 @@
 ///    An error should be raised if this is done in the wrong order.
 ///
 struct SheathBoundaryPenalty : public Component {
+  struct PenaltyMaskData {
+    Field3D mask;
+    Region<Ind3D> region;
+  };
+
   /// # Input options
   /// - <name> e.g. "sheath_boundary_penalty"
   ///   - penalty_timescale    Timescale in seconds
@@ -32,6 +38,18 @@ struct SheathBoundaryPenalty : public Component {
   ///  - R<species>_penalty    Energy source
   ///
   void outputVars(Options& state) override;
+
+  // The following functions are public for unit testing
+
+  /// Cell indices where mask > threshold in the interior region
+  static Region<Ind3D> buildPenaltyRegion(const Field3D& mask, BoutReal threshold = 1e-5);
+
+  /// Apply boundary conditions to the mask and calculate the penalty region
+  static PenaltyMaskData preparePenaltyMask(Field3D mask, BoutReal threshold = 1e-5);
+
+  /// Calculate the field-aligned penalty region and extend the mask into Y guard cells
+  static PenaltyMaskData prepareFieldAlignedPenaltyMask(Field3D mask_fa, Mesh& mesh,
+                                                        BoutReal threshold = 1e-5);
 
 private:
   /// Mask function that is 0 in the plasma, 1 in the wall
