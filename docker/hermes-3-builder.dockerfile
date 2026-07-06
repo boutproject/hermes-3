@@ -27,7 +27,7 @@ COPY docker/image_ingredients/spack_config.yaml /root/.spack/config.yaml
 RUN spack external find gcc
 
 # Check what architecture is supported by the builder
-RUN /usr/lib64/ld-linux-x86-64.so.2 --help|grep supported
+RUN /usr/lib64/ld-linux-x86-64.so.2 --help|grep supported || :
 
 # Add Spack's signed public binary mirror and trust its keys. --yes-to-all
 # avoids the interactive [y/N] key-trust prompt, which would EOF in a
