@@ -36,6 +36,9 @@ COPY docker/image_ingredients/spack_config.yaml /root/.spack/config.yaml
 # legacy `spack compiler find`, which writes compilers.yaml, is ignored).
 RUN spack external find gcc
 
+# Check what architecture is supported by the builder
+RUN /usr/lib64/ld-linux-x86-64.so.2 --help|grep supported
+
 # Add Spack's public binary mirror so most dependencies can be downloaded as
 # prebuilt binaries instead of compiled from source. Signed, so import the
 # public signing keys and trust them. (Cache hits depend on the concretization
