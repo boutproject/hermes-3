@@ -683,6 +683,41 @@ together.
 .. doxygenclass:: ComponentScheduler
    :members:
 
+Component sorting algorithm
+```````````````````````````
+
+The algorithm for sorting components is slightly complicated. Normally
+users and developers will not need to be concerned with it but, in the
+event that it is ever necessary to modify or debug the algorithm, the
+steps are provided below.
+
+1. Construct a map between names and the variable(s) to which
+   they refer (section names refer to all variables contained within
+   the section). This is used so that, when a permission is set for
+   a whole section, we can work out what are the actual variables
+   to which the permission applies.
+2. Identify the components which have permission to do final writes
+   and non- final writes on each variable.
+3. Construct a map between variable names and which components last
+   write to them.
+
+   - For variables where a component has final write permission,
+     it is that component.
+   - Otherwise, it is all components which have non-final write
+     permission for the variable.
+
+4. Establish the dependencies between components.
+
+   - Components which have final-write permission for a variable
+     depend on any components that have non-final write permission for
+     that variable.
+   - Components that have read permission for a variable will depend
+     on whichever component(s) last write to that variable, as
+     determined in the previous step.
+
+5. Use this dependency information to perform a topological sort on
+   the components.
+
 
 .. _sec-permissions:
 
