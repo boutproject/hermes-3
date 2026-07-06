@@ -4,6 +4,11 @@
 
 #include "component.hxx"
 
+#include <bout/bout_types.hxx>
+#include <bout/field3d.hxx>
+
+#include <string>
+
 /// Boundary condition at the wall in Y
 ///
 /// This is a collective component, because it couples all charged species
@@ -27,14 +32,24 @@ struct SheathBoundary : public Component {
   ///   - wall_potential           Voltage of the wall [Volts]
   ///   - floor_potential          Apply floor to sheath potential?
   ///   - secondary_electron_coef  Effective secondary electron emission coefficient
-  ///   - sin_alpha                Sine of the angle between magnetic field line and wall surface (0 to 1)
-  ///   - always_set_phi           Always set phi field? Default is to only modify if already set
-  SheathBoundary(std::string name, Options &options, Solver *);
+  ///   - sin_alpha                Sine of the angle between magnetic field line and wall
+  ///   surface (0 to 1)
+  ///   - always_set_phi           Always set phi field? Default is to only modify if
+  ///   already set
+  SheathBoundary(std::string name, Options& options, Solver*);
+
+  /// Ion-induced secondary electron emission yield γ(E_i)
+  ///
+  /// Input energy `ion_energy` is in Hermes normalised units (same as used internally
+  /// in `src/sheath_boundary.cxx`).
+  ///
+  /// If ion-induced SEE is disabled (`ion_ee_gamma_max < 0`) then returns 0.
+  BoutReal ionSecondaryElectronEmissionGamma(BoutReal ion_energy) const;
 
 private:
-  BoutReal Ge; // Secondary electron emission coefficient
+  BoutReal Ge;       // Secondary electron emission coefficient
   Field3D sin_alpha; // sin of angle between magnetic field and wall.
-  
+
   bool lower_y; // Boundary on lower y?
   bool upper_y; // Boundary on upper y?
 
@@ -43,6 +58,12 @@ private:
   Field3D wall_potential; ///< Voltage at the wall. Normalised units.
 
   bool floor_potential; ///< Apply floor to sheath potential?
+
+  // Ion-induced Secondary Electron Emission
+  BoutReal ion_ee_gamma_max; ///< Maximum ion induced secondary emission coefficient
+  BoutReal ion_ee_E_th;      ///< Threshold energy [normalised]
+  BoutReal ion_ee_E_max;     ///< Peak energy [normalised]
+  BoutReal ion_ee_p;         ///< Shape coefficient
 
   ///
   /// # Inputs
@@ -93,8 +114,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SheathBoundary>
-    registercomponentsheathboundary("sheath_boundary");
+RegisterComponent<SheathBoundary> registercomponentsheathboundary("sheath_boundary");
 }
 
 #endif // SHEATH_BOUNDARY_H

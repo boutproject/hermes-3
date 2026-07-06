@@ -1,18 +1,31 @@
 
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/globals.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
+#include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/evolve_energy.hxx"
-#include "../include/hermes_utils.hxx"
+#include "../include/guarded_options.hxx"
 #include "../include/hermes_build_config.hxx"
+#include "../include/hermes_utils.hxx"
+#include "../include/permissions.hxx"
 
 #include <algorithm>
+#include <memory>
+#include <string>
 
 using bout::globals::mesh;
 
@@ -205,7 +218,7 @@ void EvolveEnergy::finally(const Options& state) {
       const BoutReal nsheath = 0.5 * (N[im] + N[i]);
       const BoutReal vsheath = 0.5 * (V[im] + V[i]);
 
-      const BoutReal Esheath = Cv * psheath + 0.5 * AA * nsheath * SQ(vsheath);
+      const BoutReal Esheath = (Cv * psheath) + (0.5 * AA * nsheath * SQ(vsheath));
       E[im] = 2 * Esheath - E[i];
     }
   }
@@ -218,19 +231,19 @@ void EvolveEnergy::finally(const Options& state) {
       const BoutReal nsheath = 0.5 * (N[ip] + N[i]);
       const BoutReal vsheath = 0.5 * (V[ip] + V[i]);
 
-      const BoutReal Esheath = Cv * psheath + 0.5 * AA * nsheath * SQ(vsheath);
+      const BoutReal Esheath = (Cv * psheath) + (0.5 * AA * nsheath * SQ(vsheath));
       E[ip] = 2 * Esheath - E[i];
     }
   }
   E = fromFieldAligned(E);
 
-  Field3D Pfloor = P;
+  const Field3D Pfloor = P;
 
-  if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5) and
-      state.isSection("fields") and state["fields"].isSet("phi")) {
+  if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5)
+      and state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set -> include ExB flow
 
-    Field3D phi = get<Field3D>(state["fields"]["phi"]);
+    const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
     ddt(E) = -Div_n_bxGrad_f_B_XPPM(E, phi, bndry_flux, poloidal_flows, true);
   } else {
@@ -238,7 +251,7 @@ void EvolveEnergy::finally(const Options& state) {
   }
 
   if (species.isSet("velocity")) {
-    Field3D V = get<Field3D>(species["velocity"]);
+    const Field3D V = get<Field3D>(species["velocity"]);
 
     // Typical wave speed used for numerical diffusion
     Field3D fastest_wave;
@@ -260,7 +273,7 @@ void EvolveEnergy::finally(const Options& state) {
 
   if (species.isSet("low_n_coeff")) {
     // Low density parallel diffusion
-    Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
+    const Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(E) += FV::Div_par_K_Grad_par(low_n_coeff * T, N)
               + FV::Div_par_K_Grad_par(low_n_coeff, P);
   }
@@ -279,7 +292,8 @@ void EvolveEnergy::finally(const Options& state) {
   }
 #if CHECKLEVEL >= 1
   if (species.isSet("pressure_source")) {
-    throw BoutException("Components must evolve `energy_source` rather then `pressure_source`");
+    throw BoutException(
+        "Components must evolve `energy_source` rather then `pressure_source`");
   }
 #endif
   if (species.isSet("momentum_source")) {
@@ -384,24 +398,26 @@ void EvolveEnergy::outputVars(Options& state) {
                     {"source", "evolve_energy"}});
 
     if (flow_xlow.isAllocated()) {
-      set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " power through X cell face. Note: May be incomplete."},
-                    {"species", name},
-                    {"source", "evolve_energy"}});
+      set_with_attrs(
+          state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
+          {{"time_dimension", "t"},
+           {"units", "W"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+           {"standard_name", "power"},
+           {"long_name", name + " power through X cell face. Note: May be incomplete."},
+           {"species", name},
+           {"source", "evolve_energy"}});
     }
     if (flow_ylow.isAllocated()) {
-      set_with_attrs(state[fmt::format("ef{}_tot_ylow", name)], flow_ylow,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " power through Y cell face. Note: May be incomplete."},
-                    {"species", name},
-                    {"source", "evolve_energy"}});
+      set_with_attrs(
+          state[fmt::format("ef{}_tot_ylow", name)], flow_ylow,
+          {{"time_dimension", "t"},
+           {"units", "W"},
+           {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+           {"standard_name", "power"},
+           {"long_name", name + " power through Y cell face. Note: May be incomplete."},
+           {"species", name},
+           {"source", "evolve_energy"}});
     }
   }
 }
