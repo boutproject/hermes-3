@@ -81,8 +81,8 @@ SheathBoundaryPenalty::SheathBoundaryPenalty(std::string name, Options& alloptio
     // Calculate surface terms using field-aligned coordinates
     penalty_mask_fa = toFieldAligned(penalty_mask);
     Region<Ind3D>::RegionIndices indices;
-    BOUT_FOR_SERIAL(i, penalty_mask.getRegion("RGN_NOBNDRY")) {
-      if (penalty_mask[i] > 1e-5) {
+    BOUT_FOR_SERIAL(i, penalty_mask_fa.getRegion("RGN_NOBNDRY")) {
+      if (penalty_mask_fa[i] > 1e-5) {
         // Add this cell to the iteration
         indices.push_back(i);
       }
