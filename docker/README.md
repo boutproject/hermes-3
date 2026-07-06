@@ -93,6 +93,22 @@ To use a different tag, either:
 
 If neither the variable nor `.env` provides a value, the compose file falls back to `latest`.
 
+## Controlling build parallelism
+
+When you rebuild BOUT++ or Hermes-3 in the container (`build_boutpp`, `build_hermes`,
+`build_both`), the number of parallel compile jobs is controlled by the
+`HERMES_BUILD_JOBS` variable, which defaults to `4`. `setup.sh` writes
+`HERMES_BUILD_JOBS=4` to `.env`. A low default keeps memory use modest —
+BOUT++/Hermes-3 are template-heavy, so each job can consume a lot of RAM — but
+if you have spare cores and memory you can raise it:
+
+* **Edit `.env`** for a persistent value: `HERMES_BUILD_JOBS=8`
+* **Override for a single build**: `HERMES_BUILD_JOBS=8 ./run.sh build_both`
+
+The same variable is also a build-arg for the image build itself
+(`docker build --build-arg HERMES_BUILD_JOBS=8 ...`), where it likewise defaults
+to `4`.
+
 ## Overriding Default Builds using the `work` Folder
 
 The `work` folder on your local machine is mounted to the `/hermes_project/work` directory inside the Docker container. This allows you to override the default builds of BOUT++ and Hermes-3 that are included in the image by placing your own source code and configuration files within the `work` folder. The build scripts inside the container are designed to prioritize these files if they exist.
@@ -209,7 +225,7 @@ esac
 spack -e . config add "packages:all:require:target=${HERMES_TARGET}"
 ```
 
-`aarch64` and `x86_64_v3` are portable baselines (`x86_64_v3` ≈ any x86-64 CPU since ~2013 — Intel Haswell / AMD Excavator and later — adding AVX2, BMI1/2 and FMA). Requiring a *generic-family* target this way does **not** break concretization of the externally-found gcc — a newer compiler can always target an older ISA — despite the compiler being a graph node in Spack 1.x. (A more specific microarch, e.g. `x86_64_v4`, could conflict with the external gcc's detected target; the generic family does not.)
+`aarch64` and `x86_64_v3` are portable baselines (`x86_64_v3` adds AVX2, BMI1/2 and FMA on top of the base x86-64 ISA). Requiring a *generic-family* target this way does **not** break concretization of the externally-found gcc — a newer compiler can always target an older ISA — despite the compiler being a graph node in Spack 1.x.
 
 Because the target is now fixed regardless of which runner a job lands on, concretization — and therefore OCI-cache hits — are **deterministic across the heterogeneous amd64 runner fleet**. The one residual cost: the public mirror ships some amd64 binaries only at other `x86_64_vN` levels, so a few packages may compile from source at the `v3` floor; they populate the OCI cache on the first run and are reused incrementally thereafter (arm64, already generic on the public mirror, is fully cache-served from the start).
 
@@ -246,8 +262,40 @@ The runtime image is built from **two** Dockerfiles: `docker/hermes-3-builder.do
 4.  **Working directory and environment variables (`WORKDIR /hermes_project`, `ENV ...`)**: define the locations of the source, build, and config directories for BOUT++ and Hermes-3. The `*_OVERRIDE` variables point into `work/`, so mounted local source and config files take precedence over the built-in versions (see [Overriding Default Builds](#overriding-default-builds-using-the-work-folder)).
 5.  **Copy source and init submodules (`COPY . ${HERMES_SRC_DIR}`, `git submodule update ...`)**: the Hermes-3 source is copied in (files excluded via `docker/hermes-3.dockerfile.dockerignore`) and its submodules (including BOUT++) are initialized.
 6.  **Copy default config files** (`boutpp_config.cmake`, `hermes_config.cmake`), used unless overridden from `work/`.
-7.  **Configure and build BOUT++ then Hermes-3 (`. activate.sh && cmake ... && cmake --build ... --parallel 4`)**: both are compiled at image-build time. `-DCMAKE_PREFIX_PATH` points Hermes-3 at the freshly-built BOUT++.
+7.  **Configure and build BOUT++ then Hermes-3 (`. activate.sh && cmake ... && cmake --build ... --parallel ${HERMES_BUILD_JOBS}`)**: both are compiled at image-build time. `-DCMAKE_PREFIX_PATH` points Hermes-3 at the freshly-built BOUT++. `HERMES_BUILD_JOBS` (a build-arg, default `4`) sets the number of parallel compile jobs.
 8.  **Helper commands and entrypoint**: `docker_image_commands.sh` is installed as `/bin/image` (providing `build_boutpp`, `build_hermes`, `run`, etc.), `docker_entrypoint.sh` becomes the entrypoint, and the default command is `/bin/bash`.
+
+## Required upkeep
+
+The Docker images pin their inputs deliberately (for reproducible, cache-friendly
+builds), which means they don't update themselves. The following need periodic
+manual attention to keep the images building, secure, and current:
+
+* **Spack base image** (`docker/hermes-3-builder.dockerfile`): pinned as
+  `spack/ubuntu-noble:<tag>@sha256:<digest>`. Docker resolves purely by digest,
+  so bump the tag **and** the digest together by hand. Watch Spack release notes
+  when bumping — e.g. 1.1 had a PETSc packaging bug that broke this build and 1.2
+  fixed it, so a version jump can require touching `spack.yaml` too.
+* **Jupyter base image** (`docker/hermes-3-jupyter.dockerfile`): pinned as
+  `quay.io/jupyter/scipy-notebook:<date-tag>@sha256:<digest>` (the Docker Hub
+  `jupyter/*` images are frozen at Oct 2023 — stay on quay.io). Bump the dated
+  tag and digest together.
+* **Runtime base image** (`docker/hermes-3.dockerfile`): `FROM ubuntu:24.04`.
+  Move to the next Ubuntu LTS when appropriate, keeping it aligned with the
+  builder's Ubuntu release.
+* **CI runner architecture labels** (`.github/workflows/build_*image.yml`,
+  `test_docker_build.yml`): the per-arch build matrices pin `ubuntu-24.04` and
+  `ubuntu-24.04-arm`. GitHub retires old runner images, so bump these to the
+  next version when it lands — and keep the amd64 and arm64 labels on the same
+  Ubuntu release so the two architectures stay aligned.
+* **Microarchitecture target floor** (`hermes-3-builder.dockerfile`, per-arch
+  `x86_64_v3` / `aarch64`): revisit if the portability baseline needs to change
+  (see [the microarchitecture pin](#why-a-hard-target-pin-not-just-granularity-generic)).
+* **Spack environment** (`docker/image_ingredients/spack.yaml`): the package set
+  and versions used to build the scientific stack. Refresh as dependencies
+  (PETSc, SUNDIALS, MPI, …) move forward.
+
+After changing any pin, the `test_docker_build.yml` workflow will run to confirm everything builds correctly before it reaches `master` and updates the default `latest` image.
 
 ## Help!!! I don't have permission to delete the `hermes-3-docker/work` folder
 

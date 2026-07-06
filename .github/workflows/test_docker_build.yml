@@ -26,6 +26,7 @@ on:
     paths:
       - 'docker/**'
       - '.github/workflows/test_docker_build.yml'
+      - '.github/workflows/build*image.yml'
   workflow_dispatch:  # Allows manual triggering
 
 permissions:
@@ -107,7 +108,7 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             arch: amd64
             target: x86_64_v2
           - platform: linux/amd64
@@ -236,7 +237,7 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             arch: amd64
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
@@ -276,6 +277,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=exp-final-${{ matrix.target }}
           build-args: |
             BUILDER_TAG=${{ env.EXPERIMENTAL_TAG }}
+            HERMES_BUILD_JOBS=2
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest

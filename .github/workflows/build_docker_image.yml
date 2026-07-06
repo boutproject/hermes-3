@@ -38,7 +38,7 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             arch: amd64
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
@@ -80,6 +80,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=final-${{ matrix.arch }}
           build-args: |
             BUILDER_TAG=latest
+            HERMES_BUILD_JOBS=2
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest

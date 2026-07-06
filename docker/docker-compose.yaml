@@ -31,12 +31,16 @@ services:
     image: "ghcr.io/boutproject/hermes-3:${HERMES_TAG:-latest}"
     volumes:
       - ${PWD}/work:/hermes_project/work
+    environment:
+    - HERMES_BUILD_JOBS=${HERMES_BUILD_JOBS:-4}
     command: ["image", "build_hermes"]
   build_boutpp:
     # Rebuild BOUT++, using ./work/BOUT-dev if available
     image: "ghcr.io/boutproject/hermes-3:${HERMES_TAG:-latest}"
     volumes:
       - ${PWD}/work:/hermes_project/work
+    environment:
+    - HERMES_BUILD_JOBS=${HERMES_BUILD_JOBS:-4}
     command: ["image", "build_boutpp"]
   build_both:
     # Rebuild both hermes and BOUT++, using overrides
@@ -44,6 +48,8 @@ services:
     image: "ghcr.io/boutproject/hermes-3:${HERMES_TAG:-latest}"
     volumes:
       - ${PWD}/work:/hermes_project/work
+    environment:
+    - HERMES_BUILD_JOBS=${HERMES_BUILD_JOBS:-4}
     command: ['image', "build_both"]
   hermes:
     # Run a hermes-3 case in
