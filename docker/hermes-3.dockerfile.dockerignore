@@ -8,7 +8,6 @@ docker/work
 external/googletest
 performance
 scripts
-examples
 
 external/BOUT-dev/.docker
 external/BOUT-dev/.github
@@ -19,6 +18,3 @@ external/BOUT-dev/externalpackages/googletest
 external/BOUT-dev/externalpackages/boutdata
 external/BOUT-dev/manual
 external/BOUT-dev/tests
-
-*.png
-*.gif
