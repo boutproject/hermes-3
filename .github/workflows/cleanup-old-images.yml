@@ -16,7 +16,7 @@ on:
       dry-run:
         description: 'Dry run (report deletions without performing them)'
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
