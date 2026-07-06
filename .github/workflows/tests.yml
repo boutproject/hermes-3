@@ -14,7 +14,7 @@ defaults:
 
 jobs:
   cmake_tests:
-    name: ${{ matrix.build_type.test_type }} tests, ${{ matrix.config.name }}
+    name: ${{ matrix.build_type.test_type }} tests, ${{ matrix.build_type.name }}
     runs-on: ${{ matrix.config.os }}
     env:
       OMP_NUM_THREADS: ${{ matrix.config.omp_num_threads }}
@@ -29,19 +29,21 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - name: "CMake default options"
-            os: ubuntu-latest
+          - os: ubuntu-latest
         build_type:
           - cmake_build_type: Debug
             test_type: unit
             coverage: ON
+            name: "CMake default options"
             configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON"
           - cmake_build_type: Release
             test_type: integration
             coverage: OFF
+            name: "CMake default options"
             configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON"
           - cmake_build_type: Debug
             test_type: None
+            name: "3D metrics (compile only)"
             configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
             coverage: OFF
 
