@@ -157,6 +157,7 @@ jobs:
           build-args: |
             SPACK_OCI_USER=${{ github.actor }}
             HERMES_TARGET=${{ matrix.target }}
+            HERMES_BUILD_JOBS=2
           secrets: |
             ghcr_token=${{ secrets.GITHUB_TOKEN }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
@@ -235,9 +236,15 @@ jobs:
           - platform: linux/amd64
             runner: ubuntu-24.04
             arch: amd64
+            target: x86_64_v2
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+            target: x86_64_v3
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
+            target: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
@@ -273,6 +280,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=exp-final-${{ matrix.target }}
           build-args: |
             BUILDER_TAG=${{ env.EXPERIMENTAL_TAG }}
+            HERMES_TARGET=${{ matrix.target }}
             HERMES_BUILD_JOBS=2
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 

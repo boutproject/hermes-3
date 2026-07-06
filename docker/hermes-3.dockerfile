@@ -54,11 +54,14 @@ COPY docker/image_ingredients/boutpp_config.cmake ${BOUTPP_CONFIG}
 COPY docker/image_ingredients/hermes_config.cmake ${HERMES_CONFIG}
 
 # Configure and build BOUT++
+ARG HERMES_TARGET=x86_64_v4
 RUN . /opt/spack-environment/activate.sh \
 &&  cmake -B ${BOUTPP_BUILD_DIR} \
           -S ${BOUTPP_SRC_DIR} \
           -C ${BOUTPP_CONFIG} \
           -Wno-dev \
+          -DCMAKE_CXX_FLAGS="-march=${HERMES_TARGET}" \
+          -DCMAKE_C_FLAGS="-march=${HERMES_TARGET}" \
 && cmake --build ${BOUTPP_BUILD_DIR} --parallel ${HERMES_BUILD_JOBS}
 
 # Configure and build Hermes
@@ -68,6 +71,8 @@ RUN . /opt/spack-environment/activate.sh \
           -C ${HERMES_CONFIG} \
           -DCMAKE_PREFIX_PATH=${BOUTPP_BUILD_DIR} \
           -Wno-dev \
+          -DCMAKE_CXX_FLAGS="-march=${HERMES_TARGET}" \
+          -DCMAKE_C_FLAGS="-march=${HERMES_TARGET}" \
 && cmake --build ${HERMES_BUILD_DIR} --parallel ${HERMES_BUILD_JOBS}
 
 # Copy in some helpful commands which can be used in
