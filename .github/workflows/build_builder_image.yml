@@ -29,7 +29,7 @@ env:
 
 jobs:
 
-  # Compute the build matrices. Compat variants (x86_64_v2 / x86_64_v1) only
+  # Compute the build matrices. Compat variants only
   # ever carry the `latest` tag, which is published on the default branch only.
   # On events where `latest` won't be applied (releases, whose ref is a tag; a
   # dispatch from a non-default branch) the compat builds would produce no tag,
@@ -59,19 +59,16 @@ jobs:
           builder='[
             {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"default","target":"x86_64_v3"},
             {"platform":"linux/arm64","runner":"ubuntu-24.04-arm","arch":"arm64","variant":"default","target":"aarch64"},
-            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v2","target":"x86_64_v2"},
-            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v1","target":"x86_64"}
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v2","target":"x86_64_v2"}
           ]'
           final='[
             {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"default","builder_tag":"edge","target":"x86_64_v3"},
             {"platform":"linux/arm64","runner":"ubuntu-24.04-arm","arch":"arm64","variant":"default","builder_tag":"edge","target":"aarch64"},
-            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v2","builder_tag":"edge-x86_64_v2","target":"x86_64_v2"},
-            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v1","builder_tag":"edge-x86_64_v1","target":"x86_64"}
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v2","builder_tag":"edge-x86_64_v2","target":"x86_64_v2"}
           ]'
           merge='[
             {"variant":"default","suffix":""},
-            {"variant":"x86_64_v2","suffix":"-x86_64_v2"},
-            {"variant":"x86_64_v1","suffix":"-x86_64_v1"}
+            {"variant":"x86_64_v2","suffix":"-x86_64_v2"}
           ]'
 
           # Keep only the default variant when compat builds are skipped.

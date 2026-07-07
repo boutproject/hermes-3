@@ -106,8 +106,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Default (amd64 v3 + arm64) plus the x86_64_v2 / x86_64_v1 amd64 compat
-        # legs, so the compat-variant build is exercised end to end here too.
+        # Default (amd64 v3 + arm64) plus the compat variants,
+        # so the compat-variant build is exercised end to end here too.
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
@@ -124,11 +124,6 @@ jobs:
             arch: amd64
             variant: x86_64_v2
             target: x86_64_v2
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: x86_64_v1
-            target: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
@@ -199,8 +194,6 @@ jobs:
             suffix: ''
           - variant: x86_64_v2
             suffix: -x86_64_v2
-          - variant: x86_64_v1
-            suffix: -x86_64_v1
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
@@ -273,12 +266,6 @@ jobs:
             variant: x86_64_v2
             builder_suffix: -x86_64_v2
             target: x86_64_v2
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: x86_64_v1
-            builder_suffix: -x86_64_v1
-            target: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
@@ -346,8 +333,6 @@ jobs:
             suffix: ''
           - variant: x86_64_v2
             suffix: -x86_64_v2
-          - variant: x86_64_v1
-            suffix: -x86_64_v1
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
