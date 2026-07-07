@@ -43,10 +43,8 @@ WORKDIR /opt/spack-environment
 # older hardware. A `require: target=...` is a hard constraint reuse cannot
 # override; we enforce it here because the shared spack.yaml can't branch on
 # architecture.
-#
-# HERMES_TARGET overrides the microarch level explicitly; this is how the CI
-# matrix builds older-arch-compatible variants (e.g. x86_64_v2). When left
-# empty we derive a sensible portable default from `uname -m`.
+# HERMES_TARGET overrides the microarch (CI builds compat variants, e.g.
+# x86_64_v2); empty => portable default from `uname -m`.
 ARG HERMES_TARGET=""
 RUN if [ -z "${HERMES_TARGET}" ]; then \
       case "$(uname -m)" in \

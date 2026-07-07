@@ -33,6 +33,8 @@ services:
       - ${PWD}/work:/hermes_project/work
     environment:
     - HERMES_BUILD_JOBS=${HERMES_BUILD_JOBS:-4}
+    - CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS:-}
+    - CMAKE_C_FLAGS=${CMAKE_C_FLAGS:-}
     command: ["image", "build_hermes"]
   build_boutpp:
     # Rebuild BOUT++, using ./work/BOUT-dev if available
@@ -41,6 +43,8 @@ services:
       - ${PWD}/work:/hermes_project/work
     environment:
     - HERMES_BUILD_JOBS=${HERMES_BUILD_JOBS:-4}
+    - CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS:-}
+    - CMAKE_C_FLAGS=${CMAKE_C_FLAGS:-}
     command: ["image", "build_boutpp"]
   build_both:
     # Rebuild both hermes and BOUT++, using overrides
@@ -50,6 +54,8 @@ services:
       - ${PWD}/work:/hermes_project/work
     environment:
     - HERMES_BUILD_JOBS=${HERMES_BUILD_JOBS:-4}
+    - CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS:-}
+    - CMAKE_C_FLAGS=${CMAKE_C_FLAGS:-}
     command: ['image', "build_both"]
   hermes:
     # Run a hermes-3 case in

@@ -109,6 +109,34 @@ The same variable is also a build-arg for the image build itself
 (`docker build --build-arg HERMES_BUILD_JOBS=8 ...`), where it likewise defaults
 to `4`.
 
+## Compiler flags and the per-image `-march`
+
+Each published image is compiled for a fixed microarchitecture, and that
+`-march` is **baked into the image** at build time (recorded in
+`/etc/hermes-march`). The level depends on which tag you pull:
+
+| Image tag | Baked `-march` |
+| --- | --- |
+| `hermes-3:latest` | `x86-64-v3` on amd64, `armv8-a` on arm64 |
+| `hermes-3:latest-x86_64_v2` | `x86-64-v2` (pre-Haswell / older amd64) |
+| `hermes-3:latest-x86_64_v1` | `x86-64` (maximally portable amd64 baseline) |
+
+The default `latest` targets `x86_64_v3` (AVX2/FMA); the `-x86_64_v2` and
+`-x86_64_v1` variants trade performance for compatibility with older CPUs. The
+same `-march` applies to both the initial build *and* any in-container rebuild
+(`build_boutpp`, `build_hermes`, `build_both`), so a rebuild stays consistent
+with the image by default — you don't have to set anything.
+
+To add flags or retarget a rebuild, set `CMAKE_CXX_FLAGS` / `CMAKE_C_FLAGS`;
+they are **appended after** the baked `-march`. Because a later `-march` wins,
+this both adds flags and lets you change the target:
+
+* **Tune for your own CPU**: `CMAKE_CXX_FLAGS=-march=native ./run.sh build_both`
+* **Extra optimisation flags**: `CMAKE_CXX_FLAGS=-funroll-loops`
+* **Persistent value**: edit `.env` (`setup.sh` seeds both empty).
+
+Leave them empty (the default) to match the image you pulled.
+
 ## Overriding Default Builds using the `work` Folder
 
 The `work` folder on your local machine is mounted to the `/hermes_project/work` directory inside the Docker container. This allows you to override the default builds of BOUT++ and Hermes-3 that are included in the image by placing your own source code and configuration files within the `work` folder. The build scripts inside the container are designed to prioritize these files if they exist.

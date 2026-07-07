@@ -10,12 +10,9 @@ FROM ubuntu:24.04
 # Number of parallel compile jobs. Overridable per-build (CI/local).
 ARG HERMES_BUILD_JOBS=4
 
-# Microarch level for the BOUT++/Hermes-3 application code, mirroring the Spack
-# dependency pin in the builder image. Without it these (the physics hot loops)
-# would compile at GCC's generic baseline regardless of the builder's target, so
-# an "optimized" image would gain nothing over a compat one. Empty => derive the
-# same portable default as the builder from `uname -m`. Mapped to a GCC -march
-# string below (Spack spells it x86_64_v3; GCC wants x86-64-v3).
+# Microarch for the BOUT++/Hermes-3 code, matching the builder's Spack pin;
+# without it the physics hot loops compile at GCC's generic baseline. Empty =>
+# same `uname -m` default as the builder. Mapped to a -march string below.
 ARG HERMES_TARGET=""
 
 COPY --from=builder /opt/spack-environment /opt/spack-environment
@@ -61,10 +58,8 @@ RUN git -C ${HERMES_SRC_DIR} submodule update --init --recursive --depth 1 --sin
 COPY docker/image_ingredients/boutpp_config.cmake ${BOUTPP_CONFIG}
 COPY docker/image_ingredients/hermes_config.cmake ${HERMES_CONFIG}
 
-# Resolve HERMES_TARGET (Spack name) to a GCC -march string, deriving the same
-# portable default as the builder when unset. Emitted to /etc/hermes-march so
-# both CMake builds below reuse it without duplicating the mapping. An unknown
-# target yields an empty file, and the builds fall back to GCC's default -march.
+# Map HERMES_TARGET (Spack name) -> GCC -march, into /etc/hermes-march so both
+# builds below and in-container rebuilds reuse it. Unknown => empty (GCC default).
 RUN hermes_target="${HERMES_TARGET}" && \
     if [ -z "${hermes_target}" ]; then \
       case "$(uname -m)" in \
