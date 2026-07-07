@@ -106,13 +106,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Default (amd64 v3 + arm64) plus the x86_64_v2 / x86_64_v1 amd64 compat
+        # legs, so the compat-variant build is exercised end to end here too.
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
             arch: amd64
+            variant: default
+            target: x86_64_v3
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
+            variant: default
+            target: aarch64
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v2
+            target: x86_64_v2
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v1
+            target: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
@@ -144,12 +160,13 @@ jobs:
           file: ${{ env.BUILDER_DOCKERFILE }}
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=exp-builder-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=exp-builder-${{ matrix.arch }}
+          cache-from: type=gha,scope=exp-builder-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=exp-builder-${{ matrix.variant }}-${{ matrix.arch }}
           # Credentials for the self-hosted OCI Spack build cache, so the build
           # can pull previously-compiled binaries and push newly-built ones.
           build-args: |
             SPACK_OCI_USER=${{ github.actor }}
+            HERMES_TARGET=${{ matrix.target }}
           secrets: |
             ghcr_token=${{ secrets.GITHUB_TOKEN }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
@@ -163,22 +180,33 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: exp-builder-digests-${{ matrix.arch }}
+          name: exp-builder-digests-${{ matrix.variant }}-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
-  # Combine the per-arch builder images into the experimental multi-arch tag.
+  # Combine the per-arch builder images into the experimental tag(s): a
+  # multi-arch 'default' tag plus the suffixed compat tags.
   merge-builder:
     needs: [changes, build-builder]
     if: needs.changes.outputs.builder == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: default
+            suffix: ''
+          - variant: x86_64_v2
+            suffix: -x86_64_v2
+          - variant: x86_64_v1
+            suffix: -x86_64_v1
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: exp-builder-digests-*
+          pattern: exp-builder-digests-${{ matrix.variant }}-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -195,11 +223,11 @@ jobs:
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
-            -t ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }} \
+            -t ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }} \
             $(printf '${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect manifest
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }}
 
   # ---- Final image ----
 
@@ -224,13 +252,33 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Each final image is built FROM the matching-variant experimental
+        # builder tag and compiled at the same microarch.
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
             arch: amd64
+            variant: default
+            builder_suffix: ''
+            target: x86_64_v3
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
+            variant: default
+            builder_suffix: ''
+            target: aarch64
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v2
+            builder_suffix: -x86_64_v2
+            target: x86_64_v2
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v1
+            builder_suffix: -x86_64_v1
+            target: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
@@ -262,10 +310,11 @@ jobs:
           file: ${{ env.FINAL_DOCKERFILE }}
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=exp-final-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=exp-final-${{ matrix.arch }}
+          cache-from: type=gha,scope=exp-final-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=exp-final-${{ matrix.variant }}-${{ matrix.arch }}
           build-args: |
-            BUILDER_TAG=${{ env.EXPERIMENTAL_TAG }}
+            BUILDER_TAG=${{ env.EXPERIMENTAL_TAG }}${{ matrix.builder_suffix }}
+            HERMES_TARGET=${{ matrix.target }}
             HERMES_BUILD_JOBS=2
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 
@@ -278,22 +327,33 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: exp-final-digests-${{ matrix.arch }}
+          name: exp-final-digests-${{ matrix.variant }}-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
-  # Combine the per-arch final images into the experimental multi-arch tag.
+  # Combine the per-arch final images into the experimental tag(s): a multi-arch
+  # 'default' tag plus the suffixed compat tags.
   merge-final:
     needs: build-final
     if: always() && needs.build-final.result == 'success'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: default
+            suffix: ''
+          - variant: x86_64_v2
+            suffix: -x86_64_v2
+          - variant: x86_64_v1
+            suffix: -x86_64_v1
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: exp-final-digests-*
+          pattern: exp-final-digests-${{ matrix.variant }}-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -310,11 +370,11 @@ jobs:
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
-            -t ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }} \
+            -t ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }} \
             $(printf '${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect manifest
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }}
 
   # ---- Jupyter image (only when the jupyter dockerfile changed) ----
 
