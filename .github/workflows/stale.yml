@@ -1,0 +1,40 @@
+name: Close stale PRs
+on:
+  schedule:
+    - cron: '30 1 1 * *'   # monthly, 1st of the month at 01:30 UTC
+  workflow_dispatch:        # allow manual runs
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-stale: 90
+          days-before-close: 14
+          stale-pr-label: stale
+          stale-pr-message: >
+            This PR has had no activity for 90 days and is marked stale.
+            It will be closed in 14 days unless there is new activity.
+            Remove the `stale` label or comment to keep it open.
+          exempt-pr-labels: 'keep,pinned,security'
+          # Issues: mark stale after a year of inactivity, close 14 days later.
+          days-before-issue-stale: 365
+          days-before-issue-close: 14
+          stale-issue-label: stale
+          stale-issue-message: >
+            This issue has had no activity for a year and is marked stale.
+            It will be closed in 14 days unless there is new activity.
+            Remove the `stale` label, comment, or assign it to the
+            "long-term development" milestone to keep it open.
+          # Never touch issues in the long-term development milestone.
+          exempt-issue-milestones: 'long-term development'
+          # Process more items per run to clear the existing backlog faster
+          # (default is 30). Can be lowered once the backlog is drained.
+          operations-per-run: 100
+          # Uncomment for a dry run: logs what it *would* do without acting.
+          # debug-only: true
