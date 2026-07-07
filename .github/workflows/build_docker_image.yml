@@ -45,21 +45,25 @@ jobs:
             arch: amd64
             variant: default
             builder_tag: latest
+            target: x86_64_v3
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
             variant: default
             builder_tag: latest
+            target: aarch64
           - platform: linux/amd64
             runner: ubuntu-24.04
             arch: amd64
             variant: x86_64_v2
             builder_tag: latest-x86_64_v2
+            target: x86_64_v2
           - platform: linux/amd64
             runner: ubuntu-24.04
             arch: amd64
             variant: x86_64_v1
             builder_tag: latest-x86_64_v1
+            target: x86_64
 
     runs-on: ${{ matrix.runner }}
 
@@ -97,6 +101,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=final-${{ matrix.variant }}-${{ matrix.arch }}
           build-args: |
             BUILDER_TAG=${{ matrix.builder_tag }}
+            HERMES_TARGET=${{ matrix.target }}
             HERMES_BUILD_JOBS=2
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 

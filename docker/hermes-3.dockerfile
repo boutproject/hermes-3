@@ -10,6 +10,14 @@ FROM ubuntu:24.04
 # Number of parallel compile jobs. Overridable per-build (CI/local).
 ARG HERMES_BUILD_JOBS=4
 
+# Microarch level for the BOUT++/Hermes-3 application code, mirroring the Spack
+# dependency pin in the builder image. Without it these (the physics hot loops)
+# would compile at GCC's generic baseline regardless of the builder's target, so
+# an "optimized" image would gain nothing over a compat one. Empty => derive the
+# same portable default as the builder from `uname -m`. Mapped to a GCC -march
+# string below (Spack spells it x86_64_v3; GCC wants x86-64-v3).
+ARG HERMES_TARGET=""
+
 COPY --from=builder /opt/spack-environment /opt/spack-environment
 COPY --from=builder /opt/software /opt/software
 
@@ -53,12 +61,36 @@ RUN git -C ${HERMES_SRC_DIR} submodule update --init --recursive --depth 1 --sin
 COPY docker/image_ingredients/boutpp_config.cmake ${BOUTPP_CONFIG}
 COPY docker/image_ingredients/hermes_config.cmake ${HERMES_CONFIG}
 
+# Resolve HERMES_TARGET (Spack name) to a GCC -march string, deriving the same
+# portable default as the builder when unset. Emitted to /etc/hermes-march so
+# both CMake builds below reuse it without duplicating the mapping. An unknown
+# target yields an empty file, and the builds fall back to GCC's default -march.
+RUN hermes_target="${HERMES_TARGET}" && \
+    if [ -z "${hermes_target}" ]; then \
+      case "$(uname -m)" in \
+        aarch64) hermes_target=aarch64 ;; \
+        x86_64)  hermes_target=x86_64_v3 ;; \
+      esac ; \
+    fi && \
+    case "${hermes_target}" in \
+      x86_64)    march=x86-64 ;; \
+      x86_64_v2) march=x86-64-v2 ;; \
+      x86_64_v3) march=x86-64-v3 ;; \
+      x86_64_v4) march=x86-64-v4 ;; \
+      aarch64)   march=armv8-a ;; \
+      *)         march="" ;; \
+    esac && \
+    printf '%s' "${march:+-march=${march}}" > /etc/hermes-march && \
+    echo "BOUT++/Hermes-3 -march flag: '$(cat /etc/hermes-march)'"
+
 # Configure and build BOUT++
 RUN . /opt/spack-environment/activate.sh \
 &&  cmake -B ${BOUTPP_BUILD_DIR} \
           -S ${BOUTPP_SRC_DIR} \
           -C ${BOUTPP_CONFIG} \
           -Wno-dev \
+          -DCMAKE_CXX_FLAGS="$(cat /etc/hermes-march)" \
+          -DCMAKE_C_FLAGS="$(cat /etc/hermes-march)" \
 && cmake --build ${BOUTPP_BUILD_DIR} --parallel ${HERMES_BUILD_JOBS}
 
 # Configure and build Hermes
@@ -68,6 +100,8 @@ RUN . /opt/spack-environment/activate.sh \
           -C ${HERMES_CONFIG} \
           -DCMAKE_PREFIX_PATH=${BOUTPP_BUILD_DIR} \
           -Wno-dev \
+          -DCMAKE_CXX_FLAGS="$(cat /etc/hermes-march)" \
+          -DCMAKE_C_FLAGS="$(cat /etc/hermes-march)" \
 && cmake --build ${HERMES_BUILD_DIR} --parallel ${HERMES_BUILD_JOBS}
 
 # Copy in some helpful commands which can be used in

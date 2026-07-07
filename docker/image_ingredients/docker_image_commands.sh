@@ -19,6 +19,14 @@ notice() { print_message "${LIGHTGREEN}" "$1"; }
 info() { print_message "${LIGHTBLUE}" "$1"; }
 status() { print_message "" "$1"; } # No color for status messages
 
+# The -march flag the image was built with (written to /etc/hermes-march by
+# hermes-3.dockerfile). Reused for in-container rebuilds so build_boutpp /
+# build_hermes match the image's microarch instead of falling back to GCC's
+# generic baseline. Override with HERMES_MARCH (e.g. HERMES_MARCH="-march=native"
+# or "" to disable) for a manual rebuild at a different level.
+default_march="$(cat /etc/hermes-march 2>/dev/null || true)"
+MARCH_FLAG="${HERMES_MARCH-$default_march}"
+
 # Helper function to check exit codes and exit on failure
 check_exit_code() {
     local exit_code=$?
@@ -74,8 +82,9 @@ build_boutpp () {
         info "Build directory ${build_dir} is empty."
     fi
 
-    notice "Configuring BOUT++ from ${source_dir} using the config file ${config_file}"
-    cmake -Wno-dev -B "${build_dir}" -S "${source_dir}" -C "${config_file}"
+    notice "Configuring BOUT++ from ${source_dir} using the config file ${config_file} (march: '${MARCH_FLAG}')"
+    cmake -Wno-dev -B "${build_dir}" -S "${source_dir}" -C "${config_file}" \
+          -DCMAKE_CXX_FLAGS="${MARCH_FLAG}" -DCMAKE_C_FLAGS="${MARCH_FLAG}"
     check_exit_code "BOUT++ configuration failed"
 
     local jobs="${HERMES_BUILD_JOBS:-4}"
@@ -104,9 +113,10 @@ build_hermes () {
         info "Build directory ${build_dir} is empty."
     fi
 
-    notice "Configuring Hermes-3 from ${source_dir} using the config file ${config_file}"
+    notice "Configuring Hermes-3 from ${source_dir} using the config file ${config_file} (march: '${MARCH_FLAG}')"
     cmake -Wno-dev -B "${build_dir}" -S "${source_dir}" -C "${config_file}" \
-           -DCMAKE_PREFIX_PATH="${boutpp_dir}"
+           -DCMAKE_PREFIX_PATH="${boutpp_dir}" \
+           -DCMAKE_CXX_FLAGS="${MARCH_FLAG}" -DCMAKE_C_FLAGS="${MARCH_FLAG}"
     check_exit_code "Hermes-3 configuration failed"
 
     local jobs="${HERMES_BUILD_JOBS:-4}"
