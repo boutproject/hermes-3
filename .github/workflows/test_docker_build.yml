@@ -112,13 +112,13 @@ jobs:
             arch: amd64
             target: x86_64_v2
           - platform: linux/amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             arch: amd64
             target: x86_64_v3
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
-            target: aarch64
+            target: armv8.6a
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
@@ -238,13 +238,13 @@ jobs:
             arch: amd64
             target: x86_64_v2
           - platform: linux/amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             arch: amd64
             target: x86_64_v3
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
-            target: aarch64
+            target: armv8.6a
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository

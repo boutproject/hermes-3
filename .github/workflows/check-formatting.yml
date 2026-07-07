@@ -30,5 +30,15 @@ jobs:
       - name: Check prek versions are up-to-date
         run: uv tool run sync-with-uv --check --diff
 
+      # `origin` points at the (possibly forked) head repo, so `origin/<base>`
+      # may be missing or stale. Fetch the real base branch and diff against the
+      # merge-base so prek only checks files changed by this PR.
+      - name: Determine base ref
+        id: base
+        run: |
+          git remote add base "https://github.com/${{ github.event.pull_request.base.repo.full_name }}.git"
+          git fetch --no-tags base "${{ github.base_ref }}"
+          echo "ref=$(git merge-base base/${{ github.base_ref }} HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Run everything
-        run: uv tool run prek run --show-diff-on-failure --from-ref origin/${{ github.base_ref }}
+        run: uv tool run prek run --show-diff-on-failure --from-ref ${{ steps.base.outputs.ref }}

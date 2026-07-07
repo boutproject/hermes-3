@@ -46,6 +46,7 @@ WORKDIR /opt/spack-environment
 # older hardware. A `require: target=...` is a hard constraint reuse cannot
 # override; we enforce it here because the shared spack.yaml can't branch on
 # architecture.
+
 ARG HERMES_TARGET=x86_64_v4
 RUN spack -e . config add "packages:all:require:target=${HERMES_TARGET}"
 # Install the environment. With OCI credentials, add the self-hosted cache,
