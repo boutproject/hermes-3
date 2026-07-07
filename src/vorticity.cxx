@@ -19,6 +19,7 @@
 #include <bout/invert_laplace.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
+#include <bout/output_bout_types.hxx>
 #include <bout/solver.hxx>
 #include <bout/sys/range.hxx>
 #include <bout/vecops.hxx>
@@ -923,6 +924,14 @@ void Vorticity::finally(const Options& state) {
       }
     }
   }
+
+#if CHECKLEVEL >= 1
+  for (auto& i : Vort.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(ddt(Vort)[i])) {
+      throw BoutException("ddt(Vort) non-finite at {}\n", i);
+    }
+  }
+#endif
 }
 
 void Vorticity::outputVars(Options& state) {
