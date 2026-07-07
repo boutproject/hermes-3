@@ -57,6 +57,12 @@ COPY docker/image_ingredients/hermes_config.cmake ${HERMES_CONFIG}
 # See for aarch64 mapping https://en.wikipedia.org/wiki/ARM_architecture_family#Cores
 ARG HERMES_TARGET=x86_64_v4
 RUN . /opt/spack-environment/activate.sh \
+      case $HERMES_TARGET in \
+      armv8.6a) target=armv8.6-a ;; \
+      x86_64_v4)  target=x86-64-v4 ;; \
+      x86_64_v3)  target=x86-64-v3 ;; \
+      x86_64_v2)  target=x86-64-v2 ;; \
+      esac && \
 &&  cmake -B ${BOUTPP_BUILD_DIR} \
           -S ${BOUTPP_SRC_DIR} \
           -C ${BOUTPP_CONFIG} \
@@ -67,13 +73,19 @@ RUN . /opt/spack-environment/activate.sh \
 
 # Configure and build Hermes
 RUN . /opt/spack-environment/activate.sh \
+      case $HERMES_TARGET in \
+      armv8.6a) target=armv8.6-a ;; \
+      x86_64_v4)  target=x86-64-v4 ;; \
+      x86_64_v3)  target=x86-64-v3 ;; \
+      x86_64_v2)  target=x86-64-v2 ;; \
+      esac && \
 &&  cmake -B ${HERMES_BUILD_DIR} \
           -S ${HERMES_SRC_DIR} \
           -C ${HERMES_CONFIG} \
           -DCMAKE_PREFIX_PATH=${BOUTPP_BUILD_DIR} \
           -Wno-dev \
-          -DCMAKE_CXX_FLAGS="-march=${HERMES_TARGET}" \
-          -DCMAKE_C_FLAGS="-march=${HERMES_TARGET}" \
+          -DCMAKE_CXX_FLAGS="-march=${target}" \
+          -DCMAKE_C_FLAGS="-march=${target}" \
 && cmake --build ${HERMES_BUILD_DIR} --parallel ${HERMES_BUILD_JOBS}
 
 # Copy in some helpful commands which can be used in
