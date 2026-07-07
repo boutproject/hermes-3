@@ -29,41 +29,70 @@ env:
 
 jobs:
 
+  # Compute the build matrices. Compat variants (x86_64_v2 / x86_64_v1) only
+  # ever carry the `latest` tag, which is published on the default branch only.
+  # On events where `latest` won't be applied (releases, whose ref is a tag; a
+  # dispatch from a non-default branch) the compat builds would produce no tag,
+  # so drop them and build the default variant alone.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      builder_matrix: ${{ steps.gen.outputs.builder_matrix }}
+      final_matrix: ${{ steps.gen.outputs.final_matrix }}
+      merge_matrix: ${{ steps.gen.outputs.merge_matrix }}
+    steps:
+      - name: Compute matrices (include compat variants only when publishing latest)
+        id: gen
+        run: |
+          case "${{ github.event_name }}" in
+            release)      compat=false ;;
+            schedule|push) compat=true ;;
+            *)  # workflow_dispatch etc.: only when on the default branch
+              if [ "${{ github.ref_name }}" = "${{ github.event.repository.default_branch }}" ]; then
+                compat=true
+              else
+                compat=false
+              fi ;;
+          esac
+          echo "Build compat variants: ${compat}"
+
+          builder='[
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"default","target":"x86_64_v3"},
+            {"platform":"linux/arm64","runner":"ubuntu-24.04-arm","arch":"arm64","variant":"default","target":"aarch64"},
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v2","target":"x86_64_v2"},
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v1","target":"x86_64"}
+          ]'
+          final='[
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"default","builder_tag":"edge","target":"x86_64_v3"},
+            {"platform":"linux/arm64","runner":"ubuntu-24.04-arm","arch":"arm64","variant":"default","builder_tag":"edge","target":"aarch64"},
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v2","builder_tag":"edge-x86_64_v2","target":"x86_64_v2"},
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v1","builder_tag":"edge-x86_64_v1","target":"x86_64"}
+          ]'
+          merge='[
+            {"variant":"default","suffix":""},
+            {"variant":"x86_64_v2","suffix":"-x86_64_v2"},
+            {"variant":"x86_64_v1","suffix":"-x86_64_v1"}
+          ]'
+
+          # Keep only the default variant when compat builds are skipped.
+          f='if $c=="true" then . else map(select(.variant=="default")) end'
+          {
+            echo "builder_matrix=$(jq -c --arg c "$compat" "$f" <<<"$builder")"
+            echo "final_matrix=$(jq -c --arg c "$compat" "$f" <<<"$final")"
+            echo "merge_matrix=$(jq -c --arg c "$compat" "$f" <<<"$merge")"
+          } >> "$GITHUB_OUTPUT"
+
   # Build the builder image once per architecture on a native runner, pushing
   # each by digest only. The merge job below assembles them into a single
-  # multi-arch manifest.
+  # multi-arch manifest. `variant` groups per-arch builds into one published
+  # manifest/tag family; `target` is the hard Spack microarch pin.
   build-builder-image:
 
+    needs: setup
     strategy:
       fail-fast: false
       matrix:
-        # `variant` groups per-arch builds into one published manifest/tag
-        # family: the `default` variant becomes the multi-arch :latest/:edge
-        # tags; each compat variant is amd64-only and gets its own suffixed
-        # tags (e.g. :edge-x86_64_v2). `target` is the hard Spack microarch
-        # pin passed to the builder dockerfile.
-        include:
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: default
-            target: x86_64_v3
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
-            arch: arm64
-            variant: default
-            target: aarch64
-          # Older-arch-compatible amd64 variants (published as separate tags).
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: x86_64_v2
-            target: x86_64_v2
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: x86_64_v1
-            target: x86_64
+        include: ${{ fromJSON(needs.setup.outputs.builder_matrix) }}
 
     runs-on: ${{ matrix.runner }}
 
@@ -129,19 +158,13 @@ jobs:
   # tags; each compat variant is amd64-only under suffixed tags.
   merge-builder-image:
 
-    needs: build-builder-image
+    needs: [setup, build-builder-image]
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - variant: default
-            suffix: ''
-          - variant: x86_64_v2
-            suffix: -x86_64_v2
-          - variant: x86_64_v1
-            suffix: -x86_64_v1
+        include: ${{ fromJSON(needs.setup.outputs.merge_matrix) }}
 
     steps:
       - name: Download digests
@@ -170,20 +193,25 @@ jobs:
           # onlatest=true so :latest also becomes :latest-x86_64_v2, etc.
           flavor: |
             suffix=${{ matrix.suffix }},onlatest=true
+          # Compat variants get ONLY the `latest` tag (suffixed). Every other tag
+          # (edge, sha, branch, monthly schedule, version semver) is restricted to
+          # the default variant. The `variant=='default' && '{{is_default_branch}}'`
+          # form ANDs the existing default-branch gate with the variant restriction
+          # (a non-default variant short-circuits to `false`).
           tags: |
             # tag with date for scheduled jobs (YYYY-MM)
-            type=schedule,pattern={{date 'YYYY-MM'}}
-            # set "latest" tag
+            type=schedule,pattern={{date 'YYYY-MM'}},enable=${{ matrix.variant == 'default' }}
+            # set "latest" tag (the only tag compat variants receive)
             type=raw,value=latest,enable={{is_default_branch}}
             # always tag the most recent build as 'edge'
-            type=raw,value=edge
+            type=raw,value=edge,enable=${{ matrix.variant == 'default' }}
             # short sha tag
-            type=sha,enable={{is_default_branch}}
+            type=sha,enable=${{ matrix.variant == 'default' && '{{is_default_branch}}' }}
             # tag with semantic version
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},enable=${{ matrix.variant == 'default' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ matrix.variant == 'default' }}
             # tag with branch name
-            type=ref,event=branch,enable={{is_default_branch}}
+            type=ref,event=branch,enable=${{ matrix.variant == 'default' && '{{is_default_branch}}' }}
 
       - name: Create manifest
         working-directory: /tmp/digests
@@ -199,7 +227,7 @@ jobs:
   # pushing by digest; then merge into a multi-arch manifest.
   build-final-image:
 
-    needs: merge-builder-image
+    needs: [setup, merge-builder-image]
     if: needs.merge-builder-image.result == 'success'
 
     strategy:
@@ -207,31 +235,7 @@ jobs:
       matrix:
         # Each final image is built FROM the matching-variant builder tag, and
         # compiles BOUT++/Hermes-3 at the same microarch (`target`).
-        include:
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: default
-            builder_tag: edge
-            target: x86_64_v3
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
-            arch: arm64
-            variant: default
-            builder_tag: edge
-            target: aarch64
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: x86_64_v2
-            builder_tag: edge-x86_64_v2
-            target: x86_64_v2
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: x86_64_v1
-            builder_tag: edge-x86_64_v1
-            target: x86_64
+        include: ${{ fromJSON(needs.setup.outputs.final_matrix) }}
 
     runs-on: ${{ matrix.runner }}
 
@@ -288,19 +292,13 @@ jobs:
 
   merge-final-image:
 
-    needs: build-final-image
+    needs: [setup, build-final-image]
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - variant: default
-            suffix: ''
-          - variant: x86_64_v2
-            suffix: -x86_64_v2
-          - variant: x86_64_v1
-            suffix: -x86_64_v1
+        include: ${{ fromJSON(needs.setup.outputs.merge_matrix) }}
 
     steps:
       - name: Download digests
@@ -328,20 +326,25 @@ jobs:
           # Suffix every tag for compat variants (empty for the default variant).
           flavor: |
             suffix=${{ matrix.suffix }},onlatest=true
+          # Compat variants get ONLY the `latest` tag (suffixed). Every other tag
+          # (edge, sha, branch, monthly schedule, version semver) is restricted to
+          # the default variant. The `variant=='default' && '{{is_default_branch}}'`
+          # form ANDs the existing default-branch gate with the variant restriction
+          # (a non-default variant short-circuits to `false`).
           tags: |
             # tag with date for scheduled jobs (YYYY-MM)
-            type=schedule,pattern={{date 'YYYY-MM'}}
-            # set "latest" tag
+            type=schedule,pattern={{date 'YYYY-MM'}},enable=${{ matrix.variant == 'default' }}
+            # set "latest" tag (the only tag compat variants receive)
             type=raw,value=latest,enable={{is_default_branch}}
             # always tag the most recent build as 'edge'
-            type=raw,value=edge
+            type=raw,value=edge,enable=${{ matrix.variant == 'default' }}
             # short sha tag
-            type=sha,enable={{is_default_branch}}
+            type=sha,enable=${{ matrix.variant == 'default' && '{{is_default_branch}}' }}
             # tag with semantic version
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},enable=${{ matrix.variant == 'default' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ matrix.variant == 'default' }}
             # tag with branch name
-            type=ref,event=branch,enable={{is_default_branch}}
+            type=ref,event=branch,enable=${{ matrix.variant == 'default' && '{{is_default_branch}}' }}
 
       - name: Create manifest
         working-directory: /tmp/digests

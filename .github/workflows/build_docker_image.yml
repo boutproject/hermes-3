@@ -29,41 +29,61 @@ env:
 
 jobs:
 
+  # Compute the build matrices. Compat variants (x86_64_v2 / x86_64_v1) only
+  # ever carry the `latest` tag, published on the default branch only. On events
+  # where `latest` won't be applied (releases, whose ref is a tag; a dispatch
+  # from a non-default branch) the compat builds would produce no tag, so drop
+  # them and build the default variant alone.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      final_matrix: ${{ steps.gen.outputs.final_matrix }}
+      merge_matrix: ${{ steps.gen.outputs.merge_matrix }}
+    steps:
+      - name: Compute matrices (include compat variants only when publishing latest)
+        id: gen
+        run: |
+          case "${{ github.event_name }}" in
+            release)      compat=false ;;
+            schedule|push) compat=true ;;
+            *)  # workflow_dispatch etc.: only when on the default branch
+              if [ "${{ github.ref_name }}" = "${{ github.event.repository.default_branch }}" ]; then
+                compat=true
+              else
+                compat=false
+              fi ;;
+          esac
+          echo "Build compat variants: ${compat}"
+
+          final='[
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"default","builder_tag":"latest","target":"x86_64_v3"},
+            {"platform":"linux/arm64","runner":"ubuntu-24.04-arm","arch":"arm64","variant":"default","builder_tag":"latest","target":"aarch64"},
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v2","builder_tag":"latest-x86_64_v2","target":"x86_64_v2"},
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v1","builder_tag":"latest-x86_64_v1","target":"x86_64"}
+          ]'
+          merge='[
+            {"variant":"default","suffix":""},
+            {"variant":"x86_64_v2","suffix":"-x86_64_v2"},
+            {"variant":"x86_64_v1","suffix":"-x86_64_v1"}
+          ]'
+
+          # Keep only the default variant when compat builds are skipped.
+          f='if $c=="true" then . else map(select(.variant=="default")) end'
+          {
+            echo "final_matrix=$(jq -c --arg c "$compat" "$f" <<<"$final")"
+            echo "merge_matrix=$(jq -c --arg c "$compat" "$f" <<<"$merge")"
+          } >> "$GITHUB_OUTPUT"
+
   # Build the final image once per architecture on a native runner, pushing each
-  # by digest only. The merge job assembles them into a multi-arch manifest.
+  # by digest only. The merge job assembles them into a manifest per variant.
+  # Each is built FROM the matching-variant builder tag.
   build-final-image:
 
+    needs: setup
     strategy:
       fail-fast: false
       matrix:
-        # Each final image is built FROM the matching-variant builder tag. The
-        # `default` variant is multi-arch; compat variants are amd64-only and
-        # get suffixed tags (e.g. :latest-x86_64_v2).
-        include:
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: default
-            builder_tag: latest
-            target: x86_64_v3
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
-            arch: arm64
-            variant: default
-            builder_tag: latest
-            target: aarch64
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: x86_64_v2
-            builder_tag: latest-x86_64_v2
-            target: x86_64_v2
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-            arch: amd64
-            variant: x86_64_v1
-            builder_tag: latest-x86_64_v1
-            target: x86_64
+        include: ${{ fromJSON(needs.setup.outputs.final_matrix) }}
 
     runs-on: ${{ matrix.runner }}
 
@@ -122,19 +142,13 @@ jobs:
   # Combine the per-arch images into one manifest per variant and apply tags.
   merge-final-image:
 
-    needs: build-final-image
+    needs: [setup, build-final-image]
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - variant: default
-            suffix: ''
-          - variant: x86_64_v2
-            suffix: -x86_64_v2
-          - variant: x86_64_v1
-            suffix: -x86_64_v1
+        include: ${{ fromJSON(needs.setup.outputs.merge_matrix) }}
 
     steps:
       - name: Download digests
@@ -162,18 +176,23 @@ jobs:
           # Suffix every tag for compat variants (empty for the default variant).
           flavor: |
             suffix=${{ matrix.suffix }},onlatest=true
+          # Compat variants get ONLY the `latest` tag (suffixed). Every other tag
+          # (edge, sha, branch, version semver) is restricted to the default
+          # variant. The `variant=='default' && '{{is_default_branch}}'` form ANDs
+          # the existing default-branch gate with the variant restriction (a
+          # non-default variant short-circuits to `false`).
           tags: |
-            # set "latest" tag
+            # set "latest" tag (the only tag compat variants receive)
             type=raw,value=latest,enable={{is_default_branch}}
             # always tag the most recent build as 'edge'
-            type=raw,value=edge
+            type=raw,value=edge,enable=${{ matrix.variant == 'default' }}
             # short sha tag
-            type=sha,enable={{is_default_branch}}
+            type=sha,enable=${{ matrix.variant == 'default' && '{{is_default_branch}}' }}
             # tag with semantic version
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},enable=${{ matrix.variant == 'default' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ matrix.variant == 'default' }}
             # tag with branch name
-            type=ref,event=branch,enable={{is_default_branch}}
+            type=ref,event=branch,enable=${{ matrix.variant == 'default' && '{{is_default_branch}}' }}
 
       - name: Create manifest
         working-directory: /tmp/digests
