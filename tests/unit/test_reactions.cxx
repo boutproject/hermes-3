@@ -1,13 +1,14 @@
 #include "test_adas_reactions.hxx"
 #include "test_cx_reactions.hxx"
 #include "test_izn_rec_reactions.hxx"
+#include "test_molecule_reactions.hxx"
 
 namespace hermes {
 
-//======================== General reaction class tests =======================
+// ======================= General reaction class tests =======================
 /// @brief Test parsing of various input optionsReactionBase constructor should throw if
-/// the reaction type string is not
-TEST(ReactionTest, InputOptions) {
+/// the reaction type string is not valid
+TEST(ReactionConfigTest, InputOptions) {
   const std::string comp_name = "test";
 
   // Base input with two reaction strings
@@ -48,7 +49,23 @@ TEST(ReactionTest, InputOptions) {
   ASSERT_THROW(CXReaction(comp_name, invalid_input2), BoutException);
 }
 
-//======================== CX reaction class tests =======================
+/// @brief Values < 0 or > 1 for momentum/energy channels should throw
+TEST(ReactionConfigTest, InvalidChannelWeightOptions) {
+  Options base_options{
+      {"test", {{"type", "(h2 + d+ -> d+ + h2)"}, {"data_ids", "H.2_0.3T"}}},
+      {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+
+  ReactionBase::reset_instance_counter();
+  Options options1 = base_options.copy();
+  auto invalid_mom_weights_reaction = InvalidMomWeightsReaction("test", options1);
+  ASSERT_THROW(invalid_mom_weights_reaction.transform(options1), BoutException);
+
+  ReactionBase::reset_instance_counter();
+  Options options2 = base_options.copy();
+  auto invalid_energy_weights_reaction = InvalidEnergyWeightsReaction("test", options2);
+  ASSERT_THROW(invalid_energy_weights_reaction.transform(options2), BoutException);
+}
+// ========================== CX reaction class tests =========================
 
 /// @brief CXReaction constructor should throw for strings that aren't valid CX
 /// reactions
@@ -97,7 +114,36 @@ TEST(CXReactionTest, OrderIndependentReactionStrs) {
   }
 }
 
-//====================== Reaction source regression tests =====================
+// =================== ElasticCollision reaction class tests ==================
+/// @brief Test validity of various reaction strings for elastic collisions
+TEST(ElasticCollisionTest, ReactionStrings) {
+  Options base_options{
+      {"test", {{"data_ids", "H.2_0.3T"}}},
+      {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+
+  // Swapped order should work
+  std::string valid_reaction_str = "h2 + d+ -> d+ + h2 ";
+  ReactionBase::reset_instance_counter();
+  Options options = base_options.copy();
+  options["test"]["type"] = valid_reaction_str;
+  ASSERT_NO_THROW(ElasticCollision("test", options));
+
+  // Invalid elastic collision reaction strings
+  std::string too_few_species = "h -> h";
+  std::string too_many_species = "h + d+ + t -> h + d+ + t";
+  std::string reactants_products_mismatch = "h2 + d+ -> h2 +d";
+
+  // Test that constructor throws for each invalid reaction string
+  for (const auto& invalid_reaction_str :
+       {too_few_species, too_many_species, reactants_products_mismatch}) {
+    ReactionBase::reset_instance_counter();
+    Options options = base_options.copy();
+    options["test"]["type"] = invalid_reaction_str;
+    ASSERT_THROW(ElasticCollision("test", options), BoutException);
+  }
+}
+
+// ===================== Reaction source regression tests =====================
 
 // H isotopes ionization
 TEST_F(HIznTest, SourcesRegression) { sources_regression_test(); }
@@ -119,6 +165,21 @@ TEST_F(DTpCXTest, SourcesRegression) { sources_regression_test(); }
 
 // H/H+ CX with neutral momentum gain turned off
 TEST_F(HHpCXTest_noNeutralMomGain, SourcesRegression) { sources_regression_test(); }
+
+/* Various dissociation reactions involving neutral/ionic molecules of H
+ * isotopes(non-exhaustive)
+ */
+TEST_F(H2DissTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(T2pDissExcTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(D2DissIznTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(H2NonDissIznTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(T2pDissRecTest, SourcesRegression) { sources_regression_test(); }
+
+// CX involving molecules of H isotopes (non-exhaustive)
+TEST_F(D2DpCXTest, SourcesRegression) { sources_regression_test(); }
+
+// Elastic collision between H2 and H+
+TEST_F(H2HpElasticCollisionTest, SourcesRegression) { sources_regression_test(); }
 
 // He ionization
 TEST_F(HeIzn01Test, SourcesRegression) { sources_regression_test(); }
