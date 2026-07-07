@@ -124,10 +124,12 @@ to Stangeby, eq. 2.55b, with temperature in eV:
 
 .. math::
    \begin{aligned}
-   v_{i}^{sheath} \geq [(e T_{e} + \gamma e T_{i})/m_{i}]^{1/2}
+   v_{i}^{sheath} \geq [(\alpha_e e T_{e} + \alpha_i e T_{i})/m_{i}]^{1/2}
    \end{aligned}
 
-where :math:`\gamma` is the ion polytropic coefficient, which is set to 1 by default as per SOLPS-ITER.
+where :math:`\alpha_i` and :math:`\alpha_e` are the ion and electron polytropic coefficients in the
+Bohm sound speed, both set to 1 by default as per SOLPS-ITER and user-configurable through
+`sheath_ion_polytropic` and `sheath_electron_polytropic`.
 The electron velocity is calculated from the potential:
 
 .. math::
@@ -217,6 +219,70 @@ of slack, resulting in a not-perfectly-exact setting but a smoother and more sta
 disable this behaviour and fix the Bohm condition explicitly. This can be done by setting ``fix_momentum_boundary_flux``
 to ``true`` in the `evolve_pressure` component. Note that this has been observed to increase numerical oscillations near
 the boundary and is not recommended.
+
+.. _sec-sheath_boundary_penalty:
+
+sheath_boundary_penalty
+^^^^^^^^^^^^^^^^^^^^^^^
+
+This is a top-level component for imposing sheath-like losses on an immersed wall defined inside the mesh,
+rather than only at the structured domain boundary. The wall shape is given by a 3D mesh field, `penalty_mask`,
+which is interpreted as 0 in the plasma and 1 in the wall. Cells with `penalty_mask > 1e-5` are included in the
+penalty region. The ordering of this component relative to other sheath-related components is subject to change.
+
+The component adds volumetric sink terms to charged species density, momentum and energy equations over the masked region:
+
+.. math::
+   \begin{aligned}
+   S_{N}^{penalty} &= -M S_{N} - M \frac{\max(N - N_{floor}, 0)}{\tau_p} \\
+   S_{NV}^{penalty} &= -M S_{NV} - M \frac{m N_{floor} V}{\tau_p} \\
+   S_{E}^{penalty} &= -M S_{E} - M \frac{\gamma N_{floor} T}{\tau_p}
+   \end{aligned}
+
+where :math:`M` is the penalty mask, :math:`\tau_p` is the penalty timescale set by `penalty_timescale`,
+:math:`N_{floor}` is the density floor used internally to avoid vanishing denominators, and :math:`\gamma`
+is `gamma_e` for electrons or `gamma_i` for ions.
+
+If `surface_terms = true`, additional field-aligned momentum penalties are added where the mask changes along the
+field line, so that the immersed boundary also drives sheath-like surface momentum losses. Ion surface terms use
+a Bohm-like speed based on local ion and electron temperatures and the user options
+`sheath_ion_polytropic` and `sheath_electron_polytropic`; electron surface terms additionally require `phi`
+to be available so that the electron saturation speed can be evaluated.
+
+**Usage and options**
+
+The wall mask is read from the mesh as `penalty_mask` by default, or from another variable if `mask_name` is set.
+The most important user options are:
+
+- `penalty_timescale`: timescale of penalisation in seconds
+- `gamma_i`, `gamma_e`: ion and electron sheath heat transmission coefficients used in the energy penalty
+- `sheath_ion_polytropic`, `sheath_electron_polytropic`: ion and electron polytropic coefficients used in the
+  Bohm-like sound speed for ion surface terms
+- `surface_terms`: include additional surface momentum terms at mask transitions
+- `mask_name`: name of the mesh field containing the immersed-wall mask
+- `diagnose`: save diagnostic penalty source terms
+
+For example, in a 1D test where the wall begins beyond the X-point:
+
+.. code-block:: ini
+
+   [mesh]
+   penalty_mask = H(y - y_xpt)
+
+   [hermes]
+   components = (d+, e,
+                 collisions,
+                 sheath_boundary_penalty,
+                 electron_force_balance)
+
+   [sheath_boundary_penalty]
+   penalty_timescale = 1e-6
+   gamma_e = 5/2
+   gamma_i = 5/2
+
+If `diagnose = true`, the component saves `S<species>_penalty`, `F<species>_penalty` and `R<species>_penalty`
+for particle, momentum and energy penalty terms respectively. It also always outputs the `penalty_mask` field.
+For ions, the internal `density_penalty` and `energy_penalty` fields are made available to other components.
 
 .. _sheath_boundary:
 
@@ -309,7 +375,7 @@ Recycling therefore can't be calculated until all species boundary conditions
 have been set. It is therefore expected that this component is a top-level
 component (i.e. in the `Hermes` section) which comes after boundary conditions are set.
 
-Recycling has been implemented at the target, the SOL edge and the PFR edge.
+Recycling has been implemented at the target, the SOL edge, the PFR edge and penalty boundaries.
 Each is off by default and must be activated with a separate flag. Each can be
 assigned a separate recycle multiplier and recycle energy.
 
@@ -336,7 +402,7 @@ allow an outflow.
 The recycling component has a `species` option, that is a list of species
 to recycle. For each of the species in that list, `recycling` will look in
 the corresponding section for the options `recycle_as`, `recycle_multiplier`
-and `recycle_energy` for each of the three implemented boundaries. Note that
+and `recycle_energy` for each enabled boundary region. Note that
 the resulting recycling source is a simple
 multiplication of the outgoing species flow and the multiplier factor.
 This means that recycling ``d+`` ions into ``d2`` molecules would require a multiplier
@@ -368,6 +434,11 @@ Each returning atom has an energy of 3.5eV:
    pfr_recycle = true
    pfr_recycle_multiplier = 1 # Recycling fraction
    pfr_recycle_energy = 3.5   # Energy of recycled particles [eV]
+
+If `sheath_boundary_penalty` is used, recycling can also be driven from its volumetric ion penalty terms by enabling
+`penalty_recycle = true`. In that case, `penalty_recycle_multiplier`, `penalty_recycle_energy`,
+`penalty_fast_recycle_fraction` and `penalty_fast_recycle_energy_factor` control the corresponding penalty-boundary
+recycling channel.
 
 Allowing for fast recycling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -464,13 +535,14 @@ Diagnostic variables and settings
 .. note::
    All recycling settings are in the ion header (e.g. ``[d+]``), including pump settings.
 
-Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, and the
-SOL/PFR region (grouped together as `wall`, e.g. `Sd_wall_recycle`). The pump diagnostics are provided in the form
+Diagnostic variables for the recycled particle and energy fluxes are provided separately for the targets, the
+SOL/PFR region (grouped together as `wall`, e.g. `Sd_wall_recycle`), and penalty recycling
+(`Sd_penalty_recycle`, `Ed_penalty_recycle`). The pump diagnostics are provided in the form
 of neutral particle and energy losses due to the pump, e.g. `Sd_pump` and `Ed_pump`, which correspond to
 :math:`\Gamma_{N_{n}}^{loss}` and :math:`\Gamma_{E_{n}}^{loss}` respectively. The pump recycle multiplier is
 set by the `pump_multiplier` option, and recycling coefficients by `target_recycle_multiplier`, etc.
-The pump and recycling surfaces can be enabled or disabled using `target_recycle`, `sol_recycle`, `pfr_recycle`
-and `neutral_pump` flags.
+The pump and recycling surfaces can be enabled or disabled using `target_recycle`, `sol_recycle`, `pfr_recycle`,
+`penalty_recycle` and `neutral_pump` flags.
 
 
 
