@@ -5,7 +5,11 @@
 
 #include "../../include/sheath_boundary_penalty.hxx"
 
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
+#include <bout/region.hxx>
+#include <bout/sys/range.hxx>
 
 #include <cmath>
 #include <set>
@@ -30,6 +34,149 @@ std::set<int> regionIndices(const Region<Ind3D>& region) {
 }
 
 } // namespace
+
+TEST_F(SheathBoundaryPenaltyTest, CreateComponentNeedsMask) {
+  Options options = {{"units", {{"seconds", 1e-7}}}};
+
+  // No penalty_mask available
+  EXPECT_THROW(const SheathBoundaryPenalty component("test", options, nullptr),
+               BoutException);
+}
+
+TEST_F(SheathBoundaryPenaltyTest, CreateComponent) {
+  Options options = {{"units", {{"seconds", 1e-7}}}};
+
+  dynamic_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"penalty_mask", 1.0}}});
+  // penalty_mask available
+  const SheathBoundaryPenalty component("test", options, nullptr);
+}
+
+TEST_F(SheathBoundaryPenaltyTest, CreateComponentMaskName) {
+  Options options = {{"units", {{"seconds", 1e-7}}},
+                     {"test", {{"mask_name", "penalty_mask_2"}}}};
+
+  dynamic_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"penalty_mask_2", 1.0}}});
+  // penalty_mask_2 available
+  const SheathBoundaryPenalty component("test", options, nullptr);
+}
+
+TEST_F(SheathBoundaryPenaltyTest, TransformNeedsElectrons) {
+  Options options = {{"units", {{"seconds", 1e-7}}}};
+  dynamic_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"penalty_mask", 1.0}}});
+  SheathBoundaryPenalty component("test", options, nullptr);
+
+  Options state;
+
+  EXPECT_THROW(component.transform(state), BoutException);
+}
+
+TEST_F(SheathBoundaryPenaltyTest, TransformElectrons) {
+  Options options = {{"units", {{"seconds", 1e-7}}}};
+  dynamic_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"penalty_mask", 1.0}}});
+  SheathBoundaryPenalty component("test", options, nullptr);
+
+  Options state = {
+      {"species", {{"e", {{"AA", 0.001}, {"density", 1.0}, {"temperature", 1.0}}}}}};
+  component.declareAllSpecies({"e"});
+
+  component.transform(state);
+
+  ASSERT_TRUE(state["species"]["e"].isSet("density_source"));
+  ASSERT_TRUE(state["species"]["e"].isSet("momentum_source"));
+  ASSERT_TRUE(state["species"]["e"].isSet("energy_source"));
+}
+
+TEST_F(SheathBoundaryPenaltyTest, TransformElectronsIons) {
+  Options options = {{"units", {{"seconds", 1e-7}}}};
+  dynamic_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"penalty_mask", 1.0}}});
+  SheathBoundaryPenalty component("test", options, nullptr);
+
+  Options state = {
+      {"species",
+       {{"e", {{"AA", 0.001}, {"density", 1.0}, {"temperature", 1.0}}},
+        {"h+", {{"AA", 2.0}, {"charge", 1.0}, {"density", 1.0}, {"temperature", 2.0}}}}}};
+  component.declareAllSpecies({"e", "h+"});
+
+  component.transform(state);
+
+  ASSERT_TRUE(state["species"]["e"].isSet("density_source"));
+  ASSERT_TRUE(state["species"]["e"].isSet("momentum_source"));
+  ASSERT_TRUE(state["species"]["e"].isSet("energy_source"));
+
+  ASSERT_TRUE(state["species"]["h+"].isSet("density_source"));
+  ASSERT_TRUE(state["species"]["h+"].isSet("momentum_source"));
+  ASSERT_TRUE(state["species"]["h+"].isSet("energy_source"));
+}
+
+TEST_F(SheathBoundaryPenaltyTest, TransformElectronsNeutrals) {
+  Options options = {{"units", {{"seconds", 1e-7}}}};
+  dynamic_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"penalty_mask", 1.0}}});
+  SheathBoundaryPenalty component("test", options, nullptr);
+
+  Options state = {{"species",
+                    {{"e", {{"AA", 0.001}, {"density", 1.0}, {"temperature", 1.0}}},
+                     {"h", {{"AA", 2.0}, {"density", 1.0}, {"temperature", 2.0}}}}}};
+  component.declareAllSpecies({"e", "h"});
+
+  component.transform(state);
+
+  ASSERT_TRUE(state["species"]["e"].isSet("density_source"));
+  ASSERT_TRUE(state["species"]["e"].isSet("momentum_source"));
+  ASSERT_TRUE(state["species"]["e"].isSet("energy_source"));
+
+  // No sources for neutral species
+  ASSERT_FALSE(state["species"]["h"].isSet("density_source"));
+  ASSERT_FALSE(state["species"]["h"].isSet("momentum_source"));
+  ASSERT_FALSE(state["species"]["h"].isSet("energy_source"));
+}
+
+TEST_F(SheathBoundaryPenaltyTest, OutputPenaltyMask) {
+  Options options = {{"units", {{"seconds", 1e-7}}}};
+
+  dynamic_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"penalty_mask", 1.0}}});
+
+  SheathBoundaryPenalty component("test", options, nullptr);
+
+  Options output_state;
+  component.outputVars(output_state);
+
+  ASSERT_TRUE(output_state.isSet("penalty_mask"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(output_state["penalty_mask"]), 1.0));
+}
+
+TEST_F(SheathBoundaryPenaltyTest, OutputDiagnostics) {
+  Options options = {{"units", {{"seconds", 1e-7}}}, {"test", {{"diagnose", true}}}};
+  dynamic_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"penalty_mask", 1.0}}});
+  SheathBoundaryPenalty component("test", options, nullptr);
+
+  Options state = {
+      {"species",
+       {{"e", {{"AA", 0.001}, {"density", 1.0}, {"temperature", 1.0}}},
+        {"h+", {{"AA", 2.0}, {"charge", 1.0}, {"density", 1.0}, {"temperature", 2.0}}}}}};
+  component.declareAllSpecies({"e", "h+"});
+
+  component.transform(state);
+
+  Options output_state = {
+      {"Nnorm", 1e19}, {"Tnorm", 10.}, {"Omega_ci", 1e7}, {"Cs0", 1e5}};
+  component.outputVars(output_state);
+
+  ASSERT_TRUE(output_state.isSet("Se_penalty"));
+  ASSERT_TRUE(output_state.isSet("Fe_penalty"));
+  ASSERT_TRUE(output_state.isSet("Re_penalty"));
+
+  ASSERT_TRUE(output_state.isSet("Sh+_penalty"));
+  ASSERT_TRUE(output_state.isSet("Fh+_penalty"));
+  ASSERT_TRUE(output_state.isSet("Rh+_penalty"));
+}
 
 TEST_F(SheathBoundaryPenaltyTest, BuildPenaltyRegionUsesStrictThreshold) {
   auto mask = makeField<Field3D>([](const Ind3D&) { return 0.0; });

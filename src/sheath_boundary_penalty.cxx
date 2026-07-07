@@ -245,6 +245,12 @@ void SheathBoundaryPenalty::transform_impl(GuardedOptions& state) {
     phi = getNoBoundary<Field3D>(state["fields"]["phi"]);
   }
 
+  Field3D Te_fa;
+  if (surface_terms) {
+    // This is re-used in each species below
+    Te_fa = toFieldAligned(Te);
+  }
+
   {
     const Field3D Pe = electrons.isSet("pressure")
                            ? GET_NOBOUNDARY(Field3D, electrons["pressure"])
@@ -280,7 +286,6 @@ void SheathBoundaryPenalty::transform_impl(GuardedOptions& state) {
       // The gradient of the mask gives the direction into the wall
 
       auto Ne_fa = toFieldAligned(Ne);
-      auto Te_fa = toFieldAligned(Te);
       auto Ve_fa = toFieldAligned(Ve);
       auto phi_fa = toFieldAligned(phi);
 
@@ -292,6 +297,14 @@ void SheathBoundaryPenalty::transform_impl(GuardedOptions& state) {
     add(electrons["density_source"], electron_penalty.density);
     add(electrons["momentum_source"], electron_penalty.momentum);
     add(electrons["energy_source"], electron_penalty.energy);
+
+    if (diagnose) {
+      // Store penalty term diagnostics to used in outputVars
+      auto& diagnostic_species = diagnostics["e"];
+      set(diagnostic_species["density_penalty"], electron_penalty.density);
+      set(diagnostic_species["momentum_penalty"], electron_penalty.momentum);
+      set(diagnostic_species["energy_penalty"], electron_penalty.energy);
+    }
   }
 
   for (auto& kv : allspecies.getChildren()) {
@@ -350,7 +363,6 @@ void SheathBoundaryPenalty::transform_impl(GuardedOptions& state) {
 
       auto Ni_fa = toFieldAligned(Ni);
       auto Ti_fa = toFieldAligned(Ti);
-      auto Te_fa = toFieldAligned(Te);
       auto Vi_fa = toFieldAligned(Vi);
 
       auto momentum_penalty_fa = calculateIonSurfaceMomentumPenalty(
