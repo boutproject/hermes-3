@@ -128,8 +128,9 @@ Field3D SheathBoundaryPenalty::calculateElectronSurfaceMomentumPenalty(
 
 Field3D SheathBoundaryPenalty::calculateIonSurfaceMomentumPenalty(
     const PenaltyMaskData& penalty_fa_data, const Field3D& Ni_fa, const Field3D& Ti_fa,
-    const Field3D& Te_fa, const Field3D& Vi_fa, BoutReal Mi, BoutReal penalty_timescale,
-    BoutReal density_floor, BoutReal mask_threshold) {
+    const Field3D& Te_fa, const Field3D& Vi_fa, BoutReal Mi,
+    BoutReal sheath_ion_polytropic, BoutReal sheath_electron_polytropic,
+    BoutReal penalty_timescale, BoutReal density_floor, BoutReal mask_threshold) {
   Field3D momentum_penalty_fa{zeroFrom(Ni_fa)};
   BOUT_FOR(i, penalty_fa_data.region) {
     const auto iyp = i.yp();
@@ -140,7 +141,9 @@ Field3D SheathBoundaryPenalty::calculateIonSurfaceMomentumPenalty(
       const BoutReal tisheath = 0.5 * (Ti_fa[i] + Ti_fa[iyp]);
       const BoutReal tesheath = 0.5 * (Te_fa[i] + Te_fa[iyp]);
       const BoutReal visheath = 0.5 * (Vi_fa[i] + Vi_fa[iyp]);
-      const BoutReal Cs = sqrt((tesheath + tisheath) / Mi);
+      const BoutReal Cs =
+          sqrt((sheath_electron_polytropic * tesheath + sheath_ion_polytropic * tisheath)
+               / Mi);
 
       momentum_penalty_fa[i] += mask * std::fabs(dmask_yup) * Mi * nfloor
                                 * (SIGN(dmask_yup) * Cs - visheath) / penalty_timescale;
@@ -153,7 +156,9 @@ Field3D SheathBoundaryPenalty::calculateIonSurfaceMomentumPenalty(
       const BoutReal tisheath = 0.5 * (Ti_fa[i] + Ti_fa[iym]);
       const BoutReal tesheath = 0.5 * (Te_fa[i] + Te_fa[iym]);
       const BoutReal visheath = 0.5 * (Vi_fa[i] + Vi_fa[iym]);
-      const BoutReal Cs = sqrt((tesheath + tisheath) / Mi);
+      const BoutReal Cs =
+          sqrt((sheath_electron_polytropic * tesheath + sheath_ion_polytropic * tisheath)
+               / Mi);
 
       momentum_penalty_fa[i] += mask * std::fabs(dmask_ydown) * Mi * nfloor
                                 * (SIGN(dmask_ydown) * Cs - visheath) / penalty_timescale;
@@ -203,6 +208,15 @@ SheathBoundaryPenalty::SheathBoundaryPenalty(std::string name, Options& alloptio
 
   gamma_i =
       options["gamma_i"].doc("Ion sheath heat transmission coefficient").withDefault(3.5);
+
+  sheath_ion_polytropic = options["sheath_ion_polytropic"]
+                              .doc("Ion polytropic coefficient in Bohm sound speed")
+                              .withDefault(1.0);
+
+  sheath_electron_polytropic =
+      options["sheath_electron_polytropic"]
+          .doc("Electron polytropic coefficient in Bohm sound speed")
+          .withDefault(1.0);
 
   penalty_timescale = options["penalty_timescale"]
                           .doc("Timescale of penalisation [seconds]")
@@ -366,7 +380,8 @@ void SheathBoundaryPenalty::transform_impl(GuardedOptions& state) {
       auto Vi_fa = toFieldAligned(Vi);
 
       auto momentum_penalty_fa = calculateIonSurfaceMomentumPenalty(
-          penalty_fa_data, Ni_fa, Ti_fa, Te_fa, Vi_fa, Mi, penalty_timescale);
+          penalty_fa_data, Ni_fa, Ti_fa, Te_fa, Vi_fa, Mi, sheath_ion_polytropic,
+          sheath_electron_polytropic, penalty_timescale);
       ion_penalty.momentum += fromFieldAligned(momentum_penalty_fa);
     }
 

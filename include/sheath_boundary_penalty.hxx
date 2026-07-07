@@ -28,6 +28,8 @@ struct SheathBoundaryPenalty : public Component {
   /// # Input options
   /// - <name> e.g. "sheath_boundary_penalty"
   ///   - penalty_timescale    Timescale in seconds
+  ///   - sheath_ion_polytropic       Ion polytropic coefficient in Bohm sound speed
+  ///   - sheath_electron_polytropic  Electron polytropic coefficient in Bohm sound speed
   ///
   /// # Reads from the mesh
   /// - penalty_mask[x,y,z]    A 3D field defining the shape of the boundary
@@ -74,14 +76,19 @@ struct SheathBoundaryPenalty : public Component {
   /// Calculate ion surface momentum penalty terms in field-aligned coordinates
   static Field3D calculateIonSurfaceMomentumPenalty(
       const PenaltyMaskData& penalty_fa_data, const Field3D& Ni_fa, const Field3D& Ti_fa,
-      const Field3D& Te_fa, const Field3D& Vi_fa, BoutReal Mi, BoutReal penalty_timescale,
-      BoutReal density_floor = 1e-5, BoutReal mask_threshold = 1e-5);
+      const Field3D& Te_fa, const Field3D& Vi_fa, BoutReal Mi,
+      BoutReal sheath_ion_polytropic, BoutReal sheath_electron_polytropic,
+      BoutReal penalty_timescale, BoutReal density_floor = 1e-5,
+      BoutReal mask_threshold = 1e-5);
 
 private:
   /// Mask function and region in the original mesh coordinates
   PenaltyMaskData penalty_data;
 
-  BoutReal gamma_e, gamma_i; // Sheath heat transmission factors
+  BoutReal gamma_e, gamma_i;      // Sheath heat transmission factors
+  BoutReal sheath_ion_polytropic; ///< Ion polytropic coefficient in Bohm sound speed
+  BoutReal
+      sheath_electron_polytropic; ///< Electron polytropic coefficient in Bohm sound speed
 
   /// Timescale of penalisation [normalised]
   BoutReal penalty_timescale;

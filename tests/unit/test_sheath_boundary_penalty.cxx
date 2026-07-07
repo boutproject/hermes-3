@@ -62,6 +62,17 @@ TEST_F(SheathBoundaryPenaltyTest, CreateComponentMaskName) {
   const SheathBoundaryPenalty component("test", options, nullptr);
 }
 
+TEST_F(SheathBoundaryPenaltyTest, CreateComponentPolytropicOptions) {
+  Options options = {
+      {"units", {{"seconds", 1e-7}}},
+      {"test",
+       {{"sheath_ion_polytropic", 5. / 3.}, {"sheath_electron_polytropic", 7. / 5.}}}};
+
+  dynamic_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"penalty_mask", 1.0}}});
+  const SheathBoundaryPenalty component("test", options, nullptr);
+}
+
 TEST_F(SheathBoundaryPenaltyTest, TransformNeedsElectrons) {
   Options options = {{"units", {{"seconds", 1e-7}}}};
   dynamic_cast<FakeMesh*>(bout::globals::mesh)
@@ -387,11 +398,15 @@ TEST_F(SheathBoundaryPenaltyTest, CalculateIonSurfaceMomentumPenaltyAddsExpected
   const BoutReal Mi = 2.0;
   const BoutReal penalty_timescale = 5.0;
   const BoutReal density_floor = 0.6;
-  const BoutReal Cs = sqrt((2.5 + 1.5) / Mi);
+  const BoutReal sheath_ion_polytropic = 5. / 3.;
+  const BoutReal sheath_electron_polytropic = 7. / 5.;
+  const BoutReal Cs =
+      sqrt((sheath_electron_polytropic * 2.5 + sheath_ion_polytropic * 1.5) / Mi);
   const BoutReal expected = Mi * density_floor * (Cs - (-0.2)) / penalty_timescale;
 
   const auto result = SheathBoundaryPenalty::calculateIonSurfaceMomentumPenalty(
-      penalty_fa_data, Ni_fa, Ti_fa, Te_fa, Vi_fa, Mi, penalty_timescale, density_floor);
+      penalty_fa_data, Ni_fa, Ti_fa, Te_fa, Vi_fa, Mi, sheath_ion_polytropic,
+      sheath_electron_polytropic, penalty_timescale, density_floor);
 
   EXPECT_DOUBLE_EQ(result[active], expected);
   const auto other = indexAt(mask_fa, mesh->xstart, mesh->ystart, mesh->LocalNz - 1);
