@@ -30,16 +30,17 @@ private:
     std::string to;   ///< Species to recycle to
 
     /// Flux multiplier (recycling fraction).
-    /// Combination of recycling fraction and species change e.g h+ -> h2 results in 0.5
-    /// multiplier
-    BoutReal target_multiplier, sol_multiplier, pfr_multiplier, pump_multiplier;
-    BoutReal target_energy, sol_energy,
-        pfr_energy; ///< Energy of recycled particle (normalised to Tnorm)
+    /// Combination of recycling fraction and species change e.g h+ -> h2 results in 0.5 multiplier
+    BoutReal target_multiplier, sol_multiplier, pfr_multiplier, pump_multiplier,
+        penalty_multiplier;
+    BoutReal target_energy, sol_energy, pfr_energy,
+        penalty_energy; ///< Energy of recycled particle (normalised to Tnorm)
     BoutReal target_fast_recycle_fraction, pfr_fast_recycle_fraction,
-        sol_fast_recycle_fraction; ///< Fraction of ions undergoing fast reflection
+        sol_fast_recycle_fraction,
+        penalty_fast_recycle_fraction; ///< Fraction of ions undergoing fast reflection
     BoutReal target_fast_recycle_energy_factor, sol_fast_recycle_energy_factor,
-        pfr_fast_recycle_energy_factor; ///< Fraction of energy retained by fast recycled
-                                        ///< neutrals
+        pfr_fast_recycle_energy_factor,
+        penalty_fast_recycle_energy_factor; ///< Fraction of energy retained by fast recycled neutrals
 
     // Recycling particle and energy sources for the different sources of recycling
     // These sources are per-channel and added to the `to` species
@@ -55,11 +56,16 @@ private:
     Field3D pump_density_source = 0.0;
     /// Recycling energy source for pump recycling
     Field3D pump_energy_source = 0.0;
+    /// Recycling density source for penalty recycling
+    Field3D penalty_density_source = 0.0;
+    /// Recycling energy source for penalty recycling
+    Field3D penalty_energy_source = 0.0;
   };
 
   std::vector<RecycleChannel> channels; // Recycling channels
 
   bool target_recycle{false}, sol_recycle{false}, pfr_recycle{false},
+      penalty_recycle{false},
       neutral_pump{false}; ///< Flags for enabling recycling in different regions
   bool diagnose;           ///< Save additional post-processing variables?
   bool has_sheath_boundary_simple{
@@ -71,7 +77,7 @@ private:
   BoutReal gamma_i; /// Sheath heat transmission coefficient
 
   Field3D density_source,
-      energy_source; ///< Recycling particle and energy sources for all locations
+      energy_source;          ///< Recycling particle and energy sources for all locations
   Field3D energy_flow_xlow;   ///< Cell edge fluxes used for calculating
                               ///<
                               ///< fast recycling energy source
