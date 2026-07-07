@@ -43,11 +43,19 @@ WORKDIR /opt/spack-environment
 # older hardware. A `require: target=...` is a hard constraint reuse cannot
 # override; we enforce it here because the shared spack.yaml can't branch on
 # architecture.
-RUN case "$(uname -m)" in \
-      aarch64) HERMES_TARGET=aarch64 ;; \
-      x86_64)  HERMES_TARGET=x86_64_v3 ;; \
-      *)       HERMES_TARGET="$(uname -m)" ;; \
-    esac && \
+#
+# HERMES_TARGET overrides the microarch level explicitly; this is how the CI
+# matrix builds older-arch-compatible variants (e.g. x86_64_v2). When left
+# empty we derive a sensible portable default from `uname -m`.
+ARG HERMES_TARGET=""
+RUN if [ -z "${HERMES_TARGET}" ]; then \
+      case "$(uname -m)" in \
+        aarch64) HERMES_TARGET=aarch64 ;; \
+        x86_64)  HERMES_TARGET=x86_64_v3 ;; \
+        *)       HERMES_TARGET="$(uname -m)" ;; \
+      esac ; \
+    fi && \
+    echo "Pinning Spack microarch target: ${HERMES_TARGET}" && \
     spack -e . config add "packages:all:require:target=${HERMES_TARGET}"
 # Install the environment. With OCI credentials, add the self-hosted cache,
 # then install without --fail-fast and push whatever installed regardless of

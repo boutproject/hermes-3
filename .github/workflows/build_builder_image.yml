@@ -37,13 +37,33 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `variant` groups per-arch builds into one published manifest/tag
+        # family: the `default` variant becomes the multi-arch :latest/:edge
+        # tags; each compat variant is amd64-only and gets its own suffixed
+        # tags (e.g. :edge-x86_64_v2). `target` is the hard Spack microarch
+        # pin passed to the builder dockerfile.
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
             arch: amd64
+            variant: default
+            target: x86_64_v3
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
+            variant: default
+            target: aarch64
+          # Older-arch-compatible amd64 variants (published as separate tags).
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v2
+            target: x86_64_v2
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v1
+            target: x86_64
 
     runs-on: ${{ matrix.runner }}
 
@@ -78,12 +98,14 @@ jobs:
           file: ${{ env.BUILDER_DOCKERFILE }}
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=builder-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=builder-${{ matrix.arch }}
+          cache-from: type=gha,scope=builder-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=builder-${{ matrix.variant }}-${{ matrix.arch }}
           # Credentials for the self-hosted OCI Spack build cache, so the build
           # can pull previously-compiled binaries and push newly-built ones.
+          # HERMES_TARGET pins the microarch level for this variant.
           build-args: |
             SPACK_OCI_USER=${{ github.actor }}
+            HERMES_TARGET=${{ matrix.target }}
           secrets: |
             ghcr_token=${{ secrets.GITHUB_TOKEN }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
@@ -97,23 +119,36 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: builder-digests-${{ matrix.arch }}
+          name: builder-digests-${{ matrix.variant }}-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
-  # Combine the per-arch builder images into one multi-arch manifest and apply tags.
+  # Combine the per-arch builder images into one manifest per variant and apply
+  # tags. The `default` variant is multi-arch (amd64+arm64) under the primary
+  # tags; each compat variant is amd64-only under suffixed tags.
   merge-builder-image:
 
     needs: build-builder-image
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: default
+            suffix: ''
+          - variant: x86_64_v2
+            suffix: -x86_64_v2
+          - variant: x86_64_v1
+            suffix: -x86_64_v1
 
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: builder-digests-*
+          pattern: builder-digests-${{ matrix.variant }}-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -131,6 +166,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}
+          # Suffix every tag for compat variants (empty for the default variant).
+          # onlatest=true so :latest also becomes :latest-x86_64_v2, etc.
+          flavor: |
+            suffix=${{ matrix.suffix }},onlatest=true
           tags: |
             # tag with date for scheduled jobs (YYYY-MM)
             type=schedule,pattern={{date 'YYYY-MM'}}
@@ -146,7 +185,7 @@ jobs:
             # tag with branch name
             type=ref,event=branch,enable={{is_default_branch}}
 
-      - name: Create multi-arch manifest
+      - name: Create manifest
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
@@ -154,7 +193,7 @@ jobs:
             $(printf '${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect manifest
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:edge
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:edge${{ matrix.suffix }}
 
   # Build the final image per architecture, each FROM the matching-arch builder,
   # pushing by digest; then merge into a multi-arch manifest.
@@ -166,13 +205,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Each final image is built FROM the matching-variant builder tag.
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
             arch: amd64
+            variant: default
+            builder_tag: edge
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
+            variant: default
+            builder_tag: edge
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v2
+            builder_tag: edge-x86_64_v2
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v1
+            builder_tag: edge-x86_64_v1
 
     runs-on: ${{ matrix.runner }}
 
@@ -206,10 +260,10 @@ jobs:
           file: ${{ env.FINAL_DOCKERFILE }}
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=final-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=final-${{ matrix.arch }}
+          cache-from: type=gha,scope=final-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=final-${{ matrix.variant }}-${{ matrix.arch }}
           build-args: |
-            BUILDER_TAG=edge
+            BUILDER_TAG=${{ matrix.builder_tag }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
@@ -221,7 +275,7 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: final-digests-${{ matrix.arch }}
+          name: final-digests-${{ matrix.variant }}-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -231,12 +285,23 @@ jobs:
     needs: build-final-image
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: default
+            suffix: ''
+          - variant: x86_64_v2
+            suffix: -x86_64_v2
+          - variant: x86_64_v1
+            suffix: -x86_64_v1
+
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: final-digests-*
+          pattern: final-digests-${{ matrix.variant }}-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -254,6 +319,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}
+          # Suffix every tag for compat variants (empty for the default variant).
+          flavor: |
+            suffix=${{ matrix.suffix }},onlatest=true
           tags: |
             # tag with date for scheduled jobs (YYYY-MM)
             type=schedule,pattern={{date 'YYYY-MM'}}
@@ -269,7 +337,7 @@ jobs:
             # tag with branch name
             type=ref,event=branch,enable={{is_default_branch}}
 
-      - name: Create multi-arch manifest
+      - name: Create manifest
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
@@ -277,4 +345,4 @@ jobs:
             $(printf '${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect manifest
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:edge
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:edge${{ matrix.suffix }}

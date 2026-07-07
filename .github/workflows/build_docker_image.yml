@@ -36,13 +36,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Each final image is built FROM the matching-variant builder tag. The
+        # `default` variant is multi-arch; compat variants are amd64-only and
+        # get suffixed tags (e.g. :latest-x86_64_v2).
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
             arch: amd64
+            variant: default
+            builder_tag: latest
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
+            variant: default
+            builder_tag: latest
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v2
+            builder_tag: latest-x86_64_v2
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v1
+            builder_tag: latest-x86_64_v1
 
     runs-on: ${{ matrix.runner }}
 
@@ -76,10 +93,10 @@ jobs:
           file: ${{ env.DOCKERFILE }}
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=final-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=final-${{ matrix.arch }}
+          cache-from: type=gha,scope=final-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=final-${{ matrix.variant }}-${{ matrix.arch }}
           build-args: |
-            BUILDER_TAG=latest
+            BUILDER_TAG=${{ matrix.builder_tag }}
             HERMES_BUILD_JOBS=2
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 
@@ -92,23 +109,34 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: final-digests-${{ matrix.arch }}
+          name: final-digests-${{ matrix.variant }}-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
-  # Combine the per-arch images into one multi-arch manifest and apply tags.
+  # Combine the per-arch images into one manifest per variant and apply tags.
   merge-final-image:
 
     needs: build-final-image
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: default
+            suffix: ''
+          - variant: x86_64_v2
+            suffix: -x86_64_v2
+          - variant: x86_64_v1
+            suffix: -x86_64_v1
 
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: final-digests-*
+          pattern: final-digests-${{ matrix.variant }}-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -126,6 +154,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Suffix every tag for compat variants (empty for the default variant).
+          flavor: |
+            suffix=${{ matrix.suffix }},onlatest=true
           tags: |
             # set "latest" tag
             type=raw,value=latest,enable={{is_default_branch}}
@@ -139,7 +170,7 @@ jobs:
             # tag with branch name
             type=ref,event=branch,enable={{is_default_branch}}
 
-      - name: Create multi-arch manifest
+      - name: Create manifest
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
@@ -147,4 +178,4 @@ jobs:
             $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect manifest
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:edge
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:edge${{ matrix.suffix }}
