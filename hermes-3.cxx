@@ -281,6 +281,9 @@ int Hermes::init(bool restarting) {
         coord->Bxy /= Bnorm;
 
         coord->geometry(); // Calculate other metrics
+
+        coord->g_22_ylow() /= SQ(rho_s0);
+        coord->g_22_yhigh() /= SQ(rho_s0);
       } else {
         // To use non-orthogonal metric
         // Normalise
