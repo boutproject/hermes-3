@@ -8,7 +8,9 @@
 /**
  * @brief The ``fieldline_geometry`` component in Hermes-3 helps to set up 1D simulations and to compute cell geometry for other modules.
  */
-struct FieldlineGeometry : public Component {
+struct FieldlineGeometry : public NamedComponent<FieldlineGeometry> {
+
+  static constexpr auto type = "fieldline_geometry";
 
   /**
    * @brief Constructor for the FieldlineGeometry component.
@@ -57,7 +59,7 @@ private:
 };
 
 namespace {
-RegisterComponent<FieldlineGeometry> register_fieldline_geometry("fieldline_geometry");
+RegisterComponent<FieldlineGeometry> register_fieldline_geometry;
 }
 
 #endif // fieldline_geometry_H

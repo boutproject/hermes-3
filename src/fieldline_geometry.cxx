@@ -70,21 +70,22 @@ Field3D calculate_Lpar() {
  * It calculates and stores various geometric quantities such as the parallel length,
  * magnetic field components, flux expansion, and cell dimensions.
  */
-FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*)
+FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*)
     // Declare write permissions for the geometry quantities that transform_impl()
     // publishes into the shared state, so other components can read them.
-    : Component(
-          {readWrite("fieldline_geometry_lpar"),
-           readWrite("fieldline_geometry_lambda_int"),
-           readWrite("fieldline_geometry_magnetic_pitch"),
-           readWrite("fieldline_geometry_Rxy"), readWrite("fieldline_geometry_Bpxy"),
-           readWrite("fieldline_geometry_Btxy"), readWrite("fieldline_geometry_Bxy"),
-           readWrite("fieldline_geometry_transport_broadening"),
-           readWrite("fieldline_geometry_f_R"),
-           readWrite("fieldline_geometry_flux_tube_width"),
-           readWrite("fieldline_geometry_dlpol"),
-           readWrite("fieldline_geometry_cell_side_area"),
-           readWrite("fieldline_geometry_cell_volume")}) {
+    : NamedComponent(name, {readWrite("fieldline_geometry_lpar"),
+                            readWrite("fieldline_geometry_lambda_int"),
+                            readWrite("fieldline_geometry_magnetic_pitch"),
+                            readWrite("fieldline_geometry_Rxy"),
+                            readWrite("fieldline_geometry_Bpxy"),
+                            readWrite("fieldline_geometry_Btxy"),
+                            readWrite("fieldline_geometry_Bxy"),
+                            readWrite("fieldline_geometry_transport_broadening"),
+                            readWrite("fieldline_geometry_f_R"),
+                            readWrite("fieldline_geometry_flux_tube_width"),
+                            readWrite("fieldline_geometry_dlpol"),
+                            readWrite("fieldline_geometry_cell_side_area"),
+                            readWrite("fieldline_geometry_cell_volume")}) {
   Options& geo_options =
       options["fieldline_geometry"];       // Get options specific to fieldline_geometry
   const Options& units = options["units"]; // Get unit options
@@ -235,7 +236,7 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*)
   mesh->communicate(coord->J);
 
   // Parallel length of cell
-  Field3D dlpar = coord->dy / Lnorm;
+  Field3D dlpar = Field3D(coord->dy) / Lnorm;
   // Width of flux tube in the radial direction
   flux_tube_width = lambda_int * flux_expansion;
   // Length of the cell in the poloidal direction

@@ -245,16 +245,18 @@ TEST_F(FieldlineGeometryTest, GeometryFactorsAreSelfConsistentForNonTrivialProfi
   auto cell_volume = get<Field3D>(outputs["fieldline_geometry_cell_volume"]);
 
   // dlpol = dy * Bpol/B
-  ASSERT_TRUE(IsFieldEqual(dlpol, dy * pitch_angle, "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(dlpol, Field3D(dy * pitch_angle), "RGN_NOBNDRY"));
 
   // flux_tube_width = lambda_int * f_R
-  ASSERT_TRUE(IsFieldEqual(flux_tube_width, lambda_int * f_R, "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(flux_tube_width, Field3D(lambda_int * f_R), "RGN_NOBNDRY"));
 
   // cell_side_area = dlpol * 2 * pi * R
-  ASSERT_TRUE(IsFieldEqual(cell_side_area, dlpol * 2.0 * PI * Rxy, "RGN_NOBNDRY"));
+  ASSERT_TRUE(
+      IsFieldEqual(cell_side_area, Field3D(dlpol * 2.0 * PI * Rxy), "RGN_NOBNDRY"));
 
   // cell_volume = cell_side_area * flux_tube_width
-  ASSERT_TRUE(IsFieldEqual(cell_volume, cell_side_area * flux_tube_width, "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(cell_volume, Field3D(cell_side_area * flux_tube_width),
+                           "RGN_NOBNDRY"));
 
   // The profiles are non-trivial, so these factors should not all just be 1
   // (otherwise this test wouldn't be exercising anything the constant-input
