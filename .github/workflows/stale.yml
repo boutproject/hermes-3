@@ -1,7 +1,7 @@
 name: Close stale PRs
 on:
   schedule:
-    - cron: '30 1 1 * *'   # monthly, 1st of the month at 01:30 UTC
+    - cron: '30 1 */3 * *'   # run every 3 days at 01:30 UTC
   workflow_dispatch:        # allow manual runs
 
 permissions:
@@ -15,26 +15,23 @@ jobs:
       - uses: actions/stale@v9
         with:
           days-before-stale: 90
-          days-before-close: 14
+          days-before-close: 28
           stale-pr-label: stale
           stale-pr-message: >
             This PR has had no activity for 90 days and is marked stale.
-            It will be closed in 14 days unless there is new activity.
+            It will be closed in 28 days unless there is new activity.
             Remove the `stale` label or comment to keep it open.
           exempt-pr-labels: 'keep,pinned,security'
-          # Issues: mark stale after a year of inactivity, close 14 days later.
           days-before-issue-stale: 365
-          days-before-issue-close: 14
+          days-before-issue-close: 28
           stale-issue-label: stale
           stale-issue-message: >
             This issue has had no activity for a year and is marked stale.
-            It will be closed in 14 days unless there is new activity.
+            It will be closed in 28 days unless there is new activity.
             Remove the `stale` label, comment, or assign it to the
-            "long-term development" milestone to keep it open.
-          # Never touch issues in the long-term development milestone.
-          exempt-issue-milestones: 'long-term development'
-          # Process more items per run to clear the existing backlog faster
-          # (default is 30). Can be lowered once the backlog is drained.
-          operations-per-run: 100
-          # Uncomment for a dry run: logs what it *would* do without acting.
-          # debug-only: true
+            "long-term" milestone to keep it open.
+          exempt-issue-milestones: 'long-term'
+          # Conservative limit while starting out; raise once behaviour is trusted.
+          operations-per-run: 5
+          # Dry run: logs what it *would* do without acting. Disable to go live.
+          debug-only: true
