@@ -181,7 +181,7 @@ INSTANTIATE_TEST_SUITE_P(
                      {"permissions",
                       toString(Permissions({readWrite("1", Regions::Interior)}))}}}},
                   {"c", "a", "b"}),
-        Parameter({{"components", "a,b,c"},
+        Parameter({{"components", "b,a,c"},
                    {"a",
                     {{"type", "orderchecker"},
                      {"permissions",
@@ -197,7 +197,7 @@ INSTANTIATE_TEST_SUITE_P(
                      {"permissions",
                       toString(Permissions({readOnly("1", Regions::Boundaries),
                                             readOnly("2", Regions::Boundaries)}))}}}},
-                  {"b", "a", "c"})));
+                  {"a", "b", "c"})));
 
 class InvalidComponentOrderTest : public testing::TestWithParam<Options> {
   void SetUp() override { OrderChecker::resetOrderInfo(); }
