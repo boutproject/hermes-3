@@ -124,6 +124,11 @@ jobs:
             arch: amd64
             variant: x86_64_v2
             target: x86_64_v2
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v4
+            target: x86_64_v4
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
@@ -194,6 +199,8 @@ jobs:
             suffix: ''
           - variant: x86_64_v2
             suffix: -x86_64_v2
+          - variant: x86_64_v4
+            suffix: -x86_64_v4
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
@@ -266,6 +273,12 @@ jobs:
             variant: x86_64_v2
             builder_suffix: -x86_64_v2
             target: x86_64_v2
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            variant: x86_64_v4
+            builder_suffix: -x86_64_v4
+            target: x86_64_v4
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
@@ -333,6 +346,8 @@ jobs:
             suffix: ''
           - variant: x86_64_v2
             suffix: -x86_64_v2
+          - variant: x86_64_v4
+            suffix: -x86_64_v4
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4

@@ -58,11 +58,13 @@ jobs:
           final='[
             {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"default","builder_tag":"latest","target":"x86_64_v3"},
             {"platform":"linux/arm64","runner":"ubuntu-24.04-arm","arch":"arm64","variant":"default","builder_tag":"latest","target":"aarch64"},
-            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v2","builder_tag":"latest-x86_64_v2","target":"x86_64_v2"}
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v2","builder_tag":"latest-x86_64_v2","target":"x86_64_v2"},
+            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v4","builder_tag":"latest-x86_64_v4","target":"x86_64_v4"}
           ]'
           merge='[
             {"variant":"default","suffix":""},
-            {"variant":"x86_64_v2","suffix":"-x86_64_v2"}
+            {"variant":"x86_64_v2","suffix":"-x86_64_v2"},
+            {"variant":"x86_64_v4","suffix":"-x86_64_v4"}
           ]'
 
           # Keep only the default variant when compat builds are skipped.

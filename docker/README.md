@@ -119,9 +119,12 @@ Each published image is compiled for a fixed microarchitecture, and that
 | --- | --- |
 | `hermes-3:latest` | `x86-64-v3` on amd64, `armv8-a` on arm64 |
 | `hermes-3:latest-x86_64_v2` | `x86-64-v2` (pre-Haswell / older amd64) |
+| `hermes-3:latest-x86_64_v4` | `x86-64-v4` (AVX-512; Skylake-SP / Zen 4 and newer) |
 
 The default `latest` targets `x86_64_v3` (AVX2/FMA); the `-x86_64_v2`
-variant trades performance for compatibility with older CPUs. The
+variant trades performance for compatibility with older CPUs, while the
+`-x86_64_v4` variant adds AVX-512 for newer CPUs and will fault with an
+illegal instruction on hardware that lacks it. The
 same `-march` applies to both the initial build *and* any in-container rebuild
 (`build_boutpp`, `build_hermes`, `build_both`), so a rebuild stays consistent
 with the image by default — you don't have to set anything.
