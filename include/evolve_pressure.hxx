@@ -107,7 +107,8 @@ private:
   Field3D E_PdivV,
       E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
 
-  bool initialize_from_mesh;  ///< Initilize the Field3D P from 2D profiles stored in the mesh file. 
+  bool
+      initialize_from_mesh; ///< Initilize the Field3D P from 2D profiles stored in the mesh file.
 
   /// Inputs
   /// - species
