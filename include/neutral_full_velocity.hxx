@@ -102,5 +102,5 @@ namespace {
 RegisterComponent<NeutralFullVelocity>
     registersolverneutralfullvelocity("neutral_full_velocity");
 }
-#endif // fu
+#endif // not BOUT_USE_METRIC_3D
 #endif // NEUTRAL_FULL_VELOCITY_H
