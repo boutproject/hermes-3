@@ -1,8 +1,8 @@
 name: Build hermes-3 Docker image
 
-# Configures this workflow to run every time a change is pushed to the master branch,
-# when a release is released (so versioned image tags are published), or when
-# manually triggered.
+# Runs on every push to master, on release, or when manually triggered. The
+# default variant is built multi-arch and gets the full tag set; the compat
+# variants are built in separate jobs and only ever carry a suffixed `latest`.
 on:
   push:
     branches:
@@ -29,255 +29,147 @@ env:
 
 jobs:
 
-  # Compute the build matrices. Compat variants only
-  # ever carry the `latest` tag, published on the default branch only. On events
-  # where `latest` won't be applied (releases, whose ref is a tag; a dispatch
-  # from a non-default branch) the compat builds would produce no tag, so drop
-  # them and build the default variant alone.
+  # Compat variants only carry `latest` (default branch only), so skip them on
+  # events that won't publish it: releases (tag ref) or a dispatch off the
+  # default branch.
   setup:
     runs-on: ubuntu-latest
     outputs:
-      final_matrix: ${{ steps.gen.outputs.final_matrix }}
-      merge_matrix: ${{ steps.gen.outputs.merge_matrix }}
+      compat: ${{ steps.gen.outputs.compat }}
     steps:
-      - name: Compute matrices (include compat variants only when publishing latest)
+      - name: Decide whether to build compat variants
         id: gen
         run: |
           case "${{ github.event_name }}" in
-            release)      compat=false ;;
-            schedule|push) compat=true ;;
-            *)  # workflow_dispatch etc.: only when on the default branch
-              if [ "${{ github.ref_name }}" = "${{ github.event.repository.default_branch }}" ]; then
-                compat=true
-              else
-                compat=false
-              fi ;;
+            push)    compat=true ;;
+            release) compat=false ;;
+            *) [ "${{ github.ref_name }}" = "${{ github.event.repository.default_branch }}" ] \
+                 && compat=true || compat=false ;;
           esac
+          echo "compat=${compat}" >> "$GITHUB_OUTPUT"
           echo "Build compat variants: ${compat}"
 
-          final='[
-            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"default","builder_tag":"latest","target":"x86_64_v3"},
-            {"platform":"linux/arm64","runner":"ubuntu-24.04-arm","arch":"arm64","variant":"default","builder_tag":"latest","target":"aarch64"},
-            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v2","builder_tag":"latest-x86_64_v2","target":"x86_64_v2"},
-            {"platform":"linux/amd64","runner":"ubuntu-24.04","arch":"amd64","variant":"x86_64_v4","builder_tag":"latest-x86_64_v4","target":"x86_64_v4"}
-          ]'
-          merge='[
-            {"variant":"default","suffix":""},
-            {"variant":"x86_64_v2","suffix":"-x86_64_v2"},
-            {"variant":"x86_64_v4","suffix":"-x86_64_v4"}
-          ]'
+  # ---- Default variant (multi-arch, full tag set) ----
 
-          # Keep only the default variant when compat builds are skipped.
-          f='if $c=="true" then . else map(select(.variant=="default")) end'
-          {
-            echo "final_matrix=$(jq -c --arg c "$compat" "$f" <<<"$final")"
-            echo "merge_matrix=$(jq -c --arg c "$compat" "$f" <<<"$merge")"
-          } >> "$GITHUB_OUTPUT"
-
-  # Build the final image once per architecture on a native runner, pushing each
-  # by digest only. The merge job assembles them into a manifest per variant.
-  # Each is built FROM the matching-variant builder tag.
-  build-final-image:
-
-    needs: setup
+  build-default:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.setup.outputs.final_matrix) }}
-
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+            target: x86_64_v3
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+            target: aarch64
     runs-on: ${{ matrix.runner }}
-
     steps:
-      # Fail fast (before checkout/build) if this runner can't run the code it is
-      # about to build. The x86_64_v4 variant targets AVX-512, and GitHub-hosted
-      # runners are a mixed fleet: on a CPU without AVX-512 the v4-compiled Spack
-      # cmake SIGILLs during configure. Re-running the job re-rolls the runner.
-      - name: Require AVX-512 for x86_64_v4 build
-        if: matrix.target == 'x86_64_v4'
-        run: |
-          if ! grep -qw avx512f /proc/cpuinfo; then
-            echo "::error::Runner CPU lacks AVX-512 (no avx512f in /proc/cpuinfo); the x86_64_v4 image built here would SIGILL. Re-run this job to land on an AVX-512-capable runner, or build it on AVX-512 hardware."
-            exit 1
-          fi
-          echo "AVX-512 present; proceeding with x86_64_v4 build."
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v3
+      - uses: ./.github/actions/build-image
         with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          dockerfile: ${{ env.DOCKERFILE }}
+          platform: ${{ matrix.platform }}
+          cache-scope: final-default-${{ matrix.arch }}
+          artifact-name: final-digests-default-${{ matrix.arch }}
+          build-args: |
+            BUILDER_TAG=latest
+            HERMES_TARGET=${{ matrix.target }}
+            HERMES_BUILD_JOBS=2
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+  merge-default:
+    needs: build-default
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: Build and push image by digest
-        id: build
-        uses: docker/build-push-action@v6
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=edge
+            type=sha,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch,enable={{is_default_branch}}
+      - uses: ./.github/actions/merge-digests
         with:
-          context: .
-          file: ${{ env.DOCKERFILE }}
-          platforms: ${{ matrix.platform }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=final-${{ matrix.variant }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=final-${{ matrix.variant }}-${{ matrix.arch }}
-          build-args: |
-            BUILDER_TAG=${{ matrix.builder_tag }}
-            HERMES_TARGET=${{ matrix.target }}
-            HERMES_BUILD_JOBS=2
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          artifact-pattern: final-digests-default-*
+          tags: ${{ steps.meta.outputs.tags }}
+          inspect-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:edge
+          tolerant: 'false'
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
+  # ---- Compat variants (amd64-only, suffixed `latest` only) ----
 
-      - name: Upload digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: final-digests-${{ matrix.variant }}-${{ matrix.arch }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  # Combine the per-arch images into one manifest per variant and apply tags.
-  merge-final-image:
-
-    needs: [setup, build-final-image]
-    # Run even when a compat build leg failed/was skipped (e.g. the x86_64_v4 leg
-    # lost the AVX-512 runner roll). Each variant is merged independently below,
-    # and a variant with no digests is skipped, so a missing v2/v4 image never
-    # blocks the default manifest.
-    if: always() && needs.setup.result == 'success'
-    runs-on: ubuntu-latest
-
+  build-compat:
+    needs: setup
+    if: needs.setup.outputs.compat == 'true'
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.setup.outputs.merge_matrix) }}
-
+        variant: [x86_64_v2, x86_64_v4]
+    runs-on: ubuntu-24.04
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+      - uses: actions/checkout@v4
         with:
-          path: /tmp/digests
-          pattern: final-digests-${{ matrix.variant }}-*
-          merge-multiple: true
-
-      # A compat variant whose build leg failed/was skipped has no digests. These
-      # single-arch variants aren't actually multi-arch-merged, so skip cleanly
-      # rather than failing when there is nothing to assemble.
-      - name: Check for digests
-        id: digests
-        run: |
-          if [ -n "$(ls -A /tmp/digests 2>/dev/null)" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "No final-image digests for variant '${{ matrix.variant }}'; nothing to merge."
-          fi
-
-      - name: Set up Docker Buildx
-        if: steps.digests.outputs.present == 'true'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry ${{ env.REGISTRY }}
-        if: steps.digests.outputs.present == 'true'
-        uses: docker/login-action@v3
+          fetch-depth: 1
+      - uses: ./.github/actions/build-image
         with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          dockerfile: ${{ env.DOCKERFILE }}
+          platform: linux/amd64
+          cache-scope: final-${{ matrix.variant }}-amd64
+          artifact-name: final-digests-${{ matrix.variant }}-amd64
+          require-avx512: ${{ matrix.variant == 'x86_64_v4' }}
+          build-args: |
+            BUILDER_TAG=latest-${{ matrix.variant }}
+            HERMES_TARGET=${{ matrix.variant }}
+            HERMES_BUILD_JOBS=2
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Docker metadata
-        id: meta
-        if: steps.digests.outputs.present == 'true'
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Suffix every tag for compat variants (empty for the default variant).
-          flavor: |
-            suffix=${{ matrix.suffix }},onlatest=true
-          # Compat variants get ONLY the `latest` tag (suffixed). Every other tag
-          # (edge, sha, branch, version semver) is restricted to the default
-          # variant. The `variant=='default' && '{{is_default_branch}}'` form ANDs
-          # the existing default-branch gate with the variant restriction (a
-          # non-default variant short-circuits to `false`).
-          tags: |
-            # set "latest" tag (the only tag compat variants receive)
-            type=raw,value=latest,enable={{is_default_branch}}
-            # always tag the most recent build as 'edge'
-            type=raw,value=edge,enable=${{ matrix.variant == 'default' }}
-            # short sha tag
-            type=sha,enable=${{ matrix.variant == 'default' && '{{is_default_branch}}' }}
-            # tag with semantic version
-            type=semver,pattern={{version}},enable=${{ matrix.variant == 'default' }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ matrix.variant == 'default' }}
-            # tag with branch name
-            type=ref,event=branch,enable=${{ matrix.variant == 'default' && '{{is_default_branch}}' }}
-
-      - name: Create manifest
-        if: steps.digests.outputs.present == 'true'
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
-
-      - name: Inspect manifest
-        if: steps.digests.outputs.present == 'true'
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:edge${{ matrix.suffix }}
-
-  # Auto-retry when the x86_64_v4 build fails purely because the job landed on a
-  # runner without AVX-512 (GitHub's fleet is mixed). Re-running the whole run
-  # re-rolls the runners; the default/v2 legs restore from the gha layer cache so
-  # the re-run is cheap. We use a FULL re-run rather than `--failed` because the
-  # latter's dependent-job rerun is unreliable for matrix jobs (actions/runner
-  # #2810), which would leave a retried v4 image built but never tagged.
-  # Bounded by github.run_attempt (3 attempts => 2 automatic retries) so a
-  # genuinely-broken build can't loop; raise the `< 3` to allow more. A non-v4
-  # failure is never retried, and once retries are exhausted the tolerant merge
-  # above still publishes the default/v2 images.
-  retry-v4-runner-lottery:
-    needs: build-final-image
-    if: failure() && fromJSON(github.run_attempt) < 6
+  merge-compat:
+    needs: [setup, build-compat]
+    # Run even when a compat leg failed (e.g. the x86_64_v4 AVX-512 runner roll):
+    # merge-digests is tolerant, so a missing variant is skipped and the others
+    # still publish.
+    if: always() && needs.setup.outputs.compat == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [x86_64_v2, x86_64_v4]
     steps:
-      - name: Re-run the workflow if only x86_64_v4 legs failed
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          failed=$(gh api \
-            "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}/jobs" \
-            --paginate --jq '.jobs[] | select(.conclusion=="failure") | .name')
-          echo "Failed jobs on attempt ${{ github.run_attempt }}:"
-          printf '%s\n' "$failed"
-          if [ -z "$failed" ]; then
-            echo "No failed jobs detected; nothing to retry."
-            exit 0
-          fi
-          # Every matrix leg's job name embeds its matrix values, so an x86_64_v4
-          # leg's name contains "x86_64_v4". If any failed job does NOT, it's a
-          # real failure (default/v2), not the AVX-512 runner lottery.
-          if printf '%s\n' "$failed" | grep -qv 'x86_64_v4'; then
-            echo "A non-x86_64_v4 job failed; treating as a real failure and not retrying."
-            exit 0
-          fi
-          echo "Only x86_64_v4 leg(s) failed; re-running to re-roll the runner."
-          sleep 30
-          gh run rerun "${{ github.run_id }}"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: ./.github/actions/merge-digests
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          artifact-pattern: final-digests-${{ matrix.variant }}-*
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ matrix.variant }}
+          inspect-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ matrix.variant }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+  # NOTE: the x86_64_v4 AVX-512 runner-lottery auto-retry lives in the separate
+  # retry-v4.yml workflow (triggered on workflow_run: completed), because
+  # `gh run rerun` requires the target run to have finished — a job inside the
+  # run can't re-run its own still-in-progress run.

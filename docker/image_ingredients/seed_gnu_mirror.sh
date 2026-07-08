@@ -4,14 +4,18 @@
 # Files are laid out by sha256 in Spack's source-cache format; Spack verifies
 # the sha256 on use, so transport integrity does not matter.
 #
-# Usage: seed_gnu_mirror.sh "<GNU_BASE_URL> [GNU_BASE_URL ...]" <MIRROR_DIR>
+# Usage: seed_gnu_mirror.sh "<GNU_BASE_URL> [GNU_BASE_URL ...]" <MIRROR_DIR> [VERSIONS]
 #   GNU_BASE_URLs  space-separated bases serving readline/..., tried in order
 #                  per file (e.g. "https://ftp.gnu.org/gnu https://mirrors.kernel.org/gnu")
 #   MIRROR_DIR     output dir; register with `spack mirror add <name> file://<dir>`
+#   VERSIONS       optional space-separated readline versions to seed patches for
+#                  (defaults below); extend when Spack pins a newer readline, or
+#                  patches for that version silently won't be seeded.
 set -eu
 
 BASES="$1"
 MIRROR="$2"
+VERSIONS="${3:-8.0 8.1 8.2 8.3 8.4 8.5 8.6}"
 ARCHIVE="${MIRROR}/_source-cache/archive"
 mkdir -p "${ARCHIVE}"
 
@@ -29,9 +33,9 @@ fetch_first() {
 
 seeded=0
 # readline patches are published as contiguous series per version
-# (readline-<v>-patches/readline<vj>-001, -002, ...). Walk plausible versions,
-# and within each, sequential patch numbers until the first gap (all mirrors miss).
-for v in 8.0 8.1 8.2 8.3 8.4 8.5; do
+# (readline-<v>-patches/readline<vj>-001, -002, ...). Walk each version, and
+# within it sequential patch numbers until the first gap (all mirrors miss).
+for v in ${VERSIONS}; do
   vj=$(printf '%s' "$v" | tr -d '.')
   n=1
   while :; do

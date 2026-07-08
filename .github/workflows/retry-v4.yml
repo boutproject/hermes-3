@@ -1,0 +1,68 @@
+name: Retry x86_64_v4 runner lottery
+
+# The x86_64_v4 final image only runs on an AVX-512 CPU, and GitHub's runner
+# fleet is mixed, so a build run can fail purely because the v4 leg landed on a
+# runner without AVX-512. When a run of the build workflows fails with ONLY
+# x86_64_v4 leg(s) failing, re-run it to re-roll the runners.
+#
+# This is a separate workflow_run-triggered workflow rather than a job inside
+# the build run: `gh run rerun` requires the target run to have COMPLETED, so a
+# job cannot re-run its own still-in-progress run. workflow_run fires after the
+# run finishes, when the re-run API is valid. A FULL re-run (not `--failed`) is
+# used because `--failed`'s dependent-job rerun is unreliable for matrix jobs
+# (actions/runner #2810), which would leave a retried v4 image built but never
+# tagged; unaffected legs restore from the gha layer cache so it stays cheap.
+#
+# NOTE: workflow_run uses the workflow definition on the default branch, so this
+# only takes effect once merged to the default branch.
+on:
+  workflow_run:
+    workflows:
+      - "Build hermes-3 Docker image"
+      - "Build hermes-3-builder and hermes-3 Docker images"
+    types: [completed]
+
+permissions:
+  actions: write
+
+jobs:
+  retry:
+    # Only failed runs, and bounded so a genuinely-broken build can't loop
+    # (10 attempts => up to 9 automatic retries; raise the `< 10` to allow more).
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.run_attempt < 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-run the run if only x86_64_v4 legs failed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          failed=$(gh api \
+            "repos/${GH_REPO}/actions/runs/${RUN_ID}/attempts/${ATTEMPT}/jobs" \
+            --paginate --jq '.jobs[] | select(.conclusion=="failure") | .name')
+          echo "Failed jobs on attempt ${ATTEMPT} of run ${RUN_ID}:"
+          printf '%s\n' "$failed"
+          if [ -z "$failed" ]; then
+            echo "Run failed but no failed jobs found (cancelled / startup failure?); not retrying."
+            exit 0
+          fi
+          # Each matrix leg's job name embeds its matrix values, so an x86_64_v4
+          # leg's name contains "x86_64_v4". If any failed job does NOT, it's a
+          # real failure (not the AVX-512 runner lottery), so don't retry.
+          if printf '%s\n' "$failed" | grep -qv 'x86_64_v4'; then
+            echo "A non-x86_64_v4 job failed; treating as a real failure and not retrying."
+            exit 0
+          fi
+          # The lottery only affects the FINAL image build (which runs the
+          # v4-compiled cmake). A v4 *builder* failure is deterministic, so
+          # retrying won't help; builder-stage job names contain "builder".
+          if printf '%s\n' "$failed" | grep -q 'builder'; then
+            echo "A builder-stage job failed; deterministic, not the runner lottery, not retrying."
+            exit 0
+          fi
+          echo "Only x86_64_v4 final leg(s) failed; re-running to re-roll the runner."
+          gh run rerun "${RUN_ID}"

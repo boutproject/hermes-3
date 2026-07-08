@@ -27,6 +27,7 @@ on:
       - 'docker/**'
       - '.github/workflows/test_docker_build.yml'
       - '.github/workflows/build*image.yml'
+      - '.github/actions/**'
   workflow_dispatch:  # Allows manual triggering
 
 permissions:
@@ -74,6 +75,7 @@ jobs:
               - 'docker/image_ingredients/spack_config.yaml'
               - 'docker/image_ingredients/docker_entrypoint.sh'
               - '.github/workflows/test_docker_build.yml'
+              - '.github/actions/**'
             # Files that affect the final hermes-3 image build.
             final:
               - 'docker/hermes-3.dockerfile'
@@ -83,6 +85,7 @@ jobs:
               - 'docker/image_ingredients/docker_image_commands.sh'
               - 'docker/image_ingredients/docker_entrypoint.sh'
               - '.github/workflows/test_docker_build.yml'
+              - '.github/actions/**'
             # Files that affect the jupyter image build. This image is built
             # FROM jupyter/scipy-notebook and is independent of the
             # builder->final chain.
@@ -92,8 +95,8 @@ jobs:
 
   # ---- Builder image (only when the builder or its deps changed) ----
 
-  # Build the builder image once per architecture on a native runner, pushing
-  # each by digest only.
+  # Build the builder image once per architecture/variant, pushing each by
+  # digest only.
   build-builder:
     needs: changes
     # Publishing needs registry write access, which fork PRs don't have, so skip
@@ -106,8 +109,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Default (amd64 v3 + arm64) plus the compat variants,
-        # so the compat-variant build is exercised end to end here too.
+        # Default (amd64 v3 + arm64) plus the compat variants, so the
+        # compat-variant build is exercised end to end here too.
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
@@ -131,59 +134,24 @@ jobs:
             target: x86_64_v4
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v3
+      - uses: ./.github/actions/build-image
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}
-
-      - name: Build and push builder image by digest
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ env.BUILDER_DOCKERFILE }}
-          platforms: ${{ matrix.platform }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=exp-builder-${{ matrix.variant }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=exp-builder-${{ matrix.variant }}-${{ matrix.arch }}
-          # Credentials for the self-hosted OCI Spack build cache, so the build
-          # can pull previously-compiled binaries and push newly-built ones.
+          image: ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}
+          dockerfile: ${{ env.BUILDER_DOCKERFILE }}
+          platform: ${{ matrix.platform }}
+          cache-scope: exp-builder-${{ matrix.variant }}-${{ matrix.arch }}
+          artifact-name: exp-builder-digests-${{ matrix.variant }}-${{ matrix.arch }}
           build-args: |
             SPACK_OCI_USER=${{ github.actor }}
             HERMES_TARGET=${{ matrix.target }}
-          secrets: |
+          build-secrets: |
             ghcr_token=${{ secrets.GITHUB_TOKEN }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: exp-builder-digests-${{ matrix.variant }}-${{ matrix.arch }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
   # Combine the per-arch builder images into the experimental tag(s): a
   # multi-arch 'default' tag plus the suffixed compat tags.
@@ -202,39 +170,26 @@ jobs:
           - variant: x86_64_v4
             suffix: -x86_64_v4
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
         with:
-          path: /tmp/digests
-          pattern: exp-builder-digests-${{ matrix.variant }}-*
-          merge-multiple: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v3
+          fetch-depth: 1
+      - uses: ./.github/actions/merge-digests
         with:
+          image: ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}
+          artifact-pattern: exp-builder-digests-${{ matrix.variant }}-*
+          tags: ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }}
+          inspect-tag: ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }}
+          tolerant: 'false'
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create experimental builder manifest
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create \
-            -t ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }} \
-            $(printf '${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}@sha256:%s ' *)
-
-      - name: Inspect manifest
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }}
-
   # ---- Final image ----
 
-  # Build the final image once per architecture, FROM the experimental builder,
-  # pushing each by digest only. Runs whenever the builder OR the final image is
-  # affected. If the builder changed, this waits for the experimental builder to
-  # be (re)published first; otherwise it uses the one from a previous run.
+  # Build the final image once per architecture/variant, FROM the experimental
+  # builder, pushing each by digest only. Runs whenever the builder OR the final
+  # image is affected. If the builder changed, this waits for the experimental
+  # builder to be (re)published first; otherwise it uses the one from a previous run.
   build-final:
     needs: [changes, merge-builder]
     # Runs when the builder changed (only after the experimental builder is
@@ -281,78 +236,31 @@ jobs:
             target: x86_64_v4
     runs-on: ${{ matrix.runner }}
     steps:
-      # Fail fast (before checkout/build) if this runner can't run the code it is
-      # about to build. The x86_64_v4 variant targets AVX-512, and GitHub-hosted
-      # runners are a mixed fleet: on a CPU without AVX-512 the v4-compiled Spack
-      # cmake SIGILLs during configure. Re-running the job re-rolls the runner.
-      - name: Require AVX-512 for x86_64_v4 build
-        if: matrix.target == 'x86_64_v4'
-        run: |
-          if ! grep -qw avx512f /proc/cpuinfo; then
-            echo "::error::Runner CPU lacks AVX-512 (no avx512f in /proc/cpuinfo); the x86_64_v4 image built here would SIGILL. Re-run this job to land on an AVX-512-capable runner, or build it on AVX-512 hardware."
-            exit 1
-          fi
-          echo "AVX-512 present; proceeding with x86_64_v4 build."
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v3
+      - uses: ./.github/actions/build-image
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}
-
-      - name: Build and push final image by digest
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ env.FINAL_DOCKERFILE }}
-          platforms: ${{ matrix.platform }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=exp-final-${{ matrix.variant }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=exp-final-${{ matrix.variant }}-${{ matrix.arch }}
+          image: ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}
+          dockerfile: ${{ env.FINAL_DOCKERFILE }}
+          platform: ${{ matrix.platform }}
+          cache-scope: exp-final-${{ matrix.variant }}-${{ matrix.arch }}
+          artifact-name: exp-final-digests-${{ matrix.variant }}-${{ matrix.arch }}
+          require-avx512: ${{ matrix.variant == 'x86_64_v4' }}
           build-args: |
             BUILDER_TAG=${{ env.EXPERIMENTAL_TAG }}${{ matrix.builder_suffix }}
             HERMES_TARGET=${{ matrix.target }}
             HERMES_BUILD_JOBS=2
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: exp-final-digests-${{ matrix.variant }}-${{ matrix.arch }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
   # Combine the per-arch final images into the experimental tag(s): a multi-arch
-  # 'default' tag plus the suffixed compat tags.
+  # 'default' tag plus the suffixed compat tags. Runs when build-final actually
+  # ran (success or partial failure such as the x86_64_v4 AVX-512 runner roll),
+  # but not when it was skipped; a variant with no digests is skipped.
   merge-final:
     needs: build-final
-    # Run when build-final actually ran (success OR a partial failure such as the
-    # x86_64_v4 leg losing the AVX-512 runner roll), but not when it was skipped.
-    # Each variant is merged independently and a variant with no digests is
-    # skipped, so a missing v2/v4 image never blocks the default manifest.
     if: always() && (needs.build-final.result == 'success' || needs.build-final.result == 'failure')
     runs-on: ubuntu-latest
     strategy:
@@ -366,50 +274,18 @@ jobs:
           - variant: x86_64_v4
             suffix: -x86_64_v4
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+      - uses: actions/checkout@v4
         with:
-          path: /tmp/digests
-          pattern: exp-final-digests-${{ matrix.variant }}-*
-          merge-multiple: true
-
-      # A compat variant whose build leg failed/was skipped has no digests. These
-      # single-arch variants aren't actually multi-arch-merged, so skip cleanly
-      # rather than failing when there is nothing to assemble.
-      - name: Check for digests
-        id: digests
-        run: |
-          if [ -n "$(ls -A /tmp/digests 2>/dev/null)" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "No final-image digests for variant '${{ matrix.variant }}'; nothing to merge."
-          fi
-
-      - name: Set up Docker Buildx
-        if: steps.digests.outputs.present == 'true'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry ${{ env.REGISTRY }}
-        if: steps.digests.outputs.present == 'true'
-        uses: docker/login-action@v3
+          fetch-depth: 1
+      - uses: ./.github/actions/merge-digests
         with:
+          image: ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}
+          artifact-pattern: exp-final-digests-${{ matrix.variant }}-*
+          tags: ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }}
+          inspect-tag: ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }}
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create experimental final manifest
-        if: steps.digests.outputs.present == 'true'
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create \
-            -t ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }} \
-            $(printf '${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}@sha256:%s ' *)
-
-      - name: Inspect manifest
-        if: steps.digests.outputs.present == 'true'
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}${{ matrix.suffix }}
 
   # ---- Jupyter image (only when the jupyter dockerfile changed) ----
 

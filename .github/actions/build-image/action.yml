@@ -1,0 +1,109 @@
+name: Build image by digest
+description: >-
+  Build a single-platform image, push it to the registry by digest only, and
+  upload the digest as an artifact for a later manifest-merge step. The caller
+  must have checked out the repository first (this is a local action, and the
+  build context is the workspace).
+
+inputs:
+  image:
+    description: Fully-qualified image name (registry/namespace/name).
+    required: true
+  dockerfile:
+    description: Path to the Dockerfile.
+    required: true
+  platform:
+    description: Target platform, e.g. linux/amd64.
+    required: true
+  cache-scope:
+    description: gha cache scope; must be unique per image/variant/arch.
+    required: true
+  artifact-name:
+    description: Name for the uploaded digest artifact; unique per build leg.
+    required: true
+  build-args:
+    description: Newline-separated build-args for build-push-action.
+    required: false
+    default: ""
+  build-secrets:
+    description: Newline-separated secrets for build-push-action.
+    required: false
+    default: ""
+  require-avx512:
+    description: When 'true', fail fast unless the runner CPU has AVX-512.
+    required: false
+    default: "false"
+  registry:
+    description: Registry to log in to.
+    required: true
+  username:
+    description: Registry username.
+    required: true
+  password:
+    description: Registry password/token.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # x86_64_v4 targets AVX-512, but GitHub's runner fleet is mixed: on a CPU
+    # without it the v4-compiled Spack cmake SIGILLs during configure. Fail fast
+    # here (re-running the job re-rolls the runner) instead of deep in the build.
+    - name: Require AVX-512
+      if: inputs.require-avx512 == 'true'
+      shell: bash
+      run: |
+        if ! grep -qw avx512f /proc/cpuinfo; then
+          echo "::error::Runner CPU lacks AVX-512 (no avx512f in /proc/cpuinfo); this x86_64_v4 image would SIGILL. Re-run to land on an AVX-512-capable runner."
+          exit 1
+        fi
+        echo "AVX-512 present; proceeding."
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.username }}
+        password: ${{ inputs.password }}
+
+    # Labels only; tags are applied later by the merge step.
+    - name: Extract Docker metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ inputs.image }}
+
+    - name: Build and push image by digest
+      id: build
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ${{ inputs.dockerfile }}
+        platforms: ${{ inputs.platform }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha,scope=${{ inputs.cache-scope }}
+        cache-to: type=gha,mode=max,scope=${{ inputs.cache-scope }}
+        build-args: ${{ inputs.build-args }}
+        secrets: ${{ inputs.build-secrets }}
+        outputs: type=image,name=${{ inputs.image }},push-by-digest=true,name-canonical=true,push=true
+
+    - name: Export digest
+      shell: bash
+      run: |
+        mkdir -p /tmp/digests
+        digest="${{ steps.build.outputs.digest }}"
+        touch "/tmp/digests/${digest#sha256:}"
+
+    - name: Upload digest
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: /tmp/digests/*
+        if-no-files-found: error
+        retention-days: 1
+        # Names are unique per leg; overwrite lets a full re-run (the v4 retry)
+        # replace the prior attempt's artifact instead of 409-ing.
+        overwrite: true
