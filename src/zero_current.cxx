@@ -4,17 +4,16 @@
 #include <bout/mesh.hxx>
 #include <bout/options.hxx>
 
+#include "../include/hermes_utils.hxx"
 #include "../include/zero_current.hxx"
 #include <bout/constants.hxx>
-#include "../include/hermes_utils.hxx"
 
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : NamedComponent(name,
                      {readIfSet("species:{all_species}:charge"),
                       readIfSet("species:{all_species}:{inputs}", Regions::Interior),
                       readWrite(fmt::format("species:{}:velocity", name)),
-                      readWrite(fmt::format("species:{}:momentum", name))
-                    }),
+                      readWrite(fmt::format("species:{}:momentum", name))}),
       name(name) {
   Options& options = alloptions[name];
 
@@ -22,7 +21,8 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
 
   ASSERT0(charge != 0.0);
 
-  atomic_mass = options["AA"].doc("Particle atomic number.").withDefault(0.0); // Atomic mass
+  atomic_mass =
+      options["AA"].doc("Particle atomic number.").withDefault(0.0); // Atomic mass
   ASSERT0(atomic_mass != 0.0);
 
   substitutePermissions("inputs", {"density", "velocity"});
@@ -98,7 +98,7 @@ void ZeroCurrent::outputVars(Options& state) {
                   {"source", "zero_current"}});
 
   set_with_attrs(state[std::string("NV") + name], momentum,
-                  {{"time_dimension", "t"},
+                 {{"time_dimension", "t"},
                   {"units", "kg / m^2 / s"},
                   {"conversion", SI::Mp * Nnorm * Cs0},
                   {"long_name", name + " parallel momentum"},
