@@ -29,15 +29,17 @@ Field3D calculate_Lpar() {
   auto dy = coord->dy;               // Get the poloidal cell width
   lpar(0, 0, 0) = 0.5 * dy(0, 0, 0); // Initialize lpar at the first cell center
   // The parallel length at the first cell center is half of the cell width.
-  for (int id = 0; id <= NYPE - 1;
-       ++id) { // Iterate through each processor in the poloidal direction
-    for (int j = 0; j <= mesh->LocalNy;
+  // The local trapezoidal integration below only knows the correct starting
+  // value on rank 0. Each guard-cell exchange (mesh->communicate) carries the
+  // accumulated length one rank further downstream, so repeating the
+  // integrate-then-communicate step NYPE times propagates the correct value to
+  // every rank in the y-direction. The loop variable is just a sweep counter.
+  for (int sweep = 0; sweep < NYPE; ++sweep) {
+    for (int j = 1; j < mesh->LocalNy;
          ++j) { // Iterate through each cell in the local poloidal domain
-      if (j > 0) {
-        // Calculate lpar at the current cell center by adding the average of the current
-        // and previous cell widths to the previous lpar value. This is a simple trapezoidal rule.
-        lpar(0, j, 0) = lpar(0, j - 1, 0) + 0.5 * dy(0, j - 1, 0) + 0.5 * dy(0, j, 0);
-      }
+      // Calculate lpar at the current cell center by adding the average of the current
+      // and previous cell widths to the previous lpar value. This is a simple trapezoidal rule.
+      lpar(0, j, 0) = lpar(0, j - 1, 0) + 0.5 * dy(0, j - 1, 0) + 0.5 * dy(0, j, 0);
     }
     mesh->communicate(lpar); // Communicate lpar values across guard cells.
                              // This is necessary to ensure that the lpar calculation
@@ -69,7 +71,20 @@ Field3D calculate_Lpar() {
  * magnetic field components, flux expansion, and cell dimensions.
  */
 FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*)
-    : Component({}) {
+    // Declare write permissions for the geometry quantities that transform_impl()
+    // publishes into the shared state, so other components can read them.
+    : Component(
+          {readWrite("fieldline_geometry_lpar"),
+           readWrite("fieldline_geometry_lambda_int"),
+           readWrite("fieldline_geometry_magnetic_pitch"),
+           readWrite("fieldline_geometry_Rxy"), readWrite("fieldline_geometry_Bpxy"),
+           readWrite("fieldline_geometry_Btxy"), readWrite("fieldline_geometry_Bxy"),
+           readWrite("fieldline_geometry_transport_broadening"),
+           readWrite("fieldline_geometry_f_R"),
+           readWrite("fieldline_geometry_flux_tube_width"),
+           readWrite("fieldline_geometry_dlpol"),
+           readWrite("fieldline_geometry_cell_side_area"),
+           readWrite("fieldline_geometry_cell_volume")}) {
   Options& geo_options =
       options["fieldline_geometry"];       // Get options specific to fieldline_geometry
   const Options& units = options["units"]; // Get unit options
@@ -81,6 +96,20 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*)
 
   Coordinates* coord = mesh->getCoordinates(); // Get the coordinates object from the mesh
   lpar = calculate_Lpar() / Lnorm; // Calculate the parallel length and normalize it
+
+  // Helper to obtain the value of a field at the *global* upstream boundary.
+  // In a parallel y-decomposition only rank 0 holds the true upstream cell
+  // (mesh->ystart is merely the local first cell on each rank), so we read the
+  // value on rank 0 and broadcast it to every processor. This must be called
+  // collectively (on every rank) because of the MPI_Bcast.
+  auto upstream_value = [](const Field3D& field) {
+    BoutReal value = 0.0;
+    if (BoutComm::rank() == 0) {
+      value = field(0, mesh->ystart, 0);
+    }
+    MPI_Bcast(&value, 1, MPI_DOUBLE, 0, BoutComm::get());
+    return value;
+  };
 
   // Get the string expressions for lambda_int, fieldline_radius and poloidal_magnetic_field from the options
   std::string lambda_int_str = geo_options["lambda_int"]
@@ -145,7 +174,7 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*)
             .as<BoutReal>();
     // Compute toroidal_magnetic_field using the formula: Btor = B_tor,upstream * R_upstream / R
     toroidal_magnetic_field = (upstream_toroidal_magnetic_field / Bnorm)
-                              * fieldline_radius(0, mesh->ystart, 0) / fieldline_radius;
+                              * upstream_value(fieldline_radius) / fieldline_radius;
   } else {
     // Otherwise, use the provided function for toroidal_magnetic_field
     geo_options["upstream_toroidal_magnetic_field"]
@@ -172,10 +201,12 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*)
                               + poloidal_magnetic_field * poloidal_magnetic_field);
   // Compute the pitch angle
   pitch_angle = poloidal_magnetic_field / total_magnetic_field;
-  // Compute the flux tube broadening factor due to cross-field transport
-  transport_broadening = lambda_int / lambda_int(0, mesh->ystart, 0);
-  // Compute the flux expansion factor
-  flux_expansion = pitch_angle(0, mesh->ystart, 0) / pitch_angle;
+  // Compute the flux tube broadening factor due to cross-field transport.
+  // The reference is the *global* upstream value (see upstream_value above),
+  // so that the normalisation is identical regardless of the y-decomposition.
+  transport_broadening = lambda_int / upstream_value(lambda_int);
+  // Compute the flux expansion factor (again relative to the global upstream)
+  flux_expansion = upstream_value(pitch_angle) / pitch_angle;
 
   // Compute the effective magnetic field strength, which is the actual magnetic field strength divided by the transport broadening.
   // This is used in the Jacobian calculation.
@@ -187,12 +218,21 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*)
     coord->Bxy[i] = std::numeric_limits<BoutReal>::quiet_NaN();
   }
 
-  // Calculate the Jacobian
-  for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+  // Calculate the Jacobian over the whole local field, including the guard
+  // cells. Setting only the interior (ystart..yend) leaves the guard cells
+  // holding the default mesh Jacobian, which is discontinuous with the
+  // fieldline Jacobian in the interior. That discontinuity at the domain and
+  // inter-processor boundaries degrades the solution (and roughly doubles the
+  // spread between different y-decompositions). effective_magnetic_field_strength
+  // is defined over RGN_ALL, so the guard cells get a consistent value here.
+  for (int j = 0; j < mesh->LocalNy; ++j) {
     // N.b.
     // The Jacobian has units of [m / radian T], which is why we need an extra factor of Lnorm.
     coord->J(0, j) = 1 / effective_magnetic_field_strength(0, j, 0) / Lnorm;
   }
+  // Fill the inter-processor guard cells with the neighbour's Jacobian so the
+  // metric is continuous across rank boundaries in a parallel y-decomposition.
+  mesh->communicate(coord->J);
 
   // Parallel length of cell
   Field3D dlpar = coord->dy / Lnorm;
@@ -211,10 +251,30 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*)
                  .withDefault<bool>(false);
 }
 
-void FieldlineGeometry::transform_impl(GuardedOptions& UNUSED(state)) {
-  // This method is intentionally left empty.
-  // If you want the geometry to evolve during the simulation (for instance, increasing
-  // the cross-field broadening based on divertor conditions) you can implement it here.
+void FieldlineGeometry::transform_impl(GuardedOptions& state) {
+  // Expose the geometry quantities in the shared state so that other components
+  // (which run after this one) can read them with get<Field3D>(). These are set
+  // on every RHS evaluation. The names match the diagnostic outputs in
+  // outputVars() for consistency.
+  //
+  // Note: the quantities themselves are constant in time (they are computed once
+  // in the constructor). If you want the geometry to evolve during the simulation
+  // (for instance, increasing the cross-field broadening based on divertor
+  // conditions) you can recompute them here before setting them into the state.
+  set(state[std::string("fieldline_geometry_lpar")], lpar);
+  set(state[std::string("fieldline_geometry_lambda_int")], lambda_int);
+  set(state[std::string("fieldline_geometry_magnetic_pitch")], pitch_angle);
+  set(state[std::string("fieldline_geometry_Rxy")], fieldline_radius);
+  set(state[std::string("fieldline_geometry_Bpxy")], poloidal_magnetic_field);
+  set(state[std::string("fieldline_geometry_Btxy")], toroidal_magnetic_field);
+  set(state[std::string("fieldline_geometry_Bxy")], total_magnetic_field);
+  set(state[std::string("fieldline_geometry_transport_broadening")],
+      transport_broadening);
+  set(state[std::string("fieldline_geometry_f_R")], flux_expansion);
+  set(state[std::string("fieldline_geometry_flux_tube_width")], flux_tube_width);
+  set(state[std::string("fieldline_geometry_dlpol")], cell_poloidal_length);
+  set(state[std::string("fieldline_geometry_cell_side_area")], cell_side_area);
+  set(state[std::string("fieldline_geometry_cell_volume")], cell_volume);
 }
 
 /**

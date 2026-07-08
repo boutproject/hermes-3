@@ -140,6 +140,13 @@ TEST_F(FieldlineGeometryTest, SetsCoordinatesJacobianAndBxy) {
   for (int j = mesh->ystart; j <= mesh->yend; ++j) {
     ASSERT_NEAR(coord->J(0, j), 1.0 / Btotal, 1e-12);
   }
+
+  // J must also be set in the guard cells (not left at the default mesh value),
+  // otherwise the metric is discontinuous at domain / inter-processor
+  // boundaries. Check the full local range including guard cells.
+  for (int j = 0; j < mesh->LocalNy; ++j) {
+    ASSERT_NEAR(coord->J(0, j), 1.0 / Btotal, 1e-12);
+  }
 }
 
 TEST_F(FieldlineGeometryTest, ParallelLengthIncreasesAlongFieldline) {
@@ -256,4 +263,27 @@ TEST_F(FieldlineGeometryTest, GeometryFactorsAreSelfConsistentForNonTrivialProfi
   ASSERT_FALSE(
       IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_transport_broadening"]), 1.0,
                    "RGN_NOBNDRY"));
+}
+
+TEST_F(FieldlineGeometryTest, TransformPublishesGeometryToState) {
+  // transform() should publish the geometry quantities into the shared state,
+  // so that other components (running afterwards) can read them via get<>().
+  Options options = makeOptions("0.01", "2.0", "0.5", false, "1.0");
+  FieldlineGeometry component("test", options, nullptr);
+
+  component.transform(options);
+
+  for (const auto& name :
+       {"fieldline_geometry_lpar", "fieldline_geometry_lambda_int",
+        "fieldline_geometry_magnetic_pitch", "fieldline_geometry_Rxy",
+        "fieldline_geometry_Bpxy", "fieldline_geometry_Btxy", "fieldline_geometry_Bxy",
+        "fieldline_geometry_transport_broadening", "fieldline_geometry_f_R",
+        "fieldline_geometry_flux_tube_width", "fieldline_geometry_dlpol",
+        "fieldline_geometry_cell_side_area", "fieldline_geometry_cell_volume"}) {
+    ASSERT_TRUE(options.isSet(name)) << name << " was not published to the state";
+  }
+
+  // The published major radius should match the requested constant value.
+  ASSERT_TRUE(
+      IsFieldEqual(get<Field3D>(options["fieldline_geometry_Rxy"]), 2.0, "RGN_NOBNDRY"));
 }
