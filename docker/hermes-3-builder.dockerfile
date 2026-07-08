@@ -76,19 +76,25 @@ RUN if [ -n "${GNU_MIRROR_URL}" ]; then \
 # exit code (so a late failure still caches most packages for the next run),
 # re-propagating the exit code so a failed build still fails CI. Without
 # credentials, build from source (plus any SPACK_INSTALL_EXTRA_ARGS).
+#
+# Compat (non-default HERMES_TARGET) builds concretize --fresh: reusing the
+# cache's default-target specs makes the compat target unsatisfiable. Binary
+# install/push still work, so repeat builds stay fast.
 RUN --mount=type=secret,id=ghcr_token \
     spack env activate . && \
+    INSTALL_ARGS="${SPACK_INSTALL_EXTRA_ARGS}" && \
+    if [ -n "${HERMES_TARGET}" ]; then INSTALL_ARGS="${INSTALL_ARGS} --fresh"; fi && \
     if [ -n "${SPACK_OCI_USER}" ] && [ -s /run/secrets/ghcr_token ]; then \
       export SPACK_OCI_TOKEN="$(cat /run/secrets/ghcr_token)" && \
       spack mirror add --unsigned \
         --oci-username-variable SPACK_OCI_USER \
         --oci-password-variable SPACK_OCI_TOKEN \
         hermes-oci "${SPACK_OCI_CACHE}" && \
-      { spack install ; rc=$? ; \
+      { spack install ${INSTALL_ARGS} ; rc=$? ; \
         spack buildcache push --unsigned --update-index --without-build-dependencies hermes-oci || true ; \
         exit $rc ; } ; \
     else \
-      spack install ${SPACK_INSTALL_EXTRA_ARGS} --fail-fast ; \
+      spack install ${INSTALL_ARGS} --fail-fast ; \
     fi
 
 # Make an 'entrypoint.sh' script which activates the spack environment
