@@ -1,0 +1,375 @@
+name: Test Docker image builds
+
+# Validates that the Docker images still build when the docker setup changes,
+# and publishes the results under a dedicated 'experimental_docker_build' tag so
+# the builder->final chain can be exercised end to end without touching the
+# 'latest'/'edge' tags that real consumers rely on.
+#
+#   * If a change touches the builder image or anything it depends on, the
+#     builder image is rebuilt and published as 'experimental_docker_build', and
+#     the hermes-3 image is then built *on top of that freshly built builder*.
+#   * If a change only touches things that affect the hermes-3 image, that image
+#     is built by itself, FROM the 'experimental_docker_build' builder image
+#     published by a previous run.
+#
+# Both images are built natively per architecture (amd64 + arm64) and merged
+# into a single multi-arch manifest per tag.
+#
+#   * If a change touches the jupyter image, it is built (multi-arch, under
+#     emulation) and published as 'experimental_docker_build' too. It is
+#     independent of the builder->final chain.
+#
+# NOTE: publishing requires write access to the registry, so this only works for
+# branches in this repository, not pull requests opened from forks.
+on:
+  pull_request:
+    paths:
+      - 'docker/**'
+      - '.github/workflows/test_docker_build.yml'
+      - '.github/workflows/build*image.yml'
+  workflow_dispatch:  # Allows manual triggering
+
+permissions:
+  contents: read
+  packages: write
+
+# One run per PR/ref; cancel superseded runs since only the latest push matters.
+concurrency:
+  group: test-docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  BUILDER_IMAGE_NAME: boutproject/hermes-3-builder
+  FINAL_IMAGE_NAME: boutproject/hermes-3
+  JUPYTER_IMAGE_NAME: boutproject/hermes-3-jupyter
+  BUILDER_DOCKERFILE: docker/hermes-3-builder.dockerfile
+  FINAL_DOCKERFILE: docker/hermes-3.dockerfile
+  JUPYTER_DOCKERFILE: docker/hermes-3-jupyter.dockerfile
+  EXPERIMENTAL_TAG: experimental_docker_build
+
+jobs:
+
+  # Work out which images are affected by the changed files.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      builder: ${{ steps.filter.outputs.builder }}
+      final: ${{ steps.filter.outputs.final }}
+      jupyter: ${{ steps.filter.outputs.jupyter }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect affected images
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            # Files the builder image is built from. A change here means the
+            # builder must be rebuilt (and the final image re-tested on top).
+            builder:
+              - 'docker/hermes-3-builder.dockerfile'
+              - 'docker/image_ingredients/spack.yaml'
+              - 'docker/image_ingredients/spack_config.yaml'
+              - 'docker/image_ingredients/docker_entrypoint.sh'
+              - '.github/workflows/test_docker_build.yml'
+            # Files that affect the final hermes-3 image build.
+            final:
+              - 'docker/hermes-3.dockerfile'
+              - 'docker/hermes-3.dockerfile.dockerignore'
+              - 'docker/image_ingredients/hermes_config.cmake'
+              - 'docker/image_ingredients/boutpp_config.cmake'
+              - 'docker/image_ingredients/docker_image_commands.sh'
+              - 'docker/image_ingredients/docker_entrypoint.sh'
+              - '.github/workflows/test_docker_build.yml'
+            # Files that affect the jupyter image build. This image is built
+            # FROM jupyter/scipy-notebook and is independent of the
+            # builder->final chain.
+            jupyter:
+              - 'docker/hermes-3-jupyter.dockerfile'
+              - '.github/workflows/test_docker_build.yml'
+
+  # ---- Builder image (only when the builder or its deps changed) ----
+
+  # Build the builder image once per architecture on a native runner, pushing
+  # each by digest only.
+  build-builder:
+    needs: changes
+    # Publishing needs registry write access, which fork PRs don't have, so skip
+    # cleanly on forks instead of failing on the push step. (Non-PR events such
+    # as workflow_dispatch always run from this repo.)
+    if: |
+      needs.changes.outputs.builder == 'true' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}
+
+      - name: Build and push builder image by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.BUILDER_DOCKERFILE }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=exp-builder-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=exp-builder-${{ matrix.arch }}
+          # Credentials for the self-hosted OCI Spack build cache, so the build
+          # can pull previously-compiled binaries and push newly-built ones.
+          build-args: |
+            SPACK_OCI_USER=${{ github.actor }}
+          secrets: |
+            ghcr_token=${{ secrets.GITHUB_TOKEN }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp-builder-digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Combine the per-arch builder images into the experimental multi-arch tag.
+  merge-builder:
+    needs: [changes, build-builder]
+    if: needs.changes.outputs.builder == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: exp-builder-digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create experimental builder manifest
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }} \
+            $(printf '${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Inspect manifest
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}
+
+  # ---- Final image ----
+
+  # Build the final image once per architecture, FROM the experimental builder,
+  # pushing each by digest only. Runs whenever the builder OR the final image is
+  # affected. If the builder changed, this waits for the experimental builder to
+  # be (re)published first; otherwise it uses the one from a previous run.
+  build-final:
+    needs: [changes, merge-builder]
+    # Runs when the builder changed (only after the experimental builder is
+    # (re)published successfully) OR when only the final image changed (using the
+    # experimental builder from a previous run, so merge-builder is skipped).
+    # Skips on fork PRs, which can't publish.
+    if: |
+      always() &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (
+        (needs.changes.outputs.builder == 'true' && needs.merge-builder.result == 'success') ||
+        (needs.changes.outputs.builder != 'true' && needs.changes.outputs.final == 'true')
+      )
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}
+
+      - name: Build and push final image by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.FINAL_DOCKERFILE }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=exp-final-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=exp-final-${{ matrix.arch }}
+          build-args: |
+            BUILDER_TAG=${{ env.EXPERIMENTAL_TAG }}
+            HERMES_BUILD_JOBS=2
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp-final-digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Combine the per-arch final images into the experimental multi-arch tag.
+  merge-final:
+    needs: build-final
+    if: always() && needs.build-final.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: exp-final-digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create experimental final manifest
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }} \
+            $(printf '${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Inspect manifest
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}
+
+  # ---- Jupyter image (only when the jupyter dockerfile changed) ----
+
+  # The jupyter image is built FROM jupyter/scipy-notebook and is independent of
+  # the builder->final chain, so it gets its own standalone job. As in
+  # build_jupyter_image.yml, the steps are just apt/pip installs, so building the
+  # arm64 variant under emulation is cheap enough that a native-runner matrix is
+  # unnecessary; a single job builds both platforms and pushes the multi-arch
+  # 'experimental_docker_build' tag directly.
+  build-jupyter:
+    needs: changes
+    # Publishing needs registry write access, which fork PRs don't have, so skip
+    # cleanly on forks instead of failing on the push step.
+    if: |
+      needs.changes.outputs.jupyter == 'true' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # Enable emulation so we can build the arm64 variant on an amd64 runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.JUPYTER_IMAGE_NAME }}
+
+      - name: Build and push jupyter image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.JUPYTER_DOCKERFILE }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.JUPYTER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=exp-jupyter
+          cache-to: type=gha,mode=max,scope=exp-jupyter
+
+      - name: Inspect manifest
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.JUPYTER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}

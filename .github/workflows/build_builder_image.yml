@@ -9,6 +9,17 @@ on:
     # Run monthly, at 1:23AM UTC on the 1st
     - cron: '23 1 1 * *'
 
+permissions:
+  contents: read
+  packages: write
+
+# Serialize runs so overlapping push/schedule/dispatch builds don't race on
+# the shared image tags. Don't cancel an in-progress build (it may already be
+# pushing binaries to the OCI cache).
+concurrency:
+  group: build-builder-image
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   BUILDER_IMAGE_NAME: boutproject/hermes-3-builder
@@ -18,9 +29,23 @@ env:
 
 jobs:
 
+  # Build the builder image once per architecture on a native runner, pushing
+  # each by digest only. The merge job below assembles them into a single
+  # multi-arch manifest.
   build-builder-image:
 
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout repository
@@ -28,13 +53,8 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Set up BuildKit Docker container builder to be able to build
-      # multi-platform images and export cache
-      # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          platforms: linux/amd64
 
       - name: Log in to registry ${{ env.REGISTRY }}
         uses: docker/login-action@v3
@@ -43,8 +63,69 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Extract metadata (tags, labels) for Docker
-      # https://github.com/docker/metadata-action
+      # Labels for the per-arch image (tags are applied later in the merge job)
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}
+
+      - name: Build and push image by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.BUILDER_DOCKERFILE }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=builder-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=builder-${{ matrix.arch }}
+          # Credentials for the self-hosted OCI Spack build cache, so the build
+          # can pull previously-compiled binaries and push newly-built ones.
+          build-args: |
+            SPACK_OCI_USER=${{ github.actor }}
+          secrets: |
+            ghcr_token=${{ secrets.GITHUB_TOKEN }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: builder-digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Combine the per-arch builder images into one multi-arch manifest and apply tags.
+  merge-builder-image:
+
+    needs: build-builder-image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: builder-digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -55,7 +136,7 @@ jobs:
             type=schedule,pattern={{date 'YYYY-MM'}}
             # set "latest" tag
             type=raw,value=latest,enable={{is_default_branch}}
-            # whichever workflow runs last will be tagged as edge
+            # always tag the most recent build as 'edge'
             type=raw,value=edge
             # short sha tag
             type=sha,enable={{is_default_branch}}
@@ -65,26 +146,35 @@ jobs:
             # tag with branch name
             type=ref,event=branch,enable={{is_default_branch}}
 
-      # Build and push Docker image with Buildx
-      # https://github.com/docker/build-push-action
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ env.BUILDER_DOCKERFILE }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-  
+      - name: Create multi-arch manifest
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Inspect manifest
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:edge
+
+  # Build the final image per architecture, each FROM the matching-arch builder,
+  # pushing by digest; then merge into a multi-arch manifest.
   build-final-image:
 
-    needs: build-builder-image
-    runs-on: ubuntu-latest
-    if: needs.build-builder-image.result == 'success'
+    needs: merge-builder-image
+    if: needs.merge-builder-image.result == 'success'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout repository
@@ -92,13 +182,8 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Set up BuildKit Docker container builder to be able to build
-      # multi-platform images and export cache
-      # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          platforms: linux/amd64
 
       - name: Log in to registry ${{ env.REGISTRY }}
         uses: docker/login-action@v3
@@ -107,8 +192,63 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Extract metadata (tags, labels) for Docker
-      # https://github.com/docker/metadata-action
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}
+
+      - name: Build and push image by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.FINAL_DOCKERFILE }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=final-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=final-${{ matrix.arch }}
+          build-args: |
+            BUILDER_TAG=edge
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-final-image:
+
+    needs: build-final-image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: final-digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -119,7 +259,7 @@ jobs:
             type=schedule,pattern={{date 'YYYY-MM'}}
             # set "latest" tag
             type=raw,value=latest,enable={{is_default_branch}}
-            # whichever workflow runs last will be tagged as edge
+            # always tag the most recent build as 'edge'
             type=raw,value=edge
             # short sha tag
             type=sha,enable={{is_default_branch}}
@@ -129,20 +269,12 @@ jobs:
             # tag with branch name
             type=ref,event=branch,enable={{is_default_branch}}
 
-      # Build and push Docker image with Buildx
-      # https://github.com/docker/build-push-action
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ env.FINAL_DOCKERFILE }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            "BUILDER_TAG=edge"
-  
+      - name: Create multi-arch manifest
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Inspect manifest
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:edge
