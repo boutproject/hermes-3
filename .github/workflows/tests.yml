@@ -14,7 +14,7 @@ defaults:
 
 jobs:
   cmake_tests:
-    name: ${{ matrix.build_type.test_type }} tests, ${{ matrix.config.name }}
+    name: ${{ matrix.build_type.test_type }} tests, ${{ matrix.build_type.name }}
     runs-on: ${{ matrix.config.os }}
     env:
       OMP_NUM_THREADS: ${{ matrix.config.omp_num_threads }}
@@ -22,29 +22,36 @@ jobs:
       OMPI_MCA_rmaps_base_oversubscribe: yes
       MPIRUN: mpiexec -np
       LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
-      BOUT_CONFIGURE_OPTIONS: ${{ matrix.config.configure_options }} -DHERMES_COVERAGE=${{ matrix.build_type.coverage }}
+      BOUT_CONFIGURE_OPTIONS: ${{ matrix.build_type.configure_options }} -DHERMES_COVERAGE=${{ matrix.build_type.coverage }}
       BUILD_TYPE: ${{ matrix.build_type.cmake_build_type }}
       TEST_TYPE: ${{ matrix.build_type.test_type }}
     strategy:
       fail-fast: false
       matrix:
         config:
-          - name: "CMake default options"
-            os: ubuntu-latest
-            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON"
+          - os: ubuntu-latest
         build_type:
           - cmake_build_type: Debug
             test_type: unit
             coverage: ON
+            name: "CMake default options"
+            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON"
           - cmake_build_type: Release
             test_type: integration
+            coverage: OFF
+            name: "CMake default options"
+            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON"
+          - cmake_build_type: Debug
+            test_type: None
+            name: "3D metrics (compile only)"
+            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
             coverage: OFF
 
     steps:
       - name: Job information
         run: |
           echo Build: ${{ matrix.config.name }}, ${{ matrix.config.os }}
-          echo Configure options: ${{ matrix.config.configure_options }}
+          echo Configure options: ${{ matrix.build_type.configure_options }}
           echo Build type: ${{ matrix.build_type.cmake_build_type }}
           echo Coverage: ${{ matrix.build_type.coverage }}
           echo Tests to run: ${{ matrix.build_type.test_type }}

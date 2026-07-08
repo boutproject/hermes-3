@@ -1,8 +1,18 @@
 #include "../include/electromagnetic.hxx"
 
+#include "../include/component.hxx"
+#include "../include/guarded_options.hxx"
+#include "../include/permissions.hxx"
+
+#include <bout/bout_types.hxx>
 #include <bout/constants.hxx>
+#include <bout/field3d.hxx>
 #include <bout/invert_laplace.hxx>
 #include <bout/mesh.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+
+#include <string>
 
 // Set the default acceptance tolerances for the Naulin solver.
 // These are used if the maximum iterations is reached.
@@ -166,7 +176,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
         for (int z = mesh->zstart; z <= mesh->zend; z++) {
           rhs(x, y, z) = (weight * (Apar(x + 1, y, z) - Apar(x, y, z))
                           + (1 - weight) * (Apar(x + 2, y, z) - Apar(x + 1, y, z)))
-                         / (sqrt(coords->g_11(x, y)) * coords->dx(x, y));
+                         / (sqrt(coords->g_11(x, y, z)) * coords->dx(x, y, z));
         }
       }
     }
@@ -176,7 +186,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
         for (int z = mesh->zstart; z <= mesh->zend; z++) {
           rhs(x, y, z) = (weight * (Apar(x, y, z) - Apar(x - 1, y, z))
                           + (1 - weight) * (Apar(x - 1, y, z) - Apar(x - 2, y, z)))
-                         / sqrt(coords->g_11(x, y)) / coords->dx(x, y);
+                         / sqrt(coords->g_11(x, y, z)) / coords->dx(x, y, z);
         }
       }
     }
