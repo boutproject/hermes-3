@@ -6,12 +6,21 @@
 FROM spack/ubuntu-noble:1.2.0@sha256:dafccd1a2e77c61b5b6f81c06bbdabd999e6886daa405b3ac9011c5e4d98f8fa AS builder
 
 # Self-hosted OCI Spack build cache and the registry user. When SPACK_OCI_USER
-# is empty (local builds or fork PRs) the OCI cache is skipped, leaving only the
-# public mirror.
+# is empty (local builds or fork PRs) the OCI cache is skipped and the stack
+# builds from source.
 ARG SPACK_OCI_CACHE=oci://ghcr.io/boutproject/hermes-3-spack-cache
 ARG SPACK_OCI_USER=""
 ENV SPACK_OCI_CACHE=${SPACK_OCI_CACHE} \
     SPACK_OCI_USER=${SPACK_OCI_USER}
+
+# Extra flags for the no-credentials (source-build) `spack install`; empty in
+# CI, local builds pass e.g. "--fresh --verbose".
+ARG SPACK_INSTALL_EXTRA_ARGS=""
+
+# GNU mirror(s) to seed readline patches from (space-separated, tried in order).
+# ftpmirror.gnu.org, which Spack fetches these patches from, is unreachable from
+# our build network. Set to "" to disable.
+ARG GNU_MIRROR_URL="https://ftp.gnu.org/gnu https://mirrors.kernel.org/gnu"
 
 # Make sure that spack is available if we need to launch a terminal in the image
 RUN spack_path=$(which spack) && \
@@ -26,11 +35,10 @@ COPY docker/image_ingredients/spack_config.yaml /root/.spack/config.yaml
 # `spack compiler find`).
 RUN spack external find gcc
 
-# Add Spack's signed public binary mirror and trust its keys. --yes-to-all
-# avoids the interactive [y/N] key-trust prompt, which would EOF in a
-# non-interactive build.
-RUN spack mirror add --scope site spack-public https://binaries.spack.io/develop \
- && spack buildcache keys --install --trust --yes-to-all
+# The public Spack binary mirror is intentionally not added: some of its
+# packages (e.g. python) are built with intel-oneapi, and reusing those leaks
+# the Intel-only `-fp-model=strict` flag into gcc source builds. The stack
+# builds from source with gcc instead.
 
 RUN mkdir -p /opt/spack-environment
 COPY docker/image_ingredients/spack.yaml /opt/spack-environment/spack.yaml
@@ -55,11 +63,19 @@ RUN if [ -z "${HERMES_TARGET}" ]; then \
     fi && \
     echo "Pinning Spack microarch target: ${HERMES_TARGET}" && \
     spack -e . config add "packages:all:require:target=${HERMES_TARGET}"
+
+# Seed readline patches into a local Spack source mirror (see GNU_MIRROR_URL).
+COPY docker/image_ingredients/seed_gnu_mirror.sh /tmp/seed_gnu_mirror.sh
+RUN if [ -n "${GNU_MIRROR_URL}" ]; then \
+      sh /tmp/seed_gnu_mirror.sh "${GNU_MIRROR_URL}" /opt/gnu-mirror && \
+      spack mirror add --scope site local-gnu file:///opt/gnu-mirror ; \
+    fi
+
 # Install the environment. With OCI credentials, add the self-hosted cache,
 # then install without --fail-fast and push whatever installed regardless of
 # exit code (so a late failure still caches most packages for the next run),
 # re-propagating the exit code so a failed build still fails CI. Without
-# credentials, just install from the public mirror + source.
+# credentials, build from source (plus any SPACK_INSTALL_EXTRA_ARGS).
 RUN --mount=type=secret,id=ghcr_token \
     spack env activate . && \
     if [ -n "${SPACK_OCI_USER}" ] && [ -s /run/secrets/ghcr_token ]; then \
@@ -72,7 +88,7 @@ RUN --mount=type=secret,id=ghcr_token \
         spack buildcache push --unsigned --update-index --without-build-dependencies hermes-oci || true ; \
         exit $rc ; } ; \
     else \
-      spack install --fail-fast ; \
+      spack install ${SPACK_INSTALL_EXTRA_ARGS} --fail-fast ; \
     fi
 
 # Make an 'entrypoint.sh' script which activates the spack environment
