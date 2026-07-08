@@ -6,12 +6,13 @@
 #     ./run.sh <service> [arguments]
 #
 # Examples:
-#   ./run.sh shell                 # interactive shell in the image
-#   ./run.sh build_both            # rebuild hermes and BOUT++
-#   ./run.sh hermes work/test      # run a hermes-3 case (argument required)
-#   ./run.sh jupyter               # start the Jupyter server
-#   ./run.sh cleanup               # tidy up orphaned/stopped containers
-#   ./run.sh rm_docker             # remove all images, containers and volumes
+#   ./run.sh shell                        # interactive shell in the image
+#   ./run.sh build_both                   # rebuild hermes and BOUT++
+#   ./run.sh hermes work/test             # run a hermes-3 case (single rank)
+#   ./run.sh hermes_parallel 4 work/test  # run a case on 4 MPI ranks
+#   ./run.sh jupyter                      # start the Jupyter server
+#   ./run.sh cleanup                      # tidy up orphaned/stopped containers
+#   ./run.sh rm_docker                    # remove all images, containers and volumes
 
 # Define color codes for pretty output
 LIGHTRED='\033[1;31m'
@@ -49,7 +50,8 @@ run_docker_help() {
   echo "  build_hermes     Rebuild hermes, using ./work/hermes-3 if available"
   echo "  build_boutpp     Rebuild BOUT++, using ./work/BOUT-dev if available"
   echo "  build_both       Rebuild both hermes and BOUT++"
-  echo "  hermes <case>    Run a hermes-3 case (requires a path, e.g. work/test)"
+  echo "  hermes <case>    Run a hermes-3 case on a single rank (e.g. work/test)"
+  echo "  hermes_parallel <n> <case>  Run a case on <n> MPI ranks (e.g. 4 work/test)"
   echo "  fix_permissions  Fix ownership of ./work so you can access it"
   echo "  jupyter          Start the Jupyter server on http://localhost:8888"
   echo
@@ -129,6 +131,56 @@ docker_rm() {
   echo "  docker system prune -a --volumes"
 }
 
+# Run a hermes-3 case on multiple MPI ranks.
+#
+# The 'hermes' compose service overrides the image entrypoint, so it does not
+# source the spack environment and 'mpirun' is not on its PATH. We therefore run
+# mpirun through the 'shell' service (which keeps /entrypoint.sh) instead.
+#
+# Usage: run_hermes_parallel <n_ranks> <case> [extra BOUT++ args...]
+#   e.g. run_hermes_parallel 4 work/fieldline-par-np4
+run_hermes_parallel() {
+  local nranks="$1"
+  local case_dir="$2"
+
+  if [ -z "$nranks" ] || [ -z "$case_dir" ]; then
+    warn "Error: hermes_parallel needs a rank count and a case path."
+    warn "For example: run_docker hermes_parallel 4 work/test"
+    return 1
+  fi
+  case "$nranks" in
+    ''|*[!0-9]*)
+      warn "Error: '$nranks' is not a valid number of ranks."
+      return 1 ;;
+  esac
+  # Drop <n_ranks> and <case> so "$@" holds any extra BOUT++ options to forward.
+  shift 2
+
+  # Resolve the executable inside the container the same way the image's 'run'
+  # command does (prefer the work/ override build if present), then launch it
+  # under mpirun. --oversubscribe lets the rank count exceed the host core count.
+  # Args are passed positionally ($1=ranks, $2=case, rest=extra) to avoid quoting
+  # issues.
+  docker compose run --rm shell bash -c '
+    nranks="$1"; shift
+    case_dir="/hermes_project/$1"; shift
+    exe="${HERMES_BUILD_DIR}/hermes-3"
+    [ -d "${HERMES_BUILD_DIR_OVERRIDE}" ] && exe="${HERMES_BUILD_DIR_OVERRIDE}/hermes-3"
+    if [ ! -x "${exe}" ]; then
+      echo "Error: hermes-3 executable not found at ${exe}." >&2
+      echo "Build it first, e.g. ./run.sh build_hermes" >&2
+      exit 1
+    fi
+    if [ ! -f "${case_dir}/BOUT.inp" ]; then
+      echo "Error: ${case_dir} does not contain a BOUT.inp file." >&2
+      exit 1
+    fi
+    echo "Using ${exe}"
+    echo "Running on ${nranks} rank(s) in ${case_dir}"
+    exec mpirun --oversubscribe -np "${nranks}" "${exe}" -d "${case_dir}" "$@"
+  ' _ "$nranks" "$case_dir" "$@"
+}
+
 run_docker() {
   local service="$1"
 
@@ -148,6 +200,15 @@ run_docker() {
   if [ "$service" = "rm_docker" ]; then
     check_environment || return 1
     docker_rm
+    return $?
+  fi
+
+  # Parallel run: not a compose service, but a helper that drives the 'shell'
+  # service so mpirun has the spack environment on its PATH.
+  if [ "$service" = "hermes_parallel" ]; then
+    check_environment || return 1
+    shift
+    run_hermes_parallel "$@"
     return $?
   fi
 
