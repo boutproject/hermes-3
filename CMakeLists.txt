@@ -487,6 +487,11 @@ if(HERMES_TESTS)
       COMMAND runtest)
     set_tests_properties(dmplex-vertex-coordinates PROPERTIES LABELS
                                                               integration)
+    add_test(
+      NAME vantage-iz-rec-balance
+      WORKING_DIRECTORY tests/integrated/vantage-iz-rec-balance/
+      COMMAND runtest)
+    set_tests_properties(vantage-iz-rec-balance PROPERTIES LABELS integration)
   endif()
 endif()
 

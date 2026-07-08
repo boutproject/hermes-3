@@ -1,0 +1,72 @@
+nout = 0
+timestep = 1
+
+[mesh]
+J = 1
+
+nx = 40  # X grid size
+ny = 36  # Y grid size
+
+dx = 1.0/(nx-4)  # X mesh spacing
+dy = 2*pi/ny  # Y mesh spacing
+dz = 1  # Unity in toroidal direction
+
+Rxy = x
+Rxy_corners = x - 0.5*dx
+Rxy_lower_right_corners = x + 0.5*dx
+Rxy_upper_left_corners = x - 0.5*dx
+Rxy_upper_right_corners = x + 0.5*dx
+Zxy = y
+Zxy_corners = y - 0.5*dy
+Zxy_lower_right_corners = y - 0.5*dy
+Zxy_upper_left_corners = y + 0.5*dy
+Zxy_upper_right_corners = y + 0.5*dy
+
+[dmplex]
+use_cxx_ivertex=true
+test_dmplex_cell_volumes = true
+test_dmplex_cell_centres = true
+
+[solver]
+type = pvode
+
+[hermes]
+components = (d+, e, vantage)
+Nnorm = 1e19
+
+[d+]
+type = evolve_density
+AA = 1
+charge = 1
+
+[Nd+]
+function = 1
+
+[e]
+type = quasineutral
+AA = 1/1836
+charge = -1
+
+[vantage]
+# Trying to get as close to equilibrium in only 3 steps.
+# This is not straightforward because the step can't be too big 
+# so that it consumes all of the neutral particles in one go.
+dt = 700
+nsteps = 3
+
+# This is the final expected steady state density
+initial_neutral_density = 8e18
+
+
+test_mass_conservation = true
+
+npart_per_cell = 20
+
+background_ion_density = 1e21
+background_ion_temperature = 2
+background_ion_Vy = 0
+
+remove_threshold = 1e-10
+merge_threshold = 0
+iz_rate_override = -1
+rec_rate_override = -1

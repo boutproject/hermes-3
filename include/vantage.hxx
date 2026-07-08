@@ -20,7 +20,6 @@ struct Vantage : public Component {
 private:
   PetscLib petsc_lib; // Ensures PETSc is initialized for the lifetime of this component
   std::string name;   // Component name
-  std::shared_ptr<H5Part> h5part;
   DM dm;
   std::shared_ptr<PetscInterface::DMPlexInterface> neso_mesh;
   std::shared_ptr<SYCLTarget> sycl_target;
@@ -73,9 +72,6 @@ public:
 
   // Update the Hermes-3 source field using the accumulated data from corresponding
   // VANTAGE source
-  // Accumulated source is in total weight. Divide by volume to get weight/m^3,
-  // then by timestep to get weight/m^3/s, and finally multiply N_w to get
-  // particles/m^3/s and divide by Nnorm to keep normalised units.
   void update_source(const std::string& hermes_source_name, double dt);
 
   // Call update_source on all sources

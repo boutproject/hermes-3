@@ -27,3 +27,4 @@
 [submodule "external/NESO-RNG-Toolkit"]
     path = external/NESO-RNG-Toolkit
     url = https://github.com/ExCALIBUR-NEPTUNE/NESO-RNG-Toolkit.git
+    ignore = dirty

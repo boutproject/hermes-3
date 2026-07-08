@@ -83,14 +83,15 @@ def particle_push_input(
     dt = {dt}
     nsteps = {nsteps}
     test_mass_conservation = true
-    initial_neutral_density = 1
+    initial_neutral_density = 1e19
     npart_per_cell = 20
-    background_ion_density = 2
+    background_ion_density = 1e19
+    background_ion_temperature = 50
     background_ion_Vy = 1
     remove_threshold = {remove_threshold}
     merge_threshold = {merge_threshold}
-    iz_rate = {iz_rate}
-    rec_rate = {rec_rate}
+    iz_rate_override = {iz_rate}
+    rec_rate_override = {rec_rate}
   """
     return input_file_string
 
@@ -169,7 +170,7 @@ def test_particle_push(
     np.testing.assert_equal(
         nsteps,
         nsteps_out,
-        err_msg=f"Number of steps in outputdoes not match expected for {mode} test",
+        err_msg=f"Number of steps in output does not match expected for {mode} test",
     )
 
     # number of markers (or super particles) conserved
@@ -245,7 +246,7 @@ test_particle_push(
     nsteps=3,
     remove_threshold=1.0e-10,
     merge_threshold=0,
-    iz_rate=0.01,
+    iz_rate=0.1,
     rec_rate=0.00,
 )
 if verbose:
@@ -258,7 +259,7 @@ test_particle_push(
     remove_threshold=1.0e-10,
     merge_threshold=0,
     iz_rate=0.00,
-    rec_rate=0.0005,
+    rec_rate=0.1,
 )
 if verbose:
     print("Recombination test passed")

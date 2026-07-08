@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+import xhermes
+import numpy as np
+import json
+from time import time
+import os
+from pathlib import Path
+import matplotlib.pyplot as plt
+from boututils.run_wrapper import shell, launch_safe
+
+
+t0 = time()
+
+path = "data"
+
+"""
+Adapted from the ionisation-recombination balance test in the VANTAGE-Reactions demo app.
+
+Simulates a slab with AMJUEL ionisation and recombination rates.
+At steady state, the ionisation and recombination density sources will equal:
+
+Ne * Nn * Kion = Ne * Ne * Krec
+
+Where Kion and Krec are the AMJUEL ionisation and recombination rates, respectively, in units
+of m^3/s. They are functions of both Te and Ne which are stored in JSON files in Hermes-3.
+
+For a constant background Te and Ne, we can calculate the steady state neutral density 
+by rearranging:
+
+Nn = (Ne * Ne * Krec) / (Ne * Kion)
+-> Nn = (Ne * Krec) / Kion
+
+In this test, we start from near-steady state neutral density and take three time steps.
+The test passes if the final neutral density is close enough to the expected value,
+and if the AMJUEL ionisation and recombination rates match expected values calculated
+from the JSON files in Python.
+"""
+
+
+# AMJUEL reader
+def calc_data(fluid_dens, electron_temp, coeffs, num_coeffs_n=9, num_coeffs_T=9):
+    log_temp = np.log(electron_temp)
+    log_rate = 0.0
+    log_n = 0.0
+    if fluid_dens >= 1e14:
+        log_n = np.log(fluid_dens / 1e14)
+
+    for j in range(num_coeffs_n):
+        log_n_m = log_n**j
+        for i in range(num_coeffs_T):
+            log_rate += coeffs[i][j] * log_n_m * (log_temp**i)
+
+    rate = np.exp(log_rate) * 1.0e-6
+
+    return rate
+
+
+def load_hermes_amjuel_coeffs(json_path):
+    with open(json_path) as f:
+        data = json.load(f)
+    return np.array(data["coeffs"])
+
+
+### Run test
+if not Path("hermes-3").is_file():
+    shell("ln -s ../../../hermes-3 hermes-3")
+
+s, out = launch_safe(f"./hermes-3 -d {path}", nproc=1, mthread=1, pipe=True)
+
+if s != 0:
+    print(" => vantage-iz-rec-balance test failed: ")
+    print(out)
+    exit(1)
+
+t_run = time()
+print(f"vantage-iz-rec-balance: simulation took {t_run - t0:.2f}s")
+
+### Analyse results
+# Load datasets
+ds_vantage = xhermes.open_hermesdataset(
+    datapath=f"{path}/BOUT.dmp.vantage.*.nc",
+    inputfilepath=f"{path}/BOUT.inp",
+    info=False,
+    keep_xboundaries=False,
+    keep_yboundaries=False,
+)
+ds = xhermes.open_hermesdataset(
+    datapath=f"{path}/BOUT.dmp.[0-9]*.nc",
+    inputfilepath=f"{path}/BOUT.inp",
+    info=False,
+    keep_xboundaries=False,
+    keep_yboundaries=False,
+)
+
+# Siz at t=-1 is calculated from Nn at t=-2 as it's in the kinetic step
+Siz = ds_vantage["Siz"].mean(dim=["x", "y"]).bout.final_time().values
+Srec = ds_vantage["Srec"].mean(dim=["x", "y"]).bout.final_time().values
+Nn = ds_vantage["Nn"].mean(dim=["x", "y"]).isel(t=-2).values
+
+# Plasma parameters come from input file for now
+Te = ds.options["vantage"]["background_ion_temperature"]
+Ne = ds.options["vantage"]["background_ion_density"]
+
+
+h4_2_1_5_coeffs = load_hermes_amjuel_coeffs(
+    "../../../json_database/AMJUEL_H.4_2.1.5.json"
+)
+
+h4_2_1_8_coeffs = load_hermes_amjuel_coeffs(
+    "../../../json_database/AMJUEL_H.4_2.1.8.json"
+)
+
+Kiz = abs(Siz) / Ne / Nn
+Krec = abs(Srec) / Ne / Ne
+
+Krec_ref = calc_data(Ne, Te, h4_2_1_8_coeffs)
+Kiz_ref = calc_data(Ne, Te, h4_2_1_5_coeffs)
+
+# Ionisation balance: Ne*Nn*Kiz = Ne*Ne*Krec
+# So: Nn = Krec*Ne/Kiz
+Nn_expected = Ne * Krec_ref / Kiz_ref
+print("\n\n")
+print("VANTAGE Iz-Rec balance test results")
+print("-----------------------------------\n")
+
+print(f"Krec / Kiz = {Krec / Kiz:.2e}")
+
+print(f"Expected Nn: {Ne * Krec_ref / Kiz_ref:.2e}")
+print(f"Actual Nn: {Nn:.2e}")
+
+print("\n--> Fractional errors:")
+Kiz_error = (Kiz_ref - Kiz) / Kiz_ref
+Krec_error = (Krec_ref - Krec) / Krec_ref
+Nn_error = (Nn_expected - Nn) / Nn_expected
+
+print(f"(Kiz_AMJUEL - Kiz) / Kiz_AMJUEL = {Kiz_error:.2e}")
+print(f"(Krec_AMJUEL - Krec) / Krec_AMJUEL = {Krec_error:.2e}")
+print(f"(Nn_expected - Nn_actual) / Nn_expected = {Nn_error:.2e}")
+
+t_final = time()
+print("\n")
+print(f"vantage-iz-rec-balance: analysis took {t_final - t_run:.2f}s")
+print(f"vantage-iz-rec-balance: overall test runtime {t_final - t0:.2f}s")
+
+np.testing.assert_allclose(
+    Krec, Krec_ref, rtol=1e-12, err_msg="Recombination rate doesn't match AMJUEL!"
+)
+np.testing.assert_allclose(
+    Kiz, Kiz_ref, rtol=1e-12, err_msg="Ionisation rate doesn't match AMJUEL!"
+)
+np.testing.assert_allclose(
+    Nn, Nn_expected, rtol=5e-3, err_msg="Steady state Nn does not match!"
+)
+print("\n\n")

@@ -2,7 +2,7 @@ nout = 0
 timestep = 1
 
 [mesh]
-file = example_cdn.grd.nc
+file = example_usn.grd.nc
 extrapolate_y = false
 
 [dmplex]
@@ -41,5 +41,5 @@ initial_neutral_density = 20
 npart_per_cell = 20
 remove_threshold = 0.0
 merge_threshold = 0.0
-iz_rate = 0.0
-rec_rate = 0.0
+iz_rate_override = 0.0
+rec_rate_override = 0.0
