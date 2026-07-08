@@ -43,7 +43,7 @@
 
 using bout::globals::mesh;
 
-const Field3D Div_par_diffusion_index(const Field3D& f, bool bndry_flux) {
+Field3D Div_par_diffusion_index(const Field3D& f, bool bndry_flux) {
   Field3D result;
   result = 0.0;
 
@@ -115,8 +115,8 @@ void MC(Stencil1D& n) {
  * poloidal   - If true, includes X-Y flows
  * positive   - If true, limit advected quantity (n_in) to be positive
  */
-const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flux,
-                                    bool poloidal, bool positive) {
+Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flux,
+                              bool poloidal, bool positive) {
   Field3D result{0.0};
 
   Coordinates* coord = mesh->getCoordinates();
@@ -431,7 +431,7 @@ const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bnd
   return result;
 }
 
-const Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs) {
+Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs) {
 
   Field3D result = 0.0;
 
@@ -497,7 +497,7 @@ const Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs) {
 }
 
 /// Z diffusion in index space
-const Field3D Div_Z_FV_Index(const Field3D& as, const Field3D& fs) {
+Field3D Div_Z_FV_Index(const Field3D& as, const Field3D& fs) {
 
   Field3D result = 0.0;
 
@@ -524,7 +524,7 @@ const Field3D Div_Z_FV_Index(const Field3D& as, const Field3D& fs) {
 }
 
 // *** USED ***
-const Field3D D4DX4_FV_Index(const Field3D& f, bool bndry_flux) {
+Field3D D4DX4_FV_Index(const Field3D& f, bool bndry_flux) {
   Field3D result = 0.0;
 
   Coordinates* coord = mesh->getCoordinates();
@@ -608,7 +608,7 @@ const Field3D D4DX4_FV_Index(const Field3D& f, bool bndry_flux) {
   return result;
 }
 
-const Field3D D4DZ4_Index(const Field3D& f) {
+Field3D D4DZ4_Index(const Field3D& f) {
   Field3D result;
   result.allocate();
   BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
@@ -625,12 +625,11 @@ const Field3D D4DZ4_Index(const Field3D& f) {
  *
  */
 #if BOUT_USE_METRIC_3D
-const Field2D Laplace_FV([[maybe_unused]] const Field2D& k,
-                         [[maybe_unused]] const Field2D& f) {
+Field2D Laplace_FV([[maybe_unused]] const Field2D& k, [[maybe_unused]] const Field2D& f) {
   throw BoutException("Not Implemented!");
 }
 #else
-const Field2D Laplace_FV(const Field2D& k, const Field2D& f) {
+Field2D Laplace_FV(const Field2D& k, const Field2D& f) {
   Field2D result;
   result.allocate();
 
@@ -680,8 +679,8 @@ const Field2D Laplace_FV(const Field2D& k, const Field2D& f) {
 }
 #endif
 
-const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
-                                    Field3D& flow_xlow, Field3D& flow_ylow) {
+Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f, Field3D& flow_xlow,
+                              Field3D& flow_ylow) {
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
@@ -911,7 +910,7 @@ const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
 
 // Div ( a Grad_perp(f) )  -- diffusion
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
-const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
+Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
@@ -1474,8 +1473,8 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
     ///
     ///
     /// WARNING: Causes checkerboarding in neutral_mixed integrated test
-    const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
-                                               Field3D& flow_xlow, Field3D& flow_ylow) {
+    Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
+                                         Field3D& flow_xlow, Field3D& flow_ylow) {
       ASSERT2(a.getLocation() == f.getLocation());
 
       Mesh* mesh = a.getMesh();
@@ -1666,8 +1665,8 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
           return result;
         }
 
-        const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g,
-                                            const Field3D& f, bool bndry_flux) {
+        Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g,
+                                      const Field3D& f, bool bndry_flux) {
           Field3D result{0.0};
 
           Coordinates* coord = mesh->getCoordinates();
@@ -1829,8 +1828,8 @@ const Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
           return result;
         }
 
-        const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
-                                             Field3D& flow_ylow, bool bndry_flux) {
+        Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
+                                       Field3D& flow_ylow, bool bndry_flux) {
           TRACE("FV::Div_par_K_Grad_par_mod");
 
           ASSERT2(Kin.getLocation() == fin.getLocation());
