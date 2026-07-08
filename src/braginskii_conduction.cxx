@@ -22,6 +22,7 @@
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/permissions.hxx"
 
 using bout::globals::mesh;
 
@@ -32,10 +33,10 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
                  readWrite("species:{sp}:{output_vars}")}) {
 
   // Get settings for each species
-  for (auto& kv : alloptions.getChildren()) {
+  for (const auto& kv : alloptions.getChildren()) {
     auto& options = alloptions[kv.first];
     // Check if the component is a species which undergoes energy/pressure evolution
-    if (options.isValue() || !options["type"].isValue()
+    if (options.isValue() || !options.isSet("type")
         || (options["type"].as<std::string>().find("evolve_pressure") == std::string::npos
             && options["type"].as<std::string>().find("evolve_energy")
                    == std::string::npos)) {

@@ -190,7 +190,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
     // Create an XY solver for n=0 component
     laplacexy = LaplaceXY::create(mesh);
     // Set coefficients for Boussinesq solve
-    laplacexy->setCoefs(average_atomic_mass / SQ(coord->Bxy), 0.0);
+    laplacexy->setCoefs(average_atomic_mass / SQ(DC(coord->Bxy)), 0.0);
   }
   phiSolver = Laplacian::create(&options["laplacian"]);
   // Set coefficients for Boussinesq solve
@@ -820,7 +820,8 @@ void Vorticity::finally(const Options& state) {
 
       mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
-      ddt(Vort) -= FV::Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
+      ddt(Vort) -=
+          FV::Div_a_Grad_perp(Field3D{0.5 * average_atomic_mass / Bsq}, vEdotGradPi);
       ddt(Vort) -=
           Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux, poloidal_flows);
     }

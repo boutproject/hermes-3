@@ -256,23 +256,30 @@ else()
 endif()
 
 # copy the data and test directories
-add_custom_command(
-  TARGET setup-examples
-  PRE_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples
-          $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+if(EXISTS ${CMAKE_SOURCE_DIR}/examples)
+  add_custom_command(
+    TARGET setup-examples
+    PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+endif()
 
-add_custom_command(
-  TARGET setup-examples
-  PRE_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/json_database
-          $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+if(EXISTS ${CMAKE_SOURCE_DIR}/json_database)
+  add_custom_command(
+    TARGET setup-examples
+    PRE_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/json_database
+      $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+endif()
 
-add_custom_command(
-  TARGET setup-test
-  PRE_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/tests
-          $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+if(EXISTS ${CMAKE_SOURCE_DIR}/tests)
+  add_custom_command(
+    TARGET setup-test
+    PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/tests
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+endif()
 
 if(HERMES_TESTS)
   enable_testing()

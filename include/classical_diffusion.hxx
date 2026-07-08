@@ -2,17 +2,20 @@
 #ifndef CLASSICAL_DIFFUSION_H
 #define CLASSICAL_DIFFUSION_H
 
+#include <bout/coordinates.hxx>
+
 #include "component.hxx"
 
 struct ClassicalDiffusion : public Component {
   ClassicalDiffusion(std::string name, Options& alloptions, Solver*);
 
-  void outputVars(Options &state) override;
-private:
-  Field2D Bsq; // Magnetic field squared
+  void outputVars(Options& state) override;
 
-  bool diagnose; ///< Output additional diagnostics?
-  Field3D Dn; ///< Particle diffusion coefficient
+private:
+  Coordinates::FieldMetric Bsq; // Magnetic field squared
+
+  bool diagnose;     ///< Output additional diagnostics?
+  Field3D Dn;        ///< Particle diffusion coefficient
   BoutReal custom_D; ///< User-set particle diffusion coefficient override
 
   // Flow diagnostics
@@ -24,7 +27,8 @@ private:
 };
 
 namespace {
-RegisterComponent<ClassicalDiffusion> registercomponentclassicaldiffusion("classical_diffusion");
+RegisterComponent<ClassicalDiffusion>
+    registercomponentclassicaldiffusion("classical_diffusion");
 }
 
 #endif // CLASSICAL_DIFFUSION_H

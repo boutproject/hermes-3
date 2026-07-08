@@ -8,6 +8,7 @@
 #include <bout/boutexception.hxx>
 #include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
+#include <bout/fieldops.hxx>
 #include <bout/generic_factory.hxx>
 #include <bout/options.hxx>
 #include <bout/unused.hxx>
@@ -402,6 +403,11 @@ Options& set(Options& option, T value) {
   return option;
 }
 
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) set(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
+  return set(option, ResT{f});
+}
+
 template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
 decltype(auto) set(GO&& option, T value) {
   set(std::forward<GO>(option).getWritable(), value);
@@ -427,6 +433,12 @@ Options& setBoundary(Options& option, T value) {
 #endif
   option.force(std::move(value));
   return option;
+}
+
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) setBoundary(Options& option,
+                                  const BinaryExpr<ResT, L, R, Func>& f) {
+  return setBoundary(option, ResT{f});
 }
 
 template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
@@ -461,6 +473,11 @@ Options& add(Options& option, T value) {
   }
 }
 
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) add(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
+  return add(option, ResT{f});
+}
+
 template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
 decltype(auto) add(GO&& option, T value) {
   add(std::forward<GO>(option).getWritable(), value);
@@ -489,6 +506,11 @@ Options& subtract(Options& option, T value) {
   }
 }
 
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) subtract(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
+  return subtract(option, ResT{f});
+}
+
 template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
 decltype(auto) subtract(GO&& option, T value) {
   subtract(std::forward<GO>(option).getWritable(), value);
@@ -503,6 +525,13 @@ void set_with_attrs(
   option.setAttributes(attrs);
 }
 
+template <typename ResT, typename L, typename R, typename Func>
+inline void set_with_attrs(
+    Options& option, const BinaryExpr<ResT, L, R, Func>& f,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(option, ResT{f}, attrs);
+}
+
 template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
 void set_with_attrs(
     GO&& option, T value,
@@ -513,7 +542,7 @@ void set_with_attrs(
 #if CHECKLEVEL >= 1
 template <>
 inline void set_with_attrs(
-    Options& option, Field3D value,
+    Options& option, const Field3D& value,
     std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
   if (!value.isAllocated()) {
     throw BoutException("set_with_attrs: Field3D assigned to {:s} is not allocated",
