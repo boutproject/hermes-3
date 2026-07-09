@@ -17,9 +17,9 @@ BraginskiiHeatExchange::BraginskiiHeatExchange(const std::string& name,
                                                Options& alloptions, Solver*)
     // FIXME: Not all species are actually read or written; only those with collision
     // rates and temperatures
-    : Component({readOnly("species:{all_species}:{input_vars}"),
-                 readIfSet("species:{all_species}:{optional_vars}"),
-                 readWrite("species:{all_species}:{output_vars}")}) {
+    : NamedComponent(name, {readOnly("species:{all_species}:{input_vars}"),
+                            readIfSet("species:{all_species}:{optional_vars}"),
+                            readWrite("species:{all_species}:{output_vars}")}) {
   diagnose = alloptions[name]["diagnose"]
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);

@@ -7,8 +7,8 @@ using bout::globals::mesh;
 
 DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
                                    Solver* UNUSED(solver))
-    : Component({readIfSet("species:{all_species}:{input}"),
-                 readWrite("species:{all_species}:{output}")}) {
+    : NamedComponent(name, {readIfSet("species:{all_species}:{input}"),
+                            readWrite("species:{all_species}:{output}")}) {
 
   // Get options for this component
   auto& options = alloptions[name];

@@ -13,7 +13,7 @@
 /// steady state, but not for timescales shorter than the relaxation
 /// timescale.
 ///
-struct RelaxPotential : public Component {
+struct RelaxPotential : public NamedComponent<RelaxPotential> {
   /// Options
   ///
   /// - <name>
@@ -81,6 +81,9 @@ struct RelaxPotential : public Component {
   //                  {{"long_name", "plasma potential"},
   //                   {"source", "vorticity"}});
   // }
+
+  static constexpr auto type = "relax_potential";
+
 private:
   Field3D Vort; // Evolving vorticity
 
@@ -150,7 +153,7 @@ private:
 };
 
 namespace {
-RegisterComponent<RelaxPotential> registercomponentrelaxpotential("relax_potential");
+RegisterComponent<RelaxPotential> registercomponentrelaxpotential;
 }
 
 #endif // RELAX_POTENTIAL_H

@@ -21,14 +21,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using AnomalousDiffusionTest = FakeMeshFixture;
 
-TEST_F(AnomalousDiffusionTest, CreateComponent) {
-  Options options;
-  options["units"]["meters"] = 1.0;
-  options["units"]["seconds"] = 1.0;
-
-  AnomalousDiffusion component("test", options, nullptr);
-}
-
 TEST_F(AnomalousDiffusionTest, NoDiffusion) {
   Options options;
   options["units"]["meters"] = 1.0;

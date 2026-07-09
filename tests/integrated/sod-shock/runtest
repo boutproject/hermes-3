@@ -7,6 +7,12 @@
 #   https://www.mathworks.com/matlabcentral/fileexchange/46311-sod-shock-tube-problem-solver
 #
 
+from math import sqrt
+import numpy as np
+from boututils.run_wrapper import shell, launch_safe
+from boutdata.collect import collect
+import sys
+
 resolutions = [
     (100, "ob", 0.05),
     (400, "-r", 0.02),
@@ -14,12 +20,6 @@ resolutions = [
 ]
 
 plotting = False
-
-from math import sqrt
-import numpy as np
-from boututils.run_wrapper import shell, launch_safe, getmpirun
-from boutdata.collect import collect
-import sys
 
 # Semi-analytic Sod shock problem
 # 5 regions:
@@ -76,7 +76,6 @@ if plotting:
     try:
         import matplotlib.pyplot as plt
         from mpl_toolkits.axes_grid1.inset_locator import (
-            inset_axes,
             InsetPosition,
             mark_inset,
         )
@@ -114,14 +113,11 @@ if plotting:
         # Mark the region corresponding to the inset axes on ax1 and draw lines
         # in grey linking the two axes.
         mark_inset(ax1, ax2, loc1=2, loc2=4, fc="none", ec="0.5")
-    except:
+    except:  # noqa
         print("WARNING: Could not import Matplotlib")
         plotting = False
 
 # Perform simulations at required resolutions
-
-# Link to the executable
-shell("ln -s ../../../hermes-3 hermes-3")
 
 errs = []
 for ny, sym, tol in resolutions:
@@ -129,7 +125,7 @@ for ny, sym, tol in resolutions:
     shell("rm data/BOUT.dmp.*.nc")
 
     # Launch using MPI
-    s, out = launch_safe(f"./hermes-3 mesh:ny={ny}", nproc=1, pipe=True)
+    s, out = launch_safe(f"../../../hermes-3 mesh:ny={ny}", nproc=1, pipe=True)
 
     # Save output to log file
     f = open(f"run.log.{ny}", "w")

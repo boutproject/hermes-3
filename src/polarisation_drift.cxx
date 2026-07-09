@@ -12,10 +12,11 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
                                      Solver* UNUSED(solver))
     // FIXME: There is a lot of complicated conditional logic which is not being captured
     // here. E.g., species without AA or momentum will be skipped.
-    : Component({readIfSet("species:{all_species}:charge"),
-                 readOnly("species:{charged}:{inputs}"),
-                 readIfSet("species:{charged}:momentum"), readIfSet("fields:{fields}"),
-                 readWrite("species:{charged}:{outputs}")}) {
+    : NamedComponent(name, {readIfSet("species:{all_species}:charge"),
+                            readOnly("species:{charged}:{inputs}"),
+                            readIfSet("species:{charged}:momentum"),
+                            readIfSet("fields:{fields}"),
+                            readWrite("species:{charged}:{outputs}")}) {
 
   // Get options for this component
   auto& options = alloptions[name];

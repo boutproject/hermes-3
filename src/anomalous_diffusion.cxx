@@ -10,10 +10,9 @@
 using bout::globals::mesh;
 
 AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, Solver*)
-    : Component({readOnly("species:{name}:density", Regions::Interior),
-                 readIfSet("species:{name}:{optional}", Regions::Interior),
-                 readWrite("species:{name}:{output}")}),
-      name(name) {
+    : NamedComponent(name, {readOnly("species:{name}:density", Regions::Interior),
+                            readIfSet("species:{name}:{optional}", Regions::Interior),
+                            readWrite("species:{name}:{output}")}) {
   // Normalisations
   const Options& units = alloptions["units"];
   const BoutReal rho_s0 = units["meters"];
@@ -81,7 +80,7 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
 
 void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
 
-  GuardedOptions species = state["species"][name];
+  GuardedOptions species = state["species"][objectName()];
 
   // Diffusion operates on 2D (axisymmetric) profiles
   // Note: Includes diffusion in Y, so set boundary fluxes
@@ -167,6 +166,7 @@ void AnomalousDiffusion::outputVars(Options& state) {
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+  const std::string& name = objectName();
 
   if (diagnose) {
 

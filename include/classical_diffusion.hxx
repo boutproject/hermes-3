@@ -6,10 +6,12 @@
 
 #include "component.hxx"
 
-struct ClassicalDiffusion : public Component {
+struct ClassicalDiffusion : public NamedComponent<ClassicalDiffusion> {
   ClassicalDiffusion(std::string name, Options& alloptions, Solver*);
 
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "classical_diffusion";
 
 private:
   Coordinates::FieldMetric Bsq; // Magnetic field squared
@@ -27,8 +29,7 @@ private:
 };
 
 namespace {
-RegisterComponent<ClassicalDiffusion>
-    registercomponentclassicaldiffusion("classical_diffusion");
+RegisterComponent<ClassicalDiffusion> registercomponentclassicaldiffusion;
 }
 
 #endif // CLASSICAL_DIFFUSION_H

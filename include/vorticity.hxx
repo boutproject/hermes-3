@@ -2,9 +2,6 @@
 #ifndef VORTICITY_H
 #define VORTICITY_H
 
-#include <memory>
-
-#include <bout/coordinates.hxx>
 #include <bout/invert/laplacexy.hxx>
 #include <bout/invert_laplace.hxx>
 #include <bout/vectormetric.hxx>
@@ -13,7 +10,7 @@
 
 /// Evolve electron density in time
 ///
-struct Vorticity : public Component {
+struct Vorticity : public NamedComponent<Vorticity> {
   /// Options
   ///
   /// - <name>
@@ -94,6 +91,8 @@ struct Vorticity : public Component {
   /// charged species with pressure.
   Field3D calculateDivJdia(Field3D phi, GuardedOptions allspecies);
 
+  static constexpr auto type = "vorticity";
+
 private:
   Field3D Vort; // Evolving vorticity
 
@@ -165,7 +164,7 @@ private:
 };
 
 namespace {
-RegisterComponent<Vorticity> registercomponentvorticity("vorticity");
+RegisterComponent<Vorticity> registercomponentvorticity;
 }
 
 #endif // VORTICITY_H

@@ -6,10 +6,11 @@
 #include <string>
 
 SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
-    : Component({readOnly("fields:phi"), readOnly("species:e:density"),
-                 readWrite("species:e:density_source"),
-                 // FIXME: This is only written if temperature is set
-                 readWrite("species:e:energy_source"), readWrite("fields:DivJextra")}) {
+    : NamedComponent(name, {readOnly("fields:phi"), readOnly("species:e:density"),
+                            readWrite("species:e:density_source"),
+                            // FIXME: This is only written if temperature is set
+                            readWrite("species:e:energy_source"),
+                            readWrite("fields:DivJextra")}) {
   Options& options = alloptions[name];
 
   BoutReal Lnorm = alloptions["units"]["meters"]; // Length normalisation factor

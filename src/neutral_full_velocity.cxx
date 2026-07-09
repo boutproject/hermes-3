@@ -16,7 +16,7 @@ using bout::globals::mesh;
 
 NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& alloptions,
                                          Solver* solver)
-    : Component({readWrite("species:{name}:{outputs}")}), name(name) {
+    : NamedComponent(name, {readWrite("species:{name}:{outputs}")}) {
 
   // This is used in both transform and finally functions
   coord = mesh->getCoordinates();
@@ -350,7 +350,7 @@ void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
   Vnpar = Vn2D.y / (coord->J * coord->Bxy);
 
   // Set values in the state
-  auto localstate = state["species"][name];
+  auto localstate = state["species"][objectName()];
   set(localstate["density"], Nn2D);
   set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn2D);
@@ -365,6 +365,7 @@ void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
 ///       is not taken from `state`. These are calculated in
 ///       `transform()` that must be called before `finally()`.
 void NeutralFullVelocity::finally(const Options& state) {
+  const std::string& name = objectName();
   auto& localstate = state["species"][name];
 
   ///////////////////////////////////////////////////////
@@ -745,6 +746,7 @@ void NeutralFullVelocity::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+  const std::string& name = objectName();
 
   state[std::string("N") + name].setAttributes({{"time_dimension", "t"},
                                                 {"units", "m^-3"},

@@ -91,7 +91,7 @@ Vector3D Grad_perp_XZ(const Field3D& f) {
 } // namespace
 
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
-    : Component({readWrite("fields:vorticity"), readWrite("fields:phi")}) {
+    : NamedComponent(name, {readWrite("fields:vorticity"), readWrite("fields:phi")}) {
 
   solver->add(Vort, "Vort");
 

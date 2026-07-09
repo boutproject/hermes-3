@@ -10,21 +10,21 @@
 ///
 /// This uses the sum of all species pressures and mass densities
 /// so should run after those have been set.
-struct SoundSpeed : public Component {
+struct SoundSpeed : public NamedComponent<SoundSpeed> {
   SoundSpeed(std::string name, Options& alloptions, Solver*)
-      : Component({readOnly("species:{all_species}:pressure", Regions::Interior),
-                   writeFinal("sound_speed"), writeFinal("fastest_wave"),
-                   readIfSet("species:{sp}:AA"),
-                   // FIXME: Only read if AA is set
-                   readIfSet("species:{sp}:{opt_inputs}", Regions::Interior)}) {
-    Options &options = alloptions[name];
+      : NamedComponent(name,
+                       {readOnly("species:{all_species}:pressure", Regions::Interior),
+                        writeFinal("sound_speed"), writeFinal("fastest_wave"),
+                        readIfSet("species:{sp}:AA"),
+                        // FIXME: Only read if AA is set
+                        readIfSet("species:{sp}:{opt_inputs}", Regions::Interior)}) {
+    Options& options = alloptions[name];
     electron_dynamics = options["electron_dynamics"]
-      .doc("Include electron sound speed?")
-      .withDefault<bool>(true);
+                            .doc("Include electron sound speed?")
+                            .withDefault<bool>(true);
 
-    alfven_wave = options["alfven_wave"]
-      .doc("Include Alfven wave speed?")
-      .withDefault<bool>(false);
+    alfven_wave =
+        options["alfven_wave"].doc("Include Alfven wave speed?").withDefault<bool>(false);
     if (alfven_wave) {
       // Calculate normalisation factor
       const auto& units = alloptions["units"];
@@ -35,12 +35,13 @@ struct SoundSpeed : public Component {
     }
 
     temperature_floor = options["temperature_floor"]
-      .doc("Minimum temperature when calculating sound speeds [eV]")
-      .withDefault(0.0);
+                            .doc("Minimum temperature when calculating sound speeds [eV]")
+                            .withDefault(0.0);
 
-    fastest_wave_factor = options["fastest_wave_factor"]
-      .doc("Multiply the fastest wave by this factor, affecting lax flux strength")
-      .withDefault(1.0);
+    fastest_wave_factor =
+        options["fastest_wave_factor"]
+            .doc("Multiply the fastest wave by this factor, affecting lax flux strength")
+            .withDefault(1.0);
 
     if (temperature_floor > 0.0) {
       temperature_floor /= get<BoutReal>(alloptions["units"]["eV"]);
@@ -51,11 +52,13 @@ struct SoundSpeed : public Component {
     substitutePermissions("opt_inputs", {"density", "temperature"});
   }
 
+  static constexpr auto type = "sound_speed";
+
 private:
-  bool electron_dynamics; ///< Include electron sound speed?
-  bool alfven_wave; ///< Include Alfven wave speed?
-  BoutReal beta_norm{0.0}; ///< Normalisation factor for Alfven speed
-  BoutReal temperature_floor; ///< Minimum temperature when calculating speed
+  bool electron_dynamics;       ///< Include electron sound speed?
+  bool alfven_wave;             ///< Include Alfven wave speed?
+  BoutReal beta_norm{0.0};      ///< Normalisation factor for Alfven speed
+  BoutReal temperature_floor;   ///< Minimum temperature when calculating speed
   BoutReal fastest_wave_factor; ///< Multiply the fastest wave by this factor
 
   /// This sets in the state
@@ -75,7 +78,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SoundSpeed> registercomponentsoundspeed("sound_speed");
+RegisterComponent<SoundSpeed> registercomponentsoundspeed;
 }
 
 #endif // SOUND_SPEED_H

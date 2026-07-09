@@ -18,25 +18,29 @@
 /// Note: This needs to be put after collisions and other
 ///       components which impose forces on electrons
 ///
-struct ElectronForceBalance : public Component {
+struct ElectronForceBalance : public NamedComponent<ElectronForceBalance> {
   ElectronForceBalance(std::string name, Options& alloptions, Solver*)
-      : Component({readOnly("species:e:pressure"),
-                   readOnly("species:e:density", Regions::Interior),
-                   readOnly("species:e:charge"),
-                   // FIXME: Only writes if already exists
-                   readWrite("species:e:momentum_source"),
-                   readIfSet("species:{non_electrons}:density", Regions::Interior),
-                   readIfSet("species:{non_electrons}:charge"),
-                   // FIXME: Only written if density and charge have been set.
-                   readWrite("species:{non_electrons}:momentum_source")}) {
+      : NamedComponent(name,
+                       {readOnly("species:e:pressure"),
+                        readOnly("species:e:density", Regions::Interior),
+                        readOnly("species:e:charge"),
+                        // FIXME: Only writes if already exists
+                        readWrite("species:e:momentum_source"),
+                        readIfSet("species:{non_electrons}:density", Regions::Interior),
+                        readIfSet("species:{non_electrons}:charge"),
+                        // FIXME: Only written if density and charge have been set.
+                        readWrite("species:{non_electrons}:momentum_source")}) {
     auto& options = alloptions[name];
     diagnose = options["diagnose"]
-      .doc("Save additional output diagnostics")
-      .withDefault<bool>(false);
+                   .doc("Save additional output diagnostics")
+                   .withDefault<bool>(false);
   }
 
   /// Save output diagnostics
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "electron_force_balance";
+
 private:
   bool diagnose; ///< Output additional fields
 
@@ -54,12 +58,12 @@ private:
   /// - species
   ///   - <all except e>   if both density and charge are set
   ///     - momentum_source
-  /// 
+  ///
   void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
-RegisterComponent<ElectronForceBalance> registercomponentelectronforcebalance("electron_force_balance");
+RegisterComponent<ElectronForceBalance> registercomponentelectronforcebalance;
 }
 
 #endif // ELECTRON_FORCE_BALANCE

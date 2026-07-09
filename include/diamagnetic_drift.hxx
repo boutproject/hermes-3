@@ -8,8 +8,10 @@
 
 /// Calculate diamagnetic flows
 
-struct DiamagneticDrift : public Component {
+struct DiamagneticDrift : public NamedComponent<DiamagneticDrift> {
   DiamagneticDrift(std::string name, Options& options, Solver* UNUSED(solver));
+
+  static constexpr auto type = "diamagnetic_drift";
 
 private:
   VectorMetric Curlb_B;
@@ -28,7 +30,7 @@ private:
 };
 
 namespace {
-RegisterComponent<DiamagneticDrift> registercomponentdiamagnetic("diamagnetic_drift");
+RegisterComponent<DiamagneticDrift> registercomponentdiamagnetic;
 }
 
 #endif // DIAMAGNETIC_DRIFT_H

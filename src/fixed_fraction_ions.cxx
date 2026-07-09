@@ -10,7 +10,8 @@
 
 FixedFractionIons::FixedFractionIons(std::string name, Options& alloptions,
                                      Solver* UNUSED(solver))
-    : Component({readOnly("species:e:density"), readWrite("species:{sp}:density")}) {
+    : NamedComponent(name,
+                     {readOnly("species:e:density"), readWrite("species:{sp}:density")}) {
 
   std::string fractions_str = alloptions[name]["fractions"]
                                   .doc("Comma-separated list of pairs e.g. "

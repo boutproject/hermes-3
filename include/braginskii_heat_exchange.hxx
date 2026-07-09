@@ -10,7 +10,7 @@
 
 /// Calculates the heat exchange between species due to collisions
 ///
-struct BraginskiiHeatExchange : public Component {
+struct BraginskiiHeatExchange : public NamedComponent<BraginskiiHeatExchange> {
   ///
   /// @param alloptions Settings. There is nothing to be configured.
   ///
@@ -18,6 +18,8 @@ struct BraginskiiHeatExchange : public Component {
 
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "braginskii_heat_exchange";
 
 private:
   /// Calculated energy transfer for post-processing and use by other components
@@ -48,8 +50,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiHeatExchange>
-    registercomponentbraginskiiheatexchange("braginskii_heat_exchange");
+RegisterComponent<BraginskiiHeatExchange> registercomponentbraginskiiheatexchange;
 }
 
 #endif // BRAGINSKII_HEAT_EXCHANGE_H

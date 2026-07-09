@@ -23,6 +23,17 @@
 #include <utility>
 #include <vector>
 
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
+#include <bout/generic_factory.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
+#include <fmt/base.h>
+#include <fmt/format.h>
+
 #include "guarded_options.hxx"
 #include "hermes_utils.hxx"
 #include "permissions.hxx"
@@ -30,7 +41,7 @@
 class Solver; // Time integrator
 
 /// Simple struct to store information on the different types of
-/// species present in a simulation
+/// species present in a simulation.
 struct SpeciesInformation {
   SpeciesInformation(const std::vector<std::string>& electrons,
                      const std::vector<std::string>& neutrals,
@@ -86,8 +97,8 @@ struct Component {
   /// names of all species being simulated (by calling
   /// `declareAllSpecies()`, which is done after all components are
   /// created by a ComponentSchedular).
-  Component(Permissions&& access_permissions)
-      : state_variable_access(access_permissions) {}
+  Component(const std::string& name, Permissions&& access_permissions)
+      : name(name), state_variable_access(access_permissions) {}
 
   virtual ~Component() {}
 
@@ -147,6 +158,12 @@ struct Component {
   /// must be completed or else an exception will be thrown.
   void declareAllSpecies(const SpeciesInformation& info);
 
+  const Permissions& getPermissions() const { return state_variable_access; }
+
+  virtual std::string typeName() const = 0;
+
+  std::string objectName() const { return name; }
+
 protected:
   /// Set the level of access needed by this component for a particular variable.
   void setPermissions(const std::string& variable,
@@ -165,6 +182,8 @@ protected:
   }
 
 private:
+  std::string name;
+
   /// Information on which state variables the transform method will read and write.
   Permissions state_variable_access;
 
@@ -174,6 +193,14 @@ private:
   /// variables with the appropriate permissiosn in
   /// `state_variable_access`.
   virtual void transform_impl(GuardedOptions& state) = 0;
+};
+
+/// Subclass of Component that implements the typeName method via CRTP.
+template <typename T>
+struct NamedComponent : public Component {
+  using Component::Component;
+
+  std::string typeName() const final { return T::type; }
 };
 
 ///////////////////////////////////////////////////////////////////
@@ -196,10 +223,19 @@ public:
 ///
 ///     #include "component.hxx"
 ///     namespace {
-///     RegisterComponent<MyComponent> registercomponentmine("mycomponent");
+///     RegisterComponent<MyComponent> registercomponentmine;
 ///     }
+///
+/// In order for this to work, the component class must have a static
+/// constexpr component called `type` containing the name for the
+/// component. This component will need to be convertible to a string.
+///
 template <typename DerivedType>
-using RegisterComponent = ComponentFactory::RegisterInFactory<DerivedType>;
+struct RegisterComponent : public ComponentFactory::RegisterInFactory<DerivedType> {
+  RegisterComponent()
+      : ComponentFactory::RegisterInFactory<DerivedType>(std::string(DerivedType::type)) {
+  }
+};
 
 /// Faster non-printing getter for Options
 /// If this fails, it will throw BoutException
@@ -559,5 +595,78 @@ inline void set_with_attrs(
   set_with_attrs(std::forward<GO>(option).getWritable(), std::move(value), attrs);
 }
 #endif
+
+template <>
+struct fmt::formatter<Component> : formatter<string_view> {
+  /// Formatter for Components
+  ///
+  /// By default it will use the format `OBJECT_NAME
+  /// (COMPONENT_TYPE_NAME)`, if the two names are different. If they
+  /// are the same then it will just show the object name. This
+  /// behaviour can be overriden using the format specifiers below:
+  ///
+  /// - ``~n``: Don't show object name
+  /// - ``~t``: Don't show type name
+  /// - ``T``: Always show type name
+  constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator {
+    const auto* it = ctx.begin();
+    const auto* end = ctx.end();
+
+    if (it == end) {
+      return underlying.parse(ctx);
+    }
+
+    while (it != end and *it != ':' and *it != '}') {
+      switch (*it) {
+      case '~':
+        ++it;
+        if (it == end) {
+          throw fmt::format_error("Unrecognised format specifier '~'");
+        }
+        if (*it == 'n') {
+          hide_name = true;
+        } else if (*it == 't') {
+          hide_type = true;
+        } else {
+          throw fmt::format_error(
+              fmt::format("Unrecognised format specifier '~{}'", *it));
+        }
+        ++it;
+        break;
+      case 'T':
+        show_type = true;
+        ++it;
+        break;
+      default:
+        ++it;
+        break;
+      }
+    }
+
+    if (hide_type and show_type) {
+      throw fmt::format_error("Format specifiers 'T' and '~t' are mutually-exclusive");
+    }
+
+    if (it != end and *it != '}') {
+      if (*it != ':') {
+        throw fmt::format_error("invalid format specifier");
+      }
+      ++it;
+    }
+
+    ctx.advance_to(it);
+    return underlying.parse(ctx);
+  }
+
+  auto format(const Component& component, format_context& ctx) const
+      -> format_context::iterator;
+
+private:
+  fmt::formatter<string_view> underlying;
+
+  bool hide_name = false;
+  bool hide_type = false;
+  bool show_type = false;
+};
 
 #endif // HERMES_COMPONENT_H

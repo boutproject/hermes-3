@@ -22,16 +22,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using BraginskiiCollisionsTest = FakeMeshFixture;
 
-TEST_F(BraginskiiCollisionsTest, CreateComponent) {
-  Options options;
-
-  options["units"]["eV"] = 1.0;
-  options["units"]["meters"] = 1.0;
-  options["units"]["seconds"] = 1.0;
-  options["units"]["inv_meters_cubed"] = 1e19;
-  const BraginskiiCollisions component("test", options, nullptr);
-}
-
 TEST_F(BraginskiiCollisionsTest, OnlyElectrons) {
   Options options;
 

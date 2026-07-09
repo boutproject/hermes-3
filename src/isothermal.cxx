@@ -5,11 +5,11 @@
 #include "../include/isothermal.hxx"
 
 Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(solver))
-    : Component({readIfSet(fmt::format("species:{}:density", name), Regions::Interior),
+    : NamedComponent(
+          name, {readIfSet(fmt::format("species:{}:density", name), Regions::Interior),
                  readWrite(fmt::format("species:{}:temperature", name)),
                  // FIXME: This is only written if density is set
-                 readWrite(fmt::format("species:{}:pressure", name))}),
-      name(name) {
+                 readWrite(fmt::format("species:{}:pressure", name))}) {
   Options& options = alloptions[name];
 
   auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
@@ -23,7 +23,7 @@ Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(sol
 
 void Isothermal::transform_impl(GuardedOptions& state) {
 
-  GuardedOptions species = state["species"][name];
+  GuardedOptions species = state["species"][objectName()];
 
   set(species["temperature"], T);
 
@@ -39,6 +39,7 @@ void Isothermal::transform_impl(GuardedOptions& state) {
 void Isothermal::outputVars(Options& state) {
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  const std::string& name = objectName();
 
   // Save the temperature to the output files
   set_with_attrs(state[std::string("T") + name], T,

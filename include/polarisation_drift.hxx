@@ -30,7 +30,7 @@ class Laplacian;
 ///
 /// The mass_density quantity is the sum of density * atomic mass for all
 /// charged species (ions and electrons)
-struct PolarisationDrift : public Component {
+struct PolarisationDrift : public NamedComponent<PolarisationDrift> {
   //
   PolarisationDrift(std::string name, Options& options, Solver* UNUSED(solver));
 
@@ -63,6 +63,8 @@ struct PolarisationDrift : public Component {
   /// Sets density_source, energy_source and momentum_source
   /// for all species with mass and charge.
   void polarisationAdvection(GuardedOptions& state, Field3D phi_pol);
+
+  static constexpr auto type = "polarisation_drift";
 
 private:
   std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
@@ -107,8 +109,7 @@ private:
 };
 
 namespace {
-RegisterComponent<PolarisationDrift>
-    registercomponentpolarisationdrift("polarisation_drift");
+RegisterComponent<PolarisationDrift> registercomponentpolarisationdrift;
 }
 
 #endif // POLARISATION_DRIFT_H

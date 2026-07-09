@@ -27,15 +27,6 @@ TEST_F(ExternalAparTest, CreateComponentNeedsApar) {
   EXPECT_THROW(ExternalApar component("test", options, nullptr), BoutException);
 }
 
-TEST_F(ExternalAparTest, CreateComponent) {
-  Options options = {{"units", {{"Tesla", 2.0}, {"meters", 1.0e-3}}}};
-
-  dynamic_cast<FakeMesh*>(bout::globals::mesh)
-      ->setGridDataSource(new FakeGridDataSource{{{"external_apar", 1.0}}});
-  // external_apar available
-  ExternalApar component("test", options, nullptr);
-}
-
 TEST_F(ExternalAparTest, CreateComponentSetName) {
   Options options = {{"units", {{"Tesla", 2.0}, {"meters", 1.0e-3}}},
                      {"test", {{"apar_name", "AparExt"}}}};

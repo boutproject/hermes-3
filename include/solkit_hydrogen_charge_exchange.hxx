@@ -3,6 +3,7 @@
 #define SOLKIT_HYDROGEN_CHARGE_EXCHANGE_H
 
 #include "component.hxx"
+#include "hermes_utils.hxx"
 #include "reaction.hxx"
 /// SOL-KiT Hydrogen charge exchange total rate coefficient
 ///
@@ -12,8 +13,9 @@ struct SOLKITHydrogenChargeExchange : public hermes::ReactionBase {
   ///        - units
   ///          - inv_meters_cubed
   ///          - seconds
-  SOLKITHydrogenChargeExchange(std::string, Options& alloptions, Solver*)
-      : hermes::ReactionBase({readIfSet("species:{sp}:velocity"),
+  SOLKITHydrogenChargeExchange(std::string name, Options& alloptions, Solver*)
+      : hermes::ReactionBase(std::move(name),
+                             {readIfSet("species:{sp}:velocity"),
                               readOnly("species:{sp}:{readvals}"),
                               readWrite("species:{sp}:momentum_source")}) {
     // Get the units
@@ -53,21 +55,24 @@ struct SOLKITHydrogenChargeExchangeIsotope : public SOLKITHydrogenChargeExchange
     substitutePermissions("readvals", {"AA", "density"});
   }
 
+  static constexpr char type[] = {'s', 'o',     'l', 'k',     'i', 't', ' ',     Isotope,
+                                  ' ', '+',     ' ', Isotope, '+', ' ', '-',     '>',
+                                  ' ', Isotope, '+', ' ',     '+', ' ', Isotope, '\0'};
+
+  std::string typeName() const final { return type; }
+
 private:
   void transform_impl(GuardedOptions& state) override {
-    calculate_rates(state["species"][{Isotope}],        // e.g. "h"
-                    state["species"][{Isotope, '+'}]);  // e.g. "d+"
+    calculate_rates(state["species"][{Isotope}],       // e.g. "h"
+                    state["species"][{Isotope, '+'}]); // e.g. "d+"
   }
 };
 
 namespace {
 /// Register three components, one for each hydrogen isotope
-RegisterComponent<SOLKITHydrogenChargeExchangeIsotope<'h'>>
-    register_solkit_cx_hh("solkit h + h+ -> h+ + h");
-RegisterComponent<SOLKITHydrogenChargeExchangeIsotope<'d'>>
-    register_solkit_cx_dd("solkit d + d+ -> d+ + d");
-RegisterComponent<SOLKITHydrogenChargeExchangeIsotope<'t'>>
-    register_solkit_cx_tt("solkit t + t+ -> t+ + t");
+RegisterComponent<SOLKITHydrogenChargeExchangeIsotope<'h'>> register_solkit_cx_hh;
+RegisterComponent<SOLKITHydrogenChargeExchangeIsotope<'d'>> register_solkit_cx_dd;
+RegisterComponent<SOLKITHydrogenChargeExchangeIsotope<'t'>> register_solkit_cx_tt;
 } // namespace
 
 #endif // SOLKIT_HYDROGEN_CHARGE_EXCHANGE_H

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from boututils.run_wrapper import shell, launch_safe, getmpirun
+from boututils.run_wrapper import launch_safe
 import numpy as np
 import matplotlib.pyplot as plt
 import shutil
@@ -30,7 +30,6 @@ atol = 1e-8
 ### Setup
 this_dir = Path(__file__).parent
 data_dir = this_dir / "data"
-hermes_exec = this_dir.parent.parent.parent / "hermes-3"
 output_path = data_dir / "BOUT.dmp.*.nc"
 
 zipfile_path = this_dir / "test-2D-recycling.zip"
@@ -51,8 +50,8 @@ expected_filenames = [
 ]
 
 
-### Download files
-if not debug:
+def download_data():
+    ## Download files
     tmp_path = zipfile_path.with_name(zipfile_path.name + ".tmp")
 
     with urllib.request.urlopen(url, timeout=60) as response:
@@ -66,13 +65,14 @@ if not debug:
         with open(tmp_path, "wb") as out_file:
             shutil.copyfileobj(response, out_file)
 
-    t_download = time()
     if verbose:
         print(f"2D-Recycling test: download took {t_download - t0:.2f} seconds")
 
     # Rename temp file with the correct name
     tmp_path.replace(zipfile_path)
 
+
+def extractZip():
     with zipfile.ZipFile(zipfile_path, "r") as zf:
         zip_contents = set(zf.namelist())
         try:
@@ -83,34 +83,46 @@ if not debug:
 
         except Exception as e:
             print("2D-recycling test: extracting test grids failed:", e)
+            raise
 
+
+def checkHash(doRaise=True):
     # Check hash
-    with open(zipfile_path, "rb") as f:
-        file_hash = hashlib.sha256(f.read()).hexdigest()
-        # print(file_hash)
+    try:
+        with open(zipfile_path, "rb") as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+    except FileNotFoundError:
+        if doRaise:
+            raise
+        return False
 
-    if file_hash != expected_hash:
-        raise RuntimeError(
-            "2D-recycling test: downloaded zip file hash does not match expected value"
-        )
+    if doRaise:
+        if file_hash != expected_hash:
+            raise RuntimeError(
+                "2D-recycling test: downloaded zip file hash does not match expected value"
+            )
+    return file_hash == expected_hash
+
+
+if not debug:
+    t_download = time()
+    if not checkHash(False):
+        download_data()
+        checkHash()
+
+    extractZip()
 
     t_extract = time()
     if verbose:
         print(
-            f"2D-Recycling test: zip extraction took {t_extract - t_download:.2f} seconds"
+            f"2D-recycling test: zip extraction took {t_extract - t_download:.2f} seconds"
         )
-
-    ## Run test
-    if not Path("hermes-3").is_file():
-        shell("ln -s ../../../hermes-3 hermes-3")
-
-    runcmd = getmpirun().split(" ")[0] + " -np"
 
     # Allow oversubscription for OpenMPI via env var (silently ignored by MPICH,
     # which does not enforce slot limits and does not support --oversubscribe)
     os.environ["OMPI_MCA_rmaps_base_oversubscribe"] = "yes"
 
-    s, out = launch_safe("./hermes-3 -d data", runcmd=runcmd, nproc=10, pipe=True)
+    s, out = launch_safe("../../../hermes-3 -d data", nproc=10, pipe=True)
 
     if s != 0:
         print(" => 2D-recycling test failed: ")
