@@ -103,4 +103,7 @@ namespace {
 RegisterComponent<NeutralFullVelocity> registersolverneutralfullvelocity;
 }
 #endif // not BOUT_USE_METRIC_3D
+RegisterUnavailableComponent
+    registersolverneutralfullvelocity("neutral_full_velocity",
+                                      "This not (yet) compatible with 3D metrics");
 #endif // NEUTRAL_FULL_VELOCITY_H

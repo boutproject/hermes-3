@@ -236,6 +236,7 @@ struct RegisterComponent : public ComponentFactory::RegisterInFactory<DerivedTyp
       : ComponentFactory::RegisterInFactory<DerivedType>(std::string(DerivedType::type)) {
   }
 };
+using RegisterUnavailableComponent = ComponentFactory::RegisterUnavailableInFactory;
 
 /// Faster non-printing getter for Options
 /// If this fails, it will throw BoutException
