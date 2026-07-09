@@ -43,6 +43,21 @@ contains_word() {
   esac
 }
 
+# Resolve a variable the way docker compose does: a value exported in the
+# environment wins, otherwise fall back to the value assigned in .env. Uses
+# printenv (not $VAR) deliberately -- bash always sets UID/EUID as shell
+# variables but does not export them, so they are NOT what compose (a child
+# process) actually sees; printenv reports only the exported environment.
+resolve_env() {
+  local key="$1" value
+  value=$(printenv "$key" 2>/dev/null)
+  if [ -n "$value" ]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  sed -n "s/^${key}=//p" .env 2>/dev/null | tail -n1
+}
+
 run_docker_help() {
   notice "Usage: run_docker <service> [arguments]"
   echo
@@ -73,6 +88,21 @@ check_environment() {
   if [ ! -f ".env" ]; then
     warn "Error: no .env file in $PWD."
     warn "Run 'sh setup.sh' (or development-setup.sh) first to generate it."
+    return 1
+  fi
+  # Every non-root service runs as ${UID}:${GID} (from .env) so build/run output
+  # on the mounted work/ is owned by you. If .env is empty or truncated, compose
+  # substitutes a blank user and the container runs as root, littering root-owned
+  # files across work/ on the host. Refuse to start unless both are integers.
+  local uid gid bad=""
+  uid=$(resolve_env UID)
+  gid=$(resolve_env GID)
+  case "$uid" in "" | *[!0-9]*) bad="UID='${uid}'" ;; esac
+  case "$gid" in "" | *[!0-9]*) bad="${bad:+$bad, }GID='${gid}'" ;; esac
+  if [ -n "$bad" ]; then
+    warn "Error: ${bad} is not a non-negative integer (UID/GID come from .env)."
+    warn "Without a numeric UID:GID the container runs as root and creates root-owned files in work/."
+    warn "Run 'sh setup.sh' to regenerate .env."
     return 1
   fi
   if [ ! -d "work" ]; then
@@ -142,17 +172,20 @@ docker_rm() {
 # oversubscribe and thrash the CPU, so we refuse it. Returns non-zero to abort.
 check_build_jobs() {
   local jobs
-  if [ -n "$HERMES_BUILD_JOBS" ]; then
-    jobs="$HERMES_BUILD_JOBS"
-  else
-    jobs=$(sed -n 's/^HERMES_BUILD_JOBS=//p' .env 2>/dev/null | tail -n1)
-    jobs="${jobs:-4}"
-  fi
+  jobs=$(resolve_env HERMES_BUILD_JOBS)
+  jobs="${jobs:-4}"
 
-  # Skip the check if either value isn't a plain integer we can compare.
+  # A non-integer (or zero) job count is bad config that would fail the build
+  # later with a murkier error (cmake --parallel abc), so reject it up front.
   case "$jobs" in
-    "" | *[!0-9]*) return 0 ;;
+    "" | *[!0-9]* | 0*)
+      warn "Error: HERMES_BUILD_JOBS='${jobs}' is not a positive integer."
+      warn "Set it to the number of parallel build jobs (e.g. 4), in .env or the environment."
+      return 1 ;;
   esac
+  # The core count comes from `docker info`; if it isn't available (e.g. the
+  # Docker daemon isn't running) we can't compare, so skip rather than block --
+  # docker compose will report the real problem.
   local ncores
   ncores=$(docker info --format '{{.NCPU}}' 2>/dev/null)
   case "$ncores" in

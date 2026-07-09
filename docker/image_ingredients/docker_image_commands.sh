@@ -53,6 +53,28 @@ if ! $mode_is_valid; then
     exit 1 # Return a non-zero exit code to indicate failure
 fi
 
+# Refuse to run as root unless the mode genuinely needs it. Every mode except
+# fix_permissions writes build/run output into the mounted work/ volume; doing
+# that as root leaves root-owned files on the host (compose runs these services
+# as user: ${UID}:${GID} precisely to avoid that). fix_permissions is exempt
+# because its whole job is to chown that volume. Set HERMES_ALLOW_ROOT=1 to
+# override, e.g. when the host user genuinely is root.
+root_allowed_modes=("fix_permissions")
+mode_allows_root=false
+for allowed_mode in "${root_allowed_modes[@]}"; do
+    if [[ "$mode" == "$allowed_mode" ]]; then
+        mode_allows_root=true
+        break
+    fi
+done
+
+if [[ "$(id -u)" -eq 0 ]] && ! $mode_allows_root && [[ "${HERMES_ALLOW_ROOT}" != "1" ]]; then
+    warn "Error: refusing to run mode '$mode' as root."
+    warn "It would create root-owned files in the mounted work/ directory on the host."
+    warn "Run as your host user (compose sets user: \${UID}:\${GID}), or set HERMES_ALLOW_ROOT=1 to override."
+    exit 1
+fi
+
 # Announce mode
 if [[ -n "$run_directory" ]]; then
     notice "Running ${executable_name} in mode '${mode}' with run directory '${run_directory}'"
