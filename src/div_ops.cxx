@@ -1040,9 +1040,6 @@ Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
   // Z flux
   // Easier since all metrics constant in Z
 
-  const auto zstart = bout::build::use_metric_3d ? mesh->zstart : 0;
-  const auto zend = bout::build::use_metric_3d ? mesh->zend : 0;
-
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = zstart; k <= zend; k++) {
@@ -1603,9 +1600,6 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 
   // Z flux
   // Easier since all metrics constant in Z
-  const auto zstart = bout::build::use_metric_3d ? mesh->zstart : 0;
-  const auto zend = bout::build::use_metric_3d ? mesh->zend : 0;
-
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = zstart; k <= zend; k++) {
