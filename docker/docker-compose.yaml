@@ -29,6 +29,8 @@ services:
   build_hermes:
     # Rebuild hermes, using ./work/hermes-3 if available
     image: "ghcr.io/boutproject/hermes-3:${HERMES_TAG:-latest}"
+    # Build as the host user (from .env) so build output isn't root-owned.
+    user: ${UID}:${GID}
     volumes:
       - ${PWD}/work:/hermes_project/work
     environment:
@@ -37,6 +39,8 @@ services:
   build_boutpp:
     # Rebuild BOUT++, using ./work/BOUT-dev if available
     image: "ghcr.io/boutproject/hermes-3:${HERMES_TAG:-latest}"
+    # Build as the host user (from .env) so build output isn't root-owned.
+    user: ${UID}:${GID}
     volumes:
       - ${PWD}/work:/hermes_project/work
     environment:
@@ -46,6 +50,8 @@ services:
     # Rebuild both hermes and BOUT++, using overrides
     # if they are available in ./work
     image: "ghcr.io/boutproject/hermes-3:${HERMES_TAG:-latest}"
+    # Build as the host user (from .env) so build output isn't root-owned.
+    user: ${UID}:${GID}
     volumes:
       - ${PWD}/work:/hermes_project/work
     environment:

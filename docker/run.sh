@@ -32,6 +32,8 @@ notice() { print_message "${LIGHTGREEN}" "$1"; }
 VALID_SERVICES="shell sudo build_hermes build_boutpp build_both hermes fix_permissions jupyter"
 # Services that require at least one argument (e.g. a case path under work/)
 ARG_REQUIRED_SERVICES="hermes"
+# Services that compile in parallel and honour HERMES_BUILD_JOBS
+BUILD_SERVICES="build_hermes build_boutpp build_both"
 
 # Return 0 if $1 appears as a whitespace-separated word in $2
 contains_word() {
@@ -131,6 +133,39 @@ docker_rm() {
   echo "  docker system prune -a --volumes"
 }
 
+# Fail early if the requested parallel build job count exceeds the CPUs Docker
+# exposes. This mirrors the container's --oversubscribe check for MPI runs, but
+# from the host side. HERMES_BUILD_JOBS is resolved the same way docker compose
+# resolves it: the shell environment wins, otherwise the value in .env, otherwise
+# 4. The core count comes from `docker info` (the CPUs available to the Docker
+# engine/VM, which is what the build container sees). Over-requesting would
+# oversubscribe and thrash the CPU, so we refuse it. Returns non-zero to abort.
+check_build_jobs() {
+  local jobs
+  if [ -n "$HERMES_BUILD_JOBS" ]; then
+    jobs="$HERMES_BUILD_JOBS"
+  else
+    jobs=$(sed -n 's/^HERMES_BUILD_JOBS=//p' .env 2>/dev/null | tail -n1)
+    jobs="${jobs:-4}"
+  fi
+
+  # Skip the check if either value isn't a plain integer we can compare.
+  case "$jobs" in
+    "" | *[!0-9]*) return 0 ;;
+  esac
+  local ncores
+  ncores=$(docker info --format '{{.NCPU}}' 2>/dev/null)
+  case "$ncores" in
+    "" | *[!0-9]*) return 0 ;;
+  esac
+
+  if [ "$jobs" -gt "$ncores" ]; then
+    warn "Error: HERMES_BUILD_JOBS=${jobs} exceeds the ${ncores} CPU(s) Docker exposes."
+    warn "Oversubscribed build jobs thrash the CPU. Lower HERMES_BUILD_JOBS to at most ${ncores}, or raise Docker's CPU allocation."
+    return 1
+  fi
+}
+
 run_docker() {
   local service="$1"
 
@@ -183,6 +218,11 @@ run_docker() {
                           warn "For example: run_docker hermes work/test 4"
                           return 1 ;;
     esac
+  fi
+
+  # For build services, abort if the parallel job count exceeds Docker's CPUs.
+  if contains_word "$service" "$BUILD_SERVICES"; then
+    check_build_jobs || return 1
   fi
 
   if [ "$service" = "jupyter" ]; then

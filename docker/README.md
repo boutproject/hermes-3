@@ -12,55 +12,75 @@ The published images (`ghcr.io/boutproject/hermes-3`, `hermes-3-builder`, and `h
 
 ## Quick start for developers
 
-For most developers the fastest way in is `development-setup.sh`. It gives you the
-docker tooling **plus** local checkouts of Hermes-3 and BOUT++ that you can edit and
-rebuild inside the container, so it is the recommended starting point. Everything it
-clones is fetched over **HTTPS**, so no SSH keys are required.
+For most developers the fastest way in is `development-setup.sh`. It sets up the
+docker tooling and wires up editable Hermes-3 and BOUT++ sources that you can rebuild
+inside the container, so it is the recommended starting point. Anything it fetches is
+cloned over **HTTPS**, so no SSH keys are required. It behaves differently depending
+on where you run it:
 
-There are two ways to run it:
+### In place — inside an existing checkout (recommended)
 
-* **Standalone (bootstrap from scratch):** download just this one script and run it.
-  It fetches the `docker` folder from GitHub into a new `hermes-3-docker` folder and
-  sets everything up there:
-    ```bash
-    curl -O https://raw.githubusercontent.com/boutproject/hermes-3/master/docker/development-setup.sh
-    sh development-setup.sh
-    cd hermes-3-docker
-    ```
-* **In place:** run it from the `docker` folder of an existing checkout. It detects
-  that the docker files are already present, skips the fetch, and only sets up the
-  `work` subfolder in place:
-    ```bash
-    cd docker
-    sh development-setup.sh
-    ```
-
-Either way it will:
-
-1. Run `setup.sh` to create the `.env` file and the `work` folder (see
-   [Running without the helper scripts](#running-without-the-helper-scripts) for
-   what these do).
-2. Clone Hermes-3 (`master`) into `work/hermes-3`, and BOUT++ (pinned to the
-   submodule commit Hermes-3 expects) into `work/BOUT-dev`.
-3. Copy the default CMake config files into `work/` so you can tweak the build
-   options.
-
-If you export `GITHUB_USERNAME` first, it also adds a `fork` remote pointing at your
-fork of each repository:
+Run it from the `docker` folder of a checkout you already have. It reuses that
+checkout **directly** as the build source — no second copy is cloned — so
+`./run.sh build_*` compiles your actual working tree, branch and all:
 
 ```bash
-GITHUB_USERNAME=your-username sh development-setup.sh
+cd docker
+sh development-setup.sh
 ```
 
-Because the repositories are cloned over HTTPS you can pull them without any
-credentials. To *push* to your fork, use a
-[personal access token](https://docs.github.com/en/authentication), or switch that
-one remote to SSH afterwards, e.g.
-`git -C work/hermes-3 remote set-url fork git@github.com:your-username/hermes-3.git`.
+It detects the surrounding checkout, then:
 
-Anything you build under `work/` overrides the versions baked into the image (see
-[Overriding Default Builds](#overriding-default-builds-using-the-work-folder)).
-Build and run it with `run.sh`, described next.
+1. Runs `setup.sh` to create the `.env` file and the `work` folder (see
+   [Running without the helper scripts](#running-without-the-helper-scripts)).
+2. Writes a `docker-compose.override.yaml` that bind-mounts the checkout (and its
+   `external/BOUT-dev` submodule) into the `build_hermes`, `build_boutpp` and
+   `build_both` services, pointing their source overrides at it. Compose merges this
+   file automatically. Delete the file to revert to the image's built-in sources.
+3. Copies the default CMake config files into `work/` so you can tweak build options.
+
+The build stays out of your source tree: build output goes to `work/`
+(out-of-source), and the config files disable the in-source
+`git submodule update` that CMake would otherwise run at configure time, so **your
+checkout — including `external/BOUT-dev`'s checked-out state — is not modified**. The
+build services also run as your user (`UID`/`GID` from `.env`), so nothing they write
+to `work/` is root-owned. Because the automatic submodule update is off, the
+checkout's submodules must already be populated; if any are missing the script tells
+you to run `git submodule update --init --recursive` in your checkout first.
+
+To rebuild both your Hermes-3 and your BOUT-dev in one go, use `./run.sh build_both`.
+`./run.sh build_hermes` on its own compiles your Hermes-3 tree against the BOUT++
+already built into the image, not your `external/BOUT-dev`.
+
+### Standalone — bootstrap from scratch
+
+Download just this one script and run it in an empty directory. It fetches the
+`docker` folder from GitHub into a new `hermes-3-docker` folder and then clones the
+sources into `work/`:
+
+```bash
+curl -O https://raw.githubusercontent.com/boutproject/hermes-3/master/docker/development-setup.sh
+sh development-setup.sh
+cd hermes-3-docker
+```
+
+Here it will, in addition to running `setup.sh` and copying the config files:
+
+* Clone Hermes-3 (`master`) into `work/hermes-3`, and BOUT++ (pinned to the submodule
+  commit Hermes-3 expects) into `work/BOUT-dev`, which then override the versions
+  baked into the image (see
+  [Overriding Default Builds](#overriding-default-builds-using-the-work-folder)).
+* If you export `GITHUB_USERNAME` first, add a `fork` remote to each clone pointing at
+  your fork:
+    ```bash
+    GITHUB_USERNAME=your-username sh development-setup.sh
+    ```
+  Because the clones use HTTPS you can pull without credentials. To *push* to your
+  fork, use a [personal access token](https://docs.github.com/en/authentication), or
+  switch that one remote to SSH afterwards, e.g.
+  `git -C work/hermes-3 remote set-url fork git@github.com:your-username/hermes-3.git`.
+
+Either way, build and run with `run.sh`, described next.
 
 ## Building and running with `run.sh`
 
