@@ -27,6 +27,7 @@ on:
       - 'docker/**'
       - '.github/workflows/test_docker_build.yml'
       - '.github/workflows/build*image.yml'
+      - '.github/actions/**'
   workflow_dispatch:  # Allows manual triggering
 
 permissions:
@@ -59,7 +60,7 @@ jobs:
       jupyter: ${{ steps.filter.outputs.jupyter }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect affected images
         uses: dorny/paths-filter@v3
@@ -74,6 +75,7 @@ jobs:
               - 'docker/image_ingredients/spack_config.yaml'
               - 'docker/image_ingredients/docker_entrypoint.sh'
               - '.github/workflows/test_docker_build.yml'
+              - '.github/actions/**'
             # Files that affect the final hermes-3 image build.
             final:
               - 'docker/hermes-3.dockerfile'
@@ -83,6 +85,7 @@ jobs:
               - 'docker/image_ingredients/docker_image_commands.sh'
               - 'docker/image_ingredients/docker_entrypoint.sh'
               - '.github/workflows/test_docker_build.yml'
+              - '.github/actions/**'
             # Files that affect the jupyter image build. This image is built
             # FROM jupyter/scipy-notebook and is independent of the
             # builder->final chain.
@@ -109,64 +112,33 @@ jobs:
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
-            arch: amd64
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
-            arch: arm64
     runs-on: ${{ matrix.runner }}
+    # Spack compiles the full dependency stack here, so allow a generous ceiling.
+    timeout-minutes: 240
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}
-
       - name: Build and push builder image by digest
-        id: build
-        uses: docker/build-push-action@v6
+        uses: ./.github/actions/build-push-digest
         with:
-          context: .
-          file: ${{ env.BUILDER_DOCKERFILE }}
-          platforms: ${{ matrix.platform }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=exp-builder-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=exp-builder-${{ matrix.arch }}
+          image-name: ${{ env.BUILDER_IMAGE_NAME }}
+          dockerfile: ${{ env.BUILDER_DOCKERFILE }}
+          platform: ${{ matrix.platform }}
+          cache-scope: exp-builder
+          # Warm from the production builder cache so a fresh PR isn't cold.
+          cache-fallback-scope: builder
+          token: ${{ secrets.GITHUB_TOKEN }}
           # Credentials for the self-hosted OCI Spack build cache, so the build
           # can pull previously-compiled binaries and push newly-built ones.
           build-args: |
             SPACK_OCI_USER=${{ github.actor }}
-          secrets: |
+          build-secrets: |
             ghcr_token=${{ secrets.GITHUB_TOKEN }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: exp-builder-digests-${{ matrix.arch }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
 
   # Combine the per-arch builder images into the experimental multi-arch tag.
   merge-builder:
@@ -174,32 +146,21 @@ jobs:
     if: needs.changes.outputs.builder == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
+      # Only the local composite action is needed here, not the build context.
+      - name: Checkout repository
+        uses: actions/checkout@v5
         with:
-          path: /tmp/digests
-          pattern: exp-builder-digests-*
-          merge-multiple: true
+          fetch-depth: 1
+          sparse-checkout: .github/actions
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v3
+      - name: Merge digests into experimental builder manifest
+        uses: ./.github/actions/merge-digests
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create experimental builder manifest
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create \
-            -t ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }} \
-            $(printf '${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}@sha256:%s ' *)
-
-      - name: Inspect manifest
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.BUILDER_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}
+          image-name: ${{ env.BUILDER_IMAGE_NAME }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          cache-scope: exp-builder
+          inspect-tag: ${{ env.EXPERIMENTAL_TAG }}
+          tags: type=raw,value=${{ env.EXPERIMENTAL_TAG }}
 
   # ---- Final image ----
 
@@ -227,61 +188,29 @@ jobs:
         include:
           - platform: linux/amd64
             runner: ubuntu-24.04
-            arch: amd64
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
-            arch: arm64
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}
-
       - name: Build and push final image by digest
-        id: build
-        uses: docker/build-push-action@v6
+        uses: ./.github/actions/build-push-digest
         with:
-          context: .
-          file: ${{ env.FINAL_DOCKERFILE }}
-          platforms: ${{ matrix.platform }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=exp-final-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=exp-final-${{ matrix.arch }}
+          image-name: ${{ env.FINAL_IMAGE_NAME }}
+          dockerfile: ${{ env.FINAL_DOCKERFILE }}
+          platform: ${{ matrix.platform }}
+          cache-scope: exp-final
+          # Warm from the production final cache so a fresh PR isn't cold.
+          cache-fallback-scope: final
+          token: ${{ secrets.GITHUB_TOKEN }}
           build-args: |
             BUILDER_TAG=${{ env.EXPERIMENTAL_TAG }}
-            HERMES_BUILD_JOBS=2
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: exp-final-digests-${{ matrix.arch }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
+            HERMES_BUILD_JOBS=4
 
   # Combine the per-arch final images into the experimental multi-arch tag.
   merge-final:
@@ -289,32 +218,21 @@ jobs:
     if: always() && needs.build-final.result == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
+      # Only the local composite action is needed here, not the build context.
+      - name: Checkout repository
+        uses: actions/checkout@v5
         with:
-          path: /tmp/digests
-          pattern: exp-final-digests-*
-          merge-multiple: true
+          fetch-depth: 1
+          sparse-checkout: .github/actions
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v3
+      - name: Merge digests into experimental final manifest
+        uses: ./.github/actions/merge-digests
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create experimental final manifest
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create \
-            -t ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }} \
-            $(printf '${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}@sha256:%s ' *)
-
-      - name: Inspect manifest
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.FINAL_IMAGE_NAME }}:${{ env.EXPERIMENTAL_TAG }}
+          image-name: ${{ env.FINAL_IMAGE_NAME }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          cache-scope: exp-final
+          inspect-tag: ${{ env.EXPERIMENTAL_TAG }}
+          tags: type=raw,value=${{ env.EXPERIMENTAL_TAG }}
 
   # ---- Jupyter image (only when the jupyter dockerfile changed) ----
 
@@ -333,9 +251,10 @@ jobs:
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
