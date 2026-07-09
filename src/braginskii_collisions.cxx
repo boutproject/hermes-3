@@ -149,7 +149,8 @@ void BraginskiiCollisions::collide(GuardedOptions& species1, GuardedOptions& spe
     const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]);
 
     const Field3D nu = filledFrom(nu_12, [&](auto& i) {
-      return nu_12[i] * (A1 / A2) * density1[i] / softFloor(density2[i], density_floor);
+      return nu_12[i] * (A1 / A2) * softFloor(density1[i], density_floor)
+             / softFloor(density2[i], density_floor);
     });
 
     add(species2["collision_frequency"], nu); // Total collision frequency

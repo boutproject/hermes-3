@@ -232,7 +232,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     }
 
     const Field3D tau = 1. / nu;
-    const Field3D P = get<Field3D>(species["pressure"]);
+    const Field3D P = floor(get<Field3D>(species["pressure"]), 0.0);
     const Field3D T = get<Field3D>(species["temperature"]);
     const Field3D N = get<Field3D>(species["density"]);
 
@@ -277,7 +277,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         const Field3D q_cl = eta * Grad_par(V);   // Collisional value
         const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
-        eta = eta / (1. + abs(q_cl / q_fl));
+        eta = eta / (1. + softFloor(q_cl, 1e-15) / softFloor(q_fl, 1e-15));
       }
       eta.getMesh()->communicate(eta);
       eta.applyBoundary("neumann");
