@@ -340,7 +340,7 @@ int Hermes::init(bool restarting) {
 
 	coord->Bxy /= Bnorm;
 	
-        coord->Bxy.applyBoundary("neumann_o2");
+        coord->Bxy.applyBoundary("neumann_o2"); //IB_TODO: Need to apply field3d boundary too below when IB set up?
         mesh->communicate(coord->Bxy);
         coord->Bxy.applyParallelBoundary("parallel_neumann_o2");
 

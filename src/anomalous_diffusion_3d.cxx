@@ -38,9 +38,11 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
                     .withDefault(anomalous_D_par)
                 / diffusion_norm;
 
-  anomalous_D_par.applyBoundary("neumann");
-  mesh->communicate(anomalous_D_par);
-  anomalous_D_par.applyParallelBoundary("parallel_neumann_o1");
+  if (include_D_par) { //IB_TODO: Not needed?
+    anomalous_D_par.applyBoundary("neumann");
+    mesh->communicate(anomalous_D_par);
+    anomalous_D_par.applyParallelBoundary("parallel_neumann_o1");
+  }
 
   anomalous_chi = 0.0;
   include_chi = (mesh->get(anomalous_chi, std::string("chi_") + name) == 0)

@@ -261,13 +261,13 @@ void SheathBoundaryParallel::transform(Options &state) {
       // This ensures that the guard cell values remain positive
       // exp( 2*log(N[i]) - log(N[ip]) )
       if (sheath_extrapolate) {
-	pnt.limitFree(Ne);
-	pnt.limitFree(Te);
-	pnt.limitFree(Pe);
+        pnt.limitFree(Ne);
+        pnt.limitFree(Te);
+        pnt.limitFree(Pe);
       } else {
-	pnt.ynext(Ne) = pnt.ythis(Ne);
-	pnt.ynext(Te) =	pnt.ythis(Te);
-	pnt.ynext(Pe) =	pnt.ythis(Pe);
+        pnt.ynext(Ne) = pnt.ythis(Ne);
+        pnt.ynext(Te) =	pnt.ythis(Te);
+        pnt.ynext(Pe) =	pnt.ythis(Pe);
       }
       
       // Free boundary potential linearly extrapolated
@@ -306,9 +306,9 @@ void SheathBoundaryParallel::transform(Options &state) {
       BoutReal flux = 0.0;
 
       if (pnt.dir < 0.0) {
-	flux = q * coord->cellarea_ydown[i];
+        flux = q * coord->cellarea_ydown[i];
       } else {
-	flux = q * coord->cellarea_yup[i];
+        flux = q * coord->cellarea_yup[i];
       }
 
       // Divide by volume of cell to get energy loss rate (sign depending on vesheath)

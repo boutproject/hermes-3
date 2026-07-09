@@ -467,6 +467,13 @@ void EvolvePressure::finally(const Options& state) {
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
     kappa_par = kappa_coefficient * Pfloor * tau / AA;
 
+    if (immBndry) {
+      kappa_par.name = std::string("kappa_par") + name;
+      if (!immBndry->CheckFieldSetUp(kappa_par.name)) {
+        immBndry->FieldSetup(kappa_par);
+      }
+    }
+
     if (kappa_limit_alpha > 0.0) {
       /*
        * Flux limiter, as used in SOLPS.
@@ -488,32 +495,40 @@ void EvolvePressure::finally(const Options& state) {
       kappa_par = kappa_par / (1. + abs(q_SH / floor(q_fl, 1e-10)));
 
       // Values of kappa on cell boundaries are needed for fluxes
-      kappa_par.applyBoundary("neumann");
+      if (immBndry) {
+        immBndry->SetBoundary(kappa_par); //Defaults to neumann(0.0);
+      } else {
+        kappa_par.applyBoundary("neumann");
+      }
       mesh->communicate(kappa_par);
 
     }
 
 
     if (kappa_par.isFci()) {
-      kappa_par.applyBoundary("neumann");
+      if (immBndry) {
+        immBndry->SetBoundary(kappa_par); //Defaults to neumann(0.0);
+      } else {
+        kappa_par.applyBoundary("neumann");
+      }
       mesh->communicate(kappa_par);
       kappa_par.applyParallelBoundary("parallel_neumann_o1");
     }
 
     yboundary.iter([&](auto& region) {
       for (auto& pnt : region) {
-	pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
+        pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
       }
     });
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
     ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
-    if (    flow_ylow_conduction.isAllocated()) {
+    if (flow_ylow_conduction.isAllocated()) {
       if (flow_ylow.isAllocated()) {
-	flow_ylow += flow_ylow_conduction;
+        flow_ylow += flow_ylow_conduction;
       } else {
-	flow_ylow = flow_ylow_conduction;
+        flow_ylow = flow_ylow_conduction;
       }
     }
 
