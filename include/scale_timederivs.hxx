@@ -22,6 +22,8 @@ struct ScaleTimeDerivs : public NamedComponent<ScaleTimeDerivs> {
                     {"source", "scale_timederivs"}});
   }
 
+  static constexpr auto type = "scale_timederivs";
+
 private:
   Field3D scaling; // The scaling factor applied to each cell
 
