@@ -1134,7 +1134,7 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
   for (int i = mesh->xstart - 1; i <= mesh->xend; i++) {
     // Note: Including one guard cell
     for (int j = mesh->ystart - 1; j <= mesh->yend + 1; j++) {
-      for (int k = mesh->zstart; j <= mesh->zend; k++) {
+      for (int k = mesh->zstart; k <= mesh->zend; k++) {
 
         fddx_xhigh(i, j, k) = 2. * (f(i + 1, j, k) - f(i, j, k))
                               / (coord->dx(i, j, k) + coord->dx(i + 1, j, k));
