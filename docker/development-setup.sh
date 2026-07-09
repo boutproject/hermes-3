@@ -59,7 +59,7 @@ else
   mkdir -p hermes-3-docker
   cd hermes-3-docker
   quiet git init
-  quiet git remote add -f origin git@github.com:boutproject/hermes-3.git
+  quiet git remote add -f origin https://github.com/boutproject/hermes-3.git
   # We only want to pull the "docker" folder for the project
   git config core.sparseCheckout true
   echo "docker" >> .git/info/sparse-checkout
@@ -77,7 +77,7 @@ HERMES_CONFIG_OVERRIDE=work/hermes_config.cmake
 BOUTPP_CONFIG_OVERRIDE=work/boutpp_config.cmake
 
 notice "Cloning hermes-3/master into $PWD/$HERMES_SRC_DIR_OVERRIDE"
-quiet git clone git@github.com:boutproject/hermes-3.git $HERMES_SRC_DIR_OVERRIDE
+quiet git clone https://github.com/boutproject/hermes-3.git $HERMES_SRC_DIR_OVERRIDE
 notice "Copying hermes_config.cmake into $HERMES_CONFIG_OVERRIDE"
 cp image_ingredients/hermes_config.cmake $HERMES_CONFIG_OVERRIDE
 
@@ -85,16 +85,16 @@ cp image_ingredients/hermes_config.cmake $HERMES_CONFIG_OVERRIDE
 BOUT_SUBMODULE_HASH=$(git -C $HERMES_SRC_DIR_OVERRIDE submodule status | grep "BOUT-dev" | awk '{print substr($1, 2)}')
 
 notice "Cloning BOUT-dev/$BOUT_SUBMODULE_HASH into $PWD/$BOUTPP_SRC_DIR_OVERRIDE"
-quiet git clone git@github.com:boutproject/BOUT-dev.git $BOUTPP_SRC_DIR_OVERRIDE
+quiet git clone https://github.com/boutproject/BOUT-dev.git $BOUTPP_SRC_DIR_OVERRIDE
 quiet git -C $BOUTPP_SRC_DIR_OVERRIDE checkout $BOUT_SUBMODULE_HASH
 quiet git -C $BOUTPP_SRC_DIR_OVERRIDE submodule update --init --recursive
 notice "Copying boutpp_config.cmake into $BOUTPP_CONFIG_OVERRIDE"
 cp image_ingredients/boutpp_config.cmake $BOUTPP_CONFIG_OVERRIDE
 
 if [ -n "$GITHUB_USERNAME" ]; then
-    notice "Setting the 'fork' remotes to git@github.com:$GITHUB_USERNAME/hermes-3.git and git@github.com:$GITHUB_USERNAME/BOUT-dev.git."
-    git -C $HERMES_SRC_DIR_OVERRIDE remote add fork git@github.com:$GITHUB_USERNAME/hermes-3.git
-    git -C $BOUTPP_SRC_DIR_OVERRIDE remote add fork git@github.com:$GITHUB_USERNAME/BOUT-dev.git
+    notice "Setting the 'fork' remotes to https://github.com/$GITHUB_USERNAME/hermes-3.git and https://github.com/$GITHUB_USERNAME/BOUT-dev.git."
+    git -C $HERMES_SRC_DIR_OVERRIDE remote add fork https://github.com/$GITHUB_USERNAME/hermes-3.git
+    git -C $BOUTPP_SRC_DIR_OVERRIDE remote add fork https://github.com/$GITHUB_USERNAME/BOUT-dev.git
     quiet git -C $HERMES_SRC_DIR_OVERRIDE fetch fork
     quiet git -C $BOUTPP_SRC_DIR_OVERRIDE fetch fork
 else

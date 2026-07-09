@@ -8,7 +8,8 @@
 # Examples:
 #   ./run.sh shell                 # interactive shell in the image
 #   ./run.sh build_both            # rebuild hermes and BOUT++
-#   ./run.sh hermes work/test      # run a hermes-3 case (argument required)
+#   ./run.sh hermes work/test      # run a hermes-3 case on a single process
+#   ./run.sh hermes work/test 4    # run a hermes-3 case on 4 MPI ranks
 #   ./run.sh jupyter               # start the Jupyter server
 #   ./run.sh cleanup               # tidy up orphaned/stopped containers
 #   ./run.sh rm_docker             # remove all images, containers and volumes
@@ -49,7 +50,8 @@ run_docker_help() {
   echo "  build_hermes     Rebuild hermes, using ./work/hermes-3 if available"
   echo "  build_boutpp     Rebuild BOUT++, using ./work/BOUT-dev if available"
   echo "  build_both       Rebuild both hermes and BOUT++"
-  echo "  hermes <case>    Run a hermes-3 case (requires a path, e.g. work/test)"
+  echo "  hermes <case> [n]  Run a hermes-3 case (path required, e.g. work/test)."
+  echo "                     Optional n runs it on n MPI ranks (default 1)."
   echo "  fix_permissions  Fix ownership of ./work so you can access it"
   echo "  jupyter          Start the Jupyter server on http://localhost:8888"
   echo
@@ -170,6 +172,17 @@ run_docker() {
     warn "Error: the '$service' service requires an argument."
     warn "For example: run_docker $service work/test"
     return 1
+  fi
+
+  # For 'hermes', an optional second argument is the MPI rank count; if given it
+  # must be a positive integer (matches the container's ^[1-9][0-9]*$ check, so
+  # bad input fails here before a container is even started).
+  if [ "$service" = "hermes" ] && [ -n "$2" ]; then
+    case "$2" in
+      *[!0-9]* | "" | 0*) warn "Error: rank count must be a positive integer, got '$2'."
+                          warn "For example: run_docker hermes work/test 4"
+                          return 1 ;;
+    esac
   fi
 
   if [ "$service" = "jupyter" ]; then
