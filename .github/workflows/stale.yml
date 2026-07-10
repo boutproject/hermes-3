@@ -26,5 +26,5 @@ jobs:
           days-before-issue-stale: -1
           # Conservative limit while starting out; raise once behaviour is trusted.
           operations-per-run: 5
-          # Dry run: logs what it *would* do without acting. Disable to go live.
-          debug-only: true
+          # Live: acts on stale PRs.
+          debug-only: false
