@@ -57,6 +57,7 @@ include("./cmake/Sanitizers.cmake")
 
 set(HERMES_SOURCES
     src/amjuel_data.cxx
+    src/bootstrap_current.cxx
     src/braginskii_collisions.cxx
     src/braginskii_conduction.cxx
     src/braginskii_electron_viscosity.cxx
@@ -119,6 +120,7 @@ set(HERMES_SOURCES
     include/adas_neon.hxx
     include/amjuel_data.hxx
     include/anomalous_diffusion.hxx
+    include/bootstrap_current.hxx
     include/classical_diffusion.hxx
     include/cx_reaction.hxx
     include/binormal_stpm.hxx
