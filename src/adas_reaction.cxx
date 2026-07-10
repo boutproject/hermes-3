@@ -237,4 +237,13 @@ void OpenADASChargeExchange::calculate_rates(GuardedOptions&& electron,
     subtract(from_B["energy_source"], energy_exchange);
     add(to_B["energy_source"], energy_exchange);
   }
+
+  // Update collision frequency for the colliding species
+  add(from_A["collision_frequency"], cellAverage([&](BoutReal nb, BoutReal ne, BoutReal te) {
+    return floor(nb, 0.0) * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
+  }, Ne.getRegion("RGN_NOBNDRY"))(Nb, Ne, Te));
+
+  add(from_B["collision_frequency"], cellAverage([&](BoutReal na, BoutReal ne, BoutReal te) {
+    return floor(na, 0.0) * rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
+  }, Ne.getRegion("RGN_NOBNDRY"))(Na, Ne, Te));
 }
