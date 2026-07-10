@@ -6,7 +6,6 @@ on:
 
 permissions:
   pull-requests: write
-  issues: write
 
 jobs:
   stale:
@@ -26,5 +25,5 @@ jobs:
           days-before-issue-stale: -1
           # Conservative limit while starting out; raise once behaviour is trusted.
           operations-per-run: 5
-          # Live: acts on stale PRs.
+          # Live: acts on stale PRs. Set to true to return to dry-run logging.
           debug-only: false
