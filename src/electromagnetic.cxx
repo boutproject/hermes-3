@@ -14,12 +14,12 @@ BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:atol_accept", 1e-6);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:maxits", 1000);
 
 Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* solver)
-    : Component({readIfSet("species:{all_species}:charge"),
-                 writeFinal("species:{all_species}:momentum"),
-                 writeFinal("species:{all_species}:velocity"), readOnly("time"),
-                 readOnly("species:{all_species}:AA"),
-                 readOnly("species:{all_species}:density", Regions::Interior),
-                 readWrite("fields:Apar")}) {
+    : NamedComponent(name, {readIfSet("species:{all_species}:charge"),
+                            writeFinal("species:{all_species}:momentum"),
+                            writeFinal("species:{all_species}:velocity"),
+                            readOnly("time"), readOnly("species:{all_species}:AA"),
+                            readOnly("species:{all_species}:density", Regions::Interior),
+                            readWrite("fields:Apar")}) {
 
   Options& units = alloptions["units"];
   BoutReal Bnorm = units["Tesla"];

@@ -14,7 +14,7 @@
 
 ExternalApar::ExternalApar(std::string name, Options& alloptions,
                            [[maybe_unused]] Solver* solver)
-    : Component({readWrite("fields:Apar_flutter")}) {
+    : NamedComponent(name, {readWrite("fields:Apar_flutter")}) {
 
   auto& options = alloptions[name];
   const std::string apar_name = options["apar_name"]

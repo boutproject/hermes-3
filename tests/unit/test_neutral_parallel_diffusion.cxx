@@ -32,11 +32,6 @@ TEST_F(NeutralParallelDiffusionTest, ComponentRequiresDneut) {
                BoutException);
 }
 
-TEST_F(NeutralParallelDiffusionTest, CreateComponent) {
-  Options options{{"test", {{"dneut", 1.0}}}};
-  const NeutralParallelDiffusion component("test", options, nullptr);
-}
-
 TEST_F(NeutralParallelDiffusionTest, NoNeutrals) {
   Options options{{"test", {{"dneut", 1.0}}}};
   NeutralParallelDiffusion component("test", options, nullptr);

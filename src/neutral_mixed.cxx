@@ -29,7 +29,7 @@ using bout::globals::mesh;
 using ParLimiter = hermes::Limiter;
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
-    : Component({readWrite("species:{name}:{outputs}")}), name(name) {
+    : NamedComponent(name, {readWrite("species:{name}:{outputs}")}), name(name) {
 
   // Normalisations
   const Options& units = alloptions["units"];

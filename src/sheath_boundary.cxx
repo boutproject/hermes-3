@@ -73,20 +73,20 @@ BoutReal SheathBoundary::ionSecondaryElectronEmissionGamma(BoutReal ion_energy) 
 }
 
 SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
-    : Component({
-          readIfSet("species:{all_species}:charge"),
-          readIfSet("species:e:{e_whole_domain}"),
-          writeBoundary("species:e:{e_boundary}"),
-          readWrite("species:e:energy_source"),
-          writeBoundaryIfSet("species:e:{e_optional}"),
-          writeBoundaryReadInteriorIfSet("species:e:pressure"),
-          readIfSet("species:{ions}:adiabatic"),
-          readOnly("species:{ions}:AA"),
-          readWrite("species:{ions}:energy_source"),
-          writeBoundary("species:{ions}:{ion_boundary}"),
-          writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
-          writeBoundaryIfSet("species:{ions}:{ion_optional}"),
-      }) {
+    : NamedComponent(name, {
+                               readIfSet("species:{all_species}:charge"),
+                               readIfSet("species:e:{e_whole_domain}"),
+                               writeBoundary("species:e:{e_boundary}"),
+                               readWrite("species:e:energy_source"),
+                               writeBoundaryIfSet("species:e:{e_optional}"),
+                               writeBoundaryReadInteriorIfSet("species:e:pressure"),
+                               readIfSet("species:{ions}:adiabatic"),
+                               readOnly("species:{ions}:AA"),
+                               readWrite("species:{ions}:energy_source"),
+                               writeBoundary("species:{ions}:{ion_boundary}"),
+                               writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+                               writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+                           }) {
 
   Options& options = alloptions[name];
   const Options& units = alloptions["units"];

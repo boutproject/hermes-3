@@ -27,3 +27,6 @@ views
 
 # Tests
 **/Testing/**
+docker/work/
+docker/.env
+docker/docker-compose.override.yaml

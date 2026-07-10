@@ -4,15 +4,18 @@
 
 #include "component.hxx"
 
-struct ClassicalDiffusion : public Component {
+struct ClassicalDiffusion : public NamedComponent<ClassicalDiffusion> {
   ClassicalDiffusion(std::string name, Options& alloptions, Solver*);
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
+  static constexpr auto type = "classical_diffusion";
+
 private:
   Field2D Bsq; // Magnetic field squared
 
-  bool diagnose; ///< Output additional diagnostics?
-  Field3D Dn; ///< Particle diffusion coefficient
+  bool diagnose;     ///< Output additional diagnostics?
+  Field3D Dn;        ///< Particle diffusion coefficient
   BoutReal custom_D; ///< User-set particle diffusion coefficient override
 
   // Flow diagnostics
@@ -24,7 +27,7 @@ private:
 };
 
 namespace {
-RegisterComponent<ClassicalDiffusion> registercomponentclassicaldiffusion("classical_diffusion");
+RegisterComponent<ClassicalDiffusion> registercomponentclassicaldiffusion;
 }
 
 #endif // CLASSICAL_DIFFUSION_H

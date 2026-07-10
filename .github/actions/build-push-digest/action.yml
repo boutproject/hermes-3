@@ -1,0 +1,110 @@
+name: Build and push image by digest
+description: >
+  Build a single-architecture image with Buildx and push it to the registry by
+  digest only (no tag), then upload the digest as an artifact so a later merge
+  job can assemble a multi-arch manifest. Assumes the repository is already
+  checked out (the build context is the repo root).
+
+inputs:
+  registry:
+    description: Container registry to push to.
+    default: ghcr.io
+  image-name:
+    description: Image repository name (without registry or tag).
+    required: true
+  dockerfile:
+    description: Path to the Dockerfile to build.
+    required: true
+  platform:
+    description: Target platform, e.g. linux/amd64. The arch suffix is derived from this.
+    required: true
+  cache-scope:
+    description: >
+      Names both the GitHub Actions build cache scope and the digest artifact.
+      The arch is appended, so 'final' yields cache scope 'final-amd64' and
+      artifact 'final-digests-amd64'. merge-digests reassembles it from the same
+      cache-scope.
+    required: true
+  token:
+    description: Registry password / token (pass secrets.GITHUB_TOKEN).
+    required: true
+  build-args:
+    description: Newline-separated build args passed to the build.
+    default: ""
+  build-secrets:
+    description: Newline-separated build secrets passed to the build.
+    default: ""
+  cache-fallback-scope:
+    description: >
+      Optional second cache-scope to read (but never write). Lets a build warm
+      itself from another scope's layers, e.g. a PR's experimental build
+      restoring the production base layers instead of building cold.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Derive architecture and cache sources
+      id: vars
+      shell: bash
+      run: |
+        arch="${PLATFORM##*/}"
+        echo "arch=${arch}" >> "$GITHUB_OUTPUT"
+        cache_from="type=gha,scope=${SCOPE}-${arch}"
+        if [ -n "${FALLBACK}" ]; then
+          cache_from="${cache_from}"$'\n'"type=gha,scope=${FALLBACK}-${arch}"
+        fi
+        {
+          echo "cache_from<<EOF"
+          echo "${cache_from}"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        SCOPE: ${{ inputs.cache-scope }}
+        FALLBACK: ${{ inputs.cache-fallback-scope }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to registry ${{ inputs.registry }}
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ github.actor }}
+        password: ${{ inputs.token }}
+
+    - name: Extract Docker metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ inputs.registry }}/${{ inputs.image-name }}
+
+    - name: Build and push image by digest
+      id: build
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ${{ inputs.dockerfile }}
+        platforms: ${{ inputs.platform }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: ${{ steps.vars.outputs.cache_from }}
+        cache-to: type=gha,mode=max,scope=${{ inputs.cache-scope }}-${{ steps.vars.outputs.arch }}
+        build-args: ${{ inputs.build-args }}
+        secrets: ${{ inputs.build-secrets }}
+        outputs: type=image,name=${{ inputs.registry }}/${{ inputs.image-name }},push-by-digest=true,name-canonical=true,push=true
+
+    - name: Export digest
+      shell: bash
+      run: |
+        mkdir -p /tmp/digests
+        digest="${{ steps.build.outputs.digest }}"
+        touch "/tmp/digests/${digest#sha256:}"
+
+    - name: Upload digest
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.cache-scope }}-digests-${{ steps.vars.outputs.arch }}
+        path: /tmp/digests/*
+        if-no-files-found: error
+        retention-days: 1

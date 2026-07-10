@@ -9,9 +9,10 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int nz = f.getNz();
   return Ind3D{(x * ny + y) * nz + z, ny, nz};
 }
-}
+} // namespace
 
 void NoFlowBoundary::transform_impl(GuardedOptions& state) {
+  const std::string& name = objectName();
 
   // Make sure that the state has been set for this species
   ASSERT1(state["species"].isSection(name));
@@ -69,7 +70,7 @@ void NoFlowBoundary::transform_impl(GuardedOptions& state) {
           auto i = indexAt(var, r.ind, mesh->ystart, jz);
           auto im = i.ym();
 
-          var[im] = - var[i];
+          var[im] = -var[i];
         }
       }
     }
@@ -80,7 +81,7 @@ void NoFlowBoundary::transform_impl(GuardedOptions& state) {
           auto i = indexAt(var, r.ind, mesh->yend, jz);
           auto ip = i.yp();
 
-          var[ip] = - var[i];
+          var[ip] = -var[i];
         }
       }
     }

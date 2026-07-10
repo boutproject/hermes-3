@@ -19,12 +19,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using FixedTemperatureTest = FakeMeshFixture;
 
-TEST_F(FixedTemperatureTest, CreateComponent) {
-  Options options = {{"units", {{"eV", 1.0}}}, {"test", {{"temperature", 1.0}}}};
-
-  FixedTemperature component("test", options, nullptr);
-}
-
 TEST_F(FixedTemperatureTest, MustSetTemperature) {
   Options options = {{"units", {{"eV", 1.0}}}, {"test", {{"density", 1.0}}}};
 

@@ -20,13 +20,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using ElectromagneticTest = FakeMeshFixture;
 
-TEST_F(ElectromagneticTest, CreateComponent) {
-  Options options = {
-      {"units", {{"Tesla", 1.0}, {"eV", 1.0}, {"inv_meters_cubed", 1e19}}}};
-
-  Electromagnetic component("test", options, nullptr);
-}
-
 TEST_F(ElectromagneticTest, TransformNoChargedSpecies) {
   Options options = {
       {"units", {{"Tesla", 1.0}, {"eV", 1.0}, {"inv_meters_cubed", 1e19}}}};

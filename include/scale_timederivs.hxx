@@ -10,17 +10,20 @@
 /// This is intended for steady-state calculations
 /// where the aim is to reach ddt -> 0
 ///
-struct ScaleTimeDerivs : public Component {
-  ScaleTimeDerivs(std::string, Options&, Solver*)
-      : Component({readOnly("species:e:temperature"), writeFinal("scale_timederivs")}) {}
+struct ScaleTimeDerivs : public NamedComponent<ScaleTimeDerivs> {
+  ScaleTimeDerivs(std::string name, Options&, Solver*)
+      : NamedComponent(
+            name, {readOnly("species:e:temperature"), writeFinal("scale_timederivs")}) {}
 
   void outputVars(Options& state) override {
-    set_with_attrs(
-        state["scale_timederivs"], scaling,
-        {{"time_dimension", "t"},
-         {"long_name", "Scaling factor applied to all time derivatives"},
-         {"source", "scale_timederivs"}});
+    set_with_attrs(state["scale_timederivs"], scaling,
+                   {{"time_dimension", "t"},
+                    {"long_name", "Scaling factor applied to all time derivatives"},
+                    {"source", "scale_timederivs"}});
   }
+
+  static constexpr auto type = "scale_timederivs";
+
 private:
   Field3D scaling; // The scaling factor applied to each cell
 
@@ -49,8 +52,7 @@ private:
 };
 
 namespace {
-  RegisterComponent<ScaleTimeDerivs> registercomponentscaletimederivs("scale_timederivs");
+RegisterComponent<ScaleTimeDerivs> registercomponentscaletimederivs;
 }
 
 #endif // SCALE_TIMEDERIVS_H
-

@@ -7,11 +7,16 @@
 
 namespace hermes {
 
+struct ConcreteCXReaction : public CXReaction {
+  using CXReaction::CXReaction;
+  static constexpr auto type = "test_cx_reaction";
+};
+
 /**
  * @brief Class to test charge exchange reaction transforms.
  *
  */
-template <typename RTYPE = CXReaction>
+template <typename RTYPE = ConcreteCXReaction>
 class CXReactionTest : public ReactionTest<RTYPE> {
 
 protected:
@@ -122,44 +127,44 @@ protected:
   }
 };
 
-class HHpCXTest_noNeutralMomGain : public CXReactionTest<CXReaction> {
+class HHpCXTest_noNeutralMomGain : public CXReactionTest<ConcreteCXReaction> {
 public:
   HHpCXTest_noNeutralMomGain()
-      : CXReactionTest<CXReaction>("HHpCX_noNeutralMomGain", "h + h+ -> h+ + h") {}
+      : CXReactionTest("HHpCX_noNeutralMomGain", "h + h+ -> h+ + h") {}
   virtual Options generate_state() override {
-    Options state = CXReactionTest<CXReaction>::generate_state();
+    Options state = CXReactionTest<ConcreteCXReaction>::generate_state();
     state["testHHpCX_noNeutralMomGain"]["no_neutral_cx_mom_gain"] = true;
     return state;
   }
 };
 
-class HHpCXTest : public CXReactionTest<CXReaction> {
+class HHpCXTest : public CXReactionTest<ConcreteCXReaction> {
 public:
-  HHpCXTest() : CXReactionTest<CXReaction>("HHpCX", "h + h+ -> h+ + h") {}
+  HHpCXTest() : CXReactionTest("HHpCX", "h + h+ -> h+ + h") {}
 };
 
-class DDpCXTest : public CXReactionTest<CXReaction> {
+class DDpCXTest : public CXReactionTest<ConcreteCXReaction> {
 public:
-  DDpCXTest() : CXReactionTest<CXReaction>("DDpCX", "d + d+ -> d+ + d") {}
+  DDpCXTest() : CXReactionTest("DDpCX", "d + d+ -> d+ + d") {}
 };
 
-class TTpCXTest : public CXReactionTest<CXReaction> {
+class TTpCXTest : public CXReactionTest<ConcreteCXReaction> {
 public:
-  TTpCXTest() : CXReactionTest<CXReaction>("TTpCX", "t + t+ -> t+ + t") {}
+  TTpCXTest() : CXReactionTest("TTpCX", "t + t+ -> t+ + t") {}
 };
 
-class HDpCXTest : public CXReactionTest<CXReaction> {
+class HDpCXTest : public CXReactionTest<ConcreteCXReaction> {
 public:
-  HDpCXTest() : CXReactionTest<CXReaction>("HDpCX", "h + d+ -> h+ + d") {}
+  HDpCXTest() : CXReactionTest("HDpCX", "h + d+ -> h+ + d") {}
 };
 
-class THpCXTest : public CXReactionTest<CXReaction> {
+class THpCXTest : public CXReactionTest<ConcreteCXReaction> {
 public:
-  THpCXTest() : CXReactionTest<CXReaction>("THpCX", "t + h+ -> t+ + h") {}
+  THpCXTest() : CXReactionTest("THpCX", "t + h+ -> t+ + h") {}
 };
-class DTpCXTest : public CXReactionTest<CXReaction> {
+class DTpCXTest : public CXReactionTest<ConcreteCXReaction> {
 public:
-  DTpCXTest() : CXReactionTest<CXReaction>("DTpCX", "d + t+ -> d+ + t") {}
+  DTpCXTest() : CXReactionTest("DTpCX", "d + t+ -> d+ + t") {}
 };
 
 } // namespace hermes

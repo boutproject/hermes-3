@@ -20,13 +20,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using SNBConductionTest = FakeMeshFixture;
 
-TEST_F(SNBConductionTest, CreateComponent) {
-  Options options{
-      {"units",
-       {{"meters", 1.0}, {"eV", 1.0}, {"inv_meters_cubed", 1e19}, {"seconds", 1e-6}}}};
-  SNBConduction component("test", options, nullptr);
-}
-
 TEST_F(SNBConductionTest, Transform) {
   Options options{
       {"units",

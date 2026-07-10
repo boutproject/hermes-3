@@ -13,7 +13,7 @@
 /// P<name>_src   A source of pressure, in Pascals per second
 ///               This can be over-ridden by the `source` option setting.
 ///
-struct EvolveEnergy : public Component {
+struct EvolveEnergy : public NamedComponent<EvolveEnergy> {
   ///
   /// # Inputs
   ///
@@ -54,6 +54,8 @@ struct EvolveEnergy : public Component {
   ///
   void precon(const Options& UNUSED(state), BoutReal gamma) override;
 
+  static constexpr auto type = "evolve_energy";
+
 private:
   std::string name; ///< Short name of the species e.g. h+
 
@@ -66,7 +68,7 @@ private:
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
-  bool thermal_conduction;    ///< Include thermal conduction?
+  bool thermal_conduction; ///< Include thermal conduction?
 
   Field3D nu; ///< Collision frequency for conduction
 
@@ -80,8 +82,8 @@ private:
 
   BoutReal hyper_z; ///< Hyper-diffusion
 
-  bool diagnose;      ///< Output additional diagnostics?
-  bool enable_precon; ///< Enable preconditioner?
+  bool diagnose;                ///< Output additional diagnostics?
+  bool enable_precon;           ///< Enable preconditioner?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
 
   /// Inputs
@@ -101,7 +103,7 @@ private:
 };
 
 namespace {
-RegisterComponent<EvolveEnergy> registercomponentevolveenergy("evolve_energy");
+RegisterComponent<EvolveEnergy> registercomponentevolveenergy;
 }
 
 #endif // EVOLVE_ENERGY_H

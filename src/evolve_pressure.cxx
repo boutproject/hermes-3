@@ -29,8 +29,8 @@
 using bout::globals::mesh;
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
-    : Component({readOnly("species:{name}:{inputs}", Regions::Interior),
-                 readWrite("species:{name}:{outputs}")}),
+    : NamedComponent(name, {readOnly("species:{name}:{inputs}", Regions::Interior),
+                            readWrite("species:{name}:{outputs}")}),
       name(name) {
 
   auto& options = alloptions[name];
@@ -338,11 +338,12 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) +=
-        1e-4
-        * Div_Perp_Lap_FV_Index(
-            floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
-            T);
+    ddt(P) += 1e-4
+              * Div_Perp_Lap_FV_Index(
+                  floor(Field3D{temperature_floor / softFloor(T, 1e-3 * temperature_floor)
+                                - 1.0},
+                        0.0),
+                  T);
   }
 
   if (low_p_diffuse_perp) {
