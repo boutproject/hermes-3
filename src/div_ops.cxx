@@ -1837,8 +1837,62 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
   return result;
 }
 
+// template <bool upwinding>
+// inline BoutReal dagp_fv::xflux(const Field3D& a, const Field3D& f, const Ind3D& i) {
+//   const auto ixp = i.xp();
+//   const auto dx = f[ixp] - f[i];
+//   BoutReal av;
+//   if constexpr (upwinding) {
+//     av = dx > 0 ? a[ixp] : a[i];
+//   } else {
+//     av = 0.5 * (a[i] + a[ixp]);
+//   };
+//   const auto dz =
+//       0.5 * (f[i.zp()] - f[i.zm()] + f[i.zp().xp()] - f[i.zm().xp()]);
+//   return -(fac_XX[i] * dx + fac_XZ[i] * dz) * av;
+// }
+
+// template <bool upwinding>
+// inline BoutReal dagp_fv::zflux(const Field3D& a, const Field3D& f, const Ind3D& i) {
+//   const auto izp = i.zp();
+//   const auto dz = f[izp] - f[i];
+//   BoutReal av;
+//   if constexpr (upwinding) {
+//     av = dz > 0 ? a[izp] : a[i];
+//   } else {
+//     av = 0.5 * (a[i] + a[izp]);
+//   }
+//   const auto dx = 0.5 * (f[i.xp()] - f[i.xm()] + f[izp.xp()] - f[izp.xm()]);
+//   return -(fac_ZX[i] * dx + fac_ZZ[i] * dz) * av;
+// }
+
+
 template <bool upwinding>
 inline BoutReal dagp_fv::xflux(const Field3D& a, const Field3D& f, const Ind3D& i) {
+  const auto F0 = xflux_full<upwinding>(a, f, i);
+
+  if (!immBndry) {
+    return F0;
+  } else {
+    BoutReal alpha = immBndry->xFaceFrac(i);
+    if (alpha == 0.0) {return 0.0;} //No flux if face not open.
+    if (alpha == 1.0) {return F0;}  //Original flux if face fully open.
+
+    //Get offset for gradient interpolation at partial face midpoint.
+    const auto offset = immBndry->xFaceGradOffset(i);
+    if (offset == 0) {return alpha*F0;} //Default to F1 = F0 for edge cases.
+    
+    //TODO: Eventually need xflux_full to get av at face midpoint if not constant everywhere.
+    const auto i2 = offset == 1 ? i.zp() : i.zm();
+    const auto F1 = xflux_full<upwinding>(a, f, i2);
+    const auto w0 = 0.5*(1.0 + alpha);
+    const auto w1 = 0.5*(1.0 - alpha);
+    return alpha*(w0*F0 + w1*F1);
+  }
+}
+
+template <bool upwinding>
+inline BoutReal dagp_fv::xflux_full(const Field3D& a, const Field3D& f, const Ind3D& i) {
   const auto ixp = i.xp();
   const auto dx = f[ixp] - f[i];
   BoutReal av;
@@ -1854,6 +1908,31 @@ inline BoutReal dagp_fv::xflux(const Field3D& a, const Field3D& f, const Ind3D& 
 
 template <bool upwinding>
 inline BoutReal dagp_fv::zflux(const Field3D& a, const Field3D& f, const Ind3D& i) {
+  const auto F0 = zflux_full<upwinding>(a, f, i);
+
+  if (!immBndry) {
+    return F0;
+  } else {
+    //Check partial face fraction for immersed boundaries.
+    BoutReal alpha = immBndry->zFaceFrac(i);
+    if (alpha == 0.0) {return 0.0;} //No flux if face not open.
+    if (alpha == 1.0) {return F0;}  //Original flux if face fully open.
+
+    //Get offset for gradient interpolation at partial face midpoint.
+    const auto offset = immBndry->zFaceGradOffset(i);
+    if (offset == 0) {return alpha*F0;} //Default to F1 = F0.
+
+    //TODO: Eventually need xflux_full to get av at face midpoint if not constant everywhere.
+    const auto i2 = offset == 1 ? i.xp() : i.xm();
+    const auto F1 = zflux_full<upwinding>(a, f, i2);
+    const auto w0 = 0.5*(1.0 + alpha);
+    const auto w1 = 0.5*(1.0 - alpha);
+    return alpha*(w0*F0 + w1*F1);
+  }
+}
+
+template <bool upwinding>
+inline BoutReal dagp_fv::zflux_full(const Field3D& a, const Field3D& f, const Ind3D& i) {
   const auto izp = i.zp();
   const auto dz = f[izp] - f[i];
   BoutReal av;
@@ -1865,6 +1944,7 @@ inline BoutReal dagp_fv::zflux(const Field3D& a, const Field3D& f, const Ind3D& 
   const auto dx = 0.5 * (f[i.xp()] - f[i.xm()] + f[izp.xp()] - f[izp.xm()]);
   return -(fac_ZX[i] * dx + fac_ZZ[i] * dz) * av;
 }
+
 }
 
 const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D &n, const Field3D &g, const Field3D &f, 
