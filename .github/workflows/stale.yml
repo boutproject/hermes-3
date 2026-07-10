@@ -22,15 +22,8 @@ jobs:
             It will be closed in 28 days unless there is new activity.
             Remove the `stale` label or comment to keep it open.
           exempt-pr-labels: 'keep,pinned,security'
-          days-before-issue-stale: 365
-          days-before-issue-close: 28
-          stale-issue-label: stale
-          stale-issue-message: >
-            This issue has had no activity for a year and is marked stale.
-            It will be closed in 28 days unless there is new activity.
-            Remove the `stale` label, comment, or assign it to the
-            "long-term" milestone to keep it open.
-          exempt-issue-milestones: 'long-term'
+          # Never mark issues as stale (-1 disables issue processing).
+          days-before-issue-stale: -1
           # Conservative limit while starting out; raise once behaviour is trusted.
           operations-per-run: 5
           # Dry run: logs what it *would* do without acting. Disable to go live.
