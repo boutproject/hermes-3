@@ -23,7 +23,8 @@ jobs:
           exempt-pr-labels: 'keep,pinned,security'
           # Never mark issues as stale (-1 disables issue processing).
           days-before-issue-stale: -1
-          # Conservative limit while starting out; raise once behaviour is trusted.
-          operations-per-run: 5
+          # Effectively unlimited: large enough to process the whole backlog in one
+          # run (actions/stale has no true "unlimited" value, so we set a high cap).
+          operations-per-run: 1000
           # Live: acts on stale PRs. Set to true to return to dry-run logging.
           debug-only: false
