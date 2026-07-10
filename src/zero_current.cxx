@@ -12,6 +12,7 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : NamedComponent(name,
                      {readIfSet("species:{all_species}:charge"),
                       readIfSet("species:{all_species}:{inputs}", Regions::Interior),
+                      readOnly(fmt::format("species:{}:AA", name)),
                       readWrite(fmt::format("species:{}:velocity", name)),
                       readWrite(fmt::format("species:{}:momentum", name))}),
       name(name) {
@@ -20,10 +21,6 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
   charge = options["charge"].doc("Particle charge. electrons = -1");
 
   ASSERT0(charge != 0.0);
-
-  atomic_mass =
-      options["AA"].doc("Particle atomic number.").withDefault(0.0); // Atomic mass
-  ASSERT0(atomic_mass != 0.0);
 
   substitutePermissions("inputs", {"density", "velocity"});
 }
@@ -79,7 +76,7 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
   velocity = current / (-charge * softFloor(N, 1e-7));
   set(species["velocity"], velocity);
 
-  momentum = atomic_mass * N * velocity;
+  momentum = GET_VALUE(BoutReal, species["AA"]) * N * velocity;
   set(species["momentum"], momentum);
 }
 

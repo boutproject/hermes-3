@@ -24,6 +24,7 @@ struct ZeroCurrent : public NamedComponent<ZeroCurrent> {
     // Get the velocity with boundary condition applied.
     // This is for output only
     velocity = get<Field3D>(state["species"][name]["velocity"]);
+    momentum = get<Field3D>(state["species"][name]["momentum"]);
   }
 
   void outputVars(Options& state) override;
@@ -33,7 +34,6 @@ struct ZeroCurrent : public NamedComponent<ZeroCurrent> {
 private:
   std::string name; ///< Name of this species
   BoutReal charge;  ///< The charge of this species
-  BoutReal atomic_mass; // Atomic mass
 
   Field3D velocity; ///< Species velocity (for writing to output)
   Field3D momentum; ///< Species momentum (for writing to output)
