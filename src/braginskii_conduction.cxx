@@ -234,6 +234,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
 
     Field3D P = GET_VALUE(Field3D, species["pressure"]);
     P.clearParallelSlices();
+    P.setBoundaryTo(get<Field3D>(species["pressure"]), true, true);
     const Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
     const Field3D T = get<Field3D>(species["temperature"]);
     const Field3D N = get<Field3D>(species["density"]);
