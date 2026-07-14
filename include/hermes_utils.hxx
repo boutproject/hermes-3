@@ -3,9 +3,22 @@
 #define HERMES_UTILS_H
 
 #include <algorithm>
+#include <array>
+#include <iterator>
+#include <map>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
-#include "bout/bout_enum_class.hxx"
-#include "bout/traits.hxx"
+#include <bout/bout_enum_class.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
+#include <bout/globals.hxx>
+#include <bout/mesh.hxx>
+#include <bout/region.hxx>
+#include <bout/sys/range.hxx>
+#include <bout/traits.hxx>
 
 inline BoutReal floor(BoutReal value, BoutReal min) { return std::max(value, min); }
 
@@ -15,7 +28,7 @@ inline BoutReal floor(BoutReal value, BoutReal min) { return std::max(value, min
 /// Note: This function cannot be used with min = 0!
 inline BoutReal softFloor(BoutReal value, BoutReal min) {
   value = std::max(value, 0.0);
-  return value + min * exp(-value / min);
+  return value + (min * exp(-value / min));
 }
 
 /// Apply a soft floor value \p f to a field \p var. Any value lower than
@@ -88,7 +101,44 @@ template <typename T, typename = bout::utils::EnableIfField<T>>
 Ind3D indexAt(const T& f, int x, int y, int z) {
   int ny = f.getNy();
   int nz = f.getNz();
-  return Ind3D{(x * ny + y) * nz + z, ny, nz};
+  return Ind3D{(((x * ny) + y) * nz) + z, ny, nz};
+}
+
+/// Utility for iterating over boundary points
+///
+/// The function should take 3 arguments:
+///   void func (index_bndry, index_domain, index_domain2, sign)
+///
+/// index_bndry is the Ind3D index of a point in the boundary
+/// index_domain is the neighboring point in the domain
+/// index_domain2 is the next point into the domain
+/// sign is -1 for lower Y boundaries, +1 for upper Y.
+template <typename Function>
+void iterateBoundaries(Function func) {
+  const int ny = bout::globals::mesh->LocalNy;
+  const int nz = bout::globals::mesh->LocalNz;
+
+  // Lower boundary
+  const int ystart = bout::globals::mesh->ystart;
+  for (RangeIterator r = bout::globals::mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < nz; jz++) {
+      const auto i = Ind3D{(((r.ind * ny) + ystart) * nz) + jz, ny, nz};
+      const auto im = i.ym(); // In boundary
+      const auto ip = i.yp(); // Away from boundary
+      func(im, i, ip, -1);
+    }
+  }
+
+  // Upper boundary
+  const int yend = bout::globals::mesh->yend;
+  for (RangeIterator r = bout::globals::mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = 0; jz < nz; jz++) {
+      auto i = Ind3D{(((r.ind * ny) + yend) * nz) + jz, ny, nz};
+      auto im = i.ym();
+      auto ip = i.yp(); // Into boundary
+      func(ip, i, im, +1);
+    }
+  }
 }
 
 #endif // HERMES_UTILS_H
@@ -126,8 +176,6 @@ inline bool collisionSpeciesMatch(std::string input, const std::string& species1
   bool species2_found = false;
   bool reaction_found = false;
 
-  // output << std::string("\n############################\n");
-
   if (mode == "partial") {
     if (substrings[0].find(species1) != std::string::npos) {
       species1_found = true;
@@ -159,16 +207,9 @@ inline bool collisionSpeciesMatch(std::string input, const std::string& species1
       // output << std::string(" <-- ") << species2 << std::string(" FOUND");
     }
 
-    // else if (mode == "species") {
-
-    // }
-
-    // output << std::endl;
   } else {
     throw BoutException("Collision species match mode must be 'exact' or 'partial'");
   }
-
-  // output << std::string("############################\n");
 
   // Check if the first species matches species1 and the second species matches species2
   return (species1_found && species2_found && reaction_found);
