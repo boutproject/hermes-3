@@ -138,8 +138,8 @@ void NeutralParallelDiffusion::transform_impl(GuardedOptions& state) {
       Field3D Vn = GET_NOBOUNDARY(Field3D, species["velocity"]);
       Field3D NVn = GET_NOBOUNDARY(Field3D, species["momentum"]);
 
-      iterateBoundaries([&](const Ind3D& i_bndry, const Ind3D& i, const Ind3D& ip,
-                            int sign) {
+      iterateBoundaries([&](const Ind3D& i_bndry, const Ind3D& i,
+                            [[maybe_unused]] const Ind3D& ip, int sign) {
         // Neumann boundary on Dn
         Dn[i_bndry] = Dn[i];
 
