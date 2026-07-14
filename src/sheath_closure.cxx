@@ -1,21 +1,31 @@
+#include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
 
 #include "../include/sheath_closure.hxx"
 
-SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
+#include <string>
+
+SheathClosure::SheathClosure(std::string name, Options& alloptions, Solver*)
+    : NamedComponent(name, {readOnly("fields:phi"), readOnly("species:e:density"),
+                            readWrite("species:e:density_source"),
+                            // FIXME: This is only written if temperature is set
+                            readWrite("species:e:energy_source"),
+                            readWrite("fields:DivJextra")}) {
   Options& options = alloptions[name];
 
   BoutReal Lnorm = alloptions["units"]["meters"]; // Length normalisation factor
 
   L_par = options["connection_length"]
               .doc("Field-line connection length in meters")
-              .as<BoutReal>() /
-          Lnorm;
+              .as<BoutReal>()
+          / Lnorm;
 
   sheath_gamma = options["sheath_gamma"]
-          .doc("Sheath heat transmission coefficient (dimensionless)")
-          .withDefault<BoutReal>(6.5);
+                     .doc("Sheath heat transmission coefficient (dimensionless)")
+                     .withDefault<BoutReal>(6.5);
 
-  sheath_gamma_ions = options["sheath_gamma_ions"]
+  sheath_gamma_ions =
+      options["sheath_gamma_ions"]
           .doc("Sheath heat transmission coefficient for ions (dimensionless)")
           .withDefault<BoutReal>(2.0); // Value suggested by Stangeby's book, between eqs.
                                        // (2.92) and (2.93)
@@ -25,26 +35,34 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
                .withDefault<BoutReal>(0.0);
 
   sinks = options["sinks"]
-               .doc("Include sinks of density and energy?")
-               .withDefault<bool>(false);
+              .doc("Include sinks of density and energy?")
+              .withDefault<bool>(false);
 
   output.write("\tL_par = {:e} (normalised)\n", L_par);
+
+  if (sinks) {
+    setPermissions(readOnly("species:{all_species}:{inputs}"));
+    setPermissions(readWrite("species:{non_electrons}:{outputs}"));
+    substitutePermissions("inputs", {"AA", "density", "temperature"});
+    substitutePermissions("outputs", {"density_source", "energy_source"});
+  } else {
+    setPermissions(readIfSet("species:e:temperature"));
+  }
 }
 
-void SheathClosure::transform(Options &state) {
-  AUTO_TRACE();
-  
+void SheathClosure::transform_impl(GuardedOptions& state) {
+
   // Get electrostatic potential
   auto phi = get<Field3D>(state["fields"]["phi"]);
 
-  auto& electrons = state["species"]["e"];
-  
+  auto electrons = state["species"]["e"];
+
   // Electron density
   auto n = get<Field3D>(electrons["density"]);
 
   // Divergence of current through the sheath
   Field3D DivJsh = n * (phi - offset) / L_par;
-  
+
   add(state["fields"]["DivJextra"], // Used in vorticity
       DivJsh);
 
@@ -56,9 +74,9 @@ void SheathClosure::transform(Options &state) {
     // Sheath heat transmission gamma * n * T * cs
 
     auto Te = get<Field3D>(electrons["temperature"]);
-    
-    Field3D qsheath = floor(sheath_gamma * n * Te * sqrt(Te), 0.0);
-    
+
+    Field3D qsheath = floor(Field3D{sheath_gamma * n * Te * sqrt(Te)}, 0.0);
+
     subtract(electrons["energy_source"], qsheath / L_par);
   }
 
@@ -70,10 +88,11 @@ void SheathClosure::transform(Options &state) {
     // standard Bohm boundary conditions for a pure, hydrogenic plasma.]
     Field3D P_total = 0.0;
     Field3D rho_total = 0.0; // mass density
-    Options& allspecies = state["species"];
+    GuardedOptions allspecies = state["species"];
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first];
+      GuardedOptions species = allspecies[kv.first];
 
+      // FIXME: This includes electrons in the calculation. Is that desired?
       const BoutReal A = get<BoutReal>(species["AA"]);
       Field3D Ns = get<Field3D>(species["density"]);
       Field3D Ts = get<Field3D>(species["temperature"]);
@@ -85,10 +104,10 @@ void SheathClosure::transform(Options &state) {
     Field3D c_s = sqrt(P_total / rho_total);
 
     for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first];
+      GuardedOptions species = allspecies[kv.first];
       Field3D Ns = get<Field3D>(species["density"]);
 
-      Field3D sheath_flux = floor(Ns * c_s, 0.0);
+      Field3D sheath_flux = floor(Field3D{Ns * c_s}, 0.0);
       subtract(species["density_source"], sheath_flux / L_par);
 
       if (kv.first != "e") {
@@ -97,7 +116,7 @@ void SheathClosure::transform(Options &state) {
 
         auto Ts = get<Field3D>(species["temperature"]);
 
-        Field3D qsheath = floor(sheath_gamma_ions * Ts * sheath_flux, 0.0);
+        Field3D qsheath = floor(Field3D{sheath_gamma_ions * Ts * sheath_flux}, 0.0);
 
         subtract(species["energy_source"], qsheath / L_par);
       }

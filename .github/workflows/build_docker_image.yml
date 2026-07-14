@@ -1,0 +1,85 @@
+name: Build hermes-3 Docker image
+
+# Configures this workflow to run every time a change is pushed to the master branch,
+# when a release is released (so versioned image tags are published), or when
+# manually triggered.
+on:
+  push:
+    branches:
+      - 'master'
+  release:
+    types: [released]
+
+  workflow_dispatch:  # Allows manual triggering
+
+permissions:
+  contents: read
+  packages: write
+
+# Serialize runs so overlapping push/release/dispatch builds don't race on the
+# shared image tags.
+concurrency:
+  group: build-docker-image
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: boutproject/hermes-3
+  DOCKERFILE: docker/hermes-3.dockerfile
+
+jobs:
+
+  # Build the final image once per architecture on a native runner, pushing each
+  # by digest only. The merge job assembles them into a multi-arch manifest.
+  build-final-image:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Build and push image by digest
+        uses: ./.github/actions/build-push-digest
+        with:
+          image-name: ${{ env.IMAGE_NAME }}
+          dockerfile: ${{ env.DOCKERFILE }}
+          platform: ${{ matrix.platform }}
+          cache-scope: final
+          token: ${{ secrets.GITHUB_TOKEN }}
+          build-args: |
+            BUILDER_TAG=latest
+            HERMES_BUILD_JOBS=4
+
+  # Combine the per-arch images into one multi-arch manifest and apply tags.
+  merge-final-image:
+
+    needs: build-final-image
+    runs-on: ubuntu-latest
+
+    steps:
+      # Only the local composite action is needed here, not the build context.
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/actions
+
+      - name: Merge digests into multi-arch manifest
+        uses: ./.github/actions/merge-digests
+        with:
+          image-name: ${{ env.IMAGE_NAME }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          cache-scope: final
+          inspect-tag: edge

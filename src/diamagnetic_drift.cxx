@@ -6,7 +6,9 @@
 using bout::globals::mesh;
 
 DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
-                                   Solver* UNUSED(solver)) {
+                                   Solver* UNUSED(solver))
+    : NamedComponent(name, {readIfSet("species:{all_species}:{input}"),
+                            readWrite("species:{all_species}:{output}")}) {
 
   // Get options for this component
   auto& options = alloptions[name];
@@ -15,8 +17,8 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
       options["bndry_flux"].doc("Allow fluxes through boundary?").withDefault<bool>(true);
 
   diamag_form = options["diamag_form"]
-    .doc("Form of diamagnetic drift: 0 = gradient; 1 = divergence")
-    .withDefault(Field2D(1.0));
+                    .doc("Form of diamagnetic drift: 0 = gradient; 1 = divergence")
+                    .withDefault(Field2D(1.0));
 
   // Read curvature vector
   Curlb_B.covariant = false; // Contravariant
@@ -25,8 +27,8 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   }
 
   Options& paralleltransform = Options::root()["mesh"]["paralleltransform"];
-  if (paralleltransform.isSet("type") and
-      paralleltransform["type"].as<std::string>() == "shifted") {
+  if (paralleltransform.isSet("type")
+      and paralleltransform["type"].as<std::string>() == "shifted") {
     Field2D I;
     if (mesh->get(I, "sinty")) {
       I = 0.0;
@@ -55,17 +57,28 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
     Curlb_B.y(r.ind, mesh->yend + 1) = -Curlb_B.y(r.ind, mesh->yend);
   }
+
+  // FIXME: density, pressure, and momentum will not be read even if
+  // they are defined if charge and temperature were not defined for
+  // that species.
+  substitutePermissions("input",
+                        {"charge", "temperature", "density", "pressure", "momentum"});
+  // FIXME: These will actually only be written if density, pressure,
+  // and momentum are set, respectively. They also require charge and
+  // temperature to have been set.
+  substitutePermissions("output", {"density_source", "energy_source", "momentum_source"});
 }
 
-void DiamagneticDrift::transform(Options& state) {
+void DiamagneticDrift::transform_impl(GuardedOptions& state) {
   // Iterate through all subsections
-  Options& allspecies = state["species"];
+  GuardedOptions allspecies = state["species"];
 
   for (auto& kv : allspecies.getChildren()) {
-    Options& species = allspecies[kv.first]; // Note: Need non-const
+    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-    if (!(species.isSet("charge") and species.isSet("temperature")))
+    if (!(species.isSet("charge") and species.isSet("temperature"))) {
       continue; // Skip, go to next species
+    }
 
     // Calculate diamagnetic drift velocity for this species
     auto q = get<BoutReal>(species["charge"]);
@@ -85,7 +98,8 @@ void DiamagneticDrift::transform(Options& state) {
       // Gradient form: Curlb_B dot Grad(N T / q)
       Field3D grad_form = Curlb_B * Grad(N * T / q);
 
-      subtract(species["density_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
+      subtract(species["density_source"],
+               diamag_form * div_form + (1. - diamag_form) * grad_form);
     }
 
     if (IS_SET(species["pressure"])) {
@@ -93,14 +107,16 @@ void DiamagneticDrift::transform(Options& state) {
 
       Field3D div_form = FV::Div_f_v(P, vD, bndry_flux);
       Field3D grad_form = Curlb_B * Grad(P * T / q);
-      subtract(species["energy_source"], (5. / 2) * (diamag_form * div_form + (1. - diamag_form) * grad_form));
+      subtract(species["energy_source"],
+               (5. / 2) * (diamag_form * div_form + (1. - diamag_form) * grad_form));
     }
 
     if (IS_SET(species["momentum"])) {
       auto NV = get<Field3D>(species["momentum"]);
       Field3D div_form = FV::Div_f_v(NV, vD, bndry_flux);
       Field3D grad_form = Curlb_B * Grad(NV * T / q);
-      subtract(species["momentum_source"], diamag_form * div_form + (1. - diamag_form) * grad_form);
+      subtract(species["momentum_source"],
+               diamag_form * div_form + (1. - diamag_form) * grad_form);
     }
   }
 }

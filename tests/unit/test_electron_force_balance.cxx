@@ -1,30 +1,25 @@
 
 #include "gtest/gtest.h"
 
+#include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
 
 #include "../../include/electron_force_balance.hxx"
 
 /// Global mesh
-namespace bout{
-namespace globals{
-extern Mesh *mesh;
+namespace bout {
+namespace globals {
+extern Mesh* mesh;
 } // namespace globals
 } // namespace bout
 
 // The unit tests use the global mesh
 using namespace bout::globals;
 
-#include <bout/field_factory.hxx>  // For generating functions
+#include <bout/field_factory.hxx> // For generating functions
 
 // Reuse the "standard" fixture for FakeMesh
 using ElectronForceBalanceTest = FakeMeshFixture;
-
-TEST_F(ElectronForceBalanceTest, CreateComponent) {
-  Options options;
-
-  ElectronForceBalance component("test", options, nullptr);
-}
 
 TEST_F(ElectronForceBalanceTest, MissingElectronPressure) {
   Options options;
@@ -46,6 +41,7 @@ TEST_F(ElectronForceBalanceTest, ZeroPressureGradient) {
   options["species"]["h+"]["density"] = 1.0;
   options["species"]["h+"]["charge"] = 1.0;
 
+  component.declareAllSpecies({"e", "h+"});
   component.transform(options);
 
   // Should have a momentum source, but zero because no pressure gradient
@@ -68,6 +64,7 @@ TEST_F(ElectronForceBalanceTest, WithPressureGradient) {
   options["species"]["h+"]["density"] = 1.0;
   options["species"]["h+"]["charge"] = 1.0;
 
+  component.declareAllSpecies({"e", "h+"});
   component.transform(options);
 
   // Should have a momentum source
@@ -81,12 +78,11 @@ TEST_F(ElectronForceBalanceTest, WithPressureGradient) {
   }
 }
 
-
 TEST_F(ElectronForceBalanceTest, ForceBalance) {
   Options options;
   ElectronForceBalance component("test", options, nullptr);
 
-  options["species"]["e"]["pressure"] =1.0;
+  options["species"]["e"]["pressure"] = 1.0;
   options["species"]["e"]["density"] = 2.0;
   options["species"]["e"]["charge"] = -1.0;
 
@@ -97,6 +93,7 @@ TEST_F(ElectronForceBalanceTest, ForceBalance) {
   options["species"]["ion"]["density"] = 1.0;
   options["species"]["ion"]["charge"] = 3.0;
 
+  component.declareAllSpecies({"e", "ion"});
   component.transform(options);
 
   // Should give ion momentum source charge * E = 3 * 0.5 / 2.0

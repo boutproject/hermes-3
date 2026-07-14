@@ -1,8 +1,8 @@
 /*
-    Copyright B.Dudson, J.Leddy, University of York, September 2016
-              email: benjamin.dudson@york.ac.uk
+    Copyright Hermes-3 contributors, 2016-2025
+              email: dudson2@llnl.gov
 
-    This file is part of Hermes-2 (Hot ion, multifluid).
+    This file is part of Hermes-3 (Hot ion, multifluid).
 
     Hermes is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@ public:
   virtual ~Hermes() {}
 protected:
   int init(bool restarting) override;
-  int rhs(BoutReal t) override;
+  int rhs(BoutReal t, bool linear) override;
   int precon(BoutReal t, BoutReal gamma, BoutReal delta);
 
   /// Add variables to be written to the output file

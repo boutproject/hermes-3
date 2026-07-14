@@ -1,14 +1,15 @@
 
 #include "gtest/gtest.h"
 
+#include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
 
 #include "../../include/sound_speed.hxx"
 
 /// Global mesh
-namespace bout{
-namespace globals{
-extern Mesh *mesh;
+namespace bout {
+namespace globals {
+extern Mesh* mesh;
 } // namespace globals
 } // namespace bout
 
@@ -18,20 +19,15 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using SoundSpeedTest = FakeMeshFixture;
 
-TEST_F(SoundSpeedTest, CreateComponent) {
-  Options options;
-  
-  SoundSpeed component("test", options, nullptr);
-}
-
 TEST_F(SoundSpeedTest, OneSpecies) {
   Options options;
   SoundSpeed component("test", options, nullptr);
-  
+
   options["species"]["e"]["density"] = 2.0;
   options["species"]["e"]["pressure"] = 1.2;
   options["species"]["e"]["AA"] = 1.5;
-  
+
+  component.declareAllSpecies({"e"});
   component.transform(options);
 
   ASSERT_TRUE(options.isSet("sound_speed"));
@@ -42,7 +38,7 @@ TEST_F(SoundSpeedTest, OneSpecies) {
 TEST_F(SoundSpeedTest, TwoSpecies) {
   Options options;
   SoundSpeed component("test", options, nullptr);
-  
+
   options["species"]["e"]["density"] = 2.0;
   options["species"]["e"]["pressure"] = 1.2;
   options["species"]["e"]["AA"] = 1.5;
@@ -50,7 +46,8 @@ TEST_F(SoundSpeedTest, TwoSpecies) {
   options["species"]["h"]["density"] = 3.0;
   options["species"]["h"]["pressure"] = 2.5;
   options["species"]["h"]["AA"] = 0.9;
-  
+
+  component.declareAllSpecies({"e", "h"});
   component.transform(options);
 
   ASSERT_TRUE(options.isSet("sound_speed"));

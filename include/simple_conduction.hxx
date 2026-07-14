@@ -12,9 +12,12 @@
 /// Intended mainly for testing.
 ///
 /// Expressions taken from:
-/// https://farside.ph.utexas.edu/teaching/plasma/lectures1/node35.html
-struct SimpleConduction : public Component {
-  SimpleConduction(std::string name, Options& alloptions, Solver*) : name(name) {
+/// https://farside.ph.utexas.edu/teaching/plasma/lectures1/node55.html
+struct SimpleConduction : public NamedComponent<SimpleConduction> {
+  SimpleConduction(std::string name, Options& alloptions, Solver*)
+      : NamedComponent(name, {readOnly("species:{name}:temperature", Regions::Interior),
+                              readOnly("species:{name}:AA"),
+                              readWrite("species:{name}:energy_source")}) {
     auto& units = alloptions["units"];
     Tnorm = units["eV"];
     Nnorm = units["inv_meters_cubed"];
@@ -52,12 +55,30 @@ struct SimpleConduction : public Component {
               / Nnorm;
 
     boundary_flux = options["conduction_boundary_flux"]
-      .doc("Allow heat conduction through sheath boundaries?")
-      .withDefault<bool>(false);
+                        .doc("Allow heat conduction through sheath boundaries?")
+                        .withDefault<bool>(false);
+
+    if (density <= 0.0) {
+      setPermissions(readOnly("species:{name}:density", Regions::Interior));
+    }
+    substitutePermissions("name", {name});
   }
 
-  void transform(Options& state) override {
-    auto& species = state["species"][name];
+  static constexpr auto type = "simple_conduction";
+
+private:
+  BoutReal kappa0;       ///< Pre-calculated constant in heat conduction coefficient
+  BoutReal Nnorm, Tnorm; ///< Normalisation coefficients
+
+  BoutReal temperature; ///< Fix temperature if > 0
+  BoutReal density;     ///< Fix density if > 0
+
+  bool boundary_flux; ///< Allow flux through sheath boundaries?
+
+  void transform_impl(GuardedOptions& state) override {
+    const std::string& name = objectName();
+
+    auto species = state["species"][name];
 
     // Species time-evolving temperature
     Field3D T = GET_NOBOUNDARY(Field3D, species["temperature"]);
@@ -85,21 +106,10 @@ struct SimpleConduction : public Component {
 
     add(species["energy_source"], DivQ);
   }
-
-private:
-  std::string name;      ///< Name of the species e.g. "e"
-  BoutReal kappa0;       ///< Pre-calculated constant in heat conduction coefficient
-  BoutReal Nnorm, Tnorm; ///< Normalisation coefficients
-
-  BoutReal temperature; ///< Fix temperature if > 0
-  BoutReal density;     ///< Fix density if > 0
-
-  bool boundary_flux;   ///< Allow flux through sheath boundaries?
 };
 
 namespace {
-RegisterComponent<SimpleConduction>
-    registercomponentsimpleconduction("simple_conduction");
+RegisterComponent<SimpleConduction> registercomponentsimpleconduction;
 }
 
 #endif // SIMPLE_CONDUCTION_H

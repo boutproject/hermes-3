@@ -6,15 +6,14 @@
 
 /// Set ion density to a fixed value
 ///
-struct FixedDensity : public Component {
+struct FixedDensity : public NamedComponent<FixedDensity> {
   /// Inputs
   /// - <name>
   ///   - AA
   ///   - charge
   ///   - density   value (expression) in units of m^-3
   FixedDensity(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : name(name) {
-    AUTO_TRACE();
+      : NamedComponent(name, {readWrite("species:{name}:{vars}")}) {
 
     auto& options = alloptions[name];
 
@@ -27,28 +26,13 @@ struct FixedDensity : public Component {
 
     // Get the density and normalise
     N = options["density"].as<Field3D>() / Nnorm;
-  }
-
-  /// Sets in the state the density, mass and charge of the species
-  ///
-  /// - species
-  ///   - <name>
-  ///     - AA
-  ///     - charge
-  ///     - density
-  void transform(Options& state) override {
-    AUTO_TRACE();
-    auto& species = state["species"][name];
-    if (charge != 0.0) { // Don't set charge for neutral species
-      set(species["charge"], charge);
-    }
-    set(species["AA"], AA); // Atomic mass
-    set(species["density"], N);
+    substitutePermissions("name", {name});
+    substitutePermissions("vars", {"AA", "charge", "density"});
   }
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
     auto Nnorm = get<BoutReal>(state["Nnorm"]);
+    const auto& name = objectName();
 
     // Save the density, not time dependent
     set_with_attrs(state[std::string("N") + name], N,
@@ -59,17 +43,34 @@ struct FixedDensity : public Component {
                     {"species", name},
                     {"source", "fixed_density"}});
   }
-private:
-  std::string name; ///< Short name of species e.g "e"
 
+  static constexpr auto type = "fixed_density";
+
+private:
   BoutReal charge; ///< Species charge e.g. electron = -1
   BoutReal AA;     ///< Atomic mass e.g. proton = 1
 
   Field3D N; ///< Species density (normalised)
+
+  /// Sets in the state the density, mass and charge of the species
+  ///
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - charge
+  ///     - density
+  void transform_impl(GuardedOptions& state) override {
+    auto species = state["species"][objectName()];
+    if (charge != 0.0) { // Don't set charge for neutral species
+      set(species["charge"], charge);
+    }
+    set(species["AA"], AA); // Atomic mass
+    set(species["density"], N);
+  }
 };
 
 namespace {
-RegisterComponent<FixedDensity> registercomponentfixeddensity("fixed_density");
+RegisterComponent<FixedDensity> registercomponentfixeddensity;
 }
 
 #endif // FIXED_DENSITY_H

@@ -3,50 +3,204 @@
 #ifndef HERMES_COMPONENT_H
 #define HERMES_COMPONENT_H
 
-#include <bout/options.hxx>
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
+#include <bout/fieldops.hxx>
 #include <bout/generic_factory.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
 
+#include <cmath>
+#include <initializer_list>
 #include <map>
-#include <string>
 #include <memory>
+#include <string>
+#include <type_traits>
+#include <typeinfo>
+#include <utility>
+#include <vector>
+
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
+#include <bout/generic_factory.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
+#include <fmt/base.h>
+#include <fmt/format.h>
+
+#include "guarded_options.hxx"
+#include "hermes_utils.hxx"
+#include "permissions.hxx"
 
 class Solver; // Time integrator
 
+/// Simple struct to store information on the different types of
+/// species present in a simulation.
+struct SpeciesInformation {
+  SpeciesInformation(const std::vector<std::string>& electrons,
+                     const std::vector<std::string>& neutrals,
+                     const std::vector<std::string>& positive_ions,
+                     const std::vector<std::string>& negative_ions)
+      : electrons(electrons), neutrals(neutrals), positive_ions(positive_ions),
+        negative_ions(negative_ions), ions(positive_ions) {
+    finish_construction();
+  }
+
+  SpeciesInformation(const std::initializer_list<std::string> species) {
+    for (auto& sp : species) {
+      // FIXME: identifySpecies only identifies positive ions
+      // FIXME: identifySpecies has no concept of ebeam
+      const SpeciesType type = identifySpeciesType(sp);
+      if (type == SpeciesType::electron) {
+        electrons.push_back(sp);
+      } else if (type == SpeciesType::ion) {
+        positive_ions.push_back(sp);
+      } else if (type == SpeciesType::neutral) {
+        neutrals.push_back(sp);
+      } else {
+        throw BoutException("Species {} has unrecognised type {}", sp, toString(type));
+      }
+    }
+    finish_construction();
+  }
+
+  std::vector<std::string> electrons, neutrals, positive_ions, negative_ions, ions,
+      charged, non_electrons, all_species;
+
+private:
+  void finish_construction() {
+    ions = positive_ions;
+    ions.insert(ions.end(), negative_ions.begin(), negative_ions.end());
+    charged = ions;
+    charged.insert(charged.end(), electrons.begin(), electrons.end());
+    non_electrons = ions;
+    non_electrons.insert(non_electrons.end(), neutrals.begin(), neutrals.end());
+    all_species = charged;
+    all_species.insert(all_species.end(), neutrals.begin(), neutrals.end());
+  }
+};
+
 /// Interface for a component of a simulation model
-/// 
+///
 /// The constructor of derived types should have signature
 ///   (std::string name, Options &options, Solver *solver)
-/// 
+///
 struct Component {
+  /// Initialise the `state_variable_acceess` permissions. Note that
+  /// `{all_species}` in any variable names will be replaced with the
+  /// names of all species being simulated (by calling
+  /// `declareAllSpecies()`, which is done after all components are
+  /// created by a ComponentSchedular).
+  Component(const std::string& name, Permissions&& access_permissions)
+      : name(name), state_variable_access(access_permissions) {}
+
   virtual ~Component() {}
 
-  /// Modify the given simulation state
-  /// All components must implement this function
-  virtual void transform(Options &state) = 0;
-  
+  /// Modify the given simulation state. This method will wrap the
+  /// state in a GuardedOptions object and pass that to the private
+  /// implementation of transform provided by each component.
+  void transform(Options& state);
+
   /// Use the final simulation state to update internal state
   /// (e.g. time derivatives)
-  virtual void finally(const Options &UNUSED(state)) { }
+  virtual void finally(const Options& UNUSED(state)) {}
 
   /// Add extra fields for output, or set attributes e.g docstrings
-  virtual void outputVars(Options &UNUSED(state)) { }
+  virtual void outputVars(Options& UNUSED(state)) {}
 
   /// Add extra fields to restart files
-  virtual void restartVars(Options &UNUSED(state)) { }
+  virtual void restartVars(Options& UNUSED(state)) {}
 
   /// Preconditioning
-  virtual void precon(const Options &UNUSED(state), BoutReal UNUSED(gamma)) { }
-  
+  virtual void precon(const Options& UNUSED(state), BoutReal UNUSED(gamma)) {}
+
   /// Create a Component
   ///
   /// @param type     The name of the component type to create (e.g. "evolve_density")
   /// @param name     The species/name for this instance.
   /// @param options  Component settings: options[name] are specific to this component
   /// @param solver   Time-integration solver
-  static std::unique_ptr<Component> create(const std::string &type, // The type to create
-                                           const std::string &name, // The species/name for this instance
-                                           Options &options,  // Component settings: options[name] are specific to this component
-                                           Solver *solver); // Time integration solver
+  static std::unique_ptr<Component>
+  create(const std::string& type, // The type to create
+         const std::string& name, // The species/name for this instance
+         Options&
+             options, // Component settings: options[name] are specific to this component
+         Solver* solver); // Time integration solver
+
+  /// Tell the component the name of all species in the simulation, by type. It
+  /// will use this information to substitute the following placeholders in
+  /// `state_variable_access`:
+  ///   - electrons (any electron species)
+  ///   - electrons2 (same as above, used for Cartesian product)
+  ///   - neutrals (species with no charge)
+  ///   - neutrals2 (same as above, used for Cartesian product)
+  ///   - positive_ions (ions with a positive charge)
+  ///   - positive_ions2 (same as above, used for Cartesian product)
+  ///   - negative_ions (ions with a negative charge)
+  ///   - negative_ions2 (same as above, used for Cartesian product)
+  ///   - ions (all ions, regardless of sign of charge)
+  ///   - ions2 (same as above, used for Cartesian product)
+  ///   - charged (ions and electrons)
+  ///   - charged2 (same as above, used for Cartesian product)
+  ///   - non_electrons (ions and neutrals)
+  ///   - non_electrons2 (same as above, used for Cartesian product)
+  ///   - all_species (ions, neutrals, and electrons)
+  ///   - all_species2 (same as above, used for Cartesian product)
+  ///
+  /// At the end of this function there is a call to
+  /// Permissions::checkNoRemainingSubstitutions. All substitutions
+  /// must be completed or else an exception will be thrown.
+  void declareAllSpecies(const SpeciesInformation& info);
+
+  const Permissions& getPermissions() const { return state_variable_access; }
+
+  virtual std::string typeName() const = 0;
+
+  std::string objectName() const { return name; }
+
+protected:
+  /// Set the level of access needed by this component for a particular variable.
+  void setPermissions(const std::string& variable,
+                      const Permissions::AccessRights& rights) {
+    state_variable_access.setAccess(variable, rights);
+  }
+  void setPermissions(const Permissions::VarRights& info) {
+    setPermissions(info.name, info.rights);
+  }
+
+  /// Replace a placeholder in the name of variables stored in the access control
+  /// information for this component.
+  void substitutePermissions(const std::string& label,
+                             const std::vector<std::string>& substitution) {
+    state_variable_access.substitute(label, substitution);
+  }
+
+private:
+  std::string name;
+
+  /// Information on which state variables the transform method will read and write.
+  Permissions state_variable_access;
+
+  /// The implementation of the transform method. Modify the given
+  /// simulation state. All components must implement this
+  /// function. It will only allow the reading from/writing to state
+  /// variables with the appropriate permissiosn in
+  /// `state_variable_access`.
+  virtual void transform_impl(GuardedOptions& state) = 0;
+};
+
+/// Subclass of Component that implements the typeName method via CRTP.
+template <typename T>
+struct NamedComponent : public Component {
+  using Component::Component;
+
+  std::string typeName() const final { return T::type; }
 };
 
 ///////////////////////////////////////////////////////////////////
@@ -69,10 +223,19 @@ public:
 ///
 ///     #include "component.hxx"
 ///     namespace {
-///     RegisterComponent<MyComponent> registercomponentmine("mycomponent");
+///     RegisterComponent<MyComponent> registercomponentmine;
 ///     }
+///
+/// In order for this to work, the component class must have a static
+/// constexpr component called `type` containing the name for the
+/// component. This component will need to be convertible to a string.
+///
 template <typename DerivedType>
-using RegisterComponent = ComponentFactory::RegisterInFactory<DerivedType>;
+struct RegisterComponent : public ComponentFactory::RegisterInFactory<DerivedType> {
+  RegisterComponent()
+      : ComponentFactory::RegisterInFactory<DerivedType>(std::string(DerivedType::type)) {
+  }
+};
 
 /// Faster non-printing getter for Options
 /// If this fails, it will throw BoutException
@@ -83,23 +246,32 @@ using RegisterComponent = ComponentFactory::RegisterInFactory<DerivedType>;
 /// @tparam T  The type the option should be converted to
 ///
 /// @param option  The Option whose value will be returned
-template<typename T>
+template <typename T>
 T getNonFinal(const Options& option) {
   if (!option.isSet()) {
     throw BoutException("Option {:s} has no value", option.str());
   }
   try {
     return bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value);
-  } catch (const std::bad_cast &e) {
+  } catch (const std::bad_cast& e) {
     // Convert to a more useful error message
-    throw BoutException("Could not convert {:s} to type {:s}",
-                        option.str(), typeid(T).name());
+    throw BoutException("Could not convert {:s} to type {:s}", option.str(),
+                        typeid(T).name());
   }
+}
+template <typename T>
+T getNonFinal(const GuardedOptions& option) {
+  return getNonFinal<T>(option.get());
 }
 
 #define TOSTRING_(x) #x
 #define TOSTRING(x) TOSTRING_(x)
 
+namespace hermes {
+/// Enable a function if and only if `T` is a (subclass of) `GuardedOptions`
+template <class T>
+using EnableIfGuardedOption = std::enable_if_t<std::is_base_of_v<GuardedOptions, T>>;
+} // namespace hermes
 
 /// Faster non-printing getter for Options
 /// If this fails, it will throw BoutException
@@ -111,8 +283,8 @@ T getNonFinal(const Options& option) {
 ///
 /// @param option  The Option whose value will be returned
 /// @param location  An optional string to indicate where this value is used
-template<typename T>
-T get(const Options& option, const std::string& location = "") {
+template <typename T>
+T get(const Options& option, [[maybe_unused]] const std::string& location = "") {
 #if CHECKLEVEL >= 1
   // Mark option as final, both inside the domain and the boundary
   const_cast<Options&>(option).attributes["final"] = location;
@@ -120,28 +292,32 @@ T get(const Options& option, const std::string& location = "") {
 #endif
   return getNonFinal<T>(option);
 }
+template <typename T>
+T get(const GuardedOptions& option, const std::string& location = "") {
+  return get<T>(option.get(), location);
+}
 
 /// Check if an option can be fetched
 /// Sets the final flag so setting the value
 /// afterwards will lead to an error
 bool isSetFinal(const Options& option, const std::string& location = "");
+bool isSetFinal(const GuardedOptions& option, const std::string& location = "");
 
 #if CHECKLEVEL >= 1
 /// A wrapper around isSetFinal() which captures debugging information
 ///
 /// Usage:
 ///   if (IS_SET(option["value"]));
-#define IS_SET(option) \
-  isSetFinal(option, __FILE__ ":" TOSTRING(__LINE__))
+#define IS_SET(option) isSetFinal(option, __FILE__ ":" TOSTRING(__LINE__))
 #else
-#define IS_SET(option) \
-  isSetFinal(option)
+#define IS_SET(option) isSetFinal(option)
 #endif
 
 /// Check if an option can be fetched
 /// Sets the final flag so setting the value in the domain
 /// afterwards will lead to an error
 bool isSetFinalNoBoundary(const Options& option, const std::string& location = "");
+bool isSetFinalNoBoundary(const GuardedOptions& option, const std::string& location = "");
 
 #if CHECKLEVEL >= 1
 /// A wrapper around isSetFinalNoBoundary() which captures debugging information
@@ -151,8 +327,7 @@ bool isSetFinalNoBoundary(const Options& option, const std::string& location = "
 #define IS_SET_NOBOUNDARY(option) \
   isSetFinalNoBoundary(option, __FILE__ ":" TOSTRING(__LINE__))
 #else
-#define IS_SET_NOBOUNDARY(option) \
-  isSetFinalNoBoundary(option)
+#define IS_SET_NOBOUNDARY(option) isSetFinalNoBoundary(option)
 #endif
 
 #if CHECKLEVEL >= 1
@@ -160,11 +335,9 @@ bool isSetFinalNoBoundary(const Options& option, const std::string& location = "
 ///
 /// Usage:
 ///   auto var = GET_VALUE(Field3D, option["value"]);
-#define GET_VALUE(Type, option) \
-  get<Type>(option, __FILE__ ":" TOSTRING(__LINE__))
+#define GET_VALUE(Type, option) get<Type>(option, __FILE__ ":" TOSTRING(__LINE__))
 #else
-#define GET_VALUE(Type, option) \
-  get<Type>(option)
+#define GET_VALUE(Type, option) get<Type>(option)
 #endif
 
 /// Faster non-printing getter for Options
@@ -179,13 +352,19 @@ bool isSetFinalNoBoundary(const Options& option, const std::string& location = "
 ///
 /// @param option  The Option whose value will be returned
 /// @param location  An optional string to indicate where this value is used
-template<typename T>
-T getNoBoundary(const Options& option, const std::string& location = "") {
+template <typename T>
+T getNoBoundary(const Options& option,
+                [[maybe_unused]] const std::string& location = "") {
 #if CHECKLEVEL >= 1
   // Mark option as final inside the domain
   const_cast<Options&>(option).attributes["final-domain"] = location;
 #endif
   return getNonFinal<T>(option);
+}
+
+template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
+T getNoBoundary(GO&& option, const std::string& location = "") {
+  return getNoBoundary<T>(std::forward<GO>(option).get(Regions::Interior), location);
 }
 
 #if CHECKLEVEL >= 1
@@ -196,21 +375,32 @@ T getNoBoundary(const Options& option, const std::string& location = "") {
 #define GET_NOBOUNDARY(Type, option) \
   getNoBoundary<Type>(option, __FILE__ ":" TOSTRING(__LINE__))
 #else
-#define GET_NOBOUNDARY(Type, option) \
-  getNoBoundary<Type>(option)
+#define GET_NOBOUNDARY(Type, option) getNoBoundary<Type>(option)
 #endif
 
 /// Check whether value is valid, returning true
 /// if invalid i.e contains non-finite values
-template<typename T>
-bool hermesDataInvalid(const T& value) {
+template <typename T>
+bool hermesDataInvalid([[maybe_unused]] const T& value) {
   return false; // Default
 }
 
 /// Check Field3D values.
 /// Doesn't check boundary cells
-template<>
+template <>
 inline bool hermesDataInvalid(const Field3D& value) {
+  for (const auto& i : value.getRegion("RGN_NOBNDRY")) {
+    if (!std::isfinite(value[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Check Field2D values.
+/// Doesn't check boundary cells
+template <>
+inline bool hermesDataInvalid(const Field2D& value) {
   for (auto& i : value.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(value[i])) {
       return true;
@@ -226,7 +416,7 @@ inline bool hermesDataInvalid(const Field3D& value) {
 /// This is to prevent values being modified after use.
 ///
 /// @tparam T The type of the value to set. Usually this is inferred
-template<typename T>
+template <typename T>
 Options& set(Options& option, T value) {
   // Check that the value has not already been used
 #if CHECKLEVEL >= 1
@@ -249,6 +439,17 @@ Options& set(Options& option, T value) {
   return option;
 }
 
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) set(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
+  return set(option, ResT{f});
+}
+
+template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
+decltype(auto) set(GO&& option, T value) {
+  set(std::forward<GO>(option).getWritable(), value);
+  return std::forward<GO>(option);
+}
+
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
 ///
@@ -257,7 +458,7 @@ Options& set(Options& option, T value) {
 /// or getNonFinal.
 ///
 /// @tparam T The type of the value to set. Usually this is inferred
-template<typename T>
+template <typename T>
 Options& setBoundary(Options& option, T value) {
   // Check that the value has not already been used
 #if CHECKLEVEL >= 1
@@ -270,6 +471,18 @@ Options& setBoundary(Options& option, T value) {
   return option;
 }
 
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) setBoundary(Options& option,
+                                  const BinaryExpr<ResT, L, R, Func>& f) {
+  return setBoundary(option, ResT{f});
+}
+
+template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
+decltype(auto) setBoundary(GO&& option, T value) {
+  setBoundary(std::forward<GO>(option).getWritable(Regions::Boundaries), value);
+  return std::forward<GO>(option);
+}
+
 /// Add value to a given option. If not already set, treats
 /// as zero and sets the option to the value.
 ///
@@ -278,19 +491,33 @@ Options& setBoundary(Options& option, T value) {
 ///
 /// @param option  The value to modify (or set if not already set)
 /// @param value   The quantity to add.
-template<typename T>
+template <typename T>
 Options& add(Options& option, T value) {
   if (!option.isSet()) {
     return set(option, value);
   } else {
     try {
-      return set(option, value + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value));
-    } catch (const std::bad_cast &e) {
+      return set(option,
+                 value
+                     + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
+                         option.value));
+    } catch (const std::bad_cast& e) {
       // Convert to a more useful error message
-      throw BoutException("Could not convert {:s} to type {:s}",
-                          option.str(), typeid(T).name());
+      throw BoutException("Could not convert {:s} to type {:s}", option.str(),
+                          typeid(T).name());
     }
   }
+}
+
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) add(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
+  return add(option, ResT{f});
+}
+
+template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
+decltype(auto) add(GO&& option, T value) {
+  add(std::forward<GO>(option).getWritable(), value);
+  return std::forward<GO>(option);
 }
 
 /// Add value to a given option. If not already set, treats
@@ -298,36 +525,148 @@ Options& add(Options& option, T value) {
 ///
 /// @param option  The value to modify (or set if not already set)
 /// @param value   The quantity to add.
-template<typename T>
+template <typename T>
 Options& subtract(Options& option, T value) {
   if (!option.isSet()) {
     return set(option, -value);
   } else {
     try {
-      return set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value) - value);
-    } catch (const std::bad_cast &e) {
+      return set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
+                             option.value)
+                             - value);
+    } catch (const std::bad_cast& e) {
       // Convert to a more useful error message
-      throw BoutException("Could not convert {:s} to type {:s}",
-                          option.str(), typeid(T).name());
+      throw BoutException("Could not convert {:s} to type {:s}", option.str(),
+                          typeid(T).name());
     }
   }
 }
 
-template<typename T>
-void set_with_attrs(Options& option, T value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) subtract(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
+  return subtract(option, ResT{f});
+}
+
+template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
+decltype(auto) subtract(GO&& option, T value) {
+  subtract(std::forward<GO>(option).getWritable(), value);
+  return std::forward<GO>(option);
+}
+
+template <typename T>
+void set_with_attrs(
+    Options& option, T value,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
   option.force(value);
   option.setAttributes(attrs);
 }
 
+template <typename ResT, typename L, typename R, typename Func>
+inline void set_with_attrs(
+    Options& option, const BinaryExpr<ResT, L, R, Func>& f,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(option, ResT{f}, attrs);
+}
+
+template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
+void set_with_attrs(
+    GO&& option, T value,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(std::forward<GO>(option).getWritable(), value, attrs);
+}
+
 #if CHECKLEVEL >= 1
-template<>
-inline void set_with_attrs(Options& option, Field3D value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+template <>
+inline void set_with_attrs(
+    Options& option, const Field3D& value,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
   if (!value.isAllocated()) {
-    throw BoutException("set_with_attrs: Field3D assigned to {:s} is not allocated", option.str());
+    throw BoutException("set_with_attrs: Field3D assigned to {:s} is not allocated",
+                        option.str());
   }
   option.force(value);
   option.setAttributes(attrs);
 }
+
+template <class GO, typename = hermes::EnableIfGuardedOption<GO>>
+inline void set_with_attrs(
+    GO&& option, Field3D value,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(std::forward<GO>(option).getWritable(), std::move(value), attrs);
+}
 #endif
+
+template <>
+struct fmt::formatter<Component> : formatter<string_view> {
+  /// Formatter for Components
+  ///
+  /// By default it will use the format `OBJECT_NAME
+  /// (COMPONENT_TYPE_NAME)`, if the two names are different. If they
+  /// are the same then it will just show the object name. This
+  /// behaviour can be overriden using the format specifiers below:
+  ///
+  /// - ``~n``: Don't show object name
+  /// - ``~t``: Don't show type name
+  /// - ``T``: Always show type name
+  constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator {
+    const auto* it = ctx.begin();
+    const auto* end = ctx.end();
+
+    if (it == end) {
+      return underlying.parse(ctx);
+    }
+
+    while (it != end and *it != ':' and *it != '}') {
+      switch (*it) {
+      case '~':
+        ++it;
+        if (it == end) {
+          throw fmt::format_error("Unrecognised format specifier '~'");
+        }
+        if (*it == 'n') {
+          hide_name = true;
+        } else if (*it == 't') {
+          hide_type = true;
+        } else {
+          throw fmt::format_error(
+              fmt::format("Unrecognised format specifier '~{}'", *it));
+        }
+        ++it;
+        break;
+      case 'T':
+        show_type = true;
+        ++it;
+        break;
+      default:
+        ++it;
+        break;
+      }
+    }
+
+    if (hide_type and show_type) {
+      throw fmt::format_error("Format specifiers 'T' and '~t' are mutually-exclusive");
+    }
+
+    if (it != end and *it != '}') {
+      if (*it != ':') {
+        throw fmt::format_error("invalid format specifier");
+      }
+      ++it;
+    }
+
+    ctx.advance_to(it);
+    return underlying.parse(ctx);
+  }
+
+  auto format(const Component& component, format_context& ctx) const
+      -> format_context::iterator;
+
+private:
+  fmt::formatter<string_view> underlying;
+
+  bool hide_name = false;
+  bool hide_type = false;
+  bool show_type = false;
+};
 
 #endif // HERMES_COMPONENT_H

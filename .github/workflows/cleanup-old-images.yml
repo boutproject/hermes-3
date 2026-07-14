@@ -1,0 +1,83 @@
+name: Clean up old container images
+
+# Prunes ghcr.io/boutproject packages published by this repo:
+#   - untagged (dangling) digests, any age
+#   - sha- tags older than 6 months
+# Never touches semver, YYYY-MM, latest, or edge tags.
+# dataaxiom/ghcr-cleanup-action is manifest-aware, so pruning untagged digests
+# keeps the per-arch children of live multi-arch manifests.
+
+on:
+  # Monthly; offset from the builder build (23 1 1 * *) to avoid racing a push.
+  schedule:
+    - cron: '0 3 15 * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Dry run (report deletions without performing them)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cleanup-old-images
+  cancel-in-progress: false
+
+jobs:
+
+  cleanup-images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - hermes-3
+          - hermes-3-builder
+          - hermes-3-jupyter
+
+    steps:
+      - name: Delete untagged digests (${{ matrix.package }})
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          packages: ${{ matrix.package }}
+          delete-untagged: true
+          dry-run: ${{ inputs.dry-run || false }}
+
+      # 6-month floor keeps the current master's sha- tag.
+      - name: Delete sha- tags older than 6 months (${{ matrix.package }})
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          packages: ${{ matrix.package }}
+          delete-tags: sha-*
+          exclude-tags: latest,edge
+          older-than: 6 months
+          dry-run: ${{ inputs.dry-run || false }}
+
+  # Spack OCI build cache: high-churn, cheap to regenerate (delete = recompile
+  # next build). Prune untagged + entries >6 months, but keep the index tag so
+  # `spack buildcache push --update-index` state is not orphaned.
+  cleanup-spack-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete untagged cache blobs (hermes-3-spack-cache)
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          packages: hermes-3-spack-cache
+          delete-untagged: true
+          dry-run: ${{ inputs.dry-run || false }}
+
+      # index.spack is the Spack OCI index tag; must survive so --update-index state is intact.
+      - name: Delete cache entries older than 6 months (hermes-3-spack-cache)
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          packages: hermes-3-spack-cache
+          older-than: 6 months
+          exclude-tags: index.spack
+          dry-run: ${{ inputs.dry-run || false }}

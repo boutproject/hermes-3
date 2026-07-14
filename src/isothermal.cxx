@@ -1,12 +1,15 @@
 
 #include <bout/constants.hxx>
+#include <bout/mesh.hxx>
 
 #include "../include/isothermal.hxx"
 
-Isothermal::Isothermal(std::string name, Options &alloptions,
-                       Solver *UNUSED(solver))
-    : name(name) {
-  AUTO_TRACE();
+Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(solver))
+    : NamedComponent(
+          name, {readIfSet(fmt::format("species:{}:density", name), Regions::Interior),
+                 readWrite(fmt::format("species:{}:temperature", name)),
+                 // FIXME: This is only written if density is set
+                 readWrite(fmt::format("species:{}:pressure", name))}) {
   Options& options = alloptions[name];
 
   auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
@@ -14,14 +17,13 @@ Isothermal::Isothermal(std::string name, Options &alloptions,
       / Tnorm; // Normalise
 
   diagnose = options["diagnose"]
-    .doc("Save additional output diagnostics")
-    .withDefault<bool>(false);
+                 .doc("Save additional output diagnostics")
+                 .withDefault<bool>(false);
 }
 
-void Isothermal::transform(Options &state) {
-  AUTO_TRACE();
+void Isothermal::transform_impl(GuardedOptions& state) {
 
-  Options& species = state["species"][name];
+  GuardedOptions species = state["species"][objectName()];
 
   set(species["temperature"], T);
 
@@ -35,9 +37,9 @@ void Isothermal::transform(Options &state) {
 }
 
 void Isothermal::outputVars(Options& state) {
-  AUTO_TRACE();
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  const std::string& name = objectName();
 
   // Save the temperature to the output files
   set_with_attrs(state[std::string("T") + name], T,
@@ -58,5 +60,5 @@ void Isothermal::outputVars(Options& state) {
                     {"standard_name", "pressure"},
                     {"species", name},
                     {"source", "isothermal"}});
-   }
+  }
 }

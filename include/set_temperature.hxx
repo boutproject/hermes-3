@@ -18,13 +18,16 @@
 /// type = set_temperature, ...
 ///
 /// temperature_from = e // Set Td = Te
-struct SetTemperature : public Component {
+struct SetTemperature : public NamedComponent<SetTemperature> {
   /// Inputs
   /// - <name>
   ///   - temperature_from   name of species
   SetTemperature(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : name(name) {
-    AUTO_TRACE();
+      : NamedComponent(name, {readIfSet("species:{name}:density", Regions::Interior),
+                              readOnly("species:{from}:temperature"),
+                              readWrite("species:{name}:temperature"),
+                              // FIXME: Only written if density set
+                              readWrite("species:{name}:pressure")}) {
 
     auto& options = alloptions[name];
 
@@ -35,42 +38,16 @@ struct SetTemperature : public Component {
     diagnose = options["diagnose"]
                    .doc("Save additional output diagnostics")
                    .withDefault<bool>(false);
-  }
 
-  ///
-  /// Inputs
-  /// - species
-  ///   - <temperature_from>
-  ///     - temperature
-  ///
-  /// Sets in the state:
-  /// - species
-  ///   - <name>
-  ///     - temperature
-  ///     - pressure (if density is set)
-  ///
-  void transform(Options& state) override {
-    AUTO_TRACE();
-
-    // Get the temperature
-    T = GET_NOBOUNDARY(Field3D, state["species"][temperature_from]["temperature"]);
-
-    // Set temperature
-    auto& species = state["species"][name];
-    set(species["temperature"], T);
-
-    if (isSetFinalNoBoundary(species["density"])) {
-      // Note: The boundary of N may not be set yet
-      auto N = GET_NOBOUNDARY(Field3D, species["density"]);
-      set(species["pressure"], N * T);
-    }
+    substitutePermissions("name", {name});
+    substitutePermissions("from", {temperature_from});
   }
 
   void outputVars(Options& state) override {
-    AUTO_TRACE();
 
     if (diagnose) {
       auto Tnorm = get<BoutReal>(state["Tnorm"]);
+      const std::string& name = objectName();
 
       // Save temperature to output files
       set_with_attrs(state[std::string("T") + name], T,
@@ -84,15 +61,47 @@ struct SetTemperature : public Component {
     }
   }
 
+  static constexpr auto type = "set_temperature";
+
 private:
-  std::string name;             ///< Short name of species e.g "e"
   std::string temperature_from; ///< The species that the temperature is taken from
   Field3D T;                    ///< The temperature
   bool diagnose;                ///< Output diagnostics?
+
+  ///
+  /// Inputs
+  /// - species
+  ///   - <temperature_from>
+  ///     - temperature
+  ///   - <name>
+  ///     - density (if set)
+  ///
+  /// Sets in the state:
+  /// - species
+  ///   - <name>
+  ///     - temperature
+  ///     - pressure (if density is set)
+  ///
+  void transform_impl(GuardedOptions& state) override {
+    const std::string& name = objectName();
+
+    // Get the temperature
+    T = GET_NOBOUNDARY(Field3D, state["species"][temperature_from]["temperature"]);
+
+    // Set temperature
+    auto species = state["species"][name];
+    set(species["temperature"], T);
+
+    if (isSetFinalNoBoundary(species["density"])) {
+      // Note: The boundary of N may not be set yet
+      auto N = GET_NOBOUNDARY(Field3D, species["density"]);
+      set(species["pressure"], N * T);
+    }
+  }
 };
 
 namespace {
-RegisterComponent<SetTemperature> registercomponentsettemperature("set_temperature");
+RegisterComponent<SetTemperature> registercomponentsettemperature;
 }
 
 #endif // SET_TEMPERATURE_H

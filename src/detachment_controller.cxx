@@ -1,5 +1,6 @@
 #include "../include/detachment_controller.hxx"
 
+#include <bout/bout_types.hxx>
 #include <bout/mesh.hxx>
 using bout::globals::mesh;
 #include <algorithm>  // Include for std::max
@@ -8,7 +9,7 @@ using bout::globals::mesh;
 #include <numeric>
 
 BoutReal calculateGradient(const std::vector<BoutReal>& x, const std::vector<BoutReal>& y) {
-    size_t N = x.size();
+    const auto N = x.size();
     BoutReal sum_x = std::accumulate(x.begin(), x.end(), 0.0);
     BoutReal sum_y = std::accumulate(y.begin(), y.end(), 0.0);
     BoutReal sum_xy = 0.0;
@@ -19,8 +20,9 @@ BoutReal calculateGradient(const std::vector<BoutReal>& x, const std::vector<Bou
         sum_x_squared += x[i] * x[i];
     }
     
-    BoutReal numerator = N * sum_xy - sum_x * sum_y;
-    BoutReal denominator = N * sum_x_squared - sum_x * sum_x;
+    const auto N_real = static_cast<BoutReal>(N);
+    const BoutReal numerator = (N_real * sum_xy) - (sum_x * sum_y);
+    const BoutReal denominator = (N_real * sum_x_squared) - (sum_x * sum_x);
     
     if (denominator == 0) {
         return 0.0; // Handle division by zero or return an error code
@@ -29,7 +31,7 @@ BoutReal calculateGradient(const std::vector<BoutReal>& x, const std::vector<Bou
     return numerator / denominator;
 }
 
-void DetachmentController::transform(Options& state) {
+void DetachmentController::transform_impl(GuardedOptions& state) {
 
     std::cout << std::fixed << std::setprecision(15);
 
@@ -40,8 +42,6 @@ void DetachmentController::transform(Options& state) {
 
     // Set the initial value so that if no point has Nn > Ne, the detachment front is
     // at the target.
-
-    bool detachment_front_found = false;
     BoutReal distance_from_upstream = -(coord->dy(0, mesh->ystart - 1, 0) + coord->dy(0, mesh->ystart, 0)) / 4.0;
     // Looking at https://github.com/boutproject/xhermes/blob/main/xhermes/accessors.py#L58
     // dy from the first two cells cancels out
@@ -82,9 +82,8 @@ void DetachmentController::transform(Options& state) {
             // Make sure that the linear interpolation returns a point between the two sample
             // points
             ASSERT2(((x1 < distance_from_upstream) && (distance_from_upstream < x2)));
-            ASSERT2(((0.0 < distance_from_upstream) && (distance_from_upstream < connection_length)));
-
-            detachment_front_found = true;
+            ASSERT2(((0.0 < distance_from_upstream)
+                     && (distance_from_upstream < connection_length)));
             break;
         }
     }

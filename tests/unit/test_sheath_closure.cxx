@@ -1,14 +1,15 @@
 
 #include "gtest/gtest.h"
 
+#include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
 
 #include "../../include/sheath_closure.hxx"
 
 /// Global mesh
-namespace bout{
-namespace globals{
-extern Mesh *mesh;
+namespace bout {
+namespace globals {
+extern Mesh* mesh;
 } // namespace globals
 } // namespace bout
 
@@ -18,25 +19,18 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using SheathClosureTest = FakeMeshFixture;
 
-TEST_F(SheathClosureTest, CreateComponent) {
-  Options options;
-  options["units"]["meters"] = 1.0;
-  options["test"]["connection_length"] = 10;
-  
-  SheathClosure component("test", options, nullptr);
-}
-
 TEST_F(SheathClosureTest, NeedsDensity) {
   Options options;
   options["units"]["meters"] = 1.0;
   options["test"]["connection_length"] = 10;
-  
+
   SheathClosure component("test", options, nullptr);
 
   Options state;
   state["fields"]["phi"] = Field3D(2.0);
 
   // Needs electron density
+  component.declareAllSpecies({"e"});
   ASSERT_THROW(component.transform(state), BoutException);
 }
 
@@ -44,12 +38,13 @@ TEST_F(SheathClosureTest, PhiAndDensity) {
   Options options;
   options["units"]["meters"] = 1.0;
   options["test"]["connection_length"] = 10;
-  
+
   SheathClosure component("test", options, nullptr);
 
   Options state;
   state["fields"]["phi"] = Field3D(2.0);
   state["species"]["e"]["density"] = Field3D(1.5);
+  component.declareAllSpecies({"e"});
   component.transform(state);
 
   ASSERT_TRUE(state["fields"].isSet("DivJextra"));
@@ -60,14 +55,15 @@ TEST_F(SheathClosureTest, Temperature) {
   Options options;
   options["units"]["meters"] = 1.0;
   options["test"]["connection_length"] = 10;
-  
+
   SheathClosure component("test", options, nullptr);
 
   Options state;
   state["fields"]["phi"] = Field3D(2.0);
   state["species"]["e"]["density"] = Field3D(1.5);
   state["species"]["e"]["temperature"] = Field3D(1.2);
-  
+
+  component.declareAllSpecies({"e"});
   component.transform(state);
 
   ASSERT_TRUE(state["fields"].isSet("DivJextra"));

@@ -8,8 +8,9 @@
 ///
 /// This version is intended to match the calculation of neutral diffusion
 /// in SOL-KiT (ca 2022).
-/// 
-struct SOLKITNeutralParallelDiffusion : public Component {
+///
+struct SOLKITNeutralParallelDiffusion
+    : public NamedComponent<SOLKITNeutralParallelDiffusion> {
   ///
   /// alloptions
   ///   - units
@@ -18,41 +19,49 @@ struct SOLKITNeutralParallelDiffusion : public Component {
   ///     - inv_meters_cubed
   ///   - <name>
   ///     - neutral_temperature [eV]
-  ///     
-  SOLKITNeutralParallelDiffusion(std::string name, Options &alloptions, Solver *) {
+  ///
+  SOLKITNeutralParallelDiffusion(std::string name, Options& alloptions, Solver*)
+      : NamedComponent(name, {readOnly("species:{all_species}:{inputs}"),
+                              readOnly("species:{neutrals}:AA"),
+                              readWrite("species:{neutrals}:density_source")}) {
     auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
     auto& options = alloptions[name];
     neutral_temperature = options["neutral_temperature"]
-      .doc("Neutral atom temperature [eV]")
-      .withDefault(3.0)
-      / Tnorm; // Normalise
+                              .doc("Neutral atom temperature [eV]")
+                              .withDefault(3.0)
+                          / Tnorm; // Normalise
 
     auto Nnorm = get<BoutReal>(alloptions["units"]["inv_meters_cubed"]);
     auto rho_s0 = get<BoutReal>(alloptions["units"]["meters"]);
     area_norm = 1. / (Nnorm * rho_s0);
+
+    substitutePermissions("inputs", {"charge", "density"});
   }
+
+  static constexpr auto type = "solkit_neutral_parallel_diffusion";
+
+private:
+  BoutReal neutral_temperature; ///< Fixed neutral t
+  BoutReal area_norm;           ///< Area normalisation [m^2]
 
   ///
   /// Inputs
   ///  - species
-  ///    - <all neutrals>    # Applies to all neutral species
-  ///      - AA
+  ///    - <all species>
+  ///      - AA       [neutral species only]
+  ///      - charge
   ///      - density
   ///
   /// Sets
   ///  - species
-  ///    - <name>
+  ///    - <neutral species>   # Applies to all neutral species
   ///      - density_source
-  void transform(Options &state) override;
-
-private:
-  BoutReal neutral_temperature;  ///< Fixed neutral t
-  BoutReal area_norm; ///< Area normalisation [m^2]
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
 RegisterComponent<SOLKITNeutralParallelDiffusion>
-    register_solkit_neutral_parallel_diffusion("solkit_neutral_parallel_diffusion");
+    register_solkit_neutral_parallel_diffusion;
 }
 
 #endif // SOLKIT_NEUTRAL_PARALLEL_DIFFUSION_H

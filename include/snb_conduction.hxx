@@ -19,66 +19,78 @@
 /// Important: If evolving electron pressure, disable thermal
 /// conduction or that will continue to add Spitzer heat conduction.
 ///
-/// ```
-/// [hermes]
-/// components = e, ..., collisions, snb_conduction
+/// \code{ini}
+///     [hermes]
+///     components = e, ..., collisions, snb_conduction
 ///
-/// [e]
-/// type = evolve_pressure, ...
-/// thermal_conduction = false # For evolve_pressure
+///     [e]
+///     type = evolve_pressure, ...
+///     thermal_conduction = false # For evolve_pressure
 ///
-/// [snb_conduction]
-/// diagnose = true # Saves heat flux diagnostics
-/// ```
+///     [snb_conduction]
+///     diagnose = true # Saves heat flux diagnostics
+/// \endcode
 ///
 /// # Useful references:
 ///
 ///  *  Braginskii equations by R.Fitzpatrick:
-///     http://farside.ph.utexas.edu/teaching/plasma/Plasmahtml/node35.html
+///     http://farside.ph.utexas.edu/teaching/plasma/Plasmahtml/node54.html
 ///
 ///  *  J.P.Brodrick et al 2017: https://doi.org/10.1063/1.5001079 and
 ///     https://arxiv.org/abs/1704.08963
 ///
 ///  *  Shurtz, Nicolai and Busquet 2000: https://doi.org/10.1063/1.1289512
 ///
-struct SNBConduction : public Component {
+struct SNBConduction : public NamedComponent<SNBConduction> {
 
   /// Inputs
   ///  - <name>
   ///    - diagnose   Saves Div_Q_SH and Div_Q_SNB
-  SNBConduction(std::string name, Options& alloptions, Solver*) : snb(alloptions[name]) {
-    AUTO_TRACE();
+  SNBConduction(std::string name, Options& alloptions, Solver*)
+      : NamedComponent(name,
+                       {readOnly("species:e:density"), readOnly("species:e:temperature"),
+                        readWrite("species:e:energy_source")}),
+        snb(alloptions[name]) {
     auto& options = alloptions[name];
 
+    auto& units = alloptions["units"];
+    rho_s0 = get<BoutReal>(units["meters"]);
+    Tnorm = get<BoutReal>(units["eV"]);
+    Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
+    Omega_ci = 1. / get<BoutReal>(units["seconds"]);
+
     diagnose = options["diagnose"]
-      .doc("Save additional output diagnostics")
-      .withDefault<bool>(false);
+                   .doc("Save additional output diagnostics")
+                   .withDefault<bool>(false);
   }
+
+  void outputVars(Options& state) override;
+
+  static constexpr auto type = "snb_conduction";
+
+private:
+  bout::HeatFluxSNB snb;
+
+  BoutReal rho_s0, Tnorm, Nnorm, Omega_ci; ///< Normalisations for units
+  Field3D Div_Q_SH, Div_Q_SNB;             ///< Divergence of heat fluxes
+
+  bool diagnose; ///< Output additional diagnostics?
 
   /// Inputs
   /// - species
   ///   - e
   ///     - density
-  ///     - collision_frequency
+  ///     - temperature
   ///
   /// Sets
   /// - species
   ///   - e
   ///     - energy_source
-  void transform(Options& state) override;
-
-  void outputVars(Options& state) override;
-private:
-  bout::HeatFluxSNB snb;
-
-  Field3D Div_Q_SH, Div_Q_SNB; ///< Divergence of heat fluxes
-
-  bool diagnose; ///< Output additional diagnostics?
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
-RegisterComponent<SNBConduction> registercomponentsnbconduction("snb_conduction");
+RegisterComponent<SNBConduction> registercomponentsnbconduction;
 }
 
 #endif // SNB_CONDUCTION_H
-

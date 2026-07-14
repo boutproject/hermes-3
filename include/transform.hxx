@@ -6,17 +6,19 @@
 
 /// Apply changes to the state
 ///
-struct Transform : public Component {
+struct Transform : public NamedComponent<Transform> {
   Transform(std::string name, Options& options, Solver*);
 
-  void transform(Options& state) override;
+  static constexpr auto type = "transform";
 
 private:
   std::map<std::string, std::string> transforms;
+
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
-RegisterComponent<Transform> registercomponenttransform("transform");
+RegisterComponent<Transform> registercomponenttransform;
 }
 
 #endif // TRANSFORM_H

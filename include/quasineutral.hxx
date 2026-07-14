@@ -13,7 +13,7 @@
 ///
 /// Saves the density to the output (dump) files as N<name>
 ///
-struct Quasineutral : public Component {
+struct Quasineutral : public NamedComponent<Quasineutral> {
   /// Inputs
   /// ------
   ///
@@ -23,33 +23,41 @@ struct Quasineutral : public Component {
   ///     - charge   Required to have a particle charge
   ///     - AA       Atomic mass
   ///
-  Quasineutral(std::string name, Options &alloptions, Solver *UNUSED(solver));
+  Quasineutral(std::string name, Options& alloptions, Solver* UNUSED(solver));
 
-  /// 
+  /// Get the final density for output
+  /// including any boundary conditions applied
+  void finally(const Options& state) override;
+
+  void outputVars(Options& state) override;
+
+  static constexpr auto type = "quasineutral";
+
+private:
+  std::string name; ///< Name of this species
+  BoutReal charge;  ///< The charge of this species
+  BoutReal AA;      ///< Atomic mass
+
+  Field3D density; ///< The density (for writing to output)
+
+  ///
+  /// Reads in state
+  /// - species
+  ///   - <all species>
+  ///     - charge  [if density and charge are set]
+  ///     - density [if density and charge are set]
+  ///
   /// Sets in state
   /// - species
   ///   - <name>
   ///     - density
   ///     - charge
   ///     - AA
-  void transform(Options &state) override;
-
-  /// Get the final density for output
-  /// including any boundary conditions applied
-  void finally(const Options &state) override;
-
-  void outputVars(Options &state) override;
-private:
-  std::string name; ///< Name of this species
-  BoutReal charge;  ///< The charge of this species
-  BoutReal AA;      ///< Atomic mass
-
-  Field3D density;  ///< The density (for writing to output)
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
-RegisterComponent<Quasineutral>
-    registercomponentquasineutral("quasineutral");
+RegisterComponent<Quasineutral> registercomponentquasineutral;
 }
 
 #endif // QUASINEUTRAL

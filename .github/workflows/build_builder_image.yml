@@ -1,0 +1,148 @@
+name: Build hermes-3-builder and hermes-3 Docker images
+
+# Configures this workflow to run when a release is released, or when manually triggered.
+on:
+  workflow_dispatch:  # Allows manual triggering
+  release:
+    types: [released]
+  schedule:
+    # Run monthly, at 1:23AM UTC on the 1st
+    - cron: '23 1 1 * *'
+
+permissions:
+  contents: read
+  packages: write
+
+# Serialize runs so overlapping push/schedule/dispatch builds don't race on
+# the shared image tags. Don't cancel an in-progress build (it may already be
+# pushing binaries to the OCI cache).
+concurrency:
+  group: build-builder-image
+  cancel-in-progress: false
+
+env:
+  BUILDER_IMAGE_NAME: boutproject/hermes-3-builder
+  FINAL_IMAGE_NAME: boutproject/hermes-3
+  BUILDER_DOCKERFILE: docker/hermes-3-builder.dockerfile
+  FINAL_DOCKERFILE: docker/hermes-3.dockerfile
+
+jobs:
+
+  # Build the builder image once per architecture on a native runner, pushing
+  # each by digest only. The merge job below assembles them into a single
+  # multi-arch manifest.
+  build-builder-image:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.runner }}
+    # Spack compiles the full dependency stack here, so allow a generous ceiling.
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Build and push image by digest
+        uses: ./.github/actions/build-push-digest
+        with:
+          image-name: ${{ env.BUILDER_IMAGE_NAME }}
+          dockerfile: ${{ env.BUILDER_DOCKERFILE }}
+          platform: ${{ matrix.platform }}
+          cache-scope: builder
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Credentials for the self-hosted OCI Spack build cache, so the build
+          # can pull previously-compiled binaries and push newly-built ones.
+          build-args: |
+            SPACK_OCI_USER=${{ github.actor }}
+          build-secrets: |
+            ghcr_token=${{ secrets.GITHUB_TOKEN }}
+
+  # Combine the per-arch builder images into one multi-arch manifest and apply tags.
+  merge-builder-image:
+
+    needs: build-builder-image
+    runs-on: ubuntu-latest
+
+    steps:
+      # Only the local composite action is needed here, not the build context.
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/actions
+
+      - name: Merge digests into multi-arch manifest
+        uses: ./.github/actions/merge-digests
+        with:
+          image-name: ${{ env.BUILDER_IMAGE_NAME }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          cache-scope: builder
+          inspect-tag: edge
+
+  # Build the final image per architecture, each FROM the matching-arch builder,
+  # pushing by digest; then merge into a multi-arch manifest.
+  build-final-image:
+
+    needs: merge-builder-image
+    if: needs.merge-builder-image.result == 'success'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Build and push image by digest
+        uses: ./.github/actions/build-push-digest
+        with:
+          image-name: ${{ env.FINAL_IMAGE_NAME }}
+          dockerfile: ${{ env.FINAL_DOCKERFILE }}
+          platform: ${{ matrix.platform }}
+          cache-scope: final
+          token: ${{ secrets.GITHUB_TOKEN }}
+          build-args: |
+            BUILDER_TAG=edge
+            HERMES_BUILD_JOBS=4
+
+  merge-final-image:
+
+    needs: build-final-image
+    runs-on: ubuntu-latest
+
+    steps:
+      # Only the local composite action is needed here, not the build context.
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/actions
+
+      - name: Merge digests into multi-arch manifest
+        uses: ./.github/actions/merge-digests
+        with:
+          image-name: ${{ env.FINAL_IMAGE_NAME }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          cache-scope: final
+          inspect-tag: edge

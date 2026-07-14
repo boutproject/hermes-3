@@ -3,8 +3,9 @@
 #include <bout/mesh.hxx>
 using bout::globals::mesh;
 
-void UpstreamDensityFeedback::transform(Options& state) {
-  Options& species = state["species"][name];
+void UpstreamDensityFeedback::transform_impl(GuardedOptions& state) {
+  const std::string& name = objectName();
+  GuardedOptions species = state["species"][name];
 
   // Doesn't need all boundaries to be set
   Field3D N = getNoBoundary<Field3D>(species["density"]);
@@ -24,8 +25,8 @@ void UpstreamDensityFeedback::transform(Options& state) {
 
     // Integrate using Trapezium rule
     if (time > density_error_lasttime) { // Since time can decrease
-      density_error_integral += (time - density_error_lasttime) * 0.5 *
-        (error + density_error_last);
+      density_error_integral +=
+          (time - density_error_lasttime) * 0.5 * (error + density_error_last);
     }
 
     if ((density_error_integral < 0.0) && density_integral_positive) {
@@ -64,6 +65,7 @@ void UpstreamDensityFeedback::transform(Options& state) {
     const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
     const BoutReal Mi = get<BoutReal>(species["AA"]);
     // Internal energy source
-    add(species["energy_source"], 0.5 * Mi * SQ(V) * source_multiplier * density_source_shape);
+    add(species["energy_source"],
+        0.5 * Mi * SQ(V) * source_multiplier * density_source_shape);
   }
 }

@@ -13,7 +13,7 @@
 /// P<name>_src   A source of pressure, in Pascals per second
 ///               This can be over-ridden by the `source` option setting.
 ///
-struct EvolveEnergy : public Component {
+struct EvolveEnergy : public NamedComponent<EvolveEnergy> {
   ///
   /// # Inputs
   ///
@@ -23,13 +23,9 @@ struct EvolveEnergy : public Component {
   ///   - diagnose             Output additional diagnostic fields?
   ///   - evolve_log           Evolve logarithm of pressure? Default is false
   ///   - hyper_z              Hyper-diffusion in Z
-  ///   - kappa_coefficient    Heat conduction constant. Default is 3.16 for
-  ///   electrons, 3.9 otherwise
-  ///   - kappa_limit_alpha    Flux limiter, off by default.
   ///   - poloidal_flows       Include poloidal ExB flows? Default is true
   ///   - precon               Enable preconditioner? Note: solver may not use it even if
   ///   enabled.
-  ///   - thermal_conduction   Include parallel heat conduction? Default is true
   ///
   /// - E<name>  e.g. "Ee", "Ed+"
   ///   - source     Source of energy [W / s].
@@ -40,20 +36,6 @@ struct EvolveEnergy : public Component {
   ///
   EvolveEnergy(std::string name, Options& options, Solver* solver);
 
-  /// Inputs
-  /// - species
-  ///   - <name>
-  ///     - density
-  ///     - velocity
-  ///
-  /// Sets
-  /// - species
-  ///   - <name>
-  ///     - pressure
-  ///     - temperature
-  ///
-  void transform(Options& state) override;
-
   ///
   /// Optional inputs
   ///
@@ -61,7 +43,6 @@ struct EvolveEnergy : public Component {
   ///   - <name>
   ///     - velocity. Must have sound_speed or temperature
   ///     - energy_source
-  ///     - collision_rate  (needed if thermal_conduction on)
   /// - fields
   ///   - phi      Electrostatic potential -> ExB drift
   ///
@@ -72,6 +53,8 @@ struct EvolveEnergy : public Component {
   /// Preconditioner
   ///
   void precon(const Options& UNUSED(state), BoutReal gamma) override;
+
+  static constexpr auto type = "evolve_energy";
 
 private:
   std::string name; ///< Short name of the species e.g. h+
@@ -85,29 +68,42 @@ private:
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
-  bool thermal_conduction;    ///< Include thermal conduction?
-  BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
-                              ///< calculation
-  BoutReal kappa_limit_alpha; ///< Flux limit if >0
+  bool thermal_conduction; ///< Include thermal conduction?
+
+  Field3D nu; ///< Collision frequency for conduction
 
   bool evolve_log; ///< Evolve logarithm of E?
   Field3D logE;    ///< Natural logarithm of E
 
   BoutReal density_floor; ///< Minimum density for calculating T
-  Field3D kappa_par;      ///< Parallel heat conduction coefficient
 
   Field3D source; ///< External power source
   Field3D Se;     ///< Total energy source
 
   BoutReal hyper_z; ///< Hyper-diffusion
 
-  bool diagnose;      ///< Output additional diagnostics?
-  bool enable_precon; ///< Enable preconditioner?
+  bool diagnose;                ///< Output additional diagnostics?
+  bool enable_precon;           ///< Enable preconditioner?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
+
+  /// Inputs
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - density
+  ///     - velocity
+  ///
+  /// Sets
+  /// - species
+  ///   - <name>
+  ///     - pressure
+  ///     - temperature
+  ///
+  void transform_impl(GuardedOptions& state) override;
 };
 
 namespace {
-RegisterComponent<EvolveEnergy> registercomponentevolveenergy("evolve_energy");
+RegisterComponent<EvolveEnergy> registercomponentevolveenergy;
 }
 
 #endif // EVOLVE_ENERGY_H
