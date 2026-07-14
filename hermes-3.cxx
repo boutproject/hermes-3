@@ -189,6 +189,12 @@ int Hermes::init(bool restarting) {
   options["conduction_method"] = hermes::conduction_typename;
   options["conduction_method"].setConditionallyUsed();
 
+  hermes::check_state_values =
+      options["check_state_values"]
+          .doc("Check that all values are finite when set in the state? "
+               "(only active when compiled with CHECK >= 1)")
+          .withDefault(true);
+
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
   Nnorm = options["Nnorm"].doc("Reference density [m^-3]").withDefault(1e19);
@@ -299,9 +305,24 @@ int Hermes::init(bool restarting) {
   return 0;
 }
 
+namespace {
+/// Clear all values in an options tree, keeping the node tree alive
+/// so it can be reused by the next RHS evaluation rather than rebuilt.
+void clearOptionValues(Options& node) {
+  if (node.isValue()) {
+    // Move-assignment resets the value/attributes but keeps the parent pointer
+    node = Options{nullptr, node.str()};
+  } else {
+    for (auto& child : node) {
+      clearOptionValues(child.second);
+    }
+  }
+}
+} // namespace
+
 int Hermes::rhs(BoutReal time, bool linear) {
   // Need to reset the state, since fields may be modified in transform steps
-  state = Options();
+  clearOptionValues(state);
 
   set(state["time"], time);
   state["units"] = units.copy();

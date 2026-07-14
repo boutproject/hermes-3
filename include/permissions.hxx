@@ -7,6 +7,7 @@
 #include <ostream>
 #include <regex>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -142,7 +143,7 @@ public:
   ///     permissions.setAccess("species:he:density",
   ///                           {Regions::Nowhere, Regions::All,
   ///                           Regions::Interior, Regions::Nowhere})
-  /// 
+  ///
   /// or, equivalently,
   ///
   ///     permissions.setAccess("species:he:density",
@@ -237,9 +238,15 @@ private:
   /// string indicates the name of the variable from which the access
   /// rights were derived. It will be empty if there are no matching
   /// entries.
-  VarRights bestMatchRights(const std::string& variable) const;
+  ///
+  /// Results are memoised in `match_cache`; the reference returned is
+  /// invalidated by any change to the permissions.
+  const VarRights& bestMatchRights(const std::string& variable) const;
 
   std::map<std::string, AccessRights> variable_permissions;
+
+  /// Cache of bestMatchRights results, cleared when variable_permissions changes.
+  mutable std::unordered_map<std::string, VarRights> match_cache;
 
   static const std::regex LABEL_RE;
 };
