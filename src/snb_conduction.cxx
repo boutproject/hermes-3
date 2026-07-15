@@ -8,8 +8,11 @@ void SNBConduction::transform_impl(GuardedOptions& state) {
 
   GuardedOptions electrons = state["species"]["e"];
   // Note: Needs boundary conditions on temperature
-  const Field3D Te = GET_VALUE(Field3D, electrons["temperature"]) * Tnorm; // eV
-  const Field3D Ne = GET_VALUE(Field3D, electrons["density"]) * Nnorm;     // In m^-3
+  Field3D Te = GET_VALUE(Field3D, electrons["temperature"]); 
+  Field3D Ne = GET_VALUE(Field3D, electrons["density"]);
+
+  const Field3D Telim = softFloor(Te, temperature_floor) * Tnorm; // eV
+  const Field3D Nelim = softFloor(Ne, density_floor) * Nnorm;     // In m^-3
 
   // SNB non-local heat flux. Also returns the Spitzer-Harm value for comparison
   // Note: Te in eV, Ne in Nnorm
@@ -17,7 +20,7 @@ void SNBConduction::transform_impl(GuardedOptions& state) {
   mesh->getCoordinates()->dy *= rho_s0; // Convert distances to m
 
   // Inputs in eV and m^-3
-  Div_Q_SNB = snb.divHeatFlux(Te, Ne, &Div_Q_SH);
+  Div_Q_SNB = snb.divHeatFlux(Telim, Nelim, &Div_Q_SH);
 
   // Restore the metric tensor
   mesh->getCoordinates()->dy = dy_orig;

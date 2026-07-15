@@ -59,6 +59,15 @@ struct SNBConduction : public NamedComponent<SNBConduction> {
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     Omega_ci = 1. / get<BoutReal>(units["seconds"]);
 
+    density_floor = options["density_floor"]
+                        .doc("A minimum density used when dividing NVn by Nn. "
+                            "Normalised units.")
+                        .withDefault(1e-8); 
+                          
+    temperature_floor = options["temperature_floor"]
+                            .doc("Low temperature scale for low_T_diffuse_perp")
+                            .withDefault<BoutReal>(0.1) / Tnorm;
+
     diagnose = options["diagnose"]
                    .doc("Save additional output diagnostics")
                    .withDefault<bool>(false);
@@ -73,6 +82,8 @@ private:
 
   BoutReal rho_s0, Tnorm, Nnorm, Omega_ci; ///< Normalisations for units
   Field3D Div_Q_SH, Div_Q_SNB;             ///< Divergence of heat fluxes
+
+  BoutReal density_floor, temperature_floor;   
 
   bool diagnose; ///< Output additional diagnostics?
 
