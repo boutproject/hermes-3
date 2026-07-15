@@ -1,16 +1,28 @@
 
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/globals.hxx>
+#include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
+#include "../include/component.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/guarded_options.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/neutral_mixed.hxx"
+#include "../include/permissions.hxx"
 
 #include <algorithm>
+#include <string>
 
 using bout::globals::mesh;
 
@@ -322,7 +334,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
             0.5 * (3. * Nn(r.ind, mesh->ystart, jz) - Nn(r.ind, mesh->ystart + 1, jz)),
             0.0);
 
-        BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
+        const BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
 
         Nn(r.ind, mesh->ystart - 1, jz) = 2 * nnwall - Nn(r.ind, mesh->ystart, jz);
 
@@ -350,7 +362,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
         const BoutReal nnwall = std::max(
             0.5 * (3. * Nn(r.ind, mesh->yend, jz) - Nn(r.ind, mesh->yend - 1, jz)), 0.0);
 
-        BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
+        const BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
 
         Nn(r.ind, mesh->yend + 1, jz) = 2 * nnwall - Nn(r.ind, mesh->yend, jz);
 
@@ -391,7 +403,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
 }
 
 void NeutralMixed::finally(const Options& state) {
-  auto& localstate = state["species"][name];
+  const auto& localstate = state["species"][name];
 
   // extract auxiliary variables derived from
   // Nn, Pn, NVn, from the local state
@@ -417,7 +429,7 @@ void NeutralMixed::finally(const Options& state) {
   // Nnlim Used where division by neutral density is needed
   Nnlim = softFloor(Nn, density_floor);
   // Tnlim used where positivity of Tn is required
-  Field3D Tnlim = softFloor(Tn, temperature_floor);
+  const Field3D Tnlim = softFloor(Tn, temperature_floor);
   // Pnlim used where positivity of Pn is required
   Pnlim = softFloor(Pn, pressure_floor);
   logPnlim = log(Pnlim);
@@ -426,72 +438,79 @@ void NeutralMixed::finally(const Options& state) {
   // Calculate cross-field diffusion from collision frequency
   //
   //
-
-  // Pseudo-collisionality representing domain size based neutral MFP limit
-  nu_pseudo_mfp = sqrt(Tnlim / AA) / neutral_lmax;
-
-  if (localstate.isSet("collision_frequency")) {
-    // Collisionality
-    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
-    if (collision_names.empty()) { // Calculate only once - at the beginning
-
-      if (diffusion_collisions_mode == "afn") {
-        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
-
-          std::string collision_name = collision.second.name();
-
-          if ( // Charge exchange
-              (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
-              // Ionisation
-              (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) or
-              // Neutral-neutral collisions
-              (collisionSpeciesMatch(collision_name, name, name, "coll", "exact"))) {
-            collision_names.push_back(collision_name);
-          }
-        }
-        // Multispecies mode: all collisions and CX are included
-      } else if (diffusion_collisions_mode == "multispecies") {
-        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
-
-          std::string collision_name = collision.second.name();
-
-          if ( // Charge exchange
-              (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
-              // Any collision (en, in, ee, ii, nn)
-              (collisionSpeciesMatch(collision_name, name, "", "coll", "partial"))) {
-            collision_names.push_back(collision_name);
-          }
-        }
-
-      } else {
-        throw BoutException("\ndiffusion_collisions_mode for {:s} must be either "
-                            "multispecies or braginskii",
-                            name);
-      }
-
-      if (collision_names.empty()) {
-        throw BoutException("\tNo collisions found for {:s} in neutral_mixed for "
-                            "selected collisions mode",
-                            name);
-      }
-
-      // Write chosen collisions to log file
-      output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ", name,
-                        diffusion_collisions_mode);
-      for (const auto& collision : collision_names) {
-        output_info.write("{:s} ", collision);
-      }
-      output_info.write("\n");
-    }
-
-    // Collect the collisionalities based on list of names
-    nu = 0;
-    for (const auto& collision_name : collision_names) {
-      nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
-    }
-
+  const Field3D Rnn = sqrt(Tnlim / AA)
+                      / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+  if (collisionality_override > 0.0) {
+    // user has set an override for collision frequency
+    Dnn = (Tn / AA) / collisionality_override;
   } else {
-    nu = 0.0;
+    if (localstate.isSet("collision_frequency")) {
+      // Collisionality
+      // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+      if (collision_names.empty()) { // Calculate only once - at the beginning
+
+        if (diffusion_collisions_mode == "afn") {
+          for (const auto& collision :
+               localstate["collision_frequencies"].getChildren()) {
+
+            const std::string collision_name = collision.second.name();
+
+            if ( // Charge exchange
+                (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
+                // Ionisation
+                (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) or
+                // Neutral-neutral collisions
+                (collisionSpeciesMatch(collision_name, name, name, "coll", "exact"))) {
+              collision_names.push_back(collision_name);
+            }
+          }
+          // Multispecies mode: all collisions and CX are included
+        } else if (diffusion_collisions_mode == "multispecies") {
+          for (const auto& collision :
+               localstate["collision_frequencies"].getChildren()) {
+
+            const std::string collision_name = collision.second.name();
+
+            if ( // Charge exchange
+                (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
+                // Any collision (en, in, ee, ii, nn)
+                (collisionSpeciesMatch(collision_name, name, "", "coll", "partial"))) {
+              collision_names.push_back(collision_name);
+            }
+          }
+
+        } else {
+          throw BoutException("\ndiffusion_collisions_mode for {:s} must be either "
+                              "multispecies or braginskii",
+                              name);
+        }
+
+        if (collision_names.empty()) {
+          throw BoutException("\tNo collisions found for {:s} in neutral_mixed for "
+                              "selected collisions mode",
+                              name);
+        }
+
+        // Write chosen collisions to log file
+        output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ", name,
+                          diffusion_collisions_mode);
+        for (const auto& collision : collision_names) {
+          output_info.write("{:s} ", collision);
+        }
+        output_info.write("\n");
+      }
+
+      // Collect the collisionalities based on list of names
+      nu = 0;
+      for (const auto& collision_name : collision_names) {
+        nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
+      }
+
+      // Dnn = Vth^2 / sigma
+      Dnn = (Tnlim / AA) / (nu + Rnn);
+    } else {
+      Dnn = (Tnlim / AA) / Rnn;
+    }
   }
 
   nu_total = nu + nu_pseudo_mfp;
