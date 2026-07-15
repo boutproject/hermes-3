@@ -90,12 +90,11 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                               "Default 13.6 eV (hydrogen ground-state ionisation potential). "
                               "Set to 0 to disable the electron ionisation energy loss.")
                          .withDefault<BoutReal>(13.6);
-                      
-
     core_ionise_multiplier =
         options["core_ionise_multiplier"]
             .doc("Multiply the core ionised flux by this factor. Should be >=0 and <= 1")
             .withDefault<BoutReal>(1.0);
+
     if ((core_ionise_multiplier < 0.0) or (core_ionise_multiplier > 1.0)){
       throw BoutException("Core ionise multipliers must be betweeen 0 and 1");
     }
