@@ -56,7 +56,16 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 } // namespace
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver)
-    : NamedComponent(name, {readWrite("fields:vorticity"), readWrite("fields:phi")}) {
+    : NamedComponent(
+          name,
+          {
+              readWrite("fields:vorticity"),
+              readWrite("fields:phi"),
+              // FIXME: These are only read if (has AA and pressure) or (diamagnetic and has pressure)
+              readIfSet("species:{charged}:charge"),
+              readIfSet("species:{charged}:AA"),
+              readIfSet("species:{charged}:pressure", Regions::Interior),
+          }) {
 
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
@@ -185,10 +194,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   }
 
   if (diamagnetic) {
-    // FIXME: These will only be read if BOTH charge and pressure are set
-    setPermissions(readIfSet("species:{charged}:pressure", Regions::Interior));
-    setPermissions(readIfSet("species:{all_species}:charge"));
-    // FIXME: The weay transform_impl is currently written,
+    // FIXME: The way transform_impl is currently written,
     // energy_source is set for neutral species with an explicit
     // charge declared as 0 if diamagnetic_polarisation == true. I
     // suspect that's a mistake though.
@@ -230,6 +236,15 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+
+  if (phi_boundary_relax) {
+    setPermissions(readOnly("time"));
+  } else {
+    setPermissions(readIfSet("species:e:temperature", Regions::Interior));
+  }
+  if (vort_dissipation or phi_dissipation) {
+    setPermissions(readOnly("sound_speed"));
+  }
 }
 
 void RelaxPotential::transform_impl(GuardedOptions& state) {
