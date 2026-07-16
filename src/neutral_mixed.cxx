@@ -101,17 +101,21 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   neutral_lmax = options["neutral_lmax"]
                      .doc("Maximum neutral mean free path in [m]. Used to calculate "
                           "collisionality floor.")
-                     .withDefault(0.1)
+                     .withDefault(1.0)
                  / meters;
 
   limiter_gradient_floor = options["limiter_gradient_floor"]
                                .doc("Floor for |grad log Pn| in the D limiter "
-                                    "denominator. Normalised inverse-length units.")
-                               .withDefault(1.0e-3);
+                                    "denominator. Higher values improve robustness "
+                                    "in shallow Pn gradients but may affect the answer. "
+                                    "Normalised inverse-length units.")
+                               .withDefault(1.0e-2);
 
   limiter_gradient_ceiling = options["limiter_gradient_ceiling"]
                                  .doc("Ceiling for |grad log Pn| in the D limiter "
-                                      "denominator. Normalised inverse-length units.")
+                                      "denominator. Lower values can improve robustness "
+                                      "in steep Pn gradients but may affect the answer. "
+                                      "Normalised inverse-length units.")
                                  .withDefault(0.1);
 
   flux_limit =
@@ -154,7 +158,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   diffusion_collisions_mode = options["diffusion_collisions_mode"]
                                   .doc("Can be multispecies: all enabled collisions "
                                        "excl. IZ, or afn: CX, IZ and NN collisions")
-                                  .withDefault<std::string>("multispecies");
+                                  .withDefault<std::string>("afn");
 
   if (precondition) {
     inv = Laplacian::create(&options["precon_laplace"]);
