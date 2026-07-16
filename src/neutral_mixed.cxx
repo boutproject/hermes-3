@@ -458,21 +458,22 @@ void NeutralMixed::finally(const Options& state) {
   // set through the ceiling coefficient Dmax.
   if (flux_limit > 0.0) {
 
-    // Thermal speed in a non-drifting Maxwellian [Stangeby eq. 2.21, p.67]
-    const Field3D Vn_th = sqrt(8.0 * Tnlim / (PI * AA));
+    // Mean speed in a non-drifting Maxwellian [Stangeby eq. 2.21, p.67]
+    const Field3D vn_bar = sqrt(8.0 * Tnlim / (PI * AA));
 
+    // See documentation
     // Particle flux is 0.25 * Nn * Vth [Stangeby, under eq. 2.24, p.67]; the Nn
     // factor enters at the operator.
-    // The gradient has a smooth user-set ceiling, which aids robustness in transients.
+    // The gradient is regularised.
+    // It has a smooth user-set ceiling, which aids robustness in transients.
     // It also has a smooth floor to avoid division by zero while keeping differentiability.
-    const Vector3D grad_logPnlim = Grad_perp(logPnlim);
-    const Field3D gradient_squared = grad_logPnlim * grad_logPnlim;
-    const Field3D gradient_squared_ceiled =
-        gradient_squared * SQ(limiter_gradient_ceiling)
-        / (gradient_squared + SQ(limiter_gradient_ceiling));
+    const Vector3D g = Grad_perp(logPnlim); // Inverse Pn gradient length scale
+    const Field3D g_sq = g * g;
+    const BoutReal g_max_sq = SQ(limiter_gradient_ceiling);
+    const Field3D g_ceil = g_sq * g_max_sq / (g_sq + g_max_sq);
+    const Field3D g_reg = sqrt(g_ceil + SQ(limiter_gradient_floor));
 
-    Dmax = flux_limit * 0.25 * Vn_th
-           / sqrt(gradient_squared_ceiled + SQ(limiter_gradient_floor));
+    Dmax = flux_limit * 0.25 * vn_bar / g_reg;
   }
 
   // Hard upper limit on the diffusion coefficient. Clamp Dmax down to whichever
