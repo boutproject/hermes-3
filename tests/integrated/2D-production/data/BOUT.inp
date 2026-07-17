@@ -1,21 +1,21 @@
 
 # Run one RHS
-nout = 1                  
-timestep = 0.0001        
+nout = 1
+timestep = 0.0001
 
 MZ = 1
 NXPE = 1
 
 
-tnorm_setting = 100 
-core_ti = 1500 / tnorm_setting   
-core_ne = 7e19 / hermes:Nnorm 
+tnorm_setting = 100
+core_ti = 1500 / tnorm_setting
+core_ne = 7e19 / hermes:Nnorm
 
 initial_ti = core_ti * 0.1
 initial_ne = core_ne * 1
 
 initial_pi = initial_ti * initial_ne
- 
+
 
 [input]
 error_on_unused_options = true    # Prevents crash from custom inputs
@@ -87,7 +87,7 @@ pfr_recycle_multiplier = 1
 pfr_recycle_energy = 3.5
 
 neutral_pump = true
-pump_recycle_multiplier = 0.968   
+pump_recycle_multiplier = 0.995
 
 target_fast_recycle_energy_factor = 0.48
 target_fast_recycle_fraction = 0.80
@@ -141,12 +141,12 @@ bndry_core = free_o3  # This allows density and energy advection out of core
 bndry_all = neumann
 
 [Nd]
-bndry_sol = neumann 
+bndry_sol = neumann
 bndry_core = free_o3  # This allows density and energy advection out of core
 bndry_all = neumann
 
 [Td]
-bndry_sol = neumann  
+bndry_sol = neumann
 bndry_all = neumann
 
 [Dnnd]
@@ -195,4 +195,3 @@ type = (
         d+ + e -> d,          # Deuterium recombination
         d + d+ -> d+ + d,     # Charge exchange
        )
-
