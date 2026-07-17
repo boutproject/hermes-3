@@ -706,51 +706,143 @@ In the pressure equation, the first row contains the parallel and perpendicular 
 by the compression term, the perpendicular and parallel conduction (diffusion of temperature) and perpendicular and parallel
 viscous heating, finally followed by the energy sources.
 
-While parallel momentum is evolved and is exchanged with the plasma parallel momentum, the advection of momentum is neglected in the perpendicular direction,
-resulting in the pressure diffusion model, where the pressure gradient is balanced by frictional forces. This is similar to Fickian diffusion with the pressure
-gradient replacing the density gradient as the flow driver, in an approach similar to that taken in nuclear fission neutronic transport modelling and several other edge codes.
+While parallel momentum is evolved and is exchanged with the plasma parallel momentum, the advection of momentum is neglected in the perpendicular direction.
+Instead, perpendicular advection is achieved through a pressure diffusion approach, where the pressure gradient is balanced by frictional forces and inertial terms are dropped. 
+This is similar to Fickian diffusion with the pressure gradient replacing the density gradient as the flow driver. This approach is similar to that taken in nuclear fission neutronic
+transport modelling and is typical of fluid neutral models in other codes.
 
-The perpendicular velocity is calculated as:
+The perpendicular neutral particle flux is:
+
+.. math::
+   \begin{aligned}
+   \Gamma_{\perp,n_n} =& n_n \mathbf{v}_{\perp},
+   \end{aligned}
+
+with the perpendicular velocity :math:`v_{\perp}` calculated as:
 
 .. math::
 
    \begin{aligned}
-   v_{\perp} =& -D_n \frac{1}{P_n} \nabla_{\perp} p_n
+   v_{\perp} =& -D_n \frac{1}{p_n} \nabla_{\perp} p_n = -D_n \nabla_{\perp} \ln p_n.
    \end{aligned}
 
-Where in the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`ln(P_n)`, which helps
-preserve pressure positivity. 
+In the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`\nabla_{\perp} \ln P_n` for numerical reasons. 
 
-The diffusion coefficients are defined as:
+The unlimited diffusion coefficient is defined as:
 
 .. math::
 
    \begin{aligned} 
-   D_n =& \frac{v_{th,n}^{2}}{\nu_{n, tot}} = \frac{T_n}{m_n \nu_{n, tot}} \\
-   \kappa_{n} =& \frac{5}{2} D_n N_n \\
-   \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
+   D_{n,unlim} =& \frac{v_{th,n}^{2}}{\nu_{n}}
+      = \frac{T_n}{m_n \nu_n} \\
    \end{aligned}
 
-Where :math:`v_{th,n}= \sqrt{\frac{T_n}{m_n}}` is the thermal velocity of neutrals and :math:`\nu_{n, tot}` is the total
-neutral collisionality.  When the `AFN` diffusion collision mode is selected using the `diffusion_collisions_mode` setting, 
-this collisionality is the sum of charge exchange, ionisation, neutral-neutral collisions and the 
-pseudo-collisionality `Rnn`, which represents a mean-free path limit. When the `multispecies` mode is selected, all available 
-collision frequencies are enabled instead of ionisation. `AFN` is recommended in all cases, with the `multispecies` mode representing
-a legacy approach. The `Rnn` pseudo-collisionality is based on the `neutral_lmax` parameter, currently hardcoded to 0.1m, 
-which acts as an effective maximum neutral mean free path. It represents the distance that neutrals can travel before
-hitting a solid surface.
+Here :math:`v_{th,n} = \sqrt{T_n / m_n}` is the neutral thermal speed used in
+the diffusion coefficient and :math:`\nu_{n,eff}` is the neutral
+collision frequency after flooring. A soft floor is applied to prevent 
+:math:`D_{n,unlim}` from becoming unphysically large at
+low collisionality, ensuring that :math:`\nu_n` never goes below a pseudo collision frequency 
+calculated from the maximum neutral mean free path :math:`l_{\max}`:
 
-In an additional effort to limit the diffusivitiy to more physical values, a flux limiter has been implemented which clamps
-:math:`D_n` to :math:`D_{n,max}` defined as:
+.. math::
+   \begin{aligned} 
+   \nu_{mfp} =& \frac{v_{th,n}}{l_{\max}} \\
+   \nu_{n} =& \nu_{n}
+      + \nu_{mfp}\exp\left(-\frac{\nu_{n}}{\nu_{mfp}}\right) .
+   \end{aligned}
+
+Here :math:`l_{\max}` is set by the ``neutral_lmax`` parameter with a default of 1 m. 
+This is primarily a regularisation: it prevents division by
+zero when collision processes are disabled or very weak. In the limit
+:math:`\nu_{n} \ll \nu_{mfp}`, the effective collision
+frequency tends to :math:`\nu_{mfp}`; in the opposite limit it tends
+to the physical collision frequency.
+
+The value of :math:`\nu_{n}` depends on the selected collision mode. When the
+``afn`` mode is selected using the
+``diffusion_collisions_mode`` setting, the collision frequency is built from
+charge exchange, ionisation, and neutral-neutral collisions. When
+``multispecies`` mode is selected, Hermes-3 uses charge exchange and all collisions
+enabled for neutrals (set in the `braginskii_collisions` component), but ionisation 
+is neglected.  ``afn`` is the recommended mode, and is based on the Advanced Fluid Neutral
+model in SOLPS-ITER. 
+
+
+The primary mechanism for limiting the diffusivity is the flux limiter, which 
+smoothly limits :math:`D_n` to :math:`D_{n,\max}`, calculated from a 
+user-set fraction of the free-streaming neutral particle flux:
+
 
 .. math::
 
    \begin{aligned}
-   D_{n,max} =& f_l \frac{v_{th,n}}{abs(\nabla ln(P_n) + 1/l_{max})}
+   D_{n,\max} =& \frac{\alpha \frac{1}{4} \bar{v}_{n}}{g_{reg}}, \\
    \end{aligned}
 
-This formulation is equivalent to defining a :math:`D_n` with a free streaming velocity while accounting for the pseudo collisionality due 
-to the maximum vessel mean free path :math:`l_{max}`. The flux limiter :math:`f_l` is set to 1.0 by default.
+where :math:`\alpha` is the free-streaming fraction set by the ``flux_limit`` option 
+and :math:`\bar{v}_{n} = \sqrt{8T_n / \pi m_n}` is the mean speed of a
+non-drifting Maxwellian, with the :math:`\frac{1}{4}` due to the 1D free-streaming particle 
+flux being calculated as :math:`\frac{1}{4} n_n \bar{v}_n`. The denominator
+:math:`g_{reg}` is a regularised inverse pressure-gradient length, where it is smoothly
+clamped to to the range 
+:math:`[g_{\min}, g_{\max}]`, where :math:`g_{\max}` and :math:`g_{\min}` are set by
+``limiter_gradient_ceiling`` and ``limiter_gradient_floor`` respectively:
+
+.. math::
+
+   \begin{aligned}
+   g =& \nabla_{\perp}\ln p_n = \frac{1}{p_n} \nabla_{\perp} p_n \\
+   g_{ceil} =&
+      \frac{g\,g_{\max}}{\sqrt{g^2 + g_{\max}^2}} \\
+   g_{reg} =& \sqrt{g_{ceil}^2 + g_{\min}^2}. \\
+   \end{aligned}
+
+The floor prevents division by zero, helping to regularise the fraction in regions
+of small gradient at the cost of a small additional reduction in flux. It is applied
+in a way to prevent a non-differentiable kink at :math:`g=0`. 
+
+The ceiling improves numerical robustness at very steep gradients when the flux limiter
+is saturated. By default, it is set to :math:`10^{-1}` which should only activate during
+the initial transients of a simulation where it can prevent crashes and performance
+degradation. The numerical instability is due to the fact that
+the neutral transport becomes advective in the saturated limit, where the central difference
+scheme implemented for this term is not stable. In the future, a blended operator will be implemented
+which transitions to upwind in the advective limit. 
+
+The final diffusion coefficient is a smooth blend of the unlimited
+coefficient and the :math:`D_{n,\max}` cap, using a smooth limiter function:
+
+.. math::
+   \begin{aligned}
+   D_n = D_{n,unlim}
+      \left[1 + \left(\frac{D_{n,unlim}}{D_{n,\max}}\right)^\gamma
+      \right]^{-1/\gamma},
+   \end{aligned}
+
+where :math:`\gamma` is ``flux_limiter_sharpness``. The default :math:`\gamma=1`
+gives the harmonic mean
+
+.. math::
+   \begin{aligned}
+   D_n = \frac{D_{n,unlim}D_{n,\max}}
+              {D_{n,unlim} + D_{n,\max}} .
+   \end{aligned}
+
+Larger values of :math:`\gamma` make the transition sharper. Setting
+``flux_limit`` below zero disables the flux limiter. The separate
+``diffusion_limit`` option can also impose a hard upper bound on
+:math:`D_{n,\max}`.
+
+The neutral conductivity and viscosity coefficients, which control
+both the parallel and perpendicular diffusion of temperature and 
+parallel momentum, are then calculated from the limited diffusion coefficient:
+
+.. math::
+   \begin{aligned}
+   \kappa_{n} =& \frac{5}{2} D_n N_n \\
+   \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
+   \end{aligned}
+
 
 .. doxygenstruct:: NeutralMixed
    :members:
