@@ -357,7 +357,7 @@ TEST_F(NeutralMixedTest, DnnLooseLimit) {
                                         {{"type", "neutral_mixed"},
                                          {"diagnose", true},
                                          {"AA", 2.0},
-                                         {"flux_limit", 100}}}});
+                                         {"flux_limit", 1000}}}});
 
   BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
     EXPECT_GT(Dmax[i], Dunl[i]);

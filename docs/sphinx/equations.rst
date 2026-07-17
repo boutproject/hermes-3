@@ -7,19 +7,19 @@ This section contains components which determine which equations are
 being solved in the code. There are two broad classes of components:
 
 Whole equations
-   For example, ``fixed_temperature``, ``evolve_pressure``, 
+   For example, ``fixed_temperature``, ``evolve_pressure``,
    ``evolve_energy`` allow the solution of energy in three levels
    of fidelity: constant temperature, a pressure equation and the
    conservative total energy equation. ``neutral_mixed`` contains
-   both parallel and perpendicular transport of neutrals and 
+   both parallel and perpendicular transport of neutrals and
    has several equations included within.
 
 Terms
    For example, ``anomalous_diffusion`` adds cross-field transport
    to the density, energy and momentum equations if they are available
-   while  ``diamagnetic_drift`` and ``polarisation_drift`` 
+   while  ``diamagnetic_drift`` and ``polarisation_drift``
    add drift terms.
-   
+
 Please refer to the examples for common component configurations.
 
 
@@ -410,7 +410,7 @@ This electric field is then used to calculate a force on the other species:
 
    F_z = Z n_z E_{||}
 
-which is added to the ion's `momentum_source`. 
+which is added to the ion's `momentum_source`.
 
 The implementation is in `ElectronForceBalance`:
 
@@ -476,7 +476,7 @@ The ion parallel viscosity is
 The choice of collision frequency is set by the flag `viscosity_collisions_mode`: `multispecies` uses
 all available collision frequencies involving the chosen species, while `braginskii` uses only
 ii collisions. The default is `multispecies` and it is recommended when solving
-more than one ion. If you are solving for a single ion and want to recover Braginskii, 
+more than one ion. If you are solving for a single ion and want to recover Braginskii,
 use the `braginskii` mode.
 
 
@@ -512,7 +512,7 @@ A parallel force term is added, in addition to the parallel viscosity above:
 .. math::
 
    F = -\frac{2}{3}B^{3/2}\partial_{||}\left(\frac{\Pi_{ci\perp}}{B^{3/2}}\right)
-   
+
 In the vorticity equation the viscosity appears as a divergence of a current:
 
 .. math::
@@ -558,14 +558,14 @@ and neglecting parallel gradients of velocity gives:
 
    \Pi_{ci} \simeq 0.96 p_i\tau_i \left[ \frac{RB_{\zeta}}{B}F\left(\psi\right) - V_{||i} \right]\partial_{||}\ln B
 
-   
+
 .. note::
    Implementation details: The magnitude of :math:`\Pi_{ci\perp}` and :math:`\Pi_{ci||}` are
    individually limited to be less than or equal to the scalar pressure :math:`Pi` (though can have
    opposite sign). The reasoning is that if these off-diagonal terms become large then the model is
    likely breaking down. Occasionally happens in low-density regions.
 
-   
+
 .. doxygenstruct:: BraginskiiIonViscosity
    :members:
 
@@ -655,7 +655,7 @@ The diffusion coefficient is in :math:`m^2/s` and is calculated as
    D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{eT_n}{m_{n} \nu}
 
 where ``m_{n}`` is the neutral species mass in kg and :math:`\nu` is the collision
-frequency (by default, this sums up all of the enabled neutral collisions from 
+frequency (by default, this sums up all of the enabled neutral collisions from
 the collisions component as well as the charge exchange rate).
 The factor :math:`B / B_{pol}` is the projection of the cross-field
 direction on the parallel transport, and is the ``dneut`` input setting. Currently, the recommended
@@ -677,11 +677,11 @@ are compatible with the `neutral_boundary` component which facilitates energy lo
 The `neutral_mixed` component solves fluid equations along :math:`y`
 (parallel to the magnetic field), and uses diffusive transport in :math:`x`
 and :math:`z`.  It was adopted from the approach used in UEDGE and this [M.V. Umansky, J.N.M (2003)]. The Hermes-3 approach
-is more advanced in having a separate neutral pressure equation, similar to the 
+is more advanced in having a separate neutral pressure equation, similar to the
 new AFN (Advanced Fluid Neutral) model in SOLPS-ITER [N. Horsten, N.F. (2017)].
 
 .. math::
-   
+
    \begin{aligned}
 
    \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{\parallel, n} + n_n\mathbf{v}_{\perp n}\right) \\
@@ -698,7 +698,7 @@ new AFN (Advanced Fluid Neutral) model in SOLPS-ITER [N. Horsten, N.F. (2017)].
 
    \end{aligned}
 
-Where for the density equation, the first row of terms contains the parallel and perpendicular 
+Where for the density equation, the first row of terms contains the parallel and perpendicular
 advection and the second row the particle sources. In the parallel momentum equation, the first row of terms
 features parallel and perpendicular advection of parallel momentum. This is followed by the compression term
 and the perpendicular and parallel viscosity (diffusion of parallel momentum) as well as the momentum source term.
@@ -707,7 +707,7 @@ by the compression term, the perpendicular and parallel conduction (diffusion of
 viscous heating, finally followed by the energy sources.
 
 While parallel momentum is evolved and is exchanged with the plasma parallel momentum, the advection of momentum is neglected in the perpendicular direction.
-Instead, perpendicular advection is achieved through a pressure diffusion approach, where the pressure gradient is balanced by frictional forces and inertial terms are dropped. 
+Instead, perpendicular advection is achieved through a pressure diffusion approach, where the pressure gradient is balanced by frictional forces and inertial terms are dropped.
 This is similar to Fickian diffusion with the pressure gradient replacing the density gradient as the flow driver. This approach is similar to that taken in nuclear fission neutronic
 transport modelling and is typical of fluid neutral models in other codes.
 
@@ -726,32 +726,32 @@ with the perpendicular velocity :math:`v_{\perp}` calculated as:
    v_{\perp} =& -D_n \frac{1}{p_n} \nabla_{\perp} p_n = -D_n \nabla_{\perp} \ln p_n.
    \end{aligned}
 
-In the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`\nabla_{\perp} \ln P_n` for numerical reasons. 
+In the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`\nabla_{\perp} \ln P_n` for numerical reasons.
 
 The unlimited diffusion coefficient is defined as:
 
 .. math::
 
-   \begin{aligned} 
+   \begin{aligned}
    D_{n,unlim} =& \frac{v_{th,n}^{2}}{\nu_{n}}
       = \frac{T_n}{m_n \nu_n} \\
    \end{aligned}
 
 Here :math:`v_{th,n} = \sqrt{T_n / m_n}` is the neutral thermal speed used in
 the diffusion coefficient and :math:`\nu_{n,eff}` is the neutral
-collision frequency after flooring. A soft floor is applied to prevent 
+collision frequency after flooring. A soft floor is applied to prevent
 :math:`D_{n,unlim}` from becoming unphysically large at
-low collisionality, ensuring that :math:`\nu_n` never goes below a pseudo collision frequency 
+low collisionality, ensuring that :math:`\nu_n` never goes below a pseudo collision frequency
 calculated from the maximum neutral mean free path :math:`l_{\max}`:
 
 .. math::
-   \begin{aligned} 
+   \begin{aligned}
    \nu_{mfp} =& \frac{v_{th,n}}{l_{\max}} \\
    \nu_{n} =& \nu_{n}
       + \nu_{mfp}\exp\left(-\frac{\nu_{n}}{\nu_{mfp}}\right) .
    \end{aligned}
 
-Here :math:`l_{\max}` is set by the ``neutral_lmax`` parameter with a default of 1 m. 
+Here :math:`l_{\max}` is set by the ``neutral_lmax`` parameter with a default of 1 m.
 This is primarily a regularisation: it prevents division by
 zero when collision processes are disabled or very weak. In the limit
 :math:`\nu_{n} \ll \nu_{mfp}`, the effective collision
@@ -763,13 +763,13 @@ The value of :math:`\nu_{n}` depends on the selected collision mode. When the
 ``diffusion_collisions_mode`` setting, the collision frequency is built from
 charge exchange, ionisation, and neutral-neutral collisions. When
 ``multispecies`` mode is selected, Hermes-3 uses charge exchange and all collisions
-enabled for neutrals (set in the `braginskii_collisions` component), but ionisation 
+enabled for neutrals (set in the `braginskii_collisions` component), but ionisation
 is neglected.  ``afn`` is the recommended mode, and is based on the Advanced Fluid Neutral
-model in SOLPS-ITER. 
+model in SOLPS-ITER.
 
 
-The primary mechanism for limiting the diffusivity is the flux limiter, which 
-smoothly limits :math:`D_n` to :math:`D_{n,\max}`, calculated from a 
+The primary mechanism for limiting the diffusivity is the flux limiter, which
+smoothly limits :math:`D_n` to :math:`D_{n,\max}`, calculated from a
 user-set fraction of the free-streaming neutral particle flux:
 
 
@@ -779,12 +779,12 @@ user-set fraction of the free-streaming neutral particle flux:
    D_{n,\max} =& \frac{\alpha \frac{1}{4} \bar{v}_{n}}{g_{reg}}, \\
    \end{aligned}
 
-where :math:`\alpha` is the free-streaming fraction set by the ``flux_limit`` option 
+where :math:`\alpha` is the free-streaming fraction set by the ``flux_limit`` option
 and :math:`\bar{v}_{n} = \sqrt{8T_n / \pi m_n}` is the mean speed of a
-non-drifting Maxwellian, with the :math:`\frac{1}{4}` due to the 1D free-streaming particle 
+non-drifting Maxwellian, with the :math:`\frac{1}{4}` due to the 1D free-streaming particle
 flux being calculated as :math:`\frac{1}{4} n_n \bar{v}_n`. The denominator
 :math:`g_{reg}` is a regularised inverse pressure-gradient length, where it is smoothly
-clamped to to the range 
+clamped to to the range
 :math:`[g_{\min}, g_{\max}]`, where :math:`g_{\max}` and :math:`g_{\min}` are set by
 ``limiter_gradient_ceiling`` and ``limiter_gradient_floor`` respectively:
 
@@ -799,7 +799,7 @@ clamped to to the range
 
 The floor prevents division by zero, helping to regularise the fraction in regions
 of small gradient at the cost of a small additional reduction in flux. It is applied
-in a way to prevent a non-differentiable kink at :math:`g=0`. 
+in a way to prevent a non-differentiable kink at :math:`g=0`.
 
 The ceiling improves numerical robustness at very steep gradients when the flux limiter
 is saturated. By default, it is set to :math:`10^{-1}` which should only activate during
@@ -807,7 +807,7 @@ the initial transients of a simulation where it can prevent crashes and performa
 degradation. The numerical instability is due to the fact that
 the neutral transport becomes advective in the saturated limit, where the central difference
 scheme implemented for this term is not stable. In the future, a blended operator will be implemented
-which transitions to upwind in the advective limit. 
+which transitions to upwind in the advective limit.
 
 The final diffusion coefficient is a smooth blend of the unlimited
 coefficient and the :math:`D_{n,\max}` cap, using a smooth limiter function:
@@ -834,7 +834,7 @@ Larger values of :math:`\gamma` make the transition sharper. Setting
 :math:`D_{n,\max}`.
 
 The neutral conductivity and viscosity coefficients, which control
-both the parallel and perpendicular diffusion of temperature and 
+both the parallel and perpendicular diffusion of temperature and
 parallel momentum, are then calculated from the limited diffusion coefficient:
 
 .. math::
@@ -966,7 +966,7 @@ which are implemented as
 These components are then advected as scalars for the
 :math:`\mathbf{v}_n\cdot\nabla\mathbf{v}_n` term, and are diffused for
 the :math:`\nabla\cdot\left(\mu \nabla\mathbf{v}\right)` kinematic
-viscosity. 
+viscosity.
 
 The advection of momentum :math:`\mathbf{v}\cdot\nabla\mathbf{v}` is
 controlled by these settings:
@@ -975,7 +975,7 @@ controlled by these settings:
    nonlinear advection term. This keeps the inertia in the time
    derivative, but neglects the neutral dynamic pressure in the
    momentum balance.
-   
+
 #. `toroidal_flow` is ``true`` by default, which includes the toroidal
    (:math:`z`) component of the neutral flow. Importantly, this allows
    the parallel and poloidal flows to evolve independently: The
@@ -1038,14 +1038,14 @@ equations. Calculates the diamagnetic drift velocity as
 where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
 is read from the `bxcv` mesh input variable.
 
-Two forms are available, which are implemented differently for density, momentum, and pressure equations. In the density equation, form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P; 
+Two forms are available, which are implemented differently for density, momentum, and pressure equations. In the density equation, form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P;
 at the boundaries this velocity is perpendicular to the boundary. Form 1 uses the magnetic gyro-center drifts, which are mostly vertical;
-at the boundaries this form produces a flow through the boundary. 
-Forms 0 and 1 are analytically equivalent and should give the same result away from boundaries, 
+at the boundaries this form produces a flow through the boundary.
+Forms 0 and 1 are analytically equivalent and should give the same result away from boundaries,
 but form 0 doesn't produce flows through boundaries. This is an approach that UEDGE uses to avoid unphysical boundary flows.
 
 
-However, Form 1 is nice because the flow velocity depends on the temperature, not the pressure gradient. 
+However, Form 1 is nice because the flow velocity depends on the temperature, not the pressure gradient.
 This usually makes it better behaved numerically. To make the most of both, the `diamagnetic_drift` component allows the forms to be mixed
 using the ``diamag_form`` setting. For example, the :code:`tcv-x21` example blends it such that form 0 is at the boundary:
 
@@ -1056,7 +1056,7 @@ using the ``diamag_form`` setting. For example, the :code:`tcv-x21` example blen
    diamag_form = x * (1 - x)  # 0 = gradient; 1 = divergence
 
 
-A table of the two forms used in Hermes-3, and the corresponding terms in `Simakov & Catto <https://doi.org/10.1063/1.1623492>`_ is shown below, where :math:`\mathbf{C}=\nabla\times\left(\frac{\mathbf{b}}{B}\right)` is the curvature vector. Instead of the diamagnetic velocity, the whole terms associated are shown. The difference among the forms is the divergence of a curl, which vanishes. The diamagnetic velocity :math:`\mathbf{v}_{dia}` is defined above. Notice that Simakov & Catto used Gaussian units, but Hermes-3 uses SI units. 
+A table of the two forms used in Hermes-3, and the corresponding terms in `Simakov & Catto <https://doi.org/10.1063/1.1623492>`_ is shown below, where :math:`\mathbf{C}=\nabla\times\left(\frac{\mathbf{b}}{B}\right)` is the curvature vector. Instead of the diamagnetic velocity, the whole terms associated are shown. The difference among the forms is the divergence of a curl, which vanishes. The diamagnetic velocity :math:`\mathbf{v}_{dia}` is defined above. Notice that Simakov & Catto used Gaussian units, but Hermes-3 uses SI units.
 
 .. list-table::
    :header-rows: 1
@@ -1079,7 +1079,7 @@ A table of the two forms used in Hermes-3, and the corresponding terms in `Simak
      - :math:`\dfrac{5}{2}\nabla\cdot (p \mathbf{v}_{dia})`
      - Eq. (56): :math:`\nabla\cdot\left(\dfrac{5}{2 m \Omega} \mathbf{b} \times \nabla(p T)\right)`
 
-\* Eq.(64) in Simakov & Catto is derived for ion parallel momentum, but it is also applicable to electrons since it comes from the gyro-viscosity and the mass factors of :math:`m_i` or :math:`m_e` cancel out. 
+\* Eq.(64) in Simakov & Catto is derived for ion parallel momentum, but it is also applicable to electrons since it comes from the gyro-viscosity and the mass factors of :math:`m_i` or :math:`m_e` cancel out.
 
 
 .. doxygenstruct:: DiamagneticDrift
@@ -1150,9 +1150,9 @@ cross-field diffusion:
    \begin{aligned}
    \frac{\partial N}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{D}{\Theta}\partial_{||}N\right) \\
    \frac{\partial P}{\partial t} =& \ldots + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\frac{\chi}{\Theta} N\partial_{||}T\right) \\
-   \frac{\partial}{\partial t}\left(NV\right) =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{\nu}{\Theta} \partial_{||}NV\right) 
+   \frac{\partial}{\partial t}\left(NV\right) =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{\nu}{\Theta} \partial_{||}NV\right)
    \end{aligned}
-   
+
 The diffusion coefficients `D`, `\chi` and `\nu` and field line pitch `\Theta` are prescribed in the input file.
 
 
@@ -1242,7 +1242,7 @@ as
 .. math::
 
    \nabla\cdot\left[\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \left(\phi + \frac{\hat{p}}{\overline{n}}\right) \right] = \Omega
-   
+
 Note that if ``diamagnetic_polarisation = false`` then the ion
 pressure terms are removed from the vorticity, and also from other ion
 pressure terms coming from the polarisation current
@@ -1261,7 +1261,7 @@ and is derived by replacing
    \sum_i A_i n_i \rightarrow \overline{A}\overline{n}
 
 In the case of multiple species, this Boussinesq approximation means that the ion diamagnetic flow
-terms 
+terms
 
 The vorticity equation that is integrated in time is
 
@@ -1286,7 +1286,7 @@ When ``exb_advection_simplified = false`` then the more complete
 .. math::
 
    \nabla\cdot\mathbf{J_{exb}} = -\nabla\cdot\left[\frac{\overline{A}}{2B^2}\nabla_\perp\left(\mathbf{V}_{E\times B}\cdot\nabla \hat{p}\right) + \frac{\Omega}{2} \mathbf{V}_{E\times B} + \frac{\overline{A}\overline{n}}{2B^2}\nabla_\perp^2\phi\left(\mathbf{V}_{E\times B} + \frac{\mathbf{b}}{B}\times\nabla\hat{p}\right) \right]
-   
+
 The form of the vorticity equation is based on `Simakov & Catto
 <https://doi.org/10.1063/1.1623492>`_ (corrected in `erratum 2004
 <https://doi.org/10.1063/1.1703527>`_), in the Boussinesq limit and
