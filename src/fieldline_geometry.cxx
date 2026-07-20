@@ -111,29 +111,6 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
     return value;
   };
 
-  // Get the string expressions for lambda_int, fieldline_radius and poloidal_magnetic_field from the options
-  std::string lambda_int_str = geo_options["lambda_int"]
-                                   .doc("Function for the integral heat flux width "
-                                        "lambda_int = lambda_q + 1.64 S [m].")
-                                   .as<std::string>();
-  std::string fieldline_radius_str =
-      geo_options["fieldline_radius"]
-          .doc("Function for the fieldline major radius R [m].")
-          .as<std::string>();
-  std::string poloidal_magnetic_field_str =
-      geo_options["poloidal_magnetic_field"]
-          .doc("Function for the poloidal magnetic field strength Bpol [T].")
-          .as<std::string>();
-
-  // Create FieldGenerator objects for lambda_int, fieldline_radius and poloidal_magnetic_field
-  // These FieldGenerators will be used to evaluate the string expressions
-  FieldGeneratorPtr lambda_int_function =
-      FieldFactory::get()->parse(lambda_int_str, &geo_options);
-  FieldGeneratorPtr poloidal_magnetic_field_function =
-      FieldFactory::get()->parse(poloidal_magnetic_field_str, &geo_options);
-  FieldGeneratorPtr fieldline_radius_function =
-      FieldFactory::get()->parse(fieldline_radius_str, &geo_options);
-
   // Allocate memory for the fields
   lambda_int.allocate();
   fieldline_radius.allocate();
@@ -142,26 +119,72 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
   total_magnetic_field.allocate();
   pitch_angle.allocate();
 
-  // Generate the field data for lambda_int, fieldline_radius and poloidal_magnetic_field
-  // using the FieldGenerator objects and normalize the fields
-  BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
-    lambda_int[i] = lambda_int_function->generate(
-                        bout::generator::Context().set("lpar", lpar[i] * Lnorm))
-                    / Lnorm;
-    fieldline_radius[i] = fieldline_radius_function->generate(
-                              bout::generator::Context().set("lpar", lpar[i] * Lnorm))
-                          / Lnorm;
-    poloidal_magnetic_field[i] =
-        poloidal_magnetic_field_function->generate(
-            bout::generator::Context().set("lpar", lpar[i] * Lnorm))
-        / Bnorm;
+  // get lambda_int from grid file or input file
+  if (mesh->sourceHasVar("lambda_int")) {
+    mesh->get(lambda_int, "lambda_int");
+    lambda_int /= Lnorm;
+    geo_options["lambda_int"].setConditionallyUsed();
+  } else {
+    std::string lambda_int_str = geo_options["lambda_int"]
+                                     .doc("Function for the integral heat flux width "
+                                          "lambda_int = lambda_q + 1.64 S [m].")
+                                     .as<std::string>();
+    FieldGeneratorPtr lambda_int_function =
+        FieldFactory::get()->parse(lambda_int_str, &geo_options);
+
+    BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
+      lambda_int[i] = lambda_int_function->generate(
+                          bout::generator::Context().set("lpar", lpar[i] * Lnorm))
+                      / Lnorm;
+    }
+  }
+
+  // get fieldline_radius from grid file or input file
+  if (mesh->sourceHasVar("fieldline_radius")) {
+    mesh->get(fieldline_radius, "fieldline_radius");
+    fieldline_radius /= Lnorm;
+    geo_options["fieldline_radius"].setConditionallyUsed();
+  } else {
+    std::string fieldline_radius_str =
+        geo_options["fieldline_radius"]
+            .doc("Function for the fieldline major radius R [m].")
+            .as<std::string>();
+    FieldGeneratorPtr fieldline_radius_function =
+        FieldFactory::get()->parse(fieldline_radius_str, &geo_options);
+
+    BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
+      fieldline_radius[i] = fieldline_radius_function->generate(
+                                bout::generator::Context().set("lpar", lpar[i] * Lnorm))
+                            / Lnorm;
+    }
+  }
+
+  // get poloidal_magnetic_field from grid file or input file
+  if (mesh->sourceHasVar("poloidal_magnetic_field")) {
+    mesh->get(poloidal_magnetic_field, "poloidal_magnetic_field");
+    poloidal_magnetic_field /= Bnorm;
+    geo_options["poloidal_magnetic_field"].setConditionallyUsed();
+  } else {
+    std::string poloidal_magnetic_field_str =
+        geo_options["poloidal_magnetic_field"]
+            .doc("Function for the poloidal magnetic field strength Bpol [T].")
+            .as<std::string>();
+    FieldGeneratorPtr poloidal_magnetic_field_function =
+        FieldFactory::get()->parse(poloidal_magnetic_field_str, &geo_options);
+
+    BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
+      poloidal_magnetic_field[i] =
+          poloidal_magnetic_field_function->generate(
+              bout::generator::Context().set("lpar", lpar[i] * Lnorm))
+          / Bnorm;
+    }
   }
 
   // Determine whether to compute Btor from R or use a provided function
   bool compute_B_from_R =
       geo_options["compute_Btor_from_R"]
-          .doc("Compute Btor = B_tor,upstream * R_upstream / R if true, or else use a "
-               "function for toroidal_magnetic_field")
+          .doc("Compute Btor = B_tor,upstream * R_upstream / R if true, or else use the "
+               "grid value or input file function for toroidal_magnetic_field")
           .withDefault<bool>(true);
 
   // If compute_B_from_R is true, compute Btor from R
@@ -179,20 +202,30 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
     // Otherwise, use the provided function for toroidal_magnetic_field
     geo_options["upstream_toroidal_magnetic_field"]
         .setConditionallyUsed(); // Ensure upstream_toroidal_magnetic_field is not used
-    std::string toroidal_magnetic_field_str =
-        geo_options["toroidal_magnetic_field"]
-            .doc("Function for the toroidal magnetic field strength Btor [T].")
-            .as<std::string>();
-    FieldGeneratorPtr toroidal_magnetic_field_function =
-        FieldFactory::get()->parse(toroidal_magnetic_field_str, &geo_options);
+    
+    
+    // ALTERNATIVELY get toroidal_magnetic_field from grid file or input file (if this is present then it will override the provided function,
+    // maybe better to have an explicit option for this?)
+    if (mesh->sourceHasVar("toroidal_magnetic_field")) {
+      mesh->get(toroidal_magnetic_field, "toroidal_magnetic_field");
+      toroidal_magnetic_field /= Bnorm;
+      geo_options["toroidal_magnetic_field"].setConditionallyUsed();
+    } else {
+      std::string toroidal_magnetic_field_str =
+          geo_options["toroidal_magnetic_field"]
+              .doc("Function for the toroidal magnetic field strength Btor [T].")
+              .as<std::string>();
+      FieldGeneratorPtr toroidal_magnetic_field_function =
+          FieldFactory::get()->parse(toroidal_magnetic_field_str, &geo_options);
 
-    // Generate the field data for toroidal_magnetic_field using the FieldGenerator object
-    // and normalize the field
-    BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
-      toroidal_magnetic_field[i] =
-          toroidal_magnetic_field_function->generate(
-              bout::generator::Context().set("lpar", lpar[i] * Lnorm))
-          / Bnorm;
+      // Generate the field data for toroidal_magnetic_field using the FieldGenerator object
+      // and normalize the field
+      BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
+        toroidal_magnetic_field[i] =
+            toroidal_magnetic_field_function->generate(
+                bout::generator::Context().set("lpar", lpar[i] * Lnorm))
+            / Bnorm;
+      }
     }
   }
 
