@@ -204,8 +204,7 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
         .setConditionallyUsed(); // Ensure upstream_toroidal_magnetic_field is not used
     
     
-    // ALTERNATIVELY get toroidal_magnetic_field from grid file or input file (if this is present then it will override the provided function,
-    // maybe better to have an explicit option for this?)
+    // get toroidal_magnetic_field from grid file or input file
     if (mesh->sourceHasVar("toroidal_magnetic_field")) {
       mesh->get(toroidal_magnetic_field, "toroidal_magnetic_field");
       toroidal_magnetic_field /= Bnorm;
