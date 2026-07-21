@@ -19,13 +19,35 @@ extrapolate_y = false
 type = shifted
 
 [solver]
-type = cvode
-use_precon = true
-mxstep = 1e5
-
-mxorder = 3
-atol = 1e-12
+diagnose = true
+type = snes
+snes_type = newtonls   # newtontr not as good
+ksp_type = fgmres
+pc_type = lu
+max_nonlinear_iterations = 10
+atol = 1e-3
 rtol = 1e-5
+stol = 1e-12
+maxf = 2000
+maxl = 260
+matrix_free_operator = false
+lag_jacobian = 3
+timestep = 0.1
+max_snes_failures = 20
+scale_vars = true
+
+target_its = 100
+kP = 0.233   # 0.65
+kI = 0.133 # 0.30
+kD = 0.0 # 0.15
+
+[petsc]
+log_view
+snes_fd_color_use_mat
+ksp_type = fgmres
+pc_type = lu
+pc_factor_mat_solver_type = mumps
+snes_linesearch_type = basic
 
 [hermes]
 components = (d+, d, e,
@@ -125,4 +147,3 @@ type = (d + e -> d+ + 2e,
 	d+ + e -> d)
 
 diagnose = true
-
