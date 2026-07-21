@@ -96,7 +96,7 @@ struct TemperatureFeedback : public NamedComponent<TemperatureFeedback> {
                    .doc("Output additional diagnostics?")
                    .withDefault<bool>(false);
 
-    std::vector<std::string> species_stripped;
+    std::vector<std::string> species_stripped(species_list.size());
     std::transform(species_list.begin(), species_list.end(), species_stripped.begin(),
                    [](const std::string& val) { return trim(val); });
     substitutePermissions("name", {name});
