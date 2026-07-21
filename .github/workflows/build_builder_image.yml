@@ -33,7 +33,7 @@ jobs:
   # multi-arch manifest.
   build-builder-image:
     # Scheduled/release runs only on the canonical repo; forks may still manually
-    # dispatch to validate the build, but must not push (see 'push' below).
+    # dispatch to validate the build, but must not publish (see 'publish_image').
     if: github.repository == 'boutproject/hermes-3' || github.event_name == 'workflow_dispatch'
 
     strategy:
@@ -64,7 +64,7 @@ jobs:
           cache-scope: builder
           # Only the canonical repo publishes; a fork's manual dispatch builds
           # for validation without pushing.
-          push: ${{ github.repository == 'boutproject/hermes-3' }}
+          publish_image: ${{ github.repository == 'boutproject/hermes-3' }}
           token: ${{ secrets.GITHUB_TOKEN }}
           # Credentials for the self-hosted OCI Spack build cache, so the build
           # can pull previously-compiled binaries and push newly-built ones.
