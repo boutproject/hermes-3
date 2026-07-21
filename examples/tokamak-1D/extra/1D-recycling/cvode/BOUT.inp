@@ -56,7 +56,7 @@ Tnorm = 100
 
 [solver]
 type = cvode  # Backward Euler steady-state solver
-use_precon = true
+cvode_precon_method = auto
 
 mxstep = 50000
 
