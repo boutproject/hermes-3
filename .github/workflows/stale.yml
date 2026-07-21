@@ -9,6 +9,8 @@ permissions:
 
 jobs:
   stale:
+    # Skip scheduled runs on forks; still allow manual dispatch anywhere.
+    if: github.repository == 'boutproject/hermes-3' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/stale@v9
