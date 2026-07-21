@@ -17,7 +17,7 @@ extrapolate_y = false  # Can result in negative Jacobians in guard cells
 type = shifted
 
 [solver]
-
+type=cvode
 cvode_precon_method=user
 mxstep = 100000
 cvode_max_order = 3
