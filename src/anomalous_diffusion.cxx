@@ -63,6 +63,10 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
     output_vars.push_back("density_source");
     output_vars.push_back("particle_flow_xlow");
     output_vars.push_back("particle_flow_ylow");
+    // anomalous_D is exposed for other components (e.g. neutral_mixed
+    // perp_ion_coupling); it is written in transform_impl under the same
+    // include_D condition, so its write permission must be declared here.
+    output_vars.push_back("anomalous_D");
   }
   if (include_D or include_chi) {
     output_vars.push_back("energy_source");

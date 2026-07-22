@@ -12,7 +12,8 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : NamedComponent(name,
                      {readIfSet("species:{all_species}:charge"),
                       readIfSet("species:{all_species}:{inputs}", Regions::Interior),
-                      readWrite(fmt::format("species:{}:velocity", name))}),
+                      readWrite(fmt::format("species:{}:velocity", name)),
+                      readWrite(fmt::format("species:{}:momentum", name))}),
       name(name) {
   Options& options = alloptions[name];
 
