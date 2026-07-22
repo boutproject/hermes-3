@@ -271,3 +271,147 @@ TEST_F(NeutralMixedTest, FinallyNonorthogonalOperators) {
     ASSERT_DOUBLE_EQ(0.75, ddt_NVd[i]);
   }
 }
+
+// Function to test cross-field diffusion in presence of a radial pressure gradient.
+namespace {
+auto runDnnTest(Options options, bool with_collisions = false) {
+  FakeSolver solver;
+
+  options["units"] = {
+      {"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}};
+  NeutralMixed component("d", options, &solver);
+
+  // Make pressure gradient in X direction
+  Field3D Pn = makeField<Field3D>([](Ind3D& i) { return 1.0 + 1 * i.x(); }, mesh);
+
+  // Call the finally() method with a density, energy, and momentum source
+  Options state = {{"species",
+                    {{"d",
+                      {{"density", 1.0},
+                       {"density_source", 0.5},
+                       {"pressure", Pn},
+                       {"energy_source", 1.5},
+                       {"momentum", 1.0},
+                       {"momentum_source", 0.75},
+                       {"temperature", 1.0},
+                       {"velocity", 1.0}}}}}};
+
+  // Simulate collision frequencies if needed
+  if (with_collisions) {
+    state["species"]["d"]["collision_frequency"] = 1.0;
+    state["species"]["d"]["collision_frequencies"]["d_d+_cx"] = 100.0;
+  }
+
+  component.finally(state);
+
+  // Construct state with norms for outputVars to add diagnostics to
+  Options out{
+      {"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}, {"Cs0", 1.0}, {"rho_s0", 1.0}};
+
+  component.outputVars(out);
+
+  Field3D Dnn = out["Dnnd"].as<Field3D>();
+  Field3D Dunl = out["Dnnd_unlimited"].as<Field3D>();
+  Field3D Dmax = out["Dnnd_max"].as<Field3D>();
+
+  return std::make_tuple(Dnn, Dunl, Dmax);
+}
+} // namespace
+
+// Check that flux limiter reduces to a simple harmonic mean when sharpness = 1.0.
+TEST_F(NeutralMixedTest, DnnHarmonicLimiter) {
+
+  auto [Dnn, Dunl, Dmax] = runDnnTest({{"d",
+                                        {
+                                            {"type", "neutral_mixed"},
+                                            {"diagnose", true},
+                                            {"AA", 2.0},
+                                            {"flux_limiter_sharpness", 1.0},
+                                        }}});
+
+  BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
+    EXPECT_DOUBLE_EQ(Dnn[i], Dunl[i] * Dmax[i] / (Dunl[i] + Dmax[i]));
+  }
+}
+
+// Check that an aggressive flux limit limits the flux.
+TEST_F(NeutralMixedTest, DnnTightLimit) {
+
+  auto [Dnn, Dunl, Dmax] = runDnnTest({{"d",
+                                        {{"type", "neutral_mixed"},
+                                         {"diagnose", true},
+                                         {"AA", 2.0},
+                                         {"flux_limit", 1e-5}}}});
+
+  BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
+    EXPECT_LT(Dmax[i], Dunl[i]);
+    EXPECT_LT(Dnn[i], Dunl[i]);
+    EXPECT_NEAR(Dnn[i], Dmax[i], Dnn[i] * 1e-3);
+  }
+}
+
+// Check that a loose flux limit doesn't limit the flux.
+TEST_F(NeutralMixedTest, DnnLooseLimit) {
+
+  auto [Dnn, Dunl, Dmax] = runDnnTest({{"d",
+                                        {{"type", "neutral_mixed"},
+                                         {"diagnose", true},
+                                         {"AA", 2.0},
+                                         {"flux_limit", 1000}}}});
+
+  BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
+    EXPECT_GT(Dmax[i], Dunl[i]);
+    EXPECT_NEAR(Dnn[i], Dunl[i], Dnn[i] * 1e-3);
+  }
+}
+
+// Check that the explicit diffusion limit can override the flux limitation.
+TEST_F(NeutralMixedTest, DnnExplicitLimit) {
+
+  auto [Dnn, Dunl, Dmax] = runDnnTest({{"d",
+                                        {{"type", "neutral_mixed"},
+                                         {"diagnose", true},
+                                         {"AA", 2.0},
+                                         {"flux_limit", 0.2},
+                                         {"diffusion_limit", 1e-5}}}});
+
+  BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
+    EXPECT_DOUBLE_EQ(Dmax[i], 1e-5);
+    EXPECT_NEAR(Dnn[i], 1e-5, 1e-3 * Dnn[i]);
+  }
+}
+
+// Check that adding collisionality reduces Dnn.
+TEST_F(NeutralMixedTest, DnnCollisionalityImpact) {
+
+  Options options = {{"d", {{"type", "neutral_mixed"}, {"diagnose", true}, {"AA", 2.0}}}};
+
+  auto [Dnn, Dunl, Dmax] = runDnnTest(options.copy(), false);
+  auto [Dnn_coll, Dunl_coll, Dmax_coll] = runDnnTest(options.copy(), true);
+
+  BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) { EXPECT_LT(Dnn_coll[i], Dnn[i]); }
+}
+
+// Check that reducing neutral_lmax raises collisionality floor.
+// Lower neutral_lmax leads to a higher nu_pseudo_mfp,
+// which increases total nu. and reduces Dnn.
+TEST_F(NeutralMixedTest, DnnCollisionalityFloor) {
+
+  auto [Dnn_lo_lmax, Dunl_lo_lmax, Dmax_lo_lmax] =
+      runDnnTest({{"d",
+                   {{"type", "neutral_mixed"},
+                    {"diagnose", true},
+                    {"AA", 2.0},
+                    {"neutral_lmax", 0.01}}}});
+
+  auto [Dnn_hi_lmax, Dunl_hi_lmax, Dmax_hi_lmax] =
+      runDnnTest({{"d",
+                   {{"type", "neutral_mixed"},
+                    {"diagnose", true},
+                    {"AA", 2.0},
+                    {"neutral_lmax", 100}}}});
+
+  BOUT_FOR_SERIAL(i, Dnn_lo_lmax.getRegion("RGN_NOBNDRY")) {
+    EXPECT_LT(Dnn_lo_lmax[i], Dnn_hi_lmax[i]);
+  }
+}
