@@ -189,11 +189,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   // FIXME: Temporary options to enable legacy behaviour. Will be removed.
 
-  double_count_lmax =
-      options["double_count_lmax"]
-          .doc("Include neutral_lmax in Dmax and kappa_max as well as Dnn?")
-          .withDefault<bool>(true);
-
   legacy_thermal_speed =
       options["legacy_thermal_speed"]
           .doc("Use legacy definition of thermal speed in flux limiter?")
@@ -203,6 +198,15 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                             .doc("Use legacy form of flux limiter rather than "
                                  "SOLPS-style with sharpness parameter?")
                             .withDefault<bool>(true);
+
+  gradient_floor_D =
+      options["gradient_floor_D"]
+          .doc("Regularisation for the D, kappa and eta limiter "
+               "denominators. In SI inverse-length units [1/m]. "
+               "Higher values may increase robustness at the cost of accuracy. "
+               "Default is 10 /m.")
+          .withDefault<BoutReal>(10)
+      * get<BoutReal>(alloptions["units"]["meters"]); // Normalised inverse length
 
   // Optionally output time derivatives
   output_ddt =
@@ -531,27 +535,24 @@ void NeutralMixed::finally(const Options& state) {
       Vnth_hf = sqrt(2.0 * Tnlim / (PI * AA));
     }
 
-    // Calculate maximum diffusivities
-    // double_count_lmax includes neutral_lmax also in the maximum Dnn and kappa,
-    // which is legacy behaviour and double counting.
-    // eta_max never had neutral_lmax added so is omitted
-    if (double_count_lmax) {
-      Dmax = flux_limit_adv * Vnth_pf / (abs(Grad_perp(logPnlim)) + 1. / neutral_lmax);
-      kappa_n_max_perp = flux_limit_cond_perp * (Vnth_hf * Nnlim)
-                         / (abs(Grad_perp(Tn)) / Tnlim + 1. / neutral_lmax);
-      kappa_n_max_par = flux_limit_cond_par * (Vnth_hf * Nnlim)
-                        / (abs(Grad_par(Tn)) / Tnlim + 1. / neutral_lmax);
+    // Calculate maximum diffusivities.
+    // A quadrature floor sqrt(grad^2 + gradient_floor_D^2) keeps every limiter
+    // denominator finite where a gradient vanishes (otherwise Dmax -> Inf -> NaN).
+    Field3D denominator_D =
+        sqrt(Grad_perp(logPnlim) * Grad_perp(logPnlim) + SQ(gradient_floor_D));
+    Field3D denominator_Kperp =
+        sqrt((Grad_perp(Tn) / Tnlim) * (Grad_perp(Tn) / Tnlim) + SQ(gradient_floor_D));
+    Field3D denominator_Kpar =
+        sqrt((Grad_par(Tn) / Tnlim) * (Grad_par(Tn) / Tnlim) + SQ(gradient_floor_D));
+    Field3D denominator_etaperp =
+        sqrt(Grad_perp(Vn) * Grad_perp(Vn) + SQ(gradient_floor_D));
+    Field3D denominator_etapar = sqrt(Grad_par(Vn) * Grad_par(Vn) + SQ(gradient_floor_D));
 
-    } else {
-      Dmax = flux_limit_adv * Vnth_pf / (abs(Grad_perp(logPnlim)));
-      kappa_n_max_perp =
-          flux_limit_cond_perp * (Vnth_hf * Nnlim) / (abs(Grad_perp(Tn)) / Tnlim);
-      kappa_n_max_par =
-          flux_limit_cond_par * (Vnth_hf * Nnlim) / (abs(Grad_par(Tn)) / Tnlim);
-    }
-
-    eta_n_max_perp = flux_limit_visc_perp * Pnlim / abs(Grad_perp(Vn));
-    eta_n_max_par = flux_limit_visc_par * Pnlim / abs(Grad_par(Vn));
+    Dmax = flux_limit_adv * Vnth_pf / denominator_D;
+    kappa_n_max_perp = flux_limit_cond_perp * (Vnth_hf * Nnlim) / denominator_Kperp;
+    kappa_n_max_par = flux_limit_cond_par * (Vnth_hf * Nnlim) / denominator_Kpar;
+    eta_n_max_perp = flux_limit_visc_perp * Pnlim / denominator_etaperp;
+    eta_n_max_par = flux_limit_visc_par * Pnlim / denominator_etapar;
 
     // Apply limits
     static auto apply_limiter = [](BoutReal unlimited, BoutReal max,
