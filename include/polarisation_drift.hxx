@@ -2,6 +2,8 @@
 #ifndef POLARISATION_DRIFT_H
 #define POLARISATION_DRIFT_H
 
+#include <bout/coordinates.hxx>
+
 #include "component.hxx"
 
 class Laplacian;
@@ -67,7 +69,7 @@ struct PolarisationDrift : public NamedComponent<PolarisationDrift> {
 private:
   std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
 
-  Field2D Bsq; // Cached SQ(coord->Bxy)
+  Coordinates::FieldMetric Bsq; // Cached SQ(coord->Bxy)
 
   // Diagnostic outputs
   bool diagnose;       ///< Save diagnostic outputs?

@@ -121,9 +121,9 @@ public:
 
     // Get cell radial length
     Coordinates* coord = mesh->getCoordinates();
-    Field2D dx = coord->dx;
-    Field2D g11 = coord->g11;
-    Field2D dr =
+    auto dx = coord->dx;
+    auto g11 = coord->g11;
+    Coordinates::FieldMetric dr =
         dx / sqrt(g11); // cell radial length. dr = dx/(Bpol * R) and g11 = (Bpol*R)**2
 
     // Only implemented for cell centre quantities
@@ -149,9 +149,10 @@ public:
         //    (0, -1) Y lower boundary (inner lower target)
 
         // Distance between final cell centre and inner guard cell centre in normalised units
-        BoutReal distance =
-            0.5
-            * (dr(bndry->x, bndry->y) + dr(bndry->x - bndry->bx, bndry->y - bndry->by));
+
+        BoutReal distance = 0.5
+                            * (dr(bndry->x, bndry->y, zk)
+                               + dr(bndry->x - bndry->bx, bndry->y - bndry->by, zk));
 
         // Exponential decay
         f(bndry->x, bndry->y, zk) = f(bndry->x - bndry->bx, bndry->y - bndry->by, zk)

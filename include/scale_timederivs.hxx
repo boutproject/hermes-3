@@ -40,7 +40,7 @@ private:
   void transform_impl(GuardedOptions& state) override {
 
     auto* coord = bout::globals::mesh->getCoordinates();
-    Field2D dl2 = coord->g_22 * SQ(coord->dy);
+    auto dl2 = coord->g_22 * SQ(coord->dy);
 
     // Scale by parallel heat conduction CFL timescale
     auto Te = get<Field3D>(state["species"]["e"]["temperature"]);

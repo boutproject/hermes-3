@@ -198,7 +198,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     // Read curvature vector
     try {
       // May be 2D, reading as 3D
-      Vector2D curv2d;
+      VectorMetric curv2d;
       curv2d.covariant = false;
       mesh->get(curv2d, "bxcv");
       Curlb_B = curv2d;
