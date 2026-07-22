@@ -330,8 +330,12 @@ if(HERMES_TESTS)
       # Make copies of the test exec and input file in the build directory and
       # keep them up to date
       configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
-      configure_file(${INT_TEST_SRC}/data/BOUT.inp
-                     ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+      if(EXISTS ${INT_TEST_SRC}/data/BOUT.inp)
+        configure_file(${INT_TEST_SRC}/data/BOUT.inp
+                       ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+      elseif(EXISTS ${INT_TEST_DEST}/data/BOUT.inp)
+        file(REMOVE ${INT_TEST_DEST}/data/BOUT.inp)
+      endif()
     else()
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
@@ -382,6 +386,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-production CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(examples CONFLICTS BOUT_ENABLE_METRIC_3D)
 
   hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_ENABLE_METRIC_3D)

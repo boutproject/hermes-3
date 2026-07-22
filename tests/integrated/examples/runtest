@@ -30,7 +30,7 @@ def run_examples(examples_dir: pathlib.Path, hermes3_exe: pathlib.Path, verbose:
             example_dir = example.parent
             print(f"Running {example_dir.relative_to(examples_dir)}...")
             s, out = launch(
-                f"{hermes3_exe} -d {example_dir} nout=1 timestep=1e-3",
+                f"{hermes3_exe} -d {example_dir} nout=1 timestep=1e-3 input:error_on_unused_options=true",
                 nproc=NPROCS.get(category_name, 1),
                 mthread=1,
                 pipe=True,
