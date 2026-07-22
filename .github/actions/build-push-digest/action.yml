@@ -28,6 +28,12 @@ inputs:
   token:
     description: Registry password / token (pass secrets.GITHUB_TOKEN).
     required: true
+  publish_image:
+    description: >
+      Whether to publish (push to the registry) the built image. Set false to
+      build for validation only (e.g. a fork that can't publish); the digest is
+      then not exported, so no merge step should run.
+    default: "true"
   build-args:
     description: Newline-separated build args passed to the build.
     default: ""
@@ -92,9 +98,10 @@ runs:
         cache-to: type=gha,mode=max,scope=${{ inputs.cache-scope }}-${{ steps.vars.outputs.arch }}
         build-args: ${{ inputs.build-args }}
         secrets: ${{ inputs.build-secrets }}
-        outputs: type=image,name=${{ inputs.registry }}/${{ inputs.image-name }},push-by-digest=true,name-canonical=true,push=true
+        outputs: type=image,name=${{ inputs.registry }}/${{ inputs.image-name }},push-by-digest=true,name-canonical=true,push=${{ inputs.publish_image }}
 
     - name: Export digest
+      if: inputs.publish_image == 'true'
       shell: bash
       run: |
         mkdir -p /tmp/digests
@@ -102,6 +109,7 @@ runs:
         touch "/tmp/digests/${digest#sha256:}"
 
     - name: Upload digest
+      if: inputs.publish_image == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.cache-scope }}-digests-${{ steps.vars.outputs.arch }}
