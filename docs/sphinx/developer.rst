@@ -669,6 +669,8 @@ in `group1`, and then `component3`.
    :members:
 
 
+.. _sec-permissions:
+
 Permissions
 ~~~~~~~~~~~~~~
 
@@ -864,6 +866,358 @@ calling these methods will raise an exception.
    ``GuardedOptions`` by reference. You may be able to pass them by
    reference, but this requires you to think carefully about whether
    the argument is going to be an r-value or an l-value.
+
+.. _sec-reactions-dev:
+
+Reactions
+~~~~~~~~~
+
+The code for handling reactions was significantly refactored after version 1.4.0. Currently,
+reactions involving Hydrogen isotopes and Helium use the new framework, whilst reactions involving
+impurity isotopes use their own set of classes. The intent is that all reaction classes in the code
+will eventually be migrated to the new framework.
+
+Executive summary
+`````````````````
+
+The hierarchy of classes in the framework is:
+
+- `Reaction`
+
+  - `CXReaction`
+
+  - `IznRecReaction`
+
+    - `IznReaction`
+
+    - `RecReaction`
+
+Most reaction source term contributions are handled in the the
+:code:`transform_impl` method of the base :code:`Reaction` class.  The source of the reaction rate
+data can be configured via the input file; if no reaction data type and data ID is set, a sensible
+default will be set on a per-reaction basis (e.g. Amjuel, H.2_3.1.8 for Hydrogen isotope charge
+exchange, :code:`h + d+ -> d + h+`). Subclasses of :code:`Reaction` set up appropriate diagnostics
+and :ref:`Permissions<sec-permissions>` for particular reactions in their constructors and/or
+implement a :code:`transform_additional` method to include source term contributions that aren't
+captured by :code:`Reaction::transform_impl`.
+
+The following subsections describe the general approach used to compute reaction sources and provide
+guidance to developers on adding new subclasses to handle particular reactions.
+
+The stoichiometry matrix 
+````````````````````````
+
+A core part of the approach is to convert reaction strings into a stoichiometry matrix.
+stoichiometry matrices specify the population changes associated with a *mechanism* or system of
+reactions, with each column corresponding to a reaction and each row to a species.
+
+For a configuration
+
+.. _code-reactions_config_eg:
+
+.. code-block:: ini
+
+  [reactions]
+  type = (
+          h + e -> h+ + 2e,   # R1
+          h+ + e -> h,        # R2
+          he + e -> he+ + 2e, # R3
+          he+ + e -> he,      # R4
+         )
+
+the stoichiometry matrix would be:
+
+.. _fig-stoichiometry_matrix_eg:
+.. figure:: figs/stoichiometry_matrix_eg.*
+   :alt: Example of a stoichiometry matrix for the reactions configured in :numref:code-reactions_config_eg
+
+In the `Reaction` base class, the constructor instantiates a `ReactionParser`, which assembles one
+column of this matrix from the reaction string.
+
+.. note::
+
+   The reaction string is extracted from the comma-separated list of strings provided as the 'type'
+   of the reactions component in the input file. All reaction classes (including those that do not
+   currently inherit from `Reaction`) inherit from `ReactionBase`, which ensures that subclasses are
+   paired up with reaction strings correctly. It is anticipated that changes to the input file
+   format and/or the migration of all reaction classes to the new framework will make
+   :code:`ReactionBase` unnecessary in the future.
+
+.. tip::
+
+   In addition to computing population changes, `ReactionParser` can be used to identify different
+   subsets of species via the `species_filter` enum. For instance, to obtain the names of all
+   'heavy' (non-electron) reactants:
+
+   .. code-block:: cpp
+
+      auto heavy_reactants = this->parser.get_species(species_filter::reactants, species_filter::heavy);
+
+
+Source term equations
+`````````````````````
+
+Source terms related to the population changes are calculated from the stoichiometric coefficients
+in `Reaction::transform_impl`.
+
+The reaction rate is calculated as
+
+.. math::
+   K &= M \langle\sigma_v\rangle \\
+     &= \prod_{r} n_r \langle\sigma_v\rangle
+
+where :math:`\langle\sigma_v\rangle` is the reaction cross section and :math:`M` is called the *mass
+action factor*.
+
+The density source for a species :math:`s` follows directly from the rate:
+
+.. _fig-reactions_dens_src_eqn:
+.. math::
+   S = C_s K
+
+where :math:`C_s` is the population change for species :math:`s` (from the stoichiometry matrix)
+and :math:`K` is the reaction rate calculated above. The momentum source (:math:`F`) and energy
+source (:math:`E`) associated with a species population change depend on whether the reaction in
+question is a net consumer (:math:`C_s < 0`) or a net producer (:math:`C_s > 0`) of the species:
+
+.. math::
+   F =
+      \begin{cases}
+         C_s K (NV)_s                                      & \textrm{for}\ C_s < 0 \\
+         f_{NV,s} K \sum_{r'} -C_{r'}(NV)_{r'} & \textrm{for}\ C_s > 0 \\
+         0                                              & \textrm{otherwise}    \\
+      \end{cases}
+
+.. math::
+   E =
+      \begin{cases}
+         C_s K \mathcal{E}_s                                                & \textrm{for}\ C_s < 0 \\
+         f_{\mathcal{E},s} K \sum_{r'} -C_{r'}\mathcal{E}_{r'} & \textrm{for}\ C_s > 0 \\
+         0                                                                  & \textrm{otherwise}    \\
+      \end{cases}
+
+If the species is consumed, it has negative sources proportional to its current momentum
+(:math:`{NV}_s`) and energy (:math:`\mathcal{E}_s`). If the species is produced, it has positive sources, which
+are proportional to the total momentum and energy of all consumed reactants (:math:`r'`; implying
+:math:`C_r < 0`).
+
+:math:`f_{NV,s}` and :math:`f_{\mathcal{E},s}` are weights / splitting factors used to distribute momentum and
+energy between products. The default is to weight by mass for momentum, and by population change
+(number) for energy, that is
+
+.. math::
+   \begin{aligned}
+      f_{NV,s} &= \frac{\Delta M_s}{\Delta M} \\
+              &= \frac{C_s m_s}{\sum_{p'}C_{p'} m_{p'}}
+   \end{aligned}
+
+.. math::
+   \begin{aligned}
+     f_{\mathcal{E},s} &= \frac{\Delta N_s}{\Delta N} \\
+                       &= \frac{C_s}{\sum_{p'}C_{p'}}
+   \end{aligned}
+
+where :math:`m` are species masses, :math:`C` are population changes and subscripts :math:`s` and
+:math:`p'` refer to the target species and to a *produced* species (:math:`C > 0`) respectively.
+:math:`\Delta M` and :math:`\Delta N` are the change in mass and particle number associated with one
+instance of the reaction.
+
+These default factors can be overridden by calling
+`set_energy_channel_weight<Reaction::set_energy_channel_weight>` and
+`set_momentum_channel_weight<Reaction::set_momentum_channel_weight>` in the constructor of a
+reaction subclass.
+
+For example, for charge exchange, momentum and energy need to be transferred
+
+1. from a reactant that donates an electron ('r1') to the resulting product ('p1') and 
+2. from a reactant that accepts an electron ('r2') to the resulting product ('p2').
+
+The following code sets channels to enforce those requirements:
+
+.. code-block:: cpp
+
+   // Energy exchange between r1 and p1
+   set_energy_channel_weight(this->r1, this->p1, 1.0);
+   set_energy_channel_weight(this->r1, this->p2, 0.0);
+
+   // Energy exchange between r2 and p2
+   set_energy_channel_weight(this->r2, this->p1, 0.0);
+   set_energy_channel_weight(this->r2, this->p2, 1.0);
+
+   //  Momentum exchange between r1 and p1
+   set_momentum_channel_weight(this->r1, this->p1, 1.0);
+   set_momentum_channel_weight(this->r1, this->p2, 0.0);
+
+   // Momentum exchange between r2 and p2
+   // (Can be turned off for neutral-ion CX using config option)
+   if (this->has_neutral_reactant && this->no_neutral_cx_mom_gain) {
+      set_momentum_channel_weight(this->r2, this->p2, 0.0);
+   } else {
+      set_momentum_channel_weight(this->r2, this->p2, 1.0);
+   }
+   set_momentum_channel_weight(this->r2, this->p1, 0.0);
+
+.. note::
+   So-called `participation factors<Reaction::pfactors>` are included in all source term
+   calculations in the code. For now, these are all set to 1, reproducing the equations above
+   exactly, but in future they could be made configurable to allow users to experiment with tuning
+   the contribution of particular species to reaction source terms.
+
+
+Source term calculation
+```````````````````````
+
+Density, momentum and energy source fields are constructed in `Reaction::transform_impl` using the
+`RateHelper` class to calculate reaction rates and collision frequencies.
+
+On instantiation, :code:`RateHelper` assembles maps containing (pointers to) all reactant densities
+and any other fields required as inputs.
+
+`RateHelper::calc_rates` is "run-time templated", allowing it to accept rate functions with 1D and
+2D parameterisations. It also includes an optional flag which causes reaction input parameters to be
+averaged in the parallel direction. Averaging is turned on by default, but can be disabled in a
+subclass by setting :code:`do_parallel_averaging = false`.
+
+Having calculated the reaction rate, :code:`Reaction::transform_impl` constructs sources by looping
+over the species population changes provided by :code:`ReactionParser`.
+
+.. note::
+   The loop to compute momentum and energy sources includes a subtle workaround for reactions like
+   symmetric charge exchange. Rather than using the regular stoichiometric coefficients, which are
+   all zero in such cases, the loop uses the result of `ReactionParser::get_mom_energy_pop_changes`.
+   For symmetric reactions, this returns a :code:`std::multimap` in which each species appears
+   twice; once as a reactant, with a negative population change and once as a product, with a
+   positive population change. This effectively turns reactions like :math:`\textrm{a} + \textrm{b}
+   \rightarrow \textrm{b} + \textrm{a}` into :math:`\textrm{a} + \textrm{b} \rightarrow \textrm{b}'
+   + \textrm{a}'`, allowing the momentum and energy transfer to be computed as usual, before mapping
+   sources back to the correct species.
+
+
+Adding new reaction subclasses
+``````````````````````````````
+
+New reaction subclasses should inherit directly or indirectly from `Reaction`. They are registered
+in the code with the reaction string as an argument, e.g.
+
+.. code-block:: cpp
+
+   struct MyReaction : public Reaction {
+      ...
+   }
+
+   RegisterComponent<MyReaction> register_myreaction("a + b -> c + d");
+
+Any sources associated with the reaction that are not captured by
+`transform_impl<Reaction::transform_impl>` should be added by overriding
+`transform_additional<Reaction::transform_additional>` and using
+`update_source<Reaction::update_source>` to set source terms and associated diagnostics.
+
+
+Adding new reaction diagnostics
+```````````````````````````````
+
+New diagnostics are configured by making calls to `add_diagnostic<Reaction::add_diagnostic>` in the
+subclass constructor; e.g. for a density source associated with the neutral reactant in charge
+exchange:
+
+.. code-block:: cpp
+   :caption: Example of adding a reaction diagnostic. :code:`r1` is the name of a reactant that
+    charge-exchanges with reactant :code:`r2` creating product :code:`p1`. 
+
+   add_diagnostic(
+          this->r1, fmt::format("S{:s}{:s}_cx", this->r1, this->r2),
+          fmt::format("Particle transfer to {:s} from {:s} due to CX with {:s}", this->r1,
+                      this->p1, this->r2),
+          ReactionDiagnosticType::density_src, standard_name, identity,
+          "particle transfer");
+
+
+
+An optional function pointer can be used to set a transformation that will be applied when the
+diagnostic is updated. The value passed here (also the default) is :code:`identity`, meaning that
+the diagnostic and associated source term will be updated in the same way. The fourth argument is an
+:code:`enum` value that determines, among other things, which metadata will be set when the
+diagnostic is written out.
+
+Each call adds an instance of `ReactionDiagnostic` to a `diagnostics map<Reaction::diagnostics>`,
+indexed by species name and a `ReactionDiagnosticType<ReactionDiagnostic::ReactionDiagnosticType>`
+enum. The map entries are updated via `update_source()<Reaction::update_source>`, which wraps the
+`add`, `subtract`, and `set` operations, applying them to both a source term and to an associated
+diagnostic at the same time.
+
+For example, this code
+
+.. code-block:: cpp
+
+   update_source<add<Field3D>>(state, "h+", ReactionDiagnosticType::momentum_src, momentum_source);
+
+would add the :code:`momentum_source` field to :code:`state["species"]["h+"]["momentum_source"]`,
+then apply the diagnostic transform (which defaults to an identity function) to
+:code:`momentum_source` and add the result to any diagnostics of type :code:`momentum_src`
+associated with species :code:`h+`.
+
+.. note::
+   `add`, `subtract`, and `set` can still be used directly to update the state, as usual, if there
+   is no associated diagnostic to update.   
+
+Finally, diagnostics are written out in `outputVars()<Reaction::outputVars>`, which simply iterates
+over the `diagnostics<Reaction::diagnostics>` map, copying fields into the output state. Appropriate
+metadata is set for each diagnostic depending on the associated :code:`ReactionDiagnosticType`.
+
+
+Adding new reaction data
+````````````````````````
+
+If the data being added is of a new type (i.e. one not handled by an existing subclass of
+`ReactionData`), developers will need to:
+
+1. Create a new class that inherits from `ReactionData` (or from `ReactionDataWithCoeffs` if the
+   rate calculation computes a fit value from coefficients).
+2. Implement all pure virtual functions, including those that calculate rates with different
+   parameterisations.
+3. Add code to the constructor of the new subclass to read data into the `coeffs` data member, for file-based data sources.
+4. Add a new value to the `ReactionDataType` enum.
+5. Register the data class in a new header file.
+
+   .. code-block:: cpp
+
+      RegisterReactionData<MyDataClass> register_myclass("mylabel");
+
+   where "mylabel" must match the value of the `ReactionDataType` enum added in step 4, converted to lowercase.
+
+6. Add an include statement for your class's header in :file:`hermes-3.hxx`.
+
+
+For both new and existing data types, developers need to
+
+1. Add any associated json data files to the :file:`./json_database` directory.
+2. Register a `Reaction` subclass for the reaction string.
+3. Add any default data IDs to the `generate_default_data_ids_map` function in :file:`reaction_settings.hxx`.
+
+Step 3. is optional, but without it, users will always need to specify the data type and ID/label for the new reaction in their input file.
+
+Example: To add He+ ionisation: :code:`he+ + e -> he+2 + 2e` one could
+
+1. Create :file:`./json_database/AMJUEL_H.4_2.2C.json` containing the relevant coefficients,
+   matching the format of existing Amjuel json files.
+2. Register the reaction with the standard ionisation reaction class:
+   :code:`RegisterComponent<IznReaction> register_izn_he2p("he+ + e -> he+2 + 2e");`
+3. Set the new data to be the default source for He+ ionisation in
+   :file:`include/reaction_settings.hxx`
+
+   .. code-block:: cpp
+
+      static inline void generate_default_data_ids_map() {
+      ...
+         add_default_id(ReactionDataTypes::Amjuel, "he+ + e -> he+2 + 2e", ReactionCoeffTypes::sigma_v, "H.4_2.2C");
+      ...
+      }
+
+.. note::
+   For ionisation/recombination one would also need to add data to compute the losses associated
+   with the ionisation potential energy cost and photon emission. At time of writing, appropriate
+   Amjuel data is not available for this reaction, which is why He+ ionisation hasn't already been
+   added.
 
 .. _sec-tests:
 

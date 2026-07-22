@@ -5,10 +5,13 @@ import matplotlib.pyplot as plt
 import shutil
 import zipfile
 import hashlib
+import os
 from pathlib import Path
 import urllib.request
 import xhermes
+from time import time
 
+t0 = time()
 
 """
 This test reconstructs neutra target density and energy sources due to recycling 
@@ -18,7 +21,7 @@ It mirrors the code in recycling.cxx. It's written in a way to allow easy debugg
 of the recycling calculation for development reasons.
 """
 
-verbose = False
+verbose = True
 plot = False
 debug = False  # Do not download files or run test
 rtol = 1e-6
@@ -63,6 +66,10 @@ if not debug:
         with open(tmp_path, "wb") as out_file:
             shutil.copyfileobj(response, out_file)
 
+    t_download = time()
+    if verbose:
+        print(f"2D-Recycling test: download took {t_download - t0:.2f} seconds")
+
     # Rename temp file with the correct name
     tmp_path.replace(zipfile_path)
 
@@ -87,14 +94,21 @@ if not debug:
             "2D-recycling test: downloaded zip file hash does not match expected value"
         )
 
+    t_extract = time()
     if verbose:
-        print("2D-recycling test: downloaded and extracted files")
+        print(
+            f"2D-Recycling test: zip extraction took {t_extract - t_download:.2f} seconds"
+        )
 
     ## Run test
     if not Path("hermes-3").is_file():
         shell("ln -s ../../../hermes-3 hermes-3")
 
-    runcmd = getmpirun().split(" ")[0] + " --oversubscribe -np"
+    runcmd = getmpirun().split(" ")[0] + " -np"
+
+    # Allow oversubscription for OpenMPI via env var (silently ignored by MPICH,
+    # which does not enforce slot limits and does not support --oversubscribe)
+    os.environ["OMPI_MCA_rmaps_base_oversubscribe"] = "yes"
 
     s, out = launch_safe("./hermes-3 -d data", runcmd=runcmd, nproc=10, pipe=True)
 
@@ -103,8 +117,9 @@ if not debug:
         print(out)
         exit(1)
 
+    t_run = time()
     if verbose:
-        print("2D-recycling test: completed simulation")
+        print(f"2D-Recycling test: simulation took {t_run - t_extract:.2f}")
 
 ##########################################################################
 # Load case and perform test
@@ -129,6 +144,11 @@ ds = xhermes.open_hermesdataset(
 ds = ds.hermes.extract_2d_tokamak_geometry()
 
 ds = ds.load()
+
+t_load = time()
+if verbose:
+    print(f"2D-Recycling test: loading results took {t_load - t_run:.2f} seconds")
+
 if "t" in ds.sizes:
     ds = ds.isel(t=-1)
 m = ds.metadata
@@ -429,3 +449,6 @@ for side in ["upper", "lower"]:
         atol=atol,
         err_msg=f"{side} target pump energy source mismatch",
     )
+
+t_final = time()
+print(f"2D-Recycling test: Passed in {t_final - t0:.2f} seconds")

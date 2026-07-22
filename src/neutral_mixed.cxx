@@ -1,16 +1,28 @@
 
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/globals.hxx>
+#include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/solver.hxx>
 
+#include "../include/component.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/guarded_options.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/neutral_mixed.hxx"
+#include "../include/permissions.hxx"
 
 #include <algorithm>
+#include <string>
 
 using bout::globals::mesh;
 
@@ -66,7 +78,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   density_floor = options["density_floor"]
                       .doc("A minimum density used when dividing NVn by Nn. "
                            "Normalised units.")
-                      .withDefault(1e-8);
+                      .withDefault(1e-7);
 
   freeze_low_density = options["freeze_low_density"]
                            .doc("Freeze evolution in low density regions?")
@@ -142,7 +154,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   neutral_viscosity = options["neutral_viscosity"]
                           .doc("Include neutral gas viscosity?")
                           .withDefault<bool>(true);
-
+  
   neutral_conduction = options["neutral_conduction"]
                            .doc("Include neutral gas heat conduction?")
                            .withDefault<bool>(true);
@@ -276,7 +288,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   substitutePermissions("name", {name});
   substitutePermissions(
-      "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
+      "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity",
+                  "particle_flow_xlow", "particle_flow_ylow",
+                  "energy_flow_xlow", "energy_flow_ylow"});
 }
 
 void NeutralMixed::transform_impl(GuardedOptions& state) {
@@ -320,7 +334,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
             0.5 * (3. * Nn(r.ind, mesh->ystart, jz) - Nn(r.ind, mesh->ystart + 1, jz)),
             0.0);
 
-        BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
+        const BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
 
         Nn(r.ind, mesh->ystart - 1, jz) = 2 * nnwall - Nn(r.ind, mesh->ystart, jz);
 
@@ -348,7 +362,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
         const BoutReal nnwall = std::max(
             0.5 * (3. * Nn(r.ind, mesh->yend, jz) - Nn(r.ind, mesh->yend - 1, jz)), 0.0);
 
-        BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
+        const BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
 
         Nn(r.ind, mesh->yend + 1, jz) = 2 * nnwall - Nn(r.ind, mesh->yend, jz);
 
@@ -373,10 +387,23 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   set(localstate["momentum"], NVn);
   set(localstate["velocity"], Vn);
   set(localstate["temperature"], Tn);
+
+  if (!localstate.isSet("particle_flow_xlow")) {
+    set(localstate["particle_flow_xlow"], zeroFrom(Nn));
+  }
+  if (!localstate.isSet("particle_flow_ylow")) {
+    set(localstate["particle_flow_ylow"], zeroFrom(Nn));
+  }
+  if (!localstate.isSet("energy_flow_xlow")) {
+    set(localstate["energy_flow_xlow"], zeroFrom(Nn));
+  }
+  if (!localstate.isSet("energy_flow_ylow")) {
+    set(localstate["energy_flow_ylow"], zeroFrom(Nn));
+  }
 }
 
 void NeutralMixed::finally(const Options& state) {
-  auto& localstate = state["species"][name];
+  const auto& localstate = state["species"][name];
 
   // extract auxiliary variables derived from
   // Nn, Pn, NVn, from the local state
@@ -402,7 +429,7 @@ void NeutralMixed::finally(const Options& state) {
   // Nnlim Used where division by neutral density is needed
   Nnlim = softFloor(Nn, density_floor);
   // Tnlim used where positivity of Tn is required
-  Field3D Tnlim = softFloor(Tn, temperature_floor);
+  const Field3D Tnlim = softFloor(Tn, temperature_floor);
   // Pnlim used where positivity of Pn is required
   Pnlim = softFloor(Pn, pressure_floor);
   logPnlim = log(Pnlim);
@@ -411,72 +438,79 @@ void NeutralMixed::finally(const Options& state) {
   // Calculate cross-field diffusion from collision frequency
   //
   //
-
-  // Pseudo-collisionality representing domain size based neutral MFP limit
-  nu_pseudo_mfp = sqrt(Tnlim / AA) / neutral_lmax;
-
-  if (localstate.isSet("collision_frequency")) {
-    // Collisionality
-    // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
-    if (collision_names.empty()) { // Calculate only once - at the beginning
-
-      if (diffusion_collisions_mode == "afn") {
-        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
-
-          std::string collision_name = collision.second.name();
-
-          if ( // Charge exchange
-              (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
-              // Ionisation
-              (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) or
-              // Neutral-neutral collisions
-              (collisionSpeciesMatch(collision_name, name, name, "coll", "exact"))) {
-            collision_names.push_back(collision_name);
-          }
-        }
-        // Multispecies mode: all collisions and CX are included
-      } else if (diffusion_collisions_mode == "multispecies") {
-        for (const auto& collision : localstate["collision_frequencies"].getChildren()) {
-
-          std::string collision_name = collision.second.name();
-
-          if ( // Charge exchange
-              (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
-              // Any collision (en, in, ee, ii, nn)
-              (collisionSpeciesMatch(collision_name, name, "", "coll", "partial"))) {
-            collision_names.push_back(collision_name);
-          }
-        }
-
-      } else {
-        throw BoutException("\ndiffusion_collisions_mode for {:s} must be either "
-                            "multispecies or braginskii",
-                            name);
-      }
-
-      if (collision_names.empty()) {
-        throw BoutException("\tNo collisions found for {:s} in neutral_mixed for "
-                            "selected collisions mode",
-                            name);
-      }
-
-      // Write chosen collisions to log file
-      output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ", name,
-                        diffusion_collisions_mode);
-      for (const auto& collision : collision_names) {
-        output_info.write("{:s} ", collision);
-      }
-      output_info.write("\n");
-    }
-
-    // Collect the collisionalities based on list of names
-    nu = 0;
-    for (const auto& collision_name : collision_names) {
-      nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
-    }
-
+  const Field3D Rnn = sqrt(Tnlim / AA)
+                      / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+  if (collisionality_override > 0.0) {
+    // user has set an override for collision frequency
+    Dnn = (Tn / AA) / collisionality_override;
   } else {
-    nu = 0.0;
+    if (localstate.isSet("collision_frequency")) {
+      // Collisionality
+      // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
+      if (collision_names.empty()) { // Calculate only once - at the beginning
+
+        if (diffusion_collisions_mode == "afn") {
+          for (const auto& collision :
+               localstate["collision_frequencies"].getChildren()) {
+
+            const std::string collision_name = collision.second.name();
+
+            if ( // Charge exchange
+                (collisionSpeciesMatch(collision_name, name, "+", "cx", "partial")) or
+                // Ionisation
+                (collisionSpeciesMatch(collision_name, name, "+", "iz", "partial")) or
+                // Neutral-neutral collisions
+                (collisionSpeciesMatch(collision_name, name, name, "coll", "exact"))) {
+              collision_names.push_back(collision_name);
+            }
+          }
+          // Multispecies mode: all collisions and CX are included
+        } else if (diffusion_collisions_mode == "multispecies") {
+          for (const auto& collision :
+               localstate["collision_frequencies"].getChildren()) {
+
+            const std::string collision_name = collision.second.name();
+
+            if ( // Charge exchange
+                (collisionSpeciesMatch(collision_name, name, "", "cx", "partial")) or
+                // Any collision (en, in, ee, ii, nn)
+                (collisionSpeciesMatch(collision_name, name, "", "coll", "partial"))) {
+              collision_names.push_back(collision_name);
+            }
+          }
+
+        } else {
+          throw BoutException("\ndiffusion_collisions_mode for {:s} must be either "
+                              "multispecies or braginskii",
+                              name);
+        }
+
+        if (collision_names.empty()) {
+          throw BoutException("\tNo collisions found for {:s} in neutral_mixed for "
+                              "selected collisions mode",
+                              name);
+        }
+
+        // Write chosen collisions to log file
+        output_info.write("\t{:s} neutral collisionality mode: '{:s}' using ", name,
+                          diffusion_collisions_mode);
+        for (const auto& collision : collision_names) {
+          output_info.write("{:s} ", collision);
+        }
+        output_info.write("\n");
+      }
+
+      // Collect the collisionalities based on list of names
+      nu = 0;
+      for (const auto& collision_name : collision_names) {
+        nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
+      }
+
+      // Dnn = Vth^2 / sigma
+      Dnn = (Tnlim / AA) / (nu + Rnn);
+    } else {
+      Dnn = (Tnlim / AA) / Rnn;
+    }
   }
 
   nu_total = nu + nu_pseudo_mfp;
@@ -511,9 +545,6 @@ void NeutralMixed::finally(const Options& state) {
     // Old formulation: 3D thermal speed for advection, that times 3/2 for heat flux
     // New formulation: 1D particle flow in 3D maxwellian, 1D heat flow in 3D Maxwellian
     // See Stangeby
-
-    Field3D Vnth_pf = 0.0;
-    Field3D Vnth_hf = 0.0;
 
     if (legacy_thermal_speed) {
       Vnth_pf = sqrt(Tnlim / AA);
@@ -680,15 +711,18 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  ddt(Nn) = -FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed,
-                                         pf_adv_par_ylow); // Parallel advection
+  ddtN_par_advection = -FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed, pf_adv_par_ylow);
+  ddt(Nn) = ddtN_par_advection; // Parallel advection
 
   // Perpendicular diffusion
   if (nonorthogonal_operators) {
-    ddt(Nn) +=
+    ddtN_perp_diffusion =
         Div_a_Grad_perp_nonorthog(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddt(Nn) += ddtN_perp_diffusion;
   } else {
-    ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddtN_perp_diffusion =
+        Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddt(Nn) += ddtN_perp_diffusion;
   }
 
   Sn = density_source; // Save for possible output
@@ -701,20 +735,23 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = -(5. / 3)
-                * FV::Div_par_mod<ParLimiter>( // Parallel advection
-                    Pn, Vn, sound_speed, ef_adv_par_ylow)
-            + (2. / 3) * Vn * Grad_par(Pn); // Work done
+  ddtPn_par_advection = -(5. / 3)
+                        * FV::Div_par_mod<ParLimiter>( // Parallel advection
+                            Pn, Vn, sound_speed, ef_adv_par_ylow);
+  ddtPn_work_done = (2. / 3) * Vn * Grad_par(Pn); // Work done
+  ddt(Pn) = ddtPn_par_advection + ddtPn_work_done;
 
   // Perpendicular advection of pressure
   if (nonorthogonal_operators) {
-    ddt(Pn) +=
+    ddtPn_perp_advection =
         (5. / 3)
         * Div_a_Grad_perp_nonorthog(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += ddtPn_perp_advection;
   } else {
-    ddt(Pn) +=
+    ddtPn_perp_advection =
         (5. / 3)
         * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += ddtPn_perp_advection;
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -723,20 +760,24 @@ void NeutralMixed::finally(const Options& state) {
   ef_adv_perp_ylow *= 5. / 2;
 
   if (neutral_conduction) {
-    ddt(Pn) += (2. / 3)
-               * Div_par_K_Grad_par_mod(kappa_n_par, Tn, // Parallel conduction
-                                        ef_cond_par_ylow,
-                                        false); // No conduction through target boundary
+    ddtPn_par_conduction =
+        (2. / 3)
+        * Div_par_K_Grad_par_mod(kappa_n_par, Tn, // Parallel conduction
+                                 ef_cond_par_ylow,
+                                 false); // No conduction through target boundary
+    ddt(Pn) += ddtPn_par_conduction;
 
     // Perpendicular conduction
     if (nonorthogonal_operators) {
-      ddt(Pn) += (2. / 3)
-                 * Div_a_Grad_perp_nonorthog(kappa_n_perp, Tn, ef_cond_perp_xlow,
-                                             ef_cond_perp_ylow);
+      ddtPn_perp_conduction = (2. / 3)
+                              * Div_a_Grad_perp_nonorthog(
+                                  kappa_n_perp, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      ddt(Pn) += ddtPn_perp_conduction;
     } else {
-      ddt(Pn) +=
+      ddtPn_perp_conduction =
           (2. / 3)
           * Div_a_Grad_perp_flows(kappa_n_perp, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      ddt(Pn) += ddtPn_perp_conduction;
     }
 
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
@@ -757,19 +798,23 @@ void NeutralMixed::finally(const Options& state) {
     // Neutral momentum
     TRACE("Neutral momentum");
 
-    ddt(NVn) = -AA
-                   * FV::Div_par_fvv<ParLimiter>( // Momentum flow
-                       Nnlim, Vn, sound_speed)
+    ddtNVn_par_advection = -AA
+                           * FV::Div_par_fvv<ParLimiter>( // Momentum flow
+                               Nnlim, Vn, sound_speed);
+    ddt(NVn) = ddtNVn_par_advection;
 
-               - Grad_par(Pn); // Pressure gradient
+    ddtNVn_pressure_gradient = -Grad_par(Pn); // Pressure gradient
+    ddt(NVn) += ddtNVn_pressure_gradient;
 
     // Perpendicular advection of momentum
     if (nonorthogonal_operators) {
-      ddt(NVn) +=
+      ddtNVn_perp_advection =
           Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      ddt(NVn) += ddtNVn_perp_advection;
     } else {
-      ddt(NVn) +=
+      ddtNVn_perp_advection =
           Div_a_Grad_perp_flows(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      ddt(NVn) += ddtNVn_perp_advection;
     }
 
     if (neutral_viscosity) {
@@ -781,22 +826,24 @@ void NeutralMixed::finally(const Options& state) {
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = Div_par_K_Grad_par_mod( // Parallel viscosity
+      par_viscosity_source = Div_par_K_Grad_par_mod( // Parallel viscosity
           eta_n_par, Vn, mf_visc_par_ylow,
           false) // No viscosity through target boundary
           ;
 
       // Perpendicular viscosity
       if (nonorthogonal_operators) {
-        viscosity_source += Div_a_Grad_perp_nonorthog(eta_n_perp, Vn, mf_visc_perp_xlow,
-                                                      mf_visc_perp_ylow);
+        perp_viscosity_source = Div_a_Grad_perp_nonorthog(
+            eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
       } else {
-        viscosity_source +=
+        perp_viscosity_source =
             Div_a_Grad_perp_flows(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
       }
 
-      ddt(NVn) += viscosity_source;
-      ddt(Pn) += -(2. / 3) * Vn * viscosity_source;
+      ddtNVn_viscosity = par_viscosity_source + perp_viscosity_source;
+      ddtPn_viscosity = -(2. / 3) * Vn * (par_viscosity_source + perp_viscosity_source);
+      ddt(NVn) += ddtNVn_viscosity;
+      ddt(Pn) += ddtPn_viscosity;
     }
     Snv = momentum_source;
     if (localstate.isSet("momentum_source")) {
@@ -842,18 +889,22 @@ void NeutralMixed::finally(const Options& state) {
           Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
         }
 
-        ddt(Nn) +=
+        ddtN_anomalous_transport =
             Div_a_Grad_perp_upwind(Nn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        ddt(Nn) += ddtN_anomalous_transport;
         // NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the
         // equilibrium value of Nn.
 
-        ddt(Pn) += (5. / 3)
-                   * Div_a_Grad_perp_upwind(
-                       Pn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+        ddtPn_anomalous_transport =
+            (5. / 3)
+            * Div_a_Grad_perp_upwind(Pn * anomalous_D / softFloor(Ni, density_floor),
+                                     Ni2D);
+        ddt(Pn) += ddtPn_anomalous_transport;
 
         if (evolve_momentum) {
-          ddt(NVn) += Div_a_Grad_perp_upwind(
+          ddtNVn_anomalous_transport = Div_a_Grad_perp_upwind(
               NVn * anomalous_D / softFloor(Ni, density_floor), Ni2D);
+          ddt(NVn) += ddtNVn_anomalous_transport;
         }
       }
     }
@@ -862,7 +913,7 @@ void NeutralMixed::finally(const Options& state) {
   // If N < density_floor then NV and NV_solver may differ
   // -> Add term to force NV_solver towards NV
   // Note: This correction is calculated in transform()
-  ddt(NVn) += NVn_err;
+    ddt(NVn) += NVn_err;
 
   // Ste time derivatives to zero
   if (zero_timederivs) {
@@ -885,12 +936,12 @@ void NeutralMixed::finally(const Options& state) {
     Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
     ddt(Nn) *= scale_timederivs;
     ddt(Pn) *= scale_timederivs;
-    ddt(NVn) *= scale_timederivs;
-  }
+      ddt(NVn) *= scale_timederivs;
+    }
 
   if (freeze_low_density) {
     // Apply a factor to time derivatives in low density regions.
-    // Keep the sources and sinks, so that temperature and flow
+    // Keep the sources and rescues, so that temperature and flow
     // equilibriates with the plasma through collisions.
 
     Field3D Nn_s, Pn_s, NVn_s;
@@ -919,9 +970,9 @@ void NeutralMixed::finally(const Options& state) {
       const BoutReal factor = exp(-density_floor / meanNn);
       ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
       ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
-      ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
+        ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
+      }
     }
-  }
 
   // NOTE: Do we need to do that?
   // Restore NV to the value returned by the solver
@@ -929,6 +980,52 @@ void NeutralMixed::finally(const Options& state) {
   // Note: Copy boundary condition so dump file has correct boundary.
   NVn_solver.setBoundaryTo(NVn);
   NVn = NVn_solver;
+
+  // Update the flows in the state with the calculated values
+  auto& localstate_rw = const_cast<Options&>(state)["species"][name];
+  if (pf_adv_perp_xlow.isAllocated()) {
+    set(localstate_rw["particle_flow_xlow"], pf_adv_perp_xlow);
+  }
+  if (pf_adv_perp_ylow.isAllocated()) {
+    set(localstate_rw["particle_flow_ylow"], pf_adv_perp_ylow);
+  }
+
+  Field3D ef_total_perp_xlow;
+  bool ef_total_perp_xlow_set = false;
+  if (ef_adv_perp_xlow.isAllocated()) {
+    ef_total_perp_xlow = ef_adv_perp_xlow;
+    ef_total_perp_xlow_set = true;
+  }
+  if (neutral_conduction && ef_cond_perp_xlow.isAllocated()) {
+    if (ef_total_perp_xlow_set) {
+      ef_total_perp_xlow += ef_cond_perp_xlow;
+    } else {
+      ef_total_perp_xlow = ef_cond_perp_xlow;
+      ef_total_perp_xlow_set = true;
+    }
+  }
+
+  Field3D ef_total_perp_ylow;
+  bool ef_total_perp_ylow_set = false;
+  if (ef_adv_perp_ylow.isAllocated()) {
+    ef_total_perp_ylow = ef_adv_perp_ylow;
+    ef_total_perp_ylow_set = true;
+  }
+  if (neutral_conduction && ef_cond_perp_ylow.isAllocated()) {
+    if (ef_total_perp_ylow_set) {
+      ef_total_perp_ylow += ef_cond_perp_ylow;
+    } else {
+      ef_total_perp_ylow = ef_cond_perp_ylow;
+      ef_total_perp_ylow_set = true;
+    }
+  }
+
+  if (ef_total_perp_xlow_set) {
+    set(localstate_rw["energy_flow_xlow"], ef_total_perp_xlow);
+  }
+  if (ef_total_perp_ylow_set) {
+    set(localstate_rw["energy_flow_ylow"], ef_total_perp_ylow);
+  }
 
 #if CHECKLEVEL >= 1
   for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
@@ -995,16 +1092,145 @@ void NeutralMixed::outputVars(Options& state) {
          {"conversion", Nnorm * Omega_ci},
          {"long_name", std::string("Rate of change of ") + name + " number density"},
          {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtN") + name + std::string("_par_advection")],
+                   ddtN_par_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"long_name", name + std::string(" density parallel advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtN") + name + std::string("_perp_diffusion")],
+                   ddtN_perp_diffusion,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"long_name", name + std::string(" density perpendicular diffusion")},
+                    {"source", "neutral_mixed"}});
+
     set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn),
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
                     {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_par_advection")],
+                   ddtPn_par_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure parallel advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_work_done")],
+                   ddtPn_work_done,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure work done")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtP") + name + std::string("_perp_advection")],
+        ddtPn_perp_advection,
+        {{"time_dimension", "t"},
+         {"units", "Pa s^-1"},
+         {"conversion", Pnorm * Omega_ci},
+         {"long_name", name + std::string(" pressure perpendicular advection")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_par_conduction")],
+                   ddtPn_par_conduction,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure parallel conduction")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtP") + name + std::string("_perp_conduction")],
+        ddtPn_perp_conduction,
+        {{"time_dimension", "t"},
+         {"units", "Pa s^-1"},
+         {"conversion", Pnorm * Omega_ci},
+         {"long_name", name + std::string(" pressure perpendicular conduction")},
+         {"source", "neutral_mixed"}});
+
     set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NVn),
                    {{"time_dimension", "t"},
                     {"units", "kg m^-2 s^-2"},
                     {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtNV") + name + std::string("_par_advection")],
+                   ddtNVn_par_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum parallel advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtNV") + name + std::string("_pressure_gradient")],
+                   ddtNVn_pressure_gradient,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum pressure gradient")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtNV") + name + std::string("_perp_advection")],
+        ddtNVn_perp_advection,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum perpendicular advection")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("NV") + name + std::string("_par_visc_source")],
+        par_viscosity_source,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum parallel viscosity source")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("NV") + name + std::string("_perp_visc_source")],
+        perp_viscosity_source,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum perpendicular viscosity source")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtNV") + name + std::string("_viscosity")],
+                   ddtNVn_viscosity,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum viscosity")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtPn") + name + std::string("_viscosity")],
+                   ddtPn_viscosity,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure viscosity")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtN") + name + std::string("_anomalous_transport")],
+        ddtN_anomalous_transport,
+        {{"time_dimension", "t"},
+         {"units", "m^-3 s^-1"},
+         {"conversion", Nnorm * Omega_ci},
+         {"long_name", name + std::string(" density anomalous transport")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtNV") + name + std::string("_anomalous_transport")],
+        ddtNVn_anomalous_transport,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum anomalous transport")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtPn") + name + std::string("_anomalous_transport")],
+        ddtPn_anomalous_transport,
+        {{"time_dimension", "t"},
+         {"units", "Pa s^-1"},
+         {"conversion", Pnorm * Omega_ci},
+         {"long_name", name + std::string(" pressure anomalous transport")},
+         {"source", "neutral_mixed"}});
   }
   if (diagnose) {
     set_with_attrs(state["debug"], debug,
@@ -1164,6 +1390,21 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "pressure source"},
                     {"long_name", name + " pressure source"},
                     {"species", name},
+                    {"source", "neutral_mixed"}});
+    // Lin add
+    set_with_attrs(state[std::string("V") + name + std::string("th_pf")], Vnth_pf,
+                   {{"time_dimension", "t"},
+                    {"units", "m / s"},
+                    {"conversion", Cs0},
+                    {"standard_name", "velocity"},
+                    {"long_name", name + " thermal velocity of neutrals for advection"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("V") + name + std::string("th_hf")], Vnth_hf,
+                   {{"time_dimension", "t"},
+                    {"units", "m / s"},
+                    {"conversion", Cs0},
+                    {"standard_name", "velocity"},
+                    {"long_name", name + " thermal velocity of neutrals for heat flux"},
                     {"source", "neutral_mixed"}});
 
     ///////////////////////////////////////////////////

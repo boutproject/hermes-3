@@ -37,7 +37,7 @@ struct OpenADASRateCoefficient {
 ///
 /// Uses the JSON files produced by:
 ///   https://github.com/TBody/OpenADAS_to_JSON
-struct OpenADAS : public ReactionBase {
+struct OpenADAS : public hermes::ReactionBase {
   ///
   /// Inputs
   /// ------
@@ -57,10 +57,10 @@ struct OpenADAS : public ReactionBase {
   OpenADAS(const Options& units, const std::string& rate_file,
            const std::string& radiation_file, std::string from_ion, std::string to_ion,
            std::size_t level, BoutReal electron_heating)
-      : ReactionBase({readIfSet("species:{sp}:charge"), readOnly("species:{sp}:AA"),
-                      readOnly("species:{from_ion}:{val}"), readOnly("species:e:{e_val}"),
-                      readWrite("species:{sp}:{w_val}"),
-                      readWrite("species:e:{ew_val}")}),
+      : hermes::ReactionBase(
+            {readIfSet("species:{sp}:charge"), readOnly("species:{sp}:AA"),
+             readOnly("species:{from_ion}:{val}"), readOnly("species:e:{e_val}"),
+             readWrite("species:{sp}:{w_val}"), readWrite("species:e:{ew_val}")}),
         rate_coef(std::string("json_database/") + rate_file, level),
         radiation_coef(std::string("json_database/") + radiation_file, level),
         electron_heating(electron_heating) {
@@ -94,13 +94,14 @@ private:
   BoutReal Tnorm, Nnorm, FreqNorm; ///< Normalisations
 };
 
-struct OpenADASChargeExchange : public ReactionBase {
+struct OpenADASChargeExchange : public hermes::ReactionBase {
   OpenADASChargeExchange(const Options& units, const std::string& rate_file,
                          std::string from_A, std::string from_B, std::string to_A,
                          std::string to_B, std::size_t level)
-      : ReactionBase({readIfSet("species:{sp}:charge"), readOnly("species:{sp}:AA"),
-                      readOnly("species:{from_ion}:{val}"), readOnly("species:e:{e_val}"),
-                      readWrite("species:{sp}:{w_val}")}),
+      : hermes::ReactionBase(
+            {readIfSet("species:{sp}:charge"), readOnly("species:{sp}:AA"),
+             readOnly("species:{from_ion}:{val}"), readOnly("species:e:{e_val}"),
+             readWrite("species:{sp}:{w_val}")}),
         rate_coef(std::string("json_database/") + rate_file, level) {
     // Get the units
     Tnorm = get<BoutReal>(units["eV"]);
