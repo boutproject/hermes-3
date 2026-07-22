@@ -1,7 +1,10 @@
 #include "../include/anomalous_diffusion.hxx"
 
 #include "../include/div_ops.hxx"
+
 #include <bout/fv_ops.hxx>
+#include <bout/mesh.hxx>
+#include <bout/options.hxx>
 #include <bout/output_bout_types.hxx>
 
 using bout::globals::mesh;
@@ -51,8 +54,8 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
                               .withDefault<bool>(false);
 
   diagnose = alloptions[name]["diagnose"]
-                   .doc("Output additional diagnostics?")
-                   .withDefault<bool>(false);
+                 .doc("Output additional diagnostics?")
+                 .withDefault<bool>(false);
 
   substitutePermissions("name", {name});
   substitutePermissions("optional", {"temperature", "velocity"});
@@ -92,7 +95,7 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   Field2D T2D = DC(T);
 
   const Field3D V =
-    species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
+      species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
   Field2D V2D = DC(V);
 
   if (!anomalous_sheath_flux) {
@@ -119,21 +122,22 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
     //
     //  v_D = - D Grad_perp(N) / N
 
-    add(species["density_source"], Div_a_Grad_perp_upwind_flows(anomalous_D, N2D,
-                                                                flow_xlow, flow_ylow));
+    add(species["density_source"],
+        Div_a_Grad_perp_upwind_flows(anomalous_D, N2D, flow_xlow, flow_ylow));
     add(species["particle_flow_xlow"], flow_xlow);
     add(species["particle_flow_ylow"], flow_ylow);
 
     // Note: Upwind operators used, or unphysical increases
     // in temperature and flow can be produced
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"], Div_a_Grad_perp_upwind_flows(AA * V2D * anomalous_D, N2D,
-                                                                 flow_xlow, flow_ylow));
+    add(species["momentum_source"],
+        Div_a_Grad_perp_upwind_flows(Field2D{AA * V2D * anomalous_D}, N2D, flow_xlow,
+                                     flow_ylow));
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
 
     add(species["energy_source"],
-        Div_a_Grad_perp_upwind_flows((3. / 2) * T2D * anomalous_D, N2D,
+        Div_a_Grad_perp_upwind_flows(Field2D{(3. / 2) * T2D * anomalous_D}, N2D,
                                      flow_xlow, flow_ylow));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
@@ -141,7 +145,9 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
 
   if (include_chi) {
     // Gradients in temperature that drive energy flows
-    add(species["energy_source"], Div_a_Grad_perp_upwind_flows(anomalous_chi * N2D, T2D, flow_xlow, flow_ylow));
+    add(species["energy_source"],
+        Div_a_Grad_perp_upwind_flows(Field2D{anomalous_chi * N2D}, T2D, flow_xlow,
+                                     flow_ylow));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
   }
@@ -149,7 +155,9 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   if (include_nu) {
     // Gradients in flow speed that drive momentum flows
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"], Div_a_Grad_perp_upwind_flows(anomalous_nu * AA * N2D, V2D, flow_xlow, flow_ylow));
+    add(species["momentum_source"],
+        Div_a_Grad_perp_upwind_flows(Field2D{anomalous_nu * AA * N2D}, V2D, flow_xlow,
+                                     flow_ylow));
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
   }
@@ -162,30 +170,30 @@ void AnomalousDiffusion::outputVars(Options& state) {
 
   if (diagnose) {
 
-      // Save particle, momentum and energy channels
+    // Save particle, momentum and energy channels
 
-      set_with_attrs(state[{std::string("anomalous_D_") + name}], anomalous_D,
-                      {{"time_dimension", "t"},
-                      {"units", "m^2 s^-1"},
-                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
-                      {"standard_name", "anomalous density diffusion"},
-                      {"long_name", std::string("Anomalous density diffusion of ") + name},
-                      {"source", "anomalous_diffusion"}});
+    set_with_attrs(state[{std::string("anomalous_D_") + name}], anomalous_D,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2 s^-1"},
+                    {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                    {"standard_name", "anomalous density diffusion"},
+                    {"long_name", std::string("Anomalous density diffusion of ") + name},
+                    {"source", "anomalous_diffusion"}});
 
-      set_with_attrs(state[{std::string("anomalous_Chi_") + name}], anomalous_chi,
-                      {{"time_dimension", "t"},
-                      {"units", "m^2 s^-1"},
-                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
-                      {"standard_name", "anomalous thermal diffusion"},
-                      {"long_name", std::string("Anomalous thermal diffusion of ") + name},
-                      {"source", "anomalous_diffusion"}});
+    set_with_attrs(state[{std::string("anomalous_Chi_") + name}], anomalous_chi,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2 s^-1"},
+                    {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                    {"standard_name", "anomalous thermal diffusion"},
+                    {"long_name", std::string("Anomalous thermal diffusion of ") + name},
+                    {"source", "anomalous_diffusion"}});
 
-      set_with_attrs(state[{std::string("anomalous_nu_") + name}], anomalous_nu,
-                      {{"time_dimension", "t"},
-                      {"units", "m^2 s^-1"},
-                      {"conversion", rho_s0 * rho_s0 * Omega_ci},
-                      {"standard_name", "anomalous momentum diffusion"},
-                      {"long_name", std::string("Anomalous momentum diffusion of ") + name},
-                      {"source", "anomalous_diffusion"}});
+    set_with_attrs(state[{std::string("anomalous_nu_") + name}], anomalous_nu,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2 s^-1"},
+                    {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                    {"standard_name", "anomalous momentum diffusion"},
+                    {"long_name", std::string("Anomalous momentum diffusion of ") + name},
+                    {"source", "anomalous_diffusion"}});
   }
 }

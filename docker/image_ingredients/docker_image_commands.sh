@@ -78,8 +78,9 @@ build_boutpp () {
     cmake -Wno-dev -B "${build_dir}" -S "${source_dir}" -C "${config_file}"
     check_exit_code "BOUT++ configuration failed"
 
-    notice "Finished configuring BOUT++. Starting build"
-    cmake --build "${build_dir}" --parallel
+    local jobs="${HERMES_BUILD_JOBS:-4}"
+    notice "Finished configuring BOUT++. Starting build with --parallel ${jobs} (set via HERMES_BUILD_JOBS)"
+    cmake --build "${build_dir}" --parallel "${jobs}"
     check_exit_code "BOUT++ build failed"
 
     notice "Finished building BOUT++"
@@ -108,8 +109,9 @@ build_hermes () {
            -DCMAKE_PREFIX_PATH="${boutpp_dir}"
     check_exit_code "Hermes-3 configuration failed"
 
-    notice "Finished configuring Hermes-3. Starting build"
-    cmake --build "${build_dir}" --parallel
+    local jobs="${HERMES_BUILD_JOBS:-4}"
+    notice "Finished configuring Hermes-3. Starting build with --parallel ${jobs} (set via HERMES_BUILD_JOBS)"
+    cmake --build "${build_dir}" --parallel "${jobs}"
     check_exit_code "Hermes-3 build failed"
 
     notice "Finished building Hermes-3"

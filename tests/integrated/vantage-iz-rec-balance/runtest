@@ -77,12 +77,16 @@ print(f"vantage-iz-rec-balance: simulation took {t_run - t0:.2f}s")
 
 ### Analyse results
 # Load datasets
+# TODO: lazy_load doesn't support file pattern, it hardcodes standard
+# dmp file names. This needs to be fixed in xBOUT. For now,
+# lazy loading is disabled on the VANTAGE dumps.
 ds_vantage = xhermes.open_hermesdataset(
     datapath=f"{path}/BOUT.dmp.vantage.*.nc",
     inputfilepath=f"{path}/BOUT.inp",
     info=False,
     keep_xboundaries=False,
     keep_yboundaries=False,
+    lazy_load=False,
 )
 ds = xhermes.open_hermesdataset(
     datapath=f"{path}/BOUT.dmp.[0-9]*.nc",

@@ -1,0 +1,35 @@
+---
+name: Update Python test dependencies
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-python-test-dependencies:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Update pinned upstream SHAs
+        run: |
+          python3 ci/update_pinned_packages.py
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: ci/update-python-test-dependencies
+          commit-message: Update Python test dependency SHAs
+          title: Update Python test dependency SHAs
+          body: |
+            Updates the pinned upstream SHAs used for Hermes-3 Python test dependencies.
+
+            This keeps CI near the latest xhermes, xbout, and boutdata default branches
+            while leaving required PR CI reproducible.
+          delete-branch: true

@@ -1,7 +1,13 @@
 #!/bin/bash
-# Sets up a clean development environment for use with the Hermes-3 docker image
-# in a "hermes-3-docker" folder. Copy this script to your local machine and execute
-# it with "sh development-setup.sh".
+# Sets up a clean development environment for use with the Hermes-3 docker image.
+#
+# Two ways to run it:
+#   * Standalone: copy this script to your local machine and run "sh development-setup.sh".
+#     It fetches the "docker" folder from GitHub into a new "hermes-3-docker" folder
+#     and sets everything up there.
+#   * In place: run it from an existing checkout's "docker" folder. It detects that the
+#     docker files are already present, skips the fetch, and only sets up the "work"
+#     subfolder in place.
 
 # Define color codes for pretty output
 LIGHTRED='\033[1;31m'
@@ -35,26 +41,34 @@ quiet() {
   fi
 }
 
-if [ -d "hermes-3-docker" ]; then
-  warn "Error: Directory '$PWD/hermes-3-docker' already exists. To continue, run"
-  warn "cd hermes-3-docker && docker compose run --rm fix_permissions && cd .."
-  warn "rm -rf $PWD/hermes-3-docker"
-  exit 1
+# Detect whether this script is already being run from inside the "docker"
+# folder of a checked-out hermes-3 repo. If so, all the files that the bootstrap
+# below would fetch from GitHub are already present, so we skip the fetch and
+# just set up the "work" subfolder in place.
+if [ -f "docker-compose.yaml" ] && [ -f "setup.sh" ] && [ -d "image_ingredients" ]; then
+  notice "Detected an existing docker folder in $PWD; setting up the 'work' subfolder in place."
 else
-  notice "Setting up a development environment for hermes-3 in $PWD/hermes-3-docker"
+  if [ -d "hermes-3-docker" ]; then
+    warn "Error: Directory '$PWD/hermes-3-docker' already exists. To continue, run"
+    warn "cd hermes-3-docker && docker compose run --rm fix_permissions && cd .."
+    warn "rm -rf $PWD/hermes-3-docker"
+    exit 1
+  else
+    notice "Setting up a development environment for hermes-3 in $PWD/hermes-3-docker"
+  fi
+  mkdir -p hermes-3-docker
+  cd hermes-3-docker
+  quiet git init
+  quiet git remote add -f origin git@github.com:boutproject/hermes-3.git
+  # We only want to pull the "docker" folder for the project
+  git config core.sparseCheckout true
+  echo "docker" >> .git/info/sparse-checkout
+  quiet git pull origin master
+  mv docker/* .
+  rmdir docker
+  # Uninitialize the git repository
+  rm -rf .git
 fi
-mkdir -p hermes-3-docker
-cd hermes-3-docker
-quiet git init
-quiet git remote add -f origin git@github.com:boutproject/hermes-3.git
-# We only want to pull the "docker" folder for the project
-git config core.sparseCheckout true
-echo "docker" >> .git/info/sparse-checkout
-quiet git pull origin master
-mv docker/* .
-rmdir docker
-# Uninitialize the git repository
-rm -rf .git
 sh setup.sh
 
 HERMES_SRC_DIR_OVERRIDE=work/hermes-3
@@ -74,8 +88,6 @@ notice "Cloning BOUT-dev/$BOUT_SUBMODULE_HASH into $PWD/$BOUTPP_SRC_DIR_OVERRIDE
 quiet git clone git@github.com:boutproject/BOUT-dev.git $BOUTPP_SRC_DIR_OVERRIDE
 quiet git -C $BOUTPP_SRC_DIR_OVERRIDE checkout $BOUT_SUBMODULE_HASH
 quiet git -C $BOUTPP_SRC_DIR_OVERRIDE submodule update --init --recursive
-notice "Applying 'enable_c.patch' to $BOUTPP_SRC_DIR_OVERRIDE (TODO: remove patch once BOUT-dev version updated)."
-git -C $BOUTPP_SRC_DIR_OVERRIDE apply $PWD/image_ingredients/enable_c.patch
 notice "Copying boutpp_config.cmake into $BOUTPP_CONFIG_OVERRIDE"
 cp image_ingredients/boutpp_config.cmake $BOUTPP_CONFIG_OVERRIDE
 
@@ -89,4 +101,4 @@ else
     warn "Must set the GITHUB_USERNAME variable to set up the 'fork' remotes."
 fi
 
-notice "Finished setting up $PWD/hermes-3-docker"
+notice "Finished setting up $PWD"

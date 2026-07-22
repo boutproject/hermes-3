@@ -1,5 +1,6 @@
 
 #include <bout/constants.hxx>
+#include <bout/mesh.hxx>
 
 #include "../include/isothermal.hxx"
 
@@ -16,8 +17,8 @@ Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(sol
       / Tnorm; // Normalise
 
   diagnose = options["diagnose"]
-    .doc("Save additional output diagnostics")
-    .withDefault<bool>(false);
+                 .doc("Save additional output diagnostics")
+                 .withDefault<bool>(false);
 }
 
 void Isothermal::transform_impl(GuardedOptions& state) {
@@ -58,5 +59,5 @@ void Isothermal::outputVars(Options& state) {
                     {"standard_name", "pressure"},
                     {"species", name},
                     {"source", "isothermal"}});
-   }
+  }
 }

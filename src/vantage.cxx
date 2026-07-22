@@ -782,16 +782,16 @@ Vantage::Vantage(std::string name, Options& alloptions, Solver* UNUSED(solver))
     const REAL merge_threshold = options["merge_threshold"].withDefault(1.0e-2);
 
     auto remove_wrapper = std::make_shared<TransformationWrapper>(
-        std::vector<std::shared_ptr<MarkingStrategy>>{
-            make_marking_strategy<ComparisonMarkerSingle<REAL, LessThanComp>>(
-                Sym<REAL>("WEIGHT"), remove_threshold)},
-        std::dynamic_pointer_cast<TransformationStrategy>(
-            std::make_shared<SimpleRemovalTransformationStrategy>()));
+        std::vector<std::shared_ptr<MarkingStrategy>>{make_direct_marking_strategy(
+            "removal_marker", [=](auto w) { return w[0] < remove_threshold; },
+            Access::read(Sym<REAL>("WEIGHT")))},
+        make_transformation_strategy<SimpleRemovalTransformationStrategy>());
 
+    // TODO: Replace with newer, momentum conservative merging strategy
     auto merge_wrapper = std::make_shared<TransformationWrapper>(
-        std::vector<std::shared_ptr<MarkingStrategy>>{
-            make_marking_strategy<ComparisonMarkerSingle<REAL, LessThanComp>>(
-                Sym<REAL>("WEIGHT"), merge_threshold)},
+        std::vector<std::shared_ptr<MarkingStrategy>>{make_direct_marking_strategy(
+            "merge_marker", [=](auto w) { return w[0] < merge_threshold; },
+            Access::read(Sym<REAL>("WEIGHT")))},
         make_transformation_strategy<MergeTransformationStrategy<ndim>>());
 
     // Ionisation reaction transforms and controller
@@ -806,9 +806,9 @@ Vantage::Vantage(std::string name, Options& alloptions, Solver* UNUSED(solver))
             std::vector<std::string>{"ION_SOURCE_DENSITY"});
 
     std::vector<std::shared_ptr<TransformationWrapper>> child_transforms =
-        std::vector{merge_wrapper, remove_wrapper};
+        std::vector{remove_wrapper, merge_wrapper};
     std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms_iz =
-        std::vector{iz_accumulator_real_transform_wrapper, merge_wrapper, remove_wrapper};
+        std::vector{iz_accumulator_real_transform_wrapper, remove_wrapper, merge_wrapper};
 
     auto reaction_controller = ReactionController(parent_transforms_iz, child_transforms);
 
@@ -824,7 +824,7 @@ Vantage::Vantage(std::string name, Options& alloptions, Solver* UNUSED(solver))
         std::dynamic_pointer_cast<TransformationStrategy>(accumulator_transform_rec));
 
     std::vector<std::shared_ptr<TransformationWrapper>> parent_transforms_rec =
-        std::vector{recomb_accumulator_transform_wrapper, merge_wrapper, remove_wrapper};
+        std::vector{recomb_accumulator_transform_wrapper, remove_wrapper, merge_wrapper};
 
     auto recombination_controller =
         ReactionController(parent_transforms_rec, child_transforms);

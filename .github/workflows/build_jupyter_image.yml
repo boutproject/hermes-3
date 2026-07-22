@@ -10,6 +10,16 @@ on:
     types: [released]
   workflow_dispatch:  # Allows manual triggering
 
+permissions:
+  contents: read
+  packages: write
+
+# Serialize runs so overlapping push/release/dispatch builds don't race on the
+# shared image tags.
+concurrency:
+  group: build-jupyter-image
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: boutproject/hermes-3-jupyter
@@ -26,13 +36,17 @@ jobs:
         with:
           fetch-depth: 1
 
+      # Enable emulation so we can build the arm64 variant on an amd64 runner.
+      # The steps here are just apt/pip installs, so emulation is cheap enough
+      # that a native-runner matrix is unnecessary for this image.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       # Set up BuildKit Docker container builder to be able to build
       # multi-platform images and export cache
       # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          platforms: linux/amd64
 
       - name: Log in to registry ${{ env.REGISTRY }}
         uses: docker/login-action@v3
@@ -51,7 +65,7 @@ jobs:
           tags: |
             # set "latest" tag
             type=raw,value=latest,enable={{is_default_branch}}
-            # whichever workflow runs last will be tagged as edge
+            # always tag the most recent build as 'edge'
             type=raw,value=edge
             # short sha tag
             type=sha,enable={{is_default_branch}}
@@ -72,6 +86,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max

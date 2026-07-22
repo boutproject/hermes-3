@@ -10,7 +10,7 @@ Developer tips
 Compiling Hermes-3 quickly
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-After compiling Hermes-3 and changing something, you can avoid unnecessary recompilation of 
+After compiling Hermes-3 and changing something, you can avoid unnecessary recompilation of
 unchanged files. Simply enter the build directory and do:
 
 .. code-block:: bash
@@ -26,10 +26,10 @@ Compiling documentation
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 The Hermes-3 documentation is built using `Sphinx <https:
-//www.sphinx-doc.org/en/master/usage/installation.html>`__ and 
-`Doxygen <https://www.doxygen.nl/index.html>`__. It's written in 
-`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`__, 
-which is a markup language similar to Markdown. Doxygen generates automatic 
+//www.sphinx-doc.org/en/master/usage/installation.html>`__ and
+`Doxygen <https://www.doxygen.nl/index.html>`__. It's written in
+`ReStructuredText (RST) <https://www.writethedocs.org/guide/writing/reStructuredText/>`__,
+which is a markup language similar to Markdown. Doxygen generates automatic
 documentation based on the C++ code, while Sphinx handles everything else.
 
 Editing documentation is much easier if you can compile it locally using the following steps:
@@ -80,7 +80,7 @@ Debugging: running for one iteration
 
 Any BOUT++ code can be run for just one right-hand side (RHS) iteration. This will
 run instantly for any simulation and not need any kind of solver convergence, making
-it ideal for debugging. 
+it ideal for debugging.
 
 This can be done by setting the following in the input file:
 
@@ -88,12 +88,12 @@ This can be done by setting the following in the input file:
 
    nout = 0
 
-The ``timestep`` setting will be ignored. 
+The ``timestep`` setting will be ignored.
 
 Debugging: printing values
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When debugging, it can be useful to print things out. This is simple in C++. 
+When debugging, it can be useful to print things out. This is simple in C++.
 For example, if you want to print the value of the variable ``particle_flow``, do:
 
 .. code-block:: ini
@@ -142,20 +142,20 @@ Debugging: segmentation faults
 
 `Segmentation faults <https://thelinuxcode.com/segmentation-fault-cpp/>`__ can be frustrating because
 they give very little verbosity. In practice, the most common cause is trying to access a variable
-that hasn't been initialised yet. The easiest way to debug this is to carefully review the new lines of 
+that hasn't been initialised yet. The easiest way to debug this is to carefully review the new lines of
 code to make sure all variables exist and have been declared and initialised. If this is tricky,
-another simple way is to comment out large parts of the code until the segmentation fault disappears, 
-helping to narrow down its location. 
+another simple way is to comment out large parts of the code until the segmentation fault disappears,
+helping to narrow down its location.
 
-While the above methods are very simple and can be effective, debugging tools such as 
-`gdb <https://sourceware.org/gdb/>`__ or `valgrind <https://valgrind.org/>`__ can be used to find 
+While the above methods are very simple and can be effective, debugging tools such as
+`gdb <https://sourceware.org/gdb/>`__ or `valgrind <https://valgrind.org/>`__ can be used to find
 the segmentation fault as well.
 
 Debugging: compiling in debug mode
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This can be a useful way to catch errors. Please see the
-`relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`__ 
+`relevant page <https://bout-dev.readthedocs.io/en/stable/user_docs/advanced_install.html#optimisation-and-run-time-checking>`__
 in the BOUT++ documentation.
 
 Header vs. implementation files
@@ -174,11 +174,11 @@ and the `header file <https://github.com/boutproject/hermes-3/blob/master/includ
 Data types
 ~~~~~~~~~~~~~~
 
-Hermes-3 casts its variables in a variety of BOUT++ classes. Floats are 
+Hermes-3 casts its variables in a variety of BOUT++ classes. Floats are
 usually represented as ``BoutReal``, and fields as ``Field3D``. Note that
 Hermes-3 always runs "in 3D" - when configured in 1D, the x and z dimensions
-are of unit length. See relevant `BOUT++ docs 
-<https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`__ 
+are of unit length. See relevant `BOUT++ docs
+<https://bout-dev.readthedocs.io/en/stable/developer_docs/data_types.html>`__
 for more info. There is also a data type called ``Options`` which is equivalent
 to a Python dictionary with extra functionality, and is used to store input
 options, the entire simulation state and many other data. Finally,
@@ -197,7 +197,7 @@ This is simple and uses the following syntax:
                      .doc("Allow flows through radial boundaries")
                      .withDefault<bool>(true);
 
-See `this real world example 
+See `this real world example
 <https://github.com/boutproject/hermes-3/blob/master/src/evolve_density.cxx>`__.
 
 The variable must also be declared in the corresponding header file.
@@ -261,10 +261,10 @@ Getting/setting values
 ~~~~~~~~~~~~~~~~~~~~~~
 
 Hermes-3 has a system to prevent quantities from being modified after they are used.
-This is important as it uses a single dictionary-like ``state`` class to hold all of 
+This is important as it uses a single dictionary-like ``state`` class to hold all of
 the variables in one place, which could allow some components to overwrite others.
 
-In ``component.hxx`` there is the function ``get``, which once called sets the 
+In ``component.hxx`` there is the function ``get``, which once called sets the
 "final" and "final-domain" attributes:
 
 .. code-block:: ini
@@ -278,7 +278,7 @@ In ``component.hxx`` there is the function ``get``, which once called sets the
    return getNonFinal<T>(option);
    }
 
-When you call ``set``, these attributes are checked for, so that if they have 
+When you call ``set``, these attributes are checked for, so that if they have
 already been "gotten", they can't be set again:
 
 .. code-block:: ini
@@ -317,7 +317,7 @@ the domain cells, leaving the guard cells to be settable using ``getNoBoundary``
 And there is a corresponding ``setBoundary`` that can be used for BC operations:
 
 .. code-block:: ini
-   
+
    Options& setBoundary(Options& option, T value) {
    // Check that the value has not already been used
    #if CHECKLEVEL >= 1
@@ -337,7 +337,7 @@ These functions take a second argument which tells you where they were set, whic
 They are wrapped into additional functions, ``GET_VALUE`` and ``GET_NOBOUNDARY`` which automatically
 include this argument.
 
-Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`__ 
+Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`__
 for more details.
 
 
@@ -394,7 +394,7 @@ For example a transport simulation with deuterium and tritium ions and
 atoms has an input file specifying the components
 
 .. code-block:: ini
-  
+
   [hermes]
   components = (d+, d, t+, t, e, braginskii_collisions,
                 braginskii_friction, braginskii_heat_exchange,
@@ -436,7 +436,7 @@ new state is created and contains:
 * `time`   BoutReal, the current simulation time
 * `linear` bool. True if the time integrator expects a linear response.
 * `units`
-  
+
   * `seconds`   Multiply by this to get units of seconds
   * `eV`          Temperature normalisation
   * `Tesla`       Magnetic field normalisation
@@ -446,7 +446,7 @@ new state is created and contains:
 so the temperature normalisation can be extracted using::
 
   BoutReal Tnorm = state["units"]["eV"];
-    
+
 As the components of a model are run, they set, modify and use values
 stored in this state. To ensure that components use consistent names
 for their input and output variables, a set of conventions are used
@@ -459,7 +459,7 @@ for new variables which are added to the state:
 
     * `AA`  Atomic mass, proton = 1
     * `charge`  Charge, in units of proton charge (i.e. electron=-1)
-    
+
     * `density`
     * `momentum` Parallel momentum
     * `pressure`
@@ -467,7 +467,7 @@ for new variables which are added to the state:
     * `temperature`
 
     * `collision_frequency`   Normalised collision frequency
-    * `density_source`  Normalised particle source 
+    * `density_source`  Normalised particle source
     * `momentum_source` Normalised momentum source
     * `energy_source`  Normalised energy source
 
@@ -513,7 +513,7 @@ A common need is to add or subtract values from fields, such as density sources:
 
   add(state["species"]["h"]["density_source"], recombination_rate);
   subtract(state["species"]["h+"]["density_source"], recombination_rate);
-  
+
 Notes:
 
 - When checking if a subsection exists, use ``option.isSection``, since ``option.isSet``
@@ -522,7 +522,7 @@ Notes:
   sign: ``n2+`` is a singly charged nitrogen molecule, while ``n+2`` is a +2 charged
   nitrogen atom.
 
-  
+
 Components
 ~~~~~~~~~~~~~~
 
@@ -556,7 +556,7 @@ file using a code like::
     MyComponent(const std::string &name, Options &options, Solver *solver);
     ...
   };
-  
+
   namespace {
   RegisterComponent<MyComponent> registercomponentmine("mycomponent");
   }
@@ -622,7 +622,7 @@ and then in `Hermes::rhs` the components are run by a call::
 The call to `ComponentScheduler::create` treats the "components"
 option as a comma-separated list of names. The order of the components
 is the order that they are run in. For each name in the list, the
-scheduler looks up the options under the section of that name. 
+scheduler looks up the options under the section of that name.
 
 .. code-block:: ini
 
@@ -654,7 +654,7 @@ of components
 
    [group1]
    type = component1, component2
-   
+
    # options to control component1 and component2
 
    [component3]
@@ -663,7 +663,7 @@ of components
 
 This will create three components, which will be run in the order
 `component1`, `component2`, `component3`: First all the components
-in `group1`, and then `component3`. 
+in `group1`, and then `component3`.
 
 .. doxygenclass:: ComponentScheduler
    :members:
@@ -743,7 +743,7 @@ using bitwise logical operators.
 
 .. doxygengroup:: RegionsGroup
    :members:
-         
+
 Permission Substitution
 ```````````````````````
 
@@ -783,7 +783,7 @@ momentum as follows::
   p.substitute({"density", "pressure", "temperature", "velocity", "momentum"});
 
 This is equivalent to having written::
-   
+
    Permissions p({readOnly("species:e:density"),
                   readOnly("species:e:pressure")},
                   readOnly("species:e:temperature")},
@@ -904,7 +904,7 @@ captured by :code:`Reaction::transform_impl`.
 The following subsections describe the general approach used to compute reaction sources and provide
 guidance to developers on adding new subclasses to handle particular reactions.
 
-The stoichiometry matrix 
+The stoichiometry matrix
 ````````````````````````
 
 A core part of the approach is to convert reaction strings into a stoichiometry matrix.
@@ -1029,7 +1029,7 @@ reaction subclass.
 
 For example, for charge exchange, momentum and energy need to be transferred
 
-1. from a reactant that donates an electron ('r1') to the resulting product ('p1') and 
+1. from a reactant that donates an electron ('r1') to the resulting product ('p1') and
 2. from a reactant that accepts an electron ('r2') to the resulting product ('p2').
 
 The following code sets channels to enforce those requirements:
@@ -1122,7 +1122,7 @@ exchange:
 
 .. code-block:: cpp
    :caption: Example of adding a reaction diagnostic. :code:`r1` is the name of a reactant that
-    charge-exchanges with reactant :code:`r2` creating product :code:`p1`. 
+    charge-exchanges with reactant :code:`r2` creating product :code:`p1`.
 
    add_diagnostic(
           this->r1, fmt::format("S{:s}{:s}_cx", this->r1, this->r2),
@@ -1158,7 +1158,7 @@ associated with species :code:`h+`.
 
 .. note::
    `add`, `subtract`, and `set` can still be used directly to update the state, as usual, if there
-   is no associated diagnostic to update.   
+   is no associated diagnostic to update.
 
 Finally, diagnostics are written out in `outputVars()<Reaction::outputVars>`, which simply iterates
 over the `diagnostics<Reaction::diagnostics>` map, copying fields into the output state. Appropriate
@@ -1235,20 +1235,20 @@ Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`__.
 This is a comprehensive 1D test featuring three species (deuterium tritium and helium)
 as well as all of the parallel closure terms apart from electron viscosity.
 It includes ionisation and recombination reactions for all species as well as
-charge exchange for D-D, T-T, D-T and T-D species pairs. 
+charge exchange for D-D, T-T, D-T and T-D species pairs.
 
 The test checks the values of charge
 exchange channels in the final domain cell against a reference.
 
 The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
-of the script. 
+of the script.
 
 2D-production
 ~~~~~~~~~~~~~~
 
 This is a test representing the most common production fidelity simulations at the time
-of implementation. It features a double null 2D tokamak from an upcoming publication with 
-deuterium only, a neutral puff, H-mode profiles of anomalous diffusion coefficients, a neutral pump, 
+of implementation. It features a double null 2D tokamak from an upcoming publication with
+deuterium only, a neutral puff, H-mode profiles of anomalous diffusion coefficients, a neutral pump,
 fast/thermal recycling, fast/thermal reflection as well as decay length boundary conditions on the SOL and PFR.
 Viscosity, impurities, currents and drifts are neglected.
 
@@ -1257,20 +1257,22 @@ It compares electron pressure and ion momentum at the four targets, outer midpla
 and core/pfr boundaries. If the test fails, it will print the degree of error at each boundary.
 
 The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
-of the script. 
+of the script.
 
 2D-recycling
 ~~~~~~~~~~~~~~
 
 This test uses the same restart file as 2D-production, but tests target recycling by reproducing the relevant
-recycling.cxx section in Python. It compares the source of recycled neutral density and energy as well as 
+recycling.cxx section in Python. It compares the source of recycled neutral density and energy as well as
 the pumped neutral density and energy sources between
-the calculation and the reference simulation. In the future, this test will be extended to radial recycling.
+the calculation and the reference simulation. The test currently only covers the target and does not
+reproduce radial recycling or pumping. Because of this, the test neglects the outermost radial domain cells,
+which can simultaneously have sources due to parallel and radial recycling or pumping.
 
 This test is a reproduction of C++ code, and therefore there is no golden answer reference to update.
 
 This test plots results and can be used to help with developing the recycling component. There
-is a `plot` flag near the beginning of the file. 
+is a `plot` flag near the beginning of the file.
 
 1D fluid (MMS)
 ~~~~~~~~~~~~~~
@@ -1410,7 +1412,7 @@ Drift wave
 ``tests/integrated/drift-wave``
 
 This calculates the growth rate and frequency of a resistive drift
-wave with finite electron mass. 
+wave with finite electron mass.
 
 The equations solved are:
 

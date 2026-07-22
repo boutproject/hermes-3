@@ -34,7 +34,7 @@
 /// # Useful references:
 ///
 ///  *  Braginskii equations by R.Fitzpatrick:
-///     http://farside.ph.utexas.edu/teaching/plasma/Plasmahtml/node35.html
+///     http://farside.ph.utexas.edu/teaching/plasma/Plasmahtml/node54.html
 ///
 ///  *  J.P.Brodrick et al 2017: https://doi.org/10.1063/1.5001079 and
 ///     https://arxiv.org/abs/1704.08963

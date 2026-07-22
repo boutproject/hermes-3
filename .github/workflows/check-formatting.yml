@@ -1,0 +1,44 @@
+name: format-command
+
+on:
+  pull_request:
+
+jobs:
+  clang-format:
+    # Release candidate branches tend to have big PRs which causes all sorts of problems
+    if: ${{ !endsWith(github.head_ref, '-rc') }}
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the pull request branch, also include all history
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dev tools
+        run: uv sync --only-dev
+
+      - name: Check prek versions are up-to-date
+        run: uv tool run sync-with-uv --check --diff
+
+      # `origin` points at the (possibly forked) head repo, so `origin/<base>`
+      # may be missing or stale. Fetch the real base branch and diff against the
+      # merge-base so prek only checks files changed by this PR.
+      - name: Determine base ref
+        id: base
+        run: |
+          git remote add base "https://github.com/${{ github.event.pull_request.base.repo.full_name }}.git"
+          git fetch --no-tags base "${{ github.base_ref }}"
+          echo "ref=$(git merge-base base/${{ github.base_ref }} HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Run everything
+        run: uv tool run prek run --show-diff-on-failure --from-ref ${{ steps.base.outputs.ref }}

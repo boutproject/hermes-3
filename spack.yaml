@@ -39,10 +39,10 @@ spack:
   develop:
     boutpp:
       path: ./external/BOUT-dev
-      spec: boutpp@develop
+      spec: boutpp
     hermes-3:
       path: .
-      spec: hermes-3@develop
+      spec: hermes-3@master
     vantage.vantagereactions:
       path: ./external/Reactions
       spec: vantage.vantagereactions@working
@@ -54,10 +54,10 @@ spack:
       spec: neso-rng-toolkit@working
     py-xhermes:
       path: ./external/xhermes
-      spec: py-xhermes
+      spec: py-xhermes@master
     py-xbout:
       path: ./external/xbout
-      spec: py-xbout
+      spec: py-xbout@master
     py-boutdata:
       path: ./external/boutdata
       spec: py-boutdata
