@@ -73,19 +73,55 @@ private:
 } // namespace hermes
 namespace {
 /// Register components for symmetric HCX, one per isotope
-RegisterComponent<hermes::CXReaction> register_cx_hh("h + h+ -> h+ + h");
-RegisterComponent<hermes::CXReaction> register_cx_dd("d + d+ -> d+ + d");
-RegisterComponent<hermes::CXReaction> register_cx_tt("t + t+ -> t+ + t");
+struct CXHH : hermes::CXReaction {
+  using CXReaction::CXReaction;
+  static constexpr auto type = "h + h+ -> h+ + h";
+};
+struct CXDD : hermes::CXReaction {
+  using CXReaction::CXReaction;
+  static constexpr auto type = "d + d+ -> d+ + d";
+};
+struct CXTT : hermes::CXReaction {
+  using CXReaction::CXReaction;
+  static constexpr auto type = "t + t+ -> t+ + t";
+};
+RegisterComponent<CXHH> register_cx_hh;
+RegisterComponent<CXDD> register_cx_dd;
+RegisterComponent<CXTT> register_cx_tt;
 
 /// Register components for non-symmetric HCX; one per atom,ion combination
-RegisterComponent<hermes::CXReaction> register_cx_hd("h + d+ -> h+ + d");
-RegisterComponent<hermes::CXReaction> register_cx_dh("d + h+ -> d+ + h");
+struct CXHD : hermes::CXReaction {
+  using CXReaction::CXReaction;
+  static constexpr auto type = "h + d+ -> h+ + d";
+};
+struct CXDH : hermes::CXReaction {
+  using CXReaction::CXReaction;
+  static constexpr auto type = "d + h+ -> d+ + h";
+};
+RegisterComponent<CXHD> register_cx_hd;
+RegisterComponent<CXDH> register_cx_dh;
 
-RegisterComponent<hermes::CXReaction> register_cx_ht("h + t+ -> h+ + t");
-RegisterComponent<hermes::CXReaction> register_cx_th("t + h+ -> t+ + h");
+struct CXHT : hermes::CXReaction {
+  using CXReaction::CXReaction;
+  static constexpr auto type = "h + t+ -> h+ + t";
+};
+struct CXTH : hermes::CXReaction {
+  using CXReaction::CXReaction;
+  static constexpr auto type = "t + h+ -> t+ + h";
+};
+RegisterComponent<CXHT> register_cx_ht;
+RegisterComponent<CXTH> register_cx_th;
 
-RegisterComponent<hermes::CXReaction> register_cx_dt("d + t+ -> d+ + t");
-RegisterComponent<hermes::CXReaction> register_cx_td("t + d+ -> t+ + d");
+struct CXDT : hermes::CXReaction {
+  using CXReaction::CXReaction;
+  static constexpr auto type = "d + t+ -> d+ + t";
+};
+struct CXTD : hermes::CXReaction {
+  using CXReaction::CXReaction;
+  static constexpr auto type = "t + d+ -> t+ + d";
+};
+RegisterComponent<CXDT> register_cx_dt;
+RegisterComponent<CXTD> register_cx_td;
 } // namespace
 
 #endif // CX_REACTION_H

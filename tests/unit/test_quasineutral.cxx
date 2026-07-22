@@ -19,12 +19,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using QuasineutralTest = FakeMeshFixture;
 
-TEST_F(QuasineutralTest, CreateComponent) {
-  Options options = {{"test", {{"charge", 1.0}, {"AA", 1.0}}}};
-
-  Quasineutral component("test", options, nullptr);
-}
-
 TEST_F(QuasineutralTest, ChargeNotZero) {
   Options options = {{"test", {{"charge", 0.0}, {"AA", 1.0}}}};
 

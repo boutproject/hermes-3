@@ -4,6 +4,7 @@
 #include <map>
 #include <ostream>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -153,7 +154,8 @@ Permissions::getHighestPermission(const std::string& variable, Regions region) c
   }
   auto [varname, rights] = bestMatchRights(variable);
   size_t i = static_cast<int>(PermissionTypes::ReadIfSet);
-  while (i < static_cast<size_t>(PermissionTypes::END) and (rights[i] & region) == region) {
+  while (i < static_cast<size_t>(PermissionTypes::END)
+         and (rights[i] & region) == region) {
     i++;
   }
   return {static_cast<PermissionTypes>(i - 1), varname};
@@ -167,7 +169,8 @@ Permissions::getVariablesWithPermission(PermissionTypes permission,
   }
   std::map<std::string, Regions> result;
   if (highestOnly
-      and static_cast<size_t>(permission) < static_cast<size_t>(PermissionTypes::END) - 1) {
+      and static_cast<size_t>(permission)
+              < static_cast<size_t>(PermissionTypes::END) - 1) {
     for (const auto& [varname, rights] : variable_permissions) {
       auto perm_in_regions = rights[static_cast<size_t>(permission)]
                              & ~rights[static_cast<size_t>(permission) + 1];
@@ -188,7 +191,7 @@ Permissions::getVariablesWithPermission(PermissionTypes permission,
 
 std::string Permissions::regionNames(const Regions regions) {
   std::vector<std::string> regions_present(fundamental_regions.size());
-  for (auto & [region, name] : fundamental_regions) {
+  for (auto& [region, name] : fundamental_regions) {
     if ((regions & region) == region) {
       regions_present.push_back(name);
     }

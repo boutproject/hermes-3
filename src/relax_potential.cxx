@@ -1,12 +1,29 @@
 
 #include "../include/relax_potential.hxx"
+#include "../include/component.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/guarded_options.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/permissions.hxx"
 
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field.hxx>
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/globals.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+#include <bout/solver.hxx>
+#include <bout/sys/range.hxx>
+#include <bout/vecops.hxx>
+#include <bout/vector3d.hxx>
+
+#include <string>
 
 using bout::globals::mesh;
 
@@ -39,7 +56,7 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 } // namespace
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver)
-    : Component({readWrite("fields:vorticity"), readWrite("fields:phi")}) {
+    : NamedComponent(name, {readWrite("fields:vorticity"), readWrite("fields:phi")}) {
 
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
@@ -149,7 +166,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   phi1 = 0.0;
   Vort = 0.0;
 
-  auto coord = mesh->getCoordinates();
+  const auto* coord = mesh->getCoordinates();
 
   if (phi_boundary_relax) {
     // Set the last update time to -1, so it will reset
@@ -308,7 +325,7 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
     // Update the boundary regions by relaxing towards zero gradient
     // on a given timescale.
 
-    BoutReal time = get<BoutReal>(state["time"]);
+    const BoutReal time = get<BoutReal>(state["time"]);
 
     if (phi_boundary_last_update < 0.0) {
       // First time this has been called.
@@ -318,7 +335,8 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
       // Only update if time has advanced
       // Uses an exponential decay of the weighting of the value in the boundary
       // so that the solution is well behaved for arbitrary steps
-      BoutReal weight = exp(-(time - phi_boundary_last_update) / phi_boundary_timescale);
+      const BoutReal weight =
+          exp(-(time - phi_boundary_last_update) / phi_boundary_timescale);
       phi_boundary_last_update = time;
 
       if (mesh->firstX()) {
@@ -347,11 +365,11 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
           }
 
           // Old value of phi at boundary
-          BoutReal oldvalue =
+          const BoutReal oldvalue =
               0.5 * (phi(mesh->xstart - 1, j, 0) + phi(mesh->xstart, j, 0));
 
           // New value of phi at boundary, relaxing towards phivalue
-          BoutReal newvalue = weight * oldvalue + (1. - weight) * phivalue;
+          const BoutReal newvalue = (weight * oldvalue) + ((1. - weight) * phivalue);
 
           // Set phi at the boundary to this value
           for (int k = 0; k < mesh->LocalNz; k++) {
@@ -374,10 +392,11 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
           phivalue /= mesh->LocalNz; // Average in Z of point next to boundary
 
           // Old value of phi at boundary
-          BoutReal oldvalue = 0.5 * (phi(mesh->xend + 1, j, 0) + phi(mesh->xend, j, 0));
+          const BoutReal oldvalue =
+              0.5 * (phi(mesh->xend + 1, j, 0) + phi(mesh->xend, j, 0));
 
           // New value of phi at boundary, relaxing towards phivalue
-          BoutReal newvalue = weight * oldvalue + (1. - weight) * phivalue;
+          const BoutReal newvalue = (weight * oldvalue) + ((1. - weight) * phivalue);
 
           // Set phi at the boundary to this value
           for (int k = 0; k < mesh->LocalNz; k++) {
@@ -399,7 +418,7 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
     // Sheath multiplier Te -> phi (2.84522 for Deuterium)
     BoutReal sheathmult = 0.0;
     if (sheath_boundary) {
-      BoutReal Me_Mp = get<BoutReal>(state["species"]["e"]["AA"]);
+      const BoutReal Me_Mp = get<BoutReal>(state["species"]["e"]["AA"]);
       sheathmult = log(0.5 * sqrt(1. / (Me_Mp * PI)));
     }
 
@@ -419,7 +438,7 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
           teavg += Te(mesh->xstart, j, k);
         }
         teavg /= mesh->LocalNz;
-        BoutReal phivalue = sheathmult * teavg;
+        const BoutReal phivalue = sheathmult * teavg;
         // Set midpoint (boundary) value
         for (int k = 0; k < mesh->LocalNz; k++) {
           phi(mesh->xstart - 1, j, k) = 2. * phivalue - phi(mesh->xstart, j, k);
@@ -442,7 +461,7 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
           teavg += Te(mesh->xend, j, k);
         }
         teavg /= mesh->LocalNz;
-        BoutReal phivalue = sheathmult * teavg;
+        const BoutReal phivalue = sheathmult * teavg;
         // Set midpoint (boundary) value
         for (int k = 0; k < mesh->LocalNz; k++) {
           phi(mesh->xend + 1, j, k) = 2. * phivalue - phi(mesh->xend, j, k);
@@ -511,11 +530,11 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
       phi = fromFieldAligned(phi_fa);
     }
 
-    Vector3D Grad_phi = Grad(phi);
+    const Vector3D Grad_phi = Grad(phi);
 
     GuardedOptions allspecies = state["species"];
     for (auto& kv : allspecies.getChildren()) {
-      GuardedOptions species = allspecies[kv.first]; // Note: need non-const
+      const GuardedOptions species = allspecies[kv.first]; // Note: need non-const
 
       if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"]))) {
         continue; // No pressure or charge -> no diamagnetic current
@@ -564,7 +583,7 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
         P = fromFieldAligned(P_fa);
       }
 
-      Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
+      const Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
 
       // This term energetically balances diamagnetic term
       // in the vorticity equation
@@ -626,7 +645,7 @@ void RelaxPotential::finally(const Options& state) {
 
   const Options& allspecies = state["species"];
 
-  auto coord = mesh->getCoordinates();
+  const auto* coord = mesh->getCoordinates();
 
   phi = get<Field3D>(state["fields"]["phi"]);
   // Vort = get<Field3D>(state["fields"]["vorticity"]);
@@ -659,7 +678,8 @@ void RelaxPotential::finally(const Options& state) {
 
       mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
-      ddt(Vort) -= FV::Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
+      ddt(Vort) -=
+          FV::Div_a_Grad_perp(Field3D{0.5 * average_atomic_mass / Bsq}, vEdotGradPi);
       ddt(Vort) -=
           Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux, poloidal_flows);
     }
@@ -674,7 +694,7 @@ void RelaxPotential::finally(const Options& state) {
   }
 
   // Parallel current due to species parallel flow
-  for (auto& kv : state["species"].getChildren()) {
+  for (const auto& kv : state["species"].getChildren()) {
     const Options& species = kv.second;
 
     if (!species.isSet("charge") or !species.isSet("momentum")) {
@@ -712,14 +732,14 @@ void RelaxPotential::finally(const Options& state) {
 
   if (vort_dissipation) {
     // Adds dissipation term like in other equations
-    Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+    const Field3D sound_speed = get<Field3D>(state["sound_speed"]);
     ddt(Vort) -= FV::Div_par(Vort, 0.0, sound_speed);
   }
 
   if (phi_dissipation) {
     // Adds dissipation term like in other equations, but depending on gradient of
     // potential
-    Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+    const Field3D sound_speed = get<Field3D>(state["sound_speed"]);
     ddt(Vort) -= FV::Div_par(-phi, 0.0, sound_speed);
   }
 
@@ -737,7 +757,7 @@ void RelaxPotential::finally(const Options& state) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         auto i = indexAt(phi_fa, r.ind, mesh->ystart, jz);
-        BoutReal phisheath = 0.5 * (phi_fa[i] + phi_fa[i.ym()]);
+        const BoutReal phisheath = 0.5 * (phi_fa[i] + phi_fa[i.ym()]);
         dissipation[i] = -floor(-phisheath, 0.0);
       }
     }
@@ -745,7 +765,7 @@ void RelaxPotential::finally(const Options& state) {
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         auto i = indexAt(phi_fa, r.ind, mesh->yend, jz);
-        BoutReal phisheath = 0.5 * (phi_fa[i] + phi_fa[i.yp()]);
+        const BoutReal phisheath = 0.5 * (phi_fa[i] + phi_fa[i.yp()]);
         dissipation[i] = -floor(-phisheath, 0.0);
       }
     }
@@ -771,10 +791,11 @@ void RelaxPotential::finally(const Options& state) {
   // Solve diffusion equation for potential
 
   if (boussinesq) {
-    ddt(phi1) = lambda_1 * (FV::Div_a_Grad_perp(average_atomic_mass / Bsq, phi) - Vort);
+    ddt(phi1) =
+        lambda_1 * (FV::Div_a_Grad_perp(Field3D{average_atomic_mass / Bsq}, phi) - Vort);
 
     if (diamagnetic_polarisation) {
-      for (auto& kv : allspecies.getChildren()) {
+      for (const auto& kv : allspecies.getChildren()) {
         // Note: includes electrons (should it?)
 
         const Options& species = kv.second;
@@ -790,7 +811,7 @@ void RelaxPotential::finally(const Options& state) {
         }
         const BoutReal A = get<BoutReal>(species["AA"]);
         const Field3D P = get<Field3D>(species["pressure"]);
-        ddt(phi1) += lambda_1 * FV::Div_a_Grad_perp(A / Bsq, P);
+        ddt(phi1) += lambda_1 * FV::Div_a_Grad_perp(Field3D{A / Bsq}, P);
       }
     }
   } else {
@@ -798,7 +819,7 @@ void RelaxPotential::finally(const Options& state) {
 
     // Calculate vorticity from potential phi
     Field3D phi_vort = 0.0;
-    for (auto& kv : allspecies.getChildren()) {
+    for (const auto& kv : allspecies.getChildren()) {
       const Options& species = kv.second;
 
       if (!species.isSet("charge")) {
@@ -817,7 +838,7 @@ void RelaxPotential::finally(const Options& state) {
       if (diamagnetic_polarisation and species.isSet("pressure")) {
         // Calculate the diamagnetic flow contribution
         const Field3D Pi = get<Field3D>(species["pressure"]);
-        phi_vort += FV::Div_a_Grad_perp(Ai / Bsq / Zi, Pi);
+        phi_vort += FV::Div_a_Grad_perp(Field3D{Ai / Bsq / Zi}, Pi);
       }
     }
 

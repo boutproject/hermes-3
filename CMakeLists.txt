@@ -79,6 +79,7 @@ set(HERMES_SOURCES
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
+    src/external_apar.cxx
     src/guarded_options.cxx
     src/isothermal.cxx
     src/quasineutral.cxx
@@ -111,6 +112,7 @@ set(HERMES_SOURCES
     src/reaction_data.cxx
     src/reaction_parser.cxx
     src/species_parser.cxx
+    src/fieldline_geometry.cxx
     src/transform.cxx
     src/vorticity.cxx
     include/adas_reaction.hxx
@@ -138,6 +140,7 @@ set(HERMES_SOURCES
     include/evolve_energy.hxx
     include/evolve_momentum.hxx
     include/evolve_pressure.hxx
+    include/external_apar.hxx
     include/fixed_density.hxx
     include/fixed_fraction_ions.hxx
     include/fixed_velocity.hxx
@@ -177,7 +180,8 @@ set(HERMES_SOURCES
     include/zero_current.hxx
     include/transform.hxx
     include/fixed_fraction_radiation.hxx
-    include/simple_pump.hxx)
+    include/simple_pump.hxx
+    include/fieldline_geometry.hxx)
 
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
@@ -254,23 +258,30 @@ else()
 endif()
 
 # copy the data and test directories
-add_custom_command(
-  TARGET setup-examples
-  PRE_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples
-          $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+if(EXISTS ${CMAKE_SOURCE_DIR}/examples)
+  add_custom_command(
+    TARGET setup-examples
+    PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/examples)
+endif()
 
-add_custom_command(
-  TARGET setup-examples
-  PRE_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/json_database
-          $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+if(EXISTS ${CMAKE_SOURCE_DIR}/json_database)
+  add_custom_command(
+    TARGET setup-examples
+    PRE_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/json_database
+      $<TARGET_FILE_DIR:${PROJECT_NAME}>/json_database)
+endif()
 
-add_custom_command(
-  TARGET setup-test
-  PRE_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/tests
-          $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+if(EXISTS ${CMAKE_SOURCE_DIR}/tests)
+  add_custom_command(
+    TARGET setup-test
+    PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/tests
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/tests)
+endif()
 
 if(HERMES_TESTS)
   enable_testing()
@@ -412,12 +423,20 @@ endif()
 
 # Compile-time options
 
-set(SLOPE_LIMITERS MinMod MC Upwind Superbee)
+set(SLOPE_LIMITERS MC VanAlbada WENO3 MinMod Upwind Superbee)
 set(HERMES_SLOPE_LIMITER
     MC
     CACHE STRING "Set advection slope limiter")
 set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
 message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")
+
+set(CONDUCTION_METHODS Original ProductJK Harmonic)
+set(HERMES_CONDUCTION_METHOD
+    Original
+    CACHE STRING "Parallel conduction method")
+set_property(CACHE HERMES_CONDUCTION_METHOD PROPERTY STRINGS
+                                                     ${CONDUCTION_METHODS})
+message(STATUS "Conduction method: ${HERMES_CONDUCTION_METHOD}")
 
 # Generate the build config header
 

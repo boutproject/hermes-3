@@ -18,14 +18,17 @@
 
 #include "../include/braginskii_collisions.hxx"
 #include "../include/component.hxx"
+#include "../include/guarded_options.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/permissions.hxx"
 
 BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions,
                                            Solver*)
-    : Component({readOnly("species:{non_electrons}:density", Regions::Interior),
-                 readIfSet("species:{non_electrons}:charge"),
-                 readIfSet("species:{negative_ions}:temperature", Regions::Interior),
-                 readOnly("species:{all_species}:AA")}) {
+    : NamedComponent(name,
+                     {readOnly("species:{non_electrons}:density", Regions::Interior),
+                      readIfSet("species:{non_electrons}:charge"),
+                      readIfSet("species:{negative_ions}:temperature", Regions::Interior),
+                      readOnly("species:{all_species}:AA")}) {
   const Options& units = alloptions["units"];
 
   // Normalisations
@@ -150,7 +153,7 @@ void BraginskiiCollisions::collide(GuardedOptions& species1, GuardedOptions& spe
     });
 
     add(species2["collision_frequency"], nu); // Total collision frequency
-    std::string const coll_name =
+    const std::string coll_name =
         species2.name() + std::string("_") + species1.name() + std::string("_coll");
     set(species2["collision_frequencies"][coll_name],
         nu); // Collision frequency for individual reaction
@@ -314,7 +317,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
     // If temperature isn't set, assume zero. in eV
     const Field3D temperature1 =
         species1.isSet("temperature")
-            ? GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm
+            ? Field3D{GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm}
             : 0.0;
     const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]) * Nnorm;
 
@@ -341,7 +344,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         // If temperature isn't set, assume zero. in eV
         const Field3D temperature2 =
             species2.isSet("temperature")
-                ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
+                ? Field3D{GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm}
                 : 0.0;
 
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
@@ -361,7 +364,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           const BoutReal charge2 = Z2 * SI::qe; // in Coulombs
 
           // Ion-ion collisions
-          Field3D const nu_12 = filledFrom(density1, [&](auto& i) {
+          const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
             const BoutReal Tlim1 = softFloor(temperature1[i], 0.1);
             const BoutReal Tlim2 = softFloor(temperature2[i], 0.1);
 
@@ -369,10 +372,10 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
             const BoutReal Nlim2 = softFloor(density2[i], 1e10);
 
             // Coulomb logarithm
-            BoutReal const coulomb_log =
+            const BoutReal coulomb_log =
                 29.91
                 - log((Z1 * Z2 * (AA1 + AA2)) / (AA1 * Tlim2 + AA2 * Tlim1)
-                      * sqrt(Nlim1 * SQ(Z1) / Tlim1 + Nlim2 * SQ(Z2) / Tlim2));
+                      * sqrt((Nlim1 * SQ(Z1) / Tlim1) + (Nlim2 * SQ(Z2) / Tlim2)));
 
             // Calculate v_a^2, v_b^2
             const BoutReal v1sq = 2 * Tlim1 * SI::qe / mass1;
@@ -392,9 +395,13 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         } else {
           // species1 charged, species2 neutral
 
+          if (!ion_neutral) {
+            continue;
+          }
+
           // Scattering of charged species 1
           // Neutral density
-          Field3D const Nn = GET_NOBOUNDARY(Field3D, species2["density"]);
+          const Field3D Nn = GET_NOBOUNDARY(Field3D, species2["density"]);
 
           BoutReal a0 = 5e-19; // Cross-section [m^2]
 
@@ -430,7 +437,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         // If temperature isn't set, assume zero
         const Field3D temperature2 =
             species2.isSet("temperature")
-                ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
+                ? Field3D{GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm}
                 : 0.0;
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
@@ -511,8 +518,8 @@ void BraginskiiCollisions::outputVars(Options& state) {
     const std::map<std::string, Options>& level2 = section.getChildren();
     for (auto s2 = std::begin(level2); s2 != std::end(level2); ++s2) {
       std::string A = s1->first;
-      std::string const B = s2->first;
-      std::string const AB = A + B;
+      const std::string B = s2->first;
+      const std::string AB = A + B;
 
       // Collision frequencies
       set_with_attrs(state[std::string("K") + AB + std::string("_coll")],

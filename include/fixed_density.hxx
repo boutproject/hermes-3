@@ -8,14 +8,14 @@ using bout::globals::mesh;
 
 /// Set ion density to a fixed value
 ///
-struct FixedDensity : public Component {
+struct FixedDensity : public NamedComponent<FixedDensity> {
   /// Inputs
   /// - <name>
   ///   - AA
   ///   - charge
   ///   - density   value (expression) in units of m^-3
   FixedDensity(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : Component({readWrite("species:{name}:{vars}")}), name(name) {
+      : NamedComponent(name, {readWrite("species:{name}:{vars}")}) {
 
     auto& options = alloptions[name];
 
@@ -47,6 +47,7 @@ struct FixedDensity : public Component {
 
   void outputVars(Options& state) override {
     auto Nnorm = get<BoutReal>(state["Nnorm"]);
+    const auto& name = objectName();
 
     // Save the density, not time dependent
     set_with_attrs(state[std::string("N") + name], N,
@@ -58,9 +59,9 @@ struct FixedDensity : public Component {
                     {"source", "fixed_density"}});
   }
 
-private:
-  std::string name; ///< Short name of species e.g "e"
+  static constexpr auto type = "fixed_density";
 
+private:
   BoutReal charge; ///< Species charge e.g. electron = -1
   BoutReal AA;     ///< Atomic mass e.g. proton = 1
 
@@ -77,7 +78,7 @@ private:
   ///     - charge
   ///     - density
   void transform_impl(GuardedOptions& state) override {
-    auto species = state["species"][name];
+    auto species = state["species"][objectName()];
     if (charge != 0.0) { // Don't set charge for neutral species
       set(species["charge"], charge);
     }
@@ -87,7 +88,7 @@ private:
 };
 
 namespace {
-RegisterComponent<FixedDensity> registercomponentfixeddensity("fixed_density");
+RegisterComponent<FixedDensity> registercomponentfixeddensity;
 }
 
 #endif // FIXED_DENSITY_H

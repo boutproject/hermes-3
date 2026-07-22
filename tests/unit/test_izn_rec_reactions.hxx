@@ -6,6 +6,16 @@
 
 namespace hermes {
 
+struct ConcreteIznReaction : public IznReaction {
+  using IznReaction::IznReaction;
+  static constexpr auto type = "test_izn_reaction";
+};
+
+struct ConcreteRecReaction : public RecReaction {
+  using RecReaction::RecReaction;
+  static constexpr auto type = "test_rec_reaction";
+};
+
 /**
  * @brief Class to test reactions of the form heavy_species1 + <M>e -> heavy_species2 +
  * <N>e where M and N are positive integers.
@@ -89,44 +99,44 @@ protected:
   }
 };
 
-class HIznTest : public IznRecReactionTest<IznReaction> {
+class HIznTest : public IznRecReactionTest<ConcreteIznReaction> {
 public:
-  HIznTest() : IznRecReactionTest<IznReaction>("HIzn", "h + e -> h+ + 2e") {}
+  HIznTest() : IznRecReactionTest("HIzn", "h + e -> h+ + 2e") {}
 };
 
-class DIznTest : public IznRecReactionTest<IznReaction> {
+class DIznTest : public IznRecReactionTest<ConcreteIznReaction> {
 public:
-  DIznTest() : IznRecReactionTest<IznReaction>("DIzn", "d + e -> d+ + 2e") {}
+  DIznTest() : IznRecReactionTest("DIzn", "d + e -> d+ + 2e") {}
 };
 
-class TIznTest : public IznRecReactionTest<IznReaction> {
+class TIznTest : public IznRecReactionTest<ConcreteIznReaction> {
 public:
-  TIznTest() : IznRecReactionTest<IznReaction>("TIzn", "t + e -> t+ + 2e") {}
+  TIznTest() : IznRecReactionTest("TIzn", "t + e -> t+ + 2e") {}
 };
 
-class HRecTest : public IznRecReactionTest<RecReaction> {
+class HRecTest : public IznRecReactionTest<ConcreteRecReaction> {
 public:
-  HRecTest() : IznRecReactionTest<RecReaction>("HRec", "h+ + e -> h") {}
+  HRecTest() : IznRecReactionTest("HRec", "h+ + e -> h") {}
 };
 
-class DRecTest : public IznRecReactionTest<RecReaction> {
+class DRecTest : public IznRecReactionTest<ConcreteRecReaction> {
 public:
-  DRecTest() : IznRecReactionTest<RecReaction>("DRec", "d+ + e -> d") {}
+  DRecTest() : IznRecReactionTest("DRec", "d+ + e -> d") {}
 };
 
-class TRecTest : public IznRecReactionTest<RecReaction> {
+class TRecTest : public IznRecReactionTest<ConcreteRecReaction> {
 public:
-  TRecTest() : IznRecReactionTest<RecReaction>("TRec", "t+ + e -> t") {}
+  TRecTest() : IznRecReactionTest("TRec", "t+ + e -> t") {}
 };
 
-class HeIzn01Test : public IznRecReactionTest<IznReaction> {
+class HeIzn01Test : public IznRecReactionTest<ConcreteIznReaction> {
 public:
-  HeIzn01Test() : IznRecReactionTest<IznReaction>("HeIzn01", "he + e -> he+ + 2e") {}
+  HeIzn01Test() : IznRecReactionTest("HeIzn01", "he + e -> he+ + 2e") {}
 };
 
-class HeRec10Test : public IznRecReactionTest<RecReaction> {
+class HeRec10Test : public IznRecReactionTest<ConcreteRecReaction> {
 public:
-  HeRec10Test() : IznRecReactionTest<RecReaction>("HeRec10", "he+ + e -> he") {}
+  HeRec10Test() : IznRecReactionTest("HeRec10", "he+ + e -> he") {}
 };
 
 } // namespace hermes

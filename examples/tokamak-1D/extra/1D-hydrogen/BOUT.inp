@@ -18,24 +18,30 @@ timestep = 10000
 MXG = 0  # No guard cells in X
 
 [mesh]
+# 1D simulation, use "y" as the dimension along the fieldline
 nx = 1
 ny = 400   # Resolution along field-line
 nz = 1
 
 length = 30           # Length of the domain in meters
-length_xpt = 10   # Length from midplane to X-point [m]
+length_xpt = 10   # Length from midplane to X-point [m] (i.e. this is where the source ends)
 
 dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
 
-# Parallel grid spacing
+# Parallel grid spacing — grid refinement near the divertor target
 dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
 
-# Calculate where the source ends in grid index
+# Calculate where the source ends in grid index (i.e. at the X-point)
 source = length_xpt / length
 y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
 
+# Separatrix index set to -1 for 1D simulations
 ixseps1 = -1
 ixseps2 = -1
+
+# In 1D, the Jacobian is inversely proportional to volume
+# Total flux expansion can be set up with a non-constant J profile
+J = 1
 
 [hermes]
 # Notes:
@@ -57,14 +63,26 @@ Tnorm = 100
 [solver]
 type = beuler  # Backward Euler steady-state solver
 
-snes_type = newtonls
+timestep = 1e-2  # Initial timestep
 
-max_nonlinear_iterations = 10
+#### FIRST ORDER IN TIME, FASTER SOLVER BEULER
+type = beuler                    # Backward Euler steady-state solver
+snes_type = newtonls             # Newton iterations
+ksp_type = gmres                 # GMRES method
+pc_type = hypre                  # Preconditioner type
+pc_hypre_type = euclid           # Hypre preconditioner type
+max_nonlinear_iterations = 10    # Max Newton iterations per timestep
+lag_jacobian = 500               # How long to wait before Jacobian recalculation per Newton iteration
+####
+
+# Solver tolerances
+atol = 1e-7                      # Absolute tolerance (controls small numbers)
+rtol = 1e-5                      # Relative tolerance (primary convergence control)
+
+matrix_free_operator = true
 
 diagnose = false # Print diagnostic information?
 
-atol = 1e-7
-rtol = 1e-5
 
 [sheath_boundary]
 
@@ -72,7 +90,7 @@ lower_y = false
 upper_y = true
 
 [neutral_parallel_diffusion]
-
+diffusion_collisions_mode = multispecies  # "afn" or "multispecies"
 dneut = 10   # (B / Bpol)^2 in neutral diffusion terms
 
 ####################################
@@ -108,15 +126,18 @@ function = 1
 source_shape = H(mesh:y_xpt - y)*1e20 # For upstream_density_feedback
 
 [Pd+]
+
+# Initial condition for ion pressure (in terms of hermes:Nnorm * hermes:Tnorm)
 function = 1
 
 powerflux = 2.5e7  # Input power flux in W/m^2
 
+# Divide by length of source region to get heat source in W/m3
 source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
 
 [NVd+]
 
-function = 0
+function = 0  # Initialise with Vi=0
 
 ####################################
 
@@ -130,38 +151,35 @@ AA = 2
 thermal_conduction = true
 
 [Nd]
-
 function = 0.001
 
 [Pd]
-
 function = 0.0001
 
 ####################################
 
 [e] # Electrons
-type = quasineutral, zero_current, evolve_pressure, noflow_boundary
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
 
 noflow_upper_y = false
 
 charge = -1
 AA = 1/1836
-
 thermal_conduction = true  # in evolve_pressure
+diagnose = true
 
 [Pe]
 
 function = `Pd+:function`  # Same as ion pressure initially
-
-source = `Pd+:source`  # Same as ion pressure source
+source = `Pd+:source`      # Same as ion pressure source
 
 ####################################
 
 [recycling]
-
 species = d+
 
 [reactions]
+diagnose = true
 type = (
         d + e -> d+ + 2e,     # Deuterium ionisation
         d+ + e -> d,          # Deuterium recombination

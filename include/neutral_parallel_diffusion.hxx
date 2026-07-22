@@ -3,6 +3,15 @@
 #define NEUTRAL_PARALLEL_DIFFUSION_H
 
 #include "component.hxx"
+#include "guarded_options.hxx"
+#include "permissions.hxx"
+#include <bout/bout_types.hxx>
+#include <bout/field3d.hxx>
+#include <bout/options.hxx>
+
+#include <map>
+#include <string>
+#include <vector>
 
 /// Add effective diffusion of neutrals in a 1D system,
 /// by projecting cross-field diffusion onto parallel distance.
@@ -22,36 +31,39 @@
 ///  - E<name>_Dpar   Energy source due to diffusion
 ///  - F<name>_Dpar   Momentum source due to diffusion
 ///
-struct NeutralParallelDiffusion : public Component {
+struct NeutralParallelDiffusion : public NamedComponent<NeutralParallelDiffusion> {
   NeutralParallelDiffusion(std::string name, Options& alloptions, Solver*)
-      : Component({readIfSet("species:{all_species}:charge"),
-                   readIfSet("species:{neutrals}:{optional_inputs}"),
-                   readOnly("species:{neutrals}:{inputs}"),
-                   readWrite("species:{neutrals}:{outputs}")}) {
+      : NamedComponent(name, {readIfSet("species:{all_species}:charge"),
+                              readIfSet("species:{neutrals}:{optional_inputs}"),
+                              readOnly("species:{neutrals}:{inputs}"),
+                              readWrite("species:{neutrals}:{outputs}")}) {
     auto& options = alloptions[name];
     dneut = options["dneut"]
                 .doc("cross-field diffusion projection (B  / Bpol)^2")
                 .as<BoutReal>();
 
     diagnose = options["diagnose"]
-      .doc("Output additional diagnostics?")
-      .withDefault<bool>(false);
+                   .doc("Output additional diagnostics?")
+                   .withDefault<bool>(false);
 
-    diffusion_collisions_mode = options["diffusion_collisions_mode"]
-      .doc("Can be afn: CX and IZ, or multispecies: CX and nn, ni, ne (if enabled)")
-      .withDefault<std::string>("afn");
-      
+    diffusion_collisions_mode =
+        options["diffusion_collisions_mode"]
+            .doc("Can be afn: CX and IZ, or multispecies: CX and nn, ni, ne (if enabled)")
+            .withDefault<std::string>("afn");
+
     equation_fix = options["equation_fix"]
-      .doc("Fix correcting pressure advection and conductivity factors?")
-      .withDefault<bool>(true);
+                       .doc("Fix correcting pressure advection and conductivity factors?")
+                       .withDefault<bool>(true);
 
-    perpendicular_conduction = options["perpendicular_conduction"]
-      .doc("Enable parallel projection of perpendicular conduction?")
-      .withDefault<bool>(true);
+    perpendicular_conduction =
+        options["perpendicular_conduction"]
+            .doc("Enable parallel projection of perpendicular conduction?")
+            .withDefault<bool>(true);
 
-    perpendicular_viscosity = options["perpendicular_viscosity"]
-      .doc("Enable parallel projection of perpendicular viscosity?")
-      .withDefault<bool>(true);
+    perpendicular_viscosity =
+        options["perpendicular_viscosity"]
+            .doc("Enable parallel projection of perpendicular viscosity?")
+            .withDefault<bool>(true);
 
     // FIXME: strictly speaking, momentum is not optional if velocity has been set
     substitutePermissions("optional_inputs", {"pressure", "velocity", "momentum"});
@@ -63,24 +75,29 @@ struct NeutralParallelDiffusion : public Component {
   }
 
   /// Save variables to the output
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
+  static constexpr auto type = "neutral_parallel_diffusion";
+
 private:
   BoutReal dneut; ///< cross-field diffusion projection (B  / Bpol)^2
 
   bool diagnose; ///< Output diagnostics?
-  std::map<std::string, std::vector<std::string>> collision_names; ///< Collisions used for collisionality
-  std::string diffusion_collisions_mode;  ///< Collision selection, either afn or multispecies
-  Field3D nu;   ///< Collision frequency for conduction
-  bool equation_fix;  ///< Fix incorrect 3/2 factor in pressure advection?
+  std::map<std::string, std::vector<std::string>>
+      collision_names; ///< Collisions used for collisionality
+  std::string
+      diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
+  Field3D nu;                    ///< Collision frequency for conduction
+  bool equation_fix;             ///< Fix incorrect 3/2 factor in pressure advection?
   bool perpendicular_conduction; ///< Enable conduction?
-  bool perpendicular_viscosity; ///< Enable viscosity?
+  bool perpendicular_viscosity;  ///< Enable viscosity?
 
   /// Per-species diagnostics
   struct Diagnostics {
     Field3D Dn; ///< Diffusion coefficient
-    Field3D S; ///< Particle source
-    Field3D E; ///< Energy source
-    Field3D F; ///< Momentum source
+    Field3D S;  ///< Particle source
+    Field3D E;  ///< Energy source
+    Field3D F;  ///< Momentum source
   };
 
   /// Store diagnostics for each species
@@ -109,8 +126,7 @@ private:
 };
 
 namespace {
-RegisterComponent<NeutralParallelDiffusion>
-    register_component_neutral_parallel_diffusion("neutral_parallel_diffusion");
+RegisterComponent<NeutralParallelDiffusion> register_component_neutral_parallel_diffusion;
 }
 
 #endif // NEUTRAL_PARALLEL_DIFFUSION_H
