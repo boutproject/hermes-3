@@ -1,17 +1,6 @@
 #pragma once
-
 #ifndef HERMES_COMPONENT_H
 #define HERMES_COMPONENT_H
-
-#include <bout/assert.hxx>
-#include <bout/bout_types.hxx>
-#include <bout/boutexception.hxx>
-#include <bout/field2d.hxx>
-#include <bout/field3d.hxx>
-#include <bout/fieldops.hxx>
-#include <bout/generic_factory.hxx>
-#include <bout/options.hxx>
-#include <bout/unused.hxx>
 
 #include <cmath>
 #include <initializer_list>
@@ -28,6 +17,7 @@
 #include <bout/boutexception.hxx>
 #include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
+#include <bout/fieldops.hxx>
 #include <bout/generic_factory.hxx>
 #include <bout/options.hxx>
 #include <bout/unused.hxx>
@@ -53,7 +43,7 @@ struct SpeciesInformation {
   }
 
   SpeciesInformation(const std::initializer_list<std::string> species) {
-    for (auto& sp : species) {
+    for (const auto& sp : species) {
       // FIXME: identifySpecies only identifies positive ions
       // FIXME: identifySpecies has no concept of ebeam
       const SpeciesType type = identifySpeciesType(sp);
@@ -126,12 +116,9 @@ struct Component {
   /// @param name     The species/name for this instance.
   /// @param options  Component settings: options[name] are specific to this component
   /// @param solver   Time-integration solver
-  static std::unique_ptr<Component>
-  create(const std::string& type, // The type to create
-         const std::string& name, // The species/name for this instance
-         Options&
-             options, // Component settings: options[name] are specific to this component
-         Solver* solver); // Time integration solver
+  static std::unique_ptr<Component> create(const std::string& type,
+                                           const std::string& name, Options& options,
+                                           Solver* solver);
 
   /// Tell the component the name of all species in the simulation, by type. It
   /// will use this information to substitute the following placeholders in
@@ -495,17 +482,15 @@ template <typename T>
 Options& add(Options& option, T value) {
   if (!option.isSet()) {
     return set(option, value);
-  } else {
-    try {
-      return set(option,
-                 value
-                     + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
-                         option.value));
-    } catch (const std::bad_cast& e) {
-      // Convert to a more useful error message
-      throw BoutException("Could not convert {:s} to type {:s}", option.str(),
-                          typeid(T).name());
-    }
+  }
+  try {
+    return set(option, value
+                           + bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
+                               option.value));
+  } catch (const std::bad_cast& e) {
+    // Convert to a more useful error message
+    throw BoutException("Could not convert {:s} to type {:s}", option.str(),
+                        typeid(T).name());
   }
 }
 
@@ -529,16 +514,15 @@ template <typename T>
 Options& subtract(Options& option, T value) {
   if (!option.isSet()) {
     return set(option, -value);
-  } else {
-    try {
-      return set(option, bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(
-                             option.value)
-                             - value);
-    } catch (const std::bad_cast& e) {
-      // Convert to a more useful error message
-      throw BoutException("Could not convert {:s} to type {:s}", option.str(),
-                          typeid(T).name());
-    }
+  }
+  try {
+    return set(option,
+               bout::utils::variantStaticCastOrThrow<Options::ValueType, T>(option.value)
+                   - value);
+  } catch (const std::bad_cast& e) {
+    // Convert to a more useful error message
+    throw BoutException("Could not convert {:s} to type {:s}", option.str(),
+                        typeid(T).name());
   }
 }
 
