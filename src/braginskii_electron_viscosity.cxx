@@ -62,7 +62,7 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
 
     const Field3D gradV = Grad_par(V);
     const BoutReal gradV_floor = 1e-8;
-    const Field3D q_cl = eta * sqrt(SQ(gradV) + SQ(gradV_floor));  // Collisional value
+    const Field3D q_cl = eta * sqrt(SQ(gradV) + SQ(gradV_floor)); // Collisional value
 
     const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
