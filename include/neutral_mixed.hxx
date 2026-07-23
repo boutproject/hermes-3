@@ -66,6 +66,7 @@ private:
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum;    ///< Evolve parallel momentum?
   bool normalise_sources;  ///< Normalise input sources?
+  bool ion_velocity;       ///< Include ion perpendicular velocity contribution?
 
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
 

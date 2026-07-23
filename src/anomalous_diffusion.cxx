@@ -12,7 +12,8 @@ using bout::globals::mesh;
 AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, Solver*)
     : NamedComponent(name, {readOnly("species:{name}:density", Regions::Interior),
                             readIfSet("species:{name}:{optional}", Regions::Interior),
-                            readWrite("species:{name}:{output}")}) {
+                            readWrite("species:{name}:{output}"),
+                            readWrite("species:{name}:anomalous_D")}) {
   // Normalisations
   const Options& units = alloptions["units"];
   const BoutReal rho_s0 = units["meters"];
@@ -140,6 +141,8 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
                                      flow_xlow, flow_ylow));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
+
+    set(species["anomalous_D"], anomalous_D);
   }
 
   if (include_chi) {

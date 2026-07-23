@@ -118,6 +118,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                            .doc("Include neutral gas heat conduction?")
                            .withDefault<bool>(true);
 
+  ion_velocity = options["ion_velocity"]
+                     .doc("Include ion perpendicular velocity contribution to neutral transport?")
+                     .withDefault<bool>(false);
+
   collisionality_override =
       options["collisionality_override"]
           .doc(
@@ -227,6 +231,12 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   substitutePermissions("name", {name});
   substitutePermissions(
       "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
+
+  // Add read permissions for anomalous_D and density from charged species
+  setPermissions(readIfSet("species:{charged}:anomalous_D"));
+  setPermissions(readOnly("species:{charged}:density", Regions::Interior));
+  setPermissions(readIfSet("species:{charged}:charge"));
+  setPermissions(readIfSet("species:{charged}:AA"));
 }
 
 void NeutralMixed::transform_impl(GuardedOptions& state) {
@@ -629,6 +639,53 @@ void NeutralMixed::finally(const Options& state) {
     ddt(NVn) = 0;
     Snv = 0;
   }
+
+  if (ion_velocity) {
+
+    // Add the contribution of ion perp velocity (i.e. anomalous transport)
+    // See eq 20 and 21 by Horsten et al., (2017)
+    const Options& allspecies = state["species"];
+
+    for (auto& kv : allspecies.getChildren()) {
+      // NOTE:: This is only true for d+ ions. How do we generalize?
+      //        How do we include the perpendicular ion velocity from other drifts?
+
+      const Options& species = kv.second;
+
+      if ((kv.first == "e") or !species.isSet("charge")
+          or (fabs(get<BoutReal>(species["charge"])) < 1e-5)) {
+        continue; // Skip electrons and non-charged ions
+      }
+
+      // sources/sinks due to anomalous transport
+      if (species.isSet("anomalous_D")) {
+        const Field2D anomalous_D = get<Field2D>(species["anomalous_D"]);
+
+        const Field3D Ni = get<Field3D>(species["density"]);
+        Field2D Ni2D = DC(Ni);
+
+        // Apply Neumann Y boundary condition, so no additional flux into boundary
+        // Note: Not setting radial (X) boundaries since those set radial fluxes
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          Ni2D(r.ind, mesh->ystart - 1) = Ni2D(r.ind, mesh->ystart);
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          Ni2D(r.ind, mesh->yend + 1) = Ni2D(r.ind, mesh->yend);
+        }
+
+        ddt(Nn) += Div_a_Grad_perp_upwind (Nn * anomalous_D / softFloor(Ni,density_floor), Ni2D);
+        //NOTE: Here, we used Nn as is done in UEDGE but it supposted to be the equilibrium value of Nn.
+
+        ddt(Pn) += (5. / 3) * Div_a_Grad_perp_upwind ( Pn * anomalous_D / softFloor(Ni,density_floor), Ni2D);
+
+        if (evolve_momentum) {
+          ddt(NVn) += Div_a_Grad_perp_upwind (NVn * anomalous_D / softFloor(Ni,density_floor), Ni2D);
+        }
+
+      }
+    }
+  }
+
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
