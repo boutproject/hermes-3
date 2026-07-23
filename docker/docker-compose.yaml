@@ -29,6 +29,8 @@ services:
   build_hermes:
     # Rebuild hermes, using ./work/hermes-3 if available
     image: "ghcr.io/boutproject/hermes-3:${HERMES_TAG:-latest}"
+    # Build as the host user (from .env) so build output isn't root-owned.
+    user: ${UID}:${GID}
     volumes:
       - ${PWD}/work:/hermes_project/work
     environment:
@@ -37,6 +39,8 @@ services:
   build_boutpp:
     # Rebuild BOUT++, using ./work/BOUT-dev if available
     image: "ghcr.io/boutproject/hermes-3:${HERMES_TAG:-latest}"
+    # Build as the host user (from .env) so build output isn't root-owned.
+    user: ${UID}:${GID}
     volumes:
       - ${PWD}/work:/hermes_project/work
     environment:
@@ -46,13 +50,17 @@ services:
     # Rebuild both hermes and BOUT++, using overrides
     # if they are available in ./work
     image: "ghcr.io/boutproject/hermes-3:${HERMES_TAG:-latest}"
+    # Build as the host user (from .env) so build output isn't root-owned.
+    user: ${UID}:${GID}
     volumes:
       - ${PWD}/work:/hermes_project/work
     environment:
     - HERMES_BUILD_JOBS=${HERMES_BUILD_JOBS:-4}
     command: ['image', "build_both"]
   hermes:
-    # Run a hermes-3 case in
+    # Run a hermes-3 case, e.g. `hermes work/case` (single process) or
+    # `hermes work/case 4` (4 MPI ranks). The case path and optional rank
+    # count are appended to this entrypoint as the command.
     image: "ghcr.io/boutproject/hermes-3:${HERMES_TAG:-latest}"
     user: ${UID}:${GID}
     volumes:
@@ -63,7 +71,9 @@ services:
     - HOST_DIR=$HOST_DIR
     - OMPI_ALLOW_RUN_AS_ROOT=1
     - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
-    entrypoint: ["image", "run"]
+    # Go through /entrypoint.sh so the Spack environment is sourced and mpirun
+    # is on PATH for multi-rank runs.
+    entrypoint: ["/entrypoint.sh", "image", "run"]
     command: ""
   fix_permissions:
     # Adjust the permissions of ./work to make sure

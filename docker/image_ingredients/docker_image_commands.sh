@@ -33,6 +33,8 @@ check_exit_code() {
 executable_name=$0
 mode=$1
 run_directory=$2
+# Optional third argument: number of MPI ranks for the "run" modes (default 1)
+nprocs=$3
 # Mode must be one of the handled options
 valid_modes=("build_boutpp" "build_hermes" "build_both" "run" "build_hermes_and_run" "build_both_and_run" "fix_permissions")
 
@@ -49,6 +51,28 @@ if ! $mode_is_valid; then
     warn "Error: invalid mode '$mode' for Hermes build command."
     warn "Valid modes are: ${valid_modes[*]}" >&2
     exit 1 # Return a non-zero exit code to indicate failure
+fi
+
+# Refuse to run as root unless the mode genuinely needs it. Every mode except
+# fix_permissions writes build/run output into the mounted work/ volume; doing
+# that as root leaves root-owned files on the host (compose runs these services
+# as user: ${UID}:${GID} precisely to avoid that). fix_permissions is exempt
+# because its whole job is to chown that volume. Set HERMES_ALLOW_ROOT=1 to
+# override, e.g. when the host user genuinely is root.
+root_allowed_modes=("fix_permissions")
+mode_allows_root=false
+for allowed_mode in "${root_allowed_modes[@]}"; do
+    if [[ "$mode" == "$allowed_mode" ]]; then
+        mode_allows_root=true
+        break
+    fi
+done
+
+if [[ "$(id -u)" -eq 0 ]] && ! $mode_allows_root && [[ "${HERMES_ALLOW_ROOT}" != "1" ]]; then
+    warn "Error: refusing to run mode '$mode' as root."
+    warn "It would create root-owned files in the mounted work/ directory on the host."
+    warn "Run as your host user (compose sets user: \${UID}:\${GID}), or set HERMES_ALLOW_ROOT=1 to override."
+    exit 1
 fi
 
 # Announce mode
@@ -122,6 +146,14 @@ run_hermes () {
         warn "Error: need to pass a non-empty directory to the run command."
         exit 1
     fi
+
+    # Number of MPI ranks. Defaults to a single process; must be a positive integer.
+    local ranks="${nprocs:-1}"
+    if ! [[ "$ranks" =~ ^[1-9][0-9]*$ ]]; then
+        warn "Error: number of processes must be a positive integer, got '${ranks}'."
+        exit 1
+    fi
+
     local run_dir="/hermes_project/${run_directory}"
     local hermes_dir="${HERMES_BUILD_DIR}"
 
@@ -136,10 +168,27 @@ run_hermes () {
     elif [[ ! -f "${run_dir}/BOUT.inp" ]]; then
         warn "Error: run directory '${run_dir}' does not contain a BOUT.inp file."
         exit 1
-    else
-        notice "Running Hermes-3 in ${run_dir}"
+    elif [[ "$ranks" -eq 1 ]]; then
+        notice "Running Hermes-3 in ${run_dir} on a single process"
         # Execute hermes-3 directly without changing directory
         "${hermes_dir}/hermes-3" -d "${run_dir}"
+        check_exit_code "Hermes-3 execution failed"
+        notice "Finished running Hermes-3"
+    else
+        # Only pass --oversubscribe when the request exceeds the cores Docker
+        # exposes. Within the core count, mpirun runs without it (so a genuine
+        # over-request elsewhere still fails loudly); above it we warn, since
+        # oversubscribed ranks time-slice the same CPU and run slowly.
+        local ncores
+        ncores=$(nproc 2>/dev/null || echo 1)
+        local oversubscribe=""
+        if [[ "$ranks" -gt "$ncores" ]]; then
+            warn "Warning: requested ${ranks} ranks but only ${ncores} core(s) are available to the container."
+            warn "Running with --oversubscribe; this will be slow. Raise Docker's CPU allocation for better performance."
+            oversubscribe="--oversubscribe"
+        fi
+        notice "Running Hermes-3 in ${run_dir} on ${ranks} processes with mpirun"
+        mpirun ${oversubscribe} -np "${ranks}" "${hermes_dir}/hermes-3" -d "${run_dir}"
         check_exit_code "Hermes-3 execution failed"
         notice "Finished running Hermes-3"
     fi
