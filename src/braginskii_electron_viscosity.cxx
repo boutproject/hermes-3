@@ -60,14 +60,16 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
     // SOLPS-style flux limiter
     // Values of alpha ~ 0.5 typically
 
-    const Field3D q_cl = eta * abs(Grad_par(V)); // Collisional value
+    const Field3D gradV = Grad_par(V);
+    const BoutReal gradV_floor = 1e-8;
+    const Field3D q_cl = eta * sqrt(SQ(gradV) + SQ(gradV_floor));  // Collisional value
+
     const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
     eta = eta / (1. + softFloor(q_cl, 1e-15) / softFloor(q_fl, 1e-15));
-
-    eta.getMesh()->communicate(eta);
-    eta.applyBoundary("neumann");
   }
+  eta.getMesh()->communicate(eta);
+  eta.applyBoundary("neumann");
 
   // Save term for output diagnostic
   viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
