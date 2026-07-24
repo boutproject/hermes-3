@@ -309,7 +309,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
         * R.Schneider et al. Contrib. Plasma Phys. 46, No. 1-2, 3 – 191 (2006)
         * DOI 10.1002/ctpp.200610001
         *  
-        * q_SH = -kappa_parallel * Grad_parallel(T)
+        * q_SH = -kappa_par * Grad_par(T)
         * q_FS = alpha * n * T * sqrt(T / m)
         *
         * The effective heat flux is the harmonic average of q_SH and q_FS.
@@ -346,10 +346,9 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
         const Field3D kappa_sum = kappa_par + kappa_free_streaming;
         kappa_par = kappa_par * kappa_free_streaming / softFloor(kappa_sum, 1e-10);
       }
-
-      // Values of kappa on cell boundaries are needed for fluxes
-      mesh->communicate(kappa_par);
     }
+    // Values of kappa on cell boundaries are needed for fluxes
+    mesh->communicate(kappa_par);
 
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
