@@ -82,6 +82,55 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
             .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 "
                  "for electrons, 1 for ions.")
             .withDefault(-1.0);
+
+    all_kappa_limit_model[name] =
+        options["kappa_limit_model"]
+            .doc("Parallel heat-flux limiter model. Options are 'local' and "
+                "'connection_length'. The connection_length model corresponds "
+                "to the local free-streaming approximation used in GRILLIX.")
+            .withDefault<std::string>("local");
+
+    if ((all_kappa_limit_model[name] != "local")
+        and (all_kappa_limit_model[name] != "connection_length")) {
+      throw BoutException(
+          "kappa_limit_model for species '{}' must be either 'local' or "
+          "'connection_length', but '{}' was given",
+          name, all_kappa_limit_model[name]);
+    }
+
+    all_kappa_limit_q95[name] =
+        options["kappa_limit_q95"]
+            .doc("Safety factor q95 used by the connection-length "
+                "parallel heat-flux limiter")
+            .withDefault(-1.0);
+
+    const BoutReal Lnorm = alloptions["units"]["meters"];
+
+    all_kappa_limit_R[name] =
+        options["kappa_limit_R"]
+            .doc("Major radius R used by the connection-length "
+                "parallel heat-flux limiter [m]")
+            .withDefault(-1.0)
+        / Lnorm;    
+
+    if ((all_kappa_limit_model[name] == "connection_length")
+        and (all_kappa_limit_alpha[name] > 0.0)) {
+
+      if (all_kappa_limit_q95[name] <= 0.0) {
+        throw BoutException(
+            "kappa_limit_q95 must be positive for species '{}' when "
+            "kappa_limit_model = connection_length",
+            name);
+      }
+
+      if (all_kappa_limit_R[name] <= 0.0) {
+        throw BoutException(
+            "kappa_limit_R must be positive for species '{}' when "
+            "kappa_limit_model = connection_length",
+            name);
+      }
+    }
+
     all_conduction_collisions_mode[name] =
         options["conduction_collisions_mode"]
             .doc("Can be multispecies: all collisions, or "
@@ -219,6 +268,9 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     Field3D& flow_ylow_conduction = all_flow_ylow_conduction[name];
     const BoutReal kappa_coefficient = all_kappa_coefficient[name];
     const BoutReal kappa_limit_alpha = all_kappa_limit_alpha[name];
+    const std::string& kappa_limit_model = all_kappa_limit_model[name];
+    const BoutReal kappa_limit_q95 = all_kappa_limit_q95[name];
+    const BoutReal kappa_limit_R = all_kappa_limit_R[name];
 
     /// Collect the collisionalities based on list of names
     nu = 0;
@@ -250,24 +302,56 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     kappa_par = kappa_coefficient * Pfloor * tau / AA;
 
     if (kappa_limit_alpha > 0.0) {
-      /*
-       * Flux limiter, as used in SOLPS.
-       *
-       * Calculate the heat flux from Spitzer-Harm and flux limit
-       *
-       * Typical value of alpha ~ 0.2 for electrons
-       *
-       * R.Schneider et al. Contrib. Plasma Phys. 46, No. 1-2, 3 – 191 (2006)
-       * DOI 10.1002/ctpp.200610001
-       */
+      if (kappa_limit_model == "local") {
+        /*
+        * Local gradient-dependent heat-flux limiter, as used in SOLPS.
+        *
+        * Calculate the heat flux from Spitzer-Harm and flux limit
+        *
+        * Typical value of alpha ~ 0.2 for electrons
+        *
+        * R.Schneider et al. Contrib. Plasma Phys. 46, No. 1-2, 3 – 191 (2006)
+        * DOI 10.1002/ctpp.200610001
+        *  
+        * q_SH = -kappa_parallel * Grad_parallel(T)
+        * q_FS = alpha * n * T * sqrt(T / m)
+        *
+        * The effective heat flux is the harmonic average of q_SH and q_FS.
+        */
 
-      // Spitzer-Harm heat flux
-      const Field3D q_SH = kappa_par * Grad_par(T);
-      // Free-streaming flux
-      const Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
+        // Spitzer-Harm heat flux
+        const Field3D q_SH = kappa_par * Grad_par(T);
+        // Free-streaming flux
+        const Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
 
-      // This results in a harmonic average of the heat fluxes
-      kappa_par /= (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
+        // This results in a harmonic average of the heat fluxes
+        kappa_par /= (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
+
+
+      } else if (kappa_limit_model == "connection_length") {
+        /*
+        * Connection-length free-streaming limiter used in GRILLIX.
+        *
+        * kappa_FS = f_FS * n * v_th * q95 * R,
+        *
+        * where R is normalised to the Hermes length unit and
+        * v_th = sqrt(T / m).
+        *
+        * 1 / kappa_eff = 1 / kappa_B + 1 / kappa_FS
+        */
+
+        const Field3D Nfloor = floor(N, 0.0);
+        const Field3D Tfloor = floor(T, 0.0);
+
+        const BoutReal parallel_length =
+            kappa_limit_q95 * kappa_limit_R;
+
+        const Field3D kappa_free_streaming =
+            kappa_limit_alpha * Nfloor * sqrt(Tfloor / AA) * parallel_length;
+
+        const Field3D kappa_sum = kappa_par + kappa_free_streaming;
+        kappa_par = kappa_par * kappa_free_streaming / softFloor(kappa_sum, 1e-10);
+      }
 
       // Values of kappa on cell boundaries are needed for fluxes
       mesh->communicate(kappa_par);
