@@ -286,6 +286,35 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       eta.getMesh()->communicate(eta);
       eta.applyBoundary("neumann");
 
+      // Note: We need parallel boundary conditions on eta
+      if (eta.hasParallelSlices()) {
+        Field3D& eta_ydown = eta.ydown();
+        Field3D& eta_yup = eta.yup();
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            eta_ydown(r.ind, mesh->ystart - 1, jz) = eta(r.ind, mesh->ystart, jz);
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            eta_yup(r.ind, mesh->yend + 1, jz) = eta(r.ind, mesh->yend, jz);
+          }
+        }
+      } else {
+        Field3D eta_fa = toFieldAligned(eta);
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            eta_fa(r.ind, mesh->ystart - 1, jz) = eta_fa(r.ind, mesh->ystart, jz); // Neumann BC
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            eta_fa(r.ind, mesh->yend + 1, jz) = eta_fa(r.ind, mesh->yend, jz); // Neumann BC
+          }
+        }
+        eta = fromFieldAligned(eta_fa);
+      }
+
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
       const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
