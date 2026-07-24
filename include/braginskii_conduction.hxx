@@ -30,8 +30,8 @@ struct BraginskiiConduction : public NamedComponent<BraginskiiConduction> {
   ///   - kappa_limit_alpha            Flux limiter, off by default. Free-streaming coefficient.
   ///   - kappa_limit_model            Limiter model: "local" or "connection_length".
   ///   - kappa_limit_q95              Safety factor used by the connection-length limiter.
-  ///   - kappa_limit_R                Major radius used by the connection-length limiter [m].  
-  /// 
+  ///   - kappa_limit_R                Major radius used by the connection-length limiter [m].
+  ///
   ///   - conduction_collisions_mode   Can be multispecies: all collisions, or braginskii:
   ///                                  self collisions and ie
   ///

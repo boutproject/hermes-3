@@ -86,48 +86,44 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
     all_kappa_limit_model[name] =
         options["kappa_limit_model"]
             .doc("Parallel heat-flux limiter model. Options are 'local' and "
-                "'connection_length'. The connection_length model corresponds "
-                "to the local free-streaming approximation used in GRILLIX.")
+                 "'connection_length'. The connection_length model corresponds "
+                 "to the local free-streaming approximation used in GRILLIX.")
             .withDefault<std::string>("local");
 
     if ((all_kappa_limit_model[name] != "local")
         and (all_kappa_limit_model[name] != "connection_length")) {
-      throw BoutException(
-          "kappa_limit_model for species '{}' must be either 'local' or "
-          "'connection_length', but '{}' was given",
-          name, all_kappa_limit_model[name]);
+      throw BoutException("kappa_limit_model for species '{}' must be either 'local' or "
+                          "'connection_length', but '{}' was given",
+                          name, all_kappa_limit_model[name]);
     }
 
     all_kappa_limit_q95[name] =
         options["kappa_limit_q95"]
             .doc("Safety factor q95 used by the connection-length "
-                "parallel heat-flux limiter")
+                 "parallel heat-flux limiter")
             .withDefault(-1.0);
 
     const BoutReal Lnorm = alloptions["units"]["meters"];
 
-    all_kappa_limit_R[name] =
-        options["kappa_limit_R"]
-            .doc("Major radius R used by the connection-length "
-                "parallel heat-flux limiter [m]")
-            .withDefault(-1.0)
-        / Lnorm;    
+    all_kappa_limit_R[name] = options["kappa_limit_R"]
+                                  .doc("Major radius R used by the connection-length "
+                                       "parallel heat-flux limiter [m]")
+                                  .withDefault(-1.0)
+                              / Lnorm;
 
     if ((all_kappa_limit_model[name] == "connection_length")
         and (all_kappa_limit_alpha[name] > 0.0)) {
 
       if (all_kappa_limit_q95[name] <= 0.0) {
-        throw BoutException(
-            "kappa_limit_q95 must be positive for species '{}' when "
-            "kappa_limit_model = connection_length",
-            name);
+        throw BoutException("kappa_limit_q95 must be positive for species '{}' when "
+                            "kappa_limit_model = connection_length",
+                            name);
       }
 
       if (all_kappa_limit_R[name] <= 0.0) {
-        throw BoutException(
-            "kappa_limit_R must be positive for species '{}' when "
-            "kappa_limit_model = connection_length",
-            name);
+        throw BoutException("kappa_limit_R must be positive for species '{}' when "
+                            "kappa_limit_model = connection_length",
+                            name);
       }
     }
 
@@ -327,7 +323,6 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
         // This results in a harmonic average of the heat fluxes
         kappa_par /= (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
 
-
       } else if (kappa_limit_model == "connection_length") {
         /*
         * Connection-length free-streaming limiter used in GRILLIX.
@@ -343,8 +338,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
         const Field3D Nfloor = floor(N, 0.0);
         const Field3D Tfloor = floor(T, 0.0);
 
-        const BoutReal parallel_length =
-            kappa_limit_q95 * kappa_limit_R;
+        const BoutReal parallel_length = kappa_limit_q95 * kappa_limit_R;
 
         const Field3D kappa_free_streaming =
             kappa_limit_alpha * Nfloor * sqrt(Tfloor / AA) * parallel_length;
