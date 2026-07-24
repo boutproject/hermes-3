@@ -244,7 +244,7 @@ private:
   /// Size of reactant_names, cached to avoid repeated .size() calls
   size_t num_reactants;
 
-  /// Function to calculate reaction rate as a function of n_e, T_e
+  /// Function to calculate reaction rate
   RateFuncVariant rate_calc_func;
 
   /// Reactant densities, keyed by species name (stored as pointers to avoid copying)
