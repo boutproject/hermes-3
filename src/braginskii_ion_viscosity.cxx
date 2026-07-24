@@ -301,7 +301,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         const Field3D Pi_ciperp = 0.0;
         const Field3D DivJ = 0.0;
         diagnostics[species_name] =
-            Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
+            Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star, eta};
       }
     }
 
@@ -380,7 +380,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
     if (diagnose) {
       diagnostics[species_name] =
-          Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
+          Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star, eta};
     }
   }
 }
@@ -444,6 +444,14 @@ void BraginskiiIonViscosity::outputVars(Options& state) {
                       {"long_name", std::string("nu star") + species_name},
                       {"species", species_name},
                       {"source", "ion_viscosity"}});
+
+      set_with_attrs(state[std::string("eta_") + species_name], d.eta,
+                     {{"time_dimension", "t"},
+                      {"units", "Pa s"},
+                      {"conversion", Pnorm / Omega_ci},
+                      {"long_name", std::string("Ion viscosity coefficient") + species_name},
+                      {"species", species_name},
+                      {"source", "ion_viscosity"}});                    
     }
   }
 }
