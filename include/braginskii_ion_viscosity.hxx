@@ -72,6 +72,7 @@ private:
     Field3D DivJ;      ///< Divergence of current in vorticity equation
     Field3D bounce_factor;
     Field3D nu_star;
+    Field3D eta;       ///< Ion viscosity coefficient
   };
 
   /// Store diagnostics for each species
