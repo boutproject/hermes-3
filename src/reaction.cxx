@@ -243,9 +243,8 @@ void Reaction::transform_impl(GuardedOptions& state) {
   if (rate_params_type == RateParamsTypes::ET) {
     throw BoutException("RateParamsTypes::ET not implemented");
   } else if (rate_params_type == RateParamsTypes::nT) {
-    TwoDRateFunc calc_rate = [&](BoutReal mass_action, BoutReal ne, BoutReal te) {
-      BoutReal result = mass_action
-                        * this->rate_data->eval_sigma_v_nT(te * Tnorm, ne * Nnorm) * Nnorm
+    TwoDRateFunc calc_rate = [&](BoutReal ne, BoutReal te) {
+      BoutReal result = this->rate_data->eval_sigma_v_nT(te * Tnorm, ne * Nnorm) * Nnorm
                         / FreqNorm * rate_multiplier;
       return result;
     };
@@ -253,9 +252,9 @@ void Reaction::transform_impl(GuardedOptions& state) {
         RateHelper<RateParamsTypes::nT>(state, units, reactant_names, rng_nobndry);
     rate_calc_results = rate_helper.calc_rates(calc_rate, this->do_parallel_averaging);
   } else if (rate_params_type == RateParamsTypes::T) {
-    OneDRateFunc calc_rate = [&](BoutReal mass_action, BoutReal Teff) {
-      BoutReal result = mass_action * 1e-6 * this->rate_data->eval_sigma_v_T(Teff) * Nnorm
-                        / FreqNorm * rate_multiplier;
+    OneDRateFunc calc_rate = [&](BoutReal Teff) {
+      BoutReal result = 1e-6 * this->rate_data->eval_sigma_v_T(Teff) * Nnorm / FreqNorm
+                        * rate_multiplier;
       return result;
     };
 
