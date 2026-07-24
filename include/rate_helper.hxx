@@ -16,20 +16,30 @@
 
 namespace hermes {
 
-/// Struct to hold pre-averaged data for each cell
-struct CellData {
-  CellData() : CellData(0, 0, 0) {}
-  CellData(BoutReal c, BoutReal l, BoutReal r) : centre(c), left(l), right(r) {}
+/// Struct to hold values used in cell averaging
+struct DataTriple {
+  DataTriple() : DataTriple(0, 0, 0) {}
+  DataTriple(BoutReal c, BoutReal l, BoutReal r) : centre(c), left(l), right(r) {}
   BoutReal centre, left, right;
 };
 
-/// Signatures for different rate calculations.
-/// N.B. one extra arg required for the mass action factor.
-using OneDRateFunc = std::function<BoutReal(BoutReal, BoutReal)>;
-using TwoDRateFunc = std::function<BoutReal(BoutReal, BoutReal, BoutReal)>;
+// Temporary storage for central,left,right vals of various properties at each cell index
+struct CellProps {
+  CellProps(size_t num_reactants)
+      : densities(num_reactants), collision_freqs(num_reactants) {}
+
+  DataTriple rate;
+
+  std::vector<DataTriple> densities;
+  std::vector<DataTriple> collision_freqs;
+};
+
+/// Signatures for different rate calculations
+using OneDRateFunc = std::function<BoutReal(BoutReal)>;
+using TwoDRateFunc = std::function<BoutReal(BoutReal, BoutReal)>;
 using RateFuncVariant = std::variant<OneDRateFunc, TwoDRateFunc>;
 
-/// Struct to hold reaction rate and collision frequency data
+/// Struct to hold final (possibly averaged) reaction rate and collision frequency fields that get returned by calc_rates()
 struct RateData {
   /// The reaction rate Field3D
   Field3D rate;
@@ -74,8 +84,6 @@ struct RateHelper {
    *
    * @param state
    * @param reactant_names vector of reactant names
-   * @param rate_calc_func function with which to compute the rate from the mass action
-   * factor, n_e and T_e
    * @param region the region in which to calculate the rate
    */
   RateHelper(const GuardedOptions state, const Options& units,
@@ -87,7 +95,7 @@ struct RateHelper {
     for (const auto& reactant : reactant_names) {
       // Hold the wrapper in a local so the referenced field lifetime is obvious to GCC.
       const GuardedOptions reactant_density = state["species"][reactant]["density"];
-      this->reactant_densities[reactant] = &reactant_density.GetRef<Field3D>();
+      this->reactant_densities.push_back(&reactant_density.GetRef<Field3D>());
     }
 
     // Compute / extract fields that are required as parameters for the rate calculations
@@ -95,14 +103,14 @@ struct RateHelper {
       static_assert(dependent_false<RateParamsType>,
                     "RateParamsTypes::ET not implemented");
     } else if constexpr (RateParamsType == RateParamsTypes::nT) {
-      for (auto field_lbl : {"e:density", "e:temperature"}) {
-        // Split the access to avoid dangling-reference warnings through temporary wrappers.
-        const GuardedOptions rate_param = state["species"][field_lbl];
-        add_rate_param(field_lbl, rate_param.template GetRef<Field3D>());
-      }
+
+      const GuardedOptions n_e = state["species"]["e:density"];
+      const GuardedOptions T_e = state["species"]["e:temperature"];
+      this->rate_params.push_back(&n_e.GetRef<Field3D>());
+      this->rate_params.push_back(&T_e.GetRef<Field3D>());
     } else if constexpr (RateParamsType == RateParamsTypes::T) {
       calc_Teff(state, units, reactant_names, Teff_storage);
-      add_rate_param("Teff", Teff_storage);
+      this->rate_params.push_back(&Teff_storage);
     } else {
       // Compile-time error if any other RateParamsType enum exists
       static_assert(dependent_false<RateParamsType>, "Unhandled RateParamsType");
@@ -123,83 +131,51 @@ struct RateHelper {
 
     // Initialize result data structure
     RateData result;
-    std::string first_key = str_keys(this->rate_params)[0];
-    result.rate = emptyFrom(*this->rate_params[first_key]);
+    result.rate = emptyFrom(*this->rate_params[0]);
     for (const std::string& reactant : this->reactant_names) {
-      result.collision_frequencies[reactant] = emptyFrom(*this->rate_params[first_key]);
+      result.collision_frequencies[reactant] = emptyFrom(*this->rate_params[0]);
     }
 
-    // Temporary storage for central,left,right vals of each property at each cell index
-    std::map<std::string, CellData> cell_data;
-    cell_data["rate"] = CellData();
-    for (const std::string& reactant : this->reactant_names) {
-      cell_data[reactant] = CellData();
-    }
+    // Temporary storage for densities, rate and collision frequencies associated with a cell
+    CellProps cell_props(this->num_reactants);
 
-    // Populate cell_data differently according to rate function type
+    // Populate cell_props differently according to the rate function type
     std::visit(
-        [this, &cell_data, &do_averaging, &result](auto&& rate_calc_func) {
+        [this, &cell_props, &do_averaging, &result](auto&& rate_calc_func) {
           auto J = result.rate.getCoordinates()->J;
           BOUT_FOR(i, region) {
+            // Get densities for this cell
+            add_densities(i, cell_props, do_averaging);
+
             using RateFuncType = std::decay_t<decltype(rate_calc_func)>;
             if constexpr (std::is_same_v<RateFuncType, OneDRateFunc>) {
+              // 1D rate function
               if constexpr (RateParamsType == RateParamsTypes::T) {
-                CellData T_data = compute_rate_param(Teff_name, i, do_averaging);
+                // Get rate params
+                DataTriple T_data = compute_rate_param(0, i, do_averaging);
 
-                CellData mass_actions = compute_mass_actions(i, do_averaging);
-                cell_data["rate"].centre =
-                    rate_calc_func(mass_actions.centre, T_data.centre);
+                // Compute rate(s)
+                cell_props.rate.centre = rate_calc_func(T_data.centre);
                 if (do_averaging) {
-                  cell_data["rate"].left = rate_calc_func(mass_actions.left, T_data.left);
-                  cell_data["rate"].right =
-                      rate_calc_func(mass_actions.right, T_data.right);
-                }
-
-                // collision freqs. at centre, left, right
-                for (const auto& reactant : this->reactant_names) {
-                  CellData coll_freq_dens = compute_collision_freq_density(
-                      i, do_averaging, reactant, mass_actions);
-                  cell_data[reactant].centre =
-                      rate_calc_func(coll_freq_dens.centre, T_data.centre);
-                  if (do_averaging) {
-                    cell_data[reactant].left =
-                        rate_calc_func(coll_freq_dens.left, T_data.left);
-                    cell_data[reactant].right =
-                        rate_calc_func(coll_freq_dens.right, T_data.right);
-                  }
+                  cell_props.rate.left = rate_calc_func(T_data.left);
+                  cell_props.rate.right = rate_calc_func(T_data.right);
                 }
               } else {
                 throw BoutException(
                     "Unhandled RateParamsType (1D rate function being passed)");
               }
             } else if constexpr (std::is_same_v<RateFuncType, TwoDRateFunc>) {
+              // 2D rate function
               if constexpr (RateParamsType == RateParamsTypes::nT) {
-                CellData ne_data = compute_rate_param("e:density", i, do_averaging);
-                CellData Te_data = compute_rate_param("e:temperature", i, do_averaging);
+                // Get rate params
+                DataTriple ne_data = compute_rate_param(0, i, do_averaging);
+                DataTriple Te_data = compute_rate_param(1, i, do_averaging);
 
-                // reaction rates at centre, left, right
-                CellData mass_actions = compute_mass_actions(i, do_averaging);
-                cell_data["rate"].centre =
-                    rate_calc_func(mass_actions.centre, ne_data.centre, Te_data.centre);
+                // Compute rate(s)
+                cell_props.rate.centre = rate_calc_func(ne_data.centre, Te_data.centre);
                 if (do_averaging) {
-                  cell_data["rate"].left =
-                      rate_calc_func(mass_actions.left, ne_data.left, Te_data.left);
-                  cell_data["rate"].right =
-                      rate_calc_func(mass_actions.right, ne_data.right, Te_data.right);
-                }
-
-                // collision freqs. at centre, left, right
-                for (const auto& reactant : this->reactant_names) {
-                  CellData dens_prods = compute_collision_freq_density(
-                      i, do_averaging, reactant, mass_actions);
-                  cell_data[reactant].centre =
-                      rate_calc_func(dens_prods.centre, ne_data.centre, Te_data.centre);
-                  if (do_averaging) {
-                    cell_data[reactant].left =
-                        rate_calc_func(dens_prods.left, ne_data.left, Te_data.left);
-                    cell_data[reactant].right =
-                        rate_calc_func(dens_prods.right, ne_data.right, Te_data.right);
-                  }
+                  cell_props.rate.left = rate_calc_func(ne_data.left, Te_data.left);
+                  cell_props.rate.right = rate_calc_func(ne_data.right, Te_data.right);
                 }
 
               } else if constexpr (RateParamsType == RateParamsTypes::ET) {
@@ -212,26 +188,37 @@ struct RateHelper {
               }
             }
 
+            // Apply density factors to rate and compute collision frequencies
+            add_density_factors(cell_props, do_averaging);
+
             if (do_averaging) {
               // Compute averaged rate, collision frequencies and store in result
               auto Ji = J[i];
               auto Jm = J.yup()[i.ym()];
               auto Jp = J.ydown()[i.yp()];
 
-              result.rate[i] = 4. / 6 * cell_data["rate"].centre
-                               + (Ji + Jm) / (12. * Ji) * cell_data["rate"].left
-                               + (Ji + Jp) / (12. * Ji) * cell_data["rate"].right;
-              for (const std::string& reactant : this->reactant_names) {
-                result.collision_frequencies[reactant][i] =
-                    4. / 6 * cell_data[reactant].centre
-                    + (Ji + Jm) / (12. * Ji) * cell_data[reactant].left
-                    + (Ji + Jp) / (12. * Ji) * cell_data[reactant].right;
+              result.rate[i] = 4. / 6 * cell_props.rate.centre
+                               + (Ji + Jm) / (12. * Ji) * cell_props.rate.left
+                               + (Ji + Jp) / (12. * Ji) * cell_props.rate.right;
+              for (std::size_t reactant_idx = 0; reactant_idx < this->num_reactants;
+                   reactant_idx++) {
+
+                std::string reactant_name = this->reactant_names[reactant_idx];
+                result.collision_frequencies[reactant_name][i] =
+                    4. / 6 * cell_props.collision_freqs[reactant_idx].centre
+                    + (Ji + Jm) / (12. * Ji)
+                          * cell_props.collision_freqs[reactant_idx].left
+                    + (Ji + Jp) / (12. * Ji)
+                          * cell_props.collision_freqs[reactant_idx].right;
               }
             } else {
               // Extract rate, collision frequencies at cell centre and store in result
-              result.rate[i] = cell_data["rate"].centre;
-              for (const std::string& reactant : this->reactant_names) {
-                result.collision_frequencies[reactant][i] = cell_data[reactant].centre;
+              result.rate[i] = cell_props.rate.centre;
+              for (std::size_t reactant_idx = 0; reactant_idx < this->num_reactants;
+                   reactant_idx++) {
+                std::string reactant_name = this->reactant_names[reactant_idx];
+                result.collision_frequencies[reactant_name][i] =
+                    cell_props.collision_freqs[reactant_idx].centre;
               }
             }
           }
@@ -244,11 +231,11 @@ private:
   /// Size of reactant_names, cached to avoid repeated .size() calls
   size_t num_reactants;
 
-  /// Function to calculate reaction rate as a function of n_e, T_e
+  /// Function to calculate reaction rate
   RateFuncVariant rate_calc_func;
 
   /// Reactant densities, keyed by species name (stored as pointers to avoid copying)
-  std::map<std::string, const Field3D*> reactant_densities;
+  std::vector<const Field3D*> reactant_densities;
 
   /// Reactant names in the order provided to the constructor
   std::vector<std::string> reactant_names;
@@ -257,20 +244,10 @@ private:
   const Region<Ind3D> region;
 
   // Rate parameter fields (stored as pointers to avoid copying)
-  std::map<std::string, const Field3D*> rate_params;
+  std::vector<const Field3D*> rate_params;
 
   // Storage for Teff when RateParamsType == T (needed to keep the object alive)
   Field3D Teff_storage;
-
-  /**
-   * @brief Store a field associated with a rate parameter
-   *
-   * @param field_lbl Label/tag associated with the field
-   * @param fld reference to the field object
-   */
-  void add_rate_param(const std::string& field_lbl, const Field3D& fld) {
-    this->rate_params.insert(std::make_pair(field_lbl, &fld));
-  }
 
   /**
    * @brief Compute the effective temperature (in eV) of heavy reactants.
@@ -311,59 +288,57 @@ private:
   }
 
   /**
-   * @brief Compute the density product to use in a collision frequency by dividing the
-   * total mass action factor by a specific reactant's density.
+   * @brief Multiply rates by all reactant densities, collision frequencies by all densities except the target species.
    *
-   * @param i central index
-   * @param do_averaging whether to compute left and right values
-   * @param reactant_name name of the reactant to exclude from the product
-   * @param mass_actions pre-computed mass action factor
-   * @return CellData struct containing centre, left, and right values
+   * @param cell_props[inout] temporary struct already containing rates, collision freqs, densities
+   * @param do_averaging[in] whether to compute left and right values for averaging
    */
-  inline CellData compute_collision_freq_density(Ind3D i, bool do_averaging,
-                                                 const std::string& reactant_name,
-                                                 const CellData& mass_actions) {
-    auto ym = i.ym();
-    auto yp = i.yp();
-    const auto& dens = *this->reactant_densities.at(reactant_name);
-    CellData result = mass_actions;
+  inline void add_density_factors(CellProps& cell_props, bool do_averaging = true) {
+    // Save the bare rate (before any density factors are applied)
+    const DataTriple bare_rate = cell_props.rate;
 
-    if (result.centre > 0) {
-      result.centre /= dens[i];
-    }
-
-    if (do_averaging) {
-      if (result.left > 0) {
-        result.left /= cellLeft<Limiter>(dens[i], dens[ym], dens[yp]);
-      }
-      if (result.right > 0) {
-        result.right /= cellRight<Limiter>(dens[i], dens[ym], dens[yp]);
+    // Multiply rate by all reactant densities (mass action factor)
+    for (std::size_t ridx = 0; ridx < this->num_reactants; ridx++) {
+      cell_props.rate.centre *= cell_props.densities[ridx].centre;
+      if (do_averaging) {
+        cell_props.rate.left *= cell_props.densities[ridx].left;
+        cell_props.rate.right *= cell_props.densities[ridx].right;
       }
     }
 
-    return result;
+    // Collision frequency for each target = bare_rate * product(n[j] for j != target)
+    for (std::size_t target_ridx = 0; target_ridx < this->num_reactants; target_ridx++) {
+      cell_props.collision_freqs[target_ridx] = bare_rate;
+      for (std::size_t other_ridx = 0; other_ridx < this->num_reactants; ++other_ridx) {
+        if (target_ridx != other_ridx) {
+          cell_props.collision_freqs[target_ridx].centre *=
+              cell_props.densities[other_ridx].centre;
+          if (do_averaging) {
+            cell_props.collision_freqs[target_ridx].left *=
+                cell_props.densities[other_ridx].left;
+            cell_props.collision_freqs[target_ridx].right *=
+                cell_props.densities[other_ridx].right;
+          }
+        }
+      }
+    }
   }
 
-  /**
-   * @brief Compute the product of all reactant densities at centre, left, and right
-   * positions.
-   *
-   * @param i central index
-   * @param do_averaging whether to compute left and right values
-   * @return CellData struct containing centre, left, and right mass action factors
-   */
-  inline CellData compute_mass_actions(Ind3D i, bool do_averaging) {
-    auto ym = i.ym();
-    auto yp = i.yp();
-    CellData result{1, 1, 1};
-    for (const auto& [sp_name, dens] : this->reactant_densities) {
-      result.centre *= (*dens)[i];
+  inline void add_densities(Ind3D i, CellProps& cell_props, bool do_averaging) {
+    // Store interpolated densities
+    for (std::size_t reactant_idx = 0; reactant_idx < this->num_reactants;
+         ++reactant_idx) {
+      auto* dens = this->reactant_densities[reactant_idx];
+      cell_props.densities[reactant_idx].centre = (*dens)[i];
       if (do_averaging) {
-        result.left *= cellLeft<Limiter>((*dens)[i], (*dens)[ym], (*dens)[yp]);
-        result.right *= cellRight<Limiter>((*dens)[i], (*dens)[ym], (*dens)[yp]);
+        auto ym = i.ym();
+        auto yp = i.yp();
+        cell_props.densities[reactant_idx].left =
+            cellLeft<Limiter>((*dens)[i], (*dens)[ym], (*dens)[yp]);
+        cell_props.densities[reactant_idx].right =
+            cellRight<Limiter>((*dens)[i], (*dens)[ym], (*dens)[yp]);
       }
     }
-    return result;
   }
 
   /**
@@ -374,12 +349,11 @@ private:
    * @param do_averaging whether to compute left and right values
    * @return CellData struct containing centre, left, and right values
    */
-  inline CellData compute_rate_param(const std::string& name, Ind3D i,
-                                     bool do_averaging) {
+  inline DataTriple compute_rate_param(std::size_t idx, Ind3D i, bool do_averaging) {
     auto ym = i.ym();
     auto yp = i.yp();
-    const auto& field = *this->rate_params[name];
-    CellData result;
+    const auto& field = *this->rate_params[idx];
+    DataTriple result;
     result.centre = field[i];
     if (do_averaging) {
       result.left = cellLeft<Limiter>(field[i], field[ym], field[yp]);

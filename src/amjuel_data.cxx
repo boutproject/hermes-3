@@ -12,8 +12,8 @@ namespace hermes {
 /// @brief Helper functions for evaluating Amjuel fits.
 
 /**
- * @brief Evaluate an Amjuel double polynomial fit in n and T, given a table of
- * coefficients (see page 20 of amjuel.pdf).
+ * @brief Evaluate an Amjuel double polynomial fit in n and T.
+ * This function user's Honer's method rather than the formulation on page 20 of amjuel.pdf.
  *
  * @param T temperature in eV
  * @param n number density in m^-3
@@ -24,27 +24,26 @@ namespace hermes {
 static BoutReal
 eval_amjuel_nT_fit(BoutReal T, BoutReal n,
                    const std::vector<std::vector<BoutReal>>& coeff_table) {
-  // Enforce range of validity
-  n = std::clamp(n, 1e14, 1e22); // 1e8 - 1e16 cm^-3
+  n = std::clamp(n, 1e14, 1e22);
   T = std::clamp(T, 0.1, 1e4);
 
-  BoutReal logntilde = log(n / 1e14); // Note: 1e8 cm^-3
-  BoutReal logT = log(T);
+  const BoutReal logntilde = log(n / 1e14);
+  const BoutReal logT = log(T);
+
+  const std::size_t nrows = coeff_table.size();
+  const std::size_t ncols = coeff_table[0].size();
+
   BoutReal result = 0.0;
 
-  BoutReal logT_n = 1.0; // log(T) ** n
-  std::size_t num_n = coeff_table.size();
-  std::size_t num_T = coeff_table[0].size();
-  for (size_t n_idx = 0; n_idx < num_n; ++n_idx) {
-    BoutReal logn_m = 1.0; // log(ntilde) ** m
-    const auto& nrow = coeff_table[n_idx];
-    for (size_t T_idx = 0; T_idx < num_T; ++T_idx) {
-      result += nrow[T_idx] * logn_m * logT_n;
-      logn_m *= logntilde;
+  for (std::size_t irow = nrows; irow-- > 0;) {
+    BoutReal row_result = 0.0;
+    for (std::size_t icol = ncols; icol-- > 0;) {
+      row_result = row_result * logntilde + coeff_table[irow][icol];
     }
-    logT_n *= logT;
+    result = result * logT + row_result;
   }
-  return exp(result) * 1e-6; // Note: convert cm^3 to m^3
+
+  return exp(result) * 1e-6;
 }
 
 /**
