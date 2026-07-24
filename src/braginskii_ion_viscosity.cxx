@@ -443,13 +443,14 @@ void BraginskiiIonViscosity::outputVars(Options& state) {
                       {"species", species_name},
                       {"source", "ion_viscosity"}});
 
-      set_with_attrs(state[std::string("eta_") + species_name], d.eta,
-                     {{"time_dimension", "t"},
-                      {"units", "Pa s"},
-                      {"conversion", Pnorm / Omega_ci},
-                      {"long_name", std::string("Ion viscosity coefficient") + species_name},
-                      {"species", species_name},
-                      {"source", "ion_viscosity"}});                    
+      set_with_attrs(
+          state[std::string("eta_") + species_name], d.eta,
+          {{"time_dimension", "t"},
+           {"units", "Pa s"},
+           {"conversion", Pnorm / Omega_ci},
+           {"long_name", std::string("Ion viscosity coefficient") + species_name},
+           {"species", species_name},
+           {"source", "ion_viscosity"}});
     }
   }
 }
