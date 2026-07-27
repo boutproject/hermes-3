@@ -29,7 +29,7 @@ TEST_F(BraginskiiCollisionsTest, CreateComponent) {
   options["units"]["meters"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1e19;
-  BraginskiiCollisions const component("test", options, nullptr);
+  const BraginskiiCollisions component("test", options, nullptr);
 }
 
 TEST_F(BraginskiiCollisionsTest, OnlyElectrons) {
@@ -166,4 +166,70 @@ TEST_F(BraginskiiCollisionsTest, TnormDependence) {
                    get<Field3D>(state2["species"]["d"]["collision_frequency"])(0, 0, 0));
   ASSERT_DOUBLE_EQ(get<Field3D>(state["species"]["d+"]["collision_frequency"])(0, 0, 0),
                    get<Field3D>(state2["species"]["d+"]["collision_frequency"])(0, 0, 0));
+}
+
+TEST_F(BraginskiiCollisionsTest, IonNeutral) {
+  Options options{
+      {"units",
+       {{"eV", 1.0}, {"meters", 1.0}, {"seconds", 1.0}, {"inv_meters_cubed", 1.0}}},
+      {"test",
+       {{"electron_neutral", false},
+        {"ion_neutral", true},
+        {"electron_electron", false},
+        {"ion_ion", false},
+        {"neutral_neutral", false}}}};
+
+  BraginskiiCollisions component("test", options, nullptr);
+
+  // Put ion in between neutral species to test both orders (ion-neutral and neutral-ion)
+  Options state{
+      {"species",
+       {{"d", {{"density", 1e18}, {"temperature", 3}, {"AA", 2}}},
+        {"d+", {{"density", 2e19}, {"temperature", 20}, {"charge", 1}, {"AA", 2}}},
+        {"d2", {{"density", 1e17}, {"temperature", 1}, {"AA", 4}}}}}};
+
+  component.declareAllSpecies(SpeciesInformation({}, {"d", "d2"}, {"d+"}, {}));
+  component.transform(state);
+
+  ASSERT_TRUE(state["species"]["d"].isSet("collision_frequency"));
+  ASSERT_TRUE(state["species"]["d"]["collision_frequencies"].isSet("d_d+_coll"));
+
+  ASSERT_TRUE(state["species"]["d2"].isSet("collision_frequency"));
+  ASSERT_TRUE(state["species"]["d2"]["collision_frequencies"].isSet("d2_d+_coll"));
+
+  ASSERT_TRUE(state["species"]["d+"].isSet("collision_frequency"));
+  ASSERT_TRUE(state["species"]["d+"]["collision_frequencies"].isSet("d+_d_coll"));
+  ASSERT_TRUE(state["species"]["d+"]["collision_frequencies"].isSet("d+_d2_coll"));
+
+  Options options2{
+      {"units",
+       {{"eV", 1.0}, {"meters", 1.0}, {"seconds", 1.0}, {"inv_meters_cubed", 1.0}}},
+      {"test",
+       {{"electron_neutral", false},
+        {"ion_neutral", false}, // Turn off ion_neutral collisions
+        {"electron_electron", false},
+        {"ion_ion", false},
+        {"neutral_neutral", false}}}};
+
+  BraginskiiCollisions component2("test", options2, nullptr);
+
+  Options state2{
+      {"species",
+       {{"d", {{"density", 1e18}, {"temperature", 3}, {"AA", 2}}},
+        {"d+", {{"density", 2e19}, {"temperature", 20}, {"charge", 1}, {"AA", 2}}},
+        {"d2", {{"density", 1e17}, {"temperature", 1}, {"AA", 4}}}}}};
+
+  component2.declareAllSpecies(SpeciesInformation({}, {"d", "d2"}, {"d+"}, {}));
+  component2.transform(state2);
+
+  // All ion-neutral collision frequencies should be missing
+  ASSERT_FALSE(state2["species"]["d"].isSet("collision_frequency"));
+  ASSERT_FALSE(state2["species"]["d"]["collision_frequencies"].isSet("d_d+_coll"));
+
+  ASSERT_FALSE(state2["species"]["d2"].isSet("collision_frequency"));
+  ASSERT_FALSE(state2["species"]["d2"]["collision_frequencies"].isSet("d2_d+_coll"));
+
+  ASSERT_FALSE(state2["species"]["d+"].isSet("collision_frequency"));
+  ASSERT_FALSE(state2["species"]["d+"]["collision_frequencies"].isSet("d+_d_coll"));
+  ASSERT_FALSE(state2["species"]["d+"]["collision_frequencies"].isSet("d+_d2_coll"));
 }
