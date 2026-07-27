@@ -232,7 +232,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
     }
 
-    const Field3D tau = 1. / nu;
+    const Field3D tau = 1. / softFloor(nu, 1e-10);
     const Field3D P = get<Field3D>(species["pressure"]);
     const Field3D T = get<Field3D>(species["temperature"]);
     const Field3D N = get<Field3D>(species["density"]);
