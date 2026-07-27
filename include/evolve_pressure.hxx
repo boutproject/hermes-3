@@ -2,9 +2,9 @@
 #ifndef EVOLVE_PRESSURE_H
 #define EVOLVE_PRESSURE_H
 
-#include <bout/field3d.hxx>
 #include "../include/hermes_utils.hxx"
 #include "component.hxx"
+#include <bout/field3d.hxx>
 
 /// Evolves species pressure in time
 ///
@@ -13,7 +13,7 @@
 /// P<name>_src   A source of pressure, in Pascals per second
 ///               This can be over-ridden by the `source` option setting.
 ///
-struct EvolvePressure : public Component {
+struct EvolvePressure : public NamedComponent<EvolvePressure> {
   ///
   /// # Inputs
   ///
@@ -55,7 +55,10 @@ struct EvolvePressure : public Component {
 
   /// Preconditioner
   ///
-  void precon(const Options &UNUSED(state), BoutReal gamma) override;
+  void precon(const Options& UNUSED(state), BoutReal gamma) override;
+
+  static constexpr auto type = "evolve_pressure";
+
 private:
   std::string name; ///< Short name of the species e.g. h+
 
@@ -72,34 +75,37 @@ private:
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
 
-  BoutReal density_floor; ///< Minimum density for calculating T
-  bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
+  BoutReal density_floor;     ///< Minimum density for calculating T
+  bool low_n_diffuse_perp;    ///< Cross-field diffusion at low density?
   BoutReal temperature_floor; ///< Low temperature scale for low_T_diffuse_perp
-  bool low_T_diffuse_perp; ///< Add cross-field diffusion at low temperature?
-  BoutReal pressure_floor; ///< When non-zero pressure is needed
-  bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
-  bool damp_p_nt; ///< Damp P - N*T. Active when P < 0 or N < density_floor
+  bool low_T_diffuse_perp;    ///< Add cross-field diffusion at low temperature?
+  BoutReal pressure_floor;    ///< When non-zero pressure is needed
+  bool
+      low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
+  bool damp_p_nt;         ///< Damp P - N*T. Active when P < 0 or N < density_floor
 
   Field3D source, final_source; ///< External pressure source
-  Field3D Sp;     ///< Total pressure source
+  Field3D Sp;                   ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
 
-  BoutReal hyper_z; ///< Hyper-diffusion
+  BoutReal hyper_z;   ///< Hyper-diffusion
   BoutReal hyper_z_T; ///< 4th-order dissipation in T
 
-  bool diagnose; ///< Output additional diagnostics?
-  bool enable_precon; ///< Enable preconditioner?
+  bool diagnose;                 ///< Output additional diagnostics?
+  bool enable_precon;            ///< Enable preconditioner?
   BoutReal source_normalisation; ///< Normalisation factor [Pa/s]
-  BoutReal time_normalisation; ///< Normalisation factor [s]
-  bool source_time_dependent; ///< Is the input source time dependent?
-  Field3D flow_xlow, flow_ylow;   ///< Energy flow diagnostics
-  Field3D flow_ylow_advection;    ///< Advection energy flow diagnostics
-  Field3D flow_ylow_viscous_heating; ///< Flow of kinetic energy due to numerical viscosity
+  BoutReal time_normalisation;   ///< Normalisation factor [s]
+  bool source_time_dependent;    ///< Is the input source time dependent?
+  Field3D flow_xlow, flow_ylow;  ///< Energy flow diagnostics
+  Field3D flow_ylow_advection;   ///< Advection energy flow diagnostics
+  Field3D
+      flow_ylow_viscous_heating; ///< Flow of kinetic energy due to numerical viscosity
 
-  bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
+  bool numerical_viscous_heating;  ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
-  Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
-  Field3D E_PdivV, E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
+  Field3D Sp_nvh;                  ///< Pressure source due to artificial viscosity
+  Field3D E_PdivV,
+      E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
 
   /// Inputs
   /// - species
@@ -116,7 +122,7 @@ private:
 };
 
 namespace {
-RegisterComponent<EvolvePressure> registercomponentevolvepressure("evolve_pressure");
+RegisterComponent<EvolvePressure> registercomponentevolvepressure;
 }
 
 #endif // EVOLVE_PRESSURE_H

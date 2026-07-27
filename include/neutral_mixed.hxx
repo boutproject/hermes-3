@@ -12,7 +12,7 @@
 
 /// Evolve density, parallel momentum and pressure
 /// for a neutral gas species with cross-field diffusion
-struct NeutralMixed : public Component {
+struct NeutralMixed : public NamedComponent<NeutralMixed> {
   ///
   /// @param name     The name of the species e.g. "h"
   /// @param options  Top-level options. Settings will be taken from options[name]
@@ -28,6 +28,8 @@ struct NeutralMixed : public Component {
 
   /// Preconditioner
   void precon(const Options& state, BoutReal gamma) override;
+
+  static constexpr auto type = "neutral_mixed";
 
 private:
   std::string name; ///< Species name
@@ -100,7 +102,7 @@ private:
 };
 
 namespace {
-RegisterComponent<NeutralMixed> registersolverneutralmixed("neutral_mixed");
+RegisterComponent<NeutralMixed> registersolverneutralmixed;
 }
 
 #endif // NEUTRAL_MIXED_H

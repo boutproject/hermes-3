@@ -28,11 +28,11 @@ class Laplacian;
 ///
 /// The mass_density quantity is the sum of density * atomic mass for all
 /// charged species (ions and electrons)
-struct PolarisationDrift : public Component {
+struct PolarisationDrift : public NamedComponent<PolarisationDrift> {
   //
-  PolarisationDrift(std::string name, Options &options, Solver *UNUSED(solver));
+  PolarisationDrift(std::string name, Options& options, Solver* UNUSED(solver));
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
 
   // The following functions are public for unit testing
 
@@ -61,21 +61,24 @@ struct PolarisationDrift : public Component {
   /// Sets density_source, energy_source and momentum_source
   /// for all species with mass and charge.
   void polarisationAdvection(GuardedOptions& state, Field3D phi_pol);
+
+  static constexpr auto type = "polarisation_drift";
+
 private:
   std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
 
   Field2D Bsq; // Cached SQ(coord->Bxy)
-  
+
   // Diagnostic outputs
-  bool diagnose; ///< Save diagnostic outputs?
-  Field3D DivJ; ///< Divergence of all other currents
-  Field3D phi_pol; ///< Polarisation drift potential
+  bool diagnose;       ///< Save diagnostic outputs?
+  Field3D DivJ;        ///< Divergence of all other currents
+  Field3D phi_pol;     ///< Polarisation drift potential
   Options diagnostics; ///< Other diagnostic outputs
 
-  bool boussinesq; // If true, assume a constant mass density in Jpol
-  BoutReal average_atomic_mass; // If boussinesq=true, mass density to use
-  BoutReal density_floor; // Minimum mass density if boussinesq=false
-  bool advection; // Advect fluids by an approximate polarisation velocity?
+  bool boussinesq;               // If true, assume a constant mass density in Jpol
+  BoutReal average_atomic_mass;  // If boussinesq=true, mass density to use
+  BoutReal density_floor;        // Minimum mass density if boussinesq=false
+  bool advection;                // Advect fluids by an approximate polarisation velocity?
   bool diamagnetic_polarisation; // Calculate compression terms?
 
   /// Inputs
@@ -104,7 +107,7 @@ private:
 };
 
 namespace {
-RegisterComponent<PolarisationDrift> registercomponentpolarisationdrift("polarisation_drift");
+RegisterComponent<PolarisationDrift> registercomponentpolarisationdrift;
 }
 
 #endif // POLARISATION_DRIFT_H

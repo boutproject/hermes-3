@@ -24,8 +24,9 @@ using OPTYPE = GuardedOptions && (GuardedOptions&&, Field3D);
  * Reaction.
  */
 struct ReactionBase : public Component {
-  ReactionBase(Permissions&& permissions)
-      : Component(std::move(permissions)), inst_num(incremented_instance_num() + 1) {}
+  ReactionBase(std::string name, Permissions&& permissions)
+      : Component(name, std::move(permissions)),
+        inst_num(incremented_instance_num() + 1) {}
 
   static std::size_t incremented_instance_num() { return instance_num_ref()++; }
 
@@ -73,6 +74,8 @@ struct Reaction : public ReactionBase {
    * @param state the output state to update
    */
   void outputVars(Options& state) final;
+
+  std::string typeName() const final { return parser->get_reaction_str(); }
 
 protected:
   /// Reaction string parser

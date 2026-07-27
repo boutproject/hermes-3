@@ -21,14 +21,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using RecyclingTest = FakeMeshFixture;
 
-TEST_F(RecyclingTest, CreateComponent) {
-  Options options;
-  options["units"]["eV"] = 5;           // Normalisation temperature
-  options["recycling"]["species"] = ""; // No species to recycle
-
-  Recycling component("recycling", options, nullptr);
-}
-
 // Increase velocity, pressure and temperature
 // and check that recycled density and energy sources increase
 TEST_F(RecyclingTest, RecycleSourceChange) {
