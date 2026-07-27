@@ -12,8 +12,8 @@
 
 #include "component.hxx"
 
-BOUT_ENUM_CLASS(ReactionDiagnosticType, species_collision_freq, density_src, energy_src,
-                energy_loss, momentum_src);
+BOUT_ENUM_CLASS(ReactionDiagnosticType, reaction_collision_freq, species_collision_freq,
+                density_src, energy_src, energy_loss, momentum_src);
 
 std::string toString(ReactionDiagnosticType diag_type);
 
@@ -34,7 +34,8 @@ struct ReactionDiagnostic {
   static inline std::string default_std_name(ReactionDiagnosticType type) {
     std::string standard_name;
     switch (type) {
-    case ReactionDiagnosticType::species_collision_freq:
+    case ReactionDiagnosticType::species_collision_freq: // fall through
+    case ReactionDiagnosticType::reaction_collision_freq:
       standard_name = "collision frequency";
       break;
     case ReactionDiagnosticType::density_src:
@@ -77,11 +78,12 @@ public:
     const BoutReal Omega_ci = 1 / get<BoutReal>(units["seconds"]);
 
     switch (type) {
-    case ReactionDiagnosticType::species_collision_freq: {
+    case ReactionDiagnosticType::species_collision_freq: // fall through
+    case ReactionDiagnosticType::reaction_collision_freq:
       this->conversion = Omega_ci;
       this->units = "s^-1";
       break;
-    }
+
     case ReactionDiagnosticType::density_src: {
       this->conversion = Nnorm * Omega_ci;
       this->units = "m^-3 s^-1";

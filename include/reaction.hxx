@@ -155,6 +155,17 @@ protected:
    */
   void set_momentum_channel_weight(const std::string& reactant_name,
                                    const std::string& product_name, BoutReal weight);
+
+  /**
+   * @brief Register a collision frequency to be set in transform_impl.
+   *
+   * @param sp_name Species with which to associate the collision frequency in the state
+   * @param coll_freq_name Label to use when adding the collision frequency to the state
+   * @param rate_data_lbl Label to use when retrieving the collision frequency from RateHelper data
+   */
+  void add_coll_freq(const std::string& sp_name, const std::string& coll_freq_name,
+                     const std::string& rate_data_lbl);
+
   /**
    * @brief A hook with which subclasses can perform additional transform tasks, over and
    * above those implemented in Reaction::transform. (Subclasses MAY define)
@@ -221,6 +232,9 @@ private:
   // Channels to determine how momentum and energy are distributed to product species
   std::map<std::string, std::map<std::string, BoutReal>> energy_channels;
   std::map<std::string, std::map<std::string, BoutReal>> momentum_channels;
+
+  // Collision frequency properties to be set during transform_impl
+  std::vector<std::tuple<std::string, std::string, std::string>> coll_freq_props;
 
   /// Label used in the state for reaction configuration.
   const std::string name;

@@ -43,14 +43,17 @@ IznRecReaction::IznRecReaction(std::string short_reaction_type, std::string name
   // The energy source is set for electrons
   setPermissions(readWrite("species:e:energy_source"));
 
-  // Collision frequencies are keyed by the lower charge state heavy species (reactants
-  // for ionisation, products for recombination)
-  this->heavy_collfreq_species =
+  // Register collision frequency for this reaction. By convention it's associated with
+  // the lower charge state heavy species (the reactant for ionisation, the product for
+  // recombination) when it's copied into the state, but it's always retrieved from the
+  // RateHelper data by reactant name
+  const std::string collfreq_species =
       (this->short_reaction_type == "iz") ? this->heavy_reactant : this->heavy_product;
-  setPermissions(readWrite(fmt::format("species:{}:collision_frequencies:{}_{}_{}",
-                                       this->heavy_collfreq_species, this->heavy_reactant,
-                                       this->heavy_product, this->short_reaction_type)));
+  std::string reaction_lbl = fmt::format("{:s}_{:s}_{:s}", this->heavy_reactant,
+                                         this->heavy_product, this->short_reaction_type);
+  add_coll_freq(collfreq_species, reaction_lbl, this->heavy_reactant);
 
+  // Register diagnostics
   if (this->diagnose) {
     // Set up diagnostics. Names and signs differ between ionisation and recombination.
     DiagnosticTransformerType default_transformer;
@@ -185,14 +188,6 @@ void IznRecReaction::transform_additional(GuardedOptions& state,
 
   update_state_and_diagnostics<subtract<Field3D>>(
       state, "e", ReactionDiagnosticType::energy_loss, energy_loss);
-
-  // Set collision frequency [s^-1] for heavy species
-  std::string heavy_collfreq_lbl =
-      fmt::format("{:s}_{:s}_{:s}", this->heavy_reactant, this->heavy_product,
-                  this->short_reaction_type);
-  set(state["species"][this->heavy_collfreq_species]["collision_frequencies"]
-           [heavy_collfreq_lbl],
-      rate_data.coll_freq(hr.name()));
 
   // N.B. nothing is done with the electron collision frequency at the moment.
   // Add it to the state too?

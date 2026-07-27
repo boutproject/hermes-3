@@ -72,6 +72,16 @@ Reaction::Reaction(std::string name, Options& options, bool add_pop_change_sourc
 }
 
 ///
+void Reaction::add_coll_freq(const std::string& sp_name, const std::string& state_lbl,
+                             const std::string& rate_data_lbl) {
+  const std::string coll_freq_lbl =
+      fmt::format("species:{:s}:collision_frequencies:{:s}", sp_name, state_lbl);
+  this->coll_freq_props.push_back(std::make_tuple(sp_name, coll_freq_lbl, rate_data_lbl));
+  // Set corresponding write permission
+  setPermissions(writeFinal(coll_freq_lbl));
+}
+
+///
 void Reaction::add_diagnostic(const std::string& sp_name, const std::string& diag_name,
                               const std::string& diag_desc,
                               ReactionDiagnosticType diag_type,
@@ -280,11 +290,18 @@ void Reaction::transform_impl(GuardedOptions& state) {
     throw BoutException("Unhandled RateParamsTypes in Reaction::transform_impl()");
   }
 
-  // Update reactant species collision frequencies
+  // Update (ADD to) reactant species collision frequencies
   for (const auto& reactant_name : reactant_names) {
     update_state_and_diagnostics<add<Field3D>>(
         state, reactant_name, ReactionDiagnosticType::species_collision_freq,
         rate_calc_results.coll_freq(reactant_name));
+  }
+
+  // SET collision frequencies associated with this reaction specifically
+  for (const auto& [sp_name, state_lbl, rate_data_lbl] : this->coll_freq_props) {
+    update_state_and_diagnostics<set>(
+        state, sp_name, ReactionDiagnosticType::reaction_collision_freq, state_lbl,
+        rate_calc_results.coll_freq(rate_data_lbl));
   }
 
   // Subclasses perform any additional transform tasks
