@@ -802,12 +802,14 @@ of small gradient at the cost of a small additional reduction in flux. It is app
 in a way to prevent a non-differentiable kink at :math:`g=0`.
 
 The ceiling improves numerical robustness at very steep gradients when the flux limiter
-is saturated. By default, it is set to :math:`10^{-1}` which should only activate during
+is saturated. By default, it is set to a value which should only activate during
 the initial transients of a simulation where it can prevent crashes and performance
 degradation. The numerical instability is due to the fact that
 the neutral transport becomes advective in the saturated limit, where the central difference
 scheme implemented for this term is not stable. In the future, a blended operator will be implemented
 which transitions to upwind in the advective limit.
+
+Both the floor and the ceiling are in SI units of :math:`m^{-1}`.
 
 The final diffusion coefficient is a smooth blend of the unlimited
 coefficient and the :math:`D_{n,\max}` cap, using a smooth limiter function:
