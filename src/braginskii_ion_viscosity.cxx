@@ -301,12 +301,14 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         Field3D eta_fa = toFieldAligned(eta);
         for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
           for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            eta_fa(r.ind, mesh->ystart - 1, jz) = eta_fa(r.ind, mesh->ystart, jz); // Neumann BC
+            eta_fa(r.ind, mesh->ystart - 1, jz) =
+                eta_fa(r.ind, mesh->ystart, jz); // Neumann BC
           }
         }
         for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
           for (int jz = 0; jz < mesh->LocalNz; jz++) {
-            eta_fa(r.ind, mesh->yend + 1, jz) = eta_fa(r.ind, mesh->yend, jz); // Neumann BC
+            eta_fa(r.ind, mesh->yend + 1, jz) =
+                eta_fa(r.ind, mesh->yend, jz); // Neumann BC
           }
         }
         eta = fromFieldAligned(eta_fa);
