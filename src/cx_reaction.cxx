@@ -80,7 +80,7 @@ CXReaction::CXReaction(std::string name, Options& alloptions)
   substitutePermissions("r1", {this->r1});
   substitutePermissions("r2", {this->r2});
 
-  if (diagnose) {
+  if (this->diagnose) {
     // Set up diagnostics to be written to dump file
     DiagnosticTransformerType default_transformer = identity;
     std::string r1_long_name = SpeciesParser(this->r1).long_name();
