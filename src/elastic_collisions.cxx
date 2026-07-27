@@ -56,9 +56,9 @@ void ElasticCollision::transform_additional(
   Field3D mu = (m1 * m2) / (m1 + m2);
   Field3D momentum_exchange = rate_calc_results.rate * mu * (v1 - v2);
 
-  // Subtract from r1 and diagnostic
-  update_source<subtract<Field3D>>(state, this->r1, ReactionDiagnosticType::momentum_src,
-                                   momentum_exchange);
+  // Subtract from r1 and associated diagnostic
+  update_state_and_diagnostics<subtract<Field3D>>(
+      state, this->r1, ReactionDiagnosticType::momentum_src, momentum_exchange);
   // Add to r2
   add(state["species"][this->r2]["momentum_source"], momentum_exchange);
 }

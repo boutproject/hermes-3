@@ -166,37 +166,41 @@ protected:
                                     [[maybe_unused]] const RateData& rate_calc_results) {}
 
   /**
-   * @brief Update both a species source term and the corresponding diagnostics (if any
-   * exist and if diagnostics are enabled), determining the key in the state from the
-   * type. See alternative form of update_source for further details.
+   * @brief Update both a species property in the state and the corresponding diagnostic(s)
+   * (if any exists and if diagnostics are enabled). The key in the state is inferred from the type.
+   * See alternative form of update_state_and_diagnostics for further details.
    */
   template <OPTYPE operation>
-  void update_source(GuardedOptions& state, const std::string& sp_name,
-                     ReactionDiagnosticType type, const Field3D& update_with_field) {
+  void update_state_and_diagnostics(GuardedOptions& state, const std::string& sp_name,
+                                    ReactionDiagnosticType type,
+                                    const Field3D& update_with_field) {
 
-    update_source<operation>(state, sp_name, type, sp_data_keys.at(type),
-                             update_with_field);
+    const std::string state_lbl =
+        fmt::format("species:{}:{}", sp_name, sp_data_keys.at(type));
+    update_state_and_diagnostics<operation>(state, sp_name, type, state_lbl,
+                                            update_with_field);
   }
 
   /**
-   * @brief Update both a species source term and the corresponding diagnostics (if any
-   * exist and if diagnostics are enabled)
+   * @brief Update both a property in the state and the corresponding diagnostic(s)
+   * (if any exists and if diagnostics are enabled).
    *
    * @tparam operation function to call on the state to update the source term and
    * the diagnostic. Either Component::add, Component::subtract or Component::set
    * @param state the state to update
    * @param sp_name the name of the species to update
    * @param type the type of source/diagnostic to update
-   * @param sp_data_key label/key for the field in the state object, i.e.
-   * state["species"][sp_name][sp_data_key]
+   * @param state_label label/key for the field in the state object, i.e.
+   * state[state_label]
    * @param update_with_field the field used in the update
    */
   template <OPTYPE operation>
-  void update_source(GuardedOptions& state, const std::string& sp_name,
-                     ReactionDiagnosticType type, const std::string& sp_data_key,
-                     const Field3D& update_with_field) {
+  void update_state_and_diagnostics(GuardedOptions& state, const std::string& sp_name,
+                                    ReactionDiagnosticType type,
+                                    const std::string& state_label,
+                                    const Field3D& update_with_field) {
     // Update species data
-    operation(state["species"][sp_name][sp_data_key], update_with_field);
+    operation(state[state_label], update_with_field);
 
     if (this->diagnose) {
       // Update corresponding diagnostic(s) (if any exist)

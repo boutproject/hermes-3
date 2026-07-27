@@ -183,8 +183,8 @@ void IznRecReaction::transform_additional(GuardedOptions& state,
   BoutReal electron_heating = this->e_energy_loss_data->get_metadata("electron_heating");
   energy_loss -= (electron_heating / Tnorm) * rate * radiation_multiplier;
 
-  update_source<subtract<Field3D>>(state, "e", ReactionDiagnosticType::energy_loss,
-                                   energy_loss);
+  update_state_and_diagnostics<subtract<Field3D>>(
+      state, "e", ReactionDiagnosticType::energy_loss, energy_loss);
 
   // Set collision frequency [s^-1] for heavy species
   std::string heavy_collfreq_lbl =

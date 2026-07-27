@@ -217,15 +217,17 @@ void CXReaction::transform_additional(GuardedOptions& state, const RateData& rat
   add(p2s["energy_source"], 0.5 * r2_AA * rate_data.rate * SQ(p2_vel - r2_vel));
 
   // Set 'collision_frequencies' values
-  std::string r1_coll_freq_key =
-      fmt::format("collision_frequencies:{:s}_{:s}_cx", this->r1, this->r2);
-  update_source<set>(state, this->r1, ReactionDiagnosticType::collision_freq,
-                     r1_coll_freq_key, rate_data.coll_freq(this->r1));
+  std::string r1_coll_freq_key = fmt::format(
+      "species:{:s}:collision_frequencies:{:s}_{:s}_cx", this->r1, this->r1, this->r2);
+  update_state_and_diagnostics<set>(state, this->r1,
+                                    ReactionDiagnosticType::collision_freq,
+                                    r1_coll_freq_key, rate_data.coll_freq(this->r1));
 
-  std::string r2_coll_freq_key =
-      fmt::format("collision_frequencies:{:s}_{:s}_cx", this->r2, this->r1);
-  update_source<set>(state, this->r2, ReactionDiagnosticType::collision_freq,
-                     r2_coll_freq_key, rate_data.coll_freq(this->r2));
+  std::string r2_coll_freq_key = fmt::format(
+      "species:{:s}:collision_frequencies:{:s}_{:s}_cx", this->r2, this->r2, this->r1);
+  update_state_and_diagnostics<set>(state, this->r2,
+                                    ReactionDiagnosticType::collision_freq,
+                                    r2_coll_freq_key, rate_data.coll_freq(this->r2));
 }
 
 } // namespace hermes
