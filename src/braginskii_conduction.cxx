@@ -114,17 +114,17 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
     all_neoclassical_ion_conduction[name] =
         options["neoclassical_ion_conduction"]
             .doc("Apply the SOLPS neoclassical correction to ion parallel "
-                "heat conductivity")
+                 "heat conductivity")
             .withDefault(false);
 
     all_kappa_epsilon[name] =
         options["kappa_epsilon"]
             .doc("Inverse aspect ratio used in the SOLPS ion conduction correction")
-            .withDefault(0.3);        
+            .withDefault(0.3);
 
     if ((((all_kappa_limit_model[name] == "connection_length")
           and (all_kappa_limit_alpha[name] > 0.0))
-        or all_neoclassical_ion_conduction[name])) {
+         or all_neoclassical_ion_conduction[name])) {
 
       if (all_kappa_limit_q95[name] <= 0.0) {
         throw BoutException("kappa_limit_q95 must be positive for species '{}' when "
@@ -138,7 +138,6 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
                             name);
       }
     }
-
 
     if (all_neoclassical_ion_conduction[name]) {
       const BoutReal charge = options["charge"].as<BoutReal>();
@@ -159,7 +158,8 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
 
   std::vector<std::string> coll_types;
 
-  substitutePermissions("input_vars", {"AA", "charge", "density", "pressure", "temperature"});
+  substitutePermissions("input_vars",
+                        {"AA", "charge", "density", "pressure", "temperature"});
   substitutePermissions("output_vars",
                         {"energy_source", "kappa_par", "energy_flow_ylow"});
   std::vector<std::string> species;
@@ -323,27 +323,25 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     kappa_par = kappa_coefficient * Pfloor * tau / AA;
 
     if (neoclassical_ion_conduction) {
-      // neoclassical corrections for ion kappa_par as implemented in: 
-      // Rozhansky, V., et al. "New B2SOLPS5. 2 transport code for H-mode 
+      // neoclassical corrections for ion kappa_par as implemented in:
+      // Rozhansky, V., et al. "New B2SOLPS5. 2 transport code for H-mode
       // regimes in tokamaks." Nuclear fusion 49.2 (2009): 025007.
 
       const Field3D Tfloor = floor(T, 0.0);
 
-      const BoutReal parallel_length =
-          kappa_limit_q95 * kappa_limit_R;          
+      const BoutReal parallel_length = kappa_limit_q95 * kappa_limit_R;
 
       const Field3D v_thermal = sqrt(2.0 * Tfloor / AA);
 
-      const Field3D nu_star =  parallel_length / tau /
-          (pow(kappa_epsilon, 1.5) * v_thermal);
+      const Field3D nu_star =
+          parallel_length / tau / (pow(kappa_epsilon, 1.5) * v_thermal);
 
       const Field3D sqrt2_nu_star = sqrt(2.0) * nu_star;
 
-      const Field3D K2 =
-            (0.66 + 1.88 * sqrt(kappa_epsilon) - 1.54 * kappa_epsilon)
-          / (1.0 + 1.03 * sqrt(sqrt2_nu_star) + 0.31 * sqrt2_nu_star)
-          + (1.17 * pow(kappa_epsilon, 3.0) * sqrt2_nu_star)
-          / (1.0 + 0.74 * pow(kappa_epsilon, 1.5) * sqrt2_nu_star);
+      const Field3D K2 = (0.66 + 1.88 * sqrt(kappa_epsilon) - 1.54 * kappa_epsilon)
+                             / (1.0 + 1.03 * sqrt(sqrt2_nu_star) + 0.31 * sqrt2_nu_star)
+                         + (1.17 * pow(kappa_epsilon, 3.0) * sqrt2_nu_star)
+                               / (1.0 + 0.74 * pow(kappa_epsilon, 1.5) * sqrt2_nu_star);
 
       const Field3D neoclassical_factor = 1.6 * pow(kappa_epsilon, 1.5) / K2;
 
