@@ -238,6 +238,9 @@ protected:
     std::filesystem::path outpath = ref_data_path();
     std::filesystem::remove(outpath);
     bout::OptionsIO::create(std::string(outpath))->write(state);
+
+    FAIL() << "Generated new reference data for '" << lbl << "' at " << outpath.string()
+           << std::endl;
   }
 };
 
