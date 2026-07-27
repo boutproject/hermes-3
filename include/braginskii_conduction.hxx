@@ -68,6 +68,12 @@ private:
   std::map<std::string, BoutReal>
       all_kappa_limit_R; ///< Major radius, normalised to the Hermes length unit rho_s0
 
+  std::map<std::string, bool> 
+      all_neoclassical_ion_conduction; ///< Apply neoclassical correction to ion parallel heat conductivity
+
+  std::map<std::string, BoutReal>
+      all_kappa_epsilon; ///< Inverse aspect ratio used by neoclassical ion conduction correction
+
   std::map<std::string, Field3D>
       all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
   /// Save more diagnostics?
