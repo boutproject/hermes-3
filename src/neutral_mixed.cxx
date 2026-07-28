@@ -544,9 +544,12 @@ void NeutralMixed::finally(const Options& state) {
         sqrt((Grad_perp(Tn) / Tnlim) * (Grad_perp(Tn) / Tnlim) + SQ(gradient_floor_D));
     Field3D denominator_Kpar =
         sqrt((Grad_par(Tn) / Tnlim) * (Grad_par(Tn) / Tnlim) + SQ(gradient_floor_D));
+
+    const BoutReal viscosity_limiter_grad_floor = 1e-8;
     Field3D denominator_etaperp =
-        sqrt(Grad_perp(Vn) * Grad_perp(Vn) + SQ(gradient_floor_D));
-    Field3D denominator_etapar = sqrt(Grad_par(Vn) * Grad_par(Vn) + SQ(gradient_floor_D));
+        sqrt(Grad_perp(Vn) * Grad_perp(Vn) + SQ(viscosity_limiter_grad_floor));
+    Field3D denominator_etapar =
+        sqrt(Grad_par(Vn) * Grad_par(Vn) + SQ(viscosity_limiter_grad_floor));
 
     Dmax = flux_limit_adv * Vnth_pf / denominator_D;
     kappa_n_max_perp = flux_limit_cond_perp * (Vnth_hf * Nnlim) / denominator_Kperp;
